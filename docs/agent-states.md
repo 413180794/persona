@@ -1,178 +1,178 @@
-# Agent 状态与空间模型
+# Agent states and the space model
 
-## 统一状态
+## Unified states
 
-App、手表、推送都只认这一套状态（`proto.Session.state`，连电脑的管理者计算，hub 原样给 App，`server/internal/assistant/fleet.go`）。来源是宿主（目前是 herdr）的状态，加上 Persona 自己知道的两件事：
-有没有待处理的交互、用户有没有在 App 里看过。
+The App, the watch and push notifications all use this one set of states (`proto.Session.state`, computed by the manager connected to the computers and passed to the App unchanged by the hub, `server/internal/assistant/fleet.go`). The source is the host's state (currently herdr), plus two things Persona knows itself:
+whether there's a pending interaction, and whether the user has looked at it in the App.
 
-| 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |
+| State | Meaning | From herdr | Persona adds | Color |
 | --- | --- | --- | --- | --- |
-| `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
-| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但会话有 hook（Persona 的，或全局只报告的）时 hook 的轮次计数说这一轮没结束（见下「hook 的轮次信号」）；没有 hook 的会话是终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的）；或这一轮停了、但它的后台命令 / 子 Agent / Monitor / workflow 还在跑（#2228、#2935：跑完会把结果交给它、它接着做；不含助手对话） | 琥珀，呼吸 |
-| `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
-| `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
-| `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |
-| `interrupted` 被重启中断 | 重启前在跑，重启把 herdr 的窗格一起带走了（#1917） | — | 记录里有窗格、启动时刻早于本次 node 启动，且现在没有活着的 agent | 浅灰，带「继续」 |
-| `unknown` 未知 | 宿主认出了 agent 但判断不了状态 | `unknown` | — | 灰 |
+| `needs_you` Needs you | Stuck somewhere a person must step in | `blocked` (a question / confirm box in the TUI) | A pending question, plan, permission or terminal interaction (herdr still shows working while a hook holds it) | Red, breathing |
+| `working` Working | Running | `working` | Claude: herdr reports `done` / `idle` / `unknown`, but the session has hooks (Persona's, or the global report-only ones) and the hook turn count says the turn isn't over (see "Hook turn signals" below); for sessions without hooks, the terminal title shows Claude Code's working spinner glyph (◐◓◑◒; older versions used braille dots), or the transcript shows this turn has started and not ended (no `turn_duration`, not interrupted) and was written within 45 seconds (#2069; if the transcript shows the turn ended, herdr's state is used); or the turn has stopped but its background commands / sub-Agents / Monitor / workflow are still running (#2228, #2935: when they finish they hand it the result and it carries on; assistant chats excluded) | Amber, breathing |
+| `unread` Unread | A turn finished and the result hasn't been seen | `done` (never focused in herdr) | And not viewed in the App since it finished | Green |
+| `idle` Seen | Finished and seen, waiting for input | `idle` (seen in herdr) | Or herdr still says `done` but it was viewed in the App | Gray |
+| `offline` Not running | Not in the host, only a transcript; sending a message does `--resume` | — | — | Light gray |
+| `interrupted` Interrupted by restart | Was running before a restart, and the restart took herdr's panes with it (#1917) | — | The record has a pane, the start time is earlier than this node's start, and there's no live agent now | Light gray, with "Continue" |
+| `unknown` Unknown | The host recognized the agent but can't tell its state | `unknown` | — | Gray |
 
-排序优先级：需要你 → 工作中 → 完成未看 → 已看 → 未知 → 未运行。
+Sort priority: Needs you → Working → Unread → Seen → Unknown → Not running.
 
-### 非 Claude 的 herdr agent（opencode、pi、不认识的 agent）
+### Non-Claude herdr agents (opencode, pi, unrecognized agents)
 
-herdr 报的 agent 不是 Claude / Codex / TRAEX 时，状态**一律取 herdr 报的**（`blocked` / `working` / `done` / `idle` / `unknown`），没有 hook、transcript、屏幕上的框可以补充；
-「需要你」「完成」的判断和推送是 hub 现有的逻辑（按会话状态的变化，不看 agent 是谁）。各自的补充：
+When the agent herdr reports isn't Claude / Codex / TRAEX, the state is **always what herdr reports** (`blocked` / `working` / `done` / `idle` / `unknown`); there are no hooks, transcripts or on-screen boxes to add to it.
+Deciding "Needs you" / "done" and pushing are the hub's existing logic (based on session state changes, regardless of which agent). Per-agent additions:
 
-- **opencode**（`docs/opencode.md`）：herdr 的 opencode 插件报 `working`（一轮开始、工具执行、权限回答之后）、`blocked`（`permission.asked`、`question.asked`、出错）、`idle`（一轮结束）。
-  装了 Persona 的插件时，插件在等一张权限卡（或一个只能在终端答的提问）时也报 `blocked`，node 把两边合起来：herdr 说什么就是什么，插件说 `blocked` 时算「需要你」。
-- **pi**（`docs/pi.md`）：同上，扩展有卡片在等手机时算「需要你」。
-- **不认识的 agent**（`gemini`、`amp`……）：以前整行丢掉，现在列成只有终端的一行（`docs/opencode.md`「其他 agent 的终端行」）；状态就是 herdr 的，所以它卡在确认框里时手机上看得见「需要你」，
-  但没有卡片可答（hub 不去解析不认识的 TUI 的屏幕），要进终端页答。
+- **opencode** (`docs/opencode.md`): herdr's opencode plugin reports `working` (turn start, tool execution, after a permission answer), `blocked` (`permission.asked`, `question.asked`, errors) and `idle` (turn end).
+  With Persona's plugin installed, the plugin also reports `blocked` while it's waiting on a permission card (or a question that can only be answered in the terminal); node combines both: herdr's word stands, and the plugin saying `blocked` counts as "Needs you".
+- **pi** (`docs/pi.md`): same; the extension having a card waiting on the phone counts as "Needs you".
+- **Unrecognized agents** (`gemini`, `amp`…): used to be dropped entirely; now listed as a terminal-only row (`docs/opencode.md` ("Terminal rows for other agents")). The state is herdr's, so when it's stuck in a confirm box the phone shows "Needs you",
+  but there's no card to answer (the hub doesn't parse screens of TUIs it doesn't know); answer it on the terminal page.
 
-### hook 的轮次信号
+### Hook turn signals
 
-herdr 的状态常常不对（`done` 还在干活，#2069），标题字形和 transcript 的修改时间只是推断。Persona 启动的 Claude 会话带 Persona 的 hook，用户自己起的会话在打开 `claude_global_hooks` 后由全局只报告的 hook（`claude-integration.md`「全局只报告的 hooks」）
-报同样的 `UserPromptSubmit` / `Stop`，两路进同一套计数：它们直接说一轮什么时候开始、什么时候结束，node 据此判断（`server/internal/node/hookturn.go` 的 `judgeHookTurn`，`claudeStatus` 调用）。
-借鉴 moshi-hook 的做法，每个会话在 node 内存里记：
+herdr's state is often wrong (`done` while still working, #2069), and the title glyph and transcript modification time are only inference. Claude sessions Persona starts carry Persona's hooks; sessions the user starts themselves, once `claude_global_hooks` is on, get global report-only hooks (`claude-integration.md` ("Global report-only hooks"))
+that report the same `UserPromptSubmit` / `Stop`. Both feed the same counter: they say directly when a turn starts and ends, and node decides from that (`judgeHookTurn` in `server/internal/node/hookturn.go`, called by `claudeStatus`).
+Borrowing moshi-hook's approach, node keeps per session in memory:
 
-| 字段 | 来源 | 用途 |
+| Field | Source | Purpose |
 | --- | --- | --- |
-| `prompts` | 每个 `UserPromptSubmit` 加一 | 开了几轮 |
-| `completed` | `Stop` 时置为当时的 `prompts` | 答完了几轮 |
-| 进程 pid + 启动时刻 | hook 进程往上找到 claude（`~/.claude/sessions/<pid>.json` 的 `sessionId` 对得上的那个祖先），Linux 取 `/proc/<pid>/stat` 第 22 项，存成 `linux:<starttime>`；macOS 取不到启动时刻，只存 pid | 分清活着的 claude 和被复用的 pid |
-| 回复签名 | `Stop` 的 `last_assistant_message` 去空白后的 SHA-256 前 8 字节 | hub 给「完成」推送去重 |
+| `prompts` | +1 on each `UserPromptSubmit` | How many turns started |
+| `completed` | Set to the current `prompts` on `Stop` | How many turns finished |
+| Process pid + start time | The hook process walks up to claude (the ancestor whose `~/.claude/sessions/<pid>.json` `sessionId` matches); on Linux, field 22 of `/proc/<pid>/stat`, stored as `linux:<starttime>`; macOS can't get the start time, so only the pid is stored | Tell a live claude from a reused pid |
+| Reply signature | First 8 bytes of SHA-256 of `Stop`'s `last_assistant_message` with whitespace removed | Hub dedups "done" pushes |
 
-两路来源的区别只在两点，别的都一样：Persona 启动的会话（含助手）只算插件 hook 的那一份，全局那一份在计数**之前**就丢掉，否则一次提交数两次；
-全局的事件带 `report_only`，hub 不据此认为会话有 Persona 的 hook（否则屏幕卡片会为一张不来的 hook 卡片白等）。
+The two sources differ in only two ways; everything else is the same. Sessions Persona started (including the assistant) count only the plugin hook's copy; the global copy is dropped **before** counting, otherwise one submit counts twice.
+Global events carry `report_only`, and the hub doesn't take them as meaning the session has Persona's hooks (otherwise screen cards would wait in vain for a hook card that never comes).
 
-判断（herdr 说 `done` / `idle` / `unknown` 时；`blocked`、`working` 照 herdr）：
+Decisions (when herdr says `done` / `idle` / `unknown`; `blocked` and `working` follow herdr):
 
-- **终端上开着对话框**（#2553，`node/dialogstatus.go`）：上面的判断之后仍是 `done` / `idle` / `unknown` 的 Claude（不含 botmux、Claude 的 agents 列表里的、Persona 自己在操作选择器的），
-  herdr 窗格里的，node 每 5 秒在后台读一次它的屏幕（列表不等读屏），底部是对话框（`screen.Choosing`）就记为 `blocked`，`attention_reason` 是对话框第一行，App 列表和助手 `agents_list` 的「最后说」显示这一行。
-  起因：Claude Code 2.1.309 的 auto mode 计费通知挡住了 3 个 Agent 好几分钟，herdr 报 done，Persona 显示成完成未看。
+- **A dialog is open in the terminal** (#2553, `node/dialogstatus.go`): for a Claude still `done` / `idle` / `unknown` after the checks above (excluding botmux, those in Claude's agents list, and ones where Persona itself is operating a picker)
+  in a herdr pane, node reads its screen in the background every 5 seconds (the list doesn't wait for the read). If the bottom is a dialog (`screen.Choosing`) it's recorded as `blocked`, `attention_reason` is the dialog's first line, and the "last said" in the App list and the assistant's `agents_list` shows that line.
+  Why: Claude Code 2.1.309's auto mode billing notice blocked 3 Agents for several minutes; herdr reported done and Persona showed Unread.
 
-- **有 hook 且 `prompts > completed`**：工作中，覆盖 herdr 的 `done`。
-- **有 hook 且 `prompts == completed` 并且见过 `Stop`**：没在工作，终端标题里残留的转圈字形也不算。例外：transcript 里有一轮在 `Stop` 之后（加 5 秒宽限，让收尾的几行写完）才写的、还没结束的，
-  是 hook 没通知的新一轮（后台任务或 `/loop` 唤醒 Claude、Stop hook 又让它接着干），这一轮按没有 hook 的规则判断。
-- **什么都没数到**（node 刚重启、只收到 `SessionStart`）：hook 没有发言，照没有 hook 的会话判断。计数在内存里，重启后第一个 `UserPromptSubmit` / `Stop` 起重新有效；这是安全的方向，
-  所以不进 Postgres、没有迁移。
-- **agent 进程不在了或启动时刻对不上**（pid 被别的程序复用）：丢掉这个会话的 hook 状态，一个死进程留下的「没结束的一轮」不再算工作中，改走没有 hook 的规则。
-  没直接判成未运行，因为同一个会话可能已经被手动 `claude --resume` 在同一个窗格里接着跑（那时没有 hook）；窗格里真没有 agent 时，herdr 本来就不列它。
+- **Has hooks and `prompts > completed`**: Working, overriding herdr's `done`.
+- **Has hooks, `prompts == completed`, and a `Stop` was seen**: not working; a leftover spinner glyph in the terminal title doesn't count. Exception: if the transcript has a turn written after the `Stop` (with a 5-second grace for the closing lines) that hasn't ended,
+  it's a new turn the hooks didn't report (a background task or `/loop` woke Claude, or a Stop hook made it keep going), and that turn is judged by the no-hook rules.
+- **Nothing counted** (node just restarted, only `SessionStart` received): the hooks have nothing to say; judge as a session without hooks. The counter is in memory and becomes valid again from the first `UserPromptSubmit` / `Stop` after a restart. That errs on the safe side,
+  so it isn't stored in Postgres and needs no migration.
+- **The agent process is gone or its start time doesn't match** (pid reused by another program): drop the session's hook state, so "an unfinished turn" left by a dead process no longer counts as Working; use the no-hook rules instead.
+  It isn't judged Not running outright, because the same session may already have been continued by hand with `claude --resume` in the same pane (without hooks then); if the pane really has no agent, herdr doesn't list it anyway.
 
-**中断（Esc）不触发 `Stop`**，所以 `prompts > completed` 会一直不平。按这个顺序结束这一轮：
+**Interrupting (Esc) doesn't fire `Stop`**, so `prompts > completed` never balances. The turn ends in this order:
 
-1. transcript 末尾在这次 prompt **之后**写了结束标记（`[Request interrupted by user]` 或 `turn_duration`）：结束。
-2. 标题没有转圈字形，且 transcript 自 prompt 或最后一次写入起安静了 8 秒，标题是 Claude 的等待标记 ✳：结束（✳ 是 Claude 自己画的「在等输入」，证据足）。
-3. 同上但标题认不出来（旧版本、用户自己改了标题）：安静 90 秒（`2 × claudeFresh`）才结束，因为长工具调用可以很久不写 transcript。
-4. 标题有转圈字形：一直算工作中，长时间没输出的工具调用不会被误判。
+1. The end of the transcript has an end marker written **after** this prompt (`[Request interrupted by user]` or `turn_duration`): ended.
+2. The title has no spinner glyph, the transcript has been quiet for 8 seconds since the prompt or the last write, and the title shows Claude's waiting mark ✳: ended (✳ is Claude's own "waiting for input" mark, strong enough evidence).
+3. Same but the title isn't recognizable (old version, user-changed title): ends only after 90 seconds of quiet (`2 × claudeFresh`), because long tool calls can go a long time without writing the transcript.
+4. The title has a spinner glyph: counts as Working indefinitely, so long silent tool calls aren't misjudged.
 
-有 `UserPromptSubmit` 却没有 `Stop` 的情况（本地命令是否如此没有实测）走同一条路。
+A `UserPromptSubmit` without a `Stop` (whether local commands do this hasn't been tested) takes the same path.
 
-**完成推送去重**：推送由 hub 在状态 working → done 时发出，状态抖动（working → done → working → done）可能给同一轮发两次。node 把 `Stop` 的回复签名放进 `hook.event`（`stop_sig`），
-hub 在发「完成」推送前比较：同一个会话、同一个签名、中间没有新的 `UserPromptSubmit`，就不发第二次（`Machine.stopDuplicate`）。
-全局只报告的 `Stop` 也带签名，照样去重。没有签名（没有 hook、`Stop` 没带回复）的不拦；新的 prompt 清掉记录，所以两轮碰巧回复一样（「好的」）也都会推。hub 重启后记录丢失，最坏多推一次。
+**Dedup of done pushes**: the hub sends the push on working → done, and state flapping (working → done → working → done) could push twice for one turn. node puts the `Stop` reply signature into `hook.event` (`stop_sig`),
+and before sending a "done" push the hub compares: same session, same signature, no new `UserPromptSubmit` in between, then no second push (`Machine.stopDuplicate`).
+Global report-only `Stop`s carry the signature too and are deduped the same way. Without a signature (no hooks, `Stop` without a reply) nothing is blocked; a new prompt clears the record, so two turns that happen to reply the same ("OK") both push. After a hub restart the record is lost; worst case one extra push.
 
-**同一套防 pid 复用的做法也用在「别处已打开」的判断上**（`openelsewhere.go`）：Claude Code 自己写的 `sessions/<pid>.json` 带 `procStart`（Linux 上就是 `/proc/<pid>/stat` 第 22 项，实测一致），
-留着的旧文件对应的 pid 被别的程序占用时，以前被当成「这个会话在别处开着」而拒绝从手机恢复；现在启动时刻对不上就算那个 claude 已经退出。
+**The same pid-reuse defense is used for "open elsewhere"** (`openelsewhere.go`): the `sessions/<pid>.json` Claude Code writes carries `procStart` (on Linux it's field 22 of `/proc/<pid>/stat`; verified to match).
+When a leftover old file's pid is taken by another program, it used to be treated as "this session is open elsewhere" and resuming from the phone was refused; now a start time mismatch means that claude has exited.
 
-未验证 / 已知局限：Claude Code 的后台任务唤醒、`/loop` 到点是否触发 `UserPromptSubmit` 没有实测（按触发和不触发两种情况都能判对，见上面的例外）；
-macOS 上 pid 复用的防护只有「进程是否还活着」；Windows 上找不到祖先进程，不记 pid，其余信号照常。
-Claude Code 自己写的 `sessions/<pid>.json` 还有 `status`（busy / idle）和 `statusUpdatedAt`，今后可以当作另一路信号（本次没用）。
+Not verified / known limits: whether Claude Code's background-task wakeups and `/loop` timers fire `UserPromptSubmit` hasn't been tested (both cases are judged correctly, see the exception above);
+on macOS the pid-reuse defense is only "is the process still alive"; on Windows the ancestor process can't be found, so no pid is recorded; the other signals work as usual.
+The `sessions/<pid>.json` Claude Code writes also has `status` (busy / idle) and `statusUpdatedAt`, which could become another signal later (not used this time).
 
-**工作态**（2026-11-04，#1686，[agent-work.md](agent-work.md)）：上面是宿主视角，「完成未看」只说明这一轮停了。hub 在一轮停下后分诊，
-给会话加上工作态 `work`：工作中 / 卡在具名的前置条件上（等你决定、等另一个 Agent、等外部事件、瞬时错误）/ 做完了，带一行「在等什么」或结论。
-算状态时多看一眼它：**做完了**、**卡在 hub 会替它等的事上**（hub 自动重试、到点叫醒）的不再是 `unread`，是 `idle`；
-等你决定的 hub 开一张提问卡片，于是是 `needs_you`。没分诊出来（刚停、模型失败、看不出来）的照旧是 `unread`。
-颜色只有一份：`apple/Shared/StatusPalette.swift`，App、手表和实时活动共用（`docs/ios.md`「设计语言」）。
-Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点（`Session.isWaiting`），之后会有新消息。后台命令 / 子 Agent 还在跑的，hub 直接算工作中（#2228，`backgroundState`），不再进待唤醒；助手对话的后台任务和 Monitor 常驻，不算。
-后台起的常驻进程（如开发服务器）会让 Agent 一直是工作中，直到它退出（node 不再列出超过 24 小时的后台任务）。「完成」推送、hub 自更新等一轮结束的判断看宿主状态，不受这一条影响。
+**Work state** (2026-11-04, #1686, [agent-work.md](agent-work.md)): everything above is the host's view; "Unread" only says the turn stopped. After a turn stops, the hub triages it
+and adds a work state `work` to the session: working / blocked on a named precondition (waiting for your decision, another Agent, an external event, a transient error) / done, with a line saying "what it's waiting for" or the conclusion.
+State computation takes it into account: **done**, or **blocked on something the hub waits on for it** (the hub retries automatically, wakes it at the set time), is no longer `unread` but `idle`;
+for a decision you need to make, the hub opens a question card, so it's `needs_you`. Anything not triaged (just stopped, model failure, can't tell) stays `unread`.
+There is only one set of colors: `apple/Shared/StatusPalette.swift`, shared by the App, the watch and Live Activities (`docs/ios.md` ("Design language")).
+The Agents list also has "Waiting": the state is Seen, but a `/loop` hasn't fired yet (`Session.isWaiting`), so a new message will come. Sessions whose background commands / sub-Agents are still running are counted as Working directly by the hub (#2228, `backgroundState`) and no longer go into Waiting; the assistant chat's background tasks and Monitor are always running and don't count.
+A long-running process started in the background (such as a dev server) keeps the Agent Working until it exits (node stops listing background tasks older than 24 hours). Turn-end decisions such as the "done" push and hub self-update look at the host state and aren't affected by this.
 
-### 后台 workflow、Monitor（#2935）
+### Background workflows and Monitor (#2935)
 
-Claude Code 的 Workflow 工具把一个多 agent 脚本放到后台跑，这一轮随即结束、等它跑完的通知（`<task-notification>`）再被叫醒；Monitor 也一样，事件来了叫醒它。
-它们和后台命令一样算后台工作：Agent 是工作中，「做完了」推送先压着，待办的收据、判完成和自动关闭（#1696）都等它们结束；通知把主会话叫醒后，那一轮结束时照常判断。
+Claude Code's Workflow tool runs a multi-agent script in the background; the turn ends right away and is woken again by the notification that it finished (`<task-notification>`). Monitor works the same way, waking it when an event arrives.
+They count as background work just like background commands: the Agent is Working, the "done" push is held back, and to-do receipts, completion judgment and auto-close (#1696) all wait for them to end. Once a notification wakes the main session, the end of that turn is judged as usual.
 
-- **从哪读**：transcript 里 Workflow 工具的结果「Workflow launched in background. Task ID: … Run ID: wf_…」（`turn_duration` 的 `pendingWorkflowCount` 也说明有在跑的），
-  Monitor 的「Monitor started (task …, expires in 30m …)」；结束看同一 task id 的通知（带 `<status>`）或 `TaskStop`。node 的后台扫描读整个 transcript，不会因为只看尾巴漏掉。
-- **进度在磁盘上**：`<会话>/subagents/workflows/<run>/journal.jsonl`（`started` 一行一个 agent，带 label、phase；`result` 是它回来了）、同目录的 `agent-<id>.jsonl` / `.meta.json`（每个 agent 的对话，按子 Agent 读），
-  跑完写 `<会话>/workflows/<run>.json`（status、error、耗时），脚本 `<会话>/workflows/scripts/<名字>-<run>.js` 的 `meta` 里有名字和阶段。
-- **会话字段** `workflows`（`docs/protocol.md`）：名字、状态、当前阶段、完成数 / 已开始数、耗时、子 agent 列表和每个的最后一句；在跑的同时放进 `background`（kind `workflow`），旧客户端和旧 hub 也能认出「后台还有活」。
-- **兜底**：没收到通知也没有状态文件、但 30 分钟没有任何写入的算 `stalled`（它的 claude 没了），不再算在跑；Monitor 过了 `expires_at` 不算；结束一天后不再列出。
-- 助手的实时快照和 `agents_list` 写出在跑的 workflow（「这一轮停着是在等结果，不是做完了」），它不会去催或关这些 Agent。
-列表的排序（三种分组都一样）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同状态按最后更新时间（`docs/ios.md`）。
+- **Where it's read from**: the Workflow tool result in the transcript, "Workflow launched in background. Task ID: … Run ID: wf_…" (`turn_duration`'s `pendingWorkflowCount` also says some are running),
+  and Monitor's "Monitor started (task …, expires in 30m …)". The end is the notification for the same task id (with `<status>`) or `TaskStop`. node's background scan reads the whole transcript, so nothing is missed by only reading the tail.
+- **Progress is on disk**: `<session>/subagents/workflows/<run>/journal.jsonl` (one `started` line per agent, with label and phase; `result` means it came back), and in the same directory `agent-<id>.jsonl` / `.meta.json` (each agent's conversation, read as a sub-Agent).
+  When done it writes `<session>/workflows/<run>.json` (status, error, duration); the `meta` of the script `<session>/workflows/scripts/<name>-<run>.js` has the name and phases.
+- **Session field** `workflows` (`docs/protocol.md`): name, status, current phase, finished / started counts, duration, the sub-agent list and each one's last line. While running it's also put into `background` (kind `workflow`), so old clients and old hubs can still tell "there's background work".
+- **Fallback**: with no notification and no status file, 30 minutes without any write counts as `stalled` (its claude is gone) and no longer as running; a Monitor past `expires_at` doesn't count; finished ones stop being listed after a day.
+- The assistant's live snapshot and `agents_list` spell out running workflows ("this turn stopped to wait for results, it isn't done"), so it won't nudge or close these Agents.
+List order (the same for all three groupings): Needs you → Unread → Working → Waiting → Muted → Seen; within a state, by last update time (`docs/ios.md`).
 
-### 「看过」
+### "Seen"
 
-- herdr 的看过 = 在电脑上聚焦那个 tab（CLI 读取不算）。Persona **不会**为了标已看去聚焦 tab（会抢电脑上的焦点），所以手机上看过之后，
-  电脑上 herdr 侧边栏的绿点仍在。
-- App 的看过：打开对话页、在对话页里看着它完成、在列表里左滑「标为已看」、「全部标为已读」、手表打开会话。App 发 WS `{"type":"seen"}`
-  （连接卡住时、或者 WS 发出 5 秒后 hub 还没记下时，改发 `POST /api/v1/sessions/{mid}/{sid}/seen`），hub 存进 Postgres `session_views`。
-  WS 消息没有回执，连接半开时会悄悄丢掉（#1588），所以 App 把还没被 hub 记下的已读放在 `SeenOutbox`：hub 发来的列表里这个会话的
-  `seen_at` 比标记时晚，才算记下；这期间它照旧显示已看，重新连上时再发一次；它又干了一轮、开始工作或需要你、从列表里消失、
-  或者 10 分钟还没记下，就不再等。
-- 判定：herdr `done` 且 `seen_at` 早于会话最后更新时间（transcript 的修改时间，即这一轮结束的时间）→ `unread`，否则 `idle`。
-  所以看过之后它又干了一轮，会重新变成完成未看。
+- Seen in herdr = the tab was focused on the computer (reads via the CLI don't count). Persona **does not** focus the tab to mark it seen (that would steal focus on the computer), so after you look on the phone,
+  the green dot in herdr's sidebar on the computer is still there.
+- Seen in the App: opening the chat page, watching it finish on the chat page, swiping left in the list to **Mark as Seen**, **Mark All as Read**, opening the session on the watch. The App sends WS `{"type":"seen"}`
+  (when the connection is stuck, or the hub hasn't recorded it 5 seconds after the WS send, it sends `POST /api/v1/sessions/{mid}/{sid}/seen` instead), and the hub stores it in Postgres `session_views`.
+  WS messages have no acknowledgment and are silently dropped on a half-open connection (#1588), so the App keeps reads the hub hasn't recorded yet in `SeenOutbox`: it counts as recorded only when a list from the hub has this session's
+  `seen_at` later than the mark. Meanwhile it still shows as Seen and is resent on reconnect; it stops waiting if the session does another turn, starts working or needs you, disappears from the list,
+  or still isn't recorded after 10 minutes.
+- Rule: herdr `done` and `seen_at` earlier than the session's last update time (the transcript's modification time, i.e. when the turn ended) → `unread`, otherwise `idle`.
+  So if it does another turn after you looked, it becomes Unread again.
 
-### 排序
+### Ordering
 
-- 列表按状态分组，组内新的在前。一般用 `updated_at`，但工作中的 agent 每走一步 `updated_at` 都会变，组内会跳来跳去，
-  所以「工作中」用 `state_since`：hub 记下每个 agent 进入当前状态的时间（内存里，hub 重启后从重启那一刻算）。
+- The list is grouped by state, newest first within a group. Normally that's `updated_at`, but a working agent's `updated_at` changes with every step and would jump around within the group,
+  so "Working" uses `state_since`: the hub records when each agent entered its current state (in memory; after a hub restart it counts from the restart).
 
-## 空间 / 槽位（多 tab 协作）
+## Spaces / slots (multi-tab collaboration)
 
-一个宿主里「一组相关的 agent」抽象为**空间（space）**，组里的每个位置是**槽位（slot）**：
+"A group of related agents" in a host is abstracted as a **space**, and each position in the group is a **slot**:
 
-| 字段 | herdr 映射 | 以后接入别的工具 |
+| Field | herdr mapping | Other tools later |
 | --- | --- | --- |
-| `space_kind` | `herdr` | 工具名 |
-| `space_id` / `space_name` / `space_index` | workspace id / label / number | 项目、房间、会话组 |
-| `slot_id` / `slot_name` / `slot_index` | tab id / label / number | 角色、窗口、频道 |
-| `pane_index`（可选，#2320） | 窗格在 tab 里按位置的序号（从 0 起，左上为 0） | 槽位里的第几个位置 |
-| `parent_space_id`（可选，#2073） | 不填 | 这个空间挂在哪个空间下面（同机器、同 `space_kind`）：Orca 的子工作区填父工作区的 `worktreeId`（`worktree.ps` 的 `parentWorktreeId`） |
+| `space_kind` | `herdr` | Tool name |
+| `space_id` / `space_name` / `space_index` | workspace id / label / number | Project, room, session group |
+| `slot_id` / `slot_name` / `slot_index` | tab id / label / number | Role, window, channel |
+| `pane_index` (optional, #2320) | The pane's positional index within the tab (from 0, top-left is 0) | Which position within the slot |
+| `parent_space_id` (optional, #2073) | Not set | Which space this space sits under (same machine, same `space_kind`): an Orca child workspace sets the parent workspace's `worktreeId` (`worktree.ps`'s `parentWorktreeId`) |
 
-DSH（`docs/dsh.md`）：`space_kind` 是 `dsh`，空间是会话的目录（`space_id` = 目录、`space_name` = 目录名），没有槽位；
-状态由插件给：在跑 → working，有授权 / 提问等着 → blocked，其余 done（hub 照常按看没看过分完成未看 / 已看）。
+DSH (`docs/dsh.md`): `space_kind` is `dsh`, the space is the session's directory (`space_id` = directory, `space_name` = directory name), no slots;
+state comes from the plugin: running → working, a permission / question waiting → blocked, otherwise done (the hub splits it into Unread / Seen by whether it's been seen, as usual).
 
-Paseo（`docs/paseo.md`「显示哪些会话」）：`space_kind` 是 `paseo`，空间是 Paseo 的项目（`space_id` = 项目记录 id、`space_name` = 项目名），
-同一个仓库的主检出和各个 worktree 在一个空间；槽位是 Paseo 的工作区（`slot_id` = 工作区 id、`slot_name` = 工作区标题）。
+Paseo (`docs/paseo.md` ("Which sessions are shown")): `space_kind` is `paseo`, the space is a Paseo project (`space_id` = project record id, `space_name` = project name);
+a repository's main checkout and its worktrees share a space; the slot is a Paseo workspace (`slot_id` = workspace id, `slot_name` = workspace title).
 
-opencode（`docs/opencode.md`）：herdr 窗格里的是 herdr 的会话（`space_kind` 是 `herdr`）；不在 herdr 里的（网页、别的终端）是 runtime 会话，
-`space_kind` 是 `opencode`，空间是会话的目录，没有槽位，状态由插件给（在跑 → working，等权限 → blocked，其余按有没有 assistant 消息给 done / idle）。
+opencode (`docs/opencode.md`): those in herdr panes are herdr sessions (`space_kind` is `herdr`); those outside herdr (web, other terminals) are runtime sessions,
+`space_kind` is `opencode`, the space is the session's directory, no slots, and state comes from the plugin (running → working, waiting on a permission → blocked, otherwise done / idle depending on whether there's an assistant message).
 
-node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）填这些字段：herdr 经 `events.subscribe` 推来变化时取一次
-（列表最多每秒重建一次，进入 / 离开 blocked 的不等，见 `docs/server.md`「卡片的快车道」），
-平时 10 秒兜底一次（事件流断开、或有 TRAEX 窗格时每秒一次，见 `docs/server.md`「和 herdr 的连接」）。tab 名是默认数字时 App 显示 `#2`。
+node fills these fields from herdr's `session.snapshot` (workspaces, tabs and agents in one call): once whenever herdr pushes a change via `events.subscribe`
+(the list is rebuilt at most once a second; entering / leaving blocked doesn't wait, see `docs/server.md` ("Fast lane for cards")),
+and every 10 seconds as a fallback (every second when the event stream is down or there's a TRAEX pane, see `docs/server.md` ("Connection to herdr")). When a tab name is the default number, the App shows `#2`.
 
-### 一个 tab 里的几个 pane
+### Several panes in one tab
 
-常见的用法是一个 Agent 在自己的 tab 里 `herdr pane split`，再在新 pane 里起 Claude / Codex 分头做同一件事。同一个 tab（`slot_id`）里的几个 Agent 是**一组**，不要求 Agent 额外写什么：
+A common pattern: an Agent runs `herdr pane split` in its own tab, then starts Claude / Codex in the new pane to split up the same job. Agents in the same tab (`slot_id`) form **a group**; the Agent doesn't need to write anything extra:
 
-- herdr 不记 pane 是谁起的，只有位置：快照的 `layouts` 里每个 tab 有每个 pane 的 `rect` 和分屏树 `splits`。node 按分屏树排
-  （`server/internal/herdr/layout.go`），给每个 Agent 会话填 `pane_index`（从 0 起）：
-  `splits` 每项是树上的一个节点 `{id, direction, ratio, rect}`，不列子节点；`direction` 是 `right`（左右切）或 `down`（上下切），`rect` 是它切的那块。
-  node 从整个 tab 开始，找 `rect` 正好是这块的节点、按它的方向切成两半（左 / 上那半在前；同方向有几条能切的线时取两半各自正好是一个 pane 或一个节点的那条），两半各自再这样排。
-  这样先上下再各自左右切出来的 2×2（A、B 在上，C、D 在下）排成 A、B、C、D；只看 rect 的话两条线都能切，分不出先后。
-  没有 `splits`（旧版 herdr）或某块找不到节点时退回只看 rect：找一条不穿过任何 pane 的直线，先试左右、再试上下。
-  zoom 时 herdr 照样给每个 pane 原来的 rect；rect 互相重叠、切不开时按 herdr 自己列的顺序。宿主不给布局（herdr-core、Orca 等）或 pane 不在布局里就不带 `pane_index`。
-  只有 `pane_index` 变了（`herdr pane swap`、关掉左上的 shell）node 也推 `sessions.changed`：列表的变化判断里有它（有没有、是几）。
-- 组里按 `pane_index` 排，0 号（左上，分屏都是从它切出来的）是**发起者**，其余是它起的分支；没有 `pane_index` 时退回原来的顺序（会话 id）。
-  左上是 shell 不是 Agent 时，组里没有 0 号，几个 Agent 平级（网页不标发起者）。
-- 不推断跨 tab 的父子关系（Agent 把子任务开在别的 tab / workspace）；以后需要时再约定显式标记（类似待办的 `persona_from`）。
+- herdr doesn't record who started a pane, only positions: in the snapshot's `layouts`, each tab has each pane's `rect` and the split tree `splits`. node orders by the split tree
+  (`server/internal/herdr/layout.go`) and fills `pane_index` (from 0) for each Agent session:
+  each item in `splits` is a tree node `{id, direction, ratio, rect}` without its children; `direction` is `right` (split left/right) or `down` (split top/bottom), and `rect` is the area it splits.
+  node starts from the whole tab, finds the node whose `rect` is exactly that area, and splits it in two along its direction (the left / top half first; if several lines in the same direction could split it, it takes the one where each half is exactly one pane or one node), then orders each half the same way.
+  So a 2×2 made by splitting top/bottom first and then each half left/right (A, B on top, C, D below) orders as A, B, C, D; looking only at rects, both lines could split it and the order would be ambiguous.
+  With no `splits` (old herdr) or no node for an area, it falls back to rects only: find a straight line that crosses no pane, trying left/right first, then top/bottom.
+  When zoomed, herdr still gives each pane its original rect; when rects overlap and can't be split, herdr's own listing order is used. If the host gives no layout (herdr-core, Orca, etc.) or the pane isn't in the layout, there's no `pane_index`.
+  node also pushes `sessions.changed` when only `pane_index` changes (`herdr pane swap`, closing the top-left shell): it's part of the list's change detection (present or not, and its value).
+- Within a group, order by `pane_index`. Number 0 (top-left; every split is cut from it) is the **starter**, the rest are branches it started; without `pane_index`, fall back to the old order (session id).
+  If the top-left is a shell rather than an Agent, the group has no number 0 and the Agents are peers (the web doesn't mark a starter).
+- Parent/child relationships across tabs (an Agent opening a subtask in another tab / workspace) are not inferred; if needed later, agree on an explicit marker (like to-dos' `persona_from`).
 
-网页的表现见 `docs/web.md`；Android 见 `docs/android.md`「同一个 tab 里的几个 Agent」（#2515）。iOS / Mac（#2516，纯逻辑在 `apple/Persona/Views/Chats/TabPanes.swift`，规则和网页的 `herdr-tree.ts` 一样）：
+For the web, see `docs/web.md`; Android, `docs/android.md` ("Several Agents in one tab") (#2515). iOS / Mac (#2516; the pure logic is in `apple/Persona/Views/Chats/TabPanes.swift`, same rules as the web's `herdr-tree.ts`):
 
-- Agents 列表（按仓库 / 按项目，卡片、胶囊、细列表）里一个 tab 有几个 Agent 时先是一行 tab：最需要处理的那个的状态点、tab 名和它的标题、「N 个 Agent」，点它收起 / 展开；
-  下面按 pane 的位置排，发起者在上、标「发起者」，其余缩进一级挂在下面；每行写自己的 Agent（两个都是 Claude 时编号「Claude 2」，发起者靠标记区分），不再写 tab 名。
-  默认展开，收起状态按 `机器/空间名/tab 编号` 记住（`dev.folded` 里的 `tab/…`，改名后照样认得）；整组算一项：组里有一个忙的就不进「还有 N 个空闲」。
-  空闲的空间 / 仓库展开后不再加 tab 行，同一 tab 的排在一起、照样标发起者。空间上的数字数 Agent（「N 个 Agent」）。按状态 / 按机器 / 按待办不分组。
-- 对话页顶部的同伴胶囊和 ⋯ 浮层、Mac 的同伴菜单、空间页：同一 tab 的排在一起、按位置排，名字是「#1 · Codex」，发起者带「发起」（浮层和菜单写「发起者」，分支缩进；Mac 菜单按 tab 分节）。
+- In the Agents list (by repository / by project; cards, capsules, compact list), a tab with several Agents first gets a tab row: the status dot of the one most in need of attention, the tab name and its title, "N Agents"; tap it to collapse / expand.
+  Below it, ordered by pane position: the starter on top, labeled **Started It**, the rest indented one level beneath it. Each row names its own Agent (when both are Claude they're numbered "Claude 2"; the starter is told apart by its label) and no longer repeats the tab name.
+  Expanded by default; the collapsed state is remembered per `machine/space name/tab number` (`tab/…` in `dev.folded`, still recognized after renames). The whole group counts as one item: if any member is busy, it doesn't go into "N more idle".
+  Expanding an idle space / repository adds no tab rows; members of the same tab are kept together and the starter is still labeled. The number on a space counts Agents ("N Agents"). Grouping by state / by machine / by to-do doesn't group by tab.
+- The peer capsules and ⋯ popover at the top of the chat page, the Mac peer menu, and the space page: members of the same tab are kept together and ordered by position, named "#1 · Codex"; the starter is marked **Starter** (the popover and menu write **Started It**, branches are indented; the Mac menu has one section per tab).
 
-App 里的表现：
+How it looks in the App:
 
-- **开发列表按空间分组**：有动静的空间（含需要你 / 工作中 / 完成未看）每个一张卡片，头部是空间名、机器、各状态数量，
-  里面按 tab 顺序列每个 agent（tab 名、标题、状态、最新一句）；全是已看的空间收进「空闲的空间」，一行一个、可展开；
-  不在运行的会话在「最近（未运行）」。Android（2026-11-02 起）是电脑 → 空间 → 会话的树，不再有「空闲的空间」这个分组和标题：
-  空闲的空间留在所属电脑下面，排在有动静的空间后面，默认收起、样式弱一点，收起时标出里面有几个会话（`docs/android-design.md` 2.4 节）。
-- **对话页顶栏的同伴菜单**：同一空间有多个 agent 时，顶栏第二行最左边的按钮列出它们（tab 名 + 状态；有别的 agent 需要你时按钮带红点），点一下直接切过去，不用返回列表。
-  副标题是「机器 · 空间 › tab · 状态」。
-- **空间页**：点空间卡片头部进入，网格展示每个 tab 的状态、标题、最新进展、待处理数量；可以「在这个空间开新标签」，
-  会在同一个 herdr workspace 里新建 tab（`session.start` 的 `workspace_id`）。
+- **The dev list is grouped by space**: each active space (with Needs you / Working / Unread) gets a card whose header shows the space name, machine and per-state counts,
+  listing each agent in tab order (tab name, title, state, latest line). Spaces that are all Seen are folded into **Idle Spaces**, one row each, expandable;
+  sessions that aren't running are under "Recent (not running)". On Android (since 2026-11-02) it's a computer → space → session tree, with no **Idle Spaces** group or heading:
+  idle spaces stay under their computer, after the active spaces, collapsed by default and styled more subtly, showing how many sessions they contain when collapsed (`docs/android-design.md` section 2.4).
+- **The peer menu in the chat page's top bar**: when a space has several agents, the leftmost button on the top bar's second line lists them (tab name + state; the button has a red dot when another agent needs you); tap one to switch straight to it without going back to the list.
+  The subtitle is "machine · space › tab · state".
+- **Space page**: opened from a space card's header; a grid shows each tab's state, title, latest progress and pending count. You can **Open a new tab in this space**,
+  which creates a tab in the same herdr workspace (`workspace_id` of `session.start`).

@@ -1,323 +1,323 @@
-# TestFlight 发布
+# TestFlight releases
 
-TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及用公开链接加入的外部测试（见文末「外部测试」）。
+TestFlight internal testing (testers in the configured `app_store.testers`), plus external testing joined through a public link (see "External testing" at the end).
 
-## 账号与标识
+## Accounts and identifiers
 
-产品名为 Persona（原 Jarvis），但已有 Bundle ID、App Group、钥匙串组、签名 profile 名称和 App Store Connect App 记录不变；不要因改名重新创建 App。
-App Store Connect 里的商店名 2026-11-03 起是 **Persona Side**（原「Jarvis Herd」；桌面上显示的仍是 `CFBundleDisplayName` 的 Persona），隐私政策地址同 `app_store.external.privacy_url`（官网的隐私政策页）。商店名在 App 信息的本地化（`appInfoLocalizations` 的 `name`）里，版本还没提交审核时可以用 API 直接改，见下面「改商店名」。下文的「Jarvis App Store」「Jarvis Watch App Store」是已有签名 profile 名，保留不改；当前生成工程 / target 和 archive / `.app` 产物使用 Persona 名称，旧工程 / scheme 别名与 module 身份见 [兼容迁移](rename.md)。历史构建记录保留当时名称。新默认配置和 `personad` / `jarvisd` 的兼容见 [命名与兼容](config.md#命名与兼容)。
+The product is Persona (formerly Jarvis), but the existing Bundle IDs, App Group, keychain groups, signing profile names and App Store Connect app record stay the same; don't recreate the App because of the rename.
+Since 2026-11-03 the store name in App Store Connect is **Persona Side** (formerly "Jarvis Herd"; the home screen still shows `CFBundleDisplayName`, Persona), and the privacy policy URL is `app_store.external.privacy_url` (the website's privacy policy page). The store name lives in the App Info localizations (`name` in `appInfoLocalizations`) and can be changed directly via the API while the version hasn't been submitted for review; see "Changing the store name" below. "Jarvis App Store" and "Jarvis Watch App Store" below are existing signing profile names and stay as they are; the generated project / targets and archive / `.app` products use the Persona name, and old project / scheme aliases and module identity are in [compatibility migration](rename.md). Historical build records keep the names of their time. New default config and `personad` / `jarvisd` compatibility are in [naming and compatibility](config.md#命名与兼容).
 
-都在构建配置里（`docs/config.md`）：`app.bundle_id` / `app.team_id`、`app_store.key_id` / `issuer_id` / `key_path`（API key 文件只放在
-仓库外，比如 `~/.appstoreconnect/`）、`app_store.app_id`（App 记录的数字 ID）、`app_store.testers`、`app_store.feedback_email`。
+All in the build config (`docs/config.md`): `app.bundle_id` / `app.team_id`, `app_store.key_id` / `issuer_id` / `key_path` (the API key file lives only
+outside the repo, e.g. `~/.appstoreconnect/`), `app_store.app_id` (the app record's numeric ID), `app_store.testers`, `app_store.feedback_email`.
 
-| 项目 | 说明 |
+| Item | Notes |
 | --- | --- |
-| Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`、Live Activity `<bundle_id>.liveactivity`、通知服务扩展 `<bundle_id>.notify`（推送中继，`docs/push-relay.md`）、分享扩展 `<bundle_id>.share`（#4586），用 `scripts/release/asc_signing.py` 注册 |
-| App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`USERNOTIFICATIONS_TIMESENSITIVE`（时间敏感通知，#1572）、`HEALTHKIT`、`APP_GROUPS`；Live Activity：`APP_GROUPS`；手表：无。App Group 本身只能在网站上建、挂到 App ID 上（下面「App Group」） |
-| 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」「Persona Share App Store」等（`IOS_APP_STORE`，分享扩展的是 2026-11-06 新加的，首次发版前先跑一次 `asc_signing.py` 注册它的 Bundle ID 和描述文件）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
-| 签名身份 | 登录钥匙串里的 `Apple Distribution: …（team_id）` |
-| App Store Connect App ID | 网页建好 App 记录后填进配置的 `app_store.app_id` |
+| Bundle ID | iOS `<bundle_id>`, watch `<bundle_id>.watchkitapp`, Live Activity `<bundle_id>.liveactivity`, notification service extension `<bundle_id>.notify` (push relay, `docs/push-relay.md`), share extension `<bundle_id>.share` (#4586); registered with `scripts/release/asc_signing.py` |
+| App ID capabilities | iOS: `PUSH_NOTIFICATIONS`, `USERNOTIFICATIONS_TIMESENSITIVE` (time-sensitive notifications, #1572), `HEALTHKIT`, `APP_GROUPS`; Live Activity: `APP_GROUPS`; watch: none. The App Group itself can only be created on the website and attached to App IDs ("App Group" below) |
+| Provisioning profiles | "Jarvis App Store", "Jarvis Watch App Store", "Persona Share App Store", etc. (`IOS_APP_STORE`; the share extension's was added 2026-11-06, so run `asc_signing.py` once before its first release to register its Bundle ID and profile); `asc_signing.py` deletes and recreates them and installs them into `~/Library/MobileDevice/Provisioning Profiles/` |
+| Signing identity | `Apple Distribution: … (team_id)` in the login keychain |
+| App Store Connect App ID | After creating the app record on the website, put it in the config's `app_store.app_id` |
 
-API key 的角色是 App Manager，用不了 cloud-managed signing（`-allowProvisioningUpdates` 云签名会失败），所以
-归档走自动签名，导出时 `release.sh` 按配置生成 ExportOptions（`scripts/persona_config.py export-options`），手动指定两个 App Store 描述文件重签。
+The API key's role is App Manager, which can't use cloud-managed signing (`-allowProvisioningUpdates` cloud signing fails), so
+archiving uses automatic signing, and at export `release.sh` generates ExportOptions from config (`scripts/persona_config.py export-options`) and re-signs with the two App Store profiles specified manually.
 
-## 首次准备（顺序）
+## First-time setup (in order)
 
-1. 填好 `~/.config/persona/config.json`（`app`、`app_store` 的 key 部分）。
-2. `python3 scripts/release/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送、时间敏感通知和 HealthKit、建两个 App Store 描述文件并装到本机。幂等，能力变了随时重跑。
-3. **网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称、主要语言、Bundle ID、SKU、完全访问权限。
-   把 App ID 填进配置的 `app_store.app_id`。
-4. `python3 scripts/release/asc_testflight.py setup`：建内部群组 `Internal`（`hasAccessToAllBuilds`）并把配置里的测试员加进去。
-5. `NO_UPLOAD=1 ./scripts/release/release.sh` 验证归档 + 导出（不需要 App 记录就能跑）。
-6. `./scripts/release/release.sh` 上传第一个构建 → `python3 scripts/release/asc_testflight.py wait` 等处理完并自动加入 Internal。
+1. Fill in `~/.config/persona/config.json` (`app`, and the key part of `app_store`).
+2. `python3 scripts/release/asc_signing.py`: registers the two Bundle IDs, turns on push, time-sensitive notifications and HealthKit for iOS, creates the two App Store profiles and installs them locally. Idempotent; rerun whenever capabilities change.
+3. **Create the app record on the website** (the API can't): App Store Connect › Apps › New App: iOS, name, primary language, Bundle ID, SKU, full access.
+   Put the App ID in the config's `app_store.app_id`.
+4. `python3 scripts/release/asc_testflight.py setup`: creates the internal group `Internal` (`hasAccessToAllBuilds`) and adds the configured testers.
+5. `NO_UPLOAD=1 ./scripts/release/release.sh` to verify archive + export (works without an app record).
+6. `./scripts/release/release.sh` uploads the first build → `python3 scripts/release/asc_testflight.py wait` waits for processing and adds it to Internal automatically.
 
-没填 `app_store.app_id` 时 `scripts/release/asc_testflight.py` 会直接报错提示。
+Without `app_store.app_id`, `scripts/release/asc_testflight.py` fails right away with a hint.
 
-## 每次发版
+## Every release
 
 ```sh
-./scripts/release/release.sh                      # 构建号 = yyyymmddHHMM；归档、检查、上传、打 testflight/<构建号> 标签
-python3 scripts/release/asc_testflight.py status  # 最近几个构建和处理状态
-python3 scripts/release/asc_testflight.py info "这次的 What to Test"
+./scripts/release/release.sh                      # build number = yyyymmddHHMM; archive, check, upload, tag testflight/<build number>
+python3 scripts/release/asc_testflight.py status  # recent builds and their processing state
+python3 scripts/release/asc_testflight.py info "What to Test for this build"
 git push --tags
 ```
 
-构建号也可以手动给：`./scripts/release/release.sh 42`。
+The build number can also be given by hand: `./scripts/release/release.sh 42`.
 
-`release.sh` 做的事：
+What `release.sh` does:
 
-1. `xcodegen generate`（源头是 `apple/project.yml`，生成 `Persona.xcodeproj`；旧 `Jarvis.xcodeproj` 是工程入口软链，生成内容不入库）。
-2. Release 归档到 `~/Library/Developer/Xcode/Archives/<日期>/Persona <构建号>.xcarchive`（dSYM 留给 Organizer 符号化），
-   同时嵌入手表 App。
-3. `check_bundle_strings.py` 检查 `Persona.app` 和 `Persona.app/Watch/Persona.app`：Info.plist 里的 `*UsageDescription`
-   不能为空或等于 key，`*.lproj/InfoPlist.strings` 同理（占位符文案会被 App Review 自动拒）。
-4. `strings` 检查 Release 二进制里没有 `pairURL`、`openSession`、`showNewChat` 这些只在 `#if DEBUG` 里的模拟器开关。
-   `check_bundle_privacy.py` 检查整个 bundle 里没有个人的值（外部测试是公开链接，见文末）。
-5. `xcodebuild -exportArchive`：手动签名 + `method=app-store-connect` + 两个描述文件映射。**这一步才是 App Store 签名**：
-   归档用的是自动签名的开发描述文件（所以归档里 `aps-environment` 是 `development`），导出时按 App Store 描述文件重签成
-   `production`。`NO_UPLOAD=1` 时把 `destination` 从 `upload` 改成 `export`，并额外校验导出的 ipa 里 `aps-environment`
-   确实是 `production`。
-6. `scripts/release/entitlements.py check`：归档里（`NO_UPLOAD=1` 时再加导出的 ipa）每个 bundle 都带着它 target 的钥匙串组，Info.plist 里的组名也在其中，见下面「entitlements」。
-7. `git tag -f testflight/<构建号>`。
+1. `xcodegen generate` (the source is `apple/project.yml`, generating `Persona.xcodeproj`; the old `Jarvis.xcodeproj` is a symlink to the project entry, and generated content isn't committed).
+2. Release archive to `~/Library/Developer/Xcode/Archives/<date>/Persona <build number>.xcarchive` (dSYMs kept for Organizer symbolication),
+   with the watch App embedded.
+3. `check_bundle_strings.py` checks `Persona.app` and `Persona.app/Watch/Persona.app`: `*UsageDescription` in Info.plist
+   must not be empty or equal to the key, and the same for `*.lproj/InfoPlist.strings` (placeholder text gets auto-rejected by App Review).
+4. `strings` checks that the Release binary contains none of the simulator switches that exist only under `#if DEBUG`, such as `pairURL`, `openSession`, `showNewChat`.
+   `check_bundle_privacy.py` checks that the whole bundle has no personal values (external testing is a public link, see the end).
+5. `xcodebuild -exportArchive`: manual signing + `method=app-store-connect` + the two profile mappings. **This step is the App Store signing**:
+   the archive uses automatically signed development profiles (so `aps-environment` in the archive is `development`), and export re-signs with the App Store profiles to
+   `production`. With `NO_UPLOAD=1`, `destination` changes from `upload` to `export`, and it additionally checks that `aps-environment` in the exported ipa
+   really is `production`.
+6. `scripts/release/entitlements.py check`: in the archive (plus the exported ipa with `NO_UPLOAD=1`), every bundle carries its target's keychain groups, and the group name in Info.plist is among them; see "entitlements" below.
+7. `git tag -f testflight/<build number>`.
 
-归档之后大约 10–30 分钟构建才会出现在 TestFlight。`asc_testflight.py wait [分钟数] [构建号]` 会每 30 秒查一次，等到
-`processingState=VALID` 后写默认的 What to Test 并加入 `Internal` 群组；`INVALID` / `FAILED` 会直接报错退出
-（原因在 App Store Connect 的构建页面里）。**要带上 release.sh 打印的构建号**：刚上传完新构建还查不到，不带构建号时
-「最新的构建」是上一个（早已 VALID），会把 What to Test 写到旧构建上（2026-10-25 踩过）。
+A build shows up in TestFlight about 10–30 minutes after archiving. `asc_testflight.py wait [minutes] [build number]` checks every 30 seconds until
+`processingState=VALID`, then writes the default What to Test and adds it to the `Internal` group; `INVALID` / `FAILED` exits with an error
+(the reason is on the build page in App Store Connect). **Pass the build number release.sh printed**: a just-uploaded build can't be found yet, and without the build number
+"the latest build" is the previous one (long since VALID), so What to Test gets written to the old build (hit on 2026-10-25).
 
-## 用 asc 发版
+## Releasing with asc
 
-`scripts/release/asc_cli.py` 用你自己的 App Store Connect API key 跑 [App Store Connect CLI](https://github.com/rorkai/App-Store-Connect-CLI)（`asc`），上传、TestFlight、提审、元数据、签名都能做。
-key 和上面的发版脚本是同一份配置，配一次就都能用。脚本 pin 了 asc 的版本和 sha256，第一次运行时下载到 `~/.cache/persona/asc/<版本>/`，校验不过就不装。遥测始终关闭。
+`scripts/release/asc_cli.py` runs the [App Store Connect CLI](https://github.com/rorkai/App-Store-Connect-CLI) (`asc`) with your own App Store Connect API key; it can do uploads, TestFlight, review submission, metadata and signing.
+The key is the same config as the release scripts above, so configure it once and everything works. The script pins asc's version and sha256, downloads it to `~/.cache/persona/asc/<version>/` on first run, and refuses to install if the checksum fails. Telemetry is always off.
 
-1. **配 key**：在 App Store Connect › 用户和访问 › 集成 › App Store Connect API 建一个团队 key（角色 App Manager 就够传构建和提审），下载 `AuthKey_<Key ID>.p8`
-   放到仓库外（如 `~/.appstoreconnect/`，`chmod 600`）。把 Key ID、Issuer ID、文件路径和 App 记录的数字 ID 填进 `~/.config/persona/config.json` 的
-   `app_store.key_id` / `issuer_id` / `key_path` / `app_id`。也可以用环境变量 `ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_PRIVATE_KEY_PATH`（或 `ASC_KEY_PATH`）、`ASC_APP_ID`，环境变量优先。
-   仓库的 `.gitignore` 忽略 `*.p8` 和 `.asc/`。
-2. **检查**：`python3 scripts/release/asc_cli.py check`。只在本机读配置，不发任何请求：列出 asc 的版本和位置、Key ID 的末四位、key 文件和它的权限、App ID，最后一行是 `ok`。
-   缺什么就报出环境变量名和配置项名。要确认 key 在 Apple 那边有效，跑 `python3 scripts/release/asc_cli.py auth status --validate`（会发请求）。
-3. **用**：
+1. **Set up the key**: in App Store Connect › Users and Access › Integrations › App Store Connect API, create a team key (the App Manager role is enough to upload builds and submit for review), download `AuthKey_<Key ID>.p8`,
+   and put it outside the repo (e.g. `~/.appstoreconnect/`, `chmod 600`). Put the Key ID, Issuer ID, file path and the app record's numeric ID into `~/.config/persona/config.json` as
+   `app_store.key_id` / `issuer_id` / `key_path` / `app_id`. Environment variables `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY_PATH` (or `ASC_KEY_PATH`), `ASC_APP_ID` also work and take precedence.
+   The repo's `.gitignore` ignores `*.p8` and `.asc/`.
+2. **Check**: `python3 scripts/release/asc_cli.py check`. It only reads config locally and sends no requests: lists asc's version and location, the last four characters of the Key ID, the key file and its permissions, and the App ID; the last line is `ok`.
+   Anything missing is reported with the environment variable name and config key. To confirm the key is valid on Apple's side, run `python3 scripts/release/asc_cli.py auth status --validate` (sends a request).
+3. **Use**:
    ```sh
-   UPLOADER=asc ./scripts/release/release.sh                         # 归档、导出、检查 ipa，用 asc 上传到 TestFlight
-   python3 scripts/release/asc_testflight.py wait 45 <构建号>           # 之后照旧：进 Internal 组、写 What to Test、挂外部组
-   python3 scripts/release/asc_cli.py review submit --version <版本> --build-number <构建号> --dry-run   # 提审前先看要做哪几步，不改任何东西
-   python3 scripts/release/asc_cli.py review submit --version <版本> --build-number <构建号> --confirm   # 把已上传的构建挂到 App Store 版本上，提交审核
-   python3 scripts/release/asc_cli.py <任何 asc 命令>                 # 例如 builds list --output table、review status、validate --version <版本>
+   UPLOADER=asc ./scripts/release/release.sh                         # archive, export, check the ipa, upload to TestFlight with asc
+   python3 scripts/release/asc_testflight.py wait 45 <build number>           # then as before: into the Internal group, write What to Test, attach the external group
+   python3 scripts/release/asc_cli.py review submit --version <version> --build-number <build number> --dry-run   # before submitting, see which steps it would take; changes nothing
+   python3 scripts/release/asc_cli.py review submit --version <version> --build-number <build number> --confirm   # attach the uploaded build to the App Store version and submit for review
+   python3 scripts/release/asc_cli.py <any asc command>                 # e.g. builds list --output table, review status, validate --version <version>
    ```
-   `UPLOADER=asc` 走 `NO_UPLOAD=1` 的导出和 ipa 检查（`aps-environment` 是 `production`、entitlements），再用 `asc builds upload` 上传；不设时仍是 `xcodebuild` 导出时直接上传。
-   asc 自己的帮助：`python3 scripts/release/asc_cli.py --help`、`… <命令> --help`（不需要 key）。
+   `UPLOADER=asc` goes through the `NO_UPLOAD=1` export and ipa checks (`aps-environment` is `production`, entitlements), then uploads with `asc builds upload`; when unset, `xcodebuild` still uploads directly at export.
+   asc's own help: `python3 scripts/release/asc_cli.py --help`, `… <command> --help` (no key needed).
 
-**二开**：改 asc 本身就 fork 上游，在 fork 里 `go build -o ~/bin/asc .`（要 `go.mod` 写的 Go 版本），然后 `ASC_BIN=~/bin/asc python3 scripts/release/asc_cli.py …`，key 和遥测的处理不变。
-Persona 自己的发版逻辑（测试组、What to Test、外部测试）继续写在 `asc_testflight.py` 这些脚本里，或者在 `asc_cli.py` 里组合 asc 命令。
-**升级 asc**：改 `asc_cli.py` 的 `VERSION` 和 `SHA256`（取自 release 里的 `asc_<版本>_checksums.txt`），跑 `python3 -B -m unittest discover -s scripts/release -p 'test_asc_cli.py'`。
+**Customizing**: to change asc itself, fork upstream, run `go build -o ~/bin/asc .` in the fork (needs the Go version in `go.mod`), then `ASC_BIN=~/bin/asc python3 scripts/release/asc_cli.py …`; key and telemetry handling stay the same.
+Persona's own release logic (test groups, What to Test, external testing) stays in scripts like `asc_testflight.py`, or is composed from asc commands in `asc_cli.py`.
+**Upgrading asc**: change `VERSION` and `SHA256` in `asc_cli.py` (from `asc_<version>_checksums.txt` in the release), and run `python3 -B -m unittest discover -s scripts/release -p 'test_asc_cli.py'`.
 
-asc 只用 Persona 配置里的这把 key：`asc_cli.py` 运行时去掉 `ASC_PROFILE`、`ASC_CONFIG_PATH`、`ASC_BYPASS_KEYCHAIN`、`ASC_PRIVATE_KEY`、`ASC_PRIVATE_KEY_B64`，
-`asc auth login` 存进钥匙串的 profile 不会和它混用。App Store 版本（版本号、截图、描述）要先在网页或用 `asc versions`、`asc metadata` 准备好，`review submit` 才能提交。
+asc only uses the key in Persona's config: `asc_cli.py` strips `ASC_PROFILE`, `ASC_CONFIG_PATH`, `ASC_BYPASS_KEYCHAIN`, `ASC_PRIVATE_KEY`, `ASC_PRIVATE_KEY_B64` at runtime,
+so a profile saved to the keychain by `asc auth login` never gets mixed in. The App Store version (version number, screenshots, description) must be prepared first on the website or with `asc versions` / `asc metadata` before `review submit` can submit.
 
-## 为什么这样签名
+## Why sign this way
 
-| 环节 | 签名方式 | 描述文件 |
+| Stage | Signing | Profile |
 | --- | --- | --- |
-| 归档 `xcodebuild archive` | 自动（`CODE_SIGN_STYLE=Automatic`） | 开发期的 `iOS Team Provisioning Profile` |
-| 导出 `xcodebuild -exportArchive` | 手动（`signingStyle=manual`、`signingCertificate=Apple Distribution`） | 「Jarvis App Store」/「Jarvis Watch App Store」 |
+| Archive `xcodebuild archive` | Automatic (`CODE_SIGN_STYLE=Automatic`) | The development `iOS Team Provisioning Profile` |
+| Export `xcodebuild -exportArchive` | Manual (`signingStyle=manual`, `signingCertificate=Apple Distribution`) | "Jarvis App Store" / "Jarvis Watch App Store" |
 
-App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed signing 需要 Admin；手动签名绕开这个限制。
-改 Bundle ID 能力（比如再加一个 capability）会让旧描述文件失效，重跑 `scripts/release/asc_signing.py` 即可。
+An App Store Connect API key can only do what App Manager can, and cloud-managed signing needs Admin; manual signing gets around that.
+Changing Bundle ID capabilities (say, adding another capability) invalidates the old profiles; just rerun `scripts/release/asc_signing.py`.
 
-## entitlements（2026-11-02）
+## entitlements (2026-11-02)
 
-App 和扩展靠共享的组交东西：推送中继的私钥走钥匙串组（`<team>.<bundle id>.push`，App → JarvisNotify），灵动岛的形象和形象包的图走 App Group（`group.<bundle id>`，App → JarvisWidgets，下一节）。
-每个 bundle 的签名里都得有它 target 的 `keychain-access-groups` 和 `com.apple.security.application-groups`，Info.plist 里告诉代码用哪个组（`JarvisPushKeychainGroup`、`JarvisAppGroup`）也得是其中之一，缺一样就静默退回默认值。
-App Group 的 ID 本身不带团队前缀，Info.plist 里直接写 `$(JARVIS_APP_GROUP)`，无签名归档里也有值。
+The App and its extensions hand things over through shared groups: the push relay's private key goes through a keychain group (`<team>.<bundle id>.push`, App → JarvisNotify), and the Dynamic Island avatar and avatar pack images go through the App Group (`group.<bundle id>`, App → JarvisWidgets, next section).
+Every bundle's signature must have its target's `keychain-access-groups` and `com.apple.security.application-groups`, and the group the Info.plist tells the code to use (`JarvisPushKeychainGroup`, `JarvisAppGroup`) must be one of them; if anything is missing, it silently falls back to defaults.
+The App Group ID itself has no team prefix, so the Info.plist writes `$(JARVIS_APP_GROUP)` directly, and it has a value even in an unsigned archive.
 
-- **Info.plist 的组名用 `$(DEVELOPMENT_TEAM).`，不用 `$(AppIdentifierPrefix)`**：后者只在 Xcode 签名时才有值，无签名归档里是空的。entitlements 文件里照旧写 `$(AppIdentifierPrefix)`。
-- **无签名归档（`CODE_SIGNING_ALLOWED=NO`，这台 Mac 没有发布证书、导出时云签名）**：归档里的 bundle 没有 entitlements，导出按 bundle 里有什么来签。
-  导出前用 `python3 scripts/release/entitlements.py sign <归档>` 由内到外 ad hoc 签名，每个 bundle 带上它 target 的 entitlements（从 `xcodebuild -showBuildSettings` 找，
-  构建变量展开，`$(AppIdentifierPrefix)` 是团队的；展不开就报错，不留空）。只对 App 用 `codesign --entitlements <原始文件>`、扩展不带的话，
-  导出会把 App 的 `$(JARVIS_BUNDLE_ID)` 展成空、扩展一个组都没有（build 92 就是这样，灵动岛的形象不跟随设置，`docs/live-activity.md`）。
-- **导出后查**：`python3 scripts/release/entitlements.py check <ipa>`，有问题逐条列出并非零退出；对 build 92 的 ipa 报 9 处。
-  App Group 同样查：每个 bundle 的签名里有它 target 的组，Info.plist 的 `JarvisAppGroup` 是其中之一。
-  导出的 ipa / pkg 里推送 entitlement（`aps-environment`，Mac 是 `com.apple.developer.aps-environment`）必须是 `production`。Mac 的 .pkg 同样能查。
-- **时间敏感通知**（`com.apple.developer.usernotifications.time-sensitive`，#1572）：hub 的「需要你」推送和插件的强提醒都带 `interruption-level: time-sensitive`，
-  App 签名里没有这一项时系统一律当 `active` 显示：专注模式下不突破，所以开着专注模式时手机不响、手表也收不到，而且不报错。App ID 要先开 `USERNOTIFICATIONS_TIMESENSITIVE`
-  （`asc_signing.py` 会开，开了之后旧描述文件失效，要重跑一次重建）；`entitlements.py check` 发现导出的 App 少了它会报错。
-  **合并 #1572 之后、下一次发版之前，先跑一次 `python3 scripts/release/asc_signing.py`**（签开发包的再加 `--dev` 重建 Development 描述文件）。
-  `release.sh` 开头会跑 `asc_signing.py --check`，能力没开或描述文件失效时在归档前就停下，不再等到导出时才失败。
-  Mac App 也要了这一项（#1655，`project.yml` 的 PersonaMac）：Mac 和 iPhone 是同一个 App ID（UNIVERSAL），上面开的能力同样覆盖 Mac；
-  `entitlements.py check` 对 Mac 的 .pkg / 归档同样要求它（target 要了就查，`scripts/release/test_entitlements.py`）。
-  还没在能发 Mac 版的环境里导出过一次 .pkg 核对、也没在 Mac 上开着专注模式看过横幅，这一步做完再关 #1655。
-  Apple Vision Pro 版（PersonaVision）也要了这一项（#2435），bundle id 和 iPhone 相同，同样被上面开的能力覆盖；还没在 Vision Pro 上开着专注模式看过横幅。
+- **Info.plist group names use `$(DEVELOPMENT_TEAM).`, not `$(AppIdentifierPrefix)`**: the latter only has a value during Xcode signing and is empty in an unsigned archive. Entitlements files still use `$(AppIdentifierPrefix)`.
+- **Unsigned archive (`CODE_SIGNING_ALLOWED=NO`, when this Mac has no distribution certificate and export uses cloud signing)**: bundles in the archive have no entitlements, and export signs according to what's in the bundle.
+  Before export, `python3 scripts/release/entitlements.py sign <archive>` ad hoc signs inside-out, giving each bundle its target's entitlements (found via `xcodebuild -showBuildSettings`,
+  with build variables expanded and `$(AppIdentifierPrefix)` set to the team's; if something can't be expanded it errors instead of leaving it empty). If you only run `codesign --entitlements <original file>` on the App and leave out the extensions,
+  export expands the App's `$(JARVIS_BUNDLE_ID)` to empty and the extensions get no groups at all (that's what happened in build 92: the Dynamic Island avatar didn't follow the setting, `docs/live-activity.md`).
+- **Check after export**: `python3 scripts/release/entitlements.py check <ipa>` lists every problem and exits non-zero; it reports 9 issues on build 92's ipa.
+  App Groups are checked the same way: every bundle's signature has its target's group, and the Info.plist's `JarvisAppGroup` is one of them.
+  In the exported ipa / pkg, the push entitlement (`aps-environment`; on Mac `com.apple.developer.aps-environment`) must be `production`. A Mac .pkg can be checked too.
+- **Time-sensitive notifications** (`com.apple.developer.usernotifications.time-sensitive`, #1572): the hub's "Needs you" pushes and plugins' urgent alerts carry `interruption-level: time-sensitive`.
+  If the App's signature lacks this entitlement, the system shows them all as `active`: they don't break through Focus, so with Focus on the phone doesn't ring and the watch doesn't get them either, and nothing reports an error. The App ID must first enable `USERNOTIFICATIONS_TIMESENSITIVE`
+  (`asc_signing.py` enables it; afterwards the old profiles are invalid and need one rerun to rebuild); `entitlements.py check` errors if the exported App lacks it.
+  **After merging #1572 and before the next release, run `python3 scripts/release/asc_signing.py` once** (if you sign development builds, add `--dev` to rebuild the Development profiles).
+  `release.sh` runs `asc_signing.py --check` at the start, so a missing capability or invalid profile stops it before archiving rather than failing at export.
+  The Mac App also requests this entitlement (#1655, PersonaMac in `project.yml`): Mac and iPhone share one App ID (UNIVERSAL), so the capability enabled above covers the Mac too;
+  `entitlements.py check` requires it for the Mac .pkg / archive as well (checked whenever the target requests it, `scripts/release/test_entitlements.py`).
+  No .pkg has been exported and checked yet in an environment that can ship the Mac version, and no banner has been seen on a Mac with Focus on; close #1655 after that's done.
+  The Apple Vision Pro version (PersonaVision) also requests it (#2435); its bundle id is the same as the iPhone's, so it's covered by the capability above too. No banner has been seen on Vision Pro with Focus on yet.
 
-## App Group（2026-11-02）
+## App Group (2026-11-02)
 
-App 和灵动岛扩展（JarvisWidgets）靠 App Group 容器里的文件交形象和形象包的图（`docs/live-activity.md`「形象」；实时活动的扩展在手机上读不了钥匙串）。
-组名默认 `group.<bundle id>`，配置的 `app.app_group` 可以改（`docs/config.md`），写进两个 target 的 entitlements（`com.apple.security.application-groups`）和 Info.plist 的 `JarvisAppGroup`。
-2026-11-02 已在开发者网站上注册，挂到了 App 和灵动岛扩展的 App ID 上；之后发 TestFlight 的流程（无签名归档 → `entitlements.py sign` → API key 云签名导出）导出的 ipa 里两个 bundle 都带着这个组。
+The App and the Dynamic Island extension (JarvisWidgets) hand over the avatar and avatar pack images through files in the App Group container (`docs/live-activity.md` ("Avatar"); the Live Activity extension can't read the keychain on a phone).
+The group name defaults to `group.<bundle id>` and can be changed with the config's `app.app_group` (`docs/config.md`); it's written into both targets' entitlements (`com.apple.security.application-groups`) and the Info.plist's `JarvisAppGroup`.
+It was registered on the developer website on 2026-11-02 and attached to the App IDs of the App and the Dynamic Island extension; since then, the TestFlight flow (unsigned archive → `entitlements.py sign` → export with API key cloud signing) produces an ipa where both bundles carry the group.
 
-**API key 注册不了 App Group**（2026-11-02 查过）：
-- App Store Connect API 没有 App Group 的接口（`GET /v1/appGroups` 是 404）。`bundleIdCapabilities` 只能打开 `APP_GROUPS` 这个能力，挂不上具体的组（settings 只认三个键，见下面「踩坑」）。
-  fastlane 的 `produce group` / `associate_group` 走的是 Apple ID 登录（网页的 cookie），不是 API key。
-- 导出时的 API key + `-allowProvisioningUpdates` 云签名按 App ID 现有的能力重新生成描述文件，但建不了组、也挂不上组；没挂上就导出失败。
-- 所以换一个账号或 bundle id 时，**先在网站上做完，再构建带 App Group entitlements 的包**。
+**API keys can't register App Groups** (checked 2026-11-02):
+- The App Store Connect API has no App Group endpoints (`GET /v1/appGroups` is 404). `bundleIdCapabilities` can only turn on the `APP_GROUPS` capability, not attach a specific group (settings only accepts three keys, see "Pitfalls" below).
+  fastlane's `produce group` / `associate_group` use Apple ID sign-in (website cookies), not an API key.
+- At export, API key + `-allowProvisioningUpdates` cloud signing regenerates profiles from the App ID's existing capabilities, but can't create or attach a group; if it isn't attached, export fails.
+- So when switching to another account or bundle id, **finish on the website first, then build with App Group entitlements**.
 
-开发者网站上的步骤（developer.apple.com › Account › Certificates, IDs & Profiles，账户持有人或管理员）：
-1. Identifiers › 「+」› 选 **App Groups** › Continue › Description 填 `Persona`，Identifier 填 `group.<bundle id>`（和配置的 `app.app_group` 一致）› Continue › Register。
-2. Identifiers › 右上角的筛选换回 App IDs › 点 `<bundle id>` › Capabilities 里勾 **App Groups** › 点它旁边的 Configure（已经勾过的是 Edit）›
-   勾上 `group.<bundle id>` › Continue › Save › 弹窗里 Confirm（改了能力，这个 App ID 现有的描述文件会失效）。
-3. 对灵动岛扩展的 App ID `<bundle id>.liveactivity` 同样做第 2 步。手表和通知扩展不用。
-4. 描述文件：云签名的导出（自动签名）会自己重新生成；`release.sh` 的手动签名要重跑 `python3 scripts/release/asc_signing.py`，
-   它检查每个描述文件里有没有这个组，没有就打印上面的步骤并非零退出。
-5. 发版导出后 `scripts/release/entitlements.py check` 查 ipa 里 App 和 JarvisWidgets 的签名都带着这个组。
+Steps on the developer website (developer.apple.com › Account › Certificates, IDs & Profiles, as Account Holder or Admin):
+1. Identifiers › "+" › choose **App Groups** › Continue › Description `Persona`, Identifier `group.<bundle id>` (matching the config's `app.app_group`) › Continue › Register.
+2. Identifiers › switch the top-right filter back to App IDs › click `<bundle id>` › check **App Groups** under Capabilities › click Configure next to it (Edit if already checked) ›
+   check `group.<bundle id>` › Continue › Save › Confirm in the dialog (changing capabilities invalidates this App ID's existing profiles).
+3. Do step 2 for the Dynamic Island extension's App ID `<bundle id>.liveactivity` too. The watch and notification extension don't need it.
+4. Profiles: cloud-signed export (automatic signing) regenerates them itself; `release.sh`'s manual signing needs a rerun of `python3 scripts/release/asc_signing.py`,
+   which checks every profile for the group, and if missing prints the steps above and exits non-zero.
+5. After a release export, `scripts/release/entitlements.py check` verifies that the signatures of both the App and JarvisWidgets in the ipa carry the group.
 
-## 改商店名
+## Changing the store name
 
-商店名（App Store / TestFlight 里显示的名字，和桌面上的 `CFBundleDisplayName` 无关）要全局唯一，在 App 信息的本地化里。版本还在 `PREPARE_FOR_SUBMISSION` 时 App Manager 的 API key 就能改：
-
-```sh
-python3 scripts/release/asc.py GET /v1/apps/<app id>/appInfos                    # 取 appInfo 的 id
-python3 scripts/release/asc.py GET /v1/appInfos/<appInfo id>/appInfoLocalizations # 每种语言一条，取 id
-# PATCH /v1/appInfoLocalizations/<id>，attributes 写 name（和 privacyPolicyUrl），名字被占用时报 409
-```
-
-改名不换 App 记录：Bundle ID、测试组、公开链接、已发的构建和已经装了的人都不受影响。
-
-## 踩坑
-
-- **`bundleIdCapabilities` 不能带自造的 settings**：给 `PUSH_NOTIFICATIONS` 传
-  `settings: [{"key": "PUSH_NOTIFICATIONS", ...}]` 会被 409 拒（`settings/0/key` 只接受 `ICLOUD_VERSION`、
-  `DATA_PROTECTION_PERMISSION_LEVEL`、`APPLE_ID_AUTH_APP_CONSENT`）。推送和 HealthKit 直接传空 `settings: []`。
-- **同名描述文件会挡住重建**：改能力后旧描述文件变成 `INVALID`，同名新文件创建会 409。`asc_signing.py` 先删同名再建。
-- **测试组的列表偶尔不完整**（#945）：`GET /v1/apps/{id}/betaGroups` 有时返回空列表、缺几个组或者读超时，脚本以前当成组不存在就新建，
-  2026-11-03 一天多出 4 个同名的 Friends，构建挂进了空组、测试员却都在最早那个组里。现在按名字和内外部找组，同名的取最早建的；
-  列表要问三次都没有才算没有；只有 `setup`、`external` 会新建，`wait` / `info` / `catch-up` 找不到就报错（发版时只打印一行，附重试命令）。
-  已经多出来的空组脚本不删，删不删由人定。
-- **内部测试员要用 `POST /v1/betaTesters` 带群组关系创建**：同一个邮箱在别的 App 下已有测试员记录时，直接关联会 409；
-  脚本遇到 409 会提示去网页把这个人加进本 App 的 `Internal` 群组。
-- **归档里的 `aps-environment` 总是 `development`**：归档用的是开发描述文件，最终签名在导出环节完成，别在归档产物上检查。
-- **推送和生产环境**：`UIBackgroundModes` 用 `remote-notification`（手表 App 没有后台模式）；`ITSAppUsesNonExemptEncryption=false`
-  已经在 `apple/project.yml` 里，省掉每次上传的出口合规问答。
-- **不用 iCloud 目录**：这台 Mac 没解锁，涉及 `~/Library/Mobile Documents` 的一律跳过。
-
-## 待 leader 处理
-
-（无。2026-10-24：clipJSON 截断中文的问题已修，transcript.go 已 gofmt。）
-
-## 推送（APNs）
-
-- 在 developer.apple.com 建一个 APNs key（Sandbox & Production，Team Scoped），Key ID 和 .p8 文件都不进仓库。
-- 文件：hub 机器的 `~/.persona/apns_key.p8`（配置 `~/.persona/apns.json`），另存一份到密码管理器。key 只能下载一次，丢了就重建。
-- 页面提示《Apple Developer Program 许可协议》已更新，要账户持有人在 developer.apple.com 接受（不影响建 App 和传 TestFlight）。
-
-## 外部测试（公开链接）
-
-内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`）。2026-10-30 用户定的是**公开链接**
-（`public_link: true`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装。2026-11-03 起**不限人数**（`public_link_limit: 0`，原来是 50，满了以后链接不再收人）：`public_link_limit` 为 0 或不写时关掉人数上限，只受 Apple 每个 App 最多 10,000 名外部测试员的限制；写正数就是上限。
-当前的公开链接：<https://testflight.apple.com/join/vsjfy3hE>（`asc_testflight.py external` 每次都会打印，变了就更新这里；2026-11-03 核对，是最早那个 Friends 组的链接）。
-iPhone 和 Mac 是同一个链接（同一个 Friends 组），在 Mac 上用 TestFlight 打开它就是 Mac 版。
-这个链接 2026-11-03 起可以明文写进仓库（用户要求，README 的安装方式就写着它）；官网（`site/`）上放不放另外问用户，现在不放。链接换了（比如组被重建）要把 README 和这里一起改。
-不用收集邮箱；`app_store.external.testers` 仍然可以写，列出的邮箱另外收到邀请邮件。`public_link: false` 时只有这些邮箱能加入。
+The store name (shown in the App Store / TestFlight, unrelated to the home screen's `CFBundleDisplayName`) must be globally unique and lives in the App Info localizations. While the version is still `PREPARE_FOR_SUBMISSION`, an App Manager API key can change it:
 
 ```sh
-python3 scripts/release/asc_testflight.py external   # 建群组、按配置开 / 关公开链接、写测试信息、挂最新构建、提交审核；打印公开链接
+python3 scripts/release/asc.py GET /v1/apps/<app id>/appInfos                    # get the appInfo id
+python3 scripts/release/asc.py GET /v1/appInfos/<appInfo id>/appInfoLocalizations # one per language; get the id
+# PATCH /v1/appInfoLocalizations/<id>, with name (and privacyPolicyUrl) in attributes; an occupied name returns 409
 ```
 
-- **公开链接 = 任何拿到链接的人都能装**：构建里不能有任何个人的东西（hub 地址、主机名、邮箱、路径……）。`release.sh` 在上传前跑
-  `scripts/release/check_bundle_privacy.py <Persona.app>`（用 `privacy_check.py` 的同一份敏感词，查二进制的字符串、plist、lzfse 元数据；
-  bundle id、team id、签名数据本来就在每个构建里，不算）。自己写的发版脚本也要在上传前跑它。
-- **每次发版不用另跑命令**：配置里有 `app_store.external` 时，`wait`、`info` 在挂好 Internal 之后会顺带把这个构建挂到 Friends、
-  提交审核（有列出的测试员就补邀请）。这一步出错只打印一行（附重试命令 `external`），不会让发版失败。
-- **同一版本有构建在审时，新构建交不上去**（422 `ANOTHER_BUILD_IN_REVIEW`，「审完再交」），也没有东西会在审完后再交：
-  Mac 110 在审的那段时间，111–127 都挂在 Friends、停在 `READY_FOR_BETA_SUBMISSION`，外部测试员一直拿不到（2026-11-03，#792）。
-  `asc_testflight.py [--platform mac] catch-up`：最新的 VALID 构建还没交就挂 Friends、提交审核（不改它的「测试什么」），
-  有别的在审就说一声等下一次，已经交过 / 过审 / 被拒的什么都不写。本机的 auto-tf 每轮（等新提交的每 10 分钟）对 iPhone 和 Mac 各跑一次。
-- 外部测试的构建要过 **Beta App Review**（第一次约一天，同一版本后面的构建多数自动通过）。提交前必须有联系人：
-  `app_store.external.review` 的 `first_name` / `last_name` / `phone` / `email`，缺了脚本只挂构建、不提交，也不加测试员。
-- 公开链接在没有通过审核的构建之前就能打开（API 直接给出地址），但页面显示「This beta isn't accepting any new testers right now」，
-  审核通过后才能加入。
-- 审核状态看构建的 `buildBetaDetail.externalBuildState`：`READY_FOR_BETA_SUBMISSION`（挂了没交）→ `WAITING_FOR_BETA_REVIEW` →
-  `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`。
-- 朋友的 hub 是他们自己部署的：没有开发者账号的 APNs key 时，新版 App 通过发布方的推送中继收通知和实时活动
-  （需发版配置填 `app.push_relay`、设备登记成功，见 `docs/push-relay.md`）；未配置中继的旧版只能在 App 打开时实时接收。
-  Gmail 登录要他们自己建 Google OAuth 客户端、写进自己 hub 的 `hub.json`（`docs/mail.md`）。
-- 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
-- App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
+Renaming doesn't replace the app record: Bundle IDs, test groups, public links, released builds and existing installs are unaffected.
 
-## Mac 版（2026-11-02）
+## Pitfalls
 
-Mac App（target `PersonaMac`，旧 `JarvisMac` scheme 兼容）和 iPhone 用同一个 bundle id，所以是 App Store Connect 里**同一个 App 记录**（加了 macOS 平台，版本 1.0），
-进同一个 TestFlight：同样的 Internal / Friends 组、同一个公开链接；测试员在 Mac 上装 TestFlight 就能看到 Mac 构建。
+- **`bundleIdCapabilities` cannot take invented settings**: passing
+  `settings: [{"key": "PUSH_NOTIFICATIONS", ...}]` for `PUSH_NOTIFICATIONS` is rejected with 409 (`settings/0/key` only accepts `ICLOUD_VERSION`,
+  `DATA_PROTECTION_PERMISSION_LEVEL`, `APPLE_ID_AUTH_APP_CONSENT`). For push and HealthKit, pass an empty `settings: []`.
+- **A profile with the same name blocks rebuilding**: after a capability change, the old profile becomes `INVALID`, and creating a new one with the same name returns 409. `asc_signing.py` deletes the same-named profile first, then creates it.
+- **The test-group list is sometimes incomplete** (#945): `GET /v1/apps/{id}/betaGroups` sometimes returns an empty list, omits groups, or times out. The script used to treat that as a missing group and create one;
+  on 2026-11-03 it created 4 extra Friends groups in one day, attached builds to an empty group, while all testers were in the earliest group. Now groups are matched by name and internal/external type, and the earliest-created group wins among duplicates.
+  Only after three queries find nothing is a group considered absent. Only `setup` and `external` create groups; `wait` / `info` / `catch-up` error if none is found (during a release, just one line with a retry command).
+  The script doesn't delete the extra empty groups; a person decides whether to delete them.
+- **Create internal testers with `POST /v1/betaTesters`, including the group relationship**: if the same email already has a tester record under another App, directly linking it returns 409;
+  on 409, the script prompts you to add that person to this App's `Internal` group on the website.
+- **`aps-environment` in the archive is always `development`**: archiving uses a development profile; final signing happens at export. Don't check the archived product for this.
+- **Push and production**: `UIBackgroundModes` uses `remote-notification` (the watch App has no background modes); `ITSAppUsesNonExemptEncryption=false`
+  is already in `apple/project.yml`, avoiding the export-compliance questions on every upload.
+- **No iCloud directories**: this Mac isn't unlocked; skip anything involving `~/Library/Mobile Documents`.
 
-- **构建号**：一个号在每个平台里只能用一次，不同平台可以重号。规则：**一次发布的 Mac 构建和这次的 iPhone 构建用同一个号**
-  （同一个号 = 同一个提交，查问题时一眼对上）；iPhone 的号、单独发的 Mac 都取**两个平台里最大的号加一**
-  （`python3 scripts/release/asc_testflight.py next-build`），这样不会有一个号在两个平台上指两个不同的提交。
-- **`asc_testflight.py --platform mac`**：`status` / `wait` / `info` / `external` / `catch-up` 都只看 Mac 的构建；不带时只看 iPhone 的。
-  以前不分平台，有了 Mac 构建以后「最新的 VALID 构建」可能是另一个平台的，「测试什么」会写错地方。
-- **图标**：系统不给 Mac 图标切圆角，图标自己带圆角方块和阴影（macOS 的网格：1024 里居中 824）。`AppIcon` 图标集里 iOS 的单尺寸图之外
-  另有 `idiom: mac` 的 16–512（1x / 2x），由 `python3 scripts/assets/make_icon.py mac` 从 iPhone 的图生成（全部重画时也会一起写）。
-  缺了它 Mac 包里没有图标，Mac App Store 拒收。Xcode 26 编出来的 `AppIcon.icns` 只有 16 和 128 两档，完整的各档在 `Assets.car` 里
-  （系统按 `CFBundleIconName` 去那里取），所以检查看的是 `Assets.car`（`xcrun assetutil --info`）里有没有 512 和 512@2x。
-- **Info.plist**：`LSApplicationCategoryType`（效率）、各项权限说明都在 `apple/project.yml` 的 `PersonaMac` target 源头里。
-- **沙盒**：`com.apple.security.app-sandbox` 加网络（客户端、端口转发的本机服务端）、用户选的文件、通讯录 / 日历 / 位置 / 照片、
-  麦克风 / 摄像头（`project.yml` 的 entitlements）。
-- **推送**（2026-11-02 起，`docs/mac.md`「远程推送（Mac）」）：`com.apple.developer.aps-environment`（macOS 上的名字，iOS 是 `aps-environment`）。
-  App ID 是 UNIVERSAL、早就开着 Push Notifications，开发者账号不用改；归档里是 `development`，App Store 导出时云签名改成 `production`。
-  包里另有通知服务扩展 `PersonaNotify.appex`（target `PersonaMacNotify`，module / 通知主类仍用 `JarvisNotify`，`Contents/PlugIns/`，沙盒 + `.push` 钥匙串组，#432），
-  bundle id 和 iPhone 的扩展同一个（UNIVERSAL 的 App ID），导出时云签名给它建 Mac 的描述文件；`entitlements.py sign / check` 一起签、一起查。
-- **发布前检查**和 iPhone 一样：权限说明（`check_bundle_strings.py`）、隐私扫描（`check_bundle_privacy.py`，认 Mac 的
-  `Contents/` 结构，跳过 `embedded.provisionprofile`，通用二进制整个扫）、Release 里没有 DEBUG 开关；另外查分类和图标里有 512 / 512@2x。
-- 导出是 `.pkg`（ExportOptions 的 `method` 同样是 `app-store-connect`），和 iPhone 一样云签名：App 是 Apple Distribution，
-  `.pkg` 是 3rd Party Mac Developer Installer（`pkgutil --check-signature` 会写「issued by Apple (Development)」，这类证书都这么写）。
-  上传 `altool -t macos`。本机的发版脚本和 iPhone 一样先 `entitlements.py sign` 再导出，导出后 `entitlements.py check <.pkg>`：
-  每个 bundle 带着它 target 的 entitlements，推送是 `production`（`check` 认 Mac 的 `Contents/` 结构和 `.pkg`，iPhone 的 ipa 也查推送环境）。
-- **包里的文件要别的用户也能读**（Mac 110，2026-11-02）：`.pkg` 里有只有属主能读的文件，上传时报 ITMS-90255
-  「files that are only readable by the root user」（macOS 以运行 App 的用户身份验签名）。自动发版（auto-tf）的 umask 是 077，
-  脚本里 `cp -R` 复制的归档全成了 0700 / 0600；在交互 shell（umask 022）里试永远看不出来。发版脚本开头 `umask 022`、复制归档用 `ditto`（保留原权限），
-  导出前对 `.app`、导出后对 `.pkg` 展开的 App 查一遍：所有文件 a+r、所有目录 a+rx，不满足就不传。iPhone 的脚本也一样改了（ipa 不查这个，110 照样过）。
-- **自动发布**：发完 iPhone 构建后，这次的提交里有 Mac App 用到的改动（`apple/Mac`、`apple/Shared`、`apple/Persona` 除了只属于 iOS 的
-  几个文件、`apple/Packages`、`project.yml`、`Package.resolved`）就用同一个号接着发 Mac；Mac 的结果另外报，失败不影响 iPhone 那次。
+## Pending for the leader
 
-## 发布 personad（`scripts/release/publish.sh`，2026-10-31）
+(None. 2026-10-24: the clipJSON Chinese-truncation problem is fixed, and transcript.go has been gofmt'd.)
 
-让别人不拿源代码也能装服务端：编好的 `personad` 和安装脚本放在 `site/` 那个 worker 上（配置的 `publish.site_url`）。
+## Push (APNs)
+
+- Create an APNs key at developer.apple.com (Sandbox & Production, Team Scoped); neither the Key ID nor the .p8 file goes into the repo.
+- File: `~/.persona/apns_key.p8` on the hub machine (config `~/.persona/apns.json`), with another copy in a password manager. A key can only be downloaded once; if lost, create a new one.
+- The page says the Apple Developer Program License Agreement has been updated; the Account Holder must accept it at developer.apple.com (doesn't affect app creation or TestFlight uploads).
+
+## External testing (public link)
+
+Internal testers must be team members; friends use external testing in the "Friends" group (`app_store.external.group`). On 2026-10-30 the user chose a **public link**
+(`public_link: true`): share `https://testflight.apple.com/join/…` in a group, and anyone who clicks can install. Since 2026-11-03 there is **no tester cap** (`public_link_limit: 0`, previously 50, after which the link stopped accepting people): 0 or an omitted `public_link_limit` disables the cap, subject only to Apple's limit of 10,000 external testers per App; a positive number sets the cap.
+Current public link: <https://testflight.apple.com/join/vsjfy3hE> (`asc_testflight.py external` prints it every time; update this if it changes; checked 2026-11-03, it belongs to the earliest Friends group).
+iPhone and Mac use the same link (the same Friends group); opening it in TestFlight on a Mac gives the Mac version.
+Since 2026-11-03 this link may be written in plain text in the repo (requested; README's installation instructions include it). Ask separately before putting it on the website (`site/`); it isn't there now. If the link changes (for example, the group is recreated), update both README and this doc.
+No email collection needed; `app_store.external.testers` still works, and listed emails also get invitations. With `public_link: false`, only those emails can join.
 
 ```sh
-curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad，按 SHA256SUMS 校验，不对就不装
+python3 scripts/release/asc_testflight.py external   # create the group, enable/disable the public link per config, write test info, attach the latest build, submit for review; print the public link
 ```
 
-- 装好 `personad` 后，这台电脑上找不到 herdr（PATH 和 node 会找的 `~/.local/bin` 等目录）就用 herdr 官方安装器（`https://herdr.dev/install.sh`）
-  一起装上：首次安装完 Agents 里就能看到会话。装不上只打一行警告，不影响 `personad`；用 Orca / Herdr App 的电脑 `JARVIS_SKIP_HERDR=1` 跳过。
-  `deploy.sh` 往每台电脑装 `personad` 时做同样的事（`scripts/deploy/ensure-herdr.sh`，两处的步骤保持一致）。
+- **Public link = anyone with the link can install**: builds must contain nothing personal (hub address, hostname, email, paths…). Before uploading, `release.sh` runs
+  `scripts/release/check_bundle_privacy.py <Persona.app>` (using the same sensitive-word list as `privacy_check.py`, checking binary strings, plists and lzfse metadata;
+  bundle ids, team ids and signing data are inherent to every build and don't count). Custom release scripts must run it before uploading too.
+- **No separate command needed for each release**: with `app_store.external` configured, after attaching Internal, `wait` and `info` also attach this build to Friends
+  and submit for review (inviting listed testers if any). A failure here only prints one line (with the retry command `external`) and doesn't fail the release.
+- **A new build can't be submitted while another build of the same version is in review** (422 `ANOTHER_BUILD_IN_REVIEW`, "submit after review finishes"), and nothing used to submit it later:
+  while Mac 110 was in review, 111–127 were all attached to Friends but stuck in `READY_FOR_BETA_SUBMISSION`; external testers never got them (2026-11-03, #792).
+  `asc_testflight.py [--platform mac] catch-up`: if the latest VALID build hasn't been submitted, attach it to Friends and submit (without changing its What to Test);
+  if another is in review, say to wait for the next run; if already submitted / approved / rejected, write nothing. Each local auto-tf round (every 10 minutes while waiting for a new commit) runs this once for iPhone and once for Mac.
+- External builds must pass **Beta App Review** (the first takes about a day; later builds of the same version usually pass automatically). A contact is required before submission:
+  `first_name` / `last_name` / `phone` / `email` in `app_store.external.review`. If missing, the script only attaches the build, without submitting or adding testers.
+- The public link opens before any build passes review (the API gives the address directly), but the page says "This beta isn't accepting any new testers right now";
+  joining is possible only after review passes.
+- Review state is `buildBetaDetail.externalBuildState`: `READY_FOR_BETA_SUBMISSION` (attached, not submitted) → `WAITING_FOR_BETA_REVIEW` →
+  `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`.
+- Friends deploy their own hubs: without an APNs key from a developer account, newer Apps receive notifications and Live Activities through the publisher's push relay
+  (requires `app.push_relay` in the release config and successful device registration; see `docs/push-relay.md`); older versions without a relay only receive live updates while the App is open.
+  For Gmail login they must create their own Google OAuth client and put it in their hub's `hub.json` (`docs/mail.md`).
+- Test info needs a privacy policy URL (`app_store.external.privacy_url`); Chinese and English descriptions live in `BETA_INFO` in `asc_testflight.py`.
+- Without a hub, the App only has a pairing page: review notes (`review.notes`) must explain that this App works with a self-hosted hub, or reviewers may ask how to use it.
 
-- `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
-  配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/release/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
-- 只改了官网页面（`site/`）：`SITE_ONLY=1 ./scripts/release/publish.sh`，不编译新版，把线上正在发的版本的小文件（`VERSION`、`SHA256SUMS`、`latest.json`、`SLOT`、`install.sh`）取回来，和已提交的 `site/` 一起部署，压缩包留在 R2 里不动；部署后核对线上小文件没变、每个压缩包都还在（`HEAD` 的大小）。线上还没有 `dl/SLOT`（R2 之前的发布）时会拒绝，先完整发一次。**不要在 `site/` 里直接 `wrangler deploy`**：会让 `/dl/` 和 `install.sh` 404（`docs/lessons/server.md`）。
-- 网页依赖固定从官方 npm 源装（`npm ci --registry=https://registry.npmjs.org/`，`JARVIS_NPM_REGISTRY` 可改），不跟本机的 npm 配置：`package-lock.json` 本来就指向官方源，本机配的镜像可能缺包（2026-11-06 缺 `elkjs`，发布停在打包网页前）。
-- 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`，写进 `channel=release`、build 号（UTC `YYYYMMDDHHMM`）和 `updateURL`：
-  - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.persona/web` 时就用二进制里的；有就照旧用目录里的。
-  - **不带任何 skill**：接飞书网关的 skill 是从私有的上游仓库拷来的（GPL-3.0），不能再分发；skill 放在各台机器的 `~/.persona/skills/`，
-    所以只有一种二进制，我们自己的 hub 也用它（`docs/hub-update.md`）。脚本会确认二进制里只带登记为可再分发的 skill（`scripts/release/check_bundle_skills.py`）。
-    `-tags public` 不改变任何代码（`TestOneBuild`），只是给隐私扫描的标记。
-  - **版本清单** `dl/latest.json`（各平台压缩包和解压后的 sha256、build 号、commit），不签名（用户的决定，取舍见 `docs/hub-update.md`「安全」）；
-    发布前检查 build 号比线上的大、线上那版的 commit 是这次的祖先，server/、web/ 没有没提交的改动。清单带着这次包含的所有提交（`ancestors`）：
-    各 hub 读它自动更新，但只在它包含自己正在运行的提交时才自己装（`docs/hub-update.md`「防退回」）。
-  - **一起发布的程序**：`jarvisd-wechat`（微信机器人，单独一个程序，`docs/wechat.md`）四个平台各编一份，和 personad 同一套
-    `-X`、同一次隐私扫描和体积检查，`version -v` 必须和 personad 的一样；清单的 `programs` 列出它们，hub 自动更新时一起换。
-  - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
-    Unicode 表和压缩过的 JS 里到处是短的字母组合）。公开依赖中的少量协议名、官方联系链接和标准网络常量按精确上下文分类，不放行域名或私网段；
-    要求二进制的 `public` 标记、未 replace 的依赖及 checksum 与 `server/go.sum` 一致，构建前 `go mod verify`。已登记的个人值始终优先拦截，见 `docs/lessons/testing.md`。
-- 同样四个平台再编连接器 `jarvis-link-<os>-<arch>`（2026-11-02，node 服务，`install.sh --node`，见 `docs/link.md`「装 node 服务」），一样过隐私扫描、压缩、进 `SHA256SUMS`。
-- 下载包是 `jarvisd-<os>-<arch>.gz`：原始二进制先过隐私扫描，再用 `gzip -n -9` 压缩，`SHA256SUMS` 校验压缩包；安装脚本校验通过后解压安装，校验失败 / 解压失败不覆盖旧版本。
-  **压缩包放 R2 桶 `persona-dl`，不放进站点**（#2541）：Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），
-  #1002 嵌进分级形象的图后 jarvisd 压缩后超过了它。Worker 绑定桶为 `DL`（`site/wrangler.jsonc`），`/dl/*.gz` 由 `worker.mjs` 从桶里读（`GET` / `HEAD` / `Range` / `If-None-Match`），
-  其余 `/dl/` 文件仍是静态文件。桶里有 `a`、`b` 两个槽位：发布先把压缩包传到线上没在用的那个（`<槽位>/<文件名>`），再部署站点，站点里的 `dl/SLOT` 和 `latest.json` 一起换过去；
-  另一个槽位留着上一版到下一次发布，部署那一刻正在下载的照样能下完。站点里只剩小文件，`check_asset_sizes.py` 照旧检查整个站点目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
-  回归：`python3 -B -m unittest discover -s scripts/deploy -p 'test_compressed_publish.py'`。
-- **hub 比 App 先发时，先过一遍已发布 App 的兼容**（#1693）：这一版 hub 让客户端多画一种东西（连接器登录的新 `kind`、新的 interaction 类型、
-  新的卡片 / 事件字段），而最新的 TestFlight 还没有对应的客户端改动时，已装的 App 会把它画成空白或报错（微信插件的 `kind: qr` 在没有 #1401 的 App 上
-  是一个空表单加永远灰着的「下一步」）。发 hub 前对照最新 TestFlight 的提交（`git merge-base --is-ancestor <客户端改动> <TestFlight 的提交>`）：
-  没包含就先发 TestFlight，或者让新东西在旧 App 上有能看懂的退路，或者把 `proto.MinAppBuild`（`server/internal/proto/proto.go`，hello 和
-  `latest.json` 的 `min_app_build`）提到包含它的构建号，让旧 App 提示更新。提高 `min_app_build` 会让所有旧 App 都用不了这版 hub，先问用户。
-- 只托管最新一版（R2 里多留上一版，见上）。上传桶和部署都用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
-  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json`、`dl/SLOT` 确认上去的就是刚编的，并对每个压缩包 `HEAD` 核对大小。
-  推送中继在同一个 Worker 里（`/relay/*`），每次发布会把它一起重新部署。
-- 推送中继已部署（2026-11-02）：常驻 `personad relay` + Cloudflare Tunnel + 官网 Worker 转发，公网健康、源站保护、登记和鉴权已验证。
-  发版配置需填 `app.push_relay`，安装带通知扩展的新 TestFlight 才会登记；真实设备上的通知解密仍要单独验收，见 `docs/push-relay.md`。
-- 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
-  macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
+## Mac version (2026-11-02)
 
-## 发布 hub 镜像（`.github/workflows/hub-image.yml`，2026-11-01）
+The Mac App (target `PersonaMac`, old `JarvisMac` scheme compatible) shares the iPhone's bundle id, so it is **the same app record** in App Store Connect (macOS platform added, version 1.0),
+and uses the same TestFlight: the same Internal / Friends groups and public link. Testers install TestFlight on a Mac to see Mac builds.
 
-Docker 部署的 hub（`docs/docker.md`）用 ghcr 上的镜像，linux/amd64 + linux/arm64：
+- **Build numbers**: a number can only be used once per platform; different platforms can reuse it. Rule: **the Mac build and iPhone build in one release use the same number**
+  (same number = same commit, easy to match when investigating); iPhone builds and standalone Mac builds use **the largest number across both platforms plus one**
+  (`python3 scripts/release/asc_testflight.py next-build`), so one number never identifies two different commits on the two platforms.
+- **`asc_testflight.py --platform mac`**: `status` / `wait` / `info` / `external` / `catch-up` only consider Mac builds; without it, only iPhone builds.
+  Previously platforms weren't distinguished; after Mac builds appeared, "the latest VALID build" could be on the other platform, and What to Test would be written to the wrong build.
+- **Icon**: the system doesn't round Mac icon corners; the icon itself has a rounded square and shadow (the macOS grid: a centered 824 square within 1024). Besides the single-size iOS image in `AppIcon`,
+  there are `idiom: mac` sizes 16–512 (1x / 2x), generated from the iPhone image by `python3 scripts/assets/make_icon.py mac` (also written when regenerating everything).
+  Without these the Mac package has no icon and the Mac App Store rejects it. Xcode 26's `AppIcon.icns` only has sizes 16 and 128; the full set is in `Assets.car`
+  (the system reads it using `CFBundleIconName`), so the check looks for 512 and 512@2x in `Assets.car` (`xcrun assetutil --info`).
+- **Info.plist**: `LSApplicationCategoryType` (productivity) and all permission descriptions are defined in the `PersonaMac` target in `apple/project.yml`.
+- **Sandbox**: `com.apple.security.app-sandbox`, plus networking (client and local server for port forwarding), user-selected files, contacts / calendar / location / photos,
+  microphone / camera (entitlements in `project.yml`).
+- **Push** (since 2026-11-02, `docs/mac.md` ("Remote push (Mac)")): `com.apple.developer.aps-environment` (the macOS name; iOS uses `aps-environment`).
+  The App ID is UNIVERSAL and already has Push Notifications enabled, so no developer-account change is needed; the archive has `development`, and cloud signing at App Store export changes it to `production`.
+  The package also includes notification service extension `PersonaNotify.appex` (target `PersonaMacNotify`, module / notification main class still `JarvisNotify`, in `Contents/PlugIns/`, sandbox + `.push` keychain group, #432).
+  Its bundle id is the same as the iPhone extension's (UNIVERSAL App ID); cloud signing creates its Mac profile at export. `entitlements.py sign / check` signs and checks it too.
+- **Pre-release checks** match the iPhone's: permission descriptions (`check_bundle_strings.py`), privacy scan (`check_bundle_privacy.py`, recognizes Mac's
+  `Contents/` layout, skips `embedded.provisionprofile`, scans the entire universal binary), no DEBUG switches in Release; also checks the category and 512 / 512@2x icons.
+- Export produces a `.pkg` (ExportOptions `method` is also `app-store-connect`), cloud-signed like the iPhone: the App uses Apple Distribution,
+  the `.pkg` uses 3rd Party Mac Developer Installer (`pkgutil --check-signature` says "issued by Apple (Development)"; all certificates of this type do).
+  Upload with `altool -t macos`. The local release script runs `entitlements.py sign` before export, as for the iPhone, then `entitlements.py check <.pkg>` afterwards:
+  every bundle has its target's entitlements, and push is `production` (`check` recognizes Mac's `Contents/` layout and `.pkg`; it checks the push environment in iPhone ipas too).
+- **Package files must be readable by other users** (Mac 110, 2026-11-02): files in the `.pkg` were owner-readable only, causing ITMS-90255 at upload,
+  "files that are only readable by the root user" (macOS verifies signatures as the user running the App). auto-tf's umask is 077;
+  the script's `cp -R` made the copied archive entirely 0700 / 0600, which never showed up when testing in an interactive shell (umask 022). The release script now starts with `umask 022` and copies archives with `ditto` (preserves permissions).
+  It checks the `.app` before export and the App unpacked from the `.pkg` afterwards: every file a+r, every directory a+rx, otherwise no upload. The iPhone script was changed too (ipas aren't checked for this; 110 passed there).
+- **Automatic release**: after releasing the iPhone build, if this commit includes changes used by the Mac App (`apple/Mac`, `apple/Shared`, `apple/Persona` except a few iOS-only
+  files, `apple/Packages`, `project.yml`, `Package.resolved`), release Mac next with the same number. Report the Mac result separately; its failure doesn't affect the iPhone release.
+
+## Publishing personad (`scripts/release/publish.sh`, 2026-10-31)
+
+Let others install the server without getting the source: prebuilt `personad` and the installer are hosted on the `site/` Worker (configured `publish.site_url`).
 
 ```sh
-git tag v1.2.0 && git push origin v1.2.0   # -> ghcr.io/<owner>/<repo>:1.2.0 和 :latest
+curl -fsSL <publish.site_url>/install.sh | sh   # install to ~/.persona/bin/personad; verify against SHA256SUMS, refuse if wrong
 ```
 
-- 先冒烟（amd64 + compose），过了才构建两个架构并推；带 `-` 的预发布 tag（`v1.3.0-rc1`）只推版本号，不动 `latest`。
+- After installing `personad`, if herdr can't be found on this computer (PATH and directories node searches, such as `~/.local/bin`), install it with herdr's official installer (`https://herdr.dev/install.sh`)
+  too, so sessions appear in Agents after the first install. Failure only prints one warning and doesn't affect `personad`; computers using Orca / Herdr App can skip it with `JARVIS_SKIP_HERDR=1`.
+  `deploy.sh` does the same when installing `personad` on each computer (`scripts/deploy/ensure-herdr.sh`; keep the two sets of steps aligned).
 
-- 不打 tag 想要一个当前分支的镜像：Actions 里手动运行 hub image（`edge`、`sha-<提交>`）。
-- PR 上只冒烟，不推（推送那一步才有 `packages: write`）。
-- 镜像里的 personad 用 tag 去掉 `v` 当版本（`personad version`）；node 跟它不一样时 App 提示「重新部署」，用的是镜像里带的 node 构建。
-- 镜像里的 personad 是 `docker` 渠道：不带 skill（和所有二进制一样），不自己更新，有新镜像时提示拉取（`docs/hub-update.md`）。
-- 仓库私有时包也私有，NAS 要 `docker login ghcr.io`（`docs/docker.md`「镜像」）。
+- `release.sh` runs this after uploading TestFlight. The version is `<commit>-<build number>`, matching that TestFlight release; `NO_PUBLISH=1` only releases TestFlight,
+  and no publish happens without `publish.site_url` in config. Standalone: `./scripts/release/publish.sh`; `NO_DEPLOY=1` only builds and checks (outputs in `build-publish/`).
+- Website-only changes (`site/`): `SITE_ONLY=1 ./scripts/release/publish.sh` skips a new build, fetches the small files of the currently published version (`VERSION`, `SHA256SUMS`, `latest.json`, `SLOT`, `install.sh`) and deploys them with the committed `site/`, leaving archives in R2 unchanged. Afterwards it checks the live small files are unchanged and every archive still exists (`HEAD` size). It refuses if there's no live `dl/SLOT` yet (a release from before R2); do one full publish first. **Don't run `wrangler deploy` directly in `site/`**: it makes `/dl/` and `install.sh` return 404 (`docs/lessons/server.md`).
+- Web dependencies always install from the official npm registry (`npm ci --registry=https://registry.npmjs.org/`, overridable with `JARVIS_NPM_REGISTRY`), ignoring local npm config. `package-lock.json` already points to the official registry; a locally configured mirror may lack packages (on 2026-11-06 it lacked `elkjs`, stopping release before web bundling).
+- Build four platforms (linux / darwin × amd64 / arm64), with `-tags public -trimpath -s -w`, embedding `channel=release`, build number (UTC `YYYYMMDDHHMM`) and `updateURL`:
+  - **Web bundled into the binary** (`server/internal/hub/webdist`, `go:embed`): the hub uses it when the hub machine has no `~/.persona/web`; otherwise it still uses the directory.
+  - **No skills included**: the skill connecting to the Lark gateway was copied from a private upstream repository (GPL-3.0) and cannot be redistributed. Skills live in `~/.persona/skills/` on each machine,
+    so there is only one binary, used by our own hub too (`docs/hub-update.md`). The script ensures the binary only contains skills registered as redistributable (`scripts/release/check_bundle_skills.py`).
+    `-tags public` changes no code (`TestOneBuild`); it is only a privacy-scan marker.
+  - **Version manifest** `dl/latest.json` (each platform's archive and unpacked sha256, build number, commit), unsigned (the user's decision; trade-offs in `docs/hub-update.md` ("Security"));
+    before publishing, check that the build number is greater than the live one, the live version's commit is an ancestor of this one, and server/ and web/ have no uncommitted changes. The manifest includes all commits in this release (`ancestors`):
+    hubs read it for auto-update, but only install automatically if it includes the commit they're running (`docs/hub-update.md` ("Preventing rollback")).
+  - **Programs published together**: `jarvisd-wechat` (WeChat bot, a separate program, `docs/wechat.md`), built for all four platforms with the same
+    `-X` flags, privacy scan and size check as personad; its `version -v` must match personad's. The manifest's `programs` lists them, and hub auto-update replaces them together.
+  - Before upload, run `check_bundle_privacy.py --whole-short`: binaries must contain none of the configured values (except Go module paths; values of four characters or fewer match whole words,
+    since Unicode tables and compressed JS contain short letter combinations everywhere). A few protocol names, official contact links and standard network constants in public dependencies are classified by exact context, without allowing whole domains or private network ranges;
+    it requires the binary's `public` marker, unreplaced dependencies and checksums matching `server/go.sum`, and `go mod verify` before building. Registered personal values always take precedence and are blocked; see `docs/lessons/testing.md`.
+- Build the connector `jarvis-link-<os>-<arch>` for the same four platforms too (2026-11-02, node service, `install.sh --node`, see `docs/link.md` ("Installing the node service")), with the same privacy scan and compression, included in `SHA256SUMS`.
+- Downloads are `jarvisd-<os>-<arch>.gz`: scan the raw binary first, then compress with `gzip -n -9`; `SHA256SUMS` verifies the archive. The installer verifies it before unpacking and installing; failed verification / decompression never overwrites the old version.
+  **Archives go in R2 bucket `persona-dl`, not the site** (#2541): Workers static assets have a 25 MiB per-file limit ([official limit](https://developers.cloudflare.com/workers/platform/limits/#static-assets));
+  after #1002 embedded tiered avatar images, compressed jarvisd exceeded it. The Worker binds the bucket as `DL` (`site/wrangler.jsonc`); `worker.mjs` serves `/dl/*.gz` from it (`GET` / `HEAD` / `Range` / `If-None-Match`),
+  while other `/dl/` files remain static. The bucket has slots `a` and `b`: publishing uploads archives to the inactive slot (`<slot>/<filename>`), then deploys the site, switching `dl/SLOT` and `latest.json` together.
+  The other slot keeps the previous version until the next publish, so downloads in progress at deployment can finish. The site only has small files now; `check_asset_sizes.py` still checks the whole site directory. Local `build-publish/bin` keeps uncompressed binaries for debugging but doesn't upload them.
+  Regression: `python3 -B -m unittest discover -s scripts/deploy -p 'test_compressed_publish.py'`.
+- **Before releasing a hub ahead of the App, check compatibility with the released App** (#1693): if this hub makes clients draw something new (a new connector-login `kind`, interaction type,
+  card / event fields) but the latest TestFlight doesn't yet include the client changes, installed Apps show it blank or error (the WeChat plugin's `kind: qr` on an App without #1401
+  is an empty form with a permanently disabled "Next"). Before publishing the hub, compare against the latest TestFlight commit (`git merge-base --is-ancestor <client change> <TestFlight commit>`):
+  if missing, release TestFlight first, make the new feature fall back to something old Apps understand, or raise `proto.MinAppBuild` (`server/internal/proto/proto.go`, hello and
+  `min_app_build` in `latest.json`) to the build containing it so old Apps prompt for an update. Raising `min_app_build` makes every older App unable to use this hub; ask the user first.
+- Only the latest version is hosted (R2 also retains the previous one, as above). Bucket uploads and deployment use configured `publish.wrangler` (otherwise `npx wrangler`). Cloudflare OAuth expires after one hour;
+  on an auth error, run `cf auth login` and retry. After deployment it reads back `dl/VERSION`, `dl/SHA256SUMS`, `dl/latest.json`, `dl/SLOT` to confirm the just-built version is live, and checks every archive's size with `HEAD`.
+  The push relay is in the same Worker (`/relay/*`) and is redeployed on each publish too.
+- Push relay deployed (2026-11-02): resident `personad relay` + Cloudflare Tunnel + website Worker forwarding; public health, origin protection, registration and authentication verified.
+  Release config needs `app.push_relay`; only a new TestFlight with the notification extension registers. Notification decryption on real devices still needs separate acceptance; see `docs/push-relay.md`.
+- Not yet available (others can install, but it's still awkward; see `docs/config.md`): one-step `jarvisd setup` (hub currently needs manual Postgres and `hub.json` setup),
+  Developer ID notarization of the macOS binary (browser downloads get blocked by Gatekeeper; `curl` doesn't).
+
+## Publishing the hub image (`.github/workflows/hub-image.yml`, 2026-11-01)
+
+Docker hubs (`docs/docker.md`) use the ghcr image, linux/amd64 + linux/arm64:
+
+```sh
+git tag v1.2.0 && git push origin v1.2.0   # -> ghcr.io/<owner>/<repo>:1.2.0 and :latest
+```
+
+- Smoke-test first (amd64 + compose), then build and push both architectures only after it passes. Prerelease tags containing `-` (`v1.3.0-rc1`) only push the version tag, without touching `latest`.
+
+- To get an image of the current branch without a tag: manually run hub image in Actions (`edge`, `sha-<commit>`).
+- PRs only run smoke tests, with no push (`packages: write` is granted only to the push step).
+- The image's personad uses the tag minus `v` as its version (`personad version`); when node differs, the App prompts to redeploy, using the node build included in the image.
+- The image's personad is on the `docker` channel: no skills (like all binaries), no self-update; a new image prompts you to pull it (`docs/hub-update.md`).
+- When the repository is private, the package is private too; NAS installs need `docker login ghcr.io` (`docs/docker.md` ("Image")).
 

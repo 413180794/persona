@@ -1,1000 +1,1000 @@
-# 测试
+# Testing
 
-## 命令
+## Commands
 
 ```sh
-cd server && go test ./... && go vet ./...                    # 服务端
-SIM=$(scripts/app/sim-boot.sh "Persona Tests <issue 号>")              # 自己的模拟器，瘦身启动（「模拟器」）
+cd server && go test ./... && go vet ./...                    # server
+SIM=$(scripts/app/sim-boot.sh "Persona Tests <issue number>")              # your own simulator, slim boot ("Simulators")
 cd apple && xcodegen generate -q && xcodebuild -project Persona.xcodeproj -scheme Persona \
-  -destination "id=$SIM" test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
-./scripts/app/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
-cd apple/Packages/PersonaKit && swift test                             # PersonaKit 的单测：在 Mac 上直接跑，不编 App、不开模拟器
-python3 -B scripts/test/test_sim_boot.py                               # sim-boot.sh（假的 xcrun / simslim，不开模拟器）
-n=0 failed=""; for f in $(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort); do n=$((n + 1)); (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || failed="$failed $f"; done; echo "$n suites, failed:${failed:- none}"; [ -z "$failed" ]   # scripts/ 的全部 Python 测试（同 CI，任一失败则退出码非 0）
+  -destination "id=$SIM" test   # iOS unit tests (ChatStore, ScreenParser, phone tool registry)
+./scripts/app/sim.sh [-openSession <machine>/<id>]                    # run in simulator, pair automatically to the real hub
+cd apple/Packages/PersonaKit && swift test                             # PersonaKit unit tests: directly on Mac, no App build or simulator
+python3 -B scripts/test/test_sim_boot.py                               # sim-boot.sh (fake xcrun / simslim, no simulator)
+n=0 failed=""; for f in $(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort); do n=$((n + 1)); (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || failed="$failed $f"; done; echo "$n suites, failed:${failed:- none}"; [ -z "$failed" ]   # all Python tests in scripts/, like CI; any failure exits nonzero
 ```
 
-`scripts/` 下的 `test_*.py` 每个 PR 都由 CI 的「Scripts tests」（`.github/workflows/scripts-tests.yml`，job `scripts/ unittest suites`）在 Linux 上逐个从所在目录跑一遍，任一失败即红（#3011）；Linux 上整轮约 90 秒，只在 Mac 上有意义的自己 skip。新加的测试放在 `scripts/<子目录>/test_*.py` 就会被带上。
+Every PR's CI "Scripts tests" (`.github/workflows/scripts-tests.yml`, job `scripts/ unittest suites`) runs each `scripts/` `test_*.py` from its own directory on Linux; any failure turns it red (#3011). A Linux round takes about 90 seconds; Mac-only tests skip themselves. New tests at `scripts/<subdirectory>/test_*.py` are included automatically.
 
-服务端的 `go vet ./...` 和 `go test -count=1 ./...` 在 Linux 上由 CI 跑（`.github/workflows/server-test.yml`）：只在 PR 改到服务端会读的路径时触发
-（`server/`、`sdk/go/`、`spec/fixtures/`、`schema/extension/`、`integrations/` 等，清单在 workflow 里），同一分支的新推送会取消还在跑的旧任务。
-服务端测试新读了仓库里别的文件，要把路径加进这份清单。CI 里没有 Postgres，依赖数据库的测试没有 `JARVIS_TEST_DATABASE_URL` 会跳过，照旧靠 `scripts/test/test-server.sh` 在 hub 机器上跑。
+CI runs server `go vet ./...` and `go test -count=1 ./...` on Linux (`.github/workflows/server-test.yml`), only when a PR touches paths the server reads
+(`server/`, `sdk/go/`, `spec/fixtures/`, `schema/extension/`, `integrations/`, etc.; list in the workflow). New pushes on the same branch cancel old running jobs.
+If server tests start reading other repository files, add their paths. CI has no Postgres; database tests skip without `JARVIS_TEST_DATABASE_URL`, still relying on `scripts/test/test-server.sh` on the hub machine.
 
-## 本地快速检查（`scripts/check-fast.sh`，#2849）
+## Fast local checks (`scripts/check-fast.sh`, #2849)
 
-按 git 改动只跑相关的本地秒级检查，互不依赖的检查并行执行，适合提交前自查：
+Runs only relevant second-scale checks based on git changes, with independent checks in parallel; useful before committing:
 
 ```sh
-./scripts/check-fast.sh                  # 比对 git merge-base HEAD origin/master 到工作区的改动，按路径选检查
-./scripts/check-fast.sh --base master    # 指定比对基线
-./scripts/check-fast.sh --all            # 跑除 iOS/macOS 和服务端 Postgres 全量外的所有本地快速检查
+./scripts/check-fast.sh                  # compare changes from git merge-base HEAD origin/master to worktree, select by path
+./scripts/check-fast.sh --base master    # choose a comparison baseline
+./scripts/check-fast.sh --all            # all fast local checks except full iOS/macOS and server Postgres tests
 ```
 
-`--all` 也会像 CI 的 Scripts tests job 一样跑全部 `scripts/**/test_*.py`（同一条 `find`；只跳过已有专门检查的几个：`test_external_service_refs.py`、`test_sdk_bundle.py`、`test_extension_schema.py` 和 `scripts/app/test_android_*`，见 `script_test_add`，改名或去掉这些专门检查时要同步改这份跳过清单）：放在一个检查里按顺序逐个跑，每个套件在自己的目录、各自 `CHECK_FAST_TIMEOUT_OTHER` 超时，一个失败不影响其余，结尾列出失败和超时的文件。
+`--all` also runs all `scripts/**/test_*.py` like CI’s Scripts tests job (the same `find`; it skips only tests already covered by dedicated checks: `test_external_service_refs.py`, `test_sdk_bundle.py`, `test_extension_schema.py`, and `scripts/app/test_android_*`, see `script_test_add`; update this skip list when renaming or removing dedicated checks). They run sequentially in one check, each suite from its own directory with its own `CHECK_FAST_TIMEOUT_OTHER`. One failure does not stop the rest; the final summary lists failed and timed-out files.
 
-路径映射：
+Path mapping:
 
-| 改动路径 | 跑什么 |
+| Changed path | Checks |
 | --- | --- |
-| `web/**` | `npm ci`（仅当 `node_modules` 缺失或 `package.json` / `package-lock.json` 改动）+ `npm run typecheck` + `npm test`（vitest run） |
-| `integrations/<pkg>/**` | 该包 `node --test test/*.test.{js,mjs}`（没有测试文件的包跳过） |
+| `web/**` | `npm ci` (only if `node_modules` missing or `package.json` / `package-lock.json` changed) + `npm run typecheck` + `npm test` (vitest run) |
+| `integrations/<pkg>/**` | Package `node --test test/*.test.{js,mjs}` (skip packages without tests) |
 | `site/**` | `node --test site/worker.test.mjs` |
-| `sdk/ts/**` | `bun test`（没有 bun 时跳过并写明原因） |
-| `sdk/go/**` | 在 sdk/go 模块里 `go test ./...` |
-| `server/internal/foo/**`、`server/cmd/bar/**` | `go test ./internal/foo/...` 等受影响包；无法映射的服务端改动兜底 `go build ./...` |
-| `spec/fixtures/**`、`schema/extension/**`、`integrations/**`、`docs/<文件>`、`scripts/test/server_test_env.py` | 除本表其他行的检查外，再对读取它的服务端包跑 `go test ./internal/<包>/...`（即 `server-test.yml` 路径过滤里那些服务端测试会读的仓库文件）：运行时用 `git grep` 找 `server/**/*_test.go` 里写到该路径（字符串或 `filepath.Join` 的各段，`//` 注释行不算）的包，新加的读取方不用改脚本；`spec/` 下其他文件仍按未映射列出 |
-| `android/**`、`scripts/app/*android*`（含两个 `test_android_*` 自测） | `scripts/app/android_i18n_check.py` 及 android 检查器自己的 unittest（i18n、token baseline，不跑 gradle 构建） |
+| `sdk/ts/**` | `bun test` (skip with reason if bun absent) |
+| `sdk/go/**` | `go test ./...` in sdk/go module |
+| `server/internal/foo/**`, `server/cmd/bar/**` | Affected packages, e.g. `go test ./internal/foo/...`; unmappable server changes fall back to `go build ./...` |
+| `spec/fixtures/**`, `schema/extension/**`, `integrations/**`, `docs/<file>`, `scripts/test/server_test_env.py` | In addition to other checks in this table, `go test ./internal/<package>/...` for server packages reading these files (repository inputs covered by `server-test.yml` filters). At runtime, `git grep` finds packages referencing the path in `server/**/*_test.go` (strings or `filepath.Join` components; `//` comment lines excluded), so new readers need no script changes; other `spec/` files remain unmapped |
+| `android/**`, `scripts/app/*android*` (including both `test_android_*` self-tests) | `scripts/app/android_i18n_check.py` and Android checker unittests (i18n, token baseline; no Gradle build) |
 | `.github/**` | `scripts/test/pr_needs_issue_test.mjs` |
-| `schema/**` | `scripts/test/test_extension_schema.py`、`scripts/test/test_sdk_bundle.py`，并在 sdk/go 模块 `go test ./...`（对齐 CI 的 Extension schema job 三件套） |
-| `scripts/test/test_external_service_refs.py`、`scripts/{gen,test}/sdk_bundle*` | 对应脚本本身的测试 |
-| `scripts/**` | 按改动路径选 privacy / PR / schema / refs / bundle / i18n 秒级检查；拿不准就 PR 和 schema 都跑；另外跑改到的 `scripts/<子目录>/test_*.py`，以及改到的脚本 `<名字>.py` / `<名字>.sh` 对应的 `test_<名字>.py`（`-` 换成 `_`；`.sh` 也找 `test_<名字>_sh.py`），和 CI 一样在测试所在目录跑（#3968） |
-| `docs/**`、任意 `*.md` | `scripts/test/test_doc_paths.py`、`scripts/test/test_doc_go_paths.py`（文档里引用的路径、CLAUDE.md 文档索引） |
-| `apple/**` | `scripts/test/test_apple_l10n.py`（String Catalog 完整、Swift 中文字面量都进了 catalog）；iOS / macOS 的编译和测试需要 Mac，提示跳过 |
-| `deploy/docker/**`、`docs/docker.md`、根目录 `Dockerfile` | `scripts/test/test_docker_entrypoint.py`（它也检查根目录 `Dockerfile` 的 `EXPOSE`） |
-| 其他路径 | 无代码检查，逐文件列出未映射的路径 |
+| `schema/**` | `scripts/test/test_extension_schema.py`, `scripts/test/test_sdk_bundle.py`, plus `go test ./...` in sdk/go (the same three checks as CI's Extension schema job) |
+| `scripts/test/test_external_service_refs.py`, `scripts/{gen,test}/sdk_bundle*` | The scripts' own tests |
+| `scripts/**` | Select second-scale privacy / PR / schema / refs / bundle / i18n checks by path; when uncertain run PR and schema. Also run changed `scripts/<subdirectory>/test_*.py`, and `test_<name>.py` for changed `<name>.py` / `<name>.sh` scripts (`-`→`_`; `.sh` also checks `test_<name>_sh.py`), from the test directory like CI (#3968) |
+| `docs/**`, any `*.md` | `scripts/test/test_doc_paths.py`, `scripts/test/test_doc_go_paths.py` (quoted paths and CLAUDE.md documentation index) |
+| `apple/**` | `scripts/test/test_apple_l10n.py` (complete String Catalogs and Swift Chinese literals included in catalogs); iOS / macOS builds and tests need a Mac and are reported as skipped |
+| `deploy/docker/**`, `docs/docker.md`, root `Dockerfile` | `scripts/test/test_docker_entrypoint.py` (also checks root `Dockerfile`’s `EXPOSE`) |
+| Other paths | No code checks; list unmapped paths individually |
 
-只要有改动就始终先跑 `scripts/privacy_check.py`：纯本地扫描、不联网、约几秒。每个检查都有超时（npm ci 600 s、vitest 300 s、单组 go test 300 s、其他 120 s，可用 `CHECK_FAST_TIMEOUT_NPM_CI` / `CHECK_FAST_TIMEOUT_WEB_TEST` / `CHECK_FAST_TIMEOUT_GO_TEST` / `CHECK_FAST_TIMEOUT_OTHER` 环境变量覆盖），成功、失败、超时都各打印一行结论和耗时，结尾汇总通过 / 跳过（含原因）/ 失败 / 超时清单和日志目录。退出码：全过（或无需检查）为 0；有检查失败为 1；没有失败但有超时为 124（超时不当成功，需进一步跑全套确认）。工具链缺失时，默认模式只跳过相关检查并说明，`--all` 模式下缺少核心工具（node ≥ 22、go、python3）则判失败；bun 始终可选。需要 GNU `timeout`（macOS 装 coreutils）。
+Any changes always run `scripts/privacy_check.py` first: local-only, no network, a few seconds. Every check has a timeout (npm ci 600 s, vitest 300 s, one go test group 300 s, others 120 s; override with `CHECK_FAST_TIMEOUT_NPM_CI` / `CHECK_FAST_TIMEOUT_WEB_TEST` / `CHECK_FAST_TIMEOUT_GO_TEST` / `CHECK_FAST_TIMEOUT_OTHER`). Success/failure/timeout each prints a result and duration; the final summary lists passed/skipped (with reasons)/failed/timed-out checks and log directory. Exit: 0 if all pass or none needed; 1 for failure; 124 for timeout without failures (timeouts aren't passes; run full checks to confirm). Missing toolchains skip relevant checks with reasons by default; under `--all`, missing core tools (node ≥ 22, go, python3) fail; bun is always optional. Requires GNU `timeout` (coreutils on macOS).
 
-覆盖不了的：
+Not covered:
 
-- iOS / macOS / watchOS 的编译、模拟器截图和 UI 测试仍需在 Mac 上跑 `scripts/app/sim.sh`、`scripts/app/ui-test.sh`；PersonaKit 用 `swift test`。
-- 服务端连真实 Postgres 的全量测试仍用 `scripts/test/test-server.sh`（`internal/db` 等包在没有 `JARVIS_TEST_DATABASE_URL` 时自行跳过；`internal/node`、`internal/hub` 等包的全套测试假定 hub 机器环境，本机快速检查超时不代表失败，以 test-server.sh 的结果为准）。
-- Android gradle 构建和截图用 `scripts/app/android.sh`。
+- iOS / macOS / watchOS builds, simulator screenshots and UI tests still run on Mac with `scripts/app/sim.sh`, `scripts/app/ui-test.sh`; PersonaKit uses `swift test`.
+- Full server tests against real Postgres still use `scripts/test/test-server.sh` (`internal/db`, etc. skip without `JARVIS_TEST_DATABASE_URL`; full `internal/node`, `internal/hub`, etc. assume a hub-machine environment. Fast-check timeouts aren't failures; test-server.sh is authoritative).
+- Android Gradle builds/screenshots use `scripts/app/android.sh`.
 
-**PersonaKit**（`apple/Packages/PersonaKit`，#2095）：App 里不碰界面的逻辑挪进这个包，它的测试用 `swift test` 在 Mac 上跑，冷的约 10 秒、
-改一个文件后约 2 秒（同样的测试经 `PersonaTests` 跑，冷的约 140 秒、改一个文件后约 45 秒：要编整个 App、起模拟器）。改了包里的代码，合并前跑一遍 `swift test`；
-它不在 `PersonaTests` 里，也没有 CI job。iOS / Mac / visionOS 三个 App 依赖它，手表和小组件不依赖。
+**PersonaKit** (`apple/Packages/PersonaKit`, #2095): non-UI App logic moves into this package. Tests run with `swift test` on Mac: about 10 seconds cold,
+2 seconds after one file change (the same tests through `PersonaTests` took about 140 seconds cold, 45 after one file change, building the whole App and starting a simulator). Run `swift test` before merging package changes;
+it isn't in `PersonaTests` and has no CI job. iOS / Mac / visionOS Apps depend on it, watch/widgets do not.
 
-- 现在在包里的：`Notebook`、`HTMLResources`、`ChatFollow`、`PathRefs`（连同 `PathRef`、`PathLinkURL`、`PathMarkdown`），第 2 批的 `DocumentText`（连同 `TextCompare`）、`TableParsing`（`ZipArchive`、`XLSXReader`、`DelimitedParser`、`TableSheet`）、`MathMarkdown`、`Links`，以及从视图文件里抽出来的纯函数 `ConversationTitle`、`DirectoryPath`、`StreamChunks`、`MarkdownHTML`、`APIErrorInfo`、`ZoomMath`、`LarkChangeGate`（视图只是改成调用它们），第 3 批的 `AgentSyncPacing`（`AgentSync` 的拉取节奏，`AgentSync.heldUntil` / `workingGap` 转给它）、`ConnectorPrompt`（连同 `cannotDrawNote`）。
-  `OpRetry`、`BrowserCookies`、`MachineMetrics` 先不挪：`Shared/APIClient.swift` 用它们，挪了手表就得依赖这个包（watchOS 10），另行评估。`Links`、`ConversationTitle` 原来在 `apple/Shared`，手表和小组件都没用它们，挪走后手表照旧不依赖这个包。
-- 挪进来的类型和 App 用到的成员要写 `public`（结构体要 `public init`），用到它的 App 文件加 `import PersonaKit`。包里的测试照旧用 `@testable import PersonaKit`。
-- 用到 App 类型的断言（视图、`FilePaths`）留在 `PersonaTests`，那个文件也加 `import PersonaKit`。
-- 包里只放 Foundation 能编的代码：不 import SwiftUI / UIKit，不用 App 的 `Theme`、`AppModel`。设计系统的源码检查（`TokenRatchetTests` 等）不扫这个包。
+- Currently included: `Notebook`, `HTMLResources`, `ChatFollow`, `PathRefs` (with `PathRef`, `PathLinkURL`, `PathMarkdown`); batch 2 `DocumentText` (with `TextCompare`), `TableParsing` (`ZipArchive`, `XLSXReader`, `DelimitedParser`, `TableSheet`), `MathMarkdown`, `Links`; pure functions extracted from views: `ConversationTitle`, `DirectoryPath`, `StreamChunks`, `MarkdownHTML`, `APIErrorInfo`, `ZoomMath`, `LarkChangeGate` (views now just call them); batch 3 `AgentSyncPacing` (`AgentSync` fetch timing; `AgentSync.heldUntil` / `workingGap` delegate to it), `ConnectorPrompt` (with `cannotDrawNote`).
+  Don't move `OpRetry`, `BrowserCookies`, `MachineMetrics` yet: `Shared/APIClient.swift` uses them, so moving would make the watch depend on this package (watchOS 10); assess separately. `Links` and `ConversationTitle` were in `apple/Shared`, but unused by watch/widgets, so moving them didn't add a watch dependency.
+- Moved types and App-used members must be `public` (structs need `public init`); App files using them add `import PersonaKit`. Package tests still use `@testable import PersonaKit`.
+- Assertions needing App types (views, `FilePaths`) stay in `PersonaTests`, also adding `import PersonaKit`.
+- Package code must build with Foundation only: no SwiftUI / UIKit imports, App `Theme` or `AppModel`. Design-system source checks (`TokenRatchetTests`, etc.) don't scan it.
 
-transcript 解析用真实样本做 golden 测试（`server/internal/transcript/testdata/`，`fixtures_test.go`）：每份样本的解析结果、
-「边写边读 = 一次读完」、「往前翻页不漏不重」。改了解析跑 `go test ./internal/transcript -run Fixture -update`，把 golden 的 diff 当评审看。
-加样本前先 `scripts/diag/redact_transcript.py` 脱敏、人工复核（`testdata/README.md`）；Claude Code / Codex 升级后跑
-`scripts/diag/transcript_stats.py` 看有没有解析器不认识的新类型。
+Transcript parsing uses real-sample golden tests (`server/internal/transcript/testdata/`, `fixtures_test.go`): each sample's parse result,
+"incremental read while writing = one full read", and "backward paging has no gaps/duplicates". After parsing changes run `go test ./internal/transcript -run Fixture -update` and review the golden diff.
+Before adding samples, redact with `scripts/diag/redact_transcript.py`, then manually review (`testdata/README.md`). After Claude Code / Codex upgrades, run
+`scripts/diag/transcript_stats.py` to find new types the parser doesn't recognize.
 
-接口冒烟：`curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`、`…/api/v1/sessions?machine_id=<machine>`。
+API smoke tests: `curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`, `…/api/v1/sessions?machine_id=<machine>`.
 
-## 端到端（2026-10-24 实测通过）
+## End-to-end (verified 2026-10-24)
 
-| 场景 | 方法 | 结果 |
+| Scenario | Method | Result |
 | --- | --- | --- |
-| 手机新建会话 | `POST /api/v1/sessions` 在 hub 机器 `~/jarvis-test` 用启动器启动 | 自动通过信任目录、首条消息送达 |
-| 提问 | 首条消息让 claude 调 AskUserQuestion（单题 / 两题含多选） | hub 出现 question 交互，`resolve` 后 claude 拿到答案继续 |
-| 计划审批 | ExitPlanMode → deny + 意见 → 改计划 → allow + setMode | 两种分支都对（`docs/claude-integration.md`） |
-| 手机工具 | hub 机器上的 claude 调 `mcp__jarvis__phone_device_info` | 经 node → hub → 模拟器 App 返回 iPhone 17 Pro / iOS 26.5 |
-| 实时流 | App 打开另一台 Mac 上正在工作的会话 | 工具步骤实时追加，状态条显示 spinner 行 |
-| 手表 | 手表模拟器 `-pairURL` | 「需要你」（等你的 Agent + 收件箱里需要你的事）、运行中会话；`-openInboxFirst YES` 打开第一件，`-openWatchItem question\|plan\|permission\|screen\|session` 打开第一个这类请求 / 第一个运行中的会话（`running`：列表不显示「需要你」，截运行中的会话行；`inbox`：「需要你」里只留收件箱的行）；`-showWatchMissing 公司,家里` 显示这些组还没有手表凭据（`""` 是默认组；不带 `-pairURL` 是「还没有手表的凭据」页，#1185） |
+| Create session from phone | `POST /api/v1/sessions`, launch via a launcher in `~/jarvis-test` on the hub machine | Directory trust accepted automatically; first message delivered |
+| Questions | First message asks claude to call AskUserQuestion (one question / two, including multi-select) | question interaction appears on hub; after `resolve`, claude receives answers and continues |
+| Plan approval | ExitPlanMode → deny + feedback → revise plan → allow + setMode | Both branches correct (`docs/claude-integration.md`) |
+| Phone tools | claude on hub machine calls `mcp__jarvis__phone_device_info` | node → hub → simulator App returns iPhone 17 Pro / iOS 26.5 |
+| Live stream | App opens a working session on another Mac | Tool steps append live; status bar shows spinner line |
+| Watch | Watch simulator `-pairURL` | "Needs you" (waiting Agents + Inbox items), running sessions; `-openInboxFirst YES` opens first item, `-openWatchItem question\|plan\|permission\|screen\|session` opens first request of that type / first running session (`running`: hides "Needs you" to screenshot running rows; `inbox`: only Inbox rows under "Needs you"); `-showWatchMissing Work,Home` shows groups missing watch credentials (`""` is default group; no `-pairURL` opens "No watch credentials yet", #1185) |
 
-## 界面检查清单（每次改界面都要截图看）
+## UI checklist (inspect screenshots after every UI change)
 
-- 对话列表：浅色 / 深色；有待处理交互、没有会话、连不上 hub 三种状态。
-- 对话页：长 markdown（表格、代码块）、折叠的工具组、diff、待办、图片；工作中状态条；提问 / 计划 / 授权 / 终端四种面板。
-- 新建对话：机器卡片（离线变灰）、最近目录、目录浏览、启动器搜索。
-- 机器、邮件（空状态、列表、详情、写信、添加邮箱）、设置、手机数据授权。
-- 手表：列表、交互详情、收件箱详情（AI 回复）、会话详情。
+- Chat list: light / dark; pending interactions, no sessions, hub unreachable.
+- Chat: long Markdown (tables, code blocks), collapsed tool groups, diffs, to-dos, images; Working bar; question / plan / permission / terminal panels.
+- New chat: machine cards (offline grayed out), recent directories, directory browser, launcher search.
+- Machines, mail (empty/list/detail/compose/add account), Settings, phone-data permissions.
+- Watch: list, interaction details, Inbox details (AI reply), session details.
 
-模拟器限制：屏幕锁着时 computer-use 点不了模拟器，靠 DEBUG 启动参数直达页面；推送、HealthKit 真实数据、WatchConnectivity 同步要真机。
+Simulator limits: computer-use can't click simulators while the screen is locked; use DEBUG launch arguments to open pages directly. Push, real HealthKit data and WatchConnectivity sync need devices.
 
-## 安卓截图
+## Android screenshots
 
-`./scripts/app/android.sh shots -s emulator-<端口> --out <目录>`：在专用模拟器上装独立的测试包，用匿名化的 `scripts/mock/mock_hub.py` 自动配对，
-四个 tab 和主要页面按浅色、深色各截一张（`docs/android.md`「假 hub 批量截图」；只挪代码不改样子的重构用同一节的「改前改后逐像素比对」，比对用 `scripts/app/android_shots_diff.py`）。
-改了界面还要在三套界面风格（玻璃 / 晨报 / 看板）下看（`docs/android-design.md`），平板 / 折叠屏的截图办法见 `docs/lessons/android.md`。
-手势、键盘、通知、真实网络要在真机或模拟器上看。
+`./scripts/app/android.sh shots -s emulator-<port> --out <directory>` installs a separate test package on a dedicated emulator and auto-pairs to anonymized `scripts/mock/mock_hub.py`,
+screenshotting the four tabs and main pages in light and dark (`docs/android.md` ("Batch screenshots with a mock hub"); code-only refactors use that section's before/after pixel comparison with `scripts/app/android_shots_diff.py`).
+UI changes also need all three styles (Glass / Morning / Board, `docs/android-design.md`); tablet/foldable screenshots in `docs/lessons/android.md`.
+Inspect gestures, keyboards, notifications and real networking on devices or emulators.
 
-## 用 mock 数据截图（README / 宣传图）
+## Mock-data screenshots (README / promotional images)
 
-截图不能带真实的业务数据：`scripts/mock/mock_hub.py` 是一个只返回编造数据的假 hub（三台机器、几个项目的 Agent、助手对话、
-一个提问、一个计划审批、飞书 + 邮件的收件箱），够主要界面用。
+Screenshots must contain no real business data. `scripts/mock/mock_hub.py` returns only made-up data (three machines, Agents in several projects, assistant chat,
+one question, one plan approval, Lark + mail Inbox), enough for main pages.
 
-真 hub 的收件箱端到端（分拣、事件合成、AI 分身的判断）用 `scripts/mock/mock_model.py`：一个假的 Anthropic Messages 接口（`POST /v1/messages`），
-按提示词回固定的 JSON（事件合成把这一批都并进输入里第一件开着的事，没有就新开一件；有问号的算需要你），`POST /_mode` 切成失败、没额度、
-不合格的结果，`GET /_calls` 看收到了什么。hub.json 的 `inbox.triage_ai`（事件合成也用它）和 `judge_ai` 指过去，用法写在文件开头；`scripts/mock/test_mock_model.py` 管它。
+Real-hub Inbox end-to-end tests (triage, event synthesis, AI twin decisions) use `scripts/mock/mock_model.py`: a fake Anthropic Messages endpoint (`POST /v1/messages`),
+returning fixed JSON according to prompts (event synthesis merges the batch into the first open item in the input, or creates one; question marks count as Needs you). `POST /_mode` switches to failure, exhausted quota,
+or invalid output; `GET /_calls` inspects received calls. Point hub.json `inbox.triage_ai` (also used by event synthesis) and `judge_ai` at it; usage is at the file top, tests in `scripts/mock/test_mock_model.py`.
 
 ```sh
 python3 scripts/mock/mock_hub.py &                                  # 127.0.0.1:18760
-SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue 号>")          # 新建并瘦身启动（「模拟器」），没装 simslim 时普通启动
+SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue number>")          # create/slim boot ("Simulators"), normal boot if simslim absent
 xcrun simctl status_bar $SIM override --time "$(date +%H:%M)" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
 xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" [-tab dev|mail] [-openSession <machine>/<session>]
 ```
 
-- **新建一台模拟器**，别用连过真实 hub 的：App 的磁盘缓存（对话、收件箱）会把真实数据带进截图。
-- mock 的条目 id 是固定的；改了 mock 数据（或 id）后要卸载重装 App，否则旧缓存和新数据合在一起，每一步出现两次。
-- Agent 对话页默认把工作过程折成一行，`-openAllWork YES` 展开。`-tab` 没有对话 tab，App 会停在上次的 tab：
-  要拍对话 tab 就先卸载重装（新装默认在对话 tab）。
-- 首页问候按模拟器的真实时间（「晚上好」），状态栏时间也用当前时间，别固定成 9:41。
-- 深色：`xcrun simctl ui $SIM appearance dark`。
-- herdr 没在运行（#1916）：`MOCK_HERDR_STOPPED=macbook` 让 MacBook 的经典 herdr 没在跑，Agents 列表最上面出「MacBook 的 herdr 没在运行」和「启动」；
-  `MOCK_HERDR_START=slow|fail|stale` 是启动要 6 秒 / 失败（node 的原因）/ 起来了但 `GET` 还说没在跑（更新前的 hub）。`GET /mock/herdr?stopped=…&start=…` 运行中改，
-  `/mock/reset` 换回环境变量的；回的 `starts` 是每台被要求启动的次数。`-showHerdrStart YES` 让第一行自己点一次「启动」（截「正在启动…」和失败）。
-  UI 测试 `HerdrNoticeTests`（`TEST_RUNNER_JARVIS_MOCK_HUB`，`JARVIS_SHOTS` 存图）。
-- 操控电脑（docs/computer-use.md）：`MOCK_COMPUTER=ready|permissions|both|locked|missing` 是扩展 `cua` 打开、MacBook 已打开（就绪 / 缺屏幕录制权限 / 两项都缺 / 锁屏 / 没装：「安装 Cua Driver」按钮按时间走完下载、校验、关统计、授权、点了允许，每步 `MOCK_COMPUTER_STEP` 秒，默认 2）；加 `MOCK_WEB=web/dist`（先 `npm run build`）托管网页的VNC页，并把 MacBook 的 5900 转到这台 Mac 自己的屏幕共享（UI 测试带 `TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1` 才跑这一条），Mac Studio 还没打开；`=off` 是扩展开着、哪台都没打开。再加 `MOCK_PLUGINS=1`，扩展列表里有「操控电脑（Cua）」，它的「能操控的电脑」跟着各台 Mac 的 `computer.enabled` 双向同步（`-tab settings -openExtension cua` 直接打开）。`-tab settings -openMachines YES -openMachineDetail macbook` 直接打开 MacBook 的机器页。再加 `MOCK_COMPUTER_OPERATING=1`，助手的「用计算器算 6×7」和 Agent widget 的对话里各有一个还在跑的操作，输入框上面出「正在操作 MacBook · …」（`ScreenDrawerTests`）。再加 `MOCK_DEVICE_TOKEN=jd_…`（UI 测试带同样的 `TEST_RUNNER_JARVIS_DEVICE_TOKEN`，`UITestToken`），mock 的 `/api/` 只认这一个 token（`Authorization` 或 `?token=`），别的回 401 invalid token，和 hub 一样（#1498：VNC的页面拿到编了两次的 token）。`MOCK_COMPUTER_APPS=1`：MacBook 有两个已允许助手操作的 App（计算器、整个屏幕），机器页列出来，可以移除（`ComputerSectionTests.testAllowedAppsCanBeTakenBack`，带 `TEST_RUNNER_JARVIS_COMPUTER_APPS=1`）。「扩展开着时不自动锁屏」：机器页的开关打开前先问（`ComputerSectionTests.testNoAutoLockAsksFirst`），扩展页的按机器开关看 `x-confirm` 先问（`ExtensionMachineSwitchesTests.testAListWithAConfirmAsksFirst`，`MOCK_PLUGINS=1`），mock 把扩展页的 `no_auto_lock` 同步到各台的 `computer.no_auto_lock`。`MOCK_SCREEN=fake`：5900 不转到这台 Mac 的屏幕共享，而是 mock 自己的一个（像 macOS 一样先给 ARD 登录（有 openssl 时），再给 VeNCrypt Plain，账号 `me`、密码 `mock-pass`，`GET /mock/screen-password?p=…` 改密码，`&clear=1` 清掉记下的按键；它记下登录后按的键，收到正确的密码和回车就把锁屏的 MacBook 改成解开），连上后画一帧桌面，客户端要 ZRLE 就给 ZRLE；记下指针、点击、剪贴板（node 的 `GET/POST …/computer/clipboard` 读写的也是这一份），`?clip=…` 往客户端发剪贴板，`&slow=S` 晚 S 秒才回（小窗的「连接中…」），`&down=1` 挂断现有的连接、之后来的也直接挂（`0` 恢复），`MOCK_SCREEN_ANIMATE=1` 画面里一个方块约每秒 30 帧地动（`ScreenPasswordTests`、`VNCTests`、原生客户端，UI 测试带 `TEST_RUNNER_JARVIS_FAKE_SCREEN=1`；模拟器没有画中画，「VNC」退回整页，小窗只能真机看）。
-- 临时码配对（#2766）：`MOCK_PAIR_TOKEN=jp_…` 让 mock 像 `personad hub pair` 的码一样：这个 token 在 `POST /api/v1/auth/tokens` 兑换前什么都能开，兑换后再开 `MOCK_PAIR_GRACE` 秒（默认 10，代替 hub 的 2 分钟），再兑换一次回 401；换来的设备 token（`jd_mock_<n>`）一直能用，401 都打一行日志。已配对的 socket 在宽限到了时被断开（和 hub 一样），日志里 `ws open host=… token=…` 看每次握手用的是哪个 token。`MOCK_PAIR_TRADE_DELAY=<秒>` 让兑换晚回，`MOCK_PAIR_DROP=<秒>` 把第一条临时 token 的 socket 断一次；再加 `MOCK_HUB_NAME` 和一个 `center: true`、地址是 `http://localhost:<端口>` 的 `MOCK_MESH_PEERS`，重连就走到组的中心（另一个地址）。启动参数 `-openWelcome YES -openPairLink 'persona://pair?url=http://127.0.0.1:<端口>&token=jp_…'` 像扫码一样配对（`-pairURL` 不换设备 token，测不到这条路；`simctl openurl` 会弹系统确认框），`-openPairLinkTimes 2` 同一个链接隔几秒再处理一次。过了宽限没有 401、标题不是「连接中…」才算对。
-- 浏览器（docs/plan-ego-browser.md）：`MOCK_BROWSER=missing|setup|ready` 是扩展 `ego` 打开、MacBook 已打开（没装 / 装了没做首次设置 / 就绪，统计开着；`MOCK_BROWSER_ANALYTICS=off` 是关着），Mac Studio 没打开、没装；「安装 ego lite」「打开 ego lite」按时间往前走（每步 `MOCK_COMPUTER_STEP` 秒）。加 `MOCK_PLUGINS=1`，扩展列表里有「浏览器（ego lite）」（`-tab settings -openExtension ego`）。
-- 主对话统一入口（docs/unified-entry.md）：`MOCK_TASKS=1` 启动 mock，主对话里有开始了的计划、在做 / 等你 / 做完的三个任务、一个 Agent 没开起来的任务（红色卡片和回执，#1077）、
-  答过的问题、回执、直接对任务说的话和最后一张待开始的计划卡；`MOCK_TASKS_AT=<分钟>` 把对话截到那么多分钟以前（更新的条目不要），
-  不用滑动就能在屏幕底部看到更早的部分。`MOCK_TASKS_NO_ASKS=1` 让任务的 Agent 不提问，输入框上方不再被问题卡占住。`MOCK_TASKS_DOCK=2` 只留两个在做的任务（任务坞两个任务胶囊，后面还有两个手动开的 Agent），`=pair` 只留一个任务和一个等你的手动 Agent（两个胶囊），`=many` 再加四个任务（任务坞比屏幕宽，看「全部」固定在最左边），`=multi` 只留「修小组件横屏崩溃」并给它挂两个 Agent（任务详情标题的 ⌄ 切换，`TaskSheetHeaderTests` 带 `TEST_RUNNER_JARVIS_TASK_MULTI=1`），`=long` 只留两个标题比胶囊长的任务（并排，看截断后不重叠，配合 `simctl ui <udid> content_size extra-extra-extra-large`，#3010）；不设时是四个没做完的任务加两个手动开的 Agent（#1113）。`-showTaskDetail <待办 id>`（如 `todo_task_widget`）打开任务详情，`-showTaskBoard YES` 打开任务板。
-  hub 投进对话的消息（#2358，`docs/protocol.md`「Persona 注入的消息」）：再加 `MOCK_INJECTED=1`，回执卡片下面多一条没标记的任务通知（App 按文字认）和一条 hub 标好的定时任务；
-  `MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14` 让它们停在底部，`InjectedLineTests`（`JARVIS_SHOTS` 写两行和展开的定时任务）点开定时任务、再点任务通知打开任务。
-  手表：再加 `MOCK_INJECTED_WATCH=1`（主对话在工作，手表列在第一个），手表 `-openWatchItem session` 打开它。
-  任务提问的回答记录（#1231）：mock 里「补齐网络层的单元测试」那行有三个问题的完整问答，「修小组件横屏崩溃」那行是只有摘要的老记录；`MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23` 让它们停在底部，`AnsweredLineTests`（`JARVIS_SHOTS` 写折叠 / 展开两张图）点开再收起。
-- 离开期间回顾在消息流里（#1360）：`MOCK_RECAP_LONG=1` 启动 mock，「检查 PR #42 的改动」前面多出八轮对话、比一屏高，结尾是一条回顾；`TEST_RUNNER_JARVIS_MOCK_HUB=<地址> xcodebuild test … -only-testing:PersonaUITests/RecapInFlowTests` 查展开的回顾在回复和输入框之间、往上翻跟着滚走、点了收成小条、重开还是关着（`-openRecapsFresh YES` 忘掉关过的回顾）；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 和 `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 写展开 / 收起 × 贴底 / 往上翻四张图。`MOCK_RECAPS=1` 看三条折成一行时更早的两条留成小条。
-- 截断的长输出：`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openAllWork YES -showFullOutput card`（展开「运行」卡片，
-  看「已截断，看全文」）或 `sheet`（再打开全文浮层，mock 的 `/items/{id}/full` 回全文）。
-- 往上翻时内容不动（`ChatView` 的冻结）：`MOCK_STREAM=1` 启动 mock（第一个会话打开后每 2 秒来一条新步骤 / 回复，共 12 次），
-  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openAllWork YES -showFreezeProbe YES`：App 自己往上翻，每 2 秒记一次屏幕中间那行的位置，
-  结果写在 App 容器的 `Documents/freeze.txt`（`xcrun simctl get_app_container $SIM <bundle id> data`），最后一行 `RESULT:`，应为移动 0pt。
-- 新建 Persona 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
-  App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
-  等待中看气泡和「Persona 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
-- 飞书多账号（#1321）：mock 加 `MOCK_LARK_ACCOUNTS=1`，`/api/v1/lark/accounts` 有「我」「工作号」和一个未登录的账号，`ol_account=2` 读到工作号自己的会话，收件箱最上面一件来自工作号；`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkAccountsFlowTests`（「消息」页切换账号、打开工作号的会话、设置 › 飞书的账号列表；`JARVIS_SHOTS` 存截图）；网页用 `scripts/test/web_lark_accounts_e2e.py <网页地址> [--shots <目录>]`（用法见脚本开头）。
-- 飞书加密消息（#689、#1664）：mock 加 `MOCK_LARK_NATIVE_OLK=1`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkNativeEncryptionFlowTests`（「消息」页打开「设计评审」、选对外展示、解锁、发送、失败重发、收件箱不能把加密草稿当普通消息发；解锁后查不弹「保存密码」）；`JARVIS_SHOTS` 存截图（`docs/screenshots/lark-native-encryption/`）。多账号的用例里第二个账号置顶了「季度规划」，它只在置顶栏（`feishu-pin-w1`），不在列表里（#1342）。
-- [removed]（#882）：mock 加 `MOCK_LARK_BRAVE_CLIMB=1`（开关打开，「设计评审」里有整条、拆成两段、句中夹着、旧四字编码的编码文字和一条引用，列表摘要也是编码），`TEST_RUNNER_JARVIS_MOCK_HUB` 跑 `LarkBraveClimbFlowTests`（开着：列表、聊天解码，选「[removed]编码」发出去的是编码；关着：气泡原样、摘要显示「[removed]编码消息」、模式菜单没有这一项，另一设备打开后当前聊天跟着解码）。`MOCK_LARK_OLD_DISPLAY=1` 模拟没有这个开关的旧扩展。
-- 消息来源（扩展点 `messaging`，#2138）：mock 加 `MOCK_MESSAGING=1`，`GET /api/v1/messaging` 列出来源 `lark`（扩展 `larkext`），`/api/v1/messaging/lark/…` 按 `docs/extension-messaging.md` 的格式回答：`scripts/mock/lark_messaging.py` 读 mock 自己的 `/api/v1/lark/…` 再转换，[removed]解码、加密外显 / 解开、撤回和编辑历史按显示设置这些扩展的处理在它里面做；设置页是扩展的整页 UI `POST /api/v1/extensions/larkext/-/ui/display`；hello / health 的 `features` 多 `messaging`，每个 `{type: lark}` 推送同时发一个 `{type: messaging}`。能和别的飞书 fixture 同开（`MOCK_LARK=1`、`MOCK_LARK_TRAINER=1`、`MOCK_LARK_BRAVE_CLIMB=1`、`MOCK_LARK_NATIVE_OLK=1`……）。`python3 scripts/mock/test_lark_messaging.py` 查每个回答合 schema、扩展的处理做了。
-- 没装飞书网关扩展的 hub（#1530）：mock 默认在 features 里带 `lark`、`lark_moments`（扩展给的）；加 `MOCK_NO_LARK=1` 去掉它们和 `lark_attachments`，`/api/v1/lark/…` 一律 404、连接器里没有飞书，看「消息」页、设置 › 连接器 › 飞书、翻译的「飞书会话」都不出现，飞书文档 / 公司圈链接照普通网页打开。
-- 飞书 /agent 的上下文（#876）：mock 加 `MOCK_LARK_AGENT=1`，「帮我约周五…」变成一条飞书 /agent 请求（说明和 7 项上下文在 `<jarvis-context>` 里，标签外只有请求）；`-openSession server/b2e4d6f8-0000-4000-8000-000000000003`，`-showContexts YES` 让上下文组和第一项打开。
-- Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
-- 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Persona 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
-  这时来回复不拽人；点了回到底部、之后照常跟随。Agent 对话页分四种打开方式测：普通、完成未看（`-showAsUnread YES`）、停在上次的位置（`-chat.read.<会话> <行 id>`），以及有磁盘缓存时冷启动回到离末尾很远的位置（mock 开 `/mock/paging?on=1` 像 hub 一样分页、`/mock/delay?s=3` 让缓存先上屏，#597；`/mock/reset` 会把两者关掉）。
-  回复由 mock 的 `GET /mock/say?text=…&user=…&stream=1` 推给所有打开的对话；列表在哪由 App 的 `-showScrollState YES` 报（无障碍标签
-  `chat.scrollState`：bottom / follows / frozen / arrow / newestShown / withheld…，`visible` 时画在屏幕上），XCUITest 读不准倒置列表里行的位置。
-  `testRealHubChats` 连真实 hub 拍改前改后（`TEST_RUNNER_JARVIS_REAL_PAIR` 等环境变量，不给就跳过；只开自己的会话，打开会标已读）。
-- 终端实时流：`MOCK_TERMINAL_STREAM=1` 启动 mock（hello 带 `terminal_stream`，订阅后先发一个编造的 Claude 界面整帧，再每秒一帧让 spinner 走秒；
-  再加 `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe.jsonl` 改为回放从 herdr 录下的真实帧：颜色、框里的中文、emoji、链接、200 字的长行），
-  `-openPane terminal`，`-terminalWrap NO` 看不换行，`-terminalPages 1` 加载一页（mock 的 `/screen/before` 回一段带颜色的历史）。
-- 完整 herdr 界面（网页，`docs/terminal.md` 第二十四节）：`MOCK_TERMINAL_FULL=1`（hello 带 `herdr_client`，`herdr_open` 回一个编造的 herdr 客户端：侧边栏 / 标签页条 / 两个窗格，窄时单列；Ctrl+Y 让它发一次 OSC 52；`GET /mock/herdr_client` 看 hub 收到的 `herdr_*`），
-- 完整界面的焦点联动（网页，`docs/terminal.md` 第二十八节）：`MOCK_TERMINAL_FULL=1` 的假 hub 还说 `herdr_focus`（`MOCK_TERMINAL_FULL_NOFOCUS=1` 去掉它，模拟旧 hub），页面的 `herdr_focus` 回一条 `persona` 的回声；`GET /mock/herdr_focus?pane=w1:p2[&session=<id>&source=client|persona|other&mine=1|0&view=<id>]` 让 herdr 的焦点「动一下」，像 node 告诉各视图那样。`scripts/test/web_herdr_focus_e2e.py`（用法见脚本开头，两个假 hub + 两个页面）。Playwright 的同步 API 只在调用它时才派发页面事件：等页面动起来用 `page.wait_for_timeout`，别用 `time.sleep`。
-  `MOCK_TERMINAL_FULL_EXEC="herdr session attach <临时会话>"` 在 PTY 里跑真客户端（只用自己建的临时会话），`MOCK_TERMINAL_FULL_END_AFTER=<秒>` 让视图过一会儿结束，`MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many` 拒绝。
-  端到端 `scripts/test/web_herdr_full_e2e.py`（用法见脚本开头，四个假 hub + 四个 Vite）和对真 herdr 的 `scripts/test/web_herdr_full_live.py`；完整界面里 herdr 与 Persona 的冲突（右键、Ctrl+B、鼠标、粘贴 / 拖放，#2700）：`scripts/test/web_herdr_full_conflicts_e2e.py`（一个假 hub + 一个 Vite，用法见脚本开头）和对真 herdr 临时会话的 `scripts/test/web_herdr_full_conflicts_live.py`；Go 对真 herdr：`PERSONA_LIVE_FULL_SESSION=<临时会话> go test -tags herdrlive -run 'TestLiveFullClient|TestLiveFocusPane' ./internal/herdr/`。
-- 独立终端（网页，`docs/terminal.md` 第十九节）：再加 `MOCK_TERMINAL_PANES=1`（hello 带 `terminal_panes`，`GET/POST /api/v1/machines/{mid}/panes` 回编造的空间 / 标签页 / 窗格，`pane:` 地址打开的是编造的 zsh）。
-- 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
-  `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
-  UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。
-- 设置 › 扩展：`MOCK_PLUGINS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`；`TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>` 跑 `ExtensionSettingsTests`（列表、填表被 hub 拒绝、填密钥后变成运行中）、`ExtensionSlotsTests`（UI 插槽：设置首页的卡片和入口、用量页、机器上的一节），
-  每轮前重启 mock（状态在内存里）。截图同上：`TEST_RUNNER_JARVIS_SHOTS`、`simctl ui … appearance`、`TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` 命名，两种界面风格都跑。
-  扩展安装的步骤和进度（#3307）：`MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<端口>` 跑 `ExtensionInstallProgressTests`（后台预览的步骤、等你同意时预览自己弹出、停在「启动」、离开再回来、重试走缓存直接装完、卸载失败后重试）；
-  扩展的命令行程序和登录（#4507）：每次新起一个 `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1 PORT=<端口>` 的 mock 和一个 `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1 PORT=<端口 2>` 的旧 hub，`TEST_RUNNER_JARVIS_EXT_AUTH_HUB` / `TEST_RUNNER_JARVIS_EXT_AUTH_OLD_HUB` 跑 `ExtensionSignInTests`（安装确认页的「安装命令行程序」、「安装命令行」这一步和每个程序、装完进详情自动开始扫码登录、轮询到登录成功、退出登录、「命令行」一节；旧 hub 没有登录一节、只有警告和扩展自己的登录页）；
-  `MOCK_EXTENSION_OPS=1` 全部成功，`MOCK_EXTENSION_OPS_STEP=<秒>` 放慢好截图，不带 `MOCK_EXTENSION_OPS` 加 `MOCK_EXTENSION_INSTALL_DELAY=<秒>` 看旧 hub 的「正在安装」。
-  新模拟器第一次会弹通知授权，测试自己点掉。
-- Git 拉取：`MOCK_FILES=1 MOCK_GIT_PULL=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`；`TEST_RUNNER_JARVIS_GIT_HUB=http://127.0.0.1:<端口>` 跑 `GitPullUITests`，从落后 28 个提交到成功刷新、再次检查和失败后重试。
-  `TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，分别用 `simctl ui <udid> appearance light|dark` 切换实际外观，两种界面风格都跑；`TEST_RUNNER_JARVIS_GIT_APPEARANCE` 仅用于截图命名。
-  `GitPullTests` 使用 `FakeHub` 检查 POST 请求、结果解码、反馈与重复点击；服务端 `TestGitPull*` 使用隔离 HOME / Git 配置的临时本地远端，验证未 fetch 的最新提交、fast-forward、分叉、已修改 / 已暂存 / 未跟踪文件、已有 stash 和失败状态，不拉取真实工作区。
-- 文件查看器（`docs/ios.md`「文件查看器」）：`MOCK_FILES=1` 启动 mock，给出一份编造的 `/Users/me/code/weather`：每种语言一个小文件、
-  3 MB 的 JSON、2 万行的 Go、4000 多行的 README、5 MB 的日志，`GET …/file`（2 MB 一页）和 `…/stat` 都按它回答；「给天气 App 加主屏幕小组件」
-  最后一条回复提到其中几个文件，和两个不在的路径。UI 测试 `FileViewerUITests` 要连这样的 mock。测耗时和帧率：用 `-O` 编一份
-  （`SWIFT_OPTIMIZATION_LEVEL=-O`，另一个 DerivedData），带 `JARVIS_FILE_PERF=1` 跑 `FileViewerPerfTests`，再读 App 容器里的
-  `Library/Caches/file-perf.log`。滚动用 App 内的匀速滚动测，别用 XCUITest 拖：它每个手势前在 App 主线程上抓一次无障碍快照，自己就是 40–100 ms 的长帧。
-  改了 mock 里某条消息的文字要先卸载 App：App 按 item id 缓存会话，同 id 的新文字不会盖掉旧的。
-- 表格查看器（网页 #1310）：mock 加 `MOCK_FILES=1 MOCK_SHEETS=1`，会话目录多出 `data/stations.csv`（3000 行，带引号、换行、中文）和 `reports/季度报告.xlsx`（三个工作表、合并标题、列宽、数字和百分比格式），文件面板里点开；二进制在 `file?stream=1` 时只回描述，内容从 `file/download` 取。
-- Office 预览（网页 #1345）：mock 再加 `MOCK_OFFICE=1`，`reports/` 下多出手写的 `季度报告.docx`（标题、表格、图片、页脚）、`季度回顾.pptx`（主题、母版、版式占位符、项目符号、图片、形状、表格、图表、备注）、`旧版说明.doc`（mock 的 `file/convert` 回一份 PDF）和 `路线图.pages`（回 `no_converter`）。
-- Mermaid（网页 #1376）：mock 加 `MOCK_MERMAID=1`，widget 对话末尾多一条带流程图、时序图、饼图和一张写错的图的回复。
-- Jupyter（网页 #1407）：mock 加 `MOCK_NOTEBOOK=1`，`notebooks/收入分析.ipynb` 有 Markdown + 公式、HTML 表格、stdout / stderr、PNG 图和带 ANSI 颜色的报错。
-- HTML 预览（网页 #1413）：mock 加 `MOCK_HTML=1`，`reports/周报.html` 带样式、一段改文字的脚本（默认显示「脚本没有运行」）、一张远程图片（应被拦）和同目录的 `chart.png`、`周报.css`（应读入，工具条写「读入了 2 个」）。
-- 媒体（网页 #1422）：mock 加 `MOCK_MEDIA=1`（`media/` 下一段 WAV、一个带脚本的 SVG、一个浏览器画不了的 HEIC，`file/thumb` 给它画一张替身），再配 `MOCK_VIDEO_FILE=<webm/mp4>`、`MOCK_SENT_VIDEO=<同上>` 看文件页的视频和对话里的视频卡片（无头 Chrome 放 WebM 最稳）。
-- 对比（网页 #1437）：mock 加 `MOCK_COMPARE=1`，Git 面板多出改过的 `reports/季度报告.docx`、`reports/季度回顾.pptx`、`assets/banner.png`，`git/blob` 回它们暂存区 / HEAD 的旧版。
-- 这一轮看过的图片（网页 #1540）：mock 加 `MOCK_TURN_IMAGES_WEB=1`：「检查 PR #42」最后一轮折起来的工作里有 9 张（Read、截图、网页截图、MCP、Codex view_image），「整理发布说明」最后一轮 1 张（卡片），widget 对话正在工作的一轮 2 张。
-- 文件预览里的链接（`FilePreviewLinkTests`）：`MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_FILE_LINK_HUB=http://127.0.0.1:<端口>`。从旧布局的会话文件块（固定 `-ui.oldLayout YES -tab dev`，避免隐藏助手响应全局 DEBUG 参数）与默认新外壳的「文件」页打开 README，链接必须在关闭文件前立即可点；关闭后返回原文件位置，重复打开同一链接正常，关闭文件后不补弹旧链接。开发预览还要实际读到经 hub 转发的网页文字。
-  两种风格分别切实际 light / dark 外观运行；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_FILE_LINK_APPEARANCE` 仅负责文件命名。
-- 视频预览：合成一个 120 秒、大于 2 MiB 的 H.264/AAC MP4（例如 `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 120 -c:v libx264 -b:v 3M -g 30 -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`）；再用 `ffmpeg -i /tmp/preview.mp4 -c copy /tmp/preview-tail.mp4` 生成索引在尾部的版本。mock 加 `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`，可加 `MOCK_VIDEO_DELAY=0.01` 延迟每个 32 KiB 网络片段。`GET /mock/video-reads` 返回 Range 的起止、实际发送量和 active/cancelled，`?reset=1` 清空统计。mock 正确返回 206、Content-Range、ETag 与 If-Match 412，不把整文件响应当成 Range 成功。
-  `VideoFileUITests` 检查从对话文件块打开、关闭、同进程重开；`TEST_RUNNER_JARVIS_VIDEO_HUB` 指定独立视频 mock。用 `xcrun simctl ui <udid> appearance light|dark` 真正切换模拟器外观，两种风格深浅色各跑一遍并实际检查截图；`TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` 仅命名截图。单测加 `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4`，`VideoFileTests/nativeVideoPlaysSeeksAndCleansUp` 验证首播未下载完整、seek 到 90 秒后继续播放、只读取后段必要区间和临时缓存清理；再对尾部索引版本重跑。可用 `ffprobe -select_streams v:0 -show_packets -show_entries packet=pts_time,pos,flags -of json` 找到 90 秒关键帧的 `pos`，传 `TEST_RUNNER_JARVIS_VIDEO_SEEK_BYTE` 验证新 Range 覆盖精确字节位置。不传 fixture 时该集成用例跳过，不能报成已通过。`VideoFileResourceTests` 覆盖中间/尾部直接读取、分片复用、边界、版本/长度错误和取消清理；`VideoFileHTTPTests` 覆盖鉴权头、Range、忽略范围、短片段、旧 node 错误；加 `TEST_RUNNER_JARVIS_VIDEO_HUB` 后还有真实 HTTP 中间/尾部/412 回归。node/hub 的 `TestDownload*` 验证大文件有界读取、Range、旧 node、无效范围、文件变化和取消。
-- 发送视频（#981，docs/protocol.md「发送视频」）：用 AVAssetWriter 合成一段 6 秒的 H.264 MOV（没有 ffmpeg 时也行，画面是渐变加一道扫过的竖条，不用真实视频），`xcrun simctl addmedia <udid> <文件>` 放进模拟器图库，
-  另一段给 mock 的 `MOCK_SENT_VIDEO=<文件>`（对话里多一条「别的设备发的」视频卡片，文件只在电脑上）；mock 收到的视频上传会留在它的文件里，可以再下载。
-  `VideoSendTests` 走真实的 PHPicker：Agents 对话和助手新对话各选一次视频、看上传进度和传完的卡片、发送后查 `/mock/sent` 里的 `<jarvis-file>` 标签、点消息里的卡片打开系统播放器；
-  另一条点只在电脑上的卡片，先下载再播放。环境变量 `TEST_RUNNER_JARVIS_VIDEO_SEND_HUB`，`TEST_RUNNER_JARVIS_LAYOUT=shell` / `TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 换布局和风格，
-  `TEST_RUNNER_JARVIS_SHOTS=<目录>` 存截图；`MOCK_UPLOAD_KBPS=640` 让进度条看得见。单测 `VideoAttachTests` 合成一秒的视频，验证原样传、转出来是 H.264 MP4 且时长不变、放不下时拒绝。
-  视频修复最终验证（2026-11-03）：两种风格各 544 个 iOS 单测、4 个目标文件/视频 UI 用例通过；视频从前台对话文件块打开，另在实际切到浅色/深色的四个风格组合下验证关闭和重开，截图已实际检查。4,116,551 字节的合成视频完整下载、播放时钟推进、seek 到 8 秒、临时文件清理通过。最终服务端全套在隔离真实 Postgres 上通过；iOS（含手表/扩展构建依赖）和 Mac 在 Xcode 27.1 编译通过。精确 Xcode 26.0、真机及用户原始视频未验收，不作为已发布或原 case 已修复的证明。初轮无签名构建的钥匙串测试失败、新外壳隐藏助手误执行 `openFile` 导致旧文件 UI 失败（已补到 #412）、合并 fixture 挤走文件块，以及外观标签与实际截图不符，都保留为无效或失败记录，没有改断言掩盖。
-- 形象（`docs/persona.md`）：`MOCK_PERSONAS=demo` 启动 mock 时用 `scripts/assets/make_persona.py demo` 现画一个原创的演示形象「小薄荷」；
-  `MOCK_PERSONAS=<目录>` 则列出那个目录里的包（看别的形象的效果，包不进仓库）。UI 测试 `PersonaPickerTests` 要连 `MOCK_PERSONAS=demo` 的 mock。
-  `LookPickerTests`（形象、主题色、界面风格三个选择互不影响）要连 `MOCK_PERSONAS=<目录>` 的 mock，目录里要有一个带配色、id 为 `doudou` 的包；
-  设了 `JARVIS_LOOK_SHOTS=<目录>` 就把「设置 › 外观」下主题色、界面风格两页和设置首页的截图存进去（深浅色跟模拟器的外观）。它会改 App 自己存的 `ui.style` / `ui.color`，结束时点回液态玻璃 + 跟随界面风格。
-  看某个组合直接用启动参数 `-ui.style clay -ui.color persona -openPersona doudou`。
-- hub 的版本和更新（`docs/hub-update.md`「App 里」）：`MOCK_HUB_UPDATE=available|waiting|notice|docker|docker-pinned` 启动 mock：有新版本（自动更新关着）、
-  更新在等两个在忙的 Agent、第一次告知「自动更新已开启」、Docker 的 hub 有新镜像（用 `:latest`，或钉在某个版本的标签上）；不设时 `GET /api/v1/hub/update` 是 404（老 hub，哪里都不出现）。
-  `GET /mock/hub_update?mode=…` 运行中换一种并从头开始。看页面用 `-tab settings -openHubUpdate YES`、`-openSkills YES`，提示条在 Agents 页。
-  UI 测试 `HubNoticeUITests`（提示条上的按钮各管各的、「现在就更新」先二级确认）要 `TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=<mock 地址>`。
-- 接管的真实链路（不用部署）：在 hub 机器上编一个 darwin 的 personad，本机起一个测试 hub（假 HOME、`HERDR_SOCKET_PATH` 指向真 herdr 的 socket、
-  单独的库 `jarvis_termlab` 经 SSH 隧道、`machines` 只有一台 `kind: local`），模拟器配对它，开 lab 窗格的终端（`docs/terminal.md` 第十一节的实测就是这么量的）。
-- 终端断线：`MOCK_SCREEN_FAIL_AFTER=3:14` 启动 mock（第一次读终端 3 秒后每次都 503，再过 14 秒恢复），
-  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openPane terminal`，应先出现红色「上次更新 N 秒前 · 重试」，恢复后消失。
-  mock 进程启动时还没有读终端的请求，计时从第一次请求算：编译期间旧 App 还在轮询的话，先启动 App 再启动 mock。
-- 断档自愈（`docs/protocol.md`「items 的连续性」）：`MOCK_GAP=1` 启动 mock 并卸载重装 App，`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`。
-  这个会话先只有前 8 行，2 秒后「写入」后 6 条，但只推最后 2 条（`from_seq` 12）；日志里应在约 1.5 秒后出现 `items after_seq=8`，
-  对话页的工作过程显示「工具 5」。等日志用带超时的脚本，别写只等成功的 `until grep`。
-- GitHub 的 thread 页（#1055）：mock 带 `MOCK_GITHUB_INBOX=1` 起，`-tab mail -openInboxItem github:review12` 打开编的 PR example-org/example-repo#12：
-  页头（状态、分支、三个标签）、Markdown 描述、要求修改和批准的 review、行内评论和它的回复、三项检查（test 失败带日志）、事件行；
-  发的评论在 `/mock/sent`，并加到时间线末尾。`github:ci7`（CI 失败）不是 PR，打开是 hub 收集的文本。数据在 `mock_hub.py` 的 `gh_thread_page`。
-- 飞书会话页：`-tab mail -openInboxItem lark:f3:300`（收件箱的「周末徒步群」）打开一个画全了的会话：三天的消息（日期分隔）、第一条未读前不止一页（往上翻、`has_older`）、
-  图片、引用回复、表情回复、机器人、一个 75 条回复的话题（话题浮层翻页）；从第 300 条起 12 条未读，已读到 299（`read_position`）。
-  `MOCK_LARK_LOGGED_OUT=1` 启动 mock 时会话列表、会话和话题都回 502「飞书网关未登录飞书」（带 `code: lark_not_logged_in`，和 hub 一样），看错误态。数据全是编的，在 `mock_hub.py` 的 `_lark_f3`。
-  已读回执（`POST …/read-states`）：f3 里我的消息 282 全部已读、296 部分已读、306 都未读；私聊 f1「韩梅梅」（`-openInboxItem lark:f1:100`）里我的消息有已读、未读（103）和没有回执（104）三种，mock 运行中新发的消息算都未读。
-  头像：f3 里 Tom 的头像能加载，天气助手的头像地址 404（看加载失败退回首字），其他人没有头像。
-  @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
-  话题群（#1087）：`MOCK_LARK_TOPIC=1` 启动 mock，`-tab mail -openInboxItem lark:f4:405` 打开「版本发布」话题群（消息页里也有）：发布机器人隔两分钟连发三个话题（各自一张卡片）、一个高过 320 pt 要收起的长卡片、我发的话题、带链接的话题，0 / 1 / 2 / 6 条回复的话题，还有撤回的话题（飞书网关留存了和没留存的各一个）和编辑过的话题（最新一条回复是撤回的），给「风灵月影」用；话题的回复和飞书网关一样先回话题本身、再回最新的 `limit` 条。不要和 `MOCK_LARK=1` 同开：那时飞书的读取先由它接管，「版本发布」不出现。
+- **Create a new simulator**, not one paired to a real hub: App disk caches (chats/Inbox) can leak real data into screenshots.
+- Mock item ids are fixed; after changing mock data or ids, uninstall/reinstall the App or old caches merge with new data and duplicate steps.
+- Agent chat work is collapsed to one line by default; `-openAllWork YES` expands it. `-tab` has no chat tab and stays on the last tab:
+  uninstall/reinstall to photograph the chat tab (the fresh-install default).
+- Home greeting follows the simulator's actual time ("Good evening"); status-bar time should be current too, not fixed at 9:41.
+- Dark: `xcrun simctl ui $SIM appearance dark`.
+- herdr stopped (#1916): `MOCK_HERDR_STOPPED=macbook` stops classic herdr for mock MacBook; Agents shows "MacBook's herdr isn't running" and "Start" at the top.
+  `MOCK_HERDR_START=slow|fail|stale`: startup takes 6 seconds / fails (node's reason) / starts but `GET` still reports stopped (old hub). `GET /mock/herdr?stopped=…&start=…` changes it live,
+  `/mock/reset` restores environment settings; `starts` counts requests per machine. `-showHerdrStart YES` auto-taps Start once on the first row (capture "Starting…" and failure).
+  UI suite `HerdrNoticeTests` (`TEST_RUNNER_JARVIS_MOCK_HUB`, screenshots in `JARVIS_SHOTS`).
+- Computer control (docs/computer-use.md): `MOCK_COMPUTER=ready|permissions|both|locked|missing` enables extension `cua` and mock MacBook (ready / missing Screen Recording / missing both permissions / locked / not installed: "Install Cua Driver" advances through download, verification, disabling analytics, authorization and Allow, every `MOCK_COMPUTER_STEP` seconds, default 2). Add `MOCK_WEB=web/dist` (first `npm run build`) to host the web VNC page and forward MacBook's 5900 to this Mac's own Screen Sharing (UI tests only with `TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1`); Mac Studio remains disabled. `=off` enables the extension but no machines. With `MOCK_PLUGINS=1`, the extension list includes "Computer control (Cua)"; "Computers it can control" syncs bidirectionally with each Mac's `computer.enabled` (`-tab settings -openExtension cua`). `-tab settings -openMachines YES -openMachineDetail macbook` opens MacBook's machine page. `MOCK_COMPUTER_OPERATING=1` adds a running operation to the assistant's "Calculate 6×7" and the Agent widget chat, showing "Operating MacBook · …" above input (`ScreenDrawerTests`). `MOCK_DEVICE_TOKEN=jd_…` (same `TEST_RUNNER_JARVIS_DEVICE_TOKEN` in UI tests, `UITestToken`) makes mock `/api/` accept only that token (`Authorization` or `?token=`), returning 401 invalid token otherwise, like hub (#1498: VNC page got a double-encoded token). `MOCK_COMPUTER_APPS=1` gives MacBook two assistant-approved apps (Calculator, entire screen), removable on its machine page (`ComputerSectionTests.testAllowedAppsCanBeTakenBack`, `TEST_RUNNER_JARVIS_COMPUTER_APPS=1`). "Don't auto-lock while the extension is on": machine toggle asks first (`ComputerSectionTests.testNoAutoLockAsksFirst`), and per-machine extension toggles honor `x-confirm` (`ExtensionMachineSwitchesTests.testAListWithAConfirmAsksFirst`, `MOCK_PLUGINS=1`); mock syncs extension-page `no_auto_lock` to each `computer.no_auto_lock`. `MOCK_SCREEN=fake` replaces forwarding to real Screen Sharing with a mock server (macOS-like ARD login first when openssl exists, then VeNCrypt Plain, account `me`, password `mock-pass`; `GET /mock/screen-password?p=…` changes password, `&clear=1` clears recorded keys; correct password+Return unlocks mock MacBook). It draws one desktop frame, supplies ZRLE when requested, records pointers/clicks/clipboard (node `GET/POST …/computer/clipboard` shares it); `?clip=…` sends clipboard to clients, `&slow=S` delays S seconds (miniwindow "Connecting…"), `&down=1` drops current and future connections (`0` restores). `MOCK_SCREEN_ANIMATE=1` moves a square at about 30 fps (`ScreenPasswordTests`, `VNCTests`, native client; UI tests use `TEST_RUNNER_JARVIS_FAKE_SCREEN=1`). Simulators have no PiP; VNC falls back to a full page, miniwindow needs a device.
+- Temporary-code pairing (#2766): `MOCK_PAIR_TOKEN=jp_…` behaves like `personad hub pair`: usable everywhere before `POST /api/v1/auth/tokens` exchange, then for `MOCK_PAIR_GRACE` seconds (default 10 instead of hub's 2 minutes); a second exchange returns 401. Exchanged device tokens (`jd_mock_<n>`) remain valid; every 401 logs a line. Paired sockets close after grace like hub; `ws open host=… token=…` identifies handshake tokens. `MOCK_PAIR_TRADE_DELAY=<seconds>` delays exchange, `MOCK_PAIR_DROP=<seconds>` drops the first temporary-token socket once. Add `MOCK_HUB_NAME` and `MOCK_MESH_PEERS` with `center: true`, address `http://localhost:<port>`, to reconnect through the group's center (another address). `-openWelcome YES -openPairLink 'persona://pair?url=http://127.0.0.1:<port>&token=jp_…'` pairs like scanning (`-pairURL` doesn't exchange device tokens; `simctl openurl` prompts system confirmation); `-openPairLinkTimes 2` processes it again after a few seconds. Correct only if no 401 after grace and title isn't "Connecting…".
+- Browser (docs/plan-ego-browser.md): `MOCK_BROWSER=missing|setup|ready` enables `ego` and MacBook (not installed / installed without first setup / ready, analytics on; `MOCK_BROWSER_ANALYTICS=off` disables analytics); Mac Studio disabled/uninstalled. "Install ego lite" / "Open ego lite" advance every `MOCK_COMPUTER_STEP` seconds. With `MOCK_PLUGINS=1`, list includes "Browser (ego lite)" (`-tab settings -openExtension ego`).
+- Unified main-chat entry (docs/unified-entry.md): `MOCK_TASKS=1` supplies a started plan, three tasks working/waiting/done, one Agent-start failure (red card and receipt, #1077),
+  answered questions, receipts, direct task messages and a final unstarted plan. `MOCK_TASKS_AT=<minutes>` cuts newer items so earlier portions sit at the bottom without scrolling.
+  `MOCK_TASKS_NO_ASKS=1` suppresses task-Agent questions above input. `MOCK_TASKS_DOCK=2` keeps two working tasks (two dock capsules, then two manual Agents); `=pair` one task + one manual Agent waiting for you; `=many` adds four tasks (dock wider than screen, "All" fixed left); `=multi` keeps only "Fix widget landscape crash" with two Agents (task-title ⌄ switch, `TaskSheetHeaderTests` with `TEST_RUNNER_JARVIS_TASK_MULTI=1`); `=long` keeps two overlong titles (parallel capsules, no overlapping truncation; `simctl ui <udid> content_size extra-extra-extra-large`, #3010). Default: four unfinished tasks + two manual Agents (#1113). `-showTaskDetail <to-do id>` (e.g. `todo_task_widget`) opens details; `-showTaskBoard YES` opens board.
+  Hub-injected messages (#2358, `docs/protocol.md` ("Persona-injected messages")): `MOCK_INJECTED=1` adds an unmarked task notification (recognized by text) and a marked scheduled task below receipts;
+  `MOCK_TASKS=1 MOCK_INJECTED=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=14` puts them at the bottom. `InjectedLineTests` (`JARVIS_SHOTS` captures both lines and expanded scheduled task) opens scheduled task, then notification to open task.
+  Watch: add `MOCK_INJECTED_WATCH=1` (working main chat listed first), `-openWatchItem session` opens it.
+  Task answer records (#1231): "Complete network-layer unit tests" has three full question/answer pairs; "Fix widget landscape crash" is an old summary-only record. `MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23` puts them at bottom; `AnsweredLineTests` (`JARVIS_SHOTS`, collapsed/expanded) opens then collapses them.
+- Away recap in message flow (#1360): `MOCK_RECAP_LONG=1` adds eight turns before "Review PR #42 changes", taller than one screen, ending in a recap. `TEST_RUNNER_JARVIS_MOCK_HUB=<address> xcodebuild test … -only-testing:PersonaUITests/RecapInFlowTests` checks expanded recap between reply/input, scrolling away, tap-to-collapse, remaining closed after reopening (`-openRecapsFresh YES` forgets closures). `TEST_RUNNER_JARVIS_SHOTS=<directory>` and `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` save expanded/collapsed × bottom/scrolled-up, four shots. `MOCK_RECAPS=1` keeps the earlier two as small bars when three are folded to one line.
+- Truncated output: `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openAllWork YES -showFullOutput card` (expand Run card,
+  "Truncated, view full output") or `sheet` (open full-output sheet, mock `/items/{id}/full` returns it).
+- Stable content when scrolling up (`ChatView` freeze): `MOCK_STREAM=1` adds a step/reply every 2 seconds after opening first session, 12 times;
+  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openAllWork YES -showFreezeProbe YES` scrolls up and logs the middle row's position every 2 seconds,
+  in App container `Documents/freeze.txt` (`xcrun simctl get_app_container $SIM <bundle id> data`); final `RESULT:` should be 0pt movement.
+- New Persona chat (#511): mock pushes session list immediately, transcript starts empty, first sentence appears/pushes after `MOCK_ASSISTANT_TRANSCRIPT_SECONDS` (default 1).
+  After sending, chat retains that sentence (never "No messages yet"), selects new sidebar chat with Working spinner. `MOCK_ASSISTANT_START_SECONDS=<seconds>` delays POST;
+  inspect bubble and "Persona is getting ready…" while waiting. Covered by `scripts/mock/test_assistant_mock.py`.
+- Lark multi-account (#1321): `MOCK_LARK_ACCOUNTS=1` adds "Me", "Work account", one signed-out account to `/api/v1/lark/accounts`; `ol_account=2` reads Work chats, top Inbox item is from Work. `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>` runs `LarkAccountsFlowTests` (Messages account switch, Work chat, Settings › Lark accounts; `JARVIS_SHOTS`); web: `scripts/test/web_lark_accounts_e2e.py <web URL> [--shots <directory>]` (usage at top).
+- Lark encrypted messages (#689, #1664): `MOCK_LARK_NATIVE_OLK=1`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>` runs `LarkNativeEncryptionFlowTests` (Messages › Design review, choose external display, unlock/send/retry; Inbox can't send encrypted drafts as plain messages; no Save Password after unlock). `JARVIS_SHOTS` stores in `docs/screenshots/lark-native-encryption/`. Multi-account's second account pins "Quarterly planning", shelf-only (`feishu-pin-w1`), absent from list (#1342).
+- Brave Climb (#882): `MOCK_LARK_BRAVE_CLIMB=1` enables it; Design review includes whole/two-part/mid-sentence/old-four-character encoded text and a quote, encoded list previews. `TEST_RUNNER_JARVIS_MOCK_HUB` runs `LarkBraveClimbFlowTests` (on: list/chat decode, selecting Brave Climb encoding sends encoded text; off: raw bubbles, preview "Brave Climb encoded message", mode absent; enabling from another device decodes current chat). `MOCK_LARK_OLD_DISPLAY=1` simulates an old extension without the switch.
+- Messaging sources (`messaging` extension point, #2138): `MOCK_MESSAGING=1`, `GET /api/v1/messaging` lists `lark` (extension `larkext`); `/api/v1/messaging/lark/…` follows `docs/extension-messaging.md`. `scripts/mock/lark_messaging.py` reads mock `/api/v1/lark/…` and converts, applying extension display rules for Brave Climb, encrypted external/unlocked display, recall/edit history. Settings is full extension UI `POST /api/v1/extensions/larkext/-/ui/display`; hello/health add `messaging` feature, and every `{type: lark}` push also emits `{type: messaging}`. Can combine other fixtures (`MOCK_LARK=1`, `MOCK_LARK_TRAINER=1`, `MOCK_LARK_BRAVE_CLIMB=1`, `MOCK_LARK_NATIVE_OLK=1`…). `python3 scripts/mock/test_lark_messaging.py` verifies schemas and processing.
+- Hub without Lark gateway extension (#1530): default features include extension-provided `lark`, `lark_moments`; `MOCK_NO_LARK=1` removes them and `lark_attachments`, all `/api/v1/lark/…` return 404, no Lark connector. Messages, Settings › Connectors › Lark, translation's Lark chat option vanish; Lark docs/Moments links open as regular web pages.
+- Lark /agent context (#876): `MOCK_LARK_AGENT=1` turns the "Schedule Friday…" request into Lark /agent (instructions + 7 context items in `<jarvis-context>`, only request outside). `-openSession server/b2e4d6f8-0000-4000-8000-000000000003`, `-showContexts YES` expands context group and first item.
+- Persona sidebar: `MOCK_ASSISTANT_SIDEBAR=1` adds 36 Recent chats (above displayed 30, showing View All); first three Needs you (red), unread (blue), Working (spinner).
+- Follow latest (`ChatFollowTests`, `MOCK_LONG_HISTORY=1`): long chat opens at bottom; new replies follow when already there (Persona replies first stream via `delta`); scrolling up shows "Back to latest",
+  replies don't pull you down; tapping returns to bottom and resumes following. Agent opens tested normally, Unread (`-showAsUnread YES`), saved position (`-chat.read.<session> <row id>`), and cold-start with disk cache far from end (mock `/mock/paging?on=1` mimics hub pagination, `/mock/delay?s=3` shows cache first, #597; `/mock/reset` disables both).
+  `GET /mock/say?text=…&user=…&stream=1` pushes replies to all open chats. App `-showScrollState YES` reports list state via accessibility
+  `chat.scrollState`: bottom / follows / frozen / arrow / newestShown / withheld… (`visible` draws it). XCUITest misreads inverted-list row positions.
+  `testRealHubChats` captures real-hub before/after (`TEST_RUNNER_JARVIS_REAL_PAIR`, etc., skip if absent; only own sessions, opening marks read).
+- Terminal stream: `MOCK_TERMINAL_STREAM=1` (hello `terminal_stream`) sends a fake Claude full frame after subscription, then one frame/second advancing spinner;
+  `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe.jsonl` replays real herdr frames (colors, boxed Chinese, emoji, links, 200-character line).
+  `-openPane terminal`, `-terminalWrap NO` disables wrapping, `-terminalPages 1` loads one page (mock `/screen/before` gives colored history).
+- Full herdr UI (web, `docs/terminal.md` section 24): `MOCK_TERMINAL_FULL=1` (hello `herdr_client`, `herdr_open` supplies fake sidebar/tab strip/two panes, single column when narrow; Ctrl+Y emits OSC 52; `GET /mock/herdr_client` inspects received `herdr_*`).
+- Full-UI focus sync (web, `docs/terminal.md` section 28): the same mock advertises `herdr_focus` (`MOCK_TERMINAL_FULL_NOFOCUS=1` removes for old hub); page `herdr_focus` echoes with `persona`. `GET /mock/herdr_focus?pane=w1:p2[&session=<id>&source=client|persona|other&mine=1|0&view=<id>]` moves focus like node notifications. `scripts/test/web_herdr_focus_e2e.py` (usage at top, two mocks/two pages). Playwright sync API dispatches page events only during its calls: use `page.wait_for_timeout`, not `time.sleep`.
+  `MOCK_TERMINAL_FULL_EXEC="herdr session attach <temporary session>"` runs real client in PTY (only your own temporary session), `MOCK_TERMINAL_FULL_END_AFTER=<seconds>` ends view later, `MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many` refuses.
+  E2E `scripts/test/web_herdr_full_e2e.py` (four mocks/four Vites, usage at top), real herdr `scripts/test/web_herdr_full_live.py`; full-UI herdr/Persona conflicts (right-click, Ctrl+B, mouse, paste/drop, #2700): `scripts/test/web_herdr_full_conflicts_e2e.py` (one mock/one Vite, usage at top), live temporary session `scripts/test/web_herdr_full_conflicts_live.py`; Go live: `PERSONA_LIVE_FULL_SESSION=<temporary session> go test -tags herdrlive -run 'TestLiveFullClient|TestLiveFocusPane' ./internal/herdr/`.
+- Standalone terminal (web, `docs/terminal.md` section 19): `MOCK_TERMINAL_PANES=1` (hello `terminal_panes`, `GET/POST /api/v1/machines/{mid}/panes` returns fake spaces/tabs/panes; `pane:` opens fake zsh).
+- Phone terminal takeover: `MOCK_TERMINAL_CONTROL=1` (hello `terminal_control`, fake Claude arranged to App columns × rows, typed text in input,
+  `GET /mock/terminal_input` inspects bytes); `MOCK_TERMINAL_BUSY=1` shows "Another program on the computer is using this terminal"; `-terminalSize phone|mirror` selects mode.
+  `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` needs this mock; other terminal UI tests fix `-terminalSize mirror`.
+- Settings › Extensions: `MOCK_PLUGINS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`; `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<port>` runs `ExtensionSettingsTests` (list, rejected form, Running after secret), `ExtensionSlotsTests` (Settings home card/entry, usage page, machine section).
+  Restart mock before each round (in-memory state). Screenshots as above: `TEST_RUNNER_JARVIS_SHOTS`, `simctl ui … appearance`, naming `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`, both styles.
+  Extension install progress (#3307): `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<port>` runs `ExtensionInstallProgressTests` (background preview steps, auto-opening on approval, stuck at Start, leave/return, cache retry completes directly, uninstall failure/retry).
+  Extension CLI/login (#4507): fresh `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=1 PORT=<port>` mock and old hub `MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=1 MOCK_EXTENSION_AUTH=installed MOCK_EXTENSION_AUTH_OLD=1 PORT=<port 2>` each time; `TEST_RUNNER_JARVIS_EXT_AUTH_HUB` / `TEST_RUNNER_JARVIS_EXT_AUTH_OLD_HUB` runs `ExtensionSignInTests` (Install command-line programs in confirmation, Install CLI step/programs, automatic QR sign-in after install, polling success, sign-out, CLI section; old hub only warning + extension's login page, no login section).
+  `MOCK_EXTENSION_OPS=1` all succeeds; `MOCK_EXTENSION_OPS_STEP=<seconds>` slows for screenshots. Without OPS, `MOCK_EXTENSION_INSTALL_DELAY=<seconds>` shows old-hub Installing.
+  First launch on a new simulator asks notification permission; test dismisses it.
+- Git pull: `MOCK_FILES=1 MOCK_GIT_PULL=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`; `TEST_RUNNER_JARVIS_GIT_HUB=http://127.0.0.1:<port>` runs `GitPullUITests`, from 28 commits behind through refresh success, recheck, failure/retry.
+  `TEST_RUNNER_JARVIS_SHOTS=<directory>`; actually switch `simctl ui <udid> appearance light|dark`, both styles; `TEST_RUNNER_JARVIS_GIT_APPEARANCE` only names files.
+  `GitPullTests` with `FakeHub` checks POST, decode, feedback, repeated taps. Server `TestGitPull*` uses temporary local remotes with isolated HOME/Git config to test unfetched latest commits, fast-forward/divergence, modified/staged/untracked files, existing stash, failure; never pulls real worktrees.
+- File viewer (`docs/ios.md` ("File viewer")): `MOCK_FILES=1` provides fake `/Users/me/code/weather`: small file per language,
+  3 MB JSON, 20K-line Go, 4000+-line README, 5 MB log; `GET …/file` (2 MB/page) and `…/stat` serve it. "Add a Home Screen widget to the weather App"
+  final reply links several files and two nonexistent paths. `FileViewerUITests` needs this mock. Timing/fps: build `-O`
+  (`SWIFT_OPTIMIZATION_LEVEL=-O`, separate DerivedData), run `FileViewerPerfTests` with `JARVIS_FILE_PERF=1`, read App
+  `Library/Caches/file-perf.log`. Use App constant-speed scrolling, not XCUITest drags: each gesture captures a main-thread accessibility snapshot, itself a 40–100 ms long frame.
+  Uninstall before changing mock message text: item-id caches don't replace old text under the same id.
+- Spreadsheet viewer (web #1310): `MOCK_FILES=1 MOCK_SHEETS=1` adds `data/stations.csv` (3000 rows, quotes/newlines/Chinese), `reports/季度报告.xlsx` (quarterly report; three sheets, merged title, widths, numeric/percent formatting); open in file panel. `file?stream=1` returns only binary descriptions; content via `file/download`.
+- Office preview (web #1345): add `MOCK_OFFICE=1`; `reports/` gains handmade `季度报告.docx` (quarterly report: headings/tables/images/footer), `季度回顾.pptx` (quarterly review: theme/master/layout placeholders/bullets/images/shapes/tables/charts/notes), `旧版说明.doc` (legacy notes; mock `file/convert` returns PDF), `路线图.pages` (roadmap; returns `no_converter`).
+- Mermaid (web #1376): `MOCK_MERMAID=1` adds flowchart, sequence, pie and one invalid diagram to final widget reply.
+- Jupyter (web #1407): `MOCK_NOTEBOOK=1`, `notebooks/收入分析.ipynb` (income analysis) has Markdown/math, HTML table, stdout/stderr, PNG and ANSI-colored error.
+- HTML preview (web #1413): `MOCK_HTML=1`, `reports/周报.html` (weekly report) has styles, a text-changing script (default "Script did not run"), remote image (blocked), local `chart.png` and `周报.css` (weekly-report stylesheet; loaded, toolbar "Loaded 2").
+- Media (web #1422): `MOCK_MEDIA=1` adds WAV, scripted SVG, browser-unrenderable HEIC (`file/thumb` draws stand-in) under `media/`; `MOCK_VIDEO_FILE=<webm/mp4>`, `MOCK_SENT_VIDEO=<same>` show file-page video/chat card (WebM safest for headless Chrome).
+- Compare (web #1437): `MOCK_COMPARE=1` adds changed `reports/季度报告.docx` (quarterly report), `reports/季度回顾.pptx` (quarterly review), `assets/banner.png`; `git/blob` serves staged/HEAD versions.
+- Images seen this turn (web #1540): `MOCK_TURN_IMAGES_WEB=1`: final collapsed-work turn of Review PR #42 has 9 (Read/screenshots/web/MCP/Codex view_image); release-notes turn 1 card; working widget turn 2.
+- Links in file previews (`FilePreviewLinkTests`): `MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_FILE_LINK_HUB=http://127.0.0.1:<port>`. Open README from old-layout chat file block (fixed `-ui.oldLayout YES -tab dev`, preventing hidden assistant handling global DEBUG args) and default shell Files page; links clickable immediately before closing file. Closing returns to original file position, reopening same link works, no stale link pops up after closing. Dev preview must actually show webpage text forwarded through hub.
+  Run both styles in actual light/dark; `TEST_RUNNER_JARVIS_SHOTS=<directory>` saves images, `TEST_RUNNER_JARVIS_FILE_LINK_APPEARANCE` only names them.
+- Video preview: synthesize 120-second >2 MiB H.264/AAC MP4 (e.g. `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 120 -c:v libx264 -b:v 3M -g 30 -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`); `ffmpeg -i /tmp/preview.mp4 -c copy /tmp/preview-tail.mp4` creates tail-index version. `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`, optionally `MOCK_VIDEO_DELAY=0.01` per 32 KiB network chunk. `GET /mock/video-reads` reports Range starts/ends, bytes sent, active/cancelled; `?reset=1` clears. Mock correctly returns 206, Content-Range, ETag, If-Match 412, never counts a full response as Range success.
+  `VideoFileUITests` checks chat-file open/close/reopen in same process; `TEST_RUNNER_JARVIS_VIDEO_HUB` dedicated mock. Switch actual `xcrun simctl ui <udid> appearance light|dark`; both styles × both appearances, inspect screenshots; `TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` only names them. `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4` enables `VideoFileTests/nativeVideoPlaysSeeksAndCleansUp`: starts without full download, seeks to 90 seconds/resumes, reads only needed later ranges, cleans temporary cache; repeat tail-index version. `ffprobe -select_streams v:0 -show_packets -show_entries packet=pts_time,pos,flags -of json` finds 90-second keyframe `pos`; pass `TEST_RUNNER_JARVIS_VIDEO_SEEK_BYTE` to verify exact byte coverage. Without fixture integration test skips, not passes. `VideoFileResourceTests` covers direct middle/tail reads, chunk reuse, boundaries, version/length errors, cancellation cleanup; `VideoFileHTTPTests` covers auth/Range, ignored ranges, short chunks, old node errors; adding `TEST_RUNNER_JARVIS_VIDEO_HUB` runs real HTTP middle/tail/412 regressions. node/hub `TestDownload*` verifies bounded large-file reads, Range, old nodes, invalid ranges, changed files, cancellation.
+- Sending video (#981, docs/protocol.md ("Sending video")): AVAssetWriter synthesizes a 6-second H.264 MOV (no ffmpeg required, gradient with sweeping bar, no real video); `xcrun simctl addmedia <udid> <file>` adds to Photos.
+  Give another to `MOCK_SENT_VIDEO=<file>` (chat card sent by "another device", file only on computer); uploaded videos are stored by mock and downloadable.
+  `VideoSendTests` uses real PHPicker: pick video in Agent and new assistant chats, inspect upload progress/card, check `<jarvis-file>` in `/mock/sent`, open system player from card;
+  another test opens computer-only card, downloading first. `TEST_RUNNER_JARVIS_VIDEO_SEND_HUB`, layout/style via `TEST_RUNNER_JARVIS_LAYOUT=shell` / `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`,
+  `TEST_RUNNER_JARVIS_SHOTS=<directory>`; `MOCK_UPLOAD_KBPS=640` makes progress visible. `VideoAttachTests` synthesizes one-second video, checks passthrough, H.264 MP4 conversion preserving duration, rejection when too large.
+  Final video-fix verification (2026-11-03): 544 iOS unit tests + 4 targeted file/video UI cases per style passed; foreground chat-file video open, close/reopen across four actual light/dark × style combinations, screenshots inspected. Synthetic 4,116,551-byte video fully downloaded, playback advanced, seek to 8 seconds and cleanup passed. Full server suite passed against isolated real Postgres; iOS (including watch/extension dependencies) and Mac built with Xcode 27.1. Exact Xcode 26.0, devices, original user video unverified—not evidence of release or fixing original case. Initial unsigned keychain failure, hidden-shell assistant executing `openFile` breaking old file UI (recorded in #412), merged fixtures displacing file block, and appearance labels disagreeing with screenshots remain invalid/failed records; assertions weren't weakened.
+- Avatars (`docs/persona.md`): `MOCK_PERSONAS=demo` uses `scripts/assets/make_persona.py demo` to draw original demo avatar "Mint" on startup;
+  `MOCK_PERSONAS=<directory>` lists its packs (other avatars, packs not committed). `PersonaPickerTests` needs demo mock.
+  `LookPickerTests` (independent avatar/theme/style choices) needs directory mock containing a colored pack id `doudou`;
+  `JARVIS_LOOK_SHOTS=<directory>` stores theme/style pages under Settings › Appearance and Settings home (actual simulator light/dark). It changes saved `ui.style` / `ui.color`, then restores Liquid Glass + Follow interface style.
+  Direct combination: `-ui.style clay -ui.color persona -openPersona doudou`.
+- Hub version/update (`docs/hub-update.md` ("In the App")): `MOCK_HUB_UPDATE=available|waiting|notice|docker|docker-pinned`: new version with auto-update off,
+  waiting on two busy Agents, first "Automatic updates enabled" notice, Docker new image (`:latest` or pinned tag). Unset: `GET /api/v1/hub/update` 404, old hub, absent everywhere.
+  `GET /mock/hub_update?mode=…` changes/restarts live. `-tab settings -openHubUpdate YES`, `-openSkills YES` opens pages; notice in Agents.
+  `HubNoticeUITests` (independent notice buttons, Update now asks confirmation) needs `TEST_RUNNER_JARVIS_HUB_UPDATE_HUB=<mock URL>`.
+- Real takeover without deployment: build darwin personad on hub machine, run local test hub (fake HOME, `HERDR_SOCKET_PATH` real herdr socket,
+  dedicated `jarvis_termlab` database over SSH tunnel, `machines` only one `kind: local`), pair simulator, open lab pane terminal (measurements in `docs/terminal.md` section 11 used this).
+- Terminal disconnect: `MOCK_SCREEN_FAIL_AFTER=3:14` returns 503 after 3 seconds of terminal reads, recovers 14 seconds later;
+  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openPane terminal`; red "Last updated N seconds ago · Retry" should appear, then disappear on recovery.
+  Timing starts at first request, not mock startup; if old App polls during build, start App before mock.
+- Gap healing (`docs/protocol.md` ("Item continuity")): `MOCK_GAP=1`, uninstall/reinstall App, `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`.
+  Starts with 8 rows; writes 6 more after 2 seconds but pushes only last 2 (`from_seq` 12); log should show `items after_seq=8` about 1.5 seconds later,
+  work shows "Tool 5". Use timeout-bounded waits, not success-only `until grep`.
+- GitHub thread page (#1055): `MOCK_GITHUB_INBOX=1`, `-tab mail -openInboxItem github:review12` opens fictional example-org/example-repo#12:
+  header (status/branches/three labels), Markdown description, request-changes/approve reviews, inline comment/reply, three checks (failed test logs), events.
+  Comments are in `/mock/sent` and appended to timeline. `github:ci7` (CI failure) isn't a PR, opens hub-collected text. Data: `gh_thread_page` in `mock_hub.py`.
+- Lark conversation page: `-tab mail -openInboxItem lark:f3:300` (Weekend hiking group) opens full chat: three days/date separators, over a page before first unread (scroll up, `has_older`),
+  images, quoted/emoji replies, bots, 75-reply thread with paged sheet; 12 unread from message 300, read through 299 (`read_position`).
+  `MOCK_LARK_LOGGED_OUT=1` makes lists/chats/threads return 502 "Lark gateway isn't signed in to Lark" (`code: lark_not_logged_in`, like hub), testing errors. Fictional `_lark_f3` in `mock_hub.py`.
+  Read receipts (`POST …/read-states`): own f3 messages 282 all read, 296 partly, 306 none; DM f1 "Han Meimei" (`-openInboxItem lark:f1:100`) has own read/unread (103)/no receipt (104); live new mock messages are unread.
+  Avatars: Tom's f3 loads, weather assistant returns 404 (initial fallback), others none.
+  Mentions: f2/f3 members (`GET …/members`, Tom/Mia avatars, Ajie's group nickname "Jay"); sends/replies with `mentions` store `@name` text as `at` segments.
+  Thread group (#1087): `MOCK_LARK_TOPIC=1`, `-tab mail -openInboxItem lark:f4:405` opens Release group (also in Messages): bot posts three topics two minutes apart (individual cards), long >320 pt collapsible card, own topic, linked topic, 0/1/2/6 replies, recalled topics (gateway retained and unretained), edited topic (latest reply recalled), for the "Fengling Yueying" style. Like gateway, replies return topic first then latest `limit`. Don't combine `MOCK_LARK=1`, which takes over Lark reads and hides Release.
 
-### 就绪度场景（`MOCK_READINESS`，#287）
+### Readiness scenarios (`MOCK_READINESS`, #287)
 
-新用户上手（[onboarding.md](onboarding.md) 4.4–4.6、第 5 节）的各种状态，网页 Playwright、Android、iOS / Mac 截图共用这一套。`MOCK_READINESS=<场景>` 启动 mock：
-`features` 多 `assistant_readiness`、`machines_add`、`machine_trust`、`builtin_presets`；`GET /api/v1/assistant/readiness[?probe=1]`、`POST …/readiness/dismiss`、
-`POST /api/v1/assistant/warm`（带 `readiness`）照 hub 的形状和文字回（文字读 `server/internal/i18n/locales`，按 `Accept-Language`，不带时中文）；
-`POST /api/v1/assistant/conversations` 按场景的码拒绝；`GET /api/v1/launchers/presets` 先列内置供应商（直接读 `server/internal/assistant/presets_builtin.json`），再列 mock 的插件预设。
-添加 / 确认电脑（`MOCK_ADD_COMPUTER`）一起打开，就绪度跟着机器变：`zero` 里加一台电脑、等它连上、确认后，`computer` 就是 `ok`。
+New-user onboarding states ([onboarding.md](onboarding.md) 4.4–4.6, section 5) share these fixtures across web Playwright, Android and iOS / Mac screenshots. Start with `MOCK_READINESS=<scenario>`:
+adds `assistant_readiness`, `machines_add`, `machine_trust`, `builtin_presets` to `features`; `GET /api/v1/assistant/readiness[?probe=1]`, `POST …/readiness/dismiss`,
+`POST /api/v1/assistant/warm` (with `readiness`) return hub-shaped data/text (read `server/internal/i18n/locales`, using `Accept-Language`, Chinese if absent).
+`POST /api/v1/assistant/conversations` rejects with scenario codes; `GET /api/v1/launchers/presets` lists built-in providers (directly from `server/internal/assistant/presets_builtin.json`), then mock plugin presets.
+Add/confirm computer (`MOCK_ADD_COMPUTER`) is enabled too; readiness follows machines: in `zero`, add, wait for connection, confirm, then `computer` becomes `ok`.
 
-| 场景 | 电脑 | 就绪度 | 开对话 |
+| Scenario | Computer | Readiness | Start chat |
 | --- | --- | --- | --- |
-| `zero` | 没有 | `computer` todo `no_machine`，其余 `unknown` | 409 `no_machine` |
-| `offline` | 小林的 MacBook（`mbp`）离线（`error_code: link_offline`） | `computer` problem `node_unreachable` | 503 `node_unreachable` |
-| `pending` | `mbp` 在线、待确认（`trust: pending`） | 同 `zero`：hub 不把待确认的电脑给助手 | 409 `no_machine`；在它上面开 Agent（`POST /api/v1/sessions`）409 `machine_pending` |
-| `no_claude` | `mbp`，没有 `claude_version` | `claude` problem `claude_missing` | 409 `claude_missing` |
-| `not_logged_in` | `mbp` | `model`、`first_message` problem `not_logged_in`；主对话唯一一轮是「Not logged in · Please run /login」（`turn_error_code`） | 照常开 |
-| `bad_key` | `mbp` | 同上，`auth_failed`（「Invalid API key」），按钮 `edit_provider` | 照常开 |
-| `full` | `mbp` | 全部 `ok`，主对话答过一句 | 照常开 |
-| `demo` | mock 平常的三台机器 | 全部 `ok`（助手在 `server`），其余数据照旧，拍「用起来以后」的样子 | 照常开 |
-| `unverified` | `mbp` | `model` unknown `model_unverified`（`mode` 仍是 `full`）；`?probe=1` 之后变 `ok` | 照常开 |
-| `launcher_missing` | `mbp`，启动器 `cc_glm` 不在了 | `claude` problem `launcher_missing` | 409 `launcher_missing` |
-| `model_route` / `rate_limited` | `mbp` | `model` problem（`rate_limited` 不挡，`mode` 是 `full`） | 照常开 |
-| `node_outdated` | `mbp` 的 node 太旧（`error_code: node_outdated`） | `computer` problem，没有按钮 | 照常开（还没配模型时；配了模型后真 hub 拒绝成 409 `node_outdated`，用 `MOCK_START_ERROR=node_outdated` 拍） |
-| `assistant_offline` | `mbp` | 就绪度、warm、开对话都 503 `assistant_offline` | 503 |
+| `zero` | None | `computer` todo `no_machine`, others `unknown` | 409 `no_machine` |
+| `offline` | Demo MacBook (`mbp`) offline (`error_code: link_offline`) | `computer` problem `node_unreachable` | 503 `node_unreachable` |
+| `pending` | `mbp` online, pending (`trust: pending`) | Same as `zero`: hub doesn't give pending computers to assistant | 409 `no_machine`; Agent start there (`POST /api/v1/sessions`) 409 `machine_pending` |
+| `no_claude` | `mbp`, no `claude_version` | `claude` problem `claude_missing` | 409 `claude_missing` |
+| `not_logged_in` | `mbp` | `model`, `first_message` problem `not_logged_in`; sole main-chat turn "Not logged in · Please run /login" (`turn_error_code`) | Normal |
+| `bad_key` | `mbp` | As above, `auth_failed` ("Invalid API key"), button `edit_provider` | Normal |
+| `full` | `mbp` | All `ok`, one main-chat reply | Normal |
+| `demo` | Usual three mock machines | All `ok` (assistant on `server`), other data unchanged, for "after getting started" screenshots | Normal |
+| `unverified` | `mbp` | `model` unknown `model_unverified` (`mode` still `full`); `?probe=1` makes it `ok` | Normal |
+| `launcher_missing` | `mbp`, launcher `cc_glm` gone | `claude` problem `launcher_missing` | 409 `launcher_missing` |
+| `model_route` / `rate_limited` | `mbp` | `model` problem (`rate_limited` doesn't block, `mode` is `full`) | Normal |
+| `node_outdated` | `mbp` node too old (`error_code: node_outdated`) | `computer` problem, no button | Normal (without configured model; with model real hub returns 409 `node_outdated`, screenshot via `MOCK_START_ERROR=node_outdated`) |
+| `assistant_offline` | `mbp` | Readiness/warm/start all 503 `assistant_offline` | 503 |
 
-除 `demo` 外只有 `mbp` 一台、没有 Agent 和别的助手对话（新用户的样子）。`MOCK_START_ERROR=<码>` 不管场景，开对话一律按这个码拒绝
-（`no_machine`、`machine_pending`、`claude_missing`、`launcher_missing`、`node_unreachable`、`node_outdated`、`assistant_offline`），拍每个码的卡片；
-`MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。这两种情况下，`MOCK_PROVIDERS=1` 的「测试连接」遇到含 `region` 的 Key 时，回 Anthropic 按地区拦下的那句话和 `code: "region_blocked"`（#4482，文字取自 hub 的文案）。添加电脑和 hub 一样最多 3 台待确认（第 4 台 429 `too_many_pending`）；
-`MOCK_INBOX_SOURCES=none` 让收件箱什么来源都没接（没有条目、没有邮箱账号、飞书没设置、GitHub 没登录），和 `zero` 一起拍零电脑、零来源的空状态（#4485、#4480）。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
+Except `demo`, only `mbp`, no Agents or other assistant chats (new-user state). `MOCK_START_ERROR=<code>` overrides scenario and rejects every start
+(`no_machine`, `machine_pending`, `claude_missing`, `launcher_missing`, `node_unreachable`, `node_outdated`, `assistant_offline`) for each error card;
+`MOCK_BUILTIN_PRESETS=1` only adds built-in providers and `builtin_presets`. In these cases, `MOCK_PROVIDERS=1` Test Connection returns Anthropic's region-block message and `code: "region_blocked"` for keys containing `region` (#4482, text from hub). Like hub, at most 3 pending computers (fourth 429 `too_many_pending`).
+`MOCK_INBOX_SOURCES=none` leaves no Inbox sources (no items/mail accounts, Lark unconfigured, GitHub signed out); combine `zero` for zero-computer/zero-source empty states (#4485, #4480). `mock_scenarios.py` names them `readiness-<scenario>` for live switching.
 
-iOS 的添加电脑（`AddComputerTests`，#4196）：`python3 scripts/mock/mock_scenarios.py --port <端口> --control <控制端口>`，
-`TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<控制端口>`，测试自己按需切 `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`、
-`MOCK_PAIR_SECONDS`：零电脑 → 添加 → 等待 → 确认 → 在线、Linux 的那一行和过期重出、待确认和 `error_code` 在列表里、拒绝后消失、Agents 零电脑；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存浅色、深色截图。
+iOS add-computer (`AddComputerTests`, #4196): `python3 scripts/mock/mock_scenarios.py --port <port> --control <control port>`,
+`TEST_RUNNER_JARVIS_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_ADD_CONTROL=http://127.0.0.1:<control port>`. Tests switch `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`,
+`MOCK_PAIR_SECONDS` as needed: zero → add → wait → confirm → online, Linux row, expiry/regeneration, pending/error_code in list, rejection removes row, Agents zero-computer state; `TEST_RUNNER_JARVIS_SHOTS=<directory>` saves light/dark.
 
-内置预设的向导（`ProviderPresetWizardTests`，#4197）：有场景或 `MOCK_BUILTIN_PRESETS=1` 时，带内置预设 `preset` 的「测试」按 Key 里的词回 hub 的原话（`bad` 401、`forbid` 403、`nopath` 404、`busy` 429、`slow` 超时、`region` 地区拦截），
-带 `preset` 的新增按 hub 的规则起名（`deepseek`、重名 `-2`）和显示名，带 `assign` 时回 `assigned` / `kept`：`MOCK_ASSIGN_KEPT=assistant:customized,…` 让列出的用途按给的原因留着。
-同上起 `mock_scenarios.py`，`TEST_RUNNER_JARVIS_PRESET_HUB=…` `TEST_RUNNER_JARVIS_PRESET_CONTROL=…`：A 我已经在用 Claude Code（`full` 试一句成功、`not_logged_in` 失败）、B 只有 Key（401 → 换 Key → 测试通过 → 保存，主对话 `kept`）、C 去哪弄一个模型（去开通 → 链接卡片 → 关掉后到粘 Key）和零电脑时「高级」里的导入禁用；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存截图。
+Built-in preset wizard (`ProviderPresetWizardTests`, #4197): with a scenario or `MOCK_BUILTIN_PRESETS=1`, Test requests carrying built-in `preset` return hub text according to words in the key (`bad` 401, `forbid` 403, `nopath` 404, `busy` 429, `slow` timeout, `region` region block).
+Adding with `preset` follows hub naming (`deepseek`, duplicate `-2`) and display names; with `assign`, returns `assigned` / `kept`. `MOCK_ASSIGN_KEPT=assistant:customized,…` retains listed purposes for the supplied reasons.
+Start `mock_scenarios.py` as above, set `TEST_RUNNER_JARVIS_PRESET_HUB=…`, `TEST_RUNNER_JARVIS_PRESET_CONTROL=…`: A, already using Claude Code (`full` test message succeeds, `not_logged_in` fails); B, only a key (401 → replace key → test passes → save, main chat `kept`); C, where to get a model (sign up → link card → close to key entry), plus disabled Advanced import with zero computers. `TEST_RUNNER_JARVIS_SHOTS=<directory>` saves screenshots.
 
-不会漂移：`server/internal/assistant/readiness_scenarios_test.go` 在假 hub 上搭出同样的场景，把真代码回的就绪度（三种语言）和开对话的拒绝存进
-`testdata/readiness_scenarios/<场景>.json`；`scripts/mock/test_readiness_mock.py` 起 mock 逐个比对。改了就绪度或文案：`UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`，
-看 diff，再让 `scripts/mock/readiness_mock.py` 跟上。
+Drift guard: `server/internal/assistant/readiness_scenarios_test.go` builds the same fake-hub scenarios and saves real readiness responses (three languages) and start refusals in
+`testdata/readiness_scenarios/<scenario>.json`; `scripts/mock/test_readiness_mock.py` compares each mock response. After readiness/text changes: `UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`,
+review diff, update `scripts/mock/readiness_mock.py`.
 
-## UI 测试（`scripts/app/ui-test.sh`）
+## UI tests (`scripts/app/ui-test.sh`)
 
-`apple/PersonaUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
-`SIM=<udid 或名字> ./scripts/app/ui-test.sh [machine/session]`（模拟器经 `sim-boot.sh` 瘦身启动，见下面「模拟器」）。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
-长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock/mock_hub.py`，不用真实 hub：
-`TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`。
-「选择文本」只拷一段（`SelectTextTests`：Agent 的回复带代码块、Persona 主对话的回复带粗体和列表、`MOCK_SELECT_TEXT` 的会话里一条你的消息（`__init__.py`、`2*3*4`、`# …`）和一条套了围栏、公式、缩进代码、分隔线的回复，双击开头一个词拷贝，剪贴板里正好是这个词）：mock 加 `MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1`，
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>`，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 换风格，`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存图（按模拟器外观命名）。
-写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
+`apple/PersonaUITests` drives the real App in a simulator against the configured hub (not part of default unit tests):
+`SIM=<udid or name> ./scripts/app/ui-test.sh [machine/session]` (slim boot through `sim-boot.sh`, see "Simulators" below). Currently tests edge-swipe back with expanded/collapsed top bar.
+Long-press message toolbar (`MessageMenuTests`: release after 0.4 / 0.8 / 1.5 / 2.5 seconds leaves it open; tap list/scroll closes) uses `scripts/mock/mock_hub.py`, not real hub:
+`TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`.
+Select Text copies only a segment (`SelectTextTests`: Agent reply with code block, main-chat reply with bold/list; `MOCK_SELECT_TEXT` has a user message with `__init__.py`, `2*3*4`, `# …`, and a reply with fences/math/indented code/separator; double-tap first word, clipboard exactly that word). Use `MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1`,
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>`, style `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`, `TEST_RUNNER_JARVIS_SHOTS=<directory>` (named by simulator appearance).
+Run a new UI test against unfixed code first to confirm it fails, then apply the fix.
 
-### 模拟器：一律经 `scripts/app/sim-boot.sh`，默认瘦身（simslim，#2287、#2801）
+### Simulators: always `scripts/app/sim-boot.sh`, slim by default (simslim, #2287, #2801)
 
-**新建、复用、启动模拟器都走 `scripts/app/sim-boot.sh`**，别直接 `simctl create` / `simctl boot` / 让 `xcodebuild test` 去开一台：
-它按名字复用或新建，用 [simslim](https://github.com/mobai-app/simslim) 按用途的 profile 关掉用不上的系统服务后启动，读回校验（`simslim verify`）、
-查这一用途要的功能（`simslim doctor --requires …`），最后在 stdout 打印 udid。`sim.sh`、`ui-test.sh`、`relay_sim_e2e.sh`、`diag/stream-scroll/run-ios.sh` 都已经经过它。
+**Create, reuse and boot simulators through `scripts/app/sim-boot.sh`**, not direct `simctl create` / `simctl boot` or letting `xcodebuild test` create one.
+It reuses/creates by name, disables unused services with [simslim](https://github.com/mobai-app/simslim) purpose-specific profiles, verifies (`simslim verify`),
+checks required capabilities (`simslim doctor --requires …`), prints udid to stdout. `sim.sh`, `ui-test.sh`, `relay_sim_e2e.sh`, `diag/stream-scroll/run-ios.sh` already use it.
 
 ```sh
-SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue 号>")       # 没有这个名字就新建（iPhone 17 Pro、能跑它的最新 runtime）
-SIM=$(scripts/app/sim-boot.sh --profile watch --device-type "Apple Watch Series 11 (46mm)" "Persona Watch <issue 号>")
-SIM_PROFILE=stock SIM=<udid> ./scripts/app/ui-test.sh           # 脚本里用环境变量选 profile
+SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue number>")       # create if absent (iPhone 17 Pro, latest compatible runtime)
+SIM=$(scripts/app/sim-boot.sh --profile watch --device-type "Apple Watch Series 11 (46mm)" "Persona Watch <issue number>")
+SIM_PROFILE=stock SIM=<udid> ./scripts/app/ui-test.sh           # scripts select profile from environment
 ```
 
-本机实测（2026-11-05，同一台 iPhone 17 Pro / iOS 27.0，重启后静置 90 s，`simslim measure`，机器负载 300–1000）：
+Local measurements (2026-11-05, same iPhone 17 Pro / iOS 27.0, reboot then idle 90 s, `simslim measure`, machine load 300–1000):
 
-| | 进程 | 内存（phys_footprint） |
+| | Processes | Memory (phys_footprint) |
 | --- | --- | --- |
-| 原版 | 244 | 10.87 GB |
+| Stock | 244 | 10.87 GB |
 | `default` | 86 | 2.34 GB |
-| `default` 再关 widgets（实时活动） | 88 | 2.77 GB（省不下来，所以 default 留着它） |
+| `default` with widgets (Live Activities) also disabled | 88 | 2.77 GB (no saving, so default keeps them) |
 
-Profile（`apple/simslim/<名字>.json`，理由写在各自的 `description`）：
+Profiles (`apple/simslim/<name>.json`, reasons in each `description`):
 
-| profile | 用途 | 在全关的基础上留着 |
+| profile | Purpose | Kept beyond disabling everything |
 | --- | --- | --- |
-| `default` | UI 测试、截图、平常跑 App | widgets（实时活动、灵动岛、小组件）、photos（照片选择、存图）、`com.apple.apsd`（推送）、`com.apple.linkd`（App Intents：实时活动上的按钮、快捷指令） |
-| `watch` | 配对的 iPhone + Apple Watch（两台都用它） | default 的全部，加 connectivity（配对、WatchConnectivity）、messaging（identityservicesd）、health（HealthKit、手机健康工具） |
-| `live-activity` | 走真实 APNs 的实时活动（push-to-start、`TestManualLiveActivityPush`；还没在真实 APNs 上跑过） | default 的全部，加 store（App Store、推送、媒体） |
-| `stock` | 不瘦身：断言「系统没弹窗」的测试、键盘高度相关的截图、Siri / Spotlight / 听写，或排除瘦身的影响 | 全部 |
+| `default` | UI tests, screenshots, ordinary App use | widgets (Live Activities, Dynamic Island, widgets), photos (picker/save), `com.apple.apsd` (push), `com.apple.linkd` (App Intents: Live Activity buttons, Shortcuts) |
+| `watch` | Paired iPhone + Apple Watch (both use it) | All default + connectivity (pairing/WatchConnectivity), messaging (identityservicesd), health (HealthKit/phone health tools) |
+| `live-activity` | Real APNs Live Activities (push-to-start, `TestManualLiveActivityPush`; not yet run against real APNs) | All default + store (App Store/push/media) |
+| `stock` | No slimming: "no system prompt" assertions, keyboard-height screenshots, Siri / Spotlight / dictation, or ruling out slimming effects | Everything |
 
-Persona 没有 Universal Links（没有 associated domains），所以没留 web；没有内购，没留 storekit。
+Persona has no Universal Links (no associated domains), so web isn't kept; no in-app purchases, so no storekit.
 
-- **已经开着的模拟器一律不重启**（可能是别的 Agent 在用）：瘦好的只校验；没瘦或和 profile 对不上的照原样用，打一行警告，结论是 `in-use-not-slim`。
-  确定是自己的才加 `--reslim`（会重启它）。不要对别人的模拟器 `simslim on / off`，也不要开 `simslim watch`（改本机所有模拟器）。
-- 没装 simslim 时退回普通 `simctl boot`，提示安装，结论 `stock-no-simslim`。安装：`brew install mobai-app/tap/simslim`，
-  或 `go install github.com/mobai-app/simslim/cmd/simslim@v0.14.0`（固定版本，`simslim version` 显示 dev）；不在 PATH 里用 `SIMSLIM=<路径>`。
-- stderr 的倒数第一行是结论 `sim-boot: slim|stock|stock-no-simslim|in-use-not-slim|failed→stock <profile> <udid>`，写进报告；
-  瘦身出错时它先 `simslim off` 回到原版再继续（`failed→stock`），测试照跑。用法错误（profile 不存在、udid 不存在、同名的有几台）退出 2，什么都不动。
-- 真正瘦身的是 `scripts/app/slim-sim.sh <udid> [profile JSON]`（关着的设备一次启动瘦好；开着的和配置对不上会重启），一般不直接调它。
-- 新建、`simctl erase`、换 runtime 之后瘦身状态就没了（记在那台设备上），重跑 sim-boot.sh 即可。用完 `xcrun simctl shutdown <udid>`，任务结束 `xcrun simctl delete <udid>`。
-- 测试只在瘦模拟器上挂，先用 `--profile stock` 新建一台（或对自己的那台 `simslim off <udid>`）复跑，再当成代码的问题。
-- 临时多开一类服务：开着的设备 `simslim enable <udid> <类别或 launchd 名>`，不重启、下次 `on` 或重启前有效；
-  要长期带上它，加进对应的 profile（`simslim enable … --save apple/simslim/<名字>.json`）再 `--reslim`。`on --no-reboot` 只会多关、不会重新打开，放开不了。类别见 `simslim profiles`，功能见 `simslim doctor --list`。
+- **Never reboot an already-running simulator** (another Agent may use it): verify slim ones; unslimmed/profile-mismatched ones remain unchanged with warning and `in-use-not-slim`.
+  Only use `--reslim` if it's yours (reboots). Don't `simslim on / off` others' devices, or use `simslim watch` (changes all local simulators).
+- Without simslim, normal `simctl boot`, install hint, `stock-no-simslim`. Install: `brew install mobai-app/tap/simslim`,
+  or `go install github.com/mobai-app/simslim/cmd/simslim@v0.14.0` (pinned; version reports dev). Outside PATH, use `SIMSLIM=<path>`.
+- Last stderr line: `sim-boot: slim|stock|stock-no-simslim|in-use-not-slim|failed→stock <profile> <udid>`; include in reports.
+  Slimming failure runs `simslim off` to restore stock, then continues (`failed→stock`); tests still run. Usage errors (missing profile/udid, duplicate names) exit 2 without changes.
+- Actual slimming: `scripts/app/slim-sim.sh <udid> [profile JSON]` (one boot for shut-down devices; running mismatched devices reboot), usually not called directly.
+- Creation, `simctl erase`, runtime changes lose per-device slimming; rerun sim-boot.sh. Afterwards `xcrun simctl shutdown <udid>`, task end `xcrun simctl delete <udid>`.
+- If a test fails only slimmed, rerun on a new `--profile stock` device (or `simslim off <udid>` on yours) before blaming code.
+- Temporarily enable services: `simslim enable <udid> <category or launchd name>` on running device, no reboot, lasts until next `on` or reboot.
+  Permanent: add to profile (`simslim enable … --save apple/simslim/<name>.json`), then `--reslim`. `on --no-reboot` only disables more, never reenables. Categories: `simslim profiles`; features: `simslim doctor --list`.
 
-| 测试 / 功能 | profile 或要多开的 |
+| Test / feature | Profile or extra services |
 | --- | --- |
-| `LiveActivityActionTests`、`LiveActivityShots` | 先用 stock。iOS 27.0 上（2026-11-05，#2801）原版 2 次过 1 次（重启后第一次挂，锁屏上没有活动），default 5 次只过 1 次，还没查清是瘦身的问题还是负载下本来就不稳；查清前别拿瘦模拟器上的结果下结论 |
-| `PhotoSaveTests`、`VideoSendTests`、`LarkAttachmentTests` | default（photos 已开） |
-| `NotificationActionTests`、`relay_sim_e2e.sh`（本地通知 / `simctl push`） | default（apsd 已留） |
-| `TestManualLiveActivityPush`（真实 APNs） | live-activity |
-| `QuickLookFileTests` 分享面板卡住或变慢时 | `--keep com.apple.peopled,com.apple.suggestd` |
-| 手工：Spotlight、文件选择器的「最近」 | search |
-| 手工：听写、录音转写、快捷指令 | siri，另 `--keep com.apple.mobileassetd`（linkd 默认已留） |
-| 断言「系统没弹窗」的测试（`PasswordPrompt.assertNone`：`SecretFieldTests`、`ChannelSettingsTests`、`EngineChoiceTests`、`ExtensionMarketTests`、`ExtensionSettingsTests`、`LarkNativeEncryptionFlowTests`、`PermissionInputUITests`），键盘高度相关的截图 | stock。web、icloud、siri 关掉后系统可能根本不弹「保存密码？」、候选栏也可能变，瘦模拟器上通过不算防回归的证据 |
-| 手工：健康工具、手表配对 | watch |
+| `LiveActivityActionTests`, `LiveActivityShots` | stock first. iOS 27.0 (2026-11-05, #2801): stock 1/2 passed (first after reboot failed, no activity on lock screen), default 1/5. Unknown slimming versus load instability; don't draw conclusions from slim results yet |
+| `PhotoSaveTests`, `VideoSendTests`, `LarkAttachmentTests` | default (photos enabled) |
+| `NotificationActionTests`, `relay_sim_e2e.sh` (local notifications / `simctl push`) | default (apsd kept) |
+| `TestManualLiveActivityPush` (real APNs) | live-activity |
+| `QuickLookFileTests` share sheet stuck/slow | `--keep com.apple.peopled,com.apple.suggestd` |
+| Manual Spotlight, file-picker Recent | search |
+| Manual dictation, recording transcription, Shortcuts | siri + `--keep com.apple.mobileassetd` (linkd already kept) |
+| "No system prompt" tests (`PasswordPrompt.assertNone`: `SecretFieldTests`, `ChannelSettingsTests`, `EngineChoiceTests`, `ExtensionMarketTests`, `ExtensionSettingsTests`, `LarkNativeEncryptionFlowTests`, `PermissionInputUITests`), keyboard-height screenshots | stock. Disabling web/icloud/siri may prevent Save Password prompts entirely or alter candidates; slim passes aren't regression evidence |
+| Manual health tools/watch pairing | watch |
 
-坑：
-- 模拟器 create 之后的首次启动很慢（负载高时瘦身连首启 439 s，原版首启 167–285 s；之后每次启动约 12–28 s）；把开着的原版改成瘦的（`--reslim`）负载 300+ 时要 12 分钟。
-  要反复新建，就先做一台瘦好的模板，用 `simslim clone <模板 udid> <名字>` 复制（会带上瘦身配置；`simctl clone` 不带，克隆后要重跑 sim-boot.sh）。
-- 负载高时 App（连系统「设置」）刚打开的头一分钟可能是白屏，原版也一样，等一会儿再截图，别当成瘦身关坏了。
-- iOS 27.1 的 runtime 没有 iPhone 17 Pro 这类设备类型，`simctl create` 报 Incompatible device：sim-boot.sh 自动挑能跑这个设备类型的最新 runtime，`--runtime` 指定。
+Pitfalls:
+- First boot after create is slow (high load: slim including first boot 439 s, stock 167–285 s; later boots 12–28 s); `--reslim` on running stock takes 12 minutes at load 300+.
+  For repeated creation, first make a slim template, `simslim clone <template udid> <name>` (keeps profile; `simctl clone` doesn't, rerun sim-boot.sh).
+- Under high load, newly opened Apps (even system Settings) may be white for a minute, stock too; wait before screenshotting, not a broken slim profile.
+- iOS 27.1 runtime lacks device types like iPhone 17 Pro; `simctl create` reports Incompatible device. sim-boot.sh picks latest compatible runtime; override with `--runtime`.
 
-对话输入区（#2200）：先确认端口空闲，再 `PORT=<独立端口> python3 scripts/mock/composer_hub.py`。
-这个独立入口复用编造数据，只把主对话和 Agents 对话的模型改成短／长 GPT ID，不修改其他车道的 mock 夹具。
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<独立端口> xcodebuild test … -only-testing:PersonaUITests/ComposerKeyboardTests`
-检查新旧布局的 App 收键盘按钮不存在、输入和换行、手势收键盘且保留草稿、发送、侧边栏布局页头折叠，以及模型标签与菜单一致。
-`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 切风格；用 `simctl ui <udid> appearance light|dark` 切实际外观，
-`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` 仅给截图命名。
-使用新建的专用模拟器，只配对这个假 hub；不得将本组测试指向真实主对话。夹具回归：
-`python3 -B -m unittest discover -s scripts/mock -p 'test_composer_hub.py'`。
+Chat composer (#2200): confirm port free, then `PORT=<dedicated port> python3 scripts/mock/composer_hub.py`.
+This separate entry reuses fictional data, only changes main/Agent chat models to short/long GPT IDs, never other lanes' fixtures.
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<dedicated port> xcodebuild test … -only-testing:PersonaUITests/ComposerKeyboardTests`
+checks no App keyboard-dismiss button in old/new layouts, input/newlines, gesture dismissal retaining draft, sending, sidebar-header collapse, model-label/menu consistency.
+Style `TEST_RUNNER_JARVIS_UI_STYLE=beautiful`; actual `simctl ui <udid> appearance light|dark`,
+`TEST_RUNNER_JARVIS_SHOTS=<directory>` saves, `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` only names files.
+Fresh dedicated simulator paired only to this mock; never target real main chat. Fixture regression:
+`python3 -B -m unittest discover -s scripts/mock -p 'test_composer_hub.py'`.
 
-通知按钮（`NotificationActionTests`）不连真实 hub，连 `scripts/mock/mock_hub.py`：
-`PORT=18791 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`。
-它在 SpringBoard 上长按横幅、点「拒绝」，再读 mock 的 `GET /mock/resolved` 确认 hub 收到了 resolve。
-`LiveActivityActionTests` 同样连 mock：开一个示例实时活动、锁屏、点活动上的「拒绝」。模拟器系统语言是英文时授权弹窗的按钮叫「Allow」；
-授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
+Notification buttons (`NotificationActionTests`) use mock, not real hub:
+`PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/NotificationActionTests`.
+Long-press SpringBoard banner, tap Deny, inspect mock `GET /mock/resolved` for resolve.
+`LiveActivityActionTests` also uses mock: start sample activity, lock, tap Deny. English system authorization button is Allow;
+authorization persists, so schedule notification only once App goes background or it appears while test still waits for permission.
 
-终端直接打字（`TerminalTypingTests`：点终端弹出键盘、打的字和回车按顺序发出且被合并成少数几个请求、键栏的 ctrl 作用于键盘打的下一个字、键盘按钮收起键盘）同样连 mock。
-`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe-mixed.jsonl`
-（中英混排长回答）或 `-permission.jsonl`（权限框）截终端的样子。
-终端键栏和选择（`TerminalKeysTests`：单击 / 双击锁定 / 按住 ctrl、alt、shift，输入框里打的字带 ctrl，⌃C，发出的键名和顺序；长按出「拷贝」；快捷命令双击直接发送、输入框的补全）也连 mock：
-`PORT=18792 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:PersonaUITests/TerminalKeysTests`
-（mock 的 `GET /mock/keys` 回放收到的按键）。
+Direct terminal typing (`TerminalTypingTests`: tap opens keyboard, text/Return sent in order and coalesced into few requests, key-bar ctrl applies to next typed character, keyboard button dismisses) also uses mock.
+`MOCK_TERMINAL_INTERVAL=0.02` replays recorded frames rapidly (default one/second), with `MOCK_TERMINAL_FIXTURE=apple/PersonaTests/Fixtures/terminal-observe-mixed.jsonl`
+(long mixed Chinese/English reply) or `-permission.jsonl` (permission dialog) for terminal shots.
+Terminal keys/selection (`TerminalKeysTests`: tap/double-lock/hold ctrl/alt/shift, typed ctrl text, ⌃C, key names/order, long-press Copy, double-tap shortcut sends, input completion) also uses mock:
+`PORT=18792 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:PersonaUITests/TerminalKeysTests`
+(mock `GET /mock/keys` returns recorded keys).
 
-从搜索结果打开会话只有一行标题、返回后搜索结果还在、搜索时折叠的空间里的 Agent 也搜得到点得开（`SearchOpenTests`，另有不搜索的对照，对照里再右滑返回列表；
-测试带 `-openAgentsFresh YES`，不受别的测试留下的折叠影响）连普通 mock：
-`PORT=18793 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`。
+Search results open chats with only one title line, remain after return, and find/open Agents inside collapsed spaces (`SearchOpenTests`, with non-search control and edge-swipe back;
+`-openAgentsFresh YES` avoids old collapse state) against ordinary mock:
+`PORT=18793 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`.
 
-助手的 `ask_user` 在对话里画成「提问」（`AskUserRowTests`，#677）：工具行是「提问 + 第一个问题」不是原名，展开后列出问题和选项、勾上用户选的（含多选），
-用户没回答的写「没有回答」；测试带 `-openAllWork YES -showToolDetails YES` 把工作行和工具行都展开（倒着的对话列表里的行点不准）：
-`MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`，
-截图在 `/tmp/persona-ask-user-*`（`TEST_RUNNER_SHOT_SUFFIX` 区分深浅色和风格）。
+Assistant `ask_user` renders as Question (`AskUserRowTests`, #677): tool row says Question + first question, not raw name; expanded questions/options check user choices (including multi-select),
+unanswered says No answer. `-openAllWork YES -showToolDetails YES` expands work/tool rows (inverted-list taps unreliable):
+`MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`,
+shots `/tmp/persona-ask-user-*` (`TEST_RUNNER_SHOT_SUFFIX` distinguishes appearance/style).
 
-待办详情的「当前没有 Agent」（#1110）：`MOCK_TODO_OFFLINE=1` 给「天气 App 发 1.3 版」多挂一个断连的 NAS 上的项目 backup，那里的会话状态是 unknown；
-`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openTodoDetail YES` 打开详情，backup 那行标「当前没有 Agent」，weather 那行不标。
+To-do details No Agent currently (#1110): `MOCK_TODO_OFFLINE=1` adds backup project on disconnected NAS to Weather App 1.3 release, session unknown;
+`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openTodoDetail YES`; backup says No Agent currently, weather doesn't.
 
-端口转发（`PortForwardTests`，`docs/ports.md`）：会话顶部和回复里的 `:端口` Badge 带页面标题、停掉的变灰，点开在网页卡片里经 mock 的
-`…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
-`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；
-深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
+Port forwarding (`PortForwardTests`, `docs/ports.md`): `:<port>` badges in chat header/replies include page titles; stopped gray. Open loads mock's page through
+`…/ports/{port}/connect` (`GET /mock/ports` records connections); gray says No longer listening:
+`MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`;
+light/dark × shell/old layout via `TEST_RUNNER_JARVIS_LAYOUT`, `TEST_RUNNER_SHOT_SUFFIX`, shots `/tmp/jarvis-ports-*`.
 
-本 hub 的链接在 App 内打开（`HubPageLinkUITests`，#2696）：回答里指向 mock 自己的 `/s/…?at=…` 打开那个 Agent 的对话、那条消息在屏幕上，`/todos?id=…` 浮起待办详情，
-外部链接照旧是网页卡片：`MOCK_HUB_LINKS=1 PORT=18796 python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_HUB_LINKS_HUB=http://127.0.0.1:18796 xcodebuild test … -only-testing:PersonaUITests/HubPageLinkUITests`；
-`TEST_RUNNER_JARVIS_SHOTS=<目录>`、`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 写截图。URL 解析的单测是 `PersonaTests/HubPageLinkTests`。
+Own-hub links open in App (`HubPageLinkUITests`, #2696): mock `/s/…?at=…` opens Agent chat with target message visible, `/todos?id=…` opens to-do details;
+external links remain web cards. `MOCK_HUB_LINKS=1 PORT=18796 python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_HUB_LINKS_HUB=http://127.0.0.1:18796 xcodebuild test … -only-testing:PersonaUITests/HubPageLinkUITests`;
+`TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` save shots. URL unit tests `PersonaTests/HubPageLinkTests`.
 
-Telegram 会话页的回复框（`ConnectorThreadReplyTests`，#1190）：发出去马上出现在页面里，页面上没有「确认卡片」的提示、也没有「允许」：
-`MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1 PORT=18857 python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_MOCK_HUB_TELEGRAM_THREAD=http://127.0.0.1:18857 xcodebuild test … -only-testing:PersonaUITests/ConnectorThreadReplyTests`。
+Telegram reply box (`ConnectorThreadReplyTests`, #1190): sent replies appear immediately; no confirmation-card notice or Allow:
+`MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1 PORT=18857 python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_MOCK_HUB_TELEGRAM_THREAD=http://127.0.0.1:18857 xcodebuild test … -only-testing:PersonaUITests/ConnectorThreadReplyTests`.
 
-扫码登录（`QRSignInTests`，#1351）：`MOCK_WECHAT=signed_out PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_MOCK_HUB_QR=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/QRSignInTests`：设置 › 微信 › 登录出二维码和「保存二维码」，
-mock 第六次问时确认，页面自己变成已连接。mock 的登录状态留在进程里，再跑一次（比如换深色）先重启 mock；`MOCK_WECHAT_WAIT=1` 让它一直停在二维码，方便截图。`MOCK_WECHAT_QR=link` 只去掉点阵（只剩链接），`none` 连链接也去掉（画不了的步骤，#1693）。App 画不了的步骤（`testAStepItCannotDrawSaysSo`）：再起一个 `MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none` 的 mock，带 `TEST_RUNNER_JARVIS_MOCK_HUB_QR_NONE=http://127.0.0.1:<端口>`，页面说明画不了、给「重新开始」，没有「下一步」。
-用户自己的回复不弹卡片是 hub 定的（mock 不分设备），hub 一侧见 `TestConnectorThreadReplyFromTheUsersDevice`。
+QR login (`QRSignInTests`, #1351): `MOCK_WECHAT=signed_out PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_MOCK_HUB_QR=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/QRSignInTests`: Settings › WeChat › Sign In shows QR and Save QR Code,
+mock confirms sixth poll, auto-switches to connected. Restart mock before another round (e.g. dark), state in process; `MOCK_WECHAT_WAIT=1` stays QR for shots. `MOCK_WECHAT_QR=link` removes matrix only, `none` removes link too (unrenderable step, #1693). `testAStepItCannotDrawSaysSo` uses another `MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none`, `TEST_RUNNER_JARVIS_MOCK_HUB_QR_NONE=http://127.0.0.1:<port>`; page explains inability, Restart, no Next.
+Hub decides own-device replies need no cards (mock doesn't distinguish devices); `TestConnectorThreadReplyFromTheUsersDevice`.
 
-填密钥的框不弹「保存密码？」（`SecretFieldTests`，#1598）：`MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/SecretFieldTests`：模型供应商的 API Key（自己填写、从扩展添加）、飞书机器人的 App Secret、
-邮箱的密码 / 授权码、终端要的密码，填完离开后系统都不弹「保存密码？」（`PasswordPrompt.assertNone`），值照样到了 mock。终端那张卡答完就没了，再跑要重启 mock。
+Secret fields never prompt Save Password (`SecretFieldTests`, #1598): `MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_SECRETS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/SecretFieldTests`: provider API keys (manual/extension), Lark bot App Secret,
+mail password/app code, terminal password; after entry/navigation no system Save Password (`PasswordPrompt.assertNone`), values reach mock. Terminal card disappears after answer; restart for rerun.
 
-渠道（`ChannelSettingsTests`，#1529、#2195，`docs/channels.md`「界面」）：`MOCK_CHANNELS=1 MOCK_PLUGINS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`：设置中连接器前的「渠道」行和摘要、扩展页不再包含渠道、关于只保留版本和构建且助手设置仍可进入、
-三节列表（Persona / 已接入 / 可以安装）、微信的页面（账号、消息发到、功能）、用令牌绑定（错的令牌原地报错）、飞书机器人解绑后用 6 位配对码重新配对、
-主对话第一条下面的「来自 微信」。mock 的绑定状态留在进程里，换深色再跑先重启 mock；`-openChannels YES` / `-openChannel <id>` 直接打开列表 / 某个渠道。
+Channels (`ChannelSettingsTests`, #1529, #2195, `docs/channels.md` ("UI")): `MOCK_CHANNELS=1 MOCK_PLUGINS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`: Channels row/summary before Connectors, no channels in extensions, About only version/build with assistant settings accessible,
+three sections (Persona / Connected / Available to install), WeChat account/destination/features, token binding (invalid inline error), Lark bot unbind/re-pair six-digit code,
+From WeChat below first main-chat message. Restart mock for dark (binding state in process); `-openChannels YES` / `-openChannel <id>` direct opens.
 
-浏览器登录（#1304）：`MOCK_BROWSER=ready PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `BrowserLoginsTests`：机器页列网站、选一个 cookies.txt（`-openCookieFile <路径>` 代替系统的文件选择器）后默认一个不勾、过期的勾不了、导入、清除；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存截图。
+Browser logins (#1304): `MOCK_BROWSER=ready PORT=<dedicated port> python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>` runs `BrowserLoginsTests`: machine websites, pick cookies.txt (`-openCookieFile <path>` replaces file picker), none selected by default, expired disabled, import/clear; `TEST_RUNNER_JARVIS_SHOTS=<directory>`.
 
-发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
-`PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`，再
-`TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/SendSafetyTests`：
-点终端对话框的选项，确认 hub 收到的是 `option` 而不是按键、并提示「对话框已经变了」；电脑上有草稿时点「清空并发送」，确认重发带
-`clear_draft` 且 `client_msg_id` 不变（`GET /mock/resolved`、`GET /mock/sent`）。截图：`-openSendMessage <文字>` 打开会话 3 秒后发一条（`-openSendDelay <秒>` 改这个等待）。
+Send/terminal-dialog safety (`SendSafetyTests`) uses mock:
+`PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/SendSafetyTests`:
+tap dialog option, hub gets `option` not keys and Dialog changed notice; existing computer draft, Clear and send retry carries
+`clear_draft`, same `client_msg_id` (`GET /mock/resolved`, `GET /mock/sent`). Screenshot `-openSendMessage <text>` sends after 3 seconds (`-openSendDelay <seconds>` overrides).
 
-从别的页面新建 Persona 对话（`NewConversationEntryTests`，#527）：收件箱「交给 AI」发出后，对话页立刻是这条已发送的消息，不是「还没有消息」；
-transcript 晚到以后只显示一次。连 mock 并让第一行晚写：`PORT=18927 MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18927 xcodebuild test … -only-testing:PersonaUITests/NewConversationEntryTests`（新外壳和旧布局各一个用例）。
+New Persona chat from elsewhere (`NewConversationEntryTests`, #527): Inbox Hand to AI immediately shows sent message, not No messages yet;
+late transcript shows it once. `PORT=18927 MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18927 xcodebuild test … -only-testing:PersonaUITests/NewConversationEntryTests` (one per shell/old layout).
 
-弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`：hub 断 16 秒，前 8 秒（断开的宽限，`docs/hub-restart.md`）标题不变、之后变「连接中…」、
-恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次：
-中间再断几次、进后台（后台不重连，hub 回来了也要等回到前台才发）、退出 App 再打开（发件箱在磁盘上）都恰好一次。hub 重启后的去重在服务端测试（`TestSendRetryAfterRestartAndRefusal`）。
-hub 计划内重启（#1634）：`MOCK_RESTART=1` 启动 mock，`GET /mock/restart?gap_ms=1500&missed=todos,inbox` 发 `hub_restarting`、以 1001 关掉所有 WebSocket，
-之后 `gap_ms` 内的新连接排队（像 socket activation 的 backlog），`missed` 的广播带序号记下、续传时紧跟 hello 补发；加 `&drop_post=1` 时下一个带 op id 的写请求执行了但不回应答，
-同一个 op id 再来只回第一次的结果。`GET /mock/restart` 看重启次数、每次连接是否续传、带 op id 的请求和各 GET 的次数（续传后不应再多出 `GET /api/v1/interactions` 等）。
-mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、新连接不应答就关）、`GET /mock/delay?s=<秒>`（之后每个请求和 pong 都晚这么久，0 关掉；
-启动时也可以 `MOCK_DELAY=<秒>`）。手动测真断开：只杀监听端口的进程 `kill $(lsof -i TCP:18760 -sTCP:LISTEN -t)`——
-`lsof -i :18760` 还会列出连着它的模拟器 App，一起杀掉 App 就没了。截图：`-showConnection …`（见 `docs/ios.md`）。
+Weak/offline network (`ConnectionTests`, `docs/ios.md` ("Connection state")): `PORT=18760 python3 scripts/mock/mock_hub.py &`,
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`: 16-second outage, title unchanged first 8-second grace (`docs/hub-restart.md`), then Connecting,
+restored on return; 0.2-second outage (~1-second reconnect) never changes title. Offline send says Auto-send when connected, received once after recovery,
+even further drops/background (no background reconnect/send until foreground)/App relaunch (disk outbox). Server restart dedup: `TestSendRetryAfterRestartAndRefusal`.
+Planned restart (#1634): `MOCK_RESTART=1`, `GET /mock/restart?gap_ms=1500&missed=todos,inbox` emits `hub_restarting`, closes all WS with 1001;
+new connections queue during gap like socket activation backlog, sequenced `missed` broadcasts replay after hello. `&drop_post=1` executes next op-id write without reply; retry same id returns first result.
+`GET /mock/restart` shows restart count, resume per connection, op-id requests/GET counts (no extra `GET /api/v1/interactions`, etc. after resume).
+Controls: `GET /mock/down?s=<seconds>` drops WS and closes unanswered new connections; `GET /mock/delay?s=<seconds>` delays all requests/pongs, 0 disables,
+also startup `MOCK_DELAY=<seconds>`. Kill only listener: `kill $(lsof -i TCP:18760 -sTCP:LISTEN -t)`—
+`lsof -i :18760` also lists connected simulator App, killing both loses App. Shots `-showConnection …` (`docs/ios.md`).
 
-发送文件（`FileUploadTests`：「+」菜单里有「文件」；上传时输入框上方有进度和取消，传完路径插在打的字后面、不发送）也连 mock：
-`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/FileUploadTests`
-（`GET /mock/uploads` 是收到的文件；`MOCK_UPLOAD_OLD_NODE=1` 模拟没升级的 node）。截图：`-openUploadDemo <文件名>` 打开会话 3 秒后传一个 24 MB 的假文件。
-系统的文件选择器 XCUITest 点不稳，选文件这一步没自动化。
+File sending (`FileUploadTests`: Files in + menu, progress/cancel above input, finished path appended after typed text without sending) uses mock:
+`PORT=18771 MOCK_UPLOAD_KBPS=1024 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_JARVIS_UPLOAD_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/FileUploadTests`
+(`GET /mock/uploads` lists received files; `MOCK_UPLOAD_OLD_NODE=1` old node). `-openUploadDemo <filename>` uploads fake 24 MB file after 3 seconds.
+System file-picker selection isn't automated; XCUITest unreliable there.
 
-### 机器页面（`MachinePagesTests`、`MachinePagesLiveTests`）
+### Machine pages (`MachinePagesTests`, `MachinePagesLiveTests`)
 
-把机器相关的每个入口真点一遍：设置 › 机器（列表、下拉刷新、卡片 → 详情、详情里的 Agent → 对话、36 个 Agent 的「显示全部」、离线机器的说明、重新连接）、
-Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、项目页的机器名 → 机器的项目页（项目 → 项目页、ⓘ → 详情、离线时的空状态）、
-新对话（离线机器不能选、目录浏览、最近目录、启动器、开始后 POST 的内容、失败时错误显示在按钮上方；模型：`/model` 列表、搜索、选中后只列它支持的思考强度、写死 `--model` 的启动器锁住、Codex 选模型不带思考强度，mock 的 `…/launchers/{name}/models` 见 `MOCK_MODELS_SECONDS`）。
+Actually tap every machine entry: Settings › Machines (list, pull-refresh, card→details, Agent→chat, Show All for 36 Agents, offline explanation, reconnect),
+Agents top-left menu (group/filter by machine, all), project machine name→machine projects (project→page, ⓘ→details, offline empty state),
+new chat (offline disabled, directory browser/recent/launchers, POST contents, errors above start button; models: `/model` list/search, only supported effort after selection, hardcoded `--model` launcher locked, Codex model selection no effort; mock `…/launchers/{name}/models` via `MOCK_MODELS_SECONDS`).
 
-- mock：`PORT=18773 MOCK_MACHINES=1 python3 scripts/mock/mock_hub.py &`（多一台离线的「实验室主机」，`POST …/reconnect` 后变在线；
-  Mac Studio 有 36 个 Agent；`GET /mock/hits`、`/mock/reconnects`、`/mock/started`，`/mock/reset` 恢复初始状态；cwd 以 `/broken` 结尾的新会话回 502），
-  再 `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/MachinePagesTests`，
-  深色再跑一遍（`simctl ui <udid> appearance dark`、`JARVIS_STYLE=dark`），每一步的截图存到 `JARVIS_SHOTS`，失败时附截图和视图树。
-- 真实接口：本机起一个测试 hub，**不要连线上 hub 做重连、新建、关闭**。在 hub 机器上 `GOOS=darwin` 编 personad 拷回来；
-  `docker exec jarvis-postgres createdb -U jarvis <自己的库>`，经 `ssh -L <本地端口>:127.0.0.1:18661` 连；假 HOME 里的 `~/.persona/hub.json`
-  （0600）只放 `listen`、`token`、`database_url` 和两台机器：一台 `kind: local`，一台连不上的 ssh；`herdr --session <名字> server` 起一个独立的 herdr，
-  `HERDR_SOCKET_PATH` 指向它（别指向正在用的那个）。假 HOME 里建 `code/demo`，然后
-  `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<假 HOME>/code xcodebuild test … -only-testing:PersonaUITests/MachinePagesLiveTests`。
-  node 的「最近目录」来自这台机器真实的 Claude 记录，所以测试用 `-cwd.<机器 id>` 指定目录浏览的起点。跑完关掉测试 hub、隧道和 herdr 会话，删掉库。
-- 别的车道收尾时会 `pkill -f mock_hub.py`：长时间跑的 mock 复制一份改个名再起（`/tmp/<车道>_fakehub.py`），套个 while 循环被杀了自己起来。
-- 测试中途失败时 XCTest 会结束 App，App 的请求被取消：hub 日志里那次 `POST /api/v1/sessions` 记 502，其实 node 已经把会话起好了（node 不随 hub 的请求取消）。
-  看到孤立的 502 先查是不是测试自己杀了 App。
-- 「这台电脑能做什么」（`MachineHealthTests`，#3018）：`MOCK_DOCTOR=stale PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
-  `TEST_RUNNER_JARVIS_DOCTOR_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/MachineHealthTests`：MacBook 的机器页「2 项功能需要处理」→「修复」→ 确认 → 「一切正常」→ 展开全部检查；
-  `TEST_RUNNER_JARVIS_SHOTS=<目录>`、`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 存三张图。mock 记着修过的机器，重跑前重启 mock。
+- Mock: `PORT=18773 MOCK_MACHINES=1 python3 scripts/mock/mock_hub.py &` (extra offline Lab host, `POST …/reconnect` makes online;
+  Mac Studio 36 Agents; `GET /mock/hits`, `/mock/reconnects`, `/mock/started`, `/mock/reset`; cwd ending `/broken` starts return 502),
+  `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/MachinePagesTests`,
+  repeat dark (`simctl ui <udid> appearance dark`, `JARVIS_STYLE=dark`), every-step shots in `JARVIS_SHOTS`, failures attach image/tree.
+- Real API: local test hub; **don't reconnect/create/close on production hub**. Build personad `GOOS=darwin` on hub machine, copy back;
+  `docker exec jarvis-postgres createdb -U jarvis <own database>`, tunnel `ssh -L <local port>:127.0.0.1:18661`; fake HOME `~/.persona/hub.json`
+  (0600) only `listen`, `token`, `database_url`, two machines: local and unreachable ssh. `herdr --session <name> server` creates isolated herdr,
+  `HERDR_SOCKET_PATH` points to it, not active one. Create `code/demo` in fake HOME, then
+  `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<fake HOME>/code xcodebuild test … -only-testing:PersonaUITests/MachinePagesLiveTests`.
+  Recent directories come from actual local Claude records, so `-cwd.<machine id>` sets browser origin. Afterwards stop hub/tunnel/herdr and drop database.
+- Other lanes may `pkill -f mock_hub.py` during cleanup: copy long-running mock under another name (`/tmp/<lane>_fakehub.py`), wrap while loop to restart if killed.
+- XCTest failure terminates App, cancels requests; hub logs that `POST /api/v1/sessions` as 502 even though node started session (node doesn't follow hub cancellation).
+  For isolated 502, first check if test killed App.
+- What this computer can do (`MachineHealthTests`, #3018): `MOCK_DOCTOR=stale PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
+  `TEST_RUNNER_JARVIS_DOCTOR_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/MachineHealthTests`: MacBook machine page Two features need attention→Fix→confirm→All good→expand checks;
+  `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark`, three images. Restart mock before rerun (remembers repairs).
 
-### Agents 列表（`AgentsListTests`）
+### Agents list (`AgentsListTests`)
 
-空闲空间的行序回归（`QuietSpaceOrderTests`，#2443）：以 `MOCK_QUIET=order PORT=<端口>` 启动 mock，
-传 `TEST_RUNNER_JARVIS_QUIET_ORDER_HUB=<mock 地址>`、`TEST_RUNNER_JARVIS_LAYOUT=shell`，运行 `-only-testing:PersonaUITests/QuietSpaceOrderTests`。
-fixture 的标签顺序是 41 / 52 / 1 分钟前，展开行必须显示为 1 / 41 / 52；用例同时检查卡片、细列表、折叠后重开。
-`TEST_RUNNER_JARVIS_UI_STYLE=glass|beautiful` 配合真实的模拟器 light / dark 外观覆盖普通卡片和胶囊；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_STYLE` 仅标记文件名。
+Idle-space ordering (`QuietSpaceOrderTests`, #2443): `MOCK_QUIET=order PORT=<port>`,
+`TEST_RUNNER_JARVIS_QUIET_ORDER_HUB=<mock URL>`, `TEST_RUNNER_JARVIS_LAYOUT=shell`, `-only-testing:PersonaUITests/QuietSpaceOrderTests`.
+Fixture tab order 41 / 52 / 1 minutes ago must expand as 1 / 41 / 52; cards, compact list, collapse/reopen covered.
+`TEST_RUNNER_JARVIS_UI_STYLE=glass|beautiful` plus actual light/dark covers ordinary cards/capsules; `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_STYLE` filename-only.
 
-快速筛选（全部 / 需要你 / 未读 / 工作中，计数随机器筛选变）、细列表（行数至少是卡片的 2.5 倍，重启后记住）、点空间标题折叠（折叠后标题仍报各状态计数，
-重启后记住；全部折叠 / 全部展开；折叠的空间从 ⋯「打开空间」进空间页）、空间 ⋯「全部标为已读（N）」、未读筛选下一路往下看（打开过的留在原位，
-重选筛选才消失）、筛选里「全部标为已读」确认后清空、手机上的筛选条作为列表首行随内容滚动（`testFilterBarHugsTheTop`：打开时搜索收起，下拉显示搜索，筛选条滚出屏幕后不留固定副本；
-到底、下拉刷新、进对话再返回、切到后台再回来、切 tab、搜索后回到顶部都不留雾化空档；`testFilterBarHugsTheTopBehindARestoredChat`：冷启动恢复上次的对话再返回，再下拉搜索、滚动）。
-顶部静止时按 frame 检查筛选条紧贴导航栏或展开的搜索框，**而且按截图像素确认真画在那里**：筛选条的内容被 UIKit 下移时 XCUITest 的 frame 不变，
-只看 frame 会把 TestFlight 35 / 38 的空档放过去。搜索类测试先下拉展开抽屉，不能把收起的搜索框当作没有回到列表。
-长列表滚动另用 `XCTOSSignpostMetric` 测量，模拟器只给时长不给掉帧，真机再看。
+Quick filters (All / Needs you / Unread / Working, counts follow machine filter), compact list (≥2.5× card rows, persisted across restart), space-title collapse (state counts remain,
+persisted; collapse/expand all; collapsed-space ⋯ Open Space), space ⋯ Mark All as Read (N), browsing Unread keeps seen entries until reselecting filter,
+confirmed Mark All as Read empties filter, phone filter bar scrolls as first row (`testFilterBarHugsTheTop`: search collapsed initially, pull opens, no fixed duplicate after scrolling;
+no blurred gap at bottom/pull-refresh/chat-return/background-return/tab switch/search-return-to-top; `testFilterBarHugsTheTopBehindARestoredChat`: cold restored chat→back→pull search→scroll).
+At rest, frames check filter bar touches navigation/search, **and screenshot pixels verify actual drawing**: UIKit can move contents without changing XCUITest frame,
+so frame-only checks missed TestFlight 35 / 38 gaps. Search tests first pull open drawer, not mistake collapsed search for absent list.
+Long-scroll uses `XCTOSSignpostMetric`; simulator reports duration, not dropped frames; inspect device too.
 
-- mock：`PORT=18775 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &`（约 130 个会话：platform 空间 3 需要你 / 35 完成未看 / 12 工作中，
-  另有空闲多的空间和全空闲的空间；`seen`（WebSocket 或 `POST …/seen`）把完成未看改成已看，`GET /mock/seen` 列出，`/mock/reset` 复原），
-  `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`，深色再跑一遍。
-- `-openAgentsFresh YES` 启动时清掉列表记住的样子（机器筛选、分组、细列表、折叠）：这些值测试里要在界面上改，不能用启动参数固定（启动参数会盖过 App 写进去的值）。
-- 最近使用平铺模式（`RecentAgentsTests`）：连普通 mock（不加 `MOCK_AGENTS`），传 `TEST_RUNNER_JARVIS_RECENT_HUB=<mock 地址>`，
-  选择 `-only-testing:PersonaUITests/RecentAgentsTests`。在真实菜单里切换，检查跨项目的活动顺序、重启记住选择、已读后返回、空闲 / 离线历史、实时推送重排、机器筛选和搜索。
-  浅色 / 深色各跑，`TEST_RUNNER_JARVIS_LAYOUT=shell` 再验新外壳；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存每步截图，`TEST_RUNNER_JARVIS_STYLE=light|dark` 标记文件名。
-- 列表行（`NavigationLink`）上的 `accessibilityIdentifier` 在视图树里出现两次（cell 和里面的 button），数行数、取第 n 行用 `app.buttons.matching(identifier:)`。
-- `SearchOpenTests` 以前不带 `-dev.openChat ""`：上一次测试留下打开的对话，启动后恢复进去，右滑返回回不到列表，两个用例都挂（master 上也一样）。
-- `SearchOpenTests` 两个用例在 master 上找不到 weather 的分组头和「给天气」那一行（#1051）：mock 的待处理多到 5 条后，「需要你处理」的卡片占满第一屏，懒加载的列表还没建它们。先 `bringAboveTabBar` 滚到它们，搜索前再滚回顶上；返回后用那一行判断回到了列表（列表停在原处，顶上的筛选条不在树里）。
-- `ShellAvatarTests` 以前也不带 `-dev.openChat ""`：模拟器上之前跑过的测试在 Agents 留下打开的对话，切到 Agents 时恢复进去，列表的顶栏不在，找不到 Agents 页的头像（master 上也挂）。
-- 细列表截图（`CompactListShots`，不用 mock，用体验模式的数据）：全部（空间多）、Mac Studio（未读多、空闲的空间）、未读筛选、需要你筛选、Mac mini（全部空闲）、
-  按状态分组、卡片对照，每种三档字号（`-ui.textSize small|standard|large`；`TEST_RUNNER_JARVIS_TEXT_SIZES=standard` 只拍一档）。
-  `TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/CompactListShots`，深色再跑一遍。
-  改前 / 改后对比：在 `git worktree add --detach <目录> origin/master` 里放进同一个测试文件拍改前，两边同一份数据。
-- 按电脑分段（#2108，`AgentsByMachineTests`）：默认的 mock（`TEST_RUNNER_JARVIS_MOCK_HUB`，三台电脑），查默认的按仓库和按项目都先按电脑分段、电脑按 hub 的顺序、
-  分组标题不再写电脑名、点电脑标题折叠整台电脑、选了机器筛选就没有电脑标题。仓库和工作树的推断规则在单元测试 `AgentRepoTreeTests`。
-  截图看工作树那一层用 `MOCK_WORKTREES=1` 启动 mock：weather 的小组件 Agent 在 `.worktrees/widget` 里（旁边一个空闲的），
-  `.claude/worktrees/fix-crash` 里一个空闲的，MacBook 上另有一个全空闲的仓库 notes。按仓库、按项目各拍深浅色，三种画法（默认、`-ui.style beautiful`、细列表）都看。
-  带 `-openWelcome YES` 是为了去掉别的测试留下的配对（Keychain 里的 hub 优先于体验模式），`-demo.on YES` 让它直接进体验模式。
-  所有 `launchJarvis()` / `launchPinned()` 的启动都一样：带 `-demo.on YES`、没带 `-pairURL` 时自动加 `-openWelcome YES`，不会接着用前面测试配对的 mock。
+- Mock: `PORT=18775 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &` (~130 sessions: platform 3 Needs you / 35 Unread / 12 Working,
+  plus mostly/all-idle spaces; `seen` WS or POST changes Unread→Seen, `GET /mock/seen`, `/mock/reset`),
+  `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`, repeat dark.
+- `-openAgentsFresh YES` clears remembered filter/grouping/compact/collapse at launch. Tests must change these via UI, not fixed launch args which override saved values.
+- Recent flat mode (`RecentAgentsTests`): ordinary mock (no `MOCK_AGENTS`), `TEST_RUNNER_JARVIS_RECENT_HUB=<mock URL>`,
+  `-only-testing:PersonaUITests/RecentAgentsTests`. Real menu switch; cross-project activity order, persistence, read/return, idle/offline history, live reorder, machine filter/search.
+  Light/dark, `TEST_RUNNER_JARVIS_LAYOUT=shell` too; per-step `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_STYLE=light|dark` names.
+- `NavigationLink` row accessibility identifiers appear twice (cell/button); count/select nth with `app.buttons.matching(identifier:)`.
+- `SearchOpenTests` formerly omitted `-dev.openChat ""`: previous open chat restored, swipe-back couldn't reach list; both failed on master too.
+- Both `SearchOpenTests` couldn't find weather header/Add weather row on master (#1051): five pending requests filled first screen, lazy list hadn't built rows. `bringAboveTabBar` scroll to them, back to top before search; after return use row to verify list (original scroll position, filter absent from tree).
+- `ShellAvatarTests` also omitted `-dev.openChat ""`: prior Agents chat restored, no list header/avatar, also failed on master.
+- Compact-list shots (`CompactListShots`, demo not mock): All (many spaces), Mac Studio (many unread/idle spaces), Unread, Needs you, Mac mini (all idle),
+  by-state, card comparison; all three text sizes (`-ui.textSize small|standard|large`; `TEST_RUNNER_JARVIS_TEXT_SIZES=standard` one only).
+  `TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/CompactListShots`, repeat dark.
+  Before/after: put same test file in `git worktree add --detach <directory> origin/master`, same data both sides.
+- Computer sections (#2108, `AgentsByMachineTests`): default three-computer mock (`TEST_RUNNER_JARVIS_MOCK_HUB`), repository/project modes section by computer, hub order,
+  no computer name repeated in group headers, computer title collapses whole section, machine filter removes headers. Repository/worktree inference: `AgentRepoTreeTests`.
+  `MOCK_WORKTREES=1`: weather widget Agent in `.worktrees/widget` (idle peer),
+  idle in `.claude/worktrees/fix-crash`, all-idle notes repo on MacBook. Both groupings, light/dark, all three renderings (default, `-ui.style beautiful`, compact).
+  `-openWelcome YES` removes prior pairing (Keychain hub beats demo); `-demo.on YES` enters demo.
+  All `launchJarvis()` / `launchPinned()` launches auto-add `-openWelcome YES` when demo on without `-pairURL`, never reuse previous mock pairing.
 
-### 空间标签的停止关闭（`SiblingTabsTests`）
+### Stopping/closing space tabs (`SiblingTabsTests`)
 
-- 普通 mock，独立端口与模拟器：`PORT=<端口> python3 scripts/mock/mock_hub.py`，然后
-  `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> TEST_RUNNER_JARVIS_LAYOUT=shell xcodebuild test … -only-testing:PersonaUITests/SiblingTabsTests`。
-  传给 `xcodebuild` 的变量要带 `TEST_RUNNER_`；测试进程读的是去掉前缀后的 `JARVIS_MOCK_HUB`，直接传后者会让整套用例跳过。
-- 验证左滑按钮、长按菜单、工作中取消、关闭失败时保留标签与确认卡片、关闭当前标签切到相邻标签、关闭其他标签不切换、最后一个标签关闭后返回。
-  原有的新建标签和点击切换回归一起跑；浅色、深色都看截图。截图以 `sibling-*` 附件保存在 `.xcresult`，
-  用 `xcrun xcresulttool export attachments --path <结果> --output-path <目录>` 导出；不要吞掉测试进程直接写宿主 `/tmp` 的失败。
-- mock 的 `GET /mock/session_close` 返回尝试和已关闭的目标；`?fail=1` 返回 503 且不改变会话。`/mock/reset` 恢复状态和记录。
-  `python3 -I scripts/mock/test_session_close_mock.py` 验证历史保留、其他 Agent 不变、失败和重置。
-- 不使用真实 hub 的会话测试关闭，也不以测试命令退出 0 代替检查实际执行／跳过数量。
+- Ordinary mock, dedicated port/simulator: `PORT=<port> python3 scripts/mock/mock_hub.py`, then
+  `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> TEST_RUNNER_JARVIS_LAYOUT=shell xcodebuild test … -only-testing:PersonaUITests/SiblingTabsTests`.
+  xcodebuild variables need `TEST_RUNNER_`; test process reads stripped `JARVIS_MOCK_HUB`. Passing only the latter skips the suite.
+- Verify swipe actions, long-press menu, Working cancellation, failed close retaining tab/confirmation, current close switches neighbor, other close doesn't switch, last close returns.
+  Run existing create/switch regressions too; inspect light/dark. `sibling-*` attachments in `.xcresult`,
+  export `xcrun xcresulttool export attachments --path <result> --output-path <directory>`; don't swallow failures writing directly from test process to host `/tmp`.
+- `GET /mock/session_close` returns attempts/closed targets; `?fail=1` returns 503 unchanged. `/mock/reset` resets.
+  `python3 -I scripts/mock/test_session_close_mock.py` checks retained history, other Agents unchanged, failure/reset.
+- Never close real-hub sessions for tests; command exit 0 doesn't replace checking actual run/skip counts.
 
-### 实时更新不打断操作（`LiveUpdateTests`）
+### Live updates don't interrupt interaction (`LiveUpdateTests`)
 
-用户正在做的事经得起 hub 一直推更新：Agents 的 ⋯ 菜单滚到机器那里开着（不跳、不回顶）、行的长按菜单开着、列表滚到中间（行不动）、
-在搜索框里打字（字和键盘都在）、行左滑出「关闭」；对话里工作中的 Agent 的过程卡展开着、过程里的截图全屏看着（不被关掉）。
-每个用例报每轮推送的 body 次数和主线程耗时（附件和日志里的 `PERF` 行，改前改后的对比见 `docs/archive/lanes/live-updates.md`）。
+Constant hub updates must preserve ongoing actions: Agents ⋯ menu scrolled to machine stays open without jumping, long-press menu remains, mid-list rows stay,
+search text/keyboard remain, swiped Close stays; expanded work card and full-screen screenshot in working chat remain open.
+Each case records body counts/main-thread time per push (`PERF` logs/attachments, before/after in `docs/archive/lanes/live-updates.md`).
 
-- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &`，`GET /mock/churn?n=12&ms=400` 推 n 轮（每轮：各机器的会话列表——工作中的换一句、
-  两个工作中的轮流变成最新——、机器列表、每个打开的对话一个新步骤，每 4 轮夹一句话），`&steps=N` 每轮每个对话加 N 步，`&final=1` 推完后这一轮结束（最后一句回复、工作中的变成完成）；`/mock/churned` 看推到第几轮；`MOCK_CHURN=1` 还在第一个对话的过程里放一张截图、多加 5 台机器（菜单要能滚）；`&inbox=1` 每轮再改一条收件箱、重推等你处理的事，`&waiting=1` 每轮多一个等你的 Agent、
-  下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/archive/lanes/live-updates.md`「又回来了」）。
-- `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests`。
-- 新外壳和旧布局都要跑：UI 测试默认用旧布局（`launchJarvis` 加 `-ui.oldLayout YES`），设 `TEST_RUNNER_JARVIS_LAYOUT=shell` 改用新外壳（iPhone 的默认），
-  `LiveUpdateTests`、`ChatFollowTests`、`ScrollUnderPushTests` 两种都过才算。
+- Mock: `PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &`; `GET /mock/churn?n=12&ms=400` pushes n rounds (each machine's session list—working text changes,
+  two working Agents alternate newest—machine list, one new step per open chat, reply every 4 rounds). `&steps=N` steps/chat/round; `&final=1` ends turn after pushes (final reply, Working→done); `/mock/churned` progress. `MOCK_CHURN=1` adds first-chat screenshot +5 machines (menu scroll). `&inbox=1` changes Inbox/pending items each round; `&waiting=1` adds waiting Agent,
+  answered next round (badge changes; real hub pushes these continually, session-only tests miss badge-driven rebuilds, `docs/archive/lanes/live-updates.md` ("It returned")).
+- `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests`.
+- Run shell/old layout: UI tests default old (`launchJarvis` adds `-ui.oldLayout YES`); `TEST_RUNNER_JARVIS_LAYOUT=shell` uses iPhone-default shell.
+  `LiveUpdateTests`, `ChatFollowTests`, `ScrollUnderPushTests` must pass both.
 
-### 滚动中推送（`ScrollUnderPushTests`）
+### Pushes while scrolling (`ScrollUnderPushTests`)
 
-手指拖着、惯性滑着的时候 hub 照推，屏幕上的东西只跟着手指和惯性走（`docs/archive/lanes/live-updates.md`「滚动时被迫刷新」）。
-Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 mock 按真实 hub 的节奏推：`/mock/churn?n=10&ms=2000&inbox=1&waiting=1&real=1`，
-每 2 秒一轮。`&real=1` 让工作中的 Agent 最后一句在一行、两行之间换（行变高变矮），并让一个 Agent 每三轮完成一次、再开工（空间换名次）。
+During finger drag/inertia, content only follows finger/inertia despite pushes (`docs/archive/lanes/live-updates.md` ("Forced refresh while scrolling")).
+Drag/fling Agents, Agent chat, Persona chat ~20 seconds while mock follows real cadence: `/mock/churn?n=10&ms=2000&inbox=1&waiting=1&real=1`,
+every 2 seconds. `&real=1` alternates working text between one/two lines and finishes/restarts one Agent every third round (space reorders).
 
-- App 以 `-perfCounts YES` 启动时，`PerfScroll` 逐帧看正在拖、正在滑的滚动视图。
-  - `List` 看它的 cell，`ScrollView` 看 SwiftUI 画行用的 layer。
-  - 记下几类异常：整体跳开（`jumps`，≥ 100 pt 的另记 `big`）、行之间相对挪动（`moved`）、还在屏幕里的东西被拿掉重画（`replaced`）、
-    惯性被打断（`stopped`）、内容高度变了（`resized`）。
-  - 每次异常记到它前 0.6 秒内到达的那类推送上（`causes`）。
-  - 页面刚放开扣住的更新（停下 0.5 秒后，或关键更新立刻）的 0.3 秒内出的异常另记 `landed`：那是更新按设计在静止时落地，
-    UIKit 在下一次手指落下时才排版，不算滚动中被打断。
-  - 滚动中算了哪些 body 记在 `bodies`。都在 `perf.counts` 的 `scroll` 里。
-- 断言：`big`、`replaced`、`stopped`、`defaults` 都是 0，Agents 列表的 `moved` 也是 0。两种布局、两种风格（`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`）都跑。
-  - 小于 100 pt 的跳动不推送也有（懒加载的行自己定高、UI 测试合成的拖动），不算。
-  - 机器页那种玻璃卡片的页面，`moved` 没有推送也一直在涨（效果层自己相对内容动），只在列表上看它。
-- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &`（两个对话要比屏幕长才滚得动），
-  `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`。
-- 测试先配对一次、退出，再带要打开的页面启动：配对的 hub 和上次不同时，App 从头开始、停在助手页，`-app.tab`、`-dev.openChat` 都不起作用。
+- With `-perfCounts YES`, `PerfScroll` inspects scrolling views per frame.
+  - `List` cells, `ScrollView` SwiftUI row layers.
+  - Records whole jumps (`jumps`, ≥100 pt also `big`), relative row movements (`moved`), onscreen removal/redraw (`replaced`),
+    interrupted inertia (`stopped`), content-height changes (`resized`).
+  - Attributes each anomaly to push types arriving within previous 0.6 seconds (`causes`).
+  - Anomalies within 0.3 seconds of releasing held updates (after 0.5-second rest or immediate critical update) are `landed`: designed at-rest updates,
+    UIKit may defer layout until next touch, not scrolling interruption.
+  - Bodies evaluated during scrolling in `bodies`; all under `perf.counts.scroll`.
+- Assert `big`, `replaced`, `stopped`, `defaults` = 0; Agents `moved` = 0. Both layouts/styles (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`).
+  - <100 pt jumps happen without pushes (lazy row sizing/synthetic drags), excluded.
+  - Glass-card pages like Machines continuously increase `moved` without pushes (effect layers move relative to content); only inspect it on lists.
+- Mock: `PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &` (both chats long enough to scroll),
+  `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`.
+- First pair once/quit, then launch target page: changed hub pairing restarts App on assistant, ignores `-app.tab`, `-dev.openChat`.
 
-### 进对话再返回不动（`AgentsReturnTests`）
+### Stable return from chats (`AgentsReturnTests`)
 
-- 体验模式、`-probes YES`，读 `probe.agents-scroll`（`docs/ios-state.md`「探针」）。
-- 新外壳和旧布局各一个用例，每个依次走四趟：搜索框收着 / 拉开 × 点「返回」/ 边缘右滑。
-- 每趟返回的每一帧（从返回开始到之后 1 秒）都要满足：
-  - 第一行、导航栏不动（范围、相邻帧跳动都不超过 1pt），等于离开时的位置；
-  - 搜索框保持离开时的样子（收着还是拉开）；
-  - 导航容器的 y 和顶部 safe area 不变。
-- 两种风格各跑一遍（`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`）。#340：以前新外壳返回时列表先下滑、搜索框自己展开，再上弹 52pt。
+- Demo mode, `-probes YES`, read `probe.agents-scroll` (`docs/ios-state.md` ("Probes")).
+- One case per shell/old layout, four trips each: search collapsed/expanded × Back/edge swipe.
+- Every return frame through 1 second afterwards must satisfy:
+  - First row/navigation bar stable (range and adjacent-frame jumps ≤1pt), same as before leaving;
+  - Search retains collapsed/expanded state;
+  - Navigation-container y and top safe area unchanged.
+- Both styles (`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`). #340: shell return previously slid list down, auto-expanded search, bounced up 52pt.
 
-### 真实性与及时性（`ScreenTruthTests`）
+### Truth and timeliness (`ScreenTruthTests`)
 
-屏幕上说的是 hub 的真实状态，而且及时（`docs/ios-state.md`「真实性与及时性」）。
+Displayed state must match hub promptly (`docs/ios-state.md` ("Truth and timeliness")).
 
-- App 以 `-probes YES` 启动，`probe.agents-list` 导出列表显示的每个 Agent 的状态、最后一句和列着的提问；`probe.connection` 导出标题的连接状态。
-  每个探针带 `at`（最近一次变化的时刻），和测试发推送的时刻比。
-- mock：
-  - `/mock/truth` 给 hub 此刻的真实数据；
-  - `/mock/bump?what=rev|last|needs|ask|resolve` 一次只改一样，像真实 hub 一样推（整台机器的会话列表、或一个提问）。
-- 用例和上限：
-  - 静止时一致；
-  - 手指按着时，需要你 / 提问 1 s 内上屏；
-  - 最后一句在手指抬起后 0.5 s 内落地（断言 0.8 s，含读探针的时间）；
-  - 一直按着也 5 s 内落地（断言 5.5 s）；
-  - 固定种子的随机序列（滚动、推送、churn、进出对话、前后台、断网时推送）之后 8 s 内收敛；`TEST_RUNNER_JARVIS_SEED` 重放；
-  - 甩完立刻点行，打开的是看到的那个 Agent；
-  - 断网时标题在 8 s 的宽限之后显示（11 s 内），连回 25 s 内消失：重连按 1、2、4…最多 20 s 退避（±20%）。
-- 两种布局、两种风格各跑，种子 7、21、42 各一轮。
+- `-probes YES`; `probe.agents-list` exports each visible Agent state/last line/questions; `probe.connection` header connection state.
+  Each has `at` (last change), compared to push time.
+- Mock:
+  - `/mock/truth` current authoritative data;
+  - `/mock/bump?what=rev|last|needs|ask|resolve` changes one thing, pushes whole-machine sessions/question like hub.
+- Cases/limits:
+  - Consistent at rest;
+  - During touch, Needs you/questions visible ≤1 s;
+  - Last line lands ≤0.5 s after release (assert 0.8 s including probe read);
+  - Sustained touch still lands ≤5 s (assert 5.5 s);
+  - Seeded random sequence (scroll/push/churn/chat navigation/foreground-background/offline pushes) converges ≤8 s; replay `TEST_RUNNER_JARVIS_SEED`;
+  - Tap right after fling opens the Agent actually seen;
+  - Offline title after 8-second grace (≤11 s), disappears ≤25 s after reconnect: backoff 1,2,4…max 20 s (±20%).
+- Both layouts/styles, seeds 7,21,42 each.
 
-### 体验模式（`DemoModeTests`、`DemoHubTests`）
+### Demo mode (`DemoModeTests`, `DemoHubTests`)
 
-不用 mock hub：`TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/DemoModeTests`，深色再跑一遍。
-`testWalkThroughAndLeave` 从配对页（`-openWelcome YES`）进体验模式，走一遍 Agents（筛选、细列表、Claude 会话发消息收到演示回复、终端、提问卡片作答、
-计划卡片、Codex 会话、表格和链接）、机器页和机器的 24 小时曲线、Persona（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
-每页断言没有「体验模式里没有这项数据」，最后从设置退出、重启后还在配对页；`testStaysAcrossLaunches` 断言体验模式重启后还在。
-跑完看模拟器日志里有没有页面要了 `DemoHub` 没有的接口：
-`xcrun simctl spawn <udid> log show --last 10m --predicate 'eventMessage CONTAINS "DemoHub miss"'`（应为空）。
-`DemoHubTests`（单元测试）让每个接口经 `APIClient` 解码，并检查副作用被拒、消息有回显和回复。
+No mock: `TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:PersonaUITests/DemoModeTests`, repeat dark.
+`testWalkThroughAndLeave` enters demo from pairing (`-openWelcome YES`), walks Agents (filters, compact, Claude send/demo reply, terminal, question answers,
+plan, Codex, tables/links), Machines/24-hour charts, Persona (main/sidebar/scheduled tasks), Inbox (Lark/mail),
+asserts no "This data isn't available in demo mode" on every page, exits via Settings, still pairing after relaunch. `testStaysAcrossLaunches` verifies demo persists.
+Inspect simulator logs for missing `DemoHub` APIs:
+`xcrun simctl spawn <udid> log show --last 10m --predicate 'eventMessage CONTAINS "DemoHub miss"'` (empty).
+`DemoHubTests` decodes each API via `APIClient`, checks side effects rejected and messages echoed/replied.
 
-- 列表行被快速筛选条（`safeAreaBar`）盖住时 XCUITest 仍说它 `isHittable`，点下去点到的是筛选条（「需要你」被选上）：点行之前把它滚到筛选条以下、tab 栏以上，
-  而且一次只拖三分之一屏（`swipeUp` 会甩过头）。
-- 对话页有两个「终端」按钮（展开的页头在时钟下面、折叠后的小页头里），取 `frame.minY > 40` 且能点的那个。
+- XCUITest still reports `isHittable` for rows covered by filter `safeAreaBar`, taps filter instead (Needs you selected). Scroll below filter/above tabs first,
+  drag only one-third screen per step (`swipeUp` overshoots).
+- Two Terminal buttons (expanded header under clock, compact header); choose hittable `frame.minY > 40`.
 
-### 助手活卡片的快照与事件（`AssistantLiveViewTests`，#2024）
+### Assistant live-card snapshots/events (`AssistantLiveViewTests`, #2024)
 
-用 `python3 scripts/mock/assistant_views_hub.py --port 0 --port-file /tmp/view-hub.port` 启动专用 loopback mock，端口由系统分配；读取端口后把本地地址传给
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests`。
-fixture 读取 `schema/extension/examples/assistant/progress.json` 和 `progress-updated.json`，初始快照为 version 1，`POST /mock/views/update` 推 version 2，
-`POST /mock/views/stale` 再推 version 1，但不改服务端最新快照。测试在实际 App 中检查进度文字就地更新、只有一条 feed 行，旧版本不能覆盖新版本；深浅色各跑一次并看截图。
+Dedicated loopback mock: `python3 scripts/mock/assistant_views_hub.py --port 0 --port-file /tmp/view-hub.port`, system-assigned port; read/pass
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/AssistantLiveViewTests`.
+Fixtures `schema/extension/examples/assistant/progress.json`, `progress-updated.json`: initial version 1, `POST /mock/views/update` pushes 2,
+`POST /mock/views/stale` pushes 1 without changing latest snapshot. Actual App checks progress updates in place, one feed row, stale cannot overwrite; light/dark with inspected shots.
 
-状态层单元测试 `AssistantViewsStoreTests` 检查 hub 组／对话隔离、版本单调、创建事件与快照乱序、无效归属、重连恢复、切换后旧请求不能回填，以及旧 hub 无 views 字段的兼容。
-`AssistantViewActionStateTests` 检查 `view_actions` 快照和 `assistant_view_action` 的 revision 顺序、已选内容不能被替换、View 更新不清除已答、旧格式和其他事件的 action 字段兼容，以及重连后恢复发送状态。
-统一组件中的交互由 `AssistantViewModelTests` 和 `AssistantViewAPITests` 检查：固定确认版本、同一选择只发送一次、未知结果重试原 CID、另一设备的记录优先、409 `view_changed` 不自动改版本重发，以及普通动作不能带 reply 覆盖。`AssistantActionSourceTests` 严格解析末尾来源标签，代码示例、坏标签和额外字段原样保留；`WatchAssistantFeedTests` 检查新 fallback 仍在创建位置、旧版本不覆盖和 HTML 不执行。
+`AssistantViewsStoreTests` checks hub-group/chat isolation, monotonic versions, create/snapshot reorder, invalid ownership, reconnect, stale requests after switch, old hub without views.
+`AssistantViewActionStateTests` checks revision ordering of `view_actions`/`assistant_view_action`, preserving selected content/answered state, old formats/other-event action fields, reconnect send recovery.
+`AssistantViewModelTests`, `AssistantViewAPITests`: pinned confirmation version, one send per choice, unknown retries original CID, other-device records win, no auto-version-change/retry after 409 `view_changed`, ordinary actions can't override with reply. `AssistantActionSourceTests` strictly parses final source tag; code examples/bad tags/extra fields retained verbatim. `WatchAssistantFeedTests`: new fallback remains at creation location, stale can't overwrite, HTML never executes.
 
-### 主对话富 UI 交互和共享示例（`AssistantRichCardTests`，#2024）
+### Main-chat rich UI interactions/shared samples (`AssistantRichCardTests`, #2024)
 
-`python3 scripts/mock/assistant_rich_ui_hub.py --port 0 --port-file /tmp/rich-ui-hub.port` 启动单独的 loopback 夹具，不读写真实主对话或账号。端口仍通过 `TEST_RUNNER_JARVIS_MOCK_HUB` 传给 UI 测试。手表截图使用另一实例加 `--watch`，只保留合成助手会话；给手表传该实例的 `-pairURL` 和 `-openWatchItem session`，不要改变正在跑 iOS UI 测试的夹具。
+`python3 scripts/mock/assistant_rich_ui_hub.py --port 0 --port-file /tmp/rich-ui-hub.port` runs an isolated loopback fixture, never real main chats/accounts. Pass port through `TEST_RUNNER_JARVIS_MOCK_HUB`. Watch shots use another instance with `--watch`, only synthetic assistant session; pass its `-pairURL`, `-openWatchItem session`, never alter running iOS fixture.
 
-- 表单：填写后原生确认、提交一次、显示已选和来源、重启后从 feed 恢复提交值。
-- 正文卡片：共享 fence 解析产生 item id／ordinal key；另一设备的选择事件到来后不能再提交。
-- 确认竞态：夹具只更新服务端版本、不发事件，旧确认回 `view_changed`，没有发送回复；草稿保留，重新确认才按新版本提交。
-- `testAllSharedSamplesAreVisibleAndCaptured` 逐个读取决策、比较表、进度、表单、图表和 HTML 共享示例。每种 `AppStyle` 用 `TEST_RUNNER_JARVIS_UI_STYLE` 固定，深浅色分别跑并看截图。HTML 未通过执行安全验收时必须是 fallback，不把接口 feature 当成执行许可。
+- Forms: fill, native confirmation, submit once, selected/source display, feed restores submitted values after restart.
+- Body cards: shared fence parsing creates item id/ordinal key; another-device selection event prevents resubmission.
+- Confirmation race: server version changes without event; stale confirmation returns `view_changed`, no reply sent; draft retained, new confirmation submits new version.
+- `testAllSharedSamplesAreVisibleAndCaptured` reads decision/comparison/progress/form/chart/HTML samples individually. Pin each `AppStyle` via `TEST_RUNNER_JARVIS_UI_STYLE`, run light/dark and inspect. HTML without execution-security acceptance must use fallback; API feature isn't permission to execute.
 
-### 助手的 HTML 卡片（`HTMLCardTests`、`AssistantHTMLCardTests`，#2025）
+### Assistant HTML cards (`HTMLCardTests`, `AssistantHTMLCardTests`, #2025)
 
-不用 hub：`-showSampleHTMLCard YES` 打开两张示例卡片（一张用于测试手动「运行」、一张可见时自动运行），截图看深浅色。`-showSampleHTMLCard open` 使用链接确认示例。
-`xcodebuild test … -only-testing:PersonaUITests/HTMLCardTests` 点网页里的「选 B」：先弹原生确认框、框里是要发的原文，发送后再点不再弹（一张卡片只发一次回复），「运行」「停止」换得过来。
-打开链接同样先确认；取消后本次运行不再弹，重新运行可以再问。已选的卡片仍可打开链接，打开不会消耗 reply 的一次性选择。
-单元测试 `AssistantHTMLCardTests` 真起一个沙箱 WKWebView：本机开一个端口，页面的 fetch、XHR、图片、样式表、iframe、WebSocket、beacon、`window.open`、跳走都打不到它，
-`document.cookie` 是空的，`window.persona` 改不掉，只认当前页面实例的主 frame 发给 `persona` 的 `reply` / `open`；另有不进沙箱的对照（同一个页面能打到端口），证明这项检查是真的。
-规则表加载用可控暂停点验证：旧编译晚于新编译完成也不能覆盖新页面；销毁后即使编译返回也不加载。没有规则表时不加载助手 HTML。卡片随可见性、tab 活跃状态和前后台状态释放 WebView，不把 `onAppear` 当成仍可见的依据。
+No hub: `-showSampleHTMLCard YES` opens two samples (manual Run, auto-run when visible), inspect light/dark. `-showSampleHTMLCard open` link-confirmation sample.
+`xcodebuild test … -only-testing:PersonaUITests/HTMLCardTests` clicks Choose B: native confirmation shows exact outgoing text, no second prompt after send (one reply/card); Run/Stop switch correctly.
+Links also confirm first; cancellation suppresses further prompts in that run, rerun may ask again. Selected cards still open links; links don't consume the one reply choice.
+`AssistantHTMLCardTests` uses real sandbox WKWebView: local listener receives no fetch/XHR/images/styles/iframe/WebSocket/beacon/`window.open`/navigation;
+`document.cookie` empty, `window.persona` immutable, only current instance's main-frame `reply` / `open` to `persona` accepted. Unsandboxed same-page positive control reaches port.
+Controlled rule-list compilation proves stale completion can't replace newer page, destroyed view doesn't load late compilation. No rules, no assistant HTML. Visibility/tab/foreground lifecycle releases WebViews; `onAppear` doesn't establish continued visibility.
 
-### Mac HTML 沙箱正常矩阵（#2025）
+### Mac HTML sandbox normal matrix (#2025)
 
-先 `eval "$(python3 scripts/persona_config.py env)"`，再执行 `python3 scripts/test/mac_html_security.py --output /tmp/<新的验收目录>`。目录必须不存在，失败／成功证据都不覆盖。驱动从当前 `AssistantHTMLCard.swift` 原样抽取请求类型与 Coordinator，记录整文件、抽取区间和测试 hash；复用当前安全测试，只把 UIKit 窗口换成禁止激活的隐藏 AppKit 窗口，加入独立空闲监听器、五轮资源探针和有界的 Mac 网络正对照。
+First `eval "$(python3 scripts/persona_config.py env)"`, then `python3 scripts/test/mac_html_security.py --output /tmp/<new acceptance directory>`. Directory must not exist; never overwrite success/failure evidence. Driver extracts request types/Coordinator unchanged from current `AssistantHTMLCard.swift`, records full-file/extraction/test hashes; reuses security tests, replacing UIKit window with hidden nonactivating AppKit window, adding idle listener, five resource-probe rounds, bounded Mac network positive controls.
 
-构建和测试均经 `~/.local/bin/xcode-slot`，使用临时 `HOME`／缓存目录；排队最多 3600 秒，与实际编译／测试预算分开（退出码 125 是排队超时，124 是实际运行超时）。测试 worker 一次性脱离 Agent 进程树，防端口发现误触；不筛 User-Agent，不停真实 node。listener 和 JS callback 有期限，外层记录并清理实际测试 PID／PGID，成功、失败和超时分别打印终态。任务完成后只移除本次 `.build`、临时 HOME 和缓存，源码、manifest、日志和 XML 结果保留。
+Build/tests use `~/.local/bin/xcode-slot`, temporary HOME/cache. Queue budget 3600 seconds separate from run budget (125 queue timeout, 124 execution timeout). Worker detaches once from Agent process tree to avoid port-discovery interference; no User-Agent filtering or stopping real node. Listener/JS callbacks have deadlines; outer harness records/cleans actual PID/PGID, prints success/failure/timeout terminal states. Afterwards removes only this `.build`, HOME/cache; source/manifest/log/XML retained.
 
-正常矩阵只证明本次精确 Coordinator 的网络／导航／bridge 和公开终止回调恢复；不覆盖 SwiftUI 卡片／`NSViewRepresentable` 整体接线，不证明真实 OS 杀进程、CPU／物理内存立即回收或硬配额。共享登录会话明确不运行 literal loop；该项必须在可从外部销毁的一次性 Mac VM／专用测试登录会话完成。正常矩阵通过也不自动开启 Mac execution gate，更不改变生产开关或触发 TestFlight。
+Normal matrix proves exact Coordinator networking/navigation/bridge/public termination-callback recovery only, not full SwiftUI/`NSViewRepresentable` wiring, actual OS process killing, immediate CPU/physical-memory recovery or hard quotas. Shared login sessions never run literal loops; that needs a disposable Mac VM/dedicated login externally destroyable. Passing normal matrix doesn't enable Mac execution gate, change production or trigger TestFlight.
 
-### 多 hub（`MultiHubTests`，[multi-hub.md](multi-hub.md)）
+### Multiple hubs (`MultiHubTests`, [multi-hub.md](multi-hub.md))
 
-三台假 hub 模拟「两组、其中一组两台」：A 单独一组（家里）；B、C 互联成一组（公司），C 拥有 MacBook。两组都有同 id 的机器、会话和交互，
-发错 hub 一眼就能看出来。`scripts/mock/mock_hub.py` 的互联字段（`MOCK_HUB_ID`、`MOCK_HUB_NAME`、`MOCK_MESH_PEERS`、`MOCK_MACHINE_OWNER`、
-`MOCK_MACHINE_NAMES`、`MOCK_MACHINES_KEEP`，`GET /mock/mesh`）见文件头的注释，不设时 mock 的输出和以前完全一样（`scripts/mock/test_mock_hub_mesh.py`）。
+Three mock hubs model two groups, one with two hubs: A alone (Home), B/C linked (Work), C owns MacBook. Both groups reuse machine/session/interaction ids,
+so wrong-hub routing is obvious. Mesh fields (`MOCK_HUB_ID`, `MOCK_HUB_NAME`, `MOCK_MESH_PEERS`, `MOCK_MACHINE_OWNER`,
+`MOCK_MACHINE_NAMES`, `MOCK_MACHINES_KEEP`, `GET /mock/mesh`) documented at file top; unset output unchanged (`scripts/mock/test_mock_hub_mesh.py`).
 
 ```sh
-PORT=18760 MOCK_HUB_ID=hub-a MOCK_HUB_NAME=家里 python3 scripts/mock/mock_hub.py &
-PORT=18761 MOCK_HUB_ID=hub-b MOCK_HUB_NAME=公司 \
-  MOCK_MESH_PEERS='[{"hub_id":"hub-c","name":"公司 2","endpoints":["http://127.0.0.1:18762"]}]' \
+PORT=18760 MOCK_HUB_ID=hub-a MOCK_HUB_NAME=Home python3 scripts/mock/mock_hub.py &
+PORT=18761 MOCK_HUB_ID=hub-b MOCK_HUB_NAME=Work \
+  MOCK_MESH_PEERS='[{"hub_id":"hub-c","name":"Work 2","endpoints":["http://127.0.0.1:18762"]}]' \
   MOCK_MACHINE_OWNER='{"macbook":"hub-c"}' MOCK_MACHINES_KEEP=server,macbook \
-  MOCK_MACHINE_NAMES='{"server":"工作服务器","macbook":"工作 MacBook"}' python3 scripts/mock/mock_hub.py &
-PORT=18762 MOCK_HUB_ID=hub-c MOCK_HUB_NAME="公司 2" \
-  MOCK_MESH_PEERS='[{"hub_id":"hub-b","name":"公司","endpoints":["http://127.0.0.1:18761"]}]' \
+  MOCK_MACHINE_NAMES='{"server":"Work server","macbook":"Work MacBook"}' python3 scripts/mock/mock_hub.py &
+PORT=18762 MOCK_HUB_ID=hub-c MOCK_HUB_NAME="Work 2" \
+  MOCK_MESH_PEERS='[{"hub_id":"hub-b","name":"Work","endpoints":["http://127.0.0.1:18761"]}]' \
   MOCK_MACHINE_OWNER='{"server":"hub-b"}' MOCK_MACHINES_KEEP=server,macbook \
-  MOCK_MACHINE_NAMES='{"server":"工作服务器","macbook":"工作 MacBook"}' python3 scripts/mock/mock_hub.py &
+  MOCK_MACHINE_NAMES='{"server":"Work server","macbook":"Work MacBook"}' python3 scripts/mock/mock_hub.py &
 TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://127.0.0.1:18761 \
   TEST_RUNNER_JARVIS_HUB_C=http://127.0.0.1:18762 xcodebuild test … -only-testing:PersonaUITests/MultiHubTests
 ```
 
-- 截图：`-pairURL <A> -pairURL2 <B> -pairURL3 <C>` 配三台（DEBUG；同一地址和凭据的 hub 重启后保持原来的组 id），再加页面参数：
-  `-tab dev`（合并的 Agents）、`-tab settings -openHubs YES`（设置 › hub）、`-tab settings -openMachines YES`（按组分块的机器页）、
-  `-openHub <组 id 或序号>`（当前 hub）。`-openSession` 可以写 `组 id|机器/会话`，不写组时按会话找。
-- 同组换 hub：在设置 › hub 看哪台标「在用」，对它 `GET /mock/down?s=40`（或按端口停掉它），十几秒内「在用」换到组里另一台，标题不变。
-- 只有一组时零变化：改动前在 `git worktree add --detach` 的副本里编一份 DEBUG 包，用同一份 mock（同一组启动参数、固定状态栏和时钟）拍 14 个界面 × 深浅色，
-  改动后再拍一遍逐像素比；同一个包连拍几次得到噪声（系统菊花、液态玻璃的边缘高光每次启动都不一样），比较时排除噪声，剩下的差异要逐张看。
-  设置首页「服务器」一节多出的「hub」一行是唯一允许的变化。
+- Shots: `-pairURL <A> -pairURL2 <B> -pairURL3 <C>` (DEBUG; same address/credentials retains group id across restart), plus
+  `-tab dev` merged Agents, `-tab settings -openHubs YES`, `-tab settings -openMachines YES` grouped Machines,
+  `-openHub <group id or index>` current hub. `-openSession` accepts `group id|machine/session`, otherwise finds by session.
+- Same-group failover: Settings › hub shows In use; `GET /mock/down?s=40` or stop by port. Within ~10+ seconds another group member becomes In use, title unchanged.
+- One-group zero change: build DEBUG before in detached worktree, same mock/group args/status bar/clock, 14 pages × light/dark;
+  repeat after, pixel compare. Repeated shots from same build identify noise (system spinner/Liquid Glass highlights vary per launch); exclude noise, inspect remaining differences.
+  Only allowed change: hub row added to Settings Server section.
 
-## SSH 隧道（`apple/Packages/PersonaSSH`，[network.md](network.md#经-ssh-隧道连-hub直连不通时的后备)）
+## SSH tunnels (`apple/Packages/PersonaSSH`, [network.md](network.md#经-ssh-隧道连-hub直连不通时的后备))
 
-**package 测试**（真 sshd + mock hub，不要 root、不碰本机的 ssh 配置）：
+**Package tests** (real sshd + mock hub, no root, no local SSH-config changes):
 
 ```sh
 cd apple/Packages/PersonaSSH
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # Command Line Tools 里没有 Testing 模块
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # Command Line Tools lacks Testing module
 ```
 
-每个用例在临时目录里起一个 `/usr/sbin/sshd -D`（当前用户、随机回环端口、自己的主机密钥和 authorized_keys，带 `restrict,port-forwarding,permitopen=` 的那一行），
-再起 `scripts/mock/mock_hub.py`（`PORT=0`）。覆盖：连接成功和 20 个并发请求、首次连接要确认指纹（指纹和 `ssh-keygen -lf` 一致）、指纹变了被拒且不自动重试、
-公钥未授权、目标端口不通、permitopen 不许的地址、服务器不可达、会话被杀后自动重拨、服务器停了再起来（退避后恢复、本机端口不变）、WebSocket 流式（经隧道收 hello 等推送、发 ping 收 pong）、停止后不再监听。
-全套约 7 秒。`swift test` 的输出要等跑完才出来，看进度设 `PERSONA_SSH_TRACE=<文件>`（夹具逐行写起停）。
+Each case starts `/usr/sbin/sshd -D` in a temporary directory (current user, random loopback port, own host key/authorized_keys with `restrict,port-forwarding,permitopen=`),
+plus mock hub (`PORT=0`). Covers success/20 concurrent requests, first-use fingerprint confirmation matching `ssh-keygen -lf`, changed fingerprint rejection/no autoretry,
+unauthorized key, unreachable target, denied permitopen, unreachable server, automatic redial after killed session, server restart/backoff recovery with same local port, WS hello/ping/pong, no listener after stop.
+About 7 seconds. `swift test` output arrives at end; `PERSONA_SSH_TRACE=<file>` logs fixture starts/stops live.
 
-**端到端**（真 hub）：本机另起一个专用 sshd（同上的配置，`ListenAddress 127.0.0.1`，authorized_keys 只放带 `permitopen="<hub 地址>:18660"` 的行），
-模拟器里的 App 用 DEBUG 参数指过去：
+**End-to-end** (real hub): dedicated local sshd as above, `ListenAddress 127.0.0.1`, authorized_keys only `permitopen="<hub address>:18660"`;
+simulator DEBUG args:
 
 ```sh
-# SSHRoute 的 JSON（字段见 Shared/HubTransport.swift）base64 后传，直接传 JSON 会被当成 plist 解析掉
-SEED=$(python3 -c 'import base64,json;print(base64.b64encode(json.dumps({"host":"127.0.0.1","port":<sshd 端口>,"user":"<用户>",
-  "target_host":"<hub 地址>","target_port":18660,"host_key":"SHA256:…","always":False}).encode()).decode())')
-scripts/app/personactl.py launch -- -pairURL "jarvis://pair?url=<直连不通的地址>&token=<token>" -seedSSHTunnel "$SEED" -tab settings -openSSHTunnel YES
+# base64 SSHRoute JSON (Shared/HubTransport.swift); raw JSON would be parsed as plist
+SEED=$(python3 -c 'import base64,json;print(base64.b64encode(json.dumps({"host":"127.0.0.1","port":<sshd port>,"user":"<user>",
+  "target_host":"<hub address>","target_port":18660,"host_key":"SHA256:…","always":False}).encode()).decode())')
+scripts/app/personactl.py launch -- -pairURL "jarvis://pair?url=<unreachable direct address>&token=<token>" -seedSSHTunnel "$SEED" -tab settings -openSSHTunnel YES
 ```
 
-App 自己生成的公钥从 `personactl.py find --id ssh.publicKey` 读（或用 `-seedSSHKey` 给一把测试密钥）。配对地址故意写成直连不通的（如 `http://hub.invalid:18660`）就是测后备；`"always": true` 加真 hub 地址测「总是走 SSH」。
-杀掉 sshd 的会话进程（`pgrep -P <sshd>` 及其子进程，权限分离下 socket 在子进程里）测重连；换 sshd 的主机密钥测拒绝。
+Read App-generated public key via `personactl.py find --id ssh.publicKey` (or test key `-seedSSHKey`). Unreachable pairing URL (e.g. `http://hub.invalid:18660`) tests fallback; `"always": true` with real hub URL tests Always use SSH.
+Kill sshd session (`pgrep -P <sshd>` plus descendants; privilege-separation socket in child) for reconnect; replace host key for rejection.
 
-**经隧道配对的 UI 测试**（`SSHTunnelPairingTests`，没有下列环境变量就跳过）：配对页填地址和 token → 「经 SSH 隧道连接」填服务器 → 系统弹窗里核对指纹、点「信任并保存」→「连接」。
+**Tunnel-pairing UI** (`SSHTunnelPairingTests`, skips without env below): pairing address/token→Connect via SSH tunnel/server→system fingerprint confirmation/Trust and Save→Connect.
 
 ```sh
-TEST_RUNNER_PERSONA_SSH_HOST=127.0.0.1 TEST_RUNNER_PERSONA_SSH_PORT=<sshd 端口> TEST_RUNNER_PERSONA_SSH_USER=<用户> \
-TEST_RUNNER_PERSONA_SSH_TARGET_HOST=<hub 地址> TEST_RUNNER_PERSONA_SSH_TARGET_PORT=18660 TEST_RUNNER_PERSONA_SSH_FP=SHA256:… \
-TEST_RUNNER_PERSONA_SSH_KEY=<测试密钥种子 base64> TEST_RUNNER_PERSONA_SSH_HUB_URL=http://hub.invalid:18660 TEST_RUNNER_PERSONA_SSH_HUB_TOKEN=<token> \
+TEST_RUNNER_PERSONA_SSH_HOST=127.0.0.1 TEST_RUNNER_PERSONA_SSH_PORT=<sshd port> TEST_RUNNER_PERSONA_SSH_USER=<user> \
+TEST_RUNNER_PERSONA_SSH_TARGET_HOST=<hub address> TEST_RUNNER_PERSONA_SSH_TARGET_PORT=18660 TEST_RUNNER_PERSONA_SSH_FP=SHA256:… \
+TEST_RUNNER_PERSONA_SSH_KEY=<test key seed base64> TEST_RUNNER_PERSONA_SSH_HUB_URL=http://hub.invalid:18660 TEST_RUNNER_PERSONA_SSH_HUB_TOKEN=<token> \
 xcodebuild test … -only-testing:PersonaUITests/SSHTunnelPairingTests
 ```
 
-## iOS 兼容验证（App 不改代码，验 hub 的改动）
+## iOS compatibility verification (unchanged App, hub changes)
 
-改 hub 的配对、鉴权、WebSocket 时，用当前的 iOS App 原样连一个本机测试 hub 验一遍（2026-10-31 P0 这样验过，`docs/archive/ios-p0-verification.md`）：
+After hub pairing/auth/WebSocket changes, connect current unchanged iOS App to local test hub (used for 2026-10-31 P0, `docs/archive/ios-p0-verification.md`):
 
-- 构建按模拟器 id 来（`-destination id=<udid>`，和 `scripts/app/sim.sh` 一样）。别加 `-sdk iphonesimulator`：它会把手表 target 也按 iPhone 模拟器编，
-  两个产物都叫 `Persona.app`，报「Multiple commands produce」。没有签名团队时加 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`。
-- DEBUG 版带 `-pairURL` 启动会跳过「用配对 token 换设备 token」（`DeviceCredentials.swift`）。要验换凭据：先带 `-pairURL` 启动一次
-  （配置写进 Keychain），再不带参数冷启动，App 就走真实的 `upgradeCredentials()`；查 hub 库里 `device_tokens` 有没有新行、`pair_tokens.used_at` 有没有填。
-- iOS 27 上 `simctl openurl jarvis://pair?...` 会弹「在 Persona 中打开？」确认框，脚本点不了，别用这条路配对。
-- 模拟器的 Keychain 卸载 App 后还在：同一台模拟器上前后两次配对，第二次 App 可能先拿到上一次的凭据，要么换一台新模拟器，要么先在 App 里断开。
+- Build by simulator id (`-destination id=<udid>`, like `scripts/app/sim.sh`). Don't `-sdk iphonesimulator`: it builds watch target as iPhone too,
+  both products `Persona.app`, Multiple commands produce. Without team use `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`.
+- DEBUG `-pairURL` skips pairing-token/device-token exchange (`DeviceCredentials.swift`). Verify upgrade by launching with `-pairURL` once
+  (Keychain config), then cold-launch no arguments for real `upgradeCredentials()`; inspect new `device_tokens` row and `pair_tokens.used_at`.
+- iOS 27 `simctl openurl jarvis://pair?...` prompts Open in Persona, not script-clickable; don't pair this way.
+- Simulator Keychain survives uninstall: second pairing may use old credentials; use new simulator or disconnect in App first.
 
-## herdr 联调
+## herdr integration
 
-`./scripts/test/test-herdr.sh`：起一个独立的 herdr 会话（`herdr --session jarvis-test-<pid> server`，无头，和你正在用的 herdr 互不相干，
-结束时按名字停掉），跑带 `herdrlive` 标签的测试：socket 和 CLI 结果一致、事件订阅；再在一个新建的临时目录里起一个 claude，
-依次验证信任对话框被认出（发消息拒绝 `dialog_open`）、按 option 回答（rev 核对、键从当前屏幕算）、空输入框放行、草稿拒绝
-（`input_draft`）、清空别的字不动、清空看到的那段后放行。本机没有 Go 时在 hub 机器上交叉编译测试二进制再拷回来。
-需要本机装了 herdr 和 claude（claude 只启动、不发消息）。
+`./scripts/test/test-herdr.sh` starts independent headless `herdr --session jarvis-test-<pid> server`, unrelated to active herdr,
+stopped by name afterwards. `herdrlive` tests compare socket/CLI, events; launch claude in new temporary directory,
+verify trust dialog detected (`dialog_open` refusal), option answers (rev check, keys from current screen), empty input allowed, draft refused
+(`input_draft`), unrelated text not cleared, clearing seen draft allows send. Without local Go, cross-build test binary on hub/copy back.
+Requires herdr/claude locally (claude starts but receives no message).
 
-## Codex 联调
+## Codex integration
 
-`./scripts/test/test-codex.sh`：Codex 的提问和审批卡片（`docs/codex.md`「提问和审批」）对真实 Codex 跑一遍。起一个独立的 herdr 会话（`jarvis-codex-<pid>`，
-结束时按名字停掉），在一个新建的临时 git 仓库里起 Codex，用 node 回答卡片的同一段代码（`codexAnswer`）作答，每个用例检查 rollout 和屏幕：
-async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开着、电脑上先答了）、审批（直接答、往上翻了、别的 tab 在前台、对话记录 pager 开着时
-拒绝并写理由、电脑上先答了）、提问后紧跟审批、Plan 模式的两道题（一道按选项、一道写自己的话）。
+`./scripts/test/test-codex.sh` tests real Codex question/approval cards (`docs/codex.md` ("Questions and approvals")), independent `jarvis-codex-<pid>` herdr
+(stopped by name), temporary git repo, same node `codexAnswer` code, checks rollout/screens per case:
+async questions (empty input/draft/0.163 expanded panel/already answered on computer), approvals (direct/scrolled/other tab foreground/transcript pager
+with denial reason/already answered), question then approval, two Plan questions (option/free text).
 
-- `JARVIS_CODEX_BINS="codex /path/to/other/codex"`：要测的 Codex（每个版本一份，比如 npm 装到临时目录的 `@openai/codex@0.163.0`）；
-  `JARVIS_CODEX_ARGS="-m <模型>"`：登录能用的模型（ChatGPT 登录不是每个模型都收）；`JARVIS_CODEX_ROUNDS`（默认 2）；
-  `JARVIS_CODEX_COLS=64` 每个版本再在 64 列的小窗口里跑一遍（`stty cols`：无头 herdr 的窗格分屏不会变窄）；`JARVIS_CODEX_CASES=a,b` 只跑这几个。
-- 用你自己的 `~/.codex` 登录，会发真实的（很小的）模型请求。信任临时目录会写进 `~/.codex/config.toml`，每个测试线程在 `~/.codex/sessions`
-  留一个 rollout：退出时两样都删掉。本机没有 Go 时在 hub 机器上交叉编译测试二进制再拷回来。
-- `JARVIS_CODEX_DAEMON_BINS="<0.163 的 codex>"`：守护进程路线（`docs/codex.md`「守护进程上的会话」）。测试自己起一个
-  `codex app-server --listen unix://<临时目录>/app.sock`（子进程，能杀掉重启；不碰正在用的守护进程），TUI 用 `--remote … -C <目录> -s read-only`
-  挂上去，node 关掉发现、只认这个 app-server，用一个假 hub 答卡片、看撤卡。用例：async / 阻塞提问、命令 / 改文件 / 权限审批、拒绝并写理由、
-  电脑先答、手机先答、同时答、守护进程重启、输入框有草稿时发消息，再加 `JARVIS_CODEX_BINS` 的第一个（比如 0.153）在旁边确认它走终端路线。
-  权限审批要 `features.request_permissions_tool`，测试的 app-server 会打开它。
-- 从手机新建（`docs/codex.md`「从手机新建」，`TestLiveCodexStart`）：按 `session.start` 的路子新建，第一条消息带引号、换行、`$`、反引号、中文和几千字。
-  三种：`JARVIS_CODEX_DAEMON_BINS` 的每个经 `--remote` 挂在测试自己的 app-server 上（app-server 路线）、同一个带 `-c` 的（终端路线，看「连接」的说明），
-  `JARVIS_CODEX_BINS` 的第一个（0.153）。每轮检查：回答在 60 秒内、带的就是这条消息开的 thread、rollout 里的第一条消息一字不差、这个窗格只有一条会话、
-  路由对、Codex 回了第一条也收到手机再发的一条；最后一个找不到命令的启动器要马上报错。新建要一个本机的 personad（`codex-start`），脚本一起编。
-  不跑不带参数的 0.163：它会自动启动或加入正在用的守护进程。`JARVIS_CODEX_TESTS="cards daemon start"`（默认三样都跑）挑着跑。
-- 每轮每个用例打一行 `LIVE <版本> round <n> <用例>: ok in <秒>`，失败时附上当时的屏幕；最后一行 `RESULT all: passed|FAILED`。
-  失败时屏幕上是 Codex 自己的模型服务错误（「Selected model is at capacity」之类，不是 Persona 的问题）就记一行 `SERVICE-RETRY` 再跑一次这个用例，
-  每个 RESULT 行报重试了几次——报告稳定性时要一起报，不能当成没发生。
+- `JARVIS_CODEX_BINS="codex /path/to/other/codex"` versions, e.g. temporary npm `@openai/codex@0.163.0`;
+  `JARVIS_CODEX_ARGS="-m <model>"` usable authenticated model (ChatGPT login not all models); `JARVIS_CODEX_ROUNDS` default 2;
+  `JARVIS_CODEX_COLS=64` also narrow-window runs (`stty cols`, headless splits don't narrow); `JARVIS_CODEX_CASES=a,b` selected cases.
+- Uses own `~/.codex` login, real tiny model calls. Trust writes `~/.codex/config.toml`, rollouts in `~/.codex/sessions`;
+  both cleaned on exit. No local Go: cross-build on hub/copy back.
+- `JARVIS_CODEX_DAEMON_BINS="<0.163 codex>"` daemon route (`docs/codex.md` ("Sessions on daemons")): tests own
+  `codex app-server --listen unix://<temporary directory>/app.sock`, restartable child, never active daemon. TUI `--remote … -C <directory> -s read-only`,
+  node discovery disabled, only this app-server, fake hub answers/withdraws cards. Async/blocking questions, command/edit/permission approvals, denial reasons,
+  computer-first/phone-first/simultaneous answers, restart, draft send; first `JARVIS_CODEX_BINS` (e.g. 0.153) alongside confirms terminal route.
+  Permission tests enable `features.request_permissions_tool` in test app-server.
+- Phone start (`TestLiveCodexStart`, `docs/codex.md` ("Creating from the phone")): real `session.start`, first message quotes/newlines/`$`/backticks/Chinese/thousands of characters.
+  Each daemon binary via `--remote` on own server (app-server route), same with `-c` (terminal route, Connection explanation), first BINS (0.153).
+  Each round: reply ≤60 s, correct thread, exact rollout first message, one session/pane,
+  correct route, second phone message received after first reply; missing-command launcher errors immediately. Needs local personad (`codex-start`), built by script.
+  Don't run no-argument 0.163; it joins/starts active daemon. `JARVIS_CODEX_TESTS="cards daemon start"` selects, default all.
+- Each round/case prints `LIVE <version> round <n> <case>: ok in <seconds>`, failure screen; final `RESULT all: passed|FAILED`.
+  Codex model-service errors (e.g. Selected model is at capacity, not Persona) log `SERVICE-RETRY` and rerun once;
+  each RESULT reports retry count—include in stability reports, not pretend absent.
 
-## 新手文案守门（`scripts/test/test_onboarding_copy.py`，#287）
+## New-user copy guard (`scripts/test/test_onboarding_copy.py`, #287)
 
-新用户上手时读到的字（引导卡、主对话的错误码、登录页、添加电脑、模型向导、各处空状态）里不能出现 hub.json、token（「配对码」不算）、jq、personad、TLS、node、herdr、
-launcher、localhost、`~/.`（[onboarding.md](onboarding.md) 8.1）。扫的范围在文件开头的 `SCOPES`：网页 i18n 和 hub 的 i18n 三种语言、Android `values` / `values-zh` / `values-ja` 里按前缀挑的键、
-iOS / Mac 几个 Swift 文件里的中文字面量（Apple 还没有词条文件）。`{name}`、`%1$s` 这类占位符不算。
+Onboarding copy (guide cards, main-chat errors, login, add computer, model wizard, empty states) must not mention hub.json, token (pairing code allowed), jq, personad, TLS, node, herdr,
+launcher, localhost, `~/.` ([onboarding.md](onboarding.md) 8.1). `SCOPES` at file top: web/hub i18n in three languages, Android prefixed keys in `values` / `values-zh` / `values-ja`,
+Chinese literals in some iOS/Mac Swift files (Apple has no catalog yet). Placeholders like `{name}`, `%1$s` excluded.
 
-- 在「高级」「详情」里、本来就要说这些词的：进 `ALLOW`，写清在哪、为什么。
-- 已经知道不对、有人在改的：进 `PENDING`，写 issue 号或设计里的工作项（Android #4032、iOS M2–M4）。改好了它会报「从 `PENDING` 拿掉」，新的违规不能往里加。
-- 新做的引导界面把它的词条文件或键前缀加进 `SCOPES`。
+- Legitimate advanced/details wording goes in `ALLOW`, with location/reason.
+- Known issues being fixed go in `PENDING`, issue/design work item (Android #4032, iOS M2–M4). Fixed entries trigger Remove from PENDING; no new violations added.
+- Add new onboarding catalogs/key prefixes to `SCOPES`.
 
-CI 的「Scripts tests」跑全部 `scripts/**/test_*.py`，它在里面；本地 `cd scripts/test && python3 -m unittest -v test_onboarding_copy`。
+CI Scripts tests includes it; local `cd scripts/test && python3 -m unittest -v test_onboarding_copy`.
 
-## 隐私扫描
+## Privacy scan
 
-`python3 scripts/privacy_check.py`：整个仓库（文件内容和路径）里不能有这台机器的私有值——`~/.config/persona/config.json` 里的
-主机、hub 地址、机器名、Apple 的各种 ID、邮箱，`~/.config/persona/private-words.txt`（一行一个：内部项目名、人名、内部工具名，
-自己维护）和 `CLAUDE.local.md` 里反引号括起来的值；另外任何私网 IPv4（文档网段 192.0.2.0/24 等除外）和真实域名下的邮箱
-（`example.*`、公共邮箱、`site/` 里公开的联系邮箱除外）。命中只报类型不报值（免得值进日志）。
-**不分机器都拦的名字**（#4967）：具体厂商和内部仓库的名字不进仓库，任何写法都算（大小写、连字符、下划线、空格、驼峰），规则是脚本里的 `BANNED_NAMES`（全仓只有那里写着它们）。
-CI 没有私有配置也照样拦；确实要用的能力做成扩展，名字由扩展自己带，主仓库只写通用说法（「中转 relay」「扩展提供的 IM 连接器」）。测试里的样例拆成几段拼起来，免得扫到自己。
-词表里只有一种大小写的词（全小写、全大写或首字母大写），只在原文那一段中间有「小写 → 大写」的驼峰拼接（`fooBar`）时不算：两个普通词拼成的标识符（设计 token、SF Symbol 名）刚好拼出词表里的词，会误拦全仓扫描和网页部署的 `prebuild`（#3819）。连驼峰写法也要拦的词，在词表里就写成带分界的（`FooBar`）。
-**只扫已跟踪的文件**（`git ls-files`）：新文件要先 `git add` 再跑，否则扫不到（2026-11-05 一份新设计文档里的机器 id 就这样漏过、推上了 PR 分支）。
-不算私有值的：回环地址（`127.0.0.0/8`、`::1`、`localhost`，带端口、带协议的也一样，config 或 `CLAUDE.local.md` 里写了也不算，比如 hub 地址是 `http://127.0.0.1:<端口>`、数据库是 `127.0.0.1:<端口>`；私网地址带端口照报）、文档段和 IETF 协议保留段（`192.0.0.0/24`，打包进来的 SDK 把 `192.0.0.192` 列成云元数据地址）、构建配置里装在 `/Applications` 下的 `xcode`（每台 Mac 都一样）、`config.example.json` 里本来就有的默认值（比如外部测试群组名）、仓库自己的 Go 模块路径（里面带 GitHub 用户名）、
-`CLAUDE.local.md` 里只是仓库路径 / 命令 / 配置键名的反引号内容（只有像 ID、主机、邮箱、IP 的才算），以及 `site/` 里的联系邮箱和站点域名
-（`app_store.feedback_email`、`privacy_url`，App Store 和 OAuth 同意屏幕本来就公开）。文档里说到机器用「hub 机器」「另一台 Mac」，
-示例里的机器 id 用 `server` / `laptop` 这类占位符。`release.sh` 打包前跑一遍；
-提交前跑：`git config core.hooksPath scripts/hooks`（`pre-commit` 查暂存的内容，`commit-msg` 查提交信息，`pre-push` 查推上去的提交相对 `origin/master` 改的文件和提交信息）。
-**合并前再拦一次**（#3696）：`scripts/hooks/merge-pr.sh <PR 号>` 取 PR 的 head，跑 `privacy_check.py --range origin/master..<head> --message <标题和正文>`，
-通过才 `gh pr merge --squash --delete-branch --match-head-commit <head>`（扫过的就是合进去的）。`--range <base>..<head>` 只看这段提交改到的文件（按 head 的内容，不看工作区）和这些提交的信息，几秒跑完。
-为什么不靠 CI：私有值来自每台机器自己的配置，CI 没有，只能查私网 IP、邮箱、npm 源这类通用规则；同理，合并的那台机器有那些值才挡得住。
-2026-11-05～06 定期发版 6 次被 `release.sh` 开头的全仓扫描拦下，都是带机器名的文档已经直接 `gh pr merge` 进了 master。
+`python3 scripts/privacy_check.py`: repository contents/paths must not contain this machine's private values from `~/.config/persona/config.json`:
+hosts, hub addresses, machine names, Apple IDs, emails; `~/.config/persona/private-words.txt` (one per line: internal projects/people/tools,
+maintained locally); backtick values in `CLAUDE.local.md`. Also any private IPv4 (except documentation ranges like 192.0.2.0/24) and real-domain emails
+(except `example.*`, public mailboxes, public `site/` contact). Reports type only, never value.
+**Names blocked on every machine** (#4967): specific vendor and internal-repository names never enter the repo, in any spelling (case, hyphens, underscores, spaces, camel case). Rules live in `BANNED_NAMES` in the script, their only location in the repo.
+CI enforces them without private config. Needed capabilities belong in extensions that supply their own names; the main repo uses generic wording ("relay", "extension-provided IM connector"). Test examples concatenate pieces to avoid matching themselves.
+A word listed only lowercase/uppercase/titlecase isn't matched across an internal lowercase→uppercase camel boundary (`fooBar`): ordinary-word identifiers (tokens/SF Symbols) can accidentally contain sensitive words, falsely blocking repo scans/web `prebuild` (#3819). To block camelcase too, list a boundary-bearing form (`FooBar`).
+**Only tracked files** (`git ls-files`): `git add` new files first or they're missed (2026-11-05, a new design doc's machine id escaped to PR).
+Not private: loopback (`127.0.0.0/8`, `::1`, `localhost`, including protocol/ports, even configured, e.g. `http://127.0.0.1:<port>` or database `127.0.0.1:<port>`; private addresses with ports still reported), documentation/IETF protocol reserved ranges (`192.0.0.0/24`, SDK uses `192.0.0.192` as cloud metadata), configured Xcode under `/Applications` (same on Macs), defaults already in `config.example.json` (e.g. external group), repo Go module path (GitHub username included),
+backtick paths/commands/config keys in `CLAUDE.local.md` (only ID/host/email/IP-like values count), and `site/` contact/site domain
+(`app_store.feedback_email`, `privacy_url`, already public for App Store/OAuth). Docs say hub machine/another Mac;
+example machine ids `server` / `laptop`. `release.sh` scans before packaging;
+precommit hooks: `git config core.hooksPath scripts/hooks` (`pre-commit` staged content, `commit-msg` commit message, `pre-push` changed files/messages against `origin/master`).
+**Block again before merge** (#3696): `scripts/hooks/merge-pr.sh <PR number>` fetches head, runs `privacy_check.py --range origin/master..<head> --message <title/body>`,
+then only passes to `gh pr merge --squash --delete-branch --match-head-commit <head>` (exact scanned head merges). `--range <base>..<head>` checks changed head-file contents and commit messages, not worktree, in seconds.
+Why not CI: private values come from local configs unavailable to CI, which only checks generic private-IP/email/npm rules; merge machine must possess values to block them.
+2026-11-05–06 six scheduled releases failed initial repo scan because machine-name docs had already been merged directly with `gh pr merge`.
 
-### npm 下载源拦截
+### npm registry guard
 
-所有目录下的 `package-lock.json` 和 `npm-shrinkwrap.json` 还会单独解析完整 JSON，检查 v1 的嵌套 `dependencies` 和 v2/v3 的
-`packages` 中每个 `resolved`。远程下载只接受 npm 官方公开 registry（`https://registry.npmjs.org`，缺省端口或 443），
-其他主机、HTTP、URL 用户名/密码、query/fragment、控制字符、反斜杠都拒绝；合法相对 `file:` 依赖和 workspace link 可以通过，
-绝对路径、远程 authority 及编码后伪装成远程路径的形式不行。损坏 JSON、重复键、非字符串 `resolved` 都报错，不能用 NUL 让锁文件被当成二进制跳过。
-这一项**不依赖本机配置或私词表**，报错只显示文件、行号、问题类型，不输出下载地址。`.invalid` 占位域名用于拒绝测试，不把真实内部域名写进规则或测试。
+Parse full JSON in every `package-lock.json` / `npm-shrinkwrap.json`, checking v1 nested `dependencies` and v2/v3
+`packages` `resolved` entries. Remote downloads only official public npm (`https://registry.npmjs.org`, default port/443);
+reject other hosts, HTTP, credentials, query/fragment, control characters, backslashes. Valid relative `file:` dependencies/workspace links allowed;
+absolute paths, remote authorities, encoded disguised remote paths rejected. Broken JSON, duplicate keys, nonstring `resolved` error; NUL can't make lockfiles skipped as binary.
+Independent of local config/private words, reports file/line/type only, never URL. `.invalid` placeholders in rejection tests, no real internal domains.
 
-- 网页手动检查：`cd web && npm run check:privacy`。
-- `npm run build` 的 `prebuild` 自动运行全仓隐私扫描，网页部署和公开发布都经过这个入口。
-- 外部服务仓库引用：`python3 -B scripts/test/test_external_service_refs.py`（CI 的隐私检查 job 也跑）。已跟踪的文本文件里不能有 `nwverse/<其他仓库>`（`#n`、链接都算）和 `<占位>/integrations/`、`<占位>/test/fixtures/` 这类外仓路径；经 API 接入的外部服务只引用公开契约（OpenAPI、公开文档、错误码）。Persona 公开依赖的仓库在脚本的 `ALLOWED_REPOS` 里写明理由，组织名本身（`"publisher": "nwverse"`）不算。
-- Python 回归测试：`python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`；`npm test` 不包含它。
-  包含公开 Go 二进制的依赖常量分类、依赖校验 / replace / 工具失败时拒绝，以及真实个人值不被公共常量掩盖的测试。
-  测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
-- hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
+- Web manual: `cd web && npm run check:privacy`.
+- Build `prebuild` automatically scans repo, used for web deployment/public publishing.
+- External repository refs: `python3 -B scripts/test/test_external_service_refs.py` (CI privacy job too). Tracked text cannot contain `nwverse/<other repo>` (including `#n`/links), `<placeholder>/integrations/`, `<placeholder>/test/fixtures/` external paths. External services connected through APIs only reference public contracts (OpenAPI/docs/error codes). Public dependencies in `ALLOWED_REPOS` with reasons; organization alone (`"publisher": "nwverse"`) doesn't count.
+- Python regressions: `python3 -B -m unittest discover -s scripts/release -p 'test*privacy*.py' && python3 -B -m unittest discover -s scripts/test -p 'test_privacy*.py'`; not in `npm test`.
+  Includes public Go dependency constants/classification, verification/replace/tool-failure refusal, personal values not hidden by public constants.
+  Isolated HOME/Git-config temporary repos test real hooks/staged-worktree differences, never main worktree index/history.
+- hooksPath is clone-local; new clones must run `git config`; files existing doesn't mean enabled.
 
-## 展开 / 折叠（`UnfoldTests`，#1123）
+## Expand / collapse (`UnfoldTests`, #1123)
 
-`-unfoldTrace YES`（DEBUG）让 App 自己量每一次展开 / 折叠（`UnfoldTrace`，`toggleInPlace` 和工作行的 `toggleWork` / `toggleRun`）：点下后 1.6 s 里
-每帧被点那一行在屏幕上的位置（它自己报的，`ChatPin`）、晚到的帧、最长的一帧，加上 `-perfCounts YES` 时画了哪些视图，结果放在 `probe.unfold`。
-用例点工作行（在最新处、在中间）、打开的工作行里的思考、工具、BeautifulUI 的工具胶囊，各开一次收一次，打印 `UNFOLD <场景> <什么>: moved … step …`；
-App 刚打开 6 s 时还量一段什么都不点的作对照（`idle`）。mock：`MOCK_LONG_HISTORY=1 MOCK_AGENTS=1`。
+DEBUG `-unfoldTrace YES` measures each unfold/fold (`UnfoldTrace`, `toggleInPlace`, work `toggleWork` / `toggleRun`): for 1.6 s after tap,
+per-frame tapped-row position (`ChatPin`), late frames, longest frame, and drawn views with `-perfCounts YES`, in `probe.unfold`.
+Cases toggle work at latest/middle, thinking/tools/BeautifulUI tool capsules inside work; logs `UNFOLD <scenario> <what>: moved … step …`.
+At 6 s after launch also measures untapped `idle` control. Mock `MOCK_LONG_HISTORY=1 MOCK_AGENTS=1`.
 
-- 量的时候测试不能去问 App：XCUITest 每查一次无障碍树都占 App 的主线程，0.1 s 查一次时每次点击都「掉」15–20 帧，安静地等 2.2 s 再读才是 0–3 帧；
-  同理 `probe.chat-rows` 每秒 10 次的更新也要关掉（开了 `-unfoldTrace` 就只画 `probe.unfold`）。
-- 位置以录屏为准（`scripts/diag/stream-scroll/vidpick.swift` 取帧）：App 自己报的位置可能差一帧。
-- 帧耗时要用开了优化的构建量（见下面「卡顿测量」），默认 Debug 的数字只能前后对比。
-- Mac 没有 UI 测试：`-unfoldTrace YES -showUnfoldLab YES` 让对话自己在最新处点开 / 收起最新的工作行两次，再往历史挪 40 pt 做两次，
-  每次的 `UNFOLD …` 打在控制台（启动时加 `NSUnbufferedIO=YES`，否则输出留在缓冲里，杀进程就丢）。mock 同上，`-openSession` 打开那个 Agent 对话。
+- Don't query App during measurement: each XCUITest accessibility snapshot occupies main thread; polling 0.1 s makes taps "drop" 15–20 frames, quiet 2.2 s then reading gives 0–3.
+  Disable `probe.chat-rows` 10 Hz too (`-unfoldTrace` only draws `probe.unfold`).
+- Video frames authoritative (`scripts/diag/stream-scroll/vidpick.swift`); App positions can differ by one frame.
+- Measure frame times optimized ("Jank measurement" below); default Debug numbers only relative comparisons.
+- Mac no UI tests: `-unfoldTrace YES -showUnfoldLab YES` auto-toggles newest work twice, moves 40 pt into history, twice again;
+  `UNFOLD …` to console (`NSUnbufferedIO=YES` or process kill loses buffered output). Same mock, `-openSession` Agent chat.
 
-## 新对话的第一条消息（`FirstMessageTests`）
+## First message in new chats (`FirstMessageTests`)
 
-发出后每 50 ms 记一次消息到输入框的距离（`FIRST <用例> <秒> <距离>`），断言不变（#1911）：助手的新对话（「新对话」页 → 对话页接手）、
-Agents 的新会话（空会话里发第一条，`MOCK_START_SECONDS` 后 Claude 才起来），再流一段回复。mock：`MOCK_ASSISTANT_START_SECONDS=2 MOCK_ECHO_SENT=1`。
-录屏对比用 `simctl io recordVideo` 和 `scripts/diag/stream-scroll/vidpick.swift` 取帧。
+After sending, every 50 ms measure message→input distance (`FIRST <case> <seconds> <distance>`), assert stable (#1911): new assistant chat (New Chat page→chat takeover),
+new Agent session (first send while empty, Claude starts after `MOCK_START_SECONDS`), then streamed reply. Mock `MOCK_ASSISTANT_START_SECONDS=2 MOCK_ECHO_SENT=1`.
+Video `simctl io recordVideo`, extract `scripts/diag/stream-scroll/vidpick.swift`.
 
-## 流式时的滚动（`StreamingScrollTests`，录屏逐帧量）
+## Scrolling during streaming (`StreamingScrollTests`, frame-by-frame video)
 
-看「流式时稳不稳」，截图和探针都不够（探针读的是 SwiftUI 的位置，会和屏幕差一拍，docs/lessons/ios.md）：录模拟器的屏，逐帧量。
-`SIM=<udid> OUT=/tmp/stream-shots scripts/diag/stream-scroll/run-ios.sh [用例…]` 每个用例起一个 mock hub、录屏、取回 App 的 `-scrollTrace`；
-`scripts/diag/stream-scroll/analyze.sh /tmp/stream-shots` 量每帧的位移、往回跳、一帧里的大变（回复消失一帧这种），跟随的用例再量最后一行到输入框的距离；
-`vidpick.swift` 按时间取出某几帧看。用例：跟随时长回复流式、先清空后到正式消息、看历史时流式、点 ↓、流式中往上拖、运行中的一轮、Agents 工作中。Mac 见 docs/mac.md「滚动实验」。
+Screenshots/probes aren't enough for streaming stability (probes read SwiftUI positions one beat off screen, docs/lessons/ios.md); record simulator and measure frames.
+`SIM=<udid> OUT=/tmp/stream-shots scripts/diag/stream-scroll/run-ios.sh [cases…]` starts mock per case, records video, retrieves `-scrollTrace`;
+`scripts/diag/stream-scroll/analyze.sh /tmp/stream-shots` measures displacement/backward jumps/large one-frame changes (reply disappears), plus last-row/input distance in following cases;
+`vidpick.swift` extracts timestamps. Cases: long streaming follow, clear→final message, history during stream, ↓, upward drag during stream, running turn, working Agents. Mac: docs/mac.md ("Scroll experiments").
 
-## 卡顿测量（掉帧统计）
+## Jank measurement (dropped frames)
 
-帧间隔用 App 自己统计（看时间花在哪用 Time Profiler，附加模拟器里的进程要带 `--device`，见下面「Agents 列表的结构推送」）：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，
-在对话里以快速轻扫的速度（3000pt / 2.5s）往历史翻 4 段、再翻回 4 段，`FrameStats` 记下每帧间隔，写到
-App 数据目录的 `Documents/frames.json`：卡顿次数（晚于半帧）、每秒卡顿毫秒（hitch ratio）、p50 / p95 / p99、最长一帧。
+App measures frame intervals (Time Profiler for attribution, simulator attach requires `--device`, see Agents structural pushes). DEBUG `-showAutoScroll YES` starts after 12 seconds,
+scrolls four history segments then four back at fast-swipe speed (3000pt / 2.5s). `FrameStats` writes
+`Documents/frames.json`: hitches (>half-frame late), hitch ms/second (ratio), p50/p95/p99, longest frame.
 
-- 用开了优化的 Debug 构建量（`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`，单独的 derivedData），
-  Debug 默认 -Onone 的数字没有意义；对照组用 `git worktree` 在旧提交上加同样的统计代码。
-- 打开长会话并 `-loadAll YES`；每个版本至少跑 3 次（模拟器波动不小）。
-- 看主线程在忙什么：跑的时候 `sample <pid> 18 1 -file out.txt`（系统自带，不需要 Instruments 授权），按「Main Thread」那一段统计。
+- Optimized Debug (`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`, separate derivedData),
+  default -Onone numbers meaningless; same instrumentation on old commit in worktree for control.
+- Long chat, `-loadAll YES`; ≥3 runs/version (simulator variance).
+- Main-thread attribution: `sample <pid> 18 1 -file out.txt` (built-in, no Instruments authorization), aggregate Main Thread.
 
-2026-10-26 一轮优化的结果（长会话 `codex 需求 leader`，3 次）：每秒卡顿 149–245ms → 156–171ms，最长一帧 0.5–2.4s → 0.5–0.9s，
-主线程上我们自己代码的采样从 ~1,900 降到 ~400；剩下的是 SwiftUI / CoreText 给新出现的行量文字、画字形。
+2026-10-26 optimization, long "Codex requirements leader" chat, 3 runs: hitch 149–245ms/s→156–171ms/s, longest 0.5–2.4s→0.5–0.9s,
+own main-thread samples ~1,900→~400; remaining SwiftUI/CoreText text measurement/glyph drawing for new rows.
 
-### Persona 页（长主对话）
+### Persona page (long main chat)
 
-mock 加 `MOCK_LONG_ASSISTANT=1`（主对话是 60 轮：每轮几个工具、一段带标题 / 列表 / 表格 / 代码块的长回复），`-app.tab assistant -showAutoScroll YES -perfCounts YES`。
-`-showAutoScroll` 现在依次量五段，每段一个 `Documents/frames-<段>.json`（每帧间隔、每帧主线程忙了多久 `busy_*`、
-50 ms 以上的长帧在第几秒 `long`、这段里各视图 body 的次数 `bodies`、hub 推送的主线程耗时 `push_ms`）：
+`MOCK_LONG_ASSISTANT=1`: 60 turns, each tools + long headed/list/table/code reply; `-app.tab assistant -showAutoScroll YES -perfCounts YES`.
+Five segments, `Documents/frames-<segment>.json`: intervals, main-thread `busy_*`,
+>50 ms frame times `long`, view `bodies`, push main-thread `push_ms`:
 
-| 段 | 做什么 | 脚本要配合的 |
+| Segment | Action | Script coordination |
 | --- | --- | --- |
-| idle | 停 8 秒 | 期间 `GET /mock/churn?n=14&ms=500` 推 14 轮 |
-| type | 每 120 ms 往草稿里加一个字，共 40 个 | — |
-| stream | 6 秒 | `frames-type.json` 一出现就 `GET /mock/say?stream=1&steps=60&ms=80&text=<长回复>`（hub 的节奏：每 80 ms 一个 delta） |
-| sweep | 原来的 8 段动画跳转（`scrollTo(point:)`，每段开头那一帧 SwiftUI 要估一大段行高，50–200 ms，手指滑不会这样） | — |
-| glide | 直接按显示帧移动列表的 `UIScrollView`，2000 pt/s 往历史 4 秒、回来 4 秒，最像手指滑 | — |
+| idle | Wait 8 s | `GET /mock/churn?n=14&ms=500`, 14 rounds |
+| type | Add one draft character/120 ms, 40 total | — |
+| stream | 6 s | When `frames-type.json` appears, `GET /mock/say?stream=1&steps=60&ms=80&text=<long reply>` (hub delta every 80 ms) |
+| sweep | Original 8 animated jumps (`scrollTo(point:)`, SwiftUI estimates many row heights at first frame, 50–200 ms, unlike finger scrolling) | — |
+| glide | Move list `UIScrollView` per display frame, 2000 pt/s, history 4 s/back 4 s, closest to finger scrolling | — |
 
-2026-11-01 改前（master e51a1a8）/ 改后，模拟器 iPhone 17 Pro（iOS 26.5），各 3–4 次：
+2026-11-01 before (master e51a1a8)/after, iPhone 17 Pro iOS 26.5 simulator, 3–4 runs each:
 
-| 段 | 指标 | 改前 | 改后 |
+| Segment | Metric | Before | After |
 | --- | --- | --- | --- |
-| idle（14 轮推送） | 推送的主线程合计 | 190–228 ms | 43–67 ms |
-| idle | 主线程超过 16 ms 的帧 | 7–14 | 1–4 |
-| idle | 回复 / 气泡 body 次数 | 638 / 603 | 约 30 / 12 |
-| stream | 超过 16 ms 的帧 | 21–40 | 7–12 |
-| stream | `ChatView` body 次数 | 33 | 1 |
-| glide | 掉帧（晚于 1.5 帧） | — | 0 |
-| type | 每个字主线程超过 8 ms 的帧（40 个字） | 24–35 | 2–3（输入框放进 `LayoutIsland` 后） |
+| idle (14 pushes) | Total push main-thread time | 190–228 ms | 43–67 ms |
+| idle | Main-thread frames >16 ms | 7–14 | 1–4 |
+| idle | Reply/bubble bodies | 638 / 603 | ~30 / 12 |
+| stream | Frames >16 ms | 21–40 | 7–12 |
+| stream | `ChatView` bodies | 33 | 1 |
+| glide | Dropped frames (>1.5 frames) | — | 0 |
+| type | Main-thread frames >8 ms per character (40 chars) | 24–35 | 2–3 (after `LayoutIsland`) |
 
-改了什么：用户气泡、回复、工作行、输入框改成 `Equatable`（页面每次推送都会重算，以前屏幕上和懒加载缓冲里的每一行跟着重算）；
-侧边栏关着时不读 `assistantConversations`（它读所有机器的所有会话）；顶栏的状态圆点拆成单独的视图（顶栏和它的菜单不再跟着推送重建）；
-流式回复按块切开（`StreamChunks`），写完的块不再重新解析排版，间距按主题的 margin 补；已经停在最新端时流式的「跟到最新」不再写 `ScrollPosition`。
-打字：每个字都让整页从根重新排版一次（输入框和列表在同一个 VStack 里，懒加载列表会重新量可见行）。现在输入框在自己的
-hosting controller 里排版（旧布局、BeautifulUI 以外的风格使用 `LayoutIsland`，`DesignSystem/LayoutIsland.swift`；BeautifulUI 的输入框菜单挂在输入框外面，放进去就点不到；页面的环境按值传进去，整份覆盖会让里面的控件不在无障碍树里，`ComposerAccessibilityTests`），页面只在它的高度变了（折行、上面多一个提示）时才重新排；
-新外壳的输入框保留原来的视图树：它从单行切成带按键栏的卡片，放进独立 hosting controller 后长文字会让无障碍快照卡死，不能套用旧布局的优化。
-`ComposerGrowTests` 查多行时它会长高、一直在键盘上面、删回一行会缩回去（新外壳和旧布局各一遍）。
+Changes: Equatable user bubbles/replies/work/input (previously all visible/lazy-buffer rows recalculated every push);
+closed sidebar avoids `assistantConversations` (all sessions/machines); independent header status dot (header/menu no push rebuild);
+`StreamChunks` splits streaming reply so finished blocks aren't reparsed/laid out, theme margins restore spacing; already-latest follow stops writing `ScrollPosition`.
+Typing formerly relaid whole page/root per character (input/list same VStack, lazy list remeasures). Input now has separate
+hosting controller (`LayoutIsland`, `DesignSystem/LayoutIsland.swift`, old layout except BeautifulUI whose externally attached input menu becomes untappable; pass environments by value, replacing whole environment removes accessibility controls, `ComposerAccessibilityTests`), whole page only relayouts when height changes (wrap/new notice).
+Shell input retains original tree: single-line→key-bar card, separate hosting controller makes long-text accessibility snapshots hang, so old-layout optimization doesn't apply.
+`ComposerGrowTests` verifies multiline growth, above keyboard, shrink to one line, both layouts.
 
-### 整个 App（任意页面）
+### Whole App (any page)
 
-`-showPagePerf YES`（DEBUG）：启动 10 秒后量 8 秒「停在页面上」（`frames-page-idle.json`；开始时写 `Documents/page-idle-started`，
-脚本看到它再 `GET /mock/churn?n=12&ms=500`，推送不会落到别的段里），然后找屏幕上最大的滚动视图，按显示帧往下滑 3 秒、往回 3 秒（2000 pt/s，
-`frames-page-glide.json`）。配合打开页面的启动参数：工作页 `-tab dev -app.tab chats`、收件箱 / 机器 `-openShellPage inbox|machines`、
-Agent 对话 `-openSession <machine>/<session>`。mock 用 `MOCK_AGENTS=1`（约 130 个 Agent）才看得出列表的开销。
+DEBUG `-showPagePerf YES`: after 10 s measures 8 s idle (`frames-page-idle.json`; writes `Documents/page-idle-started`,
+then script `GET /mock/churn?n=12&ms=500` keeps pushes in segment), largest visible scroll view glides down 3 s/back 3 s at 2000 pt/s,
+`frames-page-glide.json`. Target args: Work `-tab dev -app.tab chats`, Inbox/Machines `-openShellPage inbox|machines`,
+Agent chat `-openSession <machine>/<session>`. `MOCK_AGENTS=1` ~130 Agents reveals list cost.
 
-2026-11-01，iPhone 17 Pro 模拟器，各 2 次：
+2026-11-01 iPhone 17 Pro simulator, 2 runs/page:
 
-| 页面 | 12 轮推送的主线程合计 | 超过 16 ms 的帧（停 / 滑） |
+| Page | Total main-thread time for 12 pushes | Frames >16 ms (idle/glide) |
 | --- | --- | --- |
-| 工作（Agents 列表，130 个 Agent） | 约 375 ms → 82–88 ms | 15 → 1–4 / 1–2 |
-| 收件箱 | 19 ms | 6 / 8 |
-| 机器 | 44 ms | 2 / 7 |
-| 长 Agent 对话（`MOCK_LONG_HISTORY=1`） | 37 ms | 6 / 6 |
+| Work (130 Agents) | ~375 ms→82–88 ms | 15→1–4 / 1–2 |
+| Inbox | 19 ms | 6 / 8 |
+| Machines | 44 ms | 2 / 7 |
+| Long Agent chat (`MOCK_LONG_HISTORY=1`) | 37 ms | 6 / 6 |
 
-工作页的改动：hub 把每台机器的会话列表分开推（一轮好几条），以前每条都让读会话的页面各重算一遍；现在 25 ms 内到的合成一次
-（`AppModel.applyPendingSessions`），一轮推送从约 4 次 SwiftUI 更新变成 1 次。
+Work change: hub pushes sessions separately per machine, previously each recalculated session-reading pages. Coalesce arrivals within 25 ms
+(`AppModel.applyPendingSessions`), ~4 SwiftUI updates→1 per round.
 
-### 飞书页（会话页、收件箱，#674）
+### Lark pages (chat/Inbox, #674)
 
-同样用 `-showPagePerf YES -perfCounts YES`。mock 加 `MOCK_LARK_RICH=1`：f3 的历史里每 3 条有 1 条换成卡片、图片或富文本，像一个忙的工作群。
-会话页用 `-tab mail -openInboxItem lark:f3:300`，收件箱用 `-tab mail`。脚本看到 `page-idle-started` 后推
-`GET /mock/lark_churn?feed=f3&n=14&ms=500&new=1`：按 hub 的方式推 `{"type":"lark"}`，每轮先加一条别人发的消息；收件箱那页加 `&inbox=1`。
-`GET /mock/lark_churned` 返回已经推了几轮。
-`MOCK_INBOX_DELAY_MS=<毫秒>` 让 `/api/v1/inbox` 晚这么多毫秒才回，像一台慢的 hub：推送期间收件箱后台刷新时，列表不该上下跳（#1947）。
+`-showPagePerf YES -perfCounts YES`; `MOCK_LARK_RICH=1` makes every third f3 history message a card/image/rich text, like busy work group.
+Chat `-tab mail -openInboxItem lark:f3:300`, Inbox `-tab mail`. After `page-idle-started`,
+`GET /mock/lark_churn?feed=f3&n=14&ms=500&new=1`: hub-like `{"type":"lark"}`, new other-person message each round; Inbox add `&inbox=1`.
+`GET /mock/lark_churned` round count.
+`MOCK_INBOX_DELAY_MS=<milliseconds>` delays `/api/v1/inbox` like slow hub; background refresh during pushes mustn't jump list (#1947).
 
-2026-11-03 P-19（打开的会话每次推送都重拉最新一页，并在主线程解码 40 条消息）。iPhone 17 模拟器，同一段时间里改前、改后各跑 3 次：
+2026-11-03 P-19 (every chat push refetched latest page, decoded 40 messages on main). iPhone 17 simulator, before/after 3 runs in same period:
 
-| 段 | 指标 | 改前 | 改后 |
+| Segment | Metric | Before | After |
 | --- | --- | --- | --- |
-| idle（14 轮推送，每轮一条新消息） | 主线程超过 16 ms 的帧 | 2 / 4 / 0 | 0 / 1 / 0 |
-| idle | 主线程超过 8 ms 的帧 | 16 / 13 / 12 | 4 / 8 / 7 |
-| idle | 掉帧（晚于 1.5 帧） | 3 / 0 / 0 | 0 / 1 / 0 |
-| idle | 主线程上解码 `LarkMessages` 的采样数（`sample`，1 ms 一次） | 43 | 0 |
-| glide | 掉帧 | 8 / 7 / 13 | 7 / 9 / 8（这次没改滑动） |
+| idle (14 pushes/new messages) | Main-thread frames >16 ms | 2 / 4 / 0 | 0 / 1 / 0 |
+| idle | Main-thread frames >8 ms | 16 / 13 / 12 | 4 / 8 / 7 |
+| idle | Dropped frames (>1.5 frames) | 3 / 0 / 0 | 0 / 1 / 0 |
+| idle | Main-thread `LarkMessages` decode samples (`sample`, 1 ms) | 43 | 0 |
+| glide | Dropped frames | 8 / 7 / 13 | 7 / 9 / 8 (scroll unchanged) |
 
-改了什么：会话和话题的消息页改在后台线程解码（`APIClient.getDecodedOffMain`）；
-打开的会话最多每秒收到一次自己的变化通知（`LarkSync.chatGap`、`LarkChangeGate`），一阵推送合成一次，安静之后的第一条立刻送到。
+Changes: chat/thread pages decode off-main (`APIClient.getDecodedOffMain`);
+open chat receives own change at most once/second (`LarkSync.chatGap`, `LarkChangeGate`), bursts coalesce, first after quiet immediate.
 
-2026-11-03 P-20（会话页滑动时，每一行出现和消失都会写页面的 `@State`，整页 body 跟着重算）。master `995e33a5`（#777 之后），
-改前、改后交替跑 2 轮，每轮各 3 次，负载 16–60：
+2026-11-03 P-20 (appearing/disappearing rows wrote page `@State`, recalculating whole body). master `995e33a5` (after #777),
+2 alternating rounds ×3 runs each, load 16–60:
 
-| 段 | 指标 | 改前 | 改后 |
+| Segment | Metric | Before | After |
 | --- | --- | --- | --- |
-| glide | 掉帧 | 17 / 10 / 21，8 / 10 / 13 | 6 / 4 / 5，3 / 3 / 5 |
-| glide | 主线程超过 16 ms 的帧（6 次合计） | 48 | 11 |
-| glide | 主线程忙 p95 | 10.6–15.4 ms | 6.9–7.8 ms |
-| idle（14 轮推送） | 掉帧 | 1 / 0 / 0，0 / 1 / 0 | 全是 0 |
+| glide | Dropped frames | 17 / 10 / 21, 8 / 10 / 13 | 6 / 4 / 5, 3 / 3 / 5 |
+| glide | Main-thread frames >16 ms (6 total) | 48 | 11 |
+| glide | Main-thread busy p95 | 10.6–15.4 ms | 6.9–7.8 ms |
+| idle (14 pushes) | Dropped frames | 1 / 0 / 0, 0 / 1 / 0 | All 0 |
 
-改了什么：已看到的记录、上报已读的计时、回执的记账，都放进 `@State` 里的一个 class（`LarkChatBook`），写它不会让视图失效；
-会显示的（「N 条新消息」计数、回执）仍然放 state，只在真的变了时写。两次测量里 mock 收到的已读上报完全一样。
-剩下的掉帧主要是 SwiftUI 给新进来的卡片行排版：只放卡片时 5–7，只放图片或富文本时 0–4。
+Changes: seen records, read-report timing, receipt bookkeeping in `@State` class `LarkChatBook`, mutation doesn't invalidate view;
+visible new-message count/receipts remain state, written only on change. Mock read reports identical in both measurements.
+Remaining drops mainly SwiftUI layout of new card rows: cards-only 5–7, image/rich-text-only 0–4.
 
-### Agents 列表的结构推送（#343）
+### Agents structural pushes (#343)
 
-2026-11-05，master `870b0873f`，iPhone 17 Pro 模拟器，`MOCK_AGENTS=1`（140 个 Agent，19 个在工作），`-showPagePerf YES`，
-改前、改后交替跑 11 轮（`/mock/churn` 每轮都换了空间的顺序，列表的结构每次都变），取中位数。负载高（60–79），
-同一改动在负载 25–60 时另跑过一次 11 轮（那次的构建行外面还多套了 `.equatable()`，见 `lessons/ios.md`），列在括号里：
+2026-11-05 master `870b0873f`, iPhone 17 Pro, `MOCK_AGENTS=1` (140 Agents, 19 Working), `-showPagePerf YES`,
+11 alternating before/after rounds (each churn changes space order/list structure), medians, high load 60–79.
+Another 11 rounds at load 25–60 had extra `.equatable()` around constructed rows (lessons/ios.md); parenthesized:
 
-| 段 | 指标 | 改前 | 改后 |
+| Segment | Metric | Before | After |
 | --- | --- | --- | --- |
-| idle（12 轮推送） | 掉帧耗时（ms/s） | 27.6（26.6） | 18.9（10.4） |
-| idle | 掉帧 | 12（11） | 9（5） |
-| idle | 最长一帧的主线程 | 32.4 ms（33.6） | 25.0 ms（23.5） |
-| glide | 掉帧耗时（ms/s） | 13.8（10.2） | 16.7（11.3），这次没改滑动，在误差内 |
-| 40 轮推送（Time Profiler，各 1 次） | 主线程合计 | 1234 ms | 825 ms |
+| idle (12 pushes) | Hitch time (ms/s) | 27.6 (26.6) | 18.9 (10.4) |
+| idle | Dropped frames | 12 (11) | 9 (5) |
+| idle | Longest-frame main-thread time | 32.4 ms (33.6) | 25.0 ms (23.5) |
+| glide | Hitch time (ms/s) | 13.8 (10.2) | 16.7 (11.3), unchanged scrolling, within noise |
+| 40 pushes (Time Profiler, one each) | Main-thread total | 1234 ms | 825 ms |
 
-改了什么：结构变了时，列表 body 会给每一行重新构造它的修饰链（滑动操作、长按菜单、链接），占每次推送的五分之一；
-现在每行包在 `KeyedRow` 里，key（`SlotRowKey`）不变的行不再构造（跟着推送的最后一句和时间仍由行自己的 `FeedRow` 读）。
-另外 body 只算一遍要列的 Agent（筛选条在手机上不显示时也构造，又把所有 Agent 筛了两遍），`@StoredValue` 不在每个 Agent 的闭包里读；
-`AppModel` 只给有视图在看的空间排标签（`siblings(of:)`），不再每次推送给所有空间排序。
-同期对话页（长对话、流式）、收件箱、知识库量下来都接近 0（对话页 sweep 段是人为的快速大跨度翻动），没有改。
+Changes: structural list body rebuilt row modifier chains (swipe/menu/link), one-fifth of each push;
+`KeyedRow` keeps unchanged `SlotRowKey` chains (row `FeedRow` still reads live last line/time).
+Compute filtered Agents once (invisible phone filter was constructed and filtered all Agents twice), no `@StoredValue` reads inside each Agent closure;
+`AppModel.siblings(of:)` sorts only observed spaces, not all per push.
+Contemporaneous long/streaming chats, Inbox, Knowledge measured near 0 (chat sweep artificial large jumps), unchanged.
 
-Time Profiler 能用：附加到模拟器里的进程要带 `--device <模拟器 udid>`（`xcrun xctrace record --template 'Time Profiler' --device <udid>
---attach <pid> --time-limit 20s`，pid 取 `simctl launch` 的输出），再 `xcrun xctrace export --xpath '…/table[@schema="time-profile"]'`
-导出 XML 按主线程（栈里有 `UIApplicationMain`）汇总。不带 `--device` 会报找不到进程。
+Time Profiler works: `xcrun xctrace record --template 'Time Profiler' --device <udid>
+--attach <pid> --time-limit 20s`, pid from simctl launch; simulator attach needs `--device`.
+`xcrun xctrace export --xpath '…/table[@schema="time-profile"]'` XML, aggregate main-thread stacks containing `UIApplicationMain`; without device says process not found.
 
-## 侧边栏拖动（Persona tab）
+## Sidebar dragging (Persona tab)
 
-量拖动时每帧主线程的耗时，不用 Instruments（这台 Mac 上 xctrace 卡在授权）：DEBUG 的 `DrawerProbe`（`-showDrawerProbe YES`）在拖动开始到松手后
-0.6 秒里，用 run loop 的 afterWaiting / beforeWaiting（排在 Core Animation 提交之后）算每一帧里主线程忙了多久，加上 CADisplayLink 的帧间隔，
-拖动中和松手后分开统计，追加到 App 容器的 `Documents/drawer-probe.jsonl`；`DrawerPan` 每次拒绝 / 丢掉一个触摸也记一行（为什么没打开）。
+Per-frame main-thread timing without Instruments (local xctrace stuck on authorization): DEBUG `DrawerProbe` (`-showDrawerProbe YES`), drag start through
+0.6 s after release, run-loop afterWaiting/beforeWaiting (after Core Animation commit) measures busy time + CADisplayLink intervals,
+separate drag/post-release stats in `Documents/drawer-probe.jsonl`; `DrawerPan` logs rejected/dropped touches and reasons.
 
-- 手势本身：`DrawerSwipeTests`（mock 加 `MOCK_DRAWER=1`，主对话末尾有一个比屏幕宽的代码块），斜划、气泡上、快甩停下后、代码块上。
-- 数字别在 XCUITest 下量：它开着无障碍，SwiftUI 每帧多做很多事。用 `-showDrawerAutoDrag <轮数>`，`simctl launch` 启动、不接 XCUITest：
-  每轮拖开松手、拖回、半路松手（弹回）、快甩、点页面关闭，经过和手指一样的 `AssistantDrawer.dragBegan / drag / letGo`，每个显示帧一步。
-  用开了优化的 Debug 构建（`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`，单独的 derivedData）。对照组用 `git worktree`
-  在旧提交上加同样的 `DrawerProbe.swift` 和三个同名方法。
-- 侧边栏的深浅色（#4496）：`SidebarContrastTests` 截图量「收件箱」行左半边的亮度差（正常 0.9 以上，白字在浅底上只有几个百分点），反复开关、回主屏再回来、
-  `-showLookBlink 3`（每 3 秒把窗口切到另一种外观排一次版再切回，模拟后台拍快照）；`testRowsFollowALookChange` 要 `TEST_RUNNER_JARVIS_FLIP_LOOK=<文件>`，
-  测试往文件里写 light / dark，由跑测试的脚本 `simctl ui <udid> appearance` 切换后删掉文件（没设就跳过）。`TEST_RUNNER_JARVIS_SCHEME=light|dark` 加上 `-ui.scheme`。
-  确定性的回归在单测 `DrawerSidebarLookTests`（页面环境和窗口外观不一致时，侧边栏跟窗口）。
-- 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Persona.app/Persona"`，别的车道的模拟器也在跑 Persona）。
+- Gestures: `DrawerSwipeTests`, `MOCK_DRAWER=1` adds wider-than-screen code block, diagonal/bubble/after fling/code-block drags.
+- Don't benchmark under XCUITest: accessibility adds per-frame SwiftUI work. `-showDrawerAutoDrag <rounds>`, simctl launch without XCUITest:
+  each round open/release, close, halfway release/bounce, fling, tap close, same `AssistantDrawer.dragBegan / drag / letGo` per display frame.
+  Optimized Debug (`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`, separate derivedData); old worktree
+  same `DrawerProbe.swift` and three named methods.
+- Sidebar contrast (#4496): `SidebarContrastTests` measures left-half Inbox-row luminance difference (normally >0.9, white-on-light only a few percent), repeated toggles/home-return,
+  `-showLookBlink 3` switches window appearance/layout/back every 3 seconds like background snapshots. `testRowsFollowALookChange` needs `TEST_RUNNER_JARVIS_FLIP_LOOK=<file>`;
+  test writes light/dark, harness `simctl ui <udid> appearance` switches/deletes (skip if absent). `TEST_RUNNER_JARVIS_SCHEME=light|dark` adds `-ui.scheme`.
+  Deterministic `DrawerSidebarLookTests`: window appearance wins over mismatched page environment.
+- Main-thread sample `sample <pid> 30 1`; locate own simulator `pgrep -f "Devices/<udid>/.*Persona.app/Persona"` (other lanes run App too).
 
-2026-10-31 改前（master e4fca3b）/ 改后，模拟器 iPhone 18 Pro Max（60 Hz），长对话，每种 10 次（5 轮 × 2 次启动）：
+2026-10-31 before master e4fca3b/after, iPhone 18 Pro Max 60 Hz, long chat, 10 per action (5 rounds ×2 launches):
 
-| 操作 | 版本 | 次数 | 拖动中每帧主线程 p50 | 拖动中 p95 | 第一帧 | 拖动中最长 | 松手后最长 | 掉帧（拖动 / 松手后） |
+| Action | Version | Count | Drag main-thread p50/frame | Drag p95 | First frame | Longest drag | Longest after release | Drops (drag/after) |
 |---|---|---|---|---|---|---|---|---|
-| 拖开 | 改前 | 10 | 6.6 ms | 27.6 ms | 28.5 ms | 107.3 ms | 13.8 ms | 14 / 0 |
-| 拖开 | 改后 | 10 | 3.8 ms | 5.2 ms | 2.5 ms | 28.8 ms | 30.7 ms | 2 / 2 |
-| 拖回 | 改前 | 10 | 6.7 ms | 9.1 ms | 4.3 ms | 15.2 ms | 29.8 ms | 0 / 18 |
-| 拖回 | 改后 | 10 | 4.0 ms | 4.8 ms | 3.8 ms | 15.1 ms | 21.5 ms | 1 / 2 |
-| 半路松手 | 改前 | 10 | 6.4 ms | 24.0 ms | 24.3 ms | 35.5 ms | 23.3 ms | 12 / 20 |
-| 半路松手 | 改后 | 10 | 3.8 ms | 5.0 ms | 2.2 ms | 14 ms | 8.1 ms | 0 / 0 |
-| 快甩 | 改前 | 10 | 10.8 ms | 25.9 ms | 23.2 ms | 35.6 ms | 8.7 ms | 12 / 0 |
-| 快甩 | 改后 | 10 | 3.8 ms | 12.8 ms | 2.2 ms | 15.2 ms | 15.1 ms | 1 / 1 |
+| Open | Before | 10 | 6.6 ms | 27.6 ms | 28.5 ms | 107.3 ms | 13.8 ms | 14 / 0 |
+| Open | After | 10 | 3.8 ms | 5.2 ms | 2.5 ms | 28.8 ms | 30.7 ms | 2 / 2 |
+| Close | Before | 10 | 6.7 ms | 9.1 ms | 4.3 ms | 15.2 ms | 29.8 ms | 0 / 18 |
+| Close | After | 10 | 4.0 ms | 4.8 ms | 3.8 ms | 15.1 ms | 21.5 ms | 1 / 2 |
+| Halfway release | Before | 10 | 6.4 ms | 24.0 ms | 24.3 ms | 35.5 ms | 23.3 ms | 12 / 20 |
+| Halfway release | After | 10 | 3.8 ms | 5.0 ms | 2.2 ms | 14 ms | 8.1 ms | 0 / 0 |
+| Fling | Before | 10 | 10.8 ms | 25.9 ms | 23.2 ms | 35.6 ms | 8.7 ms | 12 / 0 |
+| Fling | After | 10 | 3.8 ms | 12.8 ms | 2.2 ms | 15.2 ms | 15.1 ms | 1 / 1 |
 
-「第一帧」是拖动开始那一帧，改前在这一帧里建整个侧边栏、藏 tab 栏（改安全区，整页重新布局）；「松手后最长」改前是关上最后一帧把 tab 栏放回来。
-掉帧（晚于 1.5 帧）合计 76 → 9。
-用 XCUITest 真拖（`testMeasureDrags`，`JARVIS_DRAWER_MEASURE=4`）：改后 16 次拖动每帧主线程 p50 约 4 ms、最长 15 ms，快甩全部打开；
-改前那一轮第一次快甩就没打开（松手速度 495pt/s 不到旧阈值 600），第一帧 18.6 ms，关上后 40–50 ms。
-模拟器跑在 Mac 的 CPU 上，绝对值比真机小，看相对变化；真机 120 Hz 每帧只有 8.3 ms。
+First frame = drag start, formerly builds sidebar/hides tab bar (safe-area whole-page relayout); longest post-release formerly final close frame restoring tabs.
+Total drops (>1.5 frames) 76→9.
+Real XCUITest drag (`testMeasureDrags`, `JARVIS_DRAWER_MEASURE=4`): after, 16 drags main-thread p50 ~4 ms, max 15, all flings open;
+before first fling failed (495pt/s below old 600 threshold), first frame 18.6 ms, close 40–50 ms.
+Simulator runs Mac CPU, absolute times smaller than device; compare relative changes. 120 Hz device has 8.3 ms/frame.
 
-## 推送回放（`TestPushReplay`）
+## Push replay (`TestPushReplay`)
 
-改 hub 推给 App 的东西（会话列表、实时活动的节奏）之前和之后，用同一段真实推送比：
+Compare same real pushes before/after hub session-list/Live Activity timing changes:
 
-1. 在 hub 机器上录：`cd server && go run ./cmd/pushrec 20m ~/push.jsonl`。它像 App 一样连 hub（用 `~/.persona/hub.json` 的 token，不打印；地址和 hub 一样取 `listen`，环境变量 `PERSONA_LISTEN` / `JARVIS_LISTEN` 优先），
-   不注册成手机 / 桌面、不打开对话，每条消息一行 `{"t": 毫秒, "msg": 原文}`。文件里是真实的会话（标题、最后一句），0600，**只留在那台机器上**，不拷走、不进仓库。
-2. 回放：`JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`。打印每种消息改前（录到的）和改后（这份代码会发的）
-   每分钟的条数和字节；实时活动按录到的时间把每次变化喂给合并和节流，打印 App 不开时每小时推几条、灵动岛和 hub 不一致连续最长多久，超过上限就失败。
-3. 会话列表用真的 `broadcastSessions` 决定发不发，并核对和「按录到的字节比」一致（解码不丢字段）；同时挂一个收增量的 App（`sessions_delta`），数它收到的。
-4. App 后台拉对话（`AgentSync`）的次数：`python3 scripts/diag/agentsync_replay.py ~/push.jsonl`，按录到的 `rev` 变化和当时的状态算（每分钟 45 次 → 9 次，见 `docs/ios.md`「后台同步」）。
+1. Record on hub: `cd server && go run ./cmd/pushrec 20m ~/push.jsonl`. App-like hub connection (token from `~/.persona/hub.json`, never printed; `listen` address, `PERSONA_LISTEN` / `JARVIS_LISTEN` override),
+   no phone/desktop registration or chat opening, `{"t": milliseconds, "msg": original}` per message. Contains real session titles/last lines, 0600, **stays on that machine**, never copied/committed.
+2. Replay `JARVIS_PUSH_RECORDING=~/push.jsonl go test ./internal/hub -run TestPushReplay -v`: before-recorded/after-generated
+   counts/bytes per minute; timestamped Live Activity changes pass through coalescing/throttling, report notifications/hour with App closed and longest island/hub mismatch, fail beyond limits.
+3. Real `broadcastSessions` decides sends, matches byte-comparison results (decode retains fields); parallel incremental App (`sessions_delta`) counted.
+4. Background `AgentSync` fetches: `python3 scripts/diag/agentsync_replay.py ~/push.jsonl`, recorded rev/state (45/min→9/min, `docs/ios.md` ("Background sync")).
 
-2026-11-02 录的 19 分钟（耗电排查，`docs/live-activity.md`「推送节奏」、`docs/server.md`「推送给 App 的量」）：
+19-minute recording 2026-11-02 (battery investigation, `docs/live-activity.md` ("Push cadence"), `docs/server.md` ("Push volume to App")):
 
-| | 改前 | 改后 |
+| | Before | After |
 | --- | --- | --- |
-| `sessions`（老 App：整表，一样的不发） | 36.9 条 / 分钟，2605 KB / 分钟 | 29.7 条，2452 KB |
-| `sessions`（新 App：增量） | 同上 | 29.7 条，79 KB |
-| 全部消息（新 App） | 104.9 条 / 分钟，2616 KB / 分钟 | 97.7 条，90 KB |
-| 连上时的会话快照 | 602 KB | 227 KB（不带 Codex 历史） |
-| 实时活动（App 不开） | 188 条 / 小时，不一致最长 2.5 秒 | 115 条，最长 29.2 秒（60 秒节流：60 条，58.8 秒） |
-| 实时活动（App 开着） | 同上 | 0 |
+| `sessions` (old App, whole list, unchanged skipped) | 36.9/min, 2605 KB/min | 29.7, 2452 KB |
+| `sessions` (new App, incremental) | Same | 29.7, 79 KB |
+| All messages (new App) | 104.9/min, 2616 KB/min | 97.7, 90 KB |
+| Connection session snapshot | 602 KB | 227 KB (no Codex history) |
+| Live Activity (App closed) | 188/hour, mismatch max 2.5 s | 115, max 29.2 s (60-second throttle: 60, 58.8 s) |
+| Live Activity (App open) | Same | 0 |
 
-## 实时活动截图（`LiveActivityShots`）
+## Live Activity screenshots (`LiveActivityShots`)
 
-`simctl io screenshot` 拍不到灵动岛和锁屏上的活动。UI 测试 `LiveActivityShots` 用 `-showFleetSample` 开一个编造的活动，
-回到主屏拍紧凑态（隔 0.4 秒两张，比对有没有动画）、长按灵动岛拍展开态（长按偶尔不生效，会再试一次存成 `expanded2`）、锁屏再点亮拍锁屏（首次会有系统的「允许实时活动」提示，测试会点允许），最后解锁：
+`simctl io screenshot` doesn't capture Dynamic Island/lock-screen activities. `LiveActivityShots` uses `-showFleetSample` for fictional activity,
+home compact state (two shots 0.4 s apart for animation), long-press expanded (sometimes retry `expanded2`), lock/wake screenshot (first Allow Live Activities prompt handled), then unlock:
 
 ```sh
 TEST_RUNNER_JARVIS_FLEET_SAMPLE=needsYou TEST_RUNNER_JARVIS_FLEET_DETAILS=YES TEST_RUNNER_JARVIS_FLEET_ISLAND=custom:assistant,load xcodebuild test … -only-testing:PersonaUITests/LiveActivityShots \
@@ -1002,7 +1002,7 @@ TEST_RUNNER_JARVIS_FLEET_SAMPLE=needsYou TEST_RUNNER_JARVIS_FLEET_DETAILS=YES TE
 xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /tmp/shots
 ```
 
-`JARVIS_FLEET_SAMPLE=current` 不启动 App，只拍活动现在的样子（配合真实 APNs 推送，见 `docs/live-activity.md` 验证一节）。
-和别的 App 的活动共用灵动岛：先 `scripts/app/island_peer.sh <模拟器 udid>` 装示例 App（`apple/IslandPeer`，只有一个「8分」的实时活动），
-再加 `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`，多拍 `-shared`（两个活动并存）和 `-landscape`（示例 App 在前台横屏，Persona 的活动单独在横屏的岛上）；
-`TEST_RUNNER_JARVIS_FLEET_COUNT=12` 把编造的数量都改成 12（看两位、三位数）。iPhone 18 Pro 和 17 Pro 的规则不同，两台都要拍（`docs/live-activity.md`「和其他 App 共用灵动岛」）。
+`JARVIS_FLEET_SAMPLE=current` doesn't launch App, captures current activity (real APNs, `docs/live-activity.md` verification).
+Shared island: `scripts/app/island_peer.sh <simulator udid>` installs sample `apple/IslandPeer` (one "8 min" activity),
+add `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`, extra `-shared` coexistence and `-landscape` (sample foreground landscape, Persona alone on island);
+`TEST_RUNNER_JARVIS_FLEET_COUNT=12` changes fake counts to 12 for two/three digits. iPhone 18 Pro/17 Pro differ, screenshot both (`docs/live-activity.md` ("Sharing Dynamic Island with other Apps")).

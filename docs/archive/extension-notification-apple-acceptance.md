@@ -1,55 +1,55 @@
-# Apple 扩展通知阶段验收（#1862，部分交付）
+# Apple extension notifications: phase acceptance (#1862, partial delivery)
 
-日期：2026-11-06。代码冻结：`fe49ab99eb9c0638d0ecf7cced1549934dbbb7aa`。
+Date: 2026-11-06. Code frozen at `fe49ab99eb9c0638d0ecf7cced1549934dbbb7aa`.
 
-## 本次交付
+## Delivered
 
-- iOS / macOS Notification Service Extension 交付前注册动态通知类别，App 启动时保留扩展类别并合并静态交互类别；前台通知展示前也注册。
-- 点通知带原始 `state` 打开完整扩展页面。前台按钮先领取、执行一次，再画结果，外观或页面重建不重放写操作；共用普通页面的链接、导航、失效刷新和结果提示。
-- 后台按钮按通知所属 hub 执行，文字输入作为 `values.text` 发送，只将 `toast` 显示为本地通知，不处理链接或导航结果。后台期限结束时取消请求并完成一次代理回调。
-- 未知、冲突或已断开的来源不回退到当前 hub；未知按钮、错误字段类型和非法路径不发送请求。去重区分组、通知 id 和可空的动作 id。
-- 系统 API 和 UI context 放到 Shared，Watch 目标通过兼容编译；这只是 API 准备，不代表系统位置接线完成。
+- The iOS / macOS Notification Service Extension registers dynamic notification categories before delivery; at launch the App keeps the extension categories and merges in the static interactive ones. They are also registered before a foreground notification is shown.
+- Tapping a notification opens the full extension page with the original `state`. A foreground button is claimed and run once before the result is drawn, so a change of appearance or a page rebuild does not replay the write. Links, navigation, stale-refresh and result toasts are shared with regular pages.
+- A background button runs against the hub the notification belongs to. Text input is sent as `values.text`. Only `toast` is shown, as a local notification; link and navigation results are ignored. When the background deadline ends, the request is cancelled and the delegate callback completes exactly once.
+- An unknown, conflicting or disconnected source never falls back to the current hub; unknown buttons, wrong field types and invalid paths send no request. Dedup keys on group, notification id and the optional action id.
+- System APIs and UI context moved into Shared, and the Watch target compiles through a compatibility layer. This only prepares the API; it does not mean the system placements are wired up.
 
-## 本地验证
+## Local verification
 
-Xcode 27.1；所有构建与测试均经 `~/.local/bin/xcode-slot` 顺序运行，模拟器为专用的原版 iOS 27.0 模拟器。
+Xcode 27.1. Every build and test ran sequentially through `~/.local/bin/xcode-slot`, on a dedicated stock iOS 27.0 simulator.
 
-| 验证 | 结果 |
+| Check | Result |
 | --- | --- |
-| `Persona build-for-testing` | 通过 |
-| `PersonaTests` 全量 | 1455 个测试、212 个 suite 全通过 |
-| `ExtensionSystemAPITests` / `ExtensionNotificationActionsTests` / `ExtensionNotificationRoutingTests` | 14 个定向测试通过，最终全量也包含它们 |
-| `PersonaWatch build`，watchOS Simulator | 通过；最低 watchOS 10 未抬高 |
-| `PersonaMac build`，generic macOS | 通过；没有启动 App 或抢焦点截图 |
-| `ExtensionNotificationUITests`，液态玻璃 / 浅色 | 3/3 通过 |
-| 同一 UI suite，液态玻璃 / 深色 | 3/3 通过 |
-| `scripts/test/test_extension_notifications_mock.py` | 4 个测试通过 |
-| `scripts/test/test_doc_paths.py` | 7 个测试通过 |
+| `Persona build-for-testing` | Pass |
+| Full `PersonaTests` | 1455 tests in 212 suites, all pass |
+| `ExtensionSystemAPITests` / `ExtensionNotificationActionsTests` / `ExtensionNotificationRoutingTests` | 14 targeted tests pass; the final full run includes them too |
+| `PersonaWatch build`, watchOS Simulator | Pass; minimum watchOS 10 not raised |
+| `PersonaMac build`, generic macOS | Pass; the App was not launched and no focus-stealing screenshots were taken |
+| `ExtensionNotificationUITests`, Liquid Glass / light | 3/3 pass |
+| Same UI suite, Liquid Glass / dark | 3/3 pass |
+| `scripts/test/test_extension_notifications_mock.py` | 4 tests pass |
+| `scripts/test/test_doc_paths.py` | 7 tests pass |
 | `scripts/privacy_check.py` | clean |
-| `scripts/gen/extension_schema.py --check` | 通过 |
+| `scripts/gen/extension_schema.py --check` | Pass |
 
-UI 回归实际操作 SpringBoard 通知，覆盖文字回复、前台处理和点通知本身。mock 核对动作只发一次、原始 state 和输入文字、后台不打开页面；前台结果提示的合并无障碍元素实际存在且可见。
+The UI regressions drive real SpringBoard notifications and cover text reply, foreground handling and tapping the notification itself. The mock checks that an action is sent only once, carries the original state and the typed text, and that background handling opens no page. The merged accessibility element of the foreground result toast really exists and is visible.
 
-已查看通知按钮、前台动作结果、普通点按页面的深浅色截图。保存的普通点按页面证据：
+Screenshots of the notification buttons, foreground action results and the regular tap page were reviewed in light and dark. Saved evidence for the regular tap page:
 
-- [液态玻璃 / 浅色](../screenshots/extension-notification-apple-glass-light.png)
-- [液态玻璃 / 深色](../screenshots/extension-notification-apple-glass-dark.png)
+- [Liquid Glass / light](../screenshots/extension-notification-apple-glass-light.png)
+- [Liquid Glass / dark](../screenshots/extension-notification-apple-glass-dark.png)
 
-此前失败没有作为通过：修复了 actor 传递非 Sendable SDK 对象、依赖工厂调用、夹具准备时序、系统回复栏的 TextView 定位、系统页面 toast 缺失及合并无障碍元素定位后，重新执行上述验证。
+Earlier failures were not counted as passes. The verification above was rerun after fixing: an actor passing a non-Sendable SDK object, dependency factory calls, fixture setup timing, locating the TextView in the system reply bar, a missing toast on system pages, and locating the merged accessibility element.
 
-## 主分支同步后的补验
+## Re-verification after syncing with master
 
-重基线到 `8520b954c` 后的代码：`79a7d4597e73d7074da4b9c6a2385177d4eeebd2`。唯一手工冲突位于 App 启动处：保留上游 `QuickAction.publish()`，合入紧邻的通知类别注册；其余提交自动重放。
+Code after rebasing onto `8520b954c`: `79a7d4597e73d7074da4b9c6a2385177d4eeebd2`. The only manual conflict was at App launch: kept upstream's `QuickAction.publish()` and merged the notification category registration right next to it; all other commits replayed automatically.
 
-- 同步后 `Persona build-for-testing` 通过；隐私与生成类型一致性检查通过。
-- 定向测试补跑在 `xcode-slot` 中排队 40 分钟，日志只有「all 2 slots busy, waiting」，超时退出 124，**测试未开始**。依赖它的浅色 UI 补跑未执行；不能将它们记为同步后通过。
-- 本次通知逻辑的完整验证仍以上述冻结的 1455 个单测和深浅色各 3/3 UI 回归为证据。没有用编译通过代替单测，也没有重跑或绕过全机槽位限制。
-- PR 的隐私、脚本、schema 等 CI 检查实际为 QUEUED，没有运行或通过；按项目与用户约定，以已完成的本地验证合并。
+- After the sync, `Persona build-for-testing` passes; the privacy and generated-type consistency checks pass.
+- The targeted test rerun queued in `xcode-slot` for 40 minutes, with only "all 2 slots busy, waiting" in the log, and exited 124 on timeout: **the tests never started**. The light UI rerun that depends on it did not run. Neither can be recorded as passing after the sync.
+- Full verification of this notification logic still rests on the frozen run above: 1455 unit tests and 3/3 UI regressions in each of light and dark. A passing build was not used in place of unit tests, and the machine-wide slot limit was not rerun or bypassed.
+- The PR's CI checks (privacy, scripts, schema, etc.) were actually QUEUED; they did not run or pass. Per the project and user convention, the PR was merged on the completed local verification.
 
-## 未验证与未完成
+## Not verified / not done
 
-- Xcode 26.0 环境不可用，26.0 未实编；不改变最低编译器政策。
-- GitHub CI 不作为本地通过结果。项目自建 runner 停用时，按约定以本地验证合并；PR 单独记录 CI 实际状态。
-- `simctl push` 不执行 NSE。本地通知共用类别注册逻辑，可证明系统按钮及 App 回调，不能证明真机直连 / relay APNs 首条后台通知的 NSE 送达；该边界仍待真机验证。
-- 主屏幕小组件、Watch 表盘组件和 App Intents 还未完成接线。草稿未纳入本次提交，#1862 保持打开。
-- 没有发布 TestFlight，没有访问 iCloud，没有改变生产配置、凭据或签名资料，没有发送真实 APNs 通知。
+- No Xcode 26.0 environment was available, so 26.0 was not actually compiled; the minimum-compiler policy is unchanged.
+- GitHub CI is not counted as a local pass. While the project's self-hosted runner is disabled, merging on local verification follows the convention; the PR records the real CI status separately.
+- `simctl push` does not run the NSE. Local notifications share the category registration logic, which proves the system buttons and App callbacks, but not NSE delivery of the first background notification over direct or relay APNs on a real device. That boundary still needs real-device verification.
+- Home Screen widgets, Watch complications and App Intents are not wired up yet. Drafts are not part of this commit; #1862 stays open.
+- No TestFlight release, no iCloud access, no change to production config, credentials or signing material, no real APNs notification sent.
