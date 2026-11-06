@@ -196,9 +196,12 @@ struct ChatsView: View {
     private var ownsTop: Bool { widthClass != .regular }
     /// The field on its way up into the bar's row, animated (`AgentsHeader.up`).
     private var fieldUp: Bool { header.up }
+    /// Laid out for searching (`AgentsHeader.compact`).
+    private var headerCompact: Bool { header.compact }
     #else
     private var ownsTop: Bool { false }
     private var fieldUp: Bool { false }
+    private var headerCompact: Bool { false }
     #endif
     @State private var showNew = false
     /// The ⋯ menu's actions, kept current by the list (not observed: see `AgentsListMenu`).
@@ -357,7 +360,7 @@ struct ChatsView: View {
         // (`searchedBeforePush` set): the bar stays away rather than flash back for that moment.
         .overlay(alignment: .top) {
             ZStack {
-                if let shell, path.isEmpty, ownsTop, !header.compact {
+                if let shell, path.isEmpty, ownsTop, !headerCompact {
                     // Fades with the field coming up into its row (`AgentsTopBarFade`), from the same animation. Gone
                     // once the field is up (`compact`: set when the rise ends, cleared before the way down): faded out,
                     // its controls were still in the accessibility tree over the field, ☰ found there and tappable.
@@ -2981,7 +2984,9 @@ private struct AgentsEdge: ViewModifier {
         #if os(iOS) || os(visionOS)
         if ownsTop {
             content
+                #if os(iOS)
                 .scrollEdgeEffectStyle(room ? .hard : nil, for: .top)
+                #endif
                 .scrollEdgeEffectHidden(!header.rowsUnder, for: .top)
         } else {
             content
