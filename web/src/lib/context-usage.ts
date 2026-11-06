@@ -154,11 +154,9 @@ const details = flag("agent.details");
 const asUsed = flag("agent.contextUsed");
 
 /** Settings › Appearance › "Show agent details": the sidebar rows' second line and the session header's model + context bar. */
-export const getAgentDetails = details.get;
 export const setAgentDetails = details.set;
 export const useAgentDetails = details.use;
 
 /** Settings › Appearance › "Show context as used": the context shown as what is used instead of what is left (rows and header). */
-export const getContextAsUsed = asUsed.get;
 export const setContextAsUsed = asUsed.set;
 export const useContextAsUsed = asUsed.use;

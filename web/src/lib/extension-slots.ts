@@ -10,8 +10,6 @@ import { isResumed } from "./reconnect";
 import { getState, onHubEvent, useStore } from "./store";
 import { extIdOf, hubHasExt, newRoutes } from "./extension-api";
 
-export const SLOTS_FEATURE = "plugin_ui_slots";
-
 /** Whether the hub has UI slots: extension_ui_slots (#1844), or plugin_ui_slots before it. */
 export const hasSlots = (features: string[]) => hubHasExt(features, "ui_slots");
 

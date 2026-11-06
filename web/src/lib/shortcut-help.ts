@@ -10,7 +10,6 @@ function set(next: boolean) {
   subscribers.forEach((f) => f());
 }
 
-export const openHelp = () => set(true);
 export const closeHelp = () => set(false);
 export const toggleHelp = () => set(!open);
 

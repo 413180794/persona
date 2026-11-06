@@ -28,8 +28,6 @@ export const MAX_ROWS = 500_000;
 /** Cells kept per workbook, across sheets (a wide sheet hits this before MAX_ROWS). */
 export const MAX_CELLS = 20_000_000;
 
-export const SHEET_EXTS = ["csv", "tsv", "tab", "xlsx", "xlsm", "xlsb", "xls", "ods", "numbers"];
-
 /** Which separator a delimited text file uses: TSV by name, else the commonest of , ; tab on the first lines. */
 export function separatorOf(name: string, text: string): string {
   const ext = name.toLowerCase().split(".").pop() ?? "";

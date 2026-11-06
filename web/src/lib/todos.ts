@@ -481,11 +481,6 @@ export async function setDecisionSupersedes(todoId: string, id: string, supersed
 
 // ── API helpers ──────────────────────────────────────────────
 
-export async function fetchTodos(): Promise<Todo[]> {
-  const r = await api<{ todos: Todo[] }>("/todos");
-  return r.todos ?? [];
-}
-
 export async function createTodo(title: string, notes?: string): Promise<Todo> {
   const r = await api<{ todo: Todo }>("/todos", {
     method: "POST",

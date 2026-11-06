@@ -1,24 +1,12 @@
 // Derived lists the sidebar, the home page and the palette share.
 import { useMemo } from "react";
 import { stateOf } from "./format";
-import { buildSpaces, splitAgentSessions, type Space } from "./agent-groups";
 import { useStore } from "./store";
 import type { Session } from "./types";
-
-export type { Space };
 
 export function useAgentSessions(): Session[] {
   const by = useStore((s) => s.sessions);
   return useMemo(() => Object.values(by).flat().filter((s) => !s.assistant), [by]);
-}
-
-export function useSpaces(): { spaces: Space[]; loose: Session[]; recent: Session[] } {
-  const all = useAgentSessions();
-  const machines = useStore((s) => s.machines);
-  return useMemo(() => {
-    const { live, recent } = splitAgentSessions(all, machines);
-    return { ...buildSpaces(live, machines), recent };
-  }, [all, machines]);
 }
 
 /** The agents by state. `badge` is the sidebar's "Needs you" count: without quiet tasks' agents, which the main conversation

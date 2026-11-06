@@ -1,7 +1,7 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
 // is the first entry (the app opens on the assistant); a new conversation and a new agent are the "+" of their sections (#1239).
 import { BASE } from "../lib/base";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
@@ -119,23 +119,24 @@ function useScrolled(ref: React.RefObject<HTMLElement | null>): boolean {
  *  touched (wheel, pointer, keys): it may come later, and rows loading above it push it down.
  *  The box is measured after each render and again whenever the list's layout moves without one (#2476): a group
  *  folding or opening (its Collapse animates, then ends), rows arriving or changing height, scrolling. It covers only
- *  the part of its row on show and goes away when the row is folded away or gone (lib/glide.ts). */
+ *  the part of its row on show and goes away when the row is folded away or gone (lib/glide.ts).
+ *  The row under the pointer is kept in a ref and the box in a small store only GlideHighlight reads: hovering
+ *  re-measures and moves the box without re-rendering the list that holds the rows. */
 function useGlide(activeKey: string) {
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const lastKey = useRef<string | null>(null);
   const following = useRef(false);
-  const [hovered, setHovered] = useState<string | null>(null);
-  // `at`: the last place it was on show; a box that goes away (`on` false) fades out there, and glides from there back
-  const [box, setBox] = useState<{ at: GlideBox | null; on: boolean }>({ at: null, on: false });
-  const target = useRef<string>(activeKey);
-  target.current = hovered ?? activeKey;
+  const hovered = useRef<string | null>(null);
+  const [box] = useState(glideStore);
+  const active = useRef(activeKey);
+  active.current = activeKey;
   const sizes = useRef<ResizeObserver | null>(null);
   const measure = useRef(() => {});
   measure.current = () => {
     const n = nav.current;
     // the box rests under the open row when the pointer is away, so it glides from there; that row's fill covers it
-    const el = rows.current.get(target.current);
+    const el = rows.current.get(hovered.current ?? active.current);
     let next: GlideBox | null = null;
     if (n && el?.isConnected) {
       const clips: Span[] = [];
@@ -143,7 +144,7 @@ function useGlide(activeKey: string) {
       next = glideBox(el.getBoundingClientRect(), clips, n.getBoundingClientRect(), n.scrollTop);
     }
     // only a real move updates
-    setBox((b) => (next ? (b.on && sameBox(b.at, next) ? b : { at: next, on: true }) : b.on ? { at: b.at, on: false } : b));
+    box.set((b) => (next ? (b.on && sameBox(b.at, next) ? b : { at: next, on: true }) : b.on ? { at: b.at, on: false } : b));
   };
   useEffect(() => {
     const n = nav.current;
@@ -208,14 +209,43 @@ function useGlide(activeKey: string) {
       };
     };
   });
-  const highlight = (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
-      style={glideStyle(box.at, box.on, EASE)}
-    />
-  );
-  return { nav, reg, hover: setHovered, highlight };
+  // one function for the list's life: it moves the box straight away (as a render's layout effect did) and changes
+  // nothing the rows or the list render from
+  const [hover] = useState(() => (k: string | null) => {
+    hovered.current = k;
+    measure.current();
+  });
+  const highlight = <GlideHighlight box={box} />;
+  return { nav, reg, hover, highlight };
+}
+
+/** Where the box is: `at` is the last place it was on show; a box that goes away (`on` false) fades out there, and
+ *  glides from there back. */
+type GlideState = { at: GlideBox | null; on: boolean };
+
+/** The box's place outside React state, so moving it re-renders only GlideHighlight. */
+function glideStore() {
+  let state: GlideState = { at: null, on: false };
+  const subs = new Set<() => void>();
+  return {
+    get: () => state,
+    set(f: (b: GlideState) => GlideState) {
+      const next = f(state);
+      if (next === state) return;
+      state = next;
+      subs.forEach((s) => s());
+    },
+    subscribe(s: () => void) {
+      subs.add(s);
+      return () => void subs.delete(s);
+    },
+  };
+}
+
+function GlideHighlight({ box }: { box: ReturnType<typeof glideStore> }) {
+  // box.get is the server snapshot too: the shell views are also rendered to a string (shell-views.test)
+  const { at, on } = useSyncExternalStore(box.subscribe, box.get, box.get);
+  return <span aria-hidden data-glide className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover" style={glideStyle(at, on, EASE)} />;
 }
 
 /** The row a route lights up in the sidebar: a tab's page is the pane it shows (its row in the tree is the tab's). */
@@ -631,8 +661,9 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   // stable, like `go`: every row gets it, and a new one each render would re-render them all (SessionRow's memo)
   const onRowMenu = useCallback<RowMenuFn>((s, anchor, at) => setRowMenu((m) => (!at && m?.anchor === anchor ? null : { s, anchor, at })), []);
-  const onSpaceMenu: SpaceMenuFn = (sp, anchor, at, fold) => setSpaceMenu((m) => (!at && m?.anchor === anchor ? null : { sp, anchor, at, fold }));
-  const onNodeMenu: NodeMenuFn = (node, at, header, toggle) => setNodeMenu((m) => (toggle && m?.at.anchor && m.at.anchor === at.anchor ? null : { node, at, header }));
+  // stable too: TabRow builds the menu of a tab with several panes on onNodeMenu, and that menu is its lead row's onMenu
+  const onSpaceMenu = useCallback<SpaceMenuFn>((sp, anchor, at, fold) => setSpaceMenu((m) => (!at && m?.anchor === anchor ? null : { sp, anchor, at, fold })), []);
+  const onNodeMenu = useCallback<NodeMenuFn>((node, at, header, toggle) => setNodeMenu((m) => (toggle && m?.at.anchor && m.at.anchor === at.anchor ? null : { node, at, header })), []);
   const [recentFolded, toggleRecent] = useFolded("recent", true, { holds: holdsRow(recent, activeKey), scope: AGENTS_FOLD });
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true, { scope: AGENTS_FOLD });
   const [pinnedFolded, togglePinned] = useFolded("agents-pinned", false, { holds: holdsRow(pinnedAgents, activeKey), scope: AGENTS_FOLD });
@@ -959,6 +990,8 @@ function TallyMark({ tally }: { tally: OriginTally }) {
 function AutoConversations({ conversations, main, shown, activeKey, holds, reg, hover, go }: { conversations: readonly Session[]; main?: string; shown: readonly Session[]; activeKey: string; holds: boolean; reg: RegFn; hover: (k: string | null) => void; go: GoFn }) {
   const { total, groups } = autoConversations(conversations, main);
   const [folded, toggle] = useFolded("auto-chats", true, { holds });
+  // one ref for the row's life, so a re-render does not let go of it and register it again (useGlide's reg)
+  const regRow = useMemo(() => reg("auto-chats"), [reg]);
   if (total.count === 0) return null;
   const open = activeKey.startsWith("j:") ? conversations.find((c) => `j:${c.session_id}` === activeKey && !shown.includes(c)) : undefined;
   const openGroup = open ? autoOrigin(open) : undefined;
@@ -966,7 +999,7 @@ function AutoConversations({ conversations, main, shown, activeKey, holds, reg, 
     <div>
       <button
         type="button"
-        ref={reg("auto-chats")}
+        ref={regRow}
         aria-expanded={!folded}
         aria-label={t("sidebar.auto_chats_label", { count: total.count })}
         onClick={toggle}
@@ -1505,6 +1538,20 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
   const keys = tabRowKeys(`t:${tab.key}`, tab.sessions.map(rowKey), activeKey, shut);
   const k = keys.row;
   const to: Route = { name: "tab", mid: tab.lead.machine_id, space: tab.spaceId, slot: tab.slotId };
+  // a tab with several panes has a menu of its own: rename, split, git, close it. One function per tab (a new one each
+  // render would re-render the lead row on every push, SessionRow's memo); a click reads the tab as it is now.
+  const latest = useRef({ tab, machines });
+  useLayoutEffect(() => {
+    latest.current = { tab, machines };
+  });
+  const onTabMenu = useCallback<RowMenuFn>(
+    (_s, anchor, at) => {
+      const { tab: now, machines: ms } = latest.current;
+      onNodeMenu(tabNode(now, ms), at ?? { anchor }, t("sidebar.tab_named", { label: now.label || "" }).trim(), !at);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the tab is read from `latest`; its key names the tab
+    [onNodeMenu, tab.key],
+  );
   const row = (
     <SessionRow
       s={tab.lead}
@@ -1519,8 +1566,7 @@ function TabRow({ t: tab, ...p }: { t: HerdrTab } & TreeProps) {
       prefix={tab.label}
       prefixClass="min-w-0 max-w-[50%] shrink truncate text-[11.5px] text-ink-3 tabular-nums"
       showTodoTag={single}
-      // a tab with several panes has a menu of its own: rename, split, git, close it
-      onMenu={single ? onRowMenu : (_s, anchor, at) => onNodeMenu(tabNode(tab, machines), at ?? { anchor }, t("sidebar.tab_named", { label: tab.label || "" }).trim(), !at)}
+      onMenu={single ? onRowMenu : onTabMenu}
       menuLabel={single ? undefined : t("sidebar.tab_actions")}
       endRoom={!single}
     />
@@ -1766,14 +1812,24 @@ function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?
 
 const BADGE_CLASS = { red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
 
-function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel, dot }: { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string; /** A state shown as a dot before the hint ("Automatic"'s rows: some run). */ dot?: AgentState }) {
+type NavRowProps = { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string; /** A state shown as a dot before the hint ("Automatic"'s rows: some run). */ dot?: AgentState };
+
+// The pages take nothing from the sessions, yet every sessions push re-renders the sidebar: memoized like SessionRow
+// (sameProps), a page row renders again only when its own props change (a badge, the highlight).
+const NavRow = memo(function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint, title, onMenu, menuLabel, dot }: NavRowProps) {
   const row = useRef<HTMLAnchorElement | null>(null);
+  // one ref for the row's life, so a re-render does not let go of it and register it again (useGlide's reg)
+  const regRow = useMemo(() => reg(k), [reg, k]);
+  const ref = useCallback(
+    (el: HTMLAnchorElement | null) => {
+      row.current = el;
+      regRow(el);
+    },
+    [regRow],
+  );
   const link = (
     <a
-      ref={(el) => {
-        row.current = el;
-        reg(k)(el);
-      }}
+      ref={ref}
       {...(onMenu ? contextMenuProps((at, el) => onMenu(at, el, false)) : {})}
       href={href(to)}
       title={title}
@@ -1815,7 +1871,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
       </button>
     </div>
   );
-}
+}, sameProps);
 
 /** Where the agent was opened (#2526): "Lark group" (botmux; a click opens its Feishu topic) or "Terminal" (herdr), each on its
  *  own tint. Nothing for other hosts. At the row's end, so the title starts where an untagged one does (#3043). */
@@ -1856,8 +1912,8 @@ type SessionRowProps = { menuLabel?: string; /** The mark at the start when the 
 // Every sessions push re-renders the sidebar and the Agents list, while lib/sessions-delta.ts keeps the object of each
 // session that did not change: a row renders again only when one of its props did. The props compare by identity
 // (`go` and the menus are stable), except the route, which the call sites build anew and which is its path (routePath).
-function sameRow(a: SessionRowProps, b: SessionRowProps): boolean {
-  const keys = Object.keys(a) as (keyof SessionRowProps)[];
+function sameProps<P extends { to: Route }>(a: P, b: P): boolean {
+  const keys = Object.keys(a) as (keyof P)[];
   if (keys.length !== Object.keys(b).length) return false;
   return keys.every((key) => (key === "to" ? routePath(a.to) === routePath(b.to) : Object.is(a[key], b[key])));
 }
@@ -1993,7 +2049,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       </button>
     </div>
   );
-}, sameRow);
+}, sameProps);
 
 // Personal agents: the Lark gateway's personal agents with a view menu (group / sort / show), a search field, pins and custom
 // sections — the prefs live on the hub so iOS sees the same pins.
@@ -2042,7 +2098,9 @@ function agentRowItems(s: AgentSession, p: AgentPrefs): MenuItem[] {
   ];
 }
 
-function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+// memoized: its props are stable (reg, hover, go) or a string, and it reads the agents from their own store, so a
+// sessions push does not reach it
+const PersonalAgents = memo(function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
   const { sessions, loaded, error } = useAgentList();
   const [retrying, setRetrying] = useState(false);
   const retry = async () => {
@@ -2062,6 +2120,8 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
   const menu = useMenu();
   const [page, setPage] = useState<MenuPage>("root");
   const [rowMenu, setRowMenu] = useState<{ s: AgentSession; el: HTMLElement } | null>(null);
+  // the same function on every render, so the memoized rows skip a re-render
+  const onRowMenu = useCallback((s: AgentSession, el: HTMLElement) => setRowMenu({ s, el }), []);
   if (loaded && !sessions.length && !error) return null;
   const groups = arrangeSessions(sessions, prefs, q);
   const unread = totalUnread(sessions);
@@ -2139,7 +2199,7 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
               </div>
             )}
             {rows.map((s) => (
-              <AgentRow key={s.id} s={s} reg={reg} hover={hover} active={isOpen(s)} go={go} pinned={prefs.pins.includes(s.id)} onMenu={(el) => setRowMenu({ s, el })} />
+              <AgentRow key={s.id} s={s} reg={reg} hover={hover} active={isOpen(s)} go={go} pinned={prefs.pins.includes(s.id)} onMenu={onRowMenu} />
             ))}
             {g.sessions.length > 5 && !q && g.key !== "pinned" && (
               <button type="button" onClick={() => setAll((x) => ({ ...x, [g.key]: !x[g.key] }))} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2">
@@ -2152,19 +2212,22 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
       {rowMenu && <Menu anchor={rowMenu.el} onClose={() => setRowMenu(null)} align="right" width={200} items={agentRowItems(rowMenu.s, prefs)} />}
     </Section>
   );
-}
+});
 
-export function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSession; reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; pinned: boolean; onMenu: (el: HTMLElement) => void }) {
+// memoized (props by identity: `s` is kept while the agent is unchanged, the functions are stable)
+export const AgentRow = memo(function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSession; reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; pinned: boolean; onMenu: (s: AgentSession, el: HTMLElement) => void }) {
   const k = `a:${s.id}`;
+  // one ref for the row's life, so a re-render does not let go of it and register it again (useGlide's reg)
+  const regRow = useMemo(() => reg(k), [reg, k]);
   const to: Route = { name: "agents", id: s.id };
   const unread = s.unreadCount > 0;
   return (
     <div className="group/row relative" onContextMenu={(e) => {
       e.preventDefault();
-      onMenu(e.currentTarget);
+      onMenu(s, e.currentTarget);
     }}>
       <a
-        ref={reg(k)}
+        ref={regRow}
         href={href(to)}
         onClick={go(to)}
         onMouseEnter={() => hover(k)}
@@ -2199,14 +2262,14 @@ export function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: Age
         aria-label={t("sidebar.personal_actions")}
         aria-haspopup="menu"
         title={t("sidebar.more")}
-        onClick={(e) => onMenu(e.currentTarget.parentElement ?? e.currentTarget)}
+        onClick={(e) => onMenu(s, e.currentTarget.parentElement ?? e.currentTarget)}
         className="absolute top-1/2 right-0 z-20 hidden size-11 -translate-y-1/2 items-center justify-center text-ink-3 [@media(hover:none)]:flex"
       >
         <Icon name="more" size={14} />
       </button>
     </div>
   );
-}
+});
 
 // ── the rail: the sidebar folded to its icons on a wide screen (#2524) ──
 

@@ -61,8 +61,6 @@ export interface Run {
 
 /** Monday … Sunday, short (the editor's day buttons, "every Mon, Wed"). */
 export const DAY_NAMES = t("lib-routines.day_names").split(",");
-/** Monday … Sunday in full (the day buttons' labels): 2024-01-01 was a Monday. */
-export const DAY_LONG_NAMES = DAY_NAMES.map((_, i) => formatDate(new Date(2024, 0, 1 + i), { weekday: "long" }));
 export const WORKDAYS = [1, 2, 3, 4, 5];
 export const WEEKEND = [6, 7];
 export const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;

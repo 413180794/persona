@@ -45,7 +45,6 @@ export function setSidebarCollapsed(collapsed: boolean) {
 
 export const toggleSidebarColumn = () => setSidebarCollapsed(!layout.sidebarCollapsed);
 export const toggleMaximized = () => set({ ...layout, maximized: !layout.maximized });
-export const resetLayout = () => set({ sidebarCollapsed: stored(), maximized: false });
 
 // another tab folding or opening it
 if (typeof addEventListener !== "undefined") {

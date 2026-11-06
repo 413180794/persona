@@ -328,11 +328,6 @@ export function removeContext(key: string, id: string) {
   emitContexts();
 }
 
-export function clearContexts(key: string) {
-  if (!pending.delete(key)) return;
-  emitContexts();
-}
-
 export function useContexts(key: string): ContextRef[] {
   return useSyncExternalStore(
     (l) => {
