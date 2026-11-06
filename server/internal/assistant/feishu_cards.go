@@ -698,10 +698,16 @@ func (s *Service) openButton(ctx context.Context, machine, session string) feish
 // openLinkButton is the "open on web" button for a link already built (sessionLink); nil for an empty or non-http(s)
 // one, so a card never carries a dead empty link (#4073).
 func (s *Service) openLinkButton(ctx context.Context, web string) feishubot.Button {
+	return safeLinkButton(i18n.T(s.botLang(ctx), "assistant-feishu_cards.open_web"), web)
+}
+
+// safeLinkButton is a labeled open_url button for web, nil when web is empty or not http(s) with a host: card links
+// are documented for http(s) only, so a dirty address (no scheme, empty host) never becomes a dead button.
+func safeLinkButton(label, web string) feishubot.Button {
 	if u, err := url.Parse(web); web == "" || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil
 	}
-	return feishubot.LinkBtn(i18n.T(s.botLang(ctx), "assistant-feishu_cards.open_web"), web)
+	return feishubot.LinkBtn(label, web)
 }
 
 // webBase is the hub's web app (hub.json's public_url) without the trailing slash, "" when the hub does not say.
@@ -1336,6 +1342,7 @@ func botHelp(l i18n.Lang, f FeishuFeatures) string {
 	if f.Agents {
 		b.WriteString(i18n.T(l, "assistant-feishu_cards.help_agents"))
 	}
+	b.WriteString(i18n.T(l, "assistant-feishu_cards.help_tasks"))
 	b.WriteString(i18n.T(l, "assistant-feishu_cards.help_always"))
 	return b.String()
 }
@@ -1426,6 +1433,10 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		}
 		card, fallback := s.statusCard(ctx, t)
 		reply(card, fallback)
+	case "/tasks", "/进展", "/总览": // i18n-ignore: command aliases typed by the user; the catalogs describe them in /help
+		for _, oc := range s.tasksOverview(ctx) {
+			reply(oc.card, oc.fallback)
+		}
 	default:
 		// A command the bot does not know goes on as it is (an agent's own, like /compact). A bare one a letter off
 		// one of the bot's (/stpo for /stop) sent to a Persona conversation would sit in line behind the turn it

@@ -7,6 +7,7 @@ Each computer's OS, current load and curves for the past 24 hours. The node coll
 | Collection (parsing /proc, vm_stat, iostat, sw_vers, Win32 responses, etc.) | `server/internal/sysmon/` (`sysmon.go`, `winparse.go` pure parsing; `linux.go` / `darwin.go` / `windows.go` read the OS) |
 | Node sending | `server/internal/node/metrics.go` |
 | Manager storage, downsampling, cleanup, API (hub forwards `devicewire.MetricsRoutes`) | `server/internal/devices/metrics.go`, `server/internal/db/metrics.go`, migration `0051_machine_metrics.sql` |
+| Token usage: node metering, manager storage, API (see "Token usage" below) | `server/internal/node/usage.go`, `server/internal/devices/usage.go`, `server/internal/db/usage.go`, migration `manager/0421_machine_usage.sql` |
 | App | `apple/Persona/Views/Machines/` (`MachinesView`, `MachineDetailView`, `MetricCharts`, `OSBadge`), model `apple/Shared/MachineMetrics.swift` |
 | Inspect local samples / overhead | `jarvisd sysmon [n]`: prints system info and n+1 samples (one every 10 seconds, n ≤ 8640, one day); final line gives actual sample count, collection duration and personad CPU (Ctrl-C stops immediately) |
 
@@ -201,6 +202,28 @@ Per machine at steady state: 360 raw rows for the latest hour + about 1390 aggre
 Measured row data is 116 bytes (`pg_column_size`), roughly 200 bytes including headers, pointers and primary index; whole table about **2 MB**. Writes per machine per day: 8640 raw + 1440 aggregate rows;
 6 machines about 60,000 inserts and 50,000 deletes daily (autovacuum reclaims them; table doesn't grow).
 
+## Token usage (#4973)
+
+How many tokens each machine runs, for the Machines page's cards and charts (the Dynamic Island's totals come from the same data, `docs/live-activity.md` ("Usage")).
+
+- **Metering** (`node/usage.go`): every 10 seconds the node reads what its transcripts gained (Claude Code main and subagent transcripts in every config directory, the rollouts of Codex and compatible Codex forks)
+  and sums the replies per minute, model and **launcher**: the launcher Persona started the session with (`sessionState.Launcher`, looked up by the transcript's session or thread id;
+  a subagent's transcript is its session's). A session typed in a terminal has no launcher (`""`, shown as "Other"). The node keeps 26 hours and reports changed minutes as `usage`
+  (`"launchers": true` says its buckets name the launcher; an older node's do not, and the apps grey out the launcher filter for it).
+- **Counted once**: a reply is counted once in the window even when it is in several files. A fork (Claude Code's `--fork-session`, Codex's fork) copies the history it starts from,
+  timestamps included, into the new file; the meter remembers every reply it counted (Claude Code's message id, Codex's timestamp and running total) for the window.
+  Measured on the transcripts of two machines over three days (2026-11-06): no reply was in two files and none repeated out of order in one file, so today's numbers do not change; the rule covers forks.
+- **What a reply counts**: Claude Code's `usage` (input not from the cache, cache creation as cache write, cache read, output); `<synthetic>` replies are skipped. Codex's `last_token_usage`:
+  its input includes the cached part, which is counted as cache read (input minus cached as input); Codex has no cache write (always 0); reasoning tokens are in its output.
+  Cache hit rate = cache read / (input + cache write + cache read).
+- **Storage** (`devices/usage.go`, `db/usage.go`): the manager keeps the last 26 hours in memory (the island, the cards) and writes every notification to `machine_usage` in order, from one goroutine.
+  A bucket is its minute's whole total, so a later one replaces it; a node's whole window (`full`, after it connects) first deletes the machine's minute rows of that window, so what the node
+  counts now is the record (an older node's rows without a launcher do not stay next to the new ones). Each minute the minute rows older than 27 hours are summed into one row per 10 minutes
+  (`step = 600`) and rows older than 7 days and an hour are deleted. About 1 to 3 rows a machine and minute (one per model and launcher in use), 10,000 to 30,000 rows a machine for the week.
+- **Ranges**: 1 hour by minute (60 points), 24 hours by 10 minutes (144), 7 days by hour (168). A point is the step's sums (the apps divide by `step / 60` for "per minute").
+  A step with no monitoring sample and nothing counted is a break (`gap`), as in the monitoring charts; a machine that never sent monitoring samples has no breaks.
+- **Card** (`GET /api/v1/metrics`'s `usage` per machine, from memory): today's sums, all tokens per minute now (over the last two to three minutes) and the last 60 minutes by minute.
+
 ## Gaps
 
 Periods without machine samples are breaks in the chart, not connected lines:
@@ -267,7 +290,7 @@ iOS / Mac machine detail (#3018, `apple/Persona/Views/Machines/NodeHealthSection
 
 ## API
 
-See `docs/protocol.md`: `GET /api/v1/metrics` (Machines), `GET /api/v1/machines/{id}/metrics?range=1h|6h|24h` (detail),
+See `docs/protocol.md`: `GET /api/v1/metrics` (Machines), `GET /api/v1/machines/{id}/metrics?range=1h|6h|24h` (detail), `GET /api/v1/machines/{id}/usage?range=1h|24h|7d` (token usage),
 node → manager `metrics` event, `system` in `node.info` / `Machine`; hub forwards these routes unchanged to manager (`devicewire.MetricsRoutes`, `503 assistant_offline` if absent).
 
 ## Verification

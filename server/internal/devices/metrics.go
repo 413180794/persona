@@ -220,6 +220,8 @@ type MachineMetrics struct {
 	System    *proto.System       `json:"system,omitempty"`
 	Latest    *proto.MetricSample `json:"latest,omitempty"` // nil when the node has not sent anything lately
 	Points    []proto.MetricPoint `json:"points"`
+	// Usage: its tokens, on the dashboard only (usage.go); nil there when its node never reported usage.
+	Usage *UsageCard `json:"usage,omitempty"`
 }
 
 func (d *Devices) machineMetrics(ctx context.Context, ids []string, span time.Duration, step int, now time.Time) ([]MachineMetrics, error) {
@@ -254,10 +256,15 @@ func (d *Devices) metricsRoutes(mux *http.ServeMux) {
 		for _, m := range machines {
 			ids = append(ids, m.cfg.ID)
 		}
-		list, err := d.machineMetrics(r.Context(), ids, time.Hour, 60, time.Now())
+		now := time.Now()
+		list, err := d.machineMetrics(r.Context(), ids, time.Hour, 60, now)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
+		}
+		loc := d.location()
+		for i := range list {
+			list[i].Usage = d.usage.card(list[i].MachineID, now, loc)
 		}
 		writeJSON(w, map[string]any{"machines": list, "step": 60})
 	})
@@ -300,8 +307,9 @@ func (d *Devices) metricsRoutes(mux *http.ServeMux) {
 // them, in memory only (a new node connection resends its whole window), and sums them up.
 
 type usageKey struct {
-	minute int64
-	model  string
+	minute   int64
+	model    string
+	launcher string
 }
 
 type machineUsage struct {
@@ -309,6 +317,8 @@ type machineUsage struct {
 	load    float64
 	cpus    int
 	at      time.Time // last report
+	// launchers: the node names the launcher of its buckets (an older one does not, usage.go's LaunchersKnown).
+	launchers bool
 }
 
 type usageBook struct {
@@ -319,10 +329,11 @@ type usageBook struct {
 // apply takes a node's "usage" notification.
 func (u *usageBook) apply(machine string, params json.RawMessage, now time.Time) bool {
 	var p struct {
-		Buckets []proto.UsageBucket `json:"buckets"`
-		Full    bool                `json:"full"`
-		Load    float64             `json:"load"`
-		CPUs    int                 `json:"cpus"`
+		Buckets   []proto.UsageBucket `json:"buckets"`
+		Full      bool                `json:"full"`
+		Load      float64             `json:"load"`
+		CPUs      int                 `json:"cpus"`
+		Launchers bool                `json:"launchers"`
 	}
 	if json.Unmarshal(params, &p) != nil {
 		return false
@@ -338,9 +349,9 @@ func (u *usageBook) apply(machine string, params json.RawMessage, now time.Time)
 		u.machines[machine] = m
 	}
 	for _, b := range p.Buckets {
-		m.buckets[usageKey{b.Minute, b.Model}] = b
+		m.buckets[usageKey{b.Minute, b.Model, b.Launcher}] = b
 	}
-	m.load, m.cpus, m.at = p.Load, p.CPUs, now
+	m.load, m.cpus, m.at, m.launchers = p.Load, p.CPUs, now, p.Launchers
 	cutoff := now.Add(-26*time.Hour).Unix() / 60 * 60
 	for k := range m.buckets {
 		if k.minute < cutoff {
@@ -393,6 +404,9 @@ func (u *usageBook) summary(now time.Time, loc *time.Location) UsageSummary {
 			out.Tokens += tokens
 			out.Output += b.Output
 			out.Requests += b.Requests
+			out.Input += b.Input
+			out.CacheWrite += b.CacheWrite
+			out.CacheRead += b.CacheRead
 		}
 		mu.TPM = int64(float64(recent) / elapsed)
 		out.TPM += mu.TPM
@@ -404,11 +418,15 @@ func (u *usageBook) summary(now time.Time, loc *time.Location) UsageSummary {
 
 // Usage is the token usage summed up now, "today" in the user's zone (Options.Location).
 func (d *Devices) Usage() UsageSummary {
-	loc := time.Local
+	return d.usage.summary(time.Now(), d.location())
+}
+
+// location is the user's time zone (Options.Location), for "today".
+func (d *Devices) location() *time.Location {
 	if d.opts.Location != nil {
 		if l := d.opts.Location(); l != nil {
-			loc = l
+			return l
 		}
 	}
-	return d.usage.summary(time.Now(), loc)
+	return time.Local
 }

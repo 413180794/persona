@@ -52,7 +52,7 @@ func goList(t *testing.T, format string, deps bool, pkgs ...string) []string {
 		args = append(args, "-deps")
 	}
 	for _, p := range pkgs {
-		args = append(args, modulePath+p)
+		args = append(args, importPath(p))
 	}
 	out, err := exec.Command(goBin, args...).Output()
 	if err != nil {
@@ -63,6 +63,15 @@ func goList(t *testing.T, format string, deps bool, pkgs ...string) []string {
 		t.Fatalf("go %s: %v %s", strings.Join(args, " "), err, msg)
 	}
 	return strings.Fields(string(out))
+}
+
+// importPath is a listed package's import path: a path under the module, or a full one for the SDK's contracts
+// (github.com/…/sdk/go/wire, another module).
+func importPath(p string) string {
+	if strings.Contains(strings.SplitN(p, "/", 2)[0], ".") {
+		return p
+	}
+	return modulePath + p
 }
 
 // under says whether rel (a path under the module) is pkg or one of its subpackages.
@@ -76,6 +85,7 @@ func TestContractsArePure(t *testing.T) {
 		for _, dep := range goList(t, "{{if not .Standard}}{{.ImportPath}}{{end}}", true, c) {
 			rel, ok := strings.CutPrefix(dep, modulePath)
 			switch {
+			case !ok && slices.Contains(contracts, dep): // the SDK's contract (checked pure as a listed package itself)
 			case !ok:
 				t.Errorf("contract package %s depends on %s, outside the standard library: a contract holds only types and "+
 					"constants; keep the code that needs it in the part that uses it; %s", c, dep, guardDoc)

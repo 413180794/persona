@@ -34,7 +34,7 @@ func TestUsageMeterClaude(t *testing.T) {
 	if len(m.buckets) != 2 {
 		t.Fatalf("buckets = %d, want 2: %+v", len(m.buckets), m.buckets)
 	}
-	b := m.buckets[usageKey{now.Unix() / 60 * 60, "claude-opus-5-5"}]
+	b := m.buckets[usageKey{now.Unix() / 60 * 60, "claude-opus-5-5", ""}]
 	if b == nil || b.Input != 2 || b.CacheWrite != 100 || b.CacheRead != 1000 || b.Output != 50 || b.Requests != 1 {
 		t.Fatalf("opus bucket = %+v", b)
 	}
@@ -47,7 +47,7 @@ func TestUsageMeterClaude(t *testing.T) {
 	f.Close()
 	m.dirty = map[usageKey]bool{}
 	m.scan(p, cutoff)
-	s := m.buckets[usageKey{now.Unix()/60*60 + 60, "claude-sonnet-5-5"}]
+	s := m.buckets[usageKey{now.Unix()/60*60 + 60, "claude-sonnet-5-5", ""}]
 	if s == nil || s.Output != 10 || s.Requests != 2 || len(m.dirty) != 1 {
 		t.Fatalf("sonnet bucket = %+v, dirty %v", s, m.dirty)
 	}
@@ -77,7 +77,7 @@ func TestUsageMeterCodex(t *testing.T) {
 	os.WriteFile(p, []byte(body), 0o600)
 	m := newUsageMeter()
 	m.scan(p, now.Add(-time.Hour))
-	b := m.buckets[usageKey{now.Unix() / 60 * 60, "gpt-6-codex"}]
+	b := m.buckets[usageKey{now.Unix() / 60 * 60, "gpt-6-codex", ""}]
 	if b == nil || b.Requests != 2 || b.Input != 150 || b.CacheRead != 1200 || b.Output != 150 {
 		t.Fatalf("codex bucket = %+v", b)
 	}
@@ -101,7 +101,7 @@ func TestUsageStartOffset(t *testing.T) {
 	}
 	m := newUsageMeter()
 	m.scan(p, cutoff)
-	if b := m.buckets[usageKey{now.Unix() / 60 * 60, "claude-opus-5-5"}]; b == nil || b.Output != 9 {
+	if b := m.buckets[usageKey{now.Unix() / 60 * 60, "claude-opus-5-5", ""}]; b == nil || b.Output != 9 {
 		t.Fatalf("bucket = %+v", b)
 	}
 }
@@ -112,5 +112,93 @@ func TestEachLineSkipsHugeLines(t *testing.T) {
 	n := eachLine(strings.NewReader("a\n"+huge+"\nb\npartial"), func(l []byte) { got = append(got, string(l)) })
 	if strings.Join(got, ",") != "a,b" || n != int64(len("a\n"+huge+"\nb\n")) {
 		t.Fatalf("lines = %v, consumed %d", got, n)
+	}
+}
+
+// A fork copies the replies it starts from into the new file (Claude Code's --fork-session, Codex's fork): they are
+// counted once; the fork's own replies are counted, under the fork's launcher.
+func TestUsageMeterCountsAForkOnce(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute).Add(30 * time.Second)
+	dir := t.TempDir()
+	orig := filepath.Join(dir, "proj", "s-orig.jsonl")
+	fork := filepath.Join(dir, "proj", "s-fork.jsonl")
+	sub := filepath.Join(dir, "proj", "s-orig", "subagents", "agent-a1.jsonl")
+	for _, p := range []string{orig, sub} {
+		os.MkdirAll(filepath.Dir(p), 0o700)
+	}
+	shared := claudeReply(now, "m1", "claude-opus-5-5", 10, 0, 100, 5) + claudeReply(now, "m2", "claude-opus-5-5", 10, 0, 100, 5)
+	os.WriteFile(orig, []byte(shared), 0o600)
+	os.WriteFile(fork, []byte(shared+claudeReply(now, "m3", "claude-opus-5-5", 10, 0, 100, 5)), 0o600)
+	os.WriteFile(sub, []byte(claudeReply(now, "a1", "claude-haiku-5-5", 1, 0, 0, 1)), 0o600)
+	m := newUsageMeter()
+	m.launcherOf = func(s string) string { return map[string]string{"s-orig": "claude", "s-fork": "sonnetcc"}[s] }
+	for _, p := range []string{orig, fork, sub} {
+		m.scan(p, now.Add(-time.Hour))
+	}
+	minute := now.Unix() / 60 * 60
+	if b := m.buckets[usageKey{minute, "claude-opus-5-5", "claude"}]; b == nil || b.Requests != 2 || b.Output != 10 {
+		t.Fatalf("the original's bucket = %+v", b)
+	}
+	if b := m.buckets[usageKey{minute, "claude-opus-5-5", "sonnetcc"}]; b == nil || b.Requests != 1 || b.Output != 5 {
+		t.Fatalf("the fork's bucket = %+v (its copies of m1, m2 are not counted again)", b)
+	}
+	if b := m.buckets[usageKey{minute, "claude-haiku-5-5", "claude"}]; b == nil || b.Requests != 1 {
+		t.Fatalf("the subagent's bucket = %+v (its session's launcher)", b)
+	}
+	// Rewritten from the start (the file shrank): read again, nothing counted twice.
+	os.WriteFile(orig, []byte(claudeReply(now, "m1", "claude-opus-5-5", 10, 0, 100, 5)), 0o600)
+	m.scan(orig, now.Add(-time.Hour))
+	if b := m.buckets[usageKey{minute, "claude-opus-5-5", "claude"}]; b.Requests != 2 {
+		t.Fatalf("after the rewrite = %+v", b)
+	}
+	// The counted replies leave with the window.
+	m.prune(now.Add(time.Hour))
+	if len(m.counted) != 0 {
+		t.Fatalf("counted after the window = %v", m.counted)
+	}
+	params, _ := m.report(now)
+	if params["launchers"] != true {
+		t.Fatalf("report = %v: it says its buckets name their launcher", params)
+	}
+}
+
+func TestUsageMeterCountsACodexForkOnce(t *testing.T) {
+	now := time.Now().UTC()
+	line := func(kind, payload string) string {
+		return fmt.Sprintf(`{"timestamp":%q,"type":%q,"payload":%s}`+"\n", now.Format(time.RFC3339Nano), kind, payload)
+	}
+	count := func(total, in, cached, out int) string {
+		return line("event_msg", fmt.Sprintf(`{"type":"token_count","info":{"total_token_usage":{"total_tokens":%d},`+
+			`"last_token_usage":{"input_tokens":%d,"cached_input_tokens":%d,"output_tokens":%d}}}`, total, in, cached, out))
+	}
+	dir := t.TempDir()
+	a := filepath.Join(dir, "rollout-2026-10-29T10-00-00-0199a213-81c0-7800-8aa1-bbab2a035a53.jsonl")
+	b := filepath.Join(dir, "rollout-2026-10-29T11-00-00-0199a213-81c0-7800-8aa1-ccccccccccccc.jsonl")
+	history := line("turn_context", `{"model":"gpt-6-codex"}`) + count(1000, 900, 800, 100)
+	os.WriteFile(a, []byte(history), 0o600)
+	os.WriteFile(b, []byte(history+count(1600, 500, 400, 100)), 0o600)
+	m := newUsageMeter()
+	sessions := map[string]bool{}
+	m.launcherOf = func(s string) string { sessions[s] = true; return "codex" }
+	m.scan(a, now.Add(-time.Hour))
+	m.scan(b, now.Add(-time.Hour))
+	got := m.buckets[usageKey{now.Unix() / 60 * 60, "gpt-6-codex", "codex"}]
+	if got == nil || got.Requests != 2 || got.Output != 200 {
+		t.Fatalf("bucket = %+v, want the shared request once and the fork's own", got)
+	}
+	if !sessions["0199a213-81c0-7800-8aa1-bbab2a035a53"] {
+		t.Fatalf("sessions asked = %v, want the rollout's thread id", sessions)
+	}
+}
+
+func TestUsageSession(t *testing.T) {
+	for path, want := range map[string]string{
+		"/h/.claude/projects/-p/0f1e.jsonl":                                                                    "0f1e",
+		"/h/.claude/projects/-p/0f1e/subagents/agent-a1.jsonl":                                                 "0f1e",
+		"/h/.codex/sessions/2026/10/29/rollout-2026-10-29T10-00-00-0199a213-81c0-7800-8aa1-bbab2a035a53.jsonl": "0199a213-81c0-7800-8aa1-bbab2a035a53",
+	} {
+		if got := usageSession(path); got != want {
+			t.Errorf("usageSession(%s) = %q, want %q", path, got, want)
+		}
 	}
 }

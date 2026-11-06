@@ -100,6 +100,7 @@ The parts (the hub, the managers, the node on each computer, extensions) talk on
 | `dialogwire` | A terminal dialog read off a screen, as the node and the apps see it |
 | `nodeproto` | The node protocol handshake: the protocol version and capability names a node announces (`docs/protocol.md` "Node handshake") |
 | `proto`, `rpc`, `relayproto` | The client API and node protocol types, the JSON-RPC framing, the push relay |
+| `sdk/go/wire` (the SDK's module) | The extension protocol's types generated from its schema (an error report the bus carries, say), shared with extensions written against the SDK |
 
 The business packages alias the contract types so their callers keep the old names (`type InboxThing = connectorwire.InboxThing` in `connector`, `type Update = kbwire.Update` in `kb`).
 A contract type cannot carry business methods: logic moves into the business package as a function (`kb`'s `tagUpdate`, `screen`'s `hash`).
@@ -107,7 +108,7 @@ Where the business type needs fields of its own, it stays a separate type with t
 
 `server/internal/archguard` (tests only) keeps it that way:
 
-- **Pure contracts**: every package in `testdata/contracts.txt` depends only on the standard library and other listed packages, and every package named `*wire` must be listed.
+- **Pure contracts**: every package in `testdata/contracts.txt` depends only on the standard library and other listed packages (the SDK's `sdk/go/wire` is listed by its full import path), and every package named `*wire` must be listed.
 - **Part boundaries**: the hub (`hub`, `hubedge`) depends on no manager (`assistant`, `devices`, `extmgr`, `manager`) or node package, a manager on no hub package, and the node (`node`) on neither.
   Known violations would go into `testdata/boundary_allowed.txt` (shrink-only, each line naming the step that removes it); it is empty, and a line that no longer applies fails too.
 

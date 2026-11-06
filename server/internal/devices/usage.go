@@ -1,0 +1,373 @@
+package devices
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"slices"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// Token usage by machine (docs/machines.md「Token 用量」, #4973). The nodes meter their transcripts per minute,
+// model and launcher (node/usage.go) for the last 26 hours; the manager keeps them in memory for the island
+// (metrics.go's usageBook) and in Postgres for the week, minute rows for 27 hours (the node's window and an hour),
+// then a row each 10 minutes. GET /api/v1/machines/{id}/usage draws a machine's range from them, GET /api/v1/metrics
+// carries each machine's last hour for its card (usageCard).
+
+const (
+	usageMinutesFor = 27 * time.Hour
+	usageKeep       = 7*24*time.Hour + time.Hour // a 7-day chart starts full
+	// usageNodeWindow is how far back a node's whole window ("full") goes (node/usage.go's usageWindow): from then on
+	// what it sent is the record.
+	usageNodeWindow = 26 * time.Hour
+)
+
+type usageStore interface {
+	PutUsage(ctx context.Context, machine string, buckets []proto.UsageBucket, replaceFrom time.Time) error
+	RollupUsage(ctx context.Context, before time.Time) (int64, error)
+	PruneUsage(ctx context.Context, before time.Time) (int64, error)
+	UsageSeries(ctx context.Context, machine string, from, to time.Time, step int) ([]db.UsageRow, error)
+}
+
+func (d *Devices) usageStore() usageStore {
+	if s, ok := d.opts.Store.(usageStore); ok {
+		return s
+	}
+	return nil
+}
+
+// usageWrite is one "usage" notification to store; written in order (a full window, then what changed).
+type usageWrite struct {
+	machine     string
+	buckets     []proto.UsageBucket
+	replaceFrom time.Time
+}
+
+// onUsage takes a node's "usage" notification: the island's sums (in memory), and Postgres for the charts.
+func (d *Devices) onUsage(machine string, params json.RawMessage, now time.Time) {
+	if !d.usage.apply(machine, params, now) || d.usageStore() == nil {
+		return
+	}
+	var p struct {
+		Buckets []proto.UsageBucket `json:"buckets"`
+		Full    bool                `json:"full"`
+	}
+	if json.Unmarshal(params, &p) != nil || (len(p.Buckets) == 0 && !p.Full) {
+		return
+	}
+	w := usageWrite{machine: machine, buckets: p.Buckets}
+	if p.Full {
+		w.replaceFrom = now.Add(-usageNodeWindow).Truncate(time.Minute).Add(time.Minute)
+	}
+	select {
+	case d.usageWrites <- w:
+	default: // Postgres is far behind: the next full window (a reconnect) writes it again
+		d.logf("[%s] usage: %d buckets not saved, the queue is full", machine, len(p.Buckets))
+	}
+}
+
+// usageLoop writes the notifications in the order they came, and each minute rolls up the minute rows past 27 hours
+// and drops what is older than a week.
+func (d *Devices) usageLoop(ctx context.Context) {
+	st := d.usageStore()
+	tidy := time.NewTicker(metricsTidyEach)
+	defer tidy.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case w := <-d.usageWrites:
+			if st == nil {
+				continue
+			}
+			wctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			if err := st.PutUsage(wctx, w.machine, w.buckets, w.replaceFrom); err != nil && ctx.Err() == nil {
+				d.logf("[%s] save usage: %v", w.machine, err)
+			}
+			cancel()
+		case <-tidy.C:
+			if st == nil {
+				continue
+			}
+			now := time.Now()
+			if _, err := st.RollupUsage(ctx, now.Add(-usageMinutesFor)); err != nil && ctx.Err() == nil {
+				d.logf("usage rollup: %v", err)
+			}
+			if _, err := st.PruneUsage(ctx, now.Add(-usageKeep)); err != nil && ctx.Err() == nil {
+				d.logf("usage prune: %v", err)
+			}
+		}
+	}
+}
+
+// usageRanges: what a chart can show, and its step (60, 144, 168 points).
+var usageRanges = map[string]struct {
+	span time.Duration
+	step int
+}{
+	"1h":  {time.Hour, 60},
+	"24h": {24 * time.Hour, 600},
+	"7d":  {7 * 24 * time.Hour, 3600},
+}
+
+// UsageTokens are the four kinds of tokens and the replies, summed over some time (the fields of proto.UsageBucket).
+type UsageTokens struct {
+	Input      int64 `json:"in"` // not from the cache
+	CacheWrite int64 `json:"cache_write"`
+	CacheRead  int64 `json:"cache_read"`
+	Output     int64 `json:"out"`
+	Requests   int   `json:"req"`
+}
+
+func (t *UsageTokens) add(b proto.UsageBucket) {
+	t.Input += b.Input
+	t.CacheWrite += b.CacheWrite
+	t.CacheRead += b.CacheRead
+	t.Output += b.Output
+	t.Requests += b.Requests
+}
+
+// Total is every token, cache reads included.
+func (t UsageTokens) Total() int64 { return t.Input + t.CacheWrite + t.CacheRead + t.Output }
+
+// UsagePoint is one step of a usage chart: its sums (per step, not per minute: a client divides by step/60), or a
+// break where the machine was offline (no monitoring sample in it and nothing counted).
+type UsagePoint struct {
+	T int64 `json:"t"`
+	UsageTokens
+	Gap bool `json:"gap,omitempty"`
+}
+
+// UsageShare is one model's or launcher's sums over the range.
+type UsageShare struct {
+	Name string `json:"name"` // a launcher's "": unknown (typed in a terminal, an older node)
+	UsageTokens
+}
+
+// MachineUsageSeries is GET /api/v1/machines/{id}/usage.
+type MachineUsageSeries struct {
+	MachineID string       `json:"machine_id"`
+	Online    bool         `json:"online"`
+	Range     string       `json:"range"`
+	Step      int          `json:"step"`
+	Points    []UsagePoint `json:"points"`
+	Total     UsageTokens  `json:"total"`
+	// Models: each model's share under the launcher filter; Launchers: each launcher's under the model filter, both
+	// largest first. So the filters' menus list what there is to pick.
+	Models    []UsageShare `json:"models"`
+	Launchers []UsageShare `json:"launchers"`
+	// LaunchersKnown: the machine's node names the launcher of its usage; false for an older node (its usage is all
+	// under "": the apps grey out the launcher filter and say to update it).
+	LaunchersKnown bool `json:"launchers_known"`
+	// Stored: the manager keeps the week (Postgres); false: only what is in memory (the last 26 hours).
+	Stored bool `json:"stored"`
+}
+
+// usageFilter: a model and a launcher to keep; nil keeps all.
+type usageFilter struct{ model, launcher *string }
+
+func (f usageFilter) keeps(b proto.UsageBucket, model, launcher bool) bool {
+	return (!model || f.model == nil || b.Model == *f.model) && (!launcher || f.launcher == nil || b.Launcher == *f.launcher)
+}
+
+// usageSeries sums rows (any order, Minute a step start or a minute) into the range's steps from from to now.
+// present: the steps with a monitoring sample (nil: no monitoring to tell offline time by, no breaks).
+func usageSeries(rows []proto.UsageBucket, from, now time.Time, step int, f usageFilter, present map[int64]bool) ([]UsagePoint, UsageTokens, []UsageShare, []UsageShare) {
+	first, last := from.Unix()/int64(step)*int64(step), now.Unix()/int64(step)*int64(step)
+	n := int((last-first)/int64(step)) + 1
+	points := make([]UsagePoint, n)
+	counted := make([]bool, n)
+	for i := range points {
+		points[i].T = first + int64(i*step)
+	}
+	var total UsageTokens
+	models, launchers := map[string]*UsageShare{}, map[string]*UsageShare{}
+	share := func(m map[string]*UsageShare, name string) *UsageShare {
+		s := m[name]
+		if s == nil {
+			s = &UsageShare{Name: name}
+			m[name] = s
+		}
+		return s
+	}
+	for _, b := range rows {
+		i := int((b.Minute/int64(step)*int64(step) - first) / int64(step))
+		if i < 0 || i >= n {
+			continue
+		}
+		if f.keeps(b, false, true) {
+			share(models, b.Model).add(b)
+		}
+		if f.keeps(b, true, false) {
+			share(launchers, b.Launcher).add(b)
+		}
+		if f.keeps(b, true, true) {
+			points[i].add(b)
+			total.add(b)
+			counted[i] = true
+		}
+	}
+	if present != nil {
+		for i := range points {
+			points[i].Gap = !present[points[i].T] && !counted[i] && points[i].Total() == 0
+		}
+	}
+	sorted := func(m map[string]*UsageShare) []UsageShare {
+		out := make([]UsageShare, 0, len(m))
+		for _, s := range m {
+			out = append(out, *s)
+		}
+		slices.SortFunc(out, func(a, b UsageShare) int {
+			return cmp.Or(cmp.Compare(b.Total(), a.Total()), cmp.Compare(a.Name, b.Name))
+		})
+		return out
+	}
+	return points, total, sorted(models), sorted(launchers)
+}
+
+// machineUsage draws a machine's range: from Postgres, or from memory (the last 26 hours) without it.
+func (d *Devices) machineUsage(ctx context.Context, m *Machine, name string, f usageFilter, now time.Time) (MachineUsageSeries, error) {
+	rg := usageRanges[name]
+	id := m.cfg.ID
+	from := now.Add(-rg.span).Truncate(time.Duration(rg.step) * time.Second).Add(time.Duration(rg.step) * time.Second)
+	var rows []proto.UsageBucket
+	st := d.usageStore()
+	if st != nil {
+		var err error
+		if rows, err = st.UsageSeries(ctx, id, from, now.Add(time.Minute), rg.step); err != nil {
+			return MachineUsageSeries{}, err
+		}
+	} else {
+		rows = d.usage.buckets(id)
+	}
+	// Offline time: the steps without a monitoring sample, once the machine has sent any in the range.
+	var present map[int64]bool
+	if ms := d.metricsStore(); ms != nil {
+		series, err := ms.MetricSeries(ctx, []string{id}, from, now.Add(time.Minute), rg.step)
+		if err != nil {
+			return MachineUsageSeries{}, err
+		}
+		if pts := series[id]; len(pts) > 0 {
+			present = map[int64]bool{}
+			for _, p := range pts {
+				present[p.T] = true
+			}
+		}
+	}
+	out := MachineUsageSeries{MachineID: id, Online: m.snapshot().Online, Range: name, Step: rg.step, Stored: st != nil}
+	out.Points, out.Total, out.Models, out.Launchers = usageSeries(rows, from, now, rg.step, f, present)
+	out.LaunchersKnown = d.usage.knowsLaunchers(id)
+	for _, l := range out.Launchers {
+		out.LaunchersKnown = out.LaunchersKnown || l.Name != ""
+	}
+	return out, nil
+}
+
+// UnknownLauncher is the launcher filter's value for usage with no launcher (a session typed in a terminal, an
+// older node): a launcher is a shell function's name, never "-", and the apps' clients drop empty query values.
+const UnknownLauncher = "-"
+
+// usageRoutes is GET /api/v1/machines/{id}/usage?range=1h|24h|7d[&model=…][&launcher=…|-].
+func (d *Devices) usageRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/machines/{id}/usage", func(w http.ResponseWriter, r *http.Request) {
+		m := d.machineByID(r.PathValue("id"))
+		if m == nil {
+			writeErr(w, http.StatusNotFound, errors.New("no such machine"))
+			return
+		}
+		q := r.URL.Query()
+		name := q.Get("range")
+		if name == "" {
+			name = "24h"
+		}
+		if _, ok := usageRanges[name]; !ok {
+			writeErr(w, http.StatusBadRequest, errors.New("range is 1h, 24h or 7d"))
+			return
+		}
+		var f usageFilter
+		if q.Has("model") {
+			v := q.Get("model")
+			f.model = &v
+		}
+		if q.Has("launcher") {
+			v := q.Get("launcher")
+			if v == UnknownLauncher {
+				v = ""
+			}
+			f.launcher = &v
+		}
+		out, err := d.machineUsage(r.Context(), m, name, f, time.Now())
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, map[string]any{"usage": out})
+	})
+}
+
+// UsageCard is a machine's tokens on its card in 机器 (GET /api/v1/metrics): today's sums, every token per minute
+// now (over the last two to three minutes, as the island's TPM), and the last hour by minute (the sparkline).
+type UsageCard struct {
+	Today     UsageTokens `json:"today"`
+	PerMinute int64       `json:"per_minute"`
+	// Recent: every token of each of the last 60 minutes, oldest first; the last is the minute now.
+	Recent []int64 `json:"recent"`
+}
+
+// card is a machine's UsageCard from memory; nil when its node never reported usage.
+func (u *usageBook) card(machine string, now time.Time, loc *time.Location) *UsageCard {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	m := u.machines[machine]
+	if m == nil {
+		return nil
+	}
+	y, mo, dd := now.In(loc).Date()
+	today := time.Date(y, mo, dd, 0, 0, 0, 0, loc).Unix()
+	minute := now.Unix() / 60 * 60
+	from := minute - tpmSpan*60
+	c := &UsageCard{Recent: make([]int64, 60)}
+	var recent int64
+	for k, b := range m.buckets {
+		tokens := b.Input + b.CacheWrite + b.CacheRead + b.Output
+		if i := 59 - int((minute-k.minute)/60); i >= 0 && i < 60 {
+			c.Recent[i] += tokens
+		}
+		if k.minute >= from {
+			recent += tokens
+		}
+		if k.minute >= today {
+			c.Today.add(b)
+		}
+	}
+	c.PerMinute = int64(float64(recent) / (float64(now.Unix()-from) / 60))
+	return c
+}
+
+// buckets are a machine's buckets in memory (the last 26 hours).
+func (u *usageBook) buckets(machine string) []proto.UsageBucket {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	m := u.machines[machine]
+	if m == nil {
+		return nil
+	}
+	out := make([]proto.UsageBucket, 0, len(m.buckets))
+	for _, b := range m.buckets {
+		out = append(out, b)
+	}
+	return out
+}
+
+// knowsLaunchers: the machine's node said its buckets name their launcher.
+func (u *usageBook) knowsLaunchers(machine string) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	m := u.machines[machine]
+	return m != nil && m.launchers
+}

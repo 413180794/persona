@@ -176,11 +176,16 @@ type FleetItem struct {
 
 // UsageSummary is the token usage across the machines (GET /api/v1/usage, the manager's).
 type UsageSummary struct {
-	TPM      int64          `json:"tpm"`      // output tokens per minute, over the last two to three minutes
-	Tokens   int64          `json:"tokens"`   // today: all tokens, cache reads included
-	Output   int64          `json:"output"`   // today
-	Requests int            `json:"requests"` // today
-	Machines []MachineUsage `json:"machines"`
+	TPM      int64 `json:"tpm"`      // output tokens per minute, over the last two to three minutes
+	Tokens   int64 `json:"tokens"`   // today: all tokens, cache reads included
+	Output   int64 `json:"output"`   // today
+	Requests int   `json:"requests"` // today
+	// Input (not from the cache), CacheWrite and CacheRead: today, for the cache hit rate
+	// (CacheRead / (Input + CacheWrite + CacheRead)) on 机器's card of today's tokens.
+	Input      int64          `json:"input"`
+	CacheWrite int64          `json:"cache_write"`
+	CacheRead  int64          `json:"cache_read"`
+	Machines   []MachineUsage `json:"machines"`
 }
 
 // MachineUsage is one machine's share and load; Load is the 1-minute load average over its cores, 0 when unknown.

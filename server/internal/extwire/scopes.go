@@ -60,6 +60,7 @@ var RouteScopes = map[string]string{
 	"POST /api/v1/agents/sessions/{id}/read":             ScopeAgentsControl,
 	"GET /api/v1/machines":                               ScopeMachinesRead,
 	"GET /api/v1/machines/{id}/metrics":                  ScopeMachinesRead,
+	"GET /api/v1/machines/{id}/usage":                    ScopeMachinesRead,
 	"GET /api/v1/machines/{mid}/stat":                    ScopeMachinesRead,
 	"POST /api/v1/notify":                                ScopeNotify,
 	"GET /api/v1/assistant":                              ScopeAssistantAsk,

@@ -571,7 +571,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		return
 	case "usage":
 		if !m.stopped() {
-			m.d.usage.apply(m.cfg.ID, params, time.Now())
+			m.d.onUsage(m.cfg.ID, params, time.Now())
 			m.forgetIfStopped()
 		}
 		return

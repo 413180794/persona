@@ -281,10 +281,11 @@ var Routes = []string{
 }
 
 // MetricsRoutes are the machines' monitoring's routes (internal/devices metrics.go), relayed the same way: every
-// machine's latest sample and its last hour, one machine's history, the token usage.
+// machine's latest sample and its last hour, one machine's history, the token usage (all, and one machine's range).
 var MetricsRoutes = []string{
 	"GET /api/v1/metrics",
 	"GET /api/v1/machines/{id}/metrics",
+	"GET /api/v1/machines/{id}/usage",
 	"GET /api/v1/usage",
 }
 
