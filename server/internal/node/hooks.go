@@ -311,6 +311,11 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	if ix.SessionTitle == "" {
 		ix.SessionTitle = filepath.Base(in.Cwd)
 	}
+	if asksPhone(in) {
+		var stopWatch func()
+		ctx, stopWatch = n.watchAgent(ctx, req)
+		defer stopWatch()
+	}
 
 	switch {
 	case in.HookEventName == "Elicitation":
@@ -504,6 +509,59 @@ func (n *Node) takesReport(in hookInput) bool {
 
 func permissionDecision(d map[string]any) any {
 	return map[string]any{"hookSpecificOutput": map[string]any{"hookEventName": "PermissionRequest", "decision": d}}
+}
+
+// agentWatch is how often a hook waiting on the phone looks whether the claude it runs under still lives.
+var agentWatch = 2 * time.Second
+
+// agentGone says the claude seen with that start is surely gone (procGone); a variable so tests can say who lives.
+var agentGone = procGone
+
+// asksPhone: the hook events that may wait on the phone (the cases of handleHook that call ask).
+func asksPhone(in hookInput) bool {
+	switch in.HookEventName {
+	case "Elicitation", "PermissionRequest":
+		return true
+	case "PreToolUse":
+		return in.ToolName == "AskUserQuestion" || in.ToolName == "Bash"
+	}
+	return false
+}
+
+// watchAgent ends ctx once the claude the hook runs under is gone (killed, crashed, out of memory). Claude Code starts
+// its hooks in their own process group on Linux and macOS, so a claude that dies without cleaning up leaves its hook
+// waiting, and the card on the phone, until HookTimeout (#4344). Ending ctx withdraws the card the way the hook going
+// away does (ask sends interaction.cancel). Gone takes two looks in a row, so one odd read does not withdraw the card
+// of a claude still waiting. Not watched: a hook whose claude was not found (AgentPID 0), or one already gone when it
+// asks (a pid from another pid namespace reads as gone). stop also waits for the watcher.
+func (n *Node) watchAgent(ctx context.Context, req sockRequest) (_ context.Context, stop func()) {
+	if req.AgentPID <= 0 || agentGone(req.AgentPID, req.AgentStart) {
+		return ctx, func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	exited := make(chan struct{})
+	go func() {
+		defer close(exited)
+		t := time.NewTicker(agentWatch)
+		defer t.Stop()
+		misses := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			if !agentGone(req.AgentPID, req.AgentStart) {
+				misses = 0
+				continue
+			}
+			if misses++; misses >= 2 {
+				cancel()
+				return
+			}
+		}
+	}()
+	return ctx, func() { cancel(); <-exited }
 }
 
 // ask forwards an interaction to the hub and blocks until the phone answers, it expires, or the hook is cancelled.

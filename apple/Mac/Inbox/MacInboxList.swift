@@ -95,7 +95,9 @@ struct MacInboxList: View {
             openAll(ids)
         }
         .onKeyPress(characters: ["e", "E"], phases: .down) { _ in
-            guard !state.selection.isEmpty else { return .ignored }
+            // Agent requests cannot be filed: an agents-only selection lets E fall through instead of swallowing it
+            // and doing nothing (#3479).
+            guard state.multiSelection.canMarkDone else { return .ignored }
             state.toggleDone(state.selection, model: model)
             return .handled
         }

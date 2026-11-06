@@ -71,8 +71,11 @@ nonisolated struct ExtensionInstallRequest: Encodable {
     var previewID: String
     var permissionsDigest: String
     var bundle: [BundleReference]?
+    /// `async`: a hub with `extension_operations` answers at once with the operation and pushes its steps (#3307).
+    var background: Bool?
 
-    init(preview: ExtensionPreview) {
+    init(preview: ExtensionPreview, background: Bool = false) {
+        self.background = background ? true : nil
         previewID = preview.previewID
         permissionsDigest = preview.permissionsDigest
         let refs = (preview.bundle ?? []).map { BundleReference(previewID: $0.previewID, permissionsDigest: $0.permissionsDigest) }
@@ -80,7 +83,7 @@ nonisolated struct ExtensionInstallRequest: Encodable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case previewID = "preview_id", permissionsDigest = "permissions_digest", bundle
+        case previewID = "preview_id", permissionsDigest = "permissions_digest", bundle, background = "async"
     }
 }
 

@@ -260,6 +260,120 @@ func TestScreenCardGoneWhenTheAgentMovesOnIsRecorded(t *testing.T) {
 	}
 }
 
+// The node's connection drops and comes back while the agent still waits on the same dialog: its card comes back on
+// the apps without ringing the phone a second time (#4252).
+func TestScreenCardBackAfterTheNodeReconnectsIsQuiet(t *testing.T) {
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	got, _ := waitCards(s, 1, 2*time.Second)
+	if len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(pushes) != 1 {
+		t.Fatalf("first: pushed %d times", len(pushes))
+	}
+	s.NodeDetached("mac") // the session still shows blocked while its node reconnects
+	back, _ := waitCards(s, 1, 2*time.Second)
+	if len(back) != 1 {
+		t.Fatalf("the card did not come back: %v", back)
+	}
+	for id := range got {
+		if back[id] == "" {
+			t.Fatalf("another card came back: %v, had %v", back, got)
+		}
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 300*time.Millisecond); len(pushes) != 1 {
+		t.Fatalf("the card that came back was pushed again: %d pushes", len(pushes))
+	}
+}
+
+// The agent moved on while its node was away and later asks the same dialog again: that is a new question, pushed.
+func TestScreenCardAskedAgainAfterTheNodeWasAwayIsPushed(t *testing.T) {
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(s, 1, 2*time.Second); len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	ft.d.setSessions("mac", []proto.Session{{SessionID: "s1", Agent: "claude", Status: proto.StatusUnknown}})
+	s.NodeDetached("mac") // gone past the grace: its sessions show unknown, no card is read
+	if got := pendingIDs(s); len(got) != 0 {
+		t.Fatalf("cards while the node is away: %v", got)
+	}
+	ft.sessions("mac", proto.Session{SessionID: "s1", Agent: "claude", Status: proto.StatusWorking}) // back, working
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(s, 1, 2*time.Second); len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(pushes) != 2 {
+		t.Fatalf("asked again after moving on: pushed %d times", len(pushes))
+	}
+}
+
+// Right after the reconnect the screen is read before the dialog is drawn again: that card, and the one made once the
+// dialog shows, are the card that was pushed already (#4252).
+func TestScreenCardBackHalfDrawnAfterTheNodeReconnectsIsQuiet(t *testing.T) {
+	old, oldFor := screenUpgrade, screenUpgradeFor
+	screenUpgrade, screenUpgradeFor = 50*time.Millisecond, time.Second
+	t.Cleanup(func() { screenUpgrade, screenUpgradeFor = old, oldFor })
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	got, _ := waitCards(s, 1, 2*time.Second)
+	if len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	n.setScreen("  ✢ Percolating…\n")
+	s.NodeDetached("mac")
+	if back, _ := waitCards(s, 1, 2*time.Second); len(back) != 1 || back["scr_mac_s1"] == "" {
+		t.Fatalf("the card before the dialog: %v", back)
+	}
+	n.setScreen(pickModel)
+	var first string
+	for id := range got {
+		first = id
+	}
+	// upgradeScreenCard ends the card without a dialog, then makes the dialog's: wait for that one, not for a gap.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && pendingIDs(s)[first] == "" {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if ids := pendingIDs(s); len(ids) != 1 || ids[first] == "" {
+		t.Fatalf("the dialog's card did not come back: %v, had %v", ids, got)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 300*time.Millisecond); len(pushes) != 1 {
+		t.Fatalf("pushed %d times", len(pushes))
+	}
+}
+
+// Away longer than resumeGrace: the dialog read once the node is back is pushed again.
+func TestScreenCardBackAfterTheGraceIsPushed(t *testing.T) {
+	old := resumeGrace
+	resumeGrace = 50 * time.Millisecond
+	t.Cleanup(func() { resumeGrace = old })
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(s, 1, 2*time.Second); len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	ft.d.setSessions("mac", []proto.Session{{SessionID: "s1", Agent: "claude", Status: proto.StatusUnknown}})
+	s.NodeDetached("mac")
+	time.Sleep(2 * resumeGrace)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got, _ := waitCards(s, 1, 2*time.Second); len(got) != 1 {
+		t.Fatalf("cards %v", got)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(pushes) != 2 {
+		t.Fatalf("back after the grace: pushed %d times", len(pushes))
+	}
+}
+
 // A runtime's session (docs/runtimes.md) has no terminal: blocked there, no screen is read; a session with a terminal
 // still gets its card.
 func TestNoScreenCardWithoutATerminal(t *testing.T) {

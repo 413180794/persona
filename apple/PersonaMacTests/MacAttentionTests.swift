@@ -8,10 +8,12 @@ import Testing
 struct MacAttentionTests {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
-    private func session(_ id: String, _ state: AgentState, assistant: Bool = false, since: TimeInterval = 0) -> Session {
+    private func session(_ id: String, _ state: AgentState, assistant: Bool = false, since: TimeInterval = 0,
+                         lastText: String? = "done it") -> Session {
+        let last = lastText.map { ",\"last_text\":\"\($0)\"" } ?? ""
         var s = try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t-\(id)","cwd":"/w/proj","status":"idle","state":"\(state.rawValue)",
-         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0,"last_text":"done it"}
+         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0\(last)}
         """.utf8))
         s.stateSince = now.addingTimeInterval(-since)
         return s
@@ -72,6 +74,19 @@ struct MacAttentionTests {
         #expect(t.title == "t-a 需要你")
         #expect(t.body == "done it")
         #expect(MacAttention.text(session("a", .unread), .unread).title == "t-a 做完了")
+    }
+
+    /// Without a last text yet the banner falls back to a fixed line; the main conversation names Persona,
+    /// an agent session names Agent, for both states.
+    @Test func fallbackTextNamesPersonaInTheMainConversation() {
+        #expect(MacAttention.text(session("j", .needsYou, assistant: true, lastText: nil), .needsYou).body
+                == "Persona 停下来等你处理")
+        #expect(MacAttention.text(session("j", .unread, assistant: true, lastText: nil), .unread).body
+                == "Persona 做完了")
+        #expect(MacAttention.text(session("a", .needsYou, lastText: nil), .needsYou).body
+                == "Agent 停下来等你处理")
+        #expect(MacAttention.text(session("a", .unread, lastText: nil), .unread).body
+                == "Agent 做完了")
     }
 
     /// A needs-you about a permission or a plan carries the hub's category and the interaction, so the banner has the

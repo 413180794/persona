@@ -9406,6 +9406,32 @@ CATALOG = [
      "publisher": "team", "tags": [], "contributes": {"assistant": ["tools"]}, "permissions": [_RUNS], "problem": "没有这台 hub（linux-amd64）能用的包"},
 ]
 _PREVIEWS = {}
+_PREVIEW_BODIES = {}
+
+
+def _ext_make_preview(c):
+    """A preview of catalog item c as the hub answers it (an upgrade's when it is installed); kept for the install."""
+    pid = "pv%06d" % (len(_PREVIEWS) + len(_PREVIEW_BODIES) + 1) + uuid.uuid4().hex[:4]
+    cur = PLUGINS.get(c["id"])
+    pv = {"preview_id": pid, "manifest": {"id": c["id"], "name": c["name"], "version": c["version"], "description": c["description"]},
+          "permissions": c["permissions"], "permissions_digest": "d-" + c["id"], "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 600)), "market": c["market"]}
+    if cur and cur["source"] == "installed":
+        added = [x for x in c["permissions"] if x not in cur.get("permissions", [])]
+        pv.update({"upgrade": True, "from": cur.get("version"), "more_permissions": bool(added)})
+        if added: pv["added_permissions"] = added
+    _PREVIEWS[pid] = c
+    _PREVIEW_BODIES[pid] = pv
+    return pv
+
+
+def _ext_install(c):
+    """Catalog item c installed (or upgraded) from its market."""
+    pl = PLUGINS.get(c["id"]) or {"id": c["id"], "source": "installed", "enabled": True, "form": {"fields": []}, "config": {}, "secrets": []}
+    pl.update({"name": c["name"], "version": c["version"], "description": c["description"], "status": "running", "kind": next(iter(c["contributes"]), ""),
+               "contributes": c["contributes"], "permissions": c["permissions"], "origin": "market:%s/%s" % (c["market"], c["id"]), "publisher": c.get("publisher")})
+    pl.pop("upgrade", None); pl.pop("upgrade_note", None)  # the user upgraded it
+    PLUGINS[c["id"]] = pl
+    return pl
 
 
 def _catalog_item(c):
@@ -9533,6 +9559,191 @@ def system_route(handler, p, req):
     return False
 
 
+# ---------- MOCK_EXTENSION_OPS: installs in steps (docs/protocol.md「扩展的安装、升级、卸载进度」, #3277, #3307) ----------
+# MOCK_EXTENSION_OPS=1 (with MOCK_PLUGINS): the hub says extension_operations. A preview asked for with async answers
+# 202 {"operation"} at once and goes through download (in four parts) → verify → unpack → check, then waits at consent
+# (needs_consent, GET …/-/operations/{id} carries the preview); the install or upgrade agreed to with async goes on with
+# the same operation (install → start; nodes skipped). A removal, async or not, is recorded as an operation too.
+# =fail: the first install or upgrade of each extension stops at start (retryable: …/retry starts a new operation, its
+# download from the cache and the consent already given, so it goes on by itself); the first removal stops at remove.
+# MOCK_EXTENSION_OPS_STEP=<seconds> per step (default 0.6).
+EXT_OPS = os.environ.get("MOCK_EXTENSION_OPS", "") if os.environ.get("MOCK_PLUGINS") else ""
+EXT_OPS_STEP = float(os.environ.get("MOCK_EXTENSION_OPS_STEP", "0.6"))
+EXT_OPERATIONS = {}
+EXT_OP_JOBS = {}  # what each operation does: {"retry": fn, "preview": id, "consented": digest}
+_EXT_FAILED = set()  # (kind, extension) that failed once (MOCK_EXTENSION_OPS=fail)
+_EXT_OPS_LOCK = threading.RLock()
+_INSTALL_STEPS = ["download", "verify", "unpack", "check", "consent", "install", "start", "nodes"]
+_UNINSTALL_STEPS = ["stop", "remove", "nodes"]
+_PACKAGE_BYTES = 4 * 1024 * 1024
+# MOCK_EXTENSION_INSTALL_DELAY=<seconds>: a hub without operations takes that long to answer an install or a removal.
+EXT_INSTALL_DELAY = float(os.environ.get("MOCK_EXTENSION_INSTALL_DELAY", "0"))
+
+
+def _ext_now():
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + ".%03dZ" % (int(time.time() * 1000) % 1000)
+
+
+def _ext_op_view(op):
+    return {k: v for k, v in copy.deepcopy(op).items() if v is not None}
+
+
+def _ext_op_push(op):
+    msg = {"type": "extension_operation", "operation": _ext_op_view(op)}
+    for send, _ in list(LIVE):
+        try: send(msg)
+        except Exception: pass
+
+
+def _ext_op_new(kind, ext, name, version=None, frm=None, market=None):
+    steps = _UNINSTALL_STEPS if kind == "uninstall" else _INSTALL_STEPS
+    op = {"id": "op_%s" % uuid.uuid4().hex[:10], "kind": kind, "extension": ext, "name": name, "actor": "iPhone",
+          "state": "running", "step": steps[0], "steps": [{"id": i, "state": "pending"} for i in steps],
+          "retryable": False, "started_at": _ext_now(), "updated_at": _ext_now(), "version": version, "from": frm, "market": market}
+    with _EXT_OPS_LOCK:
+        EXT_OPERATIONS[op["id"]] = op
+        EXT_OP_JOBS[op["id"]] = {}
+    _ext_op_push(op)
+    return op
+
+
+def _ext_step(op, sid, state, **extra):
+    with _EXT_OPS_LOCK:
+        for st in op["steps"]:
+            if st["id"] == sid:
+                st["state"] = state
+                st.update(extra)
+        if state == "running": op["step"] = sid
+        op["updated_at"] = _ext_now()
+    _ext_op_push(op)
+
+
+def _ext_fails(op, sid):
+    """MOCK_EXTENSION_OPS=fail: the first install / upgrade fails at start, the first removal at remove."""
+    want = "remove" if op["kind"] == "uninstall" else "start"
+    key = (op["kind"], op["extension"])
+    if EXT_OPS != "fail" or sid != want or key in _EXT_FAILED: return False
+    _EXT_FAILED.add(key)
+    return True
+
+
+def _ext_fail(op, sid, retry):
+    why, code = ("扩展启动后 5 秒内没有起来（exit status 1）", "start_failed") if sid == "start" else ("删不掉扩展目录：目录被占用（resource busy）", "uninstall_failed")
+    with _EXT_OPS_LOCK:
+        for st in op["steps"]:
+            if st["id"] == sid: st["state"] = "failed"
+        op.update(state="failed", step=sid, error=why, error_code=code, retryable=True, updated_at=_ext_now(), ended_at=_ext_now())
+        EXT_OP_JOBS[op["id"]]["retry"] = retry
+    _ext_op_push(op)
+
+
+def _ext_preview_run(op, c, cached=False):
+    """download → verify → unpack → check, then waits for consent (or goes on, the same permissions agreed to)."""
+    if cached:
+        _ext_step(op, "download", "done", cached=True)
+    else:
+        _ext_step(op, "download", "running", bytes=0, total=_PACKAGE_BYTES)
+        for part in range(1, 5):
+            time.sleep(EXT_OPS_STEP)
+            _ext_step(op, "download", "running", bytes=_PACKAGE_BYTES * part // 4, total=_PACKAGE_BYTES)
+        _ext_step(op, "download", "done")
+    for sid in ("verify", "unpack", "check"):
+        _ext_step(op, sid, "running"); time.sleep(EXT_OPS_STEP); _ext_step(op, sid, "done")
+    if op["state"] == "canceled": return
+    pv = _ext_make_preview(c)
+    with _EXT_OPS_LOCK:
+        EXT_OP_JOBS[op["id"]]["preview"] = pv["preview_id"]
+        consented = EXT_OP_JOBS[op["id"]].get("consented")
+    if consented == pv["permissions_digest"]:
+        _ext_step(op, "consent", "done")
+        _ext_install_run(op, c)
+        return
+    with _EXT_OPS_LOCK:
+        op.update(state="needs_consent", preview_id=pv["preview_id"])
+    _ext_step(op, "consent", "running")
+
+
+def _ext_install_run(op, c):
+    """install → start (nodes skipped): what was agreed to goes in."""
+    with _EXT_OPS_LOCK:
+        op.update(state="running"); op.pop("preview_id", None)
+        EXT_OP_JOBS[op["id"]]["consented"] = "d-" + c["id"]
+    _ext_step(op, "consent", "done")
+    for sid in ("install", "start"):
+        _ext_step(op, sid, "running"); time.sleep(EXT_OPS_STEP)
+        if _ext_fails(op, sid):
+            def retry(c=c, was=op):
+                nxt = _ext_op_new(was["kind"], c["id"], c["name"], version=c["version"], frm=was.get("from"), market=c["market"])
+                EXT_OP_JOBS[nxt["id"]]["consented"] = EXT_OP_JOBS[was["id"]].get("consented")
+                threading.Thread(target=_ext_preview_run, args=(nxt, c, True), daemon=True).start()
+                return nxt
+            _ext_fail(op, sid, retry)
+            return
+        if sid == "install": _ext_install(c)
+        _ext_step(op, sid, "done")
+    _ext_step(op, "nodes", "skipped")
+    with _EXT_OPS_LOCK:
+        op.update(state="succeeded", step=None, updated_at=_ext_now(), ended_at=_ext_now())
+    _ext_op_push(op)
+
+
+def _ext_uninstall_run(op, ext):
+    """stop → remove (nodes skipped). True: removed."""
+    _ext_step(op, "stop", "running"); time.sleep(EXT_OPS_STEP); _ext_step(op, "stop", "done")
+    _ext_step(op, "remove", "running"); time.sleep(EXT_OPS_STEP)
+    if _ext_fails(op, "remove"):
+        def retry(ext=ext, name=op["name"]):
+            nxt = _ext_op_new("uninstall", ext, name)
+            threading.Thread(target=_ext_uninstall_run, args=(nxt, ext), daemon=True).start()
+            return nxt
+        _ext_fail(op, "remove", retry)
+        return False
+    PLUGINS.pop(ext, None)
+    _ext_step(op, "remove", "done")
+    _ext_step(op, "nodes", "skipped")
+    with _EXT_OPS_LOCK:
+        op.update(state="succeeded", step=None, updated_at=_ext_now(), ended_at=_ext_now())
+    _ext_op_push(op)
+    return True
+
+
+def _ext_ops_route(handler, p, method):
+    """GET …/-/operations, GET / DELETE …/-/operations/{id}, POST …/-/operations/{id}/retry."""
+    if not EXT_OPS or not p.startswith("/api/v1/plugins/-/operations"): return False
+    parts = [x for x in p.split("/")[6:] if x]  # after /api/v1/plugins/-/operations
+    with _EXT_OPS_LOCK:
+        if not parts and method == "GET":
+            ops = sorted(EXT_OPERATIONS.values(), key=lambda o: o["started_at"], reverse=True)
+            handler.send_json({"operations": [_ext_op_view(o) for o in ops]}); return True
+        op = EXT_OPERATIONS.get(parts[0]) if parts else None
+        if not op:
+            handler.send_json({"error": "没有这次操作，或者已经过期了", "code": "not_found"}, 404); return True
+        if len(parts) == 1 and method == "GET":
+            v = _ext_op_view(op)
+            if op["state"] == "needs_consent" and op.get("preview_id") in _PREVIEW_BODIES:
+                v["preview"] = _PREVIEW_BODIES[op["preview_id"]]
+            handler.send_json(v); return True
+        if len(parts) == 1 and method == "DELETE":
+            consent = next((st for st in op["steps"] if st["id"] == "consent"), None)
+            if op["state"] == "needs_consent" or (op["state"] == "running" and consent and consent["state"] == "pending"):
+                _PREVIEWS.pop(op.pop("preview_id", "") or "", None)
+                op.update(state="canceled", updated_at=_ext_now(), ended_at=_ext_now())
+                _ext_op_push(op)
+            elif op["state"] == "running":
+                handler.send_json({"error": "已经开始安装了，不能取消", "code": "cannot_cancel"}, 409); return True
+            else:
+                EXT_OPERATIONS.pop(op["id"], None)
+            handler.send_response(204); handler.end_headers(); return True
+        if parts[1:] == ["retry"] and method == "POST":
+            if op["state"] != "failed":
+                handler.send_json({"error": "这次操作没有失败", "code": "not_failed"}, 409); return True
+            retry = EXT_OP_JOBS.get(op["id"], {}).get("retry")
+            if not retry:
+                handler.send_json({"error": "这次操作不能重试", "code": "not_retryable"}, 409); return True
+    nxt = retry()
+    handler.send_json({"operation": _ext_op_view(nxt)}, 202); return True
+
+
 def markets_route(handler, p, body):
     """MOCK_PLUGINS: the markets, the catalog, installing from it, and the plugins' declarative UI. False otherwise."""
     if not PLUGINS_MODE: return False
@@ -9540,6 +9751,7 @@ def markets_route(handler, p, body):
     q = {k: v[0] for k, v in parse_qs(urlparse(handler.path).query).items()}
     req = json.loads(body or b"{}") if body else {}
     if upgrades_route(handler, p, req): return True
+    if _ext_ops_route(handler, p, method): return True
     if p == "/api/v1/plugins/-/markets" and method == "GET":
         handler.send_json({"markets": list(MARKETS.values())}); return True
     if p == "/api/v1/plugins/-/markets" and method == "POST":
@@ -9570,30 +9782,51 @@ def markets_route(handler, p, body):
         c = next((c for c in CATALOG if c["market"] == req.get("market") and c["id"] == req.get("plugin")), None)
         if not c or c.get("problem"):
             handler.send_json({"error": (c or {}).get("problem") or "这个市场里没有插件 %s" % req.get("plugin"), "code": "invalid_plugin"}, 400); return True
-        pid = "pv%06d" % (len(_PREVIEWS) + 1)
-        cur = PLUGINS.get(c["id"])
-        pv = {"preview_id": pid, "manifest": {"id": c["id"], "name": c["name"], "version": c["version"], "description": c["description"]},
-              "permissions": c["permissions"], "permissions_digest": "d-" + c["id"], "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 600)), "market": c["market"]}
-        if cur and cur["source"] == "installed":
-            added = [x for x in c["permissions"] if x not in cur.get("permissions", [])]
-            pv.update({"upgrade": True, "from": cur.get("version"), "more_permissions": bool(added)})
-            if added: pv["added_permissions"] = added
+        pv = _ext_make_preview(c)
+        pid = pv["preview_id"]
         _PREVIEWS[pid] = c
+        _PREVIEW_BODIES[pid] = pv
+        if EXT_OPS and req.get("async"):
+            cur = PLUGINS.get(c["id"])
+            upgrade = bool(cur and cur["source"] == "installed")
+            op = _ext_op_new("upgrade" if upgrade else "install", c["id"], c["name"], version=c["version"],
+                             frm=cur.get("version") if upgrade else None, market=c["market"])
+            _PREVIEWS.pop(pid, None); _PREVIEW_BODIES.pop(pid, None)  # the operation makes its own
+            threading.Thread(target=_ext_preview_run, args=(op, c), daemon=True).start()
+            handler.send_json({"operation": _ext_op_view(op)}, 202); return True
         handler.send_json(pv); return True
     if p in ("/api/v1/plugins/-/install",) or (p.startswith("/api/v1/plugins/") and p.endswith("/-/upgrade")):
         c = _PREVIEWS.pop(req.get("preview_id", ""), None)
         if not c:
             handler.send_json({"error": "预览过期了，重新预览一次", "code": "install_failed"}, 400); return True
-        pl = PLUGINS.get(c["id"]) or {"id": c["id"], "source": "installed", "enabled": True, "form": {"fields": []}, "config": {}, "secrets": []}
-        pl.update({"name": c["name"], "version": c["version"], "description": c["description"], "status": "running", "kind": next(iter(c["contributes"]), ""),
-                   "contributes": c["contributes"], "permissions": c["permissions"], "origin": "market:%s/%s" % (c["market"], c["id"]), "publisher": c.get("publisher")})
-        pl.pop("upgrade", None); pl.pop("upgrade_note", None)  # the user upgraded it
-        PLUGINS[c["id"]] = pl
-        handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None}); return True
+        if EXT_OPS:
+            # The operation the preview came from goes on (an older client's synchronous install is recorded too).
+            op = next((o for o in EXT_OPERATIONS.values() if EXT_OP_JOBS.get(o["id"], {}).get("preview") == req.get("preview_id")), None)
+            if op and op["state"] == "needs_consent":
+                if req.get("async"):
+                    threading.Thread(target=_ext_install_run, args=(op, c), daemon=True).start()
+                    handler.send_json({"operation": _ext_op_view(op)}, 202); return True
+                _ext_install_run(op, c)
+                if op["state"] == "failed":
+                    handler.send_json({"error": op["error"], "code": op["error_code"]}, 500); return True
+                handler.send_json({k: v for k, v in _plugin_needs(PLUGINS[c["id"]]).items() if v is not None} | {"operation_id": op["id"]}); return True
+        time.sleep(EXT_INSTALL_DELAY)
+        handler.send_json({k: v for k, v in _plugin_needs(_ext_install(c)).items() if v is not None}); return True
     if method == "DELETE" and len(parts) >= 6 and parts[3] == "plugins" and parts[5] == "-" and parts[6:] in ([], [""]) and parts[4] in PLUGINS:
         if not PLUGINS[parts[4]].get("origin", "").startswith("market:"):
             handler.send_json({"error": "这个扩展只能在 hub 机器上（personad extension …）或 hub 的管理界面里装、升级和卸载；手机上只能装扩展市场里的",
                                "code": "this_machine_only"}, 403); return True
+        if EXT_OPS:
+            # Recorded as an operation either way; async answers at once, else when it is done (as the hub does).
+            ext = parts[4]
+            op = _ext_op_new("uninstall", ext, PLUGINS[ext].get("name", ext))
+            if q.get("async"):
+                threading.Thread(target=_ext_uninstall_run, args=(op, ext), daemon=True).start()
+                handler.send_json({"operation": _ext_op_view(op)}, 202); return True
+            if not _ext_uninstall_run(op, ext):
+                handler.send_json({"error": op["error"], "code": op["error_code"]}, 500); return True
+            handler.send_json({"ok": True}); return True
+        time.sleep(EXT_INSTALL_DELAY)
         PLUGINS.pop(parts[4]); handler.send_json({"ok": True}); return True
     if p == "/api/v1/plugins/-/ui" and method == "GET":
         placement = q.get("placement", "")
@@ -9663,7 +9896,8 @@ _features_without_plugins = features
 
 def features():
     return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade", "extension_ui_v3",
-                                           "extension_widgets", "extension_shortcuts", "extension_notify_actions"] if PLUGINS_MODE else [])
+                                           "extension_widgets", "extension_shortcuts", "extension_notify_actions"] if PLUGINS_MODE else []) + (
+                                           ["extension_operations"] if EXT_OPS else [])
 
 
 def _plugin_needs(pl):
@@ -12487,6 +12721,7 @@ def features():
     return _features_without_channels() + (["channels"] if CHANNELS_MODE else [])
 
 
+MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试一键清理的「将处理 N 件」确认")
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")

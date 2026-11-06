@@ -605,6 +605,13 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 来源记成 `market:<市场 id>/<扩展 id>` 的扩展能回滚、卸载。理由：完整权限的设备本来就能经 Agent 在各台电脑上跑任意命令，开放市场不扩大信任边界；
 包由市场索引的 sha256 钉死，装之前同样列出权限。只能读和回答的设备都不行。
 
+**App 里的进度**（iOS / iPad / Mac，#3307；协议见 `docs/protocol.md`「扩展的安装、升级、卸载进度」）：hub 说 `extension_operations` 时（WebSocket 的 `?features=` 也声明它才收得到事件），
+点「安装 / 升级」发 `catalog/preview` 带 `async: true`，扩展页上立刻出现「进行中」一节，按 `extension_operation` 画步骤和下载进度条（有 `total` 才画比例，没有就画不确定的）；
+停在 `needs_consent` 时预览页自己弹出（关掉又想装时点「查看权限」），同意就带 `async` 调 install / upgrade、同一个操作接着走，不同意就 `DELETE …/operations/{id}` 取消。
+卸载照旧同步调用（依赖它的扩展照旧 409 先问），hub 同时把它记成操作推步骤。失败时写出停在哪一步和 `error`；`retryable` 的「重试」走 `POST …/retry`（包在缓存里、权限已经同意过就不再问），
+不能续的重新预览（卸载就再卸一次）。操作存在 App 全局的 `ExtensionOperations` 里，离开这页、回来、重连后（`GET …/-/operations`）都看得到，市场列表的行标「安装中」「等你同意」「安装失败」。
+旧 hub 没有这些：照旧同步预览、等安装请求回来，这一节只写「正在安装」、在做什么和已经过去的时间。步骤的名字是 App 自己的文案，不认识的步骤 id 原样显示。
+
 ### 官方市场
 
 （#2351）公开仓库 `github:nwverse/persona-extensions` 是官方市场，每台 hub 都有，不用手动登记（`extension.Official`，`server/internal/extension/official.go`）：

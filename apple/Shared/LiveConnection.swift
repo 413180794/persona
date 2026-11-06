@@ -47,6 +47,8 @@ nonisolated enum ServerEvent: Sendable {
     case fleet(FleetState)
     /// The hub updating itself: checking, downloading, waiting for idle, restarting… (docs/hub-update.md).
     case hubUpdate(HubUpdateStatus)
+    /// An extension install / upgrade / removal moved on (#3307): the whole operation as it stands.
+    case extensionOperation(ExtensionOperation)
     /// The desktop apps connected to the hub now (sent on connect and whenever one comes or goes).
     case desktops([DesktopDevice])
     /// Tasks from an assistant conversation (docs/unified-entry.md): the todos changed (pull them), a conversation's
@@ -110,6 +112,7 @@ nonisolated enum ServerEvent: Sendable {
         var minAppBuild: Int?
         var publicURL: String?
         var update: HubUpdateStatus?
+        var operation: ExtensionOperation?
         var epoch: String?
         var seq: Int?
         var full: Bool?
@@ -140,7 +143,7 @@ nonisolated enum ServerEvent: Sendable {
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, key, conversation, plan
-            case plugin, badge, invalidate, cwd, dirs, git
+            case plugin, badge, invalidate, cwd, dirs, git, operation
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build", publicURL = "public_url"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
@@ -167,6 +170,7 @@ nonisolated enum ServerEvent: Sendable {
                                              channel: e.channel, build: e.build, protocolVersion: e.protocolVersion,
                                              minAppBuild: e.minAppBuild, publicURL: e.publicURL.flatMap { URL(string: $0) }))
         case "hub_update": return e.update.map { .hubUpdate($0) }
+        case "extension_operation", "plugin_operation": return e.operation.map { .extensionOperation($0) }
         case "machines": return e.machines.map { .machines($0) }
         case "sessions":
             guard let m = e.machineID else { return nil }
@@ -264,7 +268,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged: return self
+             .personas, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged, .extensionOperation: return self
         }
     }
 }
@@ -482,10 +486,11 @@ final class LiveConnection {
         heartbeat(t, gen)
     }
 
-    /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), and
+    /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), the
+    /// extensions' install steps (`extension_operation`, #3307), and
     /// where to resume the broadcasts from once a hello gave a stream.
     static func queryItems(_ cursor: EventCursor) -> [URLQueryItem] {
-        [URLQueryItem(name: "features", value: "sessions_delta")] + cursor.queryItems
+        [URLQueryItem(name: "features", value: "sessions_delta,extension_operations")] + cursor.queryItems
     }
 
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {

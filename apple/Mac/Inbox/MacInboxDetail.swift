@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The detail column: what the list has selected. One item opens as on the iPhone (the Feishu chat at its first new
 /// message, the mail, the cloud document's rows); an agent row shows what it waits for with the quick answers;
-/// several selected offer to file them all.
+/// several selected offer to file their item rows (an agents-only selection points to their conversations instead).
 struct MacInboxDetail: View {
     @Environment(AppModel.self) private var model
     var state = MacInboxState.shared
@@ -13,10 +13,24 @@ struct MacInboxDetail: View {
         let sel = state.liveSelection(model: model)
         if sel.count > 1 {
             VStack(spacing: Theme.Space.l) {
-                EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 件"), message: String(localized: "按 E 把它们都标为已处理。"))
-                Button("全部标为已处理") { state.toggleDone(sel, model: model) }
-                    .controlSize(.large)
-                    .lineLimit(1)
+                // Agent requests are answered in their conversations, not filed: an agents-only selection gets no
+                // mark-done button, and a mixed one only files its item rows (#3479).
+                switch state.multiSelection {
+                case .agentsOnly:
+                    EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "这些是 Agent 的请求"),
+                                   message: String(localized: "打开对应的对话来处理。"))
+                case .mixed(let itemCount, let agentCount):
+                    EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 项"),
+                                   message: String(localized: "\(agentCount) 个 Agent 请求要在对话里处理，按 E 只把另外 \(itemCount) 件标为已处理。"))
+                    Button("把 \(itemCount) 件标为已处理") { state.toggleDone(sel, model: model) }
+                        .controlSize(.large)
+                        .lineLimit(1)
+                case .itemsOnly:
+                    EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 件"), message: String(localized: "按 E 把它们都标为已处理。"))
+                    Button("全部标为已处理") { state.toggleDone(sel, model: model) }
+                        .controlSize(.large)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("收件箱")

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -97,6 +98,16 @@ func (s *Service) syncScreenInteractions(machine string, list []proto.Session) {
 			delete(s.fleet.screenAnswered, k)
 		}
 	}
+	now := time.Now()
+	for id, g := range s.fleet.screenDetached {
+		// Too old, or the agent moved on while its node was away (anything but blocked, or unknown while the node is
+		// gone): the same dialog asked later is a new question (screenBackLocked).
+		if now.Sub(g.at) > resumeGrace || g.machine == machine && slices.ContainsFunc(list, func(sess proto.Session) bool {
+			return sess.SessionID == g.session && sess.Status != proto.StatusBlocked && sess.Status != proto.StatusUnknown
+		}) {
+			delete(s.fleet.screenDetached, id)
+		}
+	}
 	var stale []string
 	hasHook := map[string]bool{}
 	for id, p := range s.fleet.interactions {
@@ -183,6 +194,7 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		s.fleet.mu.Unlock()
 		return
 	}
+	back := s.screenBackLocked(machine, sess.SessionID, id, d != nil, time.Now())
 	s.ixMapLocked()[id] = &pending{ix: ix, local: func(r proto.Resolution) error {
 		if r.Dismiss {
 			return nil
@@ -206,10 +218,46 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 	}}
 	s.fleet.mu.Unlock()
 	s.record(ix)
-	s.announce(ix)
+	if back {
+		s.show(ix) // pushed before its node's connection ended (#4252)
+	} else {
+		s.announce(ix)
+	}
 	if d == nil {
 		go s.upgradeScreenCard(machine, sess.SessionID, id)
 	}
+}
+
+// screenGone is a screen card its node's connection ended while it was open (cancelMachineInteractions).
+type screenGone struct {
+	machine, session string
+	at               time.Time
+}
+
+// screenBackLocked: card id is a screen card whose node's connection ended within resumeGrace, read again off the same
+// dialog now that the node is back. Its push went out already, so it comes back without ringing the phone a second
+// time (#4252), as a Codex card a reconnected node lists again does; the mark is used up. A card read before the
+// dialog is drawn (no dialog: a half-drawn screen right after the reconnect) is that card too while the session has a
+// mark, which it leaves for the card upgradeScreenCard makes once the dialog shows. Callers hold s.fleet.mu.
+func (s *Service) screenBackLocked(machine, session, id string, dialog bool, now time.Time) bool {
+	for k, g := range s.fleet.screenDetached {
+		if now.Sub(g.at) > resumeGrace {
+			delete(s.fleet.screenDetached, k)
+		}
+	}
+	if _, ok := s.fleet.screenDetached[id]; ok {
+		delete(s.fleet.screenDetached, id)
+		return true
+	}
+	if dialog {
+		return false
+	}
+	for _, g := range s.fleet.screenDetached {
+		if g.machine == machine && g.session == session {
+			return true
+		}
+	}
+	return false
 }
 
 // screenUpgrade: how often, and screenUpgradeFor how long, a screen card made without a dialog it could read looks
@@ -1372,10 +1420,17 @@ func (s *Service) NodeDetached(machine string) {
 func (s *Service) cancelMachineInteractions(machineID string) {
 	s.fleet.mu.Lock()
 	var ids []string
+	now := time.Now()
 	for id, p := range s.fleet.interactions {
 		// Resumable ones wait for their hook to come back through the next node (await).
 		if p.ix.MachineID == machineID && !p.ix.Resumable {
 			ids = append(ids, id)
+			if p.ix.Kind == proto.IxScreen { // its dialog may still be there when the node is back (screenBackLocked)
+				if s.fleet.screenDetached == nil {
+					s.fleet.screenDetached = map[string]screenGone{}
+				}
+				s.fleet.screenDetached[id] = screenGone{machine: machineID, session: p.ix.SessionID, at: now}
+			}
 		}
 	}
 	s.fleet.mu.Unlock()

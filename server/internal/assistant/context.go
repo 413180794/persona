@@ -157,9 +157,9 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 				needs = append(needs, a)
 			case c.State == proto.StateWorking:
 				working = append(working, agentLabel(c))
-			case w != nil && w.Phase == proto.WorkBlocked && w.On == proto.WaitUser && recent:
-				needs = append(needs, a) // waits for a decision the hub put no card up for
-			case w != nil && w.Phase == proto.WorkBlocked && c.State != proto.StateUnread && recent:
+			// A decision with no card up (cards off, muted, 先不管) is not 需要你: the lists, the badges and the Live
+			// Activity go by the state (docs/agent-states.md), so it stays 完成未看 with what it waits for, or is seen.
+			case w != nil && w.Phase == proto.WorkBlocked && w.On != proto.WaitUser && c.State != proto.StateUnread && recent:
 				waiting = append(waiting, a) // the hub waits it out (an unread one is left for the user)
 			case w != nil && w.Phase == proto.WorkDone && recent:
 				done = append(done, a)

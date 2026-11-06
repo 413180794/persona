@@ -11,6 +11,37 @@ enum MacInboxSelection: Hashable {
     case agent(String)
 }
 
+/// What a multi-row selection can be filed as. Agent requests are answered in their conversations, not items the
+/// inbox can mark 已处理: a selection made only of them has nothing to file, so the detail must not offer it and E
+/// must not be swallowed (#3479).
+nonisolated enum MacInboxMultiSelection: Equatable, Sendable {
+    /// Only agent requests: nothing can be filed; the user opens their conversations.
+    case agentsOnly(agentCount: Int)
+    /// Items and agent requests together: only the item rows are filed, the requests stay for their conversations.
+    case mixed(itemCount: Int, agentCount: Int)
+    /// Only items: every selected row can be filed.
+    case itemsOnly(itemCount: Int)
+
+    /// How many of the selected rows can be marked 已处理.
+    var itemCount: Int {
+        switch self {
+        case .agentsOnly: 0
+        case .mixed(let count, _), .itemsOnly(let count): count
+        }
+    }
+
+    /// Whether E / the detail's button files anything in the selection.
+    var canMarkDone: Bool { itemCount > 0 }
+
+    /// Classify a selection by its item rows and its agent request rows.
+    static func decide(itemCount: Int, agentCount: Int) -> MacInboxMultiSelection {
+        if itemCount > 0 {
+            return agentCount > 0 ? .mixed(itemCount: itemCount, agentCount: agentCount) : .itemsOnly(itemCount: itemCount)
+        }
+        return .agentsOnly(agentCount: agentCount)
+    }
+}
+
 /// One of the sidebar's inbox entries: 全部, 飞书, each mail account, each connector with items (sources), then @我 / 私聊 /
 /// 群聊 / 邮件 / Agent (kinds).
 enum MacInboxFilter: Hashable, Identifiable {
@@ -261,6 +292,19 @@ final class MacInboxState {
     /// The selected items (agent rows are not items).
     var selectedItems: [InboxItem] {
         selection.compactMap { if case .item(let id) = $0 { return item(id) } else { return nil } }
+    }
+
+    /// The selected agent requests: they are answered in their conversations, not filed as 已处理.
+    var selectedAgentCount: Int {
+        selection.reduce(0) { count, row in
+            guard case .agent = row else { return count }
+            return count + 1
+        }
+    }
+
+    /// What the multi-row selection can do, shared by the detail column and the list's E key.
+    var multiSelection: MacInboxMultiSelection {
+        .decide(itemCount: selectedItems.count, agentCount: selectedAgentCount)
     }
 
     /// 已处理 (or 移回 when all are done already) on these rows, then the selection moves to the row after them, as

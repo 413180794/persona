@@ -101,10 +101,13 @@ struct VNCPage: View {
 
     private var moreMenu: some View {
         Menu {
+            #if os(iOS) || os(visionOS)
+            // On the Mac updateNSView never reads the mode; the picker would only change the iPhone's setting (#3893).
             Picker("模式", selection: Binding(get: { mode }, set: { mode = $0; VNCMode.set($0, for: ref) })) {
                 Label("鼠标模式", systemImage: Theme.Icon.pointer).tag(VNCMode.mouse)
                 Label("触控板模式", systemImage: Theme.Icon.trackpad).tag(VNCMode.trackpad)
             }
+            #endif
             Button { centerPointer() } label: { Label("指针居中", systemImage: Theme.Icon.pointerCenter) }
             #if os(iOS) || os(visionOS)
             if VNCPiP.supported {
@@ -361,16 +364,28 @@ struct VNCHelp: View {
         NavigationStack {
             List {
                 Section("移动操作") {
+                    #if !os(macOS)
                     row(Theme.Icon.pointer, String(localized: "鼠标模式（默认）"), String(localized: "轻点在那里点击；单指拖动就是拖拽；两指拖动滚动；两指轻点或按住不放是右键。"))
                     row(Theme.Icon.search, String(localized: "放大"), String(localized: "双指开合放大、缩小。放大以后，两指拖动是移动画面，不再滚动。"))
+                    #else
+                    row(Theme.Icon.pointer, String(localized: "鼠标"), String(localized: "点按就是左键；右键点按（或按住 Control 再点按）是右键；按住鼠标键不放再移动就是拖拽。"))
+                    row(Theme.Icon.trackpad, String(localized: "滚动"), String(localized: "拨鼠标滚轮，或在妙控鼠标、触控板上双指滑动来滚动画面。"))
+                    row(Theme.Icon.search, String(localized: "放大"), String(localized: "Mac 上没有放大手势，画面始终完整显示。"))
+                    #endif
                 }
                 Section("输入和剪贴板") {
+                    #if !os(macOS)
                     row(Theme.Icon.keyboard, String(localized: "打字"), String(localized: "点底栏的键盘。键盘上面一排是 Mac 的快捷键：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，还有 Esc、Tab、方向键和 ⌘C ⌘V ⌘Z ⌘Tab ⌘空格。中文照常输入，上屏的字经剪贴板粘贴过去。"))
+                    #else
+                    row(Theme.Icon.keyboard, String(localized: "打字"), String(localized: "直接用这台 Mac 的键盘输入，文字、⌘ ⌥ ⌃ ⇧ 和快捷键都原样送到画面里的 Mac。"))
+                    #endif
                     row(Theme.Icon.clipboard, String(localized: "复制和粘贴"), String(localized: "点底栏的剪贴板：「\(VNCPage.fromPhone)」把这边的文字放进 Mac 的剪贴板并粘贴；「\(VNCPage.toPhone)」把 Mac 剪贴板里的文字拿过来。"))
                 }
+                #if !os(macOS)
                 Section("何时用触控板模式") {
                     row(Theme.Icon.trackpad, String(localized: "触控板模式"), String(localized: "从右上角「…」里打开。手指在屏幕上移动指针；轻点在指针处点击；轻点后马上拖动是拖拽。指针跑偏了用「指针居中」。"))
                 }
+                #endif
                 Section("小窗") {
                     row(Theme.Icon.pictureInPicture, String(localized: "小窗"), String(localized: "「…」里的「小窗」把画面放进画中画，切到别的 App 或回到桌面也浮着；点小窗回到这里。小窗只能看，关掉小窗就断开。"))
                 }

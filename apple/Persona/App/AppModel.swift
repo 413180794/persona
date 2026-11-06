@@ -1321,6 +1321,8 @@ final class AppModel {
         switch ev {
         case .hello(let hello):
             link(group)?.received(hello)
+            // Back on the hub: an install that moved on while the connection was down shows where it is now (#3307).
+            if isHub, Set(hello.features).hasExtensionFeature("operations") { Task { await ExtensionOperations.shared.reload() } }
             #if DEBUG && (os(iOS) || os(visionOS))
             // Registered on connect, before this hello said whether the hub keeps the runtime CLI from the agents.
             if RuntimeCLI.overHub, let link = link(group) { registerPhone(link) }
@@ -1398,6 +1400,8 @@ final class AppModel {
             if isHub, hubUpdate != status { hubUpdate = status }
         case .desktops(let list):
             link(group)?.desktops = list
+        case .extensionOperation(let op):
+            if isHub { ExtensionOperations.shared.received(op) }
         case .pluginBadge(let plugin, let id, let badge):
             if isHub { ExtensionSlots.shared.received(plugin: plugin, id: id, badge: badge) }
         case .extensionInvalidate(let ext, let id):
@@ -1481,6 +1485,7 @@ final class AppModel {
         case .taskPlan: "task_plan"
         case .fleet: "fleet"
         case .hubUpdate: "hub_update"
+        case .extensionOperation: "extension_operation"
         case .desktops: "desktops"
         case .terminal: "terminal"
         case .fsChanged: "fs_changed"

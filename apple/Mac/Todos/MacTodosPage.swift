@@ -28,9 +28,24 @@ struct MacTodosPage: View {
         allTodos.filter { $0.isDone && matchesQuery($0) }
     }
 
+    /// Whether the query narrows the list. The field keeps the raw text verbatim; a whitespace-only
+    /// query searches like an empty one (#3797).
+    private var isSearching: Bool { Self.isSearching(query) }
+
     private func matchesQuery(_ todo: TodoItem) -> Bool {
-        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
-        let q = query.localizedLowercase
+        Self.matches(todo, query: query)
+    }
+
+    /// Whether the raw query filters the list: whitespace-only is not a search (#3797).
+    static func isSearching(_ rawQuery: String) -> Bool {
+        !rawQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The filter shared by the open and completed sections: a trimmed-empty query matches every todo,
+    /// and surrounding spaces never stop a match.
+    static func matches(_ todo: TodoItem, query rawQuery: String) -> Bool {
+        let q = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
+        if q.isEmpty { return true }
         if todo.title.localizedLowercase.contains(q) { return true }
         if let notes = todo.notes, notes.localizedLowercase.contains(q) { return true }
         return false
@@ -126,9 +141,9 @@ struct MacTodosPage: View {
                 if openList.isEmpty && doneList.isEmpty {
                     EmptyStateView(
                         symbol: Theme.Icon.todo,
-                        title: query.isEmpty ? String(localized: "没有待办") : String(localized: "没有找到待办"),
-                        message: query.isEmpty ? String(localized: "记下一件要做的事，交给 Agent 执行并跟踪进度。") : String(localized: "换个搜索词试试"),
-                        action: query.isEmpty ? (String(localized: "新建待办"), { showCreate = true }) : nil
+                        title: isSearching ? String(localized: "没有找到待办") : String(localized: "没有待办"),
+                        message: isSearching ? String(localized: "换个搜索词试试") : String(localized: "记下一件要做的事，交给 Agent 执行并跟踪进度。"),
+                        action: isSearching ? nil : (String(localized: "新建待办"), { showCreate = true })
                     )
                 }
             }

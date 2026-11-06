@@ -158,6 +158,14 @@ private struct MarketStateChip: View {
     var item: ExtensionCatalogItem
 
     var body: some View {
+        if let op = ExtensionOperations.shared.operation(for: item.pluginID, market: item.market), let text = ExtensionOperationText.chip(op) {
+            Chip(text: text, look: .tint(op.state == .failed ? Theme.danger : Theme.accent))
+        } else {
+            stateChip
+        }
+    }
+
+    @ViewBuilder private var stateChip: some View {
         switch ExtensionMarketText.step(item) {
         case .install: Chip(text: String(localized: "可安装"), look: .tint(Theme.accent))
         case .upgrade: Chip(text: String(localized: "可升级"), look: .tint(Theme.caution))
@@ -180,6 +188,17 @@ struct MarketExtensionDetailView: View {
         SettingsForm {
             if let p = page.item {
                 header(p)
+                if let op = page.operation {
+                    ExtensionOperationSection(operation: op, name: p.name) {
+                        Task { if await page.retry() { done(op.kind) } }
+                    } review: {
+                        Task {
+                            do { try await page.review(op) } catch { app.toast = Toast(error.localizedDescription, style: .error) }
+                        }
+                    } dismiss: {
+                        Task { await page.dismissOperation() }
+                    }
+                }
                 actions(p)
                 if let perms = p.permissions, !perms.isEmpty {
                     Section {
@@ -208,9 +227,7 @@ struct MarketExtensionDetailView: View {
             titleVisibility: .visible) {
             Button(role: .destructive) {
                 Task {
-                    if await page.uninstall(cascade: true, members: page.removingMembers) {
-                        app.toast = Toast(page.removalMessage, style: .success)
-                    }
+                    if await page.uninstall(cascade: true, members: page.removingMembers) { done(.uninstall) }
                 }
             } label: { Text("停用依赖并卸载").lineLimit(1) }
             .accessibilityIdentifier("market-uninstall-cascade")
@@ -218,19 +235,37 @@ struct MarketExtensionDetailView: View {
         } message: {
             Text(page.uninstallConfirmation?.message ?? "")
         }
-        .sheet(item: $page.preview) { pv in
+        // Closed without 安装: the operation waiting on this preview is canceled.
+        .sheet(item: $page.preview, onDismiss: { page.declined() }) { pv in
             ExtensionInstallSheet(preview: pv, name: page.item?.name ?? pv.manifest.name ?? pv.manifest.id) {
-                let upgrade = pv.upgrade == true
-                if await page.confirm() {
-                    Haptics.success()
-                    app.toast = Toast(upgrade ? String(localized: "已升级") : String(localized: "已安装"), style: .success)
-                    return true
-                }
-                return false
+                // The sheet closes at once; the steps show on this page (and stay if it is left). The operation is
+                // taken before it closes, so its onDismiss does not cancel what was just agreed to.
+                let kind: ExtensionOperation.Kind = pv.upgrade == true ? .upgrade : .install
+                let consent = page.takeConsent()
+                Task { if await page.confirm(pv, consent: consent) { done(kind) } }
+                return true
             }
         }
-        .task { await page.load() }
-        .refreshable { await page.load() }
+        .task {
+            async let ops: Void = page.loadOperations()
+            await page.load()
+            await ops
+        }
+        .refreshable {
+            async let ops: Void = page.loadOperations()
+            await page.load()
+            await ops
+        }
+        // One started earlier (the page left and opened again) ends while this page is up: read it again.
+        .onChange(of: ExtensionOperations.shared.operation(for: page.pluginID, market: page.market)?.state) { old, new in
+            if old == .running, new == .succeeded { Task { await page.load() } }
+        }
+    }
+
+    private func done(_ kind: ExtensionOperation.Kind) {
+        Haptics.success()
+        app.toast = Toast(kind == .uninstall ? page.removalMessage : ExtensionOperationText.title(
+            ExtensionOperation(id: "", kind: kind, extensionID: "", state: .succeeded)), style: .success)
     }
 
     @ViewBuilder private func header(_ p: ExtensionCatalogItem) -> some View {
@@ -285,12 +320,12 @@ struct MarketExtensionDetailView: View {
                 .accessibilityIdentifier("market-uninstall")
                 .confirmationDialog("卸载「\(p.name)」？", isPresented: $confirmRemove, titleVisibility: .visible) {
                     Button(role: .destructive) {
-                        Task { if await page.uninstall() { app.toast = Toast(String(localized: "已卸载"), style: .success) } }
+                        Task { if await page.uninstall() { done(.uninstall) } }
                     } label: { Text(page.isPack ? "只卸载合集" : "卸载").lineLimit(1) }
                     .accessibilityIdentifier("market-uninstall-confirm")
                     if page.isPack {
                         Button(role: .destructive) {
-                            Task { if await page.uninstall(members: true) { app.toast = Toast(page.removalMessage, style: .success) } }
+                            Task { if await page.uninstall(members: true) { done(.uninstall) } }
                         } label: { Text("连同成员一起卸载").lineLimit(1) }
                         .accessibilityIdentifier("market-uninstall-members")
                     }
@@ -310,7 +345,7 @@ struct MarketExtensionDetailView: View {
         FormAction {
             Button { Task { await page.prepare() } } label: {
                 HStack(spacing: Theme.Space.s) {
-                    if page.working { ProgressView().controlSize(.small) } else { Image(systemName: symbol) }
+                    if page.previewing { ProgressView().controlSize(.small) } else { Image(systemName: symbol) }
                     Text(title).lineLimit(1)
                 }
                 .formActionWidth()

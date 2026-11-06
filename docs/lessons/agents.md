@@ -344,3 +344,8 @@ Claude Code 新加的后台类工具（Workflow、Monitor）都要在 `transcrip
 否则服务进程收到 SIGINT 后一直挂着；事件流是服务器范围的，N 个目录的实例就收到每个事件 N 遍，要按事件 id 去重、只让一个实例读流。
 列表和完整对话在插件接口里读不到，读 `opencode.db`（只读）；assistant 消息在一步里原地改写、seq 不变，而 runtime SDK 不会重推 `toSeq` 没增加的批次，所以只推定稿的消息。详见 `docs/opencode.md`。
 herdr 报的、Persona 不认识的 agent 以前被 `if a.Agent != "claude" { continue }` 悄悄丢掉（手机上看不见这个窗格），现在列成只有终端的行，新接一个 agent 时别再依赖「没人认领就消失」。
+
+## claude 被杀，它的 hook 还活着（2026-11-06，#4344，2.1.318）
+
+Claude Code 在 Linux / macOS 上用 `detached: true` 起 hook 命令，`personad hook` 自成一个进程组：claude 被 `kill -9`、崩溃或被 OOM 杀掉时 hook 不跟着死，还连着 node.sock 等手机，卡片和「需要你」挂到 `hook_timeout_minutes`。
+别指望「hook 断开 = Agent 不等了」：node 在等待期间按 hook 带来的 `agent_pid` / `agent_start` 每 2 秒看一次 claude 还在不在（`watchAgent`），连续两次不在才撤卡。被杀没收尸的 claude 是僵尸进程，`/proc/<pid>/stat` 还在、启动时刻也没变，要看状态 `Z` 才知道它没了（`procGone`）。

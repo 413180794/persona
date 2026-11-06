@@ -458,6 +458,28 @@
       },
       "shouldTranslate": false
     },
+    "%@ / %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        }
+      }
+    },
     "%@ / %@ token": {
       "localizations": {
         "zh-Hans": {
@@ -1127,6 +1149,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 做完了"
+          }
+        }
+      }
+    },
+    "%@ 停下来等你处理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ stopped and is waiting for you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@が停止し、対応を待っています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 停下来等你处理"
           }
         }
       }
@@ -3212,6 +3256,28 @@
     "%lld": {
       "shouldTranslate": false
     },
+    "%lld / %lld 台电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld computers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld 台のコンピューター"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld 台电脑"
+          }
+        }
+      }
+    },
     "%lld / %lld 在线": {
       "localizations": {
         "zh-Hans": {
@@ -3308,6 +3374,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%2$@のエージェント%1$lld件"
+          }
+        }
+      }
+    },
+    "%lld 个 Agent 请求要在对话里处理，按 E 只把另外 %lld 件标为已处理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld agent requests are handled in their conversations; press E to mark only the other %lld items as done."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件の Agent リクエストは会話で対応します。E キーで残りの %lld件だけを処理済みにできます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个 Agent 请求要在对话里处理，按 E 只把另外 %lld 件标为已处理。"
           }
         }
       }
@@ -8871,6 +8959,28 @@
         }
       }
     },
+    "Mac 上没有放大手势，画面始终完整显示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is no zoom gesture on the Mac; the view always shows the whole screen."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macにはズームジェスチャはなく、画面は常に全体がそのまま表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 上没有放大手势，画面始终完整显示。"
+          }
+        }
+      }
+    },
     "Mac 上的 Persona 在线时，这台 iPhone 不再推送「需要你处理」和「Agent 做完」的通知，由 Mac 提醒你；你让 Persona 定的提醒照常推送。": {
       "localizations": {
         "en": {
@@ -11869,6 +11979,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。"
+          }
+        }
+      }
+    },
+    "hub 在下载、校验、解包并启动它，大的扩展要一两分钟。可以先离开这一页，回来还能看到。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub is downloading, verifying, unpacking and starting it; a large extension takes a minute or two. You can leave this page and come back to it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hubがダウンロード、検証、展開、起動を行っています。大きな拡張機能は1〜2分かかります。このページを離れても、戻れば確認できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 在下载、校验、解包并启动它，大的扩展要一两分钟。可以先离开这一页，回来还能看到。"
+          }
+        }
+      }
+    },
+    "hub 在停下它、删掉它的文件和数据。可以先离开这一页，回来还能看到。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub is stopping it and deleting its files and data. You can leave this page and come back to it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hubが停止し、ファイルとデータを削除しています。このページを離れても、戻れば確認できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 在停下它、删掉它的文件和数据。可以先离开这一页，回来还能看到。"
           }
         }
       }
@@ -16090,6 +16244,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "下载中…"
+          }
+        }
+      }
+    },
+    "下载扩展包": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download package"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パッケージをダウンロード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载扩展包"
           }
         }
       }
@@ -21302,6 +21478,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "做完首次设置，它会装上 ego-browser 命令"
+          }
+        }
+      }
+    },
+    "停下扩展": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop extension"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能を停止"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停下扩展"
+          }
+        }
+      }
+    },
+    "停在「%@」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped at “%@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」で停止"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停在「%@」"
           }
         }
       }
@@ -26605,6 +26825,28 @@
         }
       }
     },
+    "删除文件和记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete files and records"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルと記録を削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除文件和记录"
+          }
+        }
+      }
+    },
     "删除账户": {
       "localizations": {
         "en": {
@@ -28013,6 +28255,28 @@
         }
       }
     },
+    "升级中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upgrading"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップグレード中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级中"
+          }
+        }
+      }
+    },
     "升级到 %@": {
       "localizations": {
         "en": {
@@ -28035,6 +28299,28 @@
         }
       }
     },
+    "升级失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upgrade failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップグレード失敗"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级失败"
+          }
+        }
+      }
+    },
     "升级就是同意这些。": {
       "localizations": {
         "en": {
@@ -28053,6 +28339,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "升级就是同意这些。"
+          }
+        }
+      }
+    },
+    "升级没有完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upgrade didn’t finish"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップグレードが完了しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级没有完成"
           }
         }
       }
@@ -28317,6 +28625,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "卸载「%@」？"
+          }
+        }
+      }
+    },
+    "卸载中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uninstalling"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンインストール中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卸载中"
+          }
+        }
+      }
+    },
+    "卸载失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uninstall failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンインストール失敗"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卸载失败"
+          }
+        }
+      }
+    },
+    "卸载没有完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uninstall didn’t finish"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンインストールが完了しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卸载没有完成"
           }
         }
       }
@@ -32077,6 +32451,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "同步到 Apple Watch"
+          }
+        }
+      }
+    },
+    "同步到各台电脑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync to computers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各コンピューターに同期"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步到各台电脑"
           }
         }
       }
@@ -38460,6 +38856,28 @@
         }
       }
     },
+    "安装中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装中"
+          }
+        }
+      }
+    },
     "安装前会再列一次，以下载到的包为准；新版本要得更多时，升级前会单独列出多出来的。": {
       "localizations": {
         "en": {
@@ -38482,6 +38900,28 @@
         }
       }
     },
+    "安装失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール失敗"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装失败"
+          }
+        }
+      }
+    },
     "安装时你同意过这些；新版本要得更多时，升级前会再问一次。": {
       "localizations": {
         "en": {
@@ -38500,6 +38940,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "安装时你同意过这些；新版本要得更多时，升级前会再问一次。"
+          }
+        }
+      }
+    },
+    "安装没有完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install didn’t finish"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストールが完了しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装没有完成"
           }
         }
       }
@@ -41810,6 +42272,28 @@
         }
       }
     },
+    "已取消": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canceled"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセルしました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消"
+          }
+        }
+      }
+    },
     "已取消屏蔽 %@": {
       "localizations": {
         "en": {
@@ -44115,6 +44599,28 @@
         }
       }
     },
+    "已经下载并检查好了，看一下它要的权限，同意后接着安装。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded and checked. Review the permissions it asks for; installing goes on once you agree."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロードと確認が済みました。求める権限を確認し、同意するとインストールを続けます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经下载并检查好了，看一下它要的权限，同意后接着安装。"
+          }
+        }
+      }
+    },
     "已经屏蔽了": {
       "localizations": {
         "en": {
@@ -44665,6 +45171,50 @@
         }
       }
     },
+    "已过 %lld 分 %lld 秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lldm %2$llds elapsed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld分%2$lld秒経過"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已过 %1$lld 分 %2$lld 秒"
+          }
+        }
+      }
+    },
+    "已过 %lld 秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%llds elapsed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld秒経過"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已过 %lld 秒"
+          }
+        }
+      }
+    },
     "已过保留期": {
       "localizations": {
         "en": {
@@ -45069,6 +45619,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "已选 %lld 件"
+          }
+        }
+      }
+    },
+    "已选 %lld 项": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Item Selected"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Items Selected"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld項目を選択中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %lld 项"
           }
         }
       }
@@ -50431,6 +51015,28 @@
         }
       }
     },
+    "打开对应的对话来处理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open their conversations to handle them."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "該当する会話を開いて対応してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开对应的对话来处理。"
+          }
+        }
+      }
+    },
     "打开对话": {
       "localizations": {
         "en": {
@@ -51830,6 +52436,40 @@
         }
       }
     },
+    "把 %lld 件标为已处理": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Mark %lld Item as Done"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Mark %lld Items as Done"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件を処理済みにする"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把 %lld 件标为已处理"
+          }
+        }
+      }
+    },
     "把 skill 放进跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。": {
       "localizations": {
         "en": {
@@ -52521,6 +53161,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "拖动选择，⌘C 拷贝；右键菜单里有拷贝、粘贴、全选"
+          }
+        }
+      }
+    },
+    "拨鼠标滚轮，或在妙控鼠标、触控板上双指滑动来滚动画面。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn the mouse wheel, or swipe with two fingers on a Magic Mouse or trackpad to scroll the view."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マウスホイールを回すか、Magic Mouseやトラックパッドで2本指をスワイプして画面をスクロールします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拨鼠标滚轮，或在妙控鼠标、触控板上双指滑动来滚动画面。"
           }
         }
       }
@@ -53820,6 +54482,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "换 token"
+          }
+        }
+      }
+    },
+    "换上新版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to new version"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいバージョンに切り替え"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "换上新版本"
           }
         }
       }
@@ -64618,6 +65302,28 @@
         }
       }
     },
+    "查看权限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Permissions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "権限を確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看权限"
+          }
+        }
+      }
+    },
     "查看每个账号的窗口": {
       "localizations": {
         "en": {
@@ -65257,6 +65963,28 @@
         }
       }
     },
+    "核对校验和": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verify checksum"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チェックサムを検証"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核对校验和"
+          }
+        }
+      }
+    },
     "核心": {
       "localizations": {
         "en": {
@@ -65562,6 +66290,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "检查更新"
+          }
+        }
+      }
+    },
+    "检查权限和依赖": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check permissions and dependencies"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "権限と依存関係を確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查权限和依赖"
           }
         }
       }
@@ -66266,6 +67016,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载更早的消息"
+          }
+        }
+      }
+    },
+    "正在升级": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upgrading"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップグレード中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在升级"
+          }
+        }
+      }
+    },
+    "正在卸载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uninstalling"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンインストール中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在卸载"
           }
         }
       }
@@ -69561,6 +70355,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有完全磁盘访问权限"
+          }
+        }
+      }
+    },
+    "没有完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Didn’t Finish"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有完成"
           }
         }
       }
@@ -73330,6 +74146,28 @@
         }
       }
     },
+    "点按就是左键；右键点按（或按住 Control 再点按）是右键；按住鼠标键不放再移动就是拖拽。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click for the left mouse button; right-click (or Control-click) for the right button; press and hold the mouse button and move to drag."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリックで左クリック、右クリック（またはControlを押しながらクリック）で右クリック、マウスボタンを押したまま動かすとドラッグになります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按就是左键；右键点按（或按住 Control 再点按）是右键；按住鼠标键不放再移动就是拖拽。"
+          }
+        }
+      }
+    },
     "点终端：开始打字，也是点在终端里（Claude 的「Jump to bottom」、顶上的提问）": {
       "localizations": {
         "en": {
@@ -74232,6 +75070,28 @@
         }
       }
     },
+    "用了 hub 上缓存的包": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used the package cached on the hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hubにキャッシュされたパッケージを使用"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用了 hub 上缓存的包"
+          }
+        }
+      }
+    },
     "用得偏快": {
       "localizations": {
         "en": {
@@ -74559,6 +75419,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "用量到上限"
+          }
+        }
+      }
+    },
+    "由 %@ 发起": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Started by %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@が開始"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 %@ 发起"
           }
         }
       }
@@ -75505,6 +76387,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "直接打字"
+          }
+        }
+      }
+    },
+    "直接用这台 Mac 的键盘输入，文字、⌘ ⌥ ⌃ ⇧ 和快捷键都原样送到画面里的 Mac。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type directly on this Mac's keyboard; text, ⌘ ⌥ ⌃ ⇧ and shortcuts are all sent as-is to the Mac shown in the view."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このMacのキーボードで直接入力します。文字や⌘ ⌥ ⌃ ⇧、ショートカットはすべてそのまま画面内のMacに送られます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接用这台 Mac 的键盘输入，文字、⌘ ⌥ ⌃ ⇧ 和快捷键都原样送到画面里的 Mac。"
           }
         }
       }
@@ -78033,6 +78937,28 @@
         }
       }
     },
+    "第 %lld 步，共 %lld 步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step %1$lld of %2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ステップ %1$lld/%2$lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %1$lld 步，共 %2$lld 步"
+          }
+        }
+      }
+    },
     "第 %lld 步，共 3 步 · %@": {
       "localizations": {
         "zh-Hans": {
@@ -78309,6 +79235,28 @@
         }
       }
     },
+    "等了很久 hub 还没说做完没有，下拉刷新看看。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub hasn’t said whether it finished after a long wait. Pull down to refresh."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長く待ちましたが、hubから完了の知らせがありません。下に引いて更新してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等了很久 hub 还没说做完没有，下拉刷新看看。"
+          }
+        }
+      }
+    },
     "等你": {
       "localizations": {
         "en": {
@@ -78327,6 +79275,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "等你"
+          }
+        }
+      }
+    },
+    "等你同意": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for You"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同意待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你同意"
+          }
+        }
+      }
+    },
+    "等你同意权限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for your consent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "権限への同意待ち"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你同意权限"
           }
         }
       }
@@ -82232,6 +83224,28 @@
         }
       }
     },
+    "装进 hub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install on hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hubにインストール"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装进 hub"
+          }
+        }
+      }
+    },
     "要 Persona 做什么": {
       "localizations": {
         "en": {
@@ -83108,6 +84122,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "解决后的评论会收在这里"
+          }
+        }
+      }
+    },
+    "解包": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unpack"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展開"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解包"
           }
         }
       }
@@ -90643,6 +91679,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "这些地方都能用"
+          }
+        }
+      }
+    },
+    "这些是 Agent 的请求": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are Agent requests"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これらは Agent のリクエストです"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些是 Agent 的请求"
           }
         }
       }

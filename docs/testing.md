@@ -170,6 +170,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。
 - 设置 › 扩展：`MOCK_PLUGINS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`；`TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>` 跑 `ExtensionSettingsTests`（列表、填表被 hub 拒绝、填密钥后变成运行中）、`ExtensionSlotsTests`（UI 插槽：设置首页的卡片和入口、用量页、机器上的一节），
   每轮前重启 mock（状态在内存里）。截图同上：`TEST_RUNNER_JARVIS_SHOTS`、`simctl ui … appearance`、`TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` 命名，两种界面风格都跑。
+  扩展安装的步骤和进度（#3307）：`MOCK_PLUGINS=1 MOCK_EXTENSION_OPS=fail PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_PLUGINS_OPS_HUB=http://127.0.0.1:<端口>` 跑 `ExtensionInstallProgressTests`（后台预览的步骤、等你同意时预览自己弹出、停在「启动」、离开再回来、重试走缓存直接装完、卸载失败后重试）；
+  `MOCK_EXTENSION_OPS=1` 全部成功，`MOCK_EXTENSION_OPS_STEP=<秒>` 放慢好截图，不带 `MOCK_EXTENSION_OPS` 加 `MOCK_EXTENSION_INSTALL_DELAY=<秒>` 看旧 hub 的「正在安装」。
   新模拟器第一次会弹通知授权，测试自己点掉。
 - Git 拉取：`MOCK_FILES=1 MOCK_GIT_PULL=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`；`TEST_RUNNER_JARVIS_GIT_HUB=http://127.0.0.1:<端口>` 跑 `GitPullUITests`，从落后 28 个提交到成功刷新、再次检查和失败后重试。
   `TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，分别用 `simctl ui <udid> appearance light|dark` 切换实际外观，两种界面风格都跑；`TEST_RUNNER_JARVIS_GIT_APPEARANCE` 仅用于截图命名。

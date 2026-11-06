@@ -183,7 +183,10 @@ func TestGoldenAssistantSnapshotWork(t *testing.T) {
 		{SessionID: "bbbbbbbb-2", Cwd: "/code/demo", Title: "等部署", Status: proto.StatusDone, UpdatedAt: at},
 		{SessionID: "cccccccc-3", Cwd: "/code/demo", Title: "选方案", Status: proto.StatusDone, UpdatedAt: at},
 		{SessionID: "dddddddd-4", Cwd: "/code/demo", Title: "没分诊", Status: proto.StatusDone, UpdatedAt: at},
+		{SessionID: "eeeeeeee-5", Cwd: "/code/demo", Title: "在问", Status: proto.StatusDone, UpdatedAt: at},
 	})
+	putPending(s, &pending{ix: proto.Interaction{ID: "own", MachineID: "server", SessionID: "eeeeeeee-5", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
 	wake := time.Now().Add(5 * time.Minute).UTC()
 	var report []assistantwire.SessionWork
 	for sid, w := range map[string]proto.WorkState{
@@ -239,5 +242,37 @@ func TestInteractionLineSaysWhatIsAsked(t *testing.T) {
 	got := interactionLine(i18n.ZhHans, three)
 	if !strings.HasSuffix(got, "…（还有 2 个问题）") || utf8.RuneCountInString(got) != 61 {
 		t.Errorf("long question: %q (%d runes)", got, utf8.RuneCountInString(got))
+	}
+}
+
+// The snapshot's 需要你 is the agents in that state, as the Live Activity, the lists and the badges count them: a
+// decision the triage put no card up for (cards off, muted, 先不管) stays 完成未看 with what it waits for, and is not
+// listed once seen (#4449).
+func TestSnapshotNeedsYouIsTheState(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	s := ft.s
+	ft.f.devices = []Device{{ID: "mac", Name: "Mac", Online: true, Reachable: true}}
+	ft.d.add("mac", "Mac")
+	at := time.Now().Add(-10 * time.Minute).UTC()
+	seen := proto.Session{SessionID: "bbbbbbbb-2", Cwd: "/code/demo", Title: "看过了", Status: proto.StatusIdle, UpdatedAt: at}
+	ft.d.setSessions("mac", []proto.Session{
+		{SessionID: "aaaaaaaa-1", Cwd: "/code/demo", Title: "选方案", Status: proto.StatusDone, UpdatedAt: at},
+		seen,
+		{SessionID: "cccccccc-3", Cwd: "/code/demo", Title: "在问", Status: proto.StatusDone, UpdatedAt: at},
+	})
+	user := proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, Line: "你说先不管", TurnAt: at}
+	s.fleetTakeSnapshot(Snapshot{Work: workReport(true, map[string]proto.WorkState{"aaaaaaaa-1": user, "bbbbbbbb-2": user})})
+	putPending(s, &pending{ix: proto.Interaction{ID: "own", MachineID: "mac", SessionID: "cccccccc-3", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
+
+	needs, unread, waiting, _, _, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
+	if live := s.fleetSnapshot().NeedsYou; len(needs) != live || live != 1 || needs[0].Session != "cccccccc" {
+		t.Fatalf("需要你: snapshot %+v, Live Activity %d; want the one asking", needs, live)
+	}
+	if len(unread) != 1 || unread[0].Session != "aaaaaaaa" || unread[0].Line != "你说先不管" {
+		t.Fatalf("完成未看 %+v: want the cardless decision, with what it waits for", unread)
+	}
+	if len(waiting) != 0 {
+		t.Fatalf("在等的 %+v: the hub waits out none of them", waiting)
 	}
 }

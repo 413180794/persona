@@ -246,7 +246,9 @@ enum ExtensionMarketText {
 @Observable final class ExtensionMarketModel {
     struct Deps {
         var api: () -> APIClient?
-        static var live: Deps { .init(api: { AppModel.shared.api }) }
+        /// The app's own (its installs go through `ExtensionOperations.shared`); a test's has a store of its own.
+        var live = false
+        static var live: Deps { .init(api: { AppModel.shared.api }, live: true) }
     }
 
     private(set) var items: [ExtensionCatalogItem]?
@@ -370,7 +372,9 @@ enum ExtensionMarketText {
 }
 
 /// 扩展市场 › one plugin: what it is and may do; installing or upgrading goes preview → agree → install, removing is
-/// only for one installed from this market.
+/// only for one installed from this market. With a hub that runs operations (#3307) the preview downloads and checks
+/// in the background, the page showing its steps; the sheet opens when it waits for the user's yes and the same
+/// operation installs. The operations are the app's (`ExtensionOperations`), so they stay when the page is left.
 @Observable final class MarketExtensionModel {
     let market: String
     let pluginID: String
@@ -379,22 +383,38 @@ enum ExtensionMarketText {
     private(set) var error: String?
     /// The preview waiting for the user's yes (the sheet with the permissions).
     var preview: ExtensionPreview?
-    /// Previewing, installing, upgrading or removing.
-    private(set) var working = false
+    /// Asking for the preview (an older hub: downloading and checking it before answering).
+    private(set) var previewing = false
+    /// The install / upgrade / removal request is out and the hub has not said yet what it is doing.
+    private(set) var starting = false
     private(set) var isPack = false
     private(set) var removingMembers = false
     private(set) var removalMessage = String(localized: "已卸载")
     var uninstallConfirmation: ExtensionDisableConfirmation?
+    /// The operation the open preview belongs to (a hub with operations): agreeing goes on with it, closing the
+    /// sheet without agreeing cancels it.
+    @ObservationIgnored private(set) var consentOf: String?
+    /// The last removal's choices, for 重试.
+    @ObservationIgnored private var lastRemoval = (cascade: false, members: false)
     @ObservationIgnored private let deps: ExtensionMarketModel.Deps
+    @ObservationIgnored private let operations: ExtensionOperations
 
-    init(market: String, id: String, deps: ExtensionMarketModel.Deps = .live) {
+    init(market: String, id: String, deps: ExtensionMarketModel.Deps = .live, operations: ExtensionOperations? = nil) {
         self.market = market
         self.pluginID = id
         self.deps = deps
+        self.operations = operations ?? (deps.live ? .shared : ExtensionOperations(deps: .init(api: deps.api, features: { [] }, hub: { nil })))
     }
 
     var step: ExtensionMarketText.Step? { item.map(ExtensionMarketText.step) }
     var canUninstall: Bool { item?.fromThisMarket == true && item?.installed != nil }
+    /// The install, upgrade or removal going on, waiting for consent, or the one that failed (one that went
+    /// through or was canceled is not shown).
+    var operation: ExtensionOperation? {
+        operations.operation(for: pluginID, market: market).flatMap { $0.state == .succeeded || $0.state == .canceled ? nil : $0 }
+    }
+    /// Previewing, installing, upgrading or removing.
+    var working: Bool { previewing || starting || operation?.isActive == true }
 
     func load() async {
         loading = true
@@ -416,53 +436,143 @@ enum ExtensionMarketText {
         }
     }
 
-    /// Downloads and checks the package, for the permissions to agree to (the sheet opens with `preview`).
+    /// What the hub has going on (this page opening: an install started earlier shows its steps).
+    func loadOperations() async { await operations.reload() }
+
+    /// Asks for the preview, for the permissions to agree to (the sheet opens with `preview`). A hub with operations
+    /// downloads and checks in the background, the steps on this page, and the sheet opens when it waits for consent.
     func prepare() async {
-        await work { self.preview = try await $0.previewCatalogExtension(market: self.market, plugin: self.pluginID) }
+        previewing = true
+        defer { previewing = false }
+        do {
+            if operations.stepped {
+                // The request answers at once with the operation; the button stops spinning, the steps take over.
+                let op = try await operations.preview(market: market, extension: pluginID)
+                if op.state == .needsConsent { try await review(op) }
+            } else {
+                preview = try await api().previewCatalogExtension(market: market, plugin: pluginID)
+            }
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
-    /// Installs or upgrades with the preview agreed to. true: done (the catalog read again).
-    func confirm() async -> Bool {
-        guard let pv = preview, pv.canConfirm else { return false }
-        let ok = await work {
-            if pv.upgrade == true { _ = try await $0.upgradeExtension(self.pluginID, preview: pv) } else { _ = try await $0.installExtension(preview: pv) }
-        }
+    /// Opens the preview an operation waits on (查看权限 on its card, or the page opened again).
+    func review(_ op: ExtensionOperation) async throws {
+        guard op.state == .needsConsent, let pv = try await operations.consentPreview(op.id) else { return }
+        consentOf = op.id
+        preview = pv
+    }
+
+    /// Installs or upgrades with the preview agreed to; the sheet closes at once and the steps show on the page.
+    /// `agreed`: the preview the sheet showed (the sheet closing clears `preview` before this runs).
+    /// true: done (the catalog read again); false: it failed (the page's card says where) or could not start.
+    /// `consent`: the operation it goes on with (`takeConsent()`, taken before the sheet closed); nil: the page's.
+    func confirm(_ agreed: ExtensionPreview? = nil, consent: String? = nil) async -> Bool {
+        guard let pv = agreed ?? preview, pv.canConfirm else { return false }
+        let of = consent ?? takeConsent()
         preview = nil
-        if ok { await load() }
-        return ok
+        starting = true
+        defer { starting = false }
+        let op: ExtensionOperation
+        if of != nil {
+            do {
+                op = try await operations.agree(pluginID, preview: pv)
+            } catch {
+                self.error = error.localizedDescription
+                return false
+            }
+        } else {
+            op = await operations.installWithoutSteps(pluginID, name: item?.name ?? pv.manifest.name, preview: pv)
+        }
+        guard op.state == .succeeded else { return false }
+        error = nil
+        await load()
+        return true
+    }
+
+    /// The operation the open preview belongs to, taken: the sheet closing after this does not cancel it.
+    func takeConsent() -> String? {
+        defer { consentOf = nil }
+        return consentOf
+    }
+
+    /// The sheet closed without 安装: the operation waiting on it is canceled (the hub drops the preview).
+    func declined() {
+        guard let id = consentOf else { return }
+        consentOf = nil
+        Task { await operations.dismiss(id) }
     }
 
     func uninstall(cascade: Bool = false, members: Bool = false) async -> Bool {
         guard canUninstall, !working else { return false }
         removingMembers = members
-        let ok = await work { api in
-            do {
-                let result = try await api.uninstallExtension(self.pluginID, cascade: cascade, members: members)
-                self.removalMessage = members
-                    ? result.removedMembers.map { String(localized: "合集已卸载；成功卸载 \($0.count) 个成员") } ?? String(localized: "合集已卸载，成员结果未返回")
-                    : String(localized: "已卸载")
-                self.uninstallConfirmation = nil
-            } catch let e as APIError where !cascade && e.code == "has_dependents" {
-                self.uninstallConfirmation = ExtensionDisableConfirmation(error: e)
-                throw e
-            }
-        }
-        if uninstallConfirmation != nil { error = nil }
-        if ok { await load() }
-        return ok
-    }
-
-    @discardableResult private func work(_ run: (APIClient) async throws -> Void) async -> Bool {
-        working = true
-        defer { working = false }
+        lastRemoval = (cascade, members)
+        starting = true
+        defer { starting = false }
         do {
-            try await run(try api())
+            let result = try await operations.uninstall(pluginID, name: item?.name, cascade: cascade, members: members)
+            removalMessage = members
+                ? result.removedMembers.map { String(localized: "合集已卸载；成功卸载 \($0.count) 个成员") } ?? String(localized: "合集已卸载，成员结果未返回")
+                : String(localized: "已卸载")
+            uninstallConfirmation = nil
             error = nil
+            await load()
             return true
+        } catch let e as APIError where !cascade && e.code == "has_dependents" {
+            uninstallConfirmation = ExtensionDisableConfirmation(error: e)
+            error = nil
+            return false
         } catch {
-            self.error = error.localizedDescription
+            // The operation's card says where it stopped when there is one (its event can come after the answer:
+            // read the hub's list first); else the error under the title.
+            if operations.stepped, operation?.state != .failed { await operations.reload() }
+            self.error = operation?.state == .failed ? nil : error.localizedDescription
             return false
         }
+    }
+
+    /// 重试 on a failed operation: the hub starts it again when it can (the package is in its cache; the permissions
+    /// already agreed to are not asked again); otherwise the same thing again from this page. true: done.
+    func retry() async -> Bool {
+        guard let op = operation, op.state == .failed else { return false }
+        if op.retryable, !op.isLocal, operations.stepped {
+            starting = true
+            defer { starting = false }
+            do {
+                let next = try await operations.retry(op)
+                switch next.state {
+                case .needsConsent:
+                    try await review(next)
+                    return false
+                case .succeeded:
+                    error = nil
+                    await load()
+                    return true
+                default:
+                    return false
+                }
+            } catch {
+                self.error = error.localizedDescription
+                return false
+            }
+        }
+        await operations.dismiss(op.id)
+        switch op.kind {
+        case .uninstall:
+            return await uninstall(cascade: lastRemoval.cascade, members: lastRemoval.members)
+        case .install, .upgrade:
+            await prepare()
+            return false
+        }
+    }
+
+    /// The card's 取消 (checking, waiting for consent) or 关闭 (failed): the hub cancels or forgets it.
+    func dismissOperation() async {
+        guard let op = operation else { return }
+        if op.id == consentOf { consentOf = nil }
+        await operations.dismiss(op.id)
     }
 
     private func api() throws -> APIClient {
