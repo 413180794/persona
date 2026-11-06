@@ -256,7 +256,15 @@ export function canDraft(it: InboxItem): boolean {
 export function openTitle(it: InboxItem): string {
   const url = it.connector?.open_url;
   if (url?.startsWith("sms:")) return t("lib-inbox.reply_in_messages");
-  return connectorOpenTitle(it.source) ?? (url ? t("lib-inbox.open_in", { name: it.account_name || it.source }) : t("lib-inbox.open"));
+  return connectorOpenTitle(it.source) ?? (url ? tightCJK(t("lib-inbox.open_in", { name: it.account_name || it.source })) : t("lib-inbox.open"));
+}
+
+/**
+ * Drops the template's spaces where a Chinese name meets Chinese text: 「在 GitHub 里打开」 keeps them,
+ * 「在微信里打开」 does not. Other scripts are left alone.
+ */
+export function tightCJK(text: string): string {
+  return text.replace(/(?<=\p{Script=Han}) (?=\p{Script=Han})/gu, "");
 }
 
 /** A connector item's `open_url` as the browser opens it; an sms: one carries the AI twin's draft as its body. */

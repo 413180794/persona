@@ -9,7 +9,7 @@ import {
   chatHeadline, checkLabel, githubStateLabel, isChatThread, isGitHubThread, labelColor, loadThread, mediaLine, mediaURL, mergeNewest, mergeOlder,
   reachMessage, replyInThread, reviewLabel, startsGroup, type ThreadChat, type ThreadMedia, type ThreadMessage, type ThreadPage,
 } from "../../lib/connectors";
-import { connectorReference, itemPath, shortTime, withToken, type InboxItem } from "../../lib/inbox";
+import { connectorReference, itemPath, shortTime, tightCJK, withToken, type InboxItem } from "../../lib/inbox";
 import { openLink } from "../../lib/links";
 import { t } from "../../i18n";
 import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
@@ -122,7 +122,7 @@ function ConnectorText({ item, problem }: { item: InboxItem; problem?: string })
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {c?.url && (
               <Button tone="secondary" icon="external" onClick={() => openLink(c.url!, item.title)}>
-                {t("inbox-connectorthread.open_in", { name: item.account_name || item.source })}
+                {tightCJK(t("inbox-connectorthread.open_in", { name: item.account_name || item.source }))}
               </Button>
             )}
             {c?.reply_to && c.can_reply && <p className="min-w-0 text-[12px] text-ink-3">{t("inbox-connectorthread.reply_goes", { how: c.reply_to })}</p>}

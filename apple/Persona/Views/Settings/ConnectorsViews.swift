@@ -103,7 +103,12 @@ enum ConnectorText {
     /// says its name.
     nonisolated static func openInTitle(_ id: String, name: String) -> String {
         let place = profile(id).app ?? name
-        return String(localized: "Open in \(place) [Connectors Views 25f065]")
+        return tightCJK(String(localized: "Open in \(place) [Connectors Views 25f065]"))
+    }
+
+    /// Drops the spaces where a Chinese name meets Chinese text: 「在 GitHub 里打开」 keeps them, 「在示例里打开」 does not.
+    nonisolated static func tightCJK(_ text: String) -> String {
+        text.replacingOccurrences(of: #"(?<=\p{Han}) (?=\p{Han})"#, with: "", options: .regularExpression)
     }
 }
 

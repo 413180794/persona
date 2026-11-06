@@ -211,7 +211,8 @@ describe("连接器的条目", () => {
     expect(openTitle(sms)).toBe("在信息里回复");
     expect(openTitle(ci)).toBe("打开");
     // a plugin's connector with a link of its own names the connector, never Telegram
-    expect(openTitle(item("example:1", { source: "example", account_name: "示例", connector: { thread: "t1", open_url: "https://example.com/t1" } }))).toBe("在 示例 里打开");
+    expect(openTitle(item("example:1", { source: "example", account_name: "示例", connector: { thread: "t1", open_url: "https://example.com/t1" } }))).toBe("在示例里打开");
+    expect(openTitle(item("example:2", { source: "example", account_name: "Example", connector: { thread: "t2", open_url: "https://example.com/t2" } }))).toBe("在 Example 里打开");
     expect(openURL(sms)).toBe("sms:+15550100&body=%E5%A5%BD%E7%9A%84%20%E8%A7%81");
     expect(openURL(tg)).toBe("tg://resolve?domain=example");
     expect(openURL(ci)).toBeUndefined();

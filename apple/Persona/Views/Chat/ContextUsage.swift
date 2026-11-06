@@ -33,8 +33,10 @@ nonisolated struct ContextUsage: Equatable, Sendable {
 
     /// 172000 → "172K", 1000000 → "1M", 1260000 → "1.3M".
     static func short(_ n: Int) -> String {
-        if n >= 1_000_000 {
-            let m = Double(n) / 1_000_000
+        // A unit ends where its number would round to 1000: 999_600 is "1M", not "1000K". The M figure is rounded to
+        // one decimal before asking whether it is whole, so 1_960_000 is "2M", not "2.0M".
+        if n >= 999_500 {
+            let m = (Double(n) / 100_000).rounded() / 10
             return (m == m.rounded() ? String(Int(m)) : String(format: "%.1f", m)) + "M"
         }
         if n >= 1000 { return "\(Int((Double(n) / 1000).rounded()))K" }

@@ -5,5 +5,6 @@
   "ask_apps": "アシスタントに「{machine}」の{apps}を操作させる",
   "ask_run": "アシスタントに「{machine}」で操作を実行させる",
   "ask_unknown": "{summary}（どのAppに触れるか特定しきれないため、今回は確認します）",
-  "always": "今後{apps}の操作は確認しない"
+  "always": "今後{apps}の操作は確認しない",
+  "err_no_database": "データベースがありません"
 }

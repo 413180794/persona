@@ -7,11 +7,11 @@ package extmgr
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // clipboardBodyMost caps a POST body: the node takes at most 1 MiB of text (node.clipboardMost), with room for the
@@ -20,11 +20,11 @@ const clipboardBodyMost = 4 << 20
 
 func (h *Manager) computerClipboard(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if !h.portAllowed(m, screenPort) {
-		writeErr(w, http.StatusNotFound, errors.New("这台 Mac 没有打开操控电脑或浏览器扩展"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-computer.err_clipboard_off"))
 		return
 	}
 	if !m.isOnline() {
-		writeErr(w, http.StatusConflict, errors.New("机器离线"))
+		writeErr(w, http.StatusConflict, i18n.Err("hub-computer.err_offline"))
 		return
 	}
 	params := map[string]any{}
@@ -33,7 +33,7 @@ func (h *Manager) computerClipboard(w http.ResponseWriter, r *http.Request, m *M
 			Text string `json:"text"`
 		}
 		if err := decodeJSONBody(w, r, &in, clipboardBodyMost); err != nil {
-			writeBodyErr(w, err, fmt.Errorf("bad body: %w", err))
+			h.writeComputerBodyErr(w, r, err)
 			return
 		}
 		params["set"] = in.Text
@@ -46,9 +46,9 @@ func (h *Manager) computerClipboard(w http.ResponseWriter, r *http.Request, m *M
 	}
 	if err := m.callBuiltin(ctx, "computer.clipboard", params, &out); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
-			err = errors.New("这台电脑上的 personad 太旧，还不会读写剪贴板：重新部署它")
+			err = i18n.Err("hub-computer.err_clipboard_outdated")
 		}
-		writeErr(w, http.StatusConflict, err)
+		h.writeComputerErr(w, r, http.StatusConflict, err)
 		return
 	}
 	writeJSON(w, map[string]any{"text": out.Text})

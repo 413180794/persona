@@ -8,7 +8,6 @@ package extmgr
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -70,7 +69,7 @@ func (h *Manager) refreshBrowser(ctx context.Context, m *Machine) *proto.Browser
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.browserOf(m)
 		}
-		b = proto.Browser{Note: i18n.T(h.userLang(), "hub-browser.note_outdated")}
+		b = proto.Browser{Note: i18n.T(i18n.Default, "hub-browser.note_outdated")}
 	}
 	if h.keepBrowser(m, b, asked) {
 		h.broadcastMachines()
@@ -119,7 +118,7 @@ func (h *Manager) getBrowser(w http.ResponseWriter, r *http.Request, m *Machine)
 		writeErr(w, http.StatusNotFound, i18n.Err("hub-browser.err_off"))
 		return
 	}
-	writeJSON(w, b)
+	writeJSON(w, i18n.BrowserStatus(h.requestLang(r), b))
 }
 
 // putBrowser: PUT /api/v1/machines/{mid}/browser {"enabled": bool}, the machine page's switch (the plugin's machines).
@@ -128,7 +127,7 @@ func (h *Manager) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine)
 		Enabled bool `json:"enabled"`
 	}
 	if err := decodeJSONBody(w, r, &in, 4<<10); err != nil {
-		writeBodyErr(w, err, fmt.Errorf("bad body: %w", err))
+		h.writeComputerBodyErr(w, r, err)
 		return
 	}
 	if h.browserOf(m) == nil {
@@ -139,7 +138,7 @@ func (h *Manager) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine)
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, h.refreshBrowser(r.Context(), m))
+	writeJSON(w, i18n.BrowserStatus(h.requestLang(r), h.refreshBrowser(r.Context(), m)))
 }
 
 // postBrowserJob: POST /api/v1/machines/{mid}/browser/{install|open|cancel}, the machine page's "Install ego lite", "Open
@@ -147,7 +146,7 @@ func (h *Manager) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine)
 func (h *Manager) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine) {
 	action := r.PathValue("action")
 	if action != "install" && action != "open" && action != "cancel" {
-		writeErr(w, http.StatusNotFound, errors.New("unknown action"))
+		writeErr(w, http.StatusNotFound, i18n.ErrEnglish("hub-computer.err_unknown_action"))
 		return
 	}
 	if b := h.browserOf(m); b == nil || !b.Enabled {
@@ -166,17 +165,18 @@ func (h *Manager) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Mach
 		if strings.Contains(err.Error(), "unknown method") {
 			err = i18n.Err("hub-browser.err_outdated_install")
 		}
-		writeErr(w, http.StatusConflict, err)
+		h.writeComputerErr(w, r, http.StatusConflict, err)
 		return
 	}
 	h.logf("[%s] browser %s", m.cfg.ID, action)
 	if h.keepBrowser(m, b, asked) {
 		h.broadcastMachines()
 	}
-	writeJSON(w, h.browserOf(m))
+	writeJSON(w, i18n.BrowserStatus(h.requestLang(r), h.browserOf(m)))
 }
 
 // ---- the assistant's tools ----
+// Tool diagnostics below are model instructions and raw runtime output, not client interface copy.
 
 func (h *Manager) browserTools() []proto.Tool {
 	if s := h.machineExtension(egoExtensionID); !s.On || len(s.Machines) == 0 {

@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/lcuconfirm"
@@ -144,7 +145,7 @@ func (h *Manager) refreshComputer(ctx context.Context, m *Machine) *proto.Comput
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.computerOf(m)
 		}
-		c = proto.Computer{Note: i18n.T(h.userLang(), "hub-computer.note_outdated")}
+		c = proto.Computer{Note: i18n.T(i18n.Default, "hub-computer.note_outdated")}
 	}
 	if h.keepComputer(m, c, asked) {
 		h.broadcastMachines()
@@ -197,7 +198,7 @@ func (h *Manager) getComputer(w http.ResponseWriter, r *http.Request, m *Machine
 		writeErr(w, http.StatusNotFound, i18n.Err("hub-computer.err_off"))
 		return
 	}
-	writeJSON(w, c)
+	writeJSON(w, i18n.ComputerStatus(h.requestLang(r), c))
 }
 
 // putComputer: PUT /api/v1/machines/{mid}/computer {"enabled": bool}, the machine page's switch: it goes into the
@@ -209,7 +210,7 @@ func (h *Manager) putComputer(w http.ResponseWriter, r *http.Request, m *Machine
 		NoAutoLock *bool `json:"no_auto_lock"`
 	}
 	if err := decodeJSONBody(w, r, &in, 4<<10); err != nil {
-		writeBodyErr(w, err, fmt.Errorf("bad body: %w", err))
+		h.writeComputerBodyErr(w, r, err)
 		return
 	}
 	if !h.operable(m) {
@@ -229,7 +230,7 @@ func (h *Manager) putComputer(w http.ResponseWriter, r *http.Request, m *Machine
 		}
 		h.logf("[%s] no auto lock %v", m.cfg.ID, *in.NoAutoLock)
 	}
-	writeJSON(w, h.refreshComputer(r.Context(), m))
+	writeJSON(w, i18n.ComputerStatus(h.requestLang(r), h.refreshComputer(r.Context(), m)))
 }
 
 // setPluginMachine turns a per-Mac plugin on or off for a machine: its config's machines (the machine page's switch,
@@ -242,7 +243,7 @@ func (h *Manager) setExtensionMachine(ctx context.Context, extension, machine st
 func (h *Manager) setExtensionList(ctx context.Context, extension, key, machine string, on bool) error {
 	p := h.extensions.reg.Get(extension)
 	if p == nil {
-		return errors.New("no plugin " + extension)
+		return i18n.ErrEnglish("hub-computer.err_no_extension", i18n.Args{"extension": extension})
 	}
 	cfg := map[string]any{}
 	_ = json.Unmarshal(h.extensions.reg.Config(p), &cfg)
@@ -267,7 +268,7 @@ func (h *Manager) setExtensionList(ctx context.Context, extension, key, machine 
 func (h *Manager) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine) {
 	action := r.PathValue("action")
 	if action != "install" && action != "grant" && action != "cancel" && action != "lock" && action != "unlocking" {
-		writeErr(w, http.StatusNotFound, errors.New("unknown action"))
+		writeErr(w, http.StatusNotFound, i18n.ErrEnglish("hub-computer.err_unknown_action"))
 		return
 	}
 	if c := h.computerOf(m); c == nil || !c.Enabled {
@@ -280,7 +281,7 @@ func (h *Manager) postComputerJob(w http.ResponseWriter, r *http.Request, m *Mac
 			who = "the hub's token"
 		}
 		h.logf("[%s] unlocked over its live screen from %s", m.cfg.ID, who)
-		writeJSON(w, h.computerOf(m))
+		writeJSON(w, i18n.ComputerStatus(h.requestLang(r), h.computerOf(m)))
 		return
 	}
 	if !m.isOnline() {
@@ -295,17 +296,37 @@ func (h *Manager) postComputerJob(w http.ResponseWriter, r *http.Request, m *Mac
 		if strings.Contains(err.Error(), "unknown method") {
 			err = i18n.Err("hub-computer." + map[bool]string{true: "err_outdated_lock", false: "err_outdated_install"}[action == "lock"])
 		}
-		writeErr(w, http.StatusConflict, err)
+		h.writeComputerErr(w, r, http.StatusConflict, err)
 		return
 	}
 	h.logf("[%s] computer %s", m.cfg.ID, action)
 	if h.keepComputer(m, c, asked) {
 		h.broadcastMachines()
 	}
-	writeJSON(w, h.computerOf(m))
+	writeJSON(w, i18n.ComputerStatus(h.requestLang(r), h.computerOf(m)))
+}
+
+// writeComputerErr localizes recognized node text only at the HTTP boundary, after RPC has erased Go error types.
+// Keep apierr's status/code/retry metadata and the original error for clients with no language preference.
+func (h *Manager) writeComputerErr(w http.ResponseWriter, r *http.Request, status int, err error) {
+	l := h.requestLang(r)
+	body := apierr.Body(status, "", err)
+	body["error"] = i18n.ComputerText(l, i18n.Localize(err, l))
+	writeErrorBody(w, status, body)
+}
+
+func (h *Manager) writeComputerBodyErr(w http.ResponseWriter, r *http.Request, err error) {
+	var large *http.MaxBytesError
+	if errors.As(err, &large) {
+		writeErrCode(w, http.StatusRequestEntityTooLarge, proto.CodeTooLarge,
+			i18n.ErrEnglish("hub-computer.err_body_large", i18n.Args{"limit": large.Limit}))
+		return
+	}
+	writeErr(w, http.StatusBadRequest, i18n.ErrEnglish("hub-computer.err_bad_body", i18n.Args{"err": err.Error()}))
 }
 
 // ---- the assistant's tools ----
+// Tool diagnostics below are model instructions and raw runtime output, not client interface copy.
 
 // computerTools are the assistant's tools while the plugin is on for some machine.
 func (h *Manager) computerTools() []proto.Tool {

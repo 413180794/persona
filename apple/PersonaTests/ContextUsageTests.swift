@@ -41,5 +41,11 @@ struct ContextUsageTests {
         #expect(ContextUsage.short(1_000_000) == "1M")
         #expect(ContextUsage.short(1_260_000) == "1.3M")
         #expect(ContextUsage.short(800) == "800")
+        // Values that round up to the next unit move to it.
+        #expect(ContextUsage.short(999) == "999")
+        #expect(ContextUsage.short(999_499) == "999K")
+        #expect(ContextUsage.short(999_500) == "1M")
+        #expect(ContextUsage.short(999_600) == "1M")
+        #expect(ContextUsage.short(1_960_000) == "2M")
     }
 }

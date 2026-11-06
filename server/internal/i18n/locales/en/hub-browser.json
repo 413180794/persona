@@ -4,5 +4,20 @@
   "err_not_enabled": "The browser extension isn’t on for this computer",
   "err_offline": "Machine offline",
   "err_outdated_install": "The personad on this computer is too old to install ego lite. Redeploy it",
-  "confirm_script": "Run a script in the browser on “{machine}”: {line}"
+  "confirm_script": "Run a script in the browser on “{machine}”: {line}",
+  "rpc_missing": "ego lite is not installed on this Mac",
+  "rpc_setup": "ego lite first-time setup is not complete",
+  "rpc_unknown": "ego-browser availability is not known yet",
+  "rpc_probe": "ego-browser did not run successfully: {detail}",
+  "rpc_applications_step": "Installing in Applications",
+  "rpc_applications": "Could not install in Applications: {detail}",
+  "rpc_download_step": "Downloading ego lite",
+  "rpc_download": "Could not download the package: {detail}",
+  "rpc_open_package": "Could not open the package: {detail}",
+  "rpc_verify_step": "Verifying the signature and notarization",
+  "rpc_signature": "Signature verification failed: {detail}",
+  "rpc_signer": "The signature is not from Citro Labs. Not installed",
+  "rpc_notarization": "Notarization check failed: {detail}",
+  "rpc_open_step": "Opening ego lite on that Mac",
+  "rpc_open": "Could not open ego lite: {detail}"
 }

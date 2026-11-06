@@ -180,6 +180,6 @@ struct ConnectorSignInTests {
         #expect(ConnectorText.profile("telegram").reads == "它的私聊和群")
         #expect(ConnectorText.profile("examplechat").reads == nil)
         #expect(ConnectorText.openInTitle("telegram", name: "Telegram") == "在 Telegram 里打开")
-        #expect(ConnectorText.openInTitle("examplechat", name: "示例聊天") == "在 示例聊天 里打开")
+        #expect(ConnectorText.openInTitle("examplechat", name: "示例聊天") == "在示例聊天里打开")
     }
 }

@@ -25,6 +25,7 @@ import (
 const computerAppsKey = "computer.apps"
 
 // wholeScreen stands for computer_state with no app: everything on the Mac's screen.
+// i18n-ignore: canonical stored screen name, localized only in presentation copies.
 const wholeScreen = "整个屏幕"
 
 // approvedApp is an app always allowed on a Mac.
@@ -177,7 +178,7 @@ func undecodable(err error) bool {
 
 func (h *Manager) putApprovedApps(ctx context.Context, all map[string][]approvedApp) error {
 	if h.store == nil {
-		return errors.New("no database")
+		return i18n.ErrEnglish("hub-computer_apps.err_no_database")
 	}
 	return h.store.PutSetting(ctx, computerAppsKey, all)
 }
@@ -269,7 +270,12 @@ func (h *Manager) getComputerApps(w http.ResponseWriter, r *http.Request, m *Mac
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	apps := all[m.cfg.ID]
+	apps := slices.Clone(all[m.cfg.ID])
+	for n := range apps {
+		if apps[n].BundleID == "screen" && apps[n].Name == wholeScreen {
+			apps[n].Name = i18n.T(h.requestLang(r), "hub-computer_apps.whole_screen")
+		}
+	}
 	if apps == nil {
 		apps = []approvedApp{}
 	}
