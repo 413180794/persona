@@ -6,8 +6,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,6 +46,16 @@ func TestHelperLCUProcess(t *testing.T) {
 			continue
 		}
 		frame, _ := json.Marshal(mcpMessage{JSONRPC: "2.0", ID: msg.ID, Result: result})
+		if msg.Method == "tools/call" && os.Getenv("PERSONA_LCU_HELPER_ORPHAN") == "1" {
+			// It ends after this answer while a child of its own keeps its stdout open, so its exit is not seen until
+			// the child is gone. Its stdin closes first: the next write to it fails.
+			_ = os.Stdin.Close()
+			child := exec.Command("sleep", "5")
+			child.Stdout = os.Stdout
+			_ = child.Start()
+			fmt.Fprintf(os.Stdout, "%s\n", frame)
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stdout, "%s\n", frame)
 	}
 }
@@ -104,6 +116,34 @@ func TestLCUProcessThatDiesOnStartFailsAtOnce(t *testing.T) {
 	}
 	if took := time.Since(began); took > 2*time.Second {
 		t.Fatalf("took %v to notice the process ended", took)
+	}
+}
+
+// An lcu that ends while a child of its own keeps its stdout open, so its exit is not seen yet, fails the next call at
+// once as ended (no wait for the exit), and the call after that starts a new one.
+func TestLCUThatEndsBehindAChildFailsAtOnceAndRestarts(t *testing.T) {
+	var starts atomic.Int32
+	useHelperLCU(t, &starts)
+	t.Setenv("PERSONA_LCU_HELPER_ORPHAN", "1")
+	sess := newLCUSession(nil)
+	defer stopLCU(sess)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	first, err := sess.call(ctx, "js", map[string]any{"code": "return 1"}, "", "")
+	if err != nil || !strings.HasPrefix(first.Text, "pid ") {
+		t.Fatalf("first call: %+v %v", first, err)
+	}
+	t.Setenv("PERSONA_LCU_HELPER_ORPHAN", "")
+	began := time.Now()
+	if _, err := sess.call(ctx, "js", map[string]any{"code": "return 1"}, "", ""); !errors.Is(err, errLCUEnded) {
+		t.Fatalf("err = %v, want the process ended", err)
+	}
+	if took := time.Since(began); took > time.Second {
+		t.Fatalf("took %v to say the process ended", took)
+	}
+	next, err := sess.call(ctx, "js", map[string]any{"code": "return 1"}, "", "")
+	if err != nil || !strings.HasPrefix(next.Text, "pid ") || next.Text == first.Text || starts.Load() != 2 {
+		t.Fatalf("the call after: %+v %v, %d starts", next, err, starts.Load())
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -181,3 +182,48 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
+// endingStdin is the stdin of an lcu that has just ended: a write breaks the pipe, and the process's stdout closes with
+// it, so its exit is seen only after the write failed.
+type endingStdin struct{ stdout *io.PipeWriter }
+
+func (e endingStdin) Write([]byte) (int, error) {
+	_ = e.stdout.Close()
+	return 0, io.ErrClosedPipe
+}
+
+func (endingStdin) Close() error { return nil }
+
+// A write that fails because lcu has just ended fails the call as the process's end, the same error as when the exit
+// is seen first, not as a broken pipe.
+func TestLCUWriteToAnEndedProcessSaysItEnded(t *testing.T) {
+	sess := newLCUSession(nil)
+	stdout, ended := io.Pipe()
+	sess.attachPipes(stdout, endingStdin{ended})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := sess.call(ctx, "js", map[string]any{"code": "return 1"}, "", ""); !errors.Is(err, errLCUEnded) {
+		t.Fatalf("err = %v, want the process ended", err)
+	}
+}
+
+// erringStdin is a stdin whose writes fail with err.
+type erringStdin struct{ err error }
+
+func (e erringStdin) Write([]byte) (int, error) { return 0, e.err }
+
+func (erringStdin) Close() error { return nil }
+
+// A write that fails for another reason than a closed pipe is that error, not the process's end.
+func TestLCUWriteErrorIsItselfUnlessThePipeClosed(t *testing.T) {
+	sess := newLCUSession(nil)
+	stdout, ended := io.Pipe()
+	t.Cleanup(func() { _ = ended.Close() }) // its readLoop ends with the test
+	failed := errors.New("no space left on the device")
+	sess.attachPipes(stdout, erringStdin{failed})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := sess.call(ctx, "js", map[string]any{"code": "return 1"}, "", "")
+	if !errors.Is(err, failed) || errors.Is(err, errLCUEnded) {
+		t.Fatalf("err = %v, want the write's own error", err)
+	}
+}

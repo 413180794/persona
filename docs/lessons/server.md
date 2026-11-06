@@ -2,6 +2,12 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## A child that dies at once fails the write before its exit is seen (2026-11-06, #6009)
+
+- The node writes `initialize` to `lcu`'s stdin right after starting it. If the process has already ended, the write fails with "broken pipe", or with "file already closed" once `cmd.Wait` has closed the pipe. That can happen before the goroutine that waits for the process reports the exit. So the caller got a raw pipe error or "the process ended", depending on which came first. `TestLCUProcessThatDiesOnStartFailsAtOnce` failed this way in 16 of 500 runs with `-race`.
+- Classify the write error instead of waiting for the exit (`writeFailed`). A closed pipe (`EPIPE`, `os.ErrClosed`, `io.ErrClosedPipe`) is the process's end: mark the session failed, so the next call starts a new process, and return the end at once, wrapping the write's error. Any other write error stays itself.
+- Waiting for the exit is a trap. A child of `lcu` can keep its stdout open, so the exit isn't seen for as long as the child runs. A first version that waited up to 2 s held the call lock that long and still returned the raw error, and never restarted `lcu`. The tests now cover that case and a write error that isn't a closed pipe. Tests compare with `errors.Is`, so an error that always says "ended" can't pass them.
+
 ## Cleanup after a change races work that read the state before it (2026-11-06, #5932)
 
 - Every registry change starts a sync of every machine in the background. A sync reads the registry once, then builds packages and records machine states for what it read. `drop`, which runs after an upgrade or an uninstall, removed the old version's packages and states, but a sync that had read the registry before the change rebuilt or recorded them afterwards. Nothing removed them again. This was the flaky `TestNodeProgramsForgotten`: 30 of 300 runs failed, and none did with the background syncs turned off.

@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/lcuconfirm"
@@ -104,7 +105,7 @@ func (s *lcuSession) call(ctx context.Context, name string, args map[string]any,
 		return nil, err
 	}
 	s.mu.Lock()
-	wait := s.wait
+	cmd, wait := s.cmd, s.wait
 	s.mu.Unlock()
 	if session == "" {
 		session = "persona"
@@ -120,7 +121,7 @@ func (s *lcuSession) call(ctx context.Context, name string, args map[string]any,
 		},
 	})
 	if err := s.write(mcpMessage{JSONRPC: "2.0", ID: &id, Method: "tools/call", Params: body}); err != nil {
-		return nil, err
+		return nil, s.writeFailed(cmd, err)
 	}
 	select {
 	case msg := <-ch:
@@ -131,7 +132,7 @@ func (s *lcuSession) call(ctx context.Context, name string, args map[string]any,
 	case <-ctx.Done():
 		return nil, errors.New("操控电脑的确认超时或已取消")
 	case <-wait:
-		return nil, errors.New("LCU 的进程结束了")
+		return nil, errLCUEnded
 	}
 }
 
@@ -206,12 +207,12 @@ func (s *lcuSession) ensure(ctx context.Context) error {
 		s.mu.Lock()
 		// Only the session's current process may mark it failed: a replaced one that exits late must not.
 		if s.cmd == cmd && s.failed == nil {
-			s.failed = errors.New("LCU 的进程结束了")
+			s.failed = errLCUEnded
 		}
 		s.mu.Unlock()
 		close(wait)
 	}()
-	if err := s.initialize(ctx, wait); err != nil {
+	if err := s.initialize(ctx, cmd, wait); err != nil {
 		s.mu.Lock()
 		if s.cmd == cmd {
 			s.failed = err
@@ -245,8 +246,8 @@ func (s *lcuSession) resetLocked() {
 	s.pending = map[int64]chan mcpMessage{}
 }
 
-// initialize is the MCP handshake with the process whose exit closes exited.
-func (s *lcuSession) initialize(ctx context.Context, exited <-chan struct{}) error {
+// initialize is the MCP handshake with cmd, whose exit closes exited.
+func (s *lcuSession) initialize(ctx context.Context, cmd *exec.Cmd, exited <-chan struct{}) error {
 	s.mu.Lock()
 	s.next++
 	id := s.next
@@ -264,7 +265,7 @@ func (s *lcuSession) initialize(ctx context.Context, exited <-chan struct{}) err
 		"clientInfo":      map[string]any{"name": "persona", "version": "0"},
 	})
 	if err := s.write(mcpMessage{JSONRPC: "2.0", ID: &id, Method: "initialize", Params: params}); err != nil {
-		return err
+		return s.writeFailed(cmd, err)
 	}
 	select {
 	case msg := <-ch:
@@ -274,11 +275,33 @@ func (s *lcuSession) initialize(ctx context.Context, exited <-chan struct{}) err
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-exited:
-		return errors.New("LCU 的进程结束了")
+		return errLCUEnded
 	case <-time.After(30 * time.Second):
 		return errors.New("LCU 没有完成 MCP 握手")
 	}
-	return s.write(mcpMessage{JSONRPC: "2.0", Method: "notifications/initialized"})
+	if err := s.write(mcpMessage{JSONRPC: "2.0", Method: "notifications/initialized"}); err != nil {
+		return s.writeFailed(cmd, err)
+	}
+	return nil
+}
+
+// errLCUEnded is the error of a call whose lcu process ended.
+var errLCUEnded = errors.New("LCU 的进程结束了")
+
+// writeFailed is the error of a write to cmd's stdin that failed. A closed pipe (a broken pipe, or one cmd.Wait has
+// closed) means the process ended, maybe before its exit is seen (a child of lcu can keep its stdout open): the
+// session counts cmd as ended, so the next call starts a new one, and the error says so at once, wrapping the
+// write's. Any other write error is itself.
+func (s *lcuSession) writeFailed(cmd *exec.Cmd, err error) error {
+	if !errors.Is(err, syscall.EPIPE) && !errors.Is(err, os.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {
+		return err
+	}
+	s.mu.Lock()
+	if s.cmd == cmd && s.failed == nil { // only the session's current process: a replaced one's late write is not
+		s.failed = errLCUEnded
+	}
+	s.mu.Unlock()
+	return fmt.Errorf("%w: %w", errLCUEnded, err)
 }
 
 func (s *lcuSession) readLoop(r io.Reader) {
