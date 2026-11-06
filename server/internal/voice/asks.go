@@ -443,10 +443,12 @@ func (k *asker) quiet() {
 	}
 }
 
-// reask asks the question asked again, to a new upstream session (the last one heard it).
+// reask asks the question asked again, to a new upstream session (the last one heard it). Not when it was told to this
+// one already: what asks it waited in the queue for it (a card that woke a paused upstream, suspend.go), and the
+// tracker came to this after.
 func (k *asker) reask() {
-	if k.cur == nil || k.t.c.askingCard() != k.cur.ix.ID {
-		return // not told yet: what asks it is still queued
+	if k.cur == nil || !k.t.c.toldBefore(k.cur.ix.ID) {
+		return // not told yet (what asks it is still queued), or told to this session
 	}
 	k.say(k.question(false), k.cur.ix.ID, true)
 }
@@ -555,7 +557,11 @@ func (c *conversation) startAsk(card string) {
 // told notes words that ask a card were sent (mu held): from now on the model asks it, and the app is told (protocol
 // 2). Words of a card no longer asked are nothing.
 func (c *conversation) told(card string) {
-	if card == "" || card != c.askCur || c.askTold {
+	if card == "" || card != c.askCur {
+		return
+	}
+	c.askGen = c.gen
+	if c.askTold {
 		return
 	}
 	c.askTold = true
@@ -607,6 +613,13 @@ func (c *conversation) stoppedSince(at time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return !c.stopAt.IsZero() && !c.stopAt.Before(at)
+}
+
+// toldBefore: the model was told it asks card in an earlier upstream session, not in this one.
+func (c *conversation) toldBefore(card string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return card != "" && c.askingCardLocked() == card && c.askGen != c.gen
 }
 
 // askingCard is the card the model asks now ("" none): what it hands over is that card's answer.

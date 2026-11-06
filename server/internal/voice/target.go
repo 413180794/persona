@@ -53,7 +53,7 @@ type resumeRun struct {
 }
 
 // The features this extension's protocol 2 has (GET /info, ready): only what is there (docs/voice.md "Version negotiation").
-var features = []string{"target", "runs", "asks", "resume"}
+var features = []string{"target", "runs", "asks", "resume", "suspend"}
 
 const (
 	// snapshotWait is how long the snapshot's parts that may be left out are waited for (docs/voice.md 4.5): it is

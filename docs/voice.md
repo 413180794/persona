@@ -24,7 +24,7 @@ Phase one follows the sub-issues in section 7; after each step, align this docum
 - The hub has built-in voice extension `personad voice` (`server/internal/voice`), supporting GPT-Live's `live` and `codex` dialects. Only Android has a voice page; iOS has no voice client yet.
 - Since #3502, the extension speaks protocol 2 (`GET /info` returns `protocol: 2`, `features`): `start` with `protocol: 2` and `target` binds to that chat (main chat, another Persona chat, or any Agent),
   with `run` / `link` frames, 409 mapping and `resend`, `状态：` (status), `停止：` (stop), `回答：` (answer), trimmed `resume`, and an interruption gate. Since #3504, questions are supported (`asks`: `ask` frames, voice answers, only category spoken for approvals),
-  and `features` is `[target, runs, asks, resume]`; pause (`suspend`) is not implemented or advertised yet. Protocol 1 frames are unchanged.
+  and since #3505 the upstream pauses (`suspend`: closed while the target works and the call has been quiet for 60 seconds, back when there is something to say or you speak, `link{paused / waking / live}`, 4.9); `features` is `[target, runs, asks, resume, suspend]`. Protocol 1 frames are unchanged.
 - Since #3503, rounds in the bound chat not assigned during this call are also spoken (observed runs, protocol 2 only; main-chat rounds from other channels get just one sentence). For a bound Agent with session triage enabled, model errors that the manager will "continue" do not count as completion; triage waiting on an external dependency announces "Waiting for X" once; model errors speak only the category.
   A heartbeat is spoken after 2 minutes working silently; protocol 2 interruption `clear` follows upstream signals (`incomplete` arriving after a reply has finished does not count), with PCM energy used when the upstream reports no reply boundaries (4.5 rule 7).
 - Protocol 1 delegation is hard-coded to the main chat. Before #3501, completion used polling `State` / `LastText` every 3 seconds, and the node truncated `LastText` to 200 characters, so it could speak someone else's round and only the first 200 characters.
@@ -151,7 +151,7 @@ Phase one follows the sub-issues in section 7; after each step, align this docum
 
 **L. Suspend, leave, end**
 
-- **Suspend (save cost)**: while the Agent works, after 60 seconds without speech or anything to say, the extension temporarily closes the upstream; the call bar says "Waiting for Claude · Voice paused". Speech or a result reconnects automatically in about 1 second; speech meanwhile is buffered, not lost.
+- **Suspend (save cost)**: while the Agent works, after 60 seconds without speech or anything to say, the extension temporarily closes the upstream; the call bar says "Waiting for Claude · Voice paused". Speech or a result reconnects automatically in about 1 second; speech meanwhile is buffered, not lost (measured in #3505: the wake starts 0.2 seconds after you speak and is up 0.4 seconds later, so the fast layer answers only about 0.2 seconds later than without a pause; a result starts being spoken about 1.6 seconds after it comes back).
 - **End**: any of these ends the call (CarPlay calls are unaffected by the phone's foreground/background state):
   - tap "End";
   - leave this chat page, or the shell hides it;
@@ -247,7 +247,7 @@ the hub forwards App HTTP / WS unchanged through `/api/v1/bus/relay` to the mana
    - 503 `assistant_offline` (manager absent): no entry this time; check again on returning to foreground;
    - Android does not read `/info` and keeps using protocol 1.
 3. The extension sends new frames only when `start` carries `protocol: 2`. Clients without it (Android, #1931) receive no extra frames.
-4. Future features add `features`, not a protocol bump. Phase one: `target`, `runs`, `asks`, `resume`, `suspend`; advertise only implemented ones (#3502 has `target`, `runs`, `resume`; #3504 adds `asks`; `suspend` awaits #3505).
+4. Future features add `features`, not a protocol bump. Phase one: `target`, `runs`, `asks`, `resume`, `suspend`; advertise only implemented ones (#3502 has `target`, `runs`, `resume`; #3504 adds `asks`; #3505 adds `suspend`).
 
 ### 3.2 App → extension
 
@@ -269,12 +269,12 @@ The plan card's "Return as feedback" calls `resolve` directly from the App (with
 | `tool` | Unchanged | Protocol 2 uses it only for read-only function tools (knowledge search, viewing Agents); delegated work uses `run`, reconnect state becomes `link{reconnecting}` / `link{live}` |
 | `{"type":"run","id","task","state","msg_ids","base_seq","started_at","code?","message?","draft?","clearable?"}` | New | `state`: `sending`, `sent`, `working`, `needs_you`, `blocked` (waiting externally or on another Agent; #3503: hub triage says this round waits for deployment, CI, another Agent; triage arrives about 15 seconds after a round stops, so `blocked` may follow `done`, continuing the same run and later reaching `done` again, 4.3), `held` (answered once, background still running), `done`, `failed`, `refused` (with `code`, including `unprompted`), `unknown` (502), `folded` (merged into the next run). After hold, `base_seq` updates. #3502 format: `id` is message `client_msg_id` (`voice-<16 hex digits>`), already in `msg_ids` before sending (used to locate it on resume); `started_at` is RFC 3339; `clearable` is the raw string from hub 409 (only present for one clearable text line; `draft` is all composer text and may differ). "Clear and send" returns it unchanged as `clear_draft`. After fold, the following run frame is sent again with all merged `msg_ids` (used on resume). `code`: for `refused`, hub 409 code (`dialog_open`, `input_draft`, `open_elsewhere`…) or `unprompted`, `empty`, `on_screen` (single approval word, 4.4); for `failed`, hub code or `unreachable`; for `unknown`, `unknown`; `done` after interruption is `stopped`. `message` is the hub's raw text |
 | `{"type":"ask","interaction_id","state":"asking"\|"answered"\|"released","by?":"voice"\|"elsewhere"}` | New | Which card is being asked by voice. #3504: send `asking` when the question actually reaches the fast layer (not while waiting for the interruption gate); voice resolution sends `answered{by: voice}`; screen / other-device resolution (card gone, `resolve` returns 404 / 410 / `already` / 409 `prompt_changed`, or another 409 with card already gone) sends `released{by: elsewhere}`. Two unclear answers handed to screen, `停止：` (stop) ending the round, or `resolve` missing the hub reply with card already gone (unknown resolver) sends `released` without `by`. Never send the latter states for a card without prior `asking`. One card at a time |
-| `{"type":"link","state":"live"\|"paused"\|"waking"\|"reconnecting"}` | New (`suspend`) | Upstream state |
+| `{"type":"link","state":"live"\|"paused"\|"waking"\|"reconnecting"}` | New (`suspend`) | Upstream state (protocol 2 only). `reconnecting`: the upstream dropped and is reconnecting (#3502); `paused`: the extension paused the upstream (4.9); `waking`: a wake has begun; `live`: a new upstream session is up (after a reconnect or a wake). While paused and waking the App keeps sending audio (all-zero frames when muted); the extension keeps the last 3 seconds and replays them first once up; `text` frames are kept too and sent once up. #3505: 3 failed wakes in a row are a fatal `upstream_failed`, with no further `link` |
 | `error` | Changed: optional `code` added | `no_upstream`, `upstream_forbidden`, `upstream_unavailable`, `upstream_failed`, `target_gone`, `target_read_only`, `target_forbidden` (fatal), `machine_offline` (nonfatal), `model_unavailable` (nonfatal: default model used). All present since #3502; `upstream_*` included in both protocols (`code` was already optional). Failure to reach the hub while looking up target is fatal without `code` (chat existence unknown); so is protocol 2 without `target` |
 
 ```
 App  → {"type":"start","protocol":2,"model":"custom/gpt-live-1","target":{"machine_id":"m1","session_id":"s1"},"recent":[…]}
-ext  → {"type":"ready","protocol":2,"features":["target","runs","asks","resume"],"input_rate":16000,"output_rate":24000,"target":{…,"kind":"agent","agent_label":"Claude Code"}}
+ext  → {"type":"ready","protocol":2,"features":["target","runs","asks","resume","suspend"],"input_rate":16000,"output_rate":24000,"target":{…,"kind":"agent","agent_label":"Claude Code"}}
 ext  → transcript u1 … (user) / a1 … (fast layer: "OK, handed it to Claude")
 ext  → {"type":"run","id":"voice-7c1e…","msg_ids":["voice-7c1e…"],"task":"Fix the failing login-page tests","state":"sending","base_seq":812,…}
 ext  → run …"sent" → …"working" → {"type":"link","state":"paused"} → {"type":"link","state":"live"} → run …"done" (fast layer also speaks the result)
@@ -344,7 +344,7 @@ ext  → run …"sent" → …"working" → {"type":"link","state":"paused"} →
 | `send.go` (new) | Prefix routing, sending, timeout, 409 mapping, automatic `dismiss_notice` retry, `resend`, approval-word interception, resumed runs, ending runs after stop |
 | `status.go` (new) | Status queries, stop |
 | `asks.go` (new) | Spoken questions, answer recognition, `resolve`, approval announcements |
-| `suspend.go` (new, #3505) | Suspend, wake (PCM energy detection), 3-second ring buffer |
+| `suspend.go` (new, #3505) | Suspend, wake (PCM energy detection), 3-second ring buffer, wake retries |
 | `items.go` (new) | HTTP `ItemSource` for `channel.ReadTurn` |
 | `spoken.go` (new) | Make replies speakable: identify code blocks, tables, inline code, paths, `file:line`, hashes, URLs, Markdown markers; placeholders from `prompts/voice/spoken.md` (paths keep filename only); truncate as "beginning + end" |
 | `info.go` (new) | `GET /info` |
@@ -493,7 +493,7 @@ type voiceRun struct {
 **Opening**: instructions = `instructions.md` + `target.md`, about 2.5k tokens total. Connect upstream and fetch snapshot concurrently; wait at most 500 ms for missing snapshot parts, then proceed.
 #3502: target lookup and snapshot begin on `start`, concurrent with upstream WebSocket creation (about 0.4 s measured, lessons "Instructions size"). Target itself (existence, sendability, machine name and online status) is required, at most 15 seconds; recent turns, cards, and Agent overview each get at most 500 ms.
 App `recent` retains only user/Agent text, strips `<jarvis-context>`, converts to speakable text (rule 6 placeholders), at most 300 characters per utterance and 12 utterances. If empty, read `items?turns=3`; consecutive tools become one line, "Used Bash, Read".
-Titles, goals, progress, recent turns, card questions, and Agent titles go inside `<agent_output>`, preceded by the narrowed `tool_result.md` wrapper. On upstream reconnect, refresh snapshot (fallback previous copy), telling the new session what remains pending (instructions "Still waiting").
+Titles, goals, progress, recent turns, card questions, and Agent titles go inside `<agent_output>`, preceded by the narrowed `tool_result.md` wrapper. On upstream reconnect, refresh snapshot (fallback previous copy), telling the new session what remains pending (instructions "Still waiting"). #3505: on reconnect and wake the snapshot is also read while the WebSocket connects (before, it was read after connecting, up to 500 ms more).
 
 | Part | Source | Limit |
 | --- | --- | --- |
@@ -639,7 +639,8 @@ Titles, goals, progress, recent turns, card questions, and Agent titles go insid
 - **After answering**: protocol 2's bound chat remains watched by observed runs (#3503), even for opening pending cards with no user-assigned work; the continued round is recognized and its result spoken (`Observed` in `report.md`).
   Only if no tracked run and not protocol 2's bound chat (protocol 1 tracked run ended during asking) does `answered.md#voice` include `Unfollowed`, telling fast layer this call does not follow subsequent work;
   do not promise completion announcements; user can ask status.
-- **Upstream reconnect**: new session has not heard the question; repeat current question (`tracker.reconnected`; #3505 wake-created sessions should call it too).
+- **Upstream reconnect**: new session has not heard the question; repeat current question (`tracker.reconnected`). #3505: a wake also goes through `connect` and calls it too. A card being asked blocks pausing, so a card that wakes the upstream has not been told to the model yet (its question waits in the queue and goes out once up) and is not asked again;
+  the conversation records which session generation a card was last told in (`askGen`), so when the tracker reaches `reask` after the question already went to the new session (the tracker was busy and late), it is not asked twice.
   App-extension resume does not return question progress: unresolved cards restart at question one.
 - **Permissions**: only full devices (`X-Persona-Role` full or absent) ask/answer. Calls from other extensions ask no cards, retaining "Check your phone".
 
@@ -664,9 +665,35 @@ Titles, goals, progress, recent turns, card questions, and Agent titles go insid
   - all old delegations invalid, results use `say`.
 - Suspension/wake counts separate from `maxReconnects`. Three consecutive wake failures end with `upstream_failed`; App shows "Continue".
 
+How #3505 does it (`suspend.go`; constants from lessons "Recommended constants", adjustable in tests):
+
+- **"Target working"**: each time the tracker looks at the bound chat (a run's Check, the observed run's look) it records whether the chat is working (`working` or starting), and hands that to the call after each round.
+  A call's run that waits on its background work (`held`) or on something outside (`blocked`: triage says it waits on CI, a deploy, another Agent) also counts: the session itself is idle, but a result is still to come and the user is most likely waiting (the original design said only "target working").
+  Waiting on the user (a card, `needs_you`) does not count, nor does an idle session: the user may speak at any moment then.
+- **"No speech for 60 seconds" and "upstream not speaking"** are one moment: the latest of the user's voice (PCM energy and noise floor, 4.5 rule 3), the user's captions and `text`, the model's speech by its play end (`playEnd`, lessons "Timeline": audio arrives at 9–10× speed, so arrival time is wrong),
+  the model's last handover, what the extension last gave the model (a result, `say`, a tool result), and when this upstream session connected, plus `pauseAfter` (60 seconds). No pause while the user's caption is still open.
+- **"Nothing queued to say"**: nothing waits at the insertion gate and no delegation waits on a function call (`pending`). **"No question being asked"**: no card is being asked by voice or about to be (`askCur`).
+- **On pause**: the upstream session moves to a new generation (`gen`), sends `session.close` and is closed; records still awaiting acknowledgement are dropped (none will come), and the App gets `link{paused}`. The session outlived `stableAfter` (with default values the pause conditions guarantee it), so the reconnect count resets under `lost()`'s rule.
+  No heartbeat is made or queued while paused or waking (waking the upstream just to say "still working" is not worth it).
+- **Wake**:
+  - voice in the App's audio adding up to `wakeVoice` (200 ms of the audio's own duration; pauses between words up to `bargeGap` do not break it). Voice is judged as at the insertion gate (above −40 dBFS and twice the noise floor), so a muted App's all-zero frames and a single click do not wake it;
+  - something to say: `deliver` queues any content (a result, a question, an approval announcement, a status answer, a refusal), except a heartbeat;
+  - the user typing (a `text` frame): kept and sent once up. It is not part of "what was said before the pause", so the new session's instructions do not have it. It counts as the user speaking at the moment it goes to the new session (the user-speech gate records that moment, the same as typing during a live call):
+    the new session closes the gate once on coming up because its snapshot has new Agent content, and the line is after that, so the work it hands over is sent and a `停止：` (stop) stops as usual (stamped with the time it was typed, they were refused as `unprompted`, found in the #3505 review).
+- **Coming back**: send `link{waking}` and open a new session as on a reconnect (`connect`: refreshed snapshot, `history`, runs still awaited; the snapshot read while the WebSocket connects). The instructions' "Previous conversation" uses the pause wording (`Paused`: "Nobody spoke for a while as Claude Code worked, so the voice was paused… do not bring up the pause"),
+  and `link{live}` is sent once up. Then the ring buffer (the App's audio while paused and waking, the last `ringSpan`, 3 seconds) is replayed to the new session first, as is and in order, then the kept `text` lines, and only then live audio and queued words: audio arriving during the replay goes into the buffer and follows, so the order holds.
+  Old delegations die with the old session, so results use `say` (`claim` checks `gen`). When the new session's snapshot has new Agent content (it was working while paused, so it nearly always does), the user-speech gate closes once per 4.10: what the user says after it is up passes as usual (captions of the replayed audio arrive after it is up; replayed lines count from when they are sent).
+  The wake says which wording the new session uses (`connect(woken)`); it is not guessed from the pause state. If the new session drops before the replay is out, audio and lines not yet sent are kept (a frame whose write failed goes back), and it is handled as a drop (`link{reconnecting}`, the drop wording, one reconnect counted);
+  the reconnected session continues the replay, with one replay at a time so the order holds. A line already written into the dropped session stays in "Previous conversation", and the reconnected session answers it with the drop wording.
+- **Wake failure**: each wake tries at most `wakeMost` (3) times in a row, waiting 1 second, then 2 seconds; one success resets the count. When all 3 fail, send fatal `upstream_failed` (`message` is `voice-suspend.wake_failed`, in three languages, with the upstream's reason). None of this touches `maxReconnects`: however many pauses and wakes, a real drop afterwards still gets 3 reconnects.
+- **With the insertion gate**: while there is no upstream (paused, waking, reconnecting after a drop), queued words are not sent but wait for the new session (before, words sent during a reconnect were lost). After a wake the insertion gate applies as usual: woken by your voice, it waits for you to finish; woken by a result, it speaks at once.
+- **Instructions size**: a long call's "Previous conversation" (40 lines of 200 characters each) plus a full snapshot reaches about 19,000 characters in English, near the measured limit (lessons "Instructions size": 19,000 characters open, 25,000 are refused, and refused means no session, so wakes and reconnects fail).
+  So when a new session's instructions exceed `instructionsMost` (16,000 characters), "Previous conversation" loses lines from the oldest until it fits.
+- **Measured** (on the tested service, lessons "After pausing and waking"): the wake started 0.24 seconds after the user began speaking and was up 0.43 seconds later; the replayed audio gave a complete caption, and the fast layer spoke 1.38 seconds after the user stopped (1.14–1.18 seconds without a pause). When the result came back it was up in 0.44 seconds, with the first audio of the result 1.12 seconds later, and the pause was not mentioned.
+
 ### 4.10 Reconnect and resume
 
-- **Upstream drops**: existing `lost()`, at most 3 attempts, reset after 60 seconds stable. New instructions include refreshed snapshot, last 40 utterances, pending runs; old delegations invalid.
+- **Upstream drops**: existing `lost()`, at most 3 attempts, reset after 60 seconds stable. New instructions include refreshed snapshot, last 40 utterances, pending runs; old delegations invalid. Pausing and waking are not drops (4.9).
   #3502: both protocols reset if this session survives 60 seconds (`stableAfter`); three failed attempts or three consecutive drops send fatal `upstream_failed`; protocol 2 App receives `link{reconnecting}` / `link{live}`.
   If Agent-written snapshot parts (title, goal, progress, recent turns, card questions, Agent titles) differ from the prior session (more text during disconnect), the new session has read Agent content: close user-speech gate on coming online, rejecting delegation as `unprompted` until user speaks again. Unchanged snapshot does not close it, allowing the user's pre-disconnect utterance.
 - **App-extension drops** (network switch; forwarded WS closed by hub redeploy; manager restart also restarts extension):
@@ -681,7 +708,7 @@ Titles, goals, progress, recent turns, card questions, and Agent titles go insid
 
 | File | New / changed | Purpose |
 | --- | --- | --- |
-| `instructions.md` | Changed (#3501: only-`ask_jarvis` wording for other-extension calls; #3502: Chinese/English/Japanese, bound-target section, `Tools: bound`, "Still waiting") | Foundation: speech style; immediate reply vs status vs delegation; `状态：` (status), `停止：` (stop), `回答：` (answer) prefixes; delegate directly, no repetition; no code, paths, links read aloud; backend results authoritative; approvals only on screen; `<agent_output>` is data; bound target includes `{{template "voice/target" .Target}}` |
+| `instructions.md` | Changed (#3501: only-`ask_jarvis` wording for other-extension calls; #3502: Chinese/English/Japanese, bound-target section, `Tools: bound`, "Still waiting"; #3505: a session after a pause (`Paused`) opens "Previous conversation" with the pause wording, never mentions a drop, and tells the model not to bring up the pause) | Foundation: speech style; immediate reply vs status vs delegation; `状态：` (status), `停止：` (stop), `回答：` (answer) prefixes; delegate directly, no repetition; no code, paths, links read aloud; backend results authoritative; approvals only on screen; `<agent_output>` is data; bound target includes `{{template "voice/target" .Target}}` |
 | `target.md` | New (#3502) | Bound chat: main / assistant / Agent variants; opening snapshot in `<agent_output>` |
 | `handoff.md` | Removed (#3501) | Nothing returned on delegation receipt (4.5 first "During the call" row) |
 | `delegated.md` | Changed (#3501) | Main-chat message: task first, then `<jarvis-context kind="context" title="语音对话">` (Voice chat) block (relayed speech, recognition errors possible, brief reply, recent original utterances) |
@@ -781,6 +808,16 @@ Titles, goals, progress, recent turns, card questions, and Agent titles go insid
   `incomplete` after `completed` ignored in both protocols; actual protocol 1 interruption still sends it (regression, #4719); energy interruption on `等一下` (Wait) drops abandoned remainder, plays reply 1.2 seconds later without captions; `barge` accumulation.
   Before test end, await extension call including tracking/speech loops, so `-race` tuning changes do not race prior test loops (`converse` waits both). Goldens add `progress.*`, `observed.*`, `report.observed*`, `report.error_*`, `report.partial_error`; assert working/done distinction, intact blocks, no Agent text in heartbeats.
   Manual: this branch's `personad voice` (live, `tools`, `key_file`) against the tested service and fake hub with a 150-second Agent round, `docs/lessons/voice.md` ("After speaking other rounds, heartbeat, and interruption").
+- **#3505 covered** (`voice/suspend_test.go`, fake upstream `sessionsUp` recording frames per session): delegated work in progress, quiet for `pauseAfter`, then `link{paused}` and the old session gets `session.close`; no heartbeat and no new session while paused, even past `heartbeatAfter`;
+  `状态：` (status) wakes it (`waking` → `live`), the new session's instructions use the pause wording with "Previous conversation" and "Still waiting" and without the line that woke it, and the status answer is on the new session's delegation; quiet again, pause again, woken by the result, `say` in the new session (not the old session's delegation), run `done` as usual;
+  muted all-zero frames (4 seconds) and a 100 ms blip do not wake it, 300 ms of voice does; the replay is audio from the last 3 seconds (plus the few voiced frames read during the replay), both voiced stretches present, before live audio, and the old session got no frame; a line typed while paused wakes it, is sent once up, is not in the instructions, and the App still gets its caption;
+  the Agent writes while paused, then a typed instruction or `停止：` (stop): the instruction reaches the hub, the stop stops, neither refused as `unprompted` (`TestTypedLineAfterTheAgentWrote`); the woken session drops at once: `reconnecting` → `live`, the next session uses the drop wording, the typed line is not lost (`TestWokenSessionDrops`);
+  the replay breaks halfway: unsent audio and lines stay in order, a line not written into the dropped session does not count as said, the reconnected session continues the replay, and replayed lines open the gate (`TestFlushAfterTheWokenSessionDropped`);
+  after a drop the card being asked is asked again in the new session exactly once, a card that wakes the upstream is asked once in the new session, `askGen` rule by rule (`TestCardAfterANewSession`, `TestToldBefore`);
+  a wake that fails twice still comes up (the next wake failing twice also comes up: one success resets the count), 3 failures are a fatal `upstream_failed`; after 4 pauses and wakes a real drop still reconnects;
+  no pause for an idle session, a card being asked by voice (it pauses once the card is answered on screen), or protocol 1; `pauseDue` rule by rule (model speaking, just finished, the user's voice / caption / open caption, a handover, words given to the model, just connected, queued words, a pending function call, a card being asked, reconnecting, already paused);
+  ring buffer limit and order; instructions over `instructionsMost` lose lines from the oldest. Both `features` assertions include `suspend`; goldens add `instructions.paused.*` (three languages, existing goldens unchanged). The whole package passes under `-race`.
+  Manual: this branch's `personad voice` (live, `tools`, `key_file`) against the tested service and a fake hub with a 150-second Agent round, `docs/lessons/voice.md` ("After pausing and waking").
 
 ## 5. Configurable GPT-Live upstream
 

@@ -2201,7 +2201,7 @@ except the maximum backoff rises from 60 seconds to 5 minutes.
 
 Full duplex: the phone continuously sends microphone audio (including silence); the model decides when to speak. The app does no VAD and no push-to-talk.
 
-This section is protocol 1. Voice-mode protocol 2 (spoken by the built-in voice extension from #3502; `start` includes `protocol: 2` and `target` binding the current chat, adding `run` / `link` frames, `resend` and target in `ready`; #3504 adds `ask`; from #3503 the extension also sends `clear` when the user interrupts) is in `docs/voice.md` section 3. Frames remain unchanged for clients not opting in; iOS only shows entry points for voice extensions whose `GET /info` reports `protocol` ≥2.
+This section is protocol 1. Voice-mode protocol 2 (spoken by the built-in voice extension from #3502; `start` includes `protocol: 2` and `target` binding the current chat, adding `run` / `link` frames, `resend` and target in `ready`; #3504 adds `ask`; from #3503 the extension also sends `clear` when the user interrupts; from #3505 it pauses the upstream while the bound conversation works, and `link` frames gain `paused` / `waking`) is in `docs/voice.md` section 3. Frames remain unchanged for clients not opting in; iOS only shows entry points for voice extensions whose `GET /info` reports `protocol` ≥2.
 Both protocols may include `error.code`: `upstream_forbidden` (service rejected the key), `upstream_unavailable`, `upstream_failed` (disconnected, reconnect failed); the app treats unknown codes as absent.
 
 ### `GET /models`
@@ -2328,7 +2328,7 @@ can set addresses, keys and switches; admin has a switch too:
   - **Prefer deletion on failure**: delete whether or not key-presence can be read (idempotent); unreadable presence still returns `secrets_cleared`. If deletion fails, save nothing, return 500 `secret_not_cleared`;
     if config save fails after deletion (database write failure, 409), the error also includes `secrets_cleared` and the old address remains. Invalid form config (400) changes nothing and keeps the key.
 - **Model fallback**: if the selected model's upstream disappears (address cleared, hub.json changed), no error/disconnect: use default model and voice, then send nonfatal `error{code: "model_unavailable"}` after connecting.
-- **`GET /info`**: `{"protocol": 2, "features": ["target", "runs", "asks", "resume"], "setup"?: "…", "warnings"?: ["…"]}`, without keys or upstream list. `protocol` is the highest voice-frame version this extension speaks (2 since #3502; clients not sending `protocol: 2` in `start` still use protocol 1 from this section); `features` lists only implemented capabilities (`docs/voice.md` ("Version negotiation")).
+- **`GET /info`**: `{"protocol": 2, "features": ["target", "runs", "asks", "resume", "suspend"], "setup"?: "…", "warnings"?: ["…"]}`, without keys or upstream list. `protocol` is the highest voice-frame version this extension speaks (2 since #3502; clients not sending `protocol: 2` in `start` still use protocol 1 from this section); `features` lists only implemented capabilities (`docs/voice.md` ("Version negotiation")).
 - **Extension env vars**: `PERSONA_EXTENSION_CONFIG` (form values with defaults), `PERSONA_EXTENSION_SECRETS` (`{"key": "…"}`, decrypted only in process environment),
   `PERSONA_VOICE_HUB_CONFIG` (original `config` of the taken-over entry), entry `env`, and `JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN` (manifest `hub_api`, as before);
   legacy `PERSONA_PLUGIN_*` names are also supplied and accepted.

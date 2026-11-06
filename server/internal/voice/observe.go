@@ -154,7 +154,11 @@ func (t *tracker) observe(ctx context.Context) {
 	defer cancel()
 	hub := t.c.pl.hub
 	sess, err := hub.session(ctx, o.key.machine, o.key.session)
-	if err != nil || sess == nil {
+	if err != nil {
+		return
+	}
+	t.saw(o.key, sess)
+	if sess == nil {
 		return
 	}
 	if !working(sess) {
@@ -335,7 +339,7 @@ func (t *tracker) say(r *voiceRun, w words, agent bool) {
 // say that goes after everything else and is dropped once stale. Not of a held run (they were told it goes on in the
 // background), nor of a turn from another channel.
 func (t *tracker) heartbeat(r *voiceRun, s *proto.Session, now time.Time) {
-	if r.Held || r.Observed && r.foreign {
+	if r.Held || r.Observed && r.foreign || t.c.paused() { // none while the upstream is paused (suspend.go)
 		return
 	}
 	if now.Sub(latest(r.Started, r.lastSpoken, t.c.heard())) < heartbeatAfter {

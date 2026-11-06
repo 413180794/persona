@@ -30,6 +30,9 @@ type VoiceInstructions struct {
 	// Waiting are the tasks handed over whose result has not come back yet (a reconnected session, a call picked up
 	// again).
 	Waiting []string
+	// Paused: the session comes after the upstream was paused while the bound conversation worked (protocol 2,
+	// docs/voice.md 4.9 "Suspension"), not after a drop: History is what was said before the pause.
+	Paused bool
 }
 
 // VoiceTarget is the conversation a call is bound to, as its session starts (voice/target, docs/voice.md "Context for the

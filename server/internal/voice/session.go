@@ -97,9 +97,10 @@ type conversation struct {
 	userAt           time.Time             // the user's open caption last grew
 	connectedAt      time.Time             // the upstream session came up
 	// askCur is the card the tracker asks by voice (asks.go), askTold whether the model was told it: from then on what
-	// it hands over is the card's answer.
+	// it hands over is the card's answer. askGen is the upstream session (gen) it was last told it in.
 	askCur  string
 	askTold bool
+	askGen  int
 	// stopAt is when "Stop:" began to interrupt the bound conversation (zero: it did not, or that failed): a card
 	// that goes from then on was closed by it (asks.go).
 	stopAt time.Time
@@ -112,6 +113,8 @@ type conversation struct {
 	// that were over (completed) before such a word of theirs came.
 	signals bool
 	replied []string
+	// sus is the call's pausing of its upstream while its conversation works (suspend.go, protocol 2).
+	sus suspension
 }
 
 type outFrame struct {
@@ -254,7 +257,7 @@ func (c *conversation) begin() error {
 	}
 	c.mu.Unlock()
 	c.pl.logf("conversation: %s, voice %q", c.modelID, c.voice)
-	if err := c.connect(); err != nil {
+	if err := c.connect(false); err != nil {
 		return err
 	}
 	if gone {
@@ -298,35 +301,48 @@ func (c *conversation) negotiate(s *startFrame) error {
 	return nil
 }
 
-// bound waits for the binding negotiate started (the first session), or takes a new snapshot of the bound
-// conversation (a new session after a drop: the last one is told again when it cannot be read). online: its machine
-// is connected, as far as the hub said.
-func (c *conversation) bound(ctx context.Context) (online bool, err error) {
+// bind starts reading the bound conversation for a new upstream session, and returns what waits for it: the binding
+// negotiate started (the first session), or a new snapshot of it (a new session after a drop or a pause: the last one
+// is told again when it cannot be read). It is read while the upstream's socket connects (about 0.4 s on the measured
+// service, docs/lessons/voice.md "Instructions size"), not after. online: its machine is connected, as far as the hub
+// said.
+func (c *conversation) bind(ctx context.Context) func() (online bool, err error) {
 	if c.version < 2 {
-		return true, nil
+		return func() (bool, error) { return true, nil }
 	}
 	if c.prep != nil {
-		var p prepared
+		return func() (bool, error) {
+			var p prepared
+			select {
+			case p = <-c.prep:
+			case <-ctx.Done():
+				return false, ctx.Err()
+			}
+			c.prep = nil
+			if p.err != nil {
+				return false, p.err
+			}
+			c.mu.Lock()
+			c.target, c.snap = p.target, p.snap
+			c.mu.Unlock()
+			return p.online, nil
+		}
+	}
+	snaps := make(chan *prompts.VoiceTarget, 1)
+	go func() { snaps <- c.refreshSnapshot(ctx, c.target) }()
+	return func() (bool, error) {
 		select {
-		case p = <-c.prep:
+		case snap := <-snaps:
+			if snap != nil {
+				c.mu.Lock()
+				c.snap = snap
+				c.mu.Unlock()
+			}
 		case <-ctx.Done():
 			return false, ctx.Err()
 		}
-		c.prep = nil
-		if p.err != nil {
-			return false, p.err
-		}
-		c.mu.Lock()
-		c.target, c.snap = p.target, p.snap
-		c.mu.Unlock()
-		return p.online, nil
+		return true, nil
 	}
-	if snap := c.refreshSnapshot(ctx, c.target); snap != nil {
-		c.mu.Lock()
-		c.snap = snap
-		c.mu.Unlock()
-	}
-	return true, nil
 }
 
 // openTask is a run not over yet, as a new upstream session is told (instructions' Waiting).
@@ -370,7 +386,8 @@ func upstreamCode(err error) string {
 }
 
 // connect opens an upstream session and waits for it to start; the first one answers the app's start with ready.
-func (c *conversation) connect() error {
+// woken: it is the session a wake opens (suspend.go), not one after a drop: its instructions say the voice was paused.
+func (c *conversation) connect(woken bool) error {
 	c.mu.Lock()
 	p, w, model, voice := c.p, c.w, c.model, c.voice
 	history := append([]prompts.VoiceLine(nil), c.history...)
@@ -381,11 +398,12 @@ func (c *conversation) connect() error {
 
 	dctx, cancel := context.WithTimeout(c.ctx, startTimeout)
 	defer cancel()
+	bound := c.bind(dctx) // the bound conversation as it is now, read while the socket connects
 	up, err := c.dial(dctx, p, w, model)
 	if err != nil {
 		return err
 	}
-	online, err := c.bound(dctx)
+	online, err := bound()
 	if err != nil {
 		_ = up.CloseNow()
 		return err
@@ -404,9 +422,9 @@ func (c *conversation) connect() error {
 	c.mu.Unlock()
 	s := session{
 		Model: model, Voice: voice, InputRate: p.inputRate(),
-		Instructions: prompts.RenderVoiceInstructions(prompts.VoiceInstructions{
+		Instructions: fitInstructions(prompts.VoiceInstructions{
 			Lang: string(c.language()), Owner: c.pl.cfg.Owner, Notes: c.pl.cfg.Notes, Tools: mode, History: clipHistory(history),
-			Target: snap, Waiting: waiting,
+			Target: snap, Waiting: waiting, Paused: woken,
 		}),
 		Tools: toolDecls(tools),
 	}
@@ -475,11 +493,15 @@ func (c *conversation) connect() error {
 			c.pl.logf("reconnected session speaks at %d Hz, the app plays %d", rate, c.outRate)
 		}
 		if c.version >= 2 {
-			c.sendApp(map[string]any{"type": "link", "state": "live"})
+			c.sendApp(map[string]any{"type": "link", "state": linkLive})
 		} else {
 			c.sendApp(map[string]any{"type": "tool", "id": "reconnect", "done": true})
 		}
-		c.pl.logf("reconnected (%d)", c.reconnects)
+		if woken {
+			c.pl.logf("woken: a new session")
+		} else {
+			c.pl.logf("reconnected (%d)", c.reconnects)
+		}
 	}
 	resume := c.resume
 	c.resume = nil
@@ -497,6 +519,23 @@ func (c *conversation) connect() error {
 		c.runs.observeTarget(linkKey{c.target.MachineID, c.target.SessionID}) // after the runs handed back
 	}
 	return nil
+}
+
+// instructionsMost is the most a session's instructions run to, in runes: the measured service started a session with
+// 19000 characters of them and refused one with 25000, the limit counting what it adds itself (docs/lessons/voice.md
+// "Instructions size"); refused, a session does not start at all. A long call's history (historyLines of up to 200
+// runes) with a full snapshot comes near that in English.
+const instructionsMost = 16000
+
+// fitInstructions renders in, the oldest lines of its history left out as far as it takes to keep within
+// instructionsMost.
+func fitInstructions(in prompts.VoiceInstructions) string {
+	s := prompts.RenderVoiceInstructions(in)
+	for runeLen(s) > instructionsMost && len(in.History) > 0 {
+		in.History = in.History[1:]
+		s = prompts.RenderVoiceInstructions(in)
+	}
+	return s
 }
 
 // dial opens the upstream socket: the service's WebSocket, or the fake dialect's stand-in.
@@ -993,12 +1032,13 @@ func (c *conversation) deliver(s *sentWords) {
 		return
 	}
 	c.mu.Lock()
-	if c.closed {
+	if c.closed || s.prio == prioHeartbeat && c.sus.state != "" { // no heartbeat while paused (suspend.go)
 		c.mu.Unlock()
 		return
 	}
 	s.queued = time.Now()
 	c.queue = append(c.queue, s)
+	c.rouse("something to say") // a paused upstream (suspend.go)
 	c.mu.Unlock()
 	select {
 	case c.wake <- struct{}{}:
@@ -1025,6 +1065,7 @@ func (c *conversation) speaker() {
 			}
 			c.sendNow(s)
 		}
+		c.maybePause(time.Now()) // suspend.go
 		c.mu.Lock()
 		if now := time.Now(); c.user != nil && now.Sub(c.userAt) >= captionQuiet && now.Sub(c.pace.voice) >= captionQuiet {
 			c.closeUser()
@@ -1038,6 +1079,9 @@ func (c *conversation) nextToSay(now time.Time) *sentWords {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.queue = slices.DeleteFunc(c.queue, func(s *sentWords) bool { return !s.expires.IsZero() && now.After(s.expires) })
+	if !c.ready || c.sus.state != "" {
+		return nil // no session to say it to (paused, waking, reconnecting): it waits for the next one
+	}
 	best := -1
 	for i, s := range c.queue {
 		say := s.delegation == "" || s.gen != c.gen
@@ -1089,6 +1133,7 @@ func (c *conversation) sendNow(s *sentWords) {
 	if s.agent {
 		c.gate.told(now)
 	}
+	c.sus.said = now
 	c.told(s.card)
 	delegation, gen, text, onCall := s.delegation, s.gen, s.text, s.onCall
 	c.mu.Unlock()
@@ -1207,7 +1252,7 @@ func (c *conversation) lost(gen int, why error) {
 	c.closeAsst()
 	c.closeUser()
 	if c.version >= 2 {
-		c.sendApp(map[string]any{"type": "link", "state": "reconnecting"})
+		c.sendApp(map[string]any{"type": "link", "state": linkReconnecting})
 	} else {
 		c.sendApp(map[string]any{"type": "tool", "id": "reconnect", "label": "连接断了，重新连接中", "done": false})
 	}
@@ -1225,7 +1270,11 @@ func (c *conversation) lost(gen int, why error) {
 				case <-time.After(time.Duration(attempt) * 2 * time.Second):
 				}
 			}
-			if err = c.connect(); err == nil || c.ctx.Err() != nil {
+			if err = c.connect(false); err == nil {
+				c.flushRing() // a woken session that dropped before it had what was kept while paused (suspend.go)
+				return
+			}
+			if c.ctx.Err() != nil {
 				return
 			}
 			c.pl.logf("reconnect: %v", err)
@@ -1245,9 +1294,13 @@ func (c *conversation) readApp() {
 			ms, now := meanSquare(b), time.Now()
 			c.mu.Lock()
 			up, ready, w := c.up, c.ready, c.w
-			c.cutIn(now, c.pace.heard(now, ms), len(b))
+			voiced := c.pace.heard(now, ms)
+			held := c.held(b, voiced) // paused or waking: kept for the next session (suspend.go)
+			if !held {
+				c.cutIn(now, voiced, len(b))
+			}
 			c.mu.Unlock()
-			if ready && len(b) > 0 {
+			if !held && ready && len(b) > 0 {
 				_ = writeJSON(c.ctx, up, w.audio(b))
 			}
 			continue
@@ -1279,8 +1332,9 @@ func (c *conversation) readApp() {
 			c.userText(text, true, true)
 			c.gate.user = time.Now()
 			w := c.w
+			held := c.holdText(text) // paused or waking: it wakes the upstream, and goes to the next session (suspend.go)
 			c.mu.Unlock()
-			if !c.sendUp(-1, w.text(text)) {
+			if !held && !c.sendUp(-1, w.text(text)) {
 				c.fail("语音会话还没连上，这句没发出去", false)
 			}
 		case "resend":

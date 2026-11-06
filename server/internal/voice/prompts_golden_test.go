@@ -89,6 +89,9 @@ func TestGoldenVoicePrompts(t *testing.T) {
 			"bound_plain": render("bound_plain", prompts.VoiceInstructions{Target: &prompts.VoiceTarget{Kind: "assistant", State: "unread"}}),
 			"resumed": render("resumed", prompts.VoiceInstructions{Owner: x.owner, Tools: "bound", Target: x.agent, History: x.history,
 				Waiting: x.waiting}),
+			// After a pause (suspend.go): what was said before it, without a drop.
+			"paused": render("paused", prompts.VoiceInstructions{Owner: x.owner, Tools: "bound", Target: x.agent, History: x.history,
+				Waiting: x.waiting, Paused: true}),
 		}
 		for name, got := range bound {
 			// The three marks, the measured sentence, and other people's words inside one block they cannot close.

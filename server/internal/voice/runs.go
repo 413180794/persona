@@ -154,6 +154,8 @@ type tracker struct {
 	every     time.Duration // lookEvery as the call began
 	obs       observer      // the bound conversation's turns the call did not hand over (observe.go)
 	tri       triageView    // the hub's triage switches (observe.go)
+	// busy: the bound conversation worked as it was last looked at (suspend.go).
+	busy bool
 }
 
 const refusedMost = 20
@@ -199,6 +201,7 @@ func (t *tracker) loop(ctx context.Context) {
 				t.checkAll(ctx)
 			}
 			t.observe(ctx)
+			t.c.setWorks(t.works()) // the upstream may pause while it works (suspend.go)
 		}
 		t.asks.tick(ctx) // on its own clock (asks.go): an op may have made it due
 	}
@@ -284,6 +287,7 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 	if err != nil {
 		return // the hub could not be asked: the next look
 	}
+	t.saw(linkKey{r.MachineID, r.SessionID}, sess)
 	now := clock()
 	if r.told {
 		t.afterTold(r, sess, now)
