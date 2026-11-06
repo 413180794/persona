@@ -2,7 +2,7 @@
 // task cards that follow their agents, the hub's lines (answered, receipt, routed), the 今天 card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
-import { memo, useId, useMemo, useRef, useState } from "react";
+import { memo, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   answeredItems,
   cardSent,
@@ -42,6 +42,7 @@ import { getState, useStore, type State } from "../../lib/store";
 import type { AgentState, Interaction, Machine, Session } from "../../lib/types";
 import { Button, Collapse, cx, Dialog, IconButton, Menu, toast, useNow } from "../../ui/atoms";
 import { StatusMark } from "../../ui/StatusMark";
+import { useClamped } from "../../ui/use-clamped";
 import { Icon, type IconName } from "../../ui/icons";
 import { ReviewBadge, ReviewLine } from "./Supervision";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
@@ -642,7 +643,7 @@ function InterruptedReceipt({ item }: { item: FeedItem }) {
       <Icon name="info" size={18} stroke={2.4} className="text-red" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="text-[14.5px] font-semibold">{t("assistant-tasks.interrupted_title", { title })}</div>
-        <div className="line-clamp-4 text-[13px] text-ink-2">{reason ? t("assistant-tasks.interrupted_reason", { reason }) : t("assistant-tasks.interrupted")}</div>
+        <Clamped className="text-[13px] text-ink-2">{reason ? t("assistant-tasks.interrupted_reason", { reason }) : t("assistant-tasks.interrupted")}</Clamped>
         <div className="mt-1 flex gap-2">
           {canContinue && (
             <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo, "continue")}>
@@ -716,13 +717,37 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   );
 }
 
-/** What the task's agent said last, as Markdown (a start error is plain text), in about four lines (#1508). */
+/** What the task's agent said last, as Markdown (a start error is plain text), in about four lines (#1508); 展开全文
+ *  shows the rest in place when it is cut (#4715). */
 export function ReceiptSummary({ text, plain }: { text: string; plain?: boolean }) {
-  if (plain) return <div className="line-clamp-4 text-[13px] text-ink-2">{text}</div>;
+  if (plain) return <Clamped className="text-[13px] text-ink-2">{text}</Clamped>;
   return (
-    <div className="line-clamp-4 text-ink-2">
+    <Clamped className="text-ink-2">
       <Markdown text={text} compact />
-    </div>
+    </Clamped>
+  );
+}
+
+/** Four lines of a card's text; when they cut it, a 展开全文 / 收起 under them opens the rest in place (#4715). */
+function Clamped({ className, children }: { className: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const { ref, cut: long } = useClamped<HTMLDivElement>(open);
+  return (
+    <>
+      <div ref={ref} className={cx(className, !open && "line-clamp-4")} data-clamped={open ? undefined : ""}>
+        {children}
+      </div>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="-ml-1 w-fit rounded-[6px] px-1 text-[12px] font-medium whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
+        >
+          {open ? t("assistant-tasks.summary_collapse") : t("assistant-tasks.summary_expand")}
+        </button>
+      )}
+    </>
   );
 }
 

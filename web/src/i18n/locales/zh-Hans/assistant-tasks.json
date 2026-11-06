@@ -45,6 +45,8 @@
   "receipt_continued": "「{title}」中断后继续了",
   "interrupted_title": "{title} 中断了",
   "look": "看看",
+  "summary_expand": "展开全文",
+  "summary_collapse": "收起",
   "receipt_restarting": "「{title}」正在重新开",
   "receipt_restarted": "「{title}」重试后开起来了",
   "receipt_failed_above": "「{title}」没开起来，见上方任务卡",

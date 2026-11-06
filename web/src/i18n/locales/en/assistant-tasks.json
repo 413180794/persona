@@ -50,6 +50,8 @@
   "receipt_continued": "\"{title}\" continued after the interruption",
   "interrupted_title": "{title} was interrupted",
   "look": "View",
+  "summary_expand": "Show all",
+  "summary_collapse": "Show less",
   "receipt_restarting": "Restarting \"{title}\"",
   "receipt_restarted": "\"{title}\" started on retry",
   "receipt_failed_above": "\"{title}\" didn't start, see its card above",
