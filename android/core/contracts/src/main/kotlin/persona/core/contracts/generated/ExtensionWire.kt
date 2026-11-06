@@ -1593,18 +1593,22 @@ object ExtensionTone {
 }
 
 /**
- * Values of TextStyle.
+ * title and headline (UI version 6) are a section's big title and a small heading; an older app draws them as body.
  */
 object ExtensionTextStyle {
     const val BODY = "body"
     const val SECONDARY = "secondary"
     const val CAPTION = "caption"
     const val CODE = "code"
-    val ALL = listOf("body", "secondary", "caption", "code")
+    const val TITLE = "title"
+    const val HEADLINE = "headline"
+    val ALL = listOf("body", "secondary", "caption", "code", "title", "headline")
 }
 
 /**
- * Values of FieldKind.
+ * date, time, datetime, multichoice and multiline are UI version 6. Values stay strings: date YYYY-MM-DD, time HH:MM
+ * (24 hours), datetime YYYY-MM-DDTHH:MM local to context.tz, multichoice a JSON array of the chosen values, multiline
+ * the text with \n.
  */
 object ExtensionFieldKind {
     const val TEXT = "text"
@@ -1612,16 +1616,55 @@ object ExtensionFieldKind {
     const val NUMBER = "number"
     const val TOGGLE = "toggle"
     const val CHOICE = "choice"
-    val ALL = listOf("text", "secret", "number", "toggle", "choice")
+    const val DATE = "date"
+    const val TIME = "time"
+    const val DATETIME = "datetime"
+    const val MULTICHOICE = "multichoice"
+    const val MULTILINE = "multiline"
+    val ALL = listOf("text", "secret", "number", "toggle", "choice", "date", "time", "datetime", "multichoice", "multiline")
 }
 
 /**
- * Values of ChartKind.
+ * area, candlestick, donut and pie are UI version 6: an older app gets a line (an area, a candlestick's closes) or
+ * bars (a donut, a pie).
  */
 object ExtensionChartKind {
     const val BAR = "bar"
     const val LINE = "line"
-    val ALL = listOf("bar", "line")
+    const val AREA = "area"
+    const val CANDLESTICK = "candlestick"
+    const val DONUT = "donut"
+    const val PIE = "pie"
+    val ALL = listOf("bar", "line", "area", "candlestick", "donut", "pie")
+}
+
+/**
+ * A candlestick's rising candle: green (the default) or red, as the market writes it; the falling one is the other.
+ */
+object ExtensionCandleRising {
+    const val GREEN = "green"
+    const val RED = "red"
+    val ALL = listOf("green", "red")
+}
+
+/**
+ * A named color (UI version 6): each app has its own of each, right in light and dark and in every style. Not a hex;
+ * an unknown one draws as the app's quiet ink. Only on badges, icons, tiles, chart series and sparks, never on text;
+ * never with a tone on the same object.
+ */
+object ExtensionColor {
+    const val RED = "red"
+    const val ORANGE = "orange"
+    const val AMBER = "amber"
+    const val YELLOW = "yellow"
+    const val GREEN = "green"
+    const val TEAL = "teal"
+    const val BLUE = "blue"
+    const val INDIGO = "indigo"
+    const val PURPLE = "purple"
+    const val PINK = "pink"
+    const val GRAY = "gray"
+    val ALL = listOf("red", "orange", "amber", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "gray")
 }
 
 /**
@@ -1693,8 +1736,8 @@ object ExtensionPlatform {
 
 /**
  * The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after
- * money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the
- * default (extension; plugin is its old name).
+ * money; 4 for those after settings; 6 for those after file, and a metric's, a tile's, a row action's). Each app
+ * draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).
  */
 object ExtensionNavIcon {
     const val PLUGIN = "plugin"
@@ -1724,7 +1767,52 @@ object ExtensionNavIcon {
     const val PULL_REQUEST = "pull_request"
     const val MERGE = "merge"
     const val FILE = "file"
-    val ALL = listOf("plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file")
+    const val HOME = "home"
+    const val SOFA = "sofa"
+    const val LIGHT = "light"
+    const val POWER = "power"
+    const val FAN = "fan"
+    const val THERMOMETER = "thermometer"
+    const val DROPLET = "droplet"
+    const val LOCK = "lock"
+    const val UNLOCK = "unlock"
+    const val DOOR = "door"
+    const val WINDOW = "window"
+    const val CAMERA = "camera"
+    const val VIDEO = "video"
+    const val PLAY = "play"
+    const val PAUSE = "pause"
+    const val STOP = "stop"
+    const val SPEAKER = "speaker"
+    const val TV = "tv"
+    const val PLUG = "plug"
+    const val BATTERY = "battery"
+    const val BOLT = "bolt"
+    const val SUN = "sun"
+    const val MOON = "moon"
+    const val CLOUD = "cloud"
+    const val RAIN = "rain"
+    const val SNOW = "snow"
+    const val WIND = "wind"
+    const val LEAF = "leaf"
+    const val CAR = "car"
+    const val LOCATION = "location"
+    const val ROBOT = "robot"
+    const val WIFI = "wifi"
+    const val SHIELD = "shield"
+    const val TREND_UP = "trend_up"
+    const val TREND_DOWN = "trend_down"
+    const val WALLET = "wallet"
+    const val BANK = "bank"
+    const val HEART = "heart"
+    const val PLUS = "plus"
+    const val MINUS = "minus"
+    const val TRASH = "trash"
+    const val EDIT = "edit"
+    const val REFRESH = "refresh"
+    const val SHARE = "share"
+    const val INFO = "info"
+    val ALL = listOf("plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file", "home", "sofa", "light", "power", "fan", "thermometer", "droplet", "lock", "unlock", "door", "window", "camera", "video", "play", "pause", "stop", "speaker", "tv", "plug", "battery", "bolt", "sun", "moon", "cloud", "rain", "snow", "wind", "leaf", "car", "location", "robot", "wifi", "shield", "trend_up", "trend_down", "wallet", "bank", "heart", "plus", "minus", "trash", "edit", "refresh", "share", "info")
 }
 
 @Serializable
@@ -1775,8 +1863,8 @@ sealed interface ExtensionComponent {
     data class Unknown(override val type: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionComponent
 
     companion object {
-        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer")
-        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3, "html" to 4, "header" to 4, "breadcrumb" to 4, "file_tree" to 4, "code" to 4, "diff" to 4, "comment_thread" to 4, "composer" to 4)
+        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer", "image", "grid", "carousel")
+        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3, "html" to 4, "header" to 4, "breadcrumb" to 4, "file_tree" to 4, "code" to 4, "diff" to 4, "comment_thread" to 4, "composer" to 4, "image" to 6, "grid" to 6, "carousel" to 6)
     }
 }
 
@@ -1813,6 +1901,9 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
                 "diff" -> input.json.decodeFromJsonElement(ExtensionDiffComponent.serializer(), obj)
                 "comment_thread" -> input.json.decodeFromJsonElement(ExtensionCommentThreadComponent.serializer(), obj)
                 "composer" -> input.json.decodeFromJsonElement(ExtensionComposerComponent.serializer(), obj)
+                "image" -> input.json.decodeFromJsonElement(ExtensionImageComponent.serializer(), obj)
+                "grid" -> input.json.decodeFromJsonElement(ExtensionGridComponent.serializer(), obj)
+                "carousel" -> input.json.decodeFromJsonElement(ExtensionCarouselComponent.serializer(), obj)
                 else -> ExtensionComponent.Unknown(tag, obj)
             }
         } catch (_: SerializationException) {
@@ -1848,6 +1939,9 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
             is ExtensionDiffComponent -> output.json.encodeToJsonElement(ExtensionDiffComponent.serializer(), value) as JsonObject
             is ExtensionCommentThreadComponent -> output.json.encodeToJsonElement(ExtensionCommentThreadComponent.serializer(), value) as JsonObject
             is ExtensionComposerComponent -> output.json.encodeToJsonElement(ExtensionComposerComponent.serializer(), value) as JsonObject
+            is ExtensionImageComponent -> output.json.encodeToJsonElement(ExtensionImageComponent.serializer(), value) as JsonObject
+            is ExtensionGridComponent -> output.json.encodeToJsonElement(ExtensionGridComponent.serializer(), value) as JsonObject
+            is ExtensionCarouselComponent -> output.json.encodeToJsonElement(ExtensionCarouselComponent.serializer(), value) as JsonObject
             is ExtensionComponent.Unknown -> value.raw
         }
         output.encodeJsonElement(JsonObject(obj + ("type" to JsonPrimitive(value.type))))
@@ -1876,6 +1970,9 @@ data class ExtensionMetricComponent(
     val value: String = "",
     val detail: String? = null,
     val tone: String? = null,
+    val icon: String? = null,
+    @SerialName("icon_color") val iconColor: String? = null,
+    val spark: ExtensionSpark? = null,
 ) : ExtensionComponent
 
 /**
@@ -1909,6 +2006,17 @@ data class ExtensionRowComponent(
     val icon: String? = null,
     val avatar: ExtensionAvatar? = null,
     val thumbnail: ExtensionThumbnail? = null,
+    @SerialName("icon_color") val iconColor: String? = null,
+    /**
+     * A switch, a slider or a stepper; the row then has a key.
+     */
+    val control: ExtensionRowControl? = null,
+    /**
+     * Extra actions in the row's menu and under a swipe: shortcuts only, the same must be possible on the page the
+     * row opens.
+     */
+    val actions: List<ExtensionRowAction>? = null,
+    val spark: ExtensionSpark? = null,
 ) : ExtensionComponent
 
 /**
@@ -1947,6 +2055,18 @@ data class ExtensionFieldComponent(
     val value: String? = null,
     val choices: List<ExtensionChoice>? = null,
     val placeholder: String? = null,
+    /**
+     * date, time, datetime: the first one allowed, written like value.
+     */
+    val earliest: String? = null,
+    /**
+     * date, time, datetime: the last one allowed.
+     */
+    val latest: String? = null,
+    /**
+     * A line of help under the field.
+     */
+    val detail: String? = null,
 ) : ExtensionComponent
 
 /**
@@ -1959,7 +2079,9 @@ data class ExtensionDividerComponent(
 ) : ExtensionComponent
 
 /**
- * A bar or line chart. Every series has the same labels in the same order; with more than one series each is named.
+ * A chart: bar, line, and in UI version 6 area, candlestick, donut, pie. Every series has the same labels in the same
+ * order; with more than one series each is named. A candlestick has one series whose points all have open, high, low
+ * and close (value is the close), at most 240 of them; a donut or a pie one series of 2 to 8 points.
  */
 @Serializable
 data class ExtensionChartComponent(
@@ -1971,6 +2093,14 @@ data class ExtensionChartComponent(
     val unit: String? = null,
     val stacked: Boolean? = null,
     val detail: String? = null,
+    /**
+     * donut: the words in the hole (a total).
+     */
+    val center: String? = null,
+    /**
+     * candlestick: the color of a rising candle.
+     */
+    val rising: String? = null,
 ) : ExtensionComponent
 
 /**
@@ -2032,6 +2162,7 @@ data class ExtensionEmptyComponent(
     val detail: String? = null,
     val icon: String? = null,
     val button: ExtensionEmptyButton? = null,
+    @SerialName("icon_color") val iconColor: String? = null,
 ) : ExtensionComponent
 
 /**
@@ -2206,6 +2337,203 @@ data class ExtensionComposerComponent(
     val value: String? = null,
     val buttons: List<ExtensionComposerButton> = emptyList(),
 ) : ExtensionComponent
+
+/**
+ * A picture with an optional caption; tapping it shows it full screen unless no_zoom. A ref is the extension's own
+ * picture (a camera, a map) fetched through the hub. An older app gets a row with a thumbnail (url) or a line of text
+ * (ref).
+ */
+@Serializable
+data class ExtensionImageComponent(
+    override val type: String = "image",
+    val key: String? = null,
+    val src: ExtensionImageSource = ExtensionImageSource(),
+    /**
+     * Read out, and shown when the picture does not load.
+     */
+    val alt: String = "",
+    val caption: String? = null,
+    val aspect: String? = null,
+    val fit: String? = null,
+    /**
+     * Tapping does nothing (else it shows the picture full screen).
+     */
+    @SerialName("no_zoom") val noZoom: Boolean? = null,
+) : ExtensionComponent
+
+/**
+ * Tiles in columns that fit the width: two on a phone, more on wider screens, at most max_columns (4 when absent).
+ * Each tile counts as a component of the page. An older app gets a row per tile.
+ */
+@Serializable
+data class ExtensionGridComponent(
+    override val type: String = "grid",
+    val key: String? = null,
+    val tiles: List<ExtensionTile> = emptyList(),
+    @SerialName("max_columns") val maxColumns: Int? = null,
+) : ExtensionComponent
+
+/**
+ * Tiles in one line that scrolls sideways: cameras, rooms, a watchlist. Each tile counts as a component of the page.
+ * An older app gets a text (the title) and a row per tile.
+ */
+@Serializable
+data class ExtensionCarouselComponent(
+    override val type: String = "carousel",
+    val key: String? = null,
+    val title: String? = null,
+    val tiles: List<ExtensionTile> = emptyList(),
+    val width: String? = null,
+) : ExtensionComponent
+
+/**
+ * Where a picture comes from (UI version 6): an https url the app loads without credentials, or a ref the extension
+ * serves itself (ui.image) through the hub; exactly one. path is written by the hub only, for a ref: its own address,
+ * which the app loads with its device credentials. An extension that writes path is refused.
+ */
+@Serializable
+data class ExtensionImageSource(
+    val url: String? = null,
+    val ref: String? = null,
+    val path: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+/**
+ * square 1:1, landscape 4:3 (the default), wide 16:9, portrait 3:4, auto from src's width and height (4:3 until the
+ * picture comes).
+ */
+object ExtensionImageAspect {
+    const val SQUARE = "square"
+    const val LANDSCAPE = "landscape"
+    const val WIDE = "wide"
+    const val PORTRAIT = "portrait"
+    const val AUTO = "auto"
+    val ALL = listOf("square", "landscape", "wide", "portrait", "auto")
+}
+
+/**
+ * fill crops to fill the frame (the default); fit shows all of it.
+ */
+object ExtensionImageFit {
+    const val FILL = "fill"
+    const val FIT = "fit"
+    val ALL = listOf("fill", "fit")
+}
+
+/**
+ * Values of RowControlKind.
+ */
+object ExtensionRowControlKind {
+    const val SWITCH = "switch"
+    const val SLIDER = "slider"
+    const val STEPPER = "stepper"
+    val ALL = listOf("switch", "slider", "stepper")
+}
+
+/**
+ * A control in a row or a tile (UI version 6). Changing it calls ui.action with action and values {name: the new
+ * value} (a switch "true" or "false", a slider and a stepper the number). The app shows the new value at once and
+ * puts back the old one if the action fails. A slider sends when the finger lifts, a stepper 0.6 s after the last
+ * tap.
+ */
+@Serializable
+data class ExtensionRowControl(
+    val kind: String = "",
+    val name: String = "",
+    /**
+     * switch: on or off.
+     */
+    val on: Boolean? = null,
+    /**
+     * slider, stepper: the value now.
+     */
+    val value: Double? = null,
+    val min: Double? = null,
+    val max: Double? = null,
+    /**
+     * More than 0 (checked by the hub); a slider's is (max - min) / 100 when absent.
+     */
+    val step: Double? = null,
+    val unit: String? = null,
+    /**
+     * How to write the value ("22.5 °C"); else the number and unit.
+     */
+    val display: String? = null,
+    val disabled: Boolean? = null,
+    val action: ExtensionAction = ExtensionAction(),
+)
+
+/**
+ * One of a row's or a tile's extra actions (UI version 6): in its menu (long press, right click, the … button) and,
+ * with swipe, under a swipe from the trailing edge. confirm and push work as on any action; a destructive one has
+ * confirm.
+ */
+@Serializable
+data class ExtensionRowAction(
+    val title: String = "",
+    val icon: String? = null,
+    val role: String? = null,
+    /**
+     * Also under a swipe. At most two of a row's actions.
+     */
+    val swipe: Boolean? = null,
+    val action: ExtensionAction = ExtensionAction(),
+)
+
+/**
+ * A small trend line inside a row, a metric, a stat or a tile (UI version 6): values only, no axes. Without color or
+ * tone, the app's quiet ink.
+ */
+@Serializable
+data class ExtensionSpark(
+    val values: List<Double> = emptyList(),
+    val color: String? = null,
+    val tone: String? = null,
+    /**
+     * Shade under the line.
+     */
+    val fill: Boolean? = null,
+)
+
+/**
+ * A carousel's tiles: narrow about 140pt (scenes), regular about 200pt (the default; rooms), wide about 80% of the
+ * screen (camera pictures).
+ */
+object ExtensionTileWidth {
+    const val NARROW = "narrow"
+    const val REGULAR = "regular"
+    const val WIDE = "wide"
+    val ALL = listOf("narrow", "regular", "wide")
+}
+
+/**
+ * A tile of a grid or a carousel (UI version 6): an icon or a picture, a title, a state line, a value; tapping does
+ * its action. active marks a tile that is on (a scene running, a light on) in its color.
+ */
+@Serializable
+data class ExtensionTile(
+    val key: String? = null,
+    val title: String = "",
+    val subtitle: String? = null,
+    val value: String? = null,
+    /**
+     * At most one of icon and image.
+     */
+    val icon: String? = null,
+    val image: ExtensionImageSource? = null,
+    val color: String? = null,
+    val badge: ExtensionBadge? = null,
+    val active: Boolean? = null,
+    val spark: ExtensionSpark? = null,
+    /**
+     * A switch only; the tile then has a key.
+     */
+    val control: ExtensionRowControl? = null,
+    val actions: List<ExtensionRowAction>? = null,
+    val action: ExtensionAction? = null,
+)
 
 /**
  * stack: sections one under another. split: on a wide screen the side pane's sections in a column at the start, the
@@ -2624,15 +2952,29 @@ data class ExtensionMore(
 data class ExtensionAvatar(
     val url: String? = null,
     val text: String? = null,
+    /**
+     * The extension's own picture (ui.image) through the hub, in place of url.
+     */
+    val ref: String? = null,
+    /**
+     * Written by the hub only, for a ref.
+     */
+    val path: String? = null,
 )
 
 /**
- * A small picture at the row's start: an https image the app loads without any credentials.
+ * A small picture at the row's start: an https image the app loads without any credentials, or (UI version 6) a ref
+ * the extension serves (ui.image) through the hub; exactly one of url and ref.
  */
 @Serializable
 data class ExtensionThumbnail(
-    val url: String = "",
+    val url: String? = null,
     val aspect: String? = null,
+    val ref: String? = null,
+    /**
+     * Written by the hub only, for a ref.
+     */
+    val path: String? = null,
 )
 
 /**
@@ -2672,6 +3014,7 @@ data class ExtensionEmptyButton(
 data class ExtensionBadge(
     val text: String = "",
     val tone: String? = null,
+    val color: String? = null,
 )
 
 @Serializable
@@ -2681,13 +3024,15 @@ data class ExtensionChoice(
 )
 
 /**
- * One line, or one color of bars. No tone: the app's own colors, in order.
+ * One line, or one color of bars. No tone and no color: the app's own colors, in order. At most 120 points (240 for a
+ * candlestick, checked by the hub).
  */
 @Serializable
 data class ExtensionChartSeries(
     val name: String? = null,
     val tone: String? = null,
     val points: List<ExtensionChartPoint> = emptyList(),
+    val color: String? = null,
 )
 
 /**
@@ -2698,6 +3043,11 @@ data class ExtensionChartPoint(
     val label: String = "",
     val value: Double = 0.0,
     val display: String? = null,
+    val open: Double? = null,
+    val high: Double? = null,
+    val low: Double? = null,
+    val close: Double? = null,
+    val volume: Double? = null,
 )
 
 @Serializable
@@ -2706,6 +3056,7 @@ data class ExtensionStat(
     val value: String = "",
     val detail: String? = null,
     val tone: String? = null,
+    val spark: ExtensionSpark? = null,
 )
 
 /**

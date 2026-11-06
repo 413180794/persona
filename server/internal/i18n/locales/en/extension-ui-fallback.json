@@ -17,5 +17,16 @@
   "comments_remaining_one": "{count} more comment",
   "comments_remaining_other": "{count} more comments",
   "review_drafts_one": "Review drafts · {count}",
-  "review_drafts_other": "Review drafts · {count}"
+  "review_drafts_other": "Review drafts · {count}",
+  "switch": "Switch",
+  "switch_on": "On",
+  "switch_off": "Off",
+  "apply": "Apply",
+  "set_value": "Set",
+  "tile_on": "On",
+  "control_range": "{title} ({min}–{max}{unit})",
+  "closing_price": "Close",
+  "field_detail": "{label} ({detail})",
+  "comma_separated": "{label} (separate several with commas)",
+  "image_newer": "Image: {alt} (view it in a newer app version)"
 }

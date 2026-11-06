@@ -55,6 +55,7 @@ func TestFit(t *testing.T) {
 	page, _ := Slot("nav_page")
 	v := view()
 	dropped, err := Fit(v, page, 1)
+	slices.Sort(dropped) // unknown types are left out before the check, those newer than the app after it
 	if err != nil || len(v.Sections) != 1 || v.Sections[0].Title != "数" || len(v.Sections[0].Items) != 1 || v.RefreshAfter != RefreshLeast ||
 		!slices.Equal(dropped, []string{"chart", "hologram"}) {
 		t.Fatalf("%v %+v %v", err, v, dropped)

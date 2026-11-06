@@ -1158,7 +1158,7 @@ When the app draws a slot, it states in `context` whom it is drawing for and whe
 | --- | --- | --- |
 | `placement` | — | This contribution's slot |
 | `size` | Optional: `compact` / `full` | If not sent, the size from the slot table; `compact` is a card and must be compact (see the limits under "New items") |
-| `ui_version` | The UI version the app can draw: currently `5` (web, Android; iOS catching up); **older apps do not send it, which counts as 1** | `min(app's, hub's)`; the extension can draw a version an older app can handle (e.g. `progress` instead of `chart`) |
+| `ui_version` | The UI version the app can draw: the hub knows `6`, apps currently send `5` (web, Android; iOS catching up) until they draw all of UI version 6; **older apps do not send it, which counts as 1** | `min(app's, hub's)`; the extension can draw a version an older app can handle (e.g. `progress` instead of `chart`) |
 | `tz` | The user's time zone (IANA name, `Asia/Shanghai`) | Passed on only if it loads; if not sent or invalid, the user time zone the hub knows (reported by the app, or from assistant settings), empty if neither. "Today" is computed in it |
 | `locale` | The app's language (`zh-Hans-CN`) | Passed on only if it looks like a language tag, otherwise empty |
 | `platform` | `ios` / `mac` / `android` / `web` | Other values are dropped |
@@ -1300,7 +1300,7 @@ If you do not want to see an extension's entries and cards: disable the extensio
 
 ### Compatibility
 
-**UI versions**: 1 is the original eight item types and two slots; 2 adds three slots, `chart` / `stat_grid` / `segmented`, `refresh_after` and context; for 3 see "UI version 3" above; for 4 see "UI version 4: code hosting"; for 5 see "UI version 5: code review". The version of the `ui` extension point changes with it (`hub.extension_points.ui` in `initialize`, currently 5).
+**UI versions**: 1 is the original eight item types and two slots; 2 adds three slots, `chart` / `stat_grid` / `segmented`, `refresh_after` and context; for 3 see "UI version 3" above; for 4 see "UI version 4: code hosting"; for 5 see "UI version 5: code review"; for 6 see "UI version 6". The version of the `ui` extension point changes with it (`hub.extension_points.ui` in `initialize`, currently 6).
 
 - **Older app, new slot**: the app only queries the slots it knows by `placement`; it does not see new slots and does not error. `nav_page` also appears in the extension details' `ui`, so older apps (web) can still open it under **Settings › Extensions** › this extension;
   important content can therefore just go in `nav_page`, without a `plugin_page`.
@@ -1537,6 +1537,74 @@ The hub validates as usual (`lines` limits, `items` checked for the slot, https-
 
 - **UI version 4 apps**: the hub removes these fields and actions; `review` becomes the page's first section ("Review drafts · N" + `composer` + discard button), and the first comment in each draft thread gains a **Draft** badge. Older versions follow UI version 4 downgrades.
 - Extensions still return a whole-page View for `ui_version < 5` apps (including the file when `load` is called).
+
+## UI version 6 (#5464)
+
+Pictures, controls in rows, more charts, a row's extra actions, grids and carousels, more field kinds and a few more styles: what smart-home and
+market pages need. The app sends `6` in `context.ui_version`; `hub.extension_points.ui` is `6`; there is no new `features` entry (as with 4 and 5,
+an older hub holds the app's version to its own, and the extension sees that). Fields are authoritative in `schema/extension/view.schema.json`
+(`x-since: 6`); examples are `schema/extension/examples/View.v6-*.json`. **An app sends 6 only when it draws all of the below**: with 6 the hub no
+longer downgrades, and a half-done app would skip what it does not know.
+
+Still no arbitrary values: colors are named, icons a fixed set, text sizes two more levels.
+
+### Components and fields
+
+| Where | Field | What it does |
+| --- | --- | --- |
+| `image` (new) | `src {url \| ref, width?, height?}`, `alt`, `caption?`, `aspect?`, `fit?`, `no_zoom?` | A picture. `url` is https, loaded without credentials; `ref` is the extension's own picture (a camera, a map) served by `ui.image` through the hub, which writes `src.path` for the app (an extension that writes `path` is refused). `alt` is required (screen readers, failed loads). `aspect` `square` 1:1, `landscape` 4:3 (default), `wide` 16:9, `portrait` 3:4, `auto` (from `width`/`height`); `fit` `fill` (default, cropped) or `fit`. Tapping opens it full screen unless `no_zoom` |
+| `row.thumbnail`, `row.avatar`, `header.avatar`, `Comment.avatar` | `ref` | The same as `image`'s; a thumbnail has exactly one of `url` and `ref` |
+| `row` | `control {kind, name, action, on?, value?, min?, max?, step?, unit?, display?, disabled?}` | A `switch`, `slider` or `stepper`. Changing it calls `ui.action` with `action` and `values {name: "true"\|"false"\|the number}`. The row needs a `key`; `name` is a page field name like any other |
+| `row` | `actions [{title, action, icon?, role?, swipe?}]` (1–4) | Extra actions: in the row's menu (long press, right click, the … button), `swipe: true` ones (at most 2) also under a trailing swipe. `role: destructive` needs `action.confirm`. **Shortcuts only**: the same must be possible on the page the row opens; older apps get none |
+| `row`, `metric`, `Stat`, `Tile` | `spark {values (2–60), color?, tone?, fill?}` | A small trend line, no axes |
+| `chart.kind` | `area`, `candlestick`, `donut`, `pie` | `area` follows `line`'s rules (`stacked` is a stacked area). `candlestick`: one series, every point has `open/high/low/close` (`value` is the close, used by screen readers and older apps), `low ≤ min(open, close)`, `high ≥ max(open, close)`, `volume` on all points or none, at most 240 points (other charts 120). `donut` / `pie`: one series of 2–8 points, values ≥ 0 summing to more than 0, labels unique |
+| `chart` | `center` (donut), `rising` (candlestick) | The words in a donut's hole; a rising candle's color, `green` (default) or `red` as the market writes it |
+| `grid` (new) | `tiles` (1–60), `max_columns?` (1–6, default 4) | Tiles in columns fitting the width (two on a phone) |
+| `carousel` (new) | `tiles` (1–20), `title?`, `width?` (`narrow` / `regular` / `wide`) | Tiles in a line scrolling sideways (cameras, scenes, a watchlist) |
+| `Tile` | `title`, `subtitle?`, `value?`, `icon?` or `image?`, `color?`, `badge?`, `active?`, `spark?`, `control?` (a switch), `actions?`, `action?`, `key?` | A tile. Each tile counts as a component toward a page's 300; `key`s share the page's set; a tile with a control has a `key` |
+| `FieldKind` | `date`, `time`, `datetime`, `multichoice`, `multiline` | Values stay strings: `YYYY-MM-DD`, `HH:MM` (24 hours), `YYYY-MM-DDTHH:MM` local to `context.tz` (no offset), a JSON array of the chosen `value`s, the text with `\n` |
+| `field` | `earliest`, `latest` (date / time / datetime), `detail` | Bounds written like `value` (`earliest ≤ latest`); a line of help under any field |
+| `TextStyle` | `title`, `headline` | A section's big title and a small heading (at most 200 characters) |
+| `Color` | `red orange amber yellow green teal blue indigo purple pink gray` | On `Badge.color`, `row.icon_color`, `metric.icon_color`, `empty.icon_color`, `Tile.color`, `ChartSeries.color`, `Spark.color` only, never on text. `tone` is a meaning (good / caution / bad), `color` only a category: one object never has both. A chart's series colors differ |
+| `NavIcon` | 45 more (`home`, `light`, `power`, `thermometer`, `camera`, `lock`, `trend_up`, …) | Also `metric.icon`. Each app maps every name to its own icon |
+
+Field names starting with `~` are the hub's (below) and refused in an extension's view.
+
+**Controls**: a switch has `on` and no numbers; a slider `min < max`, `value` between them, `step > 0` (default `(max − min) / 100`) and at most 10,000 steps;
+a stepper `value` and `step > 0`, `min` / `max` optional. A control's `action.values` has room for its own value (at most 7 others). The app shows the
+new value at once (a slider sends when the finger lifts, a stepper 0.6 s after the last tap, one request in flight per control, the latest kept),
+draws what the extension answers (best: `ActionResult.items` with just this row, by `key`), and puts back the extension's last value if the action fails.
+A redraw while a request is in flight keeps the user's value for that control.
+
+**Limits**: at most 50 pictures a page (images, rows and tiles with one); at most 100 rows and tiles with `actions` a page.
+A card (`compact`) takes switches and steppers but no slider, at most 4 pictures, a grid of at most 4 tiles and a carousel of at most 6, tiles counting toward its 12 items.
+A widget draws none of version 6 yet: the hub gives it what an app of version 5 gets. An assistant card (`persona-view`) takes `url` pictures but no `ref` and no controls.
+
+### Compatibility
+
+The hub draws version 6 for an older app (`downgrade6`, before the older downgrades), so a page never goes blank:
+
+| Version 6 | Version 4–5 | Version 1–3 |
+| --- | --- | --- |
+| `image` with `url` | a `row` with the picture as a thumbnail (version 3 too) | version 1–2: a `text` (caption or alt) |
+| `image` with `ref`, ref thumbnails and avatars | a caption `text` 「图片：<alt>（请在新版 App 中查看）」; ref thumbnails left out, an avatar keeps its `text` | the same |
+| `switch` | the row taps to the opposite value (`action.values`), its value 开 / 关; a row that has its own `action` keeps it and gets a row 「开关」 under it | a `toggle` field and an 「应用」 button that submits |
+| `slider` | the row with its value, a `number` field, a 「设为该值」 button | the same |
+| `stepper` | the row with its value, 「−」 / 「+」 buttons carrying the value a step away (held to min / max) | a `number` field and a button |
+| a disabled control, or one in a card of version 1–3 | the row with its value only | the same |
+| `area`, `candlestick` | a `line` (a candlestick's closes, its latest 120, detail 「收盘价 …」) | version 1: no chart |
+| `donut`, `pie` | `bar` (`center` joins `detail`) | version 1: no chart |
+| `grid`, `carousel` | a `row` per tile (`active` without a badge gets 「开启」; a `url` image as the thumbnail); a carousel's title as a `text` before them | the same |
+| `date`, `time`, `datetime`, `multiline` | a `text` field (`placeholder` the format); `detail` joins the label | the same |
+| `multichoice` | a `text` with the label, then a `toggle` per choice named `~<name>.<base64url(value)>`; more than 20 choices (or names over 128 characters): one `text` field `~csv:<name>`, values with commas | the same |
+| `title`, `headline` | `body` | the same |
+| `Badge.color`, `ChartSeries.color` | the nearest `tone` (`red` danger; `orange` / `amber` / `yellow` caution; `green` / `teal` positive; others none), a tone once per chart | the same |
+| `actions`, `spark`, `icon_color`, `Tile.color`, new icons, `metric.icon` | left out (an app's default icon) | the same |
+
+When an older app sends an action, the hub puts the multichoice back (`extension.CollectValues`): every `~<name>.*` toggle that is `"true"` joins `<name>`'s JSON array,
+`~csv:<name>` is split at commas (`,`, `，`, `、`), and the `~` names are taken out, so the extension always sees version 6's format.
+The view the extension drew is checked first, whatever the app's version (a view is refused or drawn alike for every app); then what the app gets is checked again.
+Extensions may still draw an older app differently (`ui_version`), for example a `link` to the device's own web page in place of a camera picture.
 
 ## System-level placements (#1858)
 

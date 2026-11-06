@@ -1146,14 +1146,40 @@ export interface ExtensionNotification {
 export type Tone = "neutral" | "positive" | "caution" | "danger" | (string & {});
 export const TONES = ["neutral", "positive", "caution", "danger"] as const;
 
-export type TextStyle = "body" | "secondary" | "caption" | "code" | (string & {});
-export const TEXT_STYLES = ["body", "secondary", "caption", "code"] as const;
+/**
+ * title and headline (UI version 6) are a section's big title and a small heading; an older app draws them as body.
+ */
+export type TextStyle = "body" | "secondary" | "caption" | "code" | "title" | "headline" | (string & {});
+export const TEXT_STYLES = ["body", "secondary", "caption", "code", "title", "headline"] as const;
 
-export type FieldKind = "text" | "secret" | "number" | "toggle" | "choice" | (string & {});
-export const FIELD_KINDS = ["text", "secret", "number", "toggle", "choice"] as const;
+/**
+ * date, time, datetime, multichoice and multiline are UI version 6. Values stay strings: date YYYY-MM-DD, time HH:MM
+ * (24 hours), datetime YYYY-MM-DDTHH:MM local to context.tz, multichoice a JSON array of the chosen values, multiline
+ * the text with \n.
+ */
+export type FieldKind = "text" | "secret" | "number" | "toggle" | "choice" | "date" | "time" | "datetime" | "multichoice" | "multiline" | (string & {});
+export const FIELD_KINDS = ["text", "secret", "number", "toggle", "choice", "date", "time", "datetime", "multichoice", "multiline"] as const;
 
-export type ChartKind = "bar" | "line" | (string & {});
-export const CHART_KINDS = ["bar", "line"] as const;
+/**
+ * area, candlestick, donut and pie are UI version 6: an older app gets a line (an area, a candlestick's closes) or
+ * bars (a donut, a pie).
+ */
+export type ChartKind = "bar" | "line" | "area" | "candlestick" | "donut" | "pie" | (string & {});
+export const CHART_KINDS = ["bar", "line", "area", "candlestick", "donut", "pie"] as const;
+
+/**
+ * A candlestick's rising candle: green (the default) or red, as the market writes it; the falling one is the other.
+ */
+export type CandleRising = "green" | "red" | (string & {});
+export const CANDLE_RISINGS = ["green", "red"] as const;
+
+/**
+ * A named color (UI version 6): each app has its own of each, right in light and dark and in every style. Not a hex;
+ * an unknown one draws as the app's quiet ink. Only on badges, icons, tiles, chart series and sparks, never on text;
+ * never with a tone on the same object.
+ */
+export type Color = "red" | "orange" | "amber" | "yellow" | "green" | "teal" | "blue" | "indigo" | "purple" | "pink" | "gray" | (string & {});
+export const COLORS = ["red", "orange", "amber", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "gray"] as const;
 
 export type ButtonRole = "normal" | "destructive" | (string & {});
 export const BUTTON_ROLES = ["normal", "destructive"] as const;
@@ -1184,11 +1210,11 @@ export const PLATFORMS = ["ios", "mac", "android", "web"] as const;
 
 /**
  * The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after
- * money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the
- * default (extension; plugin is its old name).
+ * money; 4 for those after settings; 6 for those after file, and a metric's, a tile's, a row action's). Each app
+ * draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).
  */
-export type NavIcon = "plugin" | "chart" | "gauge" | "list" | "bell" | "doc" | "calendar" | "money" | "extension" | "person" | "chat" | "mail" | "link" | "folder" | "star" | "check" | "warning" | "clock" | "tag" | "search" | "settings" | "branch" | "commit" | "code" | "pull_request" | "merge" | "file" | (string & {});
-export const NAV_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"] as const;
+export type NavIcon = "plugin" | "chart" | "gauge" | "list" | "bell" | "doc" | "calendar" | "money" | "extension" | "person" | "chat" | "mail" | "link" | "folder" | "star" | "check" | "warning" | "clock" | "tag" | "search" | "settings" | "branch" | "commit" | "code" | "pull_request" | "merge" | "file" | "home" | "sofa" | "light" | "power" | "fan" | "thermometer" | "droplet" | "lock" | "unlock" | "door" | "window" | "camera" | "video" | "play" | "pause" | "stop" | "speaker" | "tv" | "plug" | "battery" | "bolt" | "sun" | "moon" | "cloud" | "rain" | "snow" | "wind" | "leaf" | "car" | "location" | "robot" | "wifi" | "shield" | "trend_up" | "trend_down" | "wallet" | "bank" | "heart" | "plus" | "minus" | "trash" | "edit" | "refresh" | "share" | "info" | (string & {});
+export const NAV_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file", "home", "sofa", "light", "power", "fan", "thermometer", "droplet", "lock", "unlock", "door", "window", "camera", "video", "play", "pause", "stop", "speaker", "tv", "plug", "battery", "bolt", "sun", "moon", "cloud", "rain", "snow", "wind", "leaf", "car", "location", "robot", "wifi", "shield", "trend_up", "trend_down", "wallet", "bank", "heart", "plus", "minus", "trash", "edit", "refresh", "share", "info"] as const;
 
 export interface View {
   title?: string;
@@ -1245,9 +1271,12 @@ export type Component =
   | CodeComponent
   | DiffComponent
   | CommentThreadComponent
-  | ComposerComponent;
-export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer"] as const;
-export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3, html: 4, header: 4, breadcrumb: 4, file_tree: 4, code: 4, diff: 4, comment_thread: 4, composer: 4 };
+  | ComposerComponent
+  | ImageComponent
+  | GridComponent
+  | CarouselComponent;
+export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer", "image", "grid", "carousel"] as const;
+export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3, html: 4, header: 4, breadcrumb: 4, file_tree: 4, code: 4, diff: 4, comment_thread: 4, composer: 4, image: 6, grid: 6, carousel: 6 };
 
 /**
  * A paragraph.
@@ -1269,6 +1298,9 @@ export interface MetricComponent {
   value: string;
   detail?: string;
   tone?: Tone;
+  icon?: NavIcon;
+  icon_color?: Color;
+  spark?: Spark;
 }
 
 /**
@@ -1298,6 +1330,15 @@ export interface RowComponent {
   icon?: NavIcon;
   avatar?: Avatar;
   thumbnail?: Thumbnail;
+  icon_color?: Color;
+  /** A switch, a slider or a stepper; the row then has a key. */
+  control?: RowControl;
+  /**
+   * Extra actions in the row's menu and under a swipe: shortcuts only, the same must be possible on the page the row
+   * opens.
+   */
+  actions?: RowAction[];
+  spark?: Spark;
 }
 
 /**
@@ -1333,6 +1374,12 @@ export interface FieldComponent {
   value?: string;
   choices?: Choice[];
   placeholder?: string;
+  /** date, time, datetime: the first one allowed, written like value. */
+  earliest?: string;
+  /** date, time, datetime: the last one allowed. */
+  latest?: string;
+  /** A line of help under the field. */
+  detail?: string;
 }
 
 /**
@@ -1344,7 +1391,9 @@ export interface DividerComponent {
 }
 
 /**
- * A bar or line chart. Every series has the same labels in the same order; with more than one series each is named.
+ * A chart: bar, line, and in UI version 6 area, candlestick, donut, pie. Every series has the same labels in the same
+ * order; with more than one series each is named. A candlestick has one series whose points all have open, high, low
+ * and close (value is the close), at most 240 of them; a donut or a pie one series of 2 to 8 points.
  */
 export interface ChartComponent {
   type: "chart";
@@ -1355,6 +1404,10 @@ export interface ChartComponent {
   unit?: string;
   stacked?: boolean;
   detail?: string;
+  /** donut: the words in the hole (a total). */
+  center?: string;
+  /** candlestick: the color of a rising candle. */
+  rising?: CandleRising;
 }
 
 /**
@@ -1411,6 +1464,7 @@ export interface EmptyComponent {
   detail?: string;
   icon?: NavIcon;
   button?: EmptyButton;
+  icon_color?: Color;
 }
 
 /**
@@ -1563,6 +1617,155 @@ export interface ComposerComponent {
   placeholder?: string;
   value?: string;
   buttons: ComposerButton[];
+}
+
+/**
+ * A picture with an optional caption; tapping it shows it full screen unless no_zoom. A ref is the extension's own
+ * picture (a camera, a map) fetched through the hub. An older app gets a row with a thumbnail (url) or a line of text
+ * (ref).
+ */
+export interface ImageComponent {
+  type: "image";
+  key?: string;
+  src: ImageSource;
+  /** Read out, and shown when the picture does not load. */
+  alt: string;
+  caption?: string;
+  aspect?: ImageAspect;
+  fit?: ImageFit;
+  /** Tapping does nothing (else it shows the picture full screen). */
+  no_zoom?: boolean;
+}
+
+/**
+ * Tiles in columns that fit the width: two on a phone, more on wider screens, at most max_columns (4 when absent).
+ * Each tile counts as a component of the page. An older app gets a row per tile.
+ */
+export interface GridComponent {
+  type: "grid";
+  key?: string;
+  tiles: Tile[];
+  max_columns?: number;
+}
+
+/**
+ * Tiles in one line that scrolls sideways: cameras, rooms, a watchlist. Each tile counts as a component of the page.
+ * An older app gets a text (the title) and a row per tile.
+ */
+export interface CarouselComponent {
+  type: "carousel";
+  key?: string;
+  title?: string;
+  tiles: Tile[];
+  width?: TileWidth;
+}
+
+/**
+ * Where a picture comes from (UI version 6): an https url the app loads without credentials, or a ref the extension
+ * serves itself (ui.image) through the hub; exactly one. path is written by the hub only, for a ref: its own address,
+ * which the app loads with its device credentials. An extension that writes path is refused.
+ */
+export interface ImageSource {
+  url?: string;
+  ref?: string;
+  path?: string;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * square 1:1, landscape 4:3 (the default), wide 16:9, portrait 3:4, auto from src's width and height (4:3 until the
+ * picture comes).
+ */
+export type ImageAspect = "square" | "landscape" | "wide" | "portrait" | "auto" | (string & {});
+export const IMAGE_ASPECTS = ["square", "landscape", "wide", "portrait", "auto"] as const;
+
+/**
+ * fill crops to fill the frame (the default); fit shows all of it.
+ */
+export type ImageFit = "fill" | "fit" | (string & {});
+export const IMAGE_FITS = ["fill", "fit"] as const;
+
+export type RowControlKind = "switch" | "slider" | "stepper" | (string & {});
+export const ROW_CONTROL_KINDS = ["switch", "slider", "stepper"] as const;
+
+/**
+ * A control in a row or a tile (UI version 6). Changing it calls ui.action with action and values {name: the new
+ * value} (a switch "true" or "false", a slider and a stepper the number). The app shows the new value at once and
+ * puts back the old one if the action fails. A slider sends when the finger lifts, a stepper 0.6 s after the last
+ * tap.
+ */
+export interface RowControl {
+  kind: RowControlKind;
+  name: string;
+  /** switch: on or off. */
+  on?: boolean;
+  /** slider, stepper: the value now. */
+  value?: number;
+  min?: number;
+  max?: number;
+  /** More than 0 (checked by the hub); a slider's is (max - min) / 100 when absent. */
+  step?: number;
+  unit?: string;
+  /** How to write the value ("22.5 °C"); else the number and unit. */
+  display?: string;
+  disabled?: boolean;
+  action: Action;
+}
+
+/**
+ * One of a row's or a tile's extra actions (UI version 6): in its menu (long press, right click, the … button) and,
+ * with swipe, under a swipe from the trailing edge. confirm and push work as on any action; a destructive one has
+ * confirm.
+ */
+export interface RowAction {
+  title: string;
+  icon?: NavIcon;
+  role?: ButtonRole;
+  /** Also under a swipe. At most two of a row's actions. */
+  swipe?: boolean;
+  action: Action;
+}
+
+/**
+ * A small trend line inside a row, a metric, a stat or a tile (UI version 6): values only, no axes. Without color or
+ * tone, the app's quiet ink.
+ */
+export interface Spark {
+  values: number[];
+  color?: Color;
+  tone?: Tone;
+  /** Shade under the line. */
+  fill?: boolean;
+}
+
+/**
+ * A carousel's tiles: narrow about 140pt (scenes), regular about 200pt (the default; rooms), wide about 80% of the
+ * screen (camera pictures).
+ */
+export type TileWidth = "narrow" | "regular" | "wide" | (string & {});
+export const TILE_WIDTHS = ["narrow", "regular", "wide"] as const;
+
+/**
+ * A tile of a grid or a carousel (UI version 6): an icon or a picture, a title, a state line, a value; tapping does
+ * its action. active marks a tile that is on (a scene running, a light on) in its color.
+ */
+export interface Tile {
+  key?: string;
+  title: string;
+  subtitle?: string;
+  value?: string;
+  /** At most one of icon and image. */
+  icon?: NavIcon;
+  image?: ImageSource;
+  color?: Color;
+  badge?: Badge;
+  active?: boolean;
+  spark?: Spark;
+  /** A switch only; the tile then has a key. */
+  control?: RowControl;
+  actions?: RowAction[];
+  action?: Action;
 }
 
 /**
@@ -1877,14 +2080,22 @@ export interface More {
 export interface Avatar {
   url?: string;
   text?: string;
+  /** The extension's own picture (ui.image) through the hub, in place of url. */
+  ref?: string;
+  /** Written by the hub only, for a ref. */
+  path?: string;
 }
 
 /**
- * A small picture at the row's start: an https image the app loads without any credentials.
+ * A small picture at the row's start: an https image the app loads without any credentials, or (UI version 6) a ref
+ * the extension serves (ui.image) through the hub; exactly one of url and ref.
  */
 export interface Thumbnail {
-  url: string;
+  url?: string;
   aspect?: ThumbnailAspect;
+  ref?: string;
+  /** Written by the hub only, for a ref. */
+  path?: string;
 }
 
 export type ThumbnailAspect = "square" | "wide" | (string & {});
@@ -1909,6 +2120,7 @@ export interface EmptyButton {
 export interface Badge {
   text: string;
   tone?: Tone;
+  color?: Color;
 }
 
 export interface Choice {
@@ -1917,12 +2129,14 @@ export interface Choice {
 }
 
 /**
- * One line, or one color of bars. No tone: the app's own colors, in order.
+ * One line, or one color of bars. No tone and no color: the app's own colors, in order. At most 120 points (240 for a
+ * candlestick, checked by the hub).
  */
 export interface ChartSeries {
   name?: string;
   tone?: Tone;
   points: ChartPoint[];
+  color?: Color;
 }
 
 /**
@@ -1932,6 +2146,11 @@ export interface ChartPoint {
   label: string;
   value: number;
   display?: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  volume?: number;
 }
 
 export interface Stat {
@@ -1939,6 +2158,7 @@ export interface Stat {
   value: string;
   detail?: string;
   tone?: Tone;
+  spark?: Spark;
 }
 
 /**

@@ -122,9 +122,11 @@ var (
 // ui.invalidate; 4 the code hosting components (header, breadcrumb, file_tree, code, diff, comment_thread, composer), a
 // view's tabs and split layout, an action's values (#2951); 5 code review (#3136): a diff's context lines, viewed marks,
 // generated files, drafts of a pending review and its bar, resolving threads, a code's line links, and an action
-// answering with lines or with components in place. An app says which it draws (context.ui_version, 1 when it
-// says nothing); the hub leaves out of a View what the app does not know, or draws it with what it knows (Fit).
-const UIVersion = 5
+// answering with lines or with components in place; 6 pictures, controls in rows, candlestick, area, donut and pie
+// charts and sparks, a row's extra actions, grids and carousels, date, time, multiple choice and multi-line fields,
+// title styles, named colors and more icons (#5464). An app says which it draws (context.ui_version, 1 when it says
+// nothing); the hub leaves out of a View what the app does not know, or draws it with what it knows (Fit).
+const UIVersion = 6
 
 // PageSlot says whether placement is the extension's own page: extension_page, or plugin_page as it was called.
 func PageSlot(placement string) bool {
@@ -330,8 +332,9 @@ func ParseView(raw json.RawMessage) (*View, error) {
 // this hub does not know (a plugin written for a newer hub) are left out, a section they emptied with them; those
 // newer than the app are drawn with what it knows where that says the same (a markdown as text, a table as rows, an
 // empty state as a text and a button, a section's more as a button, a filter as a segmented), left out where it does
-// not; refresh_after is held to its bounds. Then it is checked (CheckView), a compact one to its limits. It says what
-// types it left out.
+// not; refresh_after is held to its bounds. The view the extension drew is checked first (CheckView), whatever the
+// app draws, so that a view is refused or drawn alike for every app; then what the app gets is checked again
+// (wire.CheckFitted), a compact one to its limits. It says what types it left out.
 func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped []string, err error) {
 	l := i18n.Default
 	if len(languages) > 0 {
@@ -343,6 +346,38 @@ func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped [
 	dropped = wire.StripAssistantFields(v)
 	if v.Sections == nil {
 		v.Sections = []Section{}
+	}
+	for i := range v.Sections {
+		s := &v.Sections[i]
+		s.Items = slices.DeleteFunc(s.Items, func(e UIElem) bool {
+			if _, known := elemSince[e.Type]; known {
+				return false
+			}
+			if !slices.Contains(dropped, e.Type) {
+				dropped = append(dropped, e.Type)
+			}
+			return true
+		})
+	}
+	switch {
+	case v.RefreshAfter < 0:
+		v.RefreshAfter = 0
+	case v.RefreshAfter > 0 && v.RefreshAfter < RefreshLeast:
+		v.RefreshAfter = RefreshLeast
+	case v.RefreshAfter > RefreshMost:
+		v.RefreshAfter = RefreshMost
+	}
+	if err := CheckView(v); err != nil {
+		return dropped, err
+	}
+	compact := slot.Size == SizeCompact
+	if compact {
+		if err := checkCompact6(v); err != nil {
+			return dropped, err
+		}
+	}
+	if uiVersion < 6 {
+		downgrade6(v, uiVersion, compact, l)
 	}
 	if uiVersion < 5 {
 		downgrade5(v, l)
@@ -375,18 +410,10 @@ func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped [
 		sections = append(sections, s)
 	}
 	v.Sections = sections
-	switch {
-	case v.RefreshAfter < 0:
-		v.RefreshAfter = 0
-	case v.RefreshAfter > 0 && v.RefreshAfter < RefreshLeast:
-		v.RefreshAfter = RefreshLeast
-	case v.RefreshAfter > RefreshMost:
-		v.RefreshAfter = RefreshMost
-	}
-	if err := CheckView(v); err != nil {
+	if err := wire.CheckFitted(v); err != nil {
 		return dropped, err
 	}
-	if slot.Size == SizeCompact {
+	if compact {
 		if v.Search != nil || v.Filter != nil || slices.ContainsFunc(v.Sections, func(s Section) bool { return s.More != nil }) {
 			return dropped, errors.New("a card has no search, filter or more: open a page for them")
 		}
@@ -394,6 +421,7 @@ func Fit(v *View, slot UISlot, uiVersion int, languages ...i18n.Lang) (dropped [
 		for _, s := range v.Sections {
 			n += len(s.Items)
 			for _, e := range s.Items {
+				n += max(len(e.Tiles)-1, 0)
 				if e.Type == "field" || e.Type == "composer" {
 					return dropped, errors.New("a card has no fields: open a page for them")
 				}
@@ -788,7 +816,8 @@ func FitWidget(v *View, family string, uiVersion int, languages ...i18n.Lang) (d
 		return nil, fmt.Errorf("a widget is drawn at one of %s", strings.Join(WidgetFamilies, ", "))
 	}
 	slot, _ := Slot("widget")
-	if dropped, err = Fit(v, slot, uiVersion, l); err != nil {
+	// a widget draws none of UI version 6 yet: it gets what an app of version 5 gets
+	if dropped, err = Fit(v, slot, min(uiVersion, 5), l); err != nil {
 		return dropped, err
 	}
 	drop := func(what string) {

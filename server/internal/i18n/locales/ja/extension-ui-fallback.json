@@ -14,5 +14,16 @@
   "file_added": "追加",
   "file_modified": "変更",
   "file_deleted": "削除",
-  "file_renamed": "名前変更"
+  "file_renamed": "名前変更",
+  "switch": "スイッチ",
+  "switch_on": "オン",
+  "switch_off": "オフ",
+  "apply": "適用",
+  "set_value": "この値にする",
+  "tile_on": "オン",
+  "control_range": "{title}（{min}–{max}{unit}）",
+  "closing_price": "終値",
+  "field_detail": "{label}（{detail}）",
+  "comma_separated": "{label}（複数はカンマ区切り）",
+  "image_newer": "画像：{alt}（新しいバージョンのアプリで表示してください）"
 }

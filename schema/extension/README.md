@@ -197,6 +197,11 @@ An action (`Action`) is an object; later page navigation (push / pop), new conte
 a View's `search` / `filter`, a section's `more`, `Action.push`, `ActionResult.push` / `pop`, `InvalidateEvent`
 (UI version 3, `docs/extensions.md` "UI version 3"). How `persona-card` becomes components, with its cases, is in
 `sdk/go/wire/personacard.go` and `examples/persona-card/`.
+UI version 6 (#5464) was added the same way: the `image` / `grid` / `carousel` components and fields such as
+`row.control`, `row.actions` and `spark`. Its numeric fields live in sub-objects of their own (`RowControl`,
+`ChartPoint`) rather than in `Component`'s flat struct; `Thumbnail.url` is optional now (exactly one of it and `ref`),
+which Swift reads as `String?`. Its examples are `examples/View.v6-*.json`; the showcase's version 6 pages come from
+the extensions repository (#5477), and until then `SHOWCASE_UI` in `test_extension_schema.py` stays at 5.
 
 ## Adding a call
 

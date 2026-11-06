@@ -1179,37 +1179,82 @@ const (
 // Tones are the values of Tone, in order.
 var Tones = []string{"neutral", "positive", "caution", "danger"}
 
-// Values of TextStyle.
+// TextStyle: title and headline (UI version 6) are a section's big title and a small heading; an older app draws them
+// as body.
 const (
 	TextStyleBody      = "body"
 	TextStyleSecondary = "secondary"
 	TextStyleCaption   = "caption"
 	TextStyleCode      = "code"
+	TextStyleTitle     = "title"
+	TextStyleHeadline  = "headline"
 )
 
 // TextStyles are the values of TextStyle, in order.
-var TextStyles = []string{"body", "secondary", "caption", "code"}
+var TextStyles = []string{"body", "secondary", "caption", "code", "title", "headline"}
 
-// Values of FieldKind.
+// FieldKind: date, time, datetime, multichoice and multiline are UI version 6. Values stay strings: date YYYY-MM-DD,
+// time HH:MM (24 hours), datetime YYYY-MM-DDTHH:MM local to context.tz, multichoice a JSON array of the chosen
+// values, multiline the text with \n.
 const (
-	FieldKindText   = "text"
-	FieldKindSecret = "secret"
-	FieldKindNumber = "number"
-	FieldKindToggle = "toggle"
-	FieldKindChoice = "choice"
+	FieldKindText        = "text"
+	FieldKindSecret      = "secret"
+	FieldKindNumber      = "number"
+	FieldKindToggle      = "toggle"
+	FieldKindChoice      = "choice"
+	FieldKindDate        = "date"
+	FieldKindTime        = "time"
+	FieldKindDatetime    = "datetime"
+	FieldKindMultichoice = "multichoice"
+	FieldKindMultiline   = "multiline"
 )
 
 // FieldKinds are the values of FieldKind, in order.
-var FieldKinds = []string{"text", "secret", "number", "toggle", "choice"}
+var FieldKinds = []string{"text", "secret", "number", "toggle", "choice", "date", "time", "datetime", "multichoice", "multiline"}
 
-// Values of ChartKind.
+// ChartKind: area, candlestick, donut and pie are UI version 6: an older app gets a line (an area, a candlestick's
+// closes) or bars (a donut, a pie).
 const (
-	ChartKindBar  = "bar"
-	ChartKindLine = "line"
+	ChartKindBar         = "bar"
+	ChartKindLine        = "line"
+	ChartKindArea        = "area"
+	ChartKindCandlestick = "candlestick"
+	ChartKindDonut       = "donut"
+	ChartKindPie         = "pie"
 )
 
 // ChartKinds are the values of ChartKind, in order.
-var ChartKinds = []string{"bar", "line"}
+var ChartKinds = []string{"bar", "line", "area", "candlestick", "donut", "pie"}
+
+// CandleRising: A candlestick's rising candle: green (the default) or red, as the market writes it; the falling one
+// is the other.
+const (
+	CandleRisingGreen = "green"
+	CandleRisingRed   = "red"
+)
+
+// CandleRisings are the values of CandleRising, in order.
+var CandleRisings = []string{"green", "red"}
+
+// Color: A named color (UI version 6): each app has its own of each, right in light and dark and in every style. Not
+// a hex; an unknown one draws as the app's quiet ink. Only on badges, icons, tiles, chart series and sparks, never on
+// text; never with a tone on the same object.
+const (
+	ColorRed    = "red"
+	ColorOrange = "orange"
+	ColorAmber  = "amber"
+	ColorYellow = "yellow"
+	ColorGreen  = "green"
+	ColorTeal   = "teal"
+	ColorBlue   = "blue"
+	ColorIndigo = "indigo"
+	ColorPurple = "purple"
+	ColorPink   = "pink"
+	ColorGray   = "gray"
+)
+
+// Colors are the values of Color, in order.
+var Colors = []string{"red", "orange", "amber", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "gray"}
 
 // Values of ButtonRole.
 const (
@@ -1279,8 +1324,9 @@ const (
 var Platforms = []string{"ios", "mac", "android", "web"}
 
 // NavIcon: the fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the
-// icons after money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws
-// as the default (extension; plugin is its old name).
+// icons after money; 4 for those after settings; 6 for those after file, and a metric's, a tile's, a row action's).
+// Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old
+// name).
 const (
 	NavIconPlugin      = "plugin"
 	NavIconChart       = "chart"
@@ -1309,10 +1355,55 @@ const (
 	NavIconPullRequest = "pull_request"
 	NavIconMerge       = "merge"
 	NavIconFile        = "file"
+	NavIconHome        = "home"
+	NavIconSofa        = "sofa"
+	NavIconLight       = "light"
+	NavIconPower       = "power"
+	NavIconFan         = "fan"
+	NavIconThermometer = "thermometer"
+	NavIconDroplet     = "droplet"
+	NavIconLock        = "lock"
+	NavIconUnlock      = "unlock"
+	NavIconDoor        = "door"
+	NavIconWindow      = "window"
+	NavIconCamera      = "camera"
+	NavIconVideo       = "video"
+	NavIconPlay        = "play"
+	NavIconPause       = "pause"
+	NavIconStop        = "stop"
+	NavIconSpeaker     = "speaker"
+	NavIconTv          = "tv"
+	NavIconPlug        = "plug"
+	NavIconBattery     = "battery"
+	NavIconBolt        = "bolt"
+	NavIconSun         = "sun"
+	NavIconMoon        = "moon"
+	NavIconCloud       = "cloud"
+	NavIconRain        = "rain"
+	NavIconSnow        = "snow"
+	NavIconWind        = "wind"
+	NavIconLeaf        = "leaf"
+	NavIconCar         = "car"
+	NavIconLocation    = "location"
+	NavIconRobot       = "robot"
+	NavIconWifi        = "wifi"
+	NavIconShield      = "shield"
+	NavIconTrendUp     = "trend_up"
+	NavIconTrendDown   = "trend_down"
+	NavIconWallet      = "wallet"
+	NavIconBank        = "bank"
+	NavIconHeart       = "heart"
+	NavIconPlus        = "plus"
+	NavIconMinus       = "minus"
+	NavIconTrash       = "trash"
+	NavIconEdit        = "edit"
+	NavIconRefresh     = "refresh"
+	NavIconShare       = "share"
+	NavIconInfo        = "info"
 )
 
 // NavIcons are the values of NavIcon, in order.
-var NavIcons = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"}
+var NavIcons = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file", "home", "sofa", "light", "power", "fan", "thermometer", "droplet", "lock", "unlock", "door", "window", "camera", "video", "play", "pause", "stop", "speaker", "tv", "plug", "battery", "bolt", "sun", "moon", "cloud", "rain", "snow", "wind", "leaf", "car", "location", "robot", "wifi", "shield", "trend_up", "trend_down", "wallet", "bank", "heart", "plus", "minus", "trash", "edit", "refresh", "share", "info"}
 
 type View struct {
 	Title    string    `json:"title,omitempty"`
@@ -1344,51 +1435,65 @@ type Section struct {
 // Component: one component of a view, told apart by type. A type an app does not know is skipped and the rest drawn.
 // One struct for every variant: type says which fields mean something.
 type Component struct {
-	Type     string   `json:"type"`
-	Key      string   `json:"key,omitempty"`
-	Text     string   `json:"text,omitempty"`
-	Style    string   `json:"style,omitempty"`
-	Label    string   `json:"label,omitempty"`
-	Value    string   `json:"value,omitempty"`
-	Detail   string   `json:"detail,omitempty"`
-	Tone     string   `json:"tone,omitempty"`
-	Ratio    *float64 `json:"ratio,omitempty"`
-	Title    string   `json:"title,omitempty"`
-	Subtitle string   `json:"subtitle,omitempty"`
-	Badge    *Badge   `json:"badge,omitempty"`
-	Action   *Action  `json:"action,omitempty"`
-	// At most one of icon, avatar and thumbnail.
-	Icon        string        `json:"icon,omitempty"`
-	Avatar      *Avatar       `json:"avatar,omitempty"`
-	Thumbnail   *Thumbnail    `json:"thumbnail,omitempty"`
-	Role        string        `json:"role,omitempty"`
-	URL         string        `json:"url,omitempty"`
-	Name        string        `json:"name,omitempty"`
-	Kind        string        `json:"kind,omitempty"`
-	Choices     []Choice      `json:"choices,omitempty"`
-	Placeholder string        `json:"placeholder,omitempty"`
-	Series      []ChartSeries `json:"series,omitempty"`
-	Unit        string        `json:"unit,omitempty"`
-	Stacked     bool          `json:"stacked,omitempty"`
-	Stats       []Stat        `json:"stats,omitempty"`
-	Columns     []TableColumn `json:"columns,omitempty"`
-	Rows        [][]string    `json:"rows,omitempty"`
-	Caption     string        `json:"caption,omitempty"`
-	Button      *EmptyButton  `json:"button,omitempty"`
-	Html        string        `json:"html,omitempty"`
-	Height      int           `json:"height,omitempty"`
-	Badges      []Badge       `json:"badges,omitempty"`
-	Facts       []Fact        `json:"facts,omitempty"`
-	Crumbs      []Crumb       `json:"crumbs,omitempty"`
-	Entries     []TreeEntry   `json:"entries,omitempty"`
-	Selected    string        `json:"selected,omitempty"`
-	Expand      *Action       `json:"expand,omitempty"`
-	Path        string        `json:"path,omitempty"`
-	Language    string        `json:"language,omitempty"`
-	StartLine   int           `json:"start_line,omitempty"`
-	Highlight   *LineRange    `json:"highlight,omitempty"`
-	Truncated   bool          `json:"truncated,omitempty"`
-	Load        *Action       `json:"load,omitempty"`
+	Type      string     `json:"type"`
+	Key       string     `json:"key,omitempty"`
+	Text      string     `json:"text,omitempty"`
+	Style     string     `json:"style,omitempty"`
+	Label     string     `json:"label,omitempty"`
+	Value     string     `json:"value,omitempty"`
+	Detail    string     `json:"detail,omitempty"`
+	Tone      string     `json:"tone,omitempty"`
+	Icon      string     `json:"icon,omitempty"`
+	IconColor string     `json:"icon_color,omitempty"`
+	Spark     *Spark     `json:"spark,omitempty"`
+	Ratio     *float64   `json:"ratio,omitempty"`
+	Title     string     `json:"title,omitempty"`
+	Subtitle  string     `json:"subtitle,omitempty"`
+	Badge     *Badge     `json:"badge,omitempty"`
+	Action    *Action    `json:"action,omitempty"`
+	Avatar    *Avatar    `json:"avatar,omitempty"`
+	Thumbnail *Thumbnail `json:"thumbnail,omitempty"`
+	// A switch, a slider or a stepper; the row then has a key.
+	Control *RowControl `json:"control,omitempty"`
+	// Extra actions in the row's menu and under a swipe: shortcuts only, the same must be possible on the page the row
+	// opens.
+	Actions     []RowAction `json:"actions,omitempty"`
+	Role        string      `json:"role,omitempty"`
+	URL         string      `json:"url,omitempty"`
+	Name        string      `json:"name,omitempty"`
+	Kind        string      `json:"kind,omitempty"`
+	Choices     []Choice    `json:"choices,omitempty"`
+	Placeholder string      `json:"placeholder,omitempty"`
+	// date, time, datetime: the first one allowed, written like value.
+	Earliest string `json:"earliest,omitempty"`
+	// date, time, datetime: the last one allowed.
+	Latest  string        `json:"latest,omitempty"`
+	Series  []ChartSeries `json:"series,omitempty"`
+	Unit    string        `json:"unit,omitempty"`
+	Stacked bool          `json:"stacked,omitempty"`
+	// donut: the words in the hole (a total).
+	Center string `json:"center,omitempty"`
+	// candlestick: the color of a rising candle.
+	Rising    string        `json:"rising,omitempty"`
+	Stats     []Stat        `json:"stats,omitempty"`
+	Columns   []TableColumn `json:"columns,omitempty"`
+	Rows      [][]string    `json:"rows,omitempty"`
+	Caption   string        `json:"caption,omitempty"`
+	Button    *EmptyButton  `json:"button,omitempty"`
+	Html      string        `json:"html,omitempty"`
+	Height    int           `json:"height,omitempty"`
+	Badges    []Badge       `json:"badges,omitempty"`
+	Facts     []Fact        `json:"facts,omitempty"`
+	Crumbs    []Crumb       `json:"crumbs,omitempty"`
+	Entries   []TreeEntry   `json:"entries,omitempty"`
+	Selected  string        `json:"selected,omitempty"`
+	Expand    *Action       `json:"expand,omitempty"`
+	Path      string        `json:"path,omitempty"`
+	Language  string        `json:"language,omitempty"`
+	StartLine int           `json:"start_line,omitempty"`
+	Highlight *LineRange    `json:"highlight,omitempty"`
+	Truncated bool          `json:"truncated,omitempty"`
+	Load      *Action       `json:"load,omitempty"`
 	// An https link to lines of this file on its site, {start} and {end} standing for the lines
 	// (…/blob/<sha>/a.go#L{start}-L{end}).
 	LineURL   string   `json:"line_url,omitempty"`
@@ -1423,6 +1528,16 @@ type Component struct {
 	Resolved    bool             `json:"resolved,omitempty"`
 	Reply       *Action          `json:"reply,omitempty"`
 	Buttons     []ComposerButton `json:"buttons,omitempty"`
+	Src         *ImageSource     `json:"src,omitempty"`
+	// Read out, and shown when the picture does not load.
+	Alt    string `json:"alt,omitempty"`
+	Aspect string `json:"aspect,omitempty"`
+	Fit    string `json:"fit,omitempty"`
+	// Tapping does nothing (else it shows the picture full screen).
+	NoZoom     bool   `json:"no_zoom,omitempty"`
+	Tiles      []Tile `json:"tiles,omitempty"`
+	MaxColumns int    `json:"max_columns,omitempty"`
+	Width      string `json:"width,omitempty"`
 }
 
 // Component types.
@@ -1450,13 +1565,134 @@ const (
 	ComponentDiff          = "diff"
 	ComponentCommentThread = "comment_thread"
 	ComponentComposer      = "composer"
+	ComponentImage         = "image"
+	ComponentGrid          = "grid"
+	ComponentCarousel      = "carousel"
 )
 
 // ComponentTypes are the types of Component, in order.
-var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer"}
+var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer", "image", "grid", "carousel"}
 
 // ComponentSince is the UI version that brought each type.
-var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4, "header": 4, "breadcrumb": 4, "file_tree": 4, "code": 4, "diff": 4, "comment_thread": 4, "composer": 4}
+var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4, "header": 4, "breadcrumb": 4, "file_tree": 4, "code": 4, "diff": 4, "comment_thread": 4, "composer": 4, "image": 6, "grid": 6, "carousel": 6}
+
+// ImageSource: where a picture comes from (UI version 6): an https url the app loads without credentials, or a ref
+// the extension serves itself (ui.image) through the hub; exactly one. path is written by the hub only, for a ref:
+// its own address, which the app loads with its device credentials. An extension that writes path is refused.
+type ImageSource struct {
+	URL    string `json:"url,omitempty"`
+	Ref    string `json:"ref,omitempty"`
+	Path   string `json:"path,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+// ImageAspect: square 1:1, landscape 4:3 (the default), wide 16:9, portrait 3:4, auto from src's width and height
+// (4:3 until the picture comes).
+const (
+	ImageAspectSquare    = "square"
+	ImageAspectLandscape = "landscape"
+	ImageAspectWide      = "wide"
+	ImageAspectPortrait  = "portrait"
+	ImageAspectAuto      = "auto"
+)
+
+// ImageAspects are the values of ImageAspect, in order.
+var ImageAspects = []string{"square", "landscape", "wide", "portrait", "auto"}
+
+// ImageFit: fill crops to fill the frame (the default); fit shows all of it.
+const (
+	ImageFitFill = "fill"
+	ImageFitFit  = "fit"
+)
+
+// ImageFits are the values of ImageFit, in order.
+var ImageFits = []string{"fill", "fit"}
+
+// Values of RowControlKind.
+const (
+	RowControlKindSwitch  = "switch"
+	RowControlKindSlider  = "slider"
+	RowControlKindStepper = "stepper"
+)
+
+// RowControlKinds are the values of RowControlKind, in order.
+var RowControlKinds = []string{"switch", "slider", "stepper"}
+
+// RowControl: A control in a row or a tile (UI version 6). Changing it calls ui.action with action and values {name:
+// the new value} (a switch "true" or "false", a slider and a stepper the number). The app shows the new value at once
+// and puts back the old one if the action fails. A slider sends when the finger lifts, a stepper 0.6 s after the last
+// tap.
+type RowControl struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	// switch: on or off.
+	On bool `json:"on,omitempty"`
+	// slider, stepper: the value now.
+	Value *float64 `json:"value,omitempty"`
+	Min   *float64 `json:"min,omitempty"`
+	Max   *float64 `json:"max,omitempty"`
+	// More than 0 (checked by the hub); a slider's is (max - min) / 100 when absent.
+	Step *float64 `json:"step,omitempty"`
+	Unit string   `json:"unit,omitempty"`
+	// How to write the value ("22.5 °C"); else the number and unit.
+	Display  string `json:"display,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+	Action   Action `json:"action"`
+}
+
+// RowAction: one of a row's or a tile's extra actions (UI version 6): in its menu (long press, right click, the …
+// button) and, with swipe, under a swipe from the trailing edge. confirm and push work as on any action; a
+// destructive one has confirm.
+type RowAction struct {
+	Title string `json:"title"`
+	Icon  string `json:"icon,omitempty"`
+	Role  string `json:"role,omitempty"`
+	// Also under a swipe. At most two of a row's actions.
+	Swipe  bool   `json:"swipe,omitempty"`
+	Action Action `json:"action"`
+}
+
+// Spark: A small trend line inside a row, a metric, a stat or a tile (UI version 6): values only, no axes. Without
+// color or tone, the app's quiet ink.
+type Spark struct {
+	Values []float64 `json:"values"`
+	Color  string    `json:"color,omitempty"`
+	Tone   string    `json:"tone,omitempty"`
+	// Shade under the line.
+	Fill bool `json:"fill,omitempty"`
+}
+
+// TileWidth: A carousel's tiles: narrow about 140pt (scenes), regular about 200pt (the default; rooms), wide about
+// 80% of the screen (camera pictures).
+const (
+	TileWidthNarrow  = "narrow"
+	TileWidthRegular = "regular"
+	TileWidthWide    = "wide"
+)
+
+// TileWidths are the values of TileWidth, in order.
+var TileWidths = []string{"narrow", "regular", "wide"}
+
+// Tile: A tile of a grid or a carousel (UI version 6): an icon or a picture, a title, a state line, a value; tapping
+// does its action. active marks a tile that is on (a scene running, a light on) in its color.
+type Tile struct {
+	Key      string `json:"key,omitempty"`
+	Title    string `json:"title"`
+	Subtitle string `json:"subtitle,omitempty"`
+	Value    string `json:"value,omitempty"`
+	// At most one of icon and image.
+	Icon   string       `json:"icon,omitempty"`
+	Image  *ImageSource `json:"image,omitempty"`
+	Color  string       `json:"color,omitempty"`
+	Badge  *Badge       `json:"badge,omitempty"`
+	Active bool         `json:"active,omitempty"`
+	Spark  *Spark       `json:"spark,omitempty"`
+	// A switch only; the tile then has a key.
+	Control *RowControl `json:"control,omitempty"`
+	Actions []RowAction `json:"actions,omitempty"`
+	Action  *Action     `json:"action,omitempty"`
+}
 
 // Layout: stack: sections one under another. split: on a wide screen the side pane's sections in a column at the
 // start, the rest beside it, each scrolling on its own; on a narrow one the side pane folds into a bar on top that
@@ -1770,12 +2006,20 @@ type More struct {
 type Avatar struct {
 	URL  string `json:"url,omitempty"`
 	Text string `json:"text,omitempty"`
+	// The extension's own picture (ui.image) through the hub, in place of url.
+	Ref string `json:"ref,omitempty"`
+	// Written by the hub only, for a ref.
+	Path string `json:"path,omitempty"`
 }
 
-// Thumbnail: A small picture at the row's start: an https image the app loads without any credentials.
+// Thumbnail: A small picture at the row's start: an https image the app loads without any credentials, or (UI version
+// 6) a ref the extension serves (ui.image) through the hub; exactly one of url and ref.
 type Thumbnail struct {
-	URL    string `json:"url"`
+	URL    string `json:"url,omitempty"`
 	Aspect string `json:"aspect,omitempty"`
+	Ref    string `json:"ref,omitempty"`
+	// Written by the hub only, for a ref.
+	Path string `json:"path,omitempty"`
 }
 
 // Values of ThumbnailAspect.
@@ -1808,8 +2052,9 @@ type EmptyButton struct {
 }
 
 type Badge struct {
-	Text string `json:"text"`
-	Tone string `json:"tone,omitempty"`
+	Text  string `json:"text"`
+	Tone  string `json:"tone,omitempty"`
+	Color string `json:"color,omitempty"`
 }
 
 type Choice struct {
@@ -1817,19 +2062,26 @@ type Choice struct {
 	Title string `json:"title,omitempty"`
 }
 
-// ChartSeries: one line, or one color of bars. No tone: the app's own colors, in order.
+// ChartSeries: one line, or one color of bars. No tone and no color: the app's own colors, in order. At most 120
+// points (240 for a candlestick, checked by the hub).
 type ChartSeries struct {
 	Name   string       `json:"name,omitempty"`
 	Tone   string       `json:"tone,omitempty"`
 	Points []ChartPoint `json:"points"`
+	Color  string       `json:"color,omitempty"`
 }
 
 // ChartPoint: A value at a label (a day, a model); display is how to write it ("¥1.20"), else the app writes value
 // with the unit.
 type ChartPoint struct {
-	Label   string  `json:"label"`
-	Value   float64 `json:"value"`
-	Display string  `json:"display,omitempty"`
+	Label   string   `json:"label"`
+	Value   float64  `json:"value"`
+	Display string   `json:"display,omitempty"`
+	Open    *float64 `json:"open,omitempty"`
+	High    *float64 `json:"high,omitempty"`
+	Low     *float64 `json:"low,omitempty"`
+	Close   *float64 `json:"close,omitempty"`
+	Volume  *float64 `json:"volume,omitempty"`
 }
 
 type Stat struct {
@@ -1837,6 +2089,7 @@ type Stat struct {
 	Value  string `json:"value"`
 	Detail string `json:"detail,omitempty"`
 	Tone   string `json:"tone,omitempty"`
+	Spark  *Spark `json:"spark,omitempty"`
 }
 
 // ActionResult: what ui.action answers: a new view, a short message, an https link to open, a page to push or to pop
@@ -3813,6 +4066,11 @@ var newDef = map[string]func() any{
 	"View":                         func() any { return new(View) },
 	"Section":                      func() any { return new(Section) },
 	"Component":                    func() any { return new(Component) },
+	"ImageSource":                  func() any { return new(ImageSource) },
+	"RowControl":                   func() any { return new(RowControl) },
+	"RowAction":                    func() any { return new(RowAction) },
+	"Spark":                        func() any { return new(Spark) },
+	"Tile":                         func() any { return new(Tile) },
 	"Tabs":                         func() any { return new(Tabs) },
 	"Tab":                          func() any { return new(Tab) },
 	"Fact":                         func() any { return new(Fact) },

@@ -14,5 +14,16 @@
   "file_added": "新增",
   "file_modified": "修改",
   "file_deleted": "删除",
-  "file_renamed": "重命名"
+  "file_renamed": "重命名",
+  "switch": "开关",
+  "switch_on": "开",
+  "switch_off": "关",
+  "apply": "应用",
+  "set_value": "设为该值",
+  "tile_on": "开启",
+  "control_range": "{title}（{min}–{max}{unit}）",
+  "closing_price": "收盘价",
+  "field_detail": "{label}（{detail}）",
+  "comma_separated": "{label}（多个用逗号分隔）",
+  "image_newer": "图片：{alt}（请在新版 App 中查看）"
 }

@@ -3399,30 +3399,69 @@ nonisolated enum ExtensionTone {
     static let all = ["neutral", "positive", "caution", "danger"]
 }
 
-/// Values of TextStyle.
+/// title and headline (UI version 6) are a section's big title and a small heading; an older app draws them as body.
 nonisolated enum ExtensionTextStyle {
     static let body = "body"
     static let secondary = "secondary"
     static let caption = "caption"
     static let code = "code"
-    static let all = ["body", "secondary", "caption", "code"]
+    static let title = "title"
+    static let headline = "headline"
+    static let all = ["body", "secondary", "caption", "code", "title", "headline"]
 }
 
-/// Values of FieldKind.
+/// date, time, datetime, multichoice and multiline are UI version 6. Values stay strings: date YYYY-MM-DD, time HH:MM
+/// (24 hours), datetime YYYY-MM-DDTHH:MM local to context.tz, multichoice a JSON array of the chosen values,
+/// multiline the text with \n.
 nonisolated enum ExtensionFieldKind {
     static let text = "text"
     static let secret = "secret"
     static let number = "number"
     static let toggle = "toggle"
     static let choice = "choice"
-    static let all = ["text", "secret", "number", "toggle", "choice"]
+    static let date = "date"
+    static let time = "time"
+    static let datetime = "datetime"
+    static let multichoice = "multichoice"
+    static let multiline = "multiline"
+    static let all = ["text", "secret", "number", "toggle", "choice", "date", "time", "datetime", "multichoice", "multiline"]
 }
 
-/// Values of ChartKind.
+/// area, candlestick, donut and pie are UI version 6: an older app gets a line (an area, a candlestick's closes) or
+/// bars (a donut, a pie).
 nonisolated enum ExtensionChartKind {
     static let bar = "bar"
     static let line = "line"
-    static let all = ["bar", "line"]
+    static let area = "area"
+    static let candlestick = "candlestick"
+    static let donut = "donut"
+    static let pie = "pie"
+    static let all = ["bar", "line", "area", "candlestick", "donut", "pie"]
+}
+
+/// A candlestick's rising candle: green (the default) or red, as the market writes it; the falling one is the other.
+nonisolated enum ExtensionCandleRising {
+    static let green = "green"
+    static let red = "red"
+    static let all = ["green", "red"]
+}
+
+/// A named color (UI version 6): each app has its own of each, right in light and dark and in every style. Not a hex;
+/// an unknown one draws as the app's quiet ink. Only on badges, icons, tiles, chart series and sparks, never on text;
+/// never with a tone on the same object.
+nonisolated enum ExtensionColor {
+    static let red = "red"
+    static let orange = "orange"
+    static let amber = "amber"
+    static let yellow = "yellow"
+    static let green = "green"
+    static let teal = "teal"
+    static let blue = "blue"
+    static let indigo = "indigo"
+    static let purple = "purple"
+    static let pink = "pink"
+    static let gray = "gray"
+    static let all = ["red", "orange", "amber", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "gray"]
 }
 
 /// Values of ButtonRole.
@@ -3483,8 +3522,8 @@ nonisolated enum ExtensionPlatform {
 }
 
 /// The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons
-/// after money; 4 for those after settings). Each app draws its own icon for the meaning; an unknown one draws as the
-/// default (extension; plugin is its old name).
+/// after money; 4 for those after settings; 6 for those after file, and a metric's, a tile's, a row action's). Each
+/// app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).
 nonisolated enum ExtensionNavIcon {
     static let plugin = "plugin"
     static let chart = "chart"
@@ -3513,7 +3552,52 @@ nonisolated enum ExtensionNavIcon {
     static let pullRequest = "pull_request"
     static let merge = "merge"
     static let file = "file"
-    static let all = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file"]
+    static let home = "home"
+    static let sofa = "sofa"
+    static let light = "light"
+    static let power = "power"
+    static let fan = "fan"
+    static let thermometer = "thermometer"
+    static let droplet = "droplet"
+    static let lock = "lock"
+    static let unlock = "unlock"
+    static let door = "door"
+    static let window = "window"
+    static let camera = "camera"
+    static let video = "video"
+    static let play = "play"
+    static let pause = "pause"
+    static let stop = "stop"
+    static let speaker = "speaker"
+    static let tv = "tv"
+    static let plug = "plug"
+    static let battery = "battery"
+    static let bolt = "bolt"
+    static let sun = "sun"
+    static let moon = "moon"
+    static let cloud = "cloud"
+    static let rain = "rain"
+    static let snow = "snow"
+    static let wind = "wind"
+    static let leaf = "leaf"
+    static let car = "car"
+    static let location = "location"
+    static let robot = "robot"
+    static let wifi = "wifi"
+    static let shield = "shield"
+    static let trendUp = "trend_up"
+    static let trendDown = "trend_down"
+    static let wallet = "wallet"
+    static let bank = "bank"
+    static let heart = "heart"
+    static let plus = "plus"
+    static let minus = "minus"
+    static let trash = "trash"
+    static let edit = "edit"
+    static let refresh = "refresh"
+    static let share = "share"
+    static let info = "info"
+    static let all = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file", "home", "sofa", "light", "power", "fan", "thermometer", "droplet", "lock", "unlock", "door", "window", "camera", "video", "play", "pause", "stop", "speaker", "tv", "plug", "battery", "bolt", "sun", "moon", "cloud", "rain", "snow", "wind", "leaf", "car", "location", "robot", "wifi", "shield", "trend_up", "trend_down", "wallet", "bank", "heart", "plus", "minus", "trash", "edit", "refresh", "share", "info"]
 }
 
 nonisolated struct ExtensionView: Codable, Hashable, Sendable {
@@ -3636,13 +3720,16 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
     case diff(ExtensionDiffComponent)
     case commentThread(ExtensionCommentThreadComponent)
     case composer(ExtensionComposerComponent)
+    case image(ExtensionImageComponent)
+    case grid(ExtensionGridComponent)
+    case carousel(ExtensionCarouselComponent)
     /// A type this app does not know, or a variant it could not read: skipped when drawn.
     case unknown(type: String)
 
-    static let types = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer"]
+    static let types = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading", "html", "header", "breadcrumb", "file_tree", "code", "diff", "comment_thread", "composer", "image", "grid", "carousel"]
 
     /// The UI version that brought each type.
-    static let since: [String: Int] = ["text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4, "header": 4, "breadcrumb": 4, "file_tree": 4, "code": 4, "diff": 4, "comment_thread": 4, "composer": 4]
+    static let since: [String: Int] = ["text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3, "html": 4, "header": 4, "breadcrumb": 4, "file_tree": 4, "code": 4, "diff": 4, "comment_thread": 4, "composer": 4, "image": 6, "grid": 6, "carousel": 6]
 
     private enum TagKey: String, CodingKey {
         case tag = "type"
@@ -3673,6 +3760,9 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
         case .diff: "diff"
         case .commentThread: "comment_thread"
         case .composer: "composer"
+        case .image: "image"
+        case .grid: "grid"
+        case .carousel: "carousel"
         case .unknown(let t): t
         }
     }
@@ -3703,6 +3793,9 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
         case "diff": self = (try? ExtensionDiffComponent(from: decoder)).map { .diff($0) } ?? .unknown(type: t)
         case "comment_thread": self = (try? ExtensionCommentThreadComponent(from: decoder)).map { .commentThread($0) } ?? .unknown(type: t)
         case "composer": self = (try? ExtensionComposerComponent(from: decoder)).map { .composer($0) } ?? .unknown(type: t)
+        case "image": self = (try? ExtensionImageComponent(from: decoder)).map { .image($0) } ?? .unknown(type: t)
+        case "grid": self = (try? ExtensionGridComponent(from: decoder)).map { .grid($0) } ?? .unknown(type: t)
+        case "carousel": self = (try? ExtensionCarouselComponent(from: decoder)).map { .carousel($0) } ?? .unknown(type: t)
         default: self = .unknown(type: t)
         }
     }
@@ -3732,6 +3825,9 @@ nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
         case .diff(let v): try v.encode(to: encoder)
         case .commentThread(let v): try v.encode(to: encoder)
         case .composer(let v): try v.encode(to: encoder)
+        case .image(let v): try v.encode(to: encoder)
+        case .grid(let v): try v.encode(to: encoder)
+        case .carousel(let v): try v.encode(to: encoder)
         case .unknown: break
         }
         var c = encoder.container(keyedBy: TagKey.self)
@@ -3772,13 +3868,19 @@ nonisolated struct ExtensionMetricComponent: Codable, Hashable, Sendable {
     var value: String
     var detail: String?
     var tone: String?
+    var icon: String?
+    var iconColor: String?
+    var spark: ExtensionSpark?
 
-    init(key: String? = nil, label: String = "", value: String = "", detail: String? = nil, tone: String? = nil) {
+    init(key: String? = nil, label: String = "", value: String = "", detail: String? = nil, tone: String? = nil, icon: String? = nil, iconColor: String? = nil, spark: ExtensionSpark? = nil) {
         self.key = key
         self.label = label
         self.value = value
         self.detail = detail
         self.tone = tone
+        self.icon = icon
+        self.iconColor = iconColor
+        self.spark = spark
     }
 
     enum CodingKeys: String, CodingKey {
@@ -3787,6 +3889,9 @@ nonisolated struct ExtensionMetricComponent: Codable, Hashable, Sendable {
         case value
         case detail
         case tone
+        case icon
+        case iconColor = "icon_color"
+        case spark
     }
 
     init(from decoder: Decoder) throws {
@@ -3796,6 +3901,9 @@ nonisolated struct ExtensionMetricComponent: Codable, Hashable, Sendable {
         self.value = (try? c.decodeIfPresent(String.self, forKey: .value)) ?? ""
         self.detail = try? c.decodeIfPresent(String.self, forKey: .detail)
         self.tone = try? c.decodeIfPresent(String.self, forKey: .tone)
+        self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
+        self.iconColor = try? c.decodeIfPresent(String.self, forKey: .iconColor)
+        self.spark = try? c.decodeIfPresent(ExtensionSpark.self, forKey: .spark)
     }
 }
 
@@ -3845,8 +3953,15 @@ nonisolated struct ExtensionRowComponent: Codable, Hashable, Sendable {
     var icon: String?
     var avatar: ExtensionAvatar?
     var thumbnail: ExtensionThumbnail?
+    var iconColor: String?
+    /// A switch, a slider or a stepper; the row then has a key.
+    var control: ExtensionRowControl?
+    /// Extra actions in the row's menu and under a swipe: shortcuts only, the same must be possible on the page the
+    /// row opens.
+    var actions: [ExtensionRowAction]?
+    var spark: ExtensionSpark?
 
-    init(key: String? = nil, title: String = "", subtitle: String? = nil, value: String? = nil, badge: ExtensionBadge? = nil, action: ExtensionAction? = nil, icon: String? = nil, avatar: ExtensionAvatar? = nil, thumbnail: ExtensionThumbnail? = nil) {
+    init(key: String? = nil, title: String = "", subtitle: String? = nil, value: String? = nil, badge: ExtensionBadge? = nil, action: ExtensionAction? = nil, icon: String? = nil, avatar: ExtensionAvatar? = nil, thumbnail: ExtensionThumbnail? = nil, iconColor: String? = nil, control: ExtensionRowControl? = nil, actions: [ExtensionRowAction]? = nil, spark: ExtensionSpark? = nil) {
         self.key = key
         self.title = title
         self.subtitle = subtitle
@@ -3856,6 +3971,10 @@ nonisolated struct ExtensionRowComponent: Codable, Hashable, Sendable {
         self.icon = icon
         self.avatar = avatar
         self.thumbnail = thumbnail
+        self.iconColor = iconColor
+        self.control = control
+        self.actions = actions
+        self.spark = spark
     }
 
     enum CodingKeys: String, CodingKey {
@@ -3868,6 +3987,10 @@ nonisolated struct ExtensionRowComponent: Codable, Hashable, Sendable {
         case icon
         case avatar
         case thumbnail
+        case iconColor = "icon_color"
+        case control
+        case actions
+        case spark
     }
 
     init(from decoder: Decoder) throws {
@@ -3881,6 +4004,10 @@ nonisolated struct ExtensionRowComponent: Codable, Hashable, Sendable {
         self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
         self.avatar = try? c.decodeIfPresent(ExtensionAvatar.self, forKey: .avatar)
         self.thumbnail = try? c.decodeIfPresent(ExtensionThumbnail.self, forKey: .thumbnail)
+        self.iconColor = try? c.decodeIfPresent(String.self, forKey: .iconColor)
+        self.control = try? c.decodeIfPresent(ExtensionRowControl.self, forKey: .control)
+        self.actions = try? c.decodeIfPresent([ExtensionRowAction].self, forKey: .actions)
+        self.spark = try? c.decodeIfPresent(ExtensionSpark.self, forKey: .spark)
     }
 }
 
@@ -3949,8 +4076,14 @@ nonisolated struct ExtensionFieldComponent: Codable, Hashable, Sendable {
     var value: String?
     var choices: [ExtensionChoice]?
     var placeholder: String?
+    /// date, time, datetime: the first one allowed, written like value.
+    var earliest: String?
+    /// date, time, datetime: the last one allowed.
+    var latest: String?
+    /// A line of help under the field.
+    var detail: String?
 
-    init(key: String? = nil, name: String = "", label: String = "", kind: String = "", value: String? = nil, choices: [ExtensionChoice]? = nil, placeholder: String? = nil) {
+    init(key: String? = nil, name: String = "", label: String = "", kind: String = "", value: String? = nil, choices: [ExtensionChoice]? = nil, placeholder: String? = nil, earliest: String? = nil, latest: String? = nil, detail: String? = nil) {
         self.key = key
         self.name = name
         self.label = label
@@ -3958,6 +4091,9 @@ nonisolated struct ExtensionFieldComponent: Codable, Hashable, Sendable {
         self.value = value
         self.choices = choices
         self.placeholder = placeholder
+        self.earliest = earliest
+        self.latest = latest
+        self.detail = detail
     }
 
     enum CodingKeys: String, CodingKey {
@@ -3968,6 +4104,9 @@ nonisolated struct ExtensionFieldComponent: Codable, Hashable, Sendable {
         case value
         case choices
         case placeholder
+        case earliest
+        case latest
+        case detail
     }
 
     init(from decoder: Decoder) throws {
@@ -3979,6 +4118,9 @@ nonisolated struct ExtensionFieldComponent: Codable, Hashable, Sendable {
         self.value = try? c.decodeIfPresent(String.self, forKey: .value)
         self.choices = try? c.decodeIfPresent([ExtensionChoice].self, forKey: .choices)
         self.placeholder = try? c.decodeIfPresent(String.self, forKey: .placeholder)
+        self.earliest = try? c.decodeIfPresent(String.self, forKey: .earliest)
+        self.latest = try? c.decodeIfPresent(String.self, forKey: .latest)
+        self.detail = try? c.decodeIfPresent(String.self, forKey: .detail)
     }
 }
 
@@ -4000,7 +4142,9 @@ nonisolated struct ExtensionDividerComponent: Codable, Hashable, Sendable {
     }
 }
 
-/// A bar or line chart. Every series has the same labels in the same order; with more than one series each is named.
+/// A chart: bar, line, and in UI version 6 area, candlestick, donut, pie. Every series has the same labels in the
+/// same order; with more than one series each is named. A candlestick has one series whose points all have open,
+/// high, low and close (value is the close), at most 240 of them; a donut or a pie one series of 2 to 8 points.
 nonisolated struct ExtensionChartComponent: Codable, Hashable, Sendable {
     var key: String?
     var kind: String
@@ -4009,8 +4153,12 @@ nonisolated struct ExtensionChartComponent: Codable, Hashable, Sendable {
     var unit: String?
     var stacked: Bool?
     var detail: String?
+    /// donut: the words in the hole (a total).
+    var center: String?
+    /// candlestick: the color of a rising candle.
+    var rising: String?
 
-    init(key: String? = nil, kind: String = "", series: [ExtensionChartSeries] = [], title: String? = nil, unit: String? = nil, stacked: Bool? = nil, detail: String? = nil) {
+    init(key: String? = nil, kind: String = "", series: [ExtensionChartSeries] = [], title: String? = nil, unit: String? = nil, stacked: Bool? = nil, detail: String? = nil, center: String? = nil, rising: String? = nil) {
         self.key = key
         self.kind = kind
         self.series = series
@@ -4018,6 +4166,8 @@ nonisolated struct ExtensionChartComponent: Codable, Hashable, Sendable {
         self.unit = unit
         self.stacked = stacked
         self.detail = detail
+        self.center = center
+        self.rising = rising
     }
 
     enum CodingKeys: String, CodingKey {
@@ -4028,6 +4178,8 @@ nonisolated struct ExtensionChartComponent: Codable, Hashable, Sendable {
         case unit
         case stacked
         case detail
+        case center
+        case rising
     }
 
     init(from decoder: Decoder) throws {
@@ -4039,6 +4191,8 @@ nonisolated struct ExtensionChartComponent: Codable, Hashable, Sendable {
         self.unit = try? c.decodeIfPresent(String.self, forKey: .unit)
         self.stacked = try? c.decodeIfPresent(Bool.self, forKey: .stacked)
         self.detail = try? c.decodeIfPresent(String.self, forKey: .detail)
+        self.center = try? c.decodeIfPresent(String.self, forKey: .center)
+        self.rising = try? c.decodeIfPresent(String.self, forKey: .rising)
     }
 }
 
@@ -4160,13 +4314,15 @@ nonisolated struct ExtensionEmptyComponent: Codable, Hashable, Sendable {
     var detail: String?
     var icon: String?
     var button: ExtensionEmptyButton?
+    var iconColor: String?
 
-    init(key: String? = nil, title: String = "", detail: String? = nil, icon: String? = nil, button: ExtensionEmptyButton? = nil) {
+    init(key: String? = nil, title: String = "", detail: String? = nil, icon: String? = nil, button: ExtensionEmptyButton? = nil, iconColor: String? = nil) {
         self.key = key
         self.title = title
         self.detail = detail
         self.icon = icon
         self.button = button
+        self.iconColor = iconColor
     }
 
     enum CodingKeys: String, CodingKey {
@@ -4175,6 +4331,7 @@ nonisolated struct ExtensionEmptyComponent: Codable, Hashable, Sendable {
         case detail
         case icon
         case button
+        case iconColor = "icon_color"
     }
 
     init(from decoder: Decoder) throws {
@@ -4184,6 +4341,7 @@ nonisolated struct ExtensionEmptyComponent: Codable, Hashable, Sendable {
         self.detail = try? c.decodeIfPresent(String.self, forKey: .detail)
         self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
         self.button = try? c.decodeIfPresent(ExtensionEmptyButton.self, forKey: .button)
+        self.iconColor = try? c.decodeIfPresent(String.self, forKey: .iconColor)
     }
 }
 
@@ -4574,6 +4732,384 @@ nonisolated struct ExtensionComposerComponent: Codable, Hashable, Sendable {
         self.placeholder = try? c.decodeIfPresent(String.self, forKey: .placeholder)
         self.value = try? c.decodeIfPresent(String.self, forKey: .value)
         self.buttons = (try? c.decodeIfPresent([ExtensionComposerButton].self, forKey: .buttons)) ?? []
+    }
+}
+
+/// A picture with an optional caption; tapping it shows it full screen unless no_zoom. A ref is the extension's own
+/// picture (a camera, a map) fetched through the hub. An older app gets a row with a thumbnail (url) or a line of
+/// text (ref).
+nonisolated struct ExtensionImageComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var src: ExtensionImageSource
+    /// Read out, and shown when the picture does not load.
+    var alt: String
+    var caption: String?
+    var aspect: String?
+    var fit: String?
+    /// Tapping does nothing (else it shows the picture full screen).
+    var noZoom: Bool?
+
+    init(key: String? = nil, src: ExtensionImageSource = ExtensionImageSource(), alt: String = "", caption: String? = nil, aspect: String? = nil, fit: String? = nil, noZoom: Bool? = nil) {
+        self.key = key
+        self.src = src
+        self.alt = alt
+        self.caption = caption
+        self.aspect = aspect
+        self.fit = fit
+        self.noZoom = noZoom
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case src
+        case alt
+        case caption
+        case aspect
+        case fit
+        case noZoom = "no_zoom"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.src = (try? c.decodeIfPresent(ExtensionImageSource.self, forKey: .src)) ?? ExtensionImageSource()
+        self.alt = (try? c.decodeIfPresent(String.self, forKey: .alt)) ?? ""
+        self.caption = try? c.decodeIfPresent(String.self, forKey: .caption)
+        self.aspect = try? c.decodeIfPresent(String.self, forKey: .aspect)
+        self.fit = try? c.decodeIfPresent(String.self, forKey: .fit)
+        self.noZoom = try? c.decodeIfPresent(Bool.self, forKey: .noZoom)
+    }
+}
+
+/// Tiles in columns that fit the width: two on a phone, more on wider screens, at most max_columns (4 when absent).
+/// Each tile counts as a component of the page. An older app gets a row per tile.
+nonisolated struct ExtensionGridComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var tiles: [ExtensionTile]
+    var maxColumns: Int?
+
+    init(key: String? = nil, tiles: [ExtensionTile] = [], maxColumns: Int? = nil) {
+        self.key = key
+        self.tiles = tiles
+        self.maxColumns = maxColumns
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case tiles
+        case maxColumns = "max_columns"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.tiles = (try? c.decodeIfPresent([ExtensionTile].self, forKey: .tiles)) ?? []
+        self.maxColumns = try? c.decodeIfPresent(Int.self, forKey: .maxColumns)
+    }
+}
+
+/// Tiles in one line that scrolls sideways: cameras, rooms, a watchlist. Each tile counts as a component of the page.
+/// An older app gets a text (the title) and a row per tile.
+nonisolated struct ExtensionCarouselComponent: Codable, Hashable, Sendable {
+    var key: String?
+    var title: String?
+    var tiles: [ExtensionTile]
+    var width: String?
+
+    init(key: String? = nil, title: String? = nil, tiles: [ExtensionTile] = [], width: String? = nil) {
+        self.key = key
+        self.title = title
+        self.tiles = tiles
+        self.width = width
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case title
+        case tiles
+        case width
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.title = try? c.decodeIfPresent(String.self, forKey: .title)
+        self.tiles = (try? c.decodeIfPresent([ExtensionTile].self, forKey: .tiles)) ?? []
+        self.width = try? c.decodeIfPresent(String.self, forKey: .width)
+    }
+}
+
+/// Where a picture comes from (UI version 6): an https url the app loads without credentials, or a ref the extension
+/// serves itself (ui.image) through the hub; exactly one. path is written by the hub only, for a ref: its own
+/// address, which the app loads with its device credentials. An extension that writes path is refused.
+nonisolated struct ExtensionImageSource: Codable, Hashable, Sendable {
+    var url: String?
+    var ref: String?
+    var path: String?
+    var width: Int?
+    var height: Int?
+
+    init(url: String? = nil, ref: String? = nil, path: String? = nil, width: Int? = nil, height: Int? = nil) {
+        self.url = url
+        self.ref = ref
+        self.path = path
+        self.width = width
+        self.height = height
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case url
+        case ref
+        case path
+        case width
+        case height
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.url = try? c.decodeIfPresent(String.self, forKey: .url)
+        self.ref = try? c.decodeIfPresent(String.self, forKey: .ref)
+        self.path = try? c.decodeIfPresent(String.self, forKey: .path)
+        self.width = try? c.decodeIfPresent(Int.self, forKey: .width)
+        self.height = try? c.decodeIfPresent(Int.self, forKey: .height)
+    }
+}
+
+/// square 1:1, landscape 4:3 (the default), wide 16:9, portrait 3:4, auto from src's width and height (4:3 until the
+/// picture comes).
+nonisolated enum ExtensionImageAspect {
+    static let square = "square"
+    static let landscape = "landscape"
+    static let wide = "wide"
+    static let portrait = "portrait"
+    static let auto = "auto"
+    static let all = ["square", "landscape", "wide", "portrait", "auto"]
+}
+
+/// fill crops to fill the frame (the default); fit shows all of it.
+nonisolated enum ExtensionImageFit {
+    static let fill = "fill"
+    static let fit = "fit"
+    static let all = ["fill", "fit"]
+}
+
+/// Values of RowControlKind.
+nonisolated enum ExtensionRowControlKind {
+    static let `switch` = "switch"
+    static let slider = "slider"
+    static let stepper = "stepper"
+    static let all = ["switch", "slider", "stepper"]
+}
+
+/// A control in a row or a tile (UI version 6). Changing it calls ui.action with action and values {name: the new
+/// value} (a switch "true" or "false", a slider and a stepper the number). The app shows the new value at once and
+/// puts back the old one if the action fails. A slider sends when the finger lifts, a stepper 0.6 s after the last
+/// tap.
+nonisolated struct ExtensionRowControl: Codable, Hashable, Sendable {
+    var kind: String
+    var name: String
+    /// switch: on or off.
+    var on: Bool?
+    /// slider, stepper: the value now.
+    var value: Double?
+    var min: Double?
+    var max: Double?
+    /// More than 0 (checked by the hub); a slider's is (max - min) / 100 when absent.
+    var step: Double?
+    var unit: String?
+    /// How to write the value ("22.5 °C"); else the number and unit.
+    var display: String?
+    var disabled: Bool?
+    var action: ExtensionAction
+
+    init(kind: String = "", name: String = "", on: Bool? = nil, value: Double? = nil, min: Double? = nil, max: Double? = nil, step: Double? = nil, unit: String? = nil, display: String? = nil, disabled: Bool? = nil, action: ExtensionAction = ExtensionAction()) {
+        self.kind = kind
+        self.name = name
+        self.on = on
+        self.value = value
+        self.min = min
+        self.max = max
+        self.step = step
+        self.unit = unit
+        self.display = display
+        self.disabled = disabled
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case name
+        case on
+        case value
+        case min
+        case max
+        case step
+        case unit
+        case display
+        case disabled
+        case action
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.on = try? c.decodeIfPresent(Bool.self, forKey: .on)
+        self.value = try? c.decodeIfPresent(Double.self, forKey: .value)
+        self.min = try? c.decodeIfPresent(Double.self, forKey: .min)
+        self.max = try? c.decodeIfPresent(Double.self, forKey: .max)
+        self.step = try? c.decodeIfPresent(Double.self, forKey: .step)
+        self.unit = try? c.decodeIfPresent(String.self, forKey: .unit)
+        self.display = try? c.decodeIfPresent(String.self, forKey: .display)
+        self.disabled = try? c.decodeIfPresent(Bool.self, forKey: .disabled)
+        self.action = (try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)) ?? ExtensionAction()
+    }
+}
+
+/// One of a row's or a tile's extra actions (UI version 6): in its menu (long press, right click, the … button) and,
+/// with swipe, under a swipe from the trailing edge. confirm and push work as on any action; a destructive one has
+/// confirm.
+nonisolated struct ExtensionRowAction: Codable, Hashable, Sendable {
+    var title: String
+    var icon: String?
+    var role: String?
+    /// Also under a swipe. At most two of a row's actions.
+    var swipe: Bool?
+    var action: ExtensionAction
+
+    init(title: String = "", icon: String? = nil, role: String? = nil, swipe: Bool? = nil, action: ExtensionAction = ExtensionAction()) {
+        self.title = title
+        self.icon = icon
+        self.role = role
+        self.swipe = swipe
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case icon
+        case role
+        case swipe
+        case action
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
+        self.role = try? c.decodeIfPresent(String.self, forKey: .role)
+        self.swipe = try? c.decodeIfPresent(Bool.self, forKey: .swipe)
+        self.action = (try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)) ?? ExtensionAction()
+    }
+}
+
+/// A small trend line inside a row, a metric, a stat or a tile (UI version 6): values only, no axes. Without color or
+/// tone, the app's quiet ink.
+nonisolated struct ExtensionSpark: Codable, Hashable, Sendable {
+    var values: [Double]
+    var color: String?
+    var tone: String?
+    /// Shade under the line.
+    var fill: Bool?
+
+    init(values: [Double] = [], color: String? = nil, tone: String? = nil, fill: Bool? = nil) {
+        self.values = values
+        self.color = color
+        self.tone = tone
+        self.fill = fill
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case values
+        case color
+        case tone
+        case fill
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.values = (try? c.decodeIfPresent([Double].self, forKey: .values)) ?? []
+        self.color = try? c.decodeIfPresent(String.self, forKey: .color)
+        self.tone = try? c.decodeIfPresent(String.self, forKey: .tone)
+        self.fill = try? c.decodeIfPresent(Bool.self, forKey: .fill)
+    }
+}
+
+/// A carousel's tiles: narrow about 140pt (scenes), regular about 200pt (the default; rooms), wide about 80% of the
+/// screen (camera pictures).
+nonisolated enum ExtensionTileWidth {
+    static let narrow = "narrow"
+    static let regular = "regular"
+    static let wide = "wide"
+    static let all = ["narrow", "regular", "wide"]
+}
+
+/// A tile of a grid or a carousel (UI version 6): an icon or a picture, a title, a state line, a value; tapping does
+/// its action. active marks a tile that is on (a scene running, a light on) in its color.
+nonisolated struct ExtensionTile: Codable, Hashable, Sendable {
+    var key: String?
+    var title: String
+    var subtitle: String?
+    var value: String?
+    /// At most one of icon and image.
+    var icon: String?
+    var image: ExtensionImageSource?
+    var color: String?
+    var badge: ExtensionBadge?
+    var active: Bool?
+    var spark: ExtensionSpark?
+    /// A switch only; the tile then has a key.
+    var control: ExtensionRowControl?
+    var actions: [ExtensionRowAction]?
+    var action: ExtensionAction?
+
+    init(key: String? = nil, title: String = "", subtitle: String? = nil, value: String? = nil, icon: String? = nil, image: ExtensionImageSource? = nil, color: String? = nil, badge: ExtensionBadge? = nil, active: Bool? = nil, spark: ExtensionSpark? = nil, control: ExtensionRowControl? = nil, actions: [ExtensionRowAction]? = nil, action: ExtensionAction? = nil) {
+        self.key = key
+        self.title = title
+        self.subtitle = subtitle
+        self.value = value
+        self.icon = icon
+        self.image = image
+        self.color = color
+        self.badge = badge
+        self.active = active
+        self.spark = spark
+        self.control = control
+        self.actions = actions
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case title
+        case subtitle
+        case value
+        case icon
+        case image
+        case color
+        case badge
+        case active
+        case spark
+        case control
+        case actions
+        case action
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.subtitle = try? c.decodeIfPresent(String.self, forKey: .subtitle)
+        self.value = try? c.decodeIfPresent(String.self, forKey: .value)
+        self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
+        self.image = try? c.decodeIfPresent(ExtensionImageSource.self, forKey: .image)
+        self.color = try? c.decodeIfPresent(String.self, forKey: .color)
+        self.badge = try? c.decodeIfPresent(ExtensionBadge.self, forKey: .badge)
+        self.active = try? c.decodeIfPresent(Bool.self, forKey: .active)
+        self.spark = try? c.decodeIfPresent(ExtensionSpark.self, forKey: .spark)
+        self.control = try? c.decodeIfPresent(ExtensionRowControl.self, forKey: .control)
+        self.actions = try? c.decodeIfPresent([ExtensionRowAction].self, forKey: .actions)
+        self.action = try? c.decodeIfPresent(ExtensionAction.self, forKey: .action)
     }
 }
 
@@ -5406,43 +5942,63 @@ nonisolated struct ExtensionMore: Codable, Hashable, Sendable {
 nonisolated struct ExtensionAvatar: Codable, Hashable, Sendable {
     var url: String?
     var text: String?
+    /// The extension's own picture (ui.image) through the hub, in place of url.
+    var ref: String?
+    /// Written by the hub only, for a ref.
+    var path: String?
 
-    init(url: String? = nil, text: String? = nil) {
+    init(url: String? = nil, text: String? = nil, ref: String? = nil, path: String? = nil) {
         self.url = url
         self.text = text
+        self.ref = ref
+        self.path = path
     }
 
     enum CodingKeys: String, CodingKey {
         case url
         case text
+        case ref
+        case path
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.url = try? c.decodeIfPresent(String.self, forKey: .url)
         self.text = try? c.decodeIfPresent(String.self, forKey: .text)
+        self.ref = try? c.decodeIfPresent(String.self, forKey: .ref)
+        self.path = try? c.decodeIfPresent(String.self, forKey: .path)
     }
 }
 
-/// A small picture at the row's start: an https image the app loads without any credentials.
+/// A small picture at the row's start: an https image the app loads without any credentials, or (UI version 6) a ref
+/// the extension serves (ui.image) through the hub; exactly one of url and ref.
 nonisolated struct ExtensionThumbnail: Codable, Hashable, Sendable {
-    var url: String
+    var url: String?
     var aspect: String?
+    var ref: String?
+    /// Written by the hub only, for a ref.
+    var path: String?
 
-    init(url: String = "", aspect: String? = nil) {
+    init(url: String? = nil, aspect: String? = nil, ref: String? = nil, path: String? = nil) {
         self.url = url
         self.aspect = aspect
+        self.ref = ref
+        self.path = path
     }
 
     enum CodingKeys: String, CodingKey {
         case url
         case aspect
+        case ref
+        case path
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+        self.url = try? c.decodeIfPresent(String.self, forKey: .url)
         self.aspect = try? c.decodeIfPresent(String.self, forKey: .aspect)
+        self.ref = try? c.decodeIfPresent(String.self, forKey: .ref)
+        self.path = try? c.decodeIfPresent(String.self, forKey: .path)
     }
 }
 
@@ -5506,21 +6062,25 @@ nonisolated struct ExtensionEmptyButton: Codable, Hashable, Sendable {
 nonisolated struct ExtensionBadge: Codable, Hashable, Sendable {
     var text: String
     var tone: String?
+    var color: String?
 
-    init(text: String = "", tone: String? = nil) {
+    init(text: String = "", tone: String? = nil, color: String? = nil) {
         self.text = text
         self.tone = tone
+        self.color = color
     }
 
     enum CodingKeys: String, CodingKey {
         case text
         case tone
+        case color
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
         self.tone = try? c.decodeIfPresent(String.self, forKey: .tone)
+        self.color = try? c.decodeIfPresent(String.self, forKey: .color)
     }
 }
 
@@ -5545,22 +6105,26 @@ nonisolated struct ExtensionChoice: Codable, Hashable, Sendable {
     }
 }
 
-/// One line, or one color of bars. No tone: the app's own colors, in order.
+/// One line, or one color of bars. No tone and no color: the app's own colors, in order. At most 120 points (240 for
+/// a candlestick, checked by the hub).
 nonisolated struct ExtensionChartSeries: Codable, Hashable, Sendable {
     var name: String?
     var tone: String?
     var points: [ExtensionChartPoint]
+    var color: String?
 
-    init(name: String? = nil, tone: String? = nil, points: [ExtensionChartPoint] = []) {
+    init(name: String? = nil, tone: String? = nil, points: [ExtensionChartPoint] = [], color: String? = nil) {
         self.name = name
         self.tone = tone
         self.points = points
+        self.color = color
     }
 
     enum CodingKeys: String, CodingKey {
         case name
         case tone
         case points
+        case color
     }
 
     init(from decoder: Decoder) throws {
@@ -5568,6 +6132,7 @@ nonisolated struct ExtensionChartSeries: Codable, Hashable, Sendable {
         self.name = try? c.decodeIfPresent(String.self, forKey: .name)
         self.tone = try? c.decodeIfPresent(String.self, forKey: .tone)
         self.points = (try? c.decodeIfPresent([ExtensionChartPoint].self, forKey: .points)) ?? []
+        self.color = try? c.decodeIfPresent(String.self, forKey: .color)
     }
 }
 
@@ -5577,17 +6142,32 @@ nonisolated struct ExtensionChartPoint: Codable, Hashable, Sendable {
     var label: String
     var value: Double
     var display: String?
+    var open: Double?
+    var high: Double?
+    var low: Double?
+    var close: Double?
+    var volume: Double?
 
-    init(label: String = "", value: Double = 0, display: String? = nil) {
+    init(label: String = "", value: Double = 0, display: String? = nil, open: Double? = nil, high: Double? = nil, low: Double? = nil, close: Double? = nil, volume: Double? = nil) {
         self.label = label
         self.value = value
         self.display = display
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume = volume
     }
 
     enum CodingKeys: String, CodingKey {
         case label
         case value
         case display
+        case open
+        case high
+        case low
+        case close
+        case volume
     }
 
     init(from decoder: Decoder) throws {
@@ -5595,6 +6175,11 @@ nonisolated struct ExtensionChartPoint: Codable, Hashable, Sendable {
         self.label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? ""
         self.value = (try? c.decodeIfPresent(Double.self, forKey: .value)) ?? 0
         self.display = try? c.decodeIfPresent(String.self, forKey: .display)
+        self.open = try? c.decodeIfPresent(Double.self, forKey: .open)
+        self.high = try? c.decodeIfPresent(Double.self, forKey: .high)
+        self.low = try? c.decodeIfPresent(Double.self, forKey: .low)
+        self.close = try? c.decodeIfPresent(Double.self, forKey: .close)
+        self.volume = try? c.decodeIfPresent(Double.self, forKey: .volume)
     }
 }
 
@@ -5603,12 +6188,14 @@ nonisolated struct ExtensionStat: Codable, Hashable, Sendable {
     var value: String
     var detail: String?
     var tone: String?
+    var spark: ExtensionSpark?
 
-    init(label: String = "", value: String = "", detail: String? = nil, tone: String? = nil) {
+    init(label: String = "", value: String = "", detail: String? = nil, tone: String? = nil, spark: ExtensionSpark? = nil) {
         self.label = label
         self.value = value
         self.detail = detail
         self.tone = tone
+        self.spark = spark
     }
 
     enum CodingKeys: String, CodingKey {
@@ -5616,6 +6203,7 @@ nonisolated struct ExtensionStat: Codable, Hashable, Sendable {
         case value
         case detail
         case tone
+        case spark
     }
 
     init(from decoder: Decoder) throws {
@@ -5624,6 +6212,7 @@ nonisolated struct ExtensionStat: Codable, Hashable, Sendable {
         self.value = (try? c.decodeIfPresent(String.self, forKey: .value)) ?? ""
         self.detail = try? c.decodeIfPresent(String.self, forKey: .detail)
         self.tone = try? c.decodeIfPresent(String.self, forKey: .tone)
+        self.spark = try? c.decodeIfPresent(ExtensionSpark.self, forKey: .spark)
     }
 }
 

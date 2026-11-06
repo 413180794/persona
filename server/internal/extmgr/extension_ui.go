@@ -215,7 +215,8 @@ func (h *Manager) uiParams(item extension.UIItem, slot extension.UISlot, in uiRe
 		out.Platform = c.Platform
 	}
 	if in.Action != "" {
-		out.Action, out.Values = in.Action, in.Values
+		// a multichoice the hub drew an older app as toggles comes back as UI version 6 writes it (#5464)
+		out.Action, out.Values = in.Action, extension.CollectValues(in.Values)
 	}
 	return out
 }

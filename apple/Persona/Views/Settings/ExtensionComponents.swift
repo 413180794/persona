@@ -35,7 +35,7 @@ struct ExtensionComponentRowLabel: View {
     }
 
     @ViewBuilder private var leading: some View {
-        if let t = row.thumbnail, let url = Self.image(t.url) {
+        if let t = row.thumbnail, let url = Self.image(t.url ?? "") {
             let wide = t.aspect == ExtensionThumbnailAspect.wide
             ExtensionRemoteImage(url: url)
                 .scaledFrame(width: wide ? Theme.Size.box80 : Theme.Size.box50, height: Theme.Size.box50)

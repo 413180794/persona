@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -135,6 +136,14 @@ func CheckAssistantView(v *View) error {
 			for j, e := range s.Items {
 				if e.Type == "field" && e.Kind == "secret" {
 					return fmt.Errorf("%s.sections[%d].items[%d]: assistant cards must not collect secrets", where, i, j)
+				}
+				// UI version 6: no extension serves an assistant card's pictures, and a control acts at once, which a
+				// card's actions (a reply the user confirms) do not.
+				if HasImageRef(&e) {
+					return fmt.Errorf("%s.sections[%d].items[%d]: assistant cards show pictures by https url, not ref", where, i, j)
+				}
+				if e.Control != nil || slices.ContainsFunc(e.Tiles, func(t Tile) bool { return t.Control != nil }) {
+					return fmt.Errorf("%s.sections[%d].items[%d]: assistant cards have no controls; use a button", where, i, j)
 				}
 			}
 		}

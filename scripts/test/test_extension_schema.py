@@ -16,6 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = ROOT / "schema" / "extension"
 GENERATOR = ROOT / "scripts" / "gen" / "extension_schema.py"
+# The newest UI version the showcase snapshots (examples/showcase) cover: its pages for UI version 6 come from the
+# extension (persona-extensions, #5477); until they are copied here, examples/View.v6-*.json show the newer components.
+SHOWCASE_UI = 5
 
 
 def load_schemas():
@@ -222,7 +225,8 @@ class ExtensionSchemaTests(unittest.TestCase):
                 seen |= {i["type"] for s in v["sections"] for i in s["items"]}
         view = self.v.files["view.schema.json"]["$defs"]
         components = [view[o["$ref"].split("/")[-1]] for o in view["Component"]["oneOf"]]
-        tags = {c["properties"]["type"]["const"] for c in components if not c.get("x-assistant-only")}
+        tags = {c["properties"]["type"]["const"] for c in components
+                if not c.get("x-assistant-only") and c.get("x-since", 1) <= SHOWCASE_UI}
         self.assertEqual(tags - seen, set(), "the showcase shows every extension component")
 
     def test_every_component_has_an_example(self):
