@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"slices"
 	"sort"
 	"sync"
@@ -15,7 +16,7 @@ import (
 
 // Account-pool gateways as a source of subscription usage windows (#2595, docs/usage-windows.md「账号池网关」).
 //
-// A gateway such as relay-history holds several agent accounts and already knows how much of each one's 5-hour and weekly
+// A relay (an account-pool gateway) holds several agent accounts and already knows how much of each one's 5-hour and weekly
 // allowance is used. The manager asks it, read-only, every few minutes (usagesource) and keeps the last answer of each
 // source in memory; the sidebar's merge (usagewindows.go) puts those accounts next to the ones the machines read and
 // shows an account both saw once. The key is only ever in hub.json (0600; the manager reads its usage section from
@@ -46,14 +47,27 @@ type UsageConfig struct {
 // UsageSourceConfig is one gateway.
 type UsageSourceConfig struct {
 	ID string `json:"id"`
-	// Name is what the sidebar calls the source ("relay-history").
+	// Name is what the sidebar calls the source ("Relay").
 	Name string `json:"name"`
-	// Type: relay-history | generic (usagesource).
+	// Type: relay | generic (usagesource; an older hub.json's earlier name of relay reads as relay).
 	Type string `json:"type"`
 	URL  string `json:"url"`
 	// Key is the gateway's management key (a secret: hub.json is 0600; no API answer or log ever has it).
 	Key     string `json:"key,omitempty"`
 	Enabled *bool  `json:"enabled,omitempty"`
+}
+
+// UnmarshalJSON reads a source as hub.json has it, older type names included (usagesource.StoredType): a hub.json
+// written before the relay type had its name keeps working, and the next edit of the source saves the new name.
+func (s *UsageSourceConfig) UnmarshalJSON(b []byte) error {
+	type plain UsageSourceConfig
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*s = UsageSourceConfig(p)
+	s.Type = usagesource.StoredType(s.Type)
+	return nil
 }
 
 func (c UsageConfig) on() bool       { return c.Enabled == nil || *c.Enabled }
@@ -81,7 +95,7 @@ type gatewayState struct {
 	triedAt     time.Time            // the last attempt, worked or not
 	errCode     string               // usagesource code of the last attempt; "" when it worked
 	seen        usagesource.Seen
-	// inventory is the last answer's account list (usage.gateway_accounts; relay-history only) and complete whether it
+	// inventory is the last answer's account list (usage.gateway_accounts; relay only) and complete whether it
 	// was the whole list.
 	inventory []proto.GatewayAccount
 	complete  bool
@@ -294,7 +308,7 @@ func (g *usageGateways) accounts(now time.Time) []proto.UsageAccount {
 // gateway sources that are on listed, disabled ones included, from their last read that worked (nothing is asked of a
 // gateway for it). A source whose last read failed still gives that list, its accounts marked stale and its error
 // code said; one not read yet is listed with no accounts and the error usagesource.CodePending, so that a consumer
-// does not take it for a gateway with no accounts. Only the relay-history type has an account list. No key, no
+// does not take it for a gateway with no accounts. Only the relay type has an account list. No key, no
 // address: a source is its id, name and type.
 func (g *usageGateways) gatewayAccounts() proto.GatewayAccounts {
 	g.mu.Lock()
@@ -304,7 +318,7 @@ func (g *usageGateways) gatewayAccounts() proto.GatewayAccounts {
 		return out
 	}
 	for _, s := range g.cfg.Sources {
-		if !s.on() || s.Type != usagesource.Typerelay-history {
+		if !s.on() || s.Type != usagesource.TypeRelay {
 			continue
 		}
 		src := proto.GatewaySource{ID: s.ID, Name: s.Name, Type: s.Type}

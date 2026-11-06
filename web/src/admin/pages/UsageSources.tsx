@@ -1,4 +1,4 @@
-// 用量来源: the account-pool gateways (relay-history…) whose subscription windows join the sidebar's usage bars
+// 用量来源: the account-pool gateways (relays…) whose subscription windows join the sidebar's usage bars
 // (docs/usage-windows.md「账号池网关」, #2595). Add, edit, switch and remove them, try one with a single read-only read.
 // The hub keeps the keys in hub.json and never sends one back: a source only says whether it has one.
 import { t } from "../../i18n";
@@ -131,7 +131,7 @@ function SourceRow({ s, globalOn, onEdit, onChanged }: { s: UsageSource; globalO
 
 function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSource | null; onClose: () => void; onSaved: () => void }) {
   const saved = target && target !== "add" ? target : null;
-  const [type, setType] = useState<UsageSourceType>("relay-history");
+  const [type, setType] = useState<UsageSourceType>("relay");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [key, setKey] = useState("");
@@ -144,7 +144,7 @@ function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSourc
   // a fresh form each time it opens
   useEffect(() => {
     if (!target) return;
-    setType(saved?.type ?? "relay-history");
+    setType(saved?.type ?? "relay");
     setName(saved?.name ?? "");
     setUrl(saved?.url ?? "");
     setKey("");
@@ -155,7 +155,7 @@ function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSourc
 
   const moved = saved ? needsKeyAgain(saved, { url, type }) : false;
   const urlOk = validUrl(url);
-  const keyNeeded = type === "relay-history" && !(saved?.has_key && !moved && !clearKey) && key.trim() === "";
+  const keyNeeded = type === "relay" && !(saved?.has_key && !moved && !clearKey) && key.trim() === "";
   const ok = urlOk && !keyNeeded && (type !== "generic" || name.trim() !== "");
 
   const test = async () => {
@@ -198,7 +198,7 @@ function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSourc
           <Button tone="quiet" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button busy={testing} disabled={!urlOk || (keyNeeded && type === "relay-history")} onClick={() => void test()}>
+          <Button busy={testing} disabled={!urlOk || (keyNeeded && type === "relay")} onClick={() => void test()}>
             {t("admin-pages-usage.test")}
           </Button>
           <Button tone="primary" busy={busy} disabled={!ok} onClick={() => void save()}>
@@ -214,7 +214,7 @@ function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSourc
             label={t("admin-pages-usage.type")}
             value={type}
             options={[
-              { value: "relay-history", label: typeLabel("relay-history") },
+              { value: "relay", label: typeLabel("relay") },
               { value: "generic", label: typeLabel("generic") },
             ]}
             onChange={(v) => (setType(v), setResult(null))}
@@ -229,7 +229,7 @@ function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSourc
           mono
           autoCapitalize="none"
           error={url.trim() !== "" && !urlOk ? t("admin-pages-usage.url_invalid") : undefined}
-          hint={type === "relay-history" ? t("admin-pages-usage.url_hint_relay-history") : t("admin-pages-usage.url_hint_generic")}
+          hint={type === "relay" ? t("admin-pages-usage.url_hint_relay") : t("admin-pages-usage.url_hint_generic")}
         />
         <Field
           label={t("admin-pages-usage.key")}
@@ -241,7 +241,7 @@ function SourceDialog({ target, onClose, onSaved }: { target: "add" | UsageSourc
           autoComplete="off"
           autoCapitalize="none"
           disabled={clearKey}
-          hint={moved && saved?.has_key ? t("admin-pages-usage.key_retype") : type === "relay-history" ? t("admin-pages-usage.key_hint_relay-history") : t("admin-pages-usage.key_hint_generic")}
+          hint={moved && saved?.has_key ? t("admin-pages-usage.key_retype") : type === "relay" ? t("admin-pages-usage.key_hint_relay") : t("admin-pages-usage.key_hint_generic")}
         />
         {saved?.has_key && type === "generic" && (
           <label className="flex items-center gap-2 text-[12.5px] text-ink-2">

@@ -1,0 +1,3 @@
+{
+  "text": "{\"scope\":\"observed_cache\",\"chats\":[{\"chat\":\"primary.group_example_1\",\"name\":\"示例群\",\"kind\":\"group\",\"last_at\":\"2026-11-04T08:26:00.000Z\",\"preview\":\"@示例用户 请看一下这个合成文档\"},{\"chat\":\"primary.user_example_a\",\"name\":\"Example A\",\"kind\":\"dm\",\"last_at\":\"2026-11-04T08:25:00.000Z\",\"preview\":\"Synthetic answer\"}],\"note\":\"结果只含示例聊天服务保留的消息，不是完整历史；空结果不代表没有消息。全文检索请用 kb_search。\"}"
+}

@@ -524,7 +524,7 @@ App 和网页按 `machine_id` + `session_id` 把卡放进对话；没有会话�
 
 ## 调用方走了，对端的处理要跟着停（2026-11-05，#2597）
 
-`internal/rpc` 原来没有取消：`Peer.Call` 的 ctx 结束只在本地返回，对端照常跑。用户打断助手这一轮，node 停掉 Claude 进程，`wechat-connector_send` 报「Connection closed」，hub 那边的审批卡却挂到 15 分钟过期。这期间点「允许」会把那条过时的消息发出去，助手重试后还有第二张一样的卡。现在 node 的 `mcp.call` 会发 `rpc.cancel`。别的方法想要同样的行为，加进 `Peer.Cancels`，先确认对端在 ctx 结束时停下是对的（写库之类要做完的别加）。
+`internal/rpc` 原来没有取消：`Peer.Call` 的 ctx 结束只在本地返回，对端照常跑。用户打断助手这一轮，node 停掉 Claude 进程，连接器的发送工具（`*_send`）报「Connection closed」，hub 那边的审批卡却挂到 15 分钟过期。这期间点「允许」会把那条过时的消息发出去，助手重试后还有第二张一样的卡。现在 node 的 `mcp.call` 会发 `rpc.cancel`。别的方法想要同样的行为，加进 `Peer.Cancels`，先确认对端在 ctx 结束时停下是对的（写库之类要做完的别加）。
 
 ## 写交互历史要带超时（2026-11-05，#2937）
 

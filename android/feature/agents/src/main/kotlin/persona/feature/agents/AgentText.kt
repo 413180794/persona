@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalResources
 import persona.core.designsystem.UiText
+import persona.feature.chat.AnswerReceipt
 
 /**
  * Text a view model or a long-lived helper hands to the screen: a string resource and its arguments, resolved in the
@@ -19,11 +20,21 @@ internal class AgentText(@StringRes val id: Int, vararg args: Any) {
     override fun toString() = "AgentText($id, $args)"
 
     fun resolve(resources: Resources): String =
-        resources.getString(id, *args.map { if (it is UiText) it.resolve(resources) else it }.toTypedArray())
+        resources.getString(id, *args.map { arg ->
+            when (arg) {
+                is UiText -> arg.resolve(resources)
+                // What was just answered (#4740), or the plain notice when the card says nothing of its own.
+                is AnswerReceipt -> arg.text(resources) ?: resources.getString(R.string.agents_request_sent)
+                else -> arg
+            }
+        }.toTypedArray())
 
     companion object {
         /** Text that is already in the user's words (the hub's reason, a failure message). */
         fun raw(text: String) = AgentText(R.string.agents_text_raw, text)
+
+        /** 「已允许：./gradlew test」 for an answer the hub took, in the language on screen. */
+        fun receipt(receipt: AnswerReceipt) = AgentText(R.string.agents_text_raw, receipt)
     }
 }
 

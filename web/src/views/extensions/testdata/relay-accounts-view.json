@@ -1,7 +1,7 @@
 {
-  "about": "quota-relay-history's sidebar page drawn from made-up data (extensions/quota-relay-history/sidebar_test.go TestExportFixture): the default view, the Kiro type, one account's page",
+  "about": "quota-relay's sidebar page drawn from made-up data (the extension's TestExportFixture): the default view, the Kiro type, one account's page",
   "default": {
-    "title": "relay-history 账号",
+    "title": "中转账号",
     "sections": [
       {
         "items": [
@@ -2126,7 +2126,7 @@
     "refresh_after": 60
   },
   "kiro": {
-    "title": "relay-history 账号",
+    "title": "中转账号",
     "sections": [
       {
         "items": [

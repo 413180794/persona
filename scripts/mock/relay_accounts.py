@@ -1,6 +1,6 @@
-"""quota-relay-history's sidebar page (#4576) drawn from the extension's exported fixture, for client screenshots only.
+"""quota-relay's sidebar page (#4576) drawn from the extension's exported fixture, for client screenshots only.
 
-The fixture (`extensions/quota-relay-history/testdata/relay-history-accounts-view.json` in the extensions repo, copied to
+The fixture (the extension's exported `relay-accounts-view.json` in its own repo, copied to
 `apple/PersonaTests/Fixtures/`) holds three Views made from made-up accounts: `default`, `kiro` (the Kiro type picked)
 and `detail` (one account's page). Nothing is computed here: the right View is sent as it is, with the search's text and
 the picked status echoed so that the app shows what was picked.
@@ -9,10 +9,10 @@ import copy
 import json
 from urllib.parse import urlparse, parse_qs
 
-EXTENSION = "quota-relay-history"
+EXTENSION = "quota-relay"
 UI = "sidebar"
-ENTRY = {"plugin": EXTENSION, "extension": EXTENSION, "plugin_name": "relay-history 额度", "extension_name": "relay-history 额度",
-         "id": UI, "title": "relay-history 账号", "placement": "nav_page", "size": "full"}
+ENTRY = {"plugin": EXTENSION, "extension": EXTENSION, "plugin_name": "中转额度", "extension_name": "中转额度",
+         "id": UI, "title": "中转账号", "placement": "nav_page", "size": "full"}
 PATHS = ("/api/v1/plugins/%s/-/ui/%s" % (EXTENSION, UI), "/api/v1/extensions/%s/-/ui/%s" % (EXTENSION, UI))
 LISTS = ("/api/v1/plugins/-/ui", "/api/v1/extensions/-/ui")
 
@@ -32,7 +32,7 @@ class _Listing:
         return self._h.send_json(obj, *args, **kwargs)
 
 
-class relay-historyAccountsMock:
+class RelayAccountsMock:
     def __init__(self, fixture_path, start="default"):
         # start: the View the page's first render gets (default, kiro or detail), so a screenshot needs no taps.
         self.start = start or "default"

@@ -218,7 +218,7 @@ class CheckFastServerInputsTests(unittest.TestCase):
         self.write("sdk/go/go.mod", "module example.com/sdk\n")
         self.write("spec/fixtures/x.json", "{}\n")
         self.write("spec/tokens/colors.json", "{}\n")
-        self.write("docs/wechat-connector.md", "guide\n")
+        self.write("docs/example-guide.md", "guide\n")
         self.write("docs/other.md", "other\n")
         self.write("schema/extension/examples/Manifest.x.json", "{}\n")
         self.write("server/go.mod", "module example.com/server\n")
@@ -228,7 +228,7 @@ class CheckFastServerInputsTests(unittest.TestCase):
         self.write("server/internal/noted/noted_test.go", 'package noted\n\n// Same as spec/fixtures/x.json.\n')
         self.write("server/internal/bar/bar_test.go", "package bar\n")
         self.write("server/internal/guide/conformance/guide_test.go",
-                   'package conformance\n\nconst guide = "docs/wechat-connector.md"\n')
+                   'package conformance\n\nconst guide = "docs/example-guide.md"\n')
         self.write("server/internal/ext/ext_test.go",
                    'package ext\n\nvar d = filepath.Join("..", "schema", "extension", "examples")\n')
         self.write("server/internal/db/dbtest/env_test.go",
@@ -278,7 +278,7 @@ class CheckFastServerInputsTests(unittest.TestCase):
         self.assertIn("no fast check maps to: spec/tokens/colors.json", out)
 
     def test_a_doc_runs_only_the_package_that_reads_it(self):
-        self.write("docs/wechat-connector.md", "guide changed\n")
+        self.write("docs/example-guide.md", "guide changed\n")
         self.write("docs/other.md", "other changed\n")
         out, packages = self.check_fast()
         self.assertEqual(["./internal/guide/conformance/..."], packages, out)

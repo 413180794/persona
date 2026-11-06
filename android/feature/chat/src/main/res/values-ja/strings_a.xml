@@ -67,6 +67,13 @@
     <string name="chat_info_copied_item">%1$sをコピーしました</string>
     <string name="chat_info_retry">再試行</string>
     <string name="chat_interaction_answered">選択内容を返信しました</string>
+    <string name="chat_receipt_allowed">許可しました：%1$s</string>
+    <string name="chat_receipt_always_allowed">常に許可しました：%1$s</string>
+    <string name="chat_receipt_denied">拒否しました：%1$s</string>
+    <string name="chat_receipt_plan_approved">計画を承認しました</string>
+    <string name="chat_receipt_plan_rejected">計画を差し戻しました</string>
+    <string name="chat_receipt_plan_rejected_feedback">計画を差し戻しました：%1$s</string>
+    <string name="chat_receipt_answered">回答しました：%1$s</string>
     <string name="chat_interaction_resolved_elsewhere">コンピューターで対応済みです</string>
     <string name="chat_interaction_prompt_changed">画面の内容が変わったため、今回は送信していません。新しい質問を確認してから選び直してください</string>
     <string name="chat_interaction_unknown">回答が届いたかまだ分かりません。先にリクエストを確認してください</string>

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -21,6 +22,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 import persona.core.contracts.api.*
 import persona.core.designsystem.AppStyle
 import persona.core.designsystem.PersonaTheme
@@ -158,6 +161,44 @@ class SignInStepsTest {
         assertEquals(listOf("", "qr"), hub.steps)
     }
 
+    /** A pair code on 设置 › 连接器 is sent to the bot from the chat app: the page waits for that, not for an authorization (#4983). */
+    @Test fun aPairCodeWaitsForItToBeSent() {
+        val prompt = BindPrompt(step = "pair", kind = "pair_code", userCode = "482913", interval = 3)
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true) {
+                ConnectorSignInStep("Example Chat", prompt, BindState(prompt), ConnectorSignInModel({ _, _ -> prompt }, {}))
+            }
+        }
+        rule.onNodeWithText("Waiting for you to send it to the bot in Example Chat…").assertExists()
+        rule.onAllNodesWithText("Waiting for you to authorize…").assertCountEquals(0)
+    }
+
+    /** The link of a QR step without its modules can be long-pressed and copied, not only with the copy button (#4983). */
+    @OptIn(ExperimentalTestApi::class)
+    @Config(shadows = [NoMagnifier::class])
+    @Test fun theQrLinkCanBeSelectedAndCopied() {
+        val prompt = BindPrompt(step = "qr", kind = "qr", url = "https://example.com/q", interval = 1)
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true) {
+                ConnectorSignInStep("Example", prompt, BindState(prompt), ConnectorSignInModel({ _, _ -> prompt }, {}))
+            }
+        }
+        // Long press at the start selects; dragging to the end takes the whole link; Ctrl+C copies it, as 复制 does.
+        val link = rule.onNodeWithText("https://example.com/q")
+        link.performTouchInput {
+            down(centerLeft + androidx.compose.ui.geometry.Offset(2f, 0f))
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 100)
+            moveTo(centerRight - androidx.compose.ui.geometry.Offset(2f, 0f))
+            up()
+        }
+        rule.waitForIdle()
+        link.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.C) } }
+        rule.waitForIdle()
+        val clipboard = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getSystemService(android.content.ClipboardManager::class.java)
+        assertEquals("https://example.com/q", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+    }
+
     /** The two new states in every style, light and dark, to look at. */
     @Test fun drawsTheNewStepsInEveryStyle() {
         var style by mutableStateOf(AppStyle.Glass)
@@ -186,4 +227,12 @@ class SignInStepsTest {
                 .use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+}
+
+/** Robolectric's [android.widget.Magnifier] has no surface and throws when a selection's magnifier is dismissed. */
+@Implements(android.widget.Magnifier::class)
+class NoMagnifier {
+    @Implementation fun show(sourceCenterX: Float, sourceCenterY: Float, magnifierCenterX: Float, magnifierCenterY: Float) {}
+    @Implementation fun dismiss() {}
+    @Implementation fun update() {}
 }

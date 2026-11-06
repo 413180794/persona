@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -33,9 +34,9 @@ func TestMergeLocalAndGatewayAreOneAccountWhenTheResetsAgree(t *testing.T) {
 	h5, d7 := now.Add(2*time.Hour), now.Add(3*24*time.Hour)
 	in := []proto.UsageAccount{
 		local("codex", "Codex Pro", now.Add(-time.Minute), uw("5h", 300, 31, h5), uw("7d", 10080, 41, d7)),
-		gw("relay-history", "c1", "codex", "work seat", now.Add(-10*time.Minute), uw("5h", 300, 30, h5), uw("7d", 10080, 40, d7)),
+		gw("Relay", "c1", "codex", "work seat", now.Add(-10*time.Minute), uw("5h", 300, 30, h5), uw("7d", 10080, 40, d7)),
 		// another account of the gateway: other resets
-		gw("relay-history", "c2", "codex", "spare seat", now.Add(-time.Hour), uw("5h", 300, 2, now.Add(4*time.Hour)), uw("7d", 10080, 3, now.Add(5*24*time.Hour))),
+		gw("Relay", "c2", "codex", "spare seat", now.Add(-time.Hour), uw("5h", 300, 2, now.Add(4*time.Hour)), uw("7d", 10080, 3, now.Add(5*24*time.Hour))),
 	}
 	got := mergeUsageAccounts(in, now)
 	if len(got) != 2 {
@@ -54,7 +55,7 @@ func TestMergeLocalAndGatewayAreOneAccountWhenTheResetsAgree(t *testing.T) {
 		t.Fatalf("names: %+v", got)
 	}
 	// the gateway's name wins, the newest numbers (the machine's) win, both sources are listed
-	if !merged.Local || len(merged.Sources) != 1 || merged.Sources[0] != "relay-history" || merged.Windows[0].UsedPercent != 31 {
+	if !merged.Local || len(merged.Sources) != 1 || merged.Sources[0] != "Relay" || merged.Windows[0].UsedPercent != 31 {
 		t.Errorf("merged: %+v", merged)
 	}
 	if spare.Local || len(spare.Sources) != 1 {
@@ -66,8 +67,8 @@ func TestMergeKeepsTwoAccountsOfOneGatewayApartWhateverTheirResets(t *testing.T)
 	now := time.Now().Truncate(time.Second)
 	reset := now.Add(3 * 24 * time.Hour)
 	in := []proto.UsageAccount{
-		gw("relay-history", "a", "claude", "seat a", now, uw("7d", 10080, 10, reset)),
-		gw("relay-history", "b", "claude", "seat b", now, uw("7d", 10080, 20, reset)),
+		gw("Relay", "a", "claude", "seat a", now, uw("7d", 10080, 10, reset)),
+		gw("Relay", "b", "claude", "seat b", now, uw("7d", 10080, 20, reset)),
 	}
 	if got := mergeUsageAccounts(in, now); len(got) != 2 {
 		t.Fatalf("a gateway knows its accounts apart: %+v", got)
@@ -86,9 +87,9 @@ func TestMergeScopedWindowsAreKeptApartAndNeverIdentifyAnAccount(t *testing.T) {
 	scoped := uw("7d", 10080, 100, reset)
 	scoped.Model = "Fable"
 	in := []proto.UsageAccount{
-		gw("relay-history", "a", "claude", "seat a", now, uw("5h", 300, 5, now.Add(time.Hour)), uw("7d", 10080, 10, reset), scoped),
+		gw("Relay", "a", "claude", "seat a", now, uw("5h", 300, 5, now.Add(time.Hour)), uw("7d", 10080, 10, reset), scoped),
 		// another account whose only window shares the scoped one's reset second: not the same account
-		gw("relay-history", "b", "claude", "seat b", now, uw("7d", 10080, 50, reset.Add(time.Hour)), scoped),
+		gw("Relay", "b", "claude", "seat b", now, uw("7d", 10080, 50, reset.Add(time.Hour)), scoped),
 	}
 	got := mergeUsageAccounts(in, now)
 	if len(got) != 2 {
@@ -107,9 +108,9 @@ func TestMergeScopedWindowsAreKeptApartAndNeverIdentifyAnAccount(t *testing.T) {
 func TestMergeGatewayStaleness(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	reset := now.Add(24 * time.Hour)
-	idle := gw("relay-history", "a", "codex", "idle seat", now.Add(-2*time.Hour), uw("7d", 10080, 10, reset)) // older than a machine's 30 minutes, within a gateway's
-	old := gw("relay-history", "b", "codex", "old seat", now.Add(-usageGatewayStaleAfter-time.Minute), uw("7d", 10080, 20, now.Add(48*time.Hour)))
-	flagged := gw("relay-history", "c", "codex", "flagged seat", now, uw("7d", 10080, 30, now.Add(72*time.Hour)))
+	idle := gw("Relay", "a", "codex", "idle seat", now.Add(-2*time.Hour), uw("7d", 10080, 10, reset)) // older than a machine's 30 minutes, within a gateway's
+	old := gw("Relay", "b", "codex", "old seat", now.Add(-usageGatewayStaleAfter-time.Minute), uw("7d", 10080, 20, now.Add(48*time.Hour)))
+	flagged := gw("Relay", "c", "codex", "flagged seat", now, uw("7d", 10080, 30, now.Add(72*time.Hour)))
 	flagged.Stale, flagged.Problem = true, "error"
 	machine := local("codex", "Codex", now.Add(-2*time.Hour), uw("7d", 10080, 40, now.Add(96*time.Hour)))
 	got := map[string]proto.UsageAccount{}
@@ -128,7 +129,7 @@ func TestGatewaysPollKeepLastAnswerWhenUnreachableAndMarkItStale(t *testing.T) {
 	var g usageGateways
 	g.fetch = func(_ context.Context, cfg usagesource.Config, at time.Time) (usagesource.Result, error) {
 		calls.Add(1)
-		if cfg.Key != "secret-key" || cfg.Type != "relay-history" {
+		if cfg.Key != "secret-key" || cfg.Type != "relay" {
 			t.Errorf("config: %+v", cfg)
 		}
 		if fail.Load() {
@@ -137,11 +138,11 @@ func TestGatewaysPollKeepLastAnswerWhenUnreachableAndMarkItStale(t *testing.T) {
 		a := proto.UsageAccount{Provider: "codex", Name: "seat", SampledAt: at, Ref: "c1", Windows: []proto.UsageWindow{uw("7d", 10080, 9, at.Add(time.Hour))}}
 		return usagesource.Result{Accounts: []proto.UsageAccount{a}, Seen: usagesource.Seen{Accounts: 1, Windows: 1, Providers: map[string]int{"codex": 1}}}, nil
 	}
-	g.init(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "relay-history", Type: "relay-history", URL: "https://gw.example.com", Key: "secret-key"}}}, func() {}, func(string, ...any) {})
+	g.init(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "Relay", Type: "relay", URL: "https://gw.example.com", Key: "secret-key"}}}, func() {}, func(string, ...any) {})
 
 	g.pollDue(context.Background(), now)
 	got := g.accounts(now)
-	if len(got) != 1 || got[0].Sources[0] != "relay-history" || got[0].Ref != "s1:c1" || got[0].Stale || got[0].Problem != "" {
+	if len(got) != 1 || got[0].Sources[0] != "Relay" || got[0].Ref != "s1:c1" || got[0].Stale || got[0].Problem != "" {
 		t.Fatalf("%+v", got)
 	}
 	// not due again within the interval
@@ -239,13 +240,13 @@ func TestUsageWindowsRouteIncludesGatewayAccounts(t *testing.T) {
 	}))
 	defer gate.Close()
 	h := newTestDevices(t)
-	h.usageGW.init(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "relay-history", Type: "relay-history", URL: gate.URL, Key: "k"}}}, h.usageWin.invalidate, h.logf)
+	h.usageGW.init(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "Relay", Type: "relay", URL: gate.URL, Key: "k"}}}, h.usageWin.invalidate, h.logf)
 	h.usageGW.pollDue(context.Background(), now)
 	mux := h.Handler(http.NotFoundHandler()) // the route as the hub relays it
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/usage/windows", nil))
 	body := w.Body.String()
-	for _, want := range []string{`"name":"seat one"`, `"plan":"Pro"`, `"sources":["relay-history"]`, `"used_percent":40`} {
+	for _, want := range []string{`"name":"seat one"`, `"plan":"Pro"`, `"sources":["Relay"]`, `"used_percent":40`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %s in %s", want, body)
 		}
@@ -260,7 +261,7 @@ func TestOfflineNodeCannotClaimASource(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	var u usageWindowsHub
 	src := usageSource{id: "m1", online: true, ask: func(context.Context) (proto.UsageSnapshot, error) {
-		return proto.UsageSnapshot{Enabled: true, Accounts: []proto.UsageAccount{{Provider: "codex", Name: "Codex", SampledAt: now, Sources: []string{"relay-history"}, Problem: "unreachable", Windows: []proto.UsageWindow{uw("7d", 10080, 1, now.Add(time.Hour))}}}}, nil
+		return proto.UsageSnapshot{Enabled: true, Accounts: []proto.UsageAccount{{Provider: "codex", Name: "Codex", SampledAt: now, Sources: []string{"Relay"}, Problem: "unreachable", Windows: []proto.UsageWindow{uw("7d", 10080, 1, now.Add(time.Hour))}}}}, nil
 	}}
 	got := u.poll(context.Background(), []usageSource{src}, now)
 	if len(got) != 1 || !got[0].Local || len(got[0].Sources) != 0 || got[0].Problem != "" {
@@ -286,9 +287,9 @@ func TestGatewayAccountsKeepsEachSourcesListAndMarksAFailedReadStale(t *testing.
 			}}, nil
 	}
 	g.init(UsageConfig{Sources: []UsageSourceConfig{
-		{ID: "s1", Name: "relay-history", Type: "relay-history", URL: "https://gw.example.com", Key: "secret-key"},
+		{ID: "s1", Name: "Relay", Type: "relay", URL: "https://gw.example.com", Key: "secret-key"},
 		{ID: "s2", Name: "Other", Type: "generic", URL: "https://other.example.com", Key: "other-key"},
-		{ID: "s3", Name: "Not yet", Type: "relay-history", URL: "https://later.example.com", Key: "later-key", Enabled: new(bool)},
+		{ID: "s3", Name: "Not yet", Type: "relay", URL: "https://later.example.com", Key: "later-key", Enabled: new(bool)},
 	}}, func() {}, nil)
 
 	if got := g.gatewayAccounts(); len(got.Sources) != 1 || got.Sources[0].CheckedAt != nil || len(got.Accounts) != 0 ||
@@ -297,7 +298,7 @@ func TestGatewayAccountsKeepsEachSourcesListAndMarksAFailedReadStale(t *testing.
 	}
 	g.pollDue(context.Background(), now)
 	got := g.gatewayAccounts()
-	if len(got.Sources) != 1 || got.Sources[0].ID != "s1" || got.Sources[0].Type != "relay-history" || !got.Sources[0].Complete ||
+	if len(got.Sources) != 1 || got.Sources[0].ID != "s1" || got.Sources[0].Type != "relay" || !got.Sources[0].Complete ||
 		got.Sources[0].Listed != 2 || got.Sources[0].CheckedAt == nil || got.Sources[0].Error != "" {
 		t.Fatalf("sources %+v", got.Sources)
 	}
@@ -323,12 +324,12 @@ func TestGatewayAccountsKeepsEachSourcesListAndMarksAFailedReadStale(t *testing.
 		t.Fatalf("after a failed read: %+v", got)
 	}
 	// pointing it elsewhere forgets the list
-	g.setConfig(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "relay-history", Type: "relay-history", URL: "https://moved.example.com", Key: "secret-key"}}})
+	g.setConfig(UsageConfig{Sources: []UsageSourceConfig{{ID: "s1", Name: "Relay", Type: "relay", URL: "https://moved.example.com", Key: "secret-key"}}})
 	if got = g.gatewayAccounts(); len(got.Accounts) != 0 || got.Sources[0].CheckedAt != nil || got.Sources[0].Error != usagesource.CodePending {
 		t.Fatalf("after a move: %+v", got)
 	}
 	off := false
-	g.setConfig(UsageConfig{Enabled: &off, Sources: []UsageSourceConfig{{ID: "s1", Type: "relay-history", URL: "https://moved.example.com"}}})
+	g.setConfig(UsageConfig{Enabled: &off, Sources: []UsageSourceConfig{{ID: "s1", Type: "relay", URL: "https://moved.example.com"}}})
 	if got = g.gatewayAccounts(); got.Sources == nil || got.Accounts == nil || len(got.Sources) != 0 {
 		t.Fatalf("switched off: %+v", got)
 	}
@@ -343,5 +344,21 @@ func TestUsageGatewayAccountsOverTheDevicesMethod(t *testing.T) {
 	b, _ := json.Marshal(out)
 	if string(b) != `{"sources":[],"accounts":[]}` {
 		t.Errorf("no sources: %s", b)
+	}
+}
+
+// A hub.json written before the relay type had its name still reads: any type that is not generic was the relay one.
+func TestUsageSourceConfigReadsOlderTypeNames(t *testing.T) {
+	var cfg UsageConfig
+	raw := `{"sources":[{"id":"a","type":"generic"},{"id":"b","type":"relay"},{"id":"c","type":"some-earlier-name"},{"id":"d"}]}`
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range cfg.Sources {
+		got = append(got, s.Type)
+	}
+	if want := []string{"generic", "relay", "relay", ""}; !slices.Equal(got, want) {
+		t.Fatalf("types = %q, want %q", got, want)
 	}
 }

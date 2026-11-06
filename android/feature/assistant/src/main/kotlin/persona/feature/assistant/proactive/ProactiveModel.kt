@@ -379,8 +379,12 @@ internal class ProactiveStore(
                     is TaskChange.Add -> api.saveTask(ScheduledTask().applying(change.draft)).also(::put)
                     is TaskChange.Delete -> { api.deleteTask(change.id); drop(change.id); null }
                     is TaskChange.Toggle, is TaskChange.Edit -> {
-                        // The latest the hub has, so only this change is written over it.
-                        val base = (mutable.value.tasks.value ?: readTasks())?.firstOrNull { it.id == change.id } ?: throw TaskGoneException()
+                        // The latest the hub has (the page hears nothing of changes made elsewhere), so only this
+                        // change is written over it; what the page loaded only when that read fails (quietly: the
+                        // save that follows says how it went).
+                        val latest = attempt { api.tasks() }.getOrNull()
+                            ?.also { list -> mutable.update { it.copy(tasks = Loadable(list), readAt = clock()) } }
+                        val base = (latest ?: mutable.value.tasks.value)?.firstOrNull { it.id == change.id } ?: throw TaskGoneException()
                         val next = if (change is TaskChange.Toggle) base.copy(enabled = change.enabled)
                             else (change as TaskChange.Edit).let { base.patched(it.from, it.to) }
                         api.saveTask(next).also(::put)

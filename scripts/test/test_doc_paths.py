@@ -72,9 +72,6 @@ ELSEWHERE = {
     # The Go check's overlay maps this absent path to a test source in /tmp (spec/fixtures/sort/README.md).
     "server/internal/hub/spec_sort_fixture_test.go",
     "internal/authflow/flow.go",  # in the cli/cli source (docs/connectors.md)
-    "internal/middleware/auth.go",  # in the relay-history source (docs/lessons/agents.md)
-    "internal/application/accountusage",  # in the relay-history source (docs/usage-windows.md)
-    "internal/domain/account",  # in the relay-history source (docs/usage-windows.md)
     "internal/plugin",  # the retired package name in the extension rename table (docs/extensions.md)
     "internal/larkcli",  # the planned adapter package (docs/plan-lark-cli.md)
 }

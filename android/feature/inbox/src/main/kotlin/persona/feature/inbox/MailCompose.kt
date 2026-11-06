@@ -38,25 +38,64 @@ object MailCompose {
     const val QUOTE_LINES = 40
 
     /**
-     * Addresses typed into 收件人 / 抄送 / 密送: split on commas, semicolons (half and full width) and new lines;
-     * `Name <a@b>` keeps the name. Empty pieces are dropped.
+     * Addresses typed into 收件人 / 抄送 / 密送: split on commas, semicolons (half and full width) and new lines, but not
+     * inside a `"quoted name"` or `<…>` (#5076: `"Doe, John" <a@b>`); `Name <a@b>` keeps the name, unquoted. A line
+     * with an unclosed quote or bracket splits on every separator, as before. Empty pieces are dropped.
      */
     fun parseAddresses(s: String): List<MailAddress> =
-        s.split(',', '，', ';', '；', '\n')
+        s.split('\n').flatMap(::splitLine)
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .map { piece ->
                 val lt = piece.lastIndexOf('<')
                 val gt = piece.lastIndexOf('>')
                 if (lt >= 0 && gt > lt) {
-                    val name = piece.substring(0, lt).trim().trim('"').trim()
-                    MailAddress(name, piece.substring(lt + 1, gt).trim())
+                    MailAddress(unquote(piece.substring(0, lt).trim()), piece.substring(lt + 1, gt).trim())
                 } else MailAddress("", piece)
             }
 
-    /** Back to the text field: `Name <a@b>` when there is a name, else the bare address. */
+    private val SEPARATORS = charArrayOf(',', '，', ';', '；')
+
+    private fun splitLine(line: String): List<String> {
+        val pieces = mutableListOf<String>()
+        var start = 0
+        var quoted = false
+        var angle = false
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            when {
+                quoted && c == '\\' -> i++
+                c == '"' && !angle -> quoted = !quoted
+                quoted -> {}
+                c == '<' -> angle = true
+                c == '>' -> angle = false
+                !angle && c in SEPARATORS -> { pieces += line.substring(start, i); start = i + 1 }
+            }
+            i++
+        }
+        if (quoted || angle) return line.split(*SEPARATORS)
+        pieces += line.substring(start)
+        return pieces
+    }
+
+    /** `"Doe, John"` → `Doe, John` (`\"` and `\\` unescaped); unquoted names only lose stray quotes, as before. */
+    private fun unquote(name: String): String =
+        if (name.length >= 2 && name.startsWith('"') && name.endsWith('"')) {
+            name.substring(1, name.length - 1).replace(Regex("""\\(.)"""), "$1").trim()
+        } else name.trim('"').trim()
+
+    /**
+     * Back to the text field: `Name <a@b>` when there is a name, else the bare address. A name with a separator, quote or
+     * backslash is written as an RFC 5322 quoted string so [parseAddresses] reads it back whole.
+     */
     fun formatAddresses(list: List<MailAddress>): String =
-        list.joinToString(", ") { if (it.name.isNotBlank() && it.name != it.email) "${it.name} <${it.email}>" else it.email }
+        list.joinToString(", ") { if (it.name.isNotBlank() && it.name != it.email) "${quoteName(it.name)} <${it.email}>" else it.email }
+
+    private fun quoteName(name: String): String =
+        if (name.any { it in SEPARATORS || it == '"' || it == '\\' }) {
+            "\"" + name.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        } else name
 
     /** A plausible address (one @, something on both sides, a dot after it). Only gates the send button. */
     fun looksValid(email: String): Boolean {

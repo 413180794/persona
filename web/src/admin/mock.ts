@@ -60,14 +60,14 @@ export function installMock(scenario: string) {
   };
   let restart = { required: scenario === "app", reasons: scenario === "app" ? ["添加电脑「studio」", "TLS 监听改成 :18662"] : [] };
   const startedAt = iso(60 * 26 + 17);
-  // Usage sources (docs/usage-windows.md「账号池网关」): one relay-history that works, one generic that does not answer. Any key
+  // Usage sources (docs/usage-windows.md「账号池网关」): one Relay that works, one generic that does not answer. Any key
   // other than "wrong" tests fine; an address containing "dead" does not connect. The key is never given back.
   const usage: UsageSources = {
     enabled: true,
     poll_minutes: 5,
     limit: 8,
     sources: [
-      { id: "src-1a2b3c4d", name: "relay-history", type: "relay-history", url: "https://gateway.example.com", has_key: true, enabled: true, status: { ok_at: iso(2), tried_at: iso(2), seen: { accounts: 12, windows: 31, listed: 14, providers: { codex: 8, claude: 4 } } } },
+      { id: "src-1a2b3c4d", name: "Relay", type: "relay", url: "https://gateway.example.com", has_key: true, enabled: true, status: { ok_at: iso(2), tried_at: iso(2), seen: { accounts: 12, windows: 31, listed: 14, providers: { codex: 8, claude: 4 } } } },
       { id: "src-5e6f7a8b", name: "Team pool", type: "generic", url: "https://pool.example.com/persona/usage", has_key: true, enabled: true, status: { ok_at: iso(95), tried_at: iso(1), error: "unreachable", seen: { accounts: 3, windows: 5, listed: 3, providers: { kimi: 3 } } } },
     ],
   };
@@ -421,7 +421,7 @@ export function installMock(scenario: string) {
       case "POST /usage-sources": {
         if (usage.sources.length >= usage.limit) return fail(409, "too_many", "最多 8 个来源");
         if (!/^https?:\/\//.test(String(body.url ?? ""))) return fail(400, "invalid_url", "地址要写成 http(s)://主机[:端口]");
-        const src: UsageSource = { id: `src-${Math.random().toString(16).slice(2, 10)}`, name: String(body.name || "relay-history"), type: body.type, url: String(body.url).replace(/\/+$/, ""), has_key: Boolean(body.key), enabled: true, status: {} };
+        const src: UsageSource = { id: `src-${Math.random().toString(16).slice(2, 10)}`, name: String(body.name || "Relay"), type: body.type, url: String(body.url).replace(/\/+$/, ""), has_key: Boolean(body.key), enabled: true, status: {} };
         usage.sources.push(src);
         return json({ source: src });
       }

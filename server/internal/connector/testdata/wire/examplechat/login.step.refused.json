@@ -3,14 +3,14 @@
   "fields": [
     {
       "name": "base_url",
-      "label": "wechat-connector 地址",
-      "placeholder": "https://wechat-connector.example.com"
+      "label": "服务地址",
+      "placeholder": "https://chat.example.com"
     },
     {
       "name": "app_key",
       "label": "应用密钥",
       "secret": true,
-      "placeholder": "wcpat_…"
+      "placeholder": "example-key"
     }
   ],
   "error": "应用密钥无效或已被撤销。"

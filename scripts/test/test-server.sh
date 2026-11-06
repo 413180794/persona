@@ -20,7 +20,7 @@ rsync -a --delete schema/extension/ "$H":"$D/schema/extension/"
 # and the resolution ones check the apps' Swift sources against them.
 rsync -a --delete spec/ "$H":"$D/spec/"
 rsync -a --delete --prune-empty-dirs --include '*/' --include '*.swift' --exclude '*' apple/ "$H":"$D/apple/"
-# Guide tests check a doc against the fixtures it describes (connector/conformance reads docs/wechat-connector.md).
+# Some tests read docs next to the code they describe (docs/**/*.md).
 rsync -a --delete --prune-empty-dirs --include '*/' --include '*.md' --exclude '*' docs/ "$H":"$D/docs/"
 rsync -a scripts/test/server_test_env.py "$H":"$D/server_test_env.py"
 RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)

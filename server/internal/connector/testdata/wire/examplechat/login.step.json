@@ -1,0 +1,17 @@
+{
+  "step": "connect",
+  "fields": [
+    {
+      "name": "base_url",
+      "label": "服务地址",
+      "placeholder": "https://chat.example.com"
+    },
+    {
+      "name": "app_key",
+      "label": "应用密钥",
+      "secret": true,
+      "placeholder": "example-key"
+    }
+  ],
+  "hint": "在示例聊天的开发者设置里创建一把「读取 + 事件」应用密钥填在这里。登录后，私聊会进入 Persona 的知识库和收件箱；群里只有 @ 你的消息进收件箱（可在 设置 › 插件 里调整）。应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。"
+}

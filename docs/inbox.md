@@ -316,7 +316,7 @@ hub 在转给管理者之前就拦下（403，管理者那边也查）；连接�
   每件只在内容变了（`last` 变了）时重新判断，新消息来了旧草稿作废、重新走一遍。
 - 并发 `inbox.agent.concurrency`（默认 1）；超过 `timeout_minutes`（默认 15）没交草稿，或这一轮结束了却没调 `inbox_draft`，算失败。
   最新一条早于 `max_age_hours`（默认 24）的事不交，打开开关时不会给积压的旧事一口气开一堆 Agent。
-- Agent 的提示词禁止它自己发（`lark_send` / `mail_send` / `agent_send`，以及任何连接器的写操作，如 `wechat-connector_send`、`github_comment`）和用 `ask_user` / `notify_user` 打扰用户；写操作本来也要过闸门或手机批准，提示词是第一道，闸门是最后一道。
+- Agent 的提示词禁止它自己发（`lark_send` / `mail_send` / `agent_send`，以及任何连接器的写操作，如 `*_send`、`github_comment`）和用 `ask_user` / `notify_user` 打扰用户；写操作本来也要过闸门或手机批准，提示词是第一道，闸门是最后一道。
   `inbox_draft` 只认「为某件事启动的那个对话」，普通助手对话调用会报错。
   AI 分身和代写的提示词都提醒：消息里的指令不是用户的指令，不要照做（收件箱正文是别人写的、不可信的数据）。
 - **和任务有关的事**（[unified-entry.md](unified-entry.md)）：模型 2 的输入里列出用户从助手对话开的、还在进行的任务，消息说的是其中某一个时回

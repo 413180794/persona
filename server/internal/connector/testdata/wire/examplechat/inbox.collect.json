@@ -1,24 +1,24 @@
 {
   "things": [
     {
-      "thread": "primary.example_room_a@chatroom",
+      "thread": "primary.group_example_1",
       "kind": "mention",
       "at": "2026-11-04T08:26:00.000Z",
       "last": "6",
       "label": "被 @",
-      "title": "微信群（…om_a）",
+      "title": "示例群",
       "sender": "Example A",
       "preview": "@示例用户 请看一下这个合成文档",
       "context": "Example A（11-04 08:21）：大家好，今天的合成会议改到下午。\nExample A（11-04 08:26）：@示例用户 请看一下这个合成文档",
       "tags": [
         {
           "key": "chat",
-          "value": "primary.example_room_a@chatroom",
-          "name": "微信群（…om_a）"
+          "value": "primary.group_example_1",
+          "name": "示例群"
         },
         {
           "key": "sender",
-          "value": "wxid_example_a",
+          "value": "user_example_a",
           "name": "Example A"
         }
       ],
@@ -27,7 +27,7 @@
       }
     },
     {
-      "thread": "primary.wxid_example_a",
+      "thread": "primary.user_example_a",
       "kind": "dm",
       "at": "2026-11-04T08:25:00.000Z",
       "last": "5",

@@ -17,7 +17,7 @@ const testKey = "ag-test-key-0123456789"
 
 var now = time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 
-// fakeGateway is relay-history as far as this adapter sees it: the account list, the stored usage, and a log of every
+// fakeGateway is a relay as far as this adapter sees it: the account list, the stored usage, and a log of every
 // request so that a test can say nothing else was called.
 type fakeGateway struct {
 	mu       sync.Mutex
@@ -66,7 +66,7 @@ func (g *fakeGateway) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *fakeGateway) cfg() Config {
-	return Config{Type: Typerelay-history, URL: g.srv.URL + "/", Key: g.key}
+	return Config{Type: TypeRelay, URL: g.srv.URL + "/", Key: g.key}
 }
 
 const twoAccounts = `{"accounts":[
@@ -90,7 +90,7 @@ func echoUsage(body string) func([]string) (int, string) {
 	return func([]string) (int, string) { return 200, body }
 }
 
-func Testrelay-historyMapsAccountsAndWindows(t *testing.T) {
+func TestRelayMapsAccountsAndWindows(t *testing.T) {
 	g := newGateway(t, twoAccounts, echoUsage(twoUsage))
 	res, err := Fetch(context.Background(), g.cfg(), now)
 	if err != nil {
@@ -129,7 +129,7 @@ func Testrelay-historyMapsAccountsAndWindows(t *testing.T) {
 	}
 }
 
-func Testrelay-historyOnlyReadsAndNeverRefreshes(t *testing.T) {
+func TestRelayOnlyReadsAndNeverRefreshes(t *testing.T) {
 	g := newGateway(t, twoAccounts, echoUsage(twoUsage))
 	if _, err := Fetch(context.Background(), g.cfg(), now); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func Testrelay-historyOnlyReadsAndNeverRefreshes(t *testing.T) {
 	}
 }
 
-func Testrelay-historyAsksForTheAccountsOfTheListOnly(t *testing.T) {
+func TestRelayAsksForTheAccountsOfTheListOnly(t *testing.T) {
 	var asked []string
 	g := newGateway(t, twoAccounts, func(ids []string) (int, string) { asked = ids; return 200, `{"accounts":[]}` })
 	res, err := Fetch(context.Background(), g.cfg(), now)
@@ -157,7 +157,7 @@ func Testrelay-historyAsksForTheAccountsOfTheListOnly(t *testing.T) {
 	}
 }
 
-func Testrelay-historyBatchesAndCaps(t *testing.T) {
+func TestRelayBatchesAndCaps(t *testing.T) {
 	var list []string
 	for i := 0; i < 650; i++ {
 		list = append(list, fmt.Sprintf(`{"id":"id%d","name":"n","provider":"codex","status":"active"}`, i))
@@ -175,7 +175,7 @@ func Testrelay-historyBatchesAndCaps(t *testing.T) {
 	}
 }
 
-func Testrelay-historyOldGatewayReturnsABareArray(t *testing.T) {
+func TestRelayOldGatewayReturnsABareArray(t *testing.T) {
 	g := newGateway(t, `[{"id":"c1","name":"x","provider":"codex","status":"active","proxy_url":"socks5://secret","email":"a@example.com"}]`, echoUsage(twoUsage))
 	res, err := Fetch(context.Background(), g.cfg(), now)
 	if err != nil || len(res.Accounts) != 1 || res.Accounts[0].Name != "x" {
@@ -187,7 +187,7 @@ func Testrelay-historyOldGatewayReturnsABareArray(t *testing.T) {
 	}
 }
 
-func Testrelay-historyWindowFromLimitAndRemaining(t *testing.T) {
+func TestRelayWindowFromLimitAndRemaining(t *testing.T) {
 	g := newGateway(t, `{"accounts":[{"id":"c1","name":"x","provider":"codex","status":"active"}]}`, echoUsage(`{"accounts":[{"account_id":"c1","windows":[
 	  {"kind":"monthly","remaining":25,"limit":100,"checked_at":"2026-11-05T08:00:00Z"},
 	  {"kind":"daily","checked_at":"2026-11-05T08:00:00Z"}]}]}`))
@@ -201,7 +201,7 @@ func Testrelay-historyWindowFromLimitAndRemaining(t *testing.T) {
 	}
 }
 
-func Testrelay-historyErrors(t *testing.T) {
+func TestRelayErrors(t *testing.T) {
 	cases := []struct {
 		name string
 		mod  func(g *fakeGateway)
@@ -259,7 +259,7 @@ func TestUnreachableAndTimeout(t *testing.T) {
 	defer slow.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if _, err := Fetch(ctx, Config{Type: Typerelay-history, URL: slow.URL, Key: testKey}, now); CodeOf(err) != CodeTimeout {
+	if _, err := Fetch(ctx, Config{Type: TypeRelay, URL: slow.URL, Key: testKey}, now); CodeOf(err) != CodeTimeout {
 		t.Errorf("slow: %v", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestOversizedAnswerIsRefused(t *testing.T) {
 		_, _ = io.WriteString(w, `]}`)
 	}))
 	defer big.Close()
-	if _, err := Fetch(context.Background(), Config{Type: Typerelay-history, URL: big.URL, Key: testKey}, now); CodeOf(err) != CodeTooLarge {
+	if _, err := Fetch(context.Background(), Config{Type: TypeRelay, URL: big.URL, Key: testKey}, now); CodeOf(err) != CodeTooLarge {
 		t.Errorf("%v", err)
 	}
 }
@@ -352,7 +352,7 @@ func TestUnknownTypeAndBadAddress(t *testing.T) {
 	if _, err := Fetch(context.Background(), Config{Type: "nope", URL: "https://gw.example.com"}, now); CodeOf(err) != CodeBadConfig {
 		t.Error(err)
 	}
-	if _, err := Fetch(context.Background(), Config{Type: Typerelay-history, URL: "https://u:p@gw.example.com"}, now); CodeOf(err) != CodeBadConfig {
+	if _, err := Fetch(context.Background(), Config{Type: TypeRelay, URL: "https://u:p@gw.example.com"}, now); CodeOf(err) != CodeBadConfig {
 		t.Error(err)
 	}
 }

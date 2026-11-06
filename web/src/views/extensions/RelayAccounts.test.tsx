@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// quota-relay-history's sidebar page 「relay-history 账号」 (nwverse/persona#4576) drawn by the real ExtensionUI from the views the
-// extension exports (testdata/relay-history-accounts-view.json, made-up accounts; the extension repo's
-// extensions/quota-relay-history/sidebar_test.go TestExportFixture writes it). The hub is faked: drawing answers the default
+// quota-relay's sidebar page 「中转账号」 (nwverse/persona#4576) drawn by the real ExtensionUI from the views the
+// extension exports (testdata/relay-accounts-view.json, made-up accounts; the extension repo's
+// the extension's TestExportFixture writes it). The hub is faked: drawing answers the default
 // view, or an account's page when the state names one; the type, the status and the search answer what the extension
 // would. Checked: the search box and the status filter once at the top, the type segmented and the counts in the first
 // section, a section per group with its rows, a row pushing the account's page (and back), no launcher anywhere.
@@ -9,7 +9,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UISection, UIView } from "../../lib/extension-ui";
-import fixture from "./testdata/relay-history-accounts-view.json";
+import fixture from "./testdata/relay-accounts-view.json";
 
 type Sent = { action?: string; state?: string; values?: Record<string, string> };
 const hub = vi.hoisted(() => ({ sent: [] as Sent[], answer: null as null | ((s: Sent) => unknown) }));
@@ -80,7 +80,7 @@ afterEach(() => {
 
 async function open() {
   // as the sidebar's nav page mounts it (ExtensionSlots.tsx ExtensionNavPage): the page's header has the title
-  act(() => root.render(<ExtensionUI extension="quota-relay-history" ui="sidebar" title="relay-history 账号" bare history={false} />));
+  act(() => root.render(<ExtensionUI extension="quota-relay" ui="sidebar" title="中转账号" bare history={false} />));
   await settle();
   return host;
 }
@@ -93,7 +93,7 @@ const click = async (el: Element | undefined | null) => {
   await settle();
 };
 
-describe("relay-history 账号 (quota-relay-history's sidebar page)", () => {
+describe("中转账号 (quota-relay's sidebar page)", () => {
   it("draws the default view: one search box and one status filter at the top, then every group", async () => {
     const page = await open();
     // the search box and the filter once, above every section, not inside one
@@ -192,7 +192,7 @@ describe("relay-history 账号 (quota-relay-history's sidebar page)", () => {
     expect(page.querySelector('input[type="search"]')).toBeNull();
     expect(page.textContent).not.toMatch(/启动器|Key/);
     // back to the list
-    const back = [...page.querySelectorAll("button")].find((b) => b.querySelector(".truncate")?.textContent === "relay-history 账号");
+    const back = [...page.querySelectorAll("button")].find((b) => b.querySelector(".truncate")?.textContent === "中转账号");
     await click(back);
     expect(page.querySelector("h2")).toBeNull();
     expect(sectionTitled(page, "Kiro · Free · 60")).toBeTruthy();

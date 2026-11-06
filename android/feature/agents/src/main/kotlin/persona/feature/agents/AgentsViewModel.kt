@@ -503,7 +503,7 @@ internal class AgentsViewModel(
             try {
                 interactions.resolve(interaction.id, resolution)
                 _delivery.update { it + (interaction.id to RequestDelivery.Sent) }
-                _notice.value = AgentText(R.string.agents_request_sent)
+                _notice.value = AgentText.receipt(persona.feature.chat.AnswerReceipt(latest, resolution))
                 _haptics.tryEmit(Haptic.Success)
             } catch (e: CancellationException) {
                 _delivery.update { it + (interaction.id to RequestDelivery.Unknown) }

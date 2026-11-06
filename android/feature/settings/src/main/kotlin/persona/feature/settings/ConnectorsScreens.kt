@@ -911,7 +911,9 @@ internal fun ConnectorSignInStep(
                         feedback?.notice(res.getString(R.string.settings_src_copied))
                     })
                 }
-                SignInWaiting(stringResource(R.string.settings_src_channel_waiting_authorize))
+                // A pair code is sent to the bot from the chat app, not authorized on a page (as on 设置 › 渠道).
+                SignInWaiting(if (prompt.kind == "pair_code") stringResource(R.string.settings_src_channel_waiting_send, name)
+                    else stringResource(R.string.settings_src_channel_waiting_authorize))
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                     prompt.url?.takeIf { StepView.isWebLink(it) }?.let { url ->
                         JButton(stringResource(R.string.settings_src_open_web), { runCatching { uri.openUri(url) } }, Modifier.weight(1f),

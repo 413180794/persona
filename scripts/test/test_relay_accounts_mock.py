@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The mock's quota-relay-history sidebar page (#4576): it lists the nav_page and answers with the fixture's Views; no port."""
+"""The mock's quota-relay sidebar page (#4576): it lists the nav_page and answers with the fixture's Views; no port."""
 import importlib.util
 import json
 from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).parents[2]
-spec = importlib.util.spec_from_file_location('relay-history_accounts', ROOT / 'scripts/mock/relay-history_accounts.py')
+spec = importlib.util.spec_from_file_location('relay_accounts', ROOT / 'scripts/mock/relay_accounts.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-FIXTURE = ROOT / 'apple/PersonaTests/Fixtures/relay-history-accounts-view.json'
-PATH = '/api/v1/extensions/quota-relay-history/-/ui/sidebar'
+FIXTURE = ROOT / 'web/src/views/extensions/testdata/relay-accounts-view.json'
+PATH = '/api/v1/extensions/quota-relay/-/ui/sidebar'
 
 
 class Handler:
@@ -22,9 +22,9 @@ class Handler:
         self.answer = answer
 
 
-class relay-historyAccountsMockTests(unittest.TestCase):
+class RelayAccountsMockTests(unittest.TestCase):
     def setUp(self):
-        self.mock = module.relay-historyAccountsMock(FIXTURE)
+        self.mock = module.RelayAccountsMock(FIXTURE)
 
     def post(self, request):
         h = Handler('POST')
@@ -64,13 +64,13 @@ class relay-historyAccountsMockTests(unittest.TestCase):
 
     def testTheFirstRenderCanStartElsewhere(self):
         for start in ('kiro', 'detail'):
-            self.mock = module.relay-historyAccountsMock(FIXTURE, start)
+            self.mock = module.RelayAccountsMock(FIXTURE, start)
             first = self.post({})['view']
             self.assertEqual(first, self.mock.views[start])
             # Drawn again (refresh_after) with its own state: still that view.
             self.assertEqual(self.post({'state': first['state']})['view'], first)
         with self.assertRaises(ValueError):
-            module.relay-historyAccountsMock(FIXTURE, 'search')
+            module.RelayAccountsMock(FIXTURE, 'search')
 
     def testOtherRoutesAreNotIntercepted(self):
         self.assertFalse(self.mock.route(Handler('POST'), '/api/v1/extensions/other/-/ui/sidebar', b'{}'))

@@ -46,7 +46,7 @@ const fresh = (): UsageSources => ({
   poll_minutes: 5,
   limit: 8,
   sources: [
-    { id: "s1", name: "relay-history", type: "relay-history", url: "https://gateway.example.com", has_key: true, enabled: true, status: { ok_at: new Date(Date.now() - 120_000).toISOString(), seen: { accounts: 12, windows: 31, listed: 14, providers: { codex: 12 } } } },
+    { id: "s1", name: "Relay", type: "relay", url: "https://gateway.example.com", has_key: true, enabled: true, status: { ok_at: new Date(Date.now() - 120_000).toISOString(), seen: { accounts: 12, windows: 31, listed: 14, providers: { codex: 12 } } } },
     { id: "s2", name: "Team pool", type: "generic", url: "https://pool.example.com/usage", has_key: false, enabled: false, status: {} },
   ],
 });
@@ -63,7 +63,7 @@ beforeEach(() => {
     const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
     if (path === "/usage-sources" && init.method === "GET") return reply(view);
     if (path === "/usage-sources" && init.method === "PUT") return reply({ ...view, ...body });
-    if (path === "/usage-sources" && init.method === "POST") return reply({ source: { id: "s3", name: body.name || "relay-history", type: body.type, url: body.url, has_key: Boolean(body.key), enabled: true, status: {} } });
+    if (path === "/usage-sources" && init.method === "POST") return reply({ source: { id: "s3", name: body.name || "Relay", type: body.type, url: body.url, has_key: Boolean(body.key), enabled: true, status: {} } });
     if (path === "/usage-sources/test") return reply(testAnswer);
     if (path === "/usage-sources/s1" && init.method === "PUT" && body.url === "https://other.example.com" && !body.key) return reply({ error: "要填这个来源的 Key", code: "key_required" }, 400);
     if (path.startsWith("/usage-sources/")) return reply({ source: view.sources[0], ok: true });
@@ -90,7 +90,7 @@ const open = async () => {
 describe("the usage sources page", () => {
   it("lists the sources with how they are doing and never a key", async () => {
     await open();
-    expect(text()).toContain("relay-history");
+    expect(text()).toContain("Relay");
     expect(text()).toContain("Team pool");
     expect(text()).toContain("12 个账号");
     expect(text()).toContain("31 个窗口");
@@ -128,11 +128,11 @@ describe("the usage sources page", () => {
     await act(async () => byText(dialog()!, "测试连接")!.click());
     await flush();
     expect(dialog()!.textContent).toContain("连上了：12 个账号、31 个窗口 (codex 8 · claude 4)");
-    expect(calls.find((c) => c.path === "/usage-sources/test")?.body).toMatchObject({ type: "relay-history", url: "https://gateway.example.com/", key: SECRET });
+    expect(calls.find((c) => c.path === "/usage-sources/test")?.body).toMatchObject({ type: "relay", url: "https://gateway.example.com/", key: SECRET });
     expect(calls.some((c) => c.method === "POST" && c.path === "/usage-sources")).toBe(false);
     await act(async () => (byText(dialog()!, "保存") as HTMLButtonElement).click());
     await flush();
-    expect(calls.find((c) => c.method === "POST" && c.path === "/usage-sources")?.body).toMatchObject({ type: "relay-history", url: "https://gateway.example.com/", key: SECRET });
+    expect(calls.find((c) => c.method === "POST" && c.path === "/usage-sources")?.body).toMatchObject({ type: "relay", url: "https://gateway.example.com/", key: SECRET });
     expect(dialog()).toBeNull();
   });
 

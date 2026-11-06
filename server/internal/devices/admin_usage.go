@@ -164,7 +164,7 @@ func applyUsageInput(s UsageSourceConfig, in usageSourceInput, isNew bool) (Usag
 	if in.Type != nil {
 		s.Type = strings.TrimSpace(*in.Type)
 	}
-	if s.Type != usagesource.Typerelay-history && s.Type != usagesource.TypeGeneric {
+	if s.Type != usagesource.TypeRelay && s.Type != usagesource.TypeGeneric {
 		return s, "invalid_type", i18n.Err("hub-admin_usage.invalid_type")
 	}
 	if in.URL != nil {
@@ -178,8 +178,8 @@ func applyUsageInput(s UsageSourceConfig, in usageSourceInput, isNew bool) (Usag
 	if in.Name != nil {
 		s.Name = strings.TrimSpace(*in.Name)
 	}
-	if s.Name == "" && s.Type == usagesource.Typerelay-history {
-		s.Name = "relay-history"
+	if s.Name == "" && s.Type == usagesource.TypeRelay {
+		s.Name = "Relay"
 	}
 	if !validUsageName(s.Name) {
 		return s, "invalid_name", i18n.Err("hub-admin_usage.invalid_name")
@@ -200,7 +200,7 @@ func applyUsageInput(s UsageSourceConfig, in usageSourceInput, isNew bool) (Usag
 			return s, "key_required", i18n.Err("hub-admin_usage.key_required")
 		}
 	}
-	if s.Key == "" && s.Type == usagesource.Typerelay-history {
+	if s.Key == "" && s.Type == usagesource.TypeRelay {
 		return s, "key_required", i18n.Err("hub-admin_usage.key_required")
 	}
 	if in.Enabled != nil {
@@ -395,7 +395,7 @@ func (d *Devices) adminUsageRoutes(mux *http.ServeMux) {
 			return
 		}
 		cfg := usagesource.Config{Type: strings.TrimSpace(in.Type), URL: in.URL, Key: strings.TrimSpace(in.Key)}
-		if cfg.Type != usagesource.Typerelay-history && cfg.Type != usagesource.TypeGeneric {
+		if cfg.Type != usagesource.TypeRelay && cfg.Type != usagesource.TypeGeneric {
 			writeErrCode(w, http.StatusBadRequest, "invalid_type", i18n.Err("hub-admin_usage.invalid_type"))
 			return
 		}

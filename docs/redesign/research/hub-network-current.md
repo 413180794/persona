@@ -420,7 +420,7 @@ TLS 指纹本身也能标识 hub，但内网明文连接没有指纹，数据作
 | `docs/android.md:13` | 配对：`jarvis://pair?url=…&token=…` | 新格式 |
 | `docs/android.md:47` | 「hub 默认是 HTTP（内网 / VPN），`network_security.xml` 放开了明文流量；不要把 hub 暴露到公网」 | 改成明文只给内网 / VPN、公网走 TLS + 钉扎；说明为什么钉扎只能在代码里做（6.2） |
 | `docs/android.md:84-85` | USB `adb reverse` 联调用 `http://127.0.0.1:18660` | 回环明文继续允许，保留 |
-| `docs/intents.md:51`、`:56` | 「手机要在公司网络或 removed 上」「hub 是公司内网的明文 HTTP」 | 改成通用说法；`.background` 模式的理由（网络不可达不拉起 App）仍然成立 |
+| `docs/intents.md:51`、`:56` | 「手机要在公司网络或 VPN 上」「hub 是公司内网的明文 HTTP」 | 改成通用说法；`.background` 模式的理由（网络不可达不拉起 App）仍然成立 |
 | `docs/ios.md:306`、`:318-320`、`:343` | 配对信息存 Keychain；手表配对；`jarvis://pair` 链接 | 补：候选地址 / 指纹 / hub_id 也在配对信息里；手表 token 改存 Keychain；链接配对要确认 |
 | `docs/testing.md:50`、`scripts/mock/mock_hub.py:6`、各 UI 测试 | `-pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1…&token=mock"` | 新规则必须继续允许「回环 + 明文 + token」，否则 UI 测试全挂 |
 

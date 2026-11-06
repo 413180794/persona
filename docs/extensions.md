@@ -88,7 +88,7 @@ Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展�
 | Go 包 `internal/plugin`、`plugin/host`、`plugin/serve`、`plugin/conformance` | `internal/extension/…` | — |
 | 数据库表 `plugins`、`plugin_secrets`、`plugin_audit`、`plugin_markets`，设置键 `plugin_upgrades`，模型用途 `plugin.<id>`，hub↔node 的 `plugin_skills`、`~/.persona/plugin-skills/`，插槽名 `plugin_page`、图标名 `plugin`，错误码 `plugin_failed` / `invalid_plugin` / `no_plugins` | **不改** | 持久化和内部协议的身份（同 Jarvis → Persona 的做法，`docs/rename.md`）；改了要迁数据、node 和 hub 也不同步 |
 
-**市场搬家**：仓库改名（`nwverse/removed` → `nwverse/persona-removed`）后，从它装的扩展来源是 `market:<市场 id>/<扩展 id>`，市场 id 不能变：
+**市场搬家**：市场的仓库改名或搬家（比如 `<org>/<旧仓库>` → `<org>/<新仓库>`）后，从它装的扩展来源是 `market:<市场 id>/<扩展 id>`，市场 id 不能变：
 用 `personad extension market set-spec <市场 id> <新地址>`（接口 `PUT /api/v1/extensions/-/markets/{id}` `{spec}`）原地改地址，先用市场原来的 token 读一次新地址，读不到什么都不改。
 
 **保留多久**：兼容层至少留到 **2027-05-05**（半年，覆盖已发布 TestFlight 构建的 90 天有效期和安卓的老版本），并且 hub 日志里老接口**连续 30 天没有调用**。
@@ -374,7 +374,7 @@ hub 里有一个**出网代理**（`server/internal/extension/egress`），第�
 
 | | 默认 |
 | --- | --- |
-| 从**受信任的市场**装的：市场记下的签名公钥（「签名」）是官方两个市场的（`persona-extensions`、`persona-removed`），或在 hub.json 的 `trusted_extension_markets` 里（key id，或 `market.pub` 那一行 `ed25519:…`） | 不开 |
+| 从**受信任的市场**装的：市场记下的签名公钥（「签名」）是官方市场的（`persona-extensions`），或在 hub.json 的 `trusted_extension_markets` 里（自己的私有市场就加在这里）（key id，或 `market.pub` 那一行 `ed25519:…`） | 不开 |
 | 别的：其他市场（没签名的也算）、`dir:`、`file:`、`https://…`、上传 | 开 |
 | **#1856 部署前已经装好的**（hub 第一次带着沙箱起来时） | 记成「不开」，照原样跑；要开用下面的命令 |
 
@@ -2010,8 +2010,9 @@ Swift `apple/Shared/Generated/ExtensionWire.swift`、Kotlin `android/core/contra
 不认识的贡献回 `no_contribution`、每个 `ui` 贡献画出来的 View 在它的插槽画得了（见「UI 插槽」「兼容」）、关掉 stdin 后 5 秒内退出。任何语言写的程序用 `conformance.Program(t, path, args…)` 跑，Go 的用 `conformance.Serve`。
 连接器的 `connector/conformance.Check` 对每个连接器两种开头各跑一遍（直接调 / 经协议，结果一字不差）。
 
-外部程序的一个完整例子是微信（wechat-connector）：外部 API 服务 wechat-connector 的连接器扩展，不在本仓库，以扩展包（`.tar.gz` 加 sha256）交付，
-用 `file:` 安装或在管理界面上传，用扩展协议 1 加连接器协议 v2 和 hub 说话。接入手册见 [wechat-connector.md](wechat-connector.md)；
+外部程序的完整例子是市场里的连接器扩展（比如个人微信的）：不在本仓库，以扩展包（`.tar.gz` 加 sha256）交付，
+从扩展市场安装（也可以 `file:` 安装或在管理界面上传），用扩展协议 1 加连接器协议 v2 和 hub 说话，接入手册由扩展自己的仓库发布；
+本仓库用中性的示例连接器 `examplechat` 的夹具代表这类程序（`schema/extension/examples/Manifest.examplechat.json`）；
 连接器一侧逐个能力的检查（`CheckProgram`、合成的线上夹具）见 [connector-protocol.md](connector-protocol.md)「一致性测试」。
 
 ## 写扩展：SDK、模板和命令行
@@ -2098,7 +2099,7 @@ hub.json 里写 `"command": "/usr/bin/node"`、`"args": ["…/main.mjs"]` 的外
 
 ## Telegram：从内置扩展到扩展（#1704）
 
-Telegram 连接器原来是内置扩展 `telegram`（`jarvisd-telegram`，在 personad 旁边）。2026-11-05 起它是扩展 `telegram`，代码不在本仓库：0.1.2 之前在私有的 `nwverse/persona-removed`，0.1.3 起在 `nwverse/persona-extensions` 的 `extensions/telegram/`（#2057），从那个市场装和升级。它经 TCP 直连 Telegram 的数据中心，不能在沙箱里跑（官方市场装的默认不进沙箱，见「沙箱」）。
+Telegram 连接器原来是内置扩展 `telegram`（`jarvisd-telegram`，在 personad 旁边）。2026-11-05 起它是扩展 `telegram`，代码不在本仓库：0.1.2 之前在一个私有的扩展仓库，0.1.3 起在 `nwverse/persona-extensions` 的 `extensions/telegram/`（#2057），从那个市场装和升级。它经 TCP 直连 Telegram 的数据中心，不能在沙箱里跑（官方市场装的默认不进沙箱，见「沙箱」）。
 连接器 id 还是 `telegram`，所以 `connector_secrets` 里的登录、收件箱、知识库、连接器的开关和选项都按同一个 id 接着用，装上不用重新登录。
 交接时注册表让内置的给同 id 的已装扩展让位（`Registry.Yields`）：先停掉内置的进程再起扩展的，同一个 Telegram 会话不会两边同时连。
 内置的删掉以后，没装扩展的 hub 上就没有 Telegram 连接器（App 按 hub 列出的连接器显示，不出现）；那一行登录留在库里，装上扩展接着用。

@@ -11,8 +11,8 @@ import (
 )
 
 // usage.gateway_accounts (#4576, docs/extensions.md「额度」, docs/usage-windows.md「网关的账号清单」): the account
-// lists of the account-pool gateways among the hub's usage sources, for an extension granted usage_gateways (the
-// relay-history quota extension's sidebar page lists every account of the gateway with it, not only those one launcher's
+// lists of the account-pool gateways among the hub's usage sources, for an extension granted usage_gateways (a relay's quota
+// extension lists on its sidebar page every account of the gateway, not only those one launcher's
 // key reaches). The devices in this process keep the lists from their last read of each source; nothing is asked of a
 // gateway here, and no key or address is in the answer.
 

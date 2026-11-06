@@ -12,7 +12,6 @@
   "telegram_open_title": "Reply in Telegram",
   "telegram_reads": "its chats and groups",
   "telegram_sign_in_footer": "API credentials and the sign-in are stored encrypted on the hub, and only api_id is shown. Both are deleted when you sign out.",
-  "wechat-connector_sign_in_footer": "The app key is stored encrypted on the hub, and only the account name is shown. It's deleted when you sign out.",
   "switch_footer_bot_on": "Turning it off stops {name}. You stay signed in.",
   "switch_footer_bot_off": "Turn it on to sign in.",
   "switch_footer_on": "Turning it off stops reading {name}. You stay signed in, and data already saved is kept.",

@@ -2,7 +2,7 @@
   "batches": [
     {
       "chat": {
-        "id": "primary.wxid_example_a",
+        "id": "primary.user_example_a",
         "name": "Example A",
         "kind": "dm",
         "updated_at": "2026-11-04T08:24:00.000Z"
@@ -15,11 +15,11 @@
           "type": "TEXT",
           "text": "Synthetic question: are you free today?",
           "at": "2026-11-04T08:22:00.000Z",
-          "sender_id": "wxid_example_a",
+          "sender_id": "user_example_a",
           "sender_handles": [
             {
-              "kind": "wechat",
-              "value": "wxid_example_a"
+              "kind": "examplechat",
+              "value": "user_example_a"
             }
           ],
           "sender_name": "Example A"
@@ -31,11 +31,11 @@
           "type": "IMAGE",
           "text": "[图片]",
           "at": "2026-11-04T08:23:00.000Z",
-          "sender_id": "wxid_example_a",
+          "sender_id": "user_example_a",
           "sender_handles": [
             {
-              "kind": "wechat",
-              "value": "wxid_example_a"
+              "kind": "examplechat",
+              "value": "user_example_a"
             }
           ],
           "sender_name": "Example A"

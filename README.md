@@ -160,32 +160,9 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 | GitHub | 收件箱、搜索和读取；评论、review 过确认闸门 |
 | iMessage | 读 Mac 上的「信息」，要给那台 Mac 上的 personad 完全磁盘访问权限 |
 | Telegram | 你自己的账号，只读；从扩展市场装 |
-| 微信 | 经 wechat-connector 的公开 API 接入（另行部署的服务，填地址和应用密钥），私聊和群里 @ 你的进收件箱；发送过三道锁（[docs/wechat-connector.md](docs/wechat-connector.md)） |
+| 微信 | 个人微信经连接器扩展接入（从扩展市场安装，扩展由它自己的仓库发布），私聊和群里 @ 你的进收件箱；发送要在手机上批准 |
 
 连接器怎么接、怎么加新的，见 [docs/connectors.md](docs/connectors.md)。
-
-### 微信（wechat-connector）
-
-<table>
-<tr>
-<td width="50%" valign="top">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/wechat-connector-inbox-dark.webp">
-  <img src="docs/assets/readme/wechat-connector-inbox-light.webp" alt="网页版收件箱只看微信：示例项目群里有人 @你 问场地和预算，排在「需要你」，下面是 AI 分身草拟的回复和修改、发送按钮；右边打开这个群的会话，发送人带头像，有一张海报缩略图和三条示例消息；下面还有一条私聊和一条「知悉即可」" width="100%">
-</picture><br>
-<sub>收件箱只看微信：群里 @ 你的那条排在最前，AI 分身已经起草了回复，右边是这个群的会话。</sub>
-</td>
-<td width="50%" valign="top">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/wechat-connector-signin-dark.webp">
-  <img src="docs/assets/readme/wechat-connector-signin-light.webp" alt="设置 › 连接器 › 微信的登录步骤：服务器地址填 https://wechat-connector.example.com，应用密钥显示成圆点，下方是进知识库、进收件箱两个开关" width="100%">
-</picture><br>
-<sub>接入只要两项：wechat-connector 服务的地址和一把只读的应用密钥。</sub>
-</td>
-</tr>
-</table>
-
-图里的人、群和消息都是假 hub 的演示数据。
 
 ## 数据和安全
 
@@ -225,6 +202,5 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 - 测试命令和截图清单见 [docs/testing.md](docs/testing.md)。
   运行中的 DEBUG App 可以用 `scripts/app/personactl.py` 读状态、导航和截图（[Runtime CLI](docs/runtime-cli.md)）。
 - 本页的图由 `scripts/assets/make_readme_assets.py` 生成：截图和录屏来自体验模式，徽章的版本号读自构建配置。
-  微信的两组截图由 `python3 scripts/assets/wechat-connector_shots.py` 重新生成（假 hub + 网页客户端，要先在 `web/` 里 `npm ci`、装好 Playwright for Python 和 Pillow）；网页或 wechat-connector 连接器的界面改了就重跑一次。
 
 <sub>第三方组件的许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。</sub>

@@ -43,8 +43,13 @@ internal data class InteractionReply(
 ) {
     val withdraw: Boolean get() = submission.withdraw
 
-    /** The words the chat shows for it: the answer that took effect, or why this one was not delivered. */
-    fun notice(res: Resources, interaction: Interaction): String = when {
+    /**
+     * The words the chat shows for it: what [sent] answered (#4740), the answer that took effect, or why this one was
+     * not delivered.
+     */
+    fun notice(res: Resources, interaction: Interaction, sent: Resolution? = null): String = when {
+        submission == InteractionSubmission.Answered && sent != null ->
+            AnswerReceipt(interaction, sent).text(res) ?: res.getString(submission.notice)
         effective != null -> res.getString(R.string.chat_interaction_already_with, AnsweredText.summary(res, interaction, effective))
         submission == InteractionSubmission.ResolvedElsewhere -> res.getString(when (endedStatus) {
             "expired" -> R.string.chat_interaction_ended_expired

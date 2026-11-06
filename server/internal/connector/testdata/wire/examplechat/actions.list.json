@@ -1,0 +1,26 @@
+{
+  "tools": [
+    {
+      "name": "examplechat_send",
+      "description": "给一个联系人发一条纯文本消息（最长 4000 字）。每次发送都会先在用户的手机上弹出确认卡片，写明发给谁和全文，用户批准后才发出。只能发给个人，不能发到群。收件人要先用 examplechat_resolve 确认，不要猜。结果以服务的回执为准：只有返回「已发送」才表示发出，「已提交」「结果未知」都不要重发。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "chat": {
+            "type": "string",
+            "description": "收件人，格式 <账号>.<会话 id>，从 examplechat_resolve 或 examplechat_chats 里取（个人联系人）。"
+          },
+          "text": {
+            "type": "string",
+            "description": "要发送的纯文本，1 到 4000 个字符。"
+          }
+        },
+        "required": [
+          "chat",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

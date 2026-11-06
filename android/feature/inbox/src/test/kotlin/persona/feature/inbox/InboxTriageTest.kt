@@ -19,7 +19,7 @@ class InboxTriageTest {
         InboxTriage(state, reason, waiting, sources.toList())
 
     private val lark = InboxTriageSource("lark", "飞书", "unconfigured", waiting = 3)
-    private val wechat = InboxTriageSource("wechat-connector", "微信", "behind", waiting = 2)
+    private val chat = InboxTriageSource("examplechat", "示例聊天", "behind", waiting = 2)
 
     @Test fun readsTheHubsTriageAndNothingFromAnOlderHub() {
         val body = JsonCodec.parseToJsonElement("""{"items":[],"triage":{"state":"unconfigured","waiting":3,
@@ -40,10 +40,10 @@ class InboxTriageTest {
 
     @Test fun severalSourcesAreNot() {
         assertEquals(InboxTriageBanner("有 5 条消息在等分拣：新消息太多，正在排队", configure = false),
-            InboxTriageText.banner(res, triage("behind", 5, null, wechat, lark.copy(state = "behind"))))
+            InboxTriageText.banner(res, triage("behind", 5, null, chat, lark.copy(state = "behind"))))
         // A source with nothing waiting does not count: the one that waits is named.
-        assertEquals("有 2 条微信消息在等分拣：新消息太多，正在排队",
-            InboxTriageText.banner(res, triage("behind", 2, null, wechat, lark.copy(waiting = 0)))?.text)
+        assertEquals("有 2 条示例聊天消息在等分拣：新消息太多，正在排队",
+            InboxTriageText.banner(res, triage("behind", 2, null, chat, lark.copy(waiting = 0)))?.text)
         // No sources listed: how many, without a name.
         assertEquals("有 4 条消息在等分拣：分拣模型出错了", InboxTriageText.banner(res, triage("error", 4))?.text)
     }

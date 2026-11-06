@@ -1,0 +1,68 @@
+package persona.feature.chat
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import persona.core.contracts.DialogOption
+import persona.core.contracts.Interaction
+import persona.core.contracts.Question
+import persona.core.contracts.Resolution
+import persona.core.contracts.ScreenDialog
+
+/** Right after an answer reaches the hub, the notice says what was answered, not only that something was (#4740). */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
+class AnswerReceiptTest {
+    private val res get() = ApplicationProvider.getApplicationContext<Context>().resources
+
+    private val bash = Interaction("b", kind = "permission", toolName = "Bash",
+        toolInput = buildJsonObject { put("command", JsonPrimitive("./gradlew test")) })
+    private val rm = Interaction("r", kind = "permission", summary = "rm -rf build")
+    private val plan = Interaction("p", kind = "plan", plan = "## Use Kotlin\n1. Port it")
+    private val question = Interaction("q", kind = "question", questions = listOf(Question("Which language?")))
+    private val dialog = Interaction("s", kind = "screen", dialog = ScreenDialog(options = listOf(DialogOption("1", "Yes"), DialogOption("2", "No"))))
+
+    private fun sent(interaction: Interaction, resolution: Resolution) =
+        InteractionReply(InteractionSubmission.Answered).notice(res, interaction, resolution)
+
+    @Config(qualifiers = "zh")
+    @Test fun eachKindSaysWhatWasAnswered() {
+        assertEquals("已允许：./gradlew test", sent(bash, Resolution(allow = true)))
+        assertEquals("已总是允许：./gradlew test", sent(bash, Resolution(allow = true, always = true)))
+        assertEquals("已拒绝：rm -rf build", sent(rm, Resolution(allow = false)))
+        assertEquals("已批准计划", sent(plan, Resolution(approve = true, mode = "acceptEdits")))
+        assertEquals("已打回计划：shorter", sent(plan, Resolution(approve = false, feedback = "shorter")))
+        assertEquals("已回答：用 Kotlin", sent(question, Resolution(answers = mapOf("Which language?" to "用 Kotlin"))))
+        assertEquals("已回答：No", sent(dialog, Resolution(option = "2")))
+    }
+
+    @Config(qualifiers = "zh")
+    @Test fun nothingOfItsOwnKeepsTheOldNotice() {
+        assertEquals("已回传你的选择", sent(bash, Resolution(dismiss = true)))
+        assertEquals("已回传你的选择", sent(dialog, Resolution(keys = listOf("escape"))))
+        assertEquals("已回传你的选择", sent(question, Resolution(answers = emptyMap())))
+        assertEquals("已回传你的选择", sent(Interaction("e", kind = "elicitation"), Resolution(action = "accept")))
+        assertEquals("已回传你的选择", InteractionReply(InteractionSubmission.Answered).notice(res, bash))
+        assertNull(AnswerReceipt(bash, Resolution()).text(res))
+    }
+
+    @Config(qualifiers = "en")
+    @Test fun englishAndJapaneseReadInTheirOwnWords() {
+        assertEquals("Allowed: ./gradlew test", sent(bash, Resolution(allow = true)))
+        assertEquals("Plan approved", sent(plan, Resolution(approve = true)))
+        assertEquals("Your choice was sent back", sent(bash, Resolution(dismiss = true)))
+    }
+
+    @Config(qualifiers = "ja")
+    @Test fun japanese() {
+        assertEquals("許可しました：./gradlew test", sent(bash, Resolution(allow = true)))
+        assertEquals("回答しました：Yes", sent(dialog, Resolution(option = "1")))
+    }
+}

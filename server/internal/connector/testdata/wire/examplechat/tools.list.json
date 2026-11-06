@@ -1,0 +1,126 @@
+{
+  "tools": [
+    {
+      "name": "examplechat_status",
+      "description": "查看每个账号的连接状态：是否登录、事件推送是否开启、有没有缺口、密钥权限是否有效、请求配额。",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "examplechat_chats",
+      "description": "列出最近的会话（最新在前）：会话、名字、私聊或群聊、最后一条的时间和预览。结果只含示例聊天服务保留的消息，不是完整历史；空结果不代表没有消息。全文检索请用 kb_search。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "只看名字或预览里含这段文字的会话（子串匹配）。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          }
+        }
+      }
+    },
+    {
+      "name": "examplechat_messages",
+      "description": "读一个会话的消息，旧的在前，每行「时间 名字：内容」。翻更早的消息用上一次返回的 before。结果只含示例聊天服务保留的消息，不是完整历史；空结果不代表没有消息。全文检索请用 kb_search。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "chat": {
+            "type": "string",
+            "description": "会话，格式 <账号>.<会话 id>，从 examplechat_chats 或 examplechat_resolve 里取。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          },
+          "before": {
+            "type": "string",
+            "description": "上一次返回的 before。"
+          }
+        },
+        "required": [
+          "chat"
+        ]
+      }
+    },
+    {
+      "name": "examplechat_search",
+      "description": "在服务保存的消息里找字：空格分开的几个词都要出现，不区分大小写；按字找，不按意思找。返回 cursor 时可用它继续找。结果只含示例聊天服务保留的消息，不是完整历史；空结果不代表没有消息。全文检索请用 kb_search。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "要找的词，1 到 256 个字符，多个词用空格分开。"
+          },
+          "chat": {
+            "type": "string",
+            "description": "只在这个会话里找（可选），格式 <账号>.<会话 id>。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "上一次返回的 cursor。"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "examplechat_resolve",
+      "description": "按名字找会话，用来确定收件人或要读的会话：返回候选列表（最匹配的在前）。多个候选时把列表给用户，由用户选；不要自己挑。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "要找的名字，1 到 128 个字符，不区分大小写的子串。"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group",
+              "any"
+            ],
+            "description": "user 只找个人，group 只找群，any（默认）都找。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几个候选，1 到 50，默认 10。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "examplechat_job",
+      "description": "查一个发送任务的状态，回答「刚才那条发出去了吗」。只有状态是 sent 才表示已发出。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "任务 id。"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  ]
+}

@@ -30,6 +30,21 @@ class MailComposeTest {
     }
 
     @Test
+    fun replyToNameWithComma() {
+        // #5076: 「Doe, John」 must stay one recipient, and plain lists still split.
+        val sender = MailAddress("Doe, John", "john@example.com")
+        val original = MailMessage(accountId = "acc-1", uid = 1, subject = "Hi", from = sender, to = listOf(MailAddress("Me", "me@example.com")), cc = listOf(MailAddress("Roe; \"Rich\"", "rich@example.com")))
+        val draft = MailCompose.reply(res, original, "acc-1", me = "me@example.com", all = true, zone = ZoneId.of("UTC"))
+        assertTrue(draft.to, MailCompose.fieldValid(draft.to, required = true))
+        assertEquals(listOf(sender), MailCompose.parseAddresses(draft.to))
+        assertEquals(listOf(MailAddress("Roe; \"Rich\"", "rich@example.com")), MailCompose.parseAddresses(draft.cc))
+        assertEquals(
+            listOf(MailAddress("", "a@example.com"), MailAddress("B", "b@example.com"), MailAddress("", "c@example.com")),
+            MailCompose.parseAddresses("a@example.com, B <b@example.com>；c@example.com"),
+        )
+    }
+
+    @Test
     fun addressValidation() {
         assertTrue(MailCompose.looksValid("a@example.com"))
         assertTrue(MailCompose.looksValid("test.user@sub.example.org"))

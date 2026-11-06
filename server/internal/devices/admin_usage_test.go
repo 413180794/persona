@@ -72,7 +72,7 @@ func usageFile(t *testing.T, h *Devices) map[string]any {
 	return u
 }
 
-func fakerelay-history(t *testing.T) *httptest.Server {
+func fakeRelay(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+usageTestKey {
@@ -111,9 +111,9 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 	}
 
 	// add: the key is saved in hub.json and never comes back
-	code, out = do("POST", "/api/v1/admin/usage-sources", `{"type":"relay-history","url":"https://gw.example.com/","key":"`+usageTestKey+`"}`)
+	code, out = do("POST", "/api/v1/admin/usage-sources", `{"type":"relay","url":"https://gw.example.com/","key":"`+usageTestKey+`"}`)
 	src, _ := out["source"].(map[string]any)
-	if code != 200 || src == nil || src["name"] != "relay-history" || src["url"] != "https://gw.example.com" || src["has_key"] != true || src["enabled"] != true {
+	if code != 200 || src == nil || src["name"] != "Relay" || src["url"] != "https://gw.example.com" || src["has_key"] != true || src["enabled"] != true {
 		t.Fatalf("add: %d %v", code, out)
 	}
 	if _, has := src["key"]; has {
@@ -194,16 +194,16 @@ func TestAdminUsageSourcesLifecycle(t *testing.T) {
 func TestAdminUsageSourcesValidation(t *testing.T) {
 	h, c := usageTestDevices(t, `{"token":"t"}`)
 	for body, code := range map[string]string{
-		`{"type":"nope","url":"https://gw.example.com","key":"k"}`:                                               "invalid_type",
-		`{"url":"https://gw.example.com","key":"k"}`:                                                             "invalid_type",
-		`{"type":"relay-history","url":"gw.example.com","key":"k"}`:                                                  "invalid_url",
-		`{"type":"relay-history","url":"ftp://gw.example.com","key":"k"}`:                                            "invalid_url",
-		`{"type":"relay-history","url":"https://user:pw@gw.example.com","key":"k"}`:                                  "invalid_url",
-		`{"type":"relay-history","url":"https://gw.example.com"}`:                                                    "key_required",
-		`{"type":"relay-history","url":"https://gw.example.com","key":"a b"}`:                                        "invalid_key",
-		`{"type":"relay-history","url":"https://gw.example.com","key":"k","name":"a\nb"}`:                            "invalid_name",
-		`{"type":"generic","url":"https://gw.example.com"}`:                                                      "invalid_name",
-		`{"type":"relay-history","url":"https://gw.example.com","key":"k","name":"` + strings.Repeat("x", 41) + `"}`: "invalid_name",
+		`{"type":"nope","url":"https://gw.example.com","key":"k"}`:                                           "invalid_type",
+		`{"url":"https://gw.example.com","key":"k"}`:                                                         "invalid_type",
+		`{"type":"relay","url":"gw.example.com","key":"k"}`:                                                  "invalid_url",
+		`{"type":"relay","url":"ftp://gw.example.com","key":"k"}`:                                            "invalid_url",
+		`{"type":"relay","url":"https://user:pw@gw.example.com","key":"k"}`:                                  "invalid_url",
+		`{"type":"relay","url":"https://gw.example.com"}`:                                                    "key_required",
+		`{"type":"relay","url":"https://gw.example.com","key":"a b"}`:                                        "invalid_key",
+		`{"type":"relay","url":"https://gw.example.com","key":"k","name":"a\nb"}`:                            "invalid_name",
+		`{"type":"generic","url":"https://gw.example.com"}`:                                                  "invalid_name",
+		`{"type":"relay","url":"https://gw.example.com","key":"k","name":"` + strings.Repeat("x", 41) + `"}`: "invalid_name",
 	} {
 		if status, out, _ := c.do("POST", "/api/v1/admin/usage-sources", body); status != 400 || out["code"] != code {
 			t.Errorf("%s: %d %v", body, status, out)
@@ -230,9 +230,9 @@ func TestAdminUsageSourcesValidation(t *testing.T) {
 
 func TestAdminUsageSourceTestIsOneReadOnlyRead(t *testing.T) {
 	h, c := usageTestDevices(t, `{"token":"t"}`)
-	gate := fakerelay-history(t)
+	gate := fakeRelay(t)
 
-	code, out, w := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay-history","url":"`+gate.URL+`","key":"`+usageTestKey+`"}`)
+	code, out, w := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay","url":"`+gate.URL+`","key":"`+usageTestKey+`"}`)
 	providers, _ := out["providers"].(map[string]any)
 	if code != 200 || out["ok"] != true || out["accounts"] != float64(2) || out["windows"] != float64(3) || providers["codex"] != float64(1) || providers["claude"] != float64(1) {
 		t.Fatalf("test: %d %v", code, out)
@@ -244,32 +244,32 @@ func TestAdminUsageSourceTestIsOneReadOnlyRead(t *testing.T) {
 		t.Error("a test saved something")
 	}
 	// wrong key and a dead address are results, not server errors
-	if _, out, _ := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay-history","url":"`+gate.URL+`","key":"wrong"}`); out["ok"] != false || out["code"] != usagesource.CodeUnauthorized {
+	if _, out, _ := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay","url":"`+gate.URL+`","key":"wrong"}`); out["ok"] != false || out["code"] != usagesource.CodeUnauthorized {
 		t.Errorf("wrong key: %v", out)
 	}
 	dead := httptest.NewServer(http.NotFoundHandler())
 	dead.Close()
-	if _, out, _ := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay-history","url":"`+dead.URL+`","key":"k"}`); out["ok"] != false || out["code"] != usagesource.CodeUnreachable {
+	if _, out, _ := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay","url":"`+dead.URL+`","key":"k"}`); out["ok"] != false || out["code"] != usagesource.CodeUnreachable {
 		t.Errorf("dead: %v", out)
 	}
-	if status, out, _ := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay-history","url":"nope"}`); status != 400 || out["code"] != "invalid_url" {
+	if status, out, _ := c.do("POST", "/api/v1/admin/usage-sources/test", `{"type":"relay","url":"nope"}`); status != 400 || out["code"] != "invalid_url" {
 		t.Errorf("bad url: %d %v", status, out)
 	}
 
 	// a saved source is tested with its saved key, but only at its saved address
-	_, added, _ := c.do("POST", "/api/v1/admin/usage-sources", `{"type":"relay-history","url":"`+gate.URL+`","key":"`+usageTestKey+`"}`)
+	_, added, _ := c.do("POST", "/api/v1/admin/usage-sources", `{"type":"relay","url":"`+gate.URL+`","key":"`+usageTestKey+`"}`)
 	id := added["source"].(map[string]any)["id"].(string)
 	var sentKey, sentTo string
 	h.usageGW.fetch = func(_ context.Context, cfg usagesource.Config, _ time.Time) (usagesource.Result, error) {
 		sentKey, sentTo = cfg.Key, cfg.URL
 		return usagesource.Result{}, nil
 	}
-	c.do("POST", "/api/v1/admin/usage-sources/test", `{"id":"`+id+`","type":"relay-history","url":"`+gate.URL+`"}`)
+	c.do("POST", "/api/v1/admin/usage-sources/test", `{"id":"`+id+`","type":"relay","url":"`+gate.URL+`"}`)
 	if sentKey != usageTestKey || sentTo != gate.URL {
 		t.Errorf("saved key not used: %q %q", sentKey, sentTo)
 	}
 	sentKey = "unset"
-	c.do("POST", "/api/v1/admin/usage-sources/test", `{"id":"`+id+`","type":"relay-history","url":"https://elsewhere.example.com"}`)
+	c.do("POST", "/api/v1/admin/usage-sources/test", `{"id":"`+id+`","type":"relay","url":"https://elsewhere.example.com"}`)
 	if sentKey != "" {
 		t.Errorf("the saved key was sent to another address: %q", sentKey)
 	}

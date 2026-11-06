@@ -117,8 +117,9 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
    HTTP client 一律用 `Egress.HTTPClient` 建：配了走代理、没配直连，填错了报错而不是悄悄直连。`github.proxy` 就是这样来的（#1106）；
    代理地址的解析在 `netproxy`，`google.proxy` 也用它。还没接上的：Telegram（MTProto 不是 HTTP）、子进程 / 第三方连接器（要把代理传给程序），见 #1106。
 
-> **微信（wechat-connector）是进程扩展连接器的范例**，而且不写在 hub 里：连接器是外部 API 服务 wechat-connector 的客户端，以扩展包（`.tar.gz` 加 sha256）交付，
-> 用扩展协议 1 加连接器协议 v2 和 hub 说话，声明 `fallback`（每个收件箱条目带兜底分级），本仓库没有它的代码。接入手册见 [wechat-connector.md](wechat-connector.md)。
+> **进程扩展连接器不写在 hub 里**：比如个人微信的连接器，是一个外部 API 服务的客户端，以扩展包（`.tar.gz` 加 sha256）交付、从扩展市场安装，
+> 用扩展协议 1 加连接器协议 v2 和 hub 说话，声明 `fallback`（每个收件箱条目带兜底分级）。本仓库没有它的代码，扩展和它的接入手册由它自己的仓库发布。
+> 本仓库只留一个中性的示例连接器 `examplechat`（「示例聊天」）的线上夹具和清单（`schema/extension/examples/Manifest.examplechat.json`）。
 > 怎么给这样的外部程序做一致性测试：扩展一侧的起停和握手用 `conformance.Program`（[extensions.md](extensions.md)「一致性测试」），
 > 连接器一侧逐个能力的检查用 `CheckProgram` 加合成的线上夹具（[connector-protocol.md](connector-protocol.md)「一致性测试」）。
 
@@ -312,9 +313,10 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 - `device_code`：`{url, user_code, interval}`。App 显示验证码、打开网址，然后每隔 `interval` 秒问一次同一步，直到 `done`。GitHub 的设备码登录是这种。
 - `qr`（#1351）：`{url, interval}`，`url` 是要用别的 App 扫的内容（微信的扫码授权）。hub 回给 App 时附上二维码的点阵 `qr: {size, rows}`（`rows` 是一行一串 `0` / `1`，
   不含四周的空白，和管理界面配对的二维码同一个生成法），App 照着画（深浅色下都是白底黑块，带安静区），每隔 `interval` 秒问一次同一步，直到 `done`；
-  在同一部手机上扫不了自己的屏幕，所以下面有「保存二维码」（分享 / 存到相册，再在那个 App 里从相册识别）。iOS / Mac 和网页（设置 › 连接器，#1693）有连接器登录页，Android 还没有。
+  在同一部手机上扫不了自己的屏幕，所以下面有「保存二维码」（分享 / 存到相册，再在那个 App 里从相册识别）。iOS / Mac、网页（设置 › 连接器，#1693）和 Android 都有连接器登录页。
 - 客户端画不了的步骤（不认识的 `kind`、`qr` 却没有点阵、没有字段的表单）不能显示成空表单加一个永远灰着的「下一步」（#1693）：要说明这一步画不了、下一步怎么办（更新后重新开始；也是渠道的到 设置 › 渠道 绑定），并给「重新开始」。
   网页在 `qr` 只缺点阵、`url` 是 http(s) 时退一步显示链接（可复制，照常轮询）。iOS / Mac 一样说明这一步这个版本的 App 显示不了、更新后「重新开始」，二维码的还提示去网页版 设置 › 连接器 扫码（`ConnectorPrompt.cannotDraw`）。
+  Android（设置 › 连接器、设置 › 渠道、扩展的登录，#4488）和网页一样：`qr` 只缺点阵、`url` 是 http(s) 时显示链接（复制按钮或长按选中，照常轮询）；其余画不了的说明原因，给「重新开始」「取消」，不轮询（`SignInSteps.kt` 的 `StepView`）。
 
 于是 App 只做**一个**通用登录页（填字段、打开网页、显示验证码三种步骤），Telegram、Gmail、Outlook、GitHub 都用它。
 

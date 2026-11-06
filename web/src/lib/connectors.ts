@@ -224,8 +224,6 @@ const PROFILES = new Map<string, ConnectorProfile>([
       logoutEndsRemoteSession: true,
     },
   ],
-  // No brand yet: the mark and its terms of use are undecided, so 微信 draws the generic icon until they are.
-  ["wechat-connector", { signInFooter: t("lib-connectors.wechat-connector_sign_in_footer") }],
 ]);
 
 /** Which mark a connector has of its own; others draw the generic one. */
@@ -251,7 +249,7 @@ export function signInFooter(c: HubConnector): string {
 }
 
 /** The sign-out confirmation. Only a connector known to end the remote session says so; every other one (GitHub's device
- * token, an extension's key such as wechat-connector's) only has the hub forget its copy, so it says the authorization stays. */
+ * token, an extension's key) only has the hub forget its copy, so it says the authorization stays. */
 export function logoutMessage(c: HubConnector): string {
   if (PROFILES.get(c.id)?.logoutEndsRemoteSession) return t("lib-connectors.logout_remote", { name: c.name });
   return t("lib-connectors.logout");

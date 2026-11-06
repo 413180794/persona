@@ -28,10 +28,11 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The wire fixtures are what a connector program for wechat-connector says: synthetic data, no real account, name or address.
+// The wire fixtures are what a connector program for a chat service says (the example connector "examplechat"):
+// synthetic data, no real account, name or address.
 // Here they hold the Go types: a type that changes without the program following turns these tests red, with or
 // without Node to run the program.
-const wireDir = "../testdata/wire/wechat-connector"
+const wireDir = "../testdata/wire/examplechat"
 
 func fixture(t testing.TB, name string) json.RawMessage {
 	t.Helper()
@@ -57,13 +58,13 @@ func ignore[T any](check func(json.RawMessage) (T, error)) func(json.RawMessage)
 
 // Every fixture strictly decodes into the hub's types and keeps what the hub relies on; each is listed, so a new one
 // is not left unchecked.
-func Testwechat-connectorWireFixtures(t *testing.T) {
+func TestExampleChatWireFixtures(t *testing.T) {
 	m := fixtureManifest(t)
 	items, err := connectorItems(m)
 	if err != nil {
 		t.Fatal(err)
 	}
-	actions, err := checkToolList("wechat-connector", "actions", fixture(t, "actions.list.json"))
+	actions, err := checkToolList("examplechat", "actions", fixture(t, "actions.list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,11 +73,11 @@ func Testwechat-connectorWireFixtures(t *testing.T) {
 		"initialize.json":     func(raw json.RawMessage) error { return checkInitialize(m, items, raw) },
 		"status.json":         ignore(checkStatus),
 		"tools.list.json": ignore(func(raw json.RawMessage) ([]proto.Tool, error) {
-			return checkToolList("wechat-connector", "tools", raw)
+			return checkToolList("examplechat", "tools", raw)
 		}),
 		"tools.call.json":       func(raw json.RawMessage) error { return decodeWire(raw, &serve.CallResult{}) },
-		"actions.list.json":     ignore(func(raw json.RawMessage) ([]proto.Tool, error) { return checkToolList("wechat-connector", "actions", raw) }),
-		"actions.describe.json": func(raw json.RawMessage) error { return checkDescribe("wechat-connector_send", raw) },
+		"actions.list.json":     ignore(func(raw json.RawMessage) ([]proto.Tool, error) { return checkToolList("examplechat", "actions", raw) }),
+		"actions.describe.json": func(raw json.RawMessage) error { return checkDescribe("examplechat_send", raw) },
 		"actions.do.json":       func(raw json.RawMessage) error { return decodeWire(raw, &serve.CallResult{}) },
 		"inbox.collect.json": ignore(func(raw json.RawMessage) ([]connector.InboxThing, error) {
 			return checkCollect(items[0].Kinds, slices.Contains(items[0].Capabilities, string(connector.CapFallback)), raw)
@@ -123,7 +124,7 @@ type fixtureProgram struct {
 	peerCaller *rpc.Peer
 }
 
-const goodKey = "wcpat_example"
+const goodKey = "example-key"
 
 func (f *fixtureProgram) answer(t testing.TB, name string) json.RawMessage {
 	raw := fixture(t, name)
@@ -139,7 +140,7 @@ func (f *fixtureProgram) answer(t testing.TB, name string) json.RawMessage {
 }
 
 func (f *fixtureProgram) secrets(ctx context.Context, method string, data []byte) {
-	params, _ := extension.Targeted(serve.SecretData{Data: data}, "wechat-connector")
+	params, _ := extension.Targeted(serve.SecretData{Data: data}, "examplechat")
 	_ = f.peerCaller.Call(ctx, serve.InPlugin(method), params, nil)
 }
 
@@ -157,7 +158,7 @@ func (f *fixtureProgram) handle(t testing.TB) rpc.Handler {
 		case "connector.status":
 			f.announced.Do(func() { _ = f.peerCaller.Notify("connector.changed", f.answer(t, "changed.json")) })
 			if !f.signedIn.Load() {
-				return json.RawMessage(`{"state":"not_configured","guide":["在设置里登录微信"]}`), nil
+				return json.RawMessage(`{"state":"not_configured","guide":["在设置里登录示例聊天"]}`), nil
 			}
 			return f.answer(t, "status.json"), nil
 		case "connector.tools.list":
@@ -172,7 +173,7 @@ func (f *fixtureProgram) handle(t testing.TB) rpc.Handler {
 			return f.answer(t, "inbox.collect.json"), nil
 		case "connector.thread.page":
 			if args.Before != "" {
-				return json.RawMessage(`{"chat":{"id":"primary.wxid_example_a","name":"示例联系人","kind":"dm"}}`), nil
+				return json.RawMessage(`{"chat":{"id":"primary.user_example_a","name":"示例联系人","kind":"dm"}}`), nil
 			}
 			return f.answer(t, "thread.page.json"), nil
 		case "connector.archive.changes":
@@ -241,7 +242,7 @@ func (f *fixtureProgram) check(t *testing.T, opts ...ProgramOption) string {
 	go func() {
 		defer close(done)
 		CheckProgram(rec, fixtureManifest(t), run, extension.InitializeParams{},
-			append([]ProgramOption{WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": goodKey}), RequireData()}, opts...)...)
+			append([]ProgramOption{WithLogin(map[string]string{"base_url": "https://chat.example.com", "app_key": goodKey}), RequireData()}, opts...)...)
 	}()
 	select {
 	case <-done:
@@ -301,7 +302,7 @@ func TestCheckProgramCatchesDrift(t *testing.T) {
 			func(v map[string]any) { x := first(v, "things"); x["thread_id"] = x["thread"]; delete(x, "thread") }, false},
 		{"a key in the wrong case", "inbox.collect.json", `"Thread"`,
 			func(v map[string]any) { x := first(v, "things"); x["Thread"] = x["thread"]; delete(x, "thread") }, false},
-		{"a tool without the prefix", "tools.list.json", `does not start with "wechat-connector_"`,
+		{"a tool without the prefix", "tools.list.json", `does not start with "examplechat_"`,
 			func(v map[string]any) { first(v, "tools")["name"] = "status" }, false},
 		{"a page newest first", "thread.page.json", "oldest first",
 			func(v map[string]any) { slices.Reverse(v["messages"].([]any)) }, false},
@@ -329,7 +330,7 @@ func TestCheckProgramReportsARefusedSignIn(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		CheckProgram(rec, fixtureManifest(t), run, extension.InitializeParams{}, WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": "wcpat_wrong"}))
+		CheckProgram(rec, fixtureManifest(t), run, extension.InitializeParams{}, WithLogin(map[string]string{"base_url": "https://chat.example.com", "app_key": "example-key-wrong"}))
 	}()
 	<-done
 	if got := strings.Join(rec.msgs, "\n"); !strings.Contains(got, "cannot go on") {
@@ -337,28 +338,9 @@ func TestCheckProgramReportsARefusedSignIn(t *testing.T) {
 	}
 }
 
-// Any program that speaks the connector protocol for wechat-connector, against any fixture server compatible with the
-// wechat-connector developer API: the real thing on the other side of the wire. PERSONA_TEST_wechat-connector_PROGRAM is the
-// program's launcher (in bin/ of its plugin package), wechat-connector_FIXTURE_SERVER the fixture server's script, run with
-// Node. Needs Node and both paths, so it runs where someone sets them up and skips elsewhere:
-//
-//	PERSONA_TEST_wechat-connector_PROGRAM=<plugin package>/bin/<program> \
-//	wechat-connector_FIXTURE_SERVER=<fixture server script> \
-//	go test ./internal/connector/conformance -run wechat-connector -v
-//
-// The fixture server listens on a loopback port (PORT=0) and prints one JSON line on its stdout once it is ready: its
-// base_url and test keys (see signInValues). Sending stays off on it.
-func Testwechat-connectorProgramLive(t *testing.T) {
-	program, server := os.Getenv("PERSONA_TEST_wechat-connector_PROGRAM"), os.Getenv("wechat-connector_FIXTURE_SERVER")
-	if program == "" || server == "" {
-		t.Skip("set PERSONA_TEST_wechat-connector_PROGRAM (a connector program's launcher) and wechat-connector_FIXTURE_SERVER (a compatible fixture server's script) to run it (docs/connector-protocol.md「一致性测试」)")
-	}
-	checkLive(t, program, startFixtureServer(t, server))
-}
-
 // A connector program of another repository on a fixture backend of its own, so there is no server to start: what
 // selects the fixture comes from the environment of this test, which the program inherits, and the sign-in gives no
-// values. Skips without the path:
+// values. Skips without the path, and leaves a program with a fixture server to TestConnectorProgramFixtureServerLive:
 //
 //	PERSONA_TEST_CONNECTOR_PROGRAM=<repository>/<plugin>/bin/<program> go test ./internal/connector/conformance -run ConnectorProgramLive -v
 func TestConnectorProgramLive(t *testing.T) {
@@ -366,7 +348,29 @@ func TestConnectorProgramLive(t *testing.T) {
 	if program == "" {
 		t.Skip("set PERSONA_TEST_CONNECTOR_PROGRAM to run a connector program (docs/connector-protocol.md)")
 	}
+	if os.Getenv("PERSONA_TEST_CONNECTOR_FIXTURE_SERVER") != "" {
+		t.Skip("a fixture server is set: TestConnectorProgramFixtureServerLive runs the program against it")
+	}
 	checkLive(t, program, map[string]string{})
+}
+
+// Any connector program that signs in with a service address and an app key (fields base_url and app_key), against a
+// fixture server of that service: the real thing on the other side of the wire. PERSONA_TEST_CONNECTOR_PROGRAM is the
+// program's launcher (in bin/ of its plugin package), PERSONA_TEST_CONNECTOR_FIXTURE_SERVER the fixture server's
+// script, run with Node. Needs Node and both paths, so it runs where someone sets them up and skips elsewhere:
+//
+//	PERSONA_TEST_CONNECTOR_PROGRAM=<plugin package>/bin/<program> \
+//	PERSONA_TEST_CONNECTOR_FIXTURE_SERVER=<fixture server script> \
+//	go test ./internal/connector/conformance -run FixtureServerLive -v
+//
+// The fixture server listens on a loopback port (PORT=0) and prints one JSON line on its stdout once it is ready: its
+// base_url and test keys (see signInValues). Sending stays off on it.
+func TestConnectorProgramFixtureServerLive(t *testing.T) {
+	program, server := os.Getenv("PERSONA_TEST_CONNECTOR_PROGRAM"), os.Getenv("PERSONA_TEST_CONNECTOR_FIXTURE_SERVER")
+	if program == "" || server == "" {
+		t.Skip("set PERSONA_TEST_CONNECTOR_PROGRAM (a connector program's launcher) and PERSONA_TEST_CONNECTOR_FIXTURE_SERVER (a compatible fixture server's script) to run it (docs/connector-protocol.md「一致性测试」)")
+	}
+	checkLive(t, program, startFixtureServer(t, server))
 }
 
 // checkLive holds a program, started twice, to the plugin protocol and the connector protocol, signing in with login.
@@ -438,15 +442,15 @@ func isLoopbackHost(host string) bool {
 // is signed in to, and with the read key.
 func TestSignInValuesOnlyForALoopbackServerWithSendingOff(t *testing.T) {
 	const loopback = `{"base_url":"http://127.0.0.1:41000","outbound_sends_enabled":false,"port":41000,
-		"accounts":[{"account":"primary","key":"wcpat_example_read","send_key":"wcpat_example_send"},{"account":"secondary","key":"wcpat_example_other"}]}`
+		"accounts":[{"account":"primary","key":"example-key-read","send_key":"example-key-send"},{"account":"secondary","key":"example-key-other"}]}`
 	got, err := signInValues(loopback)
-	if err != nil || got["base_url"] != "http://127.0.0.1:41000" || got["app_key"] != "wcpat_example_read" || len(got) != 2 {
+	if err != nil || got["base_url"] != "http://127.0.0.1:41000" || got["app_key"] != "example-key-read" || len(got) != 2 {
 		t.Fatalf("the loopback fixture server: %v, %v", got, err)
 	}
 	for name, line := range map[string]string{
 		"outbound sends on":      strings.Replace(loopback, `"outbound_sends_enabled":false`, `"outbound_sends_enabled":true`, 1),
 		"outbound sends unsaid":  strings.Replace(loopback, `"outbound_sends_enabled":false,`, ``, 1),
-		"a server off loopback":  strings.Replace(loopback, "127.0.0.1", "wechat-connector.example.com", 1),
+		"a server off loopback":  strings.Replace(loopback, "127.0.0.1", "chat.example.com", 1),
 		"no account":             strings.Replace(loopback, `"accounts":[`, `"accounts":[],"more":[`, 1),
 		"not a JSON object line": "listening on 127.0.0.1",
 	} {

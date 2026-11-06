@@ -182,7 +182,7 @@ describe("usage sources (docs/usage-windows.md「账号池网关」)", () => {
     const calls = stub(200, { source: { id: "s1" }, sources: [] });
     await getUsageSources();
     await saveUsageSettings({ enabled: false, poll_minutes: 15 });
-    await addUsageSource({ type: "relay-history", url: "https://gateway.example.com", key: "k" });
+    await addUsageSource({ type: "relay", url: "https://gateway.example.com", key: "k" });
     await editUsageSource("a/b", { enabled: false });
     await testUsageSource({ id: "s1", type: "generic", url: "https://gateway.example.com/u" });
     await removeUsageSource("s1");

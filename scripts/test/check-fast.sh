@@ -446,7 +446,7 @@ if [ "$ALL" -eq 0 ]; then
       schema/extension/*) _re='schema/extension|"schema", *"extension"' ;;
       integrations/*/*) _re='integrations/|"integrations"' ;;
       scripts/test/server_test_env.py) _re='server_test_env\.py' ;;
-      docs/*) _re=$(printf '%s' "$f" | sed 's/[][\.^$*+?(){}|]/\\&/g') ;;  # docs/wechat-connector.md -> docs/wechat-connector\.md
+      docs/*) _re=$(printf '%s' "$f" | sed 's/[][\.^$*+?(){}|]/\\&/g') ;;  # docs/example-guide.md -> docs/example-guide\.md
     esac
     [ -n "$_re" ] && { arr_has "$_re" "${READER_RES[@]:-}" || READER_RES+=("$_re"); }
   done <<< "$CHANGED"

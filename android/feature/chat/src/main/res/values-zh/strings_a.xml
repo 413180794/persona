@@ -67,6 +67,13 @@
     <string name="chat_info_copied_item">已拷贝%1$s</string>
     <string name="chat_info_retry">重试</string>
     <string name="chat_interaction_answered">已回传你的选择</string>
+    <string name="chat_receipt_allowed">已允许：%1$s</string>
+    <string name="chat_receipt_always_allowed">已总是允许：%1$s</string>
+    <string name="chat_receipt_denied">已拒绝：%1$s</string>
+    <string name="chat_receipt_plan_approved">已批准计划</string>
+    <string name="chat_receipt_plan_rejected">已打回计划</string>
+    <string name="chat_receipt_plan_rejected_feedback">已打回计划：%1$s</string>
+    <string name="chat_receipt_answered">已回答：%1$s</string>
     <string name="chat_interaction_resolved_elsewhere">已在电脑上处理</string>
     <string name="chat_interaction_prompt_changed">屏幕内容已变化，本次未提交。请查看新问题后重新选择</string>
     <string name="chat_interaction_unknown">还不知道你的回答送到没有，先看一下这个请求</string>

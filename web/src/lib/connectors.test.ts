@@ -45,15 +45,16 @@ describe("连接器的状态", () => {
 
   it("has a mark only for the connectors that have one; the rest draw the generic icon", () => {
     expect(["github", "telegram", "lark"].map(connectorBrand)).toEqual(["github", "telegram", "lark"]);
-    // 微信 is listed for its wording but has no brand image yet (D7); a plugin's id may also be an Object.prototype name
-    expect(["wechat-connector", "example", "constructor"].map(connectorBrand)).toEqual([undefined, undefined, undefined]);
+    // an extension's connector draws the generic icon; a plugin's id may also be an Object.prototype name
+    expect(["examplechat", "example", "constructor"].map(connectorBrand)).toEqual([undefined, undefined, undefined]);
   });
 
   it("words a listed connector from the table and any other from its own name, never Telegram's", () => {
     const off = (id: string, name: string) => conn("disabled", { id, name, enabled: false });
     expect(switchFooter(off("telegram", "Telegram"))).toContain("私聊和群");
     expect(signInFooter(conn("not_signed_in", { id: "telegram", name: "Telegram" }))).toContain("api_id");
-    expect(signInFooter(conn("not_signed_in", { id: "wechat-connector", name: "微信" }))).toBe("应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。");
+    // an extension's connector says its own storage words in its sign-in hint, so the footer is the generic one
+    expect(signInFooter(conn("not_signed_in", { id: "examplechat", name: "示例聊天" }))).toBe("登录状态加密存在 hub 上，退出登录时删掉。");
     expect(connectorOpenTitle("telegram")).toBe("在 Telegram 里回复");
 
     // not in the table: the generic wording, with the connector's own name where one is shown
@@ -88,8 +89,8 @@ describe("连接器的状态", () => {
     expect(logoutMessage(conn("ok", { id: "telegram", name: "Telegram" }))).toBe(
       "hub 上存的 API 凭据和登录状态都会删掉，Telegram 那边这个设备会话也会结束。再用要重新登录。",
     );
-    // wechat-connector, GitHub's device token, an unknown plugin or an Object.prototype name: nothing is ended or revoked over there
-    for (const [id, name] of [["wechat-connector", "微信"], ["github", "GitHub"], ["example", "示例"], ["constructor", "示例"]]) {
+    // An extension's app key, GitHub's device token, an unknown plugin or an Object.prototype name: nothing is ended or revoked over there
+    for (const [id, name] of [["examplechat", "示例聊天"], ["github", "GitHub"], ["example", "示例"], ["constructor", "示例"]]) {
       const text = logoutMessage(conn("ok", { id, name }));
       expect(text).toContain("授权不会自动撤销");
       expect(text).not.toMatch(/会话也会结束|API 凭据|Telegram/);

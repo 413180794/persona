@@ -209,7 +209,11 @@ data class BindPrompt(
     /** Who is bound, once [done]. */
     val account: String? = null,
 ) {
-    /** A step the app asks again by itself (a code on screen), not one with fields. */
+    /**
+     * A step the app asks again by itself (a code on screen), not one with fields. Only by its [kind]: the pages do not
+     * use it; they poll by `StepView` (feature/settings `SignInSteps.kt`), which also leaves out a step of a known kind
+     * that came without what it shows (#4488). Kept for older callers.
+     */
     val polled: Boolean get() = !done && kind in setOf("qr", "pair_code", "device_code")
 }
 

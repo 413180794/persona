@@ -1,7 +1,7 @@
 # The server's go vet and go test on Linux (docs/testing.md). Before this they ran only by hand, so a change that broke a
 # package on every run reached master unnoticed (#2089). Kept out of ci.yml so the path filter below can skip it on
 # PRs that cannot affect the server: the paths are the server module, its replaced sdk/go module, and the repo files
-# server tests read (fixtures, schema examples, integrations, the wechat-connector guide, the test-env launcher).
+# server tests read (fixtures, schema examples, integrations, the test-env launcher).
 # No Postgres here: those tests skip without JARVIS_TEST_DATABASE_URL; scripts/test/test-server.sh runs them on the hub.
 name: server test
 
@@ -13,7 +13,6 @@ on:
       - spec/fixtures/**
       - schema/extension/**
       - integrations/**
-      - docs/wechat-connector.md
       - scripts/test/server_test_env.py
       - .github/workflows/server-test.yml
   workflow_dispatch:

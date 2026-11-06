@@ -12,7 +12,6 @@
   "telegram_open_title": "Telegramで返信",
   "telegram_reads": "個人チャットとグループ",
   "telegram_sign_in_footer": "API認証情報とログイン状態はハブに暗号化して保存され、表示されるのはapi_idだけです。ログアウトすると両方削除されます。",
-  "wechat-connector_sign_in_footer": "アプリキーはハブに暗号化して保存され、表示されるのはアカウント名だけです。ログアウトすると削除されます。",
   "switch_footer_bot_on": "オフにすると{name}は停止します。ログイン状態は残ります。",
   "switch_footer_bot_off": "オンにするとログインできます。",
   "switch_footer_on": "オフにすると{name}を読み込まなくなります。ログイン状態と保存済みのデータは残ります。",

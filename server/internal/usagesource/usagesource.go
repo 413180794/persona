@@ -5,7 +5,7 @@
 //
 // Two source types:
 //
-//   - "relay-history": relay-history's management API (relay-history.go). The account list and the stored quota windows, both read
+//   - "relay": an account-pool relay's management API (relay.go). The account list and the stored quota windows, both read
 //     from its cache: nothing here ever asks it to probe an upstream.
 //   - "generic": Persona's own small JSON shape (generic.go), for any other gateway that wants to feed the sidebar.
 //
@@ -26,9 +26,21 @@ import (
 )
 
 const (
-	Typerelay-history = "relay-history"
-	TypeGeneric   = "generic"
+	TypeRelay   = "relay"
+	TypeGeneric = "generic"
 )
+
+// StoredType is the type of a source as a saved config (hub.json) names it. Before the relay type had its own name,
+// it was saved under the name of the one relay it was first written for; generic and relay are the only types there
+// have ever been, so any other non-empty name is that earlier one and reads as relay. What a person types on the admin
+// page is not read with this: there only relay and generic are accepted.
+func StoredType(t string) string {
+	switch t {
+	case "", TypeGeneric, TypeRelay:
+		return t
+	}
+	return TypeRelay
+}
 
 const (
 	// BodyMost caps one answer (a few hundred accounts with their windows are well under a megabyte).
@@ -59,7 +71,7 @@ type Result struct {
 	Accounts []proto.UsageAccount
 	// Inventory is every account the gateway listed (at most InventoryMost), disabled ones and those without such a
 	// window included, as usage.gateway_accounts gives them (Source not set; docs/usage-windows.md「网关的账号清单」).
-	// Only the relay-history type has one; Complete false: the list stopped short.
+	// Only the relay type has one; Complete false: the list stopped short.
 	Inventory []proto.GatewayAccount
 	Complete  bool
 	// Seen counts what the gateway reported, for the "test the connection" button: accounts that have windows we can
@@ -119,7 +131,7 @@ func CodeOf(err error) string {
 	return CodeUnreachable
 }
 
-// Fetch reads the source once. Read-only by construction: the relay-history adapter sends two calls, a GET and a POST that
+// Fetch reads the source once. Read-only by construction: the relay adapter sends two calls, a GET and a POST that
 // only reads (refresh is always false), and the generic one a GET.
 func Fetch(ctx context.Context, cfg Config, now time.Time) (Result, error) {
 	base, err := NormalizeURL(cfg.URL)
@@ -131,8 +143,8 @@ func Fetch(ctx context.Context, cfg Config, now time.Time) (Result, error) {
 		c.http = &http.Client{Timeout: Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	switch cfg.Type {
-	case Typerelay-history:
-		return fetchrelay-history(ctx, c, now)
+	case TypeRelay:
+		return fetchRelay(ctx, c, now)
 	case TypeGeneric:
 		return fetchGeneric(ctx, c, now)
 	}

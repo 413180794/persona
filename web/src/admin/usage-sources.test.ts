@@ -4,7 +4,7 @@ import type { UsageSource } from "./types";
 import { hubWords, needsKeyAgain, normalUrl, reasonText, sourceStatus, testText, validUrl } from "./usage-sources";
 
 const NOW = Date.parse("2026-11-05T10:00:00Z");
-const source = (o: Partial<UsageSource> = {}): UsageSource => ({ id: "s1", name: "relay-history", type: "relay-history", url: "https://gateway.example.com", has_key: true, enabled: true, status: {}, ...o });
+const source = (o: Partial<UsageSource> = {}): UsageSource => ({ id: "s1", name: "Relay", type: "relay", url: "https://gateway.example.com", has_key: true, enabled: true, status: {}, ...o });
 
 describe("how a source is doing", () => {
   it("is off, paused, not read yet, working or failing", () => {
@@ -51,9 +51,9 @@ describe("the form", () => {
   });
   it("compares addresses as the hub keeps them", () => {
     expect(normalUrl("https://gateway.example.com/?a=1#x")).toBe("https://gateway.example.com");
-    expect(needsKeyAgain({ url: "https://gateway.example.com", type: "relay-history" }, { url: "https://gateway.example.com/", type: "relay-history" })).toBe(false);
-    expect(needsKeyAgain({ url: "https://gateway.example.com", type: "relay-history" }, { url: "https://other.example.com", type: "relay-history" })).toBe(true);
-    expect(needsKeyAgain({ url: "https://gateway.example.com", type: "relay-history" }, { url: "https://gateway.example.com", type: "generic" })).toBe(true);
+    expect(needsKeyAgain({ url: "https://gateway.example.com", type: "relay" }, { url: "https://gateway.example.com/", type: "relay" })).toBe(false);
+    expect(needsKeyAgain({ url: "https://gateway.example.com", type: "relay" }, { url: "https://other.example.com", type: "relay" })).toBe(true);
+    expect(needsKeyAgain({ url: "https://gateway.example.com", type: "relay" }, { url: "https://gateway.example.com", type: "generic" })).toBe(true);
   });
   it("shows the hub's own words for the errors it words itself, and no other", () => {
     expect(hubWords(new AdminError(400, "地址不对", { code: "invalid_url" }))).toBe("地址不对");

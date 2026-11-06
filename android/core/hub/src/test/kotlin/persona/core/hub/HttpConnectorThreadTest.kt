@@ -26,11 +26,11 @@ class HttpConnectorThreadTest {
     @Test
     fun loginStepSendsStepAndValuesAndReadsThePrompt() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"step":"scan","kind":"qr","qr":{"size":2,"rows":["10","01"]},"interval":2,"hint":"scan it"}"""))
-        val prompt = api.connectorLogin("example", "start", mapOf("server" to "https://wechat-connector.example.com"))
+        val prompt = api.connectorLogin("example", "start", mapOf("server" to "https://chat.example.com"))
         val req = server.takeRequest()
         assertEquals("/api/v1/connectors/example/login", req.path)
         assertEquals("POST", req.method)
-        assertEquals("""{"step":"start","values":{"server":"https://wechat-connector.example.com"}}""", req.body.readUtf8())
+        assertEquals("""{"step":"start","values":{"server":"https://chat.example.com"}}""", req.body.readUtf8())
         assertEquals("scan", prompt.step)
         assertTrue(prompt.polled)
         assertEquals(listOf("10", "01"), prompt.qr?.rows)

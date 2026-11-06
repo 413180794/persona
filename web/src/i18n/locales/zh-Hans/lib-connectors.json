@@ -12,7 +12,6 @@
   "telegram_open_title": "在 Telegram 里回复",
   "telegram_reads": "它的私聊和群",
   "telegram_sign_in_footer": "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。",
-  "wechat-connector_sign_in_footer": "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。",
   "switch_footer_bot_on": "关掉后 {name} 停下来；登录状态留着。",
   "switch_footer_bot_off": "打开后才能登录。",
   "switch_footer_on": "关掉后不再读 {name}；登录状态和已经存下的数据都留着。",

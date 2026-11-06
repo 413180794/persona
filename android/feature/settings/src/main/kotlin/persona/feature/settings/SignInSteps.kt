@@ -49,7 +49,7 @@ internal enum class StepView {
     }
 }
 
-/** A QR step without its modules ([StepView.QrLink]): the link it encodes, to copy and open in [app]. */
+/** A QR step without its modules ([StepView.QrLink]): the link it encodes, to copy (button or long press) and open in [app]. */
 @Composable
 internal fun QrLinkStep(url: String, app: String) {
     val context = LocalContext.current
@@ -58,7 +58,7 @@ internal fun QrLinkStep(url: String, app: String) {
     Text(stringResource(R.string.settings_src_signin_qr_link, app), Modifier.padding(horizontal = rowPadding),
         style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
     Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-        Text(url, Modifier.weight(1f), style = PersonaTheme.type.codeSmall, color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        JSelectableText(url, PersonaTheme.type.codeSmall, PersonaTheme.palette.ink, Modifier.weight(1f), maxLines = 2)
         JIconButton(PhIcons.Copy, stringResource(R.string.settings_src_signin_copy_link), {
             context.getSystemService(ClipboardManager::class.java)
                 ?.setPrimaryClip(ClipData.newPlainText(res.getString(R.string.settings_src_signin_link), url))

@@ -65,7 +65,7 @@ class InboxTriageShotsTest {
         Unconfigured(InboxTriage("unconfigured", null, 3, listOf(InboxTriageSource("lark", "飞书", "unconfigured", waiting = 3)))),
         Behind(InboxTriage("behind", null, 12, listOf(InboxTriageSource("lark", "飞书", "behind", waiting = 12)))),
         Several(InboxTriage("error", "模型没有额度", 5, listOf(InboxTriageSource("lark", "飞书", "error", "模型没有额度", 3),
-            InboxTriageSource("wechat-connector", "微信", "timeout", waiting = 2)))),
+            InboxTriageSource("examplechat", "示例聊天", "timeout", waiting = 2)))),
     }
 
     private class OneInbox(snapshot: InboxSnapshot) : InboxRepository {

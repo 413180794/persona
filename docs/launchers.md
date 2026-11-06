@@ -86,10 +86,10 @@ herdr 0.7.1（Linux）/ 0.7.5（macOS）起支持，更老的 herdr 和 Windows 
   （`400 request is not representable on this edge: Claude Code Artifacts are enabled`），herdr 里新开的 Agent 第一轮就失败，`claude -p` 不受影响。
 - **认证方式**（`auth`，2026-11-04）：Key 放哪个变量。`api_key`（默认，已有的启动器都是它）放 `ANTHROPIC_API_KEY`，Claude Code 发
   `x-api-key`，官方 API 只认这个；`bearer` 放 `ANTHROPIC_AUTH_TOKEN`，发 `Authorization: Bearer`，给只认 Bearer 的兼容网关用
-  （relay-history 两种都认，不用改）。管理者拿启动器直接调 Messages API（分拣、翻译等用途）也按它发头；Responses 协议本来就用 Bearer，不用选。
+  （常见的中转网关两种都认，不用改）。管理者拿启动器直接调 Messages API（分拣、翻译等用途）也按它发头；Responses 协议本来就用 Bearer，不用选。
   改启动器时请求里没带 `auth`（还没升级的 App）就保留原来的值。
 - **另一个认证变量设成空**：Claude Code 把各处 settings 的 `env` 合在一起，启动器**没设**的变量照样从用户的 `~/.claude/settings.json` 来。
-  那里放着别的网关的 `ANTHROPIC_AUTH_TOKEN` 时，Claude 会把它当 `Authorization: Bearer` 和启动器的 `x-api-key` 一起发；relay-history 收到两个凭据，
+  那里放着别的网关的 `ANTHROPIC_AUTH_TOKEN` 时，Claude 会把它当 `Authorization: Bearer` 和启动器的 `x-api-key` 一起发；网关收到两个凭据，
   除非恰好一个对得上，否则 401 `invalid or missing API key`。所以有 Key 的启动器总把没用的那个（`ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`）
   设成空，环境和上面的 `--settings` 里都有；设成空的变量不会再被用户的 settings 补上（2026-11-04 用 Claude Code 2.1.308 实测）。没有 Key 时两个都不设，照旧。
 - 交互模式的 Claude Code 第一次见到 `ANTHROPIC_API_KEY` 里的 Key 会问「Do you want to use this API key?」，默认选中「No (recommended)」，

@@ -49,7 +49,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - **公网直连**（2026-10-30 用户要求）：手机经公网直连 hub 要能通，优先探测和使用 IPv6；VPN 由用户自己配置。公网用 TLS，内网兼容现有客户端，见 `docs/network.md`。
 - **不提交任何内网信息或个人信息**（2026-10-28 用户要求；`scripts/privacy_check.py` 自动查，见 `docs/testing.md`「隐私扫描」）：代码、测试数据、文档、截图、提交信息里都不能有内网域名 / IP / URL、
   主机名、内部项目 / 仓库名、真实的公司或个人数据（消息、文档链接、人名），以及个人账号、邮箱、各种 key / 项目的 ID。示例一律用占位符
-  （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。Persona 支持的产品 / 工具名（飞书、TRAEX、removed 等）不算。
+  （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。公开的第三方产品名（飞书、微信、GitHub 等）不算；内部服务、内部工具、内网接入方案的名字按上面「开源要求」一律不写。
 - **密钥绝不入库**：hub token、数据库密码只存在 hub 机器的 `~/.persona/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
 
 ### 服务端和数据
@@ -227,7 +227,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
-| `docs/usage-windows.md` | 订阅额度窗口（#2432）：Codex rollout 的 `rate_limits`、Claude 状态栏落盘的 `rate_limits`（可选接入），为什么不用 OAuth / 登录 token 的账号接口；node 采集、hub 按重置时间合并同一账号、账号池网关（relay-history…，`usage.sources`）作为来源和为什么不做成扩展、节奏和倒计时算法、网页侧边栏底部的细条和浮层、iOS 机器页和 Mac 分区列底部 |
+| `docs/usage-windows.md` | 订阅额度窗口（#2432）：Codex rollout 的 `rate_limits`、Claude 状态栏落盘的 `rate_limits`（可选接入），为什么不用 OAuth / 登录 token 的账号接口；node 采集、hub 按重置时间合并同一账号、账号池网关（中转 relay 等，`usage.sources`）作为来源和为什么不做成扩展、节奏和倒计时算法、网页侧边栏底部的细条和浮层、iOS 机器页和 Mac 分区列底部 |
 | `docs/admin.md` | hub 管理界面（`/admin`）：访问范围 `admin.access`（loopback / lan / cidrs / any）和来源判断、管理员密码 / 会话 / CSRF / 限流、改 hub.json、页面和接口、部署时怎么选 |
 | `docs/mesh.md` | hub 互联（单中心）：互联码配对、链路、中心和任期（加入组、设为中心、中心不可达）、成员把 App 请求和电脑交给中心、凭据交接、一台电脑多条路的去重和选路、kind service（hub 拨连接器）、ssh 迁移、管理接口和命令行、怎么验证 |
 | `docs/link.md` | 连接器 Persona Link（命令 `persona-link`，旧名 jarvis-link 照样认）和 node 服务：一条命令 / 一个 App 装好常驻 node + 连接器；主动模式（电脑连 hub 的链路）和被动模式（hub 连电脑：监听、配对码、接口、限流、安全边界）；Mac 菜单栏 App「Persona Link」；Linux headless 的 `jarvis-link install / status / mode / node / logs / uninstall` |
@@ -281,7 +281,6 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/channels.md` | 渠道（channel）：所有和 Persona 对话的入口（App、微信、飞书机器人、飞书 /agent、语音）的盘点和统一抽象：渠道的接口和能力、hub 的统一管线（进对话、跟踪这一轮、答案发回、文字 / 卡片提问、去重、来源标记）、插件的 `channel` 扩展点和协议、兼容迁移、`/api/v1/channels`、设置 › 插件 › 渠道 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/wechat.md` | 微信机器人（内置插件 `jarvisd-wechat`，腾讯 iLink）：扫码绑定，私聊机器人就是和主对话说话，回答发回微信，提问 / 批准用文字往返；插件只管和微信说话（`channel` 扩展点），其余走 hub 的渠道管线；和飞书机器人比 |
-| `docs/wechat-connector.md` | 微信（wechat-connector）连接器接入手册（#1420）：把 wechat-connector 当外部 API 服务接入，个人微信作为数据来源进收件箱与知识库；前置条件（服务地址、应用密钥范围、允许来源、事件推送）、插件包安装（`file:` / 管理界面上传）、登录、设置项与隐私默认、发送的三道锁、闸门示例、状态含义、已知限制、故障排查 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`（由接飞书的插件做，hub 提供开对话、知识库上下文的接口）：收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/computer-use.md` | 操控电脑：内置插件 `cua`（默认关、按机器开），助手经 hub → node → Cua Driver 看窗口、点按、截图（`computer_state` / `computer_run`），能力发现、会话、截图、写操作的日志和确认；一键安装和实时画面（屏幕共享经 hub 隧道）的方案 |

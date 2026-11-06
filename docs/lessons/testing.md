@@ -427,7 +427,7 @@
 - Go module 的本地 `replace` 也属于远端测试快照（#2028）：`server/go.mod` 引入 `../sdk/go` 后，只复制 `server/` 会在 setup 阶段报 `replacement directory ../sdk/go does not exist`。
   将完整 `sdk/go/`（含嵌入的 schema）同步到同一个 checkout 独立缓存的 `sdk/go/`，保留相对目录，并用 `--delete` 移除该 SDK 快照的过期文件；不要共享别的测试或部署车道的源码目录。
   扩展一致性测试还读取源码根的 `schema/extension/examples`（包含正常样例和 `invalid/` 反例）；同步 SDK 的嵌入 schema 不能代替这份样例快照，`schema/extension/` 也要保持同样相对目录及过期文件清理。
-- 文档也算：`connector/conformance` 拿 `docs/wechat-connector.md` 和夹具对照（#2725），脚本没带 `docs/`，部署前的全量测试就挂在这里。现在 `docs/**/*.md` 也同步过去（#2769）。
+- 文档也算：`connector/conformance` 曾拿一份接入手册和夹具对照（#2725），脚本没带 `docs/`，部署前的全量测试就挂在这里。现在 `docs/**/*.md` 也同步过去（#2769）。
   合成 rsync 不能只创建空目录：假 Go 要读取本次 SDK 源码、嵌入文件及正常 / 非法样例，先测试冷启动，再检查更新后的源码及过期文件删除，避免同步漏项也能假通过。
 
 ## 沙箱测试用独立的合成受保护目录（#2052）

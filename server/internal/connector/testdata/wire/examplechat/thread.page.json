@@ -1,7 +1,7 @@
 {
   "chat": {
-    "id": "primary.example_room_a@chatroom",
-    "name": "微信群（…om_a）",
+    "id": "primary.group_example_1",
+    "name": "示例群",
     "kind": "group"
   },
   "messages": [
@@ -9,7 +9,7 @@
       "id": "880000000001",
       "at": "2026-11-04T08:21:00.000Z",
       "sender": {
-        "id": "wxid_example_a",
+        "id": "user_example_a",
         "name": "Example A"
       },
       "text": "大家好，今天的合成会议改到下午。"
@@ -18,7 +18,7 @@
       "id": "880000000006",
       "at": "2026-11-04T08:26:00.000Z",
       "sender": {
-        "id": "wxid_example_a",
+        "id": "user_example_a",
         "name": "Example A"
       },
       "text": "@示例用户 请看一下这个合成文档"

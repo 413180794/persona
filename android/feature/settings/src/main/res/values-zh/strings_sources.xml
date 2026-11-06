@@ -207,7 +207,7 @@
     <string name="settings_src_channel_copy_code">复制配对码</string>
     <string name="settings_src_channel_code_clip">配对码</string>
     <string name="settings_src_copied">已复制</string>
-    <string name="settings_src_channel_waiting_send">等你在%1$s里发给机器人…</string>
+    <string name="settings_src_channel_waiting_send">等你在 %1$s 里发给机器人…</string>
     <string name="settings_src_channel_waiting_authorize">等你授权…</string>
     <string name="settings_src_open_web">打开网页</string>
     <string name="settings_src_channel_waiting_confirm">等你在%1$s里确认…</string>

@@ -361,7 +361,7 @@ export interface AssistantCards {
 
 // ── usage sources (docs/usage-windows.md「账号池网关」, docs/admin.md): account-pool gateways feeding the sidebar's usage bars ──
 
-export type UsageSourceType = "relay-history" | "generic";
+export type UsageSourceType = "relay" | "generic";
 
 export interface UsageSeen {
   accounts: number;

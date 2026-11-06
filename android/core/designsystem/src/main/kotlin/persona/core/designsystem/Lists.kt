@@ -492,6 +492,23 @@ fun JSwipeActions(
     ) { content() }
 }
 
+/**
+ * Text the reader can long-press to select and copy (a link, an address shown to hand on), with no surface of its own;
+ * [style] and [color] come from the theme like any [Text].
+ */
+@Composable
+fun JSelectableText(
+    text: String,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    SelectionContainer(modifier) {
+        Text(text, style = style, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    }
+}
+
 /** Code and command text in the mono face on a sunken surface; selectable. */
 @Composable
 fun JCodeBlock(code: String, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE, small: Boolean = false) =

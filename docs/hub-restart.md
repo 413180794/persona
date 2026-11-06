@@ -91,7 +91,7 @@ Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
 
 ### 蓝绿切换：hub 的入口（`internal/hubedge`，2026-11-06）
 
-参考 relay-history 的做法：入口进程常驻并持有端口，后面挂两个槽位。起因是 2026-11-05 在 Linux 上复现的问题：自更新原地 `syscall.Exec` 新二进制时，systemd 传来的监听 socket 丢了。
+参考一个账号池网关（中转）的做法：入口进程常驻并持有端口，后面挂两个槽位。起因是 2026-11-05 在 Linux 上复现的问题：自更新原地 `syscall.Exec` 新二进制时，systemd 传来的监听 socket 丢了。
 启动时清掉了 `LISTEN_FDS`，`net.FileListener` 复制出的 fd 又带 close-on-exec，新进程只能自己 `bind`，端口却还在 `jarvisd.socket` 手里，于是报 `address already in use` 退出，
 要等 systemd 用 `Restart=always` 再拉起来，还白白多算一次启动次数。自更新这条路也不走计划内停机，客户端收不到 `hub_restarting`。
 
@@ -121,7 +121,7 @@ Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
 - 入口本身不跟着 hub 自动更新，只在服务重启时换（unit 变了、或者 `hub switch` 发现入口协议比新二进制旧，退出码 3）。
   所以入口要保持很薄：转发、排队、两个槽位、控制 socket（`~/.persona/run/hub-edge.sock`，0600）。
 
-为什么不做两个 hub 同时服务（relay-history 的并行切换）：hub 里有很多同一时刻只能有一个的东西，机器连接、助手进程、机器人、连接器、扩展，还有数据库迁移。
+为什么不做两个 hub 同时服务（那个网关的并行切换）：hub 里有很多同一时刻只能有一个的东西，机器连接、助手进程、机器人、连接器、扩展，还有数据库迁移。
 新旧并存的只有 standby 自检这一段，交接时有 1–2 秒的 hold。实测（NAS，2026-11-06）：一次切换 0.68 秒，期间 4 路并发请求共 607 次，失败 0 次。
 
 不经入口的情况：Windows、Docker（镜像更新）、`PERSONA_HUB_EDGE=0`、数据目录路径太长（Unix socket 地址超限）。这时 hub 照旧自己监听。

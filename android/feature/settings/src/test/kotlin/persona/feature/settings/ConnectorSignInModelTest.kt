@@ -36,10 +36,10 @@ class ConnectorSignInModelTest {
         assertTrue(model.start())
         assertEquals("" to emptyMap<String, String>(), hub.steps[0])
         assertFalse(model.state.value.bind.canSubmit)
-        model.setValue("server", " https://wechat-connector.example.com ")
+        model.setValue("server", " https://chat.example.com ")
         assertTrue(model.submit())
         // Trimmed, and the empty field left out.
-        assertEquals("server" to mapOf("server" to "https://wechat-connector.example.com"), hub.steps[1])
+        assertEquals("server" to mapOf("server" to "https://chat.example.com"), hub.steps[1])
         assertTrue(model.state.value.bind.polled)
         var waits = 0
         model.poll { waits++ }

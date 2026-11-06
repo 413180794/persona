@@ -36,7 +36,7 @@ const kiroUsage = `{"accounts":[
  {"account_id":"k4","plan":"free","stale":true,"windows":[
    {"kind":"monthly","scope":"account","limit":50,"remaining":0,"used_ratio":1,"resets_at":"2026-12-01T00:00:00Z","checked_at":"2026-11-05T08:00:00Z"}]}]}`
 
-func Testrelay-historyInventoryKeepsEveryAccountAndKind(t *testing.T) {
+func TestRelayInventoryKeepsEveryAccountAndKind(t *testing.T) {
 	var asked []string
 	g := newGateway(t, kiroAccounts, func(ids []string) (int, string) { asked = append(asked, ids...); return 200, kiroUsage })
 	res, err := Fetch(context.Background(), g.cfg(), now)
@@ -119,7 +119,7 @@ func TestReasonOf(t *testing.T) {
 	}
 }
 
-// pagedGateway answers the compact list in pages of size, with string cursors (as relay-history does), and records the
+// pagedGateway answers the compact list in pages of size, with string cursors (as a relay does), and records the
 // cursors asked for.
 type pagedGateway struct {
 	mu      sync.Mutex
@@ -171,9 +171,9 @@ func newPaged(t *testing.T, total, size, failAt int) *pagedGateway {
 	return p
 }
 
-func (p *pagedGateway) cfg() Config { return Config{Type: Typerelay-history, URL: p.srv.URL, Key: testKey} }
+func (p *pagedGateway) cfg() Config { return Config{Type: TypeRelay, URL: p.srv.URL, Key: testKey} }
 
-func Testrelay-historyPagesTheList(t *testing.T) {
+func TestRelayPagesTheList(t *testing.T) {
 	p := newPaged(t, 1100, 500, -1)
 	res, err := Fetch(context.Background(), p.cfg(), now)
 	if err != nil {
@@ -190,7 +190,7 @@ func Testrelay-historyPagesTheList(t *testing.T) {
 	}
 }
 
-func Testrelay-historyInventoryCap(t *testing.T) {
+func TestRelayInventoryCap(t *testing.T) {
 	p := newPaged(t, 2600, 500, -1)
 	res, err := Fetch(context.Background(), p.cfg(), now)
 	if err != nil {
@@ -201,7 +201,7 @@ func Testrelay-historyInventoryCap(t *testing.T) {
 	}
 }
 
-func Testrelay-historyFailedPage(t *testing.T) {
+func TestRelayFailedPage(t *testing.T) {
 	// a page after the first failing: what was read is kept, marked incomplete
 	p := newPaged(t, 1100, 500, 1)
 	res, err := Fetch(context.Background(), p.cfg(), now)
@@ -215,7 +215,7 @@ func Testrelay-historyFailedPage(t *testing.T) {
 	}
 }
 
-func Testrelay-historyCursorLoopStops(t *testing.T) {
+func TestRelayCursorLoopStops(t *testing.T) {
 	// a gateway answering the same cursor again (a bug there) does not keep the hub reading
 	var n int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +227,7 @@ func Testrelay-historyCursorLoopStops(t *testing.T) {
 		_, _ = io.WriteString(w, `{"accounts":[{"id":"a","provider":"kiro","status":"active"}],"next_after_id":"a","next_after_priority":7}`)
 	}))
 	defer srv.Close()
-	res, err := Fetch(context.Background(), Config{Type: Typerelay-history, URL: srv.URL, Key: testKey}, now)
+	res, err := Fetch(context.Background(), Config{Type: TypeRelay, URL: srv.URL, Key: testKey}, now)
 	if err != nil || n != 2 || len(res.Inventory) != 1 || res.Complete || res.Seen.Listed != 1 {
 		t.Fatalf("%v: %d pages, %d accounts, complete %v, listed %d", err, n, len(res.Inventory), res.Complete, res.Seen.Listed)
 	}

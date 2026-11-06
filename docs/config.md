@@ -271,8 +271,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].launchers`（可选）：给这台电脑另加 node 列不出来的启动器（比如 shell 包装函数），或改 node 报上来的同名启动器的 `agent_type`、`base_url`、`model`（没写的字段照旧），
   比如 `[{"name":"example_wrapper","agent_type":"codex"}]`：包装函数实际跑的是 Codex（`agent_type` 是 `claude` / `codex` / `traex` 或 runtime 的 agent；`docs/protocol.md`、`docs/model-config.md`）。
-- `usage`（可选）：账号池网关（relay-history 之类）的订阅额度来源，合并进侧边栏的用量条（`docs/usage-windows.md`「账号池网关」，#2595）。
-  `usage.sources[]`（最多 8 个）：`id`、`name`（侧边栏上的来源名）、`type`（`relay-history` / `generic`）、`url`、`key`（网关的管理 Key，**密钥：只存在 `hub.json`（0600）**，管理界面和接口读不回来，日志里没有）、`enabled`（写 `false` 停用这一个）。
+- `usage`（可选）：账号池网关（中转 relay 之类）的订阅额度来源，合并进侧边栏的用量条（`docs/usage-windows.md`「账号池网关」，#2595）。
+  `usage.sources[]`（最多 8 个）：`id`、`name`（侧边栏上的来源名）、`type`（`relay` / `generic`；旧版本写的类型名照样能读，当成 `relay`，下次在管理界面改这个来源时写成新名字）、`url`、`key`（网关的管理 Key，**密钥：只存在 `hub.json`（0600）**，管理界面和接口读不回来，日志里没有）、`enabled`（写 `false` 停用这一个）。
   `usage.enabled`（写 `false` 是总开关）、`usage.poll_minutes`（每个来源多久读一次，默认 5，1 到 1440）。这一节是**管理者**的（`personad assistant`，它自己读写同一个 `hub.json`，hub 不读）：它只读网关缓存的数字（`refresh=false`），请求从管理者发出，节点不碰网关。
   管理界面 `/admin/usage` 里改（hub 转给管理者），立刻生效；手改要重启 hub（管理者跟着重启），或打开管理界面的这一页（管理者会采用磁盘上的版本）。
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID

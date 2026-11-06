@@ -18,7 +18,7 @@ type GatewayAccounts struct {
 type GatewaySource struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	Type string `json:"type"` // relay-history
+	Type string `json:"type"` // relay (an extension that also accepts the earlier name keeps working with older hubs)
 	// CheckedAt is the last read that worked; nil before the first.
 	CheckedAt *time.Time `json:"checked_at"`
 	// Error is the usagesource code of the last attempt when it failed ("" when it worked); the accounts are then the

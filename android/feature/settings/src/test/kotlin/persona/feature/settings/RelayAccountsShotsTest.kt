@@ -33,20 +33,20 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * quota-relay-history's sidebar page (#4576) drawn on the JVM from the extension's made-up fixture: the default view (its
+ * quota-relay's sidebar page (#4576) drawn on the JVM from the extension's made-up fixture: the default view (its
  * top and its end), the Kiro type and one account's page, every style light and dark. Written to
- * `build/relay-history-shots/` (or `-Dpersona.shots=<dir>`) to look at.
+ * `build/relay-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "zh-w400dp-h4000dp-xhdpi")
-class relay-historyAccountsShotsTest {
+class RelayAccountsShotsTest {
     @get:Rule val rule = createComposeRule()
 
-    private val pages = listOf("default", "kiro", "detail").associateWith(relay-historyFixture::view)
+    private val pages = listOf("default", "kiro", "detail").associateWith(RelayFixture::view)
     private val handle = ExtensionViewHandle({ _, _ -> }, { _, _ -> }, {}, {})
 
-    private fun out(): File = File(System.getProperty("persona.shots") ?: "build/relay-history-shots").also { it.mkdirs() }
+    private fun out(): File = File(System.getProperty("persona.shots") ?: "build/relay-shots").also { it.mkdirs() }
 
     private fun capture(name: String) {
         rule.waitForIdle()

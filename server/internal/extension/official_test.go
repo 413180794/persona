@@ -14,7 +14,7 @@ func TestOfficialMarketIs(t *testing.T) {
 			t.Errorf("%s is the official market", spec)
 		}
 	}
-	for _, spec := range []string{"github:nwverse/persona-removed", "github:someone/persona-extensions",
+	for _, spec := range []string{"github:nwverse/persona-extensions-private", "github:someone/persona-extensions",
 		"https://example.com/persona-extensions.json", "git:https://git.example.com/nwverse/persona-extensions.git", "nonsense"} {
 		if o.Is(spec) {
 			t.Errorf("%s is not the official market", spec)

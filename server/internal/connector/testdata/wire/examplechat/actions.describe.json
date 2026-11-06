@@ -1,0 +1,7 @@
+{
+  "action": {
+    "name": "examplechat_send",
+    "visible": "『示例联系人』一个人"
+  },
+  "summary": "发送消息\n账号：primary\n发给：示例联系人（user_example_a）〔私聊〕\n内容（纯文本，全文）：\n三点见。"
+}

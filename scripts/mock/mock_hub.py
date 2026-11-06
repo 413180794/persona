@@ -4265,18 +4265,18 @@ if os.environ.get("MOCK_TELEGRAM_INBOX"):
 
 # MOCK_CONNECTOR_PLUGIN=1: a plugin's connector the apps know nothing about (the generic page: switch, a one-step
 # sign-in with a token, 进收件箱, sign-out, delete). The token is example-token; all made up.
-# MOCK_CONNECTOR_PLUGIN=wechat-connector: shaped like the wechat-connector plugin (#1420): 微信, with no mark of its own, a sign-in with
-# its server's address and an app key, 进知识库 / 进收件箱, and a private chat that opens as a conversation page (#1426).
-# The address is https://wechat-connector.example.com, the key example-key; the account wxid_example_a.
-PLUGIN_WECHAT = os.environ.get("MOCK_CONNECTOR_PLUGIN") == "wechat-connector"
-if PLUGIN_WECHAT:
-    PLUGIN_CONNECTOR = {"id": "wechat-connector", "name": "微信", "status": "not_signed_in", "enabled": True, "inbox": True, "archive": False,
-                        "error": "还没登录微信", "capabilities": ["status", "tools", "inbox", "archive", "login", "threads"]}
-    PLUGIN_ACCOUNT, PLUGIN_SECRET, PLUGIN_STEP = "wxid_example_a", "example-key", "app_key"
+# MOCK_CONNECTOR_PLUGIN=examplechat: shaped like a chat service's extension connector (#1426): 示例聊天, with no mark of
+# its own, a sign-in with its server's address and an app key, 进知识库 / 进收件箱, and a private chat that opens as a
+# conversation page. The address is https://chat.example.com, the key example-key; the account user_example_a.
+PLUGIN_CHAT = os.environ.get("MOCK_CONNECTOR_PLUGIN") == "examplechat"
+if PLUGIN_CHAT:
+    PLUGIN_CONNECTOR = {"id": "examplechat", "name": "示例聊天", "status": "not_signed_in", "enabled": True, "inbox": True, "archive": False,
+                        "error": "还没登录示例聊天", "capabilities": ["status", "tools", "inbox", "archive", "login", "threads"]}
+    PLUGIN_ACCOUNT, PLUGIN_SECRET, PLUGIN_STEP = "user_example_a", "example-key", "app_key"
     PLUGIN_PROMPT = {"step": "app_key", "fields": [
-        {"name": "base_url", "label": "服务器地址", "placeholder": "https://wechat-connector.example.com"},
-        {"name": "app_key", "label": "应用密钥", "secret": True, "placeholder": "在 wechat-connector 的开发者设置里生成"}],
-        "hint": "在 wechat-connector 的开发者设置里给 Persona 建一个只读的应用密钥（read、events），连同服务器地址填到这里。"}
+        {"name": "base_url", "label": "服务器地址", "placeholder": "https://chat.example.com"},
+        {"name": "app_key", "label": "应用密钥", "secret": True, "placeholder": "在示例聊天的开发者设置里生成"}],
+        "hint": "在示例聊天的开发者设置里给 Persona 建一个只读的应用密钥，连同服务器地址填到这里。应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。"}
 else:
     PLUGIN_CONNECTOR = {"id": "example-notes", "name": "示例笔记", "status": "not_signed_in", "enabled": True, "inbox": True,
                         "error": "还没登录示例笔记", "capabilities": ["status", "tools", "inbox", "login"]} if os.environ.get("MOCK_CONNECTOR_PLUGIN") else None
@@ -4285,52 +4285,16 @@ else:
                      "hint": "在示例笔记的「设置 › 开发者」里生成一个访问令牌，粘贴到这里。"}
 
 
-# MOCK_wechat-connector_MORE=1 (with MOCK_CONNECTOR_PLUGIN=wechat-connector): a group that @-mentions you, with a drafted reply, and
-# a second private chat, for the README pictures (scripts/assets/wechat-connector_shots.py). All made up.
-PLUGIN_WECHAT_MORE = PLUGIN_WECHAT and os.environ.get("MOCK_wechat-connector_MORE") == "1"
-WECHAT_GROUP = "10000000001@chatroom"
-
-
-# Low-saturation avatar colours of the group's two senders and the poster they share (media refs wx.*).
-WECHAT_AVATARS = {"wx.avatar.c": (128, 146, 168), "wx.avatar.d": (176, 150, 132)}
-
-
-def plugin_wechat_media(ref):
-    """The bytes a made-up WeChat media ref names: an avatar, or the poster as a 4:3 picture; None otherwise."""
-    if ref in WECHAT_AVATARS:
-        return png(96, 96, WECHAT_AVATARS[ref])
-    if ref == "wx.g2.image":
-        return tg_photo(400, 300, (150, 178, 196), (226, 232, 236))
-    return None
-
-
-def plugin_wechat_group_thread(at):
-    a = {"id": "wxid_example_c", "name": "示例同事", "avatar": "wx.avatar.c"}
-    c = {"id": "wxid_example_d", "name": "示例设计师", "avatar": "wx.avatar.d"}
-    return {"chat": {"id": WECHAT_GROUP, "name": "示例项目群", "kind": "group", "members": 8}, "messages": [
-        {"id": "g1", "at": at(95), "sender": c, "text": "新版的示例海报放群文件了，大家看看"},
-        {"id": "g2", "at": at(90), "sender": c, "media": [{"kind": "image", "ref": "wx.g2.image", "width": 1200, "height": 900}]},
-        {"id": "g3", "at": at(42), "sender": a, "text": "周五的示例活动场地定了吗？"},
-        {"id": "g4", "at": at(12), "sender": a, "text": "@我 场地和预算今天能定吗？我下午要报给示例客户"},
-    ]}
-
-
-def plugin_wechat_thread(thread):
+def plugin_chat_thread(thread):
     now = datetime.now(timezone.utc)
     def at(m): return (now - timedelta(minutes=m)).isoformat().replace("+00:00", "Z")
-    if PLUGIN_WECHAT_MORE and thread == WECHAT_GROUP:
-        return plugin_wechat_group_thread(at)
-    if PLUGIN_WECHAT_MORE and thread == "wxid_example_e":
-        e = {"id": "wxid_example_e", "name": "示例房东"}
-        return {"chat": {"id": thread, "name": "示例房东", "kind": "dm", "reply": "wechat-connector_send"}, "messages": [
-            {"id": "e1", "at": at(200), "sender": e, "text": "这周六上午来修热水器，家里留个人就行"}]}
-    if thread != "wxid_example_b":
+    if thread != "user_example_b":
         return None
-    you = {"id": "wxid_example_b", "name": "示例好友"}
-    return {"chat": {"id": thread, "name": "示例好友", "kind": "dm", "reply": "wechat-connector_send"}, "messages": [
-        {"id": "1", "at": at(50), "sender": you, "text": "明天的示例会议改到下午了", "url": "https://wechat-connector.example.com/m/1"},
+    you = {"id": "user_example_b", "name": "示例好友"}
+    return {"chat": {"id": thread, "name": "示例好友", "kind": "dm", "reply": "examplechat_send"}, "messages": [
+        {"id": "1", "at": at(50), "sender": you, "text": "明天的示例会议改到下午了", "url": "https://chat.example.com/m/1"},
         {"id": "2", "at": at(48), "sender": {"name": "我"}, "mine": True, "text": "好的，几点？"},
-        {"id": "3", "at": at(15), "sender": you, "text": "三点，地点不变", "url": "https://wechat-connector.example.com/m/3"},
+        {"id": "3", "at": at(15), "sender": you, "text": "三点，地点不变", "url": "https://chat.example.com/m/3"},
     ]}
 
 
@@ -4340,18 +4304,9 @@ def plugin_connector_area(h, method, p, raw):
     if not c or not p.startswith("/api/v1/connectors/%s/" % c["id"]):
         return False
     what, body = p.rsplit("/", 1)[1], json.loads(raw or b"{}")
-    if what == "thread" and method == "GET" and PLUGIN_WECHAT:
-        page = plugin_wechat_thread(parse_qs(urlparse(h.path).query).get("thread", [""])[0])
+    if what == "thread" and method == "GET" and PLUGIN_CHAT:
+        page = plugin_chat_thread(parse_qs(urlparse(h.path).query).get("thread", [""])[0])
         return (h.send_json(page) if page else h.send_json({"error": "没有这个会话"}, 502)) or True
-    if what == "media" and method == "GET" and PLUGIN_WECHAT_MORE:
-        data = plugin_wechat_media(parse_qs(urlparse(h.path).query).get("ref", [""])[0])
-        if data is None:
-            return h.send_json({"error": "不认识这个媒体"}, 502) or True
-        h.send_response(200)
-        h.send_header("Content-Type", "image/png"); h.send_header("Content-Length", str(len(data)))
-        h.send_header("Cache-Control", "private, max-age=31536000, immutable")
-        h.end_headers(); h.wfile.write(data)
-        return True
     if what == "login" and method == "POST":
         if body.get("step") == PLUGIN_STEP and (body.get("values") or {}).get(PLUGIN_STEP) == PLUGIN_SECRET:
             c.update(status="ok", account=PLUGIN_ACCOUNT)
@@ -4359,7 +4314,7 @@ def plugin_connector_area(h, method, p, raw):
             return h.send_json({"done": True, "account": PLUGIN_ACCOUNT}) or True
         prompt = dict(PLUGIN_PROMPT)
         if body.get("step") == PLUGIN_STEP:
-            prompt["error"] = "密钥不对" if PLUGIN_WECHAT else "令牌不对"
+            prompt["error"] = "密钥不对" if PLUGIN_CHAT else "令牌不对"
         return h.send_json(prompt) or True
     if what == "logout" and method == "POST":
         c.update(status="not_signed_in", error="还没登录" + c["name"])
@@ -4376,37 +4331,18 @@ def plugin_connector_area(h, method, p, raw):
     return False
 
 
-if PLUGIN_WECHAT and os.environ.get("MOCK_CONNECTOR_PLUGIN_SIGNED_IN"):
+if PLUGIN_CHAT and os.environ.get("MOCK_CONNECTOR_PLUGIN_SIGNED_IN"):
     PLUGIN_CONNECTOR.update(status="ok", account=PLUGIN_ACCOUNT)
     PLUGIN_CONNECTOR.pop("error", None)
-if PLUGIN_WECHAT:
+if PLUGIN_CHAT:
     INBOX[1:1] = [
-        {"id": "wechat-connector:wxid_example_b", "source": "wechat-connector", "kind": "dm", "account": "wechat-connector", "account_name": "微信",
+        {"id": "examplechat:user_example_b", "source": "examplechat", "kind": "dm", "account": "examplechat", "account_name": "示例聊天",
          "title": "示例好友", "sender": "示例好友", "preview": "三点，地点不变", "count": 1,
          "started_at": ago(minutes=15), "updated_at": ago(minutes=15), "tier": "action",
          "summary": "示例好友说明天的会议改到下午三点", "reason": "等你回复", "read": False,
-         "context": "示例好友（微信私聊）\n今天 示例好友：明天的示例会议改到下午了\n今天 示例好友：三点，地点不变",
-         "connector": {"thread": "wxid_example_b", "label": "私聊", "open_url": "https://wechat-connector.example.com/c/wxid_example_b"}},
+         "context": "示例好友（示例聊天私聊）\n今天 示例好友：明天的示例会议改到下午了\n今天 示例好友：三点，地点不变",
+         "connector": {"thread": "user_example_b", "label": "私聊", "open_url": "https://chat.example.com/c/user_example_b"}},
     ]
-if PLUGIN_WECHAT_MORE:
-    INBOX[1:1] = [
-        {"id": "wechat-connector:" + WECHAT_GROUP, "source": "wechat-connector", "kind": "mention", "account": "wechat-connector", "account_name": "微信",
-         "title": "示例项目群", "sender": "示例同事", "preview": "@我 场地和预算今天能定吗？我下午要报给示例客户", "count": 2,
-         "started_at": ago(minutes=42), "updated_at": ago(minutes=12), "tier": "action",
-         "summary": "示例同事在群里 @你，问周五活动的场地和预算今天能不能定", "reason": "@了你，下午要用", "read": False,
-         "context": "示例项目群（微信群）\n今天 示例同事：周五的示例活动场地定了吗？\n今天 示例同事：@我 场地和预算今天能定吗？我下午要报给示例客户",
-         "agent": {"state": "drafted", "task": "查周五活动的场地和预算进展，回复示例同事",
-                   "draft": "场地定了，就用上次那个示例会议室；预算下午两点前发群里。",
-                   "note": "知识库里周三记过：场地已确认，预算表还差报价。"},
-         "connector": {"thread": WECHAT_GROUP, "label": "@你", "open_url": "https://wechat-connector.example.com/c/" + WECHAT_GROUP}},
-    ]
-    INBOX.append(
-        {"id": "wechat-connector:wxid_example_e", "source": "wechat-connector", "kind": "dm", "account": "wechat-connector", "account_name": "微信",
-         "title": "示例房东", "sender": "示例房东", "preview": "这周六上午来修热水器，家里留个人就行", "count": 1,
-         "started_at": ago(hours=3), "updated_at": ago(hours=3), "tier": "fyi",
-         "summary": "示例房东周六上午来修热水器", "reason": "知悉即可", "read": True,
-         "context": "示例房东（微信私聊）\n今天 示例房东：这周六上午来修热水器，家里留个人就行",
-         "connector": {"thread": "wxid_example_e", "label": "私聊", "open_url": "https://wechat-connector.example.com/c/wxid_example_e"}})
 
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
@@ -8956,15 +8892,15 @@ def mock_usage_windows():
         week = (2 * 24 + 3) * 3600
         scoped = {**win("7d", 10080, 100, week), "model": "Fable"}
         return {"accounts": [
-            {"id": "claude-1", "provider": "claude", "name": "work-claude", "plan": "Max", "sampled_at": iso(now - 12), "local": True, "sources": ["relay-history"],
+            {"id": "claude-1", "provider": "claude", "name": "work-claude", "plan": "Max", "sampled_at": iso(now - 12), "local": True, "sources": ["Relay"],
              "windows": [win("5h", 300, 86, 55 * 60), win("7d", 10080, 41, week), scoped]},
             {"id": "codex-1", "provider": "codex", "name": "Codex Pro", "plan": "pro", "sampled_at": iso(now - 190), "local": True,
              "windows": [win("5h", 300, 22, 4 * 3600), win("7d", 10080, 63, (3 * 24 + 5) * 3600)]},
-            {"id": "codex-3", "provider": "codex", "name": "team-seat-2", "plan": "ChatGPT Plus", "sampled_at": iso(now - 40 * 60), "sources": ["relay-history"],
+            {"id": "codex-3", "provider": "codex", "name": "team-seat-2", "plan": "ChatGPT Plus", "sampled_at": iso(now - 40 * 60), "sources": ["Relay"],
              "windows": [win("5h", 300, 8, 2 * 3600), win("7d", 10080, 31, 4 * 24 * 3600)]},
             {"id": "codex-4", "provider": "codex", "name": "team-seat-3", "plan": "ChatGPT Plus", "sampled_at": iso(now - 9 * 3600), "stale": True,
-             "sources": ["relay-history"], "problem": "unreachable", "windows": [win("7d", 10080, 54, 3 * 24 * 3600)]},
-            {"id": "kimi-1", "provider": "kimi", "name": "kimi-spare", "sampled_at": iso(now - 20 * 60), "sources": ["relay-history", "Team pool"],
+             "sources": ["Relay"], "problem": "unreachable", "windows": [win("7d", 10080, 54, 3 * 24 * 3600)]},
+            {"id": "kimi-1", "provider": "kimi", "name": "kimi-spare", "sampled_at": iso(now - 20 * 60), "sources": ["Relay", "Team pool"],
              "windows": [win("7d", 10080, 5, 6 * 24 * 3600)]},
         ], "checked_at": iso(now)}
     return {"accounts": [
@@ -13655,19 +13591,19 @@ if EXT_AUTH:
 MOCK_HELP.append("MOCK_EXTENSION_AUTH=1|device|installed|device-installed  （配合 MOCK_PLUGINS、MOCK_EXTENSION_OPS）扩展市场里的「Example 查询」装两个命令行程序（安装步骤多一步「安装命令行」）并要登录：装完 next=auth，登录是扫码（device：验证码和链接），第 3 次轮询登录成功（MOCK_EXTENSION_AUTH_POLLS）；installed：已经装好、未登录；MOCK_EXTENSION_AUTH_OLD=1 不说 extension_auth（旧 hub，#4507）")
 
 
-# MOCK_relay-history=<fixture> (with MOCK_PLUGINS=1): quota-relay-history's sidebar page 「relay-history 账号」 as a nav_page, drawn from
-# the extension's exported Views (apple/PersonaTests/Fixtures/relay-history-accounts-view.json, made-up accounts, #4576).
-if os.environ.get("MOCK_relay-history") and PLUGINS_MODE:
-    from relay-history_accounts import relay-historyAccountsMock
-    _relay-history_accounts = relay-historyAccountsMock(os.environ["MOCK_relay-history"], os.environ.get("MOCK_relay-history_START", ""))
-    _plugins_route_without_relay-history = plugins_route
+# MOCK_RELAY_ACCOUNTS=<fixture> (with MOCK_PLUGINS=1): quota-relay's sidebar page 「中转账号」 as a nav_page, drawn from
+# the extension's exported Views (web/src/views/extensions/testdata/relay-accounts-view.json, made-up accounts, #4576).
+if os.environ.get("MOCK_RELAY_ACCOUNTS") and PLUGINS_MODE:
+    from relay_accounts import RelayAccountsMock
+    _relay_accounts = RelayAccountsMock(os.environ["MOCK_RELAY_ACCOUNTS"], os.environ.get("MOCK_RELAY_ACCOUNTS_START", ""))
+    _plugins_route_without_relay_accounts = plugins_route
 
     def plugins_route(handler, p, body):
-        if _relay-history_accounts.route(handler, p, body): return True
-        return _plugins_route_without_relay-history(_relay-history_accounts.wrap(handler, p), p, body)
+        if _relay_accounts.route(handler, p, body): return True
+        return _plugins_route_without_relay_accounts(_relay_accounts.wrap(handler, p), p, body)
 
 
-MOCK_HELP.append("MOCK_relay-history=<fixture.json>  （配合 MOCK_PLUGINS=1）侧边栏多一个扩展页「relay-history 账号」，内容是 quota-relay-history 导出的 View（apple/PersonaTests/Fixtures/relay-history-accounts-view.json，假数据）：默认、选 Kiro、搜索、点一个账号进详情；MOCK_relay-history_START=kiro|detail 让第一次打开就是选了 Kiro / 一个账号的详情，截图不用点（#4576）")
+MOCK_HELP.append("MOCK_RELAY_ACCOUNTS=<fixture.json>  （配合 MOCK_PLUGINS=1）侧边栏多一个扩展页「中转账号」，内容是 quota-relay 导出的 View（web/src/views/extensions/testdata/relay-accounts-view.json，假数据）：默认、选 Kiro、搜索、点一个账号进详情；MOCK_RELAY_ACCOUNTS_START=kiro|detail 让第一次打开就是选了 Kiro / 一个账号的详情，截图不用点（#4576）")
 
 
 # ---------- area: adding a computer from a signed-in device (#287, docs/onboarding.md 4.2, 5.3) ----------

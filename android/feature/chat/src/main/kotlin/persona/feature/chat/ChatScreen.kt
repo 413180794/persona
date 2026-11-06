@@ -665,7 +665,7 @@ private fun ChatPage(
                                             if (result.withdraw) {
                                                 resolved = resolved + interaction.id
                                                 uncertain = uncertain - interaction.id
-                                                interactionFeedback = result.notice(res, interaction)
+                                                interactionFeedback = result.notice(res, interaction, resolution)
                                                 if (result.offersNext(resolution)) answeredHere++
                                             } else uncertain = uncertain + interaction.id
                                             notice = if (result.submission == InteractionSubmission.Unknown) res.getString(result.submission.notice) else null

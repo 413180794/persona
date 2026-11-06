@@ -447,7 +447,7 @@ func TestSameAsk(t *testing.T) {
 		a, b string
 		same bool
 	}{
-		{"等 runner 恢复 + lark-connector 0.14.0 发版", "等 runner 恢复和 lark-connector 0.14.0 发版", true},
+		{"等 runner 恢复 + im-extension 0.14.0 发版", "等 runner 恢复和 im-extension 0.14.0 发版", true},
 		{"用哪个分支？", "用哪个分支?", true},
 		{"用哪个分支？", "要不要合并？", false},
 		{"PR #100 还是 Draft，下一步？", "PR #3407 的 CI 一直排队，接下来怎么处理？", false},

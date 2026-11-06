@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The generic source is Persona's own shape, for a gateway that is not relay-history: GET <url> with
+// The generic source is Persona's own shape, for a gateway that is not a relay: GET <url> with
 // "Authorization: Bearer <key>" answers
 //
 //	{"accounts": [{

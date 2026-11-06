@@ -17,12 +17,12 @@ import persona.core.contracts.api.ExtensionView
 import java.io.File
 
 /**
- * quota-relay-history's sidebar page (#4576) as the extension draws it, from made-up data (the extension's
- * `testdata/relay-history-accounts-view.json`): every item decodes and is drawn, the account rows push the account's page,
+ * quota-relay's sidebar page (#4576) as the extension draws it, from made-up data (the extension's
+ * `testdata/relay-accounts-view.json`): every item decodes and is drawn, the account rows push the account's page,
  * and the type / status / search controls send what the extension reads back.
  */
-internal object relay-historyFixture {
-    private val raw: JsonObject by lazy { JsonCodec.parseToJsonElement(File("src/test/fixtures/relay-history-accounts-view.json").readText()).jsonObject }
+internal object RelayFixture {
+    private val raw: JsonObject by lazy { JsonCodec.parseToJsonElement(File("src/test/fixtures/relay-accounts-view.json").readText()).jsonObject }
 
     fun view(name: String): ExtensionView = JsonCodec.decodeFromJsonElement(ExtensionView.serializer(), raw.getValue(name))
 
@@ -31,8 +31,8 @@ internal object relay-historyFixture {
         .sumOf { (it.jsonObject["items"] as? JsonArray)?.size ?: 0 }
 }
 
-private class relay-historyUi : ExtensionApiStub() {
-    val views = mapOf("all" to relay-historyFixture.view("default"), "kiro" to relay-historyFixture.view("kiro"))
+private class RelayUi : ExtensionApiStub() {
+    val views = mapOf("all" to RelayFixture.view("default"), "kiro" to RelayFixture.view("kiro"))
     val actions = mutableListOf<Triple<String, String?, Map<String, String>?>>()
     /** The type the extension keeps in its state: a filter or a search sends no type and keeps it. */
     private var type = "all"
@@ -51,21 +51,21 @@ private class relay-historyUi : ExtensionApiStub() {
     }
 }
 
-class relay-historyAccountsTest {
+class RelayAccountsTest {
     private val pages = listOf("default", "kiro", "detail")
 
     @Test fun everyItemDecodesAndIsDrawn() {
         for (name in pages) {
-            val view = relay-historyFixture.view(name)
+            val view = RelayFixture.view(name)
             val items = view.sections.flatMap { it.items }
-            assertEquals("$name: no item left out when read", relay-historyFixture.rawItems(name), items.size)
+            assertEquals("$name: no item left out when read", RelayFixture.rawItems(name), items.size)
             assertEquals("$name: every item drawn", emptyList<String>(), items.filterNot(ExtensionViewText::drawable).map { it.type + ":" + it.key })
             assertTrue("$name: the list's keys are its own", ExtensionViewText.itemKeys(items).filterNotNull().let { it.size == it.toSet().size })
         }
-        val default = relay-historyFixture.view("default")
+        val default = RelayFixture.view("default")
         // all 73 accounts (71 on the gateway and 3 seats, a link with seats drawn as their section) as rows
         assertEquals(73, default.sections.flatMap { it.items }.count { it.type == "row" })
-        assertTrue("well inside the 300-item cap", relay-historyFixture.rawItems("default") <= 280)
+        assertTrue("well inside the 300-item cap", RelayFixture.rawItems("default") <= 280)
         // the status filter has more than 5 choices: this app (UI version 3+) keeps it and the search
         assertEquals(8, default.filter!!.choices.size)
         assertEquals("all", default.filter!!.value)
@@ -75,15 +75,15 @@ class relay-historyAccountsTest {
 
     @Test fun noLauncherOrKeyOnThePage() {
         for (name in pages) {
-            val text = JsonCodec.encodeToString(ExtensionView.serializer(), relay-historyFixture.view(name))
+            val text = JsonCodec.encodeToString(ExtensionView.serializer(), RelayFixture.view(name))
             assertFalse("$name names a launcher", "启动器" in text)
             assertFalse("$name names a key", Regex("""Key[：:]""").containsMatchIn(text))
         }
     }
 
     @Test fun anAccountRowPushesItsPage() = runBlocking {
-        val api = relay-historyUi()
-        val model = ExtensionViewModel(api, "quota-relay-history", "sidebar")
+        val api = RelayUi()
+        val model = ExtensionViewModel(api, "quota-relay", "sidebar")
         model.load()
         val rows = model.state.value.view!!.sections.flatMap { it.items }.filter { it.type == "row" && it.action != null }
         assertEquals(73, rows.size)
@@ -96,14 +96,14 @@ class relay-historyAccountsTest {
         val outcome = model.press(rows.first().action!!)
         assertEquals(rows.first().action!!.push, outcome.push)
         assertTrue("a push never reaches the extension", api.actions.isEmpty())
-        val route = ExtensionViewText.pushed("quota-relay-history", "sidebar", "relay-history 账号", 0, outcome.push!!)!!
+        val route = ExtensionViewText.pushed("quota-relay", "sidebar", "中转账号", 0, outcome.push!!)!!
         assertEquals("sidebar", route.uiId)
         assertEquals(rows.first().action!!.push!!.state, route.state)
     }
 
     @Test fun typeStatusAndSearchGoBackWithTheState() = runBlocking {
-        val api = relay-historyUi()
-        val model = ExtensionViewModel(api, "quota-relay-history", "sidebar")
+        val api = RelayUi()
+        val model = ExtensionViewModel(api, "quota-relay", "sidebar")
         model.load()
         val state = model.state.value.view!!.state
         val type = model.state.value.view!!.sections[0].items.first { it.type == "segmented" }

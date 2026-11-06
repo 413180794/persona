@@ -33,7 +33,7 @@ func (d *inventoryDevices) Request(_ context.Context, method string, _ json.RawM
 func TestUsageGatewayAccountsNeedsItsPermission(t *testing.T) {
 	h := newTestManager(t)
 	devs := &inventoryDevices{list: proto.GatewayAccounts{
-		Sources:  []proto.GatewaySource{{ID: "s1", Name: "relay-history", Type: "relay-history", Listed: 1, Complete: true}},
+		Sources:  []proto.GatewaySource{{ID: "s1", Name: "Relay", Type: "relay", Listed: 1, Complete: true}},
 		Accounts: []proto.GatewayAccount{{Source: "s1", AccountID: "k1", Provider: "kiro", Status: "disabled", Stale: true, Windows: []proto.GatewayWindow{}}},
 	}}
 	h.opts.Devices = devs

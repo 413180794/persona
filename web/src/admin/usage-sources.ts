@@ -8,7 +8,7 @@ import type { UsageSource, UsageSourceType, UsageTestResult } from "./types";
 /** The intervals the page offers; the hub accepts 1 to 1440 minutes, so one set by hand in hub.json is shown too. */
 export const POLL_CHOICES = [1, 5, 15, 30, 60];
 
-export const typeLabel = (type: UsageSourceType | string): string => (type === "generic" ? t("admin-pages-usage.type_generic") : t("admin-pages-usage.type_relay-history"));
+export const typeLabel = (type: UsageSourceType | string): string => (type === "generic" ? t("admin-pages-usage.type_generic") : t("admin-pages-usage.type_relay"));
 
 /** The words for a failed read, by the code the hub gives (usagesource.Code*). */
 export function reasonText(code: string): string {

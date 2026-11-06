@@ -1,7 +1,7 @@
 # 订阅额度窗口（#2432）
 
 Codex、Claude Code 这类订阅有「5 小时」「每周」的用量窗口。这一页说 Persona 怎么把它们收上来、合并、画出来，以及为什么有的来源不用。
-界面在网页版的侧边栏底部（`docs/web.md`「订阅额度」）、iOS 的机器页和 Mac 的分区列底部（下面「界面（iOS / Mac）」），数据来自各台电脑的 node，以及管理者去问的账号池网关（比如 relay-history，见下面「账号池网关」，#2595）。
+界面在网页版的侧边栏底部（`docs/web.md`「订阅额度」）、iOS 的机器页和 Mac 的分区列底部（下面「界面（iOS / Mac）」），数据来自各台电脑的 node，以及管理者去问的账号池网关（比如中转 relay，见下面「账号池网关」，#2595）。
 采集、合并和网关都是**管理者**的（连电脑的那个，助手的进程 `personad assistant`，见下面「谁管这件事」），hub 只转发接口。
 
 ## 只读本机文件，不碰凭据
@@ -67,9 +67,9 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 
 没有数据时 `accounts` 是 `[]`；老 hub 没有这个路由（404），网页当作没有数据。
 
-## 账号池网关（relay-history…，#2595）
+## 账号池网关（中转 relay…，#2595）
 
-账号池网关替你养着好几个 Codex / Claude / 别家的订阅账号，**自己已经知道每个账号的 5 小时、每周额度用了多少**（relay-history 把上游随普通请求回来的响应头存下来）。
+账号池网关替你养着好几个 Codex / Claude / 别家的订阅账号，**自己已经知道每个账号的 5 小时、每周额度用了多少**（比如中转把上游随普通请求回来的响应头存下来）。
 这些数字不必每台电脑再各查一遍：管理者去问网关，读它存好的数字，合并进侧边栏。电脑上读不到的账号（网关里养着的、本机没登录的）也能看到。
 
 ### 为什么做成内置来源，不是扩展
@@ -80,8 +80,9 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 - **新开一个扩展点要一整套**：清单字段、schema 生成的四端类型、权限、进程宿主、市场里的包。而网关要的只是「一个地址 + 一把 Key，每 5 分钟读一次，把数字映射成窗口」，几百行。
 - 所以：**来源是一个很小的概念**（`hub.json` 的 `usage.sources[]`，一个来源一种 `type`），内置两种适配（在管理者里）：
   - `generic`：**Persona 自己定义的通用格式**，任何账号池网关实现这一个 GET 就能接进来（下面）。
-  - `relay-history`：relay-history 的管理接口（它是同一个组织的开源兄弟项目，接口公开、稳定），适配器只是把它的两个只读接口映射成同一个形状。
-- 以后真有第三种、第四种形状不同的网关，再把适配器抽成扩展点（`usagesource.Fetch` 是唯一的入口，抽的时候不改别处）。**这是一个权衡，不是教条**：relay-history 的适配器写在核心里，是少数的一个具体服务的例外，换来的是装上就能用、不用装扩展。
+  - `relay`：**中转（账号池中转网关）的管理接口**，两个只读接口（下面「读取」），任何实现了这两个接口的中转都能接；适配器只是把它们映射成同一个形状。
+    旧版本 hub.json 里这个类型用的是第一个接上的中转的名字，照样能读（除了 `generic` 都当成 `relay`），下次在管理界面改这个来源时写成 `relay`。
+- 以后真有第三种、第四种形状不同的网关，再把适配器抽成扩展点（`usagesource.Fetch` 是唯一的入口，抽的时候不改别处）。**这是一个权衡，不是教条**：`relay` 的适配器写在核心里，按接口形状命名、不点名具体服务，换来的是装上就能用、不用装扩展。
 
 ### 配置
 
@@ -92,7 +93,7 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 "usage": {
   "poll_minutes": 5,
   "sources": [
-    {"id": "src-1a2b3c4d", "name": "relay-history", "type": "relay-history", "url": "https://gateway.example.com", "key": "<管理 Key>"},
+    {"id": "src-1a2b3c4d", "name": "Relay", "type": "relay", "url": "https://gateway.example.com", "key": "<管理 Key>"},
     {"id": "src-5e6f7a8b", "name": "Team pool", "type": "generic", "url": "https://pool.example.com/persona/usage", "enabled": false}
   ]
 }
@@ -102,7 +103,7 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 | --- | --- |
 | `usage.enabled` | 写 `false` 是总开关：不再问任何网关（电脑自己读到的不受影响）。不写是开 |
 | `usage.poll_minutes` | 每个来源隔多久读一次，默认 5，1 到 1440 |
-| `usage.sources[]` | 最多 8 个。`id` 是管理者起的（`src-…`，管理界面生成），`name` 是侧边栏上的来源名（最长 40 个字），`type` 是 `relay-history` / `generic`，`url` 是 http(s) 地址（不能带用户名密码），`key` 作为 `Authorization: Bearer` 发出，`enabled` 写 `false` 是这一个停用 |
+| `usage.sources[]` | 最多 8 个。`id` 是管理者起的（`src-…`，管理界面生成），`name` 是侧边栏上的来源名（最长 40 个字），`type` 是 `relay` / `generic`，`url` 是 http(s) 地址（不能带用户名密码），`key` 作为 `Authorization: Bearer` 发出，`enabled` 写 `false` 是这一个停用 |
 
 管理界面（`/admin/usage`，`docs/admin.md`）里增删改、开关、「测试连接」，改完立刻生效，不用重启。手改 `hub.json` 的话，下次打开这个页面时管理者会采用磁盘上的版本。
 
@@ -110,11 +111,11 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 
 **只读，永远不碰上游**：
 
-- relay-history：`GET /api/admin/accounts?view=compact&limit=500`（账号列表：`id`、`name`、`provider`、`status`、`schedulable`、`cooldown_until`、`last_error`、`quota_summary`，**没有邮箱、凭据、代理地址**；
+- `relay`：`GET /api/admin/accounts?view=compact&limit=500`（账号列表：`id`、`name`、`provider`、`status`、`schedulable`、`cooldown_until`、`last_error`、`quota_summary`，**没有邮箱、凭据、代理地址**；
   回答带 `next_after_id` / `next_after_priority` 时带上 `after_id` / `after_priority` 接着读下一页，最多 2000 个账号；更老的网关忽略 `view` / `limit` 回整个列表或整个数组，也认，只取这几个字段），
   再对没停用的账号 `POST /api/admin/accounts/usage {"ids": […], "refresh": false}`（每次最多 100 个、总共最多 500 个账号）。一轮读同时得到侧边栏的样本和下面「网关的账号清单」，不为清单再读一遍。`refresh` 写死 `false`：网关只读它的库，不会去问上游
   （`refresh=true` 会让网关从它唯一的出口地址探测上游，用掉整个池子的探测额度）。不调用别的路由，更不调用任何写路由。
-- **建议用分组 Key**：relay-history 的 `onboarder` / `operator` 分组管理 Key 只看得到本组账号（包括 `/accounts/usage`，见 relay-history 文档的 admin-access 一篇），读不到别的组的；比部署 Key 小得多。
+- **建议用分组 Key**：中转的分组管理 Key（比如 `onboarder` / `operator` 分组）只看得到本组账号（包括 `/accounts/usage`，见那个中转的访问控制文档），读不到别的组的；比部署 Key 小得多。
   账号在两次调用之间被换组 / 删掉，用量接口回 404 时这一轮读失败（界面写「这个地址不是网关的管理接口，或网关版本太旧」，下一轮重试）。
 - 超时（一次请求 15 秒，一个来源一轮 45 秒）、回答最多 8 MB、不跟重定向（Key 不会被带到别的地址）、错误只留一个代码，不留网关回的文字，也不进日志（日志只在代码变化时写一行 `usage source <id>: <code>`）。
 
@@ -133,8 +134,8 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 | `unsupported`、整个账号没有可画的窗口、`status: disabled` | 不列 |
 | `stale`、`error` | 标过期；`error` 的账号在浮层里写「网关读这个账号失败，显示的是它存着的数字」（错误文字不带出来） |
 
-网关里 relay-history 的数字来自随普通请求回来的响应头，**账号闲着就不更新**，所以它的样本比电脑上的老得慢：超过 6 小时才标过期（电脑上的样本 30 分钟），界面上的采样时间写的是数字真正的年龄。
-没有拿真实的 relay-history 核对过各个 `kind` 的取值：映射表按它源码里的 `quotaKindByWindowMinutes` / `quotaKindByBucket` 写，单元测试用按它的 JSON 标签写的样例（见「限制」）。
+中转的数字来自随普通请求回来的响应头，**账号闲着就不更新**，所以它的样本比电脑上的老得慢：超过 6 小时才标过期（电脑上的样本 30 分钟），界面上的采样时间写的是数字真正的年龄。
+没有拿真实的中转核对过各个 `kind` 的取值：映射表按第一个接上的中转公开的窗口名写，单元测试用按它的 JSON 字段写的样例（见「限制」）。
 
 ### 和电脑上读到的合并
 
@@ -142,25 +143,25 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 几条补充：
 
 - 同一个网关里的两个账号（`id` 不同）**绝不合并**，不管重置时间碰巧是不是一样；两个网关（或网关和电脑）各看到的同一个上游账号会合并。
-- 合并后的账号取最新样本的数字，列出来源：`本机`（电脑上读到的）和网关的名字，浮层标题下一行写「本机 · relay-history」；只有一个来源的写那一个。
+- 合并后的账号取最新样本的数字，列出来源：`本机`（电脑上读到的）和网关的名字，浮层标题下一行写「本机 · Relay」；只有一个来源的写那一个。
 - 网关**连不上就留着它的上一次回答并标过期**（`problem: "unreachable"`，浮层里写「网关暂时读不到，显示的是上次的数字」），不让账号消失；超过 3 天丢掉。
 - 排序不变：按账号的计划窗口里最满的一个从高到低，过期的排最后。没有任何数据（也没有来源）时整块不画。
 
 ### 网关的账号清单（#4576）
 
-侧边栏的额度条只画有时间窗口的账号；扩展（relay-history 额度扩展侧边栏的「relay-history 账号」页）要的是**网关里的每一个账号**：停用的、隔离的、要重新登录的、只有 Kiro 积分的都算。
+侧边栏的额度条只画有时间窗口的账号；扩展（比如某个中转的额度扩展在侧边栏的账号页）要的是**网关里的每一个账号**：停用的、隔离的、要重新登录的、只有 Kiro 积分的都算。
 同一轮读（上面）顺手留下一份清单，存在管理者的内存里，扩展用 hub 方法 `usage.gateway_accounts {}` 读（权限 `usage_gateways`，`docs/extensions.md`「额度」）。它只回上一次读到的，**从不为它去问网关**。
 
 ```json
-{"sources": [{"id": "src-…", "name": "relay-history", "type": "relay-history", "checked_at": "…", "error": "", "listed": 71, "complete": true}],
+{"sources": [{"id": "src-…", "name": "Relay", "type": "relay", "checked_at": "…", "error": "", "listed": 71, "complete": true}],
  "accounts": [{"source": "src-…", "account_id": "<网关的 id>", "name": "", "provider": "kiro", "plan": "free", "plan_raw": "", "plan_display_name": "",
    "status": "active", "schedulable": true, "reason": "", "cooldown_until": null,
    "windows": [{"kind": "monthly", "scope": "account", "scoped_model": "", "used_ratio": 0.18, "limit": 50, "remaining": 41, "resets_at": "…"}],
    "checked_at": "…", "cached": true, "stale": false}]}
 ```
 
-- 只列 `relay-history` 类型、开着的来源；还没读过的来源（刚加上，或 hub 刚重启、刚切换，内存里还没有）也列，`checked_at` 是 `null`、没有账号、`error` 是 `pending`：它是「还不知道」，不是「网关里没有账号」，用的一方要当成没有数据（relay-history 额度扩展这时退回读各启动器）。没有来源时回 `{"sources": [], "accounts": []}`。
-- `status` 是 relay-history 原样的（`active`、`cooldown`、`exhausted`、`refresh_required`、`quarantined`、`expired`、`disabled`）；`schedulable` 网关没说时当作 `true`。
+- 只列 `relay` 类型、开着的来源；还没读过的来源（刚加上，或 hub 刚重启、刚切换，内存里还没有）也列，`checked_at` 是 `null`、没有账号、`error` 是 `pending`：它是「还不知道」，不是「网关里没有账号」，用的一方要当成没有数据（额度扩展这时退回读各启动器）。没有来源时回 `{"sources": [], "accounts": []}`。
+- `status` 是中转原样的（`active`、`cooldown`、`exhausted`、`refresh_required`、`quarantined`、`expired`、`disabled`）；`schedulable` 网关没说时当作 `true`。
 - `reason` 是 `last_error` 第一个 `:` 前面那一截，**只在它是 `^[a-z_]{1,32}$` 的短词时**留下（`quarantine`、`sign_in_required`、冷却原因）；后面的文字可能是上游的原话（地址、带账号的消息），不转发、不进日志。
 - **窗口原样带出，什么 `kind` 都留**：`five_hour`、`weekly`、`monthly`、`kiro_bonus`、`kiro_free_trial`、`kiro_overage`（不封顶时没有数字）、单模型的窗口（`scope: "model"`）……数字缺的是 `null`，不当成 0。
 - **停用的账号也在**：用量接口不读它们，窗口取账号列表里的 `quota_summary`（`kind`、`scoped_model`、`used_ratio`、`resets_at`），标 `stale: true`。超过 500 个、没被用量接口读到的账号同样处理。
@@ -206,7 +207,7 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 
 - **侧边栏底部**：最满的两个账号各一条细条（名字、最满窗口的百分比），≥ 80% 用警示色；过期的变淡；鼠标放上去的提示里写来源。**没有数据时整块不画**，侧边栏和以前一样。
 - **点开**：每个账号每个窗口一行：窗口长度（5h / 7d）、已用百分比、一个条、重置倒计时、节奏提示，账号标题右边是采样时间（「12 秒前」）。
-  账号标题下一行写计划和来源（「本机 · relay-history」），单模型的窗口在长度旁写模型名，网关读不到时写一句说明（见「账号池网关」）。Esc 或点别处关。
+  账号标题下一行写计划和来源（「本机 · Relay」），单模型的窗口在长度旁写模型名，网关读不到时写一句说明（见「账号池网关」）。Esc 或点别处关。
 - **重置倒计时**：不到 1 小时写 `45m 后重置`；今天之内写时刻 `13:05 重置`；更久写 `2d 3h 后重置`。
 - **节奏**（`lib/usage-windows.ts` 的 `pace`）：窗口长度从标签读（`5h`、`7d`，读不出来用 `window_minutes`），应有进度 = 已过时间 / 窗口长度，
   实际比应有高出超过 5 个百分点是「用得偏快」，低了超过 5 个百分点是「用得偏慢」，之间不写；条上画一根刻度标出应有进度的位置。
@@ -230,8 +231,8 @@ printf '%s' "$payload" | <你原来的状态栏命令>
 - Claude 的额度要用户自己接状态栏（上面），否则只有 Codex。
 - Codex 的数字只在用过 Codex 时才更新；整台机器都没用过它，数字就停在最后一次。界面上看采样时间就知道多旧。
 - 管理者重启后（hub 重启时它跟着重启），已经下线的机器的上一次回答没了，要等它上线再问；网关的上一次回答也在内存里，重启后第一轮（几秒内）读到前侧边栏没有它的账号。
-- **没有拿真实的 relay-history 验证过**（这台开发机上没有在跑的网关）：适配器按它的源码（`internal/application/accountusage`、`internal/domain/account` 的 JSON 标签、`accountpresentation.Compact`）和它文档的 account-read-views、admin-access 两篇写，
-  测试用一个假的 relay-history HTTP 服务（账号列表、用量、错误、过期、分组 Key 的 404、旧网关的裸数组）。真正接上以后用管理界面的「测试连接」看一眼账号数和窗口数。
-  2026-11-06（#4576）拿一个真实的 relay-history 只读核对过账号清单：分页参数、`quota_summary`、`last_error` 的形状和这里写的一样，71 个账号（含 5 个停用的）都在清单里，Kiro 的 `monthly` / `kiro_bonus` 原样带出。
+- **没有拿真实的中转验证过各种窗口**（这台开发机上没有在跑的网关）：适配器按第一个接上的中转公开的接口文档（账号读取视图、访问控制）写，
+  测试用一个假的中转 HTTP 服务（账号列表、用量、错误、过期、分组 Key 的 404、旧网关的裸数组）。真正接上以后用管理界面的「测试连接」看一眼账号数和窗口数。
+  2026-11-06（#4576）拿一个真实的中转只读核对过账号清单：分页参数、`quota_summary`、`last_error` 的形状和这里写的一样，71 个账号（含 5 个停用的）都在清单里，Kiro 的 `monthly` / `kiro_bonus` 原样带出。
 - 同一个 Claude 账号在电脑上（状态栏给的 `resets_at`，秒）和网关里（响应头或用量接口的时间，可能带小数秒）的重置时间要落在同一秒才合并成一个；差一秒时会显示成两个账号，没有拿真实数据核对过。
-- 网关的 `kind` 里读不出长度的窗口不画（上面的映射表）；relay-history 以后加了新的 `kind` 词（比如 `three_hour`）要加进 `usagesource.KindMinutes`。
+- 网关的 `kind` 里读不出长度的窗口不画（上面的映射表）；中转以后加了新的 `kind` 词（比如 `three_hour`）要加进 `usagesource.KindMinutes`。

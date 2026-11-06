@@ -135,6 +135,17 @@ class ProactiveStoreTest {
         assertEquals("assistant", store.state.value.task("task_weekly")!!.createdBy)
     }
 
+    /** The prompt changed elsewhere after the page loaded (the page does not hear of it); the switch keeps that change. */
+    @Test fun aSwitchWritesOverWhatTheHubHasNowNotWhatThePageLoaded() = runTest {
+        val hub = FakeHub(listOf(morning))
+        val store = ProactiveStore(hub, this, say)
+        store.refresh()
+        hub.table = listOf(morning.copy(prompt = "new"))
+        store.toggle("morning", false)
+        advanceUntilIdle()
+        assertEquals(morning.copy(prompt = "new", enabled = false), hub.writes.single())
+    }
+
     @Test fun switchMovesAtOnceAndAFailedWriteShowsTheHubsValue() = runTest {
         val hub = FakeHub(listOf(morning))
         val store = ProactiveStore(hub, this, say)
