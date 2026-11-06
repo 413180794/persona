@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -22,7 +23,7 @@ func TestMain(m *testing.M) { os.Exit(dbtest.Main(m)) }
 
 // open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test/test-server.sh creates it on the hub machine)
 // and wipes every table so each test starts clean.
-func open(t *testing.T) *DB {
+func open(t testing.TB) *DB {
 	t.Helper()
 	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
 	if url == "" {
@@ -288,6 +289,115 @@ func TestPhoneToolsReplace(t *testing.T) {
 	tools, err := d.PhoneTools(ctx)
 	if err != nil || len(tools) != 1 || len(tools[0].Tools) != 2 || tools[0].Tools[0].Name != "z" || tools[0].Tools[1].Name != "a" {
 		t.Fatalf("tools = %+v, %v", tools, err)
+	}
+}
+
+// phoneToolList returns n tools named like an app's phone_* announcement, every other one with a schema.
+func phoneToolList(n int) []proto.Tool {
+	tools := make([]proto.Tool, n)
+	for i := range tools {
+		tools[i] = proto.Tool{Name: fmt.Sprintf("phone_tool_%02d", i), Description: fmt.Sprintf("tool %d", i)}
+		if i%2 == 0 {
+			tools[i].InputSchema = json.RawMessage(fmt.Sprintf(`{"type":"object","x":%d}`, i))
+		}
+	}
+	return tools
+}
+
+func TestPhoneToolsReplaceReorderedSubset(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	full := phoneToolList(26)
+	if err := d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "ios-device", Platform: "ios", Tools: full}); err != nil {
+		t.Fatal(err)
+	}
+	// Reversed every third tool: the rest must be gone, the order must follow the new list.
+	var subset []proto.Tool
+	for i := len(full) - 1; i >= 0; i -= 3 {
+		subset = append(subset, full[i])
+	}
+	subset[1].InputSchema = nil
+	if err := d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "ios-device", Platform: "ios", Tools: subset}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.PhoneTools(ctx)
+	if err != nil || len(got) != 1 || len(got[0].Tools) != len(subset) {
+		t.Fatalf("registrations = %+v, %v", got, err)
+	}
+	for i, tool := range got[0].Tools {
+		want := subset[i]
+		schema := string(want.InputSchema)
+		if schema == "" {
+			schema = `{}`
+		}
+		if tool.Name != want.Name || tool.Description != want.Description || !jsonEqual(t, string(tool.InputSchema), schema) {
+			t.Fatalf("tool %d = %+v, want %+v (schema %s)", i, tool, want, schema)
+		}
+	}
+	var positions []int
+	if err := d.pool.QueryRow(ctx, `SELECT array_agg(position ORDER BY position) FROM phone_tools WHERE device_id = 'ios-device'`).Scan(&positions); err != nil {
+		t.Fatal(err)
+	}
+	for i, p := range positions {
+		if p != i {
+			t.Fatalf("positions = %v", positions)
+		}
+	}
+}
+
+func TestPhoneToolsRevokedCredentialKeepsPreviousTools(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if err := d.CreateDeviceToken(ctx, DeviceToken{ID: "credential-ios", Name: "Device", Kind: "phone", Role: "full"}, "hash-ios"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "other-device", Platform: "ios", Tools: phoneToolList(3)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "other-device", Platform: "ios", CredentialID: "credential-ios", Tools: phoneToolList(26)[:2]}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.RevokeDeviceToken(ctx, "credential-ios"); err != nil || !ok {
+		t.Fatalf("revoke = %v, %v", ok, err)
+	}
+	// Revoking deleted this credential's rows; put an unrelated row back on the same device to see it survive.
+	if err := d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "other-device", Platform: "ios", Tools: phoneToolList(3)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, credential := range []string{"credential-ios", "credential-missing"} {
+		err := d.ReplacePhoneTools(ctx, PhoneToolRegistration{DeviceID: "other-device", Platform: "ios", CredentialID: credential, Tools: phoneToolList(26)})
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("%s: err = %v, want pgx.ErrNoRows", credential, err)
+		}
+	}
+	got, err := d.PhoneTools(ctx)
+	if err != nil || len(got) != 1 || len(got[0].Tools) != 3 || got[0].CredentialID != "" {
+		t.Fatalf("registrations after rejected writes = %+v, %v", got, err)
+	}
+}
+
+func jsonEqual(t *testing.T, a, b string) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal([]byte(a), &x); err != nil {
+		t.Fatalf("unmarshal %s: %v", a, err)
+	}
+	if err := json.Unmarshal([]byte(b), &y); err != nil {
+		t.Fatalf("unmarshal %s: %v", b, err)
+	}
+	return fmt.Sprint(x) == fmt.Sprint(y)
+}
+
+// BenchmarkReplacePhoneTools replaces one phone's 26-tool announcement, the write the hub makes on every connect.
+func BenchmarkReplacePhoneTools(b *testing.B) {
+	d, ctx := open(b), context.Background()
+	if err := d.CreateDeviceToken(ctx, DeviceToken{ID: "credential-bench", Name: "Device", Kind: "phone", Role: "full"}, "hash-bench"); err != nil {
+		b.Fatal(err)
+	}
+	registration := PhoneToolRegistration{DeviceID: "bench-device", Platform: "ios", CredentialID: "credential-bench", Tools: phoneToolList(26)}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := d.ReplacePhoneTools(ctx, registration); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -883,6 +993,18 @@ func TestMachineMetrics(t *testing.T) {
 	if *m1[1].CPU != 1 { // minute 1 had one sample without CPU: the average of the other five
 		t.Fatalf("minute 1 cpu = %v", *m1[1].CPU)
 	}
+	// nil means every machine; a list leaves the others out, and an empty one matches none.
+	all, err := d.MetricSeries(ctx, nil, base, base.Add(2*time.Hour), 60)
+	if err != nil || len(all) != 2 || len(all["m1"]) != 110 || len(all["m2"]) != 1 || *all["m2"][0].CPU != 99 {
+		t.Fatalf("all machines: %d machines, m1 %d points, m2 %+v, %v", len(all), len(all["m1"]), all["m2"], err)
+	}
+	only, err := d.MetricSeries(ctx, []string{"m2", "m9"}, base, base.Add(2*time.Hour), 60)
+	if err != nil || len(only) != 1 || len(only["m2"]) != 1 {
+		t.Fatalf("m2 only: %+v, %v", only, err)
+	}
+	if none, err := d.MetricSeries(ctx, []string{}, base, base.Add(2*time.Hour), 60); err != nil || len(none) != 0 {
+		t.Fatalf("no machines: %+v, %v", none, err)
+	}
 	// Raw over the last hour: one point a sample.
 	series, _ = d.MetricSeries(ctx, nil, base.Add(time.Hour), base.Add(2*time.Hour), 10)
 	if len(series["m1"]) != 360 {
@@ -931,6 +1053,61 @@ func TestRollupMetricsIndexed(t *testing.T) {
 		}
 		if plan := strings.Join(lines, "\n"); !strings.Contains(plan, "machine_metrics_raw") {
 			t.Fatalf("%s: RollupMetrics does not use machine_metrics_raw:\n%s", mode, plan)
+		}
+	}
+}
+
+// A machine's chart seeks machine_metrics_pkey by machine and time, both planned for its values and as the generic
+// plan a cached statement switches to, instead of reading every machine's rows in the range and filtering them.
+func TestMetricSeriesIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	// Ten machines with two hours of raw samples each.
+	if _, err := d.pool.Exec(ctx, `INSERT INTO machine_metrics (machine_id, ts, step, cpu, load, mem_used, mem_total,
+			swap_used, swap_total, net_rx, net_tx, disk_used, disk_total)
+		SELECT 'm' || m, now() - g * interval '10 seconds', 10, 1, 1, 1, 2, 0, 0, 1, 1, 1, 2
+		FROM generate_series(1, 10) m, generate_series(0, 719) g`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.pool.Exec(ctx, `ANALYZE machine_metrics`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `PREPARE metric_series_machines(bigint, bigint, int, text[]) AS `+metricSeriesMachinesSQL); err != nil {
+		t.Fatal(err)
+	}
+	// A prepared statement outlives the transaction; the connection goes back to the pool.
+	defer func() { _, _ = d.pool.Exec(ctx, `DEALLOCATE metric_series_machines`) }()
+	now := time.Now()
+	for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+		if _, err := tx.Exec(ctx, `SET LOCAL plan_cache_mode = `+mode); err != nil {
+			t.Fatal(err)
+		}
+		// EXPLAIN EXECUTE takes no bind parameters, so the values are written in.
+		rows, err := tx.Query(ctx, fmt.Sprintf(`EXPLAIN EXECUTE metric_series_machines(%d, %d, 60, '{m3}')`,
+			now.Add(-time.Hour).Unix(), now.Add(time.Minute).Unix()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := strings.Join(lines, "\n")
+		seeks := false
+		for _, l := range lines {
+			if strings.Contains(l, "Index Cond") && strings.Contains(l, "machine_id") {
+				seeks = true
+			}
+		}
+		if !seeks || !strings.Contains(plan, "machine_metrics_pkey") || strings.Contains(plan, "Seq Scan") {
+			t.Fatalf("%s: MetricSeries does not seek machine_metrics_pkey by machine:\n%s", mode, plan)
 		}
 	}
 }

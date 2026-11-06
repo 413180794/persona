@@ -93,11 +93,12 @@ func (d *DB) PruneMetrics(ctx context.Context, before time.Time) (int64, error) 
 	return tag.RowsAffected(), nil
 }
 
-// MetricSeries averages each machine's rows from from (inclusive) to to over steps of step seconds (aligned to the
-// Unix epoch), weighting raw and rolled-up rows by the time they cover. Only steps with data are returned, in
-// order; machines nil means all.
-func (d *DB) MetricSeries(ctx context.Context, machines []string, from, to time.Time, step int) (map[string][]proto.MetricPoint, error) {
-	rows, err := d.pool.Query(ctx, `SELECT machine_id,
+// The statements of MetricSeries: all machines, or the listed ones. The single statement they replace matched nil
+// machines with an OR ("$4 IS NULL OR machine_id = ANY($4)"). Once Postgres switched that cached statement to a
+// generic plan (after five runs) it could not fold the test away, so it read every machine's rows in the range and
+// filtered them. TestMetricSeriesIndexed checks the plans.
+const (
+	metricSeriesSelect = `SELECT machine_id,
 			extract(epoch FROM date_bin(make_interval(secs => $3), ts, timestamptz 'epoch'))::bigint,
 			sum(cpu::float8 * step) / nullif(sum(step) FILTER (WHERE cpu IS NOT NULL), 0),
 			sum(load::float8 * step) / nullif(sum(step) FILTER (WHERE load IS NOT NULL), 0),
@@ -107,8 +108,23 @@ func (d *DB) MetricSeries(ctx context.Context, machines []string, from, to time.
 			sum(net_tx::float8 * step) / nullif(sum(step) FILTER (WHERE net_tx IS NOT NULL), 0),
 			sum(disk_used::float8 * step) / sum(step)
 		FROM machine_metrics
-		WHERE ts >= to_timestamp($1) AND ts < to_timestamp($2) AND ($4::text[] IS NULL OR machine_id = ANY($4))
-		GROUP BY 1, 2 ORDER BY 1, 2`, from.Unix(), to.Unix(), step, machines)
+		WHERE ts >= to_timestamp($1) AND ts < to_timestamp($2)`
+	metricSeriesSQL = metricSeriesSelect + `
+		GROUP BY 1, 2 ORDER BY 1, 2`
+	metricSeriesMachinesSQL = metricSeriesSelect + ` AND machine_id = ANY($4::text[])
+		GROUP BY 1, 2 ORDER BY 1, 2`
+)
+
+// MetricSeries averages each machine's rows from from (inclusive) to to over steps of step seconds (aligned to the
+// Unix epoch), weighting raw and rolled-up rows by the time they cover. Only steps with data are returned, in
+// order; machines nil means all. Each case has its own statement, so a cached generic plan keeps the machine filter
+// on machine_metrics_pkey.
+func (d *DB) MetricSeries(ctx context.Context, machines []string, from, to time.Time, step int) (map[string][]proto.MetricPoint, error) {
+	q, args := metricSeriesMachinesSQL, []any{from.Unix(), to.Unix(), step, machines}
+	if machines == nil {
+		q, args = metricSeriesSQL, args[:3]
+	}
+	rows, err := d.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

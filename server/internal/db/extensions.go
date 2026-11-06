@@ -174,10 +174,26 @@ type ExtensionAudit struct {
 	At     time.Time       `json:"at"`
 }
 
+// The statements of ExtensionAudits, everyone's rows and one plugin's. The single statement they replace matched an
+// empty plugin with an OR ("$1 = empty OR plugin = $1"), which no index serves, so everyone's listing read the whole
+// append-only table and sorted it. Everyone's walks plugin_audit_at; one plugin's reads plugin_audit_plugin.
+// TestExtensionAuditsIndexed checks both plans.
+const (
+	extensionAuditsSQL = `SELECT plugin, action, actor, detail, at FROM plugin_audit
+		ORDER BY at DESC, id DESC LIMIT $1`
+	extensionAuditsPluginSQL = `SELECT plugin, action, actor, detail, at FROM plugin_audit
+		WHERE plugin = $1 ORDER BY at DESC, id DESC LIMIT $2`
+)
+
 // ExtensionAudits is the audit newest first: plugin's rows, or everyone's when plugin is "", at most limit of them.
 func (d *DB) ExtensionAudits(ctx context.Context, plugin string, limit int) ([]ExtensionAudit, error) {
-	rows, err := d.pool.Query(ctx, `SELECT plugin, action, actor, detail, at FROM plugin_audit
-		WHERE $1::text = '' OR plugin = $1::text ORDER BY at DESC, id DESC LIMIT $2`, plugin, limit)
+	var rows pgx.Rows
+	var err error
+	if plugin == "" {
+		rows, err = d.pool.Query(ctx, extensionAuditsSQL, limit)
+	} else {
+		rows, err = d.pool.Query(ctx, extensionAuditsPluginSQL, plugin, limit)
+	}
 	if err != nil {
 		return nil, err
 	}

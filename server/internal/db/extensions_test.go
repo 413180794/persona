@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
@@ -138,5 +140,58 @@ func TestExtensionAudits(t *testing.T) {
 	}
 	if none, err := d.ExtensionAudits(ctx, "example-audit-none", 10); err != nil || len(none) != 0 {
 		t.Fatalf("an extension without rows: %+v (%v)", none, err)
+	}
+}
+
+// Both audit statements stay on an index under a custom and a generic plan: everyone's walks plugin_audit_at and one
+// plugin's reads plugin_audit_plugin; neither scans the table.
+func TestExtensionAuditsIndexed(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The rows, the statistics and the settings go with the rollback.
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `INSERT INTO plugin_audit (plugin, action, actor, at)
+		SELECT 'example-audit-' || (g % 40), 'install', 'cli', now() - g * interval '1 minute'
+		FROM generate_series(1, 6000) g`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `ANALYZE plugin_audit`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, sql, types, args, index string
+	}{
+		{"audit_all", extensionAuditsSQL, "int", "100", "plugin_audit_at"},
+		{"audit_plugin", extensionAuditsPluginSQL, "text, int", "'example-audit-7', 100", "plugin_audit_plugin"},
+	} {
+		if _, err := tx.Exec(ctx, `PREPARE `+c.name+`(`+c.types+`) AS `+c.sql); err != nil {
+			t.Fatal(err)
+		}
+		// A prepared statement outlives the transaction; the connection goes back to the pool.
+		defer func() { _, _ = d.pool.Exec(ctx, `DEALLOCATE `+c.name) }()
+		for _, mode := range []string{"force_custom_plan", "force_generic_plan"} {
+			if _, err := tx.Exec(ctx, `SET LOCAL plan_cache_mode = `+mode); err != nil {
+				t.Fatal(err)
+			}
+			// EXPLAIN EXECUTE takes no bind parameters, so the values are written in.
+			rows, err := tx.Query(ctx, `EXPLAIN EXECUTE `+c.name+`(`+c.args+`)`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := strings.Join(lines, "\n")
+			if !strings.Contains(plan, c.index) || strings.Contains(plan, "Seq Scan") {
+				t.Fatalf("%s %s: want %s\nplan:\n%s", c.name, mode, c.index, plan)
+			}
+		}
 	}
 }

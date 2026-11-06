@@ -415,22 +415,21 @@ func (d *DB) ReplacePhoneTools(ctx context.Context, registration PhoneToolRegist
 				return err
 			}
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM phone_tools WHERE device_id = $1`, registration.DeviceID); err != nil {
-			return err
-		}
+		// The DELETE and every INSERT go out as one batch: one round trip instead of 1+N while the hub holds
+		// phoneToolsMu on each announcement (about 26 tools per app).
+		var b pgx.Batch
+		b.Queue(`DELETE FROM phone_tools WHERE device_id = $1`, registration.DeviceID)
 		for i, t := range registration.Tools {
 			schema := t.InputSchema
 			if len(schema) == 0 {
 				schema = json.RawMessage(`{}`)
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO phone_tools (device_id, platform, credential_id, name, description, input_schema, position)
+			b.Queue(`INSERT INTO phone_tools (device_id, platform, credential_id, name, description, input_schema, position)
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
 				ON CONFLICT (device_id, name) DO UPDATE SET description = $5, input_schema = $6, position = $7, updated_at = now()`,
-				registration.DeviceID, registration.Platform, registration.CredentialID, t.Name, t.Description, []byte(schema), i); err != nil {
-				return err
-			}
+				registration.DeviceID, registration.Platform, registration.CredentialID, t.Name, t.Description, []byte(schema), i)
 		}
-		return nil
+		return tx.SendBatch(ctx, &b).Close()
 	})
 }
 
