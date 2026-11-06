@@ -41,6 +41,18 @@ const (
 type line struct {
 	id, text, source string
 	at               time.Time // a user's line: when they stopped saying it; the model's: when it began
+	shown            bool      // a frame of it with words went to the app
+}
+
+// show tells the app line l (role's) as it is, once it has words: a line that never had any is never shown, not even
+// its end (#5587: a reply that only called a tool came as whitespace, and the app got a final caption of "").
+func (c *conversation) show(l *line, role string, final bool) {
+	text := strings.TrimSpace(l.text)
+	if text == "" && !l.shown {
+		return
+	}
+	l.shown = true
+	c.sendApp(map[string]any{"type": "transcript", "id": l.id, "role": role, "text": text, "final": final})
 }
 
 // heardLine is a line of what was said, with its line's at (zero: not known, a line the app handed back).
@@ -808,7 +820,7 @@ func (c *conversation) spokeAt(now time.Time) time.Time {
 // userText adds to the user's line; spoke is when they stopped saying text (zero for no text).
 func (c *conversation) userText(text string, replace, final bool, spoke time.Time) {
 	if c.user == nil {
-		if text == "" && !final {
+		if strings.TrimSpace(text) == "" { // no words: no line (#5587)
 			return
 		}
 		c.closeAsst()
@@ -823,7 +835,7 @@ func (c *conversation) userText(text string, replace, final bool, spoke time.Tim
 	if strings.TrimSpace(text) != "" && !spoke.IsZero() {
 		c.user.at = spoke
 	}
-	c.sendApp(map[string]any{"type": "transcript", "id": c.user.id, "role": "user", "text": strings.TrimSpace(c.user.text), "final": final})
+	c.show(c.user, "user", final)
 	if final {
 		c.remember("user", c.user.text, c.user.at)
 		c.user = nil
@@ -844,7 +856,7 @@ func (c *conversation) asstText(text string, replace, final bool, source string)
 		return
 	}
 	if c.asst == nil {
-		if text == "" && !final {
+		if strings.TrimSpace(text) == "" { // no words: no line (a reply that only calls a tool may begin with whitespace, #5587)
 			return
 		}
 		c.closeUser()
@@ -859,7 +871,7 @@ func (c *conversation) asstText(text string, replace, final bool, source string)
 	} else {
 		c.asst.text += text
 	}
-	c.sendApp(map[string]any{"type": "transcript", "id": c.asst.id, "role": "assistant", "text": strings.TrimSpace(c.asst.text), "final": final})
+	c.show(c.asst, "assistant", final)
 	if final {
 		c.remember("assistant", c.asst.text, c.asst.at)
 		c.asst = nil

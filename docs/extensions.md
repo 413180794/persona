@@ -2333,7 +2333,7 @@ Extension → app:
 | `{"type":"ready","input_rate":16000,"output_rate":24000,"model":"<id>","voice":"<id>"}` | Session ready; these sample rates are authoritative, never hardcode |
 | Binary | Audio to play at `output_rate` |
 | `{"type":"clear"}` | Discard unplayed audio (user interrupted or response canceled) |
-| `{"type":"transcript","id":"…","role":"user"\|"assistant","text":"…","final":false}` | Captions: each update for the same `id` contains **all text so far**, directly replaced by the app; unchanged after `final` |
+| `{"type":"transcript","id":"…","role":"user"\|"assistant","text":"…","final":false}` | Captions: each update for the same `id` contains **all text so far**, directly replaced by the app; unchanged after `final`; `text` is never empty (the built-in extension opens a line only once it has words, #5587) |
 | `{"type":"tool","id":"…","label":"Search knowledge base","done":false}` | Tool in progress (app shows a status line); several may be active (e.g. work delegated to main chat running in the background), tracked by `id`, latest shown |
 | `{"type":"error","message":"…","fatal":true,"code":"…"}` | With `fatal`, extension closes the connection afterwards. `code` optional; built-in voice has `no_upstream` (fatal: upstream not configured), `model_unavailable` (nonfatal: selected model's upstream gone, default model used this time); app chooses wording by `code`, with `message` as detail |
 

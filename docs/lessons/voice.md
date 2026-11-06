@@ -241,6 +241,17 @@ The App side is a script, with `protocol: 2` and `target` in `start`, sending al
 - A long call's "conversation so far" (40 lines of 200 characters each) plus a full snapshot comes to about 19,000 characters of English instructions, already at the size "Instructions size" measured as the most that opens (19,000 characters open, 25,000 are refused, and refused means no session).
   Waking and reconnecting both open a new session, so a new session's instructions drop their oldest lines once they exceed 16,000 characters (`voice.fitInstructions`). This length was not measured against the service.
 
+## End to end on a local hub (#3489, 2026-11-06)
+
+The merged server work (#3501–#3505) driven as the App would, on one Mac, without the shared hub: a hub built from master with its own `PERSONA_HOME` (`hub.json`: `listen` on loopback, a `kind: local` machine, `mesh.discovery: false`, the voice entry with `providers[]` of the live dialect, `tools`, `key_file`), a temporary Postgres cluster (`initdb` / `pg_ctl` on a free port), and a herdr **named session** for the agents (`herdr --session <name> server`, its socket handed to the hub as `HERDR_SOCKET_PATH`, started with the same `PERSONA_HOME` so the hooks in its panes reach this node, not the machine's own). A script spoke protocol 2 over `/api/v1/extensions/voice/ws` with the hub token: `text` frames, and macOS `say` → 16 kHz PCM16 in real-time 20 ms frames between silence. Same service, default model.
+
+- Worked: small talk answered at once; "create hello.txt with hi" by voice → `sending → sent → working → done` in 11 s and "Done, hello.txt contains hi" spoken; a status by voice answered from live state (nothing sent to the agent); pause 60 s after the last words, woken by voice (`waking` 0.24 s after speech began, `live` 0.44 s later) and by the result; an AskUserQuestion read by option names and answered with "the second one" (`ask{answered, by: voice}`, the agent continued); a permission said by its category only, a spoken "approve" not sent; `停止：` stopped the turn (`done{stopped}`); a dropped App socket resumed with `resume.runs` and the result spoken after; protocol 1 started the main chat and delegated to it.
+- The model tried to answer a question card from an earlier utterance after the question was read; the user-speech gate refused it as `unprompted` ("that was not you, I did not send it"), as designed.
+- Found and fixed: a wait on the user listed `working` said "still working" (#5500), two-option questions read the last option twice (#5501), the voice context out of order and without the triggering request (#5506, fixed in #5560), captions without words (#5587).
+  Filed: a message swallowed by Claude Code's one-off auto-mode dialog while the hub said 200 (#5504); `PERSONA_HOME` not applied to the assistant's directory, so this isolated hub's main chat ran in the machine's default `~/.jarvis/assistant` (#5505);
+  a voice answer refused as `unprompted` when the model only called the tool and the user's caption came 4.2 s after they stopped, past `gateWait` (#5672); a late user caption splitting the model's line in two in the App (#5673).
+- Still needs a real phone: echo cancellation, the 0.5 s barge-in threshold against real room noise, audio routes, the iOS call bar.
+
 ## Recommended constants (`docs/voice.md` 4.5 / 4.9)
 
 | Constant | Design | Recommendation | Basis |

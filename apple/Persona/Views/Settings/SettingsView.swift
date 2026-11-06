@@ -286,7 +286,11 @@ struct SettingsView: View {
 
     /// The header's line about the link: connected (and how, when it goes through the hub's SSH tunnel), or why not.
     private var linkState: String {
-        guard model.live.looksConnected else { return model.connection.phase == .online ? String(localized: "Not Connected") : model.connection.phase.title }
+        // While the hub restarts into a new version, the same words as the connection title (Hub updating…).
+        guard model.live.looksConnected else {
+            let phase = model.connection.phase
+            return phase == .online ? String(localized: "Not Connected") : ConnectionLabel.text(phase, hubRestarting: model.hubUpdate?.restarting == true)
+        }
         let tunneled = model.hub.flatMap { model.tunnel($0.group) }?.routed == true
         if let t = model.hub.flatMap({ model.inAppTunnelState($0.group) }), t.routed { return String(localized: "Connected to hub · via \(t.route.title)") }
         return tunneled ? String(localized: "Connected to hub · via SSH tunnel") : String(localized: "Connected to hub")

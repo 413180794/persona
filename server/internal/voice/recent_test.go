@@ -2,6 +2,7 @@ package voice
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -213,4 +214,64 @@ func TestHandoverHasTheRequestThatTriggeredIt(t *testing.T) {
 		t.Fatalf("sent:\n%s\nwant it to have:\n%s", m.Text, want)
 	}
 	t.Log(m.Text)
+}
+
+// A reply that only calls a tool may come with whitespace for its words (#5587, end to end: 2 of 6 of a call's model
+// captions were ""): no line is opened for it, and the app never gets a caption without words, its end neither. A line
+// with words is shown and ended as before.
+func TestNoCaptionWithoutWords(t *testing.T) {
+	hub := agentHub(t)
+	var mu sync.Mutex
+	var conn *websocket.Conn
+	up := newFakeUpstream(t, func(u *fakeUpstream, c *websocket.Conn, f map[string]any) {
+		if f["type"] == "session.start" {
+			mu.Lock()
+			conn = c
+			mu.Unlock()
+			u.send(c, map[string]any{"type": "session.started", "session": map[string]any{}})
+		}
+	})
+	pl := testPlugin(t, Config{Providers: []Provider{{ID: "rt", URL: up.url(), Models: []string{"m1"}, Tools: true}}}, hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	mu.Lock()
+	c := conn
+	mu.Unlock()
+	var got []string
+	until := func(match func(map[string]any) bool) {
+		t.Helper()
+		a.until(func(f map[string]any) bool {
+			if f["type"] == "transcript" {
+				if strings.TrimSpace(f["text"].(string)) == "" {
+					t.Errorf("a caption without words: %v", f)
+				}
+				got = append(got, fmt.Sprintf("%s:%s:%v", f["id"], f["text"], f["final"]))
+			}
+			return match(f)
+		})
+	}
+	caption := func(role string, final bool) func(map[string]any) bool {
+		return func(f map[string]any) bool {
+			return f["type"] == "transcript" && f["role"] == role && f["final"] == final
+		}
+	}
+	// The model's reply: whitespace for words (both ways a service sends them), then a status call; the user's caption
+	// begins with whitespace too.
+	up.send(c, map[string]any{"type": "response.event", "delegation_id": "r1", "event": map[string]any{"type": "response.output_text.delta", "delta": " "}})
+	up.send(c, map[string]any{"type": "session.output_transcript.delta", "delta": "\n"})
+	up.send(c, map[string]any{"type": "session.input_transcript.delta", "delta": "  "})
+	up.send(c, map[string]any{"type": "session.delegation.created", "delegation": map[string]any{"id": "dlg1", "target": "client"}})
+	up.send(c, map[string]any{"type": "response.event", "delegation_id": "dlg1", "event": map[string]any{
+		"type": "function_call", "call_id": "c1", "name": "delegate_task", "arguments": `{"task":"状态：到哪了"}`,
+	}})
+	up.send(c, map[string]any{"type": "session.input_transcript.delta", "delta": "它到哪了？"})
+	until(caption("user", false))
+	up.send(c, map[string]any{"type": "session.output_transcript.delta", "delta": "还在跑测试。"})
+	until(caption("assistant", false))
+	up.send(c, map[string]any{"type": "session.input_transcript.delta", "delta": "好的"})
+	until(caption("user", false))
+	want := []string{"u1:它到哪了？:false", "u1:它到哪了？:true", "a1:还在跑测试。:false", "a1:还在跑测试。:true", "u2:好的:false"}
+	if strings.Join(got, " | ") != strings.Join(want, " | ") {
+		t.Fatalf("captions:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
 }
