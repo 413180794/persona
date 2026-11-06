@@ -34,7 +34,8 @@ func (h *Manager) selfSettings() []selfSetting {
 				return h.textSetting(ctx, v, rulesTitle, h.inboxRules, "inbox.rules")
 			}},
 		selfSetting{key: "inbox.agent_rules", title: agentRulesTitle,
-			about: "the user's rules for which needs-you inbox items the AI twin takes on and drafts a reply for",
+			about: "the user's guidance for linking a needs-you inbox item to one of their running tasks; which items the AI twin takes on " +
+				"is set by inbox policies (POST /api/v1/inbox/policies), not here",
 			value: `a string ("" clears it)`,
 			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxAgentRules(ctx)), nil },
 			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {

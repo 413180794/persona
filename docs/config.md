@@ -376,9 +376,9 @@ The Unix socket and its immediate parent directory must belong to the current us
   `long_turn_seconds` (how long a round must be to count as a "long task", default 60), `background_hold_minutes` (maximum wait for background tasks to finish, default 120),
   `live_metrics_seconds` (minimum interval between pushes to one device when only Live Activity numbers change, default 60; `docs/live-activity.md` ("Push budget")).
   Each device's push preferences are set separately in the App (**Settings › Notifications**, stored in hub `devices.prefs`), not here.
-- `inbox.triage_ai` / `inbox.judge_ai` (optional, same fields as `ai`, omitted fields inherit from `ai`): AI twin model 1 (triage) and model 2 (whether to hand to an Agent);
+- `inbox.triage_ai` / `inbox.judge_ai` (optional, same fields as `ai`, omitted fields inherit from `ai`): AI twin model 1 (triage) and model 2 (linking a Needs you item to one of the user's tasks);
   omitted means both use `ai`. `inbox.agent`: model 3, `enabled`, `launcher` (Claude Code launcher, default the assistant's), `machine` (default the assistant's machine),
-  `concurrency` (1), `timeout_minutes` (15), `max_age_hours` (24), `rules` (personal rules for model 2). See `docs/inbox.md` ("AI twin").
+  `concurrency` (1), `timeout_minutes` (15), `max_age_hours` (24), `rules` (no longer read; what the twin takes on is set by inbox policies, `docs/inbox.md` ("Policies")). See `docs/inbox.md` ("AI twin").
 
   ```json
   "inbox": {

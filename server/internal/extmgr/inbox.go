@@ -47,11 +47,13 @@ type InboxConfig struct {
 	// Rules is extra guidance for triage, in the user's words ("anything from my manager needs me", "alerts from
 	// group X are noise"…), appended to the prompt.
 	Rules string `json:"rules,omitempty"`
-	// TriageAI (model 1) sorts and summarizes new items; JudgeAI (model 2) decides which ones the agent handles.
+	// TriageAI (model 1) sorts and summarizes new items; JudgeAI (model 2) links a Needs you item to
+	// one of the user's tasks.
 	// Empty fields fall back to hub.json's "ai"; without them both use "ai".
 	TriageAI *ai.Config `json:"triage_ai,omitempty"`
 	JudgeAI  *ai.Config `json:"judge_ai,omitempty"`
-	// Agent (model 3) works on the items the judge hands over and drafts the reply (the manager's inbox_agent.go).
+	// Agent (model 3) works on the Needs you items (and those a policy hands it) and drafts the reply (the manager's
+	// inbox_agent.go).
 	Agent InboxAgentConfig `json:"agent,omitempty"`
 }
 

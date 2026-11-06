@@ -15,8 +15,9 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The inbox's AI twin (docs/inbox.md): model 1 triages every new item (inbox_triage.go), model 2 decides which of
-// the "Needs you" items an agent should take on, and the agent (model 3, a headless Claude Code in the assistant's
+// The inbox's AI twin (docs/inbox.md): model 1 triages every new item (inbox_triage.go), every "Needs you" item
+// (and what an inbox policy hands it, inbox_policies.go) goes to an agent, model 2 links it to one of the user's
+// tasks (linkTask), and the agent (model 3, a headless Claude Code in the assistant's
 // directory, with its tools: a conversation the assistant starts itself, untitled) looks into it and drafts the reply
 // (inbox_draft). The draft waits in the inbox; nothing is sent until the user taps "Send" (POST /api/v1/inbox/{id}/reply).
 

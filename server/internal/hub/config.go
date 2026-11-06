@@ -433,6 +433,7 @@ type InboxConfig struct {
 	Rules    string         `json:"rules,omitempty"`
 	TriageAI *aiwire.Config `json:"triage_ai,omitempty"`
 	JudgeAI  *aiwire.Config `json:"judge_ai,omitempty"`
-	// Agent (model 3) works on the items the judge hands over and drafts the reply (the manager's inbox_agent.go).
+	// Agent (model 3) works on the Needs you items (and those a policy hands it) and drafts the reply (the manager's
+	// inbox_agent.go).
 	Agent assistantwire.InboxAgentConfig `json:"agent,omitempty"`
 }
