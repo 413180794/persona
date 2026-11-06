@@ -503,6 +503,38 @@ func (s *Service) taskOf(ctx context.Context, mid, sid string) (Todo, bool) {
 	return copyTodoLocked(t), true
 }
 
+// closedTaskOf is the task the hub closed (judged done, or reviewed by its supervisor) the agent mid/sid still belongs
+// to: linked, neither released nor dismissed, and working for no open todo since; the one closed last when there are
+// several (#5892). One the user closed stays theirs to reopen: done by hand while its agent still started (#2954), it
+// is not to come back when that agent goes to work.
+func (s *Service) closedTaskOf(ctx context.Context, mid, sid string) (Todo, bool) {
+	if s.ensureTodosLoaded(ctx) != nil {
+		return Todo{}, false
+	}
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
+	if _, open := s.todos.activeBySession[[2]string{mid, sid}]; open {
+		return Todo{}, false
+	}
+	var found *Todo
+	for _, t := range s.todos.todos {
+		if t.Origin == "" || t.DoneAt == nil || t.StartError != "" || t.DoneBy != db.DoneByAuto && t.DoneBy != db.DoneByReview ||
+			found != nil && !t.DoneAt.After(*found.DoneAt) {
+			continue
+		}
+		for _, a := range t.Agents {
+			if a.MachineID == mid && a.SessionID == sid && a.ReleasedAt == nil && a.DismissedAt == nil {
+				found = t
+				break
+			}
+		}
+	}
+	if found == nil {
+		return Todo{}, false
+	}
+	return copyTodoLocked(found), true
+}
+
 // ---- HTTP ----
 
 var errTodosUnavailable = errors.New("todos service unavailable")

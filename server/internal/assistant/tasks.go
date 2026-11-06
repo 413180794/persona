@@ -972,11 +972,25 @@ func (s *Service) taskWaits(ctx context.Context, t Todo) bool {
 	return waits || !known
 }
 
-// taskWorking: one of the task's agents started a turn.
+// taskWorking: one of the task's agents started a turn. The agent of a task the hub closed meanwhile (judged done,
+// reviewed) works on it again — sent more by agent_send, which resumes a closed one, or by the user: the task is open
+// again first, as a change asked for on its "Please verify" card reopens it (#3457), so this turn is followed
+// (interrupted or done receipt, judgment) and the task shows in progress, not done (#5892).
 func (s *Service) taskWorking(ctx context.Context, mid, sid string) {
 	t, ok := s.taskOf(ctx, mid, sid)
 	if !ok {
-		return
+		closed, found := s.closedTaskOf(ctx, mid, sid)
+		if !found {
+			return
+		}
+		if err := s.reopenTodo(ctx, closed.ID); err != nil {
+			s.logf("task %s: reopen: %v", closed.ID, err)
+			return
+		}
+		if t, ok = s.taskOf(ctx, mid, sid); !ok {
+			return
+		}
+		s.logf("task %s: reopened: its agent works again", t.ID)
 	}
 	s.tasks.mu.Lock()
 	s.tasks.working[t.ID] = time.Now()

@@ -206,7 +206,7 @@ Clients calculate to-do runtime state live from linked active Agents; it is not 
 | 6 | Not started | No linked active Agents |
 
 - To-do list ordering: unfinished first (same state by `created_at` descending), completed collapsed at bottom.
-- Completion means the task is over: its Agents' sessions no longer say they currently work for it; **Reopen** to continue.
+- Completion means the task is over: its Agents' sessions no longer say they currently work for it; **Reopen** to continue. A chat-dispatched task the hub completed (auto-completed or reviewed) also reopens when one of its Agents starts a turn again (sent more with `agent_send`, or by the user; see "Close Agents for completed tasks", #5892).
 - User marks done while Agent is still launching (can take minutes on a busy machine; `done_at` written first): not **Didn't Start**, to-do stays done with no `start_error`; Agents that do launch join this completed to-do and are reclaimed by "Close Agents for completed tasks" under existing rules (only after idle long enough) (#2954).
 
 ## To-do titles
@@ -299,7 +299,7 @@ Results still read from transcripts (receipts, `agent_read`, chat page); Unread 
 | Codex | Launcher arguments (with original model substituted) `resume <id> -- <message>`, through `personad codex-start`; message passed as an argument, not through shell or on screen |
 | Compatible Codex forks | `<launcher> resume <id> <message>` |
 
-Resume waits for launcher readiness; like chat sends, `route` is not cancelled by phone disconnection, waiting at most 5 minutes. Completed to-do does not reopen for this message; after another 3 minutes idle, Agent closes again.
+Resume waits for launcher readiness; like chat sends, `route` is not cancelled by phone disconnection, waiting at most 5 minutes. When the Agent starts the turn, its completed to-do (a chat-dispatched task it still belongs to that the hub closed: `done_by` `auto` or `review`; one the user completed stays completed) reopens, as **Reopen** does (`reopened_at` recorded): the task shows as in progress, the turn's end gets its interrupted or done receipt and notice as usual, and completion is judged again (#5892). If the to-do is completed again, the Agent closes again after 3 minutes idle.
 
 **Do not close**: working, waiting for user (questions, plans, permissions, any dialog, pending cards), unknown engine state; queued messages, background shells, running sub-Agents, `/loop`, listening ports (development servers); linked to another unfinished to-do; assistant chats; sessions managed by other tools (external Codex app-server, runtime, daemon, pi); not started by Persona (unknown resume method); engines unable to create tabs (Orca, herdr-core); Claude without transcript, Codex / compatible Codex forks without known launcher.
 node rejects these (`not_retirable`), assistant records them and does not ask again for 10 minutes if Agent unchanged (`taskCloseRetry`, then retries because node may have upgraded). Old nodes not recognizing `session.retire` are likewise treated as refusals, so hub-first/node-later upgrades do not close wrongly; after node upgrade, closure resumes within at most 10 minutes.

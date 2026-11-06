@@ -385,6 +385,106 @@ func TestAutoFinishLeavesAReopenedTask(t *testing.T) {
 	}
 }
 
+// The agent of a task the judge closed is sent more (agent_send resumes it) and works again: the task is open again
+// while it does, and the turn's end is followed as ever — cut off by the model service, an interrupted receipt; a
+// finished one, a done receipt and the judge, which may close it again (#5892).
+func TestClosedTaskReopensWhenItsAgentWorksAgain(t *testing.T) {
+	s, f := newTaskService(t)
+	todo := startedTask(t, s, f)
+	ctx := context.Background()
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "设计稿写好了", 0)
+	if ok, err := s.autoDoneTodo(ctx, todo.ID, "做完了", time.Now().Add(-time.Minute)); err != nil || !ok {
+		t.Fatalf("auto done: %v %v", ok, err)
+	}
+	if _, ok := s.taskOf(ctx, "box", "s1"); ok {
+		t.Fatal("a closed task still follows its agent")
+	}
+	time.Sleep(5 * time.Millisecond)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	got := todoNow(s, todo.ID)
+	if got.DoneAt != nil || got.ReopenedAt == nil || got.DoneBy != "" || got.DoneReason != "" {
+		t.Fatalf("still closed while its agent works again: %+v", got)
+	}
+	if _, ok := s.taskOf(ctx, "box", "s1"); !ok {
+		t.Fatal("the agent no longer counts for the task")
+	}
+	s.tasks.mu.Lock()
+	noted := s.tasks.working[todo.ID].After(*got.ReopenedAt)
+	s.tasks.mu.Unlock()
+	if !noted {
+		t.Fatal("the work is not noted after the reopen: the judge would not look at it")
+	}
+
+	lastReceipt := func() receiptBody {
+		items, _, _ := s.feed(ctx, "conv1", time.Time{})
+		var rb receiptBody
+		_ = json.Unmarshal(items[len(items)-1].Body, &rb)
+		if items[len(items)-1].Kind != feedReceipt {
+			t.Fatalf("last feed item is %s, not a receipt", items[len(items)-1].Kind)
+		}
+		return rb
+	}
+	agentTurn(s, f, proto.StatusDone, "API Error: 503 upstream unavailable", 0)
+	if rb := lastReceipt(); rb.State != "interrupted" {
+		t.Fatalf("a cut-off turn of the reopened task: receipt = %+v", rb)
+	}
+	if todoNow(s, todo.ID).DoneAt != nil {
+		t.Fatal("closed on a cut-off turn")
+	}
+
+	f.judge = `{"verdict":"done","reason":"做完了"}`
+	time.Sleep(5 * time.Millisecond)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "总览出好了", 0)
+	if rb := lastReceipt(); rb.State != "done" {
+		t.Fatalf("a finished turn of the reopened task: receipt = %+v", rb)
+	}
+	if got := todoNow(s, todo.ID); got.DoneAt == nil || got.DoneBy != db.DoneByAuto {
+		t.Fatalf("the work after the reopen is not judged: %+v", got)
+	}
+}
+
+// Only a task the hub closed (judged done, reviewed) opens again, and only for an agent that still belongs to it: not
+// one the user closed (done by hand while its agent still started, #2954), not one whose start failed (that goes
+// through Retry), not one the agent was released or dismissed from, and not when the agent works for an open todo now.
+func TestWhichClosedTaskReopens(t *testing.T) {
+	done := time.Now().Add(-time.Hour)
+	released := done.Add(time.Minute)
+	task := func(doneBy string, a TodoAgent) Todo {
+		return Todo{ID: "todo_a", Title: "a", Origin: "conv1", CreatedAt: done, DoneAt: &done, DoneBy: doneBy, Agents: []TodoAgent{a}}
+	}
+	s1 := TodoAgent{MachineID: "box", SessionID: "s1"}
+	failed := task(db.DoneByAuto, s1)
+	failed.StartError = "no such launcher"
+	for _, c := range []struct {
+		name    string
+		todos   []Todo
+		reopens bool
+	}{
+		{"judged done", []Todo{task(db.DoneByAuto, s1)}, true},
+		{"reviewed", []Todo{task(db.DoneByReview, s1)}, true},
+		{"closed by the user", []Todo{task("", s1)}, false},
+		{"start failed", []Todo{failed}, false},
+		{"released", []Todo{task(db.DoneByAuto, TodoAgent{MachineID: "box", SessionID: "s1", ReleasedAt: &released})}, false},
+		{"dismissed", []Todo{task(db.DoneByAuto, TodoAgent{MachineID: "box", SessionID: "s1", DismissedAt: &released})}, false},
+		{"works for an open todo", []Todo{task(db.DoneByAuto, s1), {ID: "todo_h", Title: "自己记的事", CreatedAt: done, Agents: []TodoAgent{s1}}}, false},
+		{"another agent", []Todo{task(db.DoneByAuto, TodoAgent{MachineID: "box", SessionID: "s2"})}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, f := newTaskService(t)
+			for _, td := range c.todos {
+				putTodo(s, td)
+			}
+			agentTurn(s, f, proto.StatusWorking, "", 0)
+			got := todoNow(s, "todo_a")
+			if reopened := got.DoneAt == nil && got.ReopenedAt != nil; reopened != c.reopens {
+				t.Fatalf("reopened = %v, want %v: %+v", reopened, c.reopens, got)
+			}
+		})
+	}
+}
+
 // A task's line in the snapshot follows its agent as the cards do (#1583): the step of one that has only run tools
 // and said nothing, its words and step while it works, its words once it stopped, and its running subagents on top
 // of its own progress, never instead of it.
