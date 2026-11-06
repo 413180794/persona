@@ -171,7 +171,7 @@ describe("folding a block of the sidebar", () => {
     expect(host.querySelector('a[title="Persona 的主对话"]')).not.toBeNull();
   });
 
-  it("folds the whole Agents block, the grouping and「+」 staying on its title", async () => {
+  it("folds the whole Agents block,「+」 staying on its title", async () => {
     act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
     const title = button("Agents")!;
@@ -179,6 +179,30 @@ describe("folding a block of the sidebar", () => {
     expect(title.getAttribute("aria-expanded")).toBe("false");
     expect(localStorage.getItem("fold:agents")).toBe("1");
     expect(button("新建 Agent")).toBeDefined();
+  });
+
+  it("offers the groupings as segments above the quick filter, 按待办 first and the default (#2812)", async () => {
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    const bar = host.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Agent 分组"]')!;
+    const segs = [...bar.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    expect(segs.map((b) => b.textContent)).toEqual(["待办", "机器", "仓库", "项目", "状态"]);
+    expect(segs.map((b) => b.getAttribute("aria-label"))).toEqual(["按待办", "按机器", "按仓库", "按项目", "按状态"]);
+    expect(segs[0].getAttribute("aria-checked")).toBe("true");
+    expect(segs.every((b) => b.className.includes("whitespace-nowrap"))).toBe(true);
+    act(() => segs[1].click());
+    expect(localStorage.getItem("jarvis.agentGrouping")).toBe("machine");
+    expect(segs[1].getAttribute("aria-checked")).toBe("true");
+    expect(segs[0].getAttribute("aria-checked")).toBe("false");
+    // no dropdown on the title row any more
+    expect(host.querySelector('button[aria-haspopup="menu"][aria-label^="Agent 分组"]')).toBeNull();
+  });
+
+  it("keeps a grouping chosen before", async () => {
+    localStorage.setItem("jarvis.agentGrouping", "state");
+    act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+    await flush();
+    expect(host.querySelector('[role="radio"][aria-label="按状态"]')!.getAttribute("aria-checked")).toBe("true");
   });
 
   it("starts as it was left", async () => {
@@ -206,12 +230,13 @@ describe("ordering the Agents list (G099)", () => {
   it("offers 状态优先 / 最近更新 under the grouping and keeps the choice", async () => {
     act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
-    act(() => button("Agent 分组：按机器")!.click());
+    act(() => button("Agent 列表选项")!.click());
     expect(item("状态优先")).toBeDefined();
+    expect(item("按机器")).toBeUndefined(); // the groupings are the segments now (#2812)
     act(() => item("最近更新")!.click());
     await flush();
     expect(localStorage.getItem("jarvis.agentSort")).toBe("updated");
-    expect(button("Agent 分组：按机器，最近更新")).toBeDefined();
+    expect(button("Agent 列表选项：最近更新")).toBeDefined();
   });
 
   it("is not offered under 按状态, whose sections are the states", async () => {
@@ -219,8 +244,9 @@ describe("ordering the Agents list (G099)", () => {
     localStorage.setItem("jarvis.agentSort", "updated");
     act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
-    act(() => button("Agent 分组：按状态")!.click());
-    expect(item("按机器")).toBeDefined();
+    expect(host.querySelector('[role="radio"][aria-label="按状态"]')!.getAttribute("aria-checked")).toBe("true");
+    act(() => button("Agent 列表选项")!.click());
+    expect(item("全部折叠")).toBeDefined();
     expect(item("最近更新")).toBeUndefined();
   });
 });
@@ -230,7 +256,7 @@ describe("the Agents list menu (#3027)", () => {
     localStorage.setItem("fold:space:mac/a", "1");
     act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
     await flush();
-    const menu = [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label")?.startsWith("Agent 分组"))!;
+    const menu = [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === "Agent 列表选项")!;
     act(() => menu.click());
     await flush();
     const item = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemradio], [role=menuitemcheckbox]")].find((el) => el.textContent?.includes(label));

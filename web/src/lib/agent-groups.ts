@@ -6,19 +6,20 @@ import { byTime } from "./times";
 import { stateName } from "./state-labels";
 
 export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
-// "By machine" is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
-// picked one; a grouping picked before stays.
-export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
-  { key: "machine", label: t("lib-agent-groups.by_machine") },
-  { key: "repo", label: t("lib-agent-groups.by_repo") },
-  { key: "space", label: t("lib-agent-groups.by_project") },
-  { key: "state", label: t("lib-agent-groups.by_state") },
-  { key: "todo", label: t("lib-agent-groups.by_todo") },
+// "By to-do" leads and is the default for a browser that never picked one (#2812); a grouping picked before stays. The
+// sidebar shows them in this order as segments, and the switch-grouping shortcut goes round them in it. "By machine" is
+// herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts). `short` is the segment's label, `label` the full name.
+export const AGENT_GROUPINGS: { key: AgentGrouping; label: string; short: string }[] = [
+  { key: "todo", label: t("lib-agent-groups.by_todo"), short: t("lib-agent-groups.seg_todo") },
+  { key: "machine", label: t("lib-agent-groups.by_machine"), short: t("lib-agent-groups.seg_machine") },
+  { key: "repo", label: t("lib-agent-groups.by_repo"), short: t("lib-agent-groups.seg_repo") },
+  { key: "space", label: t("lib-agent-groups.by_project"), short: t("lib-agent-groups.seg_project") },
+  { key: "state", label: t("lib-agent-groups.by_state"), short: t("lib-agent-groups.seg_state") },
 ];
 
-// the grouping this browser chose last (jarvis.agentGrouping), by todo included (#1836); by machine until it chooses (#1990)
+// the grouping this browser chose last (jarvis.agentGrouping, #1836); by todo until it chooses (#2812, was by machine, #1990)
 export function agentGrouping(value: string | null): AgentGrouping {
-  return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "machine";
+  return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "todo";
 }
 
 // the host kinds a pane ref may be prefixed with (keep in step with Kinds in server/internal/host/host.go); herdr's ids go bare and may hold a colon

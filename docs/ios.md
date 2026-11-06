@@ -94,9 +94,11 @@ Chat page:
   - Screenshots `-showSampleQuotes YES` adds website excerpt and session above input; end-to-end `QuoteBubbleTests`.
 - Files: message paths and Read / Edit / Write tool paths become tappable file tags, read from the session's computer
   (`GET /api/v1/machines/{mid}/file`, at most 2 MB, iCloud directories denied), rendered Markdown / numbered code / images / PDF / directories.
-- Other Agents in the space (Agents): second header row `SiblingTabs` (restored flat tabs at request 2026-10-31), one capsule each with state-color background
-  (Needs you red, Working orange, Unread green, Seen / Idle gray, no blinking dots); current bold outlined, shows current and fitting neighbors, horizontal scroll all; right ⋯ opens full list (dot, name, state,
-  current checkmark; red top-right dot on ⋯ when another Agent needs you), first All Agents in space X opens space page; chat ⋯ › All Agents in space same.
+- Other Agents in the space (Agents): the left part of the header's second row is `SiblingTabs` (restored flat tabs at request 2026-10-31), one capsule each with state-color background
+  (Needs you red, Working orange, Unread green, Seen / Idle gray, no blinking dots; kept at the user's request on 2026-11-06 over a neutral fill with a dot, `docs/plan-chat-topbar.md` Q2); current bold outlined.
+  A name is one line cut at its end, at most `Theme.Size.tabName` wide (BeautifulUI's chip sizes itself, so it is cut by length, `SiblingTabs.capped`): one long name cannot push the current tab away.
+  Shows current and fitting neighbors, horizontal scroll all, and an end fades while there is more to scroll that way (`.edgeFade()`); at the end the space icon and the tab count (not ⋯, the page's menu) opens the full list (dot, name, state,
+  current checkmark; red top-right dot when another Agent needs you), first All Agents in space X opens space page; chat ⋯ › All Agents in space same.
   Swipe tab rows left for Close (no full-swipe execution); list rows and capsules also long-press Stop and close Agent. Confirm if working, awaiting interaction, unknown, or holding background / queued / loop tasks; idle and completed close directly.
 - Delete chat (#1749, web #801): nonrunning sessions (`Session.canDelete`: Not running / Done / Unknown, not starting, not assistant) offer Delete chat… in Agents long-press / chat ⋯ (Mac also Agent › Delete Chat…); system confirmation explains removal from client lists only, computer records retained, reappears when reused (`DeleteSessionText`). `AppModel.deleteSession` calls `DELETE /api/v1/sessions/{mid}/{sid}`, removes locally on success (matches next hub sessions push), exits every open page (split details, separate Mac windows, `AppModel.deletedSession`); failure shows hub message.
 - Node menus (#3098, web #2329, `docs/terminal.md` ("Node menus")): running herdr Agent long-press adds Split pane ▸ Right / Down, Git ▸ Pull / Push / Fetch (pane cwd), Close tab… (system confirms all panes and Agents close); space ⋯ adds Run Agent here… and Git ▸ (workspace cwd). Run Agent here… sheet loads `GET /machines/{mid}/panes`, lists workspace shell panes with no Agent/bound session and directly startable Claude Code launchers (Codex requires first message, use New Agent), Run calls `panes/agent`; if no idle shell, create New terminal tab (`POST /panes`) then select. herdr only (not Orca, herdr-core or alternative hosts); rename retains Rename…. Logic `Views/Chats/NodeActions.swift` (`NodeMenu` pure + `NodeActions` execution/confirmation, `nodeActionPrompts()` on Agents list); menus stay Equatable, no changing push-data reads; failures show hub/node raw text in red toast. `NodeMenuTests`.
@@ -254,7 +256,12 @@ Chat page:
     `ImageRenderer` cannot draw ScrollView: separate `.card` Markdown theme wraps code and prevents horizontal table scrolling, otherwise tables and everything after turn blank;
     set `proposedSize` width or height is measured at another width, leaving a large blank bottom. Truncate beyond 3000 characters.
 - Agents chat top bar: ① Back / title + subtitle / ⋯; subtitle "● State (working duration in minutes) · Machine · Space › Tab" (since 2026-10-31 calm Seen/Not running states show only dot; tap title opens bottom Session info sheet with Run / Usage / Location, copy id/resume command, swipe down or tap above closes, former under-title pullout removed; Usage below context tokens has "Context remaining · N% left" and thin bar (#3289, web #2430, `ContextUsage.swift`: `context_tokens` / `context_window`, live session pushes, warning at ≥80% used, hidden for unknown window)); state text state-colored,
-  omit machine first then location if crowded; ② second row only for other same-space Agents or loop/background: companion menu, loop/background tags with next time/count, tap for details.
+  omit machine first then location if crowded; the title is one line cut at its end and uses the full width between the buttons (at most `Theme.Size.headerTitle` on wide screens);
+  ② second row only for other same-space Agents or loop/background: the tabs take the remaining width on the left, one activity pill sits at the trailing end (`ActivityChips`, trailing also without tabs): neutral fill, as tall as the tabs,
+  tinted icons (loop `Theme.loop`, background `Theme.busy`, the folded bar's marks), "⟳ 13:24 │ ⚙ 1" with the next time and count only (VoiceOver reads it in full); at the largest text sizes with both present the loop is only its icon; tap for details.
+  Goal, workflow and port rows are unchanged (phase 1, `docs/plan-chat-topbar.md` Q1); ③ at most one status line (`HeaderStatusLine`, `chat.status-line`): while reading a sub-Agent "👁 Viewing sub-Agent · title (read-only)",
+  the way back stays the footer's Return to main Agent (`SubagentFooter`); otherwise one running "spinner Sub-Agent title ›" opens it, several "spinner N sub-Agents running · newest title ›" open All sub-Agents;
+  no line when none runs (ended / nested ones from the work row's View sub-Agent and ⋯ › All sub-Agents (N)). The Main Agent / sub-Agent strip remains only on the Mac and in hosted headers (#3255).
   Formerly title, companion bar, tabs and activity each had a row. Files/Terminal/Git in top-right ⋯; Files ⋯ › Return to chat; collapsed slim bar has Back, location, small loop/background marks.
   Former left-swipe Files became left-swipe Quote 2026-11-04 (#1058); that day Files first had a standalone folder left of ⋯, then moved into menu at user request (#1205).
 - Header auto-collapse (Agents, like Safari toolbar): custom
@@ -319,16 +326,16 @@ Chat page:
     reread on return and re-send/reread on socket reconnect. Old hubs/nodes lacking `fs_watch` keep pull-to-refresh / ⌘R. Open diffs/file viewers do not refresh yet. Mac shares panels.
 - Loop (`/loop`): above input "Looping · Every 30 minutes · Next wake 11:56 (in 4 minutes)", tap task, confirmed Stop loop sends stop;
   each wake is "⟳ Loop wake 21:11 …" row, not user bubble.
-- Sub-Agents: Agent-tool children no longer count background tasks; below chat tabs Main Agent / running sub-Agents (spinner, row if children within a day; completed not chips, View sub-Agent in work), tap same
+- Sub-Agents: Agent-tool children no longer count background tasks; on iPhone / iPad the header's third row is a status line (see the top bar's ③ above); on the Mac and in hosted headers, below chat tabs Main Agent / running sub-Agents (spinner, row if children within a day; completed not chips, View sub-Agent in work), tap same
   message/tool UI read-only, footer "Sub-Agent · Explore · Running, read-only · Return to main Agent"; View sub-Agent below each Agent call.
-  Ended/nested children outside row add All sub-Agents N (#1559, web) at end, bottom tree sheet (`Subagent.tree`, same `subagentTree` sort:
+  Ended/nested children outside row add All sub-Agents N (#1559, web; in ⋯ on iPhone / iPad) at end, bottom tree sheet (`Subagent.tree`, same `subagentTree` sort:
   `parent_id` indentation, missing parents top-level; running first then newest start within level); state dot/description/Running or Finished/type (forks labeled Fork)/start age, tap read-only.
   Mock `MOCK_CHAT_LINES=1`, `-openSession <machine>/a1f3c2d4-0000-4000-8000-0000000c1e01` for screenshots.
   Agents with running children show "👥 Sub-Agents N", not idle. Id `<main session>@<agent id>`, history/live/paging identical to normal.
 - Background workflows (#2935, `workflows` in `docs/protocol.md`): Claude Workflow tool multi-Agent background scripts keep Agent Working after turn ends while waiting for completion,
   `state` still drives colors/count/watch/to-dos; App label Working (background) (`Session.stateLabel`);
   Agents rows/to-do cards add `WorkflowLine` below last text: "Background workflow ‘parity-audit’ · Verify 2/2 · 169/185 · 14 min" (multiple add Waiting for N);
-  chat header (expanded, side, Mac top) has Background workflows above sub-Agents (`WorkflowSection`):
+  chat header (expanded, side, Mac top) has Background workflows above sub-Agents / the status line (`WorkflowSection`):
   running `WorkflowCard`s with name/time/status Chip (running ai, complete positive, failed/stopped danger, inactive caution), stage row current highlighted, prior checked,
   "169/185 · 16 running ⌄" expands Agents, running first, tap `session_id` read-only like child. Ended within hour below as `WorkflowEndedRow`:
   name/completed-to-started/time/end state, error line for failed/stopped, expandable Agents. Whole section capped at 38% chat height (`Theme.Size.workflowShare`, #4532),
@@ -469,7 +476,7 @@ Apps built with older Xcode do not extend under the status bar and camera on Duo
   icon-only buttons become blank menu items.
 - **Vertical side bars**: when the system places bars at the side (outer screen, inner landscape; non-nil `toolbarVerticalEdge`, iOS 27.1 onward), the Agents chat page no longer draws its own header buttons;
   Back, Terminal, Git, Files and ⋯ go into the system toolbar, arranged below the status bar (`ChatView.sideBarItems`, each with title and icon). The content top keeps only a non-collapsing title
-  (tap for session info), same-space Agents, loop / background tasks and sub-Agents (`sideHeader`). Horizontal bars (ordinary iPhone, inner portrait) retain the custom collapsible header.
+  (tap for session info), same-space Agents, loop / background tasks and the sub-Agent status line (`sideHeader`, the same second and third rows as the custom header). Horizontal bars (ordinary iPhone, inner portrait) retain the custom collapsible header.
   The chat hides the system back button (`navigationBarBackButtonHidden(sideBars)`), leaving only its supplied Back in the side column. Chat destinations must use
   `.splitDetailPage(ownsBack: true)`: an outer `navigationBarBackButtonHidden(false)` overrides the page's `true`, bringing back the system button
   and stacking two Back buttons (2026-11-04, TestFlight).

@@ -1083,59 +1083,63 @@ struct BackgroundTasksStrip: View {
 
 // MARK: - Activity chips
 
-/// "⟳ Next 11:57" and "⚙ Background 2" under the chat's tabs: what keeps an agent going, in one small row.
+/// "⟳ 13:24 │ ⚙ 2" at the end of the chat header's second row: what keeps an agent going, in one neutral pill as tall
+/// as the tabs beside it. Only the icons carry color (the folded bar's marks, `ChatView.activityMark`); the words are in
+/// its VoiceOver label and its sheet (`ActivitySheet`). At the largest text sizes, with both there, the loop is only its
+/// arrows so the pill leaves the tabs some room.
 struct ActivityChips: View {
     var loop: LoopInfo?
     var background: [BackgroundTask]
-    /// Beside the agents menu in the header: the loop's next time and the task count only.
-    var compact = false
     var open: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Button {
             Haptics.tap()
             open()
         } label: {
-            HStack(spacing: Theme.Space.sm) {
+            HStack(spacing: Theme.Space.s) {
                 if let loop {
-                    chip(Theme.loop, text: Theme.loop) {
-                        Image(systemName: Theme.Icon.inProgress).font(Theme.Font.labelHeavy)
-                        TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                            Text(compact ? Self.shortLoopLabel(loop, now: ctx.date) : Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
+                    HStack(spacing: Theme.Space.xxs) {
+                        Image(systemName: Self.loopSymbol).font(Theme.Font.labelHeavy).foregroundStyle(Theme.loop)
+                        if background.isEmpty || typeSize < .xxxLarge {
+                            TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                                Text(Self.shortLoopLabel(loop, now: ctx.date)).lineLimit(1)
+                            }
                         }
                     }
+                }
+                if loop != nil, !background.isEmpty {
+                    Divider().scaledFrame(height: Theme.Size.markXS) // in an HStack: the hairline between the two
                 }
                 if !background.isEmpty {
-                    chip(Theme.busy, text: StatusPalette.working.text) {
-                        Image(systemName: Theme.Icon.backgroundTaskFilled).font(Theme.Font.labelHeavy)
-                        Text("Background \(background.count) [Chat View e7404d]").lineLimit(1)
-                        if !compact, background.count == 1, let t = background.first {
-                            Text(t.title).foregroundStyle(.secondary).lineLimit(1)
-                        }
+                    HStack(spacing: Theme.Space.xxs) {
+                        Image(systemName: Self.backgroundSymbol).font(Theme.Font.labelHeavy).foregroundStyle(Theme.busy)
+                        Text("\(background.count)").monospacedDigit().lineLimit(1)
                     }
                 }
-                if !compact { Spacer(minLength: 0) }
             }
-            .contentShape(.rect)
+            .font(Theme.Font.labelStrong)
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, Theme.Space.m)
+            .scaledFrame(height: Theme.Size.wellS)
+            .background(Theme.Fill.chip, in: .capsule)
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .accessibilityLabel(a11yLabel)
     }
+
+    /// The loop's and the background work's symbols, shared with the folded bar's mark.
+    static let loopSymbol = Theme.Icon.inProgress
+    static let backgroundSymbol = Theme.Icon.backgroundTaskFilled
 
     private var a11yLabel: String {
         let parts = [loop.map { String(localized: "Looping, \(Self.loopLabel($0, now: .now))") },
                      background.isEmpty ? nil : String(localized: "\(background.count) background tasks")].compactMap { $0 }
         let list = parts.joined(separator: String(localized: ", ", comment: "Separator between items of a spoken list"))
         return String(localized: "\(list), tap to view")
-    }
-
-    private func chip(_ tint: Color, text: Color, @ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: Theme.Space.xs) { content() }
-            .font(Theme.Font.labelStrong)
-            .foregroundStyle(text)
-            .padding(.horizontal, compact ? 10 : 8)
-            .padding(.vertical, compact ? 10 : 3) // compact: as tall as the agents menu beside it
-            .background(tint.opacity(0.12), in: .capsule)
     }
 
     /// The loop beside the arrows when room is short: the next time, or that it is running.
@@ -1267,8 +1271,9 @@ extension EnvironmentValues {
     @Entry var openSubagent: ((String) -> Void)? = nil
 }
 
-/// The agents in this conversation, under the tabs: Main Agent and each subagent it launched (spinning while it
-/// runs, a check when done). Tap one to read its conversation in the same chat UI. When some of `all` are not chips
+/// The agents in this conversation, on the Mac's row over the chat and in a hosted header (a task's sheet, #3255):
+/// Main Agent and each subagent it launched (spinning while it runs, a check when done). The iPhone's and iPad's Agents
+/// header has one status line instead (`HeaderStatusLine`). Tap one to read its conversation in the same chat UI. When some of `all` are not chips
 /// (finished, nested), 「全部子 Agent N」 at the end opens every one by who launched whom.
 struct AgentStrip: View {
     var agents: [Subagent]
@@ -1367,7 +1372,90 @@ struct AgentStrip: View {
     }
 }
 
-/// 「全部子 Agent」: every subagent under the one that launched it (`Subagent.tree`), with how it is going, what it is
+/// The one thing about the conversation's subagents the chat header's status line says (docs/plan-chat-topbar.md ③),
+/// the first that holds: one is being read; one runs; several run. None while none runs: finished and nested ones are
+/// reached from their Agent call ("View subagent") and ⋯ › All subagents.
+nonisolated enum HeaderStatus: Equatable, Sendable {
+    case viewing(Subagent)
+    case running(Subagent)
+    /// How many run and the one started last.
+    case severalRunning(count: Int, latest: Subagent)
+
+    static func pick(_ all: [Subagent], viewing: Subagent?) -> HeaderStatus? {
+        if let viewing { return .viewing(all.first { $0.id == viewing.id } ?? viewing) }
+        let running = all.filter(\.running)
+        guard let first = running.first else { return nil }
+        if running.count == 1 { return .running(first) }
+        // Started last; one without a start time counts as oldest, and of equals the first listed wins.
+        let latest = running.reduce(first) { a, b in (b.startedAt ?? .distantPast) > (a.startedAt ?? .distantPast) ? b : a }
+        return .severalRunning(count: running.count, latest: latest)
+    }
+}
+
+/// The chat header's third row, at most one line across the page's margins (`HeaderStatus`): no chip for the main agent
+/// (while a subagent is read, `SubagentFooter` at the composer has the way back, in reach of a thumb), the subagent's
+/// title cut at its end instead of running off the screen. A tap opens the one running, or every subagent when several run.
+struct HeaderStatusLine: View {
+    var status: HeaderStatus
+    var open: (Subagent) -> Void
+    var openAll: () -> Void
+
+    var body: some View {
+        switch status {
+        case .viewing(let a):
+            line(label: String(localized: "Viewing Subagent"), title: String(localized: "\(a.title) (read-only)"), chevron: false) {
+                Image(systemName: Theme.Icon.view).font(Theme.Font.labelStrong).foregroundStyle(Theme.accent)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(String(localized: "Viewing subagent: \(a.title), read-only"))
+            .accessibilityIdentifier("chat.status-line")
+        case .running(let a):
+            Button { open(a) } label: {
+                line(label: String(localized: "Subagent [Session Panes 4b81d0]"), title: a.title, chevron: true) { spinner }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "Subagent running: \(a.title)"))
+            .accessibilityHint(String(localized: "Opens its conversation"))
+            .accessibilityIdentifier("chat.status-line")
+        case .severalRunning(let n, let latest):
+            Button { openAll() } label: {
+                line(label: String(localized: "\(n) subagents running ·"), title: latest.title, titleSecondary: true, chevron: true) { spinner }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "\(n) subagents running, the newest is \(latest.title)"))
+            .accessibilityHint(String(localized: "Lists every subagent"))
+            .accessibilityIdentifier("chat.status-line")
+        }
+    }
+
+    /// Not a third orange dot under the subtitle's and the tab's: the work spinner.
+    private var spinner: some View { ProgressView().controlSize(.mini) }
+
+    private func line(label: String, title: String, titleSecondary: Bool = false, chevron: Bool,
+                      @ViewBuilder icon: () -> some View) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            icon()
+            Text(label)
+                .font(Theme.Font.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+            Text(title)
+                .font(Theme.Font.captionMedium)
+                .foregroundStyle(titleSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.primary))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if chevron {
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+            }
+        }
+        .scaledFrame(minHeight: Theme.Size.wellS)
+        .contentShape(.rect)
+    }
+}
+
+/// "All subagents": every subagent under the one that launched it (`Subagent.tree`), with how it is going, what it is
 /// and when it started; a tap reads it, like its chip.
 struct SubagentTreeSheet: View {
     @Environment(\.dismiss) private var dismiss

@@ -495,17 +495,30 @@ MOCK_WORKFLOW_RUNS = [
      "error": "Error: Workflow aborted", "agents": []},
 ]
 
+# MOCK_TOPBAR=1|3|long: the chat header's status line (docs/plan-chat-topbar.md): 1 one subagent running and one done;
+# 3 three running, tb3 started last; long a ~40-character subagent title and a long sibling tab name (truncation).
+MOCK_TOPBAR = os.environ.get("MOCK_TOPBAR", "")
+_TB_TITLES = {"tb0": "看现有的时间线刷新代码", "tb1": "查小组件的刷新预算", "tb2": "核对降雨概率的格式", "tb3": "跑一遍快照测试看看有没有回归"}
+if MOCK_TOPBAR == "long":
+    _TB_TITLES["tb1"] = "查小组件在低电量模式下的刷新预算和系统给的时间线条目数上限"
+MOCK_TOPBAR_SUBAGENTS = [
+    {"id": a, "session_id": f"{WIDGET}@{a}", "type": "Explore", "description": _TB_TITLES[a], "running": run,
+     "background": True, "started_at": ago(minutes=m), "updated_at": ago(minutes=0 if run else m - 1)}
+    for a, m, run in {"1": [("tb1", 3, True), ("tb0", 9, False)], "long": [("tb1", 3, True), ("tb0", 9, False)],
+                      "3": [("tb1", 6, True), ("tb2", 4, True), ("tb3", 1, True)]}.get(MOCK_TOPBAR, [])]
+_WIDGET_SUBAGENTS = ([
+    {"id": "a1", "session_id": f"{WIDGET}@a1", "type": "Explore", "description": "查小组件的刷新预算", "running": True,
+     "background": True, "started_at": ago(minutes=3)},
+    {"id": "a2", "session_id": f"{WIDGET}@a2", "type": "Explore", "description": "核对降雨概率的格式", "running": True,
+     "background": True, "started_at": ago(minutes=2)}] if os.environ.get("MOCK_TASKS_SUBAGENTS") == "1" else []) + MOCK_TOPBAR_SUBAGENTS
+
 SESSIONS = [
     sess("macbook", WIDGET, "给天气 App 加主屏幕小组件", "/Users/me/code/weather", "working", "working", "weather", 1, "widget", 1, 0,
          "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits",
          # Only tool calls since that line (#1108): the task card shows this step and how long it has gone on.
          activity="在跑测试", activity_at=ago(minutes=4),
-         # MOCK_TASKS_SUBAGENTS=1: two subagents running (#1583): a line under the task card's own progress.
-         **({"subagents": [
-             {"id": "a1", "session_id": f"{WIDGET}@a1", "type": "Explore", "description": "查小组件的刷新预算", "running": True,
-              "background": True, "started_at": ago(minutes=3)},
-             {"id": "a2", "session_id": f"{WIDGET}@a2", "type": "Explore", "description": "核对降雨概率的格式", "running": True,
-              "background": True, "started_at": ago(minutes=2)}]} if os.environ.get("MOCK_TASKS_SUBAGENTS") == "1" else {}),
+         # MOCK_TASKS_SUBAGENTS=1: two subagents running (#1583): a line under the task card's own progress; MOCK_TOPBAR above.
+         **({"subagents": _WIDGET_SUBAGENTS} if _WIDGET_SUBAGENTS else {}),
          loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
                "next_at": (datetime.now(timezone.utc) + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"), "ticks": 3},
          background=[{"id": "b1", "kind": "shell", "description": "跑小组件快照测试",
@@ -519,7 +532,8 @@ SESSIONS = [
          **({"queued": ["顺便把 README 里的截图也换成新的小组件", "改完以后跑一遍 UI 测试，把失败的截图发给我"]}
             if os.environ.get("MOCK_QUEUE") else {})),
     sess("macbook", TESTS, "补齐网络层的单元测试", "/Users/me/code/weather", "blocked", "needs_you", "weather", 1, "tests", 2, 2,
-         "开始写测试前想确认一下用哪个测试框架。", pending=1),
+         "开始写测试前想确认一下用哪个测试框架。", pending=1,
+         **({"slot_name": "tests-for-the-networking-layer-and-retries"} if MOCK_TOPBAR == "long" else {})),
     sess("macbook", REVIEW, "检查 PR #42 的改动", "/Users/me/code/weather", "idle", "idle", "weather", 1, "review", 3, 95,
          "PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。", seen_at=ago(minutes=80)),
     sess("macbook", RELEASE, "整理发布说明", "/Users/me/code/weather", "done", "unread", "weather", 1, "release", 4, 3,
@@ -1956,6 +1970,9 @@ ITEMS = {}
 for _a, _label, _phase, _run, _text in MOCK_WORKFLOW_AGENTS:  # MOCK_WORKFLOWS: each workflow agent's conversation
     ITEMS[f"{WIDGET}@{_a}"] = [it("user", "text", 13, text=f"{_label}：审计小组件的这一块，列出问题")] + (
         [it("assistant", "text", 1, text=_text)] if _text else [])
+for _a in MOCK_TOPBAR_SUBAGENTS:  # MOCK_TOPBAR: each subagent's own conversation, to read it in the chat
+    ITEMS[_a["session_id"]] = [it("user", "text", 3, text=_a["description"]),
+                               it("assistant", "text", 2, text="先看 `WidgetTimelineProvider` 里怎么排时间线条目，再对照系统的刷新预算。")]
 ITEMS[WIDGET] = (
     [it("user", "text", 14, text="给天气 App 加一个主屏幕小组件：显示当前温度，下面是接下来 6 小时的降雨概率。中号和小号两种尺寸。")]
     + [it("assistant", "thinking", 14, text="先看看现在的数据层有没有逐小时的预报，再决定小组件的时间线怎么刷新。")]

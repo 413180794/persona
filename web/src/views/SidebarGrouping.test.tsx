@@ -1,0 +1,178 @@
+// @vitest-environment jsdom
+// The Agents block's grouping (#2812) against the store: 按待办 waits for the first GET /todos instead of drawing every
+// agent under 没挂待办的 and moving it, and a hub without todos hides 待办 and shows 按机器 while keeping the choice.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// jsdom has no matchMedia (the sidebar's modules read it when they load) and no ResizeObserver (its highlight)
+vi.hoisted(() => {
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+  window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as typeof window.matchMedia;
+});
+import { connect, refresh, reset } from "../lib/store";
+import type { Todo } from "../lib/todos";
+import type { Machine, Session } from "../lib/types";
+import { Sidebar } from "./Sidebar";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+class FakeSocket {
+  static OPEN = 1;
+  static all: FakeSocket[] = [];
+  readyState = 0;
+  onopen: (() => void) | null = null;
+  onmessage: ((ev: { data: string }) => void) | null = null;
+  onclose: ((ev: { code: number }) => void) | null = null;
+  constructor() {
+    FakeSocket.all.push(this);
+  }
+  send() {}
+  close() {
+    this.readyState = 3;
+  }
+  open() {
+    this.readyState = 1;
+    this.onopen?.();
+  }
+  push(msg: Record<string, unknown>) {
+    this.onmessage?.({ data: JSON.stringify(msg) });
+  }
+}
+
+const mac: Machine = { id: "mac", name: "工作电脑", online: true };
+const agent: Session = { machine_id: "mac", session_id: "s1", title: "改发布脚本", cwd: "/code/weather", status: "working", state: "working" };
+const todo: Todo = { id: "td1", title: "天气 App 发 1.3 版", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z", agents: [{ machine_id: "mac", session_id: "s1", linked_at: "2026-11-05T00:00:00Z" }] };
+
+const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+/** fetch for a hub with `mac` and its one agent; GET /todos answers with `todos`. */
+const hub = (todos: () => Promise<Response>) =>
+  vi.fn((url: string) => {
+    if (url.endsWith("/api/v1/todos")) return todos();
+    if (url.endsWith("/api/v1/sessions")) return json({ sessions: [agent] });
+    if (url.endsWith("/api/v1/machines")) return json({ machines: [mac] });
+    return json({});
+  });
+
+let host: HTMLDivElement;
+let root: Root;
+const flush = async () => {
+  for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve(); });
+};
+const grouping = () => host.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Agent 分组"]')!;
+const segments = () => [...grouping().querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+const checked = () => segments().find((b) => b.getAttribute("aria-checked") === "true")?.getAttribute("aria-label");
+// the Agents block's body: the segments, the quick filter and the groups (the personal agents' 加载中… is elsewhere)
+const agentsBlock = () => grouping().parentElement!;
+const render = async () => {
+  act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));
+  await flush();
+};
+
+beforeEach(() => {
+  localStorage.clear();
+  reset();
+  FakeSocket.all = [];
+  vi.stubGlobal("WebSocket", FakeSocket);
+  history.replaceState(null, "", "/");
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+  reset();
+  vi.unstubAllGlobals();
+});
+
+describe("按待办 before the todos have loaded", () => {
+  it("says 加载中… until GET /todos answers, then draws the agent under its todo, never under 没挂待办的 first", async () => {
+    let answer!: (r: Response) => void;
+    const todos = new Promise<Response>((r) => (answer = r));
+    vi.stubGlobal("fetch", hub(() => todos));
+    // the socket pushes the machines and sessions while GET /todos (asked for on hello) is still on its way
+    connect();
+    const sock = FakeSocket.all[FakeSocket.all.length - 1];
+    sock.open();
+    sock.push({ type: "hello", server_version: "v1" });
+    sock.push({ type: "machines", machines: [mac] });
+    sock.push({ type: "sessions", machine_id: "mac", sessions: [agent] });
+    await render();
+    expect(checked()).toBe("按待办");
+    expect(agentsBlock().textContent).toContain("加载中…");
+    expect(agentsBlock().textContent).not.toContain("没挂待办的");
+    expect(agentsBlock().textContent).not.toContain("改发布脚本");
+
+    await act(async () => answer(new Response(JSON.stringify({ todos: [todo] }), { status: 200 })));
+    await flush();
+    expect(agentsBlock().textContent).not.toContain("加载中…");
+    expect(agentsBlock().textContent).toContain("天气 App 发 1.3 版");
+    expect(agentsBlock().textContent).toContain("改发布脚本");
+    expect(agentsBlock().textContent).not.toContain("没挂待办的");
+  });
+
+  it("draws the todos as soon as GET /todos answers, while GET /sessions is still on its way", async () => {
+    const slow = vi.fn((url: string) => {
+      if (url.endsWith("/api/v1/todos")) return json({ todos: [todo] });
+      if (url.endsWith("/api/v1/sessions")) return new Promise<Response>(() => {});
+      if (url.endsWith("/api/v1/machines")) return json({ machines: [mac] });
+      return json({});
+    });
+    vi.stubGlobal("fetch", slow);
+    connect();
+    const sock = FakeSocket.all[FakeSocket.all.length - 1];
+    sock.open();
+    sock.push({ type: "hello", server_version: "v1" });
+    sock.push({ type: "machines", machines: [mac] });
+    sock.push({ type: "sessions", machine_id: "mac", sessions: [agent] });
+    await render();
+    expect(agentsBlock().textContent).not.toContain("加载中…");
+    expect(agentsBlock().textContent).toContain("天气 App 发 1.3 版");
+    expect(agentsBlock().textContent).toContain("改发布脚本");
+  });
+
+  it("does not wait under another grouping", async () => {
+    localStorage.setItem("jarvis.agentGrouping", "machine");
+    vi.stubGlobal("fetch", hub(() => new Promise<Response>(() => {})));
+    connect();
+    const sock = FakeSocket.all[FakeSocket.all.length - 1];
+    sock.open();
+    sock.push({ type: "hello", server_version: "v1" });
+    sock.push({ type: "machines", machines: [mac] });
+    sock.push({ type: "sessions", machine_id: "mac", sessions: [agent] });
+    await render();
+    expect(checked()).toBe("按机器");
+    expect(agentsBlock().textContent).not.toContain("加载中…");
+    expect(agentsBlock().textContent).toContain("工作电脑");
+  });
+});
+
+describe("a hub without todos (GET /todos 404)", () => {
+  it("hides 待办 and shows 按机器 for a browser that never chose", async () => {
+    vi.stubGlobal("fetch", hub(() => json({ error: "not found" }, 404)));
+    await refresh();
+    await render();
+    expect(segments().map((b) => b.textContent)).toEqual(["机器", "仓库", "项目", "状态"]);
+    expect(checked()).toBe("按机器");
+    expect(agentsBlock().textContent).toContain("工作电脑");
+    expect(agentsBlock().textContent).not.toContain("加载中…");
+    expect(localStorage.getItem("jarvis.agentGrouping")).toBeNull();
+  });
+
+  it("keeps a 按待办 chosen before and shows it again once the hub has todos", async () => {
+    localStorage.setItem("jarvis.agentGrouping", "todo");
+    vi.stubGlobal("fetch", hub(() => json({ error: "not found" }, 404)));
+    await refresh();
+    await render();
+    expect(checked()).toBe("按机器");
+    expect(localStorage.getItem("jarvis.agentGrouping")).toBe("todo");
+
+    vi.stubGlobal("fetch", hub(() => json({ todos: [todo] })));
+    await act(async () => { await refresh(); });
+    await flush();
+    expect(segments()[0].getAttribute("aria-label")).toBe("按待办");
+    expect(checked()).toBe("按待办");
+    expect(agentsBlock().textContent).toContain("天气 App 发 1.3 版");
+  });
+});

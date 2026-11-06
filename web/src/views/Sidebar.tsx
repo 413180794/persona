@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { AGENT_SORT_KEY, AGENT_SORTS, agentSort, machineTreeByUpdate, projectsByUpdate, repoMachinesByUpdate, todoTreeByUpdate, type AgentSort } from "../lib/agent-sort";
-import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
+import { agentGrouping, AGENT_GROUPINGS, type AgentGrouping, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
@@ -498,21 +498,28 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
   const loaded = useStore((s) => s.loaded);
   const todos = useStore((s) => s.todos);
   const todosSupported = useStore((s) => s.todosSupported);
+  const todosLoaded = useStore((s) => s.todosLoaded);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
   const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
   // the switch-grouping shortcut (lib/sidebar-api.ts)
   useEffect(() => onGrouping(setGrouping), []);
-  const groupingMenu = useMenu();
   const availableGroupings = useMemo(() => {
     if (todosSupported === false) return AGENT_GROUPINGS.filter((g) => g.key !== "todo");
     return AGENT_GROUPINGS;
   }, [todosSupported]);
   // a hub without todos shows by machine, a by-todo choice kept for when it has them
   const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
-  const groupingLabel = (availableGroupings.find((g) => g.key === shownGrouping) ?? availableGroupings[0]).label;
+  const chooseGrouping = (g: AgentGrouping) => {
+    localStorage.setItem("jarvis.agentGrouping", g);
+    setGrouping(g);
+    hover(null);
+  };
   // "State first" / "Recently updated" (iOS AgentSort, G099): not under "By status", whose sections are the states already
   const [sortChoice, setSortChoice] = useState<AgentSort>(() => agentSort(localStorage.getItem(AGENT_SORT_KEY)));
   const byUpdate = sortChoice === "updated" && shownGrouping !== "state";
+  // the title row's ⋯ (#2812): what the grouping dropdown held besides the groupings, the sort and "Fold all" / "Unfold all"
+  const listMenu = useMenu();
+  const listLabel = byUpdate ? t("sidebar.list_menu_sorted", { sort: AGENT_SORTS[1].label }) : t("sidebar.list_menu");
   // the quick filter ("All" / "Needs you" / "Unread" / "Working"), stacked on any grouping; what it showed when chosen stays (`kept`)
   const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("jarvis.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
@@ -557,11 +564,14 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     if (shownGrouping === "todo") return [];
     return buildAgentGroups(unpinned, machines, "state", mutes);
   }, [unpinned, machines, shownGrouping, mutes, todos]);
+  // by todo waits for the first GET /todos: the socket pushes the sessions before it answers, and a tree drawn without
+  // the todos puts every agent under 没挂待办的 for a moment, then moves them under their todos (#2812)
+  const todosPending = shownGrouping === "todo" && !todosLoaded;
   const todoTree = useMemo(() => {
-    if (shownGrouping !== "todo") return undefined;
+    if (shownGrouping !== "todo" || !todosLoaded) return undefined;
     const built = buildTodoTree(unpinned, machines, todos, mutes);
     return byUpdate ? todoTreeByUpdate(built) : built;
-  }, [unpinned, machines, shownGrouping, mutes, todos, byUpdate]);
+  }, [unpinned, machines, shownGrouping, mutes, todos, todosLoaded, byUpdate]);
   const repoMachines = useMemo(() => {
     if (shownGrouping !== "repo") return [];
     const built = buildRepoMachineTree(unpinned, machines);
@@ -632,19 +642,14 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
           <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
         )}
         {folded && <SessionTally sessions={live} folded />}
-        <button type="button" aria-label={byUpdate ? t("sidebar.grouping_sort_label", { grouping: groupingLabel, sort: AGENT_SORTS[1].label }) : t("sidebar.grouping_label", { grouping: groupingLabel })} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="touch-hit relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
-          {byUpdate && <Icon name="clock" size={10} stroke={2} />}
-          {groupingLabel}
-          <Icon name="chevron" size={10} stroke={2} />
+        <button type="button" title={listLabel} aria-label={listLabel} aria-haspopup="menu" aria-expanded={Boolean(listMenu.anchor)} onClick={listMenu.open} className={cx("touch-hit relative z-10 flex size-5 shrink-0 items-center justify-center rounded-[5px] hover:bg-hover hover:text-ink-2", byUpdate ? "text-accent" : "text-ink-3", listMenu.anchor && "bg-hover")}>
+          <Icon name={byUpdate ? "clock" : "more"} size={12} stroke={2} />
         </button>
         {add && <SectionAdd label={t("sidebar.new_agent")} onClick={onNewAgent} />}
       </div>
-      {groupingMenu.anchor && (
-        <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header={t("sidebar.grouping_header")} items={[...availableGroupings.map((g): MenuItem => ({
-          key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: shownGrouping === g.key,
-          onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); hover(null); },
-        })), ...(shownGrouping === "state" ? [] : AGENT_SORTS.map((o, i): MenuItem => ({
-          key: `sort:${o.key}`, label: o.label, icon: o.key === "updated" ? "clock" : "layers", checked: sortChoice === o.key, divider: i === 0,
+      {listMenu.anchor && (
+        <Menu anchor={listMenu.anchor} onClose={listMenu.close} align="right" items={[...(shownGrouping === "state" ? [] : AGENT_SORTS.map((o): MenuItem => ({
+          key: `sort:${o.key}`, label: o.label, icon: o.key === "updated" ? "clock" : "layers", checked: sortChoice === o.key,
           onSelect: () => { localStorage.setItem(AGENT_SORT_KEY, o.key); setSortChoice(o.key); hover(null); },
         }))),
           // every group of the list, like the app's list settings (#3027); "Expand all" also opens the spaces and tab groups
@@ -656,6 +661,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       <FoldScope.Provider value={AGENTS_FOLD}>
       <Collapse open={!folded}>
       <div inert={folded || undefined}>
+      <GroupingBar groupings={availableGroupings} selection={shownGrouping} onChoose={chooseGrouping} />
       <FilterBar selection={filter} counts={filterTotals} onChoose={choose} botmux={botmuxCount > 0 || botmuxHidden ? { hidden: botmuxHidden, onToggle: toggleBotmux } : undefined} />
       {/* "herdr is not running on <computer>" with "Start" (#1916): before a message to an agent there fails */}
       {/* the one line about the hub (#2897): updating, rolled back, a newer version or image */}
@@ -714,6 +720,8 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
         repoMachines.map((m) => (
           <RepoMachineSection key={m.key} m={m} flat={repoMachines.length <= 1} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
         ))
+      ) : todosPending ? (
+        <p className="px-2 py-1 text-[12px] text-ink-3">{t("sidebar.loading")}</p>
       ) : todoTree ? (
         <TodoTreeView tree={todoTree} machines={machines} showHost={mixedHosts} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
       ) : groups.map((group) => (
@@ -759,6 +767,35 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
       <LinkTodoDialog open={Boolean(linkTargetSession)} session={linkTargetSession} onClose={() => setLinkTargetSession(undefined)} />
       <LinkTodoDialog open={Boolean(linkTargetSpace)} space={linkTargetSpace} onClose={() => setLinkTargetSpace(undefined)} />
     </>
+  );
+}
+
+/** How Agents are grouped (#2812): one segment per grouping, "By to-do" first, above the quick filter. The segments say
+ *  the short name (To-do / Machine…) so all five fit the sidebar's width on one line; the full name is their label. */
+function GroupingBar({ groupings, selection, onChoose }: { groupings: readonly { key: AgentGrouping; label: string; short: string }[]; selection: AgentGrouping; onChoose: (g: AgentGrouping) => void }) {
+  return (
+    <div role="radiogroup" aria-label={t("sidebar.grouping_header")} className="mt-1.5 mx-1 flex gap-0.5 rounded-full bg-inset p-0.5 shadow-hairline">
+      {groupings.map((g) => {
+        const on = g.key === selection;
+        return (
+          <button
+            key={g.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={g.label}
+            title={g.label}
+            onClick={() => onChoose(g.key)}
+            className={cx(
+              "touch-hit relative z-10 flex h-6 min-w-0 flex-auto items-center justify-center whitespace-nowrap rounded-full px-1.5 text-[11.5px] transition-[background-color,color,box-shadow] duration-150",
+              on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-2 hover:bg-hover hover:text-ink",
+            )}
+          >
+            <span className="truncate">{g.short}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

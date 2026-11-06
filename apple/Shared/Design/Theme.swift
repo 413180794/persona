@@ -371,6 +371,9 @@ nonisolated enum Theme {
         static let barWide: CGFloat = 4
         /// A share bar's thickness (the assistant's stacked-bar card).
         static let meter: CGFloat = 12
+        /// How far a sideways strip fades out at an end with more to scroll to (`.edgeFade()`): a cut-off chip reads as
+        /// "more", not as a broken row.
+        static let fadeEdge: CGFloat = 24
         // Dots and small marks.
         static let grabber: CGFloat = 5
         static let dotXS: CGFloat = 6
@@ -421,6 +424,9 @@ nonisolated enum Theme {
         static let box80: CGFloat = 80
         static let box110: CGFloat = 110
         static let box120: CGFloat = 120
+        /// The longest a tab's name gets in the chat header's strip of the space's tabs: one long name cannot push the
+        /// current tab out of sight.
+        static let tabName: CGFloat = 120
         static let box140: CGFloat = 140
         static let box150: CGFloat = 150
         static let box180: CGFloat = 180
@@ -435,6 +441,9 @@ nonisolated enum Theme {
         // Wide screens (iPad).
         /// A page meant to be read, not a list (the welcome page): no wider than this, centered.
         static let readable: CGFloat = 560
+        /// The widest the Agents chat header's title gets on a wide page (iPad, Mac): on an iPhone it takes all the room
+        /// between the round buttons; past this a line is too long to read at a glance.
+        static let headerTitle: CGFloat = 480
         /// The list column of a split on iPad: wide enough for the agents' cards and the inbox rows.
         static let sidebarMin: CGFloat = 340
         static let sidebar: CGFloat = 400

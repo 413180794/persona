@@ -44,6 +44,8 @@ struct ChatView: View {
     #endif
     @State private var file: FileRef?
     @State private var showActivity = false
+    /// "All subagents" opened, from the header's status line or ⋯ (`SubagentTreeSheet`).
+    @State private var showSubagents = false
     /// The folded header's goal mark opened (`GoalSheet`); the open header's `GoalBar` keeps its own.
     @State private var showGoal = false
     @State private var debugImages: [ImagePayload]?
@@ -2357,11 +2359,11 @@ struct ChatView: View {
     }
 
     /// The folded header's sign of a loop / background tasks: a gear with the count, or the loop arrows (still: only
-    /// Needs You and the work spinner move).
+    /// Needs You and the work spinner move). The same symbols and tints as the open header's pill (`ActivityChips`).
     private var activityMark: some View {
         let bg = session?.background?.count ?? 0
         return HStack(spacing: Theme.Space.xxs) {
-            Image(systemName: bg > 0 ? Theme.Icon.backgroundTaskFilled : Theme.Icon.inProgress)
+            Image(systemName: bg > 0 ? ActivityChips.backgroundSymbol : ActivityChips.loopSymbol)
                 .font(Theme.Font.labelHeavy)
             if bg > 0 { Text("\(bg)").font(Theme.Font.labelHeavy.monospacedDigit()) }
         }
@@ -2393,6 +2395,15 @@ struct ChatView: View {
                         Label(paneBadges[p].map { String(localized: "\(p.title) (\($0))") } ?? p.title, systemImage: p.symbol)
                     }
                 }
+                #if !os(macOS)
+                // The header's status line shows only running subagents: finished and nested ones are here (the Mac's
+                // strip and a hosted one still have their own "All subagents").
+                if host == nil, let n = session?.subagents?.count, n > 0 {
+                    Button { showSubagents = true } label: {
+                        Label(String(localized: "All Subagents (\(n))"), systemImage: Theme.Icon.list).lineLimit(1)
+                    }
+                }
+                #endif
             }
             if session?.canAttach == true {
                 Button { Task { await model.attach(key) } } label: { Label("Attach Live", systemImage: Theme.Icon.link).lineLimit(1) }
@@ -2475,7 +2486,7 @@ struct ChatView: View {
         let link = model.connection.shown
         return VStack(spacing: Theme.Space.xxs) {
             HStack(spacing: Theme.Space.xs) {
-                Text(title).font(Theme.Font.heading).lineLimit(1)
+                Text(title).font(Theme.Font.heading).lineLimit(1).truncationMode(.tail)
                 if chevron {
                     Image(systemName: Theme.Icon.expand).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
                 }
@@ -2494,7 +2505,8 @@ struct ChatView: View {
             }
             .animation(Theme.Motion.standard, value: link)
         }
-        .scaledFrame(maxWidth: Theme.Size.box260)
+        // All the room between the round buttons on an iPhone; a readable cap on a wide page.
+        .scaledFrame(maxWidth: Theme.Size.headerTitle)
         .contentShape(.rect)
     }
 
@@ -2627,23 +2639,14 @@ struct ChatView: View {
                 // A hosting sheet's grabber is over the row (#3255): it starts below it.
                 .padding(.top, host?.closes == true ? Theme.Space.m : Theme.Space.xxs)
                 .padding(.bottom, Theme.Space.sm)
-                // Row two, only when there is something for it: the space's other agents and a /loop or background
-                // work (small chips; a tap opens them). Files and Git are in the ··· menu.
-                // Hosted (a task's sheet, #3255) it is one agent's page: no strip of the space's tabs.
+                // Row two, only when there is something for it. Hosted (a task's sheet, #3255) it is one agent's page:
+                // no strip of the space's tabs, and its activity is a mark in row one.
                 let hasActivity = host == nil && (session?.loop != nil || !(session?.background ?? []).isEmpty)
                 let tabs = host == nil && session?.spaceKey != nil
                 if tabs || hasActivity {
-                    HStack(spacing: Theme.Space.s) {
-                        // The tabs take the width there is; without them the activity chips sit on the left.
-                        if tabs { SiblingTabs(current: key, select: switchTo, closed: closedAgent) }
-                        if hasActivity {
-                            ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
-                                .fixedSize()
-                        }
-                        if !tabs || model.siblings(of: key).count < 2 { Spacer(minLength: 0) }
-                    }
-                    .padding(.horizontal, Theme.Space.l)
-                    .padding(.bottom, Theme.Space.s)
+                    contextRow(tabs: tabs, activity: hasActivity)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.bottom, Theme.Space.s)
                 }
                 // The goal it works toward (docs/agent-goal.md): a tap shows all of it.
                 if host == nil, let goal = session?.goal {
@@ -2662,17 +2665,20 @@ struct ChatView: View {
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
                 }
-                // Chips only while subagents run (plus the one being read); finished and nested ones are in its
-                // 「全部子 Agent」 and stay reachable from their Agent call ("View subagent").
-                let all = session?.subagents ?? []
-                let agents = all.filter { $0.running || $0.id == viewing?.id }
-                if pane == .chat, !all.isEmpty {
-                    AgentStrip(agents: agents, all: all, viewing: viewing?.id) { a in view(a) }
+                if pane == .chat {
+                    if host == nil {
+                        statusLine
+                            .padding(.horizontal, Theme.Space.page)
+                            .padding(.bottom, Theme.Space.sm)
+                    } else {
+                        hostedAgentStrip
+                    }
                 }
             }
         } compact: {
             compactChrome
         }
+        .sheet(isPresented: $showSubagents) { subagentTree }
         .sheet(isPresented: $showActivity) {
             ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
                 showActivity = false
@@ -2741,6 +2747,7 @@ struct ChatView: View {
         }
         .animation(Theme.Motion.layout, value: composerTyping)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sideHeaderHeight = $0 }
+        .sheet(isPresented: $showSubagents) { subagentTree }
         .sheet(isPresented: $showActivity) {
             ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
                 showActivity = false
@@ -2753,22 +2760,56 @@ struct ChatView: View {
         titleButton
         let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
         let tabs = host == nil && session?.spaceKey != nil
-        if tabs || hasActivity {
-            HStack(spacing: Theme.Space.s) {
-                if tabs { SiblingTabs(current: key, select: switchTo, closed: closedAgent) }
-                if hasActivity {
-                    ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
-                        .fixedSize()
-                }
-            }
-        }
+        if tabs || hasActivity { contextRow(tabs: tabs, activity: hasActivity) }
         if let goal = session?.goal { GoalBar(goal: goal) }
         workflowBar
         if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
+        if pane == .chat {
+            if host == nil {
+                statusLine
+            } else {
+                hostedAgentStrip
+            }
+        }
+    }
+
+    /// The header's second row: the space's other agents on the left, taking the width there is, and this agent's /loop
+    /// and background work as one pill held at the trailing end (there too without tabs), so neither moves when the
+    /// other comes or goes.
+    private func contextRow(tabs: Bool, activity: Bool) -> some View {
+        HStack(spacing: Theme.Space.m) {
+            if tabs {
+                SiblingTabs(current: key, select: switchTo, closed: closedAgent).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+            }
+            if activity {
+                ActivityChips(loop: session?.loop, background: session?.background ?? []) { showActivity = true }
+            }
+        }
+    }
+
+    /// The header's third row (`HeaderStatusLine`): what its subagents are doing, when that is worth a line.
+    @ViewBuilder private var statusLine: some View {
+        if let status = HeaderStatus.pick(session?.subagents ?? [], viewing: viewing) {
+            HeaderStatusLine(status: status, open: { a in view(a) }, openAll: { Haptics.tap(); showSubagents = true })
+        }
+    }
+
+    /// Hosted (a task's sheet, #3255), which this header's redesign leaves as it was: Main Agent and a chip per running
+    /// subagent, with "All subagents" for the rest.
+    @ViewBuilder private var hostedAgentStrip: some View {
         let all = session?.subagents ?? []
-        let agents = all.filter { $0.running || $0.id == viewing?.id }
-        if pane == .chat, !all.isEmpty {
-            AgentStrip(agents: agents, all: all, viewing: viewing?.id) { a in view(a) }
+        if !all.isEmpty {
+            AgentStrip(agents: all.filter { $0.running || $0.id == viewing?.id }, all: all, viewing: viewing?.id) { a in view(a) }
+        }
+    }
+
+    /// "All subagents": every subagent by who launched whom; a tap reads it.
+    private var subagentTree: some View {
+        SubagentTreeSheet(rows: Subagent.tree(session?.subagents ?? []), viewing: viewing?.id) { a in
+            showSubagents = false
+            view(a)
         }
     }
 

@@ -42,13 +42,6 @@ struct AttachmentCard<Thumb: View>: View {
 /// and the cards scroll in.
 private struct AttachmentScroller<Content: View>: View {
     @ViewBuilder var content: Content
-    @State private var more = Edges()
-
-    private struct Edges: Equatable {
-        var leading = false
-        var trailing = false
-        var width: CGFloat = 0
-    }
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -58,22 +51,7 @@ private struct AttachmentScroller<Content: View>: View {
         // Out to the list's margins, so the row scrolls to the screen's edge and starts where the text does.
         .padding(.horizontal, -Theme.Space.page)
         .contentMargins(.horizontal, Theme.Space.page, for: .scrollContent)
-        .onScrollGeometryChange(for: Edges.self) { g in
-            // At rest the offset is minus the leading margin; at the end the trailing margin shows past the content.
-            Edges(leading: g.contentOffset.x > 1 - g.contentInsets.leading,
-                  trailing: g.contentOffset.x + g.containerSize.width < g.contentSize.width + g.contentInsets.trailing - 1,
-                  width: g.containerSize.width)
-        } action: { _, edges in
-            more = edges
-        }
-        .mask { LinearGradient(stops: fade, startPoint: .leading, endPoint: .trailing) }
-    }
-
-    /// Opaque, fading out over the last `Theme.Space.xl` on a side where there is more to scroll to.
-    private var fade: [Gradient.Stop] {
-        let f = more.width > 0 ? min(Theme.Space.xl / more.width, 0.25) : 0
-        return [.init(color: .black.opacity(more.leading ? 0 : 1), location: 0), .init(color: .black, location: f),
-                .init(color: .black, location: 1 - f), .init(color: .black.opacity(more.trailing ? 0 : 1), location: 1)]
+        .edgeFade()
     }
 }
 

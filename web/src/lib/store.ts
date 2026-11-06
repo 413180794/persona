@@ -671,16 +671,21 @@ export async function refresh() {
   const pinsAt = pinsSaves.out ? -1 : pinsSaves.rev;
   const asked = todosAsked.ask();
   const askedAssistant = assistantAsked.ask();
-  const [sessions, interactions, assistant, machines, mutes, pins, todos] = await Promise.allSettled([
+  // the todos go in as soon as they answer: By to-do (the default, #2812) waits for them, not for /sessions, which can
+  // take seconds on a busy hub while the socket has pushed the sessions already
+  const todosDone = asked.answer.then(
+    (res) => applyTodos({ status: "fulfilled", value: res }, asked.fresh),
+    (reason: unknown) => applyTodos({ status: "rejected", reason }, asked.fresh),
+  );
+  const [sessions, interactions, assistant, machines, mutes, pins] = await Promise.allSettled([
     api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
     askedAssistant.answer,
     api<{ machines: Machine[] }>("/machines"),
     api<AgentMutes>("/mutes"),
     api<Partial<AgentPins>>("/pins"),
-    asked.answer,
   ]);
-  if (gen < refreshes.applied) return;
+  if (gen < refreshes.applied) return todosDone;
   refreshes.applied = gen;
   const patch: Partial<State> = { loaded: true };
   if (sessions.status === "fulfilled") {
@@ -706,23 +711,21 @@ export async function refresh() {
   if (machines.status === "fulfilled" && machinesAt === machinesRev) patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled" && mutesAt === mutesSaves.rev) patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled" && pinsAt === pinsSaves.rev) patch.pins = pinsOf(pins.value);
-  if (todos.status === "fulfilled") {
-    if (asked.fresh()) {
-      const list = todos.value.todos ?? [];
-      patch.todos = list;
-      patch.todosSupported = true;
-      patch.todosLoaded = true;
-      patch.spacesSupported = computeSpacesSupported(list);
-    }
-  } else {
-    const reason = todos.reason;
-    if (reason instanceof ApiError && reason.status === 404 && asked.fresh()) {
-      patch.todosSupported = false;
-      patch.spacesSupported = false;
-    }
-    patch.todosLoaded = true;
-  }
   set(patch);
+  await todosDone;
+}
+
+/** refresh()'s GET /todos: the list, or a hub without todos (404), unless a later request's answer is in place (`fresh`);
+ *  loaded either way. */
+function applyTodos(todos: PromiseSettledResult<{ todos: Todo[] }>, fresh: () => boolean) {
+  if (todos.status === "fulfilled") {
+    if (!fresh()) return; // a later answer is in place, or this one belongs to a login reset() ended
+    const list = todos.value.todos ?? [];
+    return set({ todos: list, todosSupported: true, todosLoaded: true, spacesSupported: computeSpacesSupported(list) });
+  }
+  const reason = todos.reason;
+  if (reason instanceof ApiError && reason.status === 404 && fresh()) return set({ todosSupported: false, todosLoaded: true, spacesSupported: false });
+  set({ todosLoaded: true });
 }
 
 export function computeSpacesSupported(todos: Todo[]): boolean {

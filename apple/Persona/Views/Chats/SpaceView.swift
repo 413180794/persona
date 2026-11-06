@@ -7,9 +7,12 @@ extension EnvironmentValues {
 }
 
 /// The space's tabs (its agents) in the chat's header, one capsule each in its state's color (no dots: the pulsing ones
-/// were too busy in a row of them), the current one bold with a ring. The agents of one tab sit together in the order
-/// of their panes, each named by its agent, the starter marked "Starter" (#2320). As many as the width holds show around the current one; a swipe scrolls through the rest. ⋯ at the end
-/// lists every tab with its state, and the space's page, for a quick pick.
+/// were too busy in a row of them; kept over a neutral fill at the user's call, docs/plan-chat-topbar.md Q2), the
+/// current one bold with a ring. The agents of one tab sit together in the order of their
+/// panes, each named by its agent, the starter marked "Starter" (#2320). A name is one line, cut at `Theme.Size.tabName`,
+/// so one long name cannot push the current tab away. As many as the width holds show around the current one; a swipe
+/// scrolls through the rest, and an end fades while there is more that way. The space's mark and the tab count at the
+/// end (not ⋯: that is the page's menu) lists every tab with its state, and the space's page, for a quick pick.
 struct SiblingTabs: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSpace) private var openSpace
@@ -81,6 +84,7 @@ struct SiblingTabs: View {
         .scrollPosition(id: $shown, anchor: .center)
         .onAppear { shown = current }
         .onChange(of: current) { _, k in withAnimation(Theme.Motion.standard) { shown = k } }
+        .edgeFade()
         .frame(maxWidth: .infinity)
     }
 
@@ -93,8 +97,9 @@ struct SiblingTabs: View {
         return Group {
             if AppStyle.current.usesBeautifulUI {
                 // Its filter chip: the state's dot (none for a quiet, seen or idle one) and the tab's name; the current
-                // one is the raised capsule.
-                BUIFilterChip(launcher ? String(localized: "\(label) · Starter", comment: "Chip of the agent that started the tab") : label, dot: quiet ? nil : tone.dot, isActive: on) {
+                // one is the raised capsule. The chip sizes itself (`fixedSize`), so its name is cut here, not by a frame.
+                let name = Self.capped(label)
+                BUIFilterChip(launcher ? String(localized: "\(name) · Starter", comment: "Chip of the agent that started the tab") : name, dot: quiet ? nil : tone.dot, isActive: on) {
                     if !on { Haptics.tap(); select(s.key) }
                 }
             } else {
@@ -121,7 +126,10 @@ struct SiblingTabs: View {
             HStack(spacing: Theme.Space.xs) {
                 Text(label)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                     .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
+                    // A width cap that holds in the strip's open offer, where a flexible frame would not (#3010).
+                    .scaledWidthCap(Theme.Size.tabName)
                 // The starter's mark, quieter than the name (the web's "Starter").
                 if launcher { Text("Starter").font(Theme.Font.caption).opacity(0.75).lineLimit(1).fixedSize() }
             }
@@ -129,21 +137,43 @@ struct SiblingTabs: View {
                 .scaledFrame(height: Theme.Size.wellS)
                 // The state is the capsule's color; a quiet (seen, idle) one is the plain gray.
                 .background(quiet ? AnyShapeStyle(Theme.Fill.chip) : AnyShapeStyle(tone.dot.opacity(on ? 0.26 : 0.16)), in: .capsule)
-                .overlay(Capsule().strokeBorder(on ? (quiet ? Color.primary.opacity(0.45) : tone.dot.opacity(0.8)) : .clear, lineWidth: 1.5))
+                .overlay(Capsule().strokeBorder(on ? (quiet ? Color.primary.opacity(0.45) : tone.dot.opacity(0.8)) : .clear, lineWidth: Theme.Size.lineMedium))
                 .foregroundStyle(quiet ? Color.primary : tone.text)
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
     }
 
-    /// ⋯: a sheet with every tab, its state and the space's page.
+    /// A tab's name for BeautifulUI's chip, which cannot be capped from outside: about `Theme.Size.tabName` at its
+    /// 12 pt, counting a wide (CJK) character as two narrow ones; the full name is in the VoiceOver label and the list.
+    nonisolated static func capped(_ name: String, budget: Int = 20) -> String {
+        var used = 0
+        var out = ""
+        for c in name {
+            let w = c.unicodeScalars.contains { $0.properties.isIdeographic || (0xAC00...0xD7A3).contains($0.value) || (0x3040...0x30FF).contains($0.value) } ? 2 : 1
+            if used + w > budget { return out.trimmingCharacters(in: .whitespaces) + "…" }
+            used += w
+            out.append(c)
+        }
+        return out
+    }
+
+    /// The space's mark and how many tabs it has: a sheet with every tab, its state and the space's page. Not ⋯, which
+    /// is the page's menu in the same header.
     private func allButton(_ siblings: [Session]) -> some View {
         let waiting = siblings.contains { $0.key != current && $0.state == .needsYou }
         return Button { Haptics.tap(); showAll = true } label: {
-            Image(systemName: Theme.Icon.more)
-                .font(Theme.Font.captionHeavy)
-                .foregroundStyle(.secondary)
-                .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellS)
+            HStack(spacing: Theme.Space.xs) {
+                Image(systemName: Theme.Icon.space)
+                    .font(Theme.Font.labelStrong)
+                    .foregroundStyle(.secondary)
+                Text("\(siblings.count)")
+                    .font(Theme.Font.labelStrong.monospacedDigit())
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+            }
+                .padding(.horizontal, Theme.Space.s)
+                .scaledFrame(height: Theme.Size.wellS)
                 .background(Theme.Fill.chip, in: .capsule)
                 .overlay(alignment: .topTrailing) {
                     if waiting { Circle().fill(Theme.needsYou).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot).offset(x: 1, y: -1) } // still, not pulsing

@@ -61,7 +61,7 @@ def focus(port, **q):
 def fresh(browser, port, viewport, scheme="light"):
     ctx = browser.new_context(viewport=viewport, color_scheme=scheme, locale="zh-CN", permissions=["clipboard-read", "clipboard-write"])
     ctx.add_init_script(
-        f"localStorage.setItem('jarvis.token', 'mock'); localStorage.setItem('jarvis.theme', {scheme!r}); localStorage.setItem('persona.sessionView', {json.dumps(json.dumps(SEEN))})"
+        f"localStorage.setItem('jarvis.token', 'mock'); localStorage.setItem('jarvis.theme', {scheme!r}); localStorage.setItem('jarvis.agentGrouping', 'machine'); localStorage.setItem('persona.sessionView', {json.dumps(json.dumps(SEEN))})"
     )
     page = ctx.new_page()
     page.set_default_timeout(10000)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of the sidebar's "By machine" tree (machine → herdr workspace → tab, #1963): the default grouping, folding
+"""End-to-end check of the sidebar's "By machine" tree (machine → herdr workspace → tab, #1963): the "By machine" segment, folding
 machines and workspaces (kept across a reload), a tab row opening its most urgent pane under /t/…, the chat's pane tabs,
 the old /s/ links, a tab whose ids changed, the tree in the narrow drawer, and Enter making a new line on a touch screen.
 
@@ -44,11 +44,13 @@ def tree_header(page, name):
     return page.locator("aside .group\\/sec > button[aria-expanded]", has_text=name).first
 
 
-def fresh(page, base, token, theme="light"):
+def fresh(page, base, token, theme="light", grouping=None):
     page.goto(base + "/overview?token=" + token)
     # signed in (the link's token traded for this browser's) before the reload, or the reload lands on the login form
     expect(page.locator("aside")).to_be_visible(timeout=30000)
     page.evaluate(f"Object.keys(localStorage).filter(k => k.startsWith('fold:') || k === 'jarvis.agentGrouping' || k === 'jarvis.agentFilter').forEach(k => localStorage.removeItem(k)); localStorage.setItem('jarvis.theme', '{theme}')")
+    if grouping:
+        page.evaluate(f"localStorage.setItem('jarvis.agentGrouping', '{grouping}')")
     page.reload()
 
 
@@ -78,11 +80,13 @@ def desktop(browser, base, token, shots):
     page.set_default_timeout(10000)
     fresh(page, base, token)
 
-    # 1. A browser that never picked a grouping gets "By machine"; the offline machine starts folded.
-    expect(page.get_by_role("button", name="Agent 分组：按机器")).to_be_visible()
+    # 1. A browser that never picked a grouping gets "By to-do" (#2812); its "By machine" segment shows herdr's tree, the offline machine folded.
+    expect(page.get_by_role("radio", name="按待办")).to_have_attribute("aria-checked", "true")
+    page.get_by_role("radio", name="按机器").click()
+    expect(page.get_by_role("radio", name="按机器")).to_have_attribute("aria-checked", "true")
     expect(tree_header(page, "服务器")).to_have_attribute("aria-expanded", "true")
     expect(tree_header(page, "NAS")).to_have_attribute("aria-expanded", "false")
-    ok("按机器 is the default; the online machine is open, the offline one folded")
+    ok("按待办 is the default; 按机器 opens the online machine and folds the offline one")
 
     # 2. machine → workspace → tab: the tab with two panes speaks for its most urgent one (codex needs you).
     tab1 = page.locator(f'aside a[href="{TAB1}"]')
@@ -154,7 +158,7 @@ def desktop(browser, base, token, shots):
     # 8. Grouping picked before stays; the other groupings still render.
     page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'state')")
     page.reload()
-    expect(page.get_by_role("button", name="Agent 分组：按状态")).to_be_visible()
+    expect(page.get_by_role("radio", name="按状态")).to_have_attribute("aria-checked", "true")
     page.evaluate("localStorage.removeItem('jarvis.agentGrouping')")
     ok("a grouping picked before is kept")
 
@@ -175,7 +179,7 @@ def narrow(browser, base, token, shots):
         ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True, is_mobile=True)
         page = ctx.new_page()
         page.set_default_timeout(10000)
-        fresh(page, base, token, theme)
+        fresh(page, base, token, theme, grouping="machine")
         side = page.locator("main").get_by_role("button", name="侧边栏").first
         expect(side).to_be_visible(timeout=30000)  # the first load of a fresh context compiles the page
         side.click()
