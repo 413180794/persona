@@ -157,6 +157,9 @@ func (s *Service) feishuInteractionDone(ix proto.Interaction, how string) {
 	b.mu.Lock()
 	c, ok := b.cards[ix.ID]
 	delete(b.cards, ix.ID)
+	if ok && typedAnswerable(c) {
+		b.noteEndedLocked(c)
+	}
 	b.mu.Unlock()
 	if !ok || c.MessageID == "" {
 		return

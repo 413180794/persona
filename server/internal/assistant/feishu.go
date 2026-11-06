@@ -85,6 +85,9 @@ type feishuBook struct {
 	st       botState
 	cards    map[string]botCard      // interaction id -> the card asking it
 	detached map[string]detachedCard // interaction id -> its card closed when its node went away (feishuDetach)
+	// ended: interaction id -> a question card that ended without being answered in this chat (feishuInteractionDone),
+	// kept for endedAskFor so an option typed for it late is not sent on as a new message (botAnswerQuestion).
+	ended    map[string]endedCard
 	status   *FeishuStatus
 	statusAt time.Time
 	now      func() time.Time     // tests
@@ -293,7 +296,7 @@ func (s *Service) feishuReconcile(st FeishuStatus) {
 	fresh := b.st.Pairing != nil // nil: recorded for the first time, the state stays
 	if fresh {
 		b.st = botState{Current: botTarget{Kind: targetMain}, Threads: map[string]*botThread{}, Seen: b.st.Seen}
-		b.cards = nil
+		b.cards, b.ended = nil, nil
 	}
 	b.st.Pairing = &key
 	s.saveBotStateLocked()
@@ -477,7 +480,7 @@ func (s *Service) feishuReset() {
 	s.loadBotLocked(context.Background())
 	pairing := b.st.Pairing
 	b.st = botState{Current: botTarget{Kind: targetMain}, Threads: map[string]*botThread{}, Seen: b.st.Seen, Pairing: pairing}
-	b.cards = nil
+	b.cards, b.ended = nil, nil
 	b.status = nil
 	b.cotOff = false // paired afresh (maybe another app): agent messages are tried again
 	s.saveBotStateLocked()

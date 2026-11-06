@@ -192,3 +192,64 @@ func TestFeishuMessageTypedAnswer(t *testing.T) {
 		t.Fatalf("resolves %v, leaked into chat %q", *rs, sendOnceText(f))
 	}
 }
+
+// A card that ended elsewhere (answered in the app, withdrawn) is gone from the chat's cards once interaction.ended
+// closes it; an option typed for it afterwards is still read as a late answer: the owner is told it was handled
+// elsewhere and the words do not start a turn. Free words, and anything after them, go on as ordinary messages.
+func TestTypedAnswerToACardEndedElsewhereIsNotForwarded(t *testing.T) {
+	ix := qCard("ix_q", false, "北京", "上海", "广州")
+	s, f, _, notes, rs := textAnswerBot(t, nil)
+	seedCard(s, ix)
+	s.feishuInteractionDone(ix, "已在 App 中回答")
+	var ev feishubot.MessageEvent
+	ev.Message.MessageID, ev.Message.MessageType, ev.Message.Content = "om_in", "text", `{"text":"上海"}`
+	st, _ := s.feishuStatus(context.Background())
+	s.feishuMessage(ev, st, "oa_1")
+	if got := sendOnceText(f); got != "" || len(*rs) != 0 {
+		t.Fatalf("the late answer went into the conversation: %q, resolves %v", got, *rs)
+	}
+	if !strings.Contains(noteText(notes), "已经在别处处理过了") {
+		t.Fatalf("the owner was not told: %q", noteText(notes))
+	}
+	if s.botAnswerQuestion(context.Background(), "om_r2", "2", "oa_1", "", "") {
+		t.Fatal("a second reply is not about the ended card any more")
+	}
+
+	// Free words are a new message and forget the ended card: a number after them is ordinary too.
+	s, _, _, _, _ = textAnswerBot(t, nil)
+	seedCard(s, ix)
+	s.feishuInteractionDone(ix, "已在 App 中回答")
+	if s.botAnswerQuestion(context.Background(), "om_r", "帮我查天气", "oa_1", "", "") {
+		t.Fatal("free words were swallowed")
+	}
+	if s.botAnswerQuestion(context.Background(), "om_r2", "2", "oa_1", "", "") {
+		t.Fatal("a number after a new message was read as a late answer")
+	}
+
+	// A card that ended in another agent's topic does not take words written in this one, nor does one past its time.
+	s, _, _, _, _ = textAnswerBot(t, nil)
+	seedThreadCard(s, ix, "om_other_root", 1000)
+	s.feishuInteractionDone(ix, "已在 App 中回答")
+	if s.botAnswerQuestion(context.Background(), "om_r", "2", "oa_1", "om_b_root", "") {
+		t.Fatal("a card that ended in another topic took the words")
+	}
+	s, _, _, _, _ = textAnswerBot(t, nil)
+	now := time.Unix(5000, 0)
+	s.fbot.now = func() time.Time { return now }
+	seedCard(s, ix)
+	s.feishuInteractionDone(ix, "已在 App 中回答")
+	now = now.Add(endedAskFor + time.Second)
+	if s.botAnswerQuestion(context.Background(), "om_r", "2", "oa_1", "", "") {
+		t.Fatal("a card that ended long ago took the words")
+	}
+
+	// A newer card still waiting is the one a typed option answers, not an older card that ended.
+	waiting := qCard("ix_w", false, "子", "丑")
+	s, _, _, _, rs = textAnswerBot(t, nil, waiting)
+	seedCard(s, ix)
+	s.feishuInteractionDone(ix, "已在 App 中回答")
+	s.fbot.cards["ix_w"] = botCard{MessageID: "om_ix_w", Ix: waiting, At: time.Unix(2000, 0)}
+	if !s.botAnswerQuestion(context.Background(), "om_r", "2", "oa_1", "", "") || len(*rs) != 1 || (*rs)[0]["interaction_id"] != "ix_w" {
+		t.Fatalf("the waiting card was not answered: %v", *rs)
+	}
+}

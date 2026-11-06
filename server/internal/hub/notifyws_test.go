@@ -200,3 +200,79 @@ func TestASlowClientIsClosedOnce(t *testing.T) {
 		t.Fatalf("the slow client was not dropped: %v", err)
 	}
 }
+
+// 手机静音 (mute_while_desktop) holds back a device's 需要你 and 做完 alerts on its WebSocket too while a desktop app is
+// connected, as it does for its APNs pushes (alertWanted): an Android phone shows its alerts from these events. What
+// was asked for explicitly (the assistant's notify_user) still goes.
+func TestWSNotifyMuteWhileDesktop(t *testing.T) {
+	phone := &client{device: "test-device", out: make(chan []byte, 8)}
+	mac := &client{device: "mac-device", desktop: true, out: make(chan []byte, 8)}
+	h := &Hub{clients: map[*client]struct{}{phone: {}}, push: newPusher(t.TempDir(), nil, t.Logf)}
+	h.onClientMessage(context.Background(), phone, []byte(`{"type":"client_hello","features":["ws_notify"]}`))
+	<-phone.out // client_hello_ack
+	if err := h.push.setPrefs(phone.device, NotifyPrefs{Input: true, Done: DoneAlways, MuteWhileDesktop: true}); err != nil {
+		t.Fatal(err)
+	}
+	ix := proto.Interaction{ID: "ix1", MachineID: "m", SessionID: "s", Kind: proto.IxQuestion, Summary: "请选择"}
+	got := func() string {
+		t.Helper()
+		select {
+		case raw := <-phone.out:
+			var m map[string]any
+			_ = json.Unmarshal(raw, &m)
+			kind, _ := m["kind"].(string)
+			return kind
+		default:
+			return ""
+		}
+	}
+
+	// No desktop: everything comes.
+	h.notifyInteraction(ix, "box")
+	if k := got(); k != "interaction" {
+		t.Fatalf("no desktop, interaction: %q", k)
+	}
+
+	// A desktop app connected: 需要你 and 做完 stay on the desktop.
+	h.mu.Lock()
+	h.clients[mac] = struct{}{}
+	h.mu.Unlock()
+	h.notifyInteraction(ix, "box")
+	if k := got(); k != "" {
+		t.Fatalf("muted while a desktop is online, still got %q", k)
+	}
+	h.notifyDone("done", "m", "box", "s", "任务完成", "", pushWants{Kind: "done", Took: time.Hour, Long: time.Minute})
+	if k := got(); k != "" {
+		t.Fatalf("muted while a desktop is online, still got %q", k)
+	}
+	h.notifyWS(kindAlert, notifyPayload(notifyRequest{Title: "t", Level: levelActive}, "", ""), pushWants{Kind: "input"}.fn())
+	if k := got(); k != "" {
+		t.Fatalf("muted while a desktop is online, still got %q", k)
+	}
+	// An explicit one still goes.
+	h.notifyDone("assistant", "", "Persona", "s", "提醒", "有新进展", pushWants{})
+	if k := got(); k != "assistant" {
+		t.Fatalf("explicit notification while muted: %q", k)
+	}
+
+	// The desktop goes: alerts come back.
+	h.mu.Lock()
+	delete(h.clients, mac)
+	h.mu.Unlock()
+	h.notifyInteraction(ix, "box")
+	if k := got(); k != "interaction" {
+		t.Fatalf("desktop gone, interaction: %q", k)
+	}
+	h.mu.Lock()
+	h.clients[mac] = struct{}{}
+	h.mu.Unlock()
+
+	// Without 手机静音 the desktop being online changes nothing.
+	if err := h.push.setPrefs(phone.device, NotifyPrefs{Input: true, Done: DoneAlways}); err != nil {
+		t.Fatal(err)
+	}
+	h.notifyInteraction(ix, "box")
+	if k := got(); k != "interaction" {
+		t.Fatalf("not muted, interaction: %q", k)
+	}
+}

@@ -63,6 +63,9 @@ func (h *Hub) notifyWSIn(kind string, build localized, wants func(NotifyPrefs) b
 		msgs[l] = m
 		return m
 	}
+	// 手机静音 holds these back while a desktop is online, with the same rule as the APNs pushes (alertWanted): an
+	// Android phone alerts from them. desktopOnline takes h.mu, so it is read before.
+	wants = alertWanted(wants, h.desktopOnline())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
