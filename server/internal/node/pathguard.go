@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -41,8 +42,8 @@ var secretFiles = []string{
 // keyNames are private keys by their usual names, wherever they are.
 var keyNames = map[string]bool{"id_rsa": true, "id_dsa": true, "id_ecdsa": true, "id_ed25519": true, "id_ecdsa_sk": true, "id_ed25519_sk": true}
 
-// hubKeyExt are the key files in the hub's folder.
-var hubKeyExt = map[string]bool{".key": true, ".p8": true, ".pem": true, ".crt": true}
+// hubKeyExt matches key files in the hub's folder, including backup suffixes.
+var hubKeyExt = regexp.MustCompile(`\.(key|p8|pem|crt)([.~-][^/]*)?$`)
 
 // dataSecrets are the credential files in the data folder (and a manager's folder under it) by the start of their
 // name, so a backup beside one is refused too: hub.json (the token, the database password), Persona Link's credential,
@@ -115,7 +116,7 @@ func dataSecret(rel string) bool {
 		return slices.Contains(dataSecretDirs, parts[0])
 	}
 	base := parts[0]
-	if hubKeyExt[filepath.Ext(base)] {
+	if hubKeyExt.MatchString(base) {
 		return true
 	}
 	for _, name := range dataSecrets {

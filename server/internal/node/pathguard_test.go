@@ -215,6 +215,23 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 		filepath.Join(home, "code/link.json"), // a project's file of the same name
 		filepath.Join(home, "persona-state-notes/hub.json"),
 	}
+	// Key backups remain secret in default, legacy, custom and manager data folders.
+	for _, dir := range []string{
+		filepath.Join(home, ".persona"),
+		filepath.Join(home, ".jarvis"),
+		state,
+		filepath.Join(state, "managers/m1"),
+	} {
+		for _, name := range []string{"secret.key", "handles.key", "hub.key", "signing.p8", "private.pem", "certificate.crt", "SECRET.KEY"} {
+			for _, suffix := range []string{"", ".bak", "~", "-old", ".bak.1", "~backup", "-old.bak"} {
+				refused = append(refused, filepath.Join(dir, name+suffix))
+			}
+		}
+		for _, name := range []string{"notes.keywords", "notes.pemfile", "notes.p8data", "notes.crtinfo"} {
+			readable = append(readable, filepath.Join(dir, name))
+		}
+	}
+	readable = append(readable, filepath.Join(home, "code/secret.key.bak"))
 	for _, p := range append(slices.Clone(refused), readable...) {
 		write(p, `{"token":"x"}`)
 	}
