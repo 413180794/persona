@@ -421,18 +421,11 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		if a.Origin != nil && a.Origin.Kind == "peer" { // another Claude session's message, absorbed mid-turn
 			var prompt string
 			_ = json.Unmarshal(a.Prompt, &prompt)
-			from, body, ok := CrossSession(prompt)
+			it, ok := peerItem(mk, prompt, a.Origin.Name, a.Origin.Body)
 			if !ok {
-				from, body = a.Origin.Name, strings.TrimSpace(a.Origin.Body)
-			}
-			if a.Origin.Name != "" {
-				from = a.Origin.Name
-			}
-			if body == "" {
 				return nil
 			}
-			it := mk(0, "user", proto.KindText)
-			it.Text, it.From, it.Queued = clip(body), from, true
+			it.Queued = true
 			return []proto.Item{it}
 		}
 		if !notification && ((a.CommandMode != "" && a.CommandMode != "prompt") || (a.Origin != nil && a.Origin.Kind != "human")) {
@@ -550,6 +543,11 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			it := mk(0, "system", proto.KindNotice)
 			it.Text = CompactSummaryNotice
 			return []proto.Item{it}
+		}
+		if e.IsMeta {
+			if it, ok := peerMessage(mk, e.Origin, e.Message.Content); ok {
+				return []proto.Item{it}
+			}
 		}
 		var s string
 		if json.Unmarshal(e.Message.Content, &s) == nil {
@@ -992,13 +990,67 @@ var teammateIDRe = regexp.MustCompile(`teammate_id="([^"]*)"`)
 var crossRe = regexp.MustCompile(`(?s)<cross-session-message([^>]*)>\s*(.*?)\s*</cross-session-message>`)
 var crossNameRe = regexp.MustCompile(`from-name="([^"]*)"`)
 
+// peerMessage is another Claude session's message that came while this one was idle: Claude Code (2.1.299 on) writes
+// it as a hidden (isMeta) user line with the sender in its origin, and it starts a turn, so it reads as the message it
+// is, the sender's name on it, and opens the turn like a typed one (ParseLine). One absorbed mid-turn is a
+// queued_command attachment instead (parseLine). A subagent handing back its report has a peer origin too: its report
+// comes with its task notification (handbackOf). ok false for anything else.
+func peerMessage(mk func(int, string, string) proto.Item, origin, content json.RawMessage) (proto.Item, bool) {
+	var o struct {
+		Kind     string `json:"kind"`
+		Name     string `json:"name"`
+		Body     string `json:"body"`
+		Handback bool   `json:"handback"`
+	}
+	if len(origin) == 0 || json.Unmarshal(origin, &o) != nil || o.Kind != "peer" || o.Handback {
+		return proto.Item{}, false
+	}
+	var text string
+	if json.Unmarshal(content, &text) != nil {
+		var blocks []block
+		_ = json.Unmarshal(content, &blocks)
+		var parts []string
+		for _, b := range blocks {
+			if b.Type == "text" {
+				parts = append(parts, b.Text)
+			}
+		}
+		text = strings.Join(parts, "\n")
+	}
+	return peerItem(mk, text, o.Name, o.Body)
+}
+
+// FromSession is who a message another Claude session sent is from when it does not say (the apps and the hub put it
+// in the reader's language: hub/transcript_text.go, assistant/fleet_text.go).
+const FromSession = "另一个会话"
+
+// peerItem is a message another Claude session sent, as the chat shows it: the body the origin carries (the tagged one
+// in text when it does not), the sender's name on it. ok false when there is no body.
+func peerItem(mk func(int, string, string) proto.Item, text, name, body string) (proto.Item, bool) {
+	from, tagged, ok := CrossSession(text)
+	if b := strings.TrimSpace(body); b != "" || !ok {
+		tagged = b
+	}
+	if name != "" {
+		from = name
+	} else if !ok {
+		from = FromSession
+	}
+	if tagged == "" {
+		return proto.Item{}, false
+	}
+	it := mk(0, "user", proto.KindText)
+	it.Text, it.From = clip(tagged), from
+	return it, true
+}
+
 // CrossSession returns the sender and body of a cross-session message, ok false for anything else.
 func CrossSession(s string) (from, body string, ok bool) {
 	m := crossRe.FindStringSubmatch(s)
 	if m == nil {
 		return "", "", false
 	}
-	from = "另一个会话"
+	from = FromSession
 	if n := crossNameRe.FindStringSubmatch(m[1]); n != nil && n[1] != "" {
 		from = n[1]
 	}

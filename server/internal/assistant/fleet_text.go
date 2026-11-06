@@ -23,7 +23,7 @@ func tt(l i18n.Lang, key string, args ...i18n.Args) string {
 // fromName is the sender's name in l when it is the node's stand-in for a sender without one.
 func fromName(l i18n.Lang, from string) string {
 	switch from {
-	case "另一个会话":
+	case transcript.FromSession:
 		return tt(l, "from_session")
 	case "队友":
 		return tt(l, "from_teammate")

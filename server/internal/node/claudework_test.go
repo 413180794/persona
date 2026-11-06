@@ -1,6 +1,7 @@
 package node
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -178,4 +179,51 @@ func TestIdleCompactionIsNoTurn(t *testing.T) {
 // host2 is a Claude in a herdr pane the host says is in state, its title Claude Code's waiting mark.
 func host2(state string) host.Agent {
 	return host.Agent{Agent: "claude", AgentStatus: state, RawTitle: "✳ example"}
+}
+
+// Another Claude session's message to an idle one starts a turn: the session shows as working while it does, a short
+// message or a long hand-over alike (Claude Code writes it as a hidden user line with the sender in its origin).
+func TestPeerMessageStartsATurn(t *testing.T) {
+	now := time.Now().UTC()
+	at := func(ago time.Duration) string { return now.Add(-ago).Format(time.RFC3339Nano) }
+	peer := func(body string) string {
+		msg, _ := json.Marshal("Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/x.sock\" from-name=\"ark-d1\" from-mode=\"bypass\">\n" +
+			body + "\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user.")
+		origin, _ := json.Marshal(map[string]any{"kind": "peer", "from": "uds:/tmp/x.sock", "name": "ark-d1", "body": body})
+		return `{"type":"user","uuid":"p1","parentUuid":"d1","isMeta":true,"promptSource":"system","turnOrigin":"peer","origin":` + string(origin) +
+			`,"message":{"role":"user","content":` + string(msg) + `},"timestamp":"` + at(5*time.Second) + `"}`
+	}
+	for name, body := range map[string]string{"short": "Take over issue 1.", "long": strings.Repeat("Take over issue 1 and its tests. ", 400)} {
+		lines := []string{
+			`{"type":"user","uuid":"u1","message":{"role":"user","content":"tidy the example module"},"timestamp":"` + at(time.Hour) + `"}`,
+			`{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]},"timestamp":"` + at(time.Hour-time.Second) + `"}`,
+			`{"type":"system","subtype":"turn_duration","uuid":"d1","parentUuid":"a1","durationMs":1000,"timestamp":"` + at(time.Hour-time.Second) + `"}`,
+			peer(body),
+		}
+		id := "00000099-0000-4000-8000-000000000000"
+		p := filepath.Join(t.TempDir(), id+".jsonl")
+		if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		n := &Node{paths: map[string]string{id: p}, metas: map[string]quickMeta{}, bgScans: map[string]*bgScan{}}
+		st, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := n.meta(p, st); !m.claudeTurn || m.turnClosed {
+			t.Fatalf("%s: turn open %v, closed %v", name, m.claudeTurn, m.turnClosed)
+		}
+		if got := n.claudeStatus(id, host2(proto.StatusIdle), now); got != proto.StatusWorking {
+			t.Fatalf("%s: a peer's message just came, host idle: %s, want working", name, got)
+		}
+		// A session Persona started runs its hooks: they saw the last turn's Stop an hour ago and no prompt since (the
+		// peer's message fires none), and the transcript's open turn written after it says working.
+		n.hooks = &hookTurns{}
+		n.hooks.prompt(id, now.Add(-time.Hour))
+		n.hooks.stop(id, now.Add(-time.Hour+time.Second))
+		if got := n.claudeStatus(id, host2(proto.StatusIdle), now); got != proto.StatusWorking {
+			t.Fatalf("%s, with hooks: %s, want working", name, got)
+		}
+		n.hooks = nil
+	}
 }

@@ -299,8 +299,12 @@ Assistant does not enter herdr: node directly launches `zsh -ic '<launcher> "$@"
 
 ## Cross-session messages (tested 2026-10-25)
 
-- Another Claude session sends “Another Claude session sent a message:” + `<cross-session-message from="uds:…" from-name="<name>" from-mode="…">body</cross-session-message>` + English explanation. Idle: user message; working: queue-operation with same text; absorbed: `queued_command` attachment with `origin.kind:"peer"`, `origin.name`, origin.body.
-- Parse as user item with from (sender name). Queue text `【来自 名字】正文` (“[From name] body”); phone shows a left-side gray “From name” card, Markdown body like replies, not the user's own message.
+- Another Claude session sends “Another Claude session sent a message:” + `<cross-session-message from="uds:…" from-name="<name>" from-mode="…">body</cross-session-message>` + English explanation.
+  - To an idle session: before 2.1.299, a plain user message. Since then, a queue-operation enqueue / dequeue pair, then a **hidden** user line (`isMeta: true`, `promptSource: "system"`, `turnOrigin: "peer"`, `origin: {kind: "peer", from, name, body, msg_id, …}`) that starts a turn.
+  - To a working session: a queue-operation with the same text, then, absorbed, a `queued_command` attachment with the same `origin`.
+  - A subagent handing back its report has a peer origin too (`handback: true`), on a hidden line its task notification points at: it stays hidden.
+- Parse as a user item with from: the sender's name (`origin.name`, else `from-name`, else 「另一个会话」 `transcript.FromSession`, which the hub localizes) and the body (`origin.body`, else the tagged text). The hidden line's item opens the turn, so the session shows as working while it answers (#6021); it is no prompt of the user's (`LastPromptAt`, the session title).
+- Queue text `【来自 名字】正文` (“[From name] body”); phone shows a left-side gray “From name” card, Markdown body like replies, not the user's own message.
 
 
 ## Special XML in transcripts (local and hub scan, 2026-10-26)

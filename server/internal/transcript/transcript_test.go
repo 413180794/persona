@@ -708,6 +708,107 @@ func TestCrossSessionMessage(t *testing.T) {
 	}
 }
 
+// A peer's message to an idle session (Claude Code 2.1.310 on): a hidden user line with the sender in its origin. It
+// reads as the message, the sender's name on it, and opens the turn it starts, so the session shows as working; it is
+// no prompt of the user's. A subagent's handback, with a peer origin too, stays hidden.
+func TestPeerMessageToAnIdleSession(t *testing.T) {
+	msg := "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/x.sock\" from-name=\"ark-d1\" from-mode=\"bypass\">\n交接三个 issue。\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user."
+	peer := func(origin map[string]any, content any) []byte {
+		line, _ := json.Marshal(map[string]any{"type": "user", "uuid": "p", "isMeta": true, "timestamp": "2026-11-06T14:54:49.365Z",
+			"promptSource": "system", "turnOrigin": "peer", "origin": origin, "message": map[string]any{"role": "user", "content": content}})
+		return line
+	}
+	m := Meta{TurnClosed: true}
+	it := only(t, ParseLine(1, peer(map[string]any{"kind": "peer", "from": "uds:/tmp/x.sock", "name": "ark-d1", "body": "交接三个 issue。"}, msg), &m))
+	if it.From != "ark-d1" || it.Text != "交接三个 issue。" || it.Role != "user" || it.Queued {
+		t.Fatalf("item: %+v", it)
+	}
+	if !m.TurnOpen || m.TurnClosed || !m.LastPromptAt.IsZero() {
+		t.Fatalf("turn open %v closed %v, last prompt %v", m.TurnOpen, m.TurnClosed, m.LastPromptAt)
+	}
+	// Text blocks, and a body without the tag: the origin says who and what.
+	it = only(t, ParseLine(2, peer(map[string]any{"kind": "peer", "name": "ark-d2", "body": "B 已推。"}, []map[string]any{{"type": "text", "text": "B 已推。"}}), &Meta{}))
+	if it.From != "ark-d2" || it.Text != "B 已推。" {
+		t.Fatalf("blocks: %+v", it)
+	}
+	if items := ParseLine(3, peer(map[string]any{"kind": "peer", "from": "a1b2c3", "name": "general-purpose", "handback": true, "handbackReportText": "All tests pass."},
+		"Another Claude session sent a message:\n<agent-message from=\"a1b2c3\">…</agent-message>"), &Meta{}); len(items) != 0 {
+		t.Fatalf("a handback shows: %+v", items)
+	}
+	if items := ParseLine(4, peer(map[string]any{"kind": "human"}, "<local-command-caveat>…</local-command-caveat>"), &Meta{}); len(items) != 0 {
+		t.Fatalf("another hidden line shows: %+v", items)
+	}
+}
+
+// As Claude Code writes it to disk: the last turn ended, the message queued and taken, the hidden line, the reply, the
+// turn's end. One item, the queue empty again, the turn opened and closed; the session's title and the wake flag are
+// not the peer's message.
+func TestPeerMessageInTranscriptOrder(t *testing.T) {
+	msg := "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/x.sock\" from-name=\"ark-d1\">\nTake over issue 1.\n</cross-session-message>"
+	enq, _ := json.Marshal(map[string]any{"type": "queue-operation", "operation": "enqueue", "content": "<cross-session-message from=\"uds:/tmp/x.sock\" from-name=\"ark-d1\">\nTake over issue 1.\n</cross-session-message>"})
+	peer, _ := json.Marshal(map[string]any{"type": "user", "uuid": "p1", "parentUuid": "d0", "isMeta": true, "timestamp": "2026-11-06T14:54:49.365Z",
+		"origin": map[string]any{"kind": "peer", "name": "ark-d1", "body": "Take over issue 1."}, "message": map[string]any{"role": "user", "content": msg}})
+	lines := []string{
+		`{"type":"system","subtype":"turn_duration","uuid":"d0","durationMs":1000,"timestamp":"2026-11-06T14:50:00Z"}`,
+		string(enq),
+		`{"type":"queue-operation","operation":"dequeue"}`,
+		string(peer),
+		`{"type":"assistant","uuid":"a1","parentUuid":"p1","message":{"role":"assistant","content":[{"type":"text","text":"On it."}]},"timestamp":"2026-11-06T14:54:55Z"}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"d1","parentUuid":"a1","durationMs":6000,"timestamp":"2026-11-06T14:54:56Z"}`,
+	}
+	var m Meta
+	var items []proto.Item
+	for i, l := range lines {
+		items = append(items, ParseLine(i, []byte(l), &m)...)
+		if i == 3 && (!m.TurnOpen || m.TurnClosed) {
+			t.Fatalf("after the peer's line: open %v closed %v", m.TurnOpen, m.TurnClosed)
+		}
+	}
+	var peers []proto.Item
+	for _, it := range items {
+		if it.Role == "user" {
+			peers = append(peers, it)
+		}
+	}
+	if len(peers) != 1 || peers[0].From != "ark-d1" || peers[0].Text != "Take over issue 1." {
+		t.Fatalf("user items: %+v", peers)
+	}
+	if len(m.Queue) != 0 || m.TurnOpen || !m.TurnClosed || m.FirstUser != "" || m.LastTurnWake || !m.LastPromptAt.IsZero() {
+		t.Fatalf("meta: queue %q open %v closed %v first %q wake %v prompt %v", m.Queue, m.TurnOpen, m.TurnClosed, m.FirstUser, m.LastTurnWake, m.LastPromptAt)
+	}
+}
+
+// The body the origin carries wins over the tagged one (they are the same in every transcript seen); a tag with
+// nothing in it does not hide a message the origin has. A subagent's message to another agent in its own transcript
+// (the subagent's file, Meta.Sidechain) reads as from that agent. With no name and no tag, the stand-in says another session sent it, not the user.
+func TestPeerMessageBodies(t *testing.T) {
+	line := func(content any, origin map[string]any, extra map[string]any) []byte {
+		o := map[string]any{"type": "user", "uuid": "p", "isMeta": true, "origin": origin, "message": map[string]any{"role": "user", "content": content}}
+		for k, v := range extra {
+			o[k] = v
+		}
+		b, _ := json.Marshal(o)
+		return b
+	}
+	empty := "<cross-session-message from=\"uds:/x\" from-name=\"ark-d1\">\n</cross-session-message>"
+	if it := only(t, ParseLine(1, line(empty, map[string]any{"kind": "peer", "name": "ark-d1", "body": "B is pushed."}, nil), &Meta{})); it.Text != "B is pushed." {
+		t.Fatalf("empty tag: %+v", it)
+	}
+	agent := "Another Claude session sent a message:\n<agent-message from=\"a1b2c3\">Found the cause.</agent-message>"
+	if it := only(t, ParseLine(2, line(agent, map[string]any{"kind": "peer", "from": "a1b2c3", "name": "general-purpose", "body": "Found the cause."},
+		map[string]any{"isSidechain": true}), &Meta{Sidechain: true})); it.From != "general-purpose" || it.Text != "Found the cause." {
+		t.Fatalf("a subagent's message: %+v", it)
+	}
+	if it := only(t, ParseLine(3, line("hello", map[string]any{"kind": "peer", "body": "hello"}, nil), &Meta{})); it.From != FromSession {
+		t.Fatalf("no name: %+v", it)
+	}
+	att, _ := json.Marshal(map[string]any{"type": "attachment", "uuid": "q", "attachment": map[string]any{
+		"type": "queued_command", "commandMode": "prompt", "prompt": "plain words", "origin": map[string]any{"kind": "peer", "body": "plain words"}}})
+	if it := only(t, ParseLine(4, att, &Meta{})); it.From != FromSession || !it.Queued {
+		t.Fatalf("absorbed, no name: %+v", it)
+	}
+}
+
 func TestPeerMessageAbsorbedMidTurn(t *testing.T) {
 	att, _ := json.Marshal(map[string]any{"type": "attachment", "uuid": "p", "attachment": map[string]any{
 		"type": "queued_command", "commandMode": "prompt",
