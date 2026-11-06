@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"maps"
 	"net/http/httptest"
 	"path/filepath"
 	"regexp"
@@ -241,6 +242,210 @@ func TestCallSitesUseKnownKeys(t *testing.T) {
 	if calls < 100 {
 		t.Fatalf("found only %d calls with a literal key under %s; is the walk looking in the right place?", calls, root)
 	}
+}
+
+// Every catalog key is reached from server code, so a rewrite that drops a key's last caller also drops the key
+// (TestCallSitesUseKnownKeys is the other direction). A key counts as used when a string literal is the key or its
+// plural base, when it starts with the literal left side of a concatenation (string constants resolved, ns+"x"+n)
+// or of a Sprintf format, when a wrapper like workT(l, "x") passes a literal to i18n.T(l, "prefix."+name), or when
+// one of this package's catalog template filters (makeCatalogTemplates) names its prefix.
+func TestEveryKeyIsUsed(t *testing.T) {
+	root := filepath.Join("..", "..")
+	type file struct {
+		f   *ast.File
+		pkg string // name this file uses for package i18n; "" when it does not import it
+	}
+	dirs := map[string][]file{}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if p != root && (d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".")) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), p, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		dirs[filepath.Dir(p)] = append(dirs[filepath.Dir(p)], file{f, importName(f)})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exact, prefixes := map[string]bool{}, map[string]bool{}
+	addPrefix := func(s string) {
+		if strings.Contains(s, ".") { // a namespace at least, so a short literal cannot cover a whole catalog
+			prefixes[s] = true
+		}
+	}
+	for _, files := range dirs {
+		// String constants of the package and of its functions, by name; a name bound to two values is dropped.
+		consts := map[string]string{}
+		for _, fl := range files {
+			ast.Inspect(fl.f, func(n ast.Node) bool {
+				if g, ok := n.(*ast.GenDecl); ok && g.Tok == token.CONST {
+					for _, spec := range g.Specs {
+						vs := spec.(*ast.ValueSpec)
+						for i, name := range vs.Names {
+							if i >= len(vs.Values) {
+								continue
+							}
+							if s, ok := stringLit(vs.Values[i]); ok {
+								if old, seen := consts[name.Name]; seen && old != s {
+									s = "\x00"
+								}
+								consts[name.Name] = s
+							}
+						}
+					}
+				}
+				return true
+			})
+		}
+		// eval is e's constant string prefix; whole reports that all of e is constant.
+		var eval func(ast.Expr) (s string, whole bool)
+		eval = func(e ast.Expr) (string, bool) {
+			switch e := e.(type) {
+			case *ast.BasicLit:
+				return stringLit(e)
+			case *ast.Ident:
+				s, ok := consts[e.Name]
+				return s, ok && s != "\x00"
+			case *ast.ParenExpr:
+				return eval(e.X)
+			case *ast.BinaryExpr:
+				if e.Op != token.ADD {
+					return "", false
+				}
+				x, whole := eval(e.X)
+				if !whole {
+					return x, false
+				}
+				y, whole := eval(e.Y)
+				return x + y, whole
+			}
+			return "", false
+		}
+		// Wrappers: func f(..., name string, ...) whose body calls i18n.T(l, "prefix."+name, ...).
+		type wrapper struct {
+			prefix string
+			arg    int
+		}
+		wrappers := map[string]wrapper{}
+		for _, fl := range files {
+			if fl.pkg == "" {
+				continue
+			}
+			for _, decl := range fl.f.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Recv != nil || fn.Body == nil {
+					continue
+				}
+				params := map[string]int{}
+				for _, field := range fn.Type.Params.List {
+					for _, name := range field.Names {
+						params[name.Name] = len(params)
+					}
+				}
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					call, ok := n.(*ast.CallExpr)
+					if !ok || len(call.Args) < 2 {
+						return true
+					}
+					if sel, ok := call.Fun.(*ast.SelectorExpr); !ok || sel.Sel.Name != "T" || !isIdent(sel.X, fl.pkg) {
+						return true
+					}
+					bin, ok := call.Args[1].(*ast.BinaryExpr)
+					if !ok || bin.Op != token.ADD {
+						return true
+					}
+					id, ok := bin.Y.(*ast.Ident)
+					if !ok {
+						return true
+					}
+					if i, ok := params[id.Name]; ok {
+						if p, whole := eval(bin.X); whole {
+							wrappers[fn.Name.Name] = wrapper{p, i}
+						}
+					}
+					return true
+				})
+			}
+		}
+		for _, fl := range files {
+			ast.Inspect(fl.f, func(n ast.Node) bool {
+				switch n := n.(type) {
+				case *ast.BasicLit:
+					if s, ok := stringLit(n); ok {
+						exact[s] = true
+					}
+				case *ast.BinaryExpr:
+					if s, whole := eval(n); whole {
+						exact[s] = true
+					} else {
+						addPrefix(s)
+					}
+				case *ast.CallExpr:
+					switch fun := n.Fun.(type) {
+					case *ast.Ident:
+						if w, ok := wrappers[fun.Name]; ok && w.arg < len(n.Args) {
+							if s, whole := eval(n.Args[w.arg]); whole {
+								exact[w.prefix+s] = true
+							}
+						}
+						// The catalog template filters of this package translate every key they accept.
+						if fun.Name == "makeCatalogTemplates" && fl.f.Name.Name == "i18n" {
+							ast.Inspect(n, func(m ast.Node) bool {
+								if lit, ok := m.(*ast.BasicLit); ok {
+									if s, ok := stringLit(lit); ok {
+										addPrefix(s)
+									}
+								}
+								return true
+							})
+						}
+					case *ast.SelectorExpr:
+						if isIdent(fun.X, "fmt") && fun.Sel.Name == "Sprintf" && len(n.Args) > 0 {
+							if s, _ := eval(n.Args[0]); strings.Contains(s, "%") {
+								addPrefix(s[:strings.Index(s, "%")])
+							}
+						}
+					}
+				}
+				return true
+			})
+		}
+	}
+	plural := regexp.MustCompile(`_(zero|one|two|few|many|other)$`)
+	starts := slices.Collect(maps.Keys(prefixes))
+	var unused []string
+	for key := range catalogs[ZhHans] {
+		if exact[key] || exact[plural.ReplaceAllString(key, "")] {
+			continue
+		}
+		if !slices.ContainsFunc(starts, func(p string) bool { return strings.HasPrefix(key, p) }) {
+			unused = append(unused, key)
+		}
+	}
+	slices.Sort(unused)
+	for _, key := range unused {
+		t.Errorf("%s is in the catalogs but no server code uses it; remove it from every language", key)
+	}
+	if len(exact) < 1000 {
+		t.Fatalf("found only %d string literals under %s; is the walk looking in the right place?", len(exact), root)
+	}
+}
+
+func isIdent(e ast.Expr, name string) bool {
+	id, ok := e.(*ast.Ident)
+	return ok && id.Name == name
 }
 
 // importName is the name f uses for this package, "" when f does not import it.

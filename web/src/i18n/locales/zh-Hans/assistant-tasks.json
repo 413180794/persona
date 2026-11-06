@@ -115,7 +115,6 @@
   "review_met": "达成",
   "review_missing": "缺口",
   "review_note": "督办说明：{note}",
-  "review_count": "验收 {count}",
   "review_expect": "预计 {minutes} 分钟",
   "dock_task_asks": "{title}：{ask}",
   "dock_agent": "Agent {title}，{state}",

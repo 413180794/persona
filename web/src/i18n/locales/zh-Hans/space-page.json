@@ -1,7 +1,6 @@
 {
   "sidebar": "侧边栏",
   "back_to_machine": "回到机器「{name}」",
-  "space": "空间",
   "actions": "空间操作",
   "pinned": "已置顶",
   "muted": "已屏蔽",

@@ -115,7 +115,6 @@
   "review_met": "達成",
   "review_missing": "不足",
   "review_note": "監督メモ：{note}",
-  "review_count": "検収 {count}",
   "review_expect": "目安 {minutes} 分",
   "dock_task_asks": "{title}：{ask}",
   "dock_agent": "エージェント{title}、{state}",

@@ -1,6 +1,6 @@
 // @vitest-environment node
 // The catalogs and the code agree (docs/web.md "Internationalization"): the three languages have the same namespaces, keys and
-// placeholders; every t("literal") key exists and gets a value for each placeholder its text uses; and no interface text is written into the code in Chinese. That last
+// placeholders; every t("literal") key exists and gets a value for each placeholder its text uses; every key is used; and no interface text is written into the code in Chinese. That last
 // one is a ratchet while the strings move into catalogs: a file may only lose hard-coded strings, never gain them
 // (hardcoded-baseline.json; a file that reaches zero leaves it). Comments and tests don't count; a line that has to
 // keep CJK text (it matches what someone else writes, like a hub's output) says `i18n-ignore` in a comment.
@@ -67,6 +67,10 @@ interface Scan {
   hardcoded: { line: number; text: string }[];
   /** `vars`: the names a literal second argument gives, [] for none, undefined when the code can't tell (a spread, a computed name, a variable) */
   keys: { line: number; key: string; vars?: string[] }[];
+  /** every string the code spells out in full, a key or not */
+  literals: string[];
+  /** the start of a key the code completes at run time: `ns.prefix_${x}`, or a literal given to a local wrapper that appends to it */
+  prefixes: string[];
 }
 
 /** The property names of t()/tRich()'s second argument, or undefined when they aren't all written out in the call. */
@@ -82,19 +86,64 @@ function varNames(arg: ts.Expression | undefined): string[] | undefined {
   return names;
 }
 
+/** The strings an expression can be when it is written out: a literal, or either side of `cond ? "a" : "b"`. */
+function literalsOf(e: ts.Expression | undefined): string[] {
+  if (!e) return [];
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return [e.text];
+  if (ts.isParenthesizedExpression(e)) return literalsOf(e.expression);
+  if (ts.isConditionalExpression(e)) return [...literalsOf(e.whenTrue), ...literalsOf(e.whenFalse)];
+  return [];
+}
+
+/**
+ * Local functions that build a key from a parameter and a suffix, like `say = (key) => t(`${key}_${self ? "self" : "named"}`)`:
+ * name → which parameter and the text right after it.
+ */
+function suffixWrappers(sf: ts.SourceFile): Map<string, { index: number; suffix: string }> {
+  const out = new Map<string, { index: number; suffix: string }>();
+  const check = (name: string, fn: ts.SignatureDeclaration) => {
+    fn.parameters.forEach((p, index) => {
+      if (!ts.isIdentifier(p.name)) return;
+      const param = p.name.text;
+      const find = (n: ts.Node): void => {
+        if (ts.isTemplateExpression(n) && !n.head.text) {
+          const [first] = n.templateSpans;
+          if (ts.isIdentifier(first.expression) && first.expression.text === param && first.literal.text) out.set(name, { index, suffix: first.literal.text });
+        }
+        ts.forEachChild(n, find);
+      };
+      find(fn);
+    });
+  };
+  const visit = (n: ts.Node) => {
+    if (ts.isFunctionDeclaration(n) && n.name) check(n.name.text, n);
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) check(n.name.text, n.initializer);
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return out;
+}
+
 function scan(file: string): Scan {
   const text = readFileSync(file, "utf8");
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const lines = text.split("\n");
   const ignored = (line: number) => /i18n-ignore/.test(lines[line] ?? "") || /^\s*\/\/.*i18n-ignore/.test(lines[line - 1] ?? "");
-  const out: Scan = { hardcoded: [], keys: [] };
+  const out: Scan = { hardcoded: [], keys: [], literals: [], prefixes: [] };
   // t / tRich are ours only where the file imports them from src/i18n (some files have a local t)
   const ours = new Set<string>();
   for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*["'][./]*i18n(?:\/rich)?["']/g)) {
     for (const name of m[1].split(",").map((x) => x.trim())) if (name === "t" || name === "tRich") ours.add(name);
   }
   const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line;
+  const wrappers = suffixWrappers(sf);
   const visit = (n: ts.Node) => {
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) out.literals.push(n.text);
+    if (ts.isTemplateExpression(n) && n.head.text) out.prefixes.push(n.head.text);
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && wrappers.has(n.expression.text)) {
+      const w = wrappers.get(n.expression.text)!;
+      for (const lit of literalsOf(n.arguments[w.index])) out.prefixes.push(lit + w.suffix);
+    }
     let literal: string | undefined;
     if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) literal = n.text;
     else if (ts.isJsxText(n)) literal = n.text;
@@ -229,6 +278,22 @@ describe("code", () => {
     for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
     const missing = [...scans].flatMap(([f, s]) => s.keys.filter((k) => !flat.has(k.key)).map((k) => `${f}:${k.line} ${k.key}`));
     expect(missing).toEqual([]);
+  });
+
+  // A key is used when the code spells it out (or its plural base), or builds it from a prefix the code spells out.
+  // Anything else is text no one sees that still has to be translated and kept in step.
+  it("uses every key", () => {
+    const literals = new Set([...scans.values()].flatMap((s) => s.literals));
+    const prefixes = [...new Set([...scans.values()].flatMap((s) => s.prefixes))].filter((p) => p.includes("."));
+    const unused: string[] = [];
+    for (const [ns, cat] of Object.entries(catalogs()[SOURCE_LANG])) {
+      for (const k of Object.keys(cat)) {
+        const key = `${ns}.${k}`;
+        if (literals.has(key) || literals.has(`${ns}.${k.replace(PLURAL, "")}`) || prefixes.some((p) => key.startsWith(p))) continue;
+        unused.push(key);
+      }
+    }
+    expect(unused, "delete these from every language under src/i18n/locales").toEqual([]);
   });
 
   // interpolate() and tRich() leave a placeholder with no value as a literal `{name}` on the page

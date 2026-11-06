@@ -125,7 +125,6 @@
   "review_met": "Met",
   "review_missing": "Missing",
   "review_note": "Supervisor: {note}",
-  "review_count": "Review {count}",
   "review_expect": "About {minutes} min",
   "dock_task_asks": "{title}: {ask}",
   "dock_agent": "Agent {title}: {state}",

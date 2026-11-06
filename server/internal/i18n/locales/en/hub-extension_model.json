@@ -9,14 +9,7 @@
   "not_in_markets": "None of the added marketplaces has it",
   "unresolved": "{id} ({why})",
   "too_deep": "dependencies too deep",
-  "version_mismatch": "needs {want}, the marketplace has {have}",
-  "unresolved_missing": "These extensions are still missing and no marketplace has them: {list}",
   "list_separator": ", ",
-  "install_dependency": "Install the extension it needs first: {id}",
-  "bundle_required_one": "{count} extension installs with it: confirm it and send it along (bundle)",
-  "bundle_required_other": "{count} extensions install with it: confirm them and send them along (bundle)",
-  "bundle_mismatch": "{id} in the bundle doesn’t match the preview. Preview again",
-  "bundle_member_failed": "Couldn’t install {id} from the bundle: {err}",
   "has_dependents": "These extensions use it: {names}. Turn them off too?",
   "read_only": "Extension “{name}” is set in hub.json. Turn it off there first"
 }
