@@ -96,6 +96,24 @@ type InboxAgent struct {
 	// Back is the handling state a waking note interrupted (waiting, done…): a turn that only updates the recap
 	// goes back to it.
 	Back string `json:"back,omitempty"`
+	// told counts the notes queued into Pending (in memory only): a message made of Pending carried those queued up
+	// to its count, and the ones queued since are the newest. Pending is trimmed to the latest 20, so its length
+	// cannot tell how many came since.
+	told int
+}
+
+// queueNote adds a note to Pending, kept to the latest 20.
+func (a *InboxAgent) queueNote(n inboxNote) {
+	a.Pending = append(a.Pending, n)
+	if len(a.Pending) > 20 {
+		a.Pending = a.Pending[len(a.Pending)-20:]
+	}
+	a.told++
+}
+
+// keepToldSince drops the notes a message made at count told carried: only those queued since stay.
+func (a *InboxAgent) keepToldSince(told int) {
+	a.Pending = a.Pending[len(a.Pending)-min(max(a.told-told, 0), len(a.Pending)):]
 }
 
 // lost: conversation sid was found gone.
@@ -170,7 +188,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		it      *InboxItem
 		chat    string
 		prompt  func(*prompts.KBContext) string
-		carried int // the notes pending when the first message was made: it carries them
+		carried int // the agent's told count when the first message was made: it carries the notes queued up to it
 	}
 	var jobs []job
 	var adopted []*InboxItem
@@ -188,7 +206,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		it.Agent.State, it.Agent.StartedAt, it.Agent.Attempts, it.Agent.RetryAfter = AgentRunning, &now, it.Agent.Attempts+1, nil
 		a := b.inboxAgentFor(it, owner, linked[it.Agent.TodoID], larkDefault, loc)
 		jobs = append(jobs, job{it, kbChatOf(it), func(kbc *prompts.KBContext) string { a.KB = kbc; return prompts.RenderInboxAgent(a) },
-			len(it.Agent.Pending)})
+			it.Agent.told})
 	}
 	b.mu.Unlock()
 	s.saveInbox(ctx, adopted)
@@ -220,7 +238,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			} else {
 				a.State, a.MachineID, a.SessionID = AgentRunning, machineID, sessionID
 				// The first message carried the notes pending when it was made; those told since still go.
-				a.Pending = a.Pending[min(j.carried, len(a.Pending)):]
+				a.keepToldSince(j.carried)
 				tellNow = len(a.Pending) > 0
 				a.Lost = nil
 				b.noteHandling(j.it, machineID, sessionID)

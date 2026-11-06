@@ -816,6 +816,12 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 			}
 		}()
 		return toast("info", i18n.T(l, "assistant-feishu_cards.starting"))
+	case "stop":
+		// The progress card's Stop button: the run's own conversation, carried in the button when the card was built.
+		f, _ := s.feishuFeatures(ctx)
+		t := botTarget{Kind: a.Str("k"), MachineID: a.Str("m"), SessionID: a.Str("s")}
+		out := s.stopConversation(ctx, f, t)
+		return toast(out.kind, out.message)
 	}
 	return toast("info", i18n.T(l, "assistant-feishu_cards.card_expired"))
 }
@@ -1409,23 +1415,9 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		}
 		reply(s.startAgentCard(ctx, rest), "")
 	case "/stop", "/停止", "/停":
-		t := s.botTargetFor(root, parent)
-		// Commands run before the normal message's botAllowed gate, so check it here: with the Agents feature off
-		// a reply in an agent's thread must not interrupt that agent.
-		if err := botAllowed(l, f, t); err != nil {
-			s.botNote(ctx, messageID, err.Error())
-			return true, ""
-		}
-		rt, err := s.resolveBotTarget(ctx, t)
-		if err != nil || rt.isNew {
-			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.nothing_running"))
-			return true, ""
-		}
-		if err := s.call(ctx, rt.machine, "session.interrupt", map[string]any{"session_id": rt.session.SessionID}, nil); err != nil {
-			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.not_stopped", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
-			return true, ""
-		}
-		s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.stopped", i18n.Args{"label": rt.label}))
+		out := s.stopConversation(ctx, f, s.botTargetFor(root, parent))
+		s.botNote(ctx, messageID, out.message)
+		return true, ""
 	case "/status", "/状态":
 		t := s.botTargetFor(root, parent)
 		if err := botAllowed(l, f, t); err != nil {
@@ -1459,6 +1451,31 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		return false, text
 	}
 	return true, ""
+}
+
+// stopOutcome is what interrupting a conversation's current turn came to; the caller renders it as a command note
+// (/stop) or a card toast (the progress card's Stop button).
+type stopOutcome struct {
+	kind    string // toast kind: success | info | error
+	message string
+}
+
+// stopConversation interrupts t's current turn. The /stop command and the progress card's Stop button share it: both
+// may only act on a target this chat may use (the Agents feature gates agent threads even before the normal message
+// gate), and both say so when there is nothing to stop.
+func (s *Service) stopConversation(ctx context.Context, f FeishuFeatures, t botTarget) stopOutcome {
+	l := s.botLang(ctx)
+	if err := botAllowed(l, f, t); err != nil {
+		return stopOutcome{kind: "error", message: err.Error()}
+	}
+	rt, err := s.resolveBotTarget(ctx, t)
+	if err != nil || rt.isNew {
+		return stopOutcome{kind: "info", message: i18n.T(l, "assistant-feishu_cards.nothing_running")}
+	}
+	if err := s.call(ctx, rt.machine, "session.interrupt", map[string]any{"session_id": rt.session.SessionID}, nil); err != nil {
+		return stopOutcome{kind: "error", message: i18n.T(l, "assistant-feishu_cards.not_stopped", i18n.Args{"error": clip(oneLine(err.Error()), 200)})}
+	}
+	return stopOutcome{kind: "success", message: i18n.T(l, "assistant-feishu_cards.stopped", i18n.Args{"label": rt.label})}
 }
 
 // botCommandNames are the bot's own commands a typo is matched against (the Chinese ones are too short to mistype).

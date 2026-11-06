@@ -84,6 +84,7 @@
   "next_is_new": "OK, your next message starts a new chat. Send /main to go back to the main chat.",
   "nothing_running": "Nothing is running.",
   "not_stopped": "Couldn't stop it: {error}",
+  "stop": "Stop",
   "stopped": "Stopped the turn in “{label}”.",
   "status_to": "Sending to: **{target}**\n",
   "status_waiting_one": "Waiting on {count} answer.\n",

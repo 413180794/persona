@@ -54,10 +54,7 @@ func (b *inboxBook) tell(it *InboxItem, n inboxNote, wake bool, now time.Time) {
 	if a == nil {
 		return
 	}
-	a.Pending = append(a.Pending, n)
-	if len(a.Pending) > 20 {
-		a.Pending = a.Pending[len(a.Pending)-20:]
-	}
+	a.queueNote(n)
 	if !wake {
 		return
 	}
@@ -135,7 +132,7 @@ func (b *inboxBook) closeHandling(it *InboxItem, why string, now time.Time) bool
 	if !active || a.SessionID == "" {
 		return false
 	}
-	a.Pending = []inboxNote{{Name: prompts.NoteClosed, Text: why}}
+	a.queueNote(inboxNote{Name: prompts.NoteClosed, Text: why})
 	return true
 }
 
@@ -231,7 +228,7 @@ func (s *Service) deliverNotes(ctx context.Context, it *InboxItem) {
 		b.mu.Unlock()
 		return
 	}
-	machine, sid, wake := a.MachineID, a.SessionID, a.Wake
+	machine, sid, wake, told := a.MachineID, a.SessionID, a.Wake, a.told
 	notes := append([]inboxNote(nil), a.Pending...)
 	b.mu.Unlock()
 	texts := make([]string, len(notes))
@@ -253,7 +250,7 @@ func (s *Service) deliverNotes(ctx context.Context, it *InboxItem) {
 	if it.Agent == a && a.SessionID == sid {
 		switch {
 		case err == nil:
-			a.Pending = a.Pending[min(len(notes), len(a.Pending)):]
+			a.keepToldSince(told) // the notes told while it was sent go next time
 			if wake {
 				t := now.UTC()
 				a.Wake, a.StartedAt = false, &t

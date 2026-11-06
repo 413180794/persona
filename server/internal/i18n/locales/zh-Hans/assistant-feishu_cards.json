@@ -84,6 +84,7 @@
   "next_is_new": "好，下一条消息开一段新对话。发 /main 回到主对话。",
   "nothing_running": "现在没有在跑的。",
   "not_stopped": "没停下来：{error}",
+  "stop": "停止",
   "stopped": "停下了「{label}」这一轮。",
   "status_to": "现在发给：**{target}**\n",
   "status_waiting_one": "在等 {count} 个回答。\n",

@@ -1018,7 +1018,7 @@ func TestProgressCardLines(t *testing.T) {
 			p.liveNote("", it, t0)
 		}
 		v := liveView{open: p.open, calls: p.calls, read: len(p.read), edited: len(p.edited), subs: p.subs, subsMore: p.subsMore, now: t0}
-		b, _ := json.Marshal(progressCard("", "Persona", 192*time.Second, c.steps, "", "", v))
+		b, _ := json.Marshal(progressCard("", "Persona", 192*time.Second, c.steps, "", "", v, botTarget{}))
 		var s string
 		for _, md := range progressLines("", c.steps, v) {
 			s += md + "\n"
@@ -1076,11 +1076,11 @@ func TestHeldRunsNextTurnStartsItsCountsAgain(t *testing.T) {
 
 // A file counter at its cap says so: "1000+".
 func TestProgressCardFileCountAtItsCap(t *testing.T) {
-	b, _ := json.Marshal(progressCard("", "Persona", time.Second, nil, "", "", liveView{calls: 1, read: liveFilesMost, edited: 3}))
+	b, _ := json.Marshal(progressCard("", "Persona", time.Second, nil, "", "", liveView{calls: 1, read: liveFilesMost, edited: 3}, botTarget{}))
 	if !strings.Contains(string(b), "读了 1000+ 个文件 · 改了 3 个文件") {
 		t.Fatalf("%s", b)
 	}
-	b, _ = json.Marshal(progressCard(i18n.En, "Persona", time.Second, nil, "", "", liveView{calls: 1, edited: 1}))
+	b, _ = json.Marshal(progressCard(i18n.En, "Persona", time.Second, nil, "", "", liveView{calls: 1, edited: 1}, botTarget{}))
 	if !strings.Contains(string(b), "1 tool call · changed 1 file") {
 		t.Fatalf("%s", b)
 	}

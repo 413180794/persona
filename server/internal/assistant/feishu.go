@@ -1178,7 +1178,7 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 	if f.cotProgressNow(ctx, r) {
 		return
 	}
-	c := progressCard(s.botLang(ctx), r.Label, took, steps, live, s.runWaiting(r), s.runLiveView(r.ID))
+	c := progressCard(s.botLang(ctx), r.Label, took, steps, live, s.runWaiting(r), s.runLiveView(r.ID), botTargetOf(r))
 	_, prog := s.channelRunByID(r.ID)
 	if prog == nil {
 		prog = &chanLive{} // a run not followed any more: nothing to remember
@@ -1419,8 +1419,8 @@ func unreachable(err error) bool {
 }
 
 // progressCard is a run's card while it goes on; waiting: the note while its message is not found in the
-// conversation yet (runWaiting), "" once it is.
-func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live, waiting string, v liveView) *feishubot.Card {
+// conversation yet (runWaiting), "" once it is. A zero t means no live run: the card carries no Stop button.
+func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live, waiting string, v liveView, t botTarget) *feishubot.Card {
 	summary := i18n.T(l, "assistant-feishu.working_summary_took", i18n.Args{"took": channel.Duration(l, took)})
 	note := "assistant-feishu.working_note"
 	switch waiting {
@@ -1458,6 +1458,11 @@ func progressCard(l i18n.Lang, label string, took time.Duration, steps []string,
 			live = "…" + string(r[len(r)-400:])
 		}
 		c.Markdown(feishubot.EscapeMarkdown(live))
+	}
+	// The button is the /stop command on this run's conversation; it is only on the card of a run still in flight.
+	if t.Kind != "" {
+		c.Buttons(feishubot.Btn(i18n.T(l, "assistant-feishu_cards.stop"), feishubot.Danger,
+			map[string]any{"a": "stop", "k": t.Kind, "m": t.MachineID, "s": t.SessionID}))
 	}
 	return c
 }

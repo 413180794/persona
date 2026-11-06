@@ -84,6 +84,7 @@
   "next_is_new": "次のメッセージで新しいチャットを始めます。メインチャットに戻るには /main を送ってください。",
   "nothing_running": "実行中のものはありません。",
   "not_stopped": "停止できませんでした：{error}",
+  "stop": "停止",
   "stopped": "「{label}」のやり取りを止めました。",
   "status_to": "送信先：**{target}**\n",
   "status_waiting_one": "{count}件の回答を待っています。\n",

@@ -71,10 +71,10 @@ type fakeHub struct {
 	failStart    error
 	worktrees    []map[string]any // worktree.prepare / worktree.create params, {"method": …} added
 	failWorktree error            // worktree.create's answer when set
-	slowStart    bool   // session.start blocks until the call's context ends, then answers with its error (a node that builds the session before answering late)
-	judged       int    // the done judge's calls to the model
-	judge        string // what they answer ("": an error)
-	outcome      string // what the outcome model answers (todo_outcome.go; "": an error)
+	slowStart    bool             // session.start blocks until the call's context ends, then answers with its error (a node that builds the session before answering late)
+	judged       int              // the done judge's calls to the model
+	judge        string           // what they answer ("": an error)
+	outcome      string           // what the outcome model answers (todo_outcome.go; "": an error)
 	outcomeAsked []modelCall
 	retired      []string // session.retire's session ids
 	retireErr    error
@@ -102,6 +102,7 @@ type fakeHub struct {
 	hubCards       []proto.Interaction // interactions.list: what the hub has up
 	told           []told              // the manager's fleet.* events (Tell)
 	failSend       error               // session.send fails with it
+	failInterrupt  error               // session.interrupt fails with it
 	failAssistant  error               // assistant.send fails with it (a launcher that cannot start)
 
 	// The launchers' health (launcher_health.go): launchers.check's answers by "machine/launcher" (none: it works),
@@ -153,6 +154,9 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, p)
+	if p.Method == "session.interrupt" && f.failInterrupt != nil {
+		return nil, f.failInterrupt
+	}
 	if p.Device == DeviceAll && p.Method == DeviceDevicesList {
 		devices := f.devices
 		if devices == nil {
