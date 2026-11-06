@@ -41,6 +41,19 @@ check_served() {
     [ -z "$size" ] || [ "$got" = "$size" ] || { echo "served dl/$name is $got bytes, not $size" >&2; return 1; }
   done < "$sums"
 }
+# settled <what> <command…>: the command passes now, or within about two minutes. Right after a deploy the site can
+# still serve the release before for a while (the entry and the edge cache; three releases on 2026-11-06, #5698).
+settled() {
+  local what="$1" try
+  shift
+  for try in $(seq 1 12); do
+    "$@" 2>/dev/null && return 0
+    [ "$try" -lt 12 ] && sleep 10
+  done
+  "$@" || { echo "$what still differs about two minutes after the deploy" >&2; return 1; }
+}
+served_is() { [ "$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/$1" 2>/dev/null)" = "$(cat "$2")" ]; }
+same_as_served() { curl -fsSL "$JARVIS_PUBLISH_URL/$1" | cmp -s - "$2"; }
 # deploy_site <dir>: deploy that copy of site/ (with dl/ and install.sh in it), the log in <dir>/../deploy.log.
 deploy_site() {
   local dir="$1" log="$1/../deploy.log"
@@ -77,10 +90,10 @@ if [ -n "${SITE_ONLY:-}" ]; then
   if [ -n "${NO_DEPLOY:-}" ]; then echo "site with jarvisd $VERSION ready in $OUT/site (not deployed)."; exit 0; fi
   deploy_site "$OUT/site"
   for f in VERSION SHA256SUMS latest.json; do
-    curl -fsSL "$JARVIS_PUBLISH_URL/dl/$f" | cmp -s - "$OUT/dl/$f" || { echo "served dl/$f differs after the deploy" >&2; exit 1; }
+    settled "served dl/$f" same_as_served "dl/$f" "$OUT/dl/$f" || exit 1
   done
-  curl -fsSL "$JARVIS_PUBLISH_URL/install.sh" | cmp -s - "$OUT/install.sh" || { echo "served install.sh differs after the deploy" >&2; exit 1; }
-  check_served "$OUT/dl/SHA256SUMS" "$SLOT" || exit 1
+  settled "served install.sh" same_as_served install.sh "$OUT/install.sh" || exit 1
+  settled "the served downloads" check_served "$OUT/dl/SHA256SUMS" "$SLOT" || exit 1
   echo "site deployed with jarvisd $VERSION unchanged: $JARVIS_PUBLISH_URL"
   exit 0
 fi
@@ -197,13 +210,10 @@ for gz in "$PWD/$OUT/bin/"*.gz; do
 done
 deploy_site "$OUT/site"
 
-# What is served now is what was built.
-served="$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/VERSION" 2>/dev/null || true)"
-if [ "$served" != "$VERSION" ]; then
-  echo "deployed, but $JARVIS_PUBLISH_URL/dl/VERSION says '${served:-nothing}' (cache?)" >&2
-  exit 1
-fi
-curl -fsSL "$JARVIS_PUBLISH_URL/dl/SHA256SUMS" | cmp -s - "$OUT/bin/SHA256SUMS" || { echo "served SHA256SUMS differs" >&2; exit 1; }
-curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" | cmp -s - "$OUT/bin/latest.json" || { echo "served latest.json differs" >&2; exit 1; }
-check_served "$OUT/bin/SHA256SUMS" "$SLOT" || exit 1
+# What is served now is what was built (allowing the site a moment to switch over).
+settled "served dl/VERSION" served_is VERSION "$OUT/bin/VERSION" \
+  || { echo "deployed, but $JARVIS_PUBLISH_URL/dl/VERSION says '$(curl -fsSL "$JARVIS_PUBLISH_URL/dl/VERSION" 2>/dev/null)'" >&2; exit 1; }
+settled "served dl/SHA256SUMS" same_as_served dl/SHA256SUMS "$OUT/bin/SHA256SUMS" || exit 1
+settled "served dl/latest.json" same_as_served dl/latest.json "$OUT/bin/latest.json" || exit 1
+settled "the served downloads" check_served "$OUT/bin/SHA256SUMS" "$SLOT" || exit 1
 echo "jarvisd $VERSION published: curl -fsSL $JARVIS_PUBLISH_URL/install.sh | sh"
