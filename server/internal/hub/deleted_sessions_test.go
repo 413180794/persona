@@ -25,6 +25,8 @@ func TestDeleteSessions(t *testing.T) {
 			proto.Session{SessionID: "boot-0010", Cwd: "/code/app", Status: proto.StatusOffline, Starting: true, UpdatedAt: now},
 			proto.Session{SessionID: "done-0011", Cwd: "/code/app", Status: proto.StatusDone, UpdatedAt: now.Add(-time.Hour)},
 			proto.Session{SessionID: "busy-0012", Cwd: "/code/app", Status: proto.StatusBlocked, UpdatedAt: now},
+			proto.Session{SessionID: "stopped-0013", Cwd: "/code/app", Status: proto.StatusInterrupted, UpdatedAt: now.Add(-time.Hour)},
+			proto.Session{SessionID: "keep-0014", Cwd: "/code/app", Status: proto.StatusInterrupted, UpdatedAt: now.Add(-time.Hour)},
 		)
 	})
 	mux := http.NewServeMux()
@@ -54,7 +56,7 @@ func TestDeleteSessions(t *testing.T) {
 		return ids(v.Sessions)
 	}
 
-	for _, id := range []string{"old-0007", "fail-0008", "done-0011"} {
+	for _, id := range []string{"old-0007", "fail-0008", "done-0011", "stopped-0013"} {
 		if c := del("/api/v1/sessions/server/" + id); c != http.StatusOK {
 			t.Fatalf("delete %s: %d", id, c)
 		}
@@ -68,6 +70,9 @@ func TestDeleteSessions(t *testing.T) {
 	}
 	if got := ids(h.decorated(n.m)); !strings.Contains(got, "old-0007") {
 		t.Fatalf("the hub itself still knows it: %s", got)
+	}
+	if strings.Contains(got, "stopped-0013") || !strings.Contains(got, "keep-0014") {
+		t.Fatalf("only the deleted interrupted session is hidden: %s", got)
 	}
 	for path, want := range map[string]int{
 		"/api/v1/sessions/server/run-0009":  http.StatusConflict,
@@ -87,6 +92,21 @@ func TestDeleteSessions(t *testing.T) {
 	h2.store = h.store
 	if _, ok := h2.deletedAt("server")["old-0007"]; !ok {
 		t.Fatal("not kept")
+	}
+	// A node restart may classify an unchanged offline transcript as interrupted.
+	// Reloaded deletion notes must still filter both HTTP lists and socket snapshots.
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		for i := range list {
+			if list[i].SessionID == "old-0007" {
+				list[i].Status = proto.StatusInterrupted
+			}
+		}
+		return list
+	})
+	for _, rows := range []string{listed(), ids(h2.shown("server", h.decorated(n.m)))} {
+		if strings.Contains(rows, "old-0007") || strings.Contains(rows, "stopped-0013") || !strings.Contains(rows, "keep-0014") {
+			t.Fatalf("reconnected lists retain deletion by ID: %s", rows)
+		}
 	}
 
 	// Used again (resumed, a new message): listed again.

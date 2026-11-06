@@ -71,9 +71,10 @@ func (h *Hub) deletedAt(machine string) map[string]time.Time {
 }
 
 // stillDeleted reports whether s stays out of the list given when it was deleted: it has not run or been used since.
-// Finished (done / unknown) counts like offline — a bot's leftover that is not running can go too.
+// Finished and interrupted sessions count like offline. A restart can mark an
+// unchanged transcript interrupted without the user having resumed it.
 func stillDeleted(s proto.Session, at time.Time) bool {
-	finished := s.Status == proto.StatusOffline || s.Status == proto.StatusDone || s.Status == proto.StatusUnknown
+	finished := s.Status == proto.StatusOffline || s.Status == proto.StatusDone || s.Status == proto.StatusUnknown || s.Status == proto.StatusInterrupted
 	return finished && !s.Starting && !s.Assistant && !s.UpdatedAt.After(at)
 }
 
