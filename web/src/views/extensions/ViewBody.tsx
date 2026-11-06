@@ -14,6 +14,8 @@ import {
   blocks, imageURL, initials, isHttps, numberProblem, percent, rowIcon, tableRows, toneOf,
   type RowIcon, type UIAction, type UIItem, type UIMore, type UISection, type UITone, type UIView,
 } from "../../lib/extension-ui";
+import { presenceStyle, usePresence, type Present } from "./motion";
+import { Fading, Rolling } from "./Rolling";
 import { t } from "../../i18n";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -169,31 +171,34 @@ function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<S
   // the first row of the run: a row after it begins the list's next entry even when the one before has more lines under
   // its row (a progress, a text: an account and its quota), so the hairline goes above it too
   const firstRow = bs.findIndex((b) => b.kind === "item" && b.item.type === "row");
+  // each block by its key: one the extension adds comes in, one it takes away fades out where it was (#2757)
+  const list: Present[] = bs.map((b, i) => {
+    // rows that follow each other read as a list, and charts one under another as separate charts: a hairline between them
+    const prev = i > 0 && bs[i - 1].kind === "item" ? (bs[i - 1] as { item: UIItem }).item.type : "";
+    const nextEntry = b.kind === "item" && b.item.type === "row" && firstRow >= 0 && i > firstRow && prev !== "divider";
+    const afterRow = b.kind === "item" && (nextEntry || (b.item.type === "chart" && prev === "chart"));
+    // an item's key keeps it (and the list's place) when the extension draws the view again
+    const key = (b.kind === "item" ? b.item.key : b.items[0]?.key) ?? `#${i}`;
+    if (b.kind === "metrics") return { key, draw: (style) => <Metrics key={key} items={b.items} style={style} /> };
+    if (b.kind === "buttons")
+      return { key, draw: (style) => (
+        <div key={key} className="flex flex-wrap items-center gap-2 px-4 py-2.5" style={style}>
+          {b.items.map((it, j) => (
+            <ItemButton key={it.key ?? j} item={it} busy={rest.busy} onPress={rest.onPress} canPress={rest.canPress} chosen={rest.chosen} />
+          ))}
+        </div>
+      ) };
+    const divided = afterRow || (b.kind === "item" && i > 0 && b.item.type === "composer");
+    return { key, draw: (style) => (
+      <div key={key} className={cx(divided && "border-t border-line")} style={style}>
+        <Item item={b.item} compact={compact} onPicked={onPicked} {...rest} />
+      </div>
+    ) };
+  });
+  const drawn = usePresence(list);
   return (
       <div className={cx("overflow-hidden", compact || bare ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
-        {bs.map((b, i) => {
-          // rows that follow each other read as a list, and charts one under another as separate charts: a hairline between them
-          const prev = i > 0 && bs[i - 1].kind === "item" ? (bs[i - 1] as { item: UIItem }).item.type : "";
-          const nextEntry = b.kind === "item" && b.item.type === "row" && firstRow >= 0 && i > firstRow && prev !== "divider";
-          const afterRow = b.kind === "item" && (nextEntry || (b.item.type === "chart" && prev === "chart"));
-          // an item's key keeps it (and the list's place) when the extension draws the view again
-          const key = (b.kind === "item" ? b.item.key : b.items[0]?.key) ?? `#${i}`;
-          if (b.kind === "metrics") return <Metrics key={key} items={b.items} />;
-          if (b.kind === "buttons")
-            return (
-              <div key={key} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-                {b.items.map((it, j) => (
-                  <ItemButton key={it.key ?? j} item={it} busy={rest.busy} onPress={rest.onPress} canPress={rest.canPress} chosen={rest.chosen} />
-                ))}
-              </div>
-            );
-          const divided = afterRow || (b.kind === "item" && i > 0 && b.item.type === "composer");
-          return (
-            <div key={key} className={cx(divided && "border-t border-line")}>
-              <Item item={b.item} compact={compact} onPicked={onPicked} {...rest} />
-            </div>
-          );
-        })}
+        {drawn.map(({ entry, phase }) => entry.draw(presenceStyle(phase)))}
         {more && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} divided={bs.length > 0} />}
       </div>
   );
@@ -234,13 +239,13 @@ function MoreLine({ more, busy, onMore, divided }: { more: UIMore; busy: string;
   );
 }
 
-function Metrics({ items }: { items: UIItem[] }) {
+function Metrics({ items, style }: { items: UIItem[]; style?: React.CSSProperties }) {
   return (
-    <div className={cx("grid gap-x-4 gap-y-3 px-4 py-3", items.length === 1 ? "grid-cols-1" : items.length === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3")}>
+    <div className={cx("grid gap-x-4 gap-y-3 px-4 py-3", items.length === 1 ? "grid-cols-1" : items.length === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3")} style={style}>
       {items.map((it, i) => (
         <div key={i} className="min-w-0">
           <div className="truncate text-[11.5px] text-ink-3">{it.label}</div>
-          <div className={cx("mt-0.5 truncate text-[20px] leading-tight font-semibold tabular-nums", TEXT[toneOf(it.tone)])}>{it.value}</div>
+          <div className={cx("mt-0.5 truncate text-[20px] leading-tight font-semibold tabular-nums", TEXT[toneOf(it.tone)])}>{it.value && <Rolling value={it.value} />}</div>
           {it.detail && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{it.detail}</div>}
         </div>
       ))}
@@ -350,8 +355,8 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, ca
             <div className="truncate text-[13px] text-ink">{it.title}</div>
             {it.subtitle && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{it.subtitle}</div>}
           </div>
-          {it.value && <span className="shrink-0 truncate text-[12.5px] text-ink-2 tabular-nums">{it.value}</span>}
-          {it.badge?.text && <Pill tone={BADGE[toneOf(it.badge.tone)]}>{it.badge.text}</Pill>}
+          {it.value && <span className="shrink-0 truncate text-[12.5px] text-ink-2 tabular-nums"><Rolling value={it.value} /></span>}
+          {it.badge?.text && <Pill tone={BADGE[toneOf(it.badge.tone)]} animated><Fading text={it.badge.text} /></Pill>}
           {it.action && (busy === it.action.id ? <Spinner /> : <Icon name={chosen === it.action.id ? "check" : "chevronRight"} size={12} stroke={2} className={cx("shrink-0", chosen === it.action.id ? "text-accent" : "text-ink-3")} />)}
         </>
       );
@@ -427,7 +432,7 @@ function StatGrid({ item, compact }: { item: UIItem; compact?: boolean }) {
             <div key={i} className="min-w-0">
               <div className="truncate text-[11.5px] text-ink-3">{st.label}</div>
               <div className={cx("mt-0.5 truncate leading-tight font-semibold text-ink", compact ? "text-[18px]" : "text-[20px]")} title={st.value}>
-                {st.value}
+                <Rolling value={st.value} />
               </div>
               {st.detail && <div className={cx("mt-0.5 truncate text-[11.5px] tabular-nums", tone === "neutral" ? "text-ink-3" : TEXT[tone])}>{st.detail}</div>}
             </div>

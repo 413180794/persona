@@ -3,7 +3,10 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -429,5 +432,118 @@ func TestNodeRequestResumes(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the hook that came back never got the answer")
+	}
+}
+
+// slowEndMem holds the first interaction outcome write until release is closed, so a test can act inside it.
+type slowEndMem struct {
+	*fleetMem
+	entered, release chan struct{}
+	once             sync.Once
+	mu               sync.Mutex
+	ends             []string // the statuses written, in order
+}
+
+func (m *slowEndMem) FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error {
+	m.mu.Lock()
+	m.ends = append(m.ends, status)
+	m.mu.Unlock()
+	m.once.Do(func() {
+		close(m.entered)
+		<-m.release
+	})
+	return m.fleetMem.FinishInteraction(ctx, id, status, res)
+}
+
+func (m *slowEndMem) written() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.ends)
+}
+
+// slowEndTest is a fleet test whose first outcome write waits for st.release, and a resumable card id whose hook
+// went away, with a grace of its own that ends in grace (resumeGrace is shared with goroutines other tests leave
+// waiting: the timer is started again with an expiry that close, then the card's own expiry is put back).
+func slowEndTest(t *testing.T, id string, grace time.Duration) (*fleetTest, *slowEndMem) {
+	t.Helper()
+	ft := newFleetTest(t)
+	st := &slowEndMem{fleetMem: ft.st, entered: make(chan struct{}), release: make(chan struct{})}
+	ft.s = New(Options{Hub: ft.f, Store: func() Store { return st }, Logf: t.Logf, Devices: ft.d})
+	s := ft.s
+	ctx, nodeGone := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { _, _ = s.waitInteraction(ctx, resumable(id)); close(done) }()
+	ft.waitPending(1)
+	nodeGone()
+	<-done
+	s.fleet.mu.Lock()
+	p := s.fleet.interactions[id]
+	p.orphaned.Stop()
+	p.orphaned = nil
+	p.ix.ExpiresAt = time.Now().Add(grace)
+	s.orphanLocked(p)
+	p.ix.ExpiresAt = time.Now().Add(time.Hour)
+	s.fleet.mu.Unlock()
+	return ft, st
+}
+
+// The grace period ends while the hook comes back: whichever wins, the hook is not left waiting on a card nobody can
+// see or answer. Here the grace end is already writing the history when the hook asks again: the hook is told to hand
+// over (dismiss), as a hook coming back just after would be. An answer given then finds the card no longer pending.
+func TestResumableReclaimedAsTheGraceEnds(t *testing.T) {
+	ft, st := slowEndTest(t, "ix_e", 50*time.Millisecond)
+	s := ft.s
+	select {
+	case <-st.entered: // the grace timer decided to end it and is writing "cancelled"
+	case <-time.After(5 * time.Second):
+		t.Fatal("the grace period never ended")
+	}
+	back := make(chan proto.Resolution, 1)
+	go func() { r, _ := s.waitInteraction(context.Background(), resumable("ix_e")); back <- r }()
+	yes := true
+	if err := s.resolve("ix_e", proto.Resolution{Allow: &yes}); !errors.Is(err, errNotPending) {
+		t.Fatalf("an answer while the grace end is written: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond) // the hook is back before the write returns
+	close(st.release)
+	ft.waitPending(0)
+	select {
+	case r := <-back:
+		if !r.Dismiss {
+			t.Fatalf("the hook back as the grace ended got %+v", r)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the hook back as the grace ended waits on a card that is gone")
+	}
+	if got := st.written(); !slices.Equal(got, []string{"cancelled"}) {
+		t.Fatalf("written %v", got)
+	}
+}
+
+// The grace period ends while an answer given meanwhile is being written: the answer stands, not cancelled over, and
+// the hook that comes back reads it.
+func TestResumableAnswerWrittenAsTheGraceEnds(t *testing.T) {
+	ft, st := slowEndTest(t, "ix_a", 300*time.Millisecond)
+	s := ft.s
+	answered := make(chan error, 1)
+	yes := true
+	go func() { answered <- s.resolve("ix_a", proto.Resolution{Allow: &yes}) }()
+	select {
+	case <-st.entered: // the answer is being written
+	case <-time.After(5 * time.Second):
+		t.Fatal("the answer was never written")
+	}
+	time.Sleep(400 * time.Millisecond) // the grace runs out meanwhile
+	close(st.release)
+	if err := <-answered; err != nil {
+		t.Fatal(err)
+	}
+	ft.waitPending(0)
+	if got := st.written(); !slices.Equal(got, []string{"resolved"}) {
+		t.Fatalf("written %v: the grace end cancelled over the answer", got)
+	}
+	r, err := s.waitInteraction(context.Background(), resumable("ix_a"))
+	if err != nil || r.Allow == nil || !*r.Allow {
+		t.Fatalf("the hook back got %+v %v", r, err)
 	}
 }

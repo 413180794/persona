@@ -50,6 +50,8 @@ type pending struct {
 	// claimed: an answer was taken for this hook-waited card (resolve). It stays in the map until await or
 	// finishInteraction ends it, but a second answer finds it no longer pending.
 	claimed bool
+	// graceEnded: its grace period ran out (orphanLocked) and it is being ended: a hook back now hands over.
+	graceEnded bool
 	// announced: a screen card that rang (announce), carried through a detach (screenGone.announced), so the card
 	// read again once the node is back rings at the window's end only if its predecessor never did (#4979).
 	announced bool
@@ -605,8 +607,14 @@ func (s *Service) waitInteraction(ctx context.Context, ix proto.Interaction) (pr
 	if ix.Resumable {
 		s.fleet.mu.Lock()
 		if p := s.fleet.interactions[ix.ID]; p != nil && p.local == nil {
+			if p.graceEnded {
+				// The grace period ended and the card is being ended outside the lock (the history, the apps): the
+				// hook hands over, as one back just after would (#5043's kind of gap).
+				s.fleet.mu.Unlock()
+				return proto.Resolution{Dismiss: true}, nil
+			}
 			if p.orphaned != nil {
-				p.orphaned.Stop()
+				p.orphaned.Stop() // fired but not decided yet: it finds p.orphaned nil and leaves the card to the hook
 				p.orphaned = nil
 			}
 			s.fleet.mu.Unlock()
@@ -693,7 +701,12 @@ func (s *Service) orphanLocked(p *pending) bool {
 	}
 	p.orphaned = time.AfterFunc(wait, func() {
 		s.fleet.mu.Lock()
-		still := s.fleet.interactions[p.ix.ID] == p && p.orphaned != nil
+		// Claimed under the lock that decides it, as resolve claims an answer: an answer being written now is not
+		// cancelled over, and one given while this end is written finds the card no longer pending.
+		still := s.fleet.interactions[p.ix.ID] == p && p.orphaned != nil && !p.claimed
+		if still {
+			p.claimed, p.graceEnded = true, true
+		}
 		s.fleet.mu.Unlock()
 		if still {
 			s.recordEnd(p.ix.ID, "cancelled", nil)

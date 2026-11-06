@@ -7,6 +7,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { barSpans, chartExtent, compactNumber, edgeLabels, labelWidth, linear, niceTicks, pointText, seriesColors, thinLabels, type UIItem } from "../../lib/extension-ui";
 import { t } from "../../i18n";
 import { chartKind, ChartFrame, LABEL_H, plotHeight } from "./ChartFrame";
+import { useTween } from "./motion";
 
 const FONT = 10.5; // axis text, px
 const TOP = 6;
@@ -45,6 +46,16 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
   const colors = useMemo(() => seriesColors(series), [series]);
   const [box, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  // the marks go to their new values when the extension draws the same chart (same labels and series) with new numbers
+  // (#2757); the axis is the new one at once
+  const values = useMemo(() => series.flatMap((s) => s.points.map((p) => p.value)), [series]);
+  const shape = `${kind}${stacked ? "+" : ""}\n${series.map((s) => s.points.length).join(",")}\n${labels.join("\n")}`;
+  const tween = useTween(values, shape);
+  const marks = useMemo(() => {
+    if (!tween || tween.length !== values.length) return series;
+    let at = 0;
+    return series.map((s) => ({ ...s, points: s.points.map((p) => ({ ...p, value: tween[at++] })) }));
+  }, [series, tween, values]);
 
   const H = plotHeight(compact);
   const [mn, mx] = useMemo(() => chartExtent(series, kind, stacked), [series, kind, stacked]);
@@ -67,7 +78,7 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
   // bars: a group's width, each bar at most 24px (compact 16px), 2px apart
   const m = stacked ? 1 : series.length;
   const barW = kind === "bar" ? Math.max(1, Math.min(compact ? 16 : 24, (band * (compact ? 0.66 : 0.62) - 2 * (m - 1)) / m)) : 0;
-  const spans = useMemo(() => (kind === "bar" ? barSpans(series, stacked) : []), [kind, series, stacked]);
+  const spans = useMemo(() => (kind === "bar" ? barSpans(marks, stacked) : []), [kind, marks, stacked]);
 
   const nearest = (px: number) => {
     let best = 0;
@@ -145,12 +156,12 @@ export function ExtensionChart({ item, compact }: { item: UIItem; compact?: bool
               ))}
 
             {kind === "line" &&
-              series.map((s, k) => {
+              marks.map((s, k) => {
                 const pts = s.points.map((p, i) => `${xs[i].toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
                 if (n === 1) return <circle key={k} cx={xs[0]} cy={y(s.points[0].value)} r={3} fill={colors[k]} />;
                 return (
                   <g key={k}>
-                    {series.length === 1 && <polygon points={`${xs[0].toFixed(1)},${zero} ${pts} ${xs[n - 1].toFixed(1)},${zero}`} fill={colors[k]} fillOpacity={0.1} />}
+                    {marks.length === 1 && <polygon points={`${xs[0].toFixed(1)},${zero} ${pts} ${xs[n - 1].toFixed(1)},${zero}`} fill={colors[k]} fillOpacity={0.1} />}
                     <polyline points={pts} fill="none" stroke={colors[k]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
                   </g>
                 );

@@ -107,10 +107,13 @@ export function Row({ label, hint, children, onClick, mono, icon }: { label: Rea
   );
 }
 
-export function Pill({ children, tone }: { children: React.ReactNode; tone?: "accent" | "green" | "red" | "orange" }) {
+/** `animated`: a change of tone crossfades its colors (an extension's badge that the extension redraws, #2757). */
+export function Pill({ children, tone, animated }: { children: React.ReactNode; tone?: "accent" | "green" | "red" | "orange"; animated?: boolean }) {
   return (
     <span
+      style={animated ? { transitionTimingFunction: EASE } : undefined}
       className={cx(
+        animated && "transition-[background-color,color,box-shadow] duration-300",
         "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[11px] font-medium",
         tone === "accent" ? "bg-accent-tint text-accent-ink" : tone === "green" ? "bg-green-tint text-green" : tone === "red" ? "bg-red-tint text-red" : tone === "orange" ? "bg-orange-tint text-orange" : "bg-inset text-ink-2 shadow-hairline",
       )}
