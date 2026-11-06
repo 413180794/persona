@@ -238,14 +238,17 @@ fun AssistantScreen(
             navigator.navigate(ChatRoute(key.machineId, key.sessionId))
         }
     }
-    fun newConversation() {
-        if (sending) return
+    fun clearConversation() {
         openedMain = true
         viewingMainQueue = false
         activeMachine = null
         activeSession = null
         pendingClientId = null
         pendingText = null
+    }
+    fun newConversation() {
+        if (sending) return
+        clearConversation()
         scope.launch { drawerOpen = false }
     }
     fun refusal(error: Exception): String =
@@ -301,10 +304,11 @@ fun AssistantScreen(
     fun archive(session: Session) {
         val target = management ?: return
         archived = archived + session.key
-        if (active == session.key) newConversation()
         scope.launch {
             try {
                 target.archiveConversation(session.key)
+                // Clear only the archived selection; keep the list open for the next archive.
+                if (activeMachine == session.machineId && activeSession == session.sessionId) clearConversation()
                 assistantAttempt { repository.refresh() }.onSuccess { archived = archived - session.key }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
