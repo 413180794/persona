@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -540,5 +541,183 @@ func TestRewindOverATurnOfOnlyToolCalls(t *testing.T) {
 	want(t, allItems(f), "一", "答一", "二改", "答二改")
 	if !strings.HasSuffix(span.History, ".r1") {
 		t.Fatalf("history %q", span.History)
+	}
+}
+
+func (l *tline) apiError(uuid, parent string, n int) {
+	l.add(fmt.Sprintf(`{"type":"assistant","uuid":%q,"parentUuid":%s,"timestamp":%q,"isApiErrorMessage":true,"message":{"role":"assistant","id":"m_%s","model":"<synthetic>","content":[{"type":"text","text":"API Error: the reply ended during reasoning"}]}}`, uuid, parentJSON(parent), ts(n), uuid))
+}
+
+func (l *tline) thinking(uuid, parent string, n int) {
+	l.add(fmt.Sprintf(`{"type":"assistant","uuid":%q,"parentUuid":%s,"timestamp":%q,"message":{"role":"assistant","id":"m_%s","content":[{"type":"thinking","thinking":"想一想"}]}}`, uuid, parentJSON(parent), ts(n), uuid))
+}
+
+func (l *tline) awaySummary(uuid, parent string, n int) {
+	l.add(fmt.Sprintf(`{"type":"system","subtype":"away_summary","uuid":%q,"parentUuid":%s,"timestamp":%q,"content":"刚才在做的事"}`, uuid, parentJSON(parent), ts(n)))
+}
+
+// A turn that ended in an API error, then the user goes back over it in the terminal. Claude writes nothing for the
+// rewind; the next line it writes hangs from where the user went back to: here a recap after a while away, no message.
+func rewoundThenAway() (before, after *tline) {
+	before = &tline{}
+	before.user("u1", "", "一", 1)
+	before.reply("a1", "u1", "答一", 2)
+	before.turnEnd("t1", "a1", 3)
+	before.user("u2", "t1", "按这个做", 4)
+	before.add(`{"type":"user","uuid":"m2","parentUuid":"u2","isMeta":true,"timestamp":"2026-11-05T10:00:05Z","message":{"role":"user","content":[{"type":"text","text":"[Image #1]"}]}}`)
+	before.thinking("k2", "m2", 6)
+	before.apiError("e2", "k2", 7)
+	before.turnEnd("t2", "e2", 8)
+	after = &tline{}
+	after.awaySummary("s1", "t1", 200)
+	return before, after
+}
+
+// The system line beside the answered message is what says it was gone back over: the turn is out and the token moves.
+func TestASystemLineAtTheRewindPointAbandonsTheAnsweredTurn(t *testing.T) {
+	before, after := rewoundThenAway()
+	p := writeLines(t, before)
+	f := NewFile(p)
+	_, span1, err := f.RefreshSpan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want(t, allItems(f), "一", "答一", "按这个做", "API Error: the reply ended during reasoning")
+	appendLines(t, p, after)
+	_, span2, err := f.RefreshSpan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want(t, allItems(f), "一", "答一")
+	if span2.History == span1.History || !strings.HasSuffix(span2.History, ".r1") {
+		t.Fatalf("history %q → %q", span1.History, span2.History)
+	}
+	// A fresh read of the whole file says the same.
+	g := NewFile(p)
+	_, span3, _ := g.RefreshSpan()
+	want(t, allItems(g), "一", "答一")
+	if span3.History != span2.History {
+		t.Fatalf("a fresh read: %q, want %q", span3.History, span2.History)
+	}
+	// The message the user writes next hangs from the same place and does not count a second time.
+	more := &tline{}
+	more.user("u3", "t1", "换个做法", 201)
+	more.reply("a3", "u3", "好", 202)
+	appendLines(t, p, more)
+	fresh, span4, _ := f.RefreshSpan()
+	want(t, fresh, "换个做法", "好")
+	if span4.History != span2.History {
+		t.Fatalf("history %q → %q", span2.History, span4.History)
+	}
+	want(t, allItems(f), "一", "答一", "换个做法", "好")
+}
+
+// #3036 again, with a system line: a message nothing answered stays, whatever hangs beside it.
+func TestASystemLineBesideAnUnansweredMessageHidesNothing(t *testing.T) {
+	l := &tline{}
+	l.user("u1", "", "一", 1)
+	l.reply("a1", "u1", "答一", 2)
+	l.turnEnd("t1", "a1", 3)
+	l.user("u2", "t1", "二", 4) // Esc before any reply
+	l.awaySummary("s1", "t1", 200)
+	f := NewFile(writeLines(t, l))
+	_, span, _ := f.RefreshSpan()
+	want(t, allItems(f), "一", "答一", "二")
+	if strings.Contains(span.History, ".r") {
+		t.Fatalf("history %q", span.History)
+	}
+}
+
+// A turn still going (no turn_duration yet) is not one the user went back over: a system line written with the parent
+// it had before the message came in leaves it be.
+func TestASystemLineBesideATurnStillGoingHidesNothing(t *testing.T) {
+	l := &tline{}
+	l.user("u1", "", "一", 1)
+	l.reply("a1", "u1", "答一", 2)
+	l.turnEnd("t1", "a1", 3)
+	l.user("u2", "t1", "二", 4)
+	l.toolUse("a2", "u2", "tu2", 5)
+	l.awaySummary("s1", "t1", 6)
+	l.toolResult("r2", "a2", "tu2", "结果", 7)
+	l.reply("a3", "r2", "答二", 8)
+	f := NewFile(writeLines(t, l))
+	_, span, _ := f.RefreshSpan()
+	want(t, allItems(f), "一", "答一", "二", "答二")
+	if strings.Contains(span.History, ".r") {
+		t.Fatalf("history %q", span.History)
+	}
+}
+
+// The quick read of a file's end (the node's session list) follows the same rule: the agent's last words are the ones
+// still in the conversation, not the error of the turn gone back over.
+func TestTailLastWordsLeaveOutAnAbandonedTurn(t *testing.T) {
+	before, after := rewoundThenAway()
+	read := func(l string) Meta {
+		var m Meta
+		var tail Tail
+		for _, line := range strings.Split(strings.TrimSpace(l), "\n") {
+			tail.Line(&m, ParseLine(0, []byte(line), &m))
+		}
+		tail.Settle(&m)
+		return m
+	}
+	if m := read(before.b.String()); m.LastText != "API Error: the reply ended during reasoning" {
+		t.Fatalf("before the rewind: %q", m.LastText)
+	}
+	m := read(before.b.String() + after.b.String())
+	if m.LastText != "答一" || !m.LastTextAt.Equal(time.Date(2026, 11, 5, 10, 0, 2, 0, time.UTC)) {
+		t.Fatalf("after: %q at %v", m.LastText, m.LastTextAt)
+	}
+}
+
+// What the reported transcript did next (#4966): the next message hangs from the recap, not from where the user went
+// back to, so the two-messages-one-parent rule alone would never have seen the rewind. Read a line at a time and fresh,
+// the turn stays out and the token stays where the recap put it.
+func TestTheMessageAfterTheRecapHangsFromIt(t *testing.T) {
+	before, after := rewoundThenAway()
+	p := writeLines(t, before)
+	f := NewFile(p)
+	if _, _, err := f.RefreshSpan(); err != nil {
+		t.Fatal(err)
+	}
+	appendLines(t, p, after)
+	_, span1, _ := f.RefreshSpan()
+	more := &tline{}
+	more.user("u3", "s1", "换个做法", 201)
+	more.reply("a3", "u3", "好", 202)
+	more.turnEnd("t3", "a3", 203)
+	appendLines(t, p, more)
+	_, span2, _ := f.RefreshSpan()
+	want(t, allItems(f), "一", "答一", "换个做法", "好")
+	if !strings.HasSuffix(span1.History, ".r1") || span2.History != span1.History {
+		t.Fatalf("history %q → %q", span1.History, span2.History)
+	}
+	g := NewFile(p)
+	_, span3, _ := g.RefreshSpan()
+	want(t, allItems(g), "一", "答一", "换个做法", "好")
+	if span3.History != span2.History {
+		t.Fatalf("a fresh read: %q, want %q", span3.History, span2.History)
+	}
+}
+
+// A line the quick read leaves unparsed (Tail.Skipped) is the same in the tree as one parsed whole: an image prompt
+// is a message, a big tool result is not, a compaction's summary is not.
+func TestTailSkippedLineIsTheSameInTheTree(t *testing.T) {
+	big := strings.Repeat("A", 20<<10)
+	for _, c := range []struct {
+		line   string
+		prompt bool
+	}{
+		{`{"type":"user","uuid":"u","parentUuid":"p","timestamp":"2026-11-05T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"按这个做"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + big + `"}}]}}`, true},
+		{`{"type":"user","uuid":"u","parentUuid":"p","timestamp":"2026-11-05T10:00:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"` + big + `"}]},"toolUseResult":{"stdout":"` + big + `"}}`, false},
+		{`{"type":"user","uuid":"u","parentUuid":"p","isCompactSummary":true,"timestamp":"2026-11-05T10:00:00Z","message":{"role":"user","content":"` + big + `"}}`, false},
+	} {
+		var whole, skipped Tail
+		var m Meta
+		whole.Line(&m, ParseLine(0, []byte(c.line), &m))
+		skipped.Skipped([]byte(c.line))
+		if len(skipped.tree.recs) != 1 || skipped.tree.recs[0] != whole.tree.recs[0] || whole.tree.recs[0].prompt != c.prompt {
+			t.Fatalf("%.80s…: skipped %+v, whole %+v", c.line, skipped.tree.recs, whole.tree.recs)
+		}
 	}
 }

@@ -175,6 +175,9 @@ type quickMeta struct {
 	// turnError / turnErrorKind: the latest turn failed on the model service, as a Codex rollout records it
 	// (transcript.Meta.TurnError, #2185); Session.TurnError / TurnErrorKind.
 	turnError, turnErrorKind string
+	// rewound: the lines session.rewind went back over (File.RewoundLines), which Claude writes nothing for; kept from
+	// read to read, the tail leaves them out (forgetRewound).
+	rewound []string
 }
 
 const offlineWindow = 7 * 24 * time.Hour
@@ -259,6 +262,11 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	}
 	first := tm.FirstUser
 	off := max(st.Size()-quickTail, 0)
+	// The tail's lines in the transcript's tree: a turn the user went back over (a rewind in the terminal, then a recap
+	// beside it) is not where the agent's last words come from (transcript/branch.go).
+	var tail transcript.Tail
+	tail.Rewound(prev.rewound)
+	m.rewound = prev.rewound
 	buf := make([]byte, st.Size()-off)
 	if _, err := f.ReadAt(buf, off); err == nil || len(buf) > 0 {
 		lines := bytes.Split(buf, []byte("\n"))
@@ -284,18 +292,24 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 						tm.LastPromptAt = ts
 					}
 				}
+				if !tm.Codex {
+					tail.Skipped(line) // its place in the tree: a rewound turn with it in is still found, and hidden whole
+				}
 				continue
 			}
-			transcript.ParseLine(0, line, &tm)
+			tail.Line(&tm, transcript.ParseLine(0, line, &tm))
 		}
 	}
+	rewound := tail.Settle(&tm)
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
 	m.wake, m.turnClosed, m.lastTextAt, m.lastPromptAt = tm.LastTurnWake, tm.TurnClosed, tm.LastTextAt, tm.LastPromptAt
 	if m.lastText == "" && off > 0 {
 		// An agent that said a line and then ran tools for a while: their results and hook lines push its words out of
 		// the tail (a 1.5 MB transcript whose last text was 900 KB back, 2026-11-04) and its task card said "No activity yet".
-		if prev.size > 0 && prev.size >= off && prev.size <= st.Size() {
-			m.lastText = prev.lastText // nothing written since the last read is out of the tail: no newer words
+		if !rewound && prev.size > 0 && prev.size >= off && prev.size <= st.Size() {
+			// Nothing written since the last read is out of the tail: no newer words. Not after a turn in the tail was
+			// gone back over: the last read's words may be that turn's.
+			m.lastText = prev.lastText
 		} else {
 			m.lastText = lastWordsBefore(f, off)
 		}

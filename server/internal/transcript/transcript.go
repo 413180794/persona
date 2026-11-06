@@ -315,7 +315,8 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	if err := json.Unmarshal(line, &e); err != nil {
 		return nil
 	}
-	meta.tree = treeLine{uuid: e.UUID, parent: e.ParentUUID, sidechain: e.IsSidechain, assistant: e.Type == "assistant"}
+	meta.tree = treeLine{uuid: e.UUID, parent: e.ParentUUID, sidechain: e.IsSidechain, assistant: e.Type == "assistant",
+		system: e.Type == "system", turnEnd: e.Type == "system" && e.Subtype == "turn_duration"}
 	if e.Cwd != "" {
 		meta.Cwd = e.Cwd
 	}
@@ -626,8 +627,10 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				it.Text = clip(b.Text)
 				if t := withoutBotmuxSentinel(b.Text); t != "" {
 					meta.LastText = t
+					meta.tree.said = t
 				}
 				meta.LastTextAt = e.Timestamp
+				meta.tree.saidAt, meta.tree.spoke = e.Timestamp, true
 				out = append(out, it)
 			case "thinking":
 				if strings.TrimSpace(b.Thinking) == "" {

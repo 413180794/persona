@@ -380,7 +380,7 @@ func TestRewindLeavesTheRewoundTurnsOutOfTheTranscript(t *testing.T) {
 	if _, err := f.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	n := &Node{files: map[string]*transcript.File{"s1": f}, watches: map[string]*watch{}}
+	n := &Node{files: map[string]*transcript.File{"s1": f}, watches: map[string]*watch{}, metas: map[string]quickMeta{}}
 	n.forgetRewound("s1", rewindOpts{Prompt: "二", Occurrence: 1})
 	items, _, span := f.Page(0, 100)
 	var got []string
@@ -394,5 +394,159 @@ func TestRewindLeavesTheRewoundTurnsOutOfTheTranscript(t *testing.T) {
 	n.forgetRewound("s1", rewindOpts{Prompt: "没有", Occurrence: 1})
 	if items, _, _ := f.Page(0, 100); len(items) != 2 {
 		t.Fatalf("%d items", len(items))
+	}
+}
+
+// The session list's quick read takes the agent's last words off the conversation that is left after a rewind done
+// in the terminal: the turn gone back over ended in an API error, and the hub would report that error for the session
+// (TurnError, 「模型服务出错」) as long as it was the last text.
+func TestQuickMetaAfterATerminalRewindDropsTheRewoundError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := []string{
+		`{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-11-05T12:00:00Z","message":{"role":"user","content":"一"}}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-11-05T12:00:05Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"答一"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t1","parentUuid":"a1","timestamp":"2026-11-05T12:00:06Z","durationMs":6000}`,
+		`{"type":"user","uuid":"u2","parentUuid":"t1","timestamp":"2026-11-05T12:10:00Z","message":{"role":"user","content":"按这个做"}}`,
+		`{"type":"assistant","uuid":"k2","parentUuid":"u2","timestamp":"2026-11-05T12:10:05Z","message":{"id":"m2","role":"assistant","content":[{"type":"thinking","thinking":"想一想"}]}}`,
+		`{"type":"assistant","uuid":"e2","parentUuid":"k2","timestamp":"2026-11-05T12:10:09Z","isApiErrorMessage":true,"message":{"id":"m3","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: the reply ended during reasoning"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t2","parentUuid":"e2","timestamp":"2026-11-05T12:10:10Z","durationMs":10000}`,
+	}
+	write := func() os.FileInfo {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := os.Stat(path)
+		return st
+	}
+	prev := readQuickMeta(path, write())
+	if !strings.HasPrefix(prev.lastText, "API Error:") {
+		t.Fatalf("before the rewind: %q", prev.lastText)
+	}
+	// Rewound in the terminal; a while later Claude writes a recap hanging from where the user went back to.
+	lines = append(lines, `{"type":"system","subtype":"away_summary","uuid":"s1","parentUuid":"t1","timestamp":"2026-11-05T12:13:00Z","content":"刚才在做的事"}`)
+	m := readQuickMetaSince(path, write(), prev)
+	if m.lastText != "答一" || !m.lastTextAt.Equal(time.Date(2026, 11, 5, 12, 0, 5, 0, time.UTC)) {
+		t.Fatalf("after the rewind: %q at %v", m.lastText, m.lastTextAt)
+	}
+}
+
+// The quick read leaves lines over 8 KB unparsed; they still take their place in the tree. A prompt with an image (the
+// case #4966 was reported on: a 360 KB line) or a long paste is always one, and so is a big tool result in the middle of
+// the turn gone back over: without them the rewound turn was not found, or not hidden past the gap.
+func TestQuickMetaAfterATerminalRewindOverBigLines(t *testing.T) {
+	img := strings.Repeat("A", 20<<10)
+	out := strings.Repeat("x", 20<<10)
+	head := []string{
+		`{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-11-05T12:00:00Z","message":{"role":"user","content":"一"}}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-11-05T12:00:05Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"答一"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t1","parentUuid":"a1","timestamp":"2026-11-05T12:00:06Z","durationMs":6000}`,
+	}
+	tail := []string{
+		`{"type":"assistant","uuid":"e2","parentUuid":"k2","timestamp":"2026-11-05T12:10:09Z","isApiErrorMessage":true,"message":{"id":"m3","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: the reply ended during reasoning"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t2","parentUuid":"e2","timestamp":"2026-11-05T12:10:10Z","durationMs":10000}`,
+	}
+	for name, turn := range map[string][]string{
+		"an image prompt": {
+			`{"type":"user","uuid":"u2","parentUuid":"t1","timestamp":"2026-11-05T12:10:00Z","message":{"role":"user","content":[{"type":"text","text":"[Image #12] 按这个做"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + img + `"}}]}}`,
+			`{"type":"assistant","uuid":"k2","parentUuid":"u2","timestamp":"2026-11-05T12:10:05Z","message":{"id":"m2","role":"assistant","content":[{"type":"thinking","thinking":"想一想"}]}}`,
+		},
+		"a long paste": {
+			`{"type":"user","uuid":"u2","parentUuid":"t1","timestamp":"2026-11-05T12:10:00Z","message":{"role":"user","content":"按这个做 ` + out + `"}}`,
+			`{"type":"assistant","uuid":"k2","parentUuid":"u2","timestamp":"2026-11-05T12:10:05Z","message":{"id":"m2","role":"assistant","content":[{"type":"thinking","thinking":"想一想"}]}}`,
+		},
+		"a big tool result": {
+			`{"type":"user","uuid":"u2","parentUuid":"t1","timestamp":"2026-11-05T12:10:00Z","message":{"role":"user","content":"按这个做"}}`,
+			`{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-11-05T12:10:02Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Read","input":{"file_path":"/tmp/x"}}]}}`,
+			`{"type":"user","uuid":"r2","parentUuid":"a2","timestamp":"2026-11-05T12:10:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"` + out + `"}]},"toolUseResult":{"stdout":"` + out + `"}}`,
+			`{"type":"assistant","uuid":"k2","parentUuid":"r2","timestamp":"2026-11-05T12:10:05Z","message":{"id":"m4","role":"assistant","content":[{"type":"thinking","thinking":"想一想"}]}}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "s.jsonl")
+			lines := append(append(append([]string{}, head...), turn...), tail...)
+			write := func() os.FileInfo {
+				t.Helper()
+				if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				st, _ := os.Stat(path)
+				return st
+			}
+			prev := readQuickMeta(path, write())
+			if !strings.HasPrefix(prev.lastText, "API Error:") {
+				t.Fatalf("before the rewind: %q", prev.lastText)
+			}
+			lines = append(lines, `{"type":"system","subtype":"away_summary","uuid":"s1","parentUuid":"t1","timestamp":"2026-11-05T12:13:00Z","content":"刚才在做的事"}`)
+			m := readQuickMetaSince(path, write(), prev)
+			if m.lastText != "答一" {
+				t.Fatalf("after the rewind: %q", m.lastText)
+			}
+			if m.lastPromptAt != prev.lastPromptAt || m.activity.Before(prev.activity) {
+				t.Fatalf("prompt at %v (was %v), activity %v (was %v)", m.lastPromptAt, prev.lastPromptAt, m.activity, prev.activity)
+			}
+		})
+	}
+}
+
+// A rewind done from the app leaves the rewound turn out of the session list at once too: Claude writes nothing to the
+// file for it, so the quick read (readQuickMetaSince) has to know what the node went back over. Before, the row kept
+// the rewound turn's last words (an "API Error: …", from which the hub reports TurnError) until a line was written.
+// The rewound prompt may be further back than the quick read's tail (a big tool result in the turn).
+func TestAppRewindLeavesTheRewoundTurnOutOfTheSessionList(t *testing.T) {
+	const id = "0d000000-0000-4000-8000-000000004966"
+	head := []string{
+		`{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-11-05T12:00:00Z","message":{"role":"user","content":"一"}}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-11-05T12:00:05Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"答一"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t1","parentUuid":"a1","timestamp":"2026-11-05T12:00:06Z","durationMs":6000}`,
+		`{"type":"user","uuid":"u2","parentUuid":"t1","timestamp":"2026-11-05T12:10:00Z","message":{"role":"user","content":"按这个做"}}`,
+	}
+	tail := []string{
+		`{"type":"assistant","uuid":"e2","parentUuid":"k2","timestamp":"2026-11-05T12:10:09Z","isApiErrorMessage":true,"message":{"id":"m3","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: the reply ended during reasoning"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t2","parentUuid":"e2","timestamp":"2026-11-05T12:10:10Z","durationMs":10000}`,
+	}
+	big := strings.Repeat("x", quickTail+(16<<10))
+	for name, turn := range map[string][]string{
+		"in the tail": {
+			`{"type":"assistant","uuid":"k2","parentUuid":"u2","timestamp":"2026-11-05T12:10:05Z","message":{"id":"m2","role":"assistant","content":[{"type":"thinking","thinking":"想一想"}]}}`,
+		},
+		"before the tail": {
+			`{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-11-05T12:10:02Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Read","input":{"file_path":"/tmp/x"}}]}}`,
+			`{"type":"user","uuid":"r2","parentUuid":"a2","timestamp":"2026-11-05T12:10:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"` + big + `"}]}}`,
+			`{"type":"assistant","uuid":"k2","parentUuid":"r2","timestamp":"2026-11-05T12:10:05Z","message":{"id":"m4","role":"assistant","content":[{"type":"thinking","thinking":"想一想"}]}}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), id+".jsonl")
+			lines := append(append(append([]string{}, head...), turn...), tail...)
+			if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			sim := newClaudeSim(simPrompt{"一", noCode}, simPrompt{"按这个做", noCode})
+			n := rewindNode(t, sim, "claude", proto.StatusIdle)
+			n.agents = map[string]host.Agent{id: n.agents["s1"]}
+			n.paths, n.metas, n.bgScans = map[string]string{id: p}, map[string]quickMeta{}, map[string]*bgScan{}
+			n.files, n.watches = map[string]*transcript.File{}, map[string]*watch{}
+			row := func() proto.Session {
+				t.Helper()
+				for _, s := range n.sessionList(context.Background(), false) {
+					if s.SessionID == id {
+						return s
+					}
+				}
+				t.Fatal("no row")
+				return proto.Session{}
+			}
+			if s := row(); !strings.HasPrefix(s.LastText, "API Error:") {
+				t.Fatalf("before the rewind: %q", s.LastText)
+			}
+			if _, err := n.rewind(context.Background(), id, rewindOpts{Prompt: "按这个做", Occurrence: 1, PromptsAfter: after(0), Restore: RestoreConversation}); err != nil {
+				t.Fatal(err)
+			}
+			// Nothing written to the file since: the row is read again all the same.
+			if s := row(); s.LastText != "答一" || s.TurnError != "" {
+				t.Fatalf("after the rewind: %q (turn error %q)", s.LastText, s.TurnError)
+			}
+		})
 	}
 }

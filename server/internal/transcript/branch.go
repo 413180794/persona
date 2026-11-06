@@ -1,8 +1,10 @@
 package transcript
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -24,8 +26,18 @@ import (
 // compaction starts a new chain (parentUuid null) on purpose, so the walk back from the last line, which is what a
 // resume does, would lose them: it is not used.
 //
-// Clients hold items they were already sent. A branch is abandoned when the next message is written (or when the node
-// itself rewound, File.Rewound), so the history token (Span.History) carries how many abandoned branches the file has:
+// A rewind done in the terminal writes nothing either, and the next line Claude writes need not be a message: after a
+// while away it writes a recap (system away_summary) hanging from where the user went back to, and that may be all the
+// file says for hours. So a system line is taken for going back too, more narrowly: it has to hang beside one of the
+// user's messages that was answered and whose turn ended (a turn_duration line grew from it). A system line written
+// with the parent it had before a message came in (a recap worked out while the user typed) then leaves a turn still
+// going alone. Across the recorded transcripts (about 19.7k, 2026-11-06) a system line beside an answered message
+// turned up once, and that was a rewind; beside a message nothing answered it turned up too (#3036's case: kept).
+// The message the user sent next in that transcript hung from the recap, not from where they went back to: without
+// the system line, the rewind would not have been seen even then.
+//
+// Clients hold items they were already sent. A branch is abandoned when the next message or system line is written (or
+// when the node itself rewound, File.Rewound), so the history token (Span.History) carries how many abandoned branches the file has:
 // it changes then, and a client that sees it change starts over (docs/protocol.md "Continuity of items"), as it does for a
 // file that was rewritten. The token is a function of the file, so it is the same across node restarts.
 
@@ -34,20 +46,30 @@ type treeLine struct {
 	uuid, parent string
 	sidechain    bool
 	assistant    bool // the line is the assistant's (a reply, a tool call): the message it grew from was answered
+	system       bool // a system line (a recap, a turn's duration, a notice)
+	turnEnd      bool // a turn_duration line: the turn it closes ended
+	// said / saidAt: the agent's words on this line (Meta.LastText / LastTextAt as it set them); spoke says it wrote
+	// text at all (said is "" for botmux's sentinel alone).
+	said   string
+	saidAt time.Time
+	spoke  bool
 }
 
 // treeRec is a line with a uuid, as the tree keeps it: prompt says it is one of the user's own messages, reply that it
-// is the assistant's.
+// is the assistant's, system that it is a system line and turnEnd a turn_duration one.
 type treeRec struct {
 	uuid, parent string
 	prompt       bool
 	reply        bool
+	system       bool
+	turnEnd      bool
 }
 
 // branchTree tracks the lines read so far (file order) and which of them lie on abandoned branches.
 type branchTree struct {
 	recs    []treeRec
 	replies map[string]bool     // lines that are the assistant's
+	ends    map[string]bool     // turn_duration lines
 	kids    map[string][]string // parent → the lines hanging from it
 	last    map[string]string   // parent → the latest message of the user's hanging from it
 	hidden  map[string]bool     // lines on abandoned branches
@@ -58,18 +80,22 @@ type branchTree struct {
 func (t *branchTree) init() {
 	if t.kids == nil {
 		t.kids, t.last, t.hidden, t.roots = map[string][]string{}, map[string]string{}, map[string]bool{}, map[string]bool{}
-		t.replies = map[string]bool{}
+		t.replies, t.ends = map[string]bool{}, map[string]bool{}
 	}
 }
 
 // add takes the next line. drop says it hangs from an abandoned branch (its items are not shown); newly lists the
-// lines it made abandoned (the earlier message of the user's with the same parent, and what grew from it).
+// lines it made abandoned (the earlier message of the user's with the same parent, and what grew from it). A message
+// abandons that one when it was answered; a system line when it was answered and its turn ended.
 func (t *branchTree) add(r treeRec) (drop bool, newly []string) {
 	t.init()
 	t.recs = append(t.recs, r)
 	t.kids[r.parent] = append(t.kids[r.parent], r.uuid)
 	if r.reply {
 		t.replies[r.uuid] = true
+	}
+	if r.turnEnd {
+		t.ends[r.uuid] = true
 	}
 	if t.hidden[r.uuid] {
 		return true, nil // a line repeated in the file (a resume copies lines)
@@ -78,12 +104,17 @@ func (t *branchTree) add(r treeRec) (drop bool, newly []string) {
 		t.hidden[r.uuid] = true
 		return true, nil
 	}
-	if !r.prompt || r.parent == "" {
+	if !(r.prompt || r.system) || r.parent == "" {
 		return false, nil
 	}
 	prev := t.last[r.parent]
-	t.last[r.parent] = r.uuid
-	if prev == "" || prev == r.uuid || t.hidden[prev] || !t.answered(prev) {
+	if r.prompt {
+		t.last[r.parent] = r.uuid
+	}
+	if prev == "" || prev == r.uuid || t.hidden[prev] {
+		return false, nil
+	}
+	if answered, ended := t.answered(prev); !answered || !r.prompt && !ended {
 		return false, nil
 	}
 	t.roots[prev] = true
@@ -91,8 +122,9 @@ func (t *branchTree) add(r treeRec) (drop bool, newly []string) {
 }
 
 // answered says an assistant line grew from a line (or from what grew from it): there is a turn that would be gone back
-// over. It looks at the lines read so far, which for a line already there is everything its branch wrote.
-func (t *branchTree) answered(uuid string) bool {
+// over; ended that a turn_duration line did too. It looks at the lines read so far, which for a line already there is
+// everything its branch wrote.
+func (t *branchTree) answered(uuid string) (answered, ended bool) {
 	seen := map[string]bool{}
 	for todo := []string{uuid}; len(todo) > 0; {
 		u := todo[len(todo)-1]
@@ -101,12 +133,13 @@ func (t *branchTree) answered(uuid string) bool {
 			continue
 		}
 		seen[u] = true
-		if t.replies[u] {
-			return true
+		answered, ended = answered || t.replies[u], ended || t.ends[u]
+		if answered && ended {
+			break
 		}
 		todo = append(todo, t.kids[u]...)
 	}
-	return false
+	return answered, ended
 }
 
 // hideFrom marks a line and everything that grew from it abandoned; it returns the ones that were not yet.
@@ -210,7 +243,7 @@ func trackLine(t *branchTree, meta *Meta, items []proto.Item, kept, sent *[]prot
 	if tl.uuid == "" || tl.sidechain || meta.Sidechain || meta.Codex {
 		return false
 	}
-	drop, newly := t.add(treeRec{uuid: tl.uuid, parent: tl.parent, prompt: isMessage(items), reply: tl.assistant})
+	drop, newly := t.add(tl.rec(items))
 	if len(newly) > 0 {
 		gone := setOf(newly)
 		if kept != nil {
@@ -221,6 +254,109 @@ func trackLine(t *branchTree, meta *Meta, items []proto.Item, kept, sent *[]prot
 		}
 	}
 	return drop
+}
+
+func (tl treeLine) rec(items []proto.Item) treeRec {
+	return treeRec{uuid: tl.uuid, parent: tl.parent, prompt: isMessage(items), reply: tl.assistant, system: tl.system, turnEnd: tl.turnEnd}
+}
+
+// Tail follows the tree over lines read one at a time with ParseLine outside a File (the node's quick read of a
+// transcript's end), so that the agent's last words it ends up with are not ones on an abandoned branch: a turn gone back
+// over that ended in an API error would otherwise stay the session's last words, and its error the session's.
+type Tail struct {
+	tree  branchTree
+	words []treeLine      // the lines that said something, in order
+	gone  map[string]bool // Rewound's lines
+}
+
+// Rewound tells the tail about lines the node itself rewound over (File.RewoundLines): Claude writes nothing for that,
+// so they and what grows from them are left out too. All of them, not only where the branch starts: that may be
+// before the tail.
+func (t *Tail) Rewound(uuids []string) {
+	if len(uuids) > 0 {
+		t.gone = setOf(uuids)
+	}
+}
+
+// Line is told about the line ParseLine just read into meta, with the items it returned.
+func (t *Tail) Line(meta *Meta, items []proto.Item) {
+	tl := meta.tree
+	meta.tree = treeLine{}
+	if tl.spoke {
+		t.words = append(t.words, tl)
+	}
+	if tl.uuid == "" || tl.sidechain || meta.Sidechain || meta.Codex {
+		return
+	}
+	t.tree.add(tl.rec(items))
+	if t.gone[tl.uuid] && !t.tree.hidden[tl.uuid] {
+		t.tree.roots[tl.uuid] = true
+		t.tree.hideFrom(tl.uuid)
+	}
+}
+
+// Skipped is told about a line the caller left unparsed for its size (a prompt with an image or a long paste, a big
+// tool result). The line still takes its place in the tree: without it a turn whose prompt is one is not found gone
+// back over, and one with a big tool result in it is hidden only up to there (the chain breaks at the line). What makes
+// it big is not read into the copy that is parsed: an image's data, a tool result's content, the tool's own record of
+// it. meta is not touched.
+func (t *Tail) Skipped(line []byte) {
+	var e map[string]json.RawMessage
+	if json.Unmarshal(line, &e) != nil {
+		return
+	}
+	delete(e, "toolUseResult")
+	if raw, ok := e["message"]; ok {
+		var msg map[string]json.RawMessage
+		if json.Unmarshal(raw, &msg) != nil {
+			return
+		}
+		var blocks []map[string]json.RawMessage
+		if json.Unmarshal(msg["content"], &blocks) == nil {
+			for _, b := range blocks {
+				delete(b, "source")
+				var typ string
+				if json.Unmarshal(b["type"], &typ) == nil && typ == "tool_result" {
+					delete(b, "content")
+				}
+			}
+			msg["content"], _ = json.Marshal(blocks)
+		}
+		e["message"], _ = json.Marshal(msg)
+	}
+	small, err := json.Marshal(e)
+	if err != nil {
+		return
+	}
+	var m Meta
+	t.Line(&m, parseLine(0, small, &m))
+}
+
+// Settle puts into meta the agent's last words on the lines still in the conversation, when words on an abandoned
+// branch were among them (meta is left as it is otherwise). It says whether it changed them; LastText is "" then when
+// no words in the lines read are left.
+func (t *Tail) Settle(meta *Meta) bool {
+	dropped := false
+	for _, w := range t.words {
+		if t.tree.hidden[w.uuid] {
+			dropped = true
+			break
+		}
+	}
+	if !dropped {
+		return false
+	}
+	meta.LastText, meta.LastTextAt = "", time.Time{}
+	for _, w := range t.words {
+		if t.tree.hidden[w.uuid] {
+			continue
+		}
+		if w.said != "" {
+			meta.LastText = w.said
+		}
+		meta.LastTextAt = w.saidAt
+	}
+	return true
 }
 
 // squash drops every space: the words of a message, as the user typed them.
@@ -265,6 +401,31 @@ func (f *File) Rewound(prompt string, occurrence int) (Span, bool) {
 		return Span{f.history(), f.lines, f.lines}, true
 	}
 	return Span{}, false
+}
+
+// RewoundLines lists the lines on the branches Rewound left out (where each starts and everything that grew from it),
+// for a reader that sees only part of the file (Tail.Rewound).
+func (f *File) RewoundLines() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.tree == nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for u := range f.tree.manual {
+		for todo := []string{u}; len(todo) > 0; {
+			v := todo[len(todo)-1]
+			todo = todo[:len(todo)-1]
+			if seen[v] {
+				continue
+			}
+			seen[v] = true
+			out = append(out, v)
+			todo = append(todo, f.tree.kids[v]...)
+		}
+	}
+	return out
 }
 
 // branchToken is the part of the history token that says how many abandoned branches the file has.

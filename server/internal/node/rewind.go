@@ -332,6 +332,12 @@ func (n *Node) forgetRewound(id string, o rewindOpts) {
 	if span, ok := f.Rewound(o.Prompt, o.Occurrence); ok {
 		n.mu.Lock()
 		_, watched := n.watches[id]
+		// The session list's quick read is told too, and reads the file again at once: its last words, and an API error
+		// in them, may be the rewound turn's.
+		path := f.Where()
+		m := n.metas[path]
+		m.rewound, m.mtime, m.readAt = f.RewoundLines(), time.Time{}, time.Time{}
+		n.metas[path] = m
 		n.mu.Unlock()
 		if watched {
 			n.pushItems(id, nil, span)
