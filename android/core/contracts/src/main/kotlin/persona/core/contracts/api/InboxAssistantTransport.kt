@@ -7,7 +7,10 @@ import kotlinx.serialization.json.JsonObject
 /** An item of a bulk 已处理: its id and the `version` it was listed at (null: as it is now). */
 data class InboxDoneTarget(val id: String, val version: String? = null)
 
-/** What a bulk request does (`POST /api/v1/inbox/bulk`): 全部标为已处理, 全部忽略 (done_by=dismissed), 移回 (撤销). */
+/**
+ * What a bulk request does (`POST /api/v1/inbox/bulk`): done (a section's 全部看过 / 全部清除), dismiss (全部清理, recorded as
+ * done_by=dismissed), reopen (撤销).
+ */
 enum class InboxBulkAction(val wire: String) { Done("done"), Dismiss("dismiss"), Reopen("reopen") }
 
 /** The suggestion acted on is no longer the current one (`409 suggestion_stale`); [item] is the item as it is now. */

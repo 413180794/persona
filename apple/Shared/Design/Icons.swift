@@ -15,10 +15,8 @@ extension Theme {
         static let success = "checkmark.circle"
         static let successFilled = "checkmark.circle.fill"
         static let done = "checkmark"
-        /// Many items filed at once (收件箱 › 全部标为已处理).
-        static let doneAll = "checkmark.rectangle.stack"
-        /// Many items set aside at once without handling them (收件箱 › 全部忽略).
-        static let dismissAll = "rectangle.stack.badge.minus"
+        /// Every open item in view set aside at once (收件箱 › 全部清理).
+        static let cleanUpAll = "rectangle.stack.badge.minus"
         static let info = "info.circle"
         static let infoFilled = "info.circle.fill"
         static let offline = "wifi.exclamationmark"

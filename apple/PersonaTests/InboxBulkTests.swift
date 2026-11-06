@@ -1,7 +1,7 @@
 import XCTest
 @testable import Jarvis
 
-/// 全部标为已处理's arithmetic (InboxBulk): what a request moves, how the list shows it before and after the hub's
+/// Bulk filing's arithmetic (InboxBulk: 全部清理, a section's 全部看过 / 全部清除, 撤销): what a request moves, how the list shows it before and after the hub's
 /// answer, the toast, and the scope line in the menu.
 final class InboxBulkTests: XCTestCase {
     private func item(_ id: String, done: Bool = false, version: String = "v1") throws -> InboxItem {
@@ -55,7 +55,7 @@ final class InboxBulkTests: XCTestCase {
         XCTAssertEqual(InboxBulk.scopeLine(filters: ["飞书"], query: "", count: 0), "没有未处理的")
     }
 
-    // MARK: 一键清理 (POST /api/v1/inbox/bulk)
+    // MARK: 全部清理 (POST /api/v1/inbox/bulk)
 
     func testDismissShowsAsDismissed() throws {
         let a = try item("a"), b = try item("b")
@@ -78,8 +78,8 @@ final class InboxBulkTests: XCTestCase {
         XCTAssertEqual(reply.undo, .init(action: "reopen", ids: ["a"]))
         let result = InboxBulk.result(reply)
         XCTAssertEqual(result.unchanged, ["c"])
-        XCTAssertEqual(InboxBulk.message(done: true, result: result, action: .dismiss), "已忽略 1 件，1 件有新消息，留在收件箱")
-        XCTAssertEqual(InboxBulk.message(done: true, result: InboxBulkResult(changed: [], unchanged: [], skipped: []), action: .dismiss), "没有要忽略的")
+        XCTAssertEqual(InboxBulk.message(done: true, result: result, action: .dismiss), "已清理 1 件，1 件有新消息，留在收件箱")
+        XCTAssertEqual(InboxBulk.message(done: true, result: InboxBulkResult(changed: [], unchanged: [], skipped: []), action: .dismiss), "没有要清理的")
 
         let reopen = try JSON.decoder.decode(InboxBulkReply.self, from: Data(#"{"action":"reopen","changed":[],"ids":[],"unchanged":[],"skipped":[]}"#.utf8))
         XCTAssertNil(reopen.undo, "a reopen has no undo")
@@ -118,16 +118,14 @@ final class InboxBulkTests: XCTestCase {
             XCTAssertEqual(result.changed.map(\.id), ["a"])
             XCTAssertEqual(undo, .legacy([a]), "and 撤销 the old way")
 
+            // 全部清理 on an old hub falls back to the 已处理 request too (recorded there as done_by=user), not refused.
             legacy = []
-            do {
-                _ = try await InboxBulk.perform(.dismiss, [a],
-                    bulk: { _, _ in throw APIError(status: status, message: "not found") },
-                    legacy: { legacy = $0.map(\.id); return InboxBulkResult(changed: $0, unchanged: [], skipped: []) })
-                XCTFail("\(status): 忽略 went through")
-            } catch let e as APIError {
-                XCTAssertEqual(e.message, InboxBulk.dismissUnsupported.message)
-            }
-            XCTAssertEqual(legacy, [], "\(status): 忽略 was filed as handled on an old hub")
+            let (cleaned, cleanUndo) = try await InboxBulk.perform(.dismiss, [a],
+                bulk: { _, _ in throw APIError(status: status, message: "not found") },
+                legacy: { legacy = $0.map(\.id); return InboxBulkResult(changed: $0, unchanged: [], skipped: []) })
+            XCTAssertEqual(legacy, ["a"], "\(status): 全部清理 goes to the old request")
+            XCTAssertEqual(cleaned.changed.map(\.id), ["a"])
+            XCTAssertEqual(cleanUndo, .legacy([a]), "and 撤销 the old way")
         }
     }
 
@@ -149,8 +147,8 @@ final class InboxBulkTests: XCTestCase {
     func testConfirmsFromTen() {
         XCTAssertFalse(InboxBulk.needsConfirm(9))
         XCTAssertTrue(InboxBulk.needsConfirm(10))
-        XCTAssertEqual(InboxBulk.confirmTitle(.done), "全部标为已处理？")
-        XCTAssertEqual(InboxBulk.confirmTitle(.dismiss), "全部忽略？")
-        XCTAssertEqual(InboxBulk.confirmMessage(count: 12, filters: ["飞书"], query: ""), "将处理 12 件（飞书）。之后进来的新消息不受影响，完成后可以撤销。")
+        XCTAssertEqual(InboxBulk.confirmTitle, "全部清理？")
+        XCTAssertEqual(InboxBulk.confirmButton(count: 12), "清理 12 件")
+        XCTAssertEqual(InboxBulk.confirmMessage(count: 12, filters: ["飞书"], query: ""), "将清理 12 件（飞书）。之后进来的新消息不受影响，完成后可以撤销。")
     }
 }

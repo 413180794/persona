@@ -617,7 +617,7 @@ class InboxRepositoryTest {
             assertEquals(mapOf("a" to (true to "va"), "b" to (false to "vb2"), "c" to (false to "vc")), after)
 
             assertEquals(listOf(InboxBulkAction.Done), transport.actions)
-            // 全部忽略 is the same request with its own action; c is filed.
+            // 全部清理 is the same request with action dismiss; c is filed.
             transport.onBulk = { _, _ -> buildJsonObject {
                 put("changed", JsonArray(listOf(buildJsonObject {
                     put("id", "c"); put("source", "mail"); put("kind", "mail"); put("title", "c"); put("version", "vc")

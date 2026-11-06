@@ -77,14 +77,6 @@
     <string name="inbox_conn_revoked">Pairing is no longer valid</string>
     <string name="inbox_section_folded">Collapsed</string>
     <string name="inbox_bulk_search">Search “%1$s”</string>
-    <plurals name="inbox_bulk_all">
-        <item quantity="one">Mark all done · %1$d item</item>
-        <item quantity="other">Mark all done · %1$d items</item>
-    </plurals>
-    <plurals name="inbox_bulk_filtered">
-        <item quantity="one">Mark filtered done · %1$d item</item>
-        <item quantity="other">Mark filtered done · %1$d items</item>
-    </plurals>
     <plurals name="inbox_bulk_newer">
         <item quantity="one">New messages came in; %1$d item wasn\'t marked</item>
         <item quantity="other">New messages came in; %1$d items weren\'t marked</item>
@@ -98,35 +90,30 @@
         <item quantity="other">Marked %1$d items done</item>
     </plurals>
     <string name="inbox_bulk_scope_all">the whole inbox</string>
-    <string name="inbox_bulk_confirm_done_title">Mark all as done?</string>
-    <string name="inbox_bulk_confirm_dismiss_title">Dismiss all?</string>
-    <plurals name="inbox_bulk_dismiss_all">
-        <item quantity="one">Dismiss all · %1$d item</item>
-        <item quantity="other">Dismiss all · %1$d items</item>
+    <plurals name="inbox_bulk_clean_all">
+        <item quantity="one">Clean up all · %1$d item</item>
+        <item quantity="other">Clean up all · %1$d items</item>
     </plurals>
-    <plurals name="inbox_bulk_dismiss_filtered">
-        <item quantity="one">Dismiss filtered · %1$d item</item>
-        <item quantity="other">Dismiss filtered · %1$d items</item>
+    <plurals name="inbox_bulk_clean_filtered">
+        <item quantity="one">Clean up filtered · %1$d item</item>
+        <item quantity="other">Clean up filtered · %1$d items</item>
+    </plurals>
+    <string name="inbox_bulk_confirm_clean_title">Clean up all?</string>
+    <plurals name="inbox_bulk_confirm_clean">
+        <item quantity="one">Clean up %1$d</item>
+        <item quantity="other">Clean up %1$d</item>
+    </plurals>
+    <plurals name="inbox_bulk_cleaned">
+        <item quantity="one">Cleaned up %1$d item</item>
+        <item quantity="other">Cleaned up %1$d items</item>
+    </plurals>
+    <plurals name="inbox_bulk_cleaned_newer">
+        <item quantity="one">Cleaned up %1$d item; %2$d with new messages left as is</item>
+        <item quantity="other">Cleaned up %1$d items; %2$d with new messages left as is</item>
     </plurals>
     <plurals name="inbox_bulk_confirm_body">
-        <item quantity="one">This will handle %1$d item (%2$s). Anything new that comes in afterwards stays, and you can undo.</item>
-        <item quantity="other">This will handle %1$d items (%2$s). Anything new that comes in afterwards stays, and you can undo.</item>
-    </plurals>
-    <plurals name="inbox_bulk_confirm_done">
-        <item quantity="one">Mark %1$d as done</item>
-        <item quantity="other">Mark %1$d as done</item>
-    </plurals>
-    <plurals name="inbox_bulk_confirm_dismiss">
-        <item quantity="one">Dismiss %1$d</item>
-        <item quantity="other">Dismiss %1$d</item>
-    </plurals>
-    <plurals name="inbox_bulk_dismissed">
-        <item quantity="one">Dismissed %1$d item</item>
-        <item quantity="other">Dismissed %1$d items</item>
-    </plurals>
-    <plurals name="inbox_bulk_dismissed_newer">
-        <item quantity="one">Dismissed %1$d item; %2$d with new messages left as is</item>
-        <item quantity="other">Dismissed %1$d items; %2$d with new messages left as is</item>
+        <item quantity="one">This will clean up %1$d item (%2$s). Anything new that comes in afterwards stays, and you can undo.</item>
+        <item quantity="other">This will clean up %1$d items (%2$s). Anything new that comes in afterwards stays, and you can undo.</item>
     </plurals>
     <string name="inbox_doc_sheet">Sheet</string>
     <string name="inbox_doc_base">Base</string>

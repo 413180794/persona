@@ -23688,68 +23688,80 @@
         }
       }
     },
-    "全部忽略": {
+    "全部清理": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dismiss All"
+            "value": "Clean up all"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべて無視"
+            "value": "すべて片付ける"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部忽略"
+            "value": "全部清理"
           }
         }
       }
     },
-    "全部忽略：%@（⌥⇧⌘E）": {
+    "全部清理？": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dismiss all: %@ (⌥⇧⌘E)"
+            "value": "Clean up all?"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべて無視：%@（⌥⇧⌘E）"
+            "value": "すべて片付けますか？"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部忽略：%@（⌥⇧⌘E）"
+            "value": "全部清理？"
           }
         }
       }
     },
-    "全部忽略？": {
+    "清理 %lld 件": {
       "localizations": {
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dismiss All?"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Clean up %lld item"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Clean up %lld items"
+                }
+              }
+            }
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべて無視しますか？"
+            "value": "%lld件を片付ける"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部忽略？"
+            "value": "清理 %lld 件"
           }
         }
       }
@@ -23930,46 +23942,24 @@
         }
       }
     },
-    "全部标为已处理：%@（⇧⌘E）": {
+    "全部清理：%@（⇧⌘E）": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mark all as done: %@ (⇧⌘E)"
+            "value": "Clean up all: %@ (⇧⌘E)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべて対応済みにする：%@（⇧⌘E）"
+            "value": "すべて片付ける：%@（⇧⌘E）"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部标为已处理：%@（⇧⌘E）"
-          }
-        }
-      }
-    },
-    "全部标为已处理？": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark All as Done?"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "すべて対応済みにしますか？"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全部标为已处理？"
+            "value": "全部清理：%@（⇧⌘E）"
           }
         }
       }
@@ -42198,24 +42188,24 @@
         }
       }
     },
-    "将处理 %lld 件（%@）。之后进来的新消息不受影响，完成后可以撤销。": {
+    "将清理 %lld 件（%@）。之后进来的新消息不受影响，完成后可以撤销。": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将处理 %1$lld 件（%2$@）。之后进来的新消息不受影响，完成后可以撤销。"
+            "value": "将清理 %1$lld 件（%2$@）。之后进来的新消息不受影响，完成后可以撤销。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This affects %1$lld items (%2$@). New messages that arrive later aren't affected, and you can undo it afterward."
+            "value": "This cleans up %1$lld items (%2$@). New messages that arrive later aren't affected, and you can undo it afterward."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld件（%2$@）を処理します。この後に届く新しいメッセージには影響せず、完了後に取り消せます。"
+            "value": "%1$lld件（%2$@）を片付けます。この後に届く新しいメッセージには影響せず、完了後に取り消せます。"
           }
         }
       }
@@ -45619,7 +45609,7 @@
         }
       }
     },
-    "已忽略 %lld 件": {
+    "已清理 %lld 件": {
       "localizations": {
         "en": {
           "variations": {
@@ -45627,13 +45617,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Dismissed %lld item"
+                  "value": "Cleaned up %lld item"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Dismissed %lld items"
+                  "value": "Cleaned up %lld items"
                 }
               }
             }
@@ -45642,13 +45632,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld件を無視しました"
+            "value": "%lld件を片付けました"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已忽略 %lld 件"
+            "value": "已清理 %lld 件"
           }
         }
       }
@@ -73611,24 +73601,24 @@
         }
       }
     },
-    "没有要忽略的": {
+    "没有要清理的": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nothing to dismiss"
+            "value": "Nothing to clean up"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "無視する項目はありません"
+            "value": "片付ける項目はありません"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有要忽略的"
+            "value": "没有要清理的"
           }
         }
       }
@@ -95706,28 +95696,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台 hub 用不了"
-          }
-        }
-      }
-    },
-    "这台 hub 的版本不支持忽略，更新 hub 后再试": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This hub's version doesn't support dismissing. Update the hub and try again."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このハブのバージョンは無視に対応していません。ハブをアップデートしてからもう一度お試しください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这台 hub 的版本不支持忽略，更新 hub 后再试"
           }
         }
       }

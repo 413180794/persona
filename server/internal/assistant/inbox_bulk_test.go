@@ -233,6 +233,48 @@ func TestInboxBulkIDsAndSingleDismiss(t *testing.T) {
 	}
 }
 
+// Clients released before #5114 still send 全部标为已处理 (action=done) and 全部忽略 (action=dismiss) with the listed
+// items and versions; newer ones send only 全部清理 (dismiss). Both keep working, each filed as it says, and each
+// undo brings back what it filed.
+func TestInboxBulkOldClientsDoneAndDismiss(t *testing.T) {
+	h := muteHub(t)
+	mux := h.routes()
+	for _, id := range []string{"a", "b", "c", "d"} {
+		h.inbox.items[id] = mailItem(id, "shop@example.com", "示例商城")
+		h.inbox.items[id].Last = "1"
+	}
+	items := func(ids ...string) string {
+		var parts []string
+		for _, id := range ids {
+			parts = append(parts, fmt.Sprintf(`{"id":%q,"version":%q}`, id, inboxVersion(h.inbox.items[id])))
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	}
+	for _, c := range []struct {
+		action, by string
+		ids        []string
+	}{{"done", "user", []string{"a", "b"}}, {"dismiss", "dismissed", []string{"c", "d"}}} {
+		code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", fmt.Sprintf(`{"action":%q,"items":%s}`, c.action, items(c.ids...)))
+		if code != 200 || out["action"] != c.action || fmt.Sprint(out["ids"]) != fmt.Sprint(c.ids) {
+			t.Fatalf("%s: %d %v", c.action, code, out)
+		}
+		for _, id := range c.ids {
+			if it := h.inbox.items[id]; it.open() || it.DoneBy != c.by {
+				t.Fatalf("%s: %s is %v %q, want done_by=%s", c.action, id, it.DoneAt, it.DoneBy, c.by)
+			}
+		}
+		raw, _ := json.Marshal(out["undo"])
+		if code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", string(raw)); code != 200 || fmt.Sprint(out["ids"]) != fmt.Sprint(c.ids) {
+			t.Fatalf("%s undo %s: %d %v", c.action, raw, code, out)
+		}
+		for _, id := range c.ids {
+			if !h.inbox.items[id].open() {
+				t.Fatalf("%s: %s stayed filed after the undo", c.action, id)
+			}
+		}
+	}
+}
+
 func TestInboxBulkBadRequests(t *testing.T) {
 	h := muteHub(t)
 	mux := h.routes()

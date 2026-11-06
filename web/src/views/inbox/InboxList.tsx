@@ -5,7 +5,7 @@ import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
   listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, unmuteInbox,
   BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, reloadInbox, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
-  useInbox, waitingAgents, type BulkAction, type InboxItem, type InboxMute, type SectionKey,
+  useInbox, waitingAgents, type InboxItem, type InboxMute, type SectionKey,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
@@ -57,8 +57,8 @@ export function InboxList({ selected }: { selected?: string }) {
   const accounts = useMailAccounts();
   const more = useMenu();
   const [mutesOpen, setMutesOpen] = useState(false);
-  // 全部已处理 / 全部忽略 over many items asks first; the items are the ones shown when it was asked.
-  const [confirm, setConfirm] = useState<{ action: Exclude<BulkAction, "reopen">; items: InboxItem[]; scope: string } | null>(null);
+  // 全部清理 over many items asks first; the items are the ones shown when it was asked.
+  const [confirm, setConfirm] = useState<{ items: InboxItem[]; scope: string } | null>(null);
 
   // The opened item stays in sight in the list (a link straight to it, a click in the detail).
   useEffect(() => {
@@ -74,17 +74,18 @@ export function InboxList({ selected }: { selected?: string }) {
   // nothing ever came in, nothing filtered: is anything connected at all? (still unknown: the plain 都处理完了)
   const sources = useInboxSources(ready && empty && !failed && !items.length && !query && !source && !kind);
   const unconnected = sources && !sources.connected ? sources : null;
-  // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
+  // 全部清理: the open items the list shows (its filters and search); the agents waiting are not items.
   const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.working, ...s.tiers.fyi, ...s.tiers.noise];
   const filterNames = [
     source === "feishu" ? t("inbox-inboxlist.source_lark") : connectors.find((c) => c.id === source)?.name ?? mailShort(chips.find((a) => a.id === source)?.email ?? ""),
     KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
   ];
   const scope = bulkScope(filterNames, query, openInView.length);
-  const runBulk = (action: Exclude<BulkAction, "reopen">) => {
+  // 全部清理 files them as 忽略 (dismiss): the user set them aside, they did not handle them.
+  const runBulk = () => {
     if (!openInView.length) return;
-    if (openInView.length >= BULK_CONFIRM_AT) setConfirm({ action, items: openInView, scope: bulkScopeName(filterNames, query) });
-    else void setAllDone(openInView, action);
+    if (openInView.length >= BULK_CONFIRM_AT) setConfirm({ items: openInView, scope: bulkScopeName(filterNames, query) });
+    else void setAllDone(openInView, "dismiss");
   };
   const toggle = (k: string) => setOpen((o) => {
     const n = new Set(o);
@@ -110,7 +111,7 @@ export function InboxList({ selected }: { selected?: string }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("inbox-inboxlist.search_placeholder")} aria-label={t("inbox-inboxlist.search_label")} className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
           {query && <IconButton icon="x" label={t("inbox-inboxlist.clear")} size={20} iconSize={11} onClick={() => setQuery("")} />}
         </label>
-        {/* A phone: the chips in one row that scrolls sideways, 全部标为已处理 in the ⋯ menu at its end. */}
+        {/* A phone: the chips in one row that scrolls sideways, 全部清理 in the ⋯ menu at its end. */}
         <div className="mt-2.5 flex items-center gap-1.5">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 max-sm:-my-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:py-1 max-sm:scrollbar-none max-sm:[&>*]:shrink-0" role="toolbar" aria-label={t("inbox-inboxlist.filters")}>
           <Chip on={!source && !kind} onClick={() => { setSource(""); setKind(""); }}>{t("inbox-inboxlist.all")}</Chip>
@@ -128,12 +129,12 @@ export function InboxList({ selected }: { selected?: string }) {
           <button
             type="button"
             disabled={!openInView.length}
-            title={t("inbox-inboxlist.mark_all_done_scope", { scope })}
-            onClick={() => runBulk("done")}
+            title={t("inbox-inboxlist.clean_all_scope", { scope })}
+            onClick={runBulk}
             className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-control bg-surface px-2.5 text-[12px] whitespace-nowrap text-ink-2 shadow-btn transition-colors duration-150 hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-45 max-sm:hidden"
           >
             <Icon name="check" size={12} stroke={2.6} />
-            {t("inbox-inboxlist.mark_all_done")}
+            {t("inbox-inboxlist.clean_all")}
             <span className="text-ink-3">{scope}</span>
           </button>
         </div>
@@ -142,8 +143,7 @@ export function InboxList({ selected }: { selected?: string }) {
         {more.anchor && (
           <Menu anchor={more.anchor} onClose={more.close} align="right" width={240}
             items={[
-              { key: "all-done", label: t("inbox-inboxlist.mark_all_done"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => runBulk("done") },
-              { key: "all-dismiss", label: t("inbox-inboxlist.dismiss_all"), hint: scope, icon: "x", disabled: !openInView.length, onSelect: () => runBulk("dismiss") },
+              { key: "clean-all", label: t("inbox-inboxlist.clean_all"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: runBulk },
               { key: "muted", label: t("inbox-inboxlist.muted_list"), icon: "bellOff", divider: true, onSelect: () => setMutesOpen(true) },
             ]} />
         )}
@@ -468,28 +468,27 @@ const AgentRow = memo(function AgentRow({ ix }: { ix: Interaction }) {
   );
 });
 
-/** 「将处理 N 件」: asked before 全部已处理 / 全部忽略 over BULK_CONFIRM_AT items or more. */
-function BulkConfirm({ confirm, onClose }: { confirm: { action: "done" | "dismiss"; items: InboxItem[]; scope: string } | null; onClose: () => void }) {
+/** 「将清理 N 件」: asked before 全部清理 over BULK_CONFIRM_AT items or more. */
+function BulkConfirm({ confirm, onClose }: { confirm: { items: InboxItem[]; scope: string } | null; onClose: () => void }) {
   const n = confirm?.items.length ?? 0;
-  const dismiss = confirm?.action === "dismiss";
   return (
     <Dialog
       open={Boolean(confirm)}
       onClose={onClose}
-      title={t(dismiss ? "inbox-inboxlist.confirm_dismiss_title" : "inbox-inboxlist.confirm_done_title")}
+      title={t("inbox-inboxlist.confirm_clean_title")}
       width={380}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>{t("common.cancel")}</Button>
           <Button
             tone="primary"
-            icon={dismiss ? "x" : "check"}
+            icon="check"
             onClick={() => {
-              if (confirm) void setAllDone(confirm.items, confirm.action);
+              if (confirm) void setAllDone(confirm.items, "dismiss");
               onClose();
             }}
           >
-            {t(dismiss ? "inbox-inboxlist.confirm_dismiss" : "inbox-inboxlist.confirm_done", { count: n })}
+            {t("inbox-inboxlist.confirm_clean", { count: n })}
           </Button>
         </>
       }

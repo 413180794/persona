@@ -1,17 +1,13 @@
 import XCTest
 
-/// 更多 › 全部标为已处理 / 全部忽略 (docs/inbox.md「全部标为已处理」「一键清理」): the menu says what they cover (the 飞书
-/// filter here) and how many; one bulk request files them all, with their versions; the toast's 撤销 brings them back. Against
+/// 更多 › 全部清理 (docs/inbox.md「全部清理」): the menu says what it covers (the 飞书 filter here) and how many; one bulk
+/// request files them all as dismissed, with their versions; the toast's 撤销 brings them back. Against
 /// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB), which keeps the bulk requests at /mock/inbox_bulk (each test counts the
 /// ones it adds, so both run against one mock). `TEST_RUNNER_JARVIS_SHOTS=<dir>` also writes the screenshots there.
 final class InboxMarkAllTests: XCTestCase {
-    @MainActor func testMarkAllInTheFilterThenUndo() throws { try clean(entry: "全部标为已处理", action: "done", doneBy: "user",
-                                                                      toast: { "已将 \($0) 件标为已处理" }, shotName: "inbox mark all") }
-
-    @MainActor func testDismissAllInTheFilterThenUndo() throws { try clean(entry: "全部忽略", action: "dismiss", doneBy: "dismissed",
-                                                                         toast: { "已忽略 \($0) 件" }, shotName: "inbox dismiss all") }
-
-    @MainActor private func clean(entry: String, action: String, doneBy: String, toast: (Int) -> String, shotName: String) throws {
+    @MainActor func testCleanUpAllInTheFilterThenUndo() throws {
+        let entry = "全部清理", action = "dismiss", doneBy = "dismissed", shotName = "inbox clean up all"
+        let toast: (Int) -> String = { "已清理 \($0) 件" }
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_MOCK_HUB)")
         }
@@ -54,12 +50,12 @@ final class InboxMarkAllTests: XCTestCase {
         let more = app.buttons["更多"].firstMatch
         XCTAssertTrue(more.waitForExistence(timeout: 5), "no 更多")
         more.tap()
-        let markAll = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", entry)).firstMatch
-        XCTAssertTrue(markAll.waitForExistence(timeout: 5), "no \(entry) in 更多:\n\(app.debugDescription)")
+        let cleanUp = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", entry)).firstMatch
+        XCTAssertTrue(cleanUp.waitForExistence(timeout: 5), "no \(entry) in 更多:\n\(app.debugDescription)")
         XCTAssertTrue(text("飞书 · \(feishuOpen.count) 件").exists, "the entry does not say what it covers:\n\(app.debugDescription)")
         sleep(1)
         shot(shotName + " menu")
-        markAll.tap()
+        cleanUp.tap()
 
         // The mock holds fewer than InboxBulk.confirmFrom Feishu items: no question first.
         XCTAssertTrue(text(toast(feishuOpen.count)).waitForExistence(timeout: 5), "no toast:\n\(app.debugDescription)")
@@ -109,21 +105,23 @@ final class InboxMarkAllTests: XCTestCase {
         XCTAssertTrue(more.waitForExistence(timeout: 20), "no 更多")
         sleep(3) // the list loads
         more.tap()
-        let dismissAll = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "全部忽略")).firstMatch
-        XCTAssertTrue(dismissAll.waitForExistence(timeout: 5), "no 全部忽略")
-        dismissAll.tap()
-        let ask = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "将处理")).firstMatch
+        let cleanUp = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "全部清理")).firstMatch
+        XCTAssertTrue(cleanUp.waitForExistence(timeout: 5), "no 全部清理")
+        cleanUp.tap()
+        let ask = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "将清理")).firstMatch
         XCTAssertTrue(ask.waitForExistence(timeout: 5), "no question before \(open) items:\n\(app.debugDescription)")
         let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = "inbox dismiss all confirm \(UITestStyle.name)"
+        shot.name = "inbox clean up all confirm \(UITestStyle.name)"
         shot.lifetime = .keepAlways
         add(shot)
         if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
             let scheme = ProcessInfo.processInfo.environment["JARVIS_STYLE"] ?? "light"
-            try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("inbox-dismiss-all-confirm-\(scheme)-\(UITestStyle.name).png"))
+            try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("inbox-clean-up-all-confirm-\(scheme)-\(UITestStyle.name).png"))
         }
+        let confirm = app.buttons["inbox.cleanConfirm"].firstMatch
+        XCTAssertTrue(confirm.label.hasPrefix("清理 ") && confirm.label.hasSuffix(" 件"), "the dialog's button does not say how many: \(confirm.label)")
         app.buttons["inbox.cleanConfirm"].firstMatch.tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "已忽略")).firstMatch.waitForExistence(timeout: 5),
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "已清理")).firstMatch.waitForExistence(timeout: 5),
                       "no toast after the question")
         // Bring them back: the next test needs open items.
         let undo = app.buttons["撤销"].firstMatch

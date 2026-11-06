@@ -905,14 +905,15 @@ export function unmuteInbox(id: string): Promise<unknown> {
   return api(`/inbox/mutes/${enc(id)}`, { method: "DELETE" });
 }
 
-/** What a bulk action does (POST /api/v1/inbox/bulk): 全部标为已处理, 全部忽略 (done_by=dismissed), and 移回 (their 撤销). */
+/** What a bulk action does (POST /api/v1/inbox/bulk): `dismiss` is 全部清理 (done_by=dismissed), `done` files a section
+ * (全部看过 / 全部清除), `reopen` is 移回 (their 撤销). */
 export type BulkAction = "done" | "dismiss" | "reopen";
 
 /** What a bulk request did: the items it moved as the hub has them now, the ones already so, and the ones it left
  * (`changed`: new messages since the list; `missing`: gone from the hub). */
 export type BulkResult = { changed: InboxItem[]; unchanged: string[]; skipped: { id: string; reason: string }[] };
 
-/** From this many items on, 全部已处理 / 全部忽略 asks first (「将处理 N 件」); fewer go at once, with 撤销 on the toast. */
+/** From this many items on, 全部清理 asks first (「将清理 N 件」); fewer go at once, with 撤销 on the toast. */
 export const BULK_CONFIRM_AT = 10;
 
 /** The toast after a bulk request. */
@@ -922,11 +923,11 @@ export function bulkMessage(action: BulkAction | boolean, r: BulkResult): string
   const fresh = r.skipped.filter((s) => s.reason === "changed").length;
   const head = !moved
     ? t(a === "reopen" ? "lib-inbox.bulk_undone_none" : "lib-inbox.bulk_done_none")
-    : t(a === "reopen" ? "lib-inbox.bulk_undone" : a === "dismiss" ? "lib-inbox.bulk_dismissed" : "lib-inbox.bulk_done", { count: moved });
+    : t(a === "reopen" ? "lib-inbox.bulk_undone" : a === "dismiss" ? "lib-inbox.bulk_cleaned" : "lib-inbox.bulk_done", { count: moved });
   return fresh ? t("lib-inbox.bulk_fresh", { head, count: fresh }) : head;
 }
 
-/** What 全部标为已处理 covers, for its label: the filters' names and the search, or 全部. */
+/** What 全部清理 covers, for its label: the filters' names and the search, or 全部. */
 export function bulkScope(filters: string[], query: string, count: number): string {
   return count ? t("lib-inbox.scope_count", { scope: bulkScopeName(filters, query), count }) : t("lib-inbox.scope_none");
 }
@@ -938,19 +939,19 @@ export function bulkScopeName(filters: string[], query: string): string {
   return parts.length ? parts.join(" · ") : t("lib-inbox.scope_all");
 }
 
-/** One bulk request. A hub from before /api/v1/inbox/bulk (404 / 405) gets 已处理 and 移回 the old way
- * (POST /api/v1/inbox/done); it has no 忽略. */
+/** One bulk request. A hub from before /api/v1/inbox/bulk (404 / 405) gets it the old way (POST /api/v1/inbox/done):
+ * it has no 忽略, so 全部清理 there files the items as done (done_by=user), which still clears them out of the list. */
 async function bulkRequest(action: BulkAction, targets: InboxItem[]): Promise<BulkResult> {
   const items = targets.map((it) => ({ id: it.id, version: it.version }));
   try {
     return await api<BulkResult>("/inbox/bulk", { method: "POST", json: { action, items } });
   } catch (e) {
-    if (action === "dismiss" || !(e instanceof ApiError) || (e.status !== 404 && e.status !== 405)) throw e;
-    return api<BulkResult>("/inbox/done", { method: "POST", json: { done: action === "done", items } });
+    if (!(e instanceof ApiError) || (e.status !== 404 && e.status !== 405)) throw e;
+    return api<BulkResult>("/inbox/done", { method: "POST", json: { done: action !== "reopen", items } });
   }
 }
 
-/** 全部标为已处理 / 全部忽略 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for
+/** 全部清理 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for
  * them all, each with the version it was listed at, so the hub leaves one that took new messages since open (it goes
  * back here too, and the list is pulled again). Shown at once; a failure puts them all back. Filing ends with 撤销 on
  * the toast. `action` true / false is done / reopen. */
@@ -976,7 +977,7 @@ export async function setAllDone(items: InboxItem[], action: BulkAction | boolea
     toast(bulkMessage(a, r), "ok", undoable && done && moved.length ? { label: t("lib-inbox.undo"), run: () => void setAllDone(moved, "reopen", false) } : undefined);
   } catch (e) {
     set({ items: state.items.map((it) => before.get(it.id) ?? it) });
-    toast(t(!done ? "lib-inbox.undone_failed" : a === "dismiss" ? "lib-inbox.dismiss_failed" : "lib-inbox.done_failed", { error: errorText(e) }), "error");
+    toast(t(!done ? "lib-inbox.undone_failed" : a === "dismiss" ? "lib-inbox.clean_failed" : "lib-inbox.done_failed", { error: errorText(e) }), "error");
   }
 }
 

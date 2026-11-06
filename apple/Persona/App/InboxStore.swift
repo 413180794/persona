@@ -84,7 +84,7 @@ final class InboxStore {
     }
 
     /// 全部看过 / 全部清除 (a section), Mac's multi-select, and every 撤销: one request for them all on the 已处理 request
-    /// (docs/inbox.md「全部标为已处理」). Shown at once; the hub files each as the list showed it, so one that took new
+    /// (docs/inbox.md「全部清理」). Shown at once; the hub files each as the list showed it, so one that took new
     /// messages since stays open (it goes back here too), and a failure puts them all back. Filing ends with a toast and
     /// its 撤销, which brings back what was filed.
     func setDone(_ list: [InboxItem], _ done: Bool, undoable: Bool = true) {
@@ -95,11 +95,12 @@ final class InboxStore {
         }
     }
 
-    /// 全部标为已处理 / 全部忽略 (the view's open items, its filters and search): the hub's bulk request
-    /// (`POST /api/v1/inbox/bulk`, docs/inbox.md「一键清理」); on a hub without it 已处理 goes the old way and 忽略 says
-    /// it is not supported. Same as above: shown at once, put back on a failure, a toast whose 撤销 sends the hub's `undo`.
-    func clean(_ list: [InboxItem], _ action: InboxBulk.Action) {
+    /// 全部清理 (the view's open items, its filters and search): filed as dismissed in the hub's bulk request
+    /// (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」); on a hub without it the 已处理 request instead (recorded as
+    /// handled there). Same as above: shown at once, put back on a failure, a toast whose 撤销 sends the hub's `undo`.
+    func clean(_ list: [InboxItem]) {
         guard let api = AppModel.shared.api else { return }
+        let action = InboxBulk.Action.dismiss
         run(list, done: true, action: action) { targets in
             try await InboxBulk.perform(action, targets,
                                         bulk: { try await api.bulkInbox($0.rawValue, $1) },

@@ -31,7 +31,7 @@
     <string name="inbox_failed_restored">操作失败，已恢复原来的状态</string>
     <string name="inbox_undo">撤销</string>
     <string name="inbox_bulk_note_all">整个收件箱里还没处理的。只记在 Persona，不改飞书和邮件里的已读。</string>
-    <string name="inbox_bulk_note_scope">只标当前筛选：%1$s。只记在 Persona，不改飞书和邮件里的已读。</string>
+    <string name="inbox_bulk_note_scope">只清理当前筛选：%1$s。只记在 Persona，不改飞书和邮件里的已读。</string>
     <string name="inbox_filter_title">筛选收件箱</string>
     <string name="inbox_filter_source">来源：%1$s</string>
     <string name="inbox_filter_kind">类型：%1$s</string>
@@ -75,12 +75,6 @@
     <string name="inbox_conn_revoked">配对已失效</string>
     <string name="inbox_section_folded">已折叠</string>
     <string name="inbox_bulk_search">搜索「%1$s」</string>
-    <plurals name="inbox_bulk_all">
-        <item quantity="other">全部标为已处理 · %1$d 件</item>
-    </plurals>
-    <plurals name="inbox_bulk_filtered">
-        <item quantity="other">当前筛选标为已处理 · %1$d 件</item>
-    </plurals>
     <plurals name="inbox_bulk_newer">
         <item quantity="other">有新消息进来，%1$d 件没有标记</item>
     </plurals>
@@ -91,28 +85,24 @@
         <item quantity="other">已将 %1$d 件标为已处理</item>
     </plurals>
     <string name="inbox_bulk_scope_all">整个收件箱</string>
-    <string name="inbox_bulk_confirm_done_title">全部标为已处理？</string>
-    <string name="inbox_bulk_confirm_dismiss_title">全部忽略？</string>
-    <plurals name="inbox_bulk_dismiss_all">
-        <item quantity="other">全部忽略 · %1$d 件</item>
+    <plurals name="inbox_bulk_clean_all">
+        <item quantity="other">全部清理 · %1$d 件</item>
     </plurals>
-    <plurals name="inbox_bulk_dismiss_filtered">
-        <item quantity="other">忽略当前筛选 · %1$d 件</item>
+    <plurals name="inbox_bulk_clean_filtered">
+        <item quantity="other">清理当前筛选 · %1$d 件</item>
+    </plurals>
+    <string name="inbox_bulk_confirm_clean_title">全部清理？</string>
+    <plurals name="inbox_bulk_confirm_clean">
+        <item quantity="other">清理 %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_cleaned">
+        <item quantity="other">已清理 %1$d 件</item>
+    </plurals>
+    <plurals name="inbox_bulk_cleaned_newer">
+        <item quantity="other">已清理 %1$d 件，%2$d 件有新消息没动</item>
     </plurals>
     <plurals name="inbox_bulk_confirm_body">
-        <item quantity="other">将处理 %1$d 件（%2$s）。之后进来的新消息不受影响，完成后可以撤销。</item>
-    </plurals>
-    <plurals name="inbox_bulk_confirm_done">
-        <item quantity="other">标为已处理 %1$d 件</item>
-    </plurals>
-    <plurals name="inbox_bulk_confirm_dismiss">
-        <item quantity="other">忽略 %1$d 件</item>
-    </plurals>
-    <plurals name="inbox_bulk_dismissed">
-        <item quantity="other">已忽略 %1$d 件</item>
-    </plurals>
-    <plurals name="inbox_bulk_dismissed_newer">
-        <item quantity="other">已忽略 %1$d 件，%2$d 件有新消息没动</item>
+        <item quantity="other">将清理 %1$d 件（%2$s）。之后进来的新消息不受影响，完成后可以撤销。</item>
     </plurals>
     <string name="inbox_doc_sheet">表格</string>
     <string name="inbox_doc_base">多维表格</string>

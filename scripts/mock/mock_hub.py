@@ -4415,7 +4415,7 @@ if NO_SOURCES:
     INBOX.clear()
     GITHUB_CONNECTOR.update(status="not_configured", account=None, via=None)
 
-# MOCK_INBOX_EXTRA=<n>: n more 知悉即可 mails (示例通知), for 一键清理's confirmation over many items (docs/inbox.md).
+# MOCK_INBOX_EXTRA=<n>: n more 知悉即可 mails (示例通知), for 全部清理's confirmation over many items (docs/inbox.md).
 for _i in range(int(os.environ.get("MOCK_INBOX_EXTRA", "0"))):
     INBOX.append({"id": "mail:acc1:x%d" % _i, "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
                   "title": "示例通知 %d" % (_i + 1), "sender": "示例商城", "preview": "你的订单已发货", "count": 1,
@@ -11836,7 +11836,7 @@ class H(BaseHTTPRequestHandler):
                 try: send({"type": "inbox"})
                 except Exception: pass
             return self.send_json(res)
-        if p == "/api/v1/inbox/bulk" and self.command == "POST":  # 一键清理：全部已处理 / 全部忽略 / 撤销
+        if p == "/api/v1/inbox/bulk" and self.command == "POST":  # 全部清理 (dismiss; done from older clients) / 撤销
             body = json.loads(self.last_body or b"{}")
             if body.get("action") not in ("done", "dismiss", "reopen"): return self.send_json({"error": "action is done, dismiss or reopen"}, 400)
             res = inbox_bulk(body)
@@ -12846,7 +12846,7 @@ def features():
 MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_INBOX_SOURCES=none  还没接任何消息来源：收件箱空、没有邮箱账号、飞书没设置、GitHub 没登录（#4480）")
-MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试一键清理的「将处理 N 件」确认")
+MOCK_HELP.append("MOCK_INBOX_EXTRA=<n>  收件箱多 n 封知悉即可的示例通知，试「全部清理」的「将清理 N 件」确认")
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
 MOCK_HELP.append("MOCK_AUTO_CONVERSATIONS=1  助手对话带来源 origin（feature conversation_origin）：另有 10 段自动对话（收件箱 6、定时任务 2、飞书 /agent、对话派生），侧边栏收进「自动对话」（#3264）")
 

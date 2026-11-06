@@ -143,8 +143,8 @@ final class MacInboxState {
     var editingDraft: InboxItem?
     var drafting: InboxItem?
     var handingOff: InboxItem?
-    /// 全部标为已处理 / 全部忽略 over many items, waiting for the user to say yes.
-    var confirming: InboxBulk.Action?
+    /// 全部清理 over many items, waiting for the user to say yes.
+    var confirming = false
 
     private var store: InboxStore { .shared }
 
@@ -223,26 +223,26 @@ final class MacInboxState {
         return Sections(tiers: tiers, done: done)
     }
 
-    /// 全部标为已处理: the open items the list shows (its filter and search); the agents waiting are not items.
+    /// 全部清理: the open items the list shows (its filter and search); the agents waiting are not items.
     var openInView: [InboxItem] { kind == "agent" ? [] : store.items.filter { !$0.isDone && matches($0) } }
 
-    /// What 全部标为已处理 covers and how many, for its help tag.
-    var markAllScope: String {
+    /// What 全部清理 covers and how many, for its help tag.
+    var cleanUpScope: String {
         InboxBulk.scopeLine(filters: scopeFilters, query: query, count: openInView.count)
     }
 
     var scopeFilters: [String] { filter == .all ? [] : [filter.title] }
 
-    /// 全部标为已处理 / 全部忽略 (toolbar, 收件箱 menu): the open items in view, in one request with 撤销 after; from
-    /// `InboxBulk.confirmFrom` items on, the list asks first (`confirming`).
-    func clean(_ action: InboxBulk.Action, confirmed: Bool = false) {
+    /// 全部清理 (toolbar, 收件箱 menu): the open items in view filed as dismissed, in one request with 撤销 after;
+    /// from `InboxBulk.confirmFrom` items on, the list asks first (`confirming`).
+    func clean(confirmed: Bool = false) {
         let scope = openInView
         guard !scope.isEmpty else { return }
         if !confirmed && InboxBulk.needsConfirm(scope.count) {
-            confirming = action
+            confirming = true
             return
         }
-        withAnimation(Theme.Motion.standard) { store.clean(scope, action) }
+        withAnimation(Theme.Motion.standard) { store.clean(scope) }
     }
 
     /// The rows in the order the list shows them (closed sections left out): for moving the selection on.

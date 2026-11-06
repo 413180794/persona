@@ -129,7 +129,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             finally { pending.remove(id) }
         }
     }
-    // 全部标为已处理 / 全部看过 / 全部清除, and their 撤销: one request for them all (the hub skips the ones that took new
+    // 全部清理 / 全部看过 / 全部清除, and their 撤销: one request for them all (the hub skips the ones that took new
     // messages since this list), shown at once, then a notice with 撤销 when something was filed.
     fun markAll(targets: List<persona.core.contracts.api.InboxDoneTarget>, action: InboxBulkAction, undoable: Boolean = true) {
         val done = action != InboxBulkAction.Reopen
@@ -142,7 +142,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                 val result = repository.bulk(asked, action)
                 // The hub could not write some of them: they are back as they were.
                 error = if (result.failed.isEmpty()) null else res.getString(R.string.inbox_failed_restored)
-                val notice = if (undoable) bulkNotice(res, result, action == InboxBulkAction.Dismiss) else null
+                val notice = if (undoable) bulkNotice(res, result, cleaned = action == InboxBulkAction.Dismiss) else null
                 if (notice != null) {
                     val back = result.changed.map { persona.core.contracts.api.InboxDoneTarget(it) }
                     val undo = if (back.isEmpty()) null else FeedbackAction(res.getString(R.string.inbox_undo)) { markAll(back, InboxBulkAction.Reopen, undoable = false) }
@@ -174,28 +174,27 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     val scopeText = bulkScope(res, section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
         if (kind == "agent") "Agent" else kindLabel(res, kind), query)
     var showMore by remember { mutableStateOf(false) }
-    // 全部已处理 / 全部忽略 over BULK_CONFIRM_AT items or more asks first, for the items shown when it was asked.
-    var confirmBulk by remember { mutableStateOf<Pair<InboxBulkAction, List<persona.core.contracts.api.InboxDoneTarget>>?>(null) }
-    fun bulkAll(action: InboxBulkAction) {
-        if (bulk.size >= BULK_CONFIRM_AT) confirmBulk = action to bulk else markAll(bulk, action)
+    // 全部清理 files every open item of the current view (filters and search) in one request, recorded as dismissed
+    // (done_by=dismissed); over BULK_CONFIRM_AT items or more it asks first, for the items shown when it was asked.
+    var confirmBulk by remember { mutableStateOf<List<persona.core.contracts.api.InboxDoneTarget>?>(null) }
+    fun cleanAll() {
+        if (bulk.size >= BULK_CONFIRM_AT) confirmBulk = bulk else markAll(bulk, InboxBulkAction.Dismiss)
     }
     if (showMore) {
         JActionSheet(title = stringResource(R.string.inbox_title), onDismiss = { showMore = false },
             actions = listOf(
-                JAction(bulkLabel(res, bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { bulkAll(InboxBulkAction.Done) },
-                JAction(bulkLabel(res, bulk.size, scopeText, dismiss = true), PhIcons.Prohibit, enabled = bulk.isNotEmpty()) { bulkAll(InboxBulkAction.Dismiss) },
+                JAction(bulkLabel(res, bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { cleanAll() },
                 JAction(res.getString(R.string.inbox_mutes_title), PhIcons.Prohibit, separatorBefore = true) { showMutes = true },
             ),
             note = if (scopeText == null) stringResource(R.string.inbox_bulk_note_all) else stringResource(R.string.inbox_bulk_note_scope, scopeText))
     }
-    confirmBulk?.let { (action, targets) ->
-        val dismiss = action == InboxBulkAction.Dismiss
+    confirmBulk?.let { targets ->
         JDialog(onDismiss = { confirmBulk = null },
-            title = stringResource(if (dismiss) R.string.inbox_bulk_confirm_dismiss_title else R.string.inbox_bulk_confirm_done_title),
+            title = stringResource(R.string.inbox_bulk_confirm_clean_title),
             text = bulkConfirmText(res, targets.size, scopeText),
-            confirm = res.getQuantityString(if (dismiss) R.plurals.inbox_bulk_confirm_dismiss else R.plurals.inbox_bulk_confirm_done, targets.size, targets.size) to {
+            confirm = res.getQuantityString(R.plurals.inbox_bulk_confirm_clean, targets.size, targets.size) to {
                 confirmBulk = null
-                markAll(targets, action)
+                markAll(targets, InboxBulkAction.Dismiss)
             })
     }
     if (showFilters) {

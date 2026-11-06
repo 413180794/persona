@@ -1,10 +1,11 @@
 import Foundation
 
-/// The arithmetic of filing many inbox items at once (全部标为已处理, 全部忽略, 全部看过 / 全部清除, and 撤销), kept apart from
-/// `InboxStore` so it can be tested without a hub (docs/inbox.md「全部标为已处理」).
+/// The arithmetic of filing many inbox items at once (全部清理, 全部看过 / 全部清除, and 撤销), kept apart from
+/// `InboxStore` so it can be tested without a hub (docs/inbox.md「全部清理」).
 nonisolated enum InboxBulk {
-    /// The view-wide clean-up (`POST /api/v1/inbox/bulk`'s `action`): 全部标为已处理, or 全部忽略 — filed the same way,
-    /// recorded as dismissed (looked at, nothing to do) rather than handled.
+    /// How items are filed at once (`POST /api/v1/inbox/bulk`'s `action`, and the `done_by` shown meanwhile):
+    /// `done` for the 已处理 request (sections, Mac's multi-select, 撤销), `dismiss` for 全部清理 — the view-wide
+    /// clean-up, recorded as dismissed (looked at, nothing to do) rather than handled.
     enum Action: String, Sendable, CaseIterable {
         case done
         case dismiss
@@ -14,7 +15,7 @@ nonisolated enum InboxBulk {
     }
 
     /// From this many items on, the clean-up asks first (fewer are done at once, with 撤销 after); the web's and
-    /// Android's threshold too (docs/inbox.md「一键清理」).
+    /// Android's threshold too (docs/inbox.md「全部清理」).
     static let confirmFrom = 10
 
     static func needsConfirm(_ count: Int) -> Bool { count >= confirmFrom }
@@ -31,13 +32,9 @@ nonisolated enum InboxBulk {
         InboxBulkResult(changed: reply.changed, unchanged: reply.unchanged, skipped: reply.skipped)
     }
 
-    /// 全部忽略 on a hub from before `/bulk`: the 已处理 request cannot say 忽略, so it is refused, not filed as handled.
-    static var dismissUnsupported: APIError {
-        APIError(status: 405, message: String(localized: "这台 hub 的版本不支持忽略，更新 hub 后再试"))
-    }
-
-    /// Sends a clean-up: the bulk request, or on a hub from before it (404 / 405) the 已处理 one for 全部标为已处理
-    /// (全部忽略 says it is not supported). The requests come in so it can be tested without a hub.
+    /// Sends a clean-up: the bulk request, or on a hub from before it (404 / 405) the 已处理 one. That request cannot
+    /// say dismissed, so an old hub records 全部清理 as `done_by=user` — acceptable there, better than refusing it.
+    /// The requests come in so it can be tested without a hub.
     static func perform(_ action: Action, _ targets: [InboxItem],
                         bulk: (Action, [InboxItem]) async throws -> InboxBulkReply,
                         legacy: ([InboxItem]) async throws -> InboxBulkResult) async throws -> (result: InboxBulkResult, undo: Undo?) {
@@ -46,7 +43,6 @@ nonisolated enum InboxBulk {
             let r = result(reply)
             return (r, reply.undo.map(Undo.bulk) ?? (r.changed.isEmpty ? nil : .legacy(r.changed)))
         } catch let e as APIError where e.status == 404 || e.status == 405 {
-            guard action == .done else { throw dismissUnsupported }
             let r = try await legacy(targets)
             return (r, r.changed.isEmpty ? nil : .legacy(r.changed))
         }
@@ -96,22 +92,23 @@ nonisolated enum InboxBulk {
         let head: String
         switch (done, action) {
         case (true, .done): head = moved > 0 ? String(localized: "已将 \(moved) 件标为已处理") : String(localized: "没有要标的")
-        case (true, .dismiss): head = moved > 0 ? String(localized: "已忽略 \(moved) 件") : String(localized: "没有要忽略的")
+        case (true, .dismiss): head = moved > 0 ? String(localized: "已清理 \(moved) 件") : String(localized: "没有要清理的")
         case (false, _): head = moved > 0 ? String(localized: "已移回 \(moved) 件") : String(localized: "没有要移回的")
         }
         return fresh > 0 ? head + String(localized: "，\(fresh) 件有新消息，留在收件箱") : head
     }
 
-    /// The question before a large clean-up (the web's and Android's words).
-    static func confirmTitle(_ action: Action) -> String {
-        action == .done ? String(localized: "全部标为已处理？") : String(localized: "全部忽略？")
-    }
+    /// The question before a large 全部清理 (the web's and Android's words).
+    static var confirmTitle: String { String(localized: "全部清理？") }
+
+    /// The dialog's button: 清理 and how many.
+    static func confirmButton(count: Int) -> String { String(localized: "清理 \(count) 件") }
 
     static func confirmMessage(count: Int, filters: [String], query: String) -> String {
-        String(localized: "将处理 \(count) 件（\(scope(filters: filters, query: query))）。之后进来的新消息不受影响，完成后可以撤销。")
+        String(localized: "将清理 \(count) 件（\(scope(filters: filters, query: query))）。之后进来的新消息不受影响，完成后可以撤销。")
     }
 
-    /// What 全部标为已处理 covers, for the menu: the filters' names and the search, or 全部.
+    /// What 全部清理 covers, for the menu: the filters' names and the search, or 全部.
     static func scope(filters: [String], query: String) -> String {
         var parts = filters.filter { !$0.isEmpty }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -119,7 +116,7 @@ nonisolated enum InboxBulk {
         return parts.isEmpty ? String(localized: "全部") : parts.joined(separator: " · ")
     }
 
-    /// The menu's line under 全部标为已处理: what it covers and how many.
+    /// The menu's line under 全部清理: what it covers and how many.
     static func scopeLine(filters: [String], query: String, count: Int) -> String {
         count == 0 ? String(localized: "没有未处理的") : String(localized: "\(scope(filters: filters, query: query)) · \(count) 件")
     }

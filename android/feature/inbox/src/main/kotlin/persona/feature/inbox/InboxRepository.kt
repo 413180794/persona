@@ -65,12 +65,12 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun markVisible(feedId: String, messages: List<LarkMessage>) = Unit
     suspend fun setDone(itemId: String, done: Boolean)
     /**
-     * 全部标为已处理 / 全部看过 / 全部清除 and their 撤销: [items] done (or back) in one request, each as listed, so one
+     * 全部看过 / 全部清除 and their 撤销: [items] done (or back) in one request, each as listed, so one
      * that took new messages since stays open ([InboxBulkResult.changedSince]).
      */
     suspend fun setDone(items: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean): InboxBulkResult =
         bulk(items, if (done) persona.core.contracts.api.InboxBulkAction.Done else persona.core.contracts.api.InboxBulkAction.Reopen)
-    /** 全部标为已处理 / 全部忽略 / 移回 over [items] in one request ([setDone] is its done / reopen). */
+    /** 全部清理 (dismiss) / 全部看过 / 全部清除 (done) / 移回 (reopen) over [items] in one request ([setDone] is its done / reopen). */
     suspend fun bulk(items: List<persona.core.contracts.api.InboxDoneTarget>, action: persona.core.contracts.api.InboxBulkAction): InboxBulkResult =
         error("批量处理尚未接入") // i18n-ignore: developer error for a repository without the hub
     suspend fun readDraft(target: ReplyTarget): ReplyDraft?

@@ -399,14 +399,14 @@ extension APIClient {
         try await post("/api/v1/inbox/" + id + "/done", body: ["done": done])
     }
 
-    /// Files (or brings back) many items in one request (全部标为已处理, 全部看过, their 撤销): each with the version it
+    /// Files (or brings back) many items in one request (全部看过 / 全部清除, Mac's multi-select, 撤销, and 全部清理 on a hub without `/bulk`): each with the version it
     /// was listed at, so the hub leaves one that took new messages since open.
     func setInboxDone(_ items: [InboxItem], _ done: Bool) async throws -> InboxBulkResult {
         try await post("/api/v1/inbox/done", body: InboxBulkBody(done: done, items: items.map { .init(id: $0.id, version: $0.version) }),
                        as: InboxBulkResult.self)
     }
 
-    /// 全部标为已处理 / 全部忽略 (`POST /api/v1/inbox/bulk`, docs/inbox.md「一键清理」): `action` is `done` or `dismiss`,
+    /// 全部清理 (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」): `action` is `dismiss` (the hub takes `done` too),
     /// each item with the version it was listed at (the hub leaves one that took new messages since: `skipped`, changed).
     func bulkInbox(_ action: String, _ items: [InboxItem]) async throws -> InboxBulkReply {
         try await post("/api/v1/inbox/bulk",

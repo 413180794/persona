@@ -116,13 +116,11 @@ struct MacInboxList: View {
             MailAccountsView().macSheet()
         }
         .sheet(item: $state.composing) { d in ComposeView(draft: d, accounts: state.accounts).macSheet() }
-        .confirmationDialog(state.confirming.map(InboxBulk.confirmTitle) ?? "",
-                            isPresented: Binding(get: { state.confirming != nil }, set: { if !$0 { state.confirming = nil } }),
-                            presenting: state.confirming) { action in
-            Button(action == .done ? "全部标为已处理" : "全部忽略") { state.clean(action, confirmed: true) }
+        .confirmationDialog(InboxBulk.confirmTitle, isPresented: $state.confirming) {
+            Button(InboxBulk.confirmButton(count: state.openInView.count)) { state.clean(confirmed: true) }
                 .accessibilityIdentifier("mac.inbox.cleanConfirm")
             Button("取消", role: .cancel) {}
-        } message: { _ in
+        } message: {
             Text(InboxBulk.confirmMessage(count: state.openInView.count, filters: state.scopeFilters, query: state.query))
         }
         .sheet(item: $state.editingDraft) { InboxDraftSheet(item: $0, accounts: state.accounts).macSheet() }
@@ -152,19 +150,13 @@ struct MacInboxList: View {
             // ⌘R is 显示 › 刷新's, which refreshes the inbox while it is on screen.
             Button { Task { await store.refresh() } } label: { Label("刷新", systemImage: Theme.Icon.retry) }
                 .help("刷新（⌘R）")
-            // ⇧⌘E / ⌥⇧⌘E are the 收件箱 menu's (MacInboxMenu), which holds the same two.
-            Button { state.clean(.done) } label: {
-                Label("全部标为已处理", systemImage: Theme.Icon.doneAll)
+            // ⇧⌘E is the 收件箱 menu's (MacInboxMenu), which holds the same action.
+            Button { state.clean() } label: {
+                Label("全部清理", systemImage: Theme.Icon.cleanUpAll)
             }
             .disabled(state.openInView.isEmpty)
-            .help(String(localized: "全部标为已处理：\(state.markAllScope)（⇧⌘E）"))
-            .accessibilityIdentifier("mac.inbox.markAllDone")
-            Button { state.clean(.dismiss) } label: {
-                Label("全部忽略", systemImage: Theme.Icon.dismissAll)
-            }
-            .disabled(state.openInView.isEmpty)
-            .help(String(localized: "全部忽略：\(state.markAllScope)（⌥⇧⌘E）"))
-            .accessibilityIdentifier("mac.inbox.dismissAll")
+            .help(String(localized: "全部清理：\(state.cleanUpScope)（⇧⌘E）"))
+            .accessibilityIdentifier("mac.inbox.cleanUpAll")
             Button { state.composing = ComposeDraft(accountID: state.accounts.first?.id ?? "") } label: {
                 Label("写邮件", systemImage: Theme.Icon.compose)
             }

@@ -75,12 +75,6 @@
     <string name="inbox_conn_revoked">ペアリングが無効になりました</string>
     <string name="inbox_section_folded">折りたたみ済み</string>
     <string name="inbox_bulk_search">「%1$s」を検索</string>
-    <plurals name="inbox_bulk_all">
-        <item quantity="other">すべて対応済みにする・%1$d件</item>
-    </plurals>
-    <plurals name="inbox_bulk_filtered">
-        <item quantity="other">絞り込み結果を対応済みにする・%1$d件</item>
-    </plurals>
     <plurals name="inbox_bulk_newer">
         <item quantity="other">新しいメッセージが届いたため、%1$d件は対応済みにしていません</item>
     </plurals>
@@ -91,28 +85,24 @@
         <item quantity="other">%1$d件を対応済みにしました</item>
     </plurals>
     <string name="inbox_bulk_scope_all">受信トレイ全体</string>
-    <string name="inbox_bulk_confirm_done_title">すべて対応済みにしますか？</string>
-    <string name="inbox_bulk_confirm_dismiss_title">すべて無視しますか？</string>
-    <plurals name="inbox_bulk_dismiss_all">
-        <item quantity="other">すべて無視 · %1$d件</item>
+    <plurals name="inbox_bulk_clean_all">
+        <item quantity="other">すべて片付ける・%1$d件</item>
     </plurals>
-    <plurals name="inbox_bulk_dismiss_filtered">
-        <item quantity="other">絞り込みを無視 · %1$d件</item>
+    <plurals name="inbox_bulk_clean_filtered">
+        <item quantity="other">絞り込み結果を片付ける・%1$d件</item>
+    </plurals>
+    <string name="inbox_bulk_confirm_clean_title">すべて片付けますか？</string>
+    <plurals name="inbox_bulk_confirm_clean">
+        <item quantity="other">%1$d件を片付ける</item>
+    </plurals>
+    <plurals name="inbox_bulk_cleaned">
+        <item quantity="other">%1$d件を片付けました</item>
+    </plurals>
+    <plurals name="inbox_bulk_cleaned_newer">
+        <item quantity="other">%1$d件を片付けました。新着のある%2$d件はそのままです</item>
     </plurals>
     <plurals name="inbox_bulk_confirm_body">
-        <item quantity="other">%1$d件を処理します（%2$s）。この後に届く新着は対象外で、完了後に元に戻せます。</item>
-    </plurals>
-    <plurals name="inbox_bulk_confirm_done">
-        <item quantity="other">%1$d件を対応済みにする</item>
-    </plurals>
-    <plurals name="inbox_bulk_confirm_dismiss">
-        <item quantity="other">%1$d件を無視</item>
-    </plurals>
-    <plurals name="inbox_bulk_dismissed">
-        <item quantity="other">%1$d件を無視しました</item>
-    </plurals>
-    <plurals name="inbox_bulk_dismissed_newer">
-        <item quantity="other">%1$d件を無視しました。新着のある%2$d件はそのままです</item>
+        <item quantity="other">%1$d件を片付けます（%2$s）。この後に届く新着は対象外で、完了後に元に戻せます。</item>
     </plurals>
     <string name="inbox_doc_sheet">シート</string>
     <string name="inbox_doc_base">Base</string>

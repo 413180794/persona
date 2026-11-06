@@ -14,8 +14,8 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 )
 
-// Marking many items done (or back) in one request: 全部标为已处理 over what the list shows, 全部看过 / 全部清除 on a
-// section, and their 撤销 (docs/inbox.md「全部标为已处理」). Done stays in Persona, as for one item: Feishu, the mail
+// Filing many items (or bringing them back) in one request: 全部清理 over what the list shows, 全部看过 / 全部清除 on
+// a section, and their 撤销 (docs/inbox.md「全部清理」). Done stays in Persona, as for one item: Feishu, the mail
 // servers and the connectors are not told.
 
 // inboxBulkMax caps one request (the list holds a few hundred items at most).
@@ -67,9 +67,12 @@ func inboxVersion(it *InboxItem) string {
 
 // Bulk actions (POST /api/v1/inbox/bulk).
 const (
-	bulkDone    = "done"    // 全部标为已处理
-	bulkDismiss = "dismiss" // 全部忽略: done_by=dismissed
-	bulkReopen  = "reopen"  // 移回 / 撤销
+	// bulkDone files as handled (done_by=user): the sections' 全部看过 / 全部清除, and 全部标为已处理 from clients
+	// released before #5114, which still send it.
+	bulkDone = "done"
+	// bulkDismiss files as set aside (done_by=dismissed): 全部清理, and 全部忽略 from clients before #5114.
+	bulkDismiss = "dismiss"
+	bulkReopen  = "reopen" // 移回 / 撤销
 )
 
 // doneByOf is done_by for the user filing an item: 已处理 or 忽略.

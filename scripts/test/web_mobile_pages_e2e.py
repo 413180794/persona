@@ -172,10 +172,10 @@ def inbox_filters(page, tag, shots):
     check(res["rows"] == 1 and res["docW"] <= res["W"], f"{tag}: the inbox filters keep to one row that scrolls sideways", res)
     shot(page, shots, f"inbox_{tag}")
     page.get_by_role("button", name="更多操作").tap()
-    item = page.get_by_role("menuitem", name="全部标为已处理")
+    item = page.get_by_role("menuitem", name="全部清理")
     item.wait_for()
     page.wait_for_timeout(300)  # the menu's pop-in scale
-    check(item.bounding_box()["height"] >= 44, f"{tag}: 全部标为已处理 is in the ⋯ menu, a 44pt row")
+    check(item.bounding_box()["height"] >= 44, f"{tag}: 全部清理 is in the ⋯ menu, a 44pt row")
     shot(page, shots, f"inbox_menu_{tag}")
     page.keyboard.press("Escape")
     page.get_by_role("menu").wait_for(state="detached")

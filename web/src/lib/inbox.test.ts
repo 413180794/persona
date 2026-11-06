@@ -297,7 +297,7 @@ describe("飞书消息", () => {
   });
 });
 
-describe("全部标为已处理的文案", () => {
+describe("全部清理的文案", () => {
   it("范围和件数", () => {
     expect(bulkScope(["", ""], "", 12)).toBe("全部 · 12 件");
     expect(bulkScope(["飞书", "@我"], "", 3)).toBe("飞书 · @我 · 3 件");
@@ -309,7 +309,7 @@ describe("全部标为已处理的文案", () => {
     expect(bulkScopeName([], "")).toBe("全部");
   });
   it("结果", () => {
-    expect(bulkMessage("dismiss", { changed: [dm], unchanged: [], skipped: [{ id: "b", reason: "changed" }] })).toBe("已忽略 1 件，1 件有新消息，留在收件箱");
+    expect(bulkMessage("dismiss", { changed: [dm], unchanged: [], skipped: [{ id: "b", reason: "changed" }] })).toBe("已清理 1 件，1 件有新消息，留在收件箱");
     expect(bulkMessage(true, { changed: [], unchanged: ["a"], skipped: [] })).toBe("没有要标的");
     expect(bulkMessage(false, { changed: [], unchanged: [], skipped: [{ id: "a", reason: "missing" }] })).toBe("没有要移回的");
   });
@@ -445,7 +445,7 @@ describe("列表状态", () => {
     expect(init.method).toBe("DELETE");
   });
 
-  it("全部标为已处理：一次请求带版本；有新消息的留着；撤销移回；失败全部恢复", async () => {
+  it("一段全部看过（done）：一次请求带版本；有新消息的留着；撤销移回；失败全部恢复", async () => {
     const versioned = [{ ...dm, version: "v1" }, { ...doc, version: "v2" }, { ...mail, version: "v3" }];
     fetcher.mockReset().mockResolvedValueOnce(ok({ items: versioned }));
     await reloadInbox();
@@ -477,7 +477,7 @@ describe("列表状态", () => {
     expect(toast).toHaveBeenLastCalledWith("没标成已处理：boom", "error");
   });
 
-  it("全部忽略：done_by=dismissed，撤销移回；失败恢复", async () => {
+  it("全部清理：按忽略记（done_by=dismissed），撤销移回；失败恢复", async () => {
     const [a, b] = getInbox().items;
     fetcher.mockResolvedValueOnce(ok({ action: "dismiss", changed: [{ ...a, done_at: at(0), done_by: "dismissed" }, { ...b, done_at: at(0), done_by: "dismissed" }], unchanged: [], skipped: [], ids: [a.id, b.id] }));
     const p = setAllDone([a, b], "dismiss");
@@ -485,7 +485,7 @@ describe("列表状态", () => {
     await p;
     expect(JSON.parse(fetcher.mock.calls[1][1].body).action).toBe("dismiss");
     const [message, , action] = vi.mocked(toast).mock.lastCall!;
-    expect(message).toBe("已忽略 2 件");
+    expect(message).toBe("已清理 2 件");
     fetcher.mockResolvedValueOnce(ok({ action: "reopen", changed: [a, b], unchanged: [], skipped: [], ids: [a.id, b.id] }));
     action!.run();
     await vi.waitFor(() => expect(getInbox().items[0].done_by).toBeFalsy());
@@ -494,10 +494,10 @@ describe("列表状态", () => {
     fetcher.mockResolvedValueOnce(fail(502, "boom"));
     await setAllDone([a], "dismiss");
     expect(getInbox().items[0].done_at).toBeFalsy();
-    expect(toast).toHaveBeenLastCalledWith("没忽略成：boom", "error");
+    expect(toast).toHaveBeenLastCalledWith("没清理成：boom", "error");
   });
 
-  it("老 hub 没有 /inbox/bulk：已处理退回 /inbox/done，忽略照实报错", async () => {
+  it("老 hub 没有 /inbox/bulk：已处理和全部清理都退回 /inbox/done", async () => {
     const [a] = getInbox().items;
     fetcher.mockResolvedValueOnce(fail(405, "method not allowed")).mockResolvedValueOnce(ok({ changed: [{ ...a, done_at: at(0), done_by: "user" }], unchanged: [], skipped: [] }));
     await setAllDone([a], "done");
@@ -506,10 +506,12 @@ describe("列表状态", () => {
     expect(getInbox().items[0].done_by).toBe("user");
 
     const [, b] = getInbox().items;
-    fetcher.mockResolvedValueOnce(fail(404, "not found"));
+    // 全部清理 on an old hub: it has no 忽略, so the items are filed as done there.
+    fetcher.mockResolvedValueOnce(fail(404, "not found")).mockResolvedValueOnce(ok({ changed: [{ ...b, done_at: at(0), done_by: "user" }], unchanged: [], skipped: [] }));
     await setAllDone([b], "dismiss");
-    expect(fetcher).toHaveBeenCalledTimes(4);
-    expect(getInbox().items[1].done_at).toBeFalsy();
+    expect(fetcher.mock.calls[4][0]).toBe("/api/v1/inbox/done");
+    expect(JSON.parse(fetcher.mock.calls[4][1].body)).toEqual({ done: true, items: [{ id: b.id }] });
+    expect(getInbox().items[1].done_at).toBeTruthy();
   });
 
   it("发送：成功标为已处理；失败放回、留下草稿", async () => {
