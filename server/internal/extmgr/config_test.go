@@ -55,7 +55,8 @@ func TestConfigInvalidLarkIsAWarning(t *testing.T) {
 	}
 }
 
-// A manager.json that does not read: its sections are left out and said, hub.json's part still holds.
+// A manager.json that does not read: its sections are left out and said, hub.json's part still holds; and
+// LoadConfig says why, so the manager does not start without them (assistant.moveConfig).
 func TestConfigUnreadableManagerJSONKeepsTheHubPart(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token":"hub-token","listen":":18999"}`), 0o600); err != nil {
@@ -69,6 +70,52 @@ func TestConfigUnreadableManagerJSONKeepsTheHubPart(t *testing.T) {
 		cfg, err := loadConfig(dir, file)
 		if err != nil || cfg.Token != "hub-token" || cfg.Listen != ":18999" || cfg.Google.ClientID != "" || len(cfg.warnings) != 1 {
 			t.Fatalf("%s: %+v %v", bad, cfg, err)
+		}
+		if _, err := LoadConfig(dir, file); err == nil {
+			t.Fatalf("%s: LoadConfig let it start", bad)
+		}
+	}
+}
+
+// A gate rule the gate could not use, or hub.json's own part of the wrong shape: New would fall back to an empty
+// configuration, so LoadConfig stops the start.
+func TestLoadConfigRefusesWhatNewWouldDrop(t *testing.T) {
+	for _, c := range []struct{ hub, mine string }{
+		{`{"token":"t"}`, `{"connector_gate":[{"connector":"github","action":"*","decision":"denied"}]}`},
+		{`{"token":"t","inbox":{"rules":["x"]}}`, `{"lark_gate":[{"method":"CLI","path":"/docs/**","action":"deny"}]}`},
+		{`{"token":"t","listen":18660}`, `{}`},
+		{`{"token":"t"}`, ``},
+	} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(c.hub), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		file := filepath.Join(t.TempDir(), "manager.json")
+		if err := os.WriteFile(file, []byte(c.mine), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadConfig(dir, file); err == nil {
+			t.Fatalf("%s + %s: LoadConfig let it start", c.hub, c.mine)
+		}
+	}
+}
+
+// LoadConfig lets a manager start with a manager.json that reads, or none yet; an invalid lark section is only a
+// warning (lark-cli is off then, nothing opens up).
+func TestLoadConfigPassesAReadableFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token":"hub-token"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, good := range []string{"", `{}`, `{"lark_gate":[{"method":"CLI","path":"/docs/**","action":"deny"}]}`, `{"lark":{"account":-1}}`} {
+		file := filepath.Join(t.TempDir(), "manager.json")
+		if good != "" {
+			if err := os.WriteFile(file, []byte(good), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if cfg, err := LoadConfig(dir, file); err != nil || cfg.Token != "hub-token" {
+			t.Fatalf("%q: %+v %v", good, cfg, err)
 		}
 	}
 }

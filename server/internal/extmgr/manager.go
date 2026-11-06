@@ -147,9 +147,9 @@ func New(opts Options) *Manager {
 			opts.Logf("extensions: configuration: %v", err)
 			cfg = &Config{}
 		}
-		for _, w := range cfg.warnings {
-			opts.Logf("extensions: %s", w)
-		}
+	}
+	for _, w := range cfg.warnings {
+		opts.Logf("extensions: %s", w)
 	}
 	if cfg.dir == "" {
 		cfg.dir = opts.Dir

@@ -77,11 +77,14 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	}
 	home := identity.HomeDir()
 	file := managerconf.DefaultFile(home)
-	moveConfig(home, file, logger.Printf)
+	ext, err := moveConfig(home, file, logger.Printf)
+	if err != nil {
+		return err
+	}
 	moveFiles(home, logger.Printf)
 	o := builtinFiles(home)
 	o.ID, o.Hub, o.Token, o.Deploy, o.Errors = assistantwire.AssistantID, hub, token, deploy, errs
-	o.DatabaseURL, o.Logf = cfg.DatabaseURL, logger.Printf
+	o.DatabaseURL, o.Logf, o.ExtConfig = cfg.DatabaseURL, logger.Printf, ext
 	return run(ctx, build, o)
 }
 
@@ -110,23 +113,42 @@ func moveFiles(home string, logf func(string, ...any)) {
 }
 
 // moveConfig takes the manager's sections out of the hub.json in hubDir into its manager.json, once
-// (managerconf.Move), and says what it did; a failure leaves them where they were and is said too: the manager then
-// runs with what manager.json has.
-func moveConfig(hubDir, file string, logf func(string, ...any)) {
+// (managerconf.Move), says what it did, and reads the configuration the extensions, connectors and bots run with
+// (extmgr.LoadConfig), which run hands on as it is. A failed move, or a configuration that does not read, is an error
+// the manager does not start with: it would run without its sections, the user's gate rules (lark_gate,
+// connector_gate) among them, and the node would fall back to its own, which let every read through. Whatever starts
+// it again (the hub's backoff for the built-in manager, the service for one made in the app) has it say why again,
+// until the file is fixed.
+func moveConfig(hubDir, file string, logf func(string, ...any)) (*extmgr.Config, error) {
 	rep, err := managerconf.Move(hubDir, file)
 	if err != nil {
-		logf("configuration: could not move the manager's sections of hub.json into %s: %v", file, err)
-		return
+		return nil, fmt.Errorf("configuration: %w (%s)", err, notStarting)
 	}
 	if len(rep.Moved) > 0 {
 		logf("configuration: moved %s from hub.json into %s (once; hub.json keeps its copy for an older build, "+
-			"which nothing here reads; hub.json as it was is in %s)", strings.Join(rep.Moved, ", "), file, rep.Backup)
+			"which nothing here reads; the sections as they were are in %s)", strings.Join(rep.Moved, ", "), file, rep.Backup)
+	}
+	if len(rep.Ignored) > 0 {
+		logf("configuration: %s: hub.json's copy differs from %s's, which is the one read; hub.json's is not used "+
+			"(kept in %s)", strings.Join(rep.Ignored, ", "), file, rep.Backup)
 	}
 	if len(rep.Stale) > 0 {
 		logf("configuration: hub.json's %s changed after they moved to %s, which is the one read: make the change there",
 			strings.Join(rep.Stale, ", "), file)
 	}
+	for _, u := range rep.Untrimmed {
+		logf("configuration: could not cut a copy of hub.json down to the moved sections (it may still hold "+
+			"hub.json's secrets): %s", u)
+	}
+	cfg, err := extmgr.LoadConfig(hubDir, file)
+	if err != nil {
+		return nil, fmt.Errorf("configuration: %w (%s)", err, notStarting)
+	}
+	return cfg, nil
 }
+
+// notStarting ends moveConfig's errors.
+const notStarting = "the manager does not start without its configuration: fix it, and it starts the next time"
 
 // runOptions are who a manager is and where its things are: the assistant the hub starts (Main), or a manager made
 // in the app with a manager.json of its own (RunManager, manager.go).
@@ -141,7 +163,9 @@ type runOptions struct {
 	// built-in manager); "" are Dir's (TailcatKey: the machine's, tunnel.HubKeyPath).
 	SecretKey, HandlesDir, TailcatKey, KBDir string
 	// ConfigFile is its manager.json, with its sections of the configuration (internal/managerconf).
-	ConfigFile  string
+	ConfigFile string
+	// ExtConfig is the configuration of its extensions, connectors and bots as moveConfig read it (nil: read there).
+	ExtConfig   *extmgr.Config
 	DatabaseURL string
 	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
 	StopWhenRevoked bool
@@ -221,8 +245,9 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
 	// The extensions, connectors and bots (internal/extmgr): the data directory here, its own sections in manager.json
-	// and its own secret.key.
-	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, SecretKey: o.SecretKey, Store: database, Build: build,
+	// (as moveConfig read and checked them) and its own secret.key.
+	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, Config: o.ExtConfig, SecretKey: o.SecretKey,
+		Store: database, Build: build,
 		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {

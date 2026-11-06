@@ -180,6 +180,9 @@ func editIf(path string, edit func(o *Object) (bool, error)) error {
 	fileMu.Lock()
 	defer fileMu.Unlock()
 	dir := filepath.Dir(path)
+	if err := danglingLink(dir); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -188,8 +191,8 @@ func editIf(path string, edit func(o *Object) (bool, error)) error {
 		return err
 	}
 	defer unlock()
-	b, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	b, err := readConfig(path)
+	if err != nil {
 		return err
 	}
 	o, err := ParseObject(b)
@@ -207,11 +210,52 @@ func editIf(path string, edit func(o *Object) (bool, error)) error {
 	return WriteFileAtomic(path, out, 0o600)
 }
 
+// ReadFile is the configuration file at path (manager.json, or the hub.json a manager reads), nil when there is none.
+// A link to nothing (a volume not mounted yet), as the file or as a directory above it, is an error, not a missing
+// file: read as none, a manager would start without its sections, and a write would replace the link.
+func ReadFile(path string) ([]byte, error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, danglingLink(path)
+	}
+	return b, err
+}
+
+// readConfig is the manager.json at path as ReadFile reads it; one that is there but empty (cut short, emptied by a
+// failed save) is an error too, not an empty configuration.
+func readConfig(path string) ([]byte, error) {
+	b, err := ReadFile(path)
+	if err == nil && b != nil && len(bytes.TrimSpace(b)) == 0 {
+		return nil, fmt.Errorf("%s is empty", path)
+	}
+	return b, err
+}
+
+// danglingLink says whether the nearest of path and the directories above it that is there is a link to nothing.
+func danglingLink(path string) error {
+	for p := filepath.Clean(path); ; p = filepath.Dir(p) {
+		if st, err := os.Lstat(p); err == nil {
+			if st.Mode()&os.ModeSymlink != 0 {
+				if _, err := os.Stat(p); err != nil {
+					return fmt.Errorf("%s is a link to nothing (%w)", p, err)
+				}
+			}
+			return nil
+		}
+		if p == filepath.Dir(p) {
+			return nil
+		}
+	}
+}
+
+// tempInfix is in the names of WriteFileAtomic's temporary files (path + tempInfix + a random part).
+const tempInfix = ".tmp-"
+
 // WriteFileAtomic writes path in one step (temporary file, fsync, rename), with perm.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	// Named after the file (not hidden): the node's path guard refuses the temporary copy of a secret by its name too.
-	f, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	f, err := os.CreateTemp(dir, filepath.Base(path)+tempInfix+"*")
 	if err != nil {
 		return err
 	}

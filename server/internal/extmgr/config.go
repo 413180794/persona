@@ -3,7 +3,6 @@ package extmgr
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/nwverse/persona/server/internal/connector"
@@ -45,6 +44,8 @@ type Config struct {
 
 	dir      string
 	warnings []string // said once when the manager starts (loadConfig)
+	// fileErr is why the manager.json's sections were not read (LoadConfig): the manager does not start with it.
+	fileErr error
 }
 
 // GoogleConfig is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
@@ -65,29 +66,31 @@ type MicrosoftConfig struct {
 // it from hub.json (tests). A missing file is an empty one.
 func loadConfig(dir, file string) (*Config, error) {
 	cfg := &Config{Listen: ":18660", dir: dir}
-	b, err := os.ReadFile(filepath.Join(dir, "hub.json"))
+	b, err := managerconf.ReadFile(filepath.Join(dir, "hub.json"))
 	switch {
-	case err == nil:
+	case err == nil && b != nil:
 		if file != "" {
 			o, err := managerconf.ParseObject(b)
 			if err != nil {
-				return cfg, fmt.Errorf("parse hub.json: %w", err)
+				return cfg, fmt.Errorf("parse %s: %w", filepath.Join(dir, "hub.json"), err)
 			}
 			b = managerconf.Without(o, managerconf.Moved)
 		}
 		if err := json.Unmarshal(b, cfg); err != nil {
-			return cfg, fmt.Errorf("parse hub.json: %w", err)
+			return cfg, fmt.Errorf("parse %s: %w", filepath.Join(dir, "hub.json"), err)
 		}
-	case !os.IsNotExist(err):
+	case err != nil:
 		return cfg, err
 	}
 	if file != "" {
 		// A manager.json that does not read leaves its sections out, and says so: hub.json's part still holds.
 		if mine, err := managerconf.Sections(file); err != nil {
+			cfg.fileErr = err
 			cfg.warnings = append(cfg.warnings, fmt.Sprintf("%v: its sections are not read until it is fixed", err))
 		} else if err := json.Unmarshal(mine, cfg); err != nil {
-			cfg.warnings = append(cfg.warnings, fmt.Sprintf("parse %s: %v: its sections are not read until it is fixed", file, err))
 			cfg = cfgWithout(cfg)
+			cfg.fileErr = fmt.Errorf("parse %s: %w", file, err)
+			cfg.warnings = append(cfg.warnings, fmt.Sprintf("parse %s: %v: its sections are not read until it is fixed", file, err))
 		}
 	}
 	if v := identity.Getenv("JARVIS_PUBLIC_URL"); v != "" {
@@ -98,7 +101,11 @@ func loadConfig(dir, file string) (*Config, error) {
 	}
 	if err := connector.ValidateRules(cfg.ConnectorGate); err != nil {
 		cfg.ConnectorGate = nil
-		return cfg, fmt.Errorf("connector_gate: %w", err)
+		where := "hub.json"
+		if file != "" {
+			where = file
+		}
+		return cfg, fmt.Errorf("%s: connector_gate: %w", where, err)
 	}
 	if err := cfg.Lark.Validate(); err != nil { // was the hub's check at start; now the manager's, which uses it
 		cfg.warnings = append(cfg.warnings, err.Error()+": lark is not read")
@@ -107,6 +114,22 @@ func loadConfig(dir, file string) (*Config, error) {
 	if cfg.Lark.LegacyGatewayConfigured() {
 		cfg.warnings = append(cfg.warnings, "lark.container / token / base_url are not read any more: Feishu through a Lark "+
 			"gateway is an extension's now; set them in its settings (docs/feishu.md)")
+	}
+	return cfg, nil
+}
+
+// LoadConfig is the configuration of a manager about to start, from the manager.json at file and dir's hub.json (as
+// loadConfig reads them), for Options.Config; or why it must not start: a file that does not read, sections that do
+// not fit, a connector_gate rule the gate could not use. Started anyway, it would run without them (New falls back to
+// an empty configuration), the user's gate rules (lark_gate, connector_gate) among them, and the node would fall back
+// to its own, which let every read through (assistant.moveConfig). Read once, so what was checked is what runs.
+func LoadConfig(dir, file string) (*Config, error) {
+	cfg, err := loadConfig(dir, file)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.fileErr != nil {
+		return nil, cfg.fileErr
 	}
 	return cfg, nil
 }

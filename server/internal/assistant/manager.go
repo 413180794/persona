@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -103,16 +104,23 @@ func WriteManagerConfig(dir string, c ManagerConfig) error {
 		return err
 	}
 	path := filepath.Join(dir, ManagerFile)
+	var aside string
+	var why error
 	// One that does not read (cut short, edited wrong) is kept beside it rather than refused: the install code that
-	// gave this identity is spent already.
+	// gave this identity is spent already. Said, since its sections (the gate rules among them) are not in the new one.
 	if b, err := os.ReadFile(path); err == nil {
-		if _, err := managerconf.ParseObject(b); err != nil {
-			if err := os.Rename(path, path+".unreadable-"+time.Now().UTC().Format("20060102T150405Z")); err != nil {
+		if _, err := managerconf.ParseObject(b); err != nil || len(bytes.TrimSpace(b)) == 0 {
+			if err == nil {
+				err = errors.New("empty")
+			}
+			aside = path + ".unreadable-" + time.Now().UTC().Format("20060102T150405Z")
+			if err := os.Rename(path, aside); err != nil {
 				return err
 			}
+			why = err
 		}
 	}
-	return managerconf.Edit(path, func(o *managerconf.Object) error {
+	err = managerconf.Edit(path, func(o *managerconf.Object) error {
 		for _, k := range managerIdentity {
 			if v, ok := who.Get(k); ok {
 				o.SetRaw(k, v)
@@ -122,6 +130,14 @@ func WriteManagerConfig(dir string, c ManagerConfig) error {
 		}
 		return nil
 	})
+	if aside != "" {
+		if err != nil {
+			return fmt.Errorf("%w (the one that did not read is kept as %s)", err, aside)
+		}
+		fmt.Fprintf(os.Stderr, "manager: %s did not read (%v): kept as %s, and a new one written with only who the "+
+			"manager is; copy its sections (gate rules, connectors, extensions, bots) back into it\n", path, why, aside)
+	}
+	return err
 }
 
 // managerIdentity are ManagerConfig's keys in manager.json.
@@ -175,6 +191,14 @@ func RunManager(ctx context.Context, build update.Build, dir string) error {
 	if err != nil {
 		return err
 	}
+	// Its sections of the configuration are in its manager.json, beside who it is; a hub.json of its directory (an
+	// older build read the sections there) moves in once. One that does not read stops it before it opens its
+	// database (its service starts it again, and it says why again).
+	file := filepath.Join(dir, ManagerFile)
+	ext, err := moveConfig(dir, file, logger.Printf)
+	if err != nil {
+		return err
+	}
 	url := c.DatabaseURL
 	if url == "" {
 		return errors.New("no database: run personad manager install, which makes its own Postgres in Docker, or give --database-url")
@@ -194,12 +218,8 @@ func RunManager(ctx context.Context, build update.Build, dir string) error {
 			deploy = "docker"
 		}
 	}
-	// Its sections of the configuration are in its manager.json, beside who it is; a hub.json of its directory (an
-	// older build read the sections there) moves in once.
-	file := filepath.Join(dir, ManagerFile)
-	moveConfig(dir, file, logger.Printf)
 	return run(ctx, build, runOptions{ID: c.ID, Hub: c.Hub, Token: c.Token, Fingerprint: c.Fingerprint, Deploy: deploy,
-		Dir: dir, ConfigFile: file, DatabaseURL: url, StopWhenRevoked: true, Logf: logger.Printf})
+		Dir: dir, ConfigFile: file, ExtConfig: ext, DatabaseURL: url, StopWhenRevoked: true, Logf: logger.Printf})
 }
 
 // pinnedHTTPClient dials the hub only when its TLS key is fp's.
