@@ -13,7 +13,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import persona.core.contracts.Interaction
 import persona.core.designsystem.*
-import persona.core.domain.mcpServerLabel
+import persona.core.contracts.mcpServerLabel
 import persona.core.domain.answer.*
 import kotlinx.serialization.json.*
 

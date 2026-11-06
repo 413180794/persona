@@ -4,7 +4,7 @@ import persona.core.contracts.*
 import persona.core.contracts.api.*
 import persona.core.domain.sort.*
 import persona.core.domain.answer.permissionSummary
-import persona.core.domain.toolDisplayName
+import persona.core.contracts.toolDisplayName
 import android.content.res.Resources
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import persona.core.designsystem.LocalizedFormats

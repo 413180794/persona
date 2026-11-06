@@ -124,6 +124,27 @@ func TestOrcaBridgeListsChats(t *testing.T) {
 	}
 }
 
+// Before the transcript is on disk the bridge answers session.items with an empty page the hub can read: history,
+// when present, is the transcript's version string (the hub's itemSpan), never a bool (#4886).
+func TestOrcaBridgeItemsBeforeTranscriptDecodeAsSpan(t *testing.T) {
+	n, _, _ := orcaBridgeNode(t)
+	raw, err := nodeCall(t, n, "session.items", map[string]any{"session_id": orcaChatUUID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var page struct {
+		Items   []json.RawMessage `json:"items"`
+		History string            `json:"history,omitempty"`
+		ToSeq   *int              `json:"to_seq,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &page); err != nil {
+		t.Fatalf("hub can't read %s: %v", raw, err)
+	}
+	if len(page.Items) != 0 || page.History != "" || page.ToSeq == nil || *page.ToSeq != 0 {
+		t.Fatalf("page %s", raw)
+	}
+}
+
 // A message goes to Orca's session with the envelope Orca checks; the same client_msg_id again is the same operation
 // (Orca replays it); interrupting and modes are Orca's writes too.
 func TestOrcaBridgeSendsInterruptsAndSetsModes(t *testing.T) {

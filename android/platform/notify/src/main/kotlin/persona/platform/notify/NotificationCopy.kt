@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import persona.core.contracts.Interaction
 import persona.core.contracts.api.ConnectionState
 import persona.core.designsystem.resolve
-import persona.core.domain.toolDisplayName
 
 @StringRes
 internal fun ongoingTitle(state: ConnectionState): Int = when (state) {
@@ -35,7 +34,7 @@ internal fun actionResultCopy(result: NotificationActionResult): Pair<Int, Int>?
  * `mcp__github__create_issue`; an MCP form says what it asks for (the server's message) instead of only that one waits.
  */
 internal fun requestCopy(context: Context, ix: Interaction): Pair<String, String> {
-    val headline = ix.copy(toolName = toolDisplayName(ix.toolName)).headline.resolve(context)
+    val headline = ix.headline.resolve(context)
     val detail = when (ix.kind) {
         "question" -> ix.questions.orEmpty().joinToString("\n") { it.question }
         "plan" -> ix.plan ?: headline

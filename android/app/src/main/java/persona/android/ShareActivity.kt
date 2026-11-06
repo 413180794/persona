@@ -51,10 +51,11 @@ class ShareActivity : ComponentActivity() {
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     @Inject lateinit var preferences: AgentsPreferences
+    private lateinit var model: ShareViewModel
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val model = ViewModelProvider(this)[ShareViewModel::class.java]
+        model = ViewModelProvider(this)[ShareViewModel::class.java]
         model.read(intent)
         setContent {
             PersonaTheme {
@@ -151,6 +152,17 @@ class ShareActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        // Cancel / dismiss / back finish the activity; rotation keeps the staged copy for the recreated sheet.
+        discardUnsentShare(isFinishing, model.locked, model::discardDraft)
+        super.onDestroy()
+    }
+}
+
+/** A sheet closed without sending drops its staged copy (#4815); a submitted share stays queued. */
+internal fun discardUnsentShare(finishing: Boolean, submitted: Boolean, discard: () -> Unit) {
+    if (finishing && !submitted) discard()
 }
 
 @Composable
@@ -267,6 +279,15 @@ class ShareViewModel @Inject constructor(
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { if (staged) this@ShareViewModel.error = app.getString(R.string.app_share_list_stale) }
             finally { loading = false }
+        }
+    }
+
+    /** Outlives the finishing activity; waits for an in-flight stage and keeps an entry that submit already queued. */
+    fun discardDraft() {
+        app.scope.launch {
+            try { queue.discardDraft(id) }
+            catch (error: CancellationException) { throw error }
+            catch (_: Exception) { }
         }
     }
 

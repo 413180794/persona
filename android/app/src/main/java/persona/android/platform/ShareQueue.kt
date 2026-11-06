@@ -215,6 +215,8 @@ class ShareQueue @Inject constructor(
 internal fun <A> shareUploadApi(main: Boolean, machine: String, owner: A, groupApi: (String) -> A?): A =
     if (main) owner else groupApi(machine) ?: owner
 
+private const val DRAFT_MAX_AGE_MILLIS = 24L * 60 * 60 * 1000
+
 /** Returns true while the staged entry still needs a connection or a main target. */
 internal suspend fun deliverQueuedShare(
     file: File, connected: Boolean,
@@ -226,7 +228,11 @@ internal suspend fun deliverQueuedShare(
 ): Boolean {
     var entry = JsonCodec.decodeFromString<QueuedShare>(file.readText())
     fun save() = writePlatformFile(file, JsonCodec.encodeToString(QueuedShare.serializer(), entry))
-    if (!entry.queued) return false
+    if (!entry.queued) {
+        // A sheet that closed without sending (or died first) leaves its copy; drop it after a day.
+        if (System.currentTimeMillis() - file.lastModified() > DRAFT_MAX_AGE_MILLIS) file.parentFile!!.deleteRecursively()
+        return false
+    }
     if (entry.attachments.isNotEmpty() && entry.finalText == null) {
         if (!connected) return true
         val target = entry.machine?.let { SessionKey(it, requireNotNull(entry.session)) } ?: prepareMain() ?: return true

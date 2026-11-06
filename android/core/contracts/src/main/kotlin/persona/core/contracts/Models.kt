@@ -622,7 +622,8 @@ data class Interaction(
             "elicitation" -> CoreText.of(Key.HeadlineElicitation)
             "plan" -> CoreText.of(Key.FleetPlanWaiting)
             "permission" -> {
-                val tool: Any = toolName ?: CoreText.of(Key.ToolGeneric)
+                // An MCP tool reads 「github · create issue」, not its raw mcp__github__create_issue (#4806).
+                val tool: Any = toolDisplayName(toolName) ?: CoreText.of(Key.ToolGeneric)
                 val detail = summary?.takeIf { it.isNotBlank() }
                 val agent = agentDisplayName
                 when {

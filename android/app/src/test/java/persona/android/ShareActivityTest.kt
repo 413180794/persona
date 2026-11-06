@@ -28,6 +28,15 @@ class ShareActivityTest {
         assertEquals("https://example.com/page\n\n请总结", sender.sent.last().text)
     }
 
+    @Test fun closingTheSheetWithoutSendingDiscardsTheStagedCopyButRotationAndSendDoNot() {
+        var discarded = 0
+        discardUnsentShare(finishing = false, submitted = false) { discarded++ }
+        discardUnsentShare(finishing = true, submitted = true) { discarded++ }
+        assertEquals(0, discarded)
+        discardUnsentShare(finishing = true, submitted = false) { discarded++ }
+        assertEquals(1, discarded)
+    }
+
     @Test fun untitledContextUsesTheGivenTitleInTheAppLanguage() {
         val text = formatSharedContent("", "https://example.com/page", emptyList(), "", true, "Shared content")
         assertTrue(text.startsWith("<jarvis-context kind=\"context\" title=\"Shared content\" url=\"https://example.com/page\">"))

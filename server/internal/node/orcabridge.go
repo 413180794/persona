@@ -638,7 +638,7 @@ func (b *orcaBridge) request(ctx context.Context, method string, params json.Raw
 	case "session.watch", "session.unwatch":
 		return ok, nil // the transcript is the node's to follow
 	case "session.items": // before the transcript is on disk: nothing yet
-		return map[string]any{"items": []any{}, "to_seq": 0, "history": false}, nil
+		return map[string]any{"items": []any{}, "to_seq": 0}, nil // no history: it is a string (the file's version) when set
 	}
 	b.mu.Lock()
 	orca := b.orcaOf[p.SessionID]

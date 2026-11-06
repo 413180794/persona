@@ -4,7 +4,7 @@ import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 import persona.core.contracts.Interaction
 import persona.core.contracts.Item
-import persona.core.domain.mcpServerLabel
+import persona.core.contracts.mcpServerLabel
 import kotlinx.serialization.json.*
 
 /** Only metadata supplied by the hook is a source; tool names are not proof. */

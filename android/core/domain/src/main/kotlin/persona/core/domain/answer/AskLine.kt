@@ -10,7 +10,7 @@ import persona.core.contracts.Todo
 import persona.core.contracts.parseTime
 import persona.core.domain.plainMarkdown
 import persona.core.domain.sort.workLine
-import persona.core.domain.toolDisplayName
+import persona.core.contracts.toolDisplayName
 import java.time.Instant
 
 // A row shows one line of it; the rest is cut by the row anyway.

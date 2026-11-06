@@ -1,0 +1,18 @@
+package persona.core.contracts
+
+/** The MCP server's name as shown: Persona's own server keeps its old id `jarvis` (allow lists and hooks match it). */
+fun mcpServerLabel(server: String): String = server.removePrefix("plugin_").let { if (it == "jarvis") "Persona" else it }
+
+/**
+ * A tool's name for a sentence (a permission card): an MCP tool as 「Persona · mail send」, others as written; null
+ * without a name (the card says 工具, [CoreText.Key.ToolGeneric]).
+ */
+fun toolDisplayName(name: String?): String? {
+    if (name.isNullOrEmpty()) return null
+    if (!name.startsWith("mcp__")) return name
+    val rest = name.removePrefix("mcp__")
+    val i = rest.lastIndexOf("__")
+    if (i <= 0) return if (rest.isEmpty()) name else mcpServerLabel(rest)
+    val tool = rest.substring(i + 2).replace('_', ' ')
+    return if (tool.isEmpty()) mcpServerLabel(rest.substring(0, i)) else "${mcpServerLabel(rest.substring(0, i))} · $tool"
+}

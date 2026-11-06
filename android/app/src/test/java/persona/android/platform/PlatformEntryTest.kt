@@ -76,6 +76,27 @@ class PlatformEntryTest {
         assertEquals("primary", shareUploadApi(false, "machine", "owner") { "primary" })
     }
 
+    @Test fun unsubmittedSharesExpireAfterADayWhileFreshDraftsAndQueuedSharesStay() = runTest {
+        fun staged(id: String, queued: Boolean, ageMillis: Long): File {
+            val directory = temporary.newFolder(id)
+            File(directory, "copy.bin").writeText("video")
+            val file = File(directory, "entry.json")
+            writePlatformFile(file, JsonCodec.encodeToString(QueuedShare.serializer(),
+                QueuedShare(id, "", "", listOf(SharedAttachment("copy.bin", "video.mp4")), queued = queued)))
+            check(file.setLastModified(System.currentTimeMillis() - ageMillis))
+            return file
+        }
+        val day = 24L * 60 * 60 * 1000
+        val expired = staged("expired", false, 2 * day)
+        val fresh = staged("fresh", false, 60_000)
+        val waiting = staged("waiting", true, 2 * day)
+        for (file in listOf(expired, fresh, waiting)) assertEquals(file === waiting, deliverQueuedShare(file, false, "Shared content",
+            { error("Offline") }, { _, _, _, _ -> error("Offline") }, { _, _ -> error("Offline") }, { _, _, _ -> error("Offline") }))
+        assertFalse(expired.parentFile!!.exists())
+        assertTrue(File(fresh.parentFile, "copy.bin").exists())
+        assertTrue(File(waiting.parentFile, "copy.bin").exists())
+    }
+
     @Test fun lockEventsRequireIndependentFieldsAndReceiptPreservesUnknownDisplay() {
         val event = ServerEvent.decode("""{"type":"lock_test","lock_test_id":"test-id","lock_test_due_at":"2026-10-31T00:00:30Z","lock_test_sent_at":"2026-10-31T00:00:30Z"}""")
         assertTrue(event is LockTestEvent)
