@@ -448,6 +448,7 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 // terminalLoop runs observes one after another until the hub unwatches, or the session's terminal cannot be streamed
 // any more (it stopped running): then a terminal.end tells the hub why.
 func (n *Node) terminalLoop(ctx context.Context, id string, s *termStream) {
+	defer s.cancel()
 	fails := 0
 	var why error
 	for ctx.Err() == nil {
