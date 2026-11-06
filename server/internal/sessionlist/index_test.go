@@ -49,6 +49,53 @@ func requireCode(t *testing.T, err error, code string) {
 	}
 }
 
+func TestExactIdentityLookup(t *testing.T) {
+	var i Index
+	items := make([]Item, 8000)
+	for n := range items {
+		items[n] = testItem(fmt.Sprintf("s%04d", n), n)
+	}
+	i.Replace("batch", items)
+	o := Options{ID: "s0000", Machine: "machine-a", Limit: 50}
+	p := mustQuery(t, &i, o) // the oldest row is not on the first ordinary page
+	if p.Total != 1 || len(p.Sessions) != 1 || p.HasMore || p.NextCursor != "" || len(p.Remove) != 0 || p.Revision != i.Revision() ||
+		!reflect.DeepEqual(p.Sessions[0], items[0].Full) {
+		t.Fatalf("exact full row = %+v", p)
+	}
+	o.Summary = true
+	if got := mustQuery(t, &i, o).Sessions[0]; !reflect.DeepEqual(got, items[0].Summary) {
+		t.Fatalf("summary = %+v", got)
+	}
+	c, err := i.Counts(o)
+	if err != nil || c.Total != 1 || c.Machine["machine-a"] != 1 || c.State["working"] != 1 {
+		t.Fatalf("exact counts = %+v, %v", c, err)
+	}
+	for _, absent := range []Options{{ID: "missing"}, {ID: "s0000", Machine: "other"}, {ID: "s0000", State: "idle"}, {ID: "s0000", Q: "no match"}} {
+		p := mustQuery(t, &i, absent)
+		if p.Total != 0 || len(p.Sessions) != 0 || p.Sessions == nil || p.Remove == nil || p.HasMore || p.NextCursor != "" {
+			t.Fatalf("missing/filter = %+v", p)
+		}
+	}
+	// Exact queries never populate/reuse a fleet-wide ordered/counts cache.
+	if len(i.cache) != 0 || len(i.snapshots) != 0 {
+		t.Fatal("exact queries created cached collection views")
+	}
+	i.Replace("changes", []Item{testItem("unrelated", 10000)})
+	if p := mustQuery(t, &i, o); p.Revision == c.Revision || p.Total != 1 {
+		t.Fatalf("unrelated revision = %+v", p)
+	}
+	i.RemoveSource("batch")
+	if p := mustQuery(t, &i, o); p.Total != 0 || len(p.Sessions) != 0 {
+		t.Fatalf("deleted = %+v", p)
+	}
+	for _, invalid := range []Options{{ID: "s0000", Since: i.Revision()}, {ID: "s0000", Cursor: "cursor"}} {
+		_, err := i.Query(invalid)
+		requireCode(t, err, "invalid_query")
+		_, err = i.Counts(invalid)
+		requireCode(t, err, "invalid_query")
+	}
+}
+
 func TestOrderingAndZeroValue(t *testing.T) {
 	var i Index
 	empty := mustQuery(t, &i, Options{})

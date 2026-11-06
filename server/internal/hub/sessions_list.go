@@ -13,7 +13,10 @@ import (
 	"github.com/nwverse/persona/server/internal/sessionlist"
 )
 
-const featureSessionsList = "sessions_list"
+const (
+	featureSessionsList   = "sessions_list"
+	featureSessionsLookup = "sessions_lookup"
+)
 
 // runtimeList is a transport cache of the manager's already-decorated rows. It
 // does not derive agent state or store business data. sessionsMu orders updates
@@ -170,6 +173,19 @@ func (h *Hub) pagedSessions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		sessionListErr(w, err)
 		return
+	}
+	if values, lookup := r.URL.Query()["session_id"]; lookup {
+		if len(values) != 1 || values[0] == "" || opts.Machine == "" || opts.Since != "" || opts.Cursor != "" {
+			sessionListErr(w, errors.New("exact session lookup requires one nonempty session_id and machine_id, without since or cursor"))
+			return
+		}
+		opts.ID = runtimeListID(opts.Machine, values[0])
+		// Match the legacy machine-specific ownership check before initializing
+		// the index; missing/foreign machines must not weaken token boundaries.
+		if em := extensionManager(r); em != "" && h.machineOwner(opts.Machine) != em {
+			writeErrCode(w, http.StatusForbidden, codeOtherManager, errOtherManager)
+			return
+		}
 	}
 	index := h.sessionListIndex()
 	// Machine disappearance does not always carry a final sessions event.

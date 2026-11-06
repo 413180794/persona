@@ -79,7 +79,8 @@
         "builtin_presets",
         "upload_dir",
         "task_push",
-        "sessions_list"
+        "sessions_list",
+        "sessions_lookup"
       ],
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",
@@ -171,7 +172,8 @@
           "builtin_presets",
           "upload_dir",
           "task_push",
-          "sessions_list"
+          "sessions_list",
+          "sessions_lookup"
         ],
         "/type": "hello"
       }
@@ -254,7 +256,8 @@
         "builtin_presets",
         "upload_dir",
         "task_push",
-        "sessions_list"
+        "sessions_list",
+        "sessions_lookup"
       ],
       "fp": "",
       "hub_id": "00000000-0000-4000-8000-000000000001",
@@ -336,7 +339,8 @@
           "builtin_presets",
           "upload_dir",
           "task_push",
-          "sessions_list"
+          "sessions_list",
+          "sessions_lookup"
         ],
         "/ok": true,
         "/version": "fixture-version"

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ func TestRuntimeList8000OverHTTPAndSocket(t *testing.T) {
 			}
 			if err := json.Unmarshal(raw, &event); err != nil {
 				t.Fatal(err)
+			}
+			if event.Type == "hello" && !slices.Contains(event.Features, featureSessionsLookup) {
+				t.Fatal("hello did not advertise exact session lookup")
 			}
 			if event.Type == "sessions" || event.Type == "sessions_delta" {
 				t.Fatalf("unexpected unbounded list: %s", event.Type)

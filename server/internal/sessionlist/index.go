@@ -40,10 +40,12 @@ type Item struct {
 
 // Options selects a filtered full list or an incremental change list. Limit zero
 // means the default. Cursor binds the filters, Summary, and Since, but not Limit.
+// ID is an adapter-supplied exact composite identity, not a public query key;
+// it selects at most one row and cannot be combined with Cursor or Since.
 type Options struct {
-	Limit                                                              int
-	Cursor, Since, State, Machine, Project, Group, Source, Provider, Q string
-	Summary                                                            bool
+	Limit                                                                  int
+	ID, Cursor, Since, State, Machine, Project, Group, Source, Provider, Q string
+	Summary                                                                bool
 }
 
 // Page contains transport values rather than adapter-specific session types.
@@ -95,7 +97,7 @@ type journalEntry struct {
 }
 
 type filters struct {
-	State, Machine, Project, Group, Source, Provider, Q string
+	ID, State, Machine, Project, Group, Source, Provider, Q string
 }
 
 type binding struct {

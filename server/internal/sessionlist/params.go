@@ -84,6 +84,9 @@ func positiveInteger(s string) (int, error) {
 }
 
 func validate(o Options) (Options, error) {
+	if o.ID != "" && (o.Cursor != "" || o.Since != "") {
+		return Options{}, failure("invalid_query", "exact identity cannot be combined with cursor or since")
+	}
 	if o.Limit == 0 {
 		o.Limit = defaultLimit
 	}
@@ -115,7 +118,7 @@ func validate(o Options) (Options, error) {
 func normalizeQ(s string) string { return strings.ToLower(s) }
 
 func (o Options) filters() filters {
-	return filters{State: o.State, Machine: o.Machine, Project: o.Project, Group: o.Group, Source: o.Source, Provider: o.Provider, Q: o.Q}
+	return filters{ID: o.ID, State: o.State, Machine: o.Machine, Project: o.Project, Group: o.Group, Source: o.Source, Provider: o.Provider, Q: o.Q}
 }
 
 func (o Options) binding() binding {

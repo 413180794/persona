@@ -1272,6 +1272,23 @@ GET /api/v1/agents/sessions?summary=1&limit=50&source=demo
 - Snapshot retention is five minutes, with at most 32 active views per collection. A restart, expiry or eviction returns HTTP **409**, `code: "cursor_expired"`; restart at page one. Cursors bind filters and summary mode; a mismatched/tampered cursor returns 400.
 - The runtime collection includes Codex history. It uses the manager's already-decorated state, ownership, hidden/deleted-session rules and task metadata; it does not recompute business state in the hub.
 
+#### Exact runtime-session detail (`sessions_lookup`, #6054)
+
+`hello.features` advertises **`sessions_lookup`** independently of `sessions_list`. Only when it is advertised, a client can fetch one complete runtime row without paging or scanning unrelated sessions:
+
+```http
+GET /api/v1/sessions?summary=0&limit=50&machine_id=demo&session_id=<URL-encoded exact session id>
+```
+
+- `session_id` is an exact, opaque runtime id, not a substring or slash-separated path. It opts this runtime endpoint into the bounded API even without `limit`/`summary`; it does not apply to the personal-agent endpoint.
+- Supply exactly one nonempty `session_id` and one nonempty `machine_id`. Repetition, missing machine id or an empty session id returns **400**, `code: "invalid_query"`.
+- The `(machine_id, session_id)` tuple resolves directly in the existing transport-index map. Other row filters still apply to that one candidate. `summary=0` (the default) returns the identical complete, decorated/shown `Session` DTO used by the collection, including `background`, `subagents`, `workflows`, `queued`, ports and all session configuration. `summary=1` and `counts=1` retain their ordinary meanings for that candidate.
+- The ordinary collection envelope is unchanged: `sessions` has zero or one row, `total` is 0 or 1, `remove` is `[]`, `has_more` is false, `next_cursor` is absent, and `revision` is the current collection checkpoint. A missing, hidden or deleted session is an empty matching collection, not a 404. The existing `agents.read` scope and manager ownership restrictions apply; a foreign manager's machine still returns 403 `other_manager`.
+- Exact lookup cannot be combined with `since` or `cursor` (400 `invalid_query`). An active-chat getter takes a fresh exact baseline after coalesced `sessions_list` invalidations, rather than borrowing a list-summary delta checkpoint. Its revision is not a baseline for the whole collection.
+- Older hubs ignore unknown query keys: sending `session_id` to one can silently return an unrelated first page of 50 sessions. Clients **must gate on `sessions_lookup`**, never assume `sessions_list` implies it. If absent, retain the older detail/full-list fallback. Requests without `session_id` and unknown parameters otherwise keep their existing behavior.
+
+The direct lookup/count path does not build, scan or sort unrelated session views, even on a missing id, new filter or changed revision. Runtime index initialization remains a one-off full-collection cost; upstream full-list reports still update the index normally. `BenchmarkExactLookup` measures uncached found/missing requests against 1, 8,000 and 32,000 rows separately from initialization.
+
 #### Summary rows
 
 Runtime summaries keep the existing snake_case names and decode as a `Session` with optional detail fields absent. They contain:

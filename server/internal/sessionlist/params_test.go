@@ -45,6 +45,31 @@ func TestParseAndEnabled(t *testing.T) {
 	}
 }
 
+// session_id belongs only to the runtime adapter. Older hubs and the unchanged
+// personal-agent adapter parse it as unknown, not as the index's composite ID.
+func TestExactLookupQueryRequiresAdapterFeature(t *testing.T) {
+	v := url.Values{"machine_id": {"machine-a"}, "session_id": {"missing"}}
+	if Enabled(v) {
+		t.Fatal("runtime-only lookup key enabled a different collection")
+	}
+	v.Set("summary", "0")
+	v.Set("limit", "50")
+	o, err := Parse(v)
+	if err != nil || o.ID != "" {
+		t.Fatalf("adapter-specific query = %+v, %v", o, err)
+	}
+	var i Index
+	items := make([]Item, 60)
+	for n := range items {
+		items[n] = testItem(fmt.Sprintf("s%02d", n), n)
+	}
+	i.Replace("batch", items)
+	p := mustQuery(t, &i, o)
+	if len(p.Sessions) != 50 || p.Total != 60 || !p.HasMore {
+		t.Fatalf("old hub ignoring session_id = %+v", p)
+	}
+}
+
 func TestMalformedParameters(t *testing.T) {
 	tests := []url.Values{
 		{"limit": {""}}, {"limit": {"0"}}, {"limit": {"-1"}}, {"limit": {"201"}}, {"limit": {"+50"}}, {"limit": {"050"}}, {"limit": {"1.5"}}, {"limit": {" 50"}}, {"limit": {"999999999999999999999999"}},

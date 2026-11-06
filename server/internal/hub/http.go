@@ -566,7 +566,8 @@ func (h *Hub) interruptSession(w http.ResponseWriter, r *http.Request, m *Machin
 }
 
 func (h *Hub) listSessions(w http.ResponseWriter, r *http.Request) {
-	if sessionlist.Enabled(r.URL.Query()) {
+	_, lookup := r.URL.Query()["session_id"]
+	if lookup || sessionlist.Enabled(r.URL.Query()) {
 		h.pagedSessions(w, r)
 		return
 	}

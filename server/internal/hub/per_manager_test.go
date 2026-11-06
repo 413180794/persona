@@ -183,10 +183,11 @@ func TestAnExtensionsTokenOnlyOnItsManagersThings(t *testing.T) {
 	}
 	ext := extTokenPrefix + "bx-token"
 	for _, c := range []struct{ method, path, body string }{
-		{http.MethodGet, "/api/v1/machines/ma/herdr", ""},                        // forwarded by machine
-		{http.MethodPost, "/api/v1/sessions/ma/s3/messages", `{"text":"x"}`},     // the hub's own, by session
-		{http.MethodPost, "/api/v1/machines/ma/confirm", ""},                     // machines/{id}
-		{http.MethodPost, "/api/v1/interactions/ix_a/resolve", `{"allow":true}`}, // A's card
+		{http.MethodGet, "/api/v1/sessions?summary=0&limit=50&machine_id=ma&session_id=s3", ""}, // exact lookup is not an ownership bypass
+		{http.MethodGet, "/api/v1/machines/ma/herdr", ""},                                       // forwarded by machine
+		{http.MethodPost, "/api/v1/sessions/ma/s3/messages", `{"text":"x"}`},                    // the hub's own, by session
+		{http.MethodPost, "/api/v1/machines/ma/confirm", ""},                                    // machines/{id}
+		{http.MethodPost, "/api/v1/interactions/ix_a/resolve", `{"allow":true}`},                // A's card
 	} {
 		if code, out := do(ext, c.method, c.path, c.body); code != http.StatusForbidden || out["code"] != codeOtherManager {
 			t.Fatalf("%s %s with B's extension: %d %v", c.method, c.path, code, out)
@@ -197,6 +198,9 @@ func TestAnExtensionsTokenOnlyOnItsManagersThings(t *testing.T) {
 			!strings.Contains(l, `"method":"fs.watch"`) { // (the hub's own on ma's connection)
 			t.Fatalf("A was reached: %s", l)
 		}
+	}
+	if code, out := do(ext, http.MethodGet, "/api/v1/sessions?machine_id=mb&session_id=missing", ""); code != http.StatusOK || out["total"] != float64(0) {
+		t.Fatalf("B's exact lookup with B's extension: %d %v", code, out)
 	}
 	if code, out := do(ext, http.MethodGet, "/api/v1/machines/mb/herdr", ""); code != http.StatusOK || out["who"] != "b" {
 		t.Fatalf("B's machine with B's extension: %d %v", code, out)

@@ -25,6 +25,36 @@ func benchmarkIndex(b *testing.B, size int) *Index {
 	return i
 }
 
+// No ordered view or exact-query cache is warmed: every request performs the
+// direct lookup anew. Growing the unrelated fleet must not grow request cost.
+func BenchmarkExactLookup(b *testing.B) {
+	for _, size := range []int{1, 8000, 32000} {
+		for _, missing := range []bool{false, true} {
+			b.Run(fmt.Sprintf("sessions=%d/missing=%t", size, missing), func(b *testing.B) {
+				var i Index
+				items := make([]Item, size)
+				for n := range items {
+					items[n] = testItem(fmt.Sprintf("s%05d", n), n)
+				}
+				i.Replace("batch", items)
+				o := Options{ID: "s00000", Machine: "machine-a"}
+				want := 1
+				if missing {
+					o.ID, want = "missing", 0
+				}
+				b.ReportAllocs()
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					p, err := i.Query(o)
+					if err != nil || p.Total != want || len(p.Sessions) != want {
+						b.Fatalf("exact = %+v, %v", p, err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func BenchmarkWarmQuery(b *testing.B) {
 	for _, size := range []int{1000, 8000, 20000} {
 		for _, summary := range []bool{false, true} {

@@ -103,7 +103,8 @@ func (f filters) matches(r *record) bool {
 		return false
 	}
 	v := r.item
-	return (f.State == "" || f.State == v.State) &&
+	return (f.ID == "" || f.ID == v.ID) &&
+		(f.State == "" || f.State == v.State) &&
 		(f.Machine == "" || f.Machine == v.Machine) &&
 		(f.Project == "" || f.Project == v.Project) &&
 		(f.Group == "" || f.Group == v.Group) &&
@@ -169,10 +170,24 @@ func addCount(c *Counts, v Item, delta int) {
 	}
 }
 
+// exactResult deliberately bypasses ordered views and their caches. A miss,
+// changed revision or new filter still touches only the selected map entry.
+func (i *Index) exactResult(f filters) *result {
+	r := &result{counts: emptyCounts(i.revisionToken()), ordered: true}
+	if item := i.items[f.ID]; f.matches(item) {
+		addCount(&r.counts, item.item, 1)
+		r.events = []event{{id: f.ID, updated: item.item.UpdatedAt, value: item}}
+	}
+	return r
+}
+
 // countsResult never builds or sorts an ordered list. Unfiltered counts are
 // maintained on updates, so a one-row delta does not scan 8,000 unrelated rows
 // merely to report Total. Filtered counts are scanned only on a cache miss.
 func (i *Index) countsResult(f filters) *result {
+	if f.ID != "" {
+		return i.exactResult(f)
+	}
 	key := cacheKey{filters: f}
 	if r := i.cached(key); r != nil {
 		return r
@@ -192,6 +207,9 @@ func (i *Index) countsResult(f filters) *result {
 }
 
 func (i *Index) fullResult(f filters) *result {
+	if f.ID != "" {
+		return i.exactResult(f)
+	}
 	key := cacheKey{filters: f}
 	if r := i.cached(key); r != nil && r.ordered {
 		return r
