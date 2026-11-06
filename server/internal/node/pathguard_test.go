@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -167,5 +168,67 @@ func TestStatPathsTimeout(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].Kind != "missing" || got[0].Path != "~/stuck" || got[1].Kind != "file" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// The credentials in the data folder are refused whatever wrote them (Persona Link, the tunnel, the daemons, a manager)
+// and wherever PERSONA_HOME puts the folder; the rest of it stays readable (#5247).
+func TestPathGuardDataDirCredentials(t *testing.T) {
+	home := t.TempDir()
+	state := filepath.Join(t.TempDir(), "persona-state")
+	t.Setenv("PERSONA_HOME", state)
+	t.Setenv("JARVIS_HOME", "")
+	n := &Node{home: home}
+	write := func(p, body string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refused := []string{
+		filepath.Join(home, ".persona/link.json"),
+		filepath.Join(home, ".jarvis/link.json"),
+		filepath.Join(home, ".persona/tailcat.json"),
+		filepath.Join(home, ".persona/tailcat-hub.json"),
+		filepath.Join(home, ".persona/daemons.json"),
+		filepath.Join(home, ".persona/managers/m1/manager.json"),
+		filepath.Join(home, ".persona/managers/m1/secret.key"),
+		filepath.Join(state, "hub.json"),
+		filepath.Join(state, "hub.json.bak-20261106"),
+		filepath.Join(state, "secret.key"),
+		filepath.Join(state, "link.json"),
+		filepath.Join(state, "managers/m1/manager.json"),
+		filepath.Join(state, "launcher-settings/work-claude-settings.json"),
+		filepath.Join(home, ".persona/launcher-settings/work-env-settings.json"),
+		filepath.Join(state, "relay.json"),
+		filepath.Join(state, "relay.secret"),
+		filepath.Join(state, "devices.json.migrated"),
+		filepath.Join(state, "mail_accounts.json"),
+		filepath.Join(home, ".claude.json"),
+		filepath.Join(home, ".claude-custom-oauth.json"),
+	}
+	readable := []string{
+		filepath.Join(home, ".persona/data/people/a.md"),
+		filepath.Join(state, "data/people/a.md"),
+		filepath.Join(home, "code/link.json"), // a project's file of the same name
+		filepath.Join(home, "persona-state-notes/hub.json"),
+	}
+	for _, p := range append(slices.Clone(refused), readable...) {
+		write(p, `{"token":"x"}`)
+	}
+	for _, p := range refused {
+		if _, err := n.readFile(p, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read %s: %v, want it refused", p, err)
+		}
+	}
+	for _, p := range readable {
+		if _, err := n.readFile(p, "", 0, false); err != nil {
+			t.Errorf("read %s: %v", p, err)
+		}
+	}
+	if _, err := n.listDir(state, ""); err != nil {
+		t.Errorf("list the data folder: %v", err)
 	}
 }

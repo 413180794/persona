@@ -33,6 +33,10 @@ type Node struct {
 	Version string
 	updater *nodeupdate.Manager // resident-owned, shared across attach connections
 
+	// dataDirOnce finds the data folder the path guard refuses the credentials of (pathguard.go dataDirs).
+	dataDirOnce sync.Once
+	dataDirList []string
+
 	// decided: calls another PermissionRequest hook answered (hookdecided.go).
 	decided decisions
 

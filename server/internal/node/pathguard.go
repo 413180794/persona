@@ -6,7 +6,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // What a client may look at by a path a conversation names (fs.stat, file.read, fs.list, downloads): anything the
@@ -32,7 +35,7 @@ var secretDirs = []string{
 // secretFiles are files under the home that are credentials.
 var secretFiles = []string{
 	".netrc", ".git-credentials", ".npmrc", ".pypirc", ".pgpass",
-	".claude/.credentials.json", ".codex/auth.json",
+	".claude/.credentials.json", ".codex/auth.json", ".claude.json", ".claude-custom-oauth.json",
 }
 
 // keyNames are private keys by their usual names, wherever they are.
@@ -40,6 +43,15 @@ var keyNames = map[string]bool{"id_rsa": true, "id_dsa": true, "id_ecdsa": true,
 
 // hubKeyExt are the key files in the hub's folder.
 var hubKeyExt = map[string]bool{".key": true, ".p8": true, ".pem": true, ".crt": true}
+
+// dataSecrets are the credential files in the data folder (and a manager's folder under it) by the start of their
+// name, so a backup beside one is refused too: hub.json (the token, the database password), Persona Link's credential,
+// the tunnel identities (a private key), the daemons' tokens, a manager's bus token, the APNs key.
+var dataSecrets = []string{"hub.json", "link.json", "tailcat.json", "tailcat-hub.json", "daemons.json", "manager.json", "apns",
+	"relay.json", "relay.secret", "devices.json", "mail_accounts.json"}
+
+// dataSecretDirs are folders in the data folder refused whole: the launchers' merged settings hold their tokens.
+var dataSecretDirs = []string{"launcher-settings"}
 
 // fold compares paths as macOS's default file system does: case-insensitively.
 func fold(p string) string { return strings.ToLower(filepath.ToSlash(p)) }
@@ -56,15 +68,22 @@ func (n *Node) offLimits(path string) error {
 	if keyNames[filepath.Base(p)] {
 		return errOffLimits
 	}
-	// The hub's and the connector's own folders: hub.json (the token, the database password) and its backups, the
-	// keys beside it (secret.key, handles.key, hub.key, the APNs .p8).
-	for _, part := range strings.Split(p, "/") {
-		if part == ".persona" || part == ".jarvis" {
-			base := filepath.Base(p)
-			if strings.HasPrefix(base, "hub.json") || strings.HasPrefix(base, "apns") || hubKeyExt[filepath.Ext(base)] {
+	// The hub's, the node's and the managers' own folders: the credentials in them and the keys beside them (secret.key,
+	// handles.key, hub.key, the APNs .p8), wherever PERSONA_HOME puts the folder.
+	if rel, ok := n.inDataDir(p); ok {
+		base := filepath.Base(p)
+		if hubKeyExt[filepath.Ext(base)] {
+			return errOffLimits
+		}
+		for _, part := range strings.Split(rel, "/") {
+			if slices.Contains(dataSecretDirs, part) {
 				return errOffLimits
 			}
-			break
+		}
+		for _, name := range dataSecrets {
+			if strings.HasPrefix(base, name) {
+				return errOffLimits
+			}
 		}
 	}
 	if n.home == "" {
@@ -85,6 +104,41 @@ func (n *Node) offLimits(path string) error {
 		}
 	}
 	return nil
+}
+
+// inDataDir says whether the folded path p is in a data folder, and where in it: one named .persona or .jarvis
+// anywhere (this machine's, another user's, a copy), or the one PERSONA_HOME names for this node (identity.DataDir), as
+// written or with its links followed.
+func (n *Node) inDataDir(p string) (string, bool) {
+	parts := strings.Split(p, "/")
+	for i, part := range parts {
+		if part == ".persona" || part == ".jarvis" {
+			return strings.Join(parts[i+1:], "/"), true
+		}
+	}
+	for _, dir := range n.dataDirs() {
+		if rel, ok := strings.CutPrefix(p, dir+"/"); ok {
+			return rel, true
+		}
+	}
+	return "", false
+}
+
+// dataDirs are this node's data folder (folded), as written and with its links followed: looked up once, not on
+// every component of every path a client asks about. None without a home or PERSONA_HOME to find it by.
+func (n *Node) dataDirs() []string {
+	n.dataDirOnce.Do(func() {
+		dir := identity.DataDir(n.home)
+		if !filepath.IsAbs(dir) {
+			return
+		}
+		dir = filepath.Clean(dir)
+		n.dataDirList = []string{fold(dir)}
+		if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
+			n.dataDirList = append(n.dataDirList, fold(real))
+		}
+	})
+	return n.dataDirList
 }
 
 // homeRel is the folded path p relative to home, home as written or with its links followed: realPath hands over
