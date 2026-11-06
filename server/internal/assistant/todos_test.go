@@ -118,11 +118,13 @@ func (e *todoEnv) get(id string) *Todo {
 
 // sessions is machine's node sending its list (sessions.changed).
 func (e *todoEnv) sessions(machine string, list ...proto.Session) {
-	for i := range list {
-		list[i].MachineID = machine
+	copied := make([]proto.Session, len(list))
+	for i, s := range list {
+		s.MachineID = machine
+		copied[i] = s
 	}
-	e.f.setSessions(machine, list...)
-	e.s.SessionsChanged(context.Background(), DeviceSessions{MachineID: machine, Sessions: list})
+	e.f.setSessions(machine, copied...)
+	e.s.SessionsChanged(context.Background(), DeviceSessions{MachineID: machine, Sessions: copied})
 }
 
 // todoOf is the todo the agent works for, as the hub is told (the report: what its session list shows); "" for none.

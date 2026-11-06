@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -177,7 +178,7 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 			f.sessionsFail[p.Device]--
 			return nil, fmt.Errorf("%s: %w", p.Device, apierr.ErrOffline)
 		}
-		return json.Marshal(map[string]any{"sessions": list, "muted": f.muted[p.Device]})
+		return json.Marshal(map[string]any{"sessions": slices.Clone(list), "muted": f.muted[p.Device]})
 	case DeviceSessionGet:
 		for _, s := range list {
 			if s.SessionID == a["session_id"] {
@@ -458,7 +459,7 @@ func (f *fakeHub) forget(id string) {
 // setSessions replaces the sessions machine has.
 func (f *fakeHub) setSessions(machine string, list ...proto.Session) {
 	f.mu.Lock()
-	f.sessions[machine] = list
+	f.sessions[machine] = slices.Clone(list)
 	f.mu.Unlock()
 }
 

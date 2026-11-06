@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -297,7 +298,7 @@ func (s *Service) syncTodoTokens(machine string, sessions []proto.Session) {
 	ts := s.tokenSyncOf(machine)
 	ts.mu.Lock()
 	if sessions != nil {
-		ts.sessions = sessions
+		ts.sessions = slices.Clone(sessions)
 	}
 	ts.dirty = true
 	if ts.sending {
