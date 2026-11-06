@@ -79,5 +79,17 @@ describe("ContextMeter", () => {
     const alone = renderToStaticMarkup(<ContextMeter session={{ ...s, context_window: undefined }} />);
     expect(alone).not.toContain("<button");
   });
+  it("is the bare share alone when compact (#4443): no model or bar, still the popover's button, nothing without a window", () => {
+    const html = renderToStaticMarkup(<ContextMeter session={s} compact />);
+    expect(html).toMatch(/^<button type="button" aria-haspopup="dialog"/);
+    expect(html).toContain(">61%<");
+    expect(html).not.toContain("opus 5.5<");
+    expect(html).not.toContain("progressbar");
+    expect(html).not.toContain("上下文剩 61%<");
+    expect(html).toContain('aria-label="上下文剩 61%"');
+    expect(html).toContain("touch-hit");
+    expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 170000 }} compact />)).toContain("text-orange");
+    expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 180000 }} compact />)).toContain("text-red");
+    expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_window: undefined }} compact />)).toBe("");
+  });
 });
-

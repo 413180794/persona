@@ -4,7 +4,8 @@
 // open beside the chat) the header hides it so the title fits (#3532, #3670). Where the header is 1000px or wider the number
 // says what it is (「上下文剩 61%」, #3668); between 800 and 1000px it stays the bare share so the title keeps its room. The tooltip
 // adds what happens when the window fills and, once close, what to do about it. A tablet has no hover, so a click (a tap)
-// opens the same words as a popover, with the token count (#4054).
+// opens the same words as a popover, with the token count (#4054). Where the header is 680–800px wide (an iPad in landscape
+// with the sidebar open, #4443) it is `compact`: the bare share alone, coloured as it fills, opening the same popover.
 import { useEffect } from "react";
 import { contextHeaderLabel, contextHint, contextLabel, contextNotes, contextShown, contextTier, contextTooltip, contextUsage, modelShort, useContextAsUsed, type ContextTier } from "../../lib/context-usage";
 import { cx, EASE, Menu, useMenu } from "../../ui/atoms";
@@ -13,7 +14,7 @@ import type { Session } from "../../lib/types";
 const TIER_BAR: Record<ContextTier, string> = { ok: "bg-accent", warn: "bg-orange", danger: "bg-red" };
 const TIER_TEXT: Record<ContextTier, string> = { ok: "", warn: "font-medium text-orange", danger: "font-medium text-red" };
 
-export function ContextMeter({ session }: { session: Session }) {
+export function ContextMeter({ session, compact = false }: { session: Session; compact?: boolean }) {
   const asUsed = useContextAsUsed();
   const info = useMenu();
   const model = modelShort(session.model);
@@ -25,6 +26,7 @@ export function ContextMeter({ session }: { session: Session }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a change of `known` closes it
   }, [known]);
   if (!model && !usage) return null;
+  if (compact && !usage) return null; // the model alone is not worth the title's room
   const tier = usage ? contextTier(usage) : "ok";
   const tip = usage ? contextTooltip(usage, asUsed) : undefined;
   const title = [[model, tip].filter(Boolean).join(" · "), usage ? contextHint(usage) : ""].filter(Boolean).join("\n");
@@ -43,26 +45,33 @@ export function ContextMeter({ session }: { session: Session }) {
         onClick={info.open}
         aria-haspopup="dialog"
         aria-expanded={Boolean(info.anchor)}
-        // the visible words are in the name (「上下文剩 61%」, or the bare 「61%」 in a narrower header) and the explanation
+        // the visible words are in the name (「上下文剩 61%」, or the bare 「61%」 in a narrower header; the compact one says
+        // 「上下文剩 61%」 around its bare share) and the explanation
         // is the description, open or not; the tooltip goes while the popover shows the same words
-        aria-label={[model, contextHeaderLabel(usage, asUsed)].filter(Boolean).join(" · ")}
+        aria-label={[compact ? "" : model, contextHeaderLabel(usage, asUsed)].filter(Boolean).join(" · ")}
         aria-description={contextHint(usage)}
         title={info.anchor ? undefined : title}
         className={cx(look, "touch-hit -mx-1.5 rounded-chip px-1.5 transition-colors", info.anchor && "bg-hover")}
       >
-        {model && <span className="max-w-28 truncate">{model}</span>}
-        <span
-          className="block h-1 w-10 overflow-hidden rounded-full bg-hover-2"
-          role="progressbar"
-          aria-label={tip}
-          aria-valuenow={contextShown(usage, asUsed)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <span className={cx("block h-full rounded-full transition-[width] duration-300", TIER_BAR[tier])} style={{ width: `${contextShown(usage, asUsed)}%`, transitionTimingFunction: EASE }} />
-        </span>
-        <span className={cx("tabular-nums @min-[1000px]:hidden", TIER_TEXT[tier])}>{contextLabel(usage, asUsed)}</span>
-        <span className={cx("hidden tabular-nums @min-[1000px]:inline", TIER_TEXT[tier])}>{contextHeaderLabel(usage, asUsed)}</span>
+        {compact ? (
+          <span className={cx("tabular-nums", TIER_TEXT[tier])}>{contextLabel(usage, asUsed)}</span>
+        ) : (
+          <>
+            {model && <span className="max-w-28 truncate">{model}</span>}
+            <span
+              className="block h-1 w-10 overflow-hidden rounded-full bg-hover-2"
+              role="progressbar"
+              aria-label={tip}
+              aria-valuenow={contextShown(usage, asUsed)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span className={cx("block h-full rounded-full transition-[width] duration-300", TIER_BAR[tier])} style={{ width: `${contextShown(usage, asUsed)}%`, transitionTimingFunction: EASE }} />
+            </span>
+            <span className={cx("tabular-nums @min-[1000px]:hidden", TIER_TEXT[tier])}>{contextLabel(usage, asUsed)}</span>
+            <span className={cx("hidden tabular-nums @min-[1000px]:inline", TIER_TEXT[tier])}>{contextHeaderLabel(usage, asUsed)}</span>
+          </>
+        )}
       </button>
       {info.anchor && <Menu anchor={info.anchor} onClose={info.close} align="right" width={300} items={contextNotes(usage, asUsed)} />}
     </>
