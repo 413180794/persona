@@ -6,6 +6,7 @@ import {
   dayLabel,
   displayLines,
   draftPlaceholder,
+  field,
   getFeedState,
   loadFeed,
   mergeInto,
@@ -374,6 +375,23 @@ describe("loading a conversation's feed (docs/protocol.md: since, oldest first, 
     const got = getFeedState().feeds["c-pages"] ?? [];
     expect(got.length).toBe(1201);
     expect(got.at(-1)?.id).toBe("f1200");
+  });
+
+  it("a page holding two copies of one item keeps the later one, and items of another conversation go to their own feed", async () => {
+    const at = (s: number) => new Date(Date.parse("2026-01-03T00:00:00Z") + s * 1000).toISOString();
+    const items: FeedItem[] = [
+      { id: "d1", conversation: "c-dup", at: at(2), kind: "routed", ref: "r", body: { draft: "first" } },
+      { id: "o1", conversation: "c-dup-other", at: at(1), kind: "routed", ref: "r" },
+      { id: "d0", conversation: "c-dup", at: at(1), kind: "routed", ref: "r" },
+      { id: "d1", conversation: "c-dup", at: at(2), kind: "routed", ref: "r", body: { draft: "second" } },
+    ];
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ items }) })));
+    await loadFeed("c-dup");
+    const feed = getFeedState().feeds["c-dup"] ?? [];
+    expect(feed.map((i) => i.id)).toEqual(["d0", "d1"]);
+    expect(field(feed[1], "draft")).toBe("second");
+    expect(getFeedState().feeds["c-dup-other"]?.map((i) => i.id)).toEqual(["o1"]);
   });
 
   it("reads past a full page and applies the snapshot when view_actions is an object, as the hub sends it", async () => {

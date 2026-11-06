@@ -1,5 +1,7 @@
 // Under Vitest the catalog plugin inlines each catalog as one module (i18n-catalogs.ts). These tests pin that the
 // inlined catalog holds exactly the strings the import form builds, so tests see the same keys as the page.
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { catalogFiles, catalogModule, i18nCatalogs } from "./i18n-catalogs";
@@ -10,18 +12,14 @@ type Catalog = { default: Record<string, string> };
 const metas = import.meta.glob("./src/i18n/locales/*/_meta.json");
 const client = import.meta.glob<Catalog>("./src/i18n/locales/*/_meta.json", { query: "?catalog=client" });
 const admin = import.meta.glob<Catalog>("./src/i18n/locales/*/_meta.json", { query: "?catalog=admin" });
-// The namespace files as Vite's plain JSON imports, what the import form's `import nsN from …` resolve to.
-const namespaces = import.meta.glob<Record<string, string>>(
-  ["./src/i18n/locales/*/*.json", "!./src/i18n/locales/*/_*.json"],
-  { eager: true, import: "default" },
-);
-
-/** flatten() over a language's namespace files of one kind, keyed like the import form's entries. */
+/** flatten() over a language's namespace files of one kind, keyed like the import form's entries. The files are read
+ *  from disk, not through an eager import.meta.glob: that made ~900 JSON modules, the slowest import of the suite. */
 function expected(lang: string, kind: "client" | "admin"): Record<string, string> {
-  const prefix = `./src/i18n/locales/${lang}/`;
-  const files = Object.entries(namespaces).filter(([path]) =>
-    path.startsWith(prefix) && path.slice(prefix.length).startsWith("admin-") === (kind === "admin"));
-  return flatten(Object.fromEntries(files.map(([path, entries]) => [`./${path.slice(prefix.length)}`, entries])));
+  const dir = fileURLToPath(new URL(`./src/i18n/locales/${lang}/`, import.meta.url));
+  const files = readdirSync(dir).filter((name) =>
+    name.endsWith(".json") && !name.startsWith("_") && name.startsWith("admin-") === (kind === "admin"));
+  const read = (name: string) => JSON.parse(readFileSync(join(dir, name), "utf8")) as Record<string, string>;
+  return flatten(Object.fromEntries(files.map((name) => [`./${name}`, read(name)])));
 }
 
 const langs = Object.keys(metas).map((path) => path.split("/").at(-2)!);

@@ -2,7 +2,7 @@
 // The look store against a hub that keeps the choice (GET /looks, PUT /looks/current, #3200): the hub's choice wins,
 // this browser's old one moves up once when the hub has none, choosing goes to the hub, and another device's choice
 // arrives as a "look" push.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LookCurrent, LookView } from "../../lib/persona";
 
 const hub = vi.hoisted(() => ({
@@ -55,6 +55,9 @@ async function load() {
 }
 
 describe("the look the hub keeps", () => {
+  // The first import transforms Persona's whole module graph, which takes seconds when the full suite loads the
+  // machine; doing it once here keeps that cost out of the first test's 5 s budget. load() still resets modules.
+  beforeAll(() => import("./Persona"), 60_000);
   beforeEach(() => {
     localStorage.clear();
     hub.looks = [...builtins, aurora];

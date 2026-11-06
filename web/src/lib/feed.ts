@@ -162,7 +162,14 @@ export function draftPlaceholder(text: string): string | undefined {
 
 function received(items: FeedItem[], plans?: Record<string, TaskPlan>) {
   const feeds = { ...st.feeds };
-  for (const it of items) feeds[it.conversation] = mergeInto(feeds[it.conversation] ?? [], [it]);
+  // one merge per conversation: merging item by item re-sorted the whole feed once per item of a 500-item page
+  const byConversation = new Map<string, Map<string, FeedItem>>();
+  for (const it of items) {
+    const group = byConversation.get(it.conversation) ?? new Map<string, FeedItem>();
+    group.set(it.id, it); // a later copy of an id wins, as merging one by one did
+    byConversation.set(it.conversation, group);
+  }
+  for (const [c, group] of byConversation) feeds[c] = mergeInto(feeds[c] ?? [], [...group.values()]);
   set({ feeds, plans: plans ? { ...st.plans, ...plans } : st.plans });
   if (items.some((i) => i.kind === "task" || i.kind === "receipt")) void refreshTodos();
 }

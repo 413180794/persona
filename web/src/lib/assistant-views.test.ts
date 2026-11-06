@@ -161,7 +161,7 @@ describe("提交回答", () => {
 
 describe("和公共 schema 的请求示例一致（#2604）", () => {
   const ex = (name: string) =>
-    JSON.parse(Object.entries(import.meta.glob("../../../schema/extension/examples/**/*.json", { query: "?raw", import: "default", eager: true }) as Record<string, string>).find(([p]) => p.endsWith(`/${name}.json`))![1]);
+    JSON.parse(Object.entries(import.meta.glob(["../../../schema/extension/examples/**/ViewActionInput.*.json", "../../../schema/extension/examples/**/ViewChangedError.*.json"], { query: "?raw", import: "default", eager: true }) as Record<string, string>).find(([p]) => p.endsWith(`/${name}.json`))![1]);
 
   it("a confirmed submit is ViewActionInput.confirmed, field for field", async () => {
     const f = respond({ status: 200, body: { action: action("view_1", "x", 1) } });
