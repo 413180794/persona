@@ -687,6 +687,15 @@ struct StarterComposer: View {
         VStack(spacing: Theme.Space.s) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
+            #if os(iOS)
+            PasteImageChip(focused: focused) { img in
+                guard images.count < 4 else { return model.toast = Toast(String(localized: "一次最多 4 张"), style: .error) }
+                let scaled = img.scaledDown(maxSide: 1600)
+                if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
+                    images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
+                }
+            }
+            #endif
             if !images.isEmpty { ComposerImages(images: $images) }
             if let shell {
                 ShellComposerBar(placeholder: String(localized: "问 \(model.persona.name)"), text: $text, selection: $selection, focused: $focused,
@@ -778,6 +787,15 @@ struct BeautifulStarterComposer: View {
         VStack(spacing: Theme.Space.s) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
+            #if os(iOS)
+            PasteImageChip(focused: focused) { img in
+                guard images.count < 4 else { return model.toast = Toast(String(localized: "一次最多 4 张"), style: .error) }
+                let scaled = img.scaledDown(maxSide: 1600)
+                if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
+                    images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
+                }
+            }
+            #endif
             if !images.isEmpty { ComposerImages(images: $images) }
             PromptComposer(placeholder: placeholder ?? String(localized: "问 \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused,
                            hasAttachments: !images.isEmpty || !videos.items.isEmpty || !quotes.isEmpty, disabled: disabled,

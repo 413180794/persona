@@ -35,9 +35,12 @@ internal class NotificationDelivery(
                 if (event.kind == "interaction") {
                     val id = event.interactionId ?: return
                     interactions.refresh()
-                    val ix = interactions.pending.value.firstOrNull { it.id == id && it.sessionKey == session } ?: return
+                    // A card outside any session (`personad ask` in a plain terminal, #4515) has an empty session id: it
+                    // is found by the event's own ids, and with no conversation of its own to be looking at, never held back.
+                    val key = SessionKey(event.machineId, event.sessionId)
+                    val ix = interactions.pending.value.firstOrNull { it.id == id && it.sessionKey == key } ?: return
                     if (NotificationPolicy.expired(ix)) { retract(id); return }
-                    if (session != null && !suppressed(session)) postInteraction(ix)
+                    if (session == null || !suppressed(session)) postInteraction(ix)
                 } else if (session == null || !suppressed(session)) postNotify(event)
             }
             else -> Unit

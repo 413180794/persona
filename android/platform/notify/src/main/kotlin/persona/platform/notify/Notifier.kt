@@ -69,10 +69,15 @@ class Notifier @Inject constructor(
 
     private fun isAssistant(session: SessionKey) = sessions.sessions.value.firstOrNull { it.key == session }?.assistant
 
-    /** [request]: the interaction to show first in the conversation, so a tap lands on the thing it is about. */
+    /**
+     * [request]: the interaction to show first in the conversation, so a tap lands on the thing it is about. A request
+     * outside any session (empty session id, #4515) has no conversation or terminal: it opens Agents, where 需要你处理
+     * lists it with its buttons.
+     */
     private fun open(session: SessionKey?, assistant: Boolean? = null, terminal: Boolean = false, request: String? = null): PendingIntent {
-        val uri = if (terminal && session != null) Uri.parse(terminalLink(TerminalRoute(session.machineId, session.sessionId)))
-        else session?.let {
+        val target = session?.takeIf { it.sessionId.isNotBlank() }
+        val uri = if (terminal && target != null) Uri.parse(terminalLink(TerminalRoute(target.machineId, target.sessionId)))
+        else target?.let {
             NotificationRoute.conversation(it.machineId, it.sessionId, assistant ?: isAssistant(it), request)
         }?.uri() ?: NotificationRoute(AppTab.Agents).uri()
         val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(context.packageName)
@@ -290,7 +295,7 @@ class Notifier @Inject constructor(
             .setContentTitle(title).setContentText(detail)
             .setOnlyAlertOnce(true)
             .apply {
-                if (terminal && session != null) addAction(0, context.getString(R.string.notify_open_terminal), destination)
+                if (terminal && session?.sessionId?.isNotBlank() == true) addAction(0, context.getString(R.string.notify_open_terminal), destination)
             }
             .setAutoCancel(true).setContentIntent(destination).build())
     }

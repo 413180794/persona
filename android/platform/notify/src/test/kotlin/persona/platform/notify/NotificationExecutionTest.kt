@@ -198,6 +198,25 @@ class NotificationExecutionTest {
         assertNull(NotificationRoute.conversation("machine", "session", null).tab)
     }
 
+    // `personad ask` in a plain terminal (#4515): the card has no session. It is still told, and no conversation being
+    // looked at holds it back, since it has none.
+    @Test fun aRequestOutsideAnySessionIsNotified() = runBlocking {
+        val script = Interaction("script", machineId = "machine", kind = "permission", summary = "Deploy?")
+        val center = Center(script)
+        val sessions = object : SessionsRepository {
+            override val machines = MutableStateFlow<List<Machine>>(emptyList())
+            override val sessions = MutableStateFlow(listOf(Session(machineId = "machine", sessionId = "session")))
+            override suspend fun refresh() = Unit
+        }
+        val posted = mutableListOf<Interaction>()
+        val delivery = NotificationDelivery(center, sessions, { true }, { posted += it }, { fail("Not an alert") }, {})
+        delivery.accept(NotifyEvent("interaction", "machine", "", interactionId = script.id))
+        assertEquals(listOf(script), posted)
+        // The same id under another machine is not this card.
+        delivery.accept(NotifyEvent("interaction", "other", "", interactionId = script.id))
+        assertEquals(1, posted.size)
+    }
+
     @Test fun devicePreferencesGateRawInteractionsAndCompletionWithoutChangingHubLongPolicy() = runBlocking {
         val center = Center(request)
         val sessions = object : SessionsRepository {

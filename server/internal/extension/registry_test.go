@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // memStore is the registry's store in memory.
@@ -743,5 +744,48 @@ func TestUntarRefusesWritesThroughLinkChains(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(to, "lib", "more.txt")); err != nil || string(b) != "m" {
 		t.Fatalf("written through an inside link: %q %v", b, err)
+	}
+}
+
+// A preview left when the hub restarted (no install, no discard) is removed when the next registry loads; what is not
+// a preview's directory, a preview not yet expired and a preview of this registry stay (#4547).
+func TestLoadRemovesPreviewsOfAnEarlierRun(t *testing.T) {
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	pkg := t.TempDir()
+	writePackage(t, pkg, nil)
+	old, err := r.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(r.dir, "staging", "plan-"+newID())
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	r2 := NewRegistry(r.dir, store, rot13{}, 202611100000)
+	mine, err := r2.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Still fresh: another hub on the same directory may be about to install it.
+	if err := r2.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(old.staging); err != nil {
+		t.Fatal("a preview not yet expired is removed:", err)
+	}
+	r2.now = func() time.Time { return time.Now().Add(previewFor + time.Minute) }
+	if err := r2.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(old.staging); !os.IsNotExist(err) {
+		t.Fatal("the earlier run's preview is left:", err)
+	}
+	if _, err := os.Stat(mine.staging); err != nil {
+		t.Fatal("this registry's own preview is removed:", err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatal("a directory that is not a preview's is removed:", err)
 	}
 }

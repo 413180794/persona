@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
@@ -268,6 +269,7 @@ func (r *Registry) Load(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.dropStalePreviews()
 	for _, row := range rows {
 		cur := r.extensions[row.ID]
 		switch {
@@ -429,6 +431,28 @@ type Preview struct {
 // MarketTrust 是预览时绑定的市场地址和信任公钥，不增加协议字段。
 func (pv *Preview) MarketTrust() (string, string) { return pv.marketSpec, pv.marketKey }
 
+// previewIDPattern is what newID makes: a preview's staging directory is named so (staging/<id>).
+var previewIDPattern = regexp.MustCompile(`^[0-9a-f]{24}$`)
+
+// dropStalePreviews removes the staging directories of previews an earlier run of the hub made and never installed
+// or discarded: previews live in memory only, so after a restart nothing else would remove them. Only those older
+// than previewFor go (expired wherever they were made), so a preview being staged now, or one of another hub still
+// running on the same directory, stays. Other names in staging/ (plan-*, …) are left alone. Called with r.mu held.
+func (r *Registry) dropStalePreviews() {
+	root := filepath.Join(r.dir, "staging")
+	entries, _ := os.ReadDir(root)
+	for _, e := range entries {
+		if !e.IsDir() || !previewIDPattern.MatchString(e.Name()) || r.previews[e.Name()] != nil {
+			continue
+		}
+		if fi, err := e.Info(); err == nil && r.now().Sub(fi.ModTime()) > previewFor {
+			_ = os.RemoveAll(filepath.Join(root, e.Name()))
+		}
+	}
+}
+
+// newID makes preview ids (and suffixes such as plan-<id>). A bare id directly under staging/ is a preview's
+// directory and is removed on Load once expired (dropStalePreviews): other staging directories need a prefix.
 func newID() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])

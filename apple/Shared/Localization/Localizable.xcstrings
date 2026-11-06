@@ -16820,6 +16820,28 @@
         }
       }
     },
+    "不粘贴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't paste"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペーストしない"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不粘贴"
+          }
+        }
+      }
+    },
     "不翻译": {
       "localizations": {
         "en": {

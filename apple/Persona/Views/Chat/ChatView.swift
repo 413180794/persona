@@ -3680,6 +3680,9 @@ struct Composer: View, Equatable {
             }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
+            #if os(iOS)
+            PasteImageChip(focused: focused) { add($0) }
+            #endif
             if !images.isEmpty {
                 ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
             }
