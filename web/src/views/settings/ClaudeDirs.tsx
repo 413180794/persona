@@ -55,15 +55,17 @@ export function ClaudeDirs({ mid, name }: { mid: string; name: string }) {
     }
   };
 
+  // Every save sends the whole list, so a second one sent while the first is in flight would be built from the old
+  // list and could undo it on the hub: wait until it lands (the buttons are disabled, the input's Enter is not).
   const toggle = (d: ClaudeDir) => {
-    if (!state) return;
+    if (!state || busy) return;
     const label = shortPath(d.path, state.home);
     void save(toggledPatterns(state, d), d.path, d.blocked ? t("settings-claudedirs.unblocked", { name: d.blocked_by ?? label }) : t("settings-claudedirs.blocked", { name: label }));
   };
 
   const typed = state ? patternError(input, state.blocked) : "";
   const add = async () => {
-    if (!state || typed) return;
+    if (!state || typed || busy) return;
     if (await save(withPattern(state.blocked, input), "+", t("settings-claudedirs.blocked", { name: input.trim() }))) setInput("");
   };
 

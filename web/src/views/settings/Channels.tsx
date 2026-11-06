@@ -139,27 +139,50 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
   const [busy, setBusy] = useState("");
   const [picking, setPicking] = useState(false);
   const [unbinding, setUnbinding] = useState(false);
+  // Every read and change of the detail takes the next number; only the newest one's answer is shown, since each is the
+  // hub's whole detail and an older one would put back what a later request already changed.
+  const seq = useRef(0);
+  // One change at a time: the page's switches, target, unbind and test message wait while one is with the hub.
+  const saving = useRef(false);
   const load = useCallback(async () => {
+    const n = ++seq.current;
     try {
-      setD(await channelDetail(id));
+      const next = await channelDetail(id);
+      if (n !== seq.current) return;
+      setD(next);
       setError("");
     } catch (e) {
-      setError(errorText(e));
+      if (n === seq.current) setError(errorText(e));
     }
   }, [id]);
   useEffect(() => void load(), [load]);
 
-  const change = async (what: string, body: Parameters<typeof updateChannel>[1]) => {
+  /** Runs one change at a time (a switch, the target, unbinding, a test message), showing `what` as busy. When `save`
+   * answers with the detail and a later read was sent while it was out, that read may have been served before the change
+   * landed, so the page reads the detail again instead of keeping the older answer. */
+  const exclusive = async (what: string, save: () => Promise<ChannelDetail | void>, done?: () => void) => {
+    if (saving.current) return;
+    saving.current = true;
+    const n = ++seq.current;
     setBusy(what);
+    let stale = false;
     try {
-      setD(await updateChannel(id, body));
-      forgetChannels();
+      const next = await save();
+      if (next) {
+        forgetChannels();
+        if (n === seq.current) setD(next);
+        else stale = true;
+      }
+      done?.();
     } catch (e) {
       toast(errorText(e), "error");
     } finally {
+      saving.current = false;
       setBusy("");
     }
+    if (stale) void load();
   };
+  const change = (what: string, body: Parameters<typeof updateChannel>[1]) => exclusive(what, () => updateChannel(id, body));
 
   const head = (
     <div className="mb-3 flex items-center gap-2">
@@ -204,7 +227,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
       {editable && (
         <Group footer={d.source === "plugin" ? t("settings-channels.disable_footer") : undefined}>
           <Row label={t("settings-channels.enable", { name: d.name })}>
-            <Switch on={d.enabled} onChange={(on) => void change("enabled", { enabled: on })} disabled={busy === "enabled"} label={t("settings-channels.enable", { name: d.name })} />
+            <Switch on={d.enabled} onChange={(on) => void change("enabled", { enabled: on })} disabled={!!busy} label={t("settings-channels.enable", { name: d.name })} />
           </Row>
         </Group>
       )}
@@ -214,14 +237,14 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
         <Group title={t("settings-channels.binding")} footer={t("settings-channels.binding_footer")}>
           <Row label={t("settings-channels.bound_account")}>{d.account?.name ?? t("settings-channels.bound")}</Row>
           <div className="px-4 py-2.5">
-            <Button tone="quiet" icon="logout" onClick={() => setUnbinding(true)} className="-ml-2 text-red">{t("settings-channels.unbind")}</Button>
+            <Button tone="quiet" icon="logout" onClick={() => setUnbinding(true)} disabled={!!busy} className="-ml-2 text-red">{t("settings-channels.unbind")}</Button>
           </div>
         </Group>
       )}
 
       {editable && d.target && (
         <Group title={t("settings-channels.target_title")} footer={t("settings-channels.target_footer")}>
-          <Row label={t("settings-channels.target_row")} onClick={() => setPicking(true)}>
+          <Row label={t("settings-channels.target_row")} onClick={() => !busy && setPicking(true)}>
             <span className="max-w-[220px] truncate">{targetText(d.target)}</span>
           </Row>
         </Group>
@@ -231,7 +254,7 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
         <Group title={t("settings-channels.features")}>
           {d.features!.map((f) => (
             <Row key={f.id} label={f.title} hint={f.description}>
-              <Switch on={f.on} onChange={(on) => void change("f:" + f.id, { features: { [f.id]: on } })} disabled={busy === "f:" + f.id} label={f.title} />
+              <Switch on={f.on} onChange={(on) => void change("f:" + f.id, { features: { [f.id]: on } })} disabled={!!busy} label={f.title} />
             </Row>
           ))}
         </Group>
@@ -267,17 +290,14 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
               tone="secondary"
               icon="send"
               busy={busy === "test"}
-              onClick={async () => {
-                setBusy("test");
-                try {
-                  await testChannel(id);
-                  toast(t("settings-channels.test_sent", { name: d.name }), "ok");
-                } catch (e) {
-                  toast(errorText(e), "error");
-                } finally {
-                  setBusy("");
-                }
-              }}
+              disabled={!!busy && busy !== "test"}
+              onClick={() =>
+                void exclusive(
+                  "test",
+                  async () => void (await testChannel(id)),
+                  () => toast(t("settings-channels.test_sent", { name: d.name }), "ok"),
+                )
+              }
             >
               {t("settings-channels.send_test")}
             </Button>
@@ -302,19 +322,13 @@ export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: ()
             <Button
               tone="danger"
               busy={busy === "unbind"}
-              onClick={async () => {
-                setBusy("unbind");
-                try {
-                  setD(await unbindChannel(id));
-                  forgetChannels();
+              disabled={!!busy && busy !== "unbind"}
+              onClick={() =>
+                void exclusive("unbind", () => unbindChannel(id), () => {
                   setUnbinding(false);
                   toast(t("settings-channels.unbound"), "ok");
-                } catch (e) {
-                  toast(errorText(e), "error");
-                } finally {
-                  setBusy("");
-                }
-              }}
+                })
+              }
             >
               {t("settings-channels.unbind")}
             </Button>

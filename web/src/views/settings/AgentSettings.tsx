@@ -42,7 +42,12 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
   const [applyAll, setApplyAll] = useState(() => localStorage.getItem(ALL_KEY) !== "0"); // on by default, as on iOS
   const [settings, setSettings] = useState<AgentSetting[] | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
+  // The keys with a save in flight: each row stays disabled until its own save ends, whatever else finishes first.
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
+  // The shown computer's saves in flight, and a count of saves started, so an answer can tell whether it is the
+  // only and newest save (then its full list is current) or another row's value may be newer than what it carries.
+  const saving = useRef(new Set<string>());
+  const started = useRef(0);
   const [reload, setReload] = useState(0);
   const current = useRef(mid);
 
@@ -73,22 +78,38 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
     localStorage.setItem(ALL_KEY, on ? "1" : "0");
   };
 
+  const markBusy = (key: string, on: boolean) =>
+    setBusy((cur) => {
+      const next = new Set(cur);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+
   const put = (id: string, key: string, value: SettingValue) =>
     api<{ settings?: AgentSetting[] }>(`/machines/${enc(id)}/${text.path}`, { method: "PUT", json: { key, value } });
 
   // Sends one value to the shown computer (and, with "Change all", every other online one); rolls the row back if the
-  // shown computer refuses, and says what happened.
+  // shown computer refuses, and says what happened. While another row's save is in flight (or one started after
+  // this), the answer's list may hold that row's old value, so only this row's value is taken from it.
   const change = async (s: AgentSetting, value: SettingValue) => {
     const before = s.value ?? null;
     const target = shown;
+    const seq = ++started.current;
+    saving.current.add(s.key);
     setSettings((cur) => cur && withValue(cur, s.key, value));
-    setBusy(s.key);
+    markBusy(s.key, true);
     const ids = applyAll ? [target, ...online.map((m) => m.id).filter((id) => id !== target)] : [target];
     const results: ApplyResult[] = await Promise.all(
       ids.map(async (id) => {
         try {
           const r = await put(id, s.key, value);
-          if (id === target && current.current === target && r.settings) setSettings(r.settings);
+          if (id === target && current.current === target && r.settings) {
+            const alone = saving.current.size === 1 && started.current === seq;
+            const answered = r.settings.find((x) => x.key === s.key);
+            if (alone) setSettings(r.settings);
+            else if (answered) setSettings((cur) => cur && withValue(cur, s.key, answered.value ?? null));
+          }
           return { id, name: name(id) };
         } catch (e) {
           if (id === target && current.current === target) setSettings((cur) => cur && withValue(cur, s.key, before));
@@ -96,7 +117,8 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
         }
       }),
     );
-    setBusy(null);
+    saving.current.delete(s.key);
+    markBusy(s.key, false);
     const sum = applySummary(results);
     toast(sum.ok ? t("settings-agentsettings.toast_value", { title: settingTitle(s), value: valueText(value, s.key), summary: sum.text }) : t("settings-agentsettings.toast_failed", { title: settingTitle(s), summary: sum.text }), sum.ok ? "ok" : "error");
   };
@@ -105,7 +127,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
   const pushToAll = async (s: AgentSetting) => {
     const others = online.filter((m) => m.id !== shown);
     if (!others.length) return toast(t("settings-agentsettings.no_other_online"), "info");
-    setBusy(s.key);
+    markBusy(s.key, true);
     const results: ApplyResult[] = await Promise.all(
       others.map((m) =>
         put(m.id, s.key, s.value ?? null).then(
@@ -114,7 +136,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
         ),
       ),
     );
-    setBusy(null);
+    markBusy(s.key, false);
     const sum = applySummary(results);
     toast(sum.ok ? t("settings-agentsettings.pushed_to_others", { title: settingTitle(s), value: valueText(s.value ?? null, s.key), count: results.length }) : t("settings-agentsettings.toast_failed", { title: settingTitle(s), summary: sum.text }), sum.ok ? "ok" : "error");
   };
@@ -165,7 +187,7 @@ export function AgentSettings({ agent }: { agent: AgentKind }) {
           <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings-agentsettings.empty")}</p>
         ) : (
           settings.map((s, i) => (
-            <SettingRow key={`${shown}/${s.key}`} s={s} i={i} busy={busy === s.key} others={online.length - 1} onChange={(v) => void change(s, v)} onPushAll={() => void pushToAll(s)} />
+            <SettingRow key={`${shown}/${s.key}`} s={s} i={i} busy={busy.has(s.key)} others={online.length - 1} onChange={(v) => void change(s, v)} onPushAll={() => void pushToAll(s)} />
           ))
         )}
       </Group>

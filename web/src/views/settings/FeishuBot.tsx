@@ -3,7 +3,7 @@
 // credentials, pairing with a code sent to the bot, what the bot may do, the agents driven there, and how to make one.
 // Each change goes to the hub at once and the page shows what the hub answered; a failed one leaves it as it was.
 import { ChannelLink } from "./Channels";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import { t } from "../../i18n";
 import { ago } from "../../lib/format";
@@ -88,10 +88,13 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
   const changed = credentialsChanged(status, form);
   const pairing = livePairing(status, now);
   const features = status?.features ?? DEFAULT_FEATURES;
+  // Read at answer time, not when the request (or the pairing poll) started: typing meanwhile must count.
+  const changedRef = useRef(changed);
+  changedRef.current = changed;
 
-  // A newer status: fill the form unless something is being typed.
+  // A newer status: fill the form unless something is being typed (replace: the answer to saving the credentials).
   const adopt = (s: FeishuBotStatus, replace = false) => {
-    if (replace || !changed) setForm(credentialsOf(s));
+    if (replace || !changedRef.current) setForm(credentialsOf(s));
     setStatus(s);
   };
   useEffect(() => {
@@ -109,10 +112,10 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairing?.code, status?.owner]);
 
-  const run = async (what: string, call: () => Promise<FeishuBotStatus>, done?: string) => {
+  const run = async (what: string, call: () => Promise<FeishuBotStatus>, done?: string, replace = false) => {
     setSaving(true);
     try {
-      adopt(await call(), true);
+      adopt(await call(), replace);
       setError("");
       if (done) toast(done, "ok");
       return true;
@@ -186,7 +189,7 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
           </select>
         </Row>
         <div className="flex justify-end px-4 py-2.5">
-          <Button tone="accent" busy={saving && changed} disabled={!changed || !form.appID.trim() || saving} onClick={() => void run(t("settings-feishubot.save_failed"), () => updateBot(credentialsUpdate(form)), t("settings-feishubot.credentials_saved"))}>
+          <Button tone="accent" busy={saving && changed} disabled={!changed || !form.appID.trim() || saving} onClick={() => void run(t("settings-feishubot.save_failed"), () => updateBot(credentialsUpdate(form)), t("settings-feishubot.credentials_saved"), true)}>
             {t("settings-feishubot.verify_save")}
           </Button>
         </div>
