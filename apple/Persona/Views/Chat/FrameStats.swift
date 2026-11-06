@@ -60,7 +60,10 @@ final class FrameStats: NSObject {
         last = link.timestamp
     }
 
-    func stop(label: String) {
+    var running: Bool { link != nil }
+
+    @discardableResult
+    func stop(label: String) -> [String: Any] {
         link?.invalidate()
         link = nil
         for o in observers { CFRunLoopRemoveObserver(CFRunLoopGetMain(), o, .commonModes) }
@@ -100,11 +103,94 @@ final class FrameStats: NSObject {
             try? data.write(to: dir.appending(path: "frames.json"))
             try? data.write(to: dir.appending(path: "frames-\(label).json"))
         }
+        return result
     }
 }
 
 #if os(iOS) || os(visionOS)
 import UIKit
+
+/// Frames measured on a UI test's cue (`-showFrameProbe YES`, the performance UI tests, #5730): the test posts the
+/// Darwin notification `start` before an interaction and `stop` after it, and each stop sends what `FrameStats`
+/// measured in between to the paired hub's `POST /mock/frames` (the mock hub keeps it for the test to read).
+/// XCTHitchMetric and the scroll signposts report nothing on a simulator, this does.
+@MainActor enum FrameProbe {
+    static let start = "com.persona.perf.frames.start"
+    static let stop = "com.persona.perf.frames.stop"
+    static let glideNotice = "com.persona.perf.frames.glide"
+
+    static func listenIfAsked() {
+        guard UserDefaults.standard.bool(forKey: "showFrameProbe") else { return }
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        // Darwin notifications come on the run loop that registered them, the main one.
+        let callback: CFNotificationCallback = { @Sendable _, _, name, _, _ in
+            let n = name?.rawValue as String?
+            DispatchQueue.main.async { MainActor.assumeIsolated { FrameProbe.handle(n) } }
+        }
+        for name in [start, stop, glideNotice] {
+            CFNotificationCenterAddObserver(center, nil, callback, name as CFString, nil, .deliverImmediately)
+        }
+    }
+
+    private static func handle(_ name: String?) {
+        let stats = FrameStats.shared
+        if name == glideNotice {
+            Task { await runGlide() }
+        } else if name == start {
+            if stats.running { stats.stop(label: "probe") }
+            stats.start()
+        } else if name == stop, stats.running {
+            let result = stats.stop(label: "probe")
+            guard let hub = AppModel.shared.api?.config,
+                  let body = try? JSONSerialization.data(withJSONObject: result) else { return }
+            var r = URLRequest(url: hub.url.appending(path: "mock/frames"))
+            r.httpMethod = "POST"
+            r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            r.setValue("Bearer " + hub.token, forHTTPHeaderField: "Authorization")
+            r.httpBody = body
+            Task { _ = try? await URLSession.shared.data(for: r) }
+        }
+    }
+
+    /// Holds the actual UIKit scroll view for the entire run. The UI test only polls the mock; it never requests
+    /// accessibility snapshots while frames are recorded. Tagged results are custom display-link cadence, not GPU FPS.
+    private static func runGlide() async {
+        guard let hub = AppModel.shared.api?.config else { return }
+        var request = URLRequest(url: hub.url.appending(path: "mock/frames_glide_context"), timeoutInterval: 10)
+        request.setValue("Bearer " + hub.token, forHTTPHeaderField: "Authorization")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              var context = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              context["run_id"] is String, context["name"] is String else { return }
+        context["sample_source"] = "app-list-glide"
+        let stats = FrameStats.shared
+        if stats.running {
+            context["error"] = "another frame measurement is already running"
+        } else if let list = PagePerf.mainScrollView() {
+            context["viewport_height_pt"] = Double(list.bounds.height)
+            context["content_height_pt"] = Double(list.contentSize.height)
+            list.setContentOffset(CGPoint(x: list.contentOffset.x, y: -list.adjustedContentInset.top), animated: false)
+            try? await Task.sleep(for: .milliseconds(500))
+            let startY = list.contentOffset.y
+            stats.start()
+            await ListGlide.run(list, seconds: 3, speed: 2000)
+            let moved = abs(list.contentOffset.y - startY)
+            await ListGlide.run(list, seconds: 3, speed: -2000)
+            let frames = stats.stop(label: "probe-glide")
+            context.merge(frames) { _, measured in measured }
+            context["scroll_offset_delta_pt"] = Double(moved)
+        } else {
+            context["error"] = "no visible, vertically scrollable main view"
+        }
+        guard let body = try? JSONSerialization.data(withJSONObject: context) else { return }
+        var upload = URLRequest(url: hub.url.appending(path: "mock/frames"), timeoutInterval: 10)
+        upload.httpMethod = "POST"
+        upload.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        upload.setValue("Bearer " + hub.token, forHTTPHeaderField: "Authorization")
+        upload.httpBody = body
+        _ = try? await URLSession.shared.data(for: upload)
+    }
+}
 
 /// Any page, measured (`-showPagePerf YES`, docs/testing.md「整个 App」): 10 s after launch, 8 s on the page as it is
 /// (a script pushes hub updates meanwhile), then the page's main scroll view (the largest one on screen) glides
@@ -133,7 +219,7 @@ import UIKit
     }
 
     /// The tallest-content scroll view that is on screen and taller than half the window.
-    private static func mainScrollView() -> UIScrollView? {
+    static func mainScrollView() -> UIScrollView? {
         guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
             .flatMap(\.windows).first(where: \.isKeyWindow) else { return nil }
         var best: UIScrollView?

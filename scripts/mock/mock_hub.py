@@ -381,6 +381,12 @@ if not os.environ.get("MOCK_MACHINES"):  # that mode has its own offline machine
 if os.environ.get("MOCK_LONG_OS"):
     SYSTEMS["server"]["name"] = "Example GNU/Linux 2 (codename)"
     MACHINES[0]["node_mismatch"] = True
+# MOCK_PERF_MACHINES=<n>: additional neutral machines with full system facts and distinct synthetic metric curves.
+# Unlike MOCK_MACHINES' offline edge cases, these make a genuinely scrollable monitoring grid (#5730).
+for _i in range(int(os.environ.get("MOCK_PERF_MACHINES", "0"))):
+    _mid = f"perf-machine-{_i + 1:03d}"
+    SYSTEMS[_mid] = dict(SYSTEMS["server"])
+    MACHINES.append(dict(MACHINES[0], id=_mid, name=f"示例机器 {_i + 1:03d}", hostname=f"example-node-{_i + 1:03d}"))
 for _m in MACHINES:
     _m["system"] = dict(SYSTEMS[_m["id"]], boot_time=int((NOW - timedelta(days=3, hours=4)).timestamp()))
 # Machines added later (MOCK_MACHINES) have no system and never sent a sample.
@@ -402,23 +408,24 @@ def metric_at(mid, t):
     """A smooth made-up reading: a daily rhythm, a few slower waves and a little jitter, by machine."""
     import math
     sys_ = SYSTEMS[mid]
+    template = mid if mid in ("server", "macbook", "studio", "nas") else "server"
     h = int(hashlib.md5(f"{mid}{t // 10}".encode()).hexdigest()[:6], 16) / 0xFFFFFF  # jitter 0…1
     day = math.sin(2 * math.pi * (t % 86400) / 86400)
     wave = math.sin(t / 1900) * 0.5 + math.sin(t / 530 + len(mid)) * 0.3
-    base = {"server": 38, "macbook": 18, "studio": 27, "nas": 6}[mid]
+    base = {"server": 38, "macbook": 18, "studio": 27, "nas": 6}[template]
     cpu = base + 10 * day + 12 * wave + 8 * h
     if mid == "server" and t > T0 - 25 * 60:  # a build running since 25 minutes before the mock started
         cpu = 92 + 6 * h  # always over the 90 % "critical" line
     cpu = max(0.5, min(99.5, cpu))
-    mem_frac = {"server": 0.62, "macbook": 0.55, "studio": 0.31, "nas": 0.42}[mid] + 0.05 * day + 0.04 * wave
+    mem_frac = {"server": 0.62, "macbook": 0.55, "studio": 0.31, "nas": 0.42}[template] + 0.05 * day + 0.04 * wave
     if mid == "server" and t > T0 - 25 * 60:
         mem_frac = 0.88 + 0.02 * h
-    rx = max(0.0, {"server": 2.4e6, "macbook": 4.5e5, "studio": 1.2e6, "nas": 3e5}[mid] * (1 + 0.6 * wave + 0.5 * h))
-    tx = rx * {"server": 0.35, "macbook": 0.2, "studio": 0.6, "nas": 1.4}[mid] * (0.7 + 0.6 * h)
+    rx = max(0.0, {"server": 2.4e6, "macbook": 4.5e5, "studio": 1.2e6, "nas": 3e5}[template] * (1 + 0.6 * wave + 0.5 * h))
+    tx = rx * {"server": 0.35, "macbook": 0.2, "studio": 0.6, "nas": 1.4}[template] * (0.7 + 0.6 * h)
     load = sys_["cores"] * cpu / 100 * (0.9 + 0.3 * h)
-    disk_frac = {"server": 0.64, "macbook": 0.71, "studio": 0.38, "nas": 0.93}[mid]
+    disk_frac = {"server": 0.64, "macbook": 0.71, "studio": 0.38, "nas": 0.93}[template]
     return {"cpu": round(cpu, 1), "load": round(load, 2), "mem": round(mem_frac * sys_["memory"]),
-            "swap": round({"server": 0.0, "macbook": 1.2, "studio": 0.0, "nas": 0.4}[mid] * GB),
+            "swap": round({"server": 0.0, "macbook": 1.2, "studio": 0.0, "nas": 0.4}[template] * GB),
             "rx": round(rx, 1), "tx": round(tx, 1), "disk": round(disk_frac * {"nas": 4000, "studio": 2000}.get(mid, 1000) * GB)}
 
 
@@ -5717,6 +5724,11 @@ if os.environ.get("MOCK_LARK_RICH"):
 # the chat's inbox item changes too and `inbox` is pushed, as the hub's collection after the event does.
 # GET /mock/lark_churned tells how many rounds have gone out. Without MOCK_LARK (the chats of LARK_MESSAGES).
 LARK_CHURN = {"rounds": 0}
+# The performance UI tests' frame probe (#5730, PerfTestCase): the app POSTs /mock/frames with what FrameStats measured
+# between the test's start and stop cues (`-showFrameProbe YES`); /mock/frames_label?name=<test> names the next ones,
+# GET /mock/frames?name=<test> lists them (all of them without a name).
+FRAMES = {"label": "", "runs": []}
+FRAME_GLIDE_CONTEXT = {}
 
 
 def lark_churn(feed, rounds, ms, new=False, inbox=False):
@@ -11367,6 +11379,19 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/send-fail":
             SEND_FAIL["on"] = q.get("on", ["1"])[0] == "1"
             return self.send_json(SEND_FAIL)
+        if p == "/mock/frames_label":
+            FRAMES["label"] = q.get("name", [""])[0]
+            return self.send_json({"ok": True})
+        if p == "/mock/frames_glide_context":
+            if "run_id" in q:
+                FRAME_GLIDE_CONTEXT.clear()
+                FRAME_GLIDE_CONTEXT.update(name=q.get("name", [""])[0], run_id=q["run_id"][0],
+                                           warm_up=q.get("warm_up", ["0"])[0] == "1", action="glide",
+                                           expected_iterations=int(q.get("expected_iterations", ["5"])[0]))
+            return self.send_json(dict(FRAME_GLIDE_CONTEXT))
+        if p == "/mock/frames":
+            name = q.get("name", [None])[0]
+            return self.send_json({"runs": [r for r in FRAMES["runs"] if name is None or r.get("test") == name]})
         if p == "/mock/persona-tier":
             set_persona_tier(q.get("tier", [""])[0])
             return self.send_json({"ok": True, "tier": PERSONA_TIER["tier"]})
@@ -11482,6 +11507,8 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
             r = q.get("range", ["1h"])[0]
             secs, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
+            if r == "24h" and os.environ.get("MOCK_PERF_METRIC_STEP"):
+                step = max(1, int(os.environ["MOCK_PERF_METRIC_STEP"]))
             return self.send_json({"metrics": machine_metrics(p.split("/")[4], secs, step), "range": r, "step": step})
         if p == "/api/v1/sessions": return self.send_json({"sessions": out_by_machine(all_sessions())})
         if tasks_area(self, "GET", p, None): return
@@ -12096,6 +12123,11 @@ class H(BaseHTTPRequestHandler):
             key = p.rsplit("/", 1)[-1]
             ALWAYS_GRANTS[:] = [g for g in ALWAYS_GRANTS if g["key_hash"] != key]
             return self.send_json({"ok": True, "restart_required": False})
+        if p == "/mock/frames":
+            run = json.loads(self.last_body or b"{}")
+            run["test"] = run.get("name") or FRAMES["label"]
+            FRAMES["runs"].append(run)
+            return self.send_json({"ok": True})
         if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith(tuple(
                 "/api/v1/%s/%s/-/ui/" % (kind, lark_messaging.EXTENSION) for kind in ("extensions", "plugins")))) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return

@@ -866,6 +866,24 @@ hosting controller (`LayoutIsland`, `DesignSystem/LayoutIsland.swift`, old layou
 Shell input retains original tree: single-line→key-bar card, separate hosting controller makes long-text accessibility snapshots hang, so old-layout optimization doesn't apply.
 `ComposerGrowTests` verifies multiline growth, above keyboard, shrink to one line, both layouts.
 
+### 全页面性能 UI 测试（#5730）
+
+`./scripts/app/perf-test.sh [agents|assistant|inbox|settings|machines …]` 用优化 Debug 构建、各套件独立 mock 和共享模拟器锁运行。指定已有的专用模拟器 `PERF_SIM`，`PERF_ONLY=PerfMachinesTests/testMachineDetailScroll` 可只运行一项；`PERF_SKIP_BUILD=1` 只在确认 DerivedData 与当前源码一致时使用。编译和执行均经过 `xcode-slot`，输出目录已存在时拒绝覆盖。
+
+| 测试文件（`apple/PersonaUITests/`） | 入口及主要跳转 |
+| --- | --- |
+| `PerfAgentsTests.swift` | Agents 列表、筛选、开对话、长历史/图片/输入、工作详情、子 Agent 往返、提问卡后滚动、终端、文件/代码、图片翻页、链接卡片 |
+| `PerfAssistantTests.swift` | 主对话滚动/流式/输入/推送、侧栏、切会话/归档、tab 往返、任务坞、欢迎页、助手资料/定时任务、知识库、待办 |
+| `PerfInboxTests.swift` | 收件箱滚动/搜索/推送、飞书与邮件详情往返、群聊/话题/线程/消息页 |
+| `PerfSettingsTests.swift` | 设置滚动及 push/pop、扩展/市场/详情/搜索、定时任务及运行记录 |
+| `PerfMachinesTests.swift` | 机器网格、详情 push/pop、完整历史滚动、选点/范围切换、两页前台推送和指标轮询 |
+
+`PerfTestCase.swift` 统一 `launchPinned()`、配对、模拟器系统提示处理、原始 frame 附件及各测量入口。需要 mock 的性能测试在普通 UI 测试中跳过；跳过不算测量成功。当前清单覆盖本轮盘点的主要场景，不等于 App 的每个设置叶子页都已有独立性能测量。
+
+机器和收件箱的 `measureVerifiedGlide()` 在 App 内固定持有一个真正可滚动的 UIKit 列表，避免 XCUITest 元素位置查询随树变化漂移；一轮显式 warm-up 加 N 轮正式样本，并验证样本归属、帧数、时长和实际位移。其他手势、输入和跳转入口仍是诊断测量：XCUITest 查询/手势开销混在窗口内，报告标成 `legacy_unverified`，不能作纯 App 的 60 FPS 证据。
+
+`scripts/app/perf_report.py` 优先导出 xcresult 原始 frame 附件，保存各轮与来源；缺样、失败、工具错误不写成通过。FPS 是 CADisplayLink 回调 cadence，不是 GPU 呈现帧率；hitch 是自定义迟到时间，run-loop busy 不是 CPU 时间。看最低 cadence、最差 hitch 和最长帧，不能只看中位数。`--final-acceptance` 只检查样本完整性，不证明稳定 60 FPS。回归测试：`python3 scripts/app/test_perf_report.py`。
+
 ### Whole App (any page)
 
 DEBUG `-showPagePerf YES`: after 10 s measures 8 s idle (`frames-page-idle.json`; writes `Documents/page-idle-started`,
