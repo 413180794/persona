@@ -33,6 +33,8 @@ interface InboxAssistantTransport {
     suspend fun replyMail(itemId: String, text: String, clientId: String, target: MailReplyTarget): JsonObject =
         throw UnsupportedOperationException("Checked mail replies unavailable")
     suspend fun messages(feedId: String, around: Long? = null, before: String? = null, after: String? = null): JsonObject
+    /** One Feishu message (`GET /api/v1/lark/messages/{id}`, `{account?, message}`): the outbox confirms delivery with it. */
+    suspend fun larkMessage(messageId: String): JsonObject = throw UnsupportedOperationException("Message lookup unavailable")
     suspend fun assistant(): JsonObject
     suspend fun createConversation(main: Boolean): JsonObject
     /** A conversation that runs on [launcher] (POST /api/v1/assistant/conversations `launcher`), not the default one. */

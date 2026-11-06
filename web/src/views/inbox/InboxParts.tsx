@@ -1,6 +1,6 @@
 // Small pieces the inbox pages share: avatars (chat, mail, document, 公司圈) with their source mark, tags, counts,
 // the AI 分身's draft card, a document row's status menu, and the few glyphs the shared icon set does not have.
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   agentDraft, docChangeLine, isDone, isLark, movingKey, setDocStatus, useInbox, withToken,
   type DocRow, type DocStatus, type InboxItem,
@@ -10,6 +10,7 @@ import { t } from "../../i18n";
 import { Button, cx, Menu, Spinner, useMenu } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
+import { useClamped } from "../../ui/use-clamped";
 import larkMark from "./lark.svg";
 
 // ── glyphs not in ui/icons (Beautiful UI grammar: 24 grid, round caps, currentColor) ──
@@ -162,6 +163,9 @@ export function Count({ n, accent }: { n: number; accent?: boolean }) {
 export function DraftCard({ it, onEdit, onSend }: { it: InboxItem; onEdit: () => void; onSend: () => void }) {
   const draft = agentDraft(it);
   const sending = useInbox((s) => s.sending.includes(it.id));
+  // the four lines may cut it: 展开全文 shows the rest in place, so it is read before 发送 (#4742)
+  const [open, setOpen] = useState(false);
+  const { ref: textRef, cut: long } = useClamped<HTMLParagraphElement>(open);
   if (!draft) return null;
   return (
     <div className="rounded-[10px] bg-inset p-3 shadow-hairline">
@@ -169,7 +173,21 @@ export function DraftCard({ it, onEdit, onSend }: { it: InboxItem; onEdit: () =>
         <Spark />
         {t("inbox-inboxparts.draft_title")}
       </p>
-      <p className="mt-1.5 line-clamp-4 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink">{draft}</p>
+      <p ref={textRef} className={cx("mt-1.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink", !open && "line-clamp-4")} data-draft-text>{draft}</p>
+      {long && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+          aria-expanded={open}
+          className="-ml-1 mt-0.5 rounded-[6px] px-1 text-[12px] font-medium whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
+        >
+          {open ? t("inbox-inboxparts.draft_collapse") : t("inbox-inboxparts.draft_expand")}
+        </button>
+      )}
       {(it.agent?.changes ?? []).map((c) => (
         <p key={`${c.ref}|${c.field}`} className="mt-1 flex items-center gap-1.5 truncate text-[11.5px] text-ink-2">
           <Icon name="chevronRight" size={11} stroke={2.4} className="shrink-0 text-ink-3" />

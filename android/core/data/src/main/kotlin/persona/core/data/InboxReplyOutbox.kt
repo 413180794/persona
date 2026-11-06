@@ -20,6 +20,8 @@ internal data class InboxPendingReply(
     val state: String = "sending",
     val serverId: String? = null,
     val error: String? = null,
+    /** The server's copy has been seen in a chat window: the entry stays only as the receipt for dedupe (#4687). */
+    val seen: Boolean = false,
 ) {
     // A mail target change is a definite refusal: nothing was sent and it needs a new identifier.
     val outboxState: OutboxState get() = if (state == "waiting") OutboxState.WaitingForNetwork
@@ -51,10 +53,10 @@ internal data class InboxReplyDocument(
         if (it.request.clientId == clientId && it.state != "sent") it.copy(state = state, error = error) else it
     })
 
-    fun confirm(clientId: String, serverId: String? = null): InboxReplyDocument = copy(
+    fun confirm(clientId: String, serverId: String? = null, seen: Boolean = false): InboxReplyDocument = copy(
         drafts = drafts.filterValues { it.clientId != clientId },
         outbox = outbox.map { reply -> if (reply.request.clientId == clientId)
-            reply.copy(state = "sent", serverId = serverId ?: reply.serverId) else reply },
+            reply.copy(state = "sent", serverId = serverId ?: reply.serverId, seen = seen || reply.seen) else reply },
     )
 }
 

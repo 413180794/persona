@@ -5,11 +5,13 @@ import persona.core.contracts.api.*
 import persona.feature.inbox.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
+import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 
@@ -199,6 +201,104 @@ class InboxRepositoryTest {
             backgroundScope.coroutineContext[Job]!!.cancelAndJoin()
             directory.deleteRecursively()
         }
+    }
+
+    // #4687: a sent reply stays on screen until Feishu's copy is seen, then never comes back at the tail.
+    @Test fun sentLarkReplyLeavesTheOutboxOnceItsCopyIsSeen() = runTest {
+        val directory = Files.createTempDirectory("inbox-outbox-test").toFile()
+        try {
+            val transport = FakeTransport()
+            val connection = object : InboxAssistantConnection {
+                override val current = MutableStateFlow<InboxAssistantTransport?>(transport)
+            }
+            val sessions = object : SessionsRepository {
+                override val machines = MutableStateFlow<List<Machine>>(emptyList())
+                override val sessions = MutableStateFlow<List<Session>>(emptyList())
+                override suspend fun refresh() = Unit
+            }
+            val interactions = object : InteractionCenter {
+                override val pending = MutableStateFlow<List<Interaction>>(emptyList())
+                override suspend fun refresh() = Unit
+                override suspend fun resolve(id: String, resolution: Resolution) = Unit
+            }
+            val repository = RealInboxRepository(connection, InboxReplyJournal(directory, "hub/generation"), sessions,
+                interactions, backgroundScope) { _, _ -> error("unused") }
+            runCurrent()
+            transport.onReply = { buildJsonObject { put("ok", true); put("message_id", "m1") } }
+            repository.reply(ReplyTarget.Lark("feed"), ReplyRequest("ok", "c1"))
+            assertEquals(listOf("m1"), repository.larkOutbox("feed").first().map { it.id })
+            repository.acceptLarkWindow("feed", listOf(row("m1", 10, "ok")))
+            assertEquals(emptyList<String>(), repository.larkOutbox("feed").first().map { it.id })
+            // A later window without the copy (reopened at the first new message) must not bring it back.
+            repository.acceptLarkWindow("feed", (200L..249L).map { row("n$it", it, "later") })
+            assertEquals(emptyList<String>(), repository.larkOutbox("feed").first().map { it.id })
+        } finally {
+            backgroundScope.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    // #4687: opened past the reply (start_position after m1), the tail never holds the copy, so the hub confirms it.
+    @Test fun sentLarkReplyIsConfirmedOnTheHubWhenTheWindowLacksItsCopy() = runTest {
+        val directory = Files.createTempDirectory("inbox-outbox-test").toFile()
+        try {
+            val transport = FakeTransport()
+            val repository = larkRepository(transport, InboxReplyJournal(directory, "hub/generation"))
+            runCurrent()
+            transport.onReply = { buildJsonObject { put("ok", true); put("message_id", "m1") } }
+            repository.reply(ReplyTarget.Lark("feed"), ReplyRequest("ok", "c1"))
+            val later = (200L..249L).map { row("n$it", it, "later") }
+            // A copy the hub still holds as pending is not delivery.
+            transport.onLarkMessage = { id -> buildJsonObject { put("message", buildJsonObject {
+                put("id", id); put("position", 10); put("local_state", "pending") }) } }
+            repository.acceptLarkWindow("feed", later)
+            assertEquals(listOf("m1"), repository.larkOutbox("feed").first().map { it.id })
+            transport.onLarkMessage = { id -> buildJsonObject { put("message", row(id, 10, "ok")) } }
+            repository.acceptLarkWindow("feed", later)
+            assertEquals(emptyList<String>(), repository.larkOutbox("feed").first().map { it.id })
+            assertEquals(listOf("m1", "m1"), transport.lookedUp)
+        } finally {
+            backgroundScope.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    // #4687: replies confirmed before this build were saved without `seen`; they leave the tail once the hub confirms them.
+    @Test fun sentLarkReplyFromAnOlderJournalLeavesTheOutbox() = runTest {
+        val directory = Files.createTempDirectory("inbox-outbox-test").toFile()
+        try {
+            val old = JsonCodec.encodeToJsonElement(InboxReplyDocument(outbox = listOf(InboxPendingReply(
+                ReplyTarget.Lark("feed"), ReplyRequest("ok", "c1"), "feed", state = "sent", serverId = "m1")))).jsonObject
+            val legacy = JsonObject(old + ("outbox" to JsonArray(old.getValue("outbox").jsonArray.map {
+                JsonObject(it.jsonObject - "seen") })))
+            File(directory, "replies.json").writeText(legacy.toString())
+            val transport = FakeTransport()
+            transport.onLarkMessage = { id -> buildJsonObject { put("message", row(id, 10, "ok")) } }
+            val repository = larkRepository(transport, InboxReplyJournal(directory, "hub/generation"))
+            assertEquals(listOf("m1"), repository.larkOutbox("feed").first { it.isNotEmpty() }.map { it.id })
+            repository.acceptLarkWindow("feed", (200L..249L).map { row("n$it", it, "later") })
+            assertEquals(emptyList<String>(), repository.larkOutbox("feed").first().map { it.id })
+        } finally {
+            backgroundScope.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    private fun TestScope.larkRepository(transport: FakeTransport, journal: InboxReplyJournal): RealInboxRepository {
+        val connection = object : InboxAssistantConnection {
+            override val current = MutableStateFlow<InboxAssistantTransport?>(transport)
+        }
+        val sessions = object : SessionsRepository {
+            override val machines = MutableStateFlow<List<Machine>>(emptyList())
+            override val sessions = MutableStateFlow<List<Session>>(emptyList())
+            override suspend fun refresh() = Unit
+        }
+        val interactions = object : InteractionCenter {
+            override val pending = MutableStateFlow<List<Interaction>>(emptyList())
+            override suspend fun refresh() = Unit
+            override suspend fun resolve(id: String, resolution: Resolution) = Unit
+        }
+        return RealInboxRepository(connection, journal, sessions, interactions, backgroundScope) { _, _ -> error("unused") }
     }
 
     @Test fun reconnectRevalidatesSparseRangeAndStalledCursorReplacesLatest() = runBlocking {
@@ -738,6 +838,9 @@ class InboxRepositoryTest {
             return setDone(items, action != InboxBulkAction.Reopen)
         }
         override suspend fun messages(feedId: String, around: Long?, before: String?, after: String?) = onMessages(around, before, after)
+        val lookedUp = mutableListOf<String>()
+        var onLarkMessage: suspend (String) -> JsonObject = { throw UnsupportedOperationException() }
+        override suspend fun larkMessage(messageId: String): JsonObject { lookedUp += messageId; return onLarkMessage(messageId) }
         override suspend fun assistant() = JsonObject(emptyMap())
         override suspend fun createConversation(main: Boolean) = JsonObject(emptyMap())
         override suspend fun pins() = JsonObject(emptyMap())

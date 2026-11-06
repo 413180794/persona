@@ -3,6 +3,8 @@
   "source_mail": "邮件",
   "draft_title": "AI 分身草拟的回复",
   "edit": "修改",
+  "draft_expand": "展开全文",
+  "draft_collapse": "收起",
   "send_draft": "发送 AI 分身草拟的回复",
   "send": "发送",
   "agent_queued": "AI 分身排队中",

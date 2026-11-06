@@ -443,7 +443,8 @@ class RealInboxRepository(
     }
 
     fun larkOutbox(feedId: String): Flow<List<LarkMessage>> = outbox.map { pending ->
-        pending.filter { it.feedId == feedId }.map { local ->
+        // Once Feishu's copy has been seen it is the message; a window without it must not show the reply again.
+        pending.filter { it.feedId == feedId && !it.seen }.map { local ->
             LarkMessage(local.serverId ?: "local:${local.request.clientId}", "", DataText.of(Key.Me), mine = true,
                 parts = listOf(LarkPart.Text(local.request.text)), clientId = local.request.clientId,
                 delivery = when (local.outboxState) {
@@ -487,7 +488,7 @@ class RealInboxRepository(
                         }
                     }
                     combine(window.state, outbox) { state, pending ->
-                        val locals = if (window.tail) pending.filter { it.feedId == feedId }.filterNot { local ->
+                        val locals = if (window.tail) pending.filter { it.feedId == feedId && !it.seen }.filterNot { local ->
                             state.messages.any { it.clientId == local.request.clientId || local.serverId != null && it.id == local.serverId }
                         }.map { local ->
                             LarkMessage(local.serverId ?: "local:${local.request.clientId}", "", DataText.of(Key.Me), mine = true,
@@ -779,13 +780,28 @@ class RealInboxRepository(
             for (local in document.outbox.filter { it.feedId == window.feedId }) {
                 val remote = raw.firstOrNull { it.optional("client_id") == local.request.clientId ||
                     it.optional("clientId") == local.request.clientId || local.serverId != null && it.string("id") == local.serverId }
-                if (remote != null && (remote.optional("local_state") ?: remote.optional("localState")) !in setOf("sending", "pending", "failed", "unknown", "verifying", "queued", "waiting", "waitingForNetwork") && remote.optional("id") != null)
-                    confirmed = confirmed.confirm(local.request.clientId, remote.string("id"))
+                if (remote != null && delivered(remote))
+                    confirmed = confirmed.confirm(local.request.clientId, remote.string("id"), seen = true)
             }
             confirmed
         }
         if (owns(window.transport)) publishLocal(saved)
+        // A window opened past the reply never holds its copy: ask the hub for it by id, as iOS verifyAcknowledged does.
+        for (local in saved.outbox.filter { it.feedId == window.feedId && it.state == "sent" && !it.seen && it.serverId != null }) {
+            if (!owns(window.transport)) return
+            val id = local.serverId!!
+            quietly {
+                val copy = window.transport.larkMessage(id).obj("message")
+                if (copy != null && copy.string("id") == id && delivered(copy)) publishLocal(journal.update(window.transport.scope) {
+                    if (it.outbox.any { reply -> reply.request.clientId == local.request.clientId && reply.state == "sent" })
+                        it.confirm(local.request.clientId, id, seen = true) else it
+                })
+            }
+        }
     }
+
+    private fun delivered(remote: JsonObject) = remote.optional("id") != null &&
+        (remote.optional("local_state") ?: remote.optional("localState")) !in setOf("sending", "pending", "failed", "unknown", "verifying", "queued", "waiting", "waitingForNetwork")
 
     private suspend fun install(window: Window, incoming: List<JsonObject>, older: String?, newer: String?,
         hasOlder: Boolean, hasNewer: Boolean, generation: Long, replaced: Boolean = false, reconciling: Boolean = false) {

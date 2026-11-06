@@ -3,6 +3,8 @@
   "source_mail": "メール",
   "draft_title": "AI 分身が下書きした返信",
   "edit": "編集",
+  "draft_expand": "全文を表示",
+  "draft_collapse": "折りたたむ",
   "send_draft": "AI 分身が下書きした返信を送信",
   "send": "送信",
   "agent_queued": "AI 分身が待機中",

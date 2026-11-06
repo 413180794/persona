@@ -119,6 +119,10 @@ class HttpInboxAssistantTransport private constructor(
             after?.let { addQueryParameter("after", it) }
         }.build(),
     )
+    override suspend fun larkMessage(messageId: String): JsonObject {
+        require(messageId.isNotBlank())
+        return json(url("api", "v1", "lark", "messages", messageId))
+    }
     override suspend fun assistant() = json(url("api", "v1", "assistant"))
     override suspend fun createConversation(main: Boolean) = json(url("api", "v1", "assistant", "conversations"),
         buildJsonObject { put("prompt", ""); put("main", main) })
