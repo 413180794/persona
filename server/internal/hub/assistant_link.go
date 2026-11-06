@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -409,12 +410,54 @@ func (h *Hub) assistantHello(ctx context.Context) assistantwire.Hello {
 // assistantHelloFor is assistantHello for manager id.
 func (h *Hub) assistantHelloFor(ctx context.Context, id string) assistantwire.Hello {
 	hello, _ := assistantLink{h}.Hello(ctx)
+	hello = h.placedFor(hello, id)
 	hello.Mutes = h.mutesFor(id, assistantwire.FleetMutes{Mutes: hello.Mutes}).Mutes // its own machines' only, as fleet.mutes (fleet_link.go)
 	raw, _ := json.Marshal(updatedHello(hello))
 	a := h.assistantOf(id)
 	a.helloMu.Lock()
 	a.lastHello = string(raw)
 	a.helloMu.Unlock()
+	return hello
+}
+
+// placedFor is hello's placement for manager id, which acts only on the machines it owns (#5760, ownership.go): the
+// machines it owns, the hub's default machine when it owns that one (else its first own one, a local one first; ""
+// with none), and the launchers of its own machines only. Its manager.json's assistant.machine goes over that only
+// when it names one of them (assistant/ownconfig.go).
+func (h *Hub) placedFor(hello assistantwire.Hello, id string) assistantwire.Hello {
+	own := []string{}
+	for _, mid := range hello.Assistant.Machines {
+		if h.machineOwner(mid) == id {
+			own = append(own, mid)
+		}
+	}
+	hello.Assistant.Machines = own
+	if !slices.Contains(own, hello.Assistant.MachineID) {
+		hello.Assistant.MachineID = ""
+		for _, m := range h.machinesNow() {
+			if slices.Contains(own, m.cfg.ID) && (hello.Assistant.MachineID == "" || m.cfg.Kind == "local") {
+				hello.Assistant.MachineID = m.cfg.ID
+				if m.cfg.Kind == "local" {
+					break
+				}
+			}
+		}
+		if hello.Assistant.MachineID == "" && len(own) > 0 {
+			hello.Assistant.MachineID = own[0]
+		}
+	}
+	if hello.Models.Launchers != nil {
+		mine := map[string][]assistantwire.ConfiguredLauncher{}
+		for mid, l := range hello.Models.Launchers {
+			if slices.Contains(own, mid) {
+				mine[mid] = l
+			}
+		}
+		hello.Models.Launchers = nil
+		if len(mine) > 0 {
+			hello.Models.Launchers = mine
+		}
+	}
 	return hello
 }
 
@@ -459,7 +502,7 @@ func (h *Hub) managerUpdated(id string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		hello, _ := assistantLink{h}.Hello(ctx)
-		hello = updatedHello(hello)
+		hello = updatedHello(h.placedFor(hello, id))
 		raw, _ := json.Marshal(hello)
 		a.helloMu.Lock()
 		same := a.lastHello == string(raw)

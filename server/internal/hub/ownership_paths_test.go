@@ -407,3 +407,54 @@ func TestEachManagersHelloHasItsOwnMutes(t *testing.T) {
 		}
 	}
 }
+
+// Each manager's hello places it on its own machines (#5760): the machines it owns, the hub's default machine when it
+// owns that one, else its first own one, and only its own machines' launchers. A machine moved from one manager to
+// the other moves in both hellos, and each manager is told (manager.updated).
+func TestEachManagersHelloPlacesItOnItsOwnMachines(t *testing.T) {
+	h, a, b := pathsHub(t, quiet, quiet)
+	d := &h.devices
+	d.mu.Lock()
+	for i := range d.entries {
+		d.entries[i].Launchers = []assistantwire.ConfiguredLauncher{{Launcher: proto.Launcher{Name: "work-" + d.entries[i].ID}}}
+	}
+	d.mu.Unlock()
+	for _, m := range h.machinesNow() {
+		m.mu.Lock()
+		m.cfg.Launchers = []assistantwire.ConfiguredLauncher{{Launcher: proto.Launcher{Name: "work-" + m.cfg.ID}}}
+		m.mu.Unlock()
+	}
+	place := func(id string) assistantwire.Hello { return h.assistantHelloFor(context.Background(), id) }
+	check := func(id string, machines []string, machine string) {
+		t.Helper()
+		got := place(id)
+		var launchers []string
+		for mid := range got.Models.Launchers {
+			launchers = append(launchers, mid)
+		}
+		slices.Sort(launchers)
+		if !slices.Equal(got.Assistant.Machines, machines) || got.Assistant.MachineID != machine || !slices.Equal(launchers, machines) {
+			t.Errorf("%s's hello: machines %v, default %q, launchers of %v; want %v, %q", id, got.Assistant.Machines,
+				got.Assistant.MachineID, launchers, machines, machine)
+		}
+	}
+	check(assistantwire.AssistantID, []string{"ma"}, "ma")
+	check("m-0b0b0b", []string{"mb"}, "mb")
+
+	// The setup's own updates (its move, the reports) are sent and done first: what is heard next is the move's.
+	eventually(t, 5*time.Second, "the setup's updates", func() bool {
+		return !h.assistantOf(assistantwire.AssistantID).updating.Load() && !h.assistantOf("m-0b0b0b").updating.Load()
+	})
+	check(assistantwire.AssistantID, []string{"ma"}, "ma") // the last answer each was sent, as it is now
+	check("m-0b0b0b", []string{"mb"}, "mb")
+	heardA, heardB := heard(a, assistantwire.EventUpdated), heard(b, assistantwire.EventUpdated)
+	if _, err := h.moveMachine(context.Background(), "mb", assistantwire.AssistantID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 5*time.Second, "both told", func() bool { return heardA() != "" && heardB() != "" })
+	if !strings.Contains(heardA(), `"mb"`) || strings.Contains(heardB(), `"mb"`) {
+		t.Errorf("told A %s, B %s", heardA(), heardB())
+	}
+	check(assistantwire.AssistantID, []string{"ma", "mb"}, "ma")
+	check("m-0b0b0b", []string{}, "")
+}
