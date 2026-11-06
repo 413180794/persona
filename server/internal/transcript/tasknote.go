@@ -162,6 +162,9 @@ func oneLine(s string, n int) string {
 // subagent's last words in its own transcript, and the notification's detail in the parent's.
 const handbackTool = "SubagentHandback"
 
+// HandbackTool is handbackTool for the node, which counts a subagent's steps without reading every line through ParseLine.
+const HandbackTool = handbackTool
+
 // handbacksKept: reports waiting for their notification; each one takes its own, so more is a session that lost them.
 const handbacksKept = 64
 

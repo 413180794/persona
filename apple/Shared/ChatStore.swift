@@ -1131,10 +1131,12 @@ nonisolated enum ChatCache {
     /// (`dropOlder`). v7: items carry `client_msg_id`, the message sent from the phone they came from (#968).
     /// v8: folds carry the images their work looked at (`Fold.images`); v7's folds had none, and their turns no strip.
     /// v9: user lines Persona typed in for the model carry `injected` (docs/protocol.md「Persona 注入的消息」, #2358).
+    /// v10: a background workflow's end notice is kind `workflow` (#3731) and the hub gives it in the App's language
+    /// (#5511); v9's copies would keep its Chinese text for English and Japanese users.
     /// Bump it whenever the item structure or the text the hub gives an item changes.
-    static let folder = "chats-v9"
+    static let folder = "chats-v10"
     /// The folder before, removed on the first launch with this one.
-    private static let previous = "chats-v8"
+    private static let previous = "chats-v9"
 
     /// Once per launch, before the first copy is read or written (a static let runs once, on whichever thread asks first).
     private static let dropOlder: Void = {

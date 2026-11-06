@@ -1,8 +1,9 @@
 package node
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,17 +42,27 @@ var (
 	wfMetaName = regexp.MustCompile("(?m)^\\s*name:\\s*['\"`]([^'\"`\\n]+)['\"`]")
 )
 
-// wfCache remembers a run's progress per run directory, re-read at most every workflowReadInterval (the session list is
-// rebuilt every second) and never again once the run has ended and its state file is read.
+// wfCache remembers each run's progress by run directory (the least recently asked for forgotten first). A running
+// run is read again at most every workflowReadInterval (the session list is rebuilt every second), its journal only for
+// the lines it gained; an ended one never again, except once more when its state file shows up after the transcript
+// said it ended.
 var wfCache = struct {
 	sync.Mutex
-	m map[string]wfMemo
-}{m: map[string]wfMemo{}}
+	m *lru[string, *wfEntry]
+}{m: newLRU[string, *wfEntry](wfCacheMax)}
 
-type wfMemo struct {
-	readAt time.Time
-	final  bool
-	w      proto.Workflow
+const wfCacheMax = 512
+
+// wfEntry is one run's; its lock keeps two list requests from reading the same run at once.
+type wfEntry struct {
+	mu        sync.Mutex
+	journal   wfJournal
+	read      bool
+	status    string // the run's status in the transcript when w was read
+	readAt    time.Time
+	final     bool // ended: w does not change any more
+	waitState bool // final, though without the state file: read once more when it appears
+	w         proto.Workflow
 }
 
 // setBackground fills s's background work from m: the background tasks (background subagents are listed as
@@ -117,18 +128,32 @@ func readWorkflow(subagents, parent string, run proto.Workflow, script string) p
 		return run
 	}
 	runDir := filepath.Join(subagents, "workflows", run.RunID)
-	key := runDir + "\x00" + run.Status
+	stateFile := filepath.Join(filepath.Dir(subagents), "workflows", run.RunID+".json")
 	wfCache.Lock()
-	memo, ok := wfCache.m[key]
+	e, ok := wfCache.m.get(runDir)
+	if !ok {
+		e = &wfEntry{}
+		wfCache.m.put(runDir, e)
+	}
 	wfCache.Unlock()
-	if ok && (memo.final || time.Since(memo.readAt) < workflowReadInterval) {
-		return memo.w
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.read && e.status == run.Status {
+		switch {
+		case e.final && !e.waitState, time.Since(e.readAt) < workflowReadInterval:
+			return e.w
+		case e.final && !fileExists(stateFile):
+			e.readAt = time.Now()
+			return e.w
+		}
 	}
 	readAt := time.Now()
-	w, final := workflowProgress(runDir, filepath.Join(filepath.Dir(subagents), "workflows", run.RunID+".json"), parent, run, script)
-	wfCache.Lock()
-	wfCache.m[key] = wfMemo{readAt: readAt, final: final, w: w}
-	wfCache.Unlock()
+	w, stated := workflowProgress(&e.journal, runDir, stateFile, parent, run, script)
+	e.read, e.status, e.readAt, e.w = true, run.Status, readAt, w
+	// Ended: the state file says so, or the transcript (its notification, a TaskStop) without one. A stalled run is
+	// not: it may move again.
+	e.final = !w.Running && (stated || !run.Running)
+	e.waitState = e.final && !stated
 	return w
 }
 
@@ -137,6 +162,82 @@ type wfJournalLine struct {
 	AgentID string `json:"agentId"`
 	Label   string `json:"label"`
 	Phase   string `json:"phase"`
+}
+
+// wfJournal is what a run's journal.jsonl said so far: its agents in the order they started, and how each ended. Read
+// once, then only for the lines it gained: a result line holds the agent's whole answer.
+type wfJournal struct {
+	info   os.FileInfo
+	size   int64
+	mtime  time.Time
+	off    int64
+	head   []byte // detects a rewrite even if the new file is larger
+	agents []wfJournalAgent
+	index  map[string]int
+}
+
+type wfJournalAgent struct {
+	id, label, phase string
+	outcome          string // "" while it runs, then wfAgentDone or wfAgentFailed
+}
+
+// A workflow agent's statuses (WorkflowAgent.Status).
+const (
+	wfAgentRunning = "running"
+	wfAgentDone    = "done"    // it returned (a result line)
+	wfAgentFailed  = "failed"  // the journal says it failed (a failed line: an API error ended it)
+	wfAgentStopped = "stopped" // its run ended before it came back
+)
+
+// update reads what the journal at path gained since the last read; all of it when it is new or was rewritten.
+func (j *wfJournal) update(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		*j = wfJournal{}
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return
+	}
+	if j.info != nil && os.SameFile(j.info, st) && st.Size() == j.size && st.ModTime().Equal(j.mtime) {
+		return
+	}
+	var buf [256]byte
+	n, _ := f.ReadAt(buf[:min(st.Size(), int64(len(buf)))], 0)
+	head := buf[:n]
+	if j.info == nil || !os.SameFile(j.info, st) || st.Size() <= j.size || !bytes.HasPrefix(head, j.head) {
+		*j = wfJournal{}
+	}
+	j.off += eachLine(io.NewSectionReader(f, j.off, st.Size()-j.off), j.line)
+	j.head = append(j.head[:0], head[:min(int64(len(head)), j.off)]...)
+	j.info, j.size, j.mtime = st, st.Size(), st.ModTime()
+}
+
+func (j *wfJournal) line(b []byte) {
+	var l wfJournalLine
+	if json.Unmarshal(b, &l) != nil || l.AgentID == "" {
+		return
+	}
+	i, ok := j.index[l.AgentID]
+	if !ok {
+		if j.index == nil {
+			j.index = map[string]int{}
+		}
+		i = len(j.agents)
+		j.index[l.AgentID] = i
+		j.agents = append(j.agents, wfJournalAgent{id: l.AgentID})
+	}
+	a := &j.agents[i]
+	a.label, a.phase = cmpStr(l.Label, a.label), cmpStr(l.Phase, a.phase)
+	switch l.Type {
+	case "started":
+	case "failed":
+		a.outcome = wfAgentFailed
+	default:
+		a.outcome = wfAgentDone // "result", or however else it ended
+	}
 }
 
 type wfState struct {
@@ -151,17 +252,12 @@ type wfState struct {
 	} `json:"phases"`
 }
 
-type wfAgentMeta struct {
-	Description string `json:"description"`
-	Phase       string `json:"workflowPhase"`
-}
-
-// workflowProgress reads run's progress: final when the run has ended and nothing about it will change.
-func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, script string) (proto.Workflow, bool) {
+// workflowProgress reads run's progress, j its journal as read so far; stated when the run's state file was read.
+func workflowProgress(j *wfJournal, runDir, stateFile, parent string, run proto.Workflow, script string) (proto.Workflow, bool) {
 	w := run
 	w.Agents = nil
 	w.PhaseStats = nil
-	w.AgentsStarted, w.AgentsDone, w.AgentsRunning = 0, 0, 0
+	w.AgentsStarted, w.AgentsDone, w.AgentsFailed, w.AgentsRunning = 0, 0, 0, 0
 	w.Tokens, w.Calls = 0, 0
 	var state *wfState
 	if b, err := os.ReadFile(stateFile); err == nil {
@@ -188,46 +284,22 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 		}
 	}
 
-	// The journal: which agents started, in which phase, and which returned.
+	// The journal: which agents started, in which phase, and which returned or failed.
+	j.update(filepath.Join(runDir, "journal.jsonl"))
 	type agent struct {
 		proto.WorkflowAgent
-		done   bool
-		lastAt time.Time
+		outcome string
+		lastAt  time.Time
 	}
-	var agents []*agent
-	byID := map[string]*agent{}
-	var updated time.Time
-	if f, err := os.Open(filepath.Join(runDir, "journal.jsonl")); err == nil {
-		if st, err := f.Stat(); err == nil {
-			updated = st.ModTime()
-		}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 64<<10), 16<<20) // a result line holds the agent's whole answer
-		for sc.Scan() {
-			var l wfJournalLine
-			if json.Unmarshal(sc.Bytes(), &l) != nil || l.AgentID == "" {
-				continue
-			}
-			a := byID[l.AgentID]
-			if a == nil {
-				a = &agent{WorkflowAgent: proto.WorkflowAgent{ID: l.AgentID, SessionID: parent + subagentSep + l.AgentID}}
-				byID[l.AgentID] = a
-				agents = append(agents, a)
-			}
-			a.Label, a.Phase = cmpStr(l.Label, a.Label), cmpStr(l.Phase, a.Phase)
-			if l.Type != "started" {
-				a.done = true // "result", or however else it ended
-			}
-		}
-		f.Close()
-	}
-	for _, a := range agents {
+	agents := make([]*agent, 0, len(j.agents))
+	updated := j.mtime
+	for _, ja := range j.agents {
+		a := &agent{WorkflowAgent: proto.WorkflowAgent{ID: ja.id, SessionID: parent + subagentSep + ja.id, Label: ja.label,
+			Phase: ja.phase}, outcome: ja.outcome}
+		agents = append(agents, a)
 		if a.Label == "" || a.Phase == "" {
-			if b, err := os.ReadFile(filepath.Join(runDir, "agent-"+a.ID+".meta.json")); err == nil {
-				var m wfAgentMeta
-				if json.Unmarshal(b, &m) == nil {
-					a.Label, a.Phase = cmpStr(a.Label, m.Description), cmpStr(a.Phase, m.Phase)
-				}
+			if m, ok := subagentMetaCached(filepath.Join(runDir, "agent-"+a.ID+".meta.json")); ok {
+				a.Label, a.Phase = cmpStr(a.Label, m.Description), cmpStr(a.Phase, m.Phase)
 			}
 		}
 		jp := filepath.Join(runDir, "agent-"+a.ID+".jsonl")
@@ -236,9 +308,9 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 			if a.UpdatedAt.After(updated) {
 				updated = a.UpdatedAt
 			}
-			// Once finalized the workflow cache no longer refreshes: do not freeze a throttled agent snapshot.
-			fresh := a.done || !run.Running || state != nil && state.Status != proto.WorkflowRunning
-			edges := subagentEdgesCached(jp, st, fresh)
+			// Read whenever it changed: this read is paced by wfCache, and the one that finalizes the run must see
+			// the agent's last lines.
+			edges := subagentEdgesCached(jp, st, true)
 			a.StartedAt, a.LastText, a.lastAt = edges.started, edges.last, edges.lastAt
 			a.Model, a.LatestTool, a.Tokens, a.Calls = edges.model, edges.latestTool, edges.tokens, edges.calls
 		}
@@ -288,26 +360,31 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 		w.Calls += a.Calls
 		p := phaseStats(a.Phase)
 		p.Started++
-		a.Running = w.Running && !a.done
-		a.Status = map[bool]string{true: "done", false: "stopped"}[a.done]
-		if a.Running {
-			a.Status = "running"
-		} else {
+		a.Running = w.Running && a.outcome == ""
+		switch {
+		case a.Running:
+			a.Status = wfAgentRunning
+			w.AgentsRunning++
+			p.Running++
+		case a.outcome == wfAgentDone:
+			a.Status = wfAgentDone
+			w.AgentsDone++
+			p.Done++
+		case a.outcome == wfAgentFailed:
+			a.Status = wfAgentFailed
+			w.AgentsFailed++
+			p.Failed++
+		default:
+			a.Status = wfAgentStopped
+		}
+		if !a.Running {
 			at := cmpTime(a.lastAt, a.UpdatedAt, deref(w.EndedAt))
-			if !a.done {
+			if a.outcome == "" { // stopped: when its run ended
 				at = cmpTime(deref(w.EndedAt), at)
 			}
 			if !at.IsZero() {
 				a.EndedAt = &at
 			}
-		}
-		switch {
-		case a.done:
-			w.AgentsDone++
-			p.Done++
-		case a.Running:
-			w.AgentsRunning++
-			p.Running++
 		}
 		if a.Phase != "" {
 			latest = a.Phase
@@ -329,7 +406,7 @@ func workflowProgress(runDir, stateFile, parent string, run proto.Workflow, scri
 	for _, a := range agents {
 		w.Agents = append(w.Agents, a.WorkflowAgent)
 	}
-	return w, !w.Running && state != nil
+	return w, state != nil
 }
 
 // workflowScript reads a workflow's name and phase titles from its script's meta block.

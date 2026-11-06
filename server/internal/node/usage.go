@@ -1,11 +1,9 @@
 package node
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -152,42 +150,6 @@ func (m *usageMeter) scan(path string, cutoff time.Time) {
 			m.claudeLine(uf, line, cutoff)
 		}
 	})
-}
-
-// eachLine calls fn for every complete line and returns the bytes those lines take (a partial last line is left
-// for the next scan).
-func eachLine(r io.Reader, fn func([]byte)) int64 {
-	br := bufio.NewReaderSize(r, 1<<20)
-	var done, pending int64 // pending: the start of a line longer than the buffer
-	var long []byte
-	skipping := false
-	for {
-		chunk, err := br.ReadSlice('\n')
-		if errors.Is(err, bufio.ErrBufferFull) {
-			if !skipping && len(long)+len(chunk) <= usageMaxLine {
-				long = append(long, chunk...)
-			} else {
-				skipping, long = true, long[:0]
-			}
-			pending += int64(len(chunk))
-			continue
-		}
-		if err != nil { // EOF: whatever is left is an unfinished line
-			return done
-		}
-		done += pending + int64(len(chunk))
-		if len(long)+len(chunk) > usageMaxLine {
-			skipping = true
-		}
-		line := chunk
-		if len(long) > 0 && !skipping {
-			line = append(long, chunk...)
-		}
-		if !skipping {
-			fn(bytes.TrimSpace(line))
-		}
-		long, skipping, pending = long[:0], false, 0
-	}
 }
 
 // usageSession is the session a transcript belongs to: a Claude Code transcript's name (<id>.jsonl), the session

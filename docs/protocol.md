@@ -451,7 +451,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
                 "parent_id":"c27d03b1…","fork":true,   // who started it: the id of the subagent that started it (absent when the main session did); fork = forked off. Treated as top-level when the parent isn't in the list
                 "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…",   // subagents are read as sessions
-                "steps":7,"last_tool":{"id":"toolu_…","name":"Bash","summary":"running the tests"}}],   // #5602: tool calls made, the latest one (what it does now); updated_at is its last message's time, not the file's mtime
+                "steps":7,"last_tool":{"id":"toolu_…","name":"Bash","summary":"running the tests"}}],   // #5602: tool calls made, the latest one (what it does now; summary in the request's language, like a workflow agent's latest_tool); updated_at is its last message's time, not the file's mtime
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
  "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // the goal it's working on (docs/agent-goal.md)
         "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // absent when there is no goal
@@ -467,22 +467,23 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
                 "run_id":"wf_c1d9daf8-cd2"}], // workflow: which run in workflows it is; only running workflows are here (old clients still treat it as a background task)
  // Claude Code workflows (multi-agent scripts the Workflow tool runs in the background, #2935, docs/agent-states.md "Background workflows"): the last day's, newest first.
  // Running ones (running=true) count as background work: the hub computes state as working, doesn't push "done", doesn't judge the to-do complete or auto-close this Agent. Old nodes don't have this field
- // phase_stats follows phases order, including phases with no agents yet, then appends undeclared phases; title="" means unknown. done counts journal results only, not stopped agents.
- // Each agent's tokens is the latest assistant usage's input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens, not a cumulative total.
- // calls counts tool_use / server_tool_use, deduplicated by nonempty tool_use_id; latest_tool keeps the last tool even after the final reply. Clients retain their existing display when these fields are absent.
+ // phase_stats follows phases order, including phases with no agents yet, then appends undeclared phases; title="" means unknown. done counts journal results only; failed counts the journal's failed lines (#5511, omitted when 0; older nodes counted them as done); agents stopped when the run ended are in none of done / failed / running.
+ // Each agent's tokens is the latest assistant usage's input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens, not a cumulative total. Claude Code's own error replies (model <synthetic> / isApiErrorMessage, usage all zeros), usage whose input_tokens + cache_read_input_tokens + cache_creation_input_tokens is 0 (a gateway's on a turn's other replies, whatever its output_tokens) and a gateway's whole-turn sum (over transcript.PlausibleContext) are skipped: the last real one stands.
+ // calls counts tool_use / server_tool_use, deduplicated by nonempty tool_use_id; latest_tool keeps the last tool even after the final reply. latest_tool.summary is a short line on what the call does, in the request's language (the node writes it in Chinese and the hub rewrites it, like activity). Clients retain their existing display when these fields are absent.
+ // Pushes: sessions.changed goes out when a workflow's status, phase, any of its agent counts, or a listed agent's latest_tool name / calls change, at most as often as node rereads workflows (1.5 s); tokens, last_text and the rest ride along with those pushes.
  "workflows":[{"task_id":"wdp5zxh37","run_id":"wf_c1d9daf8-cd2","name":"parity-audit","summary":"…",
                "status":"running|completed|failed|killed|stalled","running":true,   // stalled: no end notification, but no activity for 30 minutes (its claude is gone); not counted as running
                "phases":["Audit","Verify"],"phase":"Verify","phase_index":2,"phase_count":2,   // phases from the script's meta; phase is the phase of the most recently started agent still running, phase_index counts from 1, 0 = unknown
-               "phase_stats":[{"title":"Audit","started":180,"done":169,"running":11},{"title":"Verify","started":5,"done":0,"running":5}], // per-phase counts across all agents, unaffected by the 60-agent response limit
+               "phase_stats":[{"title":"Audit","started":180,"done":167,"failed":2,"running":11},{"title":"Verify","started":5,"done":0,"running":5}], // per-phase counts across all agents, unaffected by the 60-agent response limit
                "tool_use_id":"toolu_…",                                            // the Workflow call that started it
-               "agents_started":185,"agents_done":169,"agents_running":16,        // the total is known only once finished (the script dispatches as it runs): show "done / started"
+               "agents_started":185,"agents_done":167,"agents_failed":2,"agents_running":16, // the total is known only once finished (the script dispatches as it runs): show "done / started"; agents_failed only when > 0
                "tokens":123400,"calls":420,                                    // sums across all agents, before truncation; tokens is not cumulative consumption
                "started_at":"...","ended_at":"...","updated_at":"...",           // ended_at only once finished; duration = (ended_at or now) - started_at
                "error":"Error: Workflow aborted",                                 // first line for failed / killed
                "agents":[{"id":"a55ab0b9…","session_id":"<id>@a55ab0b9…","label":"audit:chat-rich","phase":"Audit",   // in start order, at most 60 (newest kept)
-                          "running":false,"status":"running|done|stopped",   // stopped: it hadn't come back when the run ended
-                          "started_at":"...","ended_at":"...","updated_at":"...","last_text":"…", // ended_at is absent while running; completed agents use the last exchange time (file mtime as fallback), stopped agents prefer the run's end time; omitted if unknown
-                          "model":"claude-example","latest_tool":{"name":"Read","summary":"Reading example.go"},
+                          "running":false,"status":"running|done|failed|stopped",   // failed: the journal says it failed (an API error ended it; older nodes said done); stopped: it hadn't come back when the run ended
+                          "started_at":"...","ended_at":"...","updated_at":"...","last_text":"…", // ended_at is absent while running; done and failed agents use the last exchange time (file mtime as fallback), stopped agents prefer the run's end time; omitted if unknown
+                          "model":"claude-example","latest_tool":{"id":"toolu_…","name":"Read","summary":"Reading example.go"}, // summary in the request's language
                           "tokens":1234,"calls":8}]}],                   // each agent is read as a subagent: GET the content of session session_id
  "asks":"Push it to beta?",   // what the last reply asks the user, read by the node off the whole reply (last_text is only its start); absent when it asks nothing (#5096, docs/agent-states.md "Awaiting your reply")
  "asks_read":true,            // the node read asks off the reply (empty asks then means it asks nothing or was answered); without it the hub reads last_text when it is whole

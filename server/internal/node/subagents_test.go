@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -154,7 +155,7 @@ func TestSubagentsMetaCache(t *testing.T) {
 	}
 	old := filepath.Join(dir, "agent-old3.meta.json")
 	metaCache.Lock()
-	_, cached := metaCache.m[old]
+	_, cached := metaCache.m.peek(old)
 	metaCache.Unlock()
 	if cached {
 		t.Fatal("the meta of a subagent past the cutoff was read")
@@ -191,7 +192,7 @@ func TestSubagentsMetaCacheParseFailure(t *testing.T) {
 		}
 	}
 	metaCache.Lock()
-	e, cached := metaCache.m[mp]
+	e, cached := metaCache.m.peek(mp)
 	metaCache.Unlock()
 	if !cached || e.ok {
 		t.Fatalf("parse failure cached = %v, ok = %v; want a cached failure", cached, e.ok)
@@ -212,24 +213,49 @@ func edgeReply(id, at, model, content, usage string) string {
 	return `{"type":"assistant","uuid":"` + id + `","timestamp":"` + at + `","isSidechain":true,"message":{"role":"assistant","model":"` + model + `","content":` + content + usage + `}}` + "\n"
 }
 
+// apiErrorReply is the reply Claude Code writes itself when a request fails, in the shape it has in real transcripts
+// (2.1.318, a workflow agent's last line): model <synthetic>, isApiErrorMessage, a usage of all zeros.
+func apiErrorReply(id, at, text string) string {
+	return `{"parentUuid":"p-` + id + `","isSidechain":true,"agentId":"a-example","type":"assistant","uuid":"` + id + `","timestamp":"` + at +
+		`","message":{"id":"m-` + id + `","container":null,"model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence",` +
+		`"stop_sequence":"","type":"message","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,` +
+		`"cache_read_input_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":null,` +
+		`"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}},"content":[{"type":"text","text":"` + text +
+		`"}],"context_management":null},"requestId":"r-` + id + `","error":"unknown","isApiErrorMessage":true,"apiErrorStatus":500}` + "\n"
+}
+
 func TestSubagentEdgeDetails(t *testing.T) {
 	const start = "2026-01-01T00:00:00Z"
 	const end = "2026-01-01T00:01:00Z"
 	const usage = `{"input_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"output_tokens":4}`
 	read := edgeReply("a", start, "model-a", `[{"type":"tool_use","id":"read1","name":"Read","input":{"file_path":"/work/project/example.go"}}]`, usage)
 	server := edgeReply("b", end, "model-b", `[{"type":"server_tool_use","id":"search1","name":"WebSearch","input":{"query":"example\nquery"}}]`, usage)
+	finished := `[{"type":"text","text":"Finished"}]`
 	for _, tt := range []struct {
 		name, body, model, last string
 		tokens, calls           int
 		tool                    *proto.WorkflowTool
 		lastAt                  string
 	}{
-		{"latest usage is not accumulated", read + server + edgeReply("c", end, "<synthetic>", `[{"type":"text","text":"Finished"}]`, ""),
+		{"latest usage is not accumulated", read + server, "model-b", "", 10, 2,
+			&proto.WorkflowTool{ID: "search1", Name: "WebSearch", Summary: "在搜网页 example"}, end},
+		{"a synthetic reply without usage", read + server + edgeReply("c", end, "<synthetic>", finished, ""),
 			"model-b", "Finished", 10, 2, &proto.WorkflowTool{ID: "search1", Name: "WebSearch", Summary: "在搜网页 example"}, end},
+		// A failed workflow agent's last line: its usage of zeros is not the agent's.
+		{"an API error keeps the usage", read + server + apiErrorReply("c", end, "API Error: 500 Server error mid-response"),
+			"model-b", "API Error: 500 Server error mid-response", 10, 2, &proto.WorkflowTool{ID: "search1", Name: "WebSearch", Summary: "在搜网页 example"}, end},
 		{"duplicate tool id counts once", read + read + server, "model-b", "", 10, 2,
 			&proto.WorkflowTool{ID: "search1", Name: "WebSearch", Summary: "在搜网页 example"}, end},
-		{"latest zero usage replaces older usage", read + edgeReply("b", end, "model-a", `[{"type":"text","text":"Finished"}]`, `{}`),
-			"model-a", "Finished", 0, 1, &proto.WorkflowTool{ID: "read1", Name: "Read", Summary: "在读 example.go"}, end},
+		{"zero usage keeps the earlier usage", read + edgeReply("b", end, "model-a", finished,
+			`{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":0}`),
+			"model-a", "Finished", 10, 1, &proto.WorkflowTool{ID: "read1", Name: "Read", Summary: "在读 example.go"}, end},
+		{"empty usage keeps the earlier usage", read + edgeReply("b", end, "model-a", finished, `{}`),
+			"model-a", "Finished", 10, 1, &proto.WorkflowTool{ID: "read1", Name: "Read", Summary: "在读 example.go"}, end},
+		// A gateway's replies without input on a turn (transcript/usage_test.go's shape), then the whole turn's input
+		// added up on its last (#3300).
+		{"a gateway's sum of a turn is not a usage", read + edgeReply("b", end, "model-a", finished, `{"input_tokens":0,"output_tokens":1}`) +
+			edgeReply("c", end, "model-a", finished, `{"input_tokens":1700000,"output_tokens":12}`),
+			"model-a", "Finished", 10, 1, &proto.WorkflowTool{ID: "read1", Name: "Read", Summary: "在读 example.go"}, end},
 		{"no assistant metadata", `{"type":"user","timestamp":"` + start + `"}` + "\n",
 			"", "", 0, 0, nil, start},
 		{"large tool output preserves earlier details", read + `{"type":"user","timestamp":"` + end + `","message":{"content":"` + strings.Repeat("x", 128<<10) + `"}}` + "\n" +
@@ -252,6 +278,19 @@ func TestSubagentEdgeDetails(t *testing.T) {
 			}
 			if again := subagentEdgesCached(path, st, true); !reflect.DeepEqual(got, again) {
 				t.Fatalf("unchanged file changed details: %+v -> %+v", got, again)
+			}
+			// A subagent's (#5602): the same steps, latest call and times, without its usage and model.
+			sub := filepath.Join(t.TempDir(), "agent-test.jsonl")
+			if err := os.WriteFile(sub, []byte(tt.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if st, err = os.Stat(sub); err != nil {
+				t.Fatal(err)
+			}
+			want := got
+			want.tokens, want.model = 0, ""
+			if s := subagentEdgesCached(sub, st, false); !reflect.DeepEqual(s, want) {
+				t.Fatalf("a subagent's = %+v, tool = %+v; want %+v", s, s.latestTool, want)
 			}
 		})
 	}
@@ -306,6 +345,50 @@ func TestSubagentEdgesAppendAndRewrite(t *testing.T) {
 			got := subagentEdgesCached(path, st, true)
 			if got.calls != tt.calls || got.tokens != tt.tokens {
 				t.Fatalf("calls/tokens = %d/%d, want %d/%d", got.calls, got.tokens, tt.calls, tt.tokens)
+			}
+		})
+	}
+}
+
+// A running workflow agent is already cached when its last lines come (the workflow cache reads it again every
+// 1.5 s), so an API error or a gateway's reply without input is read on its own, from the end of what was read before
+// (#5511): the usage read before stands, an error's <synthetic> is not a model, and the words and the time move on.
+func TestSubagentEdgesAppendedRepliesKeepUsage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+	const usage = `{"input_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"output_tokens":4}`
+	const apiError = "API Error: 500 Server error mid-response"
+	for _, tt := range []struct {
+		name, body, model, last, lastAt string
+	}{
+		{"first scan", edgeReply("a", "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"t1","name":"Read","input":{}}]`, usage),
+			"model-a", "", "2026-01-01T00:00:00Z"},
+		{"an API error", apiErrorReply("b", "2026-01-01T00:01:00Z", apiError), "model-a", apiError, "2026-01-01T00:01:00Z"},
+		// A real reply: its model is the latest, its usage without input is not.
+		{"a gateway's reply without input", edgeReply("c", "2026-01-01T00:02:00Z", "model-b", `[{"type":"text","text":"Retrying"}]`,
+			`{"input_tokens":0,"output_tokens":1}`), "model-b", "Retrying", "2026-01-01T00:02:00Z"},
+		{"all-zero usage", edgeReply("d", "2026-01-01T00:03:00Z", "model-b", `[{"type":"text","text":"Still here"}]`,
+			`{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":0}`), "model-b", "Still here",
+			"2026-01-01T00:03:00Z"},
+		{"another API error", apiErrorReply("e", "2026-01-01T00:04:00Z", apiError), "model-b", apiError, "2026-01-01T00:04:00Z"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = f.WriteString(tt.body)
+			f.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			st, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := subagentEdgesCached(path, st, true)
+			if got.calls != 1 || got.tokens != 10 || got.model != tt.model || got.last != tt.last ||
+				got.lastAt.Format(time.RFC3339) != tt.lastAt || got.latestTool == nil || got.latestTool.Name != "Read" {
+				t.Fatalf("edges = %+v, tool %+v; want calls 1, tokens 10, model %q, last %q at %s", got, got.latestTool, tt.model, tt.last, tt.lastAt)
 			}
 		})
 	}
@@ -375,6 +458,124 @@ func TestSubagentListsStepsLastToolAndContentTime(t *testing.T) {
 	}
 	if again := n.subagents(parent)[0]; !again.UpdatedAt.Equal(a.UpdatedAt) {
 		t.Fatalf("updated_at moved with the mtime: %v", again.UpdatedAt)
+	}
+}
+
+// A subagent's (not a workflow agent's) metadata is all of it but its usage and model: its first timestamp, its steps
+// and latest call (#5602), its last exchange, and its last words however far back a large tool output pushed them.
+// Asked for as a workflow agent's, the usage and model are read too.
+func TestSubagentEdgesLastWords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+	body := `{"type":"user","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":"go"}}` + "\n" +
+		edgeReply("a", "2026-01-01T00:00:01Z", "model-a", `[{"type":"text","text":"Found it"}]`, `{"input_tokens":5}`) +
+		edgeReply("b", "2026-01-01T00:00:02Z", "model-a", `[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/x/a.go"}}]`, `{"input_tokens":6}`) +
+		`{"type":"user","timestamp":"2026-01-01T00:00:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"` +
+		strings.Repeat("y", 300<<10) + `"}]}}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := &proto.WorkflowTool{ID: "t1", Name: "Read", Summary: "在读 a.go"}
+	got := subagentEdgesCached(path, st, false)
+	if got.last != "Found it" || got.started.Format(time.RFC3339) != "2026-01-01T00:00:00Z" || got.calls != 1 ||
+		!reflect.DeepEqual(got.latestTool, read) || got.lastAt.Format(time.RFC3339) != "2026-01-01T00:00:03Z" || got.tokens != 0 || got.model != "" {
+		t.Fatalf("a subagent's edges = %+v, tool %+v", got, got.latestTool)
+	}
+	full := subagentEdgesCached(path, st, true)
+	if full.last != "Found it" || full.calls != 1 || full.tokens != 6 || full.model != "model-a" || !reflect.DeepEqual(full.latestTool, read) ||
+		full.lastAt.Format(time.RFC3339) != "2026-01-01T00:00:03Z" {
+		t.Fatalf("read whole: %+v", full)
+	}
+	// Read whole, it serves a subagent's request too.
+	if again := subagentEdgesCached(path, st, false); again != full {
+		t.Fatalf("after a whole read: %+v", again)
+	}
+}
+
+// Read from the end, a line too long to keep (a picture) is skipped, and the words before it are found.
+func TestSubagentEdgesLastWordsBeforeOversizedLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+	body := `{"type":"user","timestamp":"2026-01-01T00:00:00Z"}` + "\n" +
+		edgeReply("a", "2026-01-01T00:00:01Z", "model-a", `[{"type":"text","text":"Before the picture"}]`, "") +
+		strings.Repeat("x", usageMaxLine+1) + "\n" + `{"type":"system","timestamp":"2026-01-01T00:00:02Z"}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := subagentEdgesCached(path, st, false); got.last != "Before the picture" || got.started.IsZero() {
+		t.Fatalf("edges = %+v", got)
+	}
+}
+
+// Many list requests read the same growing file at once: each file is read by one at a time, and every call counted
+// once (go test -race).
+func TestSubagentEdgesConcurrent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-test.jsonl")
+	reply := func(i int) string {
+		id := strconv.Itoa(i)
+		return edgeReply(id, "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"t`+id+`","name":"Read","input":{}}]`, `{"input_tokens":`+id+`}`)
+	}
+	if err := os.WriteFile(path, []byte(reply(1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for g := range 6 {
+		wg.Go(func() {
+			for range 40 {
+				if st, err := os.Stat(path); err == nil {
+					subagentEdgesCached(path, st, g%2 == 0)
+				}
+			}
+		})
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 2; i <= 30; i++ {
+		if _, err := f.WriteString(reply(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.Close()
+	wg.Wait()
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := subagentEdgesCached(path, st, true); got.calls != 30 || got.tokens != 30 {
+		t.Fatalf("after concurrent reads: calls %d tokens %d, want 30 and 30", got.calls, got.tokens)
+	}
+}
+
+// lineKind tells the lines apart where Claude Code puts their type, and never takes an assistant line for another
+// because of what a tool call's input holds near the line's start.
+func TestLineKind(t *testing.T) {
+	big := strings.Repeat("z", 8<<10)
+	for _, c := range []struct {
+		name, line string
+		want       byte
+	}{
+		{"user", `{"parentUuid":"p","isSidechain":true,"promptId":"x","agentId":"a","type":"user","message":{"role":"user","content":"` + big + `"},"timestamp":"t"}`, 'u'},
+		{"reply, type after the message", `{"parentUuid":"p","isSidechain":true,"agentId":"a","message":{"role":"assistant","content":[{"type":"text","text":"` + big + `"}]},"type":"assistant","uuid":"u"}`, 'a'},
+		{"reply, type first", `{"parentUuid":"p","isSidechain":true,"agentId":"a","type":"assistant","uuid":"u","message":{"role":"assistant","content":[{"type":"text","text":"` + big + `"}]}}`, 'a'},
+		{"reply whose input has an attachment", `{"parentUuid":"p","agentId":"a","message":{"content":[{"type":"tool_use","id":"t","name":"mcp__mail__send","input":{"attachment":{"name":"a.pdf"},"body":"` + big + `"}}]},"type":"assistant"}`, 'a'},
+		{"reply whose input has a user message", `{"parentUuid":"p","agentId":"a","message":{"content":[{"type":"tool_use","id":"t","name":"mcp__x__chat","input":{"messages":[{"type":"user","text":"hi"}],"pad":"` + big + `"}}]},"type":"assistant"}`, 'a'},
+		{"reply with a key after its type far from the end", `{"message":{"content":[]},"type":"assistant","extra":"` + big + `"}`, 'a'},
+		{"attachment", `{"parentUuid":"p","isSidechain":true,"agentId":"a","attachment":{"type":"hook_success","content":"` + big + `"},"type":"attachment","uuid":"u"}`, 0},
+		{"API request", `{"type":"api-request-blob","sessionId":"s","body":"` + big + `"}`, 0},
+		{"system", `{"type":"system","subtype":"turn_duration","durationMs":1}`, 0},
+		{"user, type after the message", `{"message":{"role":"user","content":"x"},"type":"user","pad":"` + big + `"}`, 'u'},
+	} {
+		if got := lineKind([]byte(c.line)); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 

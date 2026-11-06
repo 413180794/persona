@@ -57,6 +57,73 @@ func TestLocalizeSession(t *testing.T) {
 	}
 }
 
+// What a workflow agent's latest tool call does is the node's Chinese activity line: the apps get it in their
+// language (#5511), the node's workflows untouched.
+func TestLocalizeWorkflowAgentTools(t *testing.T) {
+	act := func(name, input string) string { return transcript.Activity(name, json.RawMessage(input)) }
+	read := &proto.WorkflowTool{ID: "toolu_r", Name: "Read", Summary: act("Read", `{"file_path":"/work/project/example.go"}`)}
+	search := &proto.WorkflowTool{ID: "srvtoolu_s", Name: "WebSearch", Summary: act("WebSearch", `{"query":"example"}`)}
+	other := &proto.WorkflowTool{ID: "toolu_o", Name: "Custom", Summary: "在做别的"}
+	runs := []proto.Workflow{
+		{TaskID: "w1", Agents: []proto.WorkflowAgent{{ID: "a1", LatestTool: read}, {ID: "a2"}, {ID: "a3", LatestTool: other}}},
+		{TaskID: "w2", Agents: []proto.WorkflowAgent{{ID: "b1", LatestTool: search}}},
+		{TaskID: "w3"},
+	}
+	summaries := func(s proto.Session) []string {
+		var out []string
+		for _, w := range s.Workflows {
+			for _, a := range w.Agents {
+				if a.LatestTool != nil {
+					out = append(out, a.LatestTool.ID+" "+a.LatestTool.Name+": "+a.LatestTool.Summary)
+				}
+			}
+		}
+		return out
+	}
+	for _, c := range []struct {
+		l    i18n.Lang
+		want []string
+	}{
+		{i18n.ZhHans, []string{"toolu_r Read: 在读 example.go", "toolu_o Custom: 在做别的", "srvtoolu_s WebSearch: 在搜网页 example"}},
+		{i18n.En, []string{"toolu_r Read: Reading example.go", "toolu_o Custom: 在做别的", "srvtoolu_s WebSearch: Searching the web for example"}},
+		{i18n.Ja, []string{"toolu_r Read: example.goを読み取り中", "toolu_o Custom: 在做别的", "srvtoolu_s WebSearch: Web検索中：example"}},
+	} {
+		s := proto.Session{Workflows: runs}
+		localizeSession(c.l, &s)
+		if got := summaries(s); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %q, want %q", c.l, got, c.want)
+		}
+	}
+	if read.Summary != "在读 example.go" || runs[0].Agents[0].LatestTool != read || search.Summary != "在搜网页 example" {
+		t.Fatal("the node's workflows were written to")
+	}
+}
+
+// So is a subagent's latest tool call (#5602): the apps get it in their language with its call id, the node's
+// subagents untouched.
+func TestLocalizeSubagentTools(t *testing.T) {
+	bash := &proto.WorkflowTool{ID: "toolu_b", Name: "Bash", Summary: transcript.Activity("Bash", json.RawMessage(`{"command":"go test ./..."}`))}
+	other := &proto.WorkflowTool{ID: "toolu_o", Name: "Custom", Summary: "在做别的"}
+	subs := []proto.Subagent{{ID: "a1", LastTool: bash, Steps: 3}, {ID: "a2"}, {ID: "a3", LastTool: other}}
+	s := proto.Session{Subagents: subs}
+	localizeSession(i18n.En, &s)
+	if got := s.Subagents[0].LastTool; got == bash || got.ID != "toolu_b" || got.Name != "Bash" || got.Summary == bash.Summary ||
+		got.Summary != activityText(i18n.En, bash.Summary) || s.Subagents[0].Steps != 3 {
+		t.Fatalf("en: %+v", got)
+	}
+	if s.Subagents[1].LastTool != nil || s.Subagents[2].LastTool != other {
+		t.Fatalf("en, the others: %+v", s.Subagents)
+	}
+	if subs[0].LastTool != bash || bash.Summary != transcript.Activity("Bash", json.RawMessage(`{"command":"go test ./..."}`)) {
+		t.Fatal("the node's subagents were written to")
+	}
+	zh := proto.Session{Subagents: subs}
+	localizeSession(i18n.ZhHans, &zh)
+	if zh.Subagents[0].LastTool != bash {
+		t.Fatal("zh-Hans rewritten")
+	}
+}
+
 // The node's reasons for running an Agent SDK conversation on the CLI read in the app's language, the cause as it was;
 // a reason the hub does not know, and Chinese, stay as they are.
 func TestRuntimeFallbackInEachLanguage(t *testing.T) {

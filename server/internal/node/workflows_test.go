@@ -181,6 +181,18 @@ func TestWorkflowFromTranscript(t *testing.T) {
 
 func ptrTime(t time.Time) *time.Time { return &t }
 
+// expireWorkflow makes the next readWorkflow of the run in dir read it again, as if its last read were long ago.
+func expireWorkflow(dir string) {
+	wfCache.Lock()
+	e, _ := wfCache.m.peek(dir)
+	wfCache.Unlock()
+	if e != nil {
+		e.mu.Lock()
+		e.readAt = time.Time{}
+		e.mu.Unlock()
+	}
+}
+
 func TestWorkflowPhaseStats(t *testing.T) {
 	for _, tt := range []struct {
 		name, status string
@@ -215,7 +227,7 @@ func TestWorkflowPhaseStats(t *testing.T) {
 			if !run.Running {
 				run.EndedAt = &ended
 			}
-			w, _ := workflowProgress(filepath.Join(sess, "subagents", "workflows", "wf_stats"), "", parent, run, "")
+			w, _ := workflowProgress(&wfJournal{}, filepath.Join(sess, "subagents", "workflows", "wf_stats"), "", parent, run, "")
 			if !reflect.DeepEqual(w.PhaseStats, tt.want) {
 				t.Fatalf("phase_stats = %+v, want %+v", w.PhaseStats, tt.want)
 			}
@@ -258,7 +270,7 @@ func TestWorkflowTotalsBeforeAgentLimit(t *testing.T) {
 		}
 	}
 	run := proto.Workflow{TaskID: "task", RunID: "wf_many", Status: proto.WorkflowRunning, Running: true, StartedAt: time.Now().Add(-time.Hour)}
-	w, _ := workflowProgress(dir, "", parent, run, "")
+	w, _ := workflowProgress(&wfJournal{}, dir, "", parent, run, "")
 	if len(w.Agents) != proto.WorkflowAgentsMax || w.Agents[0].ID != "a5" || w.Tokens != count*10 || w.Calls != count ||
 		w.AgentsStarted != count || w.AgentsDone != 10 || w.AgentsRunning != count-10 {
 		t.Fatalf("totals before limit = %+v", w)
@@ -302,12 +314,7 @@ func TestWorkflowFinalRefreshesAgentDetails(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(sess, "workflows", "wf_final.json"), []byte(`{"status":"completed"}`), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			wfCache.Lock()
-			key := dir + "\x00" + run.Status
-			memo := wfCache.m[key]
-			memo.readAt = time.Time{}
-			wfCache.m[key] = memo
-			wfCache.Unlock()
+			expireWorkflow(dir)
 			w := readWorkflow(subagents, parent, run, "")
 			if w.Running || w.Tokens != 20 || w.Calls != 2 || w.Agents[0].Model != "model-b" || w.Agents[0].EndedAt == nil ||
 				w.Agents[0].LastText != "Finished" || w.Agents[0].LatestTool.Name != "Bash" {
@@ -320,5 +327,274 @@ func TestWorkflowFinalRefreshesAgentDetails(t *testing.T) {
 				t.Fatalf("final cache changed: %+v -> %+v", w, again)
 			}
 		})
+	}
+}
+
+// The journal's failed lines (an API error ended the agent) are failures, not results (#5511): counted apart in the
+// run and its phase, the agent's status says so, and its usage before the error still counts. An agent the journal
+// names without a label or phase has them from its meta.
+func TestWorkflowFailedAgents(t *testing.T) {
+	_, parent, sess := workflowSession(t)
+	writeRun(t, sess, "wf_fail", `{"type":"launched"}
+{"type":"started","key":"v2:a","agentId":"a","label":"audit:a","phase":"Audit"}
+{"type":"started","key":"v2:b","agentId":"b","label":"audit:b","phase":"Audit"}
+{"type":"started","key":"v2:c","agentId":"c"}
+{"type":"result","key":"v2:a","agentId":"a","result":{"ok":true},"toolsUsed":["Read"]}
+{"type":"failed","key":"v2:b","agentId":"b"}
+`, nil, time.Minute)
+	dir := filepath.Join(sess, "subagents", "workflows", "wf_fail")
+	const usage = `{"input_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"output_tokens":4}`
+	files := map[string]string{
+		"agent-a.jsonl": edgeReply("a1", "2026-01-01T00:00:00Z", "model-a", `[{"type":"text","text":"done"}]`, usage),
+		"agent-b.jsonl": edgeReply("b1", "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"tb","name":"Read","input":{}}]`, usage) +
+			apiErrorReply("b2", "2026-01-01T00:02:00Z", "API Error: 500 Server error mid-response"),
+		"agent-c.jsonl":     edgeReply("c1", "2026-01-01T00:00:00Z", "model-a", `[{"type":"text","text":"working"}]`, usage),
+		"agent-c.meta.json": `{"agentType":"workflow-subagent","description":"verify:c","workflowPhase":"Verify"}`,
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := proto.Workflow{TaskID: "task", RunID: "wf_fail", Status: proto.WorkflowRunning, Running: true, Phases: []string{"Audit", "Verify"},
+		StartedAt: time.Now().Add(-time.Hour)}
+	w, _ := workflowProgress(&wfJournal{}, dir, "", parent, run, "")
+	if w.AgentsStarted != 3 || w.AgentsDone != 1 || w.AgentsFailed != 1 || w.AgentsRunning != 1 || w.Tokens != 30 {
+		t.Fatalf("run counters = %+v", w)
+	}
+	want := []proto.WorkflowPhaseStats{{Title: "Audit", Started: 2, Done: 1, Failed: 1}, {Title: "Verify", Started: 1, Running: 1}}
+	if !reflect.DeepEqual(w.PhaseStats, want) {
+		t.Fatalf("phase_stats = %+v, want %+v", w.PhaseStats, want)
+	}
+	byID := map[string]proto.WorkflowAgent{}
+	for _, a := range w.Agents {
+		byID[a.ID] = a
+	}
+	b, c := byID["b"], byID["c"]
+	if byID["a"].Status != "done" || b.Status != "failed" || b.Running || b.Tokens != 10 || b.Calls != 1 ||
+		b.EndedAt == nil || b.EndedAt.Format(time.RFC3339) != "2026-01-01T00:02:00Z" || b.LastText != "API Error: 500 Server error mid-response" {
+		t.Fatalf("failed agent = %+v", b)
+	}
+	if c.Status != "running" || c.Label != "verify:c" || c.Phase != "Verify" {
+		t.Fatalf("agent from its meta = %+v", c)
+	}
+	wire, _ := json.Marshal(w)
+	if !strings.Contains(string(wire), `"agents_failed":1`) || !strings.Contains(string(wire), `{"title":"Audit","started":2,"done":1,"failed":1,"running":0}`) {
+		t.Fatalf("wire: %s", wire)
+	}
+
+	// The run ends: the one still at it stopped, the failed one is still a failure.
+	ended := time.Now()
+	run.Status, run.Running, run.EndedAt = proto.WorkflowKilled, false, &ended
+	w, _ = workflowProgress(&wfJournal{}, dir, "", parent, run, "")
+	if w.AgentsDone != 1 || w.AgentsFailed != 1 || w.AgentsRunning != 0 {
+		t.Fatalf("ended run counters = %+v", w)
+	}
+	for _, a := range w.Agents {
+		if want := map[string]string{"a": "done", "b": "failed", "c": "stopped"}[a.ID]; a.Status != want {
+			t.Fatalf("%s: status %q, want %q", a.ID, a.Status, want)
+		}
+	}
+	// None failed: the fields are left out, as older nodes send it.
+	_, _, sess2 := workflowSession(t)
+	writeRun(t, sess2, "wf_ok", `{"type":"started","agentId":"a","phase":"Audit"}`+"\n"+`{"type":"result","agentId":"a"}`+"\n",
+		map[string]string{"a": "done"}, time.Minute)
+	ok, _ := workflowProgress(&wfJournal{}, filepath.Join(sess2, "subagents", "workflows", "wf_ok"), "", parent, run, "")
+	if wire, _ := json.Marshal(ok); strings.Contains(string(wire), "failed") {
+		t.Fatalf("no failures, yet: %s", wire)
+	}
+}
+
+// How an agent fails in practice: the run was read while the agent ran, then its API error and the journal's failed
+// line come and are read for what they added (#5511). The agent's usage before the error still counts in the run.
+func TestWorkflowAgentFailsWhileRead(t *testing.T) {
+	_, parent, sess := workflowSession(t)
+	journal := `{"type":"started","key":"v2:a","agentId":"a","label":"audit:a","phase":"Audit"}
+{"type":"started","key":"v2:b","agentId":"b","label":"audit:b","phase":"Audit"}
+{"type":"started","key":"v2:c","agentId":"c","label":"verify:c","phase":"Verify"}
+{"type":"result","key":"v2:a","agentId":"a","result":{"ok":true}}
+`
+	writeRun(t, sess, "wf_fails", journal, nil, 0)
+	dir := filepath.Join(sess, "subagents", "workflows", "wf_fails")
+	const usage = `{"input_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":3,"output_tokens":4}`
+	for id, body := range map[string]string{
+		"a": edgeReply("a1", "2026-01-01T00:00:00Z", "model-a", `[{"type":"text","text":"done"}]`, usage),
+		"b": edgeReply("b1", "2026-01-01T00:00:00Z", "model-a", `[{"type":"tool_use","id":"tb","name":"Read","input":{}}]`, usage),
+		"c": edgeReply("c1", "2026-01-01T00:00:00Z", "model-a", `[{"type":"text","text":"working"}]`, usage),
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "agent-"+id+".jsonl"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := proto.Workflow{TaskID: "task", RunID: "wf_fails", Status: proto.WorkflowRunning, Running: true, Phases: []string{"Audit", "Verify"},
+		StartedAt: time.Now().Add(-time.Hour)}
+	subagents := filepath.Join(sess, "subagents")
+	agent := func(w proto.Workflow, id string) proto.WorkflowAgent {
+		for _, a := range w.Agents {
+			if a.ID == id {
+				return a
+			}
+		}
+		t.Fatalf("no agent %s in %+v", id, w.Agents)
+		return proto.WorkflowAgent{}
+	}
+	w := readWorkflow(subagents, parent, run, "")
+	if b := agent(w, "b"); w.AgentsRunning != 2 || w.AgentsFailed != 0 || w.Tokens != 30 || b.Status != "running" || b.Tokens != 10 {
+		t.Fatalf("while b runs: %+v, b %+v", w, b)
+	}
+
+	const apiError = "API Error: 500 Server error mid-response"
+	for name, line := range map[string]string{
+		"agent-b.jsonl": apiErrorReply("b2", "2026-01-01T00:02:00Z", apiError),
+		"journal.jsonl": `{"type":"failed","key":"v2:b","agentId":"b"}` + "\n",
+	} {
+		f, err := os.OpenFile(filepath.Join(dir, name), os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.WriteString(line)
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	expireWorkflow(dir)
+	w = readWorkflow(subagents, parent, run, "")
+	b := agent(w, "b")
+	if w.AgentsDone != 1 || w.AgentsFailed != 1 || w.AgentsRunning != 1 || w.Tokens != 30 || w.Calls != 1 {
+		t.Fatalf("after b failed: %+v", w)
+	}
+	if b.Status != "failed" || b.Running || b.Tokens != 10 || b.Model != "model-a" || b.Calls != 1 || b.LastText != apiError ||
+		b.EndedAt == nil || b.EndedAt.Format(time.RFC3339) != "2026-01-01T00:02:00Z" {
+		t.Fatalf("failed agent = %+v", b)
+	}
+	want := []proto.WorkflowPhaseStats{{Title: "Audit", Started: 2, Done: 1, Failed: 1}, {Title: "Verify", Started: 1, Running: 1}}
+	if !reflect.DeepEqual(w.PhaseStats, want) {
+		t.Fatalf("phase_stats = %+v, want %+v", w.PhaseStats, want)
+	}
+}
+
+// A run's journal is read for what it gained: a line still being written waits for its end, a rewritten or replaced
+// journal is read again from its start.
+func TestWorkflowJournalIncremental(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "journal.jsonl")
+	write := func(s string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(s), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	appendTo := func(s string) {
+		t.Helper()
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var j wfJournal
+	state := func() string {
+		var out []string
+		for _, a := range j.agents {
+			out = append(out, a.id+"="+cmpStr(a.outcome, "running"))
+		}
+		return strings.Join(out, ",")
+	}
+	write(`{"type":"launched"}` + "\n" + `{"type":"started","agentId":"a"}` + "\n" + `{"type":"started","agentId":"b"}` + "\n")
+	j.update(path)
+	if got := state(); got != "a=running,b=running" {
+		t.Fatalf("first read: %s", got)
+	}
+	appendTo(`{"type":"result","agentId":"a","result":{"answer":"` + strings.Repeat("x", 4096) + `"}}` + "\n" + `{"type":"fai`)
+	j.update(path)
+	if got := state(); got != "a=done,b=running" {
+		t.Fatalf("after a result and half a line: %s", got)
+	}
+	appendTo(`led","agentId":"b"}` + "\n")
+	j.update(path)
+	if got := state(); got != "a=done,b=failed" {
+		t.Fatalf("after the line's end: %s", got)
+	}
+	write(`{"type":"started","agentId":"x"}` + "\n")
+	j.update(path)
+	if got := state(); got != "x=running" {
+		t.Fatalf("after a rewrite: %s", got)
+	}
+	if err := os.WriteFile(path+".new", []byte(`{"type":"started","agentId":"y"}`+"\n"+`{"type":"started","agentId":"z"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+".new", path); err != nil {
+		t.Fatal(err)
+	}
+	j.update(path)
+	if got := state(); got != "y=running,z=running" {
+		t.Fatalf("after a replacement: %s", got)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	j.update(path)
+	if got := state(); got != "" {
+		t.Fatalf("without a journal: %s", got)
+	}
+}
+
+// An ended run is read once (#5511): with the transcript saying it ended and no state file, its journal and agents are
+// not read again every refresh, only once more when the state file shows up; then never. A stalled run is read again.
+func TestWorkflowEndedRunIsCached(t *testing.T) {
+	_, parent, sess := workflowSession(t)
+	subagents := filepath.Join(sess, "subagents")
+	journal := `{"type":"started","agentId":"a","phase":"Audit"}` + "\n" + `{"type":"result","agentId":"a"}` + "\n"
+	writeRun(t, sess, "wf_done", journal, map[string]string{"a": "done"}, time.Minute)
+	dir := filepath.Join(subagents, "workflows", "wf_done")
+	appendJournal := func(dir, agent string) {
+		t.Helper()
+		f, err := os.OpenFile(filepath.Join(dir, "journal.jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(`{"type":"started","agentId":"` + agent + `","phase":"Audit"}` + "\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ended := time.Now()
+	run := proto.Workflow{TaskID: "t", RunID: "wf_done", Status: proto.WorkflowCompleted, StartedAt: ended.Add(-time.Hour), EndedAt: &ended}
+	if w := readWorkflow(subagents, parent, run, ""); w.AgentsStarted != 1 || w.Running {
+		t.Fatalf("first read: %+v", w)
+	}
+	appendJournal(dir, "b")
+	expireWorkflow(dir)
+	if w := readWorkflow(subagents, parent, run, ""); w.AgentsStarted != 1 {
+		t.Fatalf("an ended run was read again: %+v", w)
+	}
+	if err := os.WriteFile(filepath.Join(sess, "workflows", "wf_done.json"), []byte(`{"status":"completed","workflowName":"named"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expireWorkflow(dir)
+	w := readWorkflow(subagents, parent, run, "")
+	if w.AgentsStarted != 2 || w.Name != "named" {
+		t.Fatalf("its state file showed up: %+v", w)
+	}
+	appendJournal(dir, "c")
+	expireWorkflow(dir)
+	if again := readWorkflow(subagents, parent, run, ""); !reflect.DeepEqual(again, w) {
+		t.Fatalf("a run with its state file was read again: %+v", again)
+	}
+
+	// Stalled: the transcript says it runs, nothing moved for long. It may move again.
+	writeRun(t, sess, "wf_stalled", `{"type":"started","agentId":"s","phase":"Audit"}`+"\n", map[string]string{"s": "…"}, 2*time.Hour)
+	stalled := proto.Workflow{TaskID: "s", RunID: "wf_stalled", Status: proto.WorkflowRunning, Running: true, StartedAt: time.Now().Add(-3 * time.Hour)}
+	if w := readWorkflow(subagents, parent, stalled, ""); w.Status != proto.WorkflowStalled {
+		t.Fatalf("stalled: %+v", w)
+	}
+	sdir := filepath.Join(subagents, "workflows", "wf_stalled")
+	appendJournal(sdir, "s2")
+	expireWorkflow(sdir)
+	if w := readWorkflow(subagents, parent, stalled, ""); w.Status != proto.WorkflowRunning || w.AgentsStarted != 2 {
+		t.Fatalf("a stalled run that moved again: %+v", w)
 	}
 }

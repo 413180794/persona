@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/maphash"
 	"io"
-	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -64,6 +64,7 @@ type subagentMeta struct {
 	Finished     bool   `json:"finished"`
 	ParentID     string `json:"parentAgentId"`
 	Fork         bool   `json:"isFork"`
+	Phase        string `json:"workflowPhase"` // a workflow agent's (workflows.go)
 }
 
 // subagents lists a session's subagents, newest first; finished ones older than a day are left out (each on its own:
@@ -114,12 +115,12 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 }
 
 // metaCache remembers parsed agent-*.meta.json files by size and mtime: the session list asks for every live
-// session's subagents each second, and their metas rarely change (once when the subagent finishes).
-// Bounded like workspaceDirs: a long-lived node that has seen more metas than that starts over.
+// session's subagents each second, and their metas rarely change (once when the subagent finishes). Bounded: a
+// long-lived node that has seen more metas than that forgets the least recently asked for.
 var metaCache = struct {
 	sync.Mutex
-	m map[string]metaMemo
-}{m: map[string]metaMemo{}}
+	m *lru[string, metaMemo]
+}{m: newLRU[string, metaMemo](metaCacheMax)}
 
 const metaCacheMax = 4096
 
@@ -136,7 +137,7 @@ func subagentMetaCached(path string) (subagentMeta, bool) {
 		return subagentMeta{}, false
 	}
 	metaCache.Lock()
-	e, hit := metaCache.m[path]
+	e, hit := metaCache.m.get(path)
 	metaCache.Unlock()
 	if hit && e.size == st.Size() && e.mtime.Equal(st.ModTime()) {
 		return e.meta, e.ok
@@ -148,45 +149,67 @@ func subagentMetaCached(path string) (subagentMeta, bool) {
 	var m subagentMeta
 	ok := json.Unmarshal(b, &m) == nil
 	metaCache.Lock()
-	if len(metaCache.m) >= metaCacheMax {
-		metaCache.m = map[string]metaMemo{}
-	}
-	metaCache.m[path] = metaMemo{size: st.Size(), mtime: st.ModTime(), meta: m, ok: ok}
+	metaCache.m.put(path, metaMemo{size: st.Size(), mtime: st.ModTime(), meta: m, ok: ok})
 	metaCache.Unlock()
 	return m, ok
 }
 
-// edgeCache remembers transcript metadata per file. Counts need the whole transcript, so the first read streams
-// it once and later reads only appended complete lines, at most every metaMinInterval. Keeping the latest values
-// also avoids losing them when a large tool result pushes the last reply beyond the former 96 KB tail window.
+// edgeCache remembers what the lists show of each subagent transcript (subagentEdge), by path. The session list asks
+// every second for every live session's subagents of the last day and every workflow run's agents: a file is read
+// whole once, then only for the lines it gained. Its tool calls (a subagent's steps, a workflow agent's calls) are
+// counted over every line, but only the replies with a tool call are parsed, and only for their blocks' types and ids;
+// the few lines with the latest call, words and exchange are read again by offset, a workflow agent's latest usage and
+// model from its end back. Bounded like metaCache, the least recently asked for forgotten first.
 var edgeCache = struct {
 	sync.Mutex
-	m map[string]edgeMemo
-}{m: map[string]edgeMemo{}}
+	m *lru[string, *edgeEntry]
+}{m: newLRU[string, *edgeEntry](metaCacheMax)}
+
+// edgeEntry is one file's; its lock keeps two list requests from reading the same file at once (the second one gets
+// what the first read).
+type edgeEntry struct {
+	mu sync.Mutex
+	edgeMemo
+}
 
 type edgeMemo struct {
 	size   int64
 	mtime  time.Time
 	readAt time.Time
 	info   os.FileInfo
-	off    int64
-	head   []byte // detects a rewrite even if the new file is larger
+	off    int64               // where the complete lines read so far end
+	head   []byte              // detects a rewrite even if the new file is larger
+	full   bool                // read for a workflow agent: all of subagentEdge
+	tools  map[uint64]struct{} // the tool_use ids counted, hashed (toolSeed)
 	edges  subagentEdge
 }
 
+// subagentEdge is what the lists show of a subagent transcript: a subagent's all but its model and tokens (subagents:
+// its steps are calls, its updated_at lastAt, its last tool latestTool, #5602), a workflow agent's all of it (full).
 type subagentEdge struct {
 	started, lastAt time.Time
 	last, model     string
-	latestTool      *proto.WorkflowTool
+	latestTool      *proto.WorkflowTool // never written to once set: snapshots share it
 	tokens, calls   int
-	tools           map[string]bool
 }
 
-func subagentEdgesCached(path string, st os.FileInfo, fresh bool) subagentEdge {
+// toolSeed hashes the tool_use ids an agent's calls are told apart by.
+var toolSeed = maphash.MakeSeed()
+
+// subagentEdgesCached is path's metadata; full for a workflow agent. A growing subagent's is re-read at most every
+// metaMinInterval; a workflow agent's whenever it changed (the workflow cache paces those, workflowReadInterval).
+func subagentEdgesCached(path string, st os.FileInfo, full bool) subagentEdge {
 	edgeCache.Lock()
-	e, ok := edgeCache.m[path]
+	ent, ok := edgeCache.m.get(path)
+	if !ok {
+		ent = &edgeEntry{}
+		edgeCache.m.put(path, ent)
+	}
 	edgeCache.Unlock()
-	if ok && (e.size == st.Size() && e.mtime.Equal(st.ModTime()) || !fresh && time.Since(e.readAt) < metaMinInterval) {
+	ent.mu.Lock()
+	defer ent.mu.Unlock()
+	e := &ent.edgeMemo
+	if e.current(st, full) {
 		return e.edges
 	}
 	readAt := time.Now()
@@ -195,74 +218,301 @@ func subagentEdgesCached(path string, st os.FileInfo, fresh bool) subagentEdge {
 		return e.edges
 	}
 	defer f.Close()
-	head := make([]byte, min(st.Size(), 256))
-	n, _ := f.ReadAt(head, 0)
-	head = head[:n]
-	if !ok || !os.SameFile(e.info, st) || st.Size() <= e.size || !bytes.HasPrefix(head, e.head) {
-		e = edgeMemo{}
+	if now, err := f.Stat(); err == nil {
+		st = now // another request may have read a later state of the file while this one waited
 	}
-	e.edges.tools = maps.Clone(e.edges.tools) // cached snapshots may still be in use by another list request
-	e.off += eachLine(io.NewSectionReader(f, e.off, st.Size()-e.off), e.edges.readLine)
+	if e.current(st, full) {
+		return e.edges
+	}
+	var buf [256]byte
+	n, _ := f.ReadAt(buf[:min(st.Size(), int64(len(buf)))], 0)
+	head := buf[:n]
+	if e.info == nil || full && !e.full || !os.SameFile(e.info, st) || st.Size() <= e.size || !bytes.HasPrefix(head, e.head) {
+		*e = edgeMemo{full: full}
+	}
+	e.read(f, st.Size())
 	// Only remember already consumed bytes: a partial first line can still be changing in place.
-	e.head = append([]byte(nil), head[:min(int64(len(head)), e.off)]...)
+	e.head = append(e.head[:0], head[:min(int64(len(head)), e.off)]...)
 	e.info, e.size, e.mtime, e.readAt = st, st.Size(), st.ModTime(), readAt
-	edgeCache.Lock()
-	if len(edgeCache.m) >= metaCacheMax {
-		edgeCache.m = map[string]edgeMemo{}
-	}
-	edgeCache.m[path] = e
-	edgeCache.Unlock()
 	return e.edges
 }
 
-func (e *subagentEdge) readLine(line []byte) {
+// current says whether e is what a request for full (or not) metadata of the file as st has it gets.
+func (e *edgeMemo) current(st os.FileInfo, full bool) bool {
+	return e.info != nil && (e.full || !full) &&
+		(e.size == st.Size() && e.mtime.Equal(st.ModTime()) || !full && time.Since(e.readAt) < metaMinInterval)
+}
+
+// read reads the complete lines the file gained past e.off, up to size, forward: all of them the first time, as tool
+// calls need them all. Only the assistant lines with a tool call are parsed, for the calls' ids; the latest tool call,
+// words and exchange are read again at the end, and a workflow agent's (full) latest usage and model from the last
+// replies back. What is not found among them stays as it was: it is still the latest.
+func (e *edgeMemo) read(f *os.File, size int64) {
+	lo := e.off
+	var refs edgeRefs
+	hi := lo + eachLineAt(io.NewSectionReader(f, lo, size-lo), func(line []byte, at, n int64) bool {
+		e.scanLine(line, lineRef{lo + at, n}, &refs)
+		return true
+	})
+	e.off = hi
+	if refs.tool.size > 0 {
+		withLineAt(f, refs.tool.at, refs.tool.size, func(line []byte) {
+			meta := transcript.Meta{Sidechain: true}
+			items := transcript.ParseLine(0, line, &meta)
+			for i := len(items) - 1; i >= 0; i-- {
+				if it := items[i]; it.Kind == proto.KindToolUse {
+					e.edges.latestTool = &proto.WorkflowTool{ID: it.ToolUseID, Name: it.ToolName,
+						Summary: transcript.Activity(it.ToolName, it.ToolInput)}
+					break
+				}
+			}
+		})
+	}
+	if refs.text.size > 0 {
+		found := false
+		withLineAt(f, refs.text.at, refs.text.size, func(line []byte) { found = e.lastText(line) })
+		if !found { // its text was thinking, or only botmux's sentinel: the words before it
+			eachLineBack(f, lo, refs.text.at, usageMaxLine, func(line []byte) bool { return !e.lastText(line) })
+		}
+	}
+	if refs.exchange.size > 0 {
+		found := false
+		withLineAt(f, refs.exchange.at, refs.exchange.size, func(line []byte) { found = e.exchangeTime(line) })
+		if !found { // a nested message's mark: the exchange before it
+			eachLineBack(f, lo, refs.exchange.at, usageMaxLine, func(line []byte) bool { return !e.exchangeTime(line) })
+		}
+	}
+	if e.full && refs.reply {
+		var gotTokens, gotModel bool
+		eachLineBack(f, lo, hi, usageMaxLine, func(line []byte) bool {
+			var row edgeRow
+			if lineKind(line) != 'a' || json.Unmarshal(line, &row) != nil || row.Type != "assistant" || row.Message == nil {
+				return true
+			}
+			if t, ok := row.tokens(); ok && !gotTokens {
+				e.edges.tokens, gotTokens = t, true
+			}
+			if m := row.Message.Model; m != "" && m != "<synthetic>" && !gotModel {
+				e.edges.model, gotModel = m, true
+			}
+			return !gotTokens || !gotModel
+		})
+	}
+}
+
+// lineRef is where a line is in the file (with its newline); size 0: none.
+type lineRef struct{ at, size int64 }
+
+// edgeRefs are what read reads again: the lines with the latest tool call, the latest text and the latest exchange
+// (a user or an assistant line), and whether there were replies at all.
+type edgeRefs struct {
+	tool, text, exchange lineRef
+	reply                bool
+}
+
+// What a line holds where Claude Code (2.1.3xx) puts its own type, and the marks of a reply's blocks.
+var (
+	assistantMark  = []byte(`"type":"assistant"`)
+	userMark       = []byte(`"type":"user"`)
+	apiRequestMark = []byte(`{"type":"api-request`)
+	attachmentMark = []byte(`"attachment":{`)
+	textMark       = []byte(`"type":"text"`)
+	toolUseMark    = []byte(`tool_use"`) // "tool_use" and "server_tool_use" blocks (and a reply's stop_reason)
+)
+
+// lineHead, lineTail: how far from its start and its end lineKind first looks for a line's type. Measured on a real
+// workflow's 170k lines: a user line's is at 152 bytes, an assistant line's within 1.5 KB of its end.
+const lineHead, lineTail = 512, 2048
+
+// lineKind tells a transcript line's own type without parsing it: 'a' an assistant line, 'u' a user line, 0 another.
+// It looks where Claude Code puts the type first (a user line's near its start; an assistant line's at its end, after
+// the message; an API request or an attachment says what it is at its start), then through the whole line. It never
+// takes an assistant line for another (its tool calls would go uncounted): what it finds near the start counts only at
+// the line's top level, not in a tool call's input. It may take another line holding a nested message for an assistant
+// line: callers parse those.
+func lineKind(line []byte) byte {
+	head := line[:min(len(line), lineHead)]
+	switch {
+	case topLevelMark(line, head, userMark):
+		return 'u'
+	case bytes.HasPrefix(line, apiRequestMark), topLevelMark(line, head, attachmentMark):
+		return 0
+	case topLevelMark(line, head, assistantMark), bytes.LastIndex(line[max(0, len(line)-lineTail):], assistantMark) >= 0,
+		bytes.Contains(line, assistantMark):
+		return 'a'
+	case bytes.Contains(line, userMark):
+		return 'u'
+	}
+	return 0
+}
+
+// topLevelMark says whether head, the start of line, holds mark as one of the line's own keys or values: not inside
+// a nested object or array.
+func topLevelMark(line, head, mark []byte) bool {
+	i := bytes.Index(head, mark)
+	if i < 0 {
+		return false
+	}
+	depth, str := 0, false
+	for j := 0; j < i; j++ {
+		switch c := line[j]; {
+		case str && c == '\\':
+			j++
+		case str:
+			str = c != '"'
+		case c == '"':
+			str = true
+		case c == '{' || c == '[':
+			depth++
+		case c == '}' || c == ']':
+			depth--
+		}
+	}
+	return depth == 1 && !str
+}
+
+// scanLine is one line of read's, at at: its first timestamp, the tool calls it counts (tool_use and
+// server_tool_use blocks, once per id, but not a SubagentHandback: that is the agent's report), and where the lines to
+// read again are.
+func (e *edgeMemo) scanLine(line []byte, at lineRef, refs *edgeRefs) {
+	if e.edges.started.IsZero() {
+		e.edges.started = rowTime(line)
+	}
+	switch lineKind(line) {
+	case 'u':
+		refs.exchange = at
+		return
+	case 'a':
+		refs.exchange, refs.reply = at, true
+	default:
+		return
+	}
+	if !bytes.Contains(line, toolUseMark) { // a reply's blocks are on lines of their own: one without a tool call
+		if bytes.Contains(line, textMark) {
+			refs.text = at
+		}
+		return
+	}
+	var row struct {
+		Type    string `json:"type"`
+		Message *struct {
+			Content edgeBlocks `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &row) != nil || row.Type != "assistant" || row.Message == nil {
+		return
+	}
+	for _, b := range row.Message.Content {
+		if b.Type == "text" {
+			refs.text = at
+		}
+		if b.Type != "tool_use" && b.Type != "server_tool_use" {
+			continue
+		}
+		if b.Name == transcript.HandbackTool { // its report, not a step: ParseLine makes it the agent's last words (#5911)
+			refs.text = at
+			continue
+		}
+		refs.tool = at
+		if b.ID != "" {
+			h := maphash.String(toolSeed, b.ID)
+			if _, seen := e.tools[h]; seen {
+				continue
+			}
+			if e.tools == nil {
+				e.tools = map[uint64]struct{}{}
+			}
+			e.tools[h] = struct{}{}
+		}
+		e.edges.calls++
+	}
+}
+
+// lastText takes an assistant line's last words (transcript.Meta.LastText), true when it has them.
+func (e *edgeMemo) lastText(line []byte) bool {
+	if lineKind(line) != 'a' {
+		return false
+	}
+	meta := transcript.Meta{Sidechain: true}
+	transcript.ParseLine(0, line, &meta)
+	if meta.LastText == "" {
+		return false
+	}
+	e.edges.last = snippet(meta.LastText)
+	return true
+}
+
+// exchangeTime takes a user or assistant line's time, true when it is one with a time.
+func (e *edgeMemo) exchangeTime(line []byte) bool {
+	if lineKind(line) == 0 {
+		return false
+	}
 	var row struct {
 		Type      string    `json:"type"`
 		Timestamp time.Time `json:"timestamp"`
-		Message   *struct {
-			Usage *struct {
-				Input      int `json:"input_tokens"`
-				CacheRead  int `json:"cache_read_input_tokens"`
-				CacheWrite int `json:"cache_creation_input_tokens"`
-				Output     int `json:"output_tokens"`
-			} `json:"usage"`
-		} `json:"message"`
 	}
-	if json.Unmarshal(line, &row) != nil {
-		return
+	if json.Unmarshal(line, &row) != nil || row.Type != "user" && row.Type != "assistant" || row.Timestamp.IsZero() {
+		return false
 	}
-	if e.started.IsZero() {
-		e.started = row.Timestamp
+	e.edges.lastAt = row.Timestamp
+	return true
+}
+
+// rowTime is a line's own timestamp (not one nested in it), zero when it has none.
+func rowTime(line []byte) time.Time {
+	var row struct {
+		Timestamp time.Time `json:"timestamp"`
 	}
-	if (row.Type == "user" || row.Type == "assistant") && !row.Timestamp.IsZero() {
-		e.lastAt = row.Timestamp
+	_ = json.Unmarshal(line, &row)
+	return row.Timestamp
+}
+
+// edgeRow is what read parses of a reply for its usage and model.
+type edgeRow struct {
+	Type      string    `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	APIError  bool      `json:"isApiErrorMessage"`
+	Message   *struct {
+		Model string `json:"model"`
+		Usage *struct {
+			Input      int `json:"input_tokens"`
+			CacheRead  int `json:"cache_read_input_tokens"`
+			CacheWrite int `json:"cache_creation_input_tokens"`
+			Output     int `json:"output_tokens"`
+		} `json:"usage"`
+		Content edgeBlocks `json:"content"`
+	} `json:"message"`
+}
+
+// edgeBlocks are a reply's content blocks, by type and id; a content that is a string has none.
+type edgeBlocks []struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (b *edgeBlocks) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || data[0] != '[' {
+		*b = nil
+		return nil
 	}
-	if row.Type != "assistant" || row.Message == nil {
-		return
+	type blocks edgeBlocks
+	return json.Unmarshal(data, (*blocks)(b))
+}
+
+// tokens is the reply's usage the way the subagent page shows it: input, cache read, cache creation and output of this
+// one reply, never a sum over replies (each content block repeats it). ok only for a real one: not an error Claude Code
+// wrote itself (<synthetic>, isApiErrorMessage: its usage is all zeros), not one without input (a gateway's on a turn's
+// other replies, {"input_tokens":0,"output_tokens":1}: every request has some) nor what no one request can have (a
+// gateway's sum of a whole turn, transcript.PlausibleContext). The rule transcript's ContextTokens follows.
+func (r *edgeRow) tokens() (int, bool) {
+	u := r.Message.Usage
+	if u == nil || r.APIError || r.Message.Model == "<synthetic>" {
+		return 0, false
 	}
-	if u := row.Message.Usage; u != nil {
-		// Usage repeats on every content block of one reply; the subagent page shows the latest, never a sum.
-		e.tokens = u.Input + u.CacheRead + u.CacheWrite + u.Output
+	context := u.Input + u.CacheRead + u.CacheWrite
+	if context <= 0 || !transcript.PlausibleContext(context, 0) {
+		return 0, false
 	}
-	meta := transcript.Meta{Sidechain: true}
-	for _, it := range transcript.ParseLine(0, line, &meta) {
-		if it.Kind == proto.KindToolUse {
-			if it.ToolUseID == "" || !e.tools[it.ToolUseID] {
-				e.calls++
-				if it.ToolUseID != "" {
-					if e.tools == nil {
-						e.tools = map[string]bool{}
-					}
-					e.tools[it.ToolUseID] = true
-				}
-			}
-			e.latestTool = &proto.WorkflowTool{ID: it.ToolUseID, Name: it.ToolName, Summary: transcript.Activity(it.ToolName, it.ToolInput)}
-		}
-	}
-	if meta.LastText != "" {
-		e.last = snippet(meta.LastText)
-	}
-	if meta.Model != "" {
-		e.model = meta.Model
-	}
+	return context + u.Output, true
 }

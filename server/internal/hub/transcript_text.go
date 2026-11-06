@@ -141,6 +141,16 @@ func taskNoteHead(n *proto.TaskNote) (key string, args i18n.Args) {
 			return "agent_stopped", nil
 		}
 		return "agent", nil
+	case "workflow":
+		switch n.Status {
+		case "completed":
+			return "workflow_completed", nil
+		case "failed":
+			return "workflow_failed", nil // no exit code: noteText does not show one for a workflow
+		case "killed", "stopped":
+			return "workflow_stopped", nil
+		}
+		return "workflow", nil
 	}
 	return "", nil
 }

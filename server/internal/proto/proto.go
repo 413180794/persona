@@ -1515,9 +1515,12 @@ type Workflow struct {
 	// PhaseStats counts all agents, before Agents is capped, in Phases order then any undeclared phases.
 	PhaseStats []WorkflowPhaseStats `json:"phase_stats,omitempty"`
 	// AgentsStarted counts the agents it started so far (the total is not known before it ends: scripts fan out as
-	// they go), AgentsDone those that returned, AgentsRunning those still at it.
+	// they go), AgentsDone those that returned, AgentsFailed those the journal says failed (not counted as done; absent
+	// from older nodes, which counted them as done), AgentsRunning those still at it. Agents stopped when the run ended
+	// are none of the three.
 	AgentsStarted int        `json:"agents_started"`
 	AgentsDone    int        `json:"agents_done"`
+	AgentsFailed  int        `json:"agents_failed,omitempty"`
 	AgentsRunning int        `json:"agents_running"`
 	Tokens        int        `json:"tokens,omitempty"` // sum of each agent's latest usage, not cumulative usage
 	Calls         int        `json:"calls,omitempty"`  // all agents' tool calls, before Agents is capped
@@ -1532,11 +1535,13 @@ type Workflow struct {
 // WorkflowAgentsMax caps Workflow.Agents.
 const WorkflowAgentsMax = 60
 
-// WorkflowPhaseStats counts agents in one phase. An empty title groups agents whose phase is unknown.
+// WorkflowPhaseStats counts agents in one phase, as Workflow counts them all. An empty title groups agents whose phase
+// is unknown.
 type WorkflowPhaseStats struct {
 	Title   string `json:"title"`
 	Started int    `json:"started"`
 	Done    int    `json:"done"`
+	Failed  int    `json:"failed,omitempty"`
 	Running int    `json:"running"`
 }
 
@@ -1557,7 +1562,7 @@ type WorkflowAgent struct {
 	Label      string        `json:"label,omitempty"`
 	Phase      string        `json:"phase,omitempty"`
 	Running    bool          `json:"running"`
-	Status     string        `json:"status"` // running | done | stopped (its run ended before it returned)
+	Status     string        `json:"status"` // running | done | failed (the journal says so) | stopped (its run ended before it returned)
 	StartedAt  time.Time     `json:"started_at,omitempty"`
 	EndedAt    *time.Time    `json:"ended_at,omitempty"` // nil while running; last exchange, or the run's end if stopped
 	UpdatedAt  time.Time     `json:"updated_at,omitempty"`
@@ -1568,7 +1573,8 @@ type WorkflowAgent struct {
 	Calls      int           `json:"calls,omitempty"`  // tool_use and server_tool_use blocks in its transcript
 }
 
-// WorkflowTool is an agent's most recent tool call, retained after its final text arrives.
+// WorkflowTool is an agent's most recent tool call, retained after its final text arrives. Summary is a short line on
+// what it does ("Reading example.go"): the node writes it in Chinese, the hub gives it in the reader's language.
 type WorkflowTool struct {
 	ID      string `json:"id,omitempty"` // the call's tool_use id: a client keys what it plays for a new call by it
 	Name    string `json:"name"`

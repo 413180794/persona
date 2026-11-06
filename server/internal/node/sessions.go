@@ -2062,7 +2062,9 @@ func listKeySized(list []proto.Session, size int) string {
 		for _, t := range s.Background {
 			w.str(t.ID, ',')
 		}
-		// Workflow journals advance without changing the main transcript's rev.
+		// Workflow journals advance without changing the main transcript's rev, and so do its agents: each one's
+		// latest tool call (its name, and its calls to tell one Read from the next) goes out as often as the
+		// workflow cache reads them (workflowReadInterval). Tokens and the last text ride along.
 		for _, run := range s.Workflows {
 			w.b.WriteString("workflow:")
 			w.str(run.TaskID, '/')
@@ -2070,7 +2072,15 @@ func listKeySized(list []proto.Session, size int) string {
 			w.quote(run.Phase, '/')
 			w.int(int64(run.AgentsDone), '/')
 			w.int(int64(run.AgentsStarted), '/')
-			w.int(int64(run.AgentsRunning), '\n')
+			w.int(int64(run.AgentsRunning), '/')
+			w.int(int64(run.AgentsFailed), '\n')
+			for _, a := range run.Agents {
+				if a.LatestTool != nil {
+					w.b.WriteString(a.LatestTool.Name)
+				}
+				w.b.WriteByte('/')
+				w.int(int64(a.Calls), ',')
+			}
 		}
 		if s.Loop != nil {
 			w.b.WriteString("loop")

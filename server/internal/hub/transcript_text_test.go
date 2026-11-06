@@ -36,6 +36,14 @@ func TestLocalizedTranscriptItems(t *testing.T) {
 			"Subagent finished · Review the diff", "サブエージェント完了 · Review the diff"},
 		{note(`<task-id>m</task-id><summary>Monitor event: "Watch CI"</summary><event>build 42 passed</event>`),
 			"Monitor event · build 42 passed", "Monitorイベント · build 42 passed"},
+		// A background workflow's end (#5511): the node writes it in Chinese since #3731.
+		{note("\n<task-id>w</task-id>\n<tool-use-id>toolu_w</tool-use-id>\n<status>completed</status>\n" +
+			`<summary>Dynamic workflow "parity-audit" completed</summary>` + "\n<result>ok</result>\n"),
+			"Background workflow finished · parity-audit", "バックグラウンド workflow 完了 · parity-audit"},
+		{note(`<task-id>w</task-id><status>failed</status><summary>Dynamic workflow "parity-audit" failed</summary>`),
+			"Background workflow failed · parity-audit", "バックグラウンド workflow 失敗 · parity-audit"},
+		{note(`<task-id>w</task-id><status>killed</status><summary>Dynamic workflow "parity-audit" was stopped</summary>`),
+			"Background workflow stopped · parity-audit", "バックグラウンド workflow 停止 · parity-audit"},
 		{note(`<task-id>z</task-id><summary>Something new happened</summary>`), "Something new happened", "Something new happened"},
 		{"[Request interrupted by user]", "Interrupted", "中断しました"},
 	}
@@ -55,6 +63,45 @@ func TestLocalizedTranscriptItems(t *testing.T) {
 			t.Fatal("the node's items were written to")
 		}
 	}
+}
+
+// Every heading the node writes for a task note (transcript/tasknote.go noteText) is one the hub knows: its zh-Hans
+// text is the node's, word for word, so en and ja get theirs instead of the node's Chinese.
+func TestTaskNoteHeadsMatchTheNode(t *testing.T) {
+	for _, kind := range []string{"Background command", "Monitor", "Agent", "Dynamic workflow"} {
+		for _, c := range []struct{ status, outcome string }{
+			{"completed", "completed"}, {"failed", "failed"}, {"killed", "was stopped"}, {"stopped", "was stopped"},
+			{"", "timed out"}, {"", "stream ended"}, {"", "is waiting on its own background work"},
+		} {
+			xml := "<task-notification><task-id>t</task-id>"
+			if c.status != "" {
+				xml += "<status>" + c.status + "</status>"
+			}
+			xml += "<summary>" + kind + ` "the title" ` + c.outcome + "</summary></task-notification>"
+			items := userLine(t, xml)
+			if items[0].Task == nil || items[0].Task.Kind == "task" {
+				t.Fatalf("%s: not a task note: %+v", xml, items[0])
+			}
+			key, zh := mustHead(t, items[0].Task), items[0].Text
+			if want := tt(i18n.ZhHans, key) + " · the title"; zh != want {
+				t.Errorf("%s/%s: the node writes %q, the hub's zh-Hans %q is %q", items[0].Task.Kind, items[0].Task.Status, zh, key, want)
+			}
+			for _, l := range []i18n.Lang{i18n.En, i18n.Ja} {
+				if got, want := localizedItems(l, items)[0].Text, tt(l, key)+" · the title"; got != want {
+					t.Errorf("%s %s/%s: %q → %q, want %q", l, items[0].Task.Kind, items[0].Task.Status, zh, got, want)
+				}
+			}
+		}
+	}
+}
+
+func mustHead(t *testing.T, n *proto.TaskNote) string {
+	t.Helper()
+	key, args := taskNoteHead(n)
+	if key == "" || args != nil {
+		t.Fatalf("no plain heading for %+v", n)
+	}
+	return key
 }
 
 func TestLocalizedNotices(t *testing.T) {

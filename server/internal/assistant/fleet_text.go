@@ -60,12 +60,15 @@ func activityText(l i18n.Lang, s string) string {
 const queuedFrom = "【来自 "
 
 // localizeSession rewrites s's node-written lines in l: its activity, a background command's stand-in description, the
-// sender of a queued message. The node's slices are shared: changed ones are copied.
+// sender of a queued message, what its workflow agents' and subagents' latest tool calls do. The node's slices are
+// shared: changed ones are copied.
 func localizeSession(l i18n.Lang, s *proto.Session) {
 	if l == i18n.ZhHans || !i18n.Valid(l) {
 		return
 	}
 	s.Activity = activityText(l, s.Activity)
+	localizeWorkflows(l, s)
+	localizeSubagents(l, s)
 	s.RuntimeFallback = runtimeFallbackText(l, s.RuntimeFallback)
 	copied := false
 	for i, b := range s.Background {
@@ -91,6 +94,61 @@ func localizeSession(l i18n.Lang, s *proto.Session) {
 		}
 		s.Queued[i] = tt(l, "queued_from", i18n.Args{"from": fromName(l, from)}) + body
 	}
+}
+
+// localizeWorkflows rewrites the summary of each workflow agent's latest tool call (transcript.Activity's line, as a
+// session's activity) in l, copying the workflows, agents and tools it changes.
+func localizeWorkflows(l i18n.Lang, s *proto.Session) {
+	copied := false
+	for i := range s.Workflows {
+		var agents []proto.WorkflowAgent
+		for j, a := range s.Workflows[i].Agents {
+			if a.LatestTool == nil {
+				continue
+			}
+			sum := activityText(l, a.LatestTool.Summary)
+			if sum == a.LatestTool.Summary {
+				continue
+			}
+			if agents == nil {
+				agents = append([]proto.WorkflowAgent(nil), s.Workflows[i].Agents...)
+			}
+			agents[j].LatestTool = localizedTool(a.LatestTool, sum)
+		}
+		if agents == nil {
+			continue
+		}
+		if !copied {
+			s.Workflows, copied = append([]proto.Workflow(nil), s.Workflows...), true
+		}
+		s.Workflows[i].Agents = agents
+	}
+}
+
+// localizeSubagents rewrites the summary of each subagent's latest tool call (the same activity line, #5602) in l,
+// copying the subagents and tools it changes.
+func localizeSubagents(l i18n.Lang, s *proto.Session) {
+	copied := false
+	for i, a := range s.Subagents {
+		if a.LastTool == nil {
+			continue
+		}
+		sum := activityText(l, a.LastTool.Summary)
+		if sum == a.LastTool.Summary {
+			continue
+		}
+		if !copied {
+			s.Subagents, copied = append([]proto.Subagent(nil), s.Subagents...), true
+		}
+		s.Subagents[i].LastTool = localizedTool(a.LastTool, sum)
+	}
+}
+
+// localizedTool is a copy of t (its call id and name kept) with summary for its summary.
+func localizedTool(t *proto.WorkflowTool, summary string) *proto.WorkflowTool {
+	c := *t
+	c.Summary = summary
+	return &c
 }
 
 // workLogLine is what the knowledge base's project timeline gets for a finished turn: its conclusion when the Agents

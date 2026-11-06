@@ -117,10 +117,11 @@ func TestSubagentEdgesCached(t *testing.T) {
 		t.Fatalf("cached read differs: %q vs %q", first, again)
 	}
 	edgeCache.Lock()
-	e := edgeCache.m[path]
-	e.readAt = time.Time{} // as if read long ago
-	edgeCache.m[path] = e
+	e, _ := edgeCache.m.peek(path)
 	edgeCache.Unlock()
+	e.mu.Lock()
+	e.readAt = time.Time{} // as if read long ago
+	e.mu.Unlock()
 	st = write("two, longer")
 	if last := subagentEdgesCached(path, st, false).last; last == first && first != "" {
 		t.Fatalf("a changed file should be read again, still %q", last)

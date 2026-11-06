@@ -39,7 +39,14 @@ func listKeyFmt(list []proto.Session) string {
 			b.WriteString(t.ID + ",")
 		}
 		for _, w := range s.Workflows {
-			fmt.Fprintf(&b, "workflow:%s/%s/%q/%d/%d/%d\n", w.TaskID, w.Status, w.Phase, w.AgentsDone, w.AgentsStarted, w.AgentsRunning)
+			fmt.Fprintf(&b, "workflow:%s/%s/%q/%d/%d/%d/%d\n", w.TaskID, w.Status, w.Phase, w.AgentsDone, w.AgentsStarted, w.AgentsRunning, w.AgentsFailed)
+			for _, a := range w.Agents {
+				name := ""
+				if a.LatestTool != nil {
+					name = a.LatestTool.Name
+				}
+				fmt.Fprintf(&b, "%s/%d,", name, a.Calls)
+			}
 		}
 		if s.Loop != nil {
 			fmt.Fprintf(&b, "loop%d", s.Loop.NextAt.Unix())
@@ -80,7 +87,10 @@ func listKeyFixture(n int) []proto.Session {
 			s.PaneIndex = &pane
 			s.Activity, s.ActivityAt = "在跑测试", &act
 			s.Background = []proto.BackgroundTask{{ID: "b85polnoj"}, {ID: "b85polnok"}}
-			s.Workflows = []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowRunning, Phase: "Review", AgentsStarted: 3, AgentsDone: 1, AgentsRunning: 2}}
+			s.Workflows = []proto.Workflow{{TaskID: "w1", Status: proto.WorkflowRunning, Phase: "Review", AgentsStarted: 4, AgentsDone: 1,
+				AgentsFailed: 1, AgentsRunning: 2, Agents: []proto.WorkflowAgent{
+					{ID: "a1", Status: "done", LatestTool: &proto.WorkflowTool{Name: "Read", Summary: "在读 a.go"}, Calls: 3},
+					{ID: "a2", Status: "running"}}}}
 			s.Subagents = []proto.Subagent{{ID: "agent-a1", Running: true, UpdatedAt: at}, {ID: "agent-a2", UpdatedAt: at}}
 			s.Ports = []proto.Port{{Port: 5173, PID: 4242, Title: "Vite App"}}
 		}
@@ -237,34 +247,54 @@ func TestListKeyAgreesWithFmt(t *testing.T) {
 	}
 }
 
+// A workflow's progress and its agents' latest tool calls change the key (#5511: they are pushed as often as the
+// workflow cache reads them); what rides along with them does not.
 func TestListKeyWorkflowProgress(t *testing.T) {
-	base := proto.Workflow{TaskID: "w1", Status: proto.WorkflowRunning, Phase: "Review", AgentsStarted: 3, AgentsDone: 1, AgentsRunning: 2}
+	agents := func() []proto.WorkflowAgent {
+		return []proto.WorkflowAgent{
+			{ID: "a1", Status: "done", LatestTool: &proto.WorkflowTool{Name: "Read", Summary: "在读 a.go"}, Calls: 4, Tokens: 100, LastText: "done"},
+			{ID: "a2", Status: "running", LatestTool: &proto.WorkflowTool{Name: "Bash", Summary: "在跑测试"}, Calls: 2, Tokens: 50},
+			{ID: "a3", Status: "running"},
+		}
+	}
+	base := proto.Workflow{TaskID: "w1", Status: proto.WorkflowRunning, Phase: "Review", AgentsStarted: 3, AgentsDone: 1, AgentsRunning: 2,
+		Agents: agents()}
 	key := func(runs ...proto.Workflow) string {
 		return listKey([]proto.Session{{SessionID: "s1", Workflows: runs}})
 	}
 	want := key(base)
-	for name, change := range map[string]func(*proto.Workflow){
-		"task_id":        func(w *proto.Workflow) { w.TaskID = "w2" },
-		"status":         func(w *proto.Workflow) { w.Status = proto.WorkflowCompleted },
-		"phase":          func(w *proto.Workflow) { w.Phase = "Verify" },
-		"agents_done":    func(w *proto.Workflow) { w.AgentsDone++ },
-		"agents_started": func(w *proto.Workflow) { w.AgentsStarted++ },
-		"agents_running": func(w *proto.Workflow) { w.AgentsRunning-- },
+	for name, c := range map[string]struct {
+		change  func(*proto.Workflow)
+		changes bool
+	}{
+		"task_id":          {func(w *proto.Workflow) { w.TaskID = "w2" }, true},
+		"status":           {func(w *proto.Workflow) { w.Status = proto.WorkflowCompleted }, true},
+		"phase":            {func(w *proto.Workflow) { w.Phase = "Verify" }, true},
+		"agents_done":      {func(w *proto.Workflow) { w.AgentsDone++ }, true},
+		"agents_started":   {func(w *proto.Workflow) { w.AgentsStarted++ }, true},
+		"agents_running":   {func(w *proto.Workflow) { w.AgentsRunning-- }, true},
+		"agents_failed":    {func(w *proto.Workflow) { w.AgentsFailed++ }, true},
+		"latest tool name": {func(w *proto.Workflow) { w.Agents[1].LatestTool = &proto.WorkflowTool{Name: "Grep"} }, true},
+		"first tool call": {func(w *proto.Workflow) {
+			w.Agents[2].LatestTool, w.Agents[2].Calls = &proto.WorkflowTool{Name: "Read"}, 1
+		}, true},
+		"same tool again":    {func(w *proto.Workflow) { w.Agents[1].Calls++ }, true},
+		"timestamp":          {func(w *proto.Workflow) { w.UpdatedAt = time.Now() }, false},
+		"tokens":             {func(w *proto.Workflow) { w.Agents[1].Tokens += 10; w.Tokens += 10 }, false},
+		"last text":          {func(w *proto.Workflow) { w.Agents[1].LastText = "halfway" }, false},
+		"tool summary alone": {func(w *proto.Workflow) { w.Agents[0].LatestTool = &proto.WorkflowTool{Name: "Read", Summary: "x"} }, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := base
-			change(&changed)
-			if key(changed) == want {
-				t.Fatalf("workflow %s change does not change the list key", name)
+			changed.Agents = agents()
+			c.change(&changed)
+			if got := key(changed) != want; got != c.changes {
+				t.Fatalf("workflow %s: key changed = %v, want %v", name, got, c.changes)
 			}
 		})
 	}
 	if key() == want || key(base, base) == want {
 		t.Fatal("adding or removing a workflow does not change the list key")
-	}
-	base.UpdatedAt = time.Now()
-	if key(base) != want {
-		t.Fatal("workflow timestamp alone changes the list key")
 	}
 }
 
