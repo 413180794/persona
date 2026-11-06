@@ -29,9 +29,11 @@ func KindMinutes(kind string) (minutes int, ok bool) {
 func splitKind(kind string) (minutes int, rest string, ok bool) {
 	k := strings.ToLower(strings.TrimSpace(kind))
 	if m := lengthKind.FindStringSubmatch(k); m != nil {
-		n, _ := strconv.Atoi(m[1])
+		n, err := strconv.Atoi(m[1])
 		unit := map[string]int{"m": 1, "h": 60, "d": 1440, "w": 10080}[m[2]]
-		if n > 0 && n <= 366*1440 {
+		// The one-year cap is on the length, not on the count: "53w" is longer than a year. Bounding n by the cap over
+		// the unit keeps n*unit within the cap, so it cannot overflow even a 32-bit int.
+		if err == nil && n > 0 && n <= 366*1440/unit {
 			return n * unit, "", true
 		}
 		return 0, "", false
@@ -94,4 +96,13 @@ func addWindow(list []proto.UsageWindow, checked map[int]time.Time, w proto.Usag
 	}
 	checked[len(list)] = at
 	return append(list, w)
+}
+
+// notAfter is t, or now when t is later: a gateway whose clock runs ahead (or that sends a bogus date) would
+// otherwise hand in a sample that never ages out and is always the newest in a merge.
+func notAfter(t, now time.Time) time.Time {
+	if t.After(now) {
+		return now.UTC()
+	}
+	return t
 }

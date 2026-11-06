@@ -48,10 +48,18 @@ func fetchGeneric(ctx context.Context, c *client, now time.Time) (Result, error)
 	if err := c.do(ctx, "GET", "", nil, &out); err != nil {
 		return Result{}, err
 	}
-	res := Result{Seen: Seen{Providers: map[string]int{}, Listed: len(out.Accounts)}}
+	res := Result{Seen: Seen{Providers: map[string]int{}, Listed: distinctAccounts(out.Accounts)}}
+	seen := map[string]bool{} // ids already taken: a repeated page or a gateway bug lists an account twice
 	for i, a := range out.Accounts {
 		if i >= AccountsMost {
 			break
+		}
+		a.ID = strings.TrimSpace(a.ID)
+		if a.ID != "" {
+			if seen[a.ID] { // the first listing wins, as in the relay source
+				continue
+			}
+			seen[a.ID] = true
 		}
 		var list []proto.UsageWindow
 		checked := map[int]time.Time{}
@@ -73,7 +81,7 @@ func fetchGeneric(ctx context.Context, c *client, now time.Time) (Result, error)
 				continue
 			}
 			list = addWindow(list, checked, proto.UsageWindow{Label: proto.WindowLabel(minutes), WindowMinutes: minutes, UsedPercent: used,
-				ResetsAt: w.ResetsAt, Model: clip(strings.TrimSpace(w.Model), 40)}, time.Time{})
+				ResetsAt: utc(w.ResetsAt), Model: clip(strings.TrimSpace(w.Model), 40)}, time.Time{})
 		}
 		provider := clip(strings.ToLower(strings.TrimSpace(a.Provider)), 32)
 		if len(list) == 0 || provider == "" {
@@ -87,18 +95,37 @@ func fetchGeneric(ctx context.Context, c *client, now time.Time) (Result, error)
 		})
 		sampled := now
 		if a.SampledAt != nil && !a.SampledAt.IsZero() {
-			sampled = a.SampledAt.UTC()
+			sampled = notAfter(a.SampledAt.UTC(), now)
 		}
 		name := clip(strings.TrimSpace(a.Name), 80)
 		if name == "" {
 			name = provider
 		}
 		acct := proto.UsageAccount{Provider: provider, Name: name, Plan: clip(strings.TrimSpace(a.Plan), 40), Windows: list,
-			SampledAt: sampled, Stale: a.Stale, Ref: strings.TrimSpace(a.ID)}
+			SampledAt: sampled, Stale: a.Stale, Ref: a.ID}
 		res.Accounts = append(res.Accounts, acct)
 		res.Seen.Accounts++
 		res.Seen.Windows += len(list)
 		res.Seen.Providers[provider]++
 	}
 	return res, nil
+}
+
+// distinctAccounts counts the accounts a generic body lists, an id listed twice once. Accounts without an id cannot
+// be told apart, so each counts.
+func distinctAccounts(list []genericAccount) int {
+	ids := map[string]bool{}
+	n := 0
+	for _, a := range list {
+		id := strings.TrimSpace(a.ID)
+		if id == "" {
+			n++
+			continue
+		}
+		if !ids[id] {
+			ids[id] = true
+			n++
+		}
+	}
+	return n
 }

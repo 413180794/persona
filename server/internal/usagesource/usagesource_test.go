@@ -348,11 +348,62 @@ func TestGenericSource(t *testing.T) {
 	}
 }
 
+func TestGenericSourceKeepsTheFirstAccountOfARepeatedID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"accounts":[
+		 {"id":"acct-1","provider":"codex","name":"first","windows":[{"label":"5h","used_percent":10}]},
+		 {"id":" acct-1 ","provider":"codex","name":"repeat","windows":[{"label":"5h","used_percent":90},{"label":"7d","used_percent":50}]},
+		 {"provider":"claude","name":"no id","windows":[{"label":"5h","used_percent":20}]}]}`)
+	}))
+	defer srv.Close()
+	res, err := Fetch(context.Background(), Config{Type: TypeGeneric, URL: srv.URL, Key: testKey}, now)
+	if err != nil || len(res.Accounts) != 2 {
+		t.Fatalf("%v %+v", err, res.Accounts)
+	}
+	if a := res.Accounts[0]; a.Ref != "acct-1" || a.Name != "first" || len(a.Windows) != 1 || a.Windows[0].UsedPercent != 10 {
+		t.Errorf("first acct-1 not kept: %+v", a)
+	}
+	if b := res.Accounts[1]; b.Ref != "" || b.Provider != "claude" {
+		t.Errorf("the account without an id: %+v", b)
+	}
+	if s := res.Seen; s.Listed != 2 || s.Accounts != 2 || s.Windows != 2 || s.Providers["codex"] != 1 || s.Providers["claude"] != 1 {
+		t.Errorf("seen %+v", s)
+	}
+}
+
 func TestUnknownTypeAndBadAddress(t *testing.T) {
 	if _, err := Fetch(context.Background(), Config{Type: "nope", URL: "https://gw.example.com"}, now); CodeOf(err) != CodeBadConfig {
 		t.Error(err)
 	}
 	if _, err := Fetch(context.Background(), Config{Type: TypeRelay, URL: "https://u:p@gw.example.com"}, now); CodeOf(err) != CodeBadConfig {
 		t.Error(err)
+	}
+}
+
+// TestMapRelayCapsWindowsAndClips: the relay mapping keeps at most WindowsMost windows and clips the model and the
+// account reference, as the generic source and the inventory do, so an oversized gateway answer cannot flood the
+// merged usage list every client gets.
+func TestMapRelayCapsWindowsAndClips(t *testing.T) {
+	ratio := 0.5
+	var windows []relayWindow
+	for i := 0; i < 40; i++ {
+		model := fmt.Sprintf("m%02d-", i) + strings.Repeat("模", 200)
+		windows = append(windows, relayWindow{Kind: "weekly", Scope: "model", ScopedModel: model, UsedRatio: &ratio})
+	}
+	a := relayAccount{ID: strings.Repeat("账", 300), Provider: "claude", Name: "n"}
+	acct, n, ok := mapRelay(a, relayEntry{Windows: windows}, now)
+	if !ok {
+		t.Fatal("no account")
+	}
+	if n != WindowsMost || len(acct.Windows) != WindowsMost {
+		t.Errorf("windows = %d (%d), want %d", len(acct.Windows), n, WindowsMost)
+	}
+	for _, w := range acct.Windows {
+		if c := len([]rune(w.Model)); c > 40 {
+			t.Fatalf("model has %d runes", c)
+		}
+	}
+	if c := len([]rune(acct.Ref)); c > 128 {
+		t.Errorf("ref has %d runes", c)
 	}
 }

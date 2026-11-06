@@ -336,6 +336,9 @@ func mapRelay(a relayAccount, e relayEntry, now time.Time) (acct proto.UsageAcco
 	checkedAt := map[int]time.Time{}
 	var newest time.Time
 	for _, w := range e.Windows {
+		if len(list) >= WindowsMost {
+			break
+		}
 		minutes, rest, isWindow := splitKind(w.Kind)
 		if !isWindow {
 			continue
@@ -361,7 +364,8 @@ func mapRelay(a relayAccount, e relayEntry, now time.Time) (acct proto.UsageAcco
 		if model == "" && w.Scope == "model" {
 			model = rest
 		}
-		out := proto.UsageWindow{Label: proto.WindowLabel(minutes), WindowMinutes: minutes, UsedPercent: used, ResetsAt: w.ResetsAt, Model: model}
+		model = clip(model, 40) // the same bound the generic source puts on a model
+		out := proto.UsageWindow{Label: proto.WindowLabel(minutes), WindowMinutes: minutes, UsedPercent: used, ResetsAt: utc(w.ResetsAt), Model: model}
 		list = addWindow(list, checkedAt, out, w.CheckedAt)
 		if w.CheckedAt.After(newest) {
 			newest = w.CheckedAt
@@ -390,8 +394,8 @@ func mapRelay(a relayAccount, e relayEntry, now time.Time) (acct proto.UsageAcco
 	}
 	plan := clip(firstNonEmpty(e.PlanDisplayName, e.Plan, e.PlanRaw), 40)
 	acct = proto.UsageAccount{
-		Provider: provider, Name: name, Plan: plan, Windows: list, SampledAt: sampled.UTC(),
-		Stale: e.Stale || e.Error != "", Ref: a.ID,
+		Provider: provider, Name: name, Plan: plan, Windows: list, SampledAt: notAfter(sampled.UTC(), now),
+		Stale: e.Stale || e.Error != "", Ref: clip(a.ID, 128),
 	}
 	if e.Error != "" { // the gateway could not read the numbers just now and kept the stored ones; its text stays there
 		acct.Problem = "error"
