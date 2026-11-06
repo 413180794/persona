@@ -297,6 +297,7 @@
     <string name="chat_tasks_restarted">「%1$s」重试后开起来了</string>
     <string name="chat_tasks_receipt_failed_title">%1$s没开起来</string>
     <string name="chat_tasks_receipt_done_title">%1$s 完成</string>
+    <string name="chat_tasks_receipt_stopped_title">%1$s 停下了，还没完成</string>
     <string name="chat_tasks_look">看看</string>
     <string name="chat_tasks_finished_line">「%1$s」已完成</string>
     <string name="chat_tasks_resumed_line">「%1$s」中断后继续了</string>

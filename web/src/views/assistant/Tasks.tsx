@@ -695,7 +695,11 @@ function InterruptedReceipt({ item }: { item: FeedItem }) {
 function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   // A failed start's banner follows its task: "Retry" while it is still failed (with its latest error), a quiet line once
   // it was started again, so no stale error stays in the conversation (#1396).
-  const todo = useTodo(failed ? item.ref : undefined);
+  const linked = useTodo(item.ref);
+  const todo = failed ? linked : undefined;
+  // A done receipt ends a stretch of work, not the task: while its todo is open (the agent stopped unfinished, waits on
+  // the user…) it says so, not "done"; it turns green once the todo is done (#6153). One gone from the list stands on its receipt.
+  const stopped = !failed && !!linked && !linked.done_at;
   const plans = useFeed((s) => s.plans);
   const retrying = useRetrying(todo?.id);
   const status = useTaskStatus(todo);
@@ -724,12 +728,16 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   }
   const failure = failed && todo ? startFailure(todo, plans) : undefined;
   const summary = failure ? t("assistant-tasks.start_failed", { error: failure }) : field(item, "summary");
-  const heading = failed ? t("assistant-tasks.outcome_failed", { title }) : t("assistant-tasks.outcome_done", { title });
+  const heading = failed
+    ? t("assistant-tasks.outcome_failed", { title })
+    : stopped
+      ? t("assistant-tasks.outcome_stopped", { title })
+      : t("assistant-tasks.outcome_done", { title });
   // "Copy" / "Quote" like a reply's (#2462): the quote names the task and its todo id for the assistant
   return (
     <MessageActions text={summary?.trim() ? summary : heading} ts={item.at} task={{ title, ...(item.ref ? { id: item.ref } : {}) }} corner>
-      <div className={cx("flex gap-3 rounded-card p-4", failed ? "bg-red-tint" : "bg-green-tint")} data-receipt>
-        <Icon name={failed ? "info" : "check"} size={18} stroke={2.4} className={failed ? "text-red" : "text-green"} />
+      <div className={cx("flex gap-3 rounded-card p-4", failed ? "bg-red-tint" : stopped ? "bg-field" : "bg-green-tint")} data-receipt>
+        <Icon name={failed ? "info" : stopped ? "clock" : "check"} size={18} stroke={2.4} className={failed ? "text-red" : stopped ? "text-ink-2" : "text-green"} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="text-[14.5px] font-semibold">{heading}</div>
           {summary && <ReceiptSummary text={summary} plain={failed} />}

@@ -755,6 +755,25 @@ func TestTodayCardListsEachTaskOnce(t *testing.T) {
 	}
 }
 
+// A task whose agent stopped with the work unfinished has a done receipt but an open todo: not listed as done (#6153).
+func TestTodayCardListsOnlyFinishedTasks(t *testing.T) {
+	s, f := newTaskService(t)
+	open := startedTask(t, s, f)
+	ctx := context.Background()
+	if _, err := s.appendFeed(ctx, "conv1", feedReceipt, open.ID, receiptBody{Title: open.Title, State: "done"}); err != nil {
+		t.Fatal(err)
+	}
+	it, _, err := s.ensureToday(ctx, "conv1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body todayBody
+	_ = json.Unmarshal(it.Body, &body)
+	if len(body.Done) != 0 {
+		t.Fatalf("done = %+v, want nothing: the todo is still open", body.Done)
+	}
+}
+
 // A start that uses up all its time (a busy machine's shell never ran claude) still ends the task: recording the
 // failure gets its own time. On the start's spent context the store refused the write and the task showed "starting" with
 // no agent for ever (#4510).

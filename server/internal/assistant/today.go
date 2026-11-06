@@ -103,9 +103,16 @@ func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedIte
 			latest[it.Ref] = rb
 		}
 		for _, id := range order {
-			if rb := latest[id]; rb.State == "done" {
-				body.Done = append(body.Done, todayTask{ID: id, Title: rb.Title})
+			rb := latest[id]
+			if rb.State != "done" {
+				continue
 			}
+			// A done receipt is the end of a stretch of work, not of the task: one still open is not done (#6153).
+			// One gone from the list stands on its receipt.
+			if t, ok, err := s.todo(ctx, id); err == nil && ok && t.DoneAt == nil {
+				continue
+			}
+			body.Done = append(body.Done, todayTask{ID: id, Title: rb.Title})
 		}
 	}
 	if s.ensureTodosLoaded(ctx) == nil {

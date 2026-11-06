@@ -57,6 +57,7 @@
   "receipt_failed_above": "\"{title}\" didn't start, see its card above",
   "outcome_failed": "{title} didn't start",
   "outcome_done": "{title} done",
+  "outcome_stopped": "{title} stopped, not done yet",
   "reminder_added": "Reminder added",
   "calendar_added": "Added to calendar",
   "on_iphone": "On iPhone",

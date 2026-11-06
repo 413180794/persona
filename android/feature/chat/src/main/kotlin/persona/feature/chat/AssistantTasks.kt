@@ -416,13 +416,17 @@ private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
         return
     }
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
-    val tone = if (failed) PersonaTheme.palette.danger else PersonaTheme.palette.done
+    // A done receipt ends a stretch of work, not the task: while its todo is open (the agent stopped unfinished, waits on
+    // the user…) it says so, not "done"; done once the todo is (#6153). One gone from the list stands on its receipt.
+    val stopped = !failed && todo != null && todo.doneAt == null
+    val tone = if (failed) PersonaTheme.palette.danger else if (stopped) PersonaTheme.palette.idle else PersonaTheme.palette.done
     val summary = todo?.startError?.takeIf { failed && it.isNotBlank() }?.let { stringResource(R.string.chat_tasks_now_failed, it.trim()) } ?: item.field("summary")
     Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(tone.tint).padding(Tokens.Space.l),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-        JIcon(if (failed) PhIcons.WarningCircle else PhIcons.CheckCircle, decorative = true, tint = tone.dot)
+        JIcon(if (failed) PhIcons.WarningCircle else if (stopped) PhIcons.Clock else PhIcons.CheckCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text(stringResource(if (failed) R.string.chat_tasks_receipt_failed_title else R.string.chat_tasks_receipt_done_title, title), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Text(stringResource(if (failed) R.string.chat_tasks_receipt_failed_title else if (stopped) R.string.chat_tasks_receipt_stopped_title
+                else R.string.chat_tasks_receipt_done_title, title), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
             summary?.let { if (failed) Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 else ReceiptSummary(it) }
             if (failed && todo != null) JButton(stringResource(R.string.chat_tasks_retry), { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Secondary,

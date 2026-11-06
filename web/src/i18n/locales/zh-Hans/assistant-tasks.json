@@ -52,6 +52,7 @@
   "receipt_failed_above": "「{title}」没开起来，见上方任务卡",
   "outcome_failed": "{title}没开起来",
   "outcome_done": "{title} 完成",
+  "outcome_stopped": "{title} 停下了，还没完成",
   "reminder_added": "已加提醒",
   "calendar_added": "已加到日历",
   "on_iphone": "在 iPhone 上",

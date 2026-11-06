@@ -52,6 +52,7 @@
   "receipt_failed_above": "「{title}」を開始できませんでした（上のカードを参照）",
   "outcome_failed": "{title}を開始できませんでした",
   "outcome_done": "{title}が完了",
+  "outcome_stopped": "{title}は止まりました（未完了）",
   "reminder_added": "リマインダーを追加しました",
   "calendar_added": "カレンダーに追加しました",
   "on_iphone": "iPhone上",
