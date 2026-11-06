@@ -770,3 +770,7 @@ A successful `git ls-files` can return no files when the requested directory con
 ## Staging cleanup covers final promotion too (#6106)
 
 A verified download or unpacked binary is still temporary until its final rename succeeds. Register removal of the staging path immediately after creating it, so copy, verification and promotion failures share cleanup. Remove only that temporary file; keep the existing destination and valid input archive intact.
+
+## Database passwords need URI userinfo encoding (#6160)
+
+Query escaping turns spaces into plus signs, but URI userinfo decoding keeps a plus literal. Build credentials with `url.UserPassword`, and check the generated database URL with the actual driver's parser. Comparing a provisioning result against the same URL helper cannot detect this password change.

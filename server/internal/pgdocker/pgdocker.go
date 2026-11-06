@@ -187,7 +187,7 @@ func portTaken(err error) bool {
 func URL(password string, port int) string { return urlFor(User, Database, password, port) }
 
 func urlFor(user, database, password string, port int) string {
-	return fmt.Sprintf("postgres://%s:%s@127.0.0.1:%d/%s?sslmode=disable", user, url.QueryEscape(password), port, database)
+	return fmt.Sprintf("postgres://%s@127.0.0.1:%d/%s?sslmode=disable", url.UserPassword(user, password).String(), port, database)
 }
 
 // Start starts the container and waits until Postgres in it answers (db.sh's 30 seconds). dbURL is the address it was

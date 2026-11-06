@@ -7,7 +7,41 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
+
+func TestURLPreservesPassword(t *testing.T) {
+	t.Setenv("PGSERVICE", "")
+	t.Setenv("PGSERVICEFILE", "")
+	for _, tc := range []struct{ name, password string }{
+		{"space", "has space"},
+		{"plus", "literal+plus"},
+		{"reserved", "colon:at@slash/question?hash#percent%"},
+		{"generated", strings.Repeat("ab", 24)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := pgx.ParseConfig(URL(tc.password, 25432))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Password != tc.password {
+				t.Errorf("password = %q, want %q", cfg.Password, tc.password)
+			}
+			if cfg.User != User || cfg.Host != "127.0.0.1" || cfg.Port != 25432 || cfg.Database != Database || cfg.TLSConfig != nil {
+				t.Error("database URL changed its connection settings")
+			}
+		})
+	}
+	retained := &Container{User: "retained_role", Database: "retained_db"}
+	cfg, err := pgx.ParseConfig(retained.URL("has space", 25432))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Password != "has space" || cfg.User != retained.User || cfg.Database != retained.Database {
+		t.Error("retained container credentials changed in its URL")
+	}
+}
 
 // fake is docker on a machine with no containers yet: run makes one (with the password it was given), rm removes it.
 type fake struct {
