@@ -51,7 +51,11 @@ func listKeyFmt(list []proto.Session) string {
 			fmt.Fprintf(&b, "plan:%d/%d/%q\n", p.Done, p.Total, p.Current)
 		}
 		for _, a := range s.Subagents {
-			fmt.Fprintf(&b, "%s:%v:%d,", a.ID, a.Running, a.UpdatedAt.Unix()/10)
+			tool := ""
+			if a.LastTool != nil {
+				tool = a.LastTool.ID + ":"
+			}
+			fmt.Fprintf(&b, "%s:%v:%d:%s%d,", a.ID, a.Running, a.Steps, tool, a.UpdatedAt.Unix()/10)
 		}
 		for _, p := range s.Ports {
 			fmt.Fprintf(&b, "port%d/%d/%s,", p.Port, p.PID, p.Title)
@@ -183,10 +187,14 @@ func listKeyVariants() (proto.Session, map[string]proto.Session) {
 			s.Subagents = []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: act.Add(9 * time.Second)}}
 		},
 		"subagent_new": func(s *proto.Session) { s.Subagents = append(s.Subagents, proto.Subagent{ID: "a2"}) },
-		"port":         func(s *proto.Session) { s.Ports = []proto.Port{{Port: 3001, PID: 7, Title: "dev"}} },
-		"port_pid":     func(s *proto.Session) { s.Ports = []proto.Port{{Port: 3000, PID: 8, Title: "dev"}} },
-		"port_title":   func(s *proto.Session) { s.Ports = []proto.Port{{Port: 3000, PID: 7, Title: "Vite"}} },
-		"ports_none":   func(s *proto.Session) { s.Ports = nil },
+		// a new call shows at once (#5602), not with the next 10 s of updated_at
+		"subagent_step": func(s *proto.Session) {
+			s.Subagents = []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: at, Steps: 1, LastTool: &proto.WorkflowTool{ID: "toolu_1", Name: "Read"}}}
+		},
+		"port":       func(s *proto.Session) { s.Ports = []proto.Port{{Port: 3001, PID: 7, Title: "dev"}} },
+		"port_pid":   func(s *proto.Session) { s.Ports = []proto.Port{{Port: 3000, PID: 8, Title: "dev"}} },
+		"port_title": func(s *proto.Session) { s.Ports = []proto.Port{{Port: 3000, PID: 7, Title: "Vite"}} },
+		"ports_none": func(s *proto.Session) { s.Ports = nil },
 	}
 	out := make(map[string]proto.Session, len(v))
 	for name, f := range v {

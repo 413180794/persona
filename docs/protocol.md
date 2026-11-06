@@ -446,7 +446,8 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "queued":["messages typed while working, not yet picked up"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
                 "parent_id":"c27d03b1…","fork":true,   // who started it: the id of the subagent that started it (absent when the main session did); fork = forked off. Treated as top-level when the parent isn't in the list
-                "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // subagents are read as sessions
+                "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…",   // subagents are read as sessions
+                "steps":7,"last_tool":{"id":"toolu_…","name":"Bash","summary":"running the tests"}}],   // #5602: tool calls made, the latest one (what it does now); updated_at is its last message's time, not the file's mtime
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
  "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // the goal it's working on (docs/agent-goal.md)
         "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // absent when there is no goal

@@ -1564,6 +1564,7 @@ type WorkflowAgent struct {
 
 // WorkflowTool is an agent's most recent tool call, retained after its final text arrives.
 type WorkflowTool struct {
+	ID      string `json:"id,omitempty"` // the call's tool_use id: a client keys what it plays for a new call by it
 	Name    string `json:"name"`
 	Summary string `json:"summary"`
 }
@@ -1626,8 +1627,12 @@ type Subagent struct {
 	Running     bool      `json:"running"`
 	Background  bool      `json:"background,omitempty"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at,omitempty"`
-	LastText    string    `json:"last_text,omitempty"`
+	// UpdatedAt is when it last wrote a message or a tool result (its file's mtime only before it wrote one): it moves
+	// when there is something new to show, not with every line the file gets (#5602).
+	UpdatedAt time.Time     `json:"updated_at,omitempty"`
+	LastText  string        `json:"last_text,omitempty"`
+	Steps     int           `json:"steps,omitempty"`     // tool calls it made
+	LastTool  *WorkflowTool `json:"last_tool,omitempty"` // its latest tool call: what it is doing now while it runs
 }
 
 // UsageBucket is one minute of one model's token usage on a machine, summed over every transcript there (node

@@ -184,3 +184,32 @@ func TestFoldKeepsUnpairedCallsAndShortRuns(t *testing.T) {
 		t.Fatalf("a call and its result were folded: %+v", out)
 	}
 }
+
+// A subagent's call and its result are never folded: the chat draws them as the subagent's card, which stays on the
+// page (#5602). The work on either side of it folds on its own.
+func TestFoldLeavesSubagentCallsOnThePage(t *testing.T) {
+	ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	mk := func(seq int, role, kind, call, name string) proto.Item {
+		return proto.Item{ID: fmt.Sprintf("l%d#0", seq), Seq: seq, TS: ts.Add(time.Duration(seq) * time.Second), Role: role, Kind: kind, ToolUseID: call, ToolName: name, Text: "x"}
+	}
+	page := []proto.Item{
+		mk(1, "user", proto.KindText, "", ""),
+		mk(2, "assistant", proto.KindToolUse, "a", "Bash"), mk(3, "user", proto.KindToolResult, "a", ""),
+		mk(4, "assistant", proto.KindToolUse, "b", "Read"), mk(5, "user", proto.KindToolResult, "b", ""),
+		mk(6, "assistant", proto.KindToolUse, "sub", "Agent"), mk(7, "user", proto.KindToolResult, "sub", ""),
+		mk(8, "assistant", proto.KindToolUse, "old", "Task"), mk(9, "user", proto.KindToolResult, "old", ""),
+		mk(10, "assistant", proto.KindToolUse, "c", "Bash"), mk(11, "user", proto.KindToolResult, "c", ""),
+		mk(12, "assistant", proto.KindThinking, "", ""), mk(13, "assistant", proto.KindToolUse, "d", "Grep"), mk(14, "user", proto.KindToolResult, "d", ""),
+	}
+	var got []string
+	for _, it := range FoldWork(page) {
+		if it.Kind == proto.KindFold {
+			got = append(got, fmt.Sprintf("fold%d-%d", it.Seq, it.Fold.ThroughSeq))
+		} else {
+			got = append(got, fmt.Sprint(it.Seq))
+		}
+	}
+	if want := "1 fold2-5 6 7 8 9 fold10-14"; strings.Join(got, " ") != want {
+		t.Fatalf("got %v, want %s", got, want)
+	}
+}

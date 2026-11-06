@@ -94,10 +94,14 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 		// A subagent whose file has not moved for 20 minutes is not running any more (its claude went away).
 		running := !m.Finished && time.Since(st.ModTime()) < 20*time.Minute
 		edges := subagentEdgesCached(jp, st, false)
+		updated := edges.lastAt
+		if updated.IsZero() {
+			updated = st.ModTime()
+		}
 		out = append(out, proto.Subagent{
 			ID: id, SessionID: parent + subagentSep + id, Type: m.AgentType, Description: m.Description,
 			ToolUseID: m.ToolUseID, ParentID: m.ParentID, Fork: m.Fork, Running: running, Background: m.RequestShape == "background",
-			StartedAt: edges.started, UpdatedAt: st.ModTime(), LastText: edges.last,
+			StartedAt: edges.started, UpdatedAt: updated, LastText: edges.last, Steps: edges.calls, LastTool: edges.latestTool,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -252,7 +256,7 @@ func (e *subagentEdge) readLine(line []byte) {
 					e.tools[it.ToolUseID] = true
 				}
 			}
-			e.latestTool = &proto.WorkflowTool{Name: it.ToolName, Summary: transcript.Activity(it.ToolName, it.ToolInput)}
+			e.latestTool = &proto.WorkflowTool{ID: it.ToolUseID, Name: it.ToolName, Summary: transcript.Activity(it.ToolName, it.ToolInput)}
 		}
 	}
 	if meta.LastText != "" {

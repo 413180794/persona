@@ -7,6 +7,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
+// subagentTools are the calls that launch a subagent (Claude Code's Task, renamed Agent).
+var subagentTools = map[string]bool{"Task": true, "Agent": true}
+
 // A run of work shorter than this (and lighter than foldMinBytes) stays on the page: opening it would cost a round
 // trip for a few hundred bytes.
 const (
@@ -22,13 +25,16 @@ const (
 // A call whose result is not in the page (still running) and a result whose call is not (on an older page) are not
 // folded: the app pairs them with what comes later or earlier, and a fold hides them from that.
 func FoldWork(items []proto.Item) []proto.Item {
-	uses, results := map[string]bool{}, map[string]bool{}
+	uses, results, agents := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	taskUses := map[string]proto.Item{}
 	for _, it := range items {
 		switch it.Kind {
 		case proto.KindToolUse:
 			uses[it.ToolUseID] = true
 			taskUses[it.ToolUseID] = it
+			if subagentTools[it.ToolName] {
+				agents[it.ToolUseID] = true
+			}
 		case proto.KindToolResult:
 			results[it.ToolUseID] = true
 		}
@@ -38,7 +44,8 @@ func FoldWork(items []proto.Item) []proto.Item {
 		case proto.KindThinking:
 			return true
 		case proto.KindToolUse, proto.KindToolResult, proto.KindImage: // a tool's image goes with its call
-			return it.ToolUseID != "" && uses[it.ToolUseID] && results[it.ToolUseID]
+			// a subagent's call stays on the page: the chat draws it as a card, which never folds (#5602)
+			return it.ToolUseID != "" && uses[it.ToolUseID] && results[it.ToolUseID] && !agents[it.ToolUseID]
 		}
 		return false
 	}

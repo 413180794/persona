@@ -1993,9 +1993,15 @@ func listKeySized(list []proto.Session, size int) string {
 			w.int(int64(p.Total), '/')
 			w.quote(p.Current, '\n')
 		}
+		// A subagent's new call shows at once (its card says what it does now, #5602); the list goes out at most once a
+		// second, with the poll.
 		for _, a := range s.Subagents {
 			w.str(a.ID, ':')
 			w.str(strconv.FormatBool(a.Running), ':')
+			w.int(int64(a.Steps), ':')
+			if a.LastTool != nil {
+				w.str(a.LastTool.ID, ':')
+			}
 			w.int(a.UpdatedAt.Unix()/10, ',')
 		}
 		for _, p := range s.Ports {

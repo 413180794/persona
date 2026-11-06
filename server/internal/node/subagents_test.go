@@ -225,16 +225,16 @@ func TestSubagentEdgeDetails(t *testing.T) {
 		lastAt                  string
 	}{
 		{"latest usage is not accumulated", read + server + edgeReply("c", end, "<synthetic>", `[{"type":"text","text":"Finished"}]`, ""),
-			"model-b", "Finished", 10, 2, &proto.WorkflowTool{Name: "WebSearch", Summary: "在搜网页 example"}, end},
+			"model-b", "Finished", 10, 2, &proto.WorkflowTool{ID: "search1", Name: "WebSearch", Summary: "在搜网页 example"}, end},
 		{"duplicate tool id counts once", read + read + server, "model-b", "", 10, 2,
-			&proto.WorkflowTool{Name: "WebSearch", Summary: "在搜网页 example"}, end},
+			&proto.WorkflowTool{ID: "search1", Name: "WebSearch", Summary: "在搜网页 example"}, end},
 		{"latest zero usage replaces older usage", read + edgeReply("b", end, "model-a", `[{"type":"text","text":"Finished"}]`, `{}`),
-			"model-a", "Finished", 0, 1, &proto.WorkflowTool{Name: "Read", Summary: "在读 example.go"}, end},
+			"model-a", "Finished", 0, 1, &proto.WorkflowTool{ID: "read1", Name: "Read", Summary: "在读 example.go"}, end},
 		{"no assistant metadata", `{"type":"user","timestamp":"` + start + `"}` + "\n",
 			"", "", 0, 0, nil, start},
 		{"large tool output preserves earlier details", read + `{"type":"user","timestamp":"` + end + `","message":{"content":"` + strings.Repeat("x", 128<<10) + `"}}` + "\n" +
 			`{"type":"system","timestamp":"2026-01-02T00:00:00Z"}` + "\n", "model-a", "", 10, 1,
-			&proto.WorkflowTool{Name: "Read", Summary: "在读 example.go"}, end},
+			&proto.WorkflowTool{ID: "read1", Name: "Read", Summary: "在读 example.go"}, end},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "agent-test.jsonl")
@@ -324,5 +324,56 @@ func TestSubagentEdgesSkipOversizedLine(t *testing.T) {
 	}
 	if got := subagentEdgesCached(path, st, true); got.calls != 1 || got.tokens != 10 || got.model != "model-a" {
 		t.Fatalf("details after oversized line = %+v", got)
+	}
+}
+
+// A listed subagent says how many tool calls it made and which it made last, and its updated_at is when it last wrote
+// a message, not its file's mtime (#5602: the mtime moved about every second, so the list changed on every push and
+// the apps drew every chat again).
+func TestSubagentListsStepsLastToolAndContentTime(t *testing.T) {
+	const parent = "aaaaaaaa-0000-0000-0000-000000000009"
+	home := t.TempDir()
+	tp := filepath.Join(home, ".claude", "projects", "-src-app", parent+".jsonl")
+	dir := filepath.Join(strings.TrimSuffix(tp, ".jsonl"), "subagents")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tp, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().Add(-2 * time.Minute).UTC().Truncate(time.Second)
+	ts := func(d time.Duration) string { return at.Add(d).Format(time.RFC3339) }
+	lines := strings.Join([]string{
+		`{"type":"user","timestamp":"` + ts(0) + `","isSidechain":true,"message":{"role":"user","content":"look at the tests"}}`,
+		`{"type":"assistant","timestamp":"` + ts(time.Second) + `","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_s1","name":"Read","input":{"file_path":"/src/app/a_test.go"}}]}}`,
+		`{"type":"user","timestamp":"` + ts(2*time.Second) + `","isSidechain":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_s1","content":"ok"}]}}`,
+		`{"type":"assistant","timestamp":"` + ts(3*time.Second) + `","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_s2","name":"Bash","input":{"command":"go test ./...","description":"run the tests"}}]}}`,
+	}, "\n") + "\n"
+	jp := filepath.Join(dir, "agent-s1.jsonl")
+	if os.WriteFile(jp, []byte(lines), 0o600) != nil || os.WriteFile(filepath.Join(dir, "agent-s1.meta.json"), []byte(`{"agentType":"general-purpose","description":"示例：跑测试","toolUseId":"toolu_p1"}`), 0o600) != nil {
+		t.Fatal("write subagent files")
+	}
+	n := &Node{home: home, paths: map[string]string{parent: tp}}
+	subs := n.subagents(parent)
+	if len(subs) != 1 {
+		t.Fatalf("listed %+v", subs)
+	}
+	a := subs[0]
+	if a.Steps != 2 {
+		t.Fatalf("steps %d, want 2", a.Steps)
+	}
+	if a.LastTool == nil || a.LastTool.ID != "toolu_s2" || a.LastTool.Name != "Bash" || a.LastTool.Summary == "" {
+		t.Fatalf("last tool %+v", a.LastTool)
+	}
+	if want := at.Add(3 * time.Second); !a.UpdatedAt.Equal(want) {
+		t.Fatalf("updated_at %v, want its last message's %v", a.UpdatedAt, want)
+	}
+	// the file is touched without new content: the list says the same
+	later := time.Now()
+	if err := os.Chtimes(jp, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if again := n.subagents(parent)[0]; !again.UpdatedAt.Equal(a.UpdatedAt) {
+		t.Fatalf("updated_at moved with the mtime: %v", again.UpdatedAt)
 	}
 }
