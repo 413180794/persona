@@ -14,7 +14,7 @@ public nonisolated enum MathMarkdown {
     public static func rewrite(_ md: String) -> String {
         guard md.contains("$") || md.contains("\\(") || md.contains("\\[") else { return md }
         var out: [String] = []
-        var fence: String?
+        var fence: MarkdownFence?
         var block: (end: String, lines: [String])?
         for line in md.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let t = line.trimmingCharacters(in: .whitespaces)
@@ -29,12 +29,12 @@ public nonisolated enum MathMarkdown {
                 continue
             }
             if let f = fence {
-                if t.hasPrefix(f) { fence = nil }
+                if f.isClosed(by: t) { fence = nil }
                 out.append(line)
                 continue
             }
-            if t.hasPrefix("```") || t.hasPrefix("~~~") {
-                fence = String(t.prefix(3))
+            if let f = MarkdownFence.opening(t) {
+                fence = f
                 out.append(line)
                 continue
             }

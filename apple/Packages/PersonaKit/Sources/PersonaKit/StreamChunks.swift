@@ -8,14 +8,14 @@ public nonisolated enum StreamChunks {
         let lines = text.components(separatedBy: "\n")
         var done: [String] = []
         var start = 0
-        var fence: String?
+        var fence: MarkdownFence?
         for (i, line) in lines.enumerated() {
             let t = line.trimmingCharacters(in: .whitespaces)
             if let f = fence {
-                if t.hasPrefix(f) { fence = nil }
+                if f.isClosed(by: t) { fence = nil }
                 continue
             }
-            if t.hasPrefix("```") || t.hasPrefix("~~~") { fence = String(t.prefix(3)); continue }
+            if let f = MarkdownFence.opening(t) { fence = f; continue }
             guard t.isEmpty, i > start, i + 1 < lines.count else { continue }
             let next = lines[i + 1]
             guard !next.isEmpty, !next.hasPrefix(" "), !next.hasPrefix("\t") else { continue }

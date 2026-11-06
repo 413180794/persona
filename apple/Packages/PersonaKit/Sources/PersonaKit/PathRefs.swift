@@ -182,16 +182,16 @@ public nonisolated struct PathMarkdown: Sendable {
     public init(_ source: String, limit: Int = 40) {
         self.source = source
         var spots: [Spot] = []
-        var fence: String?
+        var fence: MarkdownFence?
         var at = 0
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             defer { at += (line as NSString).length + 1 }
             let t = line.trimmingCharacters(in: .whitespaces)
             if let f = fence {
-                if t.hasPrefix(f) { fence = nil }
+                if f.isClosed(by: t) { fence = nil }
                 continue
             }
-            if t.hasPrefix("```") || t.hasPrefix("~~~") { fence = String(t.prefix(3)); continue }
+            if let f = MarkdownFence.opening(t) { fence = f; continue }
             if line.hasPrefix("    ") || line.hasPrefix("\t") { continue } // indented code (as `Links.markdown`)
             for s in Self.spots(in: line) {
                 var s = s

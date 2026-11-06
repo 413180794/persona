@@ -186,6 +186,102 @@ func TestATaskDueWhileItsLastRunIsGoingIsSkipped(t *testing.T) {
 	}
 }
 
+// A run skipped because its last run waits on the user (an approval, a question) is pushed once per wait: only they
+// can let it go on, and the 早报 not coming said nothing (#4499). The same wait skipped again: no second push. The
+// old card answered and the turn stopped at a new one (no run went in between): a new wait, pushed again (review of
+// #4506). A last run only still working, a muted conversation and 立即运行 are not pushed.
+func TestASkipForALastRunWaitingOnTheUserIsPushedOnce(t *testing.T) {
+	n := newFakeHub().withMachine()
+	h := newStorelessService(t, n)
+	setTasks(h, Task{ID: "p", Title: "早报", Prompt: "早报", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
+	first, _ := runNow(t, h, "p")
+	sid := first.SessionID
+	waiting := func(since time.Time) {
+		n.setSessions("server", proto.Session{SessionID: sid, Status: proto.StatusBlocked, State: proto.StateNeedsYou,
+			PendingInteractions: 1, StateSince: since})
+	}
+	skip := func() {
+		t.Helper()
+		if _, err := runNow(t, h, "p"); !errors.Is(err, errTaskBusy) {
+			t.Fatalf("err = %v", err)
+		}
+	}
+	// waits: the waiting-skip pushes only. Three skips in a row also make a failure streak, told by its own notice
+	// (schedule_streak.go), which this test does not count.
+	waits := func() []Notification {
+		var w []Notification
+		for _, p := range n.pushed() {
+			if strings.Contains(p.Title, "等你") {
+				w = append(w, p)
+			}
+		}
+		return w
+	}
+
+	// Still working: skipped, nothing pushed.
+	n.setSessions("server", proto.Session{SessionID: sid, Status: proto.StatusWorking, State: proto.StateWorking})
+	skip()
+	if p := waits(); len(p) != 0 {
+		t.Fatalf("a last run still working is not pushed: %+v", p)
+	}
+
+	// Waiting on card A: pushed once across two skips.
+	cardA := time.Date(2026, 11, 2, 7, 0, 0, 0, time.UTC)
+	waiting(cardA)
+	skip()
+	skip()
+	p := waits()
+	if len(p) != 1 || !strings.Contains(p[0].Title, "早报") || !strings.Contains(p[0].Title, "等你") || p[0].SessionID != sid {
+		t.Fatalf("pushed once, naming the task and opening its conversation: %+v", p)
+	}
+
+	// A answered, the old turn stopped at card B: another wait, pushed again though no run went in.
+	waiting(cardA.Add(time.Hour))
+	skip()
+	if p := waits(); len(p) != 2 {
+		t.Fatalf("a new wait is pushed again: %+v", p)
+	}
+
+	// A skip that finds it no longer waiting clears the mark: the next wait on the same card id is news again.
+	n.setSessions("server", proto.Session{SessionID: sid, Status: proto.StatusWorking, State: proto.StateWorking})
+	skip()
+	waiting(cardA.Add(time.Hour))
+	skip()
+	if p := waits(); len(p) != 3 {
+		t.Fatalf("after the wait ended, waiting again is news: %+v", p)
+	}
+
+	// 立即运行 on it: answered busy_wait in the app, no push.
+	waiting(cardA.Add(2 * time.Hour))
+	task, _ := taskByID(h, "p")
+	if _, err := h.runTask(task, time.Now(), time.Now(), true, false); !errors.Is(err, errTaskBusy) {
+		t.Fatalf("立即运行: %v", err)
+	}
+	if p := waits(); len(p) != 3 {
+		t.Fatalf("立即运行 is not pushed: %+v", p)
+	}
+
+	// Muted: skipped and recorded, no push.
+	h.fleet.mutesMu.Lock()
+	h.fleet.mutes = &Pins{Spaces: []string{}, Sessions: []string{"server/" + sid}}
+	h.fleet.mutesMu.Unlock()
+	skip()
+	if p := waits(); len(p) != 3 {
+		t.Fatalf("a muted conversation is not pushed: %+v", p)
+	}
+
+	// Deleting the task forgets its mark.
+	if ok, err := h.deleteTask(context.Background(), "p"); err != nil || !ok {
+		t.Fatalf("delete: %v %v", ok, err)
+	}
+	h.sched.mu.Lock()
+	_, kept := h.sched.waitTold["p"]
+	h.sched.mu.Unlock()
+	if kept {
+		t.Fatal("a deleted task's mark is dropped")
+	}
+}
+
 // A task from a conversation (SessionID) whose conversation fails keeps the new one as its own: the next failure
 // continues there instead of starting yet another one.
 func TestATaskFromAConversationFallsBackToItsOwn(t *testing.T) {

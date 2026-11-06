@@ -222,6 +222,11 @@ type schedule struct {
 	sending map[string]bool
 	// inflight: runs runDue started and that have not recorded their result yet.
 	inflight sync.WaitGroup
+	// waitTold: by task, the wait on the user its skip was pushed for (tellWaitingSkip, waitKey): a patrol every 30
+	// minutes behind one card is pushed once. Another wait (the old turn answered, then stopped at a new card) is
+	// news again; a skip that finds the conversation no longer waiting, a run going in, or the task deleted clears it.
+	// In memory only: a hub restart pushes a wait once more.
+	waitTold map[string]string
 }
 
 // defaultRoutines are the tasks a new hub starts with, titled in l (the user edits them as their own afterwards).
@@ -689,6 +694,7 @@ func (s *Service) deleteTask(ctx context.Context, id string) (bool, error) {
 		sc.tasks = slices.Delete(sc.tasks, i, i+1)
 		s.saveLocked(sc)
 	}
+	delete(sc.waitTold, id)
 	sc.mu.Unlock()
 	if i >= 0 {
 		s.broadcastSchedule()
@@ -1222,7 +1228,11 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 		case t.Repeat != repeatOnce && s.sessionBusy(ctx, m.ID, t.RunSessionID):
 			s.logf("task %s: its conversation %s is still on the last run; skipped", t.ID, short(t.RunSessionID))
 			run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
-			return proto.Session{}, s.skipRun(run, errTaskBusy)
+			err := s.skipRun(run, errTaskBusy)
+			if !manual { // 立即运行 is answered busy_wait in the app
+				s.tellWaitingSkip(ctx, t, m)
+			}
+			return proto.Session{}, err
 		default:
 			params := map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true), "permission_mode": t.PermissionMode, "resume_only": true}
 			err := s.applyModel(ctx, "task."+t.ID, params)
@@ -1302,6 +1312,65 @@ func (s *Service) sessionBusy(ctx context.Context, machine, id string) bool {
 	return ok && (c.Status == proto.StatusWorking || c.State == proto.StateWorking || c.State == proto.StateNeedsYou)
 }
 
+// tellWaitingSkip pushes that t's run was skipped because its last run waits on the user (an approval, a question):
+// only they can let it go on, and the 早报 not coming said nothing of why (#4499). Once per wait (waitKey). A last run
+// that is only still working is not told (it ends by itself) and clears the mark, as does one no longer waiting. A
+// muted conversation is not pushed. A quiet task (pushesOnlyAsked) is pushed all the same, as its failed runs are
+// (run_failed): this says it did not run, not what it found.
+func (s *Service) tellWaitingSkip(ctx context.Context, t Task, m Device) {
+	key := ""
+	if c, ok := s.session(ctx, m.ID, t.RunSessionID); ok && (c.State == proto.StateNeedsYou || c.PendingInteractions > 0) {
+		key = s.waitKey(m.ID, t.RunSessionID, c)
+	}
+	s.sched.mu.Lock()
+	if key == "" {
+		delete(s.sched.waitTold, t.ID)
+		s.sched.mu.Unlock()
+		return
+	}
+	told := s.sched.waitTold[t.ID] == key
+	if !told {
+		if s.sched.waitTold == nil {
+			s.sched.waitTold = map[string]string{}
+		}
+		s.sched.waitTold[t.ID] = key
+	}
+	s.sched.mu.Unlock()
+	if told || s.muted(m.ID, t.RunSessionID) {
+		return
+	}
+	l := s.lang(ctx)
+	name := t.labelIn(l)
+	if t.Space == SpaceHealth { // the lock screen does not name a health task (health.go)
+		name, _ = healthNotice(l)
+	}
+	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: t.RunSessionID,
+		Title: i18n.T(l, "assistant-schedule.waiting_skipped", i18n.Args{"name": name}), Body: i18n.T(l, "assistant-schedule.waiting_skipped_body")})
+}
+
+// waitKey names the wait session is in: the cards it waits on (their ids), else when it entered the state it is in.
+// A card answered and a new one raised is another wait.
+func (s *Service) waitKey(machine, session string, c proto.Session) string {
+	s.fleet.mu.Lock()
+	var ids []string
+	for id, p := range s.fleet.interactions {
+		if p.ix.SessionID == session {
+			ids = append(ids, id)
+		}
+	}
+	mk, marked := s.fleet.stateSince[[2]string{machine, session}]
+	s.fleet.mu.Unlock()
+	if len(ids) > 0 {
+		slices.Sort(ids)
+		return session + "|" + strings.Join(ids, ",")
+	}
+	at := c.StateSince
+	if marked && !mk.at.IsZero() {
+		at = mk.at
+	}
+	return session + "|" + c.State + "@" + at.UTC().Format(time.RFC3339Nano)
+}
+
 func (s *Service) skipRun(run ScheduleRun, why error) error {
 	run.Status, run.Error = runSkipped, i18n.Localize(why, s.lang(context.Background())) // the history keeps it in the user's language
 	s.recordRun(run)
@@ -1319,6 +1388,9 @@ const runRetryDelay = 3 * time.Minute
 // told; the watcher records it as failed, pushes it, and retries once (the task as it is then, see watchScheduledRun).
 // m is the machine the run went to (nil: none).
 func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
+	s.sched.mu.Lock()
+	delete(s.sched.waitTold, t.ID) // it runs again: a later wait on the user is news again
+	s.sched.mu.Unlock()
 	if !t.pushesOnlyAsked() {
 		s.noteReportTurn(run.SessionID) // its answer is pushed however quick it was (#3438)
 	}

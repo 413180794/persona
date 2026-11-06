@@ -39,16 +39,16 @@ public nonisolated enum Links {
     public static func markdown(_ md: String) -> String {
         guard md.contains("://") || md.contains("www.") else { return md }
         var out: [String] = []
-        var fence: String?
+        var fence: MarkdownFence?
         for line in md.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let t = line.trimmingCharacters(in: .whitespaces)
             if let f = fence {
-                if t.hasPrefix(f) { fence = nil }
+                if f.isClosed(by: t) { fence = nil }
                 out.append(line)
                 continue
             }
-            if t.hasPrefix("```") || t.hasPrefix("~~~") {
-                fence = String(t.prefix(3))
+            if let f = MarkdownFence.opening(t) {
+                fence = f
                 out.append(line)
                 continue
             }
