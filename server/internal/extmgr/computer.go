@@ -90,7 +90,9 @@ func (h *Manager) machineExtension(id string) cuaSettings {
 	if h.extensions == nil || h.extensions.reg == nil {
 		return cuaSettings{}
 	}
-	p := h.extensions.reg.Get(id)
+	// A snapshot, not the registry's shared *Extension: SetEnabled and SetConfig write its record under the
+	// registry lock while tells and refreshes read it here.
+	p := h.extensions.reg.Snapshot(id)
 	if p == nil || !p.Record.Enabled {
 		return cuaSettings{}
 	}

@@ -36,7 +36,22 @@ func newTestManager(t *testing.T) *Manager {
 	dir := shortTempDir(t)
 	cfg := &Config{Listen: ":18660", Token: "test-master-token-" + randomHex(4), PublicURL: "http://hub.example:18660", dir: dir}
 	th := &testHub{}
-	h := New(Options{Dir: dir, Config: cfg, Hub: th, Logf: func(format string, args ...any) { t.Logf(format, args...) }})
+	// The manager's goroutines (computer.nolock, computer.cursor) can log after the test ends, when t.Logf panics.
+	var logMu sync.Mutex
+	over := false
+	logf := func(format string, args ...any) {
+		logMu.Lock()
+		defer logMu.Unlock()
+		if !over {
+			t.Logf(format, args...)
+		}
+	}
+	t.Cleanup(func() {
+		logMu.Lock()
+		over = true
+		logMu.Unlock()
+	})
+	h := New(Options{Dir: dir, Config: cfg, Hub: th, Logf: logf})
 	h.logger = log.New(io.Discard, "", 0)
 	h.version = "test"
 	th.h = h

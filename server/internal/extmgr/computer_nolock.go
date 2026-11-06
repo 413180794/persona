@@ -28,6 +28,8 @@ func (h *Manager) tellNoLock(ctx context.Context, m *Machine) {
 	if !darwin || !m.isOnline() {
 		return
 	}
+	m.noLockMu.Lock() // the setting read and said under it, so the last one said is the newest (Machine.noLockMu)
+	defer m.noLockMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if err := m.callBuiltin(ctx, "computer.nolock", map[string]any{"on": h.noLockOn(m)}, nil); err != nil && !strings.Contains(err.Error(), "unknown method") {

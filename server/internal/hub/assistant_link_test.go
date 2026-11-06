@@ -117,8 +117,7 @@ func TestAssistantSnapshotIsKeptAndShown(t *testing.T) {
 	h, n := conversationsHub(t)
 	link := assistantLink{h}
 	ctx := context.Background()
-	c := &client{out: make(chan []byte, 16)}
-	h.clients[c] = struct{}{}
+	c := appClient(h)
 	pushes := func() int {
 		got := 0
 		for {
@@ -245,8 +244,7 @@ func TestAssistantLinkScheduleCalls(t *testing.T) {
 		t.Fatalf("assistant.start prepares and starts the conversation with the purpose's model: %+v %v %v", s, err, n.lastSend(t))
 	}
 
-	c := &client{out: make(chan []byte, 16)}
-	h.clients[c] = struct{}{}
+	c := appClient(h)
 	link.Broadcast(ctx, assistant.Broadcast{Message: json.RawMessage(`{"type":"assistant_feed","item":{"id":"x","at":"2026-11-04T00:00:00Z"}}`)})
 	select {
 	case b := <-c.out:

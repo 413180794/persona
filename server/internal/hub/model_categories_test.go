@@ -31,9 +31,9 @@ func TestScheduledExecutionUsesMainConversationCategoryAndNoOldOverrides(t *test
 			t.Fatalf("task creation/resume kept an old override or changed permission: %+v", p)
 		}
 	}
-	n.m.mu.Lock()
-	n.m.sessions = []proto.Session{{SessionID: "source", Launcher: "old-source"}}
-	n.m.mu.Unlock()
+	editSessions(n.m, func([]proto.Session) []proto.Session {
+		return []proto.Session{{SessionID: "source", Launcher: "old-source"}}
+	})
 	if _, err := runNow(t, h, "two"); err != nil {
 		t.Fatal(err)
 	}

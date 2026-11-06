@@ -158,6 +158,16 @@ func waitListed(h *Hub, m *Machine, list []proto.Session) {
 	}
 }
 
+// editSessions changes m's sessions under its lock, as takeFleetSessions writes them from the bus. With the
+// assistant connected it first waits for what the manager already told (settleAssistant), so an older list cannot
+// land over the edit; the manager's next list is read from the machine (mirrorDevices.Sessions) and keeps it.
+func editSessions(m *Machine, edit func([]proto.Session) []proto.Session) {
+	settleAssistant(m.hub)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessions = edit(m.sessions)
+}
+
 // relist has the manager tell the hub m's sessions again (after a test changed what decorates them), waited for.
 func relist(h *Hub, m *Machine) {
 	settleAssistant(h)

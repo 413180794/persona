@@ -34,6 +34,7 @@ type computerCallSeen struct {
 // says which it was asked.
 func computerMac(t *testing.T, h *Manager, id string) (*Machine, func() (statuses int, calls []computerCallSeen)) {
 	t.Helper()
+	builtin := fakeNodesBuiltin
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
 	n2hR, n2hW := io.Pipe()
@@ -43,7 +44,7 @@ func computerMac(t *testing.T, h *Manager, id string) (*Machine, func() (statuse
 	var job *proto.ComputerJob // the node's install or grant, as computer.status says it
 	board := ""                // its clipboard
 	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
-		method, params = fakeBuiltinRoute(t, method, params) // either way the hub asks, the same answers (#1830 step 5)
+		method, params = fakeBuiltinRoute(t, builtin, method, params) // either way the hub asks, the same answers (#1830 step 5)
 		mu.Lock()
 		defer mu.Unlock()
 		switch method {
@@ -110,7 +111,7 @@ func computerMac(t *testing.T, h *Manager, id string) (*Machine, func() (statuse
 	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
 	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
 	m := newMachine(h, MachineConfig{ID: id, Name: id})
-	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "darwin", BuiltinPrograms: fakeBuiltinPrograms()}
+	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "darwin", BuiltinPrograms: fakeBuiltinPrograms(builtin)}
 	h.fleetMu.Lock()
 	h.machines, h.byID[id] = append(h.machines, m), m
 	h.fleetMu.Unlock()
@@ -375,5 +376,43 @@ func TestKeepComputerKeepsTheNewest(t *testing.T) {
 	}
 	if m2.computer.Job == nil {
 		t.Fatal("the install's answer is kept")
+	}
+}
+
+// cua and ego turned on and off while tells and refreshes read their settings: machineExtension reads a snapshot taken
+// under the registry lock, so `go test -race` reports nothing.
+func TestMachineExtensionToggledWhileRead(t *testing.T) {
+	h, _ := extensionTestHub(t)
+	ctx := context.Background()
+	stop := make(chan struct{})
+	var readers sync.WaitGroup
+	for _, id := range []string{cuaExtensionID, egoExtensionID} {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					_ = h.machineExtension(id)
+				}
+			}
+		}()
+	}
+	for i := range 50 {
+		for _, id := range []string{cuaExtensionID, egoExtensionID} {
+			if err := h.extensions.reg.SetEnabled(ctx, id, i%2 == 0, "test"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	close(stop)
+	readers.Wait()
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if !h.cua().On {
+		t.Fatal("cua on after the toggles")
 	}
 }

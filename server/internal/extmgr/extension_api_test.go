@@ -299,18 +299,20 @@ func TestExtensionConnectorDeclaresGroup(t *testing.T) {
 func TestExtensionConnectorUnknownCapability(t *testing.T) {
 	var logs []string
 	ps := newExtensions(t.TempDir(), nil, func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) })
+	// Each plugin and capability is logged once per process: another id each run (go test -count=2).
+	id := "example-chat-" + randomHex(4)
 	declared := connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox, "future_example", connector.CapGroup}}
 	for range 2 {
-		m := ps.knownOnly("example-chat", declared)
+		m := ps.knownOnly(id, declared)
 		if !slices.Equal(m.Capabilities, []connector.Capability{connector.CapInbox, connector.CapGroup}) {
 			t.Fatalf("capabilities %v", m.Capabilities)
 		}
 	}
-	if len(logs) != 1 || !strings.Contains(logs[0], `plugin example-chat: this hub has no connector capability "future_example"`) {
+	if len(logs) != 1 || !strings.Contains(logs[0], "plugin "+id+`: this hub has no connector capability "future_example"`) {
 		t.Fatalf("logs %q", logs)
 	}
 	reg := connector.NewRegistry(nil)
-	if err := reg.Add(proc.New(proc.Config{ID: "examplechat", Name: "Example Chat", Manifest: ps.knownOnly("example-chat", declared)})); err != nil {
+	if err := reg.Add(proc.New(proc.Config{ID: "examplechat", Name: "Example Chat", Manifest: ps.knownOnly(id, declared)})); err != nil {
 		t.Fatal(err)
 	}
 	if err := reg.Add(proc.New(proc.Config{ID: "examplechat2", Name: "x", Manifest: declared})); err == nil ||

@@ -2,7 +2,8 @@
 // The Enter that picks an input-method candidate belongs to the input method, not the box (#2733): creating a todo
 // in 关联待办 and adding a blocked Claude config directory wait for the composition to end. Safari sends that Enter with
 // isComposing false and keyCode 229 (#4667): 会话内搜索, a question card's own answer, a plan's 打回 reason and the
-// Agents page composer ignore it too.
+// Agents page composer ignore it too, and so do the code views' find-in-file and composer and the provider wizard's
+// model ID (#4937).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +19,9 @@ import { ChatSearch } from "./chat/ChatSearch";
 import { InteractionCard } from "./chat/Interactions";
 import { LinkTodoDialog } from "./LinkTodoDialog";
 import { ClaudeDirs } from "./settings/ClaudeDirs";
+import { ProviderWizard } from "./settings/ProviderWizard";
+import { INERT, ViewSections } from "./extensions/ViewBody";
+import { SHOWCASE } from "../showcase/snapshots";
 
 const createTodo = vi.fn(async (title: string) => ({ id: "t1", title }));
 vi.mock("../lib/todos", async (orig) => ({
@@ -181,5 +185,57 @@ describe("Safari's candidate Enter (isComposing false, keyCode 229)", () => {
     expect(onSend).not.toHaveBeenCalled();
     await press(area, "Enter");
     expect(onSend).toHaveBeenCalledExactlyOnceWith("会議");
+  });
+});
+
+describe("Safari's candidate keys in the code views and the provider wizard (#4937)", () => {
+  const safari = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
+    act(async () => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key, keyCode: 229, isComposing: false, bubbles: true, cancelable: true, ...init }));
+    });
+  const plain = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
+    act(async () => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+    });
+
+  it("does not move to the next hit or close find-in-file", async () => {
+    act(() => root.render(<ViewSections view={SHOWCASE["code-browse"]} {...INERT} />));
+    const card = host.querySelector(".code-hl")!.parentElement!;
+    act(() => card.querySelector<HTMLButtonElement>('[aria-label="查找"]')!.click());
+    const input = card.querySelector("input")!;
+    type(input, "retry");
+    const count = () => card.textContent!.match(/(\d+) \/ \d+/)![1];
+    expect(count()).toBe("1");
+    await safari(input, "Enter");
+    expect(count()).toBe("1");
+    await safari(input, "Escape");
+    expect(card.querySelector("input")).toBe(input); // still open
+    await plain(input, "Enter");
+    expect(count()).toBe("2");
+  });
+
+  it("does not send the code composer with ⌘/Ctrl+Enter", async () => {
+    const sent: string[] = [];
+    act(() => root.render(<ViewSections view={SHOWCASE["code-overview"]} {...INERT} onAct={(a) => sent.push(a.id)} />));
+    const area = host.querySelector("textarea")!;
+    typeArea(area, "LGTM");
+    await safari(area, "Enter", { ctrlKey: true });
+    expect(sent).toEqual([]);
+    await plain(area, "Enter", { ctrlKey: true });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("does not add a half-typed model ID", async () => {
+    const existing = { name: "gw", base_url: "https://gateway.example.com", has_key: true, model: "m1", models: [{ id: "m1" }] };
+    act(() => root.render(<ProviderWizard existing={existing} onClose={() => {}} onSaved={() => {}} />));
+    act(() => [...document.body.querySelectorAll("button")].find((b) => b.textContent?.includes("下一步"))!.click());
+    const input = document.body.querySelector<HTMLInputElement>('input[aria-label="手动添加模型 ID"]')!;
+    const rows = () => document.body.querySelectorAll('ul[aria-label="模型"] > li').length;
+    expect(rows()).toBe(1);
+    type(input, "glm");
+    await safari(input, "Enter");
+    expect(rows()).toBe(1);
+    await plain(input, "Enter");
+    expect(rows()).toBe(2);
   });
 });

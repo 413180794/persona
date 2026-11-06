@@ -11,13 +11,13 @@ import (
 
 func TestAssistantSingleSessionUsesTrustedClassification(t *testing.T) {
 	h, n := conversationsHub(t)
-	n.m.mu.Lock()
-	n.m.sessions = []proto.Session{
-		{SessionID: "headless", Cwd: convDir},
-		{SessionID: "pane", Cwd: convDir, PaneID: "window:pane", Assistant: true},
-		{SessionID: "ordinary", Cwd: "/code/example"},
-	}
-	n.m.mu.Unlock()
+	editSessions(n.m, func([]proto.Session) []proto.Session {
+		return []proto.Session{
+			{SessionID: "headless", Cwd: convDir},
+			{SessionID: "pane", Cwd: convDir, PaneID: "window:pane", Assistant: true},
+			{SessionID: "ordinary", Cwd: "/code/example"},
+		}
+	})
 	for _, tc := range []struct {
 		id   string
 		want bool

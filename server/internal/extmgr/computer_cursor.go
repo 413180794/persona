@@ -25,6 +25,8 @@ func (h *Manager) tellCursor(ctx context.Context, m *Machine) {
 	if !darwin || !m.isOnline() {
 		return
 	}
+	m.cursorMu.Lock() // the setting read and said under it, so the last one said is the newest (Machine.cursorMu)
+	defer m.cursorMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	var out struct {

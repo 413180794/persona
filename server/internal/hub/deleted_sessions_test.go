@@ -16,15 +16,17 @@ import (
 func TestDeleteSessions(t *testing.T) {
 	h, n := conversationsHub(t)
 	now := time.Now().UTC()
-	n.m.sessions = append(n.m.sessions,
-		proto.Session{SessionID: "old-0007", Cwd: "/code/app", Status: proto.StatusOffline, UpdatedAt: now.Add(-time.Hour)},
-		proto.Session{SessionID: "fail-0008", Cwd: "/code/app", Status: proto.StatusOffline, UpdatedAt: now.Add(-time.Minute),
-			StartError: "claude did not become ready within 1m0s"},
-		proto.Session{SessionID: "run-0009", Cwd: "/code/app", Status: proto.StatusWorking, UpdatedAt: now},
-		proto.Session{SessionID: "boot-0010", Cwd: "/code/app", Status: proto.StatusOffline, Starting: true, UpdatedAt: now},
-		proto.Session{SessionID: "done-0011", Cwd: "/code/app", Status: proto.StatusDone, UpdatedAt: now.Add(-time.Hour)},
-		proto.Session{SessionID: "busy-0012", Cwd: "/code/app", Status: proto.StatusBlocked, UpdatedAt: now},
-	)
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		return append(list,
+			proto.Session{SessionID: "old-0007", Cwd: "/code/app", Status: proto.StatusOffline, UpdatedAt: now.Add(-time.Hour)},
+			proto.Session{SessionID: "fail-0008", Cwd: "/code/app", Status: proto.StatusOffline, UpdatedAt: now.Add(-time.Minute),
+				StartError: "claude did not become ready within 1m0s"},
+			proto.Session{SessionID: "run-0009", Cwd: "/code/app", Status: proto.StatusWorking, UpdatedAt: now},
+			proto.Session{SessionID: "boot-0010", Cwd: "/code/app", Status: proto.StatusOffline, Starting: true, UpdatedAt: now},
+			proto.Session{SessionID: "done-0011", Cwd: "/code/app", Status: proto.StatusDone, UpdatedAt: now.Add(-time.Hour)},
+			proto.Session{SessionID: "busy-0012", Cwd: "/code/app", Status: proto.StatusBlocked, UpdatedAt: now},
+		)
+	})
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v1/sessions/{mid}/{sid}", h.withMachine(h.deleteSession))
 	mux.HandleFunc("GET /api/v1/sessions", h.listSessions)
@@ -88,13 +90,14 @@ func TestDeleteSessions(t *testing.T) {
 	}
 
 	// Used again (resumed, a new message): listed again.
-	n.m.mu.Lock()
-	for i := range n.m.sessions {
-		if n.m.sessions[i].SessionID == "old-0007" {
-			n.m.sessions[i].UpdatedAt = time.Now().UTC().Add(time.Second)
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		for i := range list {
+			if list[i].SessionID == "old-0007" {
+				list[i].UpdatedAt = time.Now().UTC().Add(time.Second)
+			}
 		}
-	}
-	n.m.mu.Unlock()
+		return list
+	})
 	if got := listed(); !strings.Contains(got, "old-0007") || strings.Contains(got, "fail-0008") {
 		t.Fatalf("a session used again is back: %s", got)
 	}

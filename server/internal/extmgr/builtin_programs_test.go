@@ -13,23 +13,25 @@ import (
 
 // fakeNodesBuiltin: the fake Macs of the cua and ego tests (computerMac, egoMac) are nodes that have the built-in
 // programs (node.info's builtin_programs), and the hub must ask them over plugin.node.call. Off, they are nodes from
-// before, asked by the old names. Only TestBuiltinProgramsSameFlows turns it on; the tests are not parallel.
+// before, asked by the old names. Only TestBuiltinProgramsSameFlows turns it on; the tests are not parallel. A fake
+// node reads it once, when it is made: its goroutines can outlive the test that set it.
 var fakeNodesBuiltin bool
 
-func fakeBuiltinPrograms() []string {
-	if fakeNodesBuiltin {
+func fakeBuiltinPrograms(builtin bool) []string {
+	if builtin {
 		return []string{"cua", "ego", "imessage"}
 	}
 	return nil
 }
 
 // fakeBuiltinRoute is the fake node's side of callBuiltin: a plugin.node.call to cua or ego back to the old method
-// name and its params, for the fake to answer as before; a call the wrong way for this node fails the test.
-func fakeBuiltinRoute(t *testing.T, method string, params json.RawMessage) (string, json.RawMessage) {
+// name and its params, for the fake to answer as before; a call the wrong way for this node (builtin: whether it has
+// the built-in programs) fails the test.
+func fakeBuiltinRoute(t *testing.T, builtin bool, method string, params json.RawMessage) (string, json.RawMessage) {
 	if method == "plugin.node.call" {
 		var c proto.PluginNodeCall
 		_ = json.Unmarshal(params, &c)
-		if !fakeNodesBuiltin {
+		if !builtin {
 			t.Errorf("plugin.node.call %s.%s to a node without built-in programs", c.ID, c.Method)
 		}
 		if c.ID == imessageExtensionID { // its methods keep their names (connector.*)
@@ -44,7 +46,7 @@ func fakeBuiltinRoute(t *testing.T, method string, params json.RawMessage) (stri
 		return method, params
 	}
 	for _, prefix := range []string{"computer.", "browser.", "connector."} {
-		if strings.HasPrefix(method, prefix) && fakeNodesBuiltin {
+		if strings.HasPrefix(method, prefix) && builtin {
 			t.Errorf("%s by its old name to a node with built-in programs", method)
 		}
 	}
@@ -63,6 +65,7 @@ func TestBuiltinProgramsSameFlows(t *testing.T) {
 		"ComputerClipboard":                              TestComputerClipboard,
 		"TheCursorAndTheClickSound":                      TestTheCursorAndTheClickSound,
 		"NoAutoLock":                                     TestNoAutoLock,
+		"ComputerTellsReachTheMacInOrder":                TestComputerTellsReachTheMacInOrder,
 		"CallApps":                                       TestCallApps,
 		"ComputerAppsAreAskedOnce":                       TestComputerAppsAreAskedOnce,
 		"EgoExtension":                                   TestEgoExtension,

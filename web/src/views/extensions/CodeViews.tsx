@@ -7,6 +7,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ago } from "../../lib/format";
 import { ancestors, buildTree, filterEntries, highlightLines, languageOf, statusMark, useHighlighter, type Comment, type Token, type TreeNode } from "../../lib/code-view";
 import { findIn, isGenerated, lineLink, lineTyped, overlay, type Span } from "../../lib/code-review";
+import { composing } from "../../lib/send-history";
 import { useReview } from "./review-context";
 import { imageURL, initials, rowIcon, toneOf, type UIAction, type UIItem, type UITone } from "../../lib/extension-ui";
 import { t } from "../../i18n";
@@ -399,6 +400,7 @@ export function CodeView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
             value={q}
             onChange={(e) => (setQ(e.target.value), setAt(0))}
             onKeyDown={(e) => {
+              if (composing(e.nativeEvent)) return;
               if (e.key === "Escape") (setTool(""), setQ(""));
               if (e.key !== "Enter") return;
               e.preventDefault();
@@ -521,7 +523,7 @@ export function Box({ value, onChange, placeholder, autoFocus, onSubmit, disable
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && onSubmit) {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && onSubmit && !composing(e.nativeEvent)) {
           e.preventDefault();
           onSubmit();
         }

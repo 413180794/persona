@@ -12,9 +12,9 @@ import (
 
 func TestAssistantViewCheckUsesLiveFlagAndTrustedSession(t *testing.T) {
 	h, n := conversationsHub(t)
-	n.m.mu.Lock()
-	n.m.sessions = append(n.m.sessions, proto.Session{SessionID: "terminal-example", Cwd: convDir, PaneID: "window:pane", Assistant: true})
-	n.m.mu.Unlock()
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		return append(list, proto.Session{SessionID: "terminal-example", Cwd: convDir, PaneID: "window:pane", Assistant: true})
+	})
 	invalid := "```persona-view\n{\"sections\":[]}\n```"
 	valid := "```persona-view\n{\"fallback\":\"Complete\",\"sections\":[]}\n```"
 	on, off := true, false

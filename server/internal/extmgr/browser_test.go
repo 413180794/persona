@@ -21,6 +21,7 @@ type browserCallSeen struct {
 // egoMac is a Mac whose node answers browser.* as a node with ego lite set up does, and says which it was asked.
 func egoMac(t *testing.T, h *Manager, id string) (*Machine, func() []browserCallSeen) {
 	t.Helper()
+	builtin := fakeNodesBuiltin
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
 	n2hR, n2hW := io.Pipe()
@@ -29,7 +30,7 @@ func egoMac(t *testing.T, h *Manager, id string) (*Machine, func() []browserCall
 	var seen []browserCallSeen
 	var job *proto.ComputerJob
 	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
-		method, params = fakeBuiltinRoute(t, method, params) // either way the hub asks, the same answers (#1830 step 5)
+		method, params = fakeBuiltinRoute(t, builtin, method, params) // either way the hub asks, the same answers (#1830 step 5)
 		mu.Lock()
 		defer mu.Unlock()
 		var p map[string]any
@@ -66,7 +67,7 @@ func egoMac(t *testing.T, h *Manager, id string) (*Machine, func() []browserCall
 	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
 	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
 	m := newMachine(h, MachineConfig{ID: id, Name: id})
-	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "darwin", BuiltinPrograms: fakeBuiltinPrograms()}
+	m.peer, m.online, m.info = hubSide, true, proto.NodeInfo{OS: "darwin", BuiltinPrograms: fakeBuiltinPrograms(builtin)}
 	h.fleetMu.Lock()
 	h.machines, h.byID[id] = append(h.machines, m), m
 	h.fleetMu.Unlock()

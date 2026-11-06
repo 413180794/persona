@@ -28,7 +28,7 @@ func conversationsHub(t *testing.T) (*Hub, *assistantNode) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	n.m.sessions = []proto.Session{
+	list := []proto.Session{
 		{SessionID: "main-0001", Cwd: convDir, Title: "长期对话", UpdatedAt: now.Add(-time.Minute), LastText: "早上好"},
 		{SessionID: "trip-0002", Cwd: convDir, Title: "1030 | 探索 | 周末出游", UpdatedAt: now.Add(-2 * time.Hour), LastText: "订好了酒店"},
 		{SessionID: "code-0003", Cwd: convDir, Title: "1031 | 修复 | 登录报错", UpdatedAt: now.Add(-3 * time.Hour), Status: proto.StatusWorking},
@@ -36,7 +36,8 @@ func conversationsHub(t *testing.T) (*Hub, *assistantNode) {
 		{SessionID: "fresh-0006", Cwd: convDir, Title: "assistant", UpdatedAt: now.Add(-5 * time.Hour)}, // not named yet
 		{SessionID: "agent-0005", Cwd: "/code/app", Title: "不是助手的"},
 	}
-	for _, s := range n.m.sessions {
+	editSessions(n.m, func([]proto.Session) []proto.Session { return list })
+	for _, s := range list {
 		n.known[s.SessionID] = true
 	}
 	connectAssistant(t, h)

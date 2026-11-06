@@ -47,11 +47,17 @@ func TestNewMainConversation(t *testing.T) {
 	if code, out := post("/api/v1/assistant/main/new", `{"expect":"another-0009"}`); code != http.StatusConflict || out["code"] != "main_changed" {
 		t.Fatalf("another main conversation: %d %v", code, out)
 	}
-	n.m.sessions[0].Status = proto.StatusWorking
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		list[0].Status = proto.StatusWorking
+		return list
+	})
 	if code, out := post("/api/v1/assistant/main/new", `{"expect":"main-0001"}`); code != http.StatusConflict || out["code"] != "busy" {
 		t.Fatalf("while it answers: %d %v", code, out)
 	}
-	n.m.sessions[0].Status = proto.StatusIdle
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		list[0].Status = proto.StatusIdle
+		return list
+	})
 	if code, out := post("/api/v1/assistant/main/new", `{"carry":"sometimes"}`); code != http.StatusBadRequest {
 		t.Fatalf("an unknown carry: %d %v", code, out)
 	}
@@ -158,7 +164,9 @@ func TestNewMainStartedEmptyCarriesOverInTheFirstMessage(t *testing.T) {
 	if got, _ := n.lastSend(t)["text"].(string); got != "" {
 		t.Fatalf("started empty with:\n%s", got)
 	}
-	n.m.sessions = append(n.m.sessions, proto.Session{SessionID: "s1", Cwd: convDir})
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		return append(list, proto.Session{SessionID: "s1", Cwd: convDir})
+	})
 	if got := send("你好"); !strings.Contains(got, "示例摘要") || !strings.HasSuffix(got, "你好") {
 		t.Fatalf("the first message:\n%s", got)
 	}

@@ -40,8 +40,10 @@ func TestAssistantOverTheBus(t *testing.T) {
 	n := newAssistantNode(t, h) // the assistant's machine, "server"
 	n.m.info.Home = "/home/me"
 	now := time.Now().UTC()
-	n.m.sessions = []proto.Session{{SessionID: "main-1", Cwd: convDir, Title: "长期对话", UpdatedAt: now},
-		{SessionID: "side-2", Cwd: convDir, Title: "1030 | 探索 | 出游", UpdatedAt: now.Add(-time.Hour)}}
+	editSessions(n.m, func([]proto.Session) []proto.Session {
+		return []proto.Session{{SessionID: "main-1", Cwd: convDir, Title: "长期对话", UpdatedAt: now},
+			{SessionID: "side-2", Cwd: convDir, Title: "1030 | 探索 | 出游", UpdatedAt: now.Add(-time.Hour)}}
+	})
 	n.known["main-1"], n.known["side-2"] = true, true
 	box := connectTaskNode(t, h, "box") // where a task's agent runs
 	if err := store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main-1", Timezone: "Asia/Shanghai"}); err != nil {

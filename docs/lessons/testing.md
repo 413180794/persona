@@ -2,6 +2,12 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 活过测试的 goroutine 不能调 `t.Logf`，也不能读测试结束后会被改掉的全局开关（2026-11-06，#4822）：`computer.nolock` / `computer.cursor` 在自己的 goroutine 里发，测试结束后才写日志会 panic（`Log in goroutine after ... has completed`）；假 Mac 节点在请求时读全局的 `fakeNodesBuiltin`，上一个测试的 cleanup 改了它，迟到的请求就让已结束的测试失败。日志函数用锁加 `over` 标记（`t.Cleanup` 里置位）挡住迟到的调用；假节点在创建时读一次开关并留在自己身上。
+
+- 助手总线会写 `m.sessions` 和 `h.clients`，测试改它们也要拿同一把锁（2026-11-06，#4822）：`fleet.sessions` 由 `takeFleetSessions` 在 `m.mu` 里写，测试直接赋值 `n.m.sessions` 时 `-race -count=30` 报 DATA RACE，还可能被尚未送到的旧列表盖掉。用 `editSessions`（先 `settleAssistant`，再在 `m.mu` 里改）和 `appClient(h)`，不要直接赋值。
+
+- 同一份状态由多个 goroutine 各自生成再发出时，生成和发送要在同一把锁里（2026-11-06，#4822）：助手连上时 `FleetUp` 发各台机器的列表，同时 `Resync` 的快照也会让列表重发；原来两边各自先 `decorated()`、出锁后再 `Tell`，旧列表（还没有快照里的「Persona」标题）偶尔最后到 hub 并一直留着，`TestTheMainConversationIsAlwaysPersona` 约 3% 失败。`publishList` 现在在 `sentMu` 里生成、去重并发送。只在测试里等「新列表到了」不够：等到的可能就是那份旧列表。
+
 - 夹具必须使用真实响应形状（2026-11-06，#2938 / #2017）：助手 feed 的 `view_actions` 是按卡片键索引的对象，空值也是 `{}`。网页和验收驱动都误当成数组时，数组夹具让单测一直通过，真实模型却在重载后丢已答状态。夹具改成协议对象，覆盖空对象、已答快照和分页；真实浏览器还要重载检查最新版本、已答状态和没有再次发送。
 
 - 自主绘制验收先说清用户场景，不能暗中指定工具（2026-11-06，#2017）：只说“进度在同一位置更新”，模型可以先给正文选择卡、选后再开进度卡；驱动却要求第一张就是 live，便不会点选择。全过程同一界面的需求要在自然语言中说明，不提供 schema、工具名或预制卡片。原失败保留，工具列表可用也不等于模型真的调用了工具。

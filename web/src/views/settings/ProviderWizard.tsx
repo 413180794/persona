@@ -46,6 +46,7 @@ import {
 } from "../../lib/providers";
 import { claudeMissing, claudeWorks, currentReadiness, readinessChanged, readinessSettled, useReadiness, type Readiness } from "../../lib/readiness";
 import { effortLabel } from "../../lib/routines";
+import { composing } from "../../lib/send-history";
 import { hubHas, useStore } from "../../lib/store";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -644,7 +645,7 @@ function ModelList({ f, setF }: { f: ProviderForm; setF: React.Dispatch<React.Se
         </ul>
       )}
       <div className="flex gap-2">
-        <input value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())} placeholder={t("settings-providerwizard.add_model_id")} aria-label={t("settings-providerwizard.add_model_id")} autoComplete="off" spellCheck={false} className={cx(INPUT, "font-mono")} />
+        <input value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !composing(e.nativeEvent) && (e.preventDefault(), add())} placeholder={t("settings-providerwizard.add_model_id")} aria-label={t("settings-providerwizard.add_model_id")} autoComplete="off" spellCheck={false} className={cx(INPUT, "font-mono")} />
         <Button tone="secondary" icon="plus" disabled={!adding.trim()} onClick={add}>
           {t("settings-providerwizard.add")}
         </Button>

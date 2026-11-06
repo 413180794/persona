@@ -58,7 +58,9 @@ func TestSupervisedTaskOverTheBus(t *testing.T) {
 
 	n := newAssistantNode(t, h) // the main conversation's machine, "server"
 	n.m.info.Home = "/home/me"
-	n.m.sessions = []proto.Session{{SessionID: "main-1", Cwd: convDir, Title: "Persona", UpdatedAt: time.Now().UTC()}}
+	editSessions(n.m, func([]proto.Session) []proto.Session {
+		return []proto.Session{{SessionID: "main-1", Cwd: convDir, Title: "Persona", UpdatedAt: time.Now().UTC()}}
+	})
 	n.known["main-1"] = true
 	box := connectTaskNode(t, h, "box")
 	if err := store.PutSetting(ctx, "assistant", assistant.Settings{MachineID: "server", Main: "main-1", Timezone: "Asia/Shanghai"}); err != nil {

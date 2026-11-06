@@ -69,7 +69,8 @@ type fleetBook struct {
 	clients            assistantwire.Clients
 	prev               map[string][]proto.Session // each machine's list setSessions saw last
 
-	// sent: each machine's last session list told the hub (fleet.sessions), as JSON.
+	// sent: each machine's last session list told the hub (fleet.sessions), as JSON. sentMu is held while a list is
+	// decorated and told (publishList), so the lists reach the hub in the order they were made.
 	sentMu sync.Mutex
 	sent   map[string]string
 
@@ -797,8 +798,7 @@ func (s *Service) sessionsChanged(machine string) {
 	if _, ok := s.fleetMachine(machine); !ok {
 		return
 	}
-	list := s.decorated(machine)
-	s.publishList(machine, list)
+	list := s.publishList(machine)
 	s.syncScreenInteractions(machine, list)
 	s.syncPlanInteractions(machine)
 }
@@ -808,28 +808,31 @@ func (s *Service) publishSessions(machine string) {
 	if _, ok := s.fleetMachine(machine); !ok {
 		return
 	}
-	s.publishList(machine, s.decorated(machine))
+	s.publishList(machine)
 }
 
-// publishList tells the hub list, when it is not what it was told last (fleet.sessions); the fleet follows.
-func (s *Service) publishList(machine string, list []proto.Session) {
-	msg := assistantwire.FleetSessions{MachineID: machine, Sessions: list, Muted: s.mutedSessions(machine, list)}
-	b, _ := json.Marshal(msg)
+// publishList tells the hub the machine's list as the apps get it now, when it is not what it was told last
+// (fleet.sessions); the fleet follows. It returns the list.
+//
+// The list is decorated and told under sentMu: two publishers (FleetUp's lists, a snapshot's changed machines) would
+// otherwise each decorate, then tell in either order, and an older list could land last on the hub and stay there.
+func (s *Service) publishList(machine string) []proto.Session {
 	f := &s.fleet
 	f.sentMu.Lock()
+	defer f.sentMu.Unlock()
+	list := s.decorated(machine)
+	msg := assistantwire.FleetSessions{MachineID: machine, Sessions: list, Muted: s.mutedSessions(machine, list)}
+	b, _ := json.Marshal(msg)
 	if f.sent == nil {
 		f.sent = map[string]string{}
 	}
-	same := f.sent[machine] == string(b)
-	if !same {
-		f.sent[machine] = string(b)
+	if f.sent[machine] == string(b) {
+		return list
 	}
-	f.sentMu.Unlock()
-	if same {
-		return
-	}
+	f.sent[machine] = string(b)
 	s.hub.Tell(assistantwire.EventFleetSessions, json.RawMessage(b))
 	s.liveChanged(false)
+	return list
 }
 
 // decorated returns a machine's sessions as the apps get them: the unified states, the pending interaction counts,

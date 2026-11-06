@@ -157,7 +157,10 @@ func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
 	model, calls := replies(t, "探索 | 不该用到")
 	useModel(t, h, model)
 	// The node's title for a transcript without one is its first message.
-	n.m.sessions[0].Title = "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		list[0].Title = "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"
+		return list
+	})
 	// Named after its first turn (by the model): what the assistant keeps, read when it first shows its titles.
 	if err := h.store.PutSetting(context.Background(), "assistant.titles", map[string]any{
 		"trip-0002": map[string]any{"machine_id": "server", "title": "1030 | 探索 | 周末出游", "by": "auto"}}); err != nil {

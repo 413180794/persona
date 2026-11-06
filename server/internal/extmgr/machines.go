@@ -57,6 +57,11 @@ type Machine struct {
 	browserAt time.Time
 	// streams are the manager's streams to its node (portStreams).
 	streams *streams.Mux
+	// noLockMu and cursorMu send computer.nolock and computer.cursor to the node one at a time (tellNoLock,
+	// tellCursor). Each tell reads the setting and then waits for the node, and the plugin's changes start them
+	// concurrently; without the lock, a tell that read the old setting could reach the node after a newer one and
+	// leave it held awake (for up to the node's 30 minutes) or with the wrong cursor.
+	noLockMu, cursorMu sync.Mutex
 }
 
 func (m *Machine) call(ctx context.Context, method string, params any, out any) error {
