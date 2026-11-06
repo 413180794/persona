@@ -254,7 +254,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 除 `demo` 外只有 `mbp` 一台、没有 Agent 和别的助手对话（新用户的样子）。`MOCK_START_ERROR=<码>` 不管场景，开对话一律按这个码拒绝
 （`no_machine`、`machine_pending`、`claude_missing`、`launcher_missing`、`node_unreachable`、`node_outdated`、`assistant_offline`），拍每个码的卡片；
-`MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
+`MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。这两种情况下，`MOCK_PROVIDERS=1` 的「测试连接」遇到含 `region` 的 Key 时，回 Anthropic 按地区拦下的那句话和 `code: "region_blocked"`（#4482，文字取自 hub 的文案）。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
 
 不会漂移：`server/internal/assistant/readiness_scenarios_test.go` 在假 hub 上搭出同样的场景，把真代码回的就绪度（三种语言）和开对话的拒绝存进
 `testdata/readiness_scenarios/<场景>.json`；`scripts/mock/test_readiness_mock.py` 起 mock 逐个比对。改了就绪度或文案：`UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`，

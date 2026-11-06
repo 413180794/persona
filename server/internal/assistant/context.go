@@ -109,7 +109,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	if e, err := s.kbGet(ctx); err == nil {
 		snap.KB = e.Prompt(6, 8)
 	}
-	snap.Followups, snap.Routines, snap.Missed, snap.MissedTotal = s.snapshotSchedule(ctx, loc, now)
+	snap.Followups, snap.Routines, snap.RoutinesTotal, snap.Missed, snap.MissedTotal = s.snapshotSchedule(ctx, loc, now)
 	wg.Wait()
 
 	cs := &s.live
@@ -247,12 +247,13 @@ func (s *Service) snapshotCalendar(ctx context.Context, now time.Time) *prompts.
 
 // snapshotSchedule is the schedule as the snapshot says it: the follow-ups to come, the daily tasks with how their
 // last run went, and the scheduled runs that failed or were skipped since yesterday 18:00 (#4124: the 早报 tells them
-// without calling list_followups). Bounded: eight daily tasks, the six newest misses (missed: all of them).
+// without calling list_followups). Bounded: eight daily tasks and the six newest misses, with the totals. The words
+// for a status are the template's (prompts/assistant/snapshot.md).
 func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now time.Time) (follow []prompts.SnapshotFollowup,
-	routines []prompts.SnapshotRoutine, misses []prompts.SnapshotMiss, missed int) {
+	routines []prompts.SnapshotRoutine, routinesTotal int, misses []prompts.SnapshotMiss, missed int) {
 	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
-		return nil, nil, nil, 0
+		return nil, nil, 0, nil, 0
 	}
 	defer sc.mu.Unlock()
 	for _, t := range sc.tasks {
@@ -260,8 +261,16 @@ func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now 
 			continue
 		}
 		if t.Repeat == repeatDaily {
+			routinesTotal++
 			if len(routines) < 8 {
-				routines = append(routines, prompts.SnapshotRoutine{Label: clip(t.label(), 30), Rule: ruleText(t, loc), Last: lastRunText(t, loc)})
+				r := prompts.SnapshotRoutine{Label: clip(t.label(), 30), Rule: ruleText(t, loc)}
+				if !t.LastRun.IsZero() {
+					r.LastAt, r.LastStatus = t.LastRun.In(loc), t.LastStatus
+					if t.LastStatus == runFailed || t.LastStatus == runSkipped {
+						r.LastWhy = clip(oneLine(t.LastError), 60)
+					}
+				}
+				routines = append(routines, r)
 			}
 			continue
 		}
@@ -273,44 +282,20 @@ func (s *Service) snapshotSchedule(ctx context.Context, loc *time.Location, now 
 	}
 	n := now.In(loc)
 	since := time.Date(n.Year(), n.Month(), n.Day()-1, 18, 0, 0, 0, loc) // as the 今天 card's 「夜里」 (today.go)
-	for i := len(sc.runs) - 1; i >= 0; i-- {                             // newest first
-		r := sc.runs[i]
-		if r.At.Before(since) {
-			break
-		}
-		if r.Status != runFailed && r.Status != runSkipped {
+	// Runs are kept in the order they ended, At is when they started: a long run recorded late sits after a later
+	// one, so the whole history (at most maxRuns) is looked through, not cut at the first run before since.
+	var all []prompts.SnapshotMiss
+	for _, r := range sc.runs {
+		if r.At.Before(since) || r.Status != runFailed && r.Status != runSkipped {
 			continue
 		}
-		missed++
-		if len(misses) < 6 {
-			misses = append(misses, prompts.SnapshotMiss{At: r.At.In(loc), Label: clip(r.Title, 30), Why: clip(oneLine(r.Error), 60),
-				Skipped: r.Status == runSkipped})
-		}
+		all = append(all, prompts.SnapshotMiss{At: r.At.In(loc), Label: clip(r.Title, 30), Why: clip(oneLine(r.Error), 60),
+			Skipped: r.Status == runSkipped})
 	}
-	return follow, routines, misses, missed
-}
-
-// lastRunText is how a daily task's last run went, for the snapshot: 「11-05 09:00 成功」, 「… 失败：原因」; "" when it
-// never ran.
-func lastRunText(t Task, loc *time.Location) string {
-	if t.LastRun.IsZero() {
-		return ""
+	sort.SliceStable(all, func(i, j int) bool { return all[i].At.After(all[j].At) }) // newest first
+	missed = len(all)
+	if len(all) > 6 {
+		all = all[:6]
 	}
-	at := t.LastRun.In(loc).Format("01-02 15:04")
-	switch t.LastStatus {
-	case runFailed:
-		return at + " 失败" + whyText(t.LastError)
-	case runSkipped:
-		return at + " 跳过" + whyText(t.LastError)
-	case runOK:
-		return at + " 成功"
-	}
-	return at
-}
-
-func whyText(why string) string {
-	if why = clip(oneLine(why), 60); why != "" {
-		return "：" + why
-	}
-	return ""
+	return follow, routines, routinesTotal, all, missed
 }

@@ -13,5 +13,8 @@
   "done_body": "Done",
   "health_title": "Health",
   "health_body": "New in your health space. Open Persona to see it.",
-  "delegate_recommend_suffix": "\nThe assistant suggests: {answer}"
+  "delegate_recommend_suffix": "\nThe assistant suggests: {answer}",
+  "question_more_options": " and {count} more",
+  "question_more_one": "{count} more question",
+  "question_more_other": "{count} more questions"
 }

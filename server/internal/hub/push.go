@@ -776,7 +776,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	switch ix.Kind {
 	case proto.IxQuestion:
 		if len(ix.Questions) > 0 {
-			body = ix.Questions[0].Question
+			body = questionAlertBody(l, ix.Questions)
 		}
 	case proto.IxPlan:
 		body = planTitle(ix.Plan)
@@ -827,6 +827,42 @@ func screenAlertBody(l i18n.Lang, ix proto.Interaction) string {
 		}
 	}
 	return i18n.T(l, "push.screen_body")
+}
+
+// A question's push shows its choices (at most questionAlertOptions, each clipped) and how many questions follow, so
+// the user can tell from the lock screen what is asked and whether to answer now (#4293).
+const (
+	questionAlertOptions   = 4
+	questionAlertOptionMax = 20
+)
+
+func questionAlertBody(l i18n.Lang, qs []proto.Question) string {
+	q := qs[0]
+	var lines []string
+	if t := strings.TrimSpace(q.Question); t != "" {
+		lines = append(lines, t)
+	}
+	var labels []string
+	for _, o := range q.Options {
+		if t := textfmt.OneLine(o.Label); t != "" { // a label's line break would break the push's lines
+			labels = append(labels, t)
+		}
+	}
+	if len(labels) > 0 {
+		shown := labels[:min(len(labels), questionAlertOptions)]
+		for i, t := range shown {
+			shown[i] = textfmt.Clip(t, questionAlertOptionMax)
+		}
+		line := strings.Join(shown, " / ")
+		if rest := len(labels) - len(shown); rest > 0 {
+			line += i18n.T(l, "push.question_more_options", i18n.Args{"count": rest})
+		}
+		lines = append(lines, line)
+	}
+	if rest := len(qs) - 1; rest > 0 {
+		lines = append(lines, i18n.T(l, "push.question_more", i18n.Args{"count": rest}))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, wants func(NotifyPrefs) bool) {

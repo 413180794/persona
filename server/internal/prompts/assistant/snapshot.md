@@ -21,6 +21,6 @@
 {{end}}{{end}}{{with .Upcoming}}{{if .Events}}- 飞书日历今天接下来：{{range $i, $e := .Events}}{{if $i}}；{{end}}{{$e.Start.Format "15:04"}}–{{$e.End.Format "15:04"}} {{$e.Title}}{{end}}
 {{else}}- 飞书日历：今天接下来没有会
 {{end}}{{end}}- 已安排的跟进：{{with .Followups}}{{range $i, $f := .}}{{if $i}}；{{end}}{{$f.At.Format "01-02 15:04"}} {{$f.Label}}{{with $f.Every}}（每 {{.}}）{{end}}{{end}}{{else}}没有{{end}}
-{{with .Routines}}- 每天的定时任务：{{range $i, $r := .}}{{if $i}}；{{end}}{{$r.Label}}（{{$r.Rule}}）{{with $r.Last}}，上次{{.}}{{end}}{{end}}
+{{with .Routines}}- 每天的定时任务：{{range $i, $r := .}}{{if $i}}；{{end}}{{$r.Label}}（{{$r.Rule}}）{{if not $r.LastAt.IsZero}}，上次{{$r.LastAt.Format "01-02 15:04"}}{{if eq $r.LastStatus "ok"}} 成功{{else if eq $r.LastStatus "failed"}} 失败{{with $r.LastWhy}}：{{.}}{{end}}{{else if eq $r.LastStatus "skipped"}} 跳过{{with $r.LastWhy}}：{{.}}{{end}}{{end}}{{end}}{{end}}{{if gt $.RoutinesTotal (len .)}} 等 {{$.RoutinesTotal}} 个{{end}}
 {{end}}{{with .Missed}}- 没成功的定时任务（昨天 18:00 以来；汇报时要说）：{{range $i, $m := .}}{{if $i}}；{{end}}{{$m.At.Format "01-02 15:04"}} {{$m.Label}}{{if $m.Skipped}}跳过了{{else}}失败了{{end}}{{with $m.Why}}：{{.}}{{end}}{{end}}{{if gt $.MissedTotal (len .)}} 等 {{$.MissedTotal}} 次{{end}}
 {{end}}

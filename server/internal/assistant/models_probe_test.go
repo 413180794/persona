@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -364,5 +365,102 @@ func TestProviderProbeBodyTooLarge(t *testing.T) {
 	big := `{"base_url":"https://gw.example.com","model":"` + strings.Repeat("m", 2<<20) + `"}`
 	if code, _ := launcherCall(t, mux, "POST", "/api/v1/launchers/test", big); code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("code %d", code)
+	}
+}
+
+// Recorded 403 bodies (#4482). Anthropic's region block comes before the key is looked at; the rest are a key that
+// lacks access, at Anthropic and at other vendors, and keep the plain 403 text.
+const (
+	anthropicRegionBlocked = `{"type":"error","error":{"type":"forbidden","message":"Request not allowed"}}`
+	anthropicPermission    = `{"type":"error","error":{"type":"permission_error","message":"Your API key does not have permission to use the specified resource."}}`
+	openAIStyleForbidden   = `{"error":{"message":"The API key doesn't have permission to access this model","type":"permission_denied_error"}}`
+	plainForbidden         = `<html><body>403 Forbidden</body></html>`
+)
+
+func forbiddenGateway(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(gw.Close)
+	return gw
+}
+
+// Anthropic's region block reads as the network's region, not the key, names vendors that open here, and carries a
+// code; test and discover alike.
+func TestProviderProbeRegionBlocked(t *testing.T) {
+	_, mux := launcherTestService(t)
+	gw := forbiddenGateway(t, anthropicRegionBlocked)
+	for _, path := range []string{"/api/v1/launchers/test", "/api/v1/launchers/discover"} {
+		out := probeResult(t, mux, path, `{"base_url":"`+gw.URL+`","api_key":"`+fakeKey+`","model":"claude-sonnet-5-5"}`)
+		msg := jsonText(out["error"])
+		if out["code"] != probeCodeRegionBlocked || !strings.Contains(msg, "地区") || !strings.Contains(msg, "DeepSeek") ||
+			!strings.Contains(msg, "智谱 GLM") || strings.Contains(msg, "Anthropic 官方、") || strings.Contains(msg, "国际版") ||
+			strings.Contains(msg, "没有权限") || strings.Contains(msg, "Request not allowed") {
+			t.Fatalf("%s: %v", path, out)
+		}
+	}
+}
+
+// Other 403s keep the 403 text with what the gateway said, and no code.
+func TestProviderTestOtherForbiddenUnchanged(t *testing.T) {
+	_, mux := launcherTestService(t)
+	for name, c := range map[string]struct{ body, said string }{
+		"anthropic permission": {anthropicPermission, "does not have permission"},
+		"other vendor":         {openAIStyleForbidden, "access this model"},
+		"html":                 {plainForbidden, "403 Forbidden"},
+	} {
+		gw := forbiddenGateway(t, c.body)
+		out := probeResult(t, mux, "/api/v1/launchers/test", `{"base_url":"`+gw.URL+`","api_key":"`+fakeKey+`","model":"m"}`)
+		msg := jsonText(out["error"])
+		if _, has := out["code"]; has || !strings.Contains(msg, "没有权限（403）") || !strings.Contains(msg, c.said) {
+			t.Fatalf("%s: %v", name, out)
+		}
+	}
+}
+
+// The region block is said in the request's language, the vendors' names too.
+func TestProviderTestRegionBlockedEnglish(t *testing.T) {
+	s, _ := launcherTestService(t)
+	gw := forbiddenGateway(t, anthropicRegionBlocked)
+	out := s.providerTest(i18n.With(context.Background(), i18n.En), probeInput{BaseURL: gw.URL, APIKey: fakeKey, Model: "m"})
+	msg := jsonText(out["error"])
+	if out["code"] != probeCodeRegionBlocked || !strings.Contains(msg, "region") || !strings.Contains(msg, "DeepSeek, ") {
+		t.Fatalf("en: %v", out)
+	}
+}
+
+func TestRegionBlockedBodies(t *testing.T) {
+	untyped := `{"error":{"message":"Request not allowed."}}`
+	for _, c := range []struct {
+		body      string
+		anthropic bool
+		want      bool
+	}{
+		{anthropicRegionBlocked, true, true},
+		{anthropicRegionBlocked, false, true}, // a relay passing Anthropic's block through
+		{untyped, true, true},
+		{untyped, false, false}, // a generic phrase from some other gateway
+		{anthropicPermission, true, false},
+		{openAIStyleForbidden, false, false},
+		{plainForbidden, true, false},
+		{`{"error":{"type":"permission_error","message":"Request not allowed"}}`, true, false},
+	} {
+		if got := regionBlocked([]byte(c.body), c.anthropic); got != c.want {
+			t.Errorf("regionBlocked(%s, %v) = %v", c.body, c.anthropic, got)
+		}
+	}
+}
+
+// A non-Anthropic gateway answering 403 with the bare generic phrase keeps its own 403 text (#4482 review).
+func TestProviderTestGenericNotAllowedElsewhere(t *testing.T) {
+	_, mux := launcherTestService(t)
+	gw := forbiddenGateway(t, `{"error":{"message":"Request not allowed"}}`)
+	out := probeResult(t, mux, "/api/v1/launchers/test", `{"base_url":"`+gw.URL+`","api_key":"`+fakeKey+`","model":"m"}`)
+	msg := jsonText(out["error"])
+	if _, has := out["code"]; has || !strings.Contains(msg, "没有权限（403）") || !strings.Contains(msg, "Request not allowed") {
+		t.Fatalf("%v", out)
 	}
 }

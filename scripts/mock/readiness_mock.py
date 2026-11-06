@@ -290,6 +290,16 @@ def builtin_presets(lang):
     return head + tail
 
 
+def region_blocked(lang):
+    """models_probe.go failure for Anthropic's region block (#4482): the text naming the built-in vendors that are not
+    global-only, and the code."""
+    with open(PRESETS_JSON, encoding="utf-8") as f:
+        regions = {b["id"]: b.get("region", "") for b in json.load(f)}
+    names = [pr["display_name"] for pr in builtin_presets(lang) if regions.get(pr["id"]) != "global"]
+    vendors = t(lang, "assistant-models_probe.list_sep").join(names)
+    return t(lang, "assistant-models_probe.region_blocked", vendors=vendors), "region_blocked"
+
+
 def merge_presets(builtin, plugins):
     """mergePresets: the plugins' after the built-in ones; one with a built-in id takes its place."""
     out = list(builtin)

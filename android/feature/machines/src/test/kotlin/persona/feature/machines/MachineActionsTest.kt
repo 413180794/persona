@@ -98,7 +98,8 @@ class MachineActionsTest {
             assertTrue(model.state.value.reconnecting)
             advanceTimeBy(15_001)
             runCurrent()
-            assertEquals(MachineNotice.NotYet("ssh: connection refused"), model.notices.first())
+            // The hub's error is read as the offline card reads it: why and what to do, not the raw English (#4537).
+            assertEquals(MachineNotice.NotYet(UiText.Res(R.string.machines_offline_unreachable_ssh)), model.notices.first())
             assertFalse(model.state.value.reconnecting)
             val refused = Management().apply { failure = HubFailure(HubError.Server, "machine is offline", 503) }
             val other = MachineActionsViewModel(refused, sessions)
@@ -108,6 +109,21 @@ class MachineActionsTest {
                 assertEquals(MachineNotice.ReconnectFailed(UiText.Plain("machine is offline")), other.notices.first())
             } finally { other.viewModelScope.cancel() }
         } finally { model.viewModelScope.cancel() }
+    }
+
+    @Test fun notYetSaysWhyInPlainWordsAndKeepsAnErrorItCannotRead() {
+        assertEquals(UiText.Res(R.string.machines_offline_auth_link),
+            notYetReason(Machine("mac", kind = "link", online = false, error = "pairing: 401 unauthorized")))
+        assertEquals(UiText.Res(R.string.machines_offline_timeout),
+            notYetReason(Machine("lab", online = false, error = "ssh: connect to host port 22: Operation timed out")))
+        assertEquals(UiText.Res(R.string.machines_offline_version_local),
+            notYetReason(Machine("lab", online = false, error = "protocol version mismatch")))
+        // A known error_code wins, as on the card.
+        assertEquals(UiText.Res(R.string.machines_onb_code_link_offline),
+            notYetReason(Machine("mac", kind = "link", online = false, error = "dial tcp: connection refused", errorCode = "link_offline")))
+        assertEquals(UiText.Plain("node said something new"), notYetReason(Machine("lab", online = false, error = "node said something new")))
+        assertNull(notYetReason(Machine("lab", online = false, error = " ")))
+        assertNull(notYetReason(Machine("lab", online = false)))
     }
 
     @Test fun deployRefreshesTheListAndReportsTheHubsReason() = test {

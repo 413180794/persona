@@ -5434,6 +5434,9 @@ def providers_route(h, method, p, q, body):
             h.send_json({"ok": False, "ms": 0, "model": b.get("model", ""), "error": "要填 API Key"}); return True
         if "bad" in (b.get("api_key") or "") or "bad" in (b.get("base_url") or ""):
             h.send_json({"ok": False, "ms": 233, "model": b.get("model", ""), "error": "401 认证失败：网关不认这个 Key"}); return True
+        if BUILTIN_PRESETS and "region" in (b.get("api_key") or ""):  # Anthropic refusing the network's region (#4482), in the hub's words
+            msg, code = readiness_mock.region_blocked(readiness_mock.lang_of(h.headers.get("Accept-Language", "")))
+            h.send_json({"ok": False, "ms": 180, "model": b.get("model", ""), "error": msg, "code": code}); return True
         h.send_json({"ok": True, "ms": 412, "model": b.get("model", "")}); return True
     if p == "/api/v1/launchers/discover" and method == "POST":
         PROVIDER_LOG["discover"].append(_provider_redacted(b))

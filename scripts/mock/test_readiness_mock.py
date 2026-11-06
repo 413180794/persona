@@ -146,6 +146,18 @@ class ReadinessMockTests(unittest.TestCase):
         # The plugins' come after the built-in ones.
         self.assertEqual([p["plugin"] for p in zh["presets"]][len(builtin):], ["example-gateway", "example-gateway"])
 
+    def test_region_blocked_key_test(self):
+        # A key with "region" in it is Anthropic refusing the network's region (#4482), in the hub's words.
+        h = hub(self, MOCK_BUILTIN_PRESETS="1", MOCK_PROVIDERS="1")
+        _, zh = h.call("POST", "/api/v1/launchers/test", {"preset": "builtin/anthropic", "api_key": "sk-region-1"})
+        self.assertEqual((zh["ok"], zh["code"]), (False, "region_blocked"))
+        self.assertIn("DeepSeek、", zh["error"])
+        self.assertNotIn("国际版", zh["error"])
+        _, en = h.call("POST", "/api/v1/launchers/test", {"preset": "builtin/anthropic", "api_key": "sk-region-1"}, lang="en")
+        self.assertIn("region", en["error"])
+        _, plain = h.call("POST", "/api/v1/launchers/test", {"preset": "builtin/anthropic", "api_key": "sk-good-1"})
+        self.assertNotIn("code", plain)
+
     def test_offline_start_is_the_offline_machines(self):
         h = hub(self, MOCK_READINESS="offline")
         status, body = h.call("POST", "/api/v1/assistant/conversations", {"prompt": "你好", "main": True})

@@ -156,8 +156,8 @@ Persona 管理的左滑是「删除」，连存着的 Key 一起删、不能恢�
 | `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?, display_name?, assign?}`；`auth` 是 `api_key`（默认）或 `bearer`；带 `preset` 时没填的从预设补上，`name` 也可以空（见下面「内置预设」「从扩展添加」）；带 `assign` 时回 `{launcher, assigned, kept}` |
 | `GET /api/v1/launchers/presets` | 供应商预设：内置的（`plugin: "builtin"`）加扩展的（`docs/extensions.md`「模型供应商」），按请求语言排序；旧 hub 回 404，App 当成没有 |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的。下面「供应商的模型和网关参数」里的字段不带就保留原值 |
-| `POST /api/v1/launchers/test` | 测试连接（不经 node，见下）：`{name?, base_url?, auth?, api_key?, headers?, model, preset?}` → `{ok, ms, model, error?}`；带 `preset` 时没填的地址、模型用预设的（默认模型） |
-| `POST /api/v1/launchers/discover` | 获取模型：`{name?, base_url?, auth?, api_key?, headers?}` → `{models:[{id, name?, context_window?, efforts?, default_effort?}], error?}` |
+| `POST /api/v1/launchers/test` | 测试连接（不经 node，见下）：`{name?, base_url?, auth?, api_key?, headers?, model, preset?}` → `{ok, ms, model, error?, code?}`（`code: "region_blocked"` 是 Anthropic 按地区拦下，换 Key 没用，见 `docs/protocol.md`）；带 `preset` 时没填的地址、模型用预设的（默认模型） |
+| `POST /api/v1/launchers/discover` | 获取模型：`{name?, base_url?, auth?, api_key?, headers?}` → `{models:[{id, name?, context_window?, efforts?, default_effort?}], error?, code?}` |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
 | `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；管理者缓存一分钟，`refresh=1` 重读 |

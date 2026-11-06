@@ -924,6 +924,15 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				n.logger.Printf("assistant %s: control request failed: %s", p.id[:8], ev.Response.Error)
 			}
 		case "stream_event":
+			if ev.ParentToolUseID != nil && *ev.ParentToolUseID != "" {
+				// A subagent's stream (#4495): its words are not the conversation's live text, its start does not clear
+				// the conversation's text or turn error, and its stop is not what the conversation just said. Its own
+				// transcript has its words; here it only shows the conversation is at work.
+				p.mu.Lock()
+				p.lastActive = time.Now()
+				p.mu.Unlock()
+				continue
+			}
 			switch ev.Event.Type {
 			case "message_start":
 				// A turn can start without a message from us: claude takes up a finished background task's
@@ -942,8 +951,9 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				p.lastActive = time.Now()
 				first := false
 				if tokens := u.Input + u.CacheRead + u.CacheCreate; ev.ParentToolUseID == nil && (tokens == 0 || transcript.PlausibleContext(tokens, 0)) {
-					// a subagent's requests are its own context; a gateway's impossible number is none (assistant_usage.go),
-					// and the zeros it reports on the other replies of a turn say nothing either: the last real one stands
+					// a subagent's requests are its own context (they do not get here; the check stays for an empty
+					// parent id); a gateway's impossible number is none (assistant_usage.go), and the zeros it reports on
+					// the other replies of a turn say nothing either: the last real one stands
 					if tokens > 0 {
 						p.context = tokens
 					}

@@ -208,6 +208,8 @@ P1：**电脑发起、手机允许**。Persona Link 首屏显示一个二维码�
 4. 有电脑但没装 Claude Code：如实说「Key 存好了；还要在电脑上装 Claude Code，主对话才能用它」，因为 `finishModel` 仍然在电脑上起 claude。P1：node 的 `claude.install`（照 `herdrinstall.go` 的下载、校验、装到 `~/.local/bin`、进度回传），只由用户点按钮触发，下载地址只认官方域名，国内网络下载失败报 `download_blocked`。
 5. 没有电脑：P1「只聊天」模式（4.4）直接用这个 Key。
 
+实现（#4482，`assistant/models_probe.go`）：403 里单独认出 Anthropic 的地区拦截（返回体 `message` 是 `Request not allowed`、`error.type` 是 `forbidden`，在看 Key 之前就拦下；`error.type` 为空的只在地址就是 Anthropic 官方时才算，别的网关的同一句泛泛的话照旧当普通 403），文案改成「Anthropic 官方不对你现在的网络所在地区开放，换 Key 也没用」，后面列出内置预设里不是只面向海外的几家（按请求的语言写名字），不再带网关的原话；测试和获取模型的回答多一个 `code: "region_blocked"`，三端目前只显示文案（向导本来就能返回上一步换一家），按码给切换入口留到后续（#4526）。Anthropic 的 `permission_error` 和别家的 403 仍是原来的「没有权限（403）」加原话。
+
 网页的实现（#4037，`views/settings/ProviderWizard.tsx`）：「已有能用的 Claude Code」按就绪度的电脑、Claude Code、模型三步都是 `ok` 算（模型从没验证过的 `unknown` 不算，新 Key 照常默认接上）；第一次结果回来之前开关不出现，保存也等结果回来再决定带不带 `assign`。
 第 4 步的提示看保存前和保存后重拉的就绪度：任一次 Claude Code 那一步是 `claude_missing`、且保存后没变成 `ok` 就提示。只看保存后不够，主对话换成 Persona 管理的供应商以后，hub 对这一步回 `unknown`（`readiness.go` 只在默认的 `claude` 启动器上断定缺失）。
 

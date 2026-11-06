@@ -91,9 +91,12 @@ type SnapshotFollowup struct {
 	Every string // "30 分钟" for a repeating one
 }
 
-// SnapshotRoutine is a daily scheduled task (早报, 晚报…): its rule, and how its last run went ("" when it never ran).
+// SnapshotRoutine is a daily scheduled task (早报, 晚报…): its rule, and how its last run went (LastAt zero: it never
+// ran). LastStatus is the run's status (ok / failed / skipped), LastWhy why it failed or was skipped, in short.
 type SnapshotRoutine struct {
-	Label, Rule, Last string
+	Label, Rule         string
+	LastAt              time.Time // in the user's zone
+	LastStatus, LastWhy string
 }
 
 // SnapshotMiss is a scheduled run that failed or was skipped since yesterday evening, with why, in short (#4124): the
@@ -149,6 +152,7 @@ type Snapshot struct {
 	Calendar      *SnapshotCalendar // nil: the calendar did not answer in time
 	Followups     []SnapshotFollowup
 	Routines      []SnapshotRoutine // the daily tasks that are on (at most eight)
+	RoutinesTotal int               // all of them
 	Missed        []SnapshotMiss    // scheduled runs that failed or were skipped since yesterday 18:00, newest first
 	MissedTotal   int               // all of them (Missed is the newest six)
 	Tasks         []SnapshotTask    // tasks opened from assistant conversations (task_plan), newest first

@@ -13,5 +13,8 @@
   "done_body": "完了しました",
   "health_title": "ヘルスケア",
   "health_body": "ヘルスケアスペースに新着があります。Personaを開いて確認してください",
-  "delegate_recommend_suffix": "\nアシスタントのおすすめ：{answer}"
+  "delegate_recommend_suffix": "\nアシスタントのおすすめ：{answer}",
+  "question_more_options": " ほか {count} 個",
+  "question_more_one": "ほかに {count} 問",
+  "question_more_other": "ほかに {count} 問"
 }

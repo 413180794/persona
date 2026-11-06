@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -959,10 +960,10 @@ func TestSnapshotScheduleTellsMisses(t *testing.T) {
 	}
 	sc.mu.Unlock()
 
-	_, routines, misses, total := h.snapshotSchedule(context.Background(), loc, now)
-	if len(routines) != 2 || routines[0].Rule != "工作日 09:00" || !strings.HasSuffix(routines[0].Last, "成功") ||
-		!strings.Contains(routines[1].Last, "失败：API Error: 503") {
-		t.Fatalf("routines: %+v", routines)
+	_, routines, routinesTotal, misses, total := h.snapshotSchedule(context.Background(), loc, now)
+	if len(routines) != 2 || routinesTotal != 2 || routines[0].Rule != "工作日 09:00" || routines[0].LastStatus != runOK ||
+		routines[1].LastStatus != runFailed || !strings.Contains(routines[1].LastWhy, "API Error: 503") {
+		t.Fatalf("routines: %+v (%d)", routines, routinesTotal)
 	}
 	if total != 8 || len(misses) != 6 {
 		t.Fatalf("misses: %d of %d, want 6 of 8 (the one before yesterday 18:00 left out)", len(misses), total)
@@ -970,13 +971,52 @@ func TestSnapshotScheduleTellsMisses(t *testing.T) {
 	if !misses[0].Skipped || misses[0].Label != "值守" {
 		t.Fatalf("newest first: %+v", misses[0])
 	}
-	text := prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "Asia/Shanghai", Routines: routines, Missed: misses, MissedTotal: total})
-	if !strings.Contains(text, "没成功的定时任务") || !strings.Contains(text, "值守跳过了") || !strings.Contains(text, "等 8 次") {
+	text := prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "Asia/Shanghai", Routines: routines, RoutinesTotal: routinesTotal,
+		Missed: misses, MissedTotal: total})
+	if !strings.Contains(text, "没成功的定时任务") || !strings.Contains(text, "值守跳过了") || !strings.Contains(text, "等 8 次") ||
+		!strings.Contains(text, "早报（工作日 09:00），上次11-04 09:30 成功") || !strings.Contains(text, "上次11-05 02:30 失败：API Error: 503") {
 		t.Fatalf("snapshot: %s", text)
 	}
 	for _, r := range misses {
 		if len([]rune(r.Why)) > 61 {
 			t.Fatalf("a reason is kept short: %q", r.Why)
 		}
+	}
+}
+
+// Runs are kept in the order they ended and At is when they started: a long 17:59 run recorded at 18:05 sits after an
+// 18:01 failure, and must not hide it. More than eight daily tasks say how many there are (#4124 review).
+func TestSnapshotScheduleLateRecordedRunAndTotals(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	now := time.Date(2026, 11, 5, 8, 30, 0, 0, loc)
+	at := func(d, hh, mm int) time.Time { return time.Date(2026, 11, d, hh, mm, 0, 0, loc) }
+	var tasks []Task
+	for i := 0; i < 10; i++ {
+		tasks = append(tasks, Task{ID: fmt.Sprintf("d%d", i), Title: fmt.Sprintf("日报%d", i), Repeat: repeatDaily, Time: "09:00", Enabled: true})
+	}
+	setTasks(h, tasks...)
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	sc.runs = []ScheduleRun{
+		{RefID: "x", Title: "巡检", At: at(4, 18, 1), Status: runFailed, Error: "18:01 的失败"},        // ended first
+		{RefID: "y", Title: "长任务", At: at(4, 17, 59), Status: runOK},                              // started before 18:00, recorded later
+		{RefID: "z", Title: "夜里", At: at(5, 2, 0), Status: runSkipped, Error: "Persona 停机，错过了时间"}, // newest
+	}
+	sc.mu.Unlock()
+
+	_, routines, routinesTotal, misses, total := h.snapshotSchedule(context.Background(), loc, now)
+	if len(routines) != 8 || routinesTotal != 10 {
+		t.Fatalf("daily tasks: %d shown of %d, want 8 of 10", len(routines), routinesTotal)
+	}
+	if total != 2 || len(misses) != 2 || misses[0].Label != "夜里" || misses[1].Label != "巡检" {
+		t.Fatalf("misses: %+v (%d), want the 02:00 skip then the 18:01 failure", misses, total)
+	}
+	text := prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "Asia/Shanghai", Routines: routines, RoutinesTotal: routinesTotal,
+		Missed: misses, MissedTotal: total})
+	if !strings.Contains(text, "等 10 个") {
+		t.Fatalf("snapshot says how many daily tasks there are: %s", text)
 	}
 }

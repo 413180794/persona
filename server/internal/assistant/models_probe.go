@@ -173,20 +173,29 @@ func pt(l i18n.Lang, key string, args ...i18n.Args) string {
 	return i18n.T(l, "assistant-models_probe."+key, args...)
 }
 
-// failure is what went wrong, said for a person (in ctx's language): the status first, then what the gateway said (redacted, clipped).
-func (t probeTarget) failure(ctx context.Context, res *http.Response, err error) string {
+// probeCodeRegionBlocked is the code of a failure that is Anthropic refusing the network's region before looking at
+// the key (#4482): no key fixes it, another vendor does.
+const probeCodeRegionBlocked = "region_blocked"
+
+// failure is what went wrong, said for a person (in ctx's language): the status first, then what the gateway said
+// (redacted, clipped); code is set for the failures a client can do more about (probeCodeRegionBlocked).
+func (t probeTarget) failure(ctx context.Context, res *http.Response, err error) (msg, code string) {
 	l := i18n.From(ctx)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
-			return pt(l, "timeout", i18n.Args{"seconds": int(probeTimeout / time.Second)})
+			return pt(l, "timeout", i18n.Args{"seconds": int(probeTimeout / time.Second)}), ""
 		}
 		var uerr *url.Error
 		if errors.As(err, &uerr) {
 			err = uerr.Err // the URL is the user's own; the cause is what helps
 		}
-		return clip(oneLine(t.redact(pt(l, "unreachable", i18n.Args{"error": err.Error()}))), 300)
+		return clip(oneLine(t.redact(pt(l, "unreachable", i18n.Args{"error": err.Error()}))), 300), ""
 	}
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+	if res.StatusCode == http.StatusForbidden && regionBlocked(raw, t.atAnthropic()) {
+		// The gateway's own words ("Request not allowed") only mislead here, so they are left out.
+		return pt(l, "region_blocked", i18n.Args{"vendors": regionOpenVendors(l)}), probeCodeRegionBlocked
+	}
 	said := gatewayMessage(raw)
 	var head string
 	switch res.StatusCode {
@@ -204,7 +213,44 @@ func (t probeTarget) failure(ctx context.Context, res *http.Response, err error)
 	if said != "" {
 		head = pt(l, "said", i18n.Args{"head": head, "said": said})
 	}
-	return clip(oneLine(t.redact(head)), 300)
+	return clip(oneLine(t.redact(head)), 300), ""
+}
+
+// atAnthropic: the target is Anthropic's own API (not a relay or another vendor).
+func (t probeTarget) atAnthropic() bool {
+	u, err := url.Parse(strings.TrimSpace(t.base))
+	return err == nil && strings.EqualFold(u.Hostname(), "api.anthropic.com")
+}
+
+// regionBlocked: a 403 body is Anthropic's region block, {"type":"error","error":{"type":"forbidden","message":
+// "Request not allowed"}}, sent before the key is looked at. A key without access is a permission_error with another
+// message, and other vendors' 403s say other things, so those keep the plain 403 text. Without the "forbidden" type
+// the bare phrase is generic, so it only counts when the target is Anthropic itself (anthropic).
+func regionBlocked(raw []byte, anthropic bool) bool {
+	var body struct {
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &body) != nil {
+		return false
+	}
+	typ := strings.ToLower(strings.TrimSpace(body.Error.Type))
+	return (typ == "forbidden" || typ == "" && anthropic) &&
+		strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(body.Error.Message), "."), "Request not allowed")
+}
+
+// regionOpenVendors names, in l, the built-in vendors that open without a VPN or a foreign card where Anthropic says
+// no (the presets whose region is not global), in the file's order.
+func regionOpenVendors(l i18n.Lang) string {
+	var names []string
+	for _, pr := range builtinLauncherPresets(l) {
+		if i := slices.IndexFunc(builtinPresets, func(b builtinPreset) bool { return b.ID == pr.ID }); i >= 0 && builtinPresets[i].Region != "global" {
+			names = append(names, pr.DisplayName)
+		}
+	}
+	return strings.Join(names, pt(l, "list_sep"))
 }
 
 // gatewayMessage is the error message in a gateway's answer ({"error":{"message"}}, {"error":"…"}, {"message"}), or
@@ -251,7 +297,11 @@ func (s *Service) providerTest(ctx context.Context, in probeInput) map[string]an
 	res, err := t.do(ctx, http.MethodPost, t.endpoint("messages"), bytes.NewReader(body))
 	out["ms"] = int(time.Since(started).Milliseconds())
 	if err != nil || res.StatusCode/100 != 2 {
-		out["error"] = t.failure(ctx, res, err)
+		msg, code := t.failure(ctx, res, err)
+		out["error"] = msg
+		if code != "" {
+			out["code"] = code
+		}
 	} else {
 		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64<<10)) // lets the connection be reused
 		out["ok"] = true
@@ -272,16 +322,25 @@ func (s *Service) providerDiscover(ctx context.Context, in probeInput) map[strin
 	}
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
+	// failed is fail with what failure says, and its code when it has one
+	failed := func(res *http.Response, err error) map[string]any {
+		msg, code := t.failure(ctx, res, err)
+		out := fail(msg)
+		if code != "" {
+			out["code"] = code
+		}
+		return out
+	}
 	res, err := t.do(ctx, http.MethodGet, t.endpoint("models"), nil)
 	if res != nil {
 		defer res.Body.Close()
 	}
 	if err != nil || res.StatusCode/100 != 2 {
-		return fail(t.failure(ctx, res, err))
+		return failed(res, err)
 	}
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 8<<20))
 	if err != nil {
-		return fail(t.failure(ctx, nil, err))
+		return failed(nil, err)
 	}
 	listed, ok := parseModelsList(raw)
 	if !ok {
