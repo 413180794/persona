@@ -939,14 +939,19 @@ func (s *Service) applyTodoRow(ctx context.Context, id string, row db.TodoRow, g
 	}
 	t.Title = row.Title
 	t.Notes = row.Notes
+	becameDone := t.DoneAt == nil && row.DoneAt != nil
 	t.DoneAt = row.DoneAt
 	t.StartError = row.StartError
 	t.DoneBy, t.DoneReason, t.ReopenedAt = row.DoneBy, row.DoneReason, row.ReopenedAt
 	t.UpdatedAt = row.UpdatedAt
+	var doneKeys [][2]string
 	for _, a := range t.Agents {
 		if a.ReleasedAt == nil && a.DismissedAt == nil {
 			key := [2]string{a.MachineID, a.SessionID}
 			if t.DoneAt != nil {
+				if becameDone && s.todos.activeBySession[key] == t.ID {
+					doneKeys = append(doneKeys, key) // its pending wake and work card are withdrawn with the todo
+				}
 				delete(s.todos.activeBySession, key)
 			} else {
 				s.todos.activeBySession[key] = t.ID
@@ -958,6 +963,9 @@ func (s *Service) applyTodoRow(ctx context.Context, id string, row db.TodoRow, g
 
 	s.linksChanged(ctx)
 	s.todosChanged(ctx)
+	if len(doneKeys) > 0 {
+		s.retireTodoWork(doneKeys...)
+	}
 	return out, true
 }
 
@@ -1225,6 +1233,7 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 	}
 	s.todos.mu.Lock()
 	t := s.todos.todos[id]
+	var failKeys [][2]string
 	if t != nil {
 		if t.DoneAt == nil {
 			t.DoneAt = &doneAt
@@ -1234,6 +1243,7 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 		for _, a := range t.Agents {
 			key := [2]string{a.MachineID, a.SessionID}
 			if s.todos.activeBySession[key] == id {
+				failKeys = append(failKeys, key) // its pending wake and work card are withdrawn with the todo
 				delete(s.todos.activeBySession, key)
 			}
 		}
@@ -1241,6 +1251,9 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 	s.todos.mu.Unlock()
 	if t == nil {
 		return db.ErrTodoNotFound
+	}
+	if len(failKeys) > 0 {
+		s.retireTodoWork(failKeys...)
 	}
 	s.linksChanged(ctx)
 	s.todosChanged(ctx)

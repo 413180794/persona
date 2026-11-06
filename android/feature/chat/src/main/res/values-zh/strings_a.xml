@@ -250,6 +250,7 @@
         <item quantity="other">没开 · %1$d 个任务</item>
     </plurals>
     <string name="chat_tasks_plan_task_failed">「%1$s」没开起来：%2$s</string>
+    <string name="chat_tasks_plan_reason_unknown">原因不明</string>
     <plurals name="chat_tasks_plan_split">
         <item quantity="other">拆成 %1$d 件事，这样开</item>
     </plurals>

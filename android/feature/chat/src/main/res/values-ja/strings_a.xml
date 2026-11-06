@@ -250,6 +250,7 @@
         <item quantity="other">未開始・%1$d件のタスク</item>
     </plurals>
     <string name="chat_tasks_plan_task_failed">「%1$s」を開始できませんでした：%2$s</string>
+    <string name="chat_tasks_plan_reason_unknown">原因不明</string>
     <plurals name="chat_tasks_plan_split">
         <item quantity="other">%1$d件に分けて、こう始めます</item>
     </plurals>

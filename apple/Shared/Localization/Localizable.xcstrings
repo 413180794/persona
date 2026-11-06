@@ -13813,6 +13813,28 @@
         }
       }
     },
+    "「%@」暂时连不上，下面是较早的数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach “%@”; showing older data"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」に接続できません。古いデータを表示しています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」暂时连不上，下面是较早的数据"
+          }
+        }
+      }
+    },
     "「%@」改成了%@": {
       "localizations": {
         "zh-Hans": {
@@ -14731,6 +14753,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "一段对话"
+          }
+        }
+      }
+    },
+    "一组 hub 暂时连不上，下面是较早的数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach a hub group; showing older data"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub グループに接続できません。古いデータを表示しています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一组 hub 暂时连不上，下面是较早的数据"
           }
         }
       }

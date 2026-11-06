@@ -260,16 +260,14 @@ func (h *Hub) pairContext(parent context.Context, p principal) (context.Context,
 	return ctx, cancel
 }
 
-func (h *Hub) notifyPairing(name string) {
+// notifyPairing tells the devices a new credential was made; credential is its id (what 撤销 revokes).
+func (h *Hub) notifyPairing(name, credential string) {
 	if !h.push.ready() {
 		h.logf("new device paired: %q (push unavailable)", name)
 		return
 	}
 	h.push.sendLocalized(func(l i18n.Lang) map[string]any {
-		return map[string]any{"aps": map[string]any{
-			"alert": map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.new_device", i18n.Args{"name": name})},
-			"sound": "default",
-		}}
+		return devicePairedPayload(l, name, credential)
 	}, "", nil)
 }
 

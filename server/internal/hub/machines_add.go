@@ -346,20 +346,61 @@ func (h *Hub) notifyComputerCode(by principal, machine string) {
 	if mc := h.cfgEntry(machine); mc != nil && mc.Name != "" {
 		name = mc.Name
 	}
-	device := by.Name
-	if device == "" {
-		device = by.ID
-	}
 	if !h.push.ready() {
-		h.logf("device %q (%s) made a pairing code for computer %q (push unavailable)", device, by.ID, machine)
+		h.logf("device %q (%s) made a pairing code for computer %q (push unavailable)", by.Name, by.ID, machine)
 		return
 	}
 	h.push.sendBuilt(func(l i18n.Lang) map[string]any {
-		return map[string]any{"aps": map[string]any{
-			"alert": map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.computer_code", i18n.Args{"device": device, "name": name})},
-			"sound": "default",
-		}}
+		device := by.Name
+		if device == "" { // never the credential id: ids only go in `pair`
+			device = i18n.T(l, "hub-pairing.some_device")
+		}
+		return computerCodePayload(l, device, name, by.ID, machine)
 	}, "", "alert", "10", func(d Device) bool { return d.Credential != by.ID && d.CredentialID != by.ID })
+}
+
+// Pairing receipts (docs/protocol.md「配对的回执推送」): aps.category picks the notification's buttons
+// (不是你？撤销, 是我的电脑 / 不是), and the ids those buttons act on are only in `pair`, never in the alert text.
+const (
+	pairCategoryReceipt = "pair_receipt"
+	pairCategoryJoining = "computer_joining"
+)
+
+// computerCodePayload is the receipt for a code a device made for a computer: device_id is the issuing device's
+// credential id (DELETE /api/v1/auth/tokens/{id}), machine the computer's id (POST /api/v1/machines/{id}/reject).
+func computerCodePayload(l i18n.Lang, device, name, credential, machine string) map[string]any {
+	return map[string]any{
+		"aps": map[string]any{
+			"alert":    map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.computer_code", i18n.Args{"device": device, "name": name})},
+			"sound":    "default",
+			"category": pairCategoryReceipt,
+		},
+		"pair": map[string]any{"kind": "computer_code", "device_id": credential, "machine": machine},
+	}
+}
+
+// computerJoiningPayload asks whether a pending computer that just traded its code is the user's (confirm / reject).
+func computerJoiningPayload(l i18n.Lang, name, machine string) map[string]any {
+	return map[string]any{
+		"aps": map[string]any{
+			"alert":    map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.computer_joining", i18n.Args{"name": name})},
+			"sound":    "default",
+			"category": pairCategoryJoining,
+		},
+		"pair": map[string]any{"kind": "computer_joining", "machine": machine},
+	}
+}
+
+// devicePairedPayload is the receipt for a new credential: device_id is its id, the one to revoke.
+func devicePairedPayload(l i18n.Lang, name, credential string) map[string]any {
+	return map[string]any{
+		"aps": map[string]any{
+			"alert":    map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.new_device", i18n.Args{"name": name})},
+			"sound":    "default",
+			"category": pairCategoryReceipt,
+		},
+		"pair": map[string]any{"kind": "device", "device_id": credential},
+	}
 }
 
 // notifyComputerJoining tells the devices a pending computer's Persona Link just traded its code: it is the one to
@@ -374,9 +415,6 @@ func (h *Hub) notifyComputerJoining(machine string) {
 		return
 	}
 	h.push.sendLocalized(func(l i18n.Lang) map[string]any {
-		return map[string]any{"aps": map[string]any{
-			"alert": map[string]any{"title": "Persona", "body": i18n.T(l, "hub-pairing.computer_joining", i18n.Args{"name": name})},
-			"sound": "default",
-		}}
+		return computerJoiningPayload(l, name, machine)
 	}, "", nil)
 }

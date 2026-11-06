@@ -220,6 +220,7 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 	s.record(ix)
 	if back {
 		s.show(ix) // pushed before its node's connection ended (#4252)
+		go s.feishuCardBack(ix)
 	} else {
 		s.announce(ix)
 	}
@@ -1063,6 +1064,7 @@ func (s *Service) syncCodexInteractions(machine string, params json.RawMessage) 
 		s.record(ix)
 		if quiet[ix.ID] {
 			s.show(ix)
+			go s.feishuCardBack(ix) // listed again by a reconnected node: its Feishu card asks again
 		} else {
 			s.announce(ix)
 		}
@@ -1438,6 +1440,7 @@ func (s *Service) cancelMachineInteractions(machineID string) {
 		}
 	}
 	s.fleet.mu.Unlock()
+	s.feishuDetach(ids)
 	for _, id := range ids {
 		s.finishInteraction(id)
 	}

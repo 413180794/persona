@@ -558,6 +558,33 @@ func (v *workView) isMuted(machine, sid string) bool {
 
 // ---- turns ----
 
+// retireTodoWork withdraws the manager's pending follow-ups for the agents of a todo that just ended (completed or a
+// failed start): the scheduled wake — one postponed while the machine was offline included — and the open work card
+// are cleared, so neither can wake the finished agent nor let a card answer back into the finished turn. The turn's
+// own work state is kept, as workStarted keeps it: with no wake and no card the tick never acts on the entry, and
+// triage never redoes a turn it already triaged.
+func (s *Service) retireTodoWork(keys ...[2]string) {
+	now := time.Now().UTC()
+	for _, k := range keys {
+		s.work.mu.Lock()
+		s.work.init()
+		e, ok := s.work.entries[k]
+		if !ok || (e.WakeAt == nil && e.InteractionID == "") {
+			s.work.mu.Unlock()
+			continue
+		}
+		if e.InteractionID != "" {
+			delete(s.work.cards, e.InteractionID)
+		}
+		e.WakeAt, e.Work.WakeAt, e.InteractionID, e.Work.InteractionID = nil, nil, "", ""
+		e.UpdatedAt = now
+		saved := *e
+		s.work.mu.Unlock()
+		s.saveWork(saved)
+		s.publishSoon()
+	}
+}
+
 // workStarted: a session began working (again). Whatever the manager was going to do for its last turn is off; a card
 // for it is withdrawn. How long the turn waited is recorded.
 func (s *Service) workStarted(ctx context.Context, machine, sid string, now time.Time) {

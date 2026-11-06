@@ -388,7 +388,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 		if kind == "link" && h.machinePending(machine) {
 			h.notifyComputerJoining(machine) // the one to confirm (machines_add.go)
 		} else {
-			h.notifyPairing(name) // also when it replaced one: a credential was still made
+			h.notifyPairing(name, dt.ID) // also when it replaced one: a credential was still made
 		}
 		resp := map[string]any{"id": dt.ID, "token": tok, "role": role, "name": name, "machine": machine}
 		if replaced != "" {

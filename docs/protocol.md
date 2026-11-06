@@ -144,6 +144,19 @@ jarvis://pair?url=<兼容地址>&token=<临时 token>&hub=<hub_id>&fp=<指纹>&t
 
 - 回执：设备出了电脑的码，给**其他**已配对设备推一条「<设备> 给电脑「<名字>」出了一个配对码」；待确认的电脑的 Persona Link 兑换了码，给所有设备推「新电脑「<名字>」想加入：打开 App 确认是不是你的」
   （代替平常的「有新设备配对」）。出码的回执是安全回执，故意不看设备的通知偏好、静音和「电脑上开着就不推」。推送不可用时记日志。出码（`code`）、兑换（`redeem`）都写 `machine_audit`。
+- 回执推送的 payload（#4199）：三条都带 `aps.category` 和顶层的 `pair`，通知按钮要用的 id 只放在 `pair` 里，通知文案里不放 id 和地址
+  （出码的设备没有名字时文案写「一台设备」，不写凭据 id）：
+
+  | 什么时候 | `aps.category` | `pair` |
+  | --- | --- | --- |
+  | 设备给电脑出码（推给其他设备） | `pair_receipt` | `{"kind":"computer_code","device_id":"<出码设备的凭据 id>","machine":"<电脑 id>"}` |
+  | 待确认的电脑兑换了码（推给所有设备） | `computer_joining` | `{"kind":"computer_joining","machine":"<电脑 id>"}` |
+  | 新凭据（新设备、已确认电脑的 Persona Link）配对（推给所有设备） | `pair_receipt` | `{"kind":"device","device_id":"<新凭据的 id>"}` |
+
+  客户端按钮：`pair_receipt` 的「不是你？撤销」在 `kind: device` 时 `DELETE /api/v1/auth/tokens/{device_id}`，`kind: computer_code` 时 `POST /api/v1/machines/{machine}/reject`
+  （电脑已经确认过时 409 `not_pending`，打开机器详情）；`computer_joining` 的「是我的电脑」/「不是」调 `…/confirm` / `…/reject`。经推送中继时 `category` 和 `pair` 和其余明文一起加密
+  （[push-relay.md](push-relay.md)「加密」），中继看不到；通知服务扩展解密后换上 category、把 `pair` 留在 `userInfo` 里。老 hub 没有这两个字段，客户端当普通通知显示。
+  通知上的按钮各端还没做（iOS / Mac 在 #4199 里接着做）。
 
 ### 候选地址
 

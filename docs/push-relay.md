@@ -31,7 +31,7 @@ hub ──(HPKE 密文 + 授权凭据)──▶ 中继 ──(APNs key)──▶
 - HPKE（RFC 9180）base 模式：DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM，`info = "jarvis push v1"`。
   Go 用标准库 `crypto/hpke`，iOS 用 CryptoKit `HPKE`（`P256_SHA256_AES_GCM_256`）。密文 = `enc`（65 字节）‖ AEAD 输出，base64 放进推送的 `e` 字段。
 - 明文就是直连时 hub 会发的那份 JSON（`aps.alert` 的标题 / 副标题 / 正文、`category`、`thread-id`、`interruption-level`、
-  `interaction_id` / `machine_id` / `session_id`、`jarvis_wake`），加一个 `iat`（Unix 秒）。
+  `interaction_id` / `machine_id` / `session_id`、配对回执的 `pair`、`jarvis_wake`），加一个 `iat`（Unix 秒）。
 - 手机的私钥：`P256.KeyAgreement.PrivateKey`，存在 App 和通知服务扩展共用的钥匙串访问组里，`AfterFirstUnlockThisDeviceOnly`
   （开机后解锁过一次，锁屏时扩展也能读；不进 iCloud 备份，换手机重新生成）。第一次需要时生成，之后不变。
 

@@ -79,7 +79,8 @@ type feishuBook struct {
 	mu       sync.Mutex
 	loaded   bool
 	st       botState
-	cards    map[string]botCard // interaction id -> the card asking it
+	cards    map[string]botCard      // interaction id -> the card asking it
+	detached map[string]detachedCard // interaction id -> its card closed when its node went away (feishuDetach)
 	status   *FeishuStatus
 	statusAt time.Time
 	now      func() time.Time     // tests

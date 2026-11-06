@@ -262,6 +262,7 @@
         <item quantity="other">Not started · %1$d tasks</item>
     </plurals>
     <string name="chat_tasks_plan_task_failed">“%1$s” didn\'t start: %2$s</string>
+    <string name="chat_tasks_plan_reason_unknown">unknown reason</string>
     <plurals name="chat_tasks_plan_split">
         <item quantity="one">%1$d task, started like this</item>
         <item quantity="other">Split into %1$d tasks, started like this</item>

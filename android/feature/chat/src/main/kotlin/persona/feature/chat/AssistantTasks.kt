@@ -254,7 +254,9 @@ private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
                 plan.tasks.size, plan.tasks.size),
                 style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
             plan.tasks.filter { it.error != null }.forEach {
-                Text(stringResource(R.string.chat_tasks_plan_task_failed, it.title, it.error.orEmpty()), style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text)
+                // A blank reason from the hub says so instead of ending on the colon (#4498, iOS #4138).
+                val reason = it.error.orEmpty().trim().ifEmpty { stringResource(R.string.chat_tasks_plan_reason_unknown) }
+                Text(stringResource(R.string.chat_tasks_plan_task_failed, it.title, reason), style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text)
             }
         }
         return

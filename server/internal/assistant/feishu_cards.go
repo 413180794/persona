@@ -138,6 +138,96 @@ func (s *Service) feishuInteractionDone(ix proto.Interaction, how string) {
 	}()
 }
 
+// detachedCard is a Feishu card closed because its node's connection ended (cancelMachineInteractions): the same card
+// read again once the node is back opens it again (feishuCardBack). closed is shut once the close went out, so the
+// reopening lands after it.
+type detachedCard struct {
+	card   botCard
+	at     time.Time
+	closed chan struct{}
+}
+
+// feishuDetach: the cards ids are about to end because their node went away. Their Feishu cards say 「已结束」 as any
+// ended card's, and are kept for resumeGrace in case the same card comes back (#4583).
+func (s *Service) feishuDetach(ids []string) {
+	b := &s.fbot
+	b.mu.Lock()
+	now := b.clock()
+	for id, d := range b.detached {
+		if now.Sub(d.at) > resumeGrace {
+			delete(b.detached, id)
+		}
+	}
+	var closing []detachedCard
+	for _, id := range ids {
+		c, ok := b.cards[id]
+		if !ok || c.MessageID == "" {
+			continue
+		}
+		delete(b.cards, id) // closed here, not again by feishuInteractionDone
+		if b.detached == nil {
+			b.detached = map[string]detachedCard{}
+		}
+		d := detachedCard{card: c, at: now, closed: make(chan struct{})}
+		b.detached[id] = d
+		closing = append(closing, d)
+	}
+	b.mu.Unlock()
+	for _, d := range closing {
+		go func() {
+			defer close(d.closed)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			s.botCardDone(ctx, d.card.MessageID, d.card.Ix, i18n.T(s.botLang(ctx), "assistant-channels.ended"))
+		}()
+	}
+}
+
+// feishuCardBack: ix is a card back on the apps after its node reconnected (shown, not announced). Its Feishu card,
+// closed when the node went away, asks it again, in the same message and without a new one. A card that did not come
+// back (answered, moved on, away past resumeGrace) stays closed.
+func (s *Service) feishuCardBack(ix proto.Interaction) {
+	b := &s.fbot
+	b.mu.Lock()
+	d, ok := b.detached[ix.ID]
+	delete(b.detached, ix.ID)
+	_, posted := b.cards[ix.ID]
+	if !ok || posted || b.clock().Sub(d.at) > resumeGrace {
+		b.mu.Unlock()
+		return
+	}
+	if b.cards == nil {
+		b.cards = map[string]botCard{}
+	}
+	b.cards[ix.ID] = botCard{MessageID: d.card.MessageID, Ix: ix}
+	b.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	select {
+	case <-d.closed:
+	case <-ctx.Done():
+		return
+	}
+	if err := s.botUpdateCard(ctx, d.card.MessageID, s.interactionCard(ctx, ix)); err != nil {
+		s.logf("bots: reopen card %s: %v", ix.ID, err)
+		b.mu.Lock()
+		if c, still := b.cards[ix.ID]; still && c.MessageID == d.card.MessageID {
+			delete(b.cards, ix.ID)
+		}
+		b.mu.Unlock()
+		return
+	}
+	b.mu.Lock()
+	_, still := b.cards[ix.ID]
+	b.mu.Unlock()
+	if _, pending := s.pendingIx(ix.ID); !still || !pending { // answered or ended meanwhile: it says so again
+		b.mu.Lock()
+		delete(b.cards, ix.ID)
+		b.mu.Unlock()
+		s.botCardDone(ctx, d.card.MessageID, ix, i18n.T(s.botLang(ctx), "assistant-feishu_cards.handled"))
+	}
+}
+
 func (s *Service) botCardDone(ctx context.Context, messageID string, ix proto.Interaction, how string) {
 	if err := s.botUpdateCard(ctx, messageID, s.answeredCard(ctx, ix, how)); err != nil {
 		s.logf("bots: close card %s: %v", ix.ID, err)

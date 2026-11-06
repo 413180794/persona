@@ -38,7 +38,16 @@ final class WatchModel {
     var inbox: [InboxItem] = []
     var machines: [Machine] = []
     var error: String?
+    /// Failed groups whose earlier cards and agents stay on screen: each gets a line at the top (#4369).
+    var groupFailures: [String] = []
     var lastUpdate: Date?
+
+    /// Each group's last successful fetch, kept in memory: a group whose refresh failed keeps it instead of being
+    /// blanked by the groups that answered (#4369).
+    @ObservationIgnored private var groupData: [String: WatchGroupData] = [:]
+    /// Interaction uids the wrist already buzzed for, oldest first; persisted across launches and group outages.
+    @ObservationIgnored private var seenInteractionUids: [String]
+    private static let seenUidsKey = "seenInteractionUids"
 
     /// The default (or first) group's client: the inbox (each hub has its own; the watch shows the first group's).
     var api: APIClient? { groups.first.flatMap { api($0) } }
@@ -46,6 +55,7 @@ final class WatchModel {
     func api(_ group: String) -> APIClient? { configs[group].map { APIClient(config: $0, group: group) } }
 
     init() {
+        seenInteractionUids = UserDefaults.standard.stringArray(forKey: Self.seenUidsKey) ?? []
         if let data = UserDefaults.standard.data(forKey: "configs"), let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
             (configs, names, missing) = (all.configs, all.names, all.missing ?? [])
         } else if let data = UserDefaults.standard.data(forKey: "config"), let c = try? JSONDecoder().decode(ServerConfig.self, from: data) {
@@ -77,6 +87,15 @@ final class WatchModel {
         }
         WatchSync.shared.onSummary = { [weak self] s in
             guard let self else { return }
+            // The phone's summary is every group merged; split it back so a later failed direct fetch keeps the right
+            // group's data, and take the phone's word that the groups it covers are reachable (#4369).
+            var byGroup: [String: WatchGroupData] = [:]
+            for x in s.sessions { byGroup[x.group, default: .empty].sessions.append(x) }
+            for x in s.interactions { byGroup[x.group, default: .empty].interactions.append(x) }
+            for x in s.machines { byGroup[x.group, default: .empty].machines.append(x) }
+            self.groupData = WatchGroupRefresh.mergeGroups(old: self.groupData, new: byGroup, failures: []).data
+                .filter { self.configs[$0.key] != nil }
+            self.groupFailures = []
             self.apply(sessions: s.sessions, interactions: s.interactions, machines: s.machines)
             if let inbox = s.inbox { self.applyInbox(inbox) }
         }
@@ -88,14 +107,26 @@ final class WatchModel {
     private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
         // Agents of quiet tasks and their questions are the main conversation's to tell (#1731), by the hub's word.
         let (sessions, interactions) = QuietTasks.leavingOut(sessions: sessions, interactions: interactions, quiet: \.quiet)
-        let hadNew = interactions.contains { ix in !self.interactions.contains { $0.uid == ix.uid } }
+        // Only a card seen for the first time buzzes: one that vanished with a failed group and came back with it is
+        // already in the persisted record (#4369).
+        let freshUids = WatchGroupRefresh.newHapticUids(seen: Set(seenInteractionUids), current: interactions)
         func rank(_ s: Session) -> Int { s.state.priority }
         self.sessions = sessions.filter { $0.state.isLive && !$0.assistant || $0.state == .needsYou || $0.state == .working }
             .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.sortDate > $1.sortDate }
         self.interactions = interactions
         if !machines.isEmpty { self.machines = machines }
         lastUpdate = .now
-        if hadNew { WKInterfaceDevice.current().play(.notification) }
+        guard !freshUids.isEmpty else { return }
+        seenInteractionUids = WatchGroupRefresh.rememberSeen(seenInteractionUids, adding: freshUids)
+        UserDefaults.standard.set(seenInteractionUids, forKey: Self.seenUidsKey)
+        WKInterfaceDevice.current().play(.notification)
+    }
+
+    /// A card answered or ended is no longer worth remembering: its uid can buzz again if the hub ever reuses it.
+    private func forgetSeen(_ uid: String) {
+        guard seenInteractionUids.contains(uid) else { return }
+        seenInteractionUids.removeAll { $0 == uid }
+        UserDefaults.standard.set(seenInteractionUids, forKey: Self.seenUidsKey)
     }
 
     private func applyInbox(_ items: [InboxItem]) {
@@ -108,26 +139,41 @@ final class WatchModel {
     /// Every group's agents, requests and machines (each group's hub answers for its own), merged.
     func refresh() async {
         guard let first = api else { return }
-        var ss: [Session] = [], ii: [Interaction] = [], mm: [Machine] = []
+        var fetched: [String: WatchGroupData] = [:]
+        var failed: Set<String> = []
+        var attempted = 0
         var failure: Error?
         let multi = configs.count > 1
         for g in groups {
             guard let api = api(g) else { continue }
+            attempted += 1
             do {
                 async let s = api.sessions()
                 async let i = api.interactions()
                 async let m = api.machines()
                 let (a, b, c) = try await (s, i, m)
-                ss += a
-                ii += b
-                mm += multi ? c.map { var m = $0; m.groupLabel = names[g] ?? g; return m } : c
+                fetched[g] = WatchGroupData(sessions: a, interactions: b,
+                    machines: multi ? c.map { var m = $0; m.groupLabel = names[g] ?? g; return m } : c)
             } catch {
+                failed.insert(g)
                 failure = error
             }
         }
-        if failure == nil || !ss.isEmpty || !mm.isEmpty { apply(sessions: ss, interactions: ii, machines: mm) }
+        // A failed group keeps its last successful data; only a group that answered replaces it (#4369). Groups the
+        // watch no longer holds a credential for are dropped everywhere.
+        let merged = WatchGroupRefresh.mergeGroups(old: groupData, new: fetched, failures: failed)
+        groupData = merged.data.filter { configs[$0.key] != nil }
+        // Every reachable group failing keeps the whole-page offline card (retry, last-updated line); only a partial
+        // failure gets the per-group "earlier data" lines.
+        let allFailed = failed.count == attempted
+        groupFailures = allFailed ? [] : merged.staleFailed.filter { configs[$0] != nil }
+        if !fetched.isEmpty {
+            let kept = groups.compactMap { groupData[$0] }
+            apply(sessions: kept.flatMap(\.sessions), interactions: kept.flatMap(\.interactions),
+                  machines: kept.flatMap(\.machines))
+        }
         if let xx = try? await first.inbox(connectors: true) { applyInbox(xx) }
-        error = failure.flatMap { ss.isEmpty && mm.isEmpty ? $0.watchShown : nil }
+        error = failure.flatMap { allFailed ? $0.watchShown : nil }
     }
 
     private func poll() async {
@@ -143,10 +189,12 @@ final class WatchModel {
         do {
             _ = try await api.resolve(ix.id, r)
             interactions.removeAll { $0.uid == ix.uid }
+            forgetSeen(ix.uid)
             WKInterfaceDevice.current().play(.success)
         } catch let e as APIError where e.status == 410 {
             // Already ended on server: remove interaction cleanly without error
             interactions.removeAll { $0.uid == ix.uid }
+            forgetSeen(ix.uid)
             WKInterfaceDevice.current().play(.directionDown)
         } catch {
             self.error = error.watchShown
@@ -232,6 +280,22 @@ struct WatchRootView: View {
                 WatchPairView()
             } else {
                 List {
+                    // A group this refresh could not reach: its cards and agents below are its earlier ones (#4369).
+                    if !model.groupFailures.isEmpty {
+                        Section {
+                            ForEach(model.groupFailures, id: \.self) { g in
+                                Label {
+                                    Text(model.names[g].flatMap { $0.isEmpty ? nil : $0 }
+                                         .map { String(localized: "「\($0)」暂时连不上，下面是较早的数据") }
+                                         ?? String(localized: "一组 hub 暂时连不上，下面是较早的数据"))
+                                        .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
+                                } icon: {
+                                    Image(systemName: Theme.Icon.offline).foregroundStyle(Theme.caution)
+                                }
+                                .watchCard()
+                            }
+                        }
+                    }
                     NavigationLink { WatchRecordingView() } label: {
                         Label("录音", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
                     }.watchCard()
