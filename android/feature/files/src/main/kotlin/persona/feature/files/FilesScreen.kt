@@ -77,6 +77,7 @@ fun SessionFilesScreen(
                     null -> FilesBrowser(state, controller, pane, { pane = it }, onBackToChat, onInsertPath)
                     is FileSelection.Commit -> CommitPage(top.hash, state, controller, back)
                     is FileSelection.CommitFile -> CommitFilePage(top, state, controller, back)
+                    is FileSelection.Compare -> ComparePage(top, state, controller, back)
                     else -> FilePreview(state, controller, images, onInsertPath, back)
                 }
             }

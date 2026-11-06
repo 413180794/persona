@@ -63,7 +63,11 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
             if (git.files.isEmpty()) item { JEmptyState(stringResource(R.string.files_git_clean), stringResource(R.string.files_git_clean_message)) }
             itemsIndexed(git.files, key = { _, it -> "file:${it.path}" }, contentType = { _, _ -> "change" }) { index, file ->
                 JGroupItem(GroupPosition.of(index, git.files.size)) {
-                    ChangeRow(file, stage = true) { controller.push(FileSelection.Diff(file, file.staged && !file.unstaged)) }
+                    ChangeRow(file, stage = true) {
+                        val staged = file.staged && !file.unstaged
+                        // A document or picture compares its two versions (#2805) when the hub hands out old ones.
+                        controller.push(if (comparable(controller, file)) compareChange(file, staged) else FileSelection.Diff(file, staged))
+                    }
                 }
             }
             item("history") { JSectionHeader(stringResource(R.string.files_git_history)) }
@@ -82,6 +86,9 @@ internal fun LazyListScope.gitBrowser(state: FilesState, controller: FilesContro
         }
     }
 }
+
+private fun comparable(controller: FilesController, file: SessionGitFile) =
+    !file.conflicted && DocumentCompare.kind(file.path) != null && controller.comparesVersions
 
 /** "Pull" (N behind) on the branch heading: a fast-forward pull only; "Pulling" and off while it runs. */
 @Composable
@@ -182,7 +189,9 @@ internal fun CommitPage(hash: String, state: FilesState, controller: FilesContro
                 if (show.files.isEmpty()) item { Notice(stringResource(R.string.files_git_commit_empty), padded = false) }
                 itemsIndexed(show.files, key = { _, it -> "file:${it.path}" }, contentType = { _, _ -> "change" }) { index, file ->
                     JGroupItem(GroupPosition.of(index, show.files.size)) {
-                        ChangeRow(file, stage = false) { controller.push(FileSelection.CommitFile(hash, file)) }
+                        ChangeRow(file, stage = false) {
+                            controller.push(if (comparable(controller, file)) compareCommit(hash, file) else FileSelection.CommitFile(hash, file))
+                        }
                     }
                 }
             }

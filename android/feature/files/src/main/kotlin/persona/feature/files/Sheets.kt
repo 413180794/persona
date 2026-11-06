@@ -90,7 +90,7 @@ internal object Delimited {
         var quoted = false
         fun endField() { row.add(field.toString()); field.setLength(0); quoted = false }
         fun endRow() { if (!(row.size == 1 && row[0].isEmpty())) out.add(row); row = ArrayList() }
-        var i = if (text.startsWith('﻿')) 1 else 0
+        var i = if (text.startsWith('\uFEFF')) 1 else 0
         while (i < text.length && out.size < maxRows) {
             val c = text[i++]
             if (inQuotes) {
@@ -156,8 +156,8 @@ internal object Xlsx {
         return parts.joinToString("/")
     }
 
-    /** The parts of the archive the reader uses (the XML under xl/), inflated. */
-    private fun unzip(bytes: ByteArray): Map<String, ByteArray> {
+    /** The parts of an Office archive a reader uses (the XML under [folder]), inflated; the comparing reads word/ and ppt/. */
+    internal fun unzip(bytes: ByteArray, folder: String = "xl/"): Map<String, ByteArray> {
         val out = HashMap<String, ByteArray>()
         var total = 0L
         try {
@@ -165,7 +165,7 @@ internal object Xlsx {
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
                     val entry = zip.nextEntry ?: break
-                    if (entry.isDirectory || !entry.name.startsWith("xl/") || !entry.name.endsWith(".xml") && !entry.name.endsWith(".rels")) continue
+                    if (entry.isDirectory || !entry.name.startsWith(folder) || !entry.name.endsWith(".xml") && !entry.name.endsWith(".rels")) continue
                     val data = ByteArrayOutputStream()
                     while (true) {
                         val n = zip.read(buffer)

@@ -185,6 +185,38 @@
         <item quantity="one">%1$s column</item>
         <item quantity="other">%1$s columns</item>
     </plurals>
+    <string name="files_compare_worktree">Working tree</string>
+    <string name="files_compare_index">Staged</string>
+    <string name="files_compare_before_commit">Before %1$s</string>
+    <string name="files_compare_versions_failed">Couldn\'t get the two versions</string>
+    <string name="files_compare_open_old">Open old</string>
+    <string name="files_compare_open_new">Open new</string>
+    <string name="files_compare_side_by_side">Side by side</string>
+    <string name="files_compare_slider">Slider</string>
+    <string name="files_compare_old">Old</string>
+    <string name="files_compare_new">New</string>
+    <string name="files_compare_not_in_version">This file isn\'t in this version</string>
+    <string name="files_compare_divider">Divider between old and new</string>
+    <string name="files_compare_failed">Couldn\'t compare</string>
+    <string name="files_compare_too_big">Too many changes to compare line by line</string>
+    <string name="files_compare_open_both">Open the old and new versions to look at them.</string>
+    <string name="files_compare_no_text_change">No text changes</string>
+    <string name="files_compare_no_text_change_detail">The change may be in formatting, images or layout. Open the old and new versions to look.</string>
+    <string name="files_compare_unreadable">Couldn\'t read the text of this file</string>
+    <string name="files_compare_too_big_file">The file is too large to compare on a phone once unzipped</string>
+    <string name="files_compare_pdf_unsupported">This phone\'s system can\'t read a PDF\'s text (it needs Android 15). Open the old and new versions to look.</string>
+    <string name="files_compare_page">Page %1$d</string>
+    <string name="files_compare_slide">Slide %1$d</string>
+    <string name="files_compare_sheet">Sheet “%1$s”</string>
+    <string name="files_compare_notes">Notes:</string>
+    <plurals name="files_compare_skipped">
+        <item quantity="one">… %1$d unchanged line</item>
+        <item quantity="other">… %1$d unchanged lines</item>
+    </plurals>
+    <plurals name="files_compare_summary">
+        <item quantity="one">+%1$d −%2$d lines · %3$d change (compared as text)</item>
+        <item quantity="other">+%1$d −%2$d lines · %3$d changes (compared as text)</item>
+    </plurals>
     <string name="files_image_loading">Loading the whole image…</string>
     <string name="files_pdf_loading">Loading the whole PDF…</string>
     <string name="files_video_loading">Loading video…</string>

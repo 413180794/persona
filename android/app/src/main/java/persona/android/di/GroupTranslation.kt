@@ -363,6 +363,9 @@ internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = source.stat(names.rawMachine(machineId), cwd, paths)
         override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =
             source.download(names.rawMachine(machineId), cwd, path, into)
+        override fun comparesVersions(machineId: String) = source.comparesVersions(names.rawMachine(machineId))
+        override suspend fun blob(machineId: String, cwd: String, path: String, rev: String) =
+            source.blob(names.rawMachine(machineId), cwd, path, rev)
         override suspend fun thumbnail(machineId: String, cwd: String, path: String, size: Int) =
             source.thumbnail(names.rawMachine(machineId), cwd, path, size)
         override suspend fun convertToPdf(machineId: String, cwd: String, path: String) = source.convertToPdf(names.rawMachine(machineId), cwd, path)

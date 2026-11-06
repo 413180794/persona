@@ -173,6 +173,38 @@
     <plurals name="files_sheet_columns">
         <item quantity="other">%1$s 列</item>
     </plurals>
+    <string name="files_compare_worktree">工作区</string>
+    <string name="files_compare_index">暂存区</string>
+    <string name="files_compare_before_commit">%1$s 之前</string>
+    <string name="files_compare_versions_failed">取不到这两个版本</string>
+    <string name="files_compare_open_old">打开旧版</string>
+    <string name="files_compare_open_new">打开新版</string>
+    <string name="files_compare_side_by_side">并排</string>
+    <string name="files_compare_slider">滑动</string>
+    <string name="files_compare_old">旧版</string>
+    <string name="files_compare_new">新版</string>
+    <string name="files_compare_not_in_version">这个版本里没有这个文件</string>
+    <string name="files_compare_divider">旧版和新版的分界</string>
+    <string name="files_compare_failed">比较不了</string>
+    <string name="files_compare_too_big">改动太多，没法逐行比较</string>
+    <string name="files_compare_open_both">分别打开旧版和新版看。</string>
+    <string name="files_compare_no_text_change">文字没有变化</string>
+    <string name="files_compare_no_text_change_detail">改的可能是格式、图片或排版：分别打开旧版和新版看。</string>
+    <string name="files_compare_unreadable">读不出这个文件的文字</string>
+    <string name="files_compare_too_big_file">文件解压后太大，手机上比较不了</string>
+    <string name="files_compare_pdf_unsupported">这台手机的系统读不出 PDF 的文字（需要 Android 15）：分别打开旧版和新版看。</string>
+    <string name="files_compare_page">第 %1$d 页</string>
+    <string name="files_compare_slide">第 %1$d 张幻灯片</string>
+    <string name="files_compare_sheet">工作表「%1$s」</string>
+    <string name="files_compare_notes">备注：</string>
+    <plurals name="files_compare_skipped">
+        <item quantity="one">… 未改动 %1$d 行</item>
+        <item quantity="other">… 未改动 %1$d 行</item>
+    </plurals>
+    <plurals name="files_compare_summary">
+        <item quantity="one">+%1$d −%2$d 行 · %3$d 处改动（按文字比较）</item>
+        <item quantity="other">+%1$d −%2$d 行 · %3$d 处改动（按文字比较）</item>
+    </plurals>
     <string name="files_image_loading">正在读取整张图片…</string>
     <string name="files_pdf_loading">正在读取整个 PDF…</string>
     <string name="files_video_loading">正在读取视频…</string>

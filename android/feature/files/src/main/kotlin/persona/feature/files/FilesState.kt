@@ -12,6 +12,9 @@ import kotlinx.coroutines.launch
 
 enum class FilesPane { Files, Git }
 
+/** The file on disk, in a [FileSelection.Compare]. */
+const val WORKTREE = "WORKTREE"
+
 /** A page shown over the browser. Pages stack: a commit's file opens over the commit, a linked file over its README. */
 sealed interface FileSelection {
     /** [line] (1-based): opened from a message's `path:12`, the text scrolls to that line and marks it. */
@@ -20,7 +23,24 @@ sealed interface FileSelection {
     data class Commit(val hash: String) : FileSelection
     /** One file of a commit: its part of the commit's diff (the commit is read once and kept). */
     data class CommitFile(val hash: String, val file: SessionGitFile) : FileSelection
+    /**
+     * A document's or picture's two versions side by side (#2805): [path] and [beforePath] (a rename's old name)
+     * relative to the repository's root; [before] / [after] are `HEAD`, `INDEX`, a commit, 「hash^」 or `WORKTREE`
+     * (the file on disk). [deleted]: gone from the working tree, so there is no new version to read.
+     */
+    data class Compare(val path: String, val beforePath: String, val before: String, val after: String, val deleted: Boolean = false,
+        /** The working-tree change it shows a half of; null for a commit's file. */
+        val change: SessionGitFile? = null) : FileSelection {
+        /** Staged and changed again: the page switches between 未暂存 and 已暂存, as the text diff does. */
+        val bothHalves: Boolean get() = change?.let { it.staged && it.unstaged } == true
+        val staged: Boolean get() = before == "HEAD" && after == "INDEX"
+    }
 }
+
+/** One version of a compared file: its revision and where it is on the machine; no [path]: not in that version. */
+data class CompareSide(val rev: String, val path: String?)
+
+data class CompareSides(val before: CompareSide, val after: CompareSide)
 
 data class FilesState(
     /** The top of the breadcrumb: the session's folder, or above it once the user went up. Absolute once listed. */
@@ -48,6 +68,8 @@ data class FilesState(
     val content: SessionFileContent? = null,
     val diff: SessionGitDiff? = null,
     val commit: SessionGitShow? = null,
+    /** The two versions of the file a [FileSelection.Compare] shows, once both are found. */
+    val compare: CompareSides? = null,
     val previewError: String? = null,
 ) {
     val selection: FileSelection? get() = stack.lastOrNull()
@@ -165,7 +187,7 @@ class FilesController(
     private fun browse(path: String, top: Boolean) {
         mutable.update {
             it.copy(root = if (top) path else it.root, stack = emptyList(), direct = false,
-                content = null, diff = null, commit = null, previewError = null)
+                content = null, diff = null, commit = null, compare = null, previewError = null)
         }
         previewJob?.cancel()
         directory(path)
@@ -292,7 +314,7 @@ class FilesController(
         val generation = ++previewGeneration
         val top = stack.lastOrNull()
         val kept = (top as? FileSelection.File)?.takeIf { !fresh }?.let { contents[it.path] }
-        mutable.update { it.copy(stack = stack, content = kept, diff = null, commit = null, previewError = null) }
+        mutable.update { it.copy(stack = stack, content = kept, diff = null, commit = null, compare = null, previewError = null) }
         if (top == null || kept != null) return
         val gitRoot = state.value.git?.root ?: cwd
         previewJob = scope.launch {
@@ -322,12 +344,27 @@ class FilesController(
                         val show = commit(gitRoot, top.hash)
                         if (generation == previewGeneration) mutable.update { it.copy(commit = show) }
                     }
+                    is FileSelection.Compare -> {
+                        val before = side(gitRoot, top.beforePath, top.before, gone = false)
+                        val after = side(gitRoot, top.path, top.after, gone = top.deleted)
+                        if (generation == previewGeneration) mutable.update { it.copy(compare = CompareSides(before, after)) }
+                    }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (generation == previewGeneration) mutable.update { it.copy(previewError = describe(error)) }
             }
         }
+    }
+
+    /** Whether this machine's hub hands out old versions: the Git page compares documents and pictures then. */
+    val comparesVersions: Boolean get() = api.comparesVersions(machineId)
+
+    /** A version on the machine: the tree's file as it is, or git's copy (`git/blob`) in the node's cache. */
+    private suspend fun side(root: String, path: String, rev: String, gone: Boolean): CompareSide = when {
+        gone -> CompareSide(rev, null)
+        rev == WORKTREE -> CompareSide(rev, joinRemotePath(root, path))
+        else -> api.blob(machineId, root, path, rev).let { CompareSide(rev, if (it.missing) null else it.path) }
     }
 
     private suspend fun commit(root: String, hash: String): SessionGitShow =

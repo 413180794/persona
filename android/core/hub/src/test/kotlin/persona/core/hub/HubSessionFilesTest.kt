@@ -51,6 +51,28 @@ class HubSessionFilesTest {
         catch (failure: HubFailure) { assertEquals(404, failure.status) }
     }
 
+    @Test fun aVersionOfAFileComesFromGitBlobWhenTheHubHasIt() = runBlocking {
+        val requests = mutableListOf<String>()
+        var body = """{"path":"/cache/blobs/ab12.png","size":10}"""
+        var features = emptySet<String>()
+        val respond: suspend (String) -> Response = { path ->
+            requests += path
+            Response.Builder().request(Request.Builder().url("https://example.com$path").build())
+                .protocol(Protocol.HTTP_1_1).code(200).message("response").body(body.toResponseBody()).build()
+        }
+        val api = HubSessionFiles(respond, features = { features })
+        assertFalse(api.comparesVersions("machine"))
+        features = setOf("git_blob")
+        assertTrue(api.comparesVersions("machine"))
+        assertEquals("/cache/blobs/ab12.png", api.blob("machine", "/workspace", "art/a b.png", "abc^").path)
+        val url = ("https://example.com" + requests.last()).toHttpUrl()
+        assertEquals("/api/v1/machines/machine/git/blob", url.encodedPath)
+        assertEquals("art/a b.png", url.queryParameter("path"))
+        assertEquals("abc^", url.queryParameter("rev"))
+        body = """{"missing":true}"""
+        assertTrue(api.blob("machine", "/workspace", "a.png", "HEAD").missing)
+    }
+
     @Test fun thumbnailsReturnThePictureAndNullWhenTheMachineCannotDrawIt(): Unit = runBlocking {
         val requests = mutableListOf<Pair<String, Long>>()
         var status = 200

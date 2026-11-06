@@ -190,6 +190,8 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = of(machineId).stat(machineId, cwd, paths)
         override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =
             of(machineId).download(machineId, cwd, path, into)
+        override fun comparesVersions(machineId: String) = stacks.of(machineId)?.files?.comparesVersions(machineId) == true
+        override suspend fun blob(machineId: String, cwd: String, path: String, rev: String) = of(machineId).blob(machineId, cwd, path, rev)
         override suspend fun thumbnail(machineId: String, cwd: String, path: String, size: Int) = of(machineId).thumbnail(machineId, cwd, path, size)
         override suspend fun convertToPdf(machineId: String, cwd: String, path: String) = of(machineId).convertToPdf(machineId, cwd, path)
     }

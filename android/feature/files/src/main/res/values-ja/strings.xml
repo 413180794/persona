@@ -173,6 +173,38 @@
     <plurals name="files_sheet_columns">
         <item quantity="other">%1$s列</item>
     </plurals>
+    <string name="files_compare_worktree">作業ツリー</string>
+    <string name="files_compare_index">ステージ</string>
+    <string name="files_compare_before_commit">%1$sより前</string>
+    <string name="files_compare_versions_failed">2つのバージョンを取得できません</string>
+    <string name="files_compare_open_old">旧版を開く</string>
+    <string name="files_compare_open_new">新版を開く</string>
+    <string name="files_compare_side_by_side">並べて表示</string>
+    <string name="files_compare_slider">スライダー</string>
+    <string name="files_compare_old">旧版</string>
+    <string name="files_compare_new">新版</string>
+    <string name="files_compare_not_in_version">このバージョンにはこのファイルがありません</string>
+    <string name="files_compare_divider">旧版と新版の境界</string>
+    <string name="files_compare_failed">比較できません</string>
+    <string name="files_compare_too_big">変更が多すぎて行ごとに比較できません</string>
+    <string name="files_compare_open_both">旧版と新版をそれぞれ開いて確認してください。</string>
+    <string name="files_compare_no_text_change">テキストに変更はありません</string>
+    <string name="files_compare_no_text_change_detail">書式、画像、レイアウトが変更された可能性があります。旧版と新版をそれぞれ開いて確認してください。</string>
+    <string name="files_compare_unreadable">このファイルのテキストを読み取れません</string>
+    <string name="files_compare_too_big_file">展開後のファイルが大きすぎて、スマートフォンでは比較できません</string>
+    <string name="files_compare_pdf_unsupported">この端末のシステムでは PDF のテキストを読み取れません（Android 15 が必要）。旧版と新版をそれぞれ開いて確認してください。</string>
+    <string name="files_compare_page">%1$dページ</string>
+    <string name="files_compare_slide">スライド%1$d</string>
+    <string name="files_compare_sheet">シート「%1$s」</string>
+    <string name="files_compare_notes">メモ：</string>
+    <plurals name="files_compare_skipped">
+        <item quantity="one">… 変更なし %1$d行</item>
+        <item quantity="other">… 変更なし %1$d行</item>
+    </plurals>
+    <plurals name="files_compare_summary">
+        <item quantity="one">+%1$d −%2$d行・%3$dか所の変更（テキストで比較）</item>
+        <item quantity="other">+%1$d −%2$d行・%3$dか所の変更（テキストで比較）</item>
+    </plurals>
     <string name="files_image_loading">画像全体を読み込み中…</string>
     <string name="files_pdf_loading">PDF 全体を読み込み中…</string>
     <string name="files_video_loading">動画を読み込み中…</string>

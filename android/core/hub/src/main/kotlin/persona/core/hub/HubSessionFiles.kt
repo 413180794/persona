@@ -30,11 +30,14 @@ class HubSessionFiles internal constructor(
     private val slow: suspend (String, Long) -> Response = { path, _ -> request(path) },
     /** A POST with a JSON body (git/pull); the hub waits up to 90 s on the machine for it. */
     private val post: suspend (String, String) -> Response = { _, _ -> throw UnsupportedOperationException("post") },
+    /** The hub's features from its last hello. */
+    private val features: () -> Set<String> = { emptySet() },
 ) : SessionFiles {
     constructor(connection: OkHttpHubConnection, decoding: CoroutineDispatcher = Dispatchers.Default) :
         this({ path -> connection.request(path, "GET", null) }, decoding, { path -> connection.request(path, "GET", null, buffered = false) },
             { path, seconds -> connection.request(path, "GET", null, readTimeoutSeconds = seconds) },
-            { path, body -> connection.request(path, "POST", body.toRequestBody(JSON), readTimeoutSeconds = 100) })
+            { path, body -> connection.request(path, "POST", body.toRequestBody(JSON), readTimeoutSeconds = 100) },
+            { connection.serverFeatures.value })
 
     companion object {
         /** Past the hub's 2 minutes for file/convert (the node gives LibreOffice 90 s), as agent creation waits 130 s. */
@@ -59,6 +62,10 @@ class HubSessionFiles internal constructor(
     }
     override suspend fun show(machineId: String, cwd: String, hash: String) =
         get<SessionGitShow>(machineId, "git/show", cwd, "hash" to hash)
+    override fun comparesVersions(machineId: String) = "git_blob" in features()
+    override suspend fun blob(machineId: String, cwd: String, path: String, rev: String) =
+        get<SessionGitBlob>(machineId, "git/blob", cwd, "path" to path, "rev" to rev)
+
     override suspend fun pull(machineId: String, cwd: String): SessionGitPull {
         require(machineId.isNotBlank() && cwd.isNotBlank())
         val path = HttpUrl.Builder().scheme("https").host("example.com")

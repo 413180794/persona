@@ -59,6 +59,11 @@ private class FakeMachine : SessionFiles {
         logFailing?.let { throw it }
         return SessionGitLog()
     }
+    override fun comparesVersions(machineId: String) = true
+    override suspend fun blob(machineId: String, cwd: String, path: String, rev: String): SessionGitBlob {
+        asked += "blob $rev $path"
+        return if (rev == "HEAD") SessionGitBlob(missing = true) else SessionGitBlob("/cache/blobs/${rev.lowercase()}.png", 10)
+    }
     override suspend fun show(machineId: String, cwd: String, hash: String): SessionGitShow {
         asked += "show $hash"
         return SessionGitShow(SessionGitCommit(hash, subject = "Add README"), files = listOf(SessionGitFile("README.md", index = "M")),
@@ -273,6 +278,24 @@ class FilesControllerTest {
         runCurrent()
         assertNull(files.state.value.previewError)
         assertEquals("hello", files.state.value.content?.text)
+    }
+
+    @Test fun aComparisonReadsEachVersionFromGitOrTheTree() = runTest {
+        val machine = FakeMachine()
+        val files = controller(machine)
+        files.start()
+        runCurrent()
+        files.push(FileSelection.Compare("art/icon.png", "art/icon.png", "INDEX", "WORKTREE"))
+        runCurrent()
+        assertTrue("blob INDEX art/icon.png" in machine.asked)
+        assertEquals(CompareSides(CompareSide("INDEX", "/cache/blobs/index.png"), CompareSide("WORKTREE", "/Users/me/code/weather/art/icon.png")),
+            files.state.value.compare)
+        // Added since HEAD: no old version. Deleted in the tree: no new one, and nothing to ask for it.
+        files.preview(FileSelection.Compare("art/icon.png", "art/icon.png", "HEAD", "WORKTREE", deleted = true))
+        runCurrent()
+        assertEquals(CompareSides(CompareSide("HEAD", null), CompareSide("WORKTREE", null)), files.state.value.compare)
+        files.back()
+        assertNull(files.state.value.compare)
     }
 
     private val tracking = SessionGitStatus(true, root = "/Users/me/code/weather", branch = "main", upstream = "origin/main", behind = 2,

@@ -29,6 +29,15 @@ interface SessionFiles {
      */
     suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File): Long =
         throw UnsupportedOperationException("download")
+    /** Whether [blob] works for [machineId] (its hub's `git_blob` feature): the Git page compares documents and pictures. */
+    fun comparesVersions(machineId: String): Boolean = false
+    /**
+     * A file as it is in [rev] (`HEAD`, `INDEX`, a commit or「hash^」), [path] relative to the repository's root
+     * (`GET …/git/blob`): where the node put it, read with [download] or [file]; `missing` when that version has no
+     * such file.
+     */
+    suspend fun blob(machineId: String, cwd: String, path: String, rev: String): SessionGitBlob =
+        throw UnsupportedOperationException("blob")
     /**
      * A picture of the file at most [size] px on its long side (`GET …/file/thumb`, the first page of a document, a
      * frame of a video); null when the machine cannot draw it (404 `no_thumbnail`). Older transports throw.
@@ -47,6 +56,9 @@ interface SessionFiles {
      */
     suspend fun pull(machineId: String, cwd: String): SessionGitPull = throw UnsupportedOperationException("pull")
 }
+
+/** `GET /api/v1/machines/{id}/git/blob`: the version's copy in the node's cache, or `missing`. */
+@Serializable data class SessionGitBlob(val path: String? = null, val size: Long = 0, val missing: Boolean = false)
 
 /** `GET /api/v1/machines/{id}/file/convert`: the converted file, an absolute path on the machine. */
 @Serializable data class SessionConvertedFile(val path: String, val size: Long = 0, val mime: String = "")
