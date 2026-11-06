@@ -447,7 +447,11 @@ func nodeConfirmForm(l i18n.Lang, s *extension.Schema, m *extension.Manifest) *e
 func (h *Manager) installRequest(w http.ResponseWriter, r *http.Request, upgrade, previewID, digest string, refs []bundleRef, async bool, code string) {
 	ps := h.extensions
 	actor := actorOr(r, "personad extension")
-	op := h.opForInstall(ps.reg.PreviewOf(previewID), previewID, opActor(r, actor), h.requestLang(r))
+	op, err := h.opForInstall(ps.reg.PreviewOf(previewID), previewID, opActor(r, actor), h.requestLang(r))
+	if err != nil {
+		writeExtensionResponseError(w, r, http.StatusConflict, "installing_already", err)
+		return
+	}
 	if async {
 		ctx := context.WithoutCancel(r.Context())
 		go func() { _, _ = h.installOp(ctx, op, upgrade, previewID, digest, refs, actor) }()

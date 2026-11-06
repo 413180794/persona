@@ -748,6 +748,7 @@ The hub records each install, upgrade and uninstall as an **operation**: split i
   "error_code": "download_stalled", // on failure, optional, see below
   "preview_id": "…",             // when needs_consent: the preview the user must agree to
   "retryable": true,             // whether POST …/retry is possible after failure
+  "warnings": ["…"],             // uninstall only, optional: what succeeded but needs a hand, e.g. files that could not be deleted (the same as the synchronous answer's `warnings`)
   "started_at": "…", "updated_at": "…", "ended_at": "…"
 }
 ```
@@ -774,11 +775,11 @@ The hub records each install, upgrade and uninstall as an **operation**: split i
 | Method | Path | Notes |
 | --- | --- | --- |
 | POST | `/api/v1/extensions/-/catalog/preview`, `/api/v1/extensions/-/preview` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` right away, downloads and checks in the background, and the operation stops at `needs_consent` (or `failed`) when done. Without `async` the synchronous response is as before, plus an `operation_id` |
-| POST | `/api/v1/extensions/-/install`, `/api/v1/extensions/{id}/-/upgrade` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` and runs `install` / `start` / `nodes` in the background. The synchronous form still returns the extension details once installed (plus an `operation_id`), without waiting for `start` and `nodes` |
+| POST | `/api/v1/extensions/-/install`, `/api/v1/extensions/{id}/-/upgrade` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` and runs `install` / `start` / `nodes` in the background. The synchronous form still returns the extension details once installed (plus an `operation_id`), without waiting for `start` and `nodes`. The first call with a `preview_id` takes over the operation waiting with it; another call with the same `preview_id` while that install runs (a double click, two clients) is 409 `installing_already` and changes nothing |
 | DELETE | `/api/v1/extensions/{id}/-/` | Unchanged; with `async=1` in the query string it returns 202 `{"operation": …}` |
 | GET | `/api/v1/extensions/-/operations` | `{"operations": [ExtensionOperation…]}`: in progress, waiting for consent, and finished within the last 10 minutes, newest first |
 | GET | `/api/v1/extensions/-/operations/{id}` | One operation; in `needs_consent` it also has `preview` (the full preview). 404 if missing or expired |
-| POST | `/api/v1/extensions/-/operations/{id}/retry` | Runs a failed operation again from the start and returns 202 `{"operation": new operation}`. A package already downloaded is in the cache, so `download` is `done` immediately (`cached`); if it failed after `consent` and the new preview's permission digest matches what the user agreed to, it does not ask again and goes straight on to install |
+| POST | `/api/v1/extensions/-/operations/{id}/retry` | Runs a failed operation again from the start and returns 202 `{"operation": new operation}`. A package already downloaded is in the cache, so `download` is `done` immediately (`cached`); if it failed after `consent` and the new preview's permission digest matches what the user agreed to, it does not ask again and goes straight on to install. A failed operation is retried once: afterwards its `retryable` is `false` (pushed to the apps) and the new operation carries on, so a second `POST` (a double tap, another app or the CLI) is 409 `not_retryable` and starts nothing |
 | DELETE | `/api/v1/extensions/-/operations/{id}` | Cancel: a download or check in progress (started async) stops, one waiting for consent drops its preview, and the operation becomes `canceled`; a finished one is removed from the list; once `install` has started it cannot be canceled (409 `cannot_cancel`) |
 
 Permissions follow the endpoint that started the operation: only a device that can preview / install can list, view, retry and cancel operations (a full-access device installs extensions from a market; every other source only accepts the main token over loopback).

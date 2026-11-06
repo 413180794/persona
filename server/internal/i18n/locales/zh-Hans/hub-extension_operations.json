@@ -5,5 +5,6 @@
   "rolled_back": "{name} {to} 起不来（{why}），已回到 {from}",
   "cannot_cancel": "已经在安装了，现在停不下来",
   "not_retryable": "这个没法在这里重试：重新开始一次",
-  "not_failed": "只有失败的才能重试"
+  "not_failed": "只有失败的才能重试",
+  "installing_already": "已经在安装了：等这次安装结束"
 }

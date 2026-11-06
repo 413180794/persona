@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -376,5 +377,100 @@ func TestNodeProgramsFieldAsksBeforeAMachine(t *testing.T) {
 	}
 	if got := ask(p.Schema); got != "" {
 		t.Fatalf("the plugin's own form changed: %q", got)
+	}
+}
+
+// nodePackageFiles are the package files the hub keeps for plugin id's program on computers.
+func nodePackageFiles(t *testing.T, h *Manager, id string) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(h.extensions.root, "node-packages", id+"-*.tgz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, f := range files {
+		files[i] = filepath.Base(f)
+	}
+	return files
+}
+
+// nodePackageKeys are the hub's cached package entries of plugin id.
+func nodePackageKeys(h *Manager, id string) []string {
+	pn := &h.extensions.nodes
+	pn.mu.Lock()
+	defer pn.mu.Unlock()
+	var keys []string
+	for k := range pn.packages {
+		if strings.HasPrefix(k, id+"/") {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+// An upgrade leaves only the new version's package; an uninstall leaves no package and no machine states, and a late
+// state from a machine for the plugin that is gone is not taken.
+func TestNodeProgramsForgotten(t *testing.T) {
+	ctx := context.Background()
+	h, _ := extensionTestHub(t)
+	box, _ := extensionNodeMachine(t, h, "box", "linux", "amd64", false)
+	reg := h.extensions.reg
+	dir := helperPackage(t)
+	pv, err := reg.Preview(ctx, "dir:"+dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Install(ctx, pv.ID, pv.Digest, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.SetConfig(ctx, "example-helper", json.RawMessage(`{"computers": ["box"]}`), "test"); err != nil {
+		t.Fatal(err)
+	}
+	h.syncExtensionNodes(ctx, box)
+	// Another plugin whose id starts with this one's keeps its package.
+	other := filepath.Join(h.extensions.root, "node-packages", "example-helper-two-1.0.0-linux-amd64.tgz")
+	if err := os.WriteFile(other, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := nodePackageFiles(t, h, "example-helper"); !slices.Contains(got, "example-helper-1.0.0-linux-amd64.tgz") {
+		t.Fatalf("the package was made: %v", got)
+	}
+
+	// Upgraded: only 2.0.0's package is left.
+	manifest := filepath.Join(dir, extension.ManifestFile)
+	raw, _ := os.ReadFile(manifest)
+	_ = os.WriteFile(manifest, []byte(strings.Replace(string(raw), `"version": "1.0.0"`, `"version": "2.0.0"`, 1)), 0o644)
+	pv, err = reg.Preview(ctx, "dir:"+dir, "example-helper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Upgrade(ctx, "example-helper", pv.ID, pv.Digest, "test"); err != nil {
+		t.Fatal(err)
+	}
+	h.syncExtensionNodes(ctx, box)
+	if got := nodePackageFiles(t, h, "example-helper"); !slices.Equal(got, []string{"example-helper-2.0.0-linux-amd64.tgz", "example-helper-two-1.0.0-linux-amd64.tgz"}) {
+		t.Fatalf("after the upgrade: %v", got)
+	}
+	if got := nodePackageKeys(h, "example-helper"); !slices.Equal(got, []string{"example-helper/2.0.0/linux-amd64"}) {
+		t.Fatalf("after the upgrade: %v", got)
+	}
+
+	// Uninstalled: nothing of it is left on the hub.
+	if err := reg.Uninstall(ctx, "example-helper", false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if v := h.extensions.nodes.views("example-helper"); len(v) != 0 {
+		t.Fatalf("machine states kept: %+v", v)
+	}
+	if got := nodePackageKeys(h, "example-helper"); len(got) != 0 {
+		t.Fatalf("packages kept: %v", got)
+	}
+	if got := nodePackageFiles(t, h, "example-helper"); !slices.Equal(got, []string{"example-helper-two-1.0.0-linux-amd64.tgz"}) {
+		t.Fatalf("package files kept: %v", got)
+	}
+
+	// A machine's late word of it is not taken.
+	h.NodeEvent("box", "plugin.node.state", json.RawMessage(`{"id":"example-helper","version":"2.0.0","state":"stopped"}`))
+	if v := h.extensions.nodes.views("example-helper"); len(v) != 0 {
+		t.Fatalf("a state for a plugin that is gone: %+v", v)
 	}
 }

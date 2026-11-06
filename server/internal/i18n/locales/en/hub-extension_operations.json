@@ -5,5 +5,6 @@
   "rolled_back": "{name} {to} does not start ({why}): back to {from}",
   "cannot_cancel": "It is being installed already and cannot be stopped now",
   "not_retryable": "This one cannot be tried again from here: start it again",
-  "not_failed": "Only a failed one can be tried again"
+  "not_failed": "Only a failed one can be tried again",
+  "installing_already": "It is being installed already: wait for that install to finish"
 }

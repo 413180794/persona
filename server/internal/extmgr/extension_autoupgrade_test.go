@@ -311,6 +311,87 @@ func TestExtensionAutoUpgradeRollsBack(t *testing.T) {
 	}
 }
 
+// Uninstalled, a plugin's upgrade state goes with it (its own switch stays): installed again, the version that rolled
+// back is not skipped, the user is told again of one asking for more, and its page shows no old note.
+func TestExtensionUpgradeForgetsRemoved(t *testing.T) {
+	h, mux, phone, mk, dir, mid := upgradeHub(t)
+	ctx := context.Background()
+	u := h.extensionUpgrades()
+
+	// 1.3.0 does not come up: rolled back, skipped, noted.
+	setVersion(t, dir, "1.3.0")
+	_ = os.WriteFile(filepath.Join(dir, "bin", "ui"), []byte("#!/bin/sh\nexit 3\n"), 0o755)
+	mk.publish(dir)
+	_, _ = h.marketRead(ctx, mid)
+	u.upgrade(ctx)
+	waitLong(t, "the rollback", func() bool {
+		_, d := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, "")
+		n, _ := d["upgrade_note"].(map[string]any)
+		return d["version"] == "1.0.0" && n["kind"] == "rolled_back"
+	})
+	if up := upgradeOf(t, mux, phone); up["state"] != upgradeSkipped {
+		t.Fatalf("%v", up)
+	}
+	_ = u.change(ctx, func(s *extensionUpgradeSettings) {
+		s.Notified = map[string]string{"example-ui": "1.3.0", "other": "2.0.0"}
+		s.Off = []string{"example-ui"}
+	})
+	u.mu.Lock()
+	u.failed = map[string]string{"example-ui": "1.3.0"}
+	u.waiting = map[string]string{"example-ui": "busy"}
+	u.mu.Unlock()
+
+	if code, _ := call(t, mux, "DELETE", "/api/v1/plugins/example-ui/-/", phone, ""); code != 200 || h.extensions.reg.Get("example-ui") != nil {
+		t.Fatalf("uninstall: %d", code)
+	}
+	var s extensionUpgradeSettings
+	if _, err := h.store.Setting(ctx, extensionUpgradesKey, &s); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Skipped["example-ui"]; ok {
+		t.Fatalf("skipped kept: %+v", s)
+	}
+	if _, ok := s.Notified["example-ui"]; ok || s.Notified["other"] != "2.0.0" {
+		t.Fatalf("notified: %+v", s)
+	}
+	if _, ok := s.Last["example-ui"]; ok {
+		t.Fatalf("note kept: %+v", s)
+	}
+	if !slices.Contains(s.Off, "example-ui") {
+		t.Fatalf("the user's switch was dropped: %+v", s)
+	}
+	u.mu.Lock()
+	_, failed := u.failed["example-ui"]
+	_, waiting := u.waiting["example-ui"]
+	u.mu.Unlock()
+	if failed || waiting {
+		t.Fatalf("in-memory state kept: failed %v waiting %v", failed, waiting)
+	}
+
+	// Installed again (a working 1.0.0), then 1.3.0 is in the market once more: it is a candidate again.
+	again := uiPackage(t)
+	mk.publish(again)
+	if _, err := h.marketRead(ctx, mid); err != nil {
+		t.Fatal(err)
+	}
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/catalog/preview", phone, fmt.Sprintf(`{"market": %q, "plugin": "example-ui"}`, mid))
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", phone, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
+		t.Fatalf("reinstall: %d %v", code, out)
+	}
+	mk.publish(dir)
+	if _, err := h.marketRead(ctx, mid); err != nil {
+		t.Fatal(err)
+	}
+	_ = u.change(ctx, func(s *extensionUpgradeSettings) { s.Off = nil })
+	up, _, _, ok := u.candidate(h.extensions.reg.Get("example-ui"))
+	if !ok || up.To != "1.3.0" || up.State == upgradeSkipped || up.State == upgradeFailed || up.State == upgradeWaitingIdle {
+		t.Fatalf("stale state on the reinstall: %+v (ok %v)", up, ok)
+	}
+	if _, d := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, ""); d["upgrade_note"] != nil {
+		t.Fatalf("old note on the reinstall: %v", d["upgrade_note"])
+	}
+}
+
 // Installed from a directory on the hub's machine: never upgraded by the hub, nor switched.
 func TestExtensionAutoUpgradeOnlyMarketExtensions(t *testing.T) {
 	h, phone, _ := marketDevices(t)

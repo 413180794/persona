@@ -89,6 +89,58 @@ func (pn *extensionNodes) forget(pluginID string, keep []string) {
 	}
 }
 
+// drop forgets what the hub keeps of plugin id's program on computers that is no longer installed: every package but
+// keepVersion's (cached and on disk under root/node-packages), and, when id is gone (keepVersion ""), its machine
+// states. Package files are matched as exactly <id>-<version>-<platform>.tgz, so an id that this one prefixes keeps
+// its own.
+func (pn *extensionNodes) drop(root, id, keepVersion string) {
+	pn.mu.Lock()
+	if keepVersion == "" {
+		delete(pn.states, id)
+	}
+	for key, pkg := range pn.packages {
+		rest, ok := strings.CutPrefix(key, id+"/")
+		if !ok {
+			continue
+		}
+		if version, _, _ := strings.Cut(rest, "/"); version != keepVersion {
+			delete(pn.packages, key)
+			_ = os.Remove(pkg.file)
+		}
+	}
+	pn.mu.Unlock()
+	// Files made before the hub last started are not in the cache.
+	dir := filepath.Join(root, "node-packages")
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if version, ok := nodePackageVersion(e.Name(), id); ok && version != keepVersion {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
+}
+
+// nodePackageVersion is the version of a package file named <id>-<version>-<os>-<arch>.tgz (nodePackage) of plugin
+// id. An id never has a dot and a version has one before any dash, so another id that id prefixes never matches.
+func nodePackageVersion(name, id string) (string, bool) {
+	rest, ok := strings.CutPrefix(name, id+"-")
+	if !ok {
+		return "", false
+	}
+	rest, ok = strings.CutSuffix(rest, ".tgz")
+	if !ok {
+		return "", false
+	}
+	parts := strings.Split(rest, "-")
+	if len(parts) < 3 {
+		return "", false
+	}
+	version := strings.Join(parts[:len(parts)-2], "-")
+	if _, err := extension.ParseVersion(version); err != nil {
+		return "", false
+	}
+	return version, true
+}
+
 // ExtensionNodeView is a plugin's program on one machine, as the apps show it.
 type ExtensionNodeView struct {
 	MachineID string `json:"machine_id"`
@@ -385,7 +437,8 @@ func (h *Manager) extensionNodeEvent(m *Machine, event string, params json.RawMe
 	switch event {
 	case "plugin.node.state":
 		var st proto.PluginNodeState
-		if json.Unmarshal(params, &st) == nil && st.ID != "" {
+		// A late word from a machine of a plugin that is gone (its "stopped" after the uninstall) is not kept.
+		if json.Unmarshal(params, &st) == nil && st.ID != "" && h.extensions.reg != nil && h.extensions.reg.Get(st.ID) != nil {
 			h.extensions.nodes.set(st.ID, m.cfg.ID, st)
 		}
 	case "plugin.node.event":

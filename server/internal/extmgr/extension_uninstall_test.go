@@ -2,8 +2,10 @@ package extmgr
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/extension"
@@ -112,5 +114,59 @@ func TestPackCannotRemoveLocalMemberAsDevice(t *testing.T) {
 		if h.extensions.reg.Get(id) == nil {
 			t.Fatalf("%s removed before source precheck", id)
 		}
+	}
+}
+
+// TestUninstallOperationWarnings: an async uninstall whose files could not all be deleted succeeds, and its operation
+// names the path to delete by hand, as the synchronous answer's warnings do.
+func TestUninstallOperationWarnings(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes from a read-only directory")
+	}
+	h, phone, _ := marketDevices(t)
+	installUninstallFixture(t, h, "solo", false)
+	// The data has a read-only directory in it: it moves aside, but cannot be removed there.
+	locked := filepath.Join(h.extensions.reg.DataDir("solo"), "locked")
+	if err := os.MkdirAll(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(locked, "f"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Dir(filepath.Dir(h.extensions.reg.DataDir("solo")))
+	var left []string // where the locked directory went
+	t.Cleanup(func() {
+		for _, d := range left {
+			_ = os.Chmod(d, 0o700)
+		}
+	})
+
+	id := opCall(t, h.routes(), "DELETE", "/api/v1/extensions/solo/-/?async=1", phone, "")
+	v := waitOp(t, h, id, opSucceeded, opFailed)
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && d.Name() == "locked" {
+			left = append(left, p)
+		}
+		return nil
+	})
+	if v.State != opSucceeded || h.extensions.reg.Get("solo") != nil {
+		t.Fatalf("uninstalled: %+v", v)
+	}
+	if len(left) != 1 || len(v.Warnings) != 1 {
+		t.Fatalf("one leftover, named: %v %+v", left, v.Warnings)
+	}
+	named := false
+	for d := filepath.Dir(left[0]); len(d) > len(root); d = filepath.Dir(d) {
+		named = named || strings.Contains(v.Warnings[0], d)
+	}
+	if !named {
+		t.Fatalf("the warning names where %s is: %q", left[0], v.Warnings[0])
+	}
+	code, out := call(t, h.routes(), "GET", "/api/v1/extensions/-/operations/"+id, phone, "")
+	if ws, _ := out["warnings"].([]any); code != 200 || len(ws) != 1 || ws[0] != v.Warnings[0] {
+		t.Fatalf("its answer has them: %d %v", code, out)
 	}
 }

@@ -210,6 +210,34 @@ func (s *extensionUpgradeSettings) note(id string, n ExtensionUpgradeNote) {
 	s.Last[id] = n
 }
 
+// forget drops what the hub remembers of plugin id's upgrades once it is uninstalled, so that installing the same id
+// again starts afresh: no version skipped by an old rollback, the user told again of one asking for more, no old note
+// on its page. Off stays: it is the user's own switch for that id. The settings are written only when they held some.
+func (u *extensionUpgrades) forget(ctx context.Context, id string) {
+	if u == nil {
+		return
+	}
+	u.load(ctx)
+	u.mu.Lock()
+	delete(u.waiting, id)
+	delete(u.failed, id)
+	delete(u.inflight, id)
+	_, skipped := u.settings.Skipped[id]
+	_, notified := u.settings.Notified[id]
+	_, last := u.settings.Last[id]
+	u.mu.Unlock()
+	if !skipped && !notified && !last {
+		return
+	}
+	if err := u.change(ctx, func(s *extensionUpgradeSettings) {
+		delete(s.Skipped, id)
+		delete(s.Notified, id)
+		delete(s.Last, id)
+	}); err != nil {
+		u.h.logf("plugin %s: forgetting its upgrades: %v", id, err)
+	}
+}
+
 // readMarkets reads each market whose index is due: marketStale (and a jitter of its own) after the last read, or
 // after a backoff when that one failed. A market is logged when it stops answering and when it answers again.
 func (u *extensionUpgrades) readMarkets(ctx context.Context) {

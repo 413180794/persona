@@ -437,6 +437,14 @@ func (ps *extensions) changed(c extension.Change) {
 	}
 	ps.apply(ctx, c.ID)
 	ps.forgetAuth(c.ID) // another version, removed, switched, set up again: ask again
+	switch c.Kind {
+	case "removed", "upgraded", "rolled_back": // only the version installed now keeps its packages for computers
+		keep := ""
+		if p := ps.reg.Get(c.ID); p != nil {
+			keep = p.Record.Version
+		}
+		ps.nodes.drop(ps.root, c.ID, keep)
+	}
 	affected := ps.modelChanged(ctx, c)
 	nodeChanged := c.Old != nil && c.Old.Manifest.NodeProgram() != nil
 	for _, p := range affected {
@@ -478,6 +486,9 @@ func (ps *extensions) changed(c extension.Change) {
 			}
 			ps.h.forgetConnector(ctx, id)
 		}
+	}
+	if c.Kind == "removed" && ps.h != nil && ps.reg.Get(c.ID) == nil {
+		ps.h.extensionUpgrades().forget(ctx, c.ID) // installed again later, it starts afresh (extension_autoupgrade.go)
 	}
 	if c.Kind == "upgraded" && c.Old != nil {
 		from := c.Old.Record.Version

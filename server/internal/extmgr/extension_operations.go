@@ -71,6 +71,8 @@ type ExtensionOperation struct {
 	Next string `json:"next,omitempty"`
 	// Preview is the preview waiting for the user's consent (GET of one operation only, never in events).
 	Preview any `json:"preview,omitempty"`
+	// Warnings is what an uninstall that succeeded leaves the user to do by hand, e.g. files it could not delete.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // ExtensionOpStep is one step of an operation.
@@ -119,6 +121,8 @@ type extOp struct {
 	// the consent goes on by itself when nothing it asks for changed.
 	consented       string
 	consentedBundle map[string]string
+	// claimed is the preview one install took this operation over with (claimOpOfPreview).
+	claimed string
 	// cancel stops its preview while it downloads and checks (DELETE); canceling says it was asked to.
 	cancel    context.CancelFunc
 	canceling bool
@@ -153,6 +157,9 @@ func (h *Manager) startOp(kind, id, actor string, l i18n.Lang, ofMarket bool) *e
 			op.v.Market = extension.FromMarket(p.Record.Origin)
 		}
 	}
+	// A consent-waiting operation whose preview expired is canceled first, so prune can give it up even when no app
+	// lists the operations (a script that only previews would otherwise grow the list without bound).
+	h.expireOps()
 	ps.ops.mu.Lock()
 	if ps.ops.byID == nil {
 		ps.ops.byID = map[string]*extOp{}
@@ -164,7 +171,9 @@ func (h *Manager) startOp(kind, id, actor string, l i18n.Lang, ofMarket bool) *e
 	return op
 }
 
-// prune drops what is over for more than opKeep, and the oldest over opMost. Called with mu held.
+// prune drops what is over for more than opKeep, and the oldest finished ones over opMost. Called with mu held.
+// Running and consent-waiting operations are never dropped: their goroutine still updates them and the apps still
+// ask for them, so the list can briefly hold more than opMost of them.
 func (o *extensionOps) prune(now time.Time) {
 	for id, op := range o.byID {
 		if op.v.EndedAt != nil && now.Sub(*op.v.EndedAt) > opKeep {
@@ -174,12 +183,14 @@ func (o *extensionOps) prune(now time.Time) {
 	if len(o.byID) < opMost {
 		return
 	}
-	all := make([]*extOp, 0, len(o.byID))
+	ended := make([]*extOp, 0, len(o.byID))
 	for _, op := range o.byID {
-		all = append(all, op)
+		if op.v.EndedAt != nil {
+			ended = append(ended, op)
+		}
 	}
-	slices.SortFunc(all, func(a, b *extOp) int { return a.v.UpdatedAt.Compare(b.v.UpdatedAt) })
-	for _, op := range all[:len(all)-opMost+1] {
+	slices.SortFunc(ended, func(a, b *extOp) int { return a.v.EndedAt.Compare(*b.v.EndedAt) })
+	for _, op := range ended[:min(len(ended), len(o.byID)-opMost+1)] {
 		delete(o.byID, op.v.ID)
 	}
 }
@@ -415,24 +426,37 @@ func (h *Manager) opPreviewed(op *extOp, pv *extension.Preview, goOn func(refs [
 	}
 }
 
-// opOfPreview is the operation waiting with preview previewID, nil when none is.
-func (h *Manager) opOfPreview(previewID string) *extOp {
+// claimOpOfPreview takes the operation waiting for consent with preview previewID for one install, nil when none
+// is. It is marked running at once, under the lock, so a second install of the same preview (a double click, the
+// web and the CLI together) cannot go on with it: that one is an installing_already error while the claimed one runs, and
+// never reaches the registry, so it can neither end the install nor take the preview from it. installing pushes the
+// change.
+func (h *Manager) claimOpOfPreview(previewID string) (*extOp, error) {
+	if previewID == "" {
+		return nil, nil
+	}
 	ps := h.extensions
 	ps.ops.mu.Lock()
 	defer ps.ops.mu.Unlock()
 	for _, op := range ps.ops.byID {
-		if op.v.PreviewID == previewID && previewID != "" {
-			return op
+		switch {
+		case op.v.PreviewID == previewID && op.v.State == opNeedsConsent:
+			op.v.State, op.v.PreviewID, op.v.UpdatedAt = opRunning, "", time.Now()
+			op.claimed = previewID
+			return op, nil
+		case op.claimed == previewID && op.v.State == opRunning:
+			return nil, i18n.Err("hub-extension_operations.installing_already")
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // opForInstall is the operation an install of preview pv goes on with: the one that made the preview, or a new one
-// whose first steps are done already (a preview made before operations, or by the admin UI).
-func (h *Manager) opForInstall(pv *extension.Preview, previewID, actor string, l i18n.Lang) *extOp {
-	if op := h.opOfPreview(previewID); op != nil {
-		return op
+// whose first steps are done already (a preview made before operations, or by the admin UI). It fails while another
+// install goes on with the preview's operation.
+func (h *Manager) opForInstall(pv *extension.Preview, previewID, actor string, l i18n.Lang) (*extOp, error) {
+	if op, err := h.claimOpOfPreview(previewID); op != nil || err != nil {
+		return op, err
 	}
 	kind, id := opInstall, ""
 	if pv != nil {
@@ -454,7 +478,7 @@ func (h *Manager) opForInstall(pv *extension.Preview, previewID, actor string, l
 		}
 		return true
 	})
-	return op
+	return op, nil
 }
 
 // installing marks op as agreed to (digest and its bundle's) and installing.
@@ -648,6 +672,7 @@ func (h *Manager) snapshot(op *extOp) ExtensionOperation {
 	defer h.extensions.ops.mu.Unlock()
 	v := op.v
 	v.Steps = slices.Clone(v.Steps)
+	v.Warnings = slices.Clone(v.Warnings)
 	for i, s := range v.Steps {
 		v.Steps[i].Tools = slices.Clone(s.Tools) // toolProgress writes its elements in place
 		if s.Machines != nil {
@@ -711,8 +736,13 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 	}))
 	api.HandleFunc("POST /api/v1/extensions/-/operations/{op}/retry", gate(func(w http.ResponseWriter, r *http.Request, op *extOp) {
 		ps := h.extensions
+		// Taken under the lock, so a failed operation is retried once: a second POST (a double tap, a second app)
+		// finds it gone and starts nothing; the new operation carries on.
 		ps.ops.mu.Lock()
 		state, retry := op.v.State, op.retry
+		if state == opFailed && retry != nil {
+			op.retry, op.v.Retryable = nil, false
+		}
 		ps.ops.mu.Unlock()
 		switch {
 		case state != opFailed:
@@ -722,8 +752,14 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 			writeExtensionResponseError(w, r, http.StatusConflict, "not_retryable", i18n.Err("hub-extension_operations.not_retryable"))
 			return
 		}
+		h.pushOp(op, true) // the apps hide its Retry
 		next, err := retry()
 		if err != nil {
+			// It did not start: give the retry back, so the user can try again.
+			ps.ops.mu.Lock()
+			op.retry, op.v.Retryable = retry, true
+			ps.ops.mu.Unlock()
+			h.pushOp(op, true)
 			writeExtensionResponseError(w, r, http.StatusBadRequest, "retry_failed", err)
 			return
 		}
@@ -852,6 +888,17 @@ func (h *Manager) uninstallOp(w http.ResponseWriter, r *http.Request, id string,
 		h.opStep(op, extension.StepRemove, extension.StepDone)
 		if p.Manifest.NodeProgram() != nil {
 			h.syncNodesFor(context.WithoutCancel(r.Context()), op, p)
+		}
+		// The answer's warnings (files left to delete by hand) go on the operation, as the synchronous answer has them.
+		var out struct {
+			Warnings []string `json:"warnings"`
+		}
+		_ = json.Unmarshal(rec.body, &out)
+		if len(out.Warnings) > 0 {
+			h.update(op, func(v *ExtensionOperation) bool {
+				v.Warnings = out.Warnings
+				return false // opSucceed pushes it
+			})
 		}
 		h.opSucceed(op)
 		return rec

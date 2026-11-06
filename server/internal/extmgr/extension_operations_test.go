@@ -172,6 +172,9 @@ func TestExtensionOperations(t *testing.T) {
 	if v = waitOp(t, h, next, opNeedsConsent, opFailed); v.State != opNeedsConsent {
 		t.Fatalf("retried: %+v", v)
 	}
+	if code, out := call(t, mux, "POST", "/api/v1/extensions/-/operations/"+id+"/retry", phone, ""); code != http.StatusConflict || out["code"] != "not_retryable" || h.snapshot(h.opByID(id)).Retryable {
+		t.Fatalf("the stalled one retried twice: %d %v", code, out)
+	}
 	if code, _ := call(t, mux, "POST", "/api/v1/extensions/-/operations/"+next+"/retry", phone, ""); code != http.StatusConflict {
 		t.Fatalf("a retry of one that did not fail: %d", code)
 	}
@@ -254,4 +257,81 @@ func TestMarketClientGitHubProxy(t *testing.T) {
 	}
 	check("")               // no proxy in the environment: only GitHub's hosts go through github.proxy
 	check("127.0.0.1:7897") // one in the environment: the others take it, GitHub's still github.proxy
+}
+
+// failedOp puts a failed operation whose retry counts its calls and answers with next (or err) into h's list.
+func failedOp(h *Manager, calls *atomic.Int32, next func() *extOp, err error) *extOp {
+	now := time.Now()
+	op := &extOp{ofMarket: true, v: ExtensionOperation{ID: newOpID(), Kind: opInstall, Extension: "example-ui", State: opFailed,
+		StartedAt: now, UpdatedAt: now, EndedAt: &now, Retryable: true}}
+	op.retry = func() (*extOp, error) {
+		calls.Add(1)
+		if err != nil {
+			return nil, err
+		}
+		return next(), nil
+	}
+	ps := h.extensions
+	ps.ops.mu.Lock()
+	if ps.ops.byID == nil {
+		ps.ops.byID = map[string]*extOp{}
+	}
+	ps.ops.byID[op.v.ID] = op
+	ps.ops.mu.Unlock()
+	return op
+}
+
+// TestExtensionOpRetryOnce: a failed operation is retried once; a second POST (a double tap, a second app) is 409
+// not_retryable and starts nothing, the old one says it is not retryable; a retry that could not start can be tried
+// again; of two at the same time exactly one starts.
+func TestExtensionOpRetryOnce(t *testing.T) {
+	h, phone, _ := marketHub(t)
+	mux := h.routes()
+	started := func() *extOp { return h.startOp(opInstall, "example-ui", "", "", true) }
+	path := func(op *extOp) string { return "/api/v1/extensions/-/operations/" + op.v.ID + "/retry" }
+
+	var calls atomic.Int32
+	op := failedOp(h, &calls, started, nil)
+	opCall(t, mux, "POST", path(op), phone, "")
+	code, out := call(t, mux, "POST", path(op), phone, "")
+	if code != http.StatusConflict || out["code"] != "not_retryable" {
+		t.Fatalf("a second retry: %d %v", code, out)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("retried %d times", n)
+	}
+	if v := h.snapshot(op); v.Retryable || v.State != opFailed {
+		t.Fatalf("the old one: %+v", v)
+	}
+
+	// A retry that could not start gives it back: it can be tried again.
+	calls.Store(0)
+	op = failedOp(h, &calls, nil, errors.New("not now"))
+	if code, out := call(t, mux, "POST", path(op), phone, ""); code != http.StatusBadRequest || out["code"] != "retry_failed" {
+		t.Fatalf("a retry that fails: %d %v", code, out)
+	}
+	if v := h.snapshot(op); !v.Retryable {
+		t.Fatalf("not retryable after a retry that did not start: %+v", v)
+	}
+	if code, _ := call(t, mux, "POST", path(op), phone, ""); code != http.StatusBadRequest || calls.Load() != 2 {
+		t.Fatalf("tried again: %d, %d calls", code, calls.Load())
+	}
+
+	// Two at the same time: one 202, one 409.
+	calls.Store(0)
+	op = failedOp(h, &calls, started, nil)
+	codes := make(chan int, 2)
+	for range 2 {
+		go func() {
+			code, _ := call(t, mux, "POST", path(op), phone, "")
+			codes <- code
+		}()
+	}
+	got := map[int]int{}
+	for range 2 {
+		got[<-codes]++
+	}
+	if got[http.StatusAccepted] != 1 || got[http.StatusConflict] != 1 || calls.Load() != 1 {
+		t.Fatalf("two at once: %v, %d calls", got, calls.Load())
+	}
 }
