@@ -1,5 +1,7 @@
 package prompts
 
+import "strings"
+
 // TodoDecisions is the context a handoff to an agent carries for a todo's decisions in effect (todo/decisions,
 // #1618, docs/todos.md "Decision log"). The caller leaves out the closing tags
 // ("</persona-context>", "</jarvis-context>") from the texts.
@@ -34,6 +36,22 @@ type TodoThreadReply struct {
 }
 
 func RenderTodoThreadReply(r TodoThreadReply) string { return render("todo/thread_reply", r) }
+
+// TodoThreadOpen is what the main conversation gets when the owner opens a new topic in a registered group chat and the
+// hub opens a to-do for it (todo/thread_open, #5279, docs/todos.md "Opening a to-do from a topic"): whose to-do it is,
+// the first words as said, and that task_plan takes the to-do's id. Title and Text carry nothing that closes a context
+// block.
+type TodoThreadOpen struct {
+	Title, TodoID, Text string
+}
+
+// RenderTodoThreadOpen is the hand-over; the words go in as a quotation, each line after "> ", so that a many-line
+// message cannot pass for the list of instructions below it.
+func RenderTodoThreadOpen(o TodoThreadOpen) string {
+	text := strings.ReplaceAll(strings.TrimSpace(o.Text), "\r\n", "\n")
+	o.Text = "> " + strings.ReplaceAll(text, "\n", "\n> ")
+	return render("todo/thread_open", o)
+}
 
 // TodoTitle is the system prompt naming a todo a task opened after what the agent is asked to do (todo/title, #2775,
 // docs/todos.md "To-do titles").

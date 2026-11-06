@@ -86,8 +86,13 @@
   "missing_pieces_other": "这条回答有 {count} 段没能发到飞书（第 {pieces} 段），完整内容在 App 里看。",
   "file_too_large": "这些文件太大，没交给助手：{files}。可以放到电脑上，再告诉它路径。",
   "file_too_large_only": "文件太大（{files}），可以放到电脑上，再告诉助手路径。",
-  "thread_unbound": "这个话题还没有绑定待办，你的回复没有转出去。先在 App 里把话题绑到一个待办上。",
+  "thread_unbound": "这个话题还没有绑定待办，你的消息没有转出去。发「/ai」加一句想做的事就能建一个待办，也可以先在 App 里把话题绑到一个待办上。",
   "thread_done": "这个话题绑定的待办已经完成，你的回复没有转出去。要继续的话，先在 App 里重新打开它。",
   "thread_question": "在飞书话题里的回复",
-  "thread_recorded_not_sent": "已记在待办上，但没有交给任何人：{error}"
+  "thread_recorded_not_sent": "已记在待办上，但没有交给任何人：{error}",
+  "thread_open_done": "已建待办「{title}」，交给主对话。",
+  "thread_open_needs_text": "用一句文字说想做什么，我就给它建待办。只有图片或转发的话，没法给待办起名。",
+  "thread_open_failed": "没能给这个话题建待办：{error}",
+  "thread_open_no_main": "没能给这个话题建待办：主对话还不存在。先在 App 里打开一次主对话。",
+  "thread_open_not_sent": "待办已建，但没能交给主对话：{error}"
 }

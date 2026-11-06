@@ -49,6 +49,10 @@ type PlanTask struct {
 	// should take (#3124, supervise.go). Both optional; the agent is told the criteria with its prompt.
 	DoneWhen      []string `json:"done_when,omitempty"`
 	ExpectMinutes int      `json:"expect_minutes,omitempty"`
+	// ReuseTodo: the todo this task runs on instead of a new one (task_plan's todo_id, #5279): one this conversation
+	// opened that has no agent yet, such as the todo a Lark topic opened (feishu_thread_open.go). Checked when the
+	// plan is made and again when it starts; it is not what the apps send back with an edit.
+	ReuseTodo string `json:"reuse_todo,omitempty"`
 	// Set once started: the todo the task is, and why its agent did not start.
 	TodoID string `json:"todo_id,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -111,6 +115,9 @@ type tasksState struct {
 	retrying map[string]bool
 	// outcomes: the completions whose outcome was recorded (todo_outcome.go, outcomeKey).
 	outcomes map[string]time.Time
+	// reusing: the todos a started plan took over (PlanTask.ReuseTodo) whose agent is not linked yet, so that a second
+	// plan cannot take the same todo in that gap (takeTodoForTask).
+	reusing map[string]bool
 	// outcomeRuns are the outcome recordings still going (goRecordTaskOutcome, waitTaskOutcomes).
 	outcomeRuns sync.WaitGroup
 }
@@ -118,7 +125,7 @@ type tasksState struct {
 func newTasksState() tasksState {
 	return tasksState{plans: map[string]*TaskPlan{}, feed: map[string][]FeedItem{},
 		working: map[string]time.Time{}, receipted: map[string]time.Time{}, retrying: map[string]bool{},
-		outcomes: map[string]time.Time{}}
+		outcomes: map[string]time.Time{}, reusing: map[string]bool{}}
 }
 
 // ---- plans and the feed: storage ----
@@ -253,12 +260,24 @@ func (s *Service) feed(ctx context.Context, conversation string, since time.Time
 
 // ---- the assistant's task_plan tool ----
 
+// planTaskIn is a task as task_plan's arguments have it. Its todo_id is the todo to run on (PlanTask.ReuseTodo); the
+// plan's own todo_id, the todo a started task became, is the hub's to set, and the shallower field wins in JSON.
+type planTaskIn struct {
+	PlanTask
+	TodoID string `json:"todo_id"`
+}
+
 func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.RawMessage) (string, error) {
-	var a struct {
-		Tasks []PlanTask `json:"tasks"`
+	var in struct {
+		Tasks []planTaskIn `json:"tasks"`
 	}
-	if err := json.Unmarshal(args, &a); err != nil {
+	if err := json.Unmarshal(args, &in); err != nil {
 		return "", fmt.Errorf("tasks: %v", err)
+	}
+	var a struct{ Tasks []PlanTask }
+	for _, t := range in.Tasks {
+		t.PlanTask.ReuseTodo = strings.TrimSpace(t.TodoID)
+		a.Tasks = append(a.Tasks, t.PlanTask)
 	}
 	if len(a.Tasks) == 0 {
 		return "", fmt.Errorf("tasks is empty")
@@ -266,6 +285,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 	if len(a.Tasks) > 8 {
 		return "", fmt.Errorf("at most 8 tasks in one plan")
 	}
+	reused := map[string]bool{}
 	for i := range a.Tasks {
 		t := &a.Tasks[i]
 		t.TodoID, t.Error = "", ""
@@ -281,6 +301,18 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 	}
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return "", fmt.Errorf("todos are unavailable: %v", err)
+	}
+	for i, t := range a.Tasks {
+		if t.ReuseTodo == "" {
+			continue
+		}
+		if reused[t.ReuseTodo] {
+			return "", fmt.Errorf("task %d: todo_id %s is already the todo of another task in this plan", i+1, t.ReuseTodo)
+		}
+		reused[t.ReuseTodo] = true
+		if err := s.reusableTodo(sessionID, t.ReuseTodo, false); err != nil {
+			return "", fmt.Errorf("task %d: %v", i+1, err)
+		}
 	}
 	dups := s.planDuplicates(ctx, a.Tasks) // before the plan's own todos exist
 	now := time.Now().UTC()
@@ -440,18 +472,32 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 	}
 	for i := range p.Tasks {
 		t := &p.Tasks[i]
-		title, retitle := s.taskTitle(ctx, t.Title, t.Prompt) // the assistant's own title stays when it is a real one
-		todo, err := s.createTodo(ctx, title, t.Prompt, p.Conversation, p.ID)
-		if err != nil {
-			t.Error = err.Error()
-			continue
-		}
-		if retitle {
-			s.nameTodoLater(ctx, todo.ID, title, t.Prompt)
+		var todo Todo
+		if t.ReuseTodo != "" {
+			// The todo is already there with its own title, notes and task card in the conversation's feed (a Lark topic
+			// opened it): the task runs on it, and nothing is made or shown twice.
+			todo, err = s.takeTodoForTask(p.Conversation, t.ReuseTodo)
+			if err != nil {
+				t.Error = err.Error()
+				continue
+			}
+		} else {
+			title, retitle := s.taskTitle(ctx, t.Title, t.Prompt) // the assistant's own title stays when it is a real one
+			todo, err = s.createTodo(ctx, title, t.Prompt, p.Conversation, p.ID)
+			if err != nil {
+				t.Error = err.Error()
+				continue
+			}
+			if retitle {
+				s.nameTodoLater(ctx, todo.ID, title, t.Prompt)
+			}
 		}
 		t.TodoID = todo.ID
 		if s.isMain(ctx, p.Conversation) { // the main conversation follows up what it hands out (supervise.go)
 			s.superviseTodo(ctx, todo.ID, p.Conversation, t.DoneWhen, t.ExpectMinutes)
+		}
+		if t.ReuseTodo != "" {
+			continue
 		}
 		if _, err := s.appendFeed(ctx, p.Conversation, feedTask, todo.ID, nil); err != nil {
 			s.logf("task %s: feed: %v", todo.ID, err)
@@ -465,11 +511,77 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 	}
 	s.event(ctx, map[string]any{"type": "task_plan", "plan": p})
 	for i := range p.Tasks {
-		if p.Tasks[i].TodoID != "" {
-			go s.startPlanTask(p.ID, p.Conversation, i, p.Tasks[i], false)
+		if task := p.Tasks[i]; task.TodoID != "" {
+			go func() {
+				defer s.releaseTakenTodo(task.ReuseTodo) // linked or failed: the todo is no longer in the gap
+				s.startPlanTask(p.ID, p.Conversation, i, task, false)
+			}()
 		}
 	}
 	return p, nil
+}
+
+// notReusable is the refusal of a todo_id: it says why, so the assistant can plan again without it.
+func notReusable(id, why string) error {
+	return fmt.Errorf("todo_id %s cannot be used: %s (leave todo_id out and the task gets a todo of its own)", id, why)
+}
+
+// reusableTodo says whether a task of a plan from conversation may run on todo id (task_plan's todo_id): the todo is
+// one that conversation opened, is not done, has no agent on it (one linked and not let go or dismissed) and is not
+// taken by a plan that started and has not linked its agent yet. taking: that last one is what the caller is about
+// to claim itself, so it is not looked at (takeTodoForTask holds it).
+func (s *Service) reusableTodo(conversation, id string, taking bool) error {
+	t, ok := s.todoNow(id)
+	switch {
+	case !ok:
+		return notReusable(id, "there is no such todo")
+	case conversation == "" || t.Origin != conversation:
+		return notReusable(id, "it was not opened from this conversation")
+	case t.DoneAt != nil:
+		return notReusable(id, "it is already done")
+	}
+	for _, a := range t.Agents {
+		if a.ReleasedAt == nil && a.DismissedAt == nil {
+			return notReusable(id, "an agent is already working on it")
+		}
+	}
+	if !taking {
+		s.tasks.mu.Lock()
+		busy := s.tasks.reusing[id]
+		s.tasks.mu.Unlock()
+		if busy {
+			return notReusable(id, "another plan is starting an agent on it")
+		}
+	}
+	return nil
+}
+
+// takeTodoForTask is the todo a started plan's task runs on (PlanTask.ReuseTodo), checked again now (it may have been
+// closed or taken since the plan was made) and held until the task's agent is linked (releaseTakenTodo).
+func (s *Service) takeTodoForTask(conversation, id string) (Todo, error) {
+	s.tasks.mu.Lock()
+	if s.tasks.reusing[id] {
+		s.tasks.mu.Unlock()
+		return Todo{}, notReusable(id, "another plan is starting an agent on it")
+	}
+	s.tasks.reusing[id] = true
+	s.tasks.mu.Unlock()
+	if err := s.reusableTodo(conversation, id, true); err != nil {
+		s.releaseTakenTodo(id)
+		return Todo{}, err
+	}
+	t, _ := s.todoNow(id)
+	return formatTodo(t), nil
+}
+
+// releaseTakenTodo lets go of a todo takeTodoForTask held; id "" is nothing.
+func (s *Service) releaseTakenTodo(id string) {
+	if id == "" {
+		return
+	}
+	s.tasks.mu.Lock()
+	delete(s.tasks.reusing, id)
+	s.tasks.mu.Unlock()
 }
 
 // applyPlanEdit takes what the user changed on the card; an empty field keeps the assistant's.

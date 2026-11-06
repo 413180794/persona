@@ -29,7 +29,8 @@ const (
 // conversation c1x1x1) and a machine "box" with one agent (agent01).
 type threadEnv struct {
 	*todoEnv
-	features FeishuFeatures
+	features  FeishuFeatures
+	publicURL string // the hub's web address the status carries ("" for none)
 }
 
 func newThreadEnv(t *testing.T, st Store) *threadEnv {
@@ -38,7 +39,7 @@ func newThreadEnv(t *testing.T, st Store) *threadEnv {
 	setSettings(t, e.s, func(v *Settings) { v.MachineID, v.Main = "server", "m1" })
 	empty := func(json.RawMessage) (any, error) { return map[string]any{}, nil }
 	e.f.answerApp(AppFeishu, FeishuStatusGet, func(json.RawMessage) (any, error) {
-		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_owner", PairedAt: time.Unix(100, 0), Features: e.features}, nil
+		return FeishuStatus{Ready: true, Enabled: true, Owner: "ou_owner", PairedAt: time.Unix(100, 0), Features: e.features, PublicURL: e.publicURL}, nil
 	})
 	e.f.answerApp(AppFeishu, FeishuReact, func(json.RawMessage) (any, error) { return map[string]any{"reaction_id": "r1"}, nil })
 	e.f.answerApp(AppFeishu, FeishuPost, func(json.RawMessage) (any, error) { return map[string]any{"message_id": "om_post"}, nil })
@@ -58,10 +59,11 @@ func (e *threadEnv) topicTodo(title string) string {
 	return id
 }
 
-// topicEvent is a message in the topic (from the owner: the hub checks who).
+// topicEvent is a reply in the topic (from the owner: the hub checks who); rootEvent is the message that starts it.
 func topicEvent(id, text string) feishubot.MessageEvent {
 	var ev feishubot.MessageEvent
 	ev.Message.MessageID, ev.Message.ChatID, ev.Message.ChatType, ev.Message.ThreadID = id, testChat, "group", testThread
+	ev.Message.RootID, ev.Message.ParentID = "om_root", "om_root"
 	ev.Message.MessageType = "text"
 	c, _ := json.Marshal(map[string]string{"text": text})
 	ev.Message.Content = string(c)
@@ -69,9 +71,16 @@ func topicEvent(id, text string) feishubot.MessageEvent {
 	return ev
 }
 
+func rootEvent(id, text string) feishubot.MessageEvent {
+	ev := topicEvent(id, text)
+	ev.Message.RootID, ev.Message.ParentID = "", ""
+	return ev
+}
+
 func privateEvent(id, text string) feishubot.MessageEvent {
 	ev := topicEvent(id, text)
 	ev.Message.ChatType, ev.Message.ChatID, ev.Message.ThreadID = "p2p", "oc_private", ""
+	ev.Message.RootID, ev.Message.ParentID = "", ""
 	return ev
 }
 
@@ -83,6 +92,7 @@ func (e *threadEnv) deliver(ev feishubot.MessageEvent) {
 		e.t.Fatal(err)
 	}
 	e.s.feishuMessage(ev, st, "")
+	e.s.todos.titling.Wait() // the model naming a to-do a topic opened (the fake has none to ask: the title stays)
 }
 
 // handoff is a message sent on to a conversation.

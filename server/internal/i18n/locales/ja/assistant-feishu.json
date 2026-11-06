@@ -86,8 +86,13 @@
   "missing_pieces_other": "この回答のうち {count} つの部分（{pieces} 番目）を Lark に送れませんでした。全文は App で確認してください。",
   "file_too_large": "次のファイルは大きすぎるため渡していません：{files}。コンピューターに置いてパスを伝えてください。",
   "file_too_large_only": "ファイルが大きすぎます（{files}）。コンピューターに置いてパスを伝えてください。",
-  "thread_unbound": "このトピックはまだ ToDo に結び付いていないため、返信は渡されませんでした。先にアプリでトピックを ToDo に結び付けてください。",
+  "thread_unbound": "このトピックはまだ ToDo に結び付いていないため、メッセージは渡されませんでした。「/ai」に続けてやりたいことを一行送ると ToDo を作れます。アプリでトピックを ToDo に結び付けることもできます。",
   "thread_done": "このトピックに結び付いた ToDo はすでに完了しているため、返信は渡されませんでした。続けるにはアプリで再開してください。",
   "thread_question": "Lark のトピックでの返信",
-  "thread_recorded_not_sent": "ToDo には記録しましたが、誰にも渡せませんでした：{error}"
+  "thread_recorded_not_sent": "ToDo には記録しましたが、誰にも渡せませんでした：{error}",
+  "thread_open_done": "ToDo「{title}」を作り、メイン会話に渡しました。",
+  "thread_open_needs_text": "やりたいことを一行の文章で送ってください。ToDo を作ります。画像や転送だけでは ToDo の名前を付けられません。",
+  "thread_open_failed": "このトピックの ToDo を作れませんでした：{error}",
+  "thread_open_no_main": "このトピックの ToDo を作れませんでした：メイン会話がまだありません。先にアプリでメイン会話を一度開いてください。",
+  "thread_open_not_sent": "ToDo は作りましたが、メイン会話に渡せませんでした：{error}"
 }

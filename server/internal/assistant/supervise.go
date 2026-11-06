@@ -1308,9 +1308,15 @@ func bigrams(s string) []string {
 func (s *Service) planDuplicates(ctx context.Context, tasks []PlanTask) string {
 	var open []Todo
 	if s.ensureTodosLoaded(ctx) == nil {
+		own := map[string]bool{} // a todo a task runs on is that task, not a copy of it
+		for _, t := range tasks {
+			if t.ReuseTodo != "" {
+				own[t.ReuseTodo] = true
+			}
+		}
 		s.todos.mu.RLock()
 		for _, t := range s.todos.todos {
-			if t.DoneAt == nil {
+			if t.DoneAt == nil && !own[t.ID] {
 				open = append(open, copyTodoLocked(t))
 			}
 		}

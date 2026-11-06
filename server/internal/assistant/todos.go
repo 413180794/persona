@@ -339,6 +339,35 @@ func (s *Service) quietTask(ctx context.Context, origin string) bool {
 	return s.settings(ctx).Main == origin && s.mainTasksQuiet(ctx)
 }
 
+// removeTodo deletes todo id from the store and from memory (its agents' and spaces' links with it) and tells the
+// apps; db.ErrTodoNotFound when it is not there. The DELETE route and the code that must take back a todo it just
+// made (a topic that turned out to be taken, feishu_thread_open.go) both go through it.
+func (s *Service) removeTodo(ctx context.Context, id string) error {
+	if st := s.todoDB(); st != nil {
+		if err := st.DeleteTodo(ctx, id); err != nil {
+			return err
+		}
+	}
+
+	s.todos.mu.Lock()
+	if cur, ok := s.todos.todos[id]; ok {
+		for _, a := range cur.Agents {
+			if a.ReleasedAt == nil && a.DismissedAt == nil {
+				delete(s.todos.activeBySession, [2]string{a.MachineID, a.SessionID})
+			}
+		}
+		for _, sp := range cur.Spaces {
+			delete(s.todos.spacesByKey, sp.MachineID+"/"+sp.Space)
+		}
+		delete(s.todos.todos, id)
+	}
+	s.todos.mu.Unlock()
+
+	s.linksChanged(ctx)
+	s.todosChanged(ctx)
+	return nil
+}
+
 // createTodo makes a todo (origin and planID set when a plan from an assistant conversation opens it as a task) and
 // tells the apps.
 func (s *Service) createTodo(ctx context.Context, title, notes, origin, planID string) (Todo, error) {
@@ -697,33 +726,14 @@ func (s *Service) todoRoutes() {
 			return
 		}
 
-		if st := s.todoDB(); st != nil {
-			if err := st.DeleteTodo(r.Context(), id); err != nil {
-				if errors.Is(err, db.ErrTodoNotFound) {
-					apierr.Write(w, http.StatusNotFound, err)
-				} else {
-					apierr.Write(w, http.StatusInternalServerError, err)
-				}
-				return
+		if err := s.removeTodo(r.Context(), id); err != nil {
+			if errors.Is(err, db.ErrTodoNotFound) {
+				apierr.Write(w, http.StatusNotFound, err)
+			} else {
+				apierr.Write(w, http.StatusInternalServerError, err)
 			}
+			return
 		}
-
-		s.todos.mu.Lock()
-		if cur, ok := s.todos.todos[id]; ok {
-			for _, a := range cur.Agents {
-				if a.ReleasedAt == nil && a.DismissedAt == nil {
-					delete(s.todos.activeBySession, [2]string{a.MachineID, a.SessionID})
-				}
-			}
-			for _, sp := range cur.Spaces {
-				delete(s.todos.spacesByKey, sp.MachineID+"/"+sp.Space)
-			}
-			delete(s.todos.todos, id)
-		}
-		s.todos.mu.Unlock()
-
-		s.linksChanged(r.Context())
-		s.todosChanged(r.Context())
 		apierr.WriteJSON(w, map[string]any{"ok": true})
 	})
 

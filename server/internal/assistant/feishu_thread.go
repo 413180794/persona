@@ -71,12 +71,16 @@ func (s *Service) threadMessage(ctx context.Context, ev feishubot.MessageEvent, 
 		return
 	}
 	t, bound := s.todoOfThread(TodoThread{Channel: channel.Feishu, ChatID: msg.ChatID, ThreadID: msg.ThreadID})
+	if !bound && s.openTopicIfAsked(ctx, ev, st, content, topic) {
+		return // a topic bound to nothing that starts one, or "/ai …" in one: a to-do is opened (feishu_thread_open.go)
+	}
 	if !bound || t.DoneAt != nil {
 		key := "assistant-feishu.thread_unbound"
 		if bound {
 			key = "assistant-feishu.thread_done"
 		}
-		if s.threadHintDue(msg.ChatID + "/" + msg.ThreadID) {
+		// "/ai" for a to-do that is done is asked for in so many words: it is answered each time, not once in ten minutes.
+		if _, asked := aiCommand(openingWords(ev, content)); bound && asked || s.threadHintDue(msg.ChatID+"/"+msg.ThreadID) {
 			s.botNoteTo(ctx, to, msg.MessageID, i18n.T(l, key))
 		}
 		return
