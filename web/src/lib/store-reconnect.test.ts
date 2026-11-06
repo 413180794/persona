@@ -1,7 +1,7 @@
 // The socket's side of #1574: a drop is invisible inside the grace, a restart retries at once, and a resumed hello
 // refetches nothing while an ordinary one refreshes everything as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyMachine, connect, getState, onHubEvent, reconnectNow, refresh, reset } from "./store";
+import { applyMachine, connect, disconnect, getState, onHubEvent, reconnectNow, refresh, reset } from "./store";
 import { offlineNow } from "./feedback";
 import { liveEntry, resetLive } from "./live";
 
@@ -143,6 +143,15 @@ describe("reconnecting", () => {
     last().drop(1006);
     vi.advanceTimersByTime(1_000);
     expect(getState().conn).not.toBe("online"); // as before: connecting while an attempt runs, offline between
+  });
+
+  it("disconnect cancels a reconnect already scheduled (signed out after a drop: no socket with an empty token)", () => {
+    const s = online();
+    s.drop();
+    disconnect(); // e.g. a 401 signs out before the retry fires
+    const before = FakeSocket.all.length;
+    vi.advanceTimersByTime(20_000);
+    expect(FakeSocket.all.length).toBe(before);
   });
 
   it("close code 1001 alone counts as a restart", () => {

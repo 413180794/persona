@@ -338,6 +338,8 @@ setOfflineProbe(() => (!networkUp() ? "network" : state.conn !== "online" || dro
 
 export function disconnect() {
   stopped = true;
+  // a reconnect scheduled after a drop would otherwise fire connect(), which clears stopped (signed out: an empty token)
+  clearTimeout(retryTimer);
   back();
   ws?.close();
   ws = null;
