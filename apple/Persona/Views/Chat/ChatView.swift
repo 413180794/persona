@@ -2347,6 +2347,8 @@ struct ChatView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(model.connection.shown != .online ? String(localized: "\(ConnectionLabel.text(model.connection.shown, hubRestarting: model.hubUpdate?.restarting == true)), show title and tags")
                                 : String(localized: "\(compactPlace), show title and tags"))
+            .accessibilityIdentifier("chat.compactTitle")
+            .titleSaysLink() // the slim bar says Connecting… too: the shell's floating pill does not say it again
             Spacer(minLength: 0)
             // A goal, a loop or background work: a small mark each. Files, the terminal and Git are in the ··· menu (a tap opens the header).
             hostedMarks
@@ -2530,6 +2532,7 @@ struct ChatView: View {
         // All the room between the round buttons on an iPhone; a readable cap on a wide page.
         .scaledFrame(maxWidth: Theme.Size.headerTitle)
         .contentShape(.rect)
+        .titleSaysLink() // the shell's floating pill does not say Connecting… again under this title
     }
 
     private var infoTitleButton: some View {

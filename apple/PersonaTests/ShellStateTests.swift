@@ -147,5 +147,27 @@ struct ShellStateTests {
         n.linkChanged(.online)
         #expect(n.folded == 1)
     }
+
+    /// A title in front that says the link itself (an agent's chat, Inbox, Machines) keeps the pill away: Connecting…
+    /// showed twice, in the chat's title and in the pill just under it.
+    @Test func aTitleSayingTheLinkKeepsThePillAway() {
+        let n = ShellNotices()
+        n.linkChanged(.connecting)
+        #expect(n.pill == .connecting)
+        n.titleShowsLink(true)
+        #expect(n.pill == nil, "the pill said it again under the chat's title")
+        #expect(n.shown == .link(.connecting), "the link's state itself is unchanged")
+        n.titleShowsLink(true)
+        n.titleShowsLink(false)
+        #expect(n.pill == nil, "another title in front still says it")
+        n.titleShowsLink(false)
+        #expect(n.pill == .connecting, "back on a page whose title does not say it: the pill again")
+        n.titleShowsLink(false)
+        n.titleShowsLink(true)
+        #expect(n.pill == nil, "an extra goodbye does not leave the count below zero")
+        n.titleShowsLink(false)
+        n.linkChanged(.online)
+        #expect(n.pill == nil)
+    }
 }
 #endif

@@ -127,6 +127,8 @@ As long as room is made through the window's safe area, it can't be fixed cleanl
 - **One-off results are toasts**: the result of something just done (archived, deleted, pinned, copied, submitted, send failed, deploy failed…, i.e. every `AppModel.toast`),
   short (info / success 2.5 s, error 4 s), one at a time, the new one replacing the old. It looks like the design system's `ToastCapsule`; connection status is `ShellLinkPill` (the same capsule:
   Liquid Glass, or the raised capsule under the BeautifulUI style). The keyboard is at the bottom and these are at the top, so they're never covered.
+- **Said once**: while a page whose own title shows connection status is in front (an agent's conversation, a subagent's included; Inbox and Machines pushed in the shell, `ConnectionTitle`),
+  it registers with `.titleSaysLink()` and the shell's pill stays away (`ShellNotices.pill`), so "Connecting…" is not said again under the title; back on a page whose title doesn't show it (Assistant, the Agents list) the pill shows as before.
 - Old Layout, iPad, Mac: the toast is `ToastOverlay` (the same `ToastCapsule`, tap to dismiss), and connection status is in the title.
   Before the shell is on screen (the welcome page, the engine step and the checklist after pairing) there is no `ToastWindow` either, so `ToastOverlay` is used there too: otherwise an error from opening a pairing link on the welcome page (hub out of reach, incomplete link) would never show (#4273).
 

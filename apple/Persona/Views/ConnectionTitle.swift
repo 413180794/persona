@@ -24,6 +24,7 @@ struct ConnectionTitle: View {
         }
         .animation(Theme.Motion.standard, value: phase)
         .connectionDetails($details)
+        .titleSaysLink() // a page pushed in the shell (Inbox, Machines): its pill does not say it again
         #if DEBUG
         // `-openConnectionDetails YES` (with `-showConnection …`): the details open (screenshots).
         .task { if phase != .online, UserDefaults.standard.bool(forKey: "openConnectionDetails") { details = true } }

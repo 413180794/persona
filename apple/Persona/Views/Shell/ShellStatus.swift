@@ -19,6 +19,18 @@ import SwiftUI
     /// How many times the link's state came and went (`probe.shell`: a toast must not bring it).
     private(set) var opened = 0
     private(set) var folded = 0
+    /// How many views in front say the link in their own title (an agent's chat, 收件箱, 机器: `titleSaysLink()`). While
+    /// any does the pill stays away: it said 连接中… a second time just under the chat's title.
+    private(set) var titles = 0
+    /// The link's state as the pill shows it: nil while the hub is reached or a title in front already says it.
+    var pill: ConnectionStatus.Phase? {
+        guard titles == 0, case .link(let phase)? = shown else { return nil }
+        return phase
+    }
+
+    func titleShowsLink(_ on: Bool) {
+        titles = max(0, titles + (on ? 1 : -1))
+    }
 
     func linkChanged(_ phase: ConnectionStatus.Phase) {
         let want: Item? = phase == .online ? nil : .link(phase)
@@ -189,14 +201,14 @@ private struct ToastWindowRoot: View {
     var body: some View {
         let size = model.textSize.applied(to: systemTypeSize)
         VStack(spacing: Theme.Space.s) {
-            if case .link(let phase)? = notices.shown {
+            if let phase = notices.pill {
                 ShellLinkPill(phase: phase)
                     .accessibilityIdentifier("shell-connection")
                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
             }
             ToastOverlay(tapToDismiss: false, onActionFrame: onActionFrame)
         }
-            .animation(Theme.Motion.standard, value: notices.shown)
+            .animation(Theme.Motion.standard, value: notices.pill)
             .padding(.top, ShellNavigationClearance.needed(at: size))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .environment(model)
@@ -206,3 +218,23 @@ private struct ToastWindowRoot: View {
     }
 }
 #endif
+
+/// A view in a title that says the hub's link itself (`ConnectionLabel`): while it is on screen in front, the shell's
+/// floating pill does not say it too. Outside the shell (old layout, iPad, Mac) nothing.
+private struct TitleSaysLink: ViewModifier {
+    @Environment(\.shell) private var shell
+
+    func body(content: Content) -> some View {
+        #if os(iOS) || os(visionOS)
+        content.onTabVisibility(appear: { shell?.notices.titleShowsLink(true) },
+                                disappear: { shell?.notices.titleShowsLink(false) })
+        #else
+        content
+        #endif
+    }
+}
+
+extension View {
+    /// This title says 等待网络 / 连接中… / 更新中… itself: the shell's pill keeps out of its way (`ShellNotices.pill`).
+    func titleSaysLink() -> some View { modifier(TitleSaysLink()) }
+}
