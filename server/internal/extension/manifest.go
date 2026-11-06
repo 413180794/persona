@@ -460,6 +460,12 @@ func (m *Manifest) Validate() error {
 				}
 			}
 		}
+		if name == "error_reports" && !m.Permissions.ErrorReports {
+			bad("contributes.error_reports needs permissions.error_reports (the user agrees that it gets the error and crash reports)")
+		}
+		if name == "error_reports" && !slices.Contains(m.Activation(), OnStartup) {
+			bad("contributes.error_reports: reports are given to a plugin that runs: activation_events on_startup")
+		}
 		if name == "events" && !slices.Contains(m.Activation(), OnStartup) {
 			bad("contributes.events: events are told to a plugin that runs: activation_events on_startup")
 		}
@@ -795,6 +801,13 @@ func (m *Manifest) Surfaces() []string {
 func (m *Manifest) Events() []EventsItem {
 	var out []EventsItem
 	_ = json.Unmarshal(m.Contributes["events"], &out)
+	return out
+}
+
+// ErrorReports are the manifest's contributions to error_reports.
+func (m *Manifest) ErrorReports() []ErrorReportsItem {
+	var out []ErrorReportsItem
+	_ = json.Unmarshal(m.Contributes["error_reports"], &out)
 	return out
 }
 

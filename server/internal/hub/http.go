@@ -214,7 +214,7 @@ func (h *Hub) routes() http.Handler {
 	h.managerInstallRoutes(mux) // GET /i/<code>: the install script (managers_install.go)
 	mux.Handle("/api/", appAPI)
 	mux.Handle("/", h.adminRoutes(mux, appAPI, webApp(filepath.Join(h.cfg.dir, "web"))))
-	return gzipResponses(h.logf, logRequests(h, jsonRouteErrors(mux)))
+	return gzipResponses(h.logf, logRequests(h, recoverPanics(h, jsonRouteErrors(mux))))
 }
 
 func (h *Hub) auth(next http.Handler) http.Handler {

@@ -781,6 +781,27 @@ Permissions follow the endpoint that started the operation: only a device that c
 3. `succeeded`: refresh the extension list; `failed`: show `error` next to the step that failed, and when `retryable` offer **Retry** (`POST …/retry`).
 4. When opening the extensions page (or reconnecting), `GET …/operations` and keep drawing the ones in progress.
 
+## Error reports (feature `error_reports`, #5533)
+
+Clients report their errors and crashes only while `features` has `error_reports` (an extension takes them, [extensions.md](extensions.md) ("Error reports")). Without it they send nothing, and drop what they kept.
+
+`POST /api/v1/error-reports` (full device credentials: the phone, the Mac, the web; not the watch, pairing tokens or extension tokens)
+
+```json
+{"reports": [{"id": "4f0c…", "source": "android", "kind": "crash", "level": "fatal", "time": "2026-11-06T09:00:00Z",
+  "release": "1.4.0", "build": "512", "os": "android", "os_version": "16", "device_model": "Pixel 9",
+  "message": "IllegalStateException in InboxViewModel",
+  "exceptions": [{"type": "java.lang.IllegalStateException", "value": "…",
+    "frames": [{"function": "load", "module": "persona.feature.inbox.InboxViewModel", "file": "InboxViewModel.kt", "line": 88, "in_app": true}]}],
+  "breadcrumbs": [{"time": "…", "category": "navigation", "message": "inbox", "level": "info"}],
+  "tags": {"screen": "inbox"}, "previous_launch": true}]}
+```
+
+- `ErrorReport` in `schema/extension/protocol.schema.json` is the format; `source` is the client's own (`web`, `android`, `ios`, `mac`, `vision`); `hub` and `manager` are refused. `fingerprint`, `count` and `received_at` are the manager's: what a client sends there is ignored.
+- At most 20 reports and 256 KB a request (400 beyond). `202 {"enabled": true, "accepted": n, "dropped": m}`: dropped are invalid, repeated (same `id`), folded (the same problem within 10 minutes) or over the rate limit; none of them should be sent again. `200 {"enabled": false, "accepted": 0}`: the feature is off; nothing was kept.
+- **What clients put in**: no user content (message text, mail, documents, prompts, notification bodies, file names the user chose), no device ids, account, hub address or machine names; breadcrumbs carry short code-chosen text (a screen's name, a route pattern). The manager scrubs again whatever slips through.
+- **Keeping and retrying**: a client keeps reports locally until it gets a 2xx (a crash is written before the process dies and sent at the next start with `previous_launch`), at most 50 for at most 7 days, and makes each report's `id` once so a retry is recognized.
+
 ## REST (App → hub)
 
 | Method | Path | Notes |

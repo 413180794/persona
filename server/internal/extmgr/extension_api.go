@@ -84,6 +84,11 @@ func (h *Manager) features() []string {
 	if len(h.extensions.messagingSources()) > 0 && !slices.Contains(out, messagingFeature) {
 		out = append(out, messagingFeature)
 	}
+	on := h.ErrorReportsOn()
+	h.errReports.on.Store(on)
+	if on {
+		out = append(out, errorReportsFeature) // the apps and the hub send their errors (error_reports.go)
+	}
 	for _, p := range h.extensions.reg.List() {
 		if !p.Record.Enabled || p.Problem != "" {
 			continue

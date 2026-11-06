@@ -8,6 +8,8 @@ package extwire
 
 import (
 	"encoding/json"
+
+	"github.com/nwverse/persona/sdk/go/wire"
 )
 
 // Routes are the routes the manager answers (net/http patterns): the hub relays each request on them to the manager
@@ -36,6 +38,7 @@ var Routes = []string{
 	"/api/v1/machines/{mid}/computer/",
 	"/api/v1/machines/{mid}/browser",
 	"/api/v1/machines/{mid}/browser/",
+	"/api/v1/error-reports",
 }
 
 // KeptRoutes are GET routes whose last answer the hub keeps and gives while the manager is away, so the apps keep
@@ -71,6 +74,10 @@ const (
 	MethodAuthorize = "extensions.authorize"
 	// EventEmit: Emit, one-way: something the hub saw that the extensions subscribe to (agent.finished, agent.needs_you).
 	EventEmit = "extensions.emit"
+	// EventErrorReports: ErrorReports, one-way: the hub's own errors (its log's error lines, panics it recovered),
+	// sent only while the report's features have error_reports; the manager scrubs them like the apps' and gives
+	// them to the extensions (docs/extensions.md "Error reports").
+	EventErrorReports = "extensions.error_reports"
 	// MethodHubCall: HubCall → the answer: what the hub's own features ask of the manager's (Hub*).
 	MethodHubCall = "extensions.hub_call"
 )
@@ -123,6 +130,11 @@ type Authorized struct {
 type Emit struct {
 	Event  string          `json:"event"`
 	Params json.RawMessage `json:"params"`
+}
+
+// ErrorReports is EventErrorReports' params.
+type ErrorReports struct {
+	Reports []wire.ErrorReport `json:"reports"`
 }
 
 // HubCall is MethodHubCall's params.

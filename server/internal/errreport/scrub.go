@@ -1,0 +1,211 @@
+// Package errreport is the generic error and crash reporting of Persona (docs/extensions.md "Error reports"): the
+// reports of the hub, the manager and the apps are trimmed, scrubbed, fingerprinted, deduplicated and rate limited
+// here before an extension with an error_reports contribution is given them. Nothing here knows where they go.
+package errreport
+
+import (
+	"regexp"
+	"slices"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/nwverse/persona/sdk/go/wire"
+)
+
+// Limits of one report (longer is cut, more is dropped), as the schema says (ErrorReport).
+const (
+	MessageMost    = 1024
+	ValueMost      = 1024
+	NameMost       = 256
+	ExceptionsMost = 5
+	FramesMost     = 64
+	CrumbsMost     = 30
+	CrumbMost      = 200
+	TagsMost       = 16
+	TagValueMost   = 64
+	FieldMost      = 64
+)
+
+// Redacted stands in for what scrubbing took out.
+const Redacted = "<redacted>"
+
+// Scrubber takes out of a report what must never leave: user content, secrets, user names in paths, machine names,
+// addresses. Names are the machine names and host names to hide (the hub's own, the user's computers).
+type Scrubber struct {
+	names []string
+}
+
+// NewScrubber hides these machine names and host names (case-insensitive; short ones are left: "a" is no name).
+func NewScrubber(names ...string) *Scrubber {
+	s := &Scrubber{}
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if utf8.RuneCountInString(n) < 3 || slices.Contains(s.names, strings.ToLower(n)) {
+			continue
+		}
+		s.names = append(s.names, strings.ToLower(n))
+		// a host name's first label is the machine's name too ("box" of "box.example.com")
+		if i := strings.IndexByte(n, '.'); i >= 3 && !slices.Contains(s.names, strings.ToLower(n[:i])) {
+			s.names = append(s.names, strings.ToLower(n[:i]))
+		}
+	}
+	// longest first: "box.example.com" goes before "box"
+	slices.SortFunc(s.names, func(a, b string) int { return len(b) - len(a) })
+	return s
+}
+
+var (
+	// secrets with their name: token=x, "password": "x", api_key: x
+	namedSecret = regexp.MustCompile(`(?i)\b(authorization|proxy-authorization|cookie|set-cookie|token|access_token|refresh_token|id_token|api[_-]?key|apikey|secret|client_secret|password|passwd|pwd|dsn|session_?id|sid|auth|key|signature|sig)(["']?\s*[:=]\s*["']?)([^\s"'&,;]+)`)
+	// an auth scheme and its credential: Bearer x, Basic x
+	schemeSecret = regexp.MustCompile(`(?i)\b(bearer|basic|token)(\s+)([A-Za-z0-9._~+/\-]{8,}=*)`)
+	// tokens by their look: well-known prefixes, JWTs, long hex
+	tokenLike = regexp.MustCompile(`\b(pext_|sk-|sk_|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-|AKIA|ya29\.)[A-Za-z0-9._\-]{6,}|\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}(\.[A-Za-z0-9_\-]*)?|\b[0-9a-fA-F]{24,}\b`)
+	// base64-ish blobs: long runs with both digits and letters (an identifier of only letters is code, not a key)
+	blob  = regexp.MustCompile(`[A-Za-z0-9+_\-]{32,}={0,2}`)
+	email = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
+	// URLs keep scheme and path; the host, the user info, the query and the fragment go.
+	urlRe = regexp.MustCompile(`\b([a-zA-Z][a-zA-Z0-9+.\-]{1,15})://([^/\s"'<>]*)([^\s"'<>?#]*)(\?[^\s"'<>#]*)?(#[^\s"'<>]*)?`)
+	ipv4  = regexp.MustCompile(`\b(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(:\d{1,5})?\b`)
+	// IPv6: at least five groups (so 12:30:45 times are not addresses), or :: forms
+	ipv6 = regexp.MustCompile(`(?i)\[?\b([0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b\]?|\[?\b([0-9a-f]{1,4}:){1,6}:([0-9a-f]{1,4})?\b\]?|\[?::ffff:[0-9.]+\]?|\[::1\]`)
+	// the user's name in home directories: /Users/x/, /home/x/, /data00/home/x/, C:\Users\x\
+	homeDir = regexp.MustCompile(`(?i)(/Users/|/home/|/data\d*/home/|/var/home/|/root\b|[A-Z]:\\Users\\|[A-Z]:/Users/)([^/\\\s"'<>]*)`)
+	// quoted spans: what errors carry of the user's content most often
+	quoted = regexp.MustCompile("\"[^\"\\n]*\"|“[^”\\n]*”|「[^」\\n]*」|『[^』\\n]*』|`[^`\\n]*`|'[^'\\n]{2,}'")
+)
+
+// Text scrubs one string of a report.
+func (s *Scrubber) Text(v string) string {
+	if v == "" {
+		return v
+	}
+	v = strings.ToValidUTF8(v, "")
+	v = urlRe.ReplaceAllStringFunc(v, func(m string) string {
+		p := urlRe.FindStringSubmatch(m)
+		return p[1] + "://<host>" + p[3]
+	})
+	v = schemeSecret.ReplaceAllString(v, "${1}${2}"+Redacted)
+	v = namedSecret.ReplaceAllString(v, "${1}${2}"+Redacted)
+	v = tokenLike.ReplaceAllString(v, Redacted)
+	v = blob.ReplaceAllStringFunc(v, func(m string) string {
+		if strings.ContainsAny(m, "0123456789") && strings.IndexFunc(m, unicode.IsLetter) >= 0 {
+			return Redacted
+		}
+		return m
+	})
+	v = email.ReplaceAllString(v, "<email>")
+	v = homeDir.ReplaceAllString(v, "~")
+	v = ipv6.ReplaceAllString(v, "<ip>")
+	v = ipv4.ReplaceAllString(v, "<ip>")
+	for _, n := range s.names {
+		v = replaceFold(v, n, "<machine>")
+	}
+	return v
+}
+
+// Message scrubs a message or an exception's value: Text, and quoted spans become "<redacted>" (an error that
+// quotes what the user wrote must not carry it).
+func (s *Scrubber) Message(v string) string {
+	v = quoted.ReplaceAllString(v, `"`+Redacted+`"`)
+	return s.Text(v)
+}
+
+// replaceFold replaces every case-insensitive match of old (lowercase) in s.
+func replaceFold(s, old, repl string) string {
+	if old == "" {
+		return s
+	}
+	lower := strings.ToLower(s)
+	if !strings.Contains(lower, old) || len(lower) != len(s) {
+		if len(lower) != len(s) { // case mapping changed lengths: match exactly only
+			return strings.ReplaceAll(s, old, repl)
+		}
+		return s
+	}
+	var b strings.Builder
+	for {
+		i := strings.Index(lower, old)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		b.WriteString(s[:i])
+		b.WriteString(repl)
+		s, lower = s[i+len(old):], lower[i+len(old):]
+	}
+}
+
+// Report scrubs and trims r in place: every string a person or a machine could be told by; ids, enums and numbers
+// are checked by Normalize.
+func (s *Scrubber) Report(r *wire.ErrorReport) {
+	r.Message = cut(s.Message(r.Message), MessageMost)
+	r.Release = cut(s.Text(r.Release), FieldMost)
+	r.Build = cut(s.Text(r.Build), FieldMost)
+	r.Commit = cut(s.Text(r.Commit), FieldMost)
+	r.OS = cut(s.Text(r.OS), 32)
+	r.OSVersion = cut(s.Text(r.OSVersion), FieldMost)
+	r.DeviceModel = cut(s.Text(r.DeviceModel), FieldMost)
+	if len(r.Exceptions) > ExceptionsMost {
+		r.Exceptions = r.Exceptions[len(r.Exceptions)-ExceptionsMost:] // the innermost cause is last: keep it
+	}
+	for i := range r.Exceptions {
+		e := &r.Exceptions[i]
+		e.Type = cut(s.Text(e.Type), NameMost)
+		e.Value = cut(s.Message(e.Value), ValueMost)
+		if len(e.Frames) > FramesMost {
+			e.Frames = e.Frames[len(e.Frames)-FramesMost:] // innermost last: the frames nearest the error stay
+		}
+		for j := range e.Frames {
+			f := &e.Frames[j]
+			f.Function = cut(s.Text(f.Function), NameMost)
+			f.Module = cut(s.Text(f.Module), NameMost)
+			f.File = cut(s.Text(f.File), NameMost)
+			f.Line, f.Column = max(f.Line, 0), max(f.Column, 0)
+		}
+	}
+	if len(r.Breadcrumbs) > CrumbsMost {
+		r.Breadcrumbs = r.Breadcrumbs[len(r.Breadcrumbs)-CrumbsMost:]
+	}
+	for i := range r.Breadcrumbs {
+		c := &r.Breadcrumbs[i]
+		c.Category = cut(s.Text(c.Category), 64)
+		c.Message = cut(s.Message(c.Message), CrumbMost)
+		c.Level = cut(c.Level, 16)
+		c.Time = cut(c.Time, 40)
+	}
+	if len(r.Tags) > 0 {
+		tags := map[string]string{}
+		for _, k := range slices.Sorted(mapKeys(r.Tags)) {
+			if len(tags) == TagsMost || !tagKey.MatchString(k) {
+				continue
+			}
+			tags[k] = cut(s.Message(r.Tags[k]), TagValueMost)
+		}
+		r.Tags = tags
+	}
+}
+
+var tagKey = regexp.MustCompile(`^[a-z][a-z0-9_.]{0,31}$`)
+
+func mapKeys(m map[string]string) func(func(string) bool) {
+	return func(yield func(string) bool) {
+		for k := range m {
+			if !yield(k) {
+				return
+			}
+		}
+	}
+}
+
+// cut keeps at most n bytes of v, on a rune boundary.
+func cut(v string, n int) string {
+	if len(v) <= n {
+		return v
+	}
+	for n > 0 && !utf8.RuneStart(v[n]) {
+		n--
+	}
+	return v[:n]
+}

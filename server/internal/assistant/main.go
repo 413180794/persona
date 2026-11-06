@@ -12,16 +12,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/sdk/go/wire"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devices"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/errreport"
 	"github.com/nwverse/persona/server/internal/extmgr"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
@@ -34,7 +39,8 @@ import (
 // from PERSONA_ASSISTANT_TOKEN (`personad hub assistant-token` makes one). It keeps its state in the hub's Postgres,
 // found as the hub finds it: hub.json's database_url, PERSONA_DATABASE_URL over it.
 func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
-	logger := log.New(os.Stderr, "assistant: ", log.LstdFlags)
+	errs := newErrorTee(build) // its log's error lines become error reports (docs/extensions.md "Error reports")
+	logger := log.New(errs, "assistant: ", log.LstdFlags)
 	cfg, err := readHubConfig()
 	if err != nil {
 		return err
@@ -68,7 +74,7 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	if deploy == "" {
 		deploy = "external"
 	}
-	return run(ctx, build, runOptions{ID: assistantwire.AssistantID, Hub: hub, Token: token, Deploy: deploy,
+	return run(ctx, build, runOptions{ID: assistantwire.AssistantID, Hub: hub, Token: token, Deploy: deploy, Errors: errs,
 		Dir: identity.HomeDir(), DatabaseURL: cfg.DatabaseURL, Logf: logger.Printf})
 }
 
@@ -84,11 +90,17 @@ type runOptions struct {
 	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
 	StopWhenRevoked bool
 	Logf            func(format string, args ...any)
+	// Errors is the process's log writer that reports its error lines (newErrorTee); nil: run makes one.
+	Errors *errorTee
 }
 
 // run is a manager's process: its database, the computers, the extensions and the assistant itself on the hub's
 // bus, until ctx ends (or the token is refused, with StopWhenRevoked: bus.ErrRevoked).
 func run(ctx context.Context, build update.Build, o runOptions) error {
+	if o.Errors == nil {
+		o.Errors = newErrorTee(build)
+	}
+	stderr := o.Errors
 	version := build.Version
 	hub, token, deploy, home := o.Hub, o.Token, o.Deploy, o.Dir
 	logf := o.Logf
@@ -108,7 +120,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	var svc *Service
 	var ext *extmgr.Manager
 	// Dir: hub.json's usage section (the account-pool gateways and their keys) is the devices', read and written there.
-	devs := devices.New(devices.Options{Store: database, Dir: home, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
+	devs := devices.New(devices.Options{Store: database, Dir: home, Logf: log.New(stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
 			if err := svc.machineTrust(ctx, machine); err != nil { // not confirmed yet: nothing of the assistant's (machine_trust.go)
 				return nil, true, err
@@ -144,7 +156,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		Hub:       lazyHost{func() *bus.Client { return bh.Client() }}})
 	// The extensions, connectors and bots (internal/extmgr): the hub.json and secret.key of the data directory here.
 	ext = extmgr.New(extmgr.Options{Dir: home, Store: database, Build: build,
-		Logf: log.New(os.Stderr, "extensions: ", log.LstdFlags).Printf,
+		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{func() *bus.Client { return bh.Client() }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 			return bh.Answer(ctx, method, params)
@@ -159,6 +171,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		Connected: func() bool { return bh.Client().Peer() != nil },
 		Lang:      func() i18n.Lang { return svc.lang(context.Background()) },
 		Timezone:  func() string { return svc.userTZ() }})
+	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
 		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
 	// The knowledge base in the data directory here (the hub's own beside it), kept as the hub's hub.json says (hello).
@@ -234,4 +247,27 @@ func localHubURL(listen string) string {
 		host = "127.0.0.1"
 	}
 	return "http://" + net.JoinHostPort(host, port)
+}
+
+// errorTee is the manager process's log writer: lines go to stderr, and its error lines become the manager's error
+// reports while an extension takes them (ext is set once the manager exists).
+type errorTee struct {
+	*errreport.Tee
+	ext *atomic.Pointer[extmgr.Manager]
+}
+
+func newErrorTee(build update.Build) *errorTee {
+	ref := &atomic.Pointer[extmgr.Manager]{}
+	return &errorTee{ext: ref, Tee: &errreport.Tee{W: os.Stderr, Build: managerErrorBuild(build),
+		On:   func() bool { return ref.Load().ErrorReportsAsked() },
+		Sink: func(r wire.ErrorReport) { ref.Load().ReportOwn(r) }}}
+}
+
+// managerErrorBuild is what the manager says of itself in its error reports.
+func managerErrorBuild(b update.Build) errreport.Build {
+	out := errreport.Build{Source: wire.ErrorSourceManager, Release: b.Version, Commit: b.Commit}
+	if b.Number > 0 {
+		out.Build = strconv.FormatInt(b.Number, 10)
+	}
+	return out
 }

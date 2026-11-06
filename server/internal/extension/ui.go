@@ -214,6 +214,10 @@ type EventsItem struct {
 	Subscribe []string `json:"subscribe"`
 }
 
+// ErrorReportsItem is a contribution to error_reports: the error and crash reports it is given (Sources: only those;
+// none: all).
+type ErrorReportsItem = wire.ErrorReportsItem
+
 // Events this hub has.
 var (
 	EventTopics = map[string]string{

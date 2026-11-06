@@ -212,6 +212,9 @@ type Permissions struct {
 	// Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
 	// directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
 	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
+	// It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user
+	// names, machine names or IP addresses). Needed by contributes.error_reports.
+	ErrorReports bool `json:"error_reports,omitempty"`
 }
 
 // Contributes: contributions by extension point. A point this hub does not know installs with a warning, not taking
@@ -238,6 +241,7 @@ type Contributes struct {
 	TriageTemplates []TriageTemplateItem `json:"triage_templates,omitempty"`
 	AgentFilters    []AgentFilterItem    `json:"agent_filters,omitempty"`
 	Tunnels         []TunnelItem         `json:"tunnels,omitempty"`
+	ErrorReports    []ErrorReportsItem   `json:"error_reports,omitempty"`
 	Messaging       []MessagingItem      `json:"messaging,omitempty"`
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
@@ -249,7 +253,7 @@ func (v *Contributes) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	declared := map[string]json.RawMessage{}
-	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging"} {
+	for _, key := range []string{"connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"} {
 		if value, ok := extra[key]; ok {
 			declared[key] = value
 			delete(extra, key)
@@ -281,7 +285,7 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	}
 	for key, value := range v.AdditionalProperties {
 		switch key {
-		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging":
+		case "connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging":
 			continue
 		}
 		fields[key] = value
@@ -471,6 +475,14 @@ type TriageTemplateItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+}
+
+// ErrorReportsItem: it is given the error and crash reports of the hub and the user's devices
+// (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.
+type ErrorReportsItem struct {
+	ID string `json:"id"`
+	// Only reports from these; omitted: all.
+	Sources []string `json:"sources,omitempty"`
 }
 
 // TunnelItem: A tunnel the apps can reach this hub through when its own addresses do not answer (docs "In-app
@@ -1040,6 +1052,110 @@ type NotifyAction struct {
 
 type NotifyActionInput struct {
 	Placeholder string `json:"placeholder,omitempty"`
+}
+
+// ErrorSource: which part of Persona an error report comes from.
+const (
+	ErrorSourceHub     = "hub"
+	ErrorSourceManager = "manager"
+	ErrorSourceWeb     = "web"
+	ErrorSourceAndroid = "android"
+	ErrorSourceIos     = "ios"
+	ErrorSourceMac     = "mac"
+	ErrorSourceWatch   = "watch"
+	ErrorSourceVision  = "vision"
+)
+
+// ErrorSources are the values of ErrorSource, in order.
+var ErrorSources = []string{"hub", "manager", "web", "android", "ios", "mac", "watch", "vision"}
+
+// ErrorKind: what an error report is: a caught exception, a crash (the app died), an ANR (it hung), a Go panic, an
+// error line of a log.
+const (
+	ErrorKindException = "exception"
+	ErrorKindCrash     = "crash"
+	ErrorKindAnr       = "anr"
+	ErrorKindPanic     = "panic"
+	ErrorKindLog       = "log"
+)
+
+// ErrorKinds are the values of ErrorKind, in order.
+var ErrorKinds = []string{"exception", "crash", "anr", "panic", "log"}
+
+// Values of ErrorLevel.
+const (
+	ErrorLevelFatal   = "fatal"
+	ErrorLevelError   = "error"
+	ErrorLevelWarning = "warning"
+)
+
+// ErrorLevels are the values of ErrorLevel, in order.
+var ErrorLevels = []string{"fatal", "error", "warning"}
+
+// ErrorFrame: one frame of a stack trace.
+type ErrorFrame struct {
+	Function string `json:"function,omitempty"`
+	Module   string `json:"module,omitempty"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
+	// Persona's own code, not a library's or the system's.
+	InApp bool `json:"in_app,omitempty"`
+}
+
+// ErrorException: one exception of a report; frames innermost last (the order Sentry uses).
+type ErrorException struct {
+	Type   string       `json:"type"`
+	Value  string       `json:"value,omitempty"`
+	Frames []ErrorFrame `json:"frames,omitempty"`
+}
+
+// ErrorBreadcrumb: something that happened before the error: a screen opened, a request failed. Code-chosen short
+// text, no user content.
+type ErrorBreadcrumb struct {
+	Time     string `json:"time,omitempty"`
+	Category string `json:"category"`
+	Message  string `json:"message,omitempty"`
+	Level    string `json:"level,omitempty"`
+}
+
+// ErrorReport: an error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
+// /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
+// it.
+type ErrorReport struct {
+	// Made by the sender; the same id again (a retry) is dropped.
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Kind   string `json:"kind"`
+	Level  string `json:"level"`
+	// When it happened, RFC 3339.
+	Time      string `json:"time"`
+	Release   string `json:"release,omitempty"`
+	Build     string `json:"build,omitempty"`
+	Commit    string `json:"commit,omitempty"`
+	OS        string `json:"os,omitempty"`
+	OSVersion string `json:"os_version,omitempty"`
+	// The model only, never an id of the device.
+	DeviceModel string            `json:"device_model,omitempty"`
+	Message     string            `json:"message,omitempty"`
+	Exceptions  []ErrorException  `json:"exceptions,omitempty"`
+	Breadcrumbs []ErrorBreadcrumb `json:"breadcrumbs,omitempty"`
+	Tags        map[string]string `json:"tags,omitempty"`
+	// It happened in an earlier run of the app and is sent now.
+	PreviousLaunch bool `json:"previous_launch,omitempty"`
+	// Set by the manager: reports with the same one are the same problem.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	// Set by the manager: how many of this fingerprint it folded into this one (1 or more).
+	Count int `json:"count,omitempty"`
+	// Set by the manager, RFC 3339.
+	ReceivedAt string `json:"received_at,omitempty"`
+}
+
+// ErrorReportsDeliver: error_reports.deliver, sent to an extension with an error_reports contribution: reports,
+// already scrubbed, deduplicated and rate limited. A notification: no answer, not sent again.
+type ErrorReportsDeliver struct {
+	Contribution string        `json:"contribution"`
+	Reports      []ErrorReport `json:"reports"`
 }
 
 // ExtensionNotification: extension_notification in an extension's alert push: whose it is, the page a tap opens (ui
@@ -3630,6 +3746,7 @@ var newDef = map[string]func() any{
 	"LookDot":                      func() any { return new(LookDot) },
 	"LookItem":                     func() any { return new(LookItem) },
 	"TriageTemplateItem":           func() any { return new(TriageTemplateItem) },
+	"ErrorReportsItem":             func() any { return new(ErrorReportsItem) },
 	"TunnelItem":                   func() any { return new(TunnelItem) },
 	"AgentFilterItem":              func() any { return new(AgentFilterItem) },
 	"ConnectorItem":                func() any { return new(ConnectorItem) },
@@ -3683,6 +3800,11 @@ var newDef = map[string]func() any{
 	"ShortcutResult":               func() any { return new(ShortcutResult) },
 	"NotifyAction":                 func() any { return new(NotifyAction) },
 	"NotifyActionInput":            func() any { return new(NotifyActionInput) },
+	"ErrorFrame":                   func() any { return new(ErrorFrame) },
+	"ErrorException":               func() any { return new(ErrorException) },
+	"ErrorBreadcrumb":              func() any { return new(ErrorBreadcrumb) },
+	"ErrorReport":                  func() any { return new(ErrorReport) },
+	"ErrorReportsDeliver":          func() any { return new(ErrorReportsDeliver) },
 	"ExtensionNotification":        func() any { return new(ExtensionNotification) },
 	"View":                         func() any { return new(View) },
 	"Section":                      func() any { return new(Section) },

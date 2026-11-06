@@ -13,6 +13,7 @@
 -                    /api/v1/connectors
 -                    /api/v1/connectors/
 -                    /api/v1/devices/{id}/widgets
+-                    /api/v1/error-reports
 -                    /api/v1/extensions
 -                    /api/v1/extensions/
 extensions.call:{id} /api/v1/extensions/{id}/
@@ -281,6 +282,7 @@ assistant.ask        POST /api/v1/assistant/conversations/{id}/stop
 -                    POST /api/v1/devices/{id}/live-activity
 -                    POST /api/v1/devices/{id}/lock-tests
 -                    POST /api/v1/devices/{id}/lock-tests/{test_id}/receipt
+-                    POST /api/v1/error-reports
 -                    POST /api/v1/extensions/-/dev
 -                    POST /api/v1/extensions/-/install
 -                    POST /api/v1/extensions/-/operations/{op}/retry

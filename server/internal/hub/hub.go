@@ -20,6 +20,9 @@ import (
 )
 
 type Hub struct {
+	// errs: the hub's own error reports on their way to the managers (error_reports.go).
+	errs hubErrors
+
 	deployCtx     context.Context // canceled with the hub; accepted node updates resume from Postgres
 	nodeWorkers   sync.WaitGroup
 	shutdown      *shutdownBudget
@@ -192,6 +195,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, calls: map[string]chan proto.ToolResult{},
 		slot: slot,
 	}
+	h.teeErrors() // the log's error lines become reports while an extension takes them (error_reports.go)
 	h.builtinLooks = builtinPersonaFS()
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)

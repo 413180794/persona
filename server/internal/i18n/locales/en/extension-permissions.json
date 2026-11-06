@@ -73,5 +73,7 @@
   "event_kb_forgotten": "A source was removed from the knowledge base (source; requires knowledge base read access)",
   "event_inbox_changed": "Inbox items were added or updated (source, kind, title)",
   "event_agent_needs_you": "An agent is waiting for your answer or approval (computer, session, question)",
-  "event_agent_finished": "An agent finished (computer, session, title)"
+  "event_agent_finished": "An agent finished (computer, session, title)",
+  "error_reports_title": "Receive error and crash reports",
+  "error_reports_detail": "Errors and crashes of the hub and your devices, scrubbed first: no message text, tokens, user names, machine names or IP addresses. It decides where they go (for example an error tracker)"
 }

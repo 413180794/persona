@@ -311,6 +311,11 @@ data class ExtensionPermissions(
      * directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
      */
     @SerialName("agent_runtimes") val agentRuntimes: Boolean? = null,
+    /**
+     * It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens,
+     * user names, machine names or IP addresses). Needed by contributes.error_reports.
+     */
+    @SerialName("error_reports") val errorReports: Boolean? = null,
 )
 
 /**
@@ -339,6 +344,7 @@ data class ExtensionContributes(
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
     val tunnels: List<ExtensionTunnelItem>? = null,
+    @SerialName("error_reports") val errorReports: List<ExtensionErrorReportsItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
     /** Extra keys stay at this object's level on the wire; declared fields always win. */
     val additionalProperties: Map<String, JsonElement> = emptyMap(),
@@ -367,12 +373,13 @@ private data class ExtensionContributesKnown(
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
     val tunnels: List<ExtensionTunnelItem>? = null,
+    @SerialName("error_reports") val errorReports: List<ExtensionErrorReportsItem>? = null,
     val messaging: List<ExtensionMessagingItem>? = null,
 )
 
 object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
     private val known = ExtensionContributesKnown.serializer()
-    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging")
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging")
     override val descriptor: SerialDescriptor = known.descriptor
 
     override fun deserialize(decoder: Decoder): ExtensionContributes {
@@ -402,6 +409,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             triageTemplates = fields.triageTemplates,
             agentFilters = fields.agentFilters,
             tunnels = fields.tunnels,
+            errorReports = fields.errorReports,
             messaging = fields.messaging,
             additionalProperties = obj.filterKeys { it !in keys },
         )
@@ -431,6 +439,7 @@ object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
             triageTemplates = value.triageTemplates,
             agentFilters = value.agentFilters,
             tunnels = value.tunnels,
+            errorReports = value.errorReports,
             messaging = value.messaging,
         )
         val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
@@ -664,6 +673,19 @@ data class ExtensionTriageTemplateItem(
     val id: String = "",
     val title: String = "",
     val text: String = "",
+)
+
+/**
+ * It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the
+ * program to speak the protocol, on_startup and permissions.error_reports.
+ */
+@Serializable
+data class ExtensionErrorReportsItem(
+    val id: String = "",
+    /**
+     * Only reports from these; omitted: all.
+     */
+    val sources: List<String>? = null,
 )
 
 /**
@@ -1410,6 +1432,141 @@ data class ExtensionNotifyAction(
 @Serializable
 data class ExtensionNotifyActionInput(
     val placeholder: String? = null,
+)
+
+/**
+ * Which part of Persona an error report comes from.
+ */
+object ExtensionErrorSource {
+    const val HUB = "hub"
+    const val MANAGER = "manager"
+    const val WEB = "web"
+    const val ANDROID = "android"
+    const val IOS = "ios"
+    const val MAC = "mac"
+    const val WATCH = "watch"
+    const val VISION = "vision"
+    val ALL = listOf("hub", "manager", "web", "android", "ios", "mac", "watch", "vision")
+}
+
+/**
+ * What an error report is: a caught exception, a crash (the app died), an ANR (it hung), a Go panic, an error line of
+ * a log.
+ */
+object ExtensionErrorKind {
+    const val EXCEPTION = "exception"
+    const val CRASH = "crash"
+    const val ANR = "anr"
+    const val PANIC = "panic"
+    const val LOG = "log"
+    val ALL = listOf("exception", "crash", "anr", "panic", "log")
+}
+
+/**
+ * Values of ErrorLevel.
+ */
+object ExtensionErrorLevel {
+    const val FATAL = "fatal"
+    const val ERROR = "error"
+    const val WARNING = "warning"
+    val ALL = listOf("fatal", "error", "warning")
+}
+
+/**
+ * One frame of a stack trace.
+ */
+@Serializable
+data class ExtensionErrorFrame(
+    val function: String? = null,
+    val module: String? = null,
+    val file: String? = null,
+    val line: Int? = null,
+    val column: Int? = null,
+    /**
+     * Persona's own code, not a library's or the system's.
+     */
+    @SerialName("in_app") val inApp: Boolean? = null,
+)
+
+/**
+ * One exception of a report; frames innermost last (the order Sentry uses).
+ */
+@Serializable
+data class ExtensionErrorException(
+    val type: String = "",
+    val value: String? = null,
+    val frames: List<ExtensionErrorFrame>? = null,
+)
+
+/**
+ * Something that happened before the error: a screen opened, a request failed. Code-chosen short text, no user
+ * content.
+ */
+@Serializable
+data class ExtensionErrorBreadcrumb(
+    val time: String? = null,
+    val category: String = "",
+    val message: String? = null,
+    val level: String? = null,
+)
+
+/**
+ * An error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
+ * /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
+ * it.
+ */
+@Serializable
+data class ExtensionErrorReport(
+    /**
+     * Made by the sender; the same id again (a retry) is dropped.
+     */
+    val id: String = "",
+    val source: String = "",
+    val kind: String = "",
+    val level: String = "",
+    /**
+     * When it happened, RFC 3339.
+     */
+    val time: String = "",
+    val release: String? = null,
+    val build: String? = null,
+    val commit: String? = null,
+    val os: String? = null,
+    @SerialName("os_version") val osVersion: String? = null,
+    /**
+     * The model only, never an id of the device.
+     */
+    @SerialName("device_model") val deviceModel: String? = null,
+    val message: String? = null,
+    val exceptions: List<ExtensionErrorException>? = null,
+    val breadcrumbs: List<ExtensionErrorBreadcrumb>? = null,
+    val tags: Map<String, String>? = null,
+    /**
+     * It happened in an earlier run of the app and is sent now.
+     */
+    @SerialName("previous_launch") val previousLaunch: Boolean? = null,
+    /**
+     * Set by the manager: reports with the same one are the same problem.
+     */
+    val fingerprint: String? = null,
+    /**
+     * Set by the manager: how many of this fingerprint it folded into this one (1 or more).
+     */
+    val count: Int? = null,
+    /**
+     * Set by the manager, RFC 3339.
+     */
+    @SerialName("received_at") val receivedAt: String? = null,
+)
+
+/**
+ * error_reports.deliver, sent to an extension with an error_reports contribution: reports, already scrubbed,
+ * deduplicated and rate limited. A notification: no answer, not sent again.
+ */
+@Serializable
+data class ExtensionErrorReportsDeliver(
+    val contribution: String = "",
+    val reports: List<ExtensionErrorReport> = emptyList(),
 )
 
 /**

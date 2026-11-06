@@ -384,6 +384,80 @@
       "type": "object",
       "properties": {"placeholder": {"type": "string", "maxLength": 80}}
     },
+    "ErrorSource": {"description": "Which part of Persona an error report comes from.", "type": "string",
+      "enum": ["hub", "manager", "web", "android", "ios", "mac", "watch", "vision"]},
+    "ErrorKind": {"description": "What an error report is: a caught exception, a crash (the app died), an ANR (it hung), a Go panic, an error line of a log.", "type": "string",
+      "enum": ["exception", "crash", "anr", "panic", "log"]},
+    "ErrorLevel": {"type": "string", "enum": ["fatal", "error", "warning"]},
+    "ErrorFrame": {
+      "description": "One frame of a stack trace.",
+      "type": "object",
+      "properties": {
+        "function": {"type": "string", "maxLength": 256},
+        "module": {"type": "string", "maxLength": 256},
+        "file": {"type": "string", "maxLength": 256},
+        "line": {"type": "integer", "minimum": 0},
+        "column": {"type": "integer", "minimum": 0},
+        "in_app": {"type": "boolean", "description": "Persona's own code, not a library's or the system's."}
+      },
+      "required": []
+    },
+    "ErrorException": {
+      "description": "One exception of a report; frames innermost last (the order Sentry uses).",
+      "type": "object",
+      "properties": {
+        "type": {"type": "string", "maxLength": 256},
+        "value": {"type": "string", "maxLength": 1024},
+        "frames": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/ErrorFrame"}}
+      },
+      "required": ["type"]
+    },
+    "ErrorBreadcrumb": {
+      "description": "Something that happened before the error: a screen opened, a request failed. Code-chosen short text, no user content.",
+      "type": "object",
+      "properties": {
+        "time": {"type": "string"},
+        "category": {"type": "string", "maxLength": 64},
+        "message": {"type": "string", "maxLength": 200},
+        "level": {"type": "string", "maxLength": 16}
+      },
+      "required": ["category"]
+    },
+    "ErrorReport": {
+      "description": "An error or crash of the hub or a device (docs/extensions.md \"Error reports\"). Clients send it to POST /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets it.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 64, "description": "Made by the sender; the same id again (a retry) is dropped."},
+        "source": {"$ref": "#/$defs/ErrorSource"},
+        "kind": {"$ref": "#/$defs/ErrorKind"},
+        "level": {"$ref": "#/$defs/ErrorLevel"},
+        "time": {"type": "string", "description": "When it happened, RFC 3339."},
+        "release": {"type": "string", "maxLength": 64},
+        "build": {"type": "string", "maxLength": 64},
+        "commit": {"type": "string", "maxLength": 64},
+        "os": {"type": "string", "maxLength": 32},
+        "os_version": {"type": "string", "maxLength": 64},
+        "device_model": {"type": "string", "maxLength": 64, "description": "The model only, never an id of the device."},
+        "message": {"type": "string", "maxLength": 1024},
+        "exceptions": {"type": "array", "maxItems": 5, "items": {"$ref": "#/$defs/ErrorException"}},
+        "breadcrumbs": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/ErrorBreadcrumb"}},
+        "tags": {"type": "object", "maxProperties": 16, "additionalProperties": {"type": "string", "maxLength": 64}},
+        "previous_launch": {"type": "boolean", "description": "It happened in an earlier run of the app and is sent now."},
+        "fingerprint": {"type": "string", "description": "Set by the manager: reports with the same one are the same problem."},
+        "count": {"type": "integer", "minimum": 1, "description": "Set by the manager: how many of this fingerprint it folded into this one (1 or more)."},
+        "received_at": {"type": "string", "description": "Set by the manager, RFC 3339."}
+      },
+      "required": ["id", "source", "kind", "level", "time"]
+    },
+    "ErrorReportsDeliver": {
+      "description": "error_reports.deliver, sent to an extension with an error_reports contribution: reports, already scrubbed, deduplicated and rate limited. A notification: no answer, not sent again.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "reports": {"type": "array", "items": {"$ref": "#/$defs/ErrorReport"}}
+      },
+      "required": ["contribution", "reports"]
+    },
     "ExtensionNotification": {
       "description": "extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).",
       "type": "object",

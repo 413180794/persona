@@ -242,7 +242,8 @@
         "launcher_keys": {"type": "boolean"},
         "gh_login": {"type": "boolean", "description": "It asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub connector), held in its memory only."},
         "usage_gateways": {"type": "boolean", "description": "It reads the account list of the account-pool gateways in the hub's usage sources (usage.gateway_accounts): accounts, status and quota windows, never a key."},
-        "agent_runtimes": {"type": "boolean", "description": "Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime."}
+        "agent_runtimes": {"type": "boolean", "description": "Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime."},
+        "error_reports": {"type": "boolean", "description": "It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens, user names, machine names or IP addresses). Needed by contributes.error_reports."}
       }
     },
     "Contributes": {
@@ -272,6 +273,7 @@
         "triage_templates": {"type": "array", "items": {"$ref": "#/$defs/TriageTemplateItem"}},
         "agent_filters": {"type": "array", "items": {"$ref": "#/$defs/AgentFilterItem"}},
         "tunnels": {"type": "array", "items": {"$ref": "#/$defs/TunnelItem"}},
+        "error_reports": {"type": "array", "items": {"$ref": "#/$defs/ErrorReportsItem"}},
         "messaging": {"type": "array", "items": {"$ref": "messaging.schema.json#/$defs/MessagingItem"}}
       }
     },
@@ -432,6 +434,16 @@
         "text": {"type": "string", "minLength": 1, "maxLength": 4000}
       },
       "required": ["id", "title", "text"]
+    },
+    "ErrorReportsItem": {
+      "description": "It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the program to speak the protocol, on_startup and permissions.error_reports.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "sources": {"type": "array", "description": "Only reports from these; omitted: all.", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "protocol.schema.json#/$defs/ErrorSource"}}
+      },
+      "required": ["id"]
     },
     "TunnelItem": {
       "description": "A tunnel the apps can reach this hub through when its own addresses do not answer (docs \"In-app tunnels\"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.",

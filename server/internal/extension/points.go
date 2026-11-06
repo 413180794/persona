@@ -631,6 +631,23 @@ var Points = map[string]Point{
 		}
 		return e.ID, nil
 	}},
+	// error_reports: the hub's and the devices' errors and crashes, scrubbed, given to the program as
+	// error_reports.deliver (docs/extensions.md "Error reports").
+	"error_reports": {Name: "error_reports", Namespace: "error_reports", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var e ErrorReportsItem
+		if err := strict(raw, &e); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(e.ID) {
+			return e.ID, fmt.Errorf("error_reports id %q: a-z0-9_-", e.ID)
+		}
+		for _, s := range e.Sources {
+			if !slices.Contains(wire.ErrorSources, s) {
+				return e.ID, fmt.Errorf("error_reports %s: no source %q (%s)", e.ID, s, strings.Join(wire.ErrorSources, ", "))
+			}
+		}
+		return e.ID, nil
+	}},
 	"voice": {Name: "voice", Namespace: "voice", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var v VoiceItem
 		if err := strict(raw, &v); err != nil {

@@ -618,8 +618,11 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     /// Its program is an agent runtime that connects to this machine's node; in a sandbox it gets a socket in its run
     /// directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
     var agentRuntimes: Bool?
+    /// It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens,
+    /// user names, machine names or IP addresses). Needed by contributes.error_reports.
+    var errorReports: Bool?
 
-    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil) {
+    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil, ghLogin: Bool? = nil, usageGateways: Bool? = nil, agentRuntimes: Bool? = nil, errorReports: Bool? = nil) {
         self.network = network
         self.hubApi = hubApi
         self.hub = hub
@@ -627,6 +630,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.ghLogin = ghLogin
         self.usageGateways = usageGateways
         self.agentRuntimes = agentRuntimes
+        self.errorReports = errorReports
     }
 
     enum CodingKeys: String, CodingKey {
@@ -637,6 +641,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         case ghLogin = "gh_login"
         case usageGateways = "usage_gateways"
         case agentRuntimes = "agent_runtimes"
+        case errorReports = "error_reports"
     }
 
     init(from decoder: Decoder) throws {
@@ -648,6 +653,7 @@ nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
         self.ghLogin = try? c.decodeIfPresent(Bool.self, forKey: .ghLogin)
         self.usageGateways = try? c.decodeIfPresent(Bool.self, forKey: .usageGateways)
         self.agentRuntimes = try? c.decodeIfPresent(Bool.self, forKey: .agentRuntimes)
+        self.errorReports = try? c.decodeIfPresent(Bool.self, forKey: .errorReports)
     }
 }
 
@@ -674,11 +680,12 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var triageTemplates: [ExtensionTriageTemplateItem]?
     var agentFilters: [ExtensionAgentFilterItem]?
     var tunnels: [ExtensionTunnelItem]?
+    var errorReports: [ExtensionErrorReportsItem]?
     var messaging: [ExtensionMessagingItem]?
     /// Extra keys stay at this object's level on the wire; declared fields always win.
     var additionalProperties: [String: JSONValue]
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, mcpServers: [ExtensionMCPServerItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, tunnels: [ExtensionTunnelItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, mcpServers: [ExtensionMCPServerItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, looks: [ExtensionLookItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, tunnels: [ExtensionTunnelItem]? = nil, errorReports: [ExtensionErrorReportsItem]? = nil, messaging: [ExtensionMessagingItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -700,6 +707,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.triageTemplates = triageTemplates
         self.agentFilters = agentFilters
         self.tunnels = tunnels
+        self.errorReports = errorReports
         self.messaging = messaging
         self.additionalProperties = additionalProperties
     }
@@ -726,6 +734,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         case triageTemplates = "triage_templates"
         case agentFilters = "agent_filters"
         case tunnels
+        case errorReports = "error_reports"
         case messaging
     }
 
@@ -752,13 +761,14 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.triageTemplates = ExtensionWireJSON.decode([ExtensionTriageTemplateItem].self, from: raw["triage_templates"])
         self.agentFilters = ExtensionWireJSON.decode([ExtensionAgentFilterItem].self, from: raw["agent_filters"])
         self.tunnels = ExtensionWireJSON.decode([ExtensionTunnelItem].self, from: raw["tunnels"])
+        self.errorReports = ExtensionWireJSON.decode([ExtensionErrorReportsItem].self, from: raw["error_reports"])
         self.messaging = ExtensionWireJSON.decode([ExtensionMessagingItem].self, from: raw["messaging"])
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"]
         additionalProperties = raw.filter { !known.contains($0.key) }
     }
 
     func encode(to encoder: Encoder) throws {
-        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "messaging"]
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "mcp_servers", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "looks", "triage_templates", "agent_filters", "tunnels", "error_reports", "messaging"]
         var fields = additionalProperties.filter { !known.contains($0.key) }
         if let value = connectors { fields["connectors"] = try ExtensionWireJSON.encode(value) }
         if let value = voice { fields["voice"] = try ExtensionWireJSON.encode(value) }
@@ -781,6 +791,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         if let value = triageTemplates { fields["triage_templates"] = try ExtensionWireJSON.encode(value) }
         if let value = agentFilters { fields["agent_filters"] = try ExtensionWireJSON.encode(value) }
         if let value = tunnels { fields["tunnels"] = try ExtensionWireJSON.encode(value) }
+        if let value = errorReports { fields["error_reports"] = try ExtensionWireJSON.encode(value) }
         if let value = messaging { fields["messaging"] = try ExtensionWireJSON.encode(value) }
         var container = encoder.singleValueContainer()
         try container.encode(fields)
@@ -1214,6 +1225,30 @@ nonisolated struct ExtensionTriageTemplateItem: Codable, Hashable, Sendable {
         self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
         self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+    }
+}
+
+/// It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the
+/// program to speak the protocol, on_startup and permissions.error_reports.
+nonisolated struct ExtensionErrorReportsItem: Codable, Hashable, Sendable {
+    var id: String
+    /// Only reports from these; omitted: all.
+    var sources: [String]?
+
+    init(id: String = "", sources: [String]? = nil) {
+        self.id = id
+        self.sources = sources
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sources
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.sources = try? c.decodeIfPresent([String].self, forKey: .sources)
     }
 }
 
@@ -3071,6 +3106,256 @@ nonisolated struct ExtensionNotifyActionInput: Codable, Hashable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.placeholder = try? c.decodeIfPresent(String.self, forKey: .placeholder)
+    }
+}
+
+/// Which part of Persona an error report comes from.
+nonisolated enum ExtensionErrorSource {
+    static let hub = "hub"
+    static let manager = "manager"
+    static let web = "web"
+    static let android = "android"
+    static let ios = "ios"
+    static let mac = "mac"
+    static let watch = "watch"
+    static let vision = "vision"
+    static let all = ["hub", "manager", "web", "android", "ios", "mac", "watch", "vision"]
+}
+
+/// What an error report is: a caught exception, a crash (the app died), an ANR (it hung), a Go panic, an error line
+/// of a log.
+nonisolated enum ExtensionErrorKind {
+    static let exception = "exception"
+    static let crash = "crash"
+    static let anr = "anr"
+    static let panic = "panic"
+    static let log = "log"
+    static let all = ["exception", "crash", "anr", "panic", "log"]
+}
+
+/// Values of ErrorLevel.
+nonisolated enum ExtensionErrorLevel {
+    static let fatal = "fatal"
+    static let error = "error"
+    static let warning = "warning"
+    static let all = ["fatal", "error", "warning"]
+}
+
+/// One frame of a stack trace.
+nonisolated struct ExtensionErrorFrame: Codable, Hashable, Sendable {
+    var function: String?
+    var module: String?
+    var file: String?
+    var line: Int?
+    var column: Int?
+    /// Persona's own code, not a library's or the system's.
+    var inApp: Bool?
+
+    init(function: String? = nil, module: String? = nil, file: String? = nil, line: Int? = nil, column: Int? = nil, inApp: Bool? = nil) {
+        self.function = function
+        self.module = module
+        self.file = file
+        self.line = line
+        self.column = column
+        self.inApp = inApp
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case function
+        case module
+        case file
+        case line
+        case column
+        case inApp = "in_app"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.function = try? c.decodeIfPresent(String.self, forKey: .function)
+        self.module = try? c.decodeIfPresent(String.self, forKey: .module)
+        self.file = try? c.decodeIfPresent(String.self, forKey: .file)
+        self.line = try? c.decodeIfPresent(Int.self, forKey: .line)
+        self.column = try? c.decodeIfPresent(Int.self, forKey: .column)
+        self.inApp = try? c.decodeIfPresent(Bool.self, forKey: .inApp)
+    }
+}
+
+/// One exception of a report; frames innermost last (the order Sentry uses).
+nonisolated struct ExtensionErrorException: Codable, Hashable, Sendable {
+    var type: String
+    var value: String?
+    var frames: [ExtensionErrorFrame]?
+
+    init(type: String = "", value: String? = nil, frames: [ExtensionErrorFrame]? = nil) {
+        self.type = type
+        self.value = value
+        self.frames = frames
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case value
+        case frames
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = (try? c.decodeIfPresent(String.self, forKey: .type)) ?? ""
+        self.value = try? c.decodeIfPresent(String.self, forKey: .value)
+        self.frames = try? c.decodeIfPresent([ExtensionErrorFrame].self, forKey: .frames)
+    }
+}
+
+/// Something that happened before the error: a screen opened, a request failed. Code-chosen short text, no user
+/// content.
+nonisolated struct ExtensionErrorBreadcrumb: Codable, Hashable, Sendable {
+    var time: String?
+    var category: String
+    var message: String?
+    var level: String?
+
+    init(time: String? = nil, category: String = "", message: String? = nil, level: String? = nil) {
+        self.time = time
+        self.category = category
+        self.message = message
+        self.level = level
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case time
+        case category
+        case message
+        case level
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.time = try? c.decodeIfPresent(String.self, forKey: .time)
+        self.category = (try? c.decodeIfPresent(String.self, forKey: .category)) ?? ""
+        self.message = try? c.decodeIfPresent(String.self, forKey: .message)
+        self.level = try? c.decodeIfPresent(String.self, forKey: .level)
+    }
+}
+
+/// An error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
+/// /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
+/// it.
+nonisolated struct ExtensionErrorReport: Codable, Hashable, Sendable {
+    /// Made by the sender; the same id again (a retry) is dropped.
+    var id: String
+    var source: String
+    var kind: String
+    var level: String
+    /// When it happened, RFC 3339.
+    var time: String
+    var release: String?
+    var build: String?
+    var commit: String?
+    var os: String?
+    var osVersion: String?
+    /// The model only, never an id of the device.
+    var deviceModel: String?
+    var message: String?
+    var exceptions: [ExtensionErrorException]?
+    var breadcrumbs: [ExtensionErrorBreadcrumb]?
+    var tags: [String: String]?
+    /// It happened in an earlier run of the app and is sent now.
+    var previousLaunch: Bool?
+    /// Set by the manager: reports with the same one are the same problem.
+    var fingerprint: String?
+    /// Set by the manager: how many of this fingerprint it folded into this one (1 or more).
+    var count: Int?
+    /// Set by the manager, RFC 3339.
+    var receivedAt: String?
+
+    init(id: String = "", source: String = "", kind: String = "", level: String = "", time: String = "", release: String? = nil, build: String? = nil, commit: String? = nil, os: String? = nil, osVersion: String? = nil, deviceModel: String? = nil, message: String? = nil, exceptions: [ExtensionErrorException]? = nil, breadcrumbs: [ExtensionErrorBreadcrumb]? = nil, tags: [String: String]? = nil, previousLaunch: Bool? = nil, fingerprint: String? = nil, count: Int? = nil, receivedAt: String? = nil) {
+        self.id = id
+        self.source = source
+        self.kind = kind
+        self.level = level
+        self.time = time
+        self.release = release
+        self.build = build
+        self.commit = commit
+        self.os = os
+        self.osVersion = osVersion
+        self.deviceModel = deviceModel
+        self.message = message
+        self.exceptions = exceptions
+        self.breadcrumbs = breadcrumbs
+        self.tags = tags
+        self.previousLaunch = previousLaunch
+        self.fingerprint = fingerprint
+        self.count = count
+        self.receivedAt = receivedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case source
+        case kind
+        case level
+        case time
+        case release
+        case build
+        case commit
+        case os
+        case osVersion = "os_version"
+        case deviceModel = "device_model"
+        case message
+        case exceptions
+        case breadcrumbs
+        case tags
+        case previousLaunch = "previous_launch"
+        case fingerprint
+        case count
+        case receivedAt = "received_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.source = (try? c.decodeIfPresent(String.self, forKey: .source)) ?? ""
+        self.kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        self.level = (try? c.decodeIfPresent(String.self, forKey: .level)) ?? ""
+        self.time = (try? c.decodeIfPresent(String.self, forKey: .time)) ?? ""
+        self.release = try? c.decodeIfPresent(String.self, forKey: .release)
+        self.build = try? c.decodeIfPresent(String.self, forKey: .build)
+        self.commit = try? c.decodeIfPresent(String.self, forKey: .commit)
+        self.os = try? c.decodeIfPresent(String.self, forKey: .os)
+        self.osVersion = try? c.decodeIfPresent(String.self, forKey: .osVersion)
+        self.deviceModel = try? c.decodeIfPresent(String.self, forKey: .deviceModel)
+        self.message = try? c.decodeIfPresent(String.self, forKey: .message)
+        self.exceptions = try? c.decodeIfPresent([ExtensionErrorException].self, forKey: .exceptions)
+        self.breadcrumbs = try? c.decodeIfPresent([ExtensionErrorBreadcrumb].self, forKey: .breadcrumbs)
+        self.tags = try? c.decodeIfPresent([String: String].self, forKey: .tags)
+        self.previousLaunch = try? c.decodeIfPresent(Bool.self, forKey: .previousLaunch)
+        self.fingerprint = try? c.decodeIfPresent(String.self, forKey: .fingerprint)
+        self.count = try? c.decodeIfPresent(Int.self, forKey: .count)
+        self.receivedAt = try? c.decodeIfPresent(String.self, forKey: .receivedAt)
+    }
+}
+
+/// error_reports.deliver, sent to an extension with an error_reports contribution: reports, already scrubbed,
+/// deduplicated and rate limited. A notification: no answer, not sent again.
+nonisolated struct ExtensionErrorReportsDeliver: Codable, Hashable, Sendable {
+    var contribution: String
+    var reports: [ExtensionErrorReport]
+
+    init(contribution: String = "", reports: [ExtensionErrorReport] = []) {
+        self.contribution = contribution
+        self.reports = reports
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case contribution
+        case reports
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.contribution = (try? c.decodeIfPresent(String.self, forKey: .contribution)) ?? ""
+        self.reports = (try? c.decodeIfPresent([ExtensionErrorReport].self, forKey: .reports)) ?? []
     }
 }
 

@@ -81,6 +81,9 @@ type Options struct {
 
 // Manager is the extensions, connectors and bots as the manager runs them.
 type Manager struct {
+	// errReports: the error reports' pipeline (error_reports.go).
+	errReports errorReports
+
 	opts    Options
 	cfg     *Config
 	version string

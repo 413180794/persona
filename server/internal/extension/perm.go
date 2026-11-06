@@ -38,6 +38,9 @@ type Permissions struct {
 	// AgentRuntimes: its program is an agent runtime that connects to this machine's node (docs/runtimes.md); in a
 	// sandbox it gets a socket in its run directory that leads to the node's runtime.sock and nowhere else (#5413).
 	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
+	// ErrorReports: it is given the error and crash reports of the hub and the user's devices, scrubbed first
+	// (contributes.error_reports, docs/extensions.md "Error reports").
+	ErrorReports bool `json:"error_reports,omitempty"`
 }
 
 var hostPattern = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -73,7 +76,7 @@ func (p Permissions) FullHub() bool { return p.HubAPI && len(p.Hub) == 0 }
 // covers every scope; scopes never cover the full token.
 func (p Permissions) Covers(q Permissions) bool {
 	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys || q.GhLogin && !p.GhLogin ||
-		q.UsageGateways && !p.UsageGateways || q.AgentRuntimes && !p.AgentRuntimes {
+		q.UsageGateways && !p.UsageGateways || q.AgentRuntimes && !p.AgentRuntimes || q.ErrorReports && !p.ErrorReports {
 		return false
 	}
 	for _, s := range q.Hub {
@@ -259,6 +262,9 @@ func ExplainIn(l i18n.Lang, m *Manifest) []PermissionLine {
 	if m.Permissions.AgentRuntimes {
 		out = append(out, permissionLine(l, "agent_runtimes"))
 	}
+	if m.Permissions.ErrorReports {
+		out = append(out, permissionLine(l, "error_reports"))
+	}
 	if to := m.ContributesTo(); len(to) > 0 {
 		out = append(out, PermissionLine{Key: "contributes_to", Title: permissionText(l, "contributes_title"),
 			Detail: permissionText(l, "contributes_detail", i18n.Args{"names": strings.Join(to, permissionText(l, "list_separator"))})})
@@ -351,6 +357,9 @@ func AddedIn(l i18n.Lang, old, m *Manifest) []PermissionLine {
 	}
 	if m.Permissions.AgentRuntimes && !old.Permissions.AgentRuntimes {
 		out = append(out, permissionLine(l, "agent_runtimes"))
+	}
+	if m.Permissions.ErrorReports && !old.Permissions.ErrorReports {
+		out = append(out, permissionLine(l, "error_reports"))
 	}
 	var to []string
 	for _, owner := range m.ContributesTo() {

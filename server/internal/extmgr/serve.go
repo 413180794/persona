@@ -113,6 +113,7 @@ func (h *Manager) registerRoutes(api *http.ServeMux) {
 	h.extensionRoutes(api)
 	h.messagingRoutes(api)
 	h.adminExtensionRoutes(api) // with the old /api/v1/admin/plugins paths
+	api.HandleFunc("POST /api/v1/error-reports", h.postErrorReports)
 	withMachine := func(fn func(http.ResponseWriter, *http.Request, *Machine)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			m := h.localMachine(r.PathValue("mid"))
@@ -339,6 +340,10 @@ func (h *Manager) Request(ctx context.Context, method string, params json.RawMes
 
 // Event takes the hub's extensions.* events (handled false: not one).
 func (h *Manager) Event(name string, params json.RawMessage) bool {
+	if name == extwire.EventErrorReports {
+		h.hubErrorReports(params)
+		return true
+	}
 	if name != extwire.EventEmit {
 		return false
 	}

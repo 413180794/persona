@@ -245,6 +245,11 @@ export interface Permissions {
    * directory (PERSONA_RUNTIME_SOCKET) that leads to the node's runtime.sock only. Needs runtime.
    */
   agent_runtimes?: boolean;
+  /**
+   * It receives the error and crash reports of the hub and the user's devices, scrubbed (no message text, tokens,
+   * user names, machine names or IP addresses). Needed by contributes.error_reports.
+   */
+  error_reports?: boolean;
 }
 
 /**
@@ -272,6 +277,7 @@ export interface Contributes {
   triage_templates?: TriageTemplateItem[];
   agent_filters?: AgentFilterItem[];
   tunnels?: TunnelItem[];
+  error_reports?: ErrorReportsItem[];
   messaging?: MessagingItem[];
   /** Extra keys are opaque JSON; declared properties keep their own types. */
   [key: string]: unknown;
@@ -430,6 +436,16 @@ export interface TriageTemplateItem {
   id: string;
   title: string;
   text: string;
+}
+
+/**
+ * It is given the error and crash reports of the hub and the user's devices (error_reports.deliver): needs the
+ * program to speak the protocol, on_startup and permissions.error_reports.
+ */
+export interface ErrorReportsItem {
+  id: string;
+  /** Only reports from these; omitted: all. */
+  sources?: ErrorSource[];
 }
 
 /**
@@ -1019,6 +1035,98 @@ export interface NotifyAction {
 
 export interface NotifyActionInput {
   placeholder?: string;
+}
+
+/**
+ * Which part of Persona an error report comes from.
+ */
+export type ErrorSource = "hub" | "manager" | "web" | "android" | "ios" | "mac" | "watch" | "vision" | (string & {});
+export const ERROR_SOURCES = ["hub", "manager", "web", "android", "ios", "mac", "watch", "vision"] as const;
+
+/**
+ * What an error report is: a caught exception, a crash (the app died), an ANR (it hung), a Go panic, an error line of
+ * a log.
+ */
+export type ErrorKind = "exception" | "crash" | "anr" | "panic" | "log" | (string & {});
+export const ERROR_KINDS = ["exception", "crash", "anr", "panic", "log"] as const;
+
+export type ErrorLevel = "fatal" | "error" | "warning" | (string & {});
+export const ERROR_LEVELS = ["fatal", "error", "warning"] as const;
+
+/**
+ * One frame of a stack trace.
+ */
+export interface ErrorFrame {
+  function?: string;
+  module?: string;
+  file?: string;
+  line?: number;
+  column?: number;
+  /** Persona's own code, not a library's or the system's. */
+  in_app?: boolean;
+}
+
+/**
+ * One exception of a report; frames innermost last (the order Sentry uses).
+ */
+export interface ErrorException {
+  type: string;
+  value?: string;
+  frames?: ErrorFrame[];
+}
+
+/**
+ * Something that happened before the error: a screen opened, a request failed. Code-chosen short text, no user
+ * content.
+ */
+export interface ErrorBreadcrumb {
+  time?: string;
+  category: string;
+  message?: string;
+  level?: string;
+}
+
+/**
+ * An error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
+ * /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
+ * it.
+ */
+export interface ErrorReport {
+  /** Made by the sender; the same id again (a retry) is dropped. */
+  id: string;
+  source: ErrorSource;
+  kind: ErrorKind;
+  level: ErrorLevel;
+  /** When it happened, RFC 3339. */
+  time: string;
+  release?: string;
+  build?: string;
+  commit?: string;
+  os?: string;
+  os_version?: string;
+  /** The model only, never an id of the device. */
+  device_model?: string;
+  message?: string;
+  exceptions?: ErrorException[];
+  breadcrumbs?: ErrorBreadcrumb[];
+  tags?: Record<string, string>;
+  /** It happened in an earlier run of the app and is sent now. */
+  previous_launch?: boolean;
+  /** Set by the manager: reports with the same one are the same problem. */
+  fingerprint?: string;
+  /** Set by the manager: how many of this fingerprint it folded into this one (1 or more). */
+  count?: number;
+  /** Set by the manager, RFC 3339. */
+  received_at?: string;
+}
+
+/**
+ * error_reports.deliver, sent to an extension with an error_reports contribution: reports, already scrubbed,
+ * deduplicated and rate limited. A notification: no answer, not sent again.
+ */
+export interface ErrorReportsDeliver {
+  contribution: string;
+  reports: ErrorReport[];
 }
 
 /**

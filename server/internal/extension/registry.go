@@ -412,6 +412,36 @@ func (r *Registry) EventSubscribers(topic, scope string) []string {
 	return ids
 }
 
+// ErrorReportTaker is an extension given error reports: its error_reports contributions that take source.
+type ErrorReportTaker struct {
+	Extension     string
+	Contributions []string
+}
+
+// ErrorReportTakers snapshots the enabled, compatible extensions granted error_reports whose contributions (the ones
+// switched on) take reports from source; source "" asks whether any takes some.
+func (r *Registry) ErrorReportTakers(source string) []ErrorReportTaker {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []ErrorReportTaker
+	for id, p := range r.extensions {
+		if !p.Record.Enabled || p.Problem != "" || p.Manifest == nil || !p.Record.Granted.ErrorReports {
+			continue
+		}
+		t := ErrorReportTaker{Extension: id}
+		for _, it := range p.Manifest.ErrorReports() {
+			if source == "" || len(it.Sources) == 0 || slices.Contains(it.Sources, source) {
+				t.Contributions = append(t.Contributions, it.ID)
+			}
+		}
+		if len(t.Contributions) > 0 {
+			out = append(out, t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Extension < out[j].Extension })
+	return out
+}
+
 // Preview is a staged package (or a remote plugin) and what installing it means, shown before the user agrees.
 type Preview struct {
 	ID          string           `json:"preview_id"`
