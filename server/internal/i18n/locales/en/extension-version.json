@@ -1,0 +1,4 @@
+{
+  "hub_too_old": "This extension needs a newer hub. Update the hub first (required: {required}, current: {current}).",
+  "hub_incompatible": "This extension requires hub build {required}; this hub is {current}."
+}

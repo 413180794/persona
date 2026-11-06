@@ -254,6 +254,10 @@ func granted(p *extension.Extension) string {
 
 // candidate is p's newer version in its market, and where it stands (ok false: none, or p is not a market plugin).
 func (u *extensionUpgrades) candidate(p *extension.Extension) (up ExtensionUpgrade, rec extension.MarketRecord, e *extension.MarketEntry, ok bool) {
+	return u.candidateIn(p, u.h.userLang())
+}
+
+func (u *extensionUpgrades) candidateIn(p *extension.Extension, l i18n.Lang) (up ExtensionUpgrade, rec extension.MarketRecord, e *extension.MarketEntry, ok bool) {
 	mid := extension.FromMarket(p.Record.Origin)
 	if p.Record.Source != extension.SourceInstalled || mid == "" {
 		return up, rec, nil, false
@@ -280,15 +284,15 @@ func (u *extensionUpgrades) candidate(p *extension.Extension) (up ExtensionUpgra
 	s := u.settings
 	switch _, engines := extension.CheckEngines(m, u.h.build.Number); {
 	case e.PackageFor(extension.Platform()) == nil:
-		up.State, up.Detail = upgradeIncompatible, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.no_package", i18n.Args{"platform": extension.Platform()})
+		up.State, up.Detail = upgradeIncompatible, i18n.T(l, "hub-extension_autoupgrade.no_package", i18n.Args{"platform": extension.Platform()})
 	case engines != nil:
-		up.State, up.Detail = upgradeIncompatible, engines.Error()
+		up.State, up.Detail = upgradeIncompatible, i18n.Localize(engines, l)
 	case s.Skipped[id] == m.Version:
-		up.State, up.Detail = upgradeSkipped, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.skipped")
+		up.State, up.Detail = upgradeSkipped, i18n.T(l, "hub-extension_autoupgrade.skipped")
 	case extension.MorePermissions(p, m) || extension.Digest(m) != granted(p):
 		up.State, up.AddedPermissions = upgradeNeedsConsent, extension.Added(p.Manifest, m)
 	case bundleConsent:
-		up.State, up.Detail = upgradeNeedsConsent, i18n.T(u.h.userLang(), "hub-extension_autoupgrade.bundle_confirmation")
+		up.State, up.Detail = upgradeNeedsConsent, i18n.T(l, "hub-extension_autoupgrade.bundle_confirmation")
 	case (s.Auto != nil && !*s.Auto) || slices.Contains(s.Off, id):
 		up.State = upgradeOff
 	case u.failed[id] == m.Version:
@@ -503,7 +507,7 @@ func (u *extensionUpgrades) decorate(ctx context.Context, v *ExtensionView, p *e
 	u.load(ctx)
 	_, own := u.auto(p.Record.ID)
 	v.AutoUpgrade = &own
-	if up, _, _, ok := u.candidate(p); ok {
+	if up, _, _, ok := u.candidateIn(p, u.h.contextLang(ctx)); ok {
 		v.Upgrade = &up
 	}
 	u.mu.Lock()
@@ -525,7 +529,7 @@ func (u *extensionUpgrades) view(ctx context.Context) upgradesView {
 	u.load(ctx)
 	v := upgradesView{Upgrades: []ExtensionUpgrade{}}
 	for _, p := range u.h.extensions.reg.List() {
-		if up, _, _, ok := u.candidate(p); ok {
+		if up, _, _, ok := u.candidateIn(p, u.h.contextLang(ctx)); ok {
 			v.Upgrades = append(v.Upgrades, up)
 		}
 	}

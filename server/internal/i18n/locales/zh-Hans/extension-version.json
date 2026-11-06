@@ -1,0 +1,4 @@
+{
+  "hub_too_old": "这个扩展需要更新版本的 hub，请先更新 hub（需要 {required}，现在是 {current}）",
+  "hub_incompatible": "这个扩展要 hub 的构建号 {required}，这台是 {current}"
+}

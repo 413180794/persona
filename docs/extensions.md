@@ -193,6 +193,12 @@ Lives at the root of the extension package. Example (a connector for a fictional
 
 Manifests are at most 256 KB and are read strictly: an unknown field at any level means it can't be installed (a misspelled `permission` is not silently ignored).
 
+When the hub build is below the lower bound in `engines.persona`, the extension list and details in Settings, marketplace, upgrade notices and installation errors
+first say “This extension needs a newer hub. Update the hub first,” followed by the required range and current build in parentheses for troubleshooting (#3598).
+Messages follow the request language (Chinese, English or Japanese); the CLI always uses the default Chinese, and logs do not change with the UI language.
+At or above a `<N` upper bound, the message explains the incompatibility without telling the user to update the hub. Version checks, installation restrictions and the
+`incompatible` status of installed extensions are unchanged; development builds still only produce a warning.
+
 ### Configuration: the form subset
 
 The root is `{"type": "object", "properties": {…}, "required": [...]}`. Every client can draw it as a form, with fields in the order the properties appear in the file (the hub keeps the order when parsing,

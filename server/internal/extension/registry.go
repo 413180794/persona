@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Where a plugin comes from.
@@ -93,12 +95,22 @@ type Extension struct {
 	// Problem is why it cannot run on this hub (engines, a missing package); it is then not started.
 	Problem  string
 	Warnings []string
+	// problemErr retains the message for responses in the request's language; Problem stays the log/CLI text.
+	problemErr error
 	// Legacy is a hub.json plugin's entry, as written (its command is a path on the machine, not in a package).
 	Legacy any
 }
 
 // ReadOnly: hub.json's, changed there only.
 func (p *Extension) ReadOnly() bool { return p.Record.Source == SourceHubJSON }
+
+// ProblemText is the compatibility problem in the client's language, when a translation is available.
+func (p *Extension) ProblemText(l i18n.Lang) string {
+	if p.problemErr != nil && p.problemErr.Error() == p.Problem {
+		return i18n.Localize(p.problemErr, l)
+	}
+	return p.Problem
+}
 
 // Change is what the registry tells the hub after it changed a plugin.
 type Change struct {
@@ -312,6 +324,7 @@ func (r *Registry) fromRow(row Record) *Extension {
 	}
 	if w, err := CheckEngines(m, r.build); err != nil {
 		p.Problem = err.Error()
+		p.problemErr = err
 	} else if w != "" {
 		p.Warnings = append(p.Warnings, w)
 	}

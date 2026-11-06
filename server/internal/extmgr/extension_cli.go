@@ -601,6 +601,8 @@ func (c *extensionClient) call(ctx context.Context, method, path string, body, o
 	}
 	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
 	req.Header.Set("Content-Type", "application/json")
+	// CLI output stays in the default language even when an app changes the user's language.
+	req.Header.Set("Accept-Language", string(i18n.Default))
 	transport := &http.Transport{Proxy: nil}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Timeout: 10 * time.Minute, Transport: transport} // a download may take a while

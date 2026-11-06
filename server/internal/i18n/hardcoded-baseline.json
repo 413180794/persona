@@ -86,7 +86,7 @@
   "internal/extension/toolinstall.go": 15,
   "internal/extension/tools.go": 6,
   "internal/extension/ui.go": 28,
-  "internal/extension/version.go": 3,
+  "internal/extension/version.go": 2,
   "internal/extmgr/bots_chat.go": 1,
   "internal/extmgr/browser.go": 3,
   "internal/extmgr/channels_extension.go": 5,

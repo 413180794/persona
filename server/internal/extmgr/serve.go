@@ -158,6 +158,7 @@ func (h *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx = i18n.With(ctx, p.Lang)
 	}
 	r = r.WithContext(ctx)
+	w = &localeWriter{ResponseWriter: w, lang: h.requestLang(r)}
 	w.Header().Set("Cache-Control", "no-store")
 	// The admin UI's routes are for a signed-in admin session only (the hub relays them from its admin mux and says so).
 	if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") && !p.Admin {
@@ -166,6 +167,17 @@ func (h *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	h.extensionAPIs(h.apiMux, h.apiMux).ServeHTTP(w, r)
 }
+
+// localeWriter lets apierr translate errors after the hub has relayed the request to this process.
+type localeWriter struct {
+	http.ResponseWriter
+	lang i18n.Lang
+}
+
+func (w *localeWriter) Lang() i18n.Lang { return w.lang }
+
+// Unwrap preserves streaming and WebSocket access to the underlying writer.
+func (w *localeWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // Accept is extwire.MethodAccept: the hub holds a request for the manager; it dials the relay with the id and serves
 // the request (and any after it on the same connection) there.

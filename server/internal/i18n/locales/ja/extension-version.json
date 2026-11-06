@@ -1,0 +1,4 @@
+{
+  "hub_too_old": "この拡張機能には新しいバージョンのハブが必要です。先にハブを更新してください（必要なビルド：{required}、現在：{current}）",
+  "hub_incompatible": "この拡張機能にはビルド{required}のハブが必要です。現在のビルドは{current}です。"
+}

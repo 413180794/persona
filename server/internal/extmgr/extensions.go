@@ -275,7 +275,7 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 	case !p.Record.Enabled:
 		v.Status = extensionDisabled
 	case p.Problem != "":
-		v.Status, v.Error = extensionIncompatible, p.Problem
+		v.Status, v.Error = extensionIncompatible, p.ProblemText(ps.h.contextLang(ctx))
 	case hp == nil:
 		v.Status = host.StateStarting
 	case hp.proc == nil:

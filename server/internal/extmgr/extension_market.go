@@ -576,7 +576,7 @@ func (h *Manager) catalogIn(l i18n.Lang, q, market string) []CatalogItem {
 			} else if e.PackageFor(extension.Platform()) == nil {
 				it.Problem = i18n.T(l, "hub-extension_market.no_package", i18n.Args{"platform": extension.Platform()})
 			} else if _, err := extension.CheckEngines(m, h.build.Number); err != nil {
-				it.Problem = err.Error()
+				it.Problem = i18n.Localize(err, l)
 			}
 			if cur := h.extensions.reg.Get(m.ID); cur != nil {
 				it.Installed, it.InstalledSource = cur.Record.Version, cur.Record.Source

@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
@@ -154,7 +156,13 @@ func CheckEngines(m *Manifest, build int64) (warning string, err error) {
 		return "开发构建的 hub 不检查 engines.persona（" + m.Engines.Persona + "）", nil
 	}
 	if !r.Allows(build) {
-		return "", fmt.Errorf("这个扩展要 hub 的构建号 %s，这台是 %d", m.Engines.Persona, build)
+		args := i18n.Args{"required": m.Engines.Persona, "current": build}
+		for _, b := range r.bounds {
+			if b.op == "<" && build >= b.n {
+				return "", i18n.Err("extension-version.hub_incompatible", args)
+			}
+		}
+		return "", i18n.Err("extension-version.hub_too_old", args)
 	}
 	return "", nil
 }
