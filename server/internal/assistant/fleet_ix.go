@@ -99,6 +99,11 @@ func (s *Service) syncScreenInteractions(machine string, list []proto.Session) {
 			delete(s.fleet.screenAnswered, k)
 		}
 	}
+	for k, g := range s.fleet.screenHandedBack {
+		if _, still := blocked[g.session]; g.machine == machine && !still || time.Since(g.at) > screenHandedBackFor {
+			delete(s.fleet.screenHandedBack, k)
+		}
+	}
 	now := time.Now()
 	for id, g := range s.fleet.screenDetached {
 		// Too old, or the agent moved on while its node was away (anything but blocked, or unknown while the node is
@@ -166,6 +171,10 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		Secret: screen.SecretPrompt(scr.Text),
 	}
 	s.fleet.mu.Lock()
+	if s.screenHandedBackLocked(machine, sess.SessionID, id, d != nil) {
+		s.fleet.mu.Unlock()
+		return
+	}
 	s.screenMovedOnLocked(machine, sess.SessionID, id)
 	if left, first := s.screenJustAnsweredLocked(id, time.Now()); left > 0 {
 		// The dialog just answered, still on screen: no second card, no second push. Still there after the quiet
@@ -316,6 +325,34 @@ type answeredScreen struct {
 	machine, session string
 	until            time.Time // the end of its quiet time (screenAnsweredQuiet, taken when it was answered)
 	retry            bool
+}
+
+// screenHandedBackFor: how long a screen card handed back to the computer is remembered at most (its card's own
+// lifetime); a session that stays blocked longer, or a machine that never lists again, does not keep it forever.
+const screenHandedBackFor = 24 * time.Hour
+
+// screenHandedBackLocked: card id is the dialog its user handed back to the computer ({"dismiss":true}: 交回电脑),
+// still on screen: no new card, no push, until the agent is no longer blocked (syncScreenInteractions) or something
+// else shows. A card handed back before its dialog could be read (no dialog in its id) is the first dialog drawn
+// after it, as upgradeScreenCard takes it for the same card. Callers hold s.fleet.mu.
+func (s *Service) screenHandedBackLocked(machine, session, id string, dialog bool) bool {
+	bare := "scr_" + machine + "_" + session
+	for k, g := range s.fleet.screenHandedBack {
+		if g.machine != machine || g.session != session {
+			continue
+		}
+		delete(s.fleet.screenHandedBack, k)
+		switch {
+		case k == id:
+		case k == bare && dialog: // the half-drawn card handed back: this dialog is it
+			g.at = time.Now()
+		default: // another question
+			continue
+		}
+		s.fleet.screenHandedBack[id] = g
+		return true
+	}
+	return false
 }
 
 // screenMovedOnLocked: machine's session shows something other than screen card keep (another dialog, none, or it
@@ -720,6 +757,12 @@ func (s *Service) resolve(id string, r proto.Resolution) error {
 			}
 			s.fleet.screenAnswered[id] = answeredScreen{machine: p.ix.MachineID, session: p.ix.SessionID,
 				until: time.Now().Add(screenAnsweredQuiet)}
+		} else if p.ix.Kind == proto.IxScreen {
+			// Handed back to the computer: no key goes, the dialog stays, and the next list must not ask it again.
+			if s.fleet.screenHandedBack == nil {
+				s.fleet.screenHandedBack = map[string]screenGone{}
+			}
+			s.fleet.screenHandedBack[id] = screenGone{machine: p.ix.MachineID, session: p.ix.SessionID, at: time.Now()}
 		}
 	} else if p != nil {
 		p.claimed = true

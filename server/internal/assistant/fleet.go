@@ -53,6 +53,9 @@ type fleetBook struct {
 	// screenDetached: screen card id -> the card its node's connection ended while it was open (fleet_ix.go
 	// screenBackLocked): read again off the same dialog once the node is back, it is that card, not a new question.
 	screenDetached map[string]screenGone
+	// screenHandedBack: screen card id -> the card handed back to the computer (fleet_ix.go screenHandedBackLocked):
+	// the same dialog still on screen gets no new card until the agent moves on (#4867).
+	screenHandedBack map[string]screenGone
 	// upgradeEvery / upgradeFor override screenUpgradeEvery / screenUpgradeFor (0: those; upgradeScreenCard). Tests
 	// shorten them on their own Service before any session list comes, so an upgrade loop another test left running
 	// never reads what this one writes (#4554).

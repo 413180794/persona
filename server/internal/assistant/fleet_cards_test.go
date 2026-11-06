@@ -1127,6 +1127,79 @@ func TestScreenCardJustAnsweredIsNotAskedAgain(t *testing.T) {
 	}
 }
 
+// A screen card handed back to the computer (交回电脑, a dismiss): nothing is pressed and the dialog stays on screen, so
+// the node keeps listing the agent blocked. The same dialog gets no new card and no second push, however long it
+// stays; once the agent moves on, the next dialog is asked as usual (#4867).
+func TestScreenCardHandedBackIsNotAskedAgain(t *testing.T) {
+	shortScreenQuiet(t, 200*time.Millisecond)
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	id := onlyCard(t, s)
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(pushes) != 1 {
+		t.Fatalf("first: pushed %d times", len(pushes))
+	}
+	if err := s.resolve(id, proto.Resolution{Dismiss: true}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // still blocked on the same dialog, past the answered quiet time too
+		time.Sleep(300 * time.Millisecond)
+		blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+		if got, _ := waitCards(s, 1, 300*time.Millisecond); len(got) != 0 {
+			t.Fatalf("the dialog handed back got a card again: %v", got)
+		}
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 100*time.Millisecond); len(pushes) != 1 {
+		t.Fatalf("the dialog handed back was pushed again: %d pushes", len(pushes))
+	}
+	n.setScreen("  ⏺ Thinking…\n") // handled at the computer: the agent works again
+	ft.sessions("mac", proto.Session{SessionID: "s1", Agent: "claude", Status: proto.StatusWorking})
+	n.setScreen(pickModel) // and later asks the same thing: a new question
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if got := onlyCard(t, s); got != id {
+		t.Fatalf("the next ask is card %q, want %q", got, id)
+	}
+}
+
+// A card handed back before its dialog could be read is that dialog once it is drawn; a dialog handed back and then
+// a screen with something else on it (no dialog read) is another question, asked (#4867).
+func TestScreenCardHandedBackHalfDrawn(t *testing.T) {
+	t.Run("handed back before the dialog was drawn", func(t *testing.T) {
+		shortScreenQuiet(t, 200*time.Millisecond)
+		ft, n := newCardFleet(t, false)
+		s := ft.s
+		n.setScreen("  Waiting for something\n")
+		blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+		if err := s.resolve(onlyCard(t, s), proto.Resolution{Dismiss: true}); err != nil {
+			t.Fatal(err)
+		}
+		n.setScreen(pickModel)
+		for range 2 {
+			blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+			if got, _ := waitCards(s, 1, 400*time.Millisecond); len(got) != 0 {
+				t.Fatalf("the dialog handed back half drawn got a card: %v", got)
+			}
+		}
+	})
+	t.Run("something else after the dialog handed back", func(t *testing.T) {
+		shortScreenQuiet(t, 200*time.Millisecond)
+		ft, n := newCardFleet(t, false)
+		s := ft.s
+		n.setScreen(pickModel)
+		blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+		first := onlyCard(t, s)
+		if err := s.resolve(first, proto.Resolution{Dismiss: true}); err != nil {
+			t.Fatal(err)
+		}
+		n.setScreen("  Waiting for something\n")
+		blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+		if got := onlyCard(t, s); got == first {
+			t.Fatalf("the next question is the card handed back: %q", got)
+		}
+	})
+}
+
 // The answer did not take: the same dialog still there once the quiet time is over is asked again, once.
 func TestScreenCardAnswerThatDidNotTakeIsAskedAgain(t *testing.T) {
 	shortScreenQuiet(t, 600*time.Millisecond)
