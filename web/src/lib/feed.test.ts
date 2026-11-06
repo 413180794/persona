@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   answeredItems,
+  cardFiled,
   cardSent,
   dayLabel,
   displayLines,
@@ -261,6 +262,12 @@ describe("a message card's 发送 (#1519)", () => {
     expect(cardSent(card("m"))).toBeUndefined();
     expect(cardSent(card("m", { sent_at: "2026-11-04T10:23:00Z", sent: "修好了" }))).toEqual({ at: "2026-11-04T10:23:00Z", text: "修好了" });
     expect(cardSent(card("m", { sent_at: "2026-11-04T10:23:00Z" }))?.text).toBe("在修了");
+  });
+
+  it("reads filed from the hub's filed_at only while the card is not sent (#4797)", () => {
+    expect(cardFiled(card("m"))).toBeUndefined();
+    expect(cardFiled(card("m", { filed_at: "2026-11-05T09:00:00Z" }))).toEqual({ at: "2026-11-05T09:00:00Z" });
+    expect(cardFiled(card("m", { filed_at: "2026-11-05T09:00:00Z", sent_at: "2026-11-04T10:23:00Z" }))).toBeUndefined();
   });
 
   it("takes a card's new body when the hub sends it again (sent on another device)", () => {

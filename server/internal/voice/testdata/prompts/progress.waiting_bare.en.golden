@@ -1,0 +1,2 @@
+The Persona main conversation stopped its turn to wait on something outside (a deploy, CI, a review, a time). It is not finished: Persona wakes it to go on once that is done, and the result is told then.
+Tell the user in one sentence that it is waiting and still working on it.

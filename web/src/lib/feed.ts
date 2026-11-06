@@ -149,6 +149,12 @@ export function cardSent(it: FeedItem): { at: string; text: string } | undefined
   return at ? { at, text: field(it, "sent") || field(it, "draft") || "" } : undefined;
 }
 
+/** Handled elsewhere, not from this card (#4797): the hub's filed_at; a sent card is never filed. */
+export function cardFiled(it: FeedItem): { at: string } | undefined {
+  const at = field(it, "filed_at");
+  return at && !field(it, "sent_at") ? { at } : undefined;
+}
+
 /** A blank a draft leaves to fill in (【预计几点前】, {{链接}}): it would go out as it is. */
 export function draftPlaceholder(text: string): string | undefined {
   return /【[^】\n]*】|\{\{[^}\n]*\}\}/.exec(text)?.[0];

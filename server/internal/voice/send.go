@@ -3,6 +3,7 @@ package voice
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -207,10 +208,18 @@ func (t *tracker) notSent(r *voiceRun, f sendFail) {
 }
 
 // sendBound sends r's message to the bound conversation in the background and follows the run it starts. first: the
-// model's handover (a resend is the user's own: no approval-word check, the same id).
+// model's handover (a resend is the user's own: no approval-word check, the same id). While it is sent, what the
+// conversation works on is not observed (observe.go): it may be this message's turn.
 func (t *tracker) sendBound(r *voiceRun, opts sendOpts, first bool) {
 	c := t.c
+	t.obs.sending.Add(1)
 	go func() {
+		handed := false // its count is handed to the tracker, which takes it off once the run is in its hands
+		defer func() {
+			if !handed {
+				t.obs.sending.Add(-1)
+			}
+		}()
 		ctx := c.ctx
 		if first && channel.IsApprovalWord(r.task) && c.cardsWaiting(ctx, approvalCards...) {
 			c.pl.logf("run %s: only an approval word while a card waits: not sent", r.ID)
@@ -231,11 +240,26 @@ func (t *tracker) sendBound(r *voiceRun, opts sendOpts, first bool) {
 				f.plan = c.cardsWaiting(ctx, proto.IxPlan)
 			}
 			t.notSent(r, f)
+			if f.state == runUnknown {
+				// It may have got there: a turn its message begins is its own, not one begun elsewhere (observe.go).
+				select {
+				case t.ops <- func() {
+					t.obs.unknown(r)
+					t.obs.sending.Add(-1)
+				}:
+					handed = true
+				case <-ctx.Done():
+				}
+			}
 			return
 		}
 		t.set(r, runSent)
 		select {
-		case t.ops <- func() { t.adopt(r) }:
+		case t.ops <- func() {
+			t.adopt(r)
+			t.obs.sending.Add(-1) // followed from now on
+		}:
+			handed = true
 		case <-ctx.Done():
 			t.link.unwatch(linkKey{r.MachineID, r.SessionID})
 		}
@@ -339,6 +363,8 @@ func (t *tracker) resume(runs []resumeRun) {
 			r.Held, r.MsgIDs, r.Probe = true, nil, ""
 		case runSending:
 			r.unsent = true
+		case runBlocked: // waiting on something outside: its turns stop on that wait, each waits for its triage
+			r.waitOn = runBlocked
 		}
 		select {
 		case t.ops <- func() {
@@ -352,20 +378,32 @@ func (t *tracker) resume(runs []resumeRun) {
 }
 
 // stopped ends the runs on the bound conversation once its turn was stopped (「停止：」): what the model was told of
-// the stop is their end, nothing more is said. (A turn stopped before it wrote anything never reads as answered:
-// channel.ReadTurn, #4505.)
+// the stop is their end, nothing more is said (a run that reads the stop first ends the same way: stopAsked, finish).
+// Nor is the stopped turn observed: the hub's interrupt returns before the conversation is listed as stopped (the
+// agent gets an Esc), and it is no turn begun elsewhere.
 func (t *tracker) stopped() {
 	select {
 	case t.ops <- func() {
 		t.asks.quiet() // the stop closed its cards
+		key := linkKey{t.c.target.MachineID, t.c.target.SessionID}
 		for _, r := range slices.Clone(t.runs) {
-			if r.MachineID == t.c.target.MachineID && r.SessionID == t.c.target.SessionID {
-				t.c.toolsDone(r.appIDs)
-				t.drop(r)
+			if (linkKey{r.MachineID, r.SessionID}) != key {
+				continue
+			}
+			t.c.toolsDone(r.appIDs)
+			t.drop(r)
+			if !r.told { // its done went out already
 				r.Code = "stopped"
 				t.set(r, runDone)
 			}
 		}
+		ctx, cancel := context.WithTimeout(t.c.ctx, statusTimeout)
+		defer cancel()
+		last, err := t.c.pl.hub.lastSeq(ctx, key.machine, key.session)
+		if err != nil {
+			last = math.MaxInt // until it is seen stopped
+		}
+		t.obs.stopped(last)
 	}:
 	case <-t.c.ctx.Done():
 	}

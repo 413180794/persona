@@ -75,15 +75,15 @@ class Notifier @Inject constructor(
 
     /**
      * [request]: the interaction to show first in the conversation, so a tap lands on the thing it is about. A request
-     * outside any session (empty session id, #4515) has no conversation or terminal: it opens Agents, where 需要你处理
-     * lists it with its buttons.
+     * outside any session (empty session id, #4515) has no conversation or terminal: it opens Agents with that card open
+     * (#4808), or just Agents when no request is named.
      */
     private fun open(session: SessionKey?, assistant: Boolean? = null, terminal: Boolean = false, request: String? = null): PendingIntent {
         val target = session?.takeIf { it.sessionId.isNotBlank() }
         val uri = if (terminal && target != null) Uri.parse(terminalLink(TerminalRoute(target.machineId, target.sessionId)))
         else target?.let {
             NotificationRoute.conversation(it.machineId, it.sessionId, assistant ?: isAssistant(it), request)
-        }?.uri() ?: NotificationRoute(AppTab.Agents).uri()
+        }?.uri() ?: NotificationRoute.card(session?.machineId.orEmpty(), request).uri()
         val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -180,13 +180,18 @@ class Notifier @Inject constructor(
 
     internal fun updateOngoing(status: OngoingStatus) = post(null, ONGOING_ID, ongoing(status))
 
-    fun postInteraction(ix: Interaction) {
-        if (preferences.preferences.value?.input != true) return
-        if (NotificationPolicy.expired(ix)) { retract(ix.id); return }
+    fun postInteraction(ix: Interaction) { postInteraction(ix, note = null) }
+
+    /** [note] replaces the line under the title and leads the expanded text (#5008). False when nothing was posted. */
+    private fun postInteraction(ix: Interaction, note: String?): Boolean {
+        if (preferences.preferences.value?.input != true) return false
+        if (NotificationPolicy.expired(ix)) { retract(ix.id); return false }
         val assistant = isAssistant(ix.sessionKey)
         val title = if (assistant == true && ix.kind == "question") context.getString(R.string.notify_title_assistant_asks)
             else ix.sessionTitle?.takeIf { it.isNotBlank() } ?: context.getString(R.string.notify_title_needs_you)
-        val (line, detail) = requestCopy(context, ix)
+        val (line, detail) = requestCopy(context, ix).let { (line, detail) ->
+            if (note == null) line to detail else note to "$note\n$detail"
+        }
         val builder = base(CH_INPUT).forSession(ix.sessionKey).setContentTitle(title).setContentText(line)
             .addExtras(android.os.Bundle().apply { putBoolean(EXTRA_REQUEST, true) })
             .setStyle(NotificationCompat.BigTextStyle().bigText(detail.take(2000)))
@@ -200,6 +205,7 @@ class Notifier @Inject constructor(
         }
         NotificationPolicy.actions(ix).forEach { action -> builder.addAction(action(ix, action)) }
         post(interactionTag(ix.id), EVENT_ID, builder.build())
+        return true
     }
 
     private fun action(ix: Interaction, action: NotificationAction): NotificationCompat.Action {
@@ -295,6 +301,17 @@ class Notifier @Inject constructor(
     fun failure(id: String, session: SessionKey?, assistant: Boolean? = null) = resultNotice(
         id, session, context.getString(R.string.notify_result_unconfirmed_title), context.getString(R.string.notify_result_check_chat), assistant,
     )
+
+    /**
+     * A tap that never reached the hub (#5008): the request comes back with its buttons and a line saying so, to be
+     * tapped again. Without the request at hand (a cold start that could not reach the hub), there are no buttons to
+     * bring back: a notice says it was not sent and opens the chat.
+     */
+    internal fun notSent(id: String, ix: Interaction?, session: SessionKey?, assistant: Boolean?) {
+        if (ix != null && postInteraction(ix, context.getString(R.string.notify_result_not_sent_detail))) return
+        resultNotice(id, session, context.getString(R.string.notify_result_not_sent_title),
+            context.getString(R.string.notify_result_open_chat), assistant)
+    }
 
     internal fun actionResult(id: String, session: SessionKey?, result: NotificationActionResult, assistant: Boolean?) {
         val (title, detail) = actionResultCopy(result) ?: return

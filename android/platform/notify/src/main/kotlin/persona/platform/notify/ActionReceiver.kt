@@ -39,12 +39,15 @@ open class ActionReceiver : BroadcastReceiver() {
             // Taps on the ongoing notification: no 核对中 / 发送中 notice of its own (that would pop a new heads-up when no
             // 需要你处理 notification is showing); results and failures still get one.
             val quiet = intent.getBooleanExtra(EXTRA_QUIET, false)
+            // Nothing goes to the hub before the claim: a failure up to then (hub unreachable, the timeout) was not sent.
+            var claimed = false
+            var request: persona.core.contracts.Interaction? = null
             try {
                 // A bounded receiver lifetime is a timeout, not a delivery guarantee.
                 withTimeout(8_000) {
                     val sessions = dependencies.sessions()
                     val result = NotificationActionExecutor(
-                        dependencies.interactions(), dependencies.actionJournal()::claim,
+                        dependencies.interactions(), { dependencies.actionJournal().claim(it).also { claimed = claimed || it } },
                         session = { key ->
                             // A cold start may not have the list yet: one refresh, then the hub decides.
                             sessions.sessions.value.firstOrNull { it.key == key } ?: run {
@@ -54,17 +57,22 @@ open class ActionReceiver : BroadcastReceiver() {
                         },
                     ).execute(id, action, reply,
                         locked = { lockedAfterUnlockSettles({ keyguard.isDeviceLocked }) },
-                        onInteraction = { session = it.sessionKey },
+                        onInteraction = { session = it.sessionKey; request = it },
                         expiresAt = intent.getStringExtra(EXTRA_EXPIRES_AT),
                         onProgress = { if (!quiet) dependencies.notifier().pending(id, session, it, assistant) },
                     )
+                    if (result == NotificationActionResult.NotSent) {
+                        dependencies.notifier().notSent(id, request, session, assistant)
+                        return@withTimeout
+                    }
                     if (result != NotificationActionResult.Locked) dependencies.notifier().retract(id)
                     if (result != NotificationActionResult.Submitted) {
                         dependencies.notifier().actionResult(id, session, result, assistant)
                     }
                 }
             } catch (failure: Exception) {
-                dependencies.notifier().failure(id, session, assistant)
+                if (claimed) dependencies.notifier().failure(id, session, assistant)
+                else dependencies.notifier().notSent(id, request, session, assistant)
                 if (failure is CancellationException) throw failure
             } finally {
                 pending.finish()

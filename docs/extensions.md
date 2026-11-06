@@ -2168,7 +2168,7 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 
 全双工：手机一直送麦克风（包括静音），什么时候该说话由模型决定，App 不做 VAD、不做「按住说话」。
 
-本节是协议 1。语音模式的协议 2（#3502 起内置语音扩展说它；`start` 带 `protocol: 2` 和 `target`：绑定所在的对话，加 `run` / `link` 帧、`resend`、`ready` 里的目标，#3504 起加 `ask` 帧）见 `docs/voice.md` 第 3 节；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
+本节是协议 1。语音模式的协议 2（#3502 起内置语音扩展说它；`start` 带 `protocol: 2` 和 `target`：绑定所在的对话，加 `run` / `link` 帧、`resend`、`ready` 里的目标，#3504 起加 `ask` 帧，#3503 起用户插话时扩展自己也会发 `clear`）见 `docs/voice.md` 第 3 节；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
 `error` 的 `code` 两种协议都可能有：`upstream_forbidden`（服务拒了 Key）、`upstream_unavailable`、`upstream_failed`（断了重连不上），App 不认识的 `code` 按没有处理。
 
 ### `GET /models`

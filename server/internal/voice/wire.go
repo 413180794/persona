@@ -54,12 +54,13 @@ const (
 	evAudio                     // audio: PCM16 to play
 	evUser                      // text of what the user said (replace: the whole line so far; final: it is done)
 	evAssistant                 // text of what the model says
-	evTurnEnd                   // the model's turn is over
-	evInterrupted               // the model's answer was cut off: drop what has not been played
+	evTurnEnd                   // the model's turn is over (id: the reply's, when the service names its replies)
+	evInterrupted               // the model's answer was cut off: drop what has not been played (id: as evTurnEnd)
 	evDelegation                // the model hands work over: id, text (what to do, may be empty)
 	evToolCall                  // a function call: id (its delegation), callID, name, args
 	evAck                       // the service took in what was sent as eventID (it may hold it while the model speaks)
 	evError                     // text, code; param (the field it refused), eventID (what it refused), when it says
+	evReply                     // the model began a reply (id): the service says when its replies start, end and are cut off
 )
 
 type event struct {
@@ -217,7 +218,8 @@ func (liveWire) decode(raw []byte) []event {
 }
 
 // liveResponseEvent reads the Responses event a response.event carries: a function call (bare, or as the finished
-// item of response.output_item.done), the model's text, the end of its turn.
+// item of response.output_item.done), the model's text, the start and end of its reply. A reply's events come on its
+// own (responses) delegation: delegation names the reply (docs/lessons/voice.md「其他行为」).
 func liveResponseEvent(delegation string, raw json.RawMessage) []event {
 	var e struct {
 		Type   string `json:"type"`
@@ -244,10 +246,12 @@ func liveResponseEvent(delegation string, raw json.RawMessage) []event {
 		}
 	case "response.output_text.delta":
 		return []event{{kind: evAssistant, text: e.Delta, name: "text"}}
+	case "response.created":
+		return []event{{kind: evReply, id: delegation}}
 	case "response.completed", "response.failed":
-		return []event{{kind: evTurnEnd}}
+		return []event{{kind: evTurnEnd, id: delegation}}
 	case "response.incomplete", "response.cancelled":
-		return []event{{kind: evInterrupted}}
+		return []event{{kind: evInterrupted, id: delegation}}
 	}
 	return nil
 }

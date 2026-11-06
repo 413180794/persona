@@ -336,9 +336,11 @@ func (k *asker) resolved(cur *askState, out resolveOutcome, delegation string, g
 	case saidVoice:
 		c.pl.logf("card %s: answered by voice", card)
 		state, by = askAnswered, byVoice
-		// Nothing follows its conversation but a run (an observed turn is #3503's): its result is not told by itself.
+		// Nothing follows its conversation but a run, or the observer on the bound one (observe.go): else its result
+		// is not told by itself.
 		key := keyOf(cur.ix)
-		d.Unfollowed = !slices.ContainsFunc(k.t.runs, func(r *voiceRun) bool { return key == linkKey{r.MachineID, r.SessionID} })
+		d.Unfollowed = !slices.ContainsFunc(k.t.runs, func(r *voiceRun) bool { return key == linkKey{r.MachineID, r.SessionID} }) &&
+			!k.t.obs.follows(key)
 	case saidLate:
 		c.pl.logf("card %s: answered elsewhere first (%s)", card, out.log)
 		by = byElsewhere

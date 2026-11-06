@@ -88,6 +88,7 @@
   "draft_blank": "The draft still has a blank \"{blank}\". Fill it in or delete it before sending.",
   "send": "Send",
   "later": "Later",
+  "filed_not_sent": "Already handled, nothing was sent",
   "more_asks_one": "{count} more",
   "more_asks_other": "{count} more",
   "dock_all": "All {count}",

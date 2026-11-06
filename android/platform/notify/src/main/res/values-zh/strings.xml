@@ -21,6 +21,8 @@
     <string name="notify_result_readonly_detail">这个会话只能查看，请打开会话或到电脑上处理。</string>
     <string name="notify_result_open_chat">请打开会话查看。</string>
     <string name="notify_result_check_chat">请打开会话核对结果，不要重复提交。</string>
+    <string name="notify_result_not_sent_title">没发出去</string>
+    <string name="notify_result_not_sent_detail">没连上 hub，没发出去，可以再点一次。</string>
     <string name="notify_open_terminal">打开终端</string>
     <string name="notify_action_deny">拒绝</string>
     <string name="notify_action_allow">允许</string>

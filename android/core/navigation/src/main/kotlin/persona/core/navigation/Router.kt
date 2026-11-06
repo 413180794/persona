@@ -17,9 +17,16 @@ sealed interface RouteInput {
 
 /**
  * Pairing credentials are transient input, never a serialized back-stack key. [focusComposer]: the Persona tab opens
- * with its composer focused and the keyboard up ([AskPersonaLink]).
+ * with its composer focused and the keyboard up ([AskPersonaLink]). [card]: Agents opens at its list with this request
+ * card open (a card outside any session, #4808).
  */
-class ResolvedRoute(val tab: AppTab, val key: NavKey, val pairingLink: String? = null, val focusComposer: Boolean = false)
+class ResolvedRoute(
+    val tab: AppTab,
+    val key: NavKey,
+    val pairingLink: String? = null,
+    val focusComposer: Boolean = false,
+    val card: RequestRef? = null,
+)
 
 /** The launcher's 「问 Persona」: the Persona tab with the cursor in its composer, cold start or not. */
 const val AskPersonaLink = "jarvis://open?target=tab&tab=jarvis&focus=composer"
@@ -143,6 +150,8 @@ fun tabRoot(tab: AppTab): NavKey = when (tab) {
 fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>): AppTab {
     val stack = stacks.getValue(tab)
     if (stack.isEmpty()) stack.add(tabRoot(tab))
+    // The card is listed on the tab's root: a conversation left open there is closed first.
+    if (card != null) while (stack.size > 1) stack.removeAt(stack.lastIndex)
     if (key == tabRoot(tab)) return tab
     // Move legacy entries out of the wrong tab, then pop to an existing target.
     stacks.filterKeys { it != tab }.values.forEach { other -> other.removeAll { sameTarget(it, key) } }

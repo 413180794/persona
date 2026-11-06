@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -125,6 +127,9 @@ func (h *hubClient) call(ctx context.Context, method, path string, body, out any
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+h.token)
+	if l := i18n.From(ctx); l != "" {
+		req.Header.Set("Accept-Language", string(l)) // what the hub answers in, where it says something for people
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -240,6 +245,28 @@ func (h *hubClient) resolve(ctx context.Context, id string, r proto.Resolution) 
 	}
 	err = h.call(ctx, "POST", "/api/v1/interactions/"+url.PathEscape(id)+"/resolve", r, &out)
 	return out.Already, err
+}
+
+// channels are the hub's channels (docs/channels.md), their names in the language ctx carries (i18n.With).
+func (h *hubClient) channels(ctx context.Context) ([]channel.View, error) {
+	var out struct {
+		Channels []channel.View `json:"channels"`
+	}
+	err := h.call(ctx, "GET", "/api/v1/channels", nil, &out)
+	return out.Channels, err
+}
+
+// triageSwitches are the hub's session triage switches (GET /api/v1/agents/triage, docs/agent-work.md「开关」): whether
+// it triages an agent's stopped turn at all, and whether it goes on (继续) after a transient model error.
+type triageSwitches struct {
+	Enabled      bool `json:"enabled"`
+	AutoContinue bool `json:"auto_continue"`
+}
+
+func (h *hubClient) triage(ctx context.Context) (triageSwitches, error) {
+	var out triageSwitches
+	err := h.call(ctx, "GET", "/api/v1/agents/triage", nil, &out)
+	return out, err
 }
 
 // interrupt stops the conversation's turn (the app's 停止 button).

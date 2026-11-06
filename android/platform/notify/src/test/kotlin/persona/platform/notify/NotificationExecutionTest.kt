@@ -143,6 +143,22 @@ class NotificationExecutionTest {
         assertEquals(3, center.writes)
     }
 
+    @Test fun aHubThatCannotBeAskedMeansNothingWasSent() = runBlocking {
+        // #5008: the check before the claim failed, so the tap can be repeated; only a lost reply after it is ambiguous.
+        val center = Center(request)
+        val claims = mutableSetOf<String>()
+        val executor = NotificationActionExecutor(center, { synchronized(claims) { claims.add(it) } }, { now })
+        val progress = mutableListOf<PendingStatus>()
+        center.refreshFailure = java.io.IOException("Unreachable")
+        assertEquals(NotificationActionResult.NotSent, executor.execute(request.id, "allow", null, { false }, onProgress = { progress += it }))
+        assertEquals(listOf(PendingStatus.Verifying), progress)
+        assertTrue(claims.isEmpty())
+        assertEquals(0, center.writes)
+        center.refreshFailure = null
+        assertEquals(NotificationActionResult.Submitted, executor.execute(request.id, "allow", null, { false }))
+        assertEquals(1, center.writes)
+    }
+
     @Test fun aSessionThatCannotApproveIsAnsweredOnTheComputer() = runBlocking {
         val center = Center(request)
         val history = Session(machineId = "machine", sessionId = "session", sourceKind = "codex_app_server",
@@ -268,7 +284,8 @@ class NotificationExecutionTest {
         var writes = 0
         var last: Resolution? = null
         var onResolve: suspend () -> Unit = {}
-        override suspend fun refresh() { refreshes++; pending.value = listOfNotNull(remote) }
+        var refreshFailure: Exception? = null
+        override suspend fun refresh() { refreshes++; refreshFailure?.let { throw it }; pending.value = listOfNotNull(remote) }
         override suspend fun resolve(id: String, resolution: Resolution) {
             writes++
             last = resolution

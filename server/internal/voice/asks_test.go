@@ -61,9 +61,10 @@ func TestAskAQuestionByVoice(t *testing.T) {
 	a.until(askFrom("q1", askAsking, ""))
 
 	a.send(map[string]any{"type": "text", "text": "第二个"})
-	// No run follows the conversation (the card was not asked of a turn the call handed over): its result is not told.
+	// The card was not asked of a turn the call handed over, but the call follows its bound conversation (observed
+	// turns): what it does next is told by itself.
 	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "用户的回答已经交给 Claude Code 了") || !strings.Contains(got, "还没做完") ||
-		!strings.Contains(got, "这次通话没有跟着它接下来做的事") {
+		strings.Contains(got, "这次通话没有跟着它接下来做的事") {
 		t.Fatalf("told: %s", got)
 	}
 	a.until(askFrom("q1", askAnswered, byVoice))

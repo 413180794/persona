@@ -224,7 +224,15 @@ func testPlugin(t *testing.T, cfg Config, hub *httptest.Server) *Plugin {
 	if os.Getenv("VOICE_TEST_LOG") != "" { // the plugin's log, when a test is being looked into
 		w = os.Stderr
 	}
-	return New(cfg, hub.URL, "hubtoken", log.New(w, t.Name()+": ", 0))
+	pl := New(cfg, hub.URL, "hubtoken", log.New(w, t.Name()+": ", 0))
+	// Its conversations are over (their apps hung up first: cleanups run last first) before the test's tunables are
+	// set back and the next test sets its own: their loops read them.
+	t.Cleanup(func() {
+		for deadline := time.Now().Add(10 * time.Second); pl.active.Load() > 0 && time.Now().Before(deadline); {
+			time.Sleep(5 * time.Millisecond)
+		}
+	})
+	return pl
 }
 
 func b64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }

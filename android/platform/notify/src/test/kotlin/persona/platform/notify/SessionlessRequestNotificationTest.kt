@@ -22,7 +22,7 @@ import persona.core.navigation.NotificationRoute
 
 /**
  * A card outside any session (`personad ask` in a plain terminal, #4515) has no conversation or terminal to open: its
- * notification, and the notice after a button on it, open Agents, where 需要你处理 lists it with its buttons.
+ * notification opens Agents with that card open (#4808); the notice after a button on it opens Agents.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -51,7 +51,8 @@ class SessionlessRequestNotificationTest {
     @Test fun aTapOpensAgents() {
         notifier().postInteraction(script)
         val notification = shown()
-        assertEquals(agents, shadowOf(notification.contentIntent).savedIntent.data)
+        assertEquals(NotificationRoute.card("machine", "script").uri(), shadowOf(notification.contentIntent).savedIntent.data)
+        assertEquals("jarvis://open?tab=agents&machine=machine&request=script", shadowOf(notification.contentIntent).savedIntent.data.toString())
         assertEquals(listOf("拒绝", "允许"), notification.actions.map { it.title.toString() })
     }
 

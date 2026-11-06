@@ -21,6 +21,8 @@
     <string name="notify_result_readonly_detail">This chat is view-only. Open it or handle it on your computer.</string>
     <string name="notify_result_open_chat">Open the chat to check.</string>
     <string name="notify_result_check_chat">Open the chat to check the result. Don\'t submit again.</string>
+    <string name="notify_result_not_sent_title">Not sent</string>
+    <string name="notify_result_not_sent_detail">Couldn\'t reach the hub, so nothing was sent. You can tap again.</string>
     <string name="notify_open_terminal">Open terminal</string>
     <string name="notify_action_deny">Deny</string>
     <string name="notify_action_allow">Allow</string>

@@ -186,3 +186,50 @@ func meanSquare(pcm []byte) float64 {
 	}
 	return sum / float64(n)
 }
+
+// Barging in (docs/voice.md「给快层的上下文」rule 7, its numbers from docs/lessons/voice.md「时间线」and「常量的建议值」,
+// protocol 2 only): the user talking over the model drops what it has not played yet (clear), as the upstream says. The
+// measured service stops the model by itself when the user cuts in for real (0.64 s and longer stopped it, a 0.43 s
+// 「嗯嗯」 did not) and says so (response.incomplete): clear follows that, at once. An upstream that never says when its
+// replies start, end or are cut off gets the energy rule instead: the app's audio has had the user's voice in it for
+// bargeMin in a row (gaps between words up to bargeGap) while the model's speech still plays (its computed play end).
+// Not by the caption, nor a list of backchannel words: the caption comes 1.2 s after the user stops, too late for
+// 0.5 s; and not the model's own 0.8 s to stop, which misses the 0.64–0.70 s cut-ins it stops for, while its abandoned
+// answer is mostly in the app already (it comes 9–10 times faster than it plays). A long backchannel (「对对对」,
+// 0.7 s) cuts the answer too, as it does the measured model's.
+//
+// What the model says next, its reply to the user, is not dropped with the rest: its audio comes 1.2–1.3 s after they
+// stop (its reply begins 0.9 s after), before the 1.5 s pause that ends a drop otherwise and often before their
+// caption (lessons「时间线」). Audio once they have been quiet replyAfterVoice, after a pause of cutGap in what came (the
+// rest of the dropped answer comes in one burst, 9–10 times faster than it plays), is that reply.
+var (
+	bargeMin        = 500 * time.Millisecond
+	bargeGap        = 120 * time.Millisecond
+	replyAfterVoice = 700 * time.Millisecond
+	cutGap          = 400 * time.Millisecond
+)
+
+// barge is the user's voice in the app's audio as the energy rule counts it: a stretch of it, by the audio's own
+// length (frames come in bursts over the network), not by when they arrived.
+type barge struct {
+	voiced time.Duration // the stretch so far, its short gaps included
+	gap    time.Duration // the audio without a voice since its last voiced frame
+}
+
+// add takes a frame of length d, voiced or not, and returns the stretch the user has been talking for.
+func (b *barge) add(voiced bool, d time.Duration) time.Duration {
+	switch {
+	case voiced:
+		b.voiced += b.gap + d
+		b.gap = 0
+	case b.voiced > 0:
+		if b.gap += d; b.gap > bargeGap {
+			*b = barge{}
+		}
+	}
+	return b.voiced
+}
+
+// prioHeartbeat is a heartbeat's place in what waits for the insertion gate (sentWords.prio, then oldest first): after
+// everything else (results are 0; a card waiting on the user, #3504, goes before them), and dropped once it is stale.
+const prioHeartbeat = -1

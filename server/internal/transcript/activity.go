@@ -176,3 +176,32 @@ func clipActivity(s string) string {
 	}
 	return s
 }
+
+// activityPhrases are Activity's fixed lines, activityVerbs its verbs (「在读 tasks.go」, or alone), by the key of their
+// words in the hub's transcript texts (i18n hub-transcript_text.<key>; a verb with what it acts on: <key>_what).
+var (
+	activityPhrases = map[string]string{
+		"在更新计划": "act_plan", "在问你问题": "act_asking", "在等你批准计划": "act_plan_approval", "在等待": "act_waiting",
+		"在等后台任务": "act_waiting_task", "在停后台任务": "act_stopping_task", "在找工具": "act_finding_tools", "在查代码": "act_lsp",
+		"在等 CI": "act_ci", "在提 PR": "act_pr_create", "在合并 PR": "act_pr_merge", "在发版": "act_release", "在部署": "act_deploy",
+		"在跑测试": "act_test", "在检查代码": "act_lint", "在编译": "act_build", "在装依赖": "act_install", "在推送代码": "act_push",
+		"在提交代码": "act_commit", "在同步代码": "act_sync", "在看改动": "act_diff", "在用模拟器": "act_simulator",
+		"在搜代码": "act_search_code", "在读文件": "act_read_files", "在跑命令": "act_command",
+	}
+	activityVerbs = map[string]string{
+		"在读": "act_read", "在改": "act_edit", "在写": "act_write", "在搜": "act_grep", "在找文件": "act_glob", "在看目录": "act_ls",
+		"在看网页": "act_fetch", "在搜网页": "act_web_search", "在派子任务": "act_subtask", "在用技能": "act_skill", "在调用": "act_tool",
+		"在跑": "act_run",
+	}
+)
+
+// ActivityKey is the key of an activity line's words in the hub's transcript texts (i18n hub-transcript_text.<key>):
+// one of its fixed lines, or a verb alone (verb: with what it acts on, <key>_what). "" for one it does not know (an
+// older or newer node's wording).
+func ActivityKey(s string) (key string, verb bool) {
+	if key, ok := activityPhrases[s]; ok {
+		return key, false
+	}
+	key, ok := activityVerbs[s]
+	return key, ok
+}

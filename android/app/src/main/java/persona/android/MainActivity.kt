@@ -217,9 +217,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 「问 Persona」 (`focus=composer`): the Persona page focuses its composer once the link is applied. */
+    /**
+     * 「问 Persona」 (`focus=composer`): the Persona page focuses its composer once the link is applied; a notification's
+     * card outside any session opens on Agents.
+     */
     private fun focusing(resolve: (Router) -> ResolvedRoute?): (Router) -> ResolvedRoute? = { router ->
-        resolve(router)?.also { if (it.focusComposer) persona.feature.assistant.AssistantComposerFocus.request() }
+        resolve(router)?.also {
+            if (it.focusComposer) persona.feature.assistant.AssistantComposerFocus.request()
+            // A card outside any session (#4808): Agents opens its sheet once the card is listed.
+            it.card?.let(persona.feature.agents.AgentsCardOpen::request)
+        }
     }
 
     companion object {

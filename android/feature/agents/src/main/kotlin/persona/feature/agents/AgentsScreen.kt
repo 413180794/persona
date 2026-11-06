@@ -45,6 +45,8 @@ internal fun AgentsScreen(
     groups: List<persona.core.contracts.api.HubGroupInfo> = emptyList(),
     /** The hub lists terminal panes (feature terminal_panes): the menu offers 终端 under 机器, as the web's sidebar does. */
     terminalPanes: Boolean = false,
+    /** A notification's card to open once it is listed (#4808). */
+    cardRequests: CardOpenRequests = AgentsCardOpen,
 ) {
     val page by model.page.collectAsStateWithLifecycle()
     val connection by model.connection.state.collectAsStateWithLifecycle()
@@ -89,6 +91,14 @@ internal fun AgentsScreen(
     }
     var allRequests by rememberSaveable { mutableStateOf(false) }
     var requestDetail by remember(model) { mutableStateOf<Interaction?>(null) }
+    val cardRequest by cardRequests.requests.collectAsStateWithLifecycle()
+    LaunchedEffect(cardRequest, everyRequest) {
+        val asked = cardRequest ?: return@LaunchedEffect
+        // The list may still be loading on a cold start: wait for the card, then open its sheet over the list.
+        val card = everyRequest.firstOrNull { it.id == asked.card.requestId && it.machineId == asked.card.machineId }
+            ?: return@LaunchedEffect
+        if (cardRequests.take(asked)) { allRequests = false; requestDetail = card }
+    }
     var now by remember { mutableStateOf(Instant.now()) }
     val lifecycle = LocalLifecycleOwner.current
     LaunchedEffect(lifecycle) {
@@ -507,7 +517,8 @@ internal fun AgentsScreen(
             page.preferences.mutes, page.settings))
     val approveBlocked = stringResource(R.string.agents_approve_blocked)
     requestDetail?.let { selected ->
-        val current = pending.firstOrNull { it.id == selected.id && it.sessionKey == selected.sessionKey }
+        // Every group's requests: a notification's card may belong to a group the list is not showing (#4808).
+        val current = everyRequest.firstOrNull { it.id == selected.id && it.sessionKey == selected.sessionKey }
         val request = current ?: selected
         RequestDetail(request, metadata, now, reachable(request), delivery[request.id],
             onDismiss = { requestDetail = null }, onOpenChat = {

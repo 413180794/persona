@@ -1,0 +1,1 @@
+The Persona main conversation has finished a turn that began elsewhere (a scheduled task, a task reporting back), not from the user in this call; its reply is in the conversation. Only mention it in one sentence ("there's something new in the conversation"), do not read it out, do not call any tools, and go on with what you were talking about.

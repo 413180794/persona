@@ -74,9 +74,44 @@ type VoiceReport struct {
 	Background int
 	Again      bool
 	Reason     string // failed: why there is no answer
+	// Failure is what sort of model error the turn ended on, said instead of its text (voice/failure): not_logged_in,
+	// auth_failed, model_route, rate_limited (proto.Session.TurnErrorCode), transient (the model service failed for a
+	// moment, and nobody went on), retried (it failed again after a 继续), error (another). failed: the turn has no
+	// answer; done: Answer is what it wrote before that.
+	Failure string
+	// Observed: the turn was not handed over by voice: the bound conversation began it otherwise (typed on the phone or
+	// at the computer, a wake-up, docs/voice.md「一轮跟踪」); Tasks is then empty.
+	Observed bool
 }
 
 func RenderVoiceReport(d VoiceReport) string { return render("voice/report", d) }
+
+// VoiceProgress is what the voice model is told while the bound conversation still works on what was handed over
+// (voice/progress, docs/voice.md「播报」): a heartbeat after a long quiet (working: the sort of step it is on and how
+// long it has worked, nothing it wrote), or once that it stopped to wait on something outside (waiting).
+type VoiceProgress struct {
+	Lang string
+	To   string // an agent's name; "" the Persona main conversation
+	Do   string // working | waiting
+	// Activity is the sort of step it is on (在跑测试, 在读, 在改…), Elapsed how long it has worked on it, in Lang.
+	Activity, Elapsed string
+	// On is what it waits on (waiting): external (a deploy, CI, a review, a time) or agent (another agent finishing);
+	// Wait what it says it waits for and Agent the agent it waits on: the hub's triage of its words, inside
+	// <agent_output>.
+	On, Wait, Agent string
+}
+
+func RenderVoiceProgress(d VoiceProgress) string { return render("voice/progress", d) }
+
+// VoiceObserved is what the voice model is told when a turn of the bound Persona conversation that came from elsewhere
+// (a chat app's bot, a scheduled task) is over (voice/observed): one line that there is news there, never its words.
+type VoiceObserved struct {
+	Lang    string
+	To      string // "" the Persona main conversation; Persona for another of its conversations
+	Channel string // the channel's name (微信, 飞书机器人…); "" not a channel (a scheduled task, a wake-up)
+}
+
+func RenderVoiceObserved(d VoiceObserved) string { return render("voice/observed", d) }
 
 // VoiceRefused is what the voice model is told when what it handed over was not sent (voice/refused).
 type VoiceRefused struct {

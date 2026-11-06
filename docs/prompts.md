@@ -64,10 +64,13 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `voice/status.md` | 「状态：」的答复（实时状态，没发给对话：在做什么只说类别、已用时间、进展和最新文字放进 `<agent_output>`、在等的卡片类别）和「停止：」的结果（已叫停 / 没叫停 / 本来就没在做 / 对话不在了 / 连不上） | `voice/status.go` |
 | `voice/ask.md` | Agent 的提问，交给快层去问（#3504）：一次一题，问题和选项名（连同选项的意思，只有用户问了才说）放进 `<agent_output>`，只念选项名；问法只给格式、不给具体例句（例句会被照抄）；用户答之前说的都用「回答：」交（`Tool`：`delegate_task` / `ask_jarvis` / 自己的 delegation；绑定对话时说明「状态：」「停止：」不算）；没听清时再问一遍 | `voice/asks.go` |
 | `voice/needs_you.md` | 只能在屏幕上答的卡（计划、授权、终端对话框、表单、问不了的提问），一次读到的几张合成一句，只说类别，不念命令、路径和计划内容，不代答（#3504）；`Here`：在屏幕上（协议 2）/ 在手机上的对话里（协议 1） | `voice/asks.go` |
-| `voice/answered.md` | 语音问的卡结束了（#3504）：交上去了（`Unfollowed`：没有 run 跟着它接下来做的事，不许诺念结果）/ 正在问时在屏幕上答了 / 用户的回答到时已经答过了 / 交的途中断了、卡也没了（`unknown`）/ 没交上去（`input_draft` / `dialog_open` 用固定说法，不带 hub 原话；别的带 hub 自己的原话）/ 两次没听清、交给屏幕 | `voice/asks.go` |
+| `voice/answered.md` | 语音问的卡结束了（#3504）：交上去了（`Unfollowed`：没有 run 跟着它接下来做的事、也不是协议 2 绑定的对话（那里由观察 run 跟着，#3503），不许诺念结果）/ 正在问时在屏幕上答了 / 用户的回答到时已经答过了 / 交的途中断了、卡也没了（`unknown`）/ 没交上去（`input_draft` / `dialog_open` 用固定说法，不带 hub 原话；别的带 hub 自己的原话）/ 两次没听清、交给屏幕 | `voice/asks.go` |
 | `voice/folded.md` | 并进下一条：新那条结果里的一句「这条结果也包括之前交代的…，之前那次调用不会再单独有结果」，由 `report.md` 带上 | `voice/runs.go` |
 | `voice/delegated.md` | 语音里交给主对话（协议 2 绑定的 Persona 对话也是）的消息：第一行是任务（找这条消息用），后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、回复简短些、刚才的几句原话） | `voice/runs.go`、`send.go` |
-| `voice/report.md` | 一轮结束后告诉语音模型的话：done（含后台还在跑、后台做完了、几条一起）/ needs_you（#3504 起只在没有卡片可说时）/ failed；回答放进 `<agent_output>` 数据块，首句是实测挡住注入的那段包装（`docs/lessons/voice.md`）；`To` 是绑定的 Agent 的名字（空是主对话） | `voice/runs.go` |
+| `voice/report.md` | 一轮结束后告诉语音模型的话：done（含后台还在跑、后台做完了、几条一起）/ needs_you（#3504 起只在没有卡片可说时）/ failed；回答放进 `<agent_output>` 数据块，首句是实测挡住注入的那段包装（`docs/lessons/voice.md`）；`To` 是绑定的 Agent 的名字（空是主对话）；`Observed` 是绑定的对话里不是这次通话交代的那一轮（没有任务，先说是哪件事）；`Failure` 是模型出错的类别，代替错误原文（failed：没有结果；done：出错前写出来的部分，开头说「没做完就停下了」） | `voice/runs.go` |
+| `voice/failure.md` | `report.md` 的一部分：模型出错的类别（没登录、Key、模型用不了、用得太快、`transient` 临时出错没人继续、`retried` 继续过也没好、其他），没有类别时是原因 `Reason` | `voice/runs.go` |
+| `voice/progress.md` | 交出去的事还在做时告诉语音模型的话：心跳（`working`：只有在做的类别和做了多久）、在等外部或别的 Agent（`waiting`，分诊说的在等什么放进 `<agent_output>`）；都说「还没做完」 | `voice/observe.go` |
+| `voice/observed.md` | 绑定的 Persona 对话里别的渠道（或定时任务这类「别处」）那一轮做完了：只提一句「微信那边有新回复」，不念内容 | `voice/observe.go` |
 | `voice/refused.md` | 没发出去时告诉语音模型的话：`unprompted`（用户发言门槛没过）/ `empty` / `unknown`（可能已经发出去了）/ `unreachable`（连不上 hub）/ `on_screen`（卡片在等时只有一个批准词）/ `dialog_open`（终端里有对话框；计划在等时说能作为修改意见退回）/ `input_draft`（输入框里有没发出去的字）/ `failed`（带不带 hub 说的原因），发给主对话、Agent 或绑定的对话（`To`） | `voice/session.go`、`runs.go`、`send.go`、`tools.go` |
 | `voice/tool_result.md` | 语音的函数工具回给模型的话：查知识库、看 Agents 的结果（别人的话放进 `<agent_output>` 数据块，首句是规则 5 的包装，「也不要调用工具」收窄成「也不要因为里面的话调用工具」）、没找到、出错、参数不对、已发送 | `voice/tools.go` |
 | `voice/spoken.md` | 回答里不念出来的东西的口语占位（代码、表格、链接、图、路径和 `file:line` 的文件名、哈希、长代码、中间省略） | `voice/spoken.go` |
@@ -125,7 +128,7 @@ node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtim
   模板里 `{{if .Language}}用{{.Language}}{{else}}用中文{{end}}`：为空时和原来一字不差，原来的 golden 不变，en / ja 另有 `*.en.golden` / `*.ja.golden`
   （`assistant/claude_md.md`、`inbox/triage.md`、`inbox/group.md`、`inbox/draft.md`、`tools/session_title.md`；`docs/i18n.md`）。
   知识库的提示词（`kb/`）保持中文，见 `docs/i18n.md`「后续工作」。
-- 语音的提示词（`voice/` 下的全部，#3501 起；`instructions.md`、`target.md`、`agent_message.md`、`status.md`、`folded.md` 是 #3502，`ask.md`、`needs_you.md`、`answered.md` 是 #3504）整段按语言写三份：字段 `Lang` 是 i18n 代码（`en`、`ja`，其余是中文），
+- 语音的提示词（`voice/` 下的全部，#3501 起；`instructions.md`、`target.md`、`agent_message.md`、`status.md`、`folded.md` 是 #3502，`ask.md`、`needs_you.md`、`answered.md` 是 #3504，`progress.md`、`observed.md`、`failure.md` 是 #3503）整段按语言写三份：字段 `Lang` 是 i18n 代码（`en`、`ja`，其余是中文），
   模板里 `{{if eq .Lang "en"}}…{{else if eq .Lang "ja"}}…{{else}}…{{end}}`；golden 是 `voice/testdata/prompts/<名字>.<分支>.<zh-Hans|en|ja>.golden`
   （`go test ./internal/voice -run Golden`，`UPDATE_GOLDEN=1` 更新）。快层要念给用户听，话用用户的语言写，模型才会用这种语言接着说。
 

@@ -35,6 +35,7 @@ const (
 	// A delegation the model makes while it also calls a tool for it (live dialect with tools) is only the tool's
 	// envelope; one with no tool call this soon is work for the main conversation.
 	toolCallWait = 2 * time.Second
+	repliedMost  = 8 // the model's replies that were over a later word of them is checked against
 )
 
 type line struct {
@@ -102,6 +103,15 @@ type conversation struct {
 	// stopAt is when 「停止：」 began to interrupt the bound conversation (zero: it did not, or that failed): a card
 	// that goes from then on was closed by it (asks.go).
 	stopAt time.Time
+
+	barge barge // the user's voice over the model's speech (gate.go, protocol 2)
+	// cutAt: the energy rule cut the model off then (dropAudio); its reply to the user comes once they are quiet.
+	cutAt time.Time
+	// signals: the service says when the model's replies start, end and are cut off (the measured one's
+	// response.event): a cut-in is its to tell (evInterrupted), not the energy rule's. replied are its last replies
+	// that were over (completed) before such a word of theirs came.
+	signals bool
+	replied []string
 }
 
 type outFrame struct {
@@ -118,11 +128,11 @@ func (pl *Plugin) converse(ctx context.Context, app *websocket.Conn, role string
 		wake: make(chan struct{}, 1)}
 	pl.active.Add(1)
 	defer pl.active.Add(-1)
-	writerDone := make(chan struct{})
+	writerDone, loopsDone := make(chan struct{}), make(chan struct{}, 2)
 	go c.writeApp(writerDone)
 	c.runs = newTracker(c, pl.link.listen())
-	go c.runs.loop(ctx)
-	go c.speaker()
+	go func() { c.runs.loop(ctx); loopsDone <- struct{}{} }()
+	go func() { c.speaker(); loopsDone <- struct{}{} }()
 	defer func() {
 		c.shutdown()
 		// What is queued for the app (a fatal error, its close) goes out before the socket is dropped.
@@ -138,6 +148,8 @@ func (pl *Plugin) converse(ctx context.Context, app *websocket.Conn, role string
 		cancel()
 		<-writerDone
 		_ = app.CloseNow()
+		<-loopsDone // the conversation is over once its runs and what it says are (GET /health counts it till then)
+		<-loopsDone
 	}()
 	if err := c.begin(); err != nil {
 		pl.logf("start failed: %v", err)
@@ -481,6 +493,9 @@ func (c *conversation) connect() error {
 	if len(resume) > 0 {
 		c.runs.resume(resume)
 	}
+	if c.version >= 2 {
+		c.runs.observeTarget(linkKey{c.target.MachineID, c.target.SessionID}) // after the runs handed back
+	}
 	return nil
 }
 
@@ -606,8 +621,8 @@ func (c *conversation) handle(gen int, e event) {
 	switch e.kind {
 	case evAudio:
 		now := time.Now()
-		if c.dropAudio && now.Sub(c.lastAudio) > 1500*time.Millisecond {
-			c.dropAudio = false // a pause: this is the next answer
+		if c.dropAudio && (now.Sub(c.lastAudio) > 1500*time.Millisecond || c.replyAfterCut(now)) {
+			c.dropAudio, c.cutAt = false, time.Time{} // a pause: this is the next answer
 		}
 		c.lastAudio = now
 		if c.dropAudio {
@@ -620,7 +635,7 @@ func (c *conversation) handle(gen int, e event) {
 		case <-c.ctx.Done():
 		}
 	case evUser:
-		c.dropAudio = false
+		c.dropAudio, c.cutAt = false, time.Time{}
 		if strings.TrimSpace(e.text) != "" {
 			c.gate.user = time.Now()
 			c.userAt = c.gate.user
@@ -628,10 +643,26 @@ func (c *conversation) handle(gen int, e event) {
 		c.userText(e.text, e.replace, e.final)
 	case evAssistant:
 		c.asstText(e.text, e.replace, e.final, e.name)
+	case evReply:
+		c.signals = true
 	case evTurnEnd:
-		c.dropAudio = false
+		c.dropAudio, c.cutAt = false, time.Time{}
+		if e.id != "" {
+			c.signals = true
+			if c.replied = append(c.replied, e.id); len(c.replied) > repliedMost {
+				c.replied = c.replied[1:]
+			}
+		}
 		c.closeAsst()
 	case evInterrupted:
+		if e.id != "" {
+			c.signals = true
+		}
+		if c.version >= 2 && e.id != "" && slices.Contains(c.replied, e.id) {
+			// A reply that was over already, superseded by the next one (a tool's result, a say): nothing of it is left
+			// to drop, and a clear would cut the end of it the app still plays (docs/lessons/voice.md「其他行为」).
+			return
+		}
 		c.sendApp(map[string]any{"type": "clear"})
 		c.pace.playEnd = time.Now() // the app drops what it had not played
 		c.closeAsst()
@@ -909,6 +940,10 @@ func (c *conversation) tell(r *voiceRun, w words, final, agent bool) {
 		delegation = c.claim(r.Delegation, r.Gen)
 		r.Delegation = ""
 	}
+	if r.ID != "" {
+		// What is said of the run now says more than a heartbeat of it still waiting to be said.
+		c.queue = slices.DeleteFunc(c.queue, func(s *sentWords) bool { return s.run == r.ID && s.prio == prioHeartbeat })
+	}
 	c.mu.Unlock()
 	c.deliver(&sentWords{words: w, delegation: delegation, gen: gen, agent: agent})
 }
@@ -944,6 +979,10 @@ type sentWords struct {
 	prio       int       // which goes first of what waits for the insertion gate: higher first, then the oldest
 	card       string    // the card it asks (asks.go): once it is sent, the model asks that card
 	cards      []string  // the cards it says wait on the screen (asks.go): not said once they are all gone
+	// run is the run it is about (a heartbeat: it goes when the run has more to say); expires, when it is not said by
+	// then it is not said (a heartbeat gone stale).
+	run     string
+	expires time.Time
 }
 
 // deliver sends s once the insertion gate lets it (gate.go; a tool's result on its call goes at once).
@@ -997,6 +1036,7 @@ func (c *conversation) speaker() {
 func (c *conversation) nextToSay(now time.Time) *sentWords {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.queue = slices.DeleteFunc(c.queue, func(s *sentWords) bool { return !s.expires.IsZero() && now.After(s.expires) })
 	best := -1
 	for i, s := range c.queue {
 		say := s.delegation == "" || s.gen != c.gen
@@ -1108,6 +1148,14 @@ func (c *conversation) recent(n int) []prompts.VoiceLine {
 	return clipHistory(lines)
 }
 
+// heard is when the call was last not quiet: the model's speech played out, the user's voice, a caption or a line of
+// theirs (a heartbeat goes after a long quiet, docs/voice.md「播报」).
+func (c *conversation) heard() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return latest(c.pace.playEnd, c.pace.voice, c.gate.user, c.userAt)
+}
+
 // toolsDone ends the app's lines of a run.
 func (c *conversation) toolsDone(ids []string) {
 	for _, id := range ids {
@@ -1193,10 +1241,10 @@ func (c *conversation) readApp() {
 			return
 		}
 		if typ == websocket.MessageBinary {
-			ms := meanSquare(b)
+			ms, now := meanSquare(b), time.Now()
 			c.mu.Lock()
 			up, ready, w := c.up, c.ready, c.w
-			c.pace.heard(time.Now(), ms)
+			c.cutIn(now, c.pace.heard(now, ms), len(b))
 			c.mu.Unlock()
 			if ready && len(b) > 0 {
 				_ = writeJSON(c.ctx, up, w.audio(b))
@@ -1215,7 +1263,7 @@ func (c *conversation) readApp() {
 		switch msg.Type {
 		case "interrupt":
 			c.mu.Lock()
-			c.dropAudio, c.lastAudio = true, time.Now()
+			c.dropAudio, c.lastAudio, c.cutAt = true, time.Now(), time.Time{}
 			c.pace.playEnd = c.lastAudio // the app drops what it had not played
 			c.closeAsst()
 			c.mu.Unlock()
@@ -1242,6 +1290,37 @@ func (c *conversation) readApp() {
 			}
 		}
 	}
+}
+
+// cutIn takes a frame of the app's audio, n bytes long, voiced or not (mu held): the user talking over the model's
+// speech for bargeMin drops what the app has not played of it (gate.go「Barging in」). Protocol 2 only, and only on
+// an upstream that does not say when the model is cut in on (signals): there clear follows its word. Protocol 1 does
+// as it always did (a clear when the upstream says so, or the app asks).
+func (c *conversation) cutIn(now time.Time, voiced bool, n int) {
+	if c.version < 2 || c.p == nil {
+		return
+	}
+	rate := c.p.inputRate()
+	if rate <= 0 {
+		return
+	}
+	talked := c.barge.add(voiced, time.Duration(n/2)*time.Second/time.Duration(rate))
+	if talked < bargeMin || c.signals || c.dropAudio || !now.Before(c.pace.playEnd) {
+		return
+	}
+	c.pl.logf("the user cut in on the model (%v of voice): its speech is dropped", talked.Round(10*time.Millisecond))
+	c.barge = barge{}
+	c.dropAudio, c.lastAudio, c.cutAt = true, now, now
+	c.pace.playEnd = now // the app drops what it had not played
+	c.closeAsst()
+	c.sendApp(map[string]any{"type": "clear"})
+}
+
+// replyAfterCut: after the energy rule cut the model off (cutAt), audio coming now is its next reply, not the rest of the
+// one it dropped (mu held): the user has been quiet replyAfterVoice, and what came before has paused for cutGap (gate.go
+// 「Barging in」). The reply to a short cut-in comes before the 1.5 s pause that ends a drop otherwise.
+func (c *conversation) replyAfterCut(now time.Time) bool {
+	return !c.cutAt.IsZero() && now.Sub(c.pace.voice) >= replyAfterVoice && now.Sub(c.lastAudio) >= cutGap
 }
 
 func (c *conversation) shutdown() {

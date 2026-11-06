@@ -56,6 +56,10 @@ type fakeHub struct {
 	onResolve func(id string) (int, string)
 	// onInterrupt runs as POST …/interrupt stops sid, before it answers (unlocked).
 	onInterrupt func(sid string)
+	// triage is the session triage's switches (GET /api/v1/agents/triage; nil: an older hub, 404); stopLag how long an
+	// interrupted conversation is still listed as working (the hub answers once the agent got its Esc).
+	triage  *triageSwitches
+	stopLag time.Duration
 }
 
 type resolvedCard struct {
@@ -72,6 +76,11 @@ type fakeSession struct {
 	turnError  string
 	items      []proto.Item
 	look       func(s *proto.Session) // what else the list says of it (an agent's title, its activity…)
+	// What the hub says of where its last turn stands (#3503): its error's kind and code, its triaged work state, its
+	// activity, and when its state and the session last changed.
+	errKind, errCode, activity string
+	work                       *proto.WorkState
+	updated, since             time.Time
 }
 
 type sentMsg struct {
@@ -161,6 +170,17 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		h.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{"machines": []proto.Machine{{ID: "m", Name: "工作站", Online: online}}})
 	})
+	mux.HandleFunc("GET /api/v1/channels", func(w http.ResponseWriter, r *http.Request) {
+		names := map[string]string{"app": "App", "voice": "语音", "wechat": "微信", "feishu": "飞书机器人"}
+		if r.Header.Get("Accept-Language") == "en" {
+			names["wechat"] = "WeChat"
+		}
+		var list []map[string]string
+		for _, id := range []string{"app", "voice", "wechat", "feishu"} {
+			list = append(list, map[string]string{"id": id, "name": names[id]})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"channels": list})
+	})
 	mux.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
 		defer h.mu.Unlock()
@@ -202,13 +222,28 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 	mux.HandleFunc("POST /api/v1/sessions/m/{sid}/interrupt", func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
 		h.interrupts = append(h.interrupts, r.PathValue("sid"))
-		onInterrupt := h.onInterrupt
+		onInterrupt, lag := h.onInterrupt, h.stopLag
 		h.mu.Unlock()
+		sid := r.PathValue("sid")
 		if onInterrupt != nil {
-			onInterrupt(r.PathValue("sid"))
+			onInterrupt(sid)
 		}
-		h.status(r.PathValue("sid"), "idle")
+		if lag == 0 {
+			h.status(sid, "idle")
+		} else {
+			time.AfterFunc(lag, func() { h.status(sid, "idle") })
+		}
 		_, _ = io.WriteString(w, `{}`)
+	})
+	mux.HandleFunc("GET /api/v1/agents/triage", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		sw := h.triage
+		h.mu.Unlock()
+		if sw == nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(sw)
 	})
 	mux.HandleFunc("GET /api/v1/sessions/m/{sid}/items", func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
@@ -333,7 +368,8 @@ func (h *fakeHub) listLocked() []proto.Session {
 	for _, id := range ids {
 		s := h.sessions[id]
 		ps := proto.Session{MachineID: "m", SessionID: s.id, Assistant: s.assistant, Status: s.status, State: s.status,
-			PendingInteractions: s.pending, TurnError: s.turnError, Rev: int64(len(s.items))}
+			PendingInteractions: s.pending, TurnError: s.turnError, Rev: int64(len(s.items)), TurnErrorKind: s.errKind,
+			TurnErrorCode: s.errCode, Work: s.work, Activity: s.activity, UpdatedAt: s.updated, StateSince: s.since}
 		for range s.background {
 			ps.Background = append(ps.Background, proto.BackgroundTask{})
 		}

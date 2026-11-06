@@ -79,6 +79,7 @@
   "draft_blank": "下書きに未入力の「{blank}」があります。書き換えるか削除してから送信してください",
   "send": "送信",
   "later": "あとで",
+  "filed_not_sent": "この件は対応済みです。送信していません",
   "more_asks_other": "ほか{count}件",
   "dock_all": "すべて{count}",
   "waiting": "要対応",

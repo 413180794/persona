@@ -24,7 +24,9 @@ internal fun Router.open(route: NotificationRoute): ResolvedRoute? {
         chat != null -> chat.copy(kind = kind ?: chat.kind).let { target ->
             parse(RouteInput.Internal(route.request?.let { InteractionRoute(target, it) } ?: target))
         }
-        tab != null -> parse(RouteInput.Internal(tabRoot(tab)))
+        tab != null -> parse(RouteInput.Internal(tabRoot(tab)))?.let { root ->
+            route.card?.takeIf { tab == AppTab.Agents }?.let { ResolvedRoute(root.tab, root.key, card = it) } ?: root
+        }
         else -> null
     }
 }

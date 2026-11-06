@@ -9,8 +9,10 @@ import persona.core.designsystem.PendingStatus
 import persona.core.domain.answer.RequestExpiry
 import persona.core.domain.sort.canApprove
 import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
-internal enum class NotificationActionResult { Submitted, Expired, Gone, Locked, Invalid, Duplicate, ReadOnly }
+/** [NotSent]: the hub could not be asked before the claim, so nothing was sent and the button can be tapped again (#5008). */
+internal enum class NotificationActionResult { Submitted, Expired, Gone, Locked, Invalid, Duplicate, ReadOnly, NotSent }
 
 /** Claim immediately before sending; a lost response must never cause another resolve. */
 internal class NotificationActionExecutor(
@@ -39,7 +41,9 @@ internal class NotificationActionExecutor(
         }
         onProgress(PendingStatus.Verifying)
         // Always query the hub: a locally pending request may already be handled elsewhere.
-        center.refresh()
+        try { center.refresh() }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { return NotificationActionResult.NotSent }
         val ix = center.pending.value.firstOrNull { it.id == id } ?: return NotificationActionResult.Gone
         onInteraction(ix)
         if (NotificationPolicy.expired(ix, now())) return NotificationActionResult.Expired

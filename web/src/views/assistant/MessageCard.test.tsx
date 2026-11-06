@@ -49,6 +49,14 @@ describe("a message card", () => {
     expect(html).not.toContain("发送");
   });
 
+  it("offers no 发送 or editor once the thing was handled elsewhere, and says nothing went out (#4797)", () => {
+    const html = renderToStaticMarkup(<FeedLineView item={card({ filed_at: "2026-11-05T09:00:00Z", draft: "确实是 bug，【预计几点前】修好" })} />);
+    expect(html).toContain("这件事已经处理过了，没有发出去");
+    expect(html).not.toContain("<textarea");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("草稿里还有没填的");
+  });
+
   it("holds a draft with a blank to fill in", () => {
     const html = renderToStaticMarkup(<FeedLineView item={card({ draft: "确实是 bug，【预计今晚 / 几点前】修好" })} />);
     expect(html).toContain("草稿里还有没填的「【预计今晚 / 几点前】」");

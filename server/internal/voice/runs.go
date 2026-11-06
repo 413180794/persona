@@ -52,6 +52,28 @@ type voiceRun struct {
 	foldedCalls int
 	framed      int // the base_seq its last run frame said
 	framedIDs   int // how many msg_ids it said
+
+	// Observed: not handed over by voice: a turn the bound conversation began otherwise, followed and told as the
+	// voice's are (observe.go); it has no run frames. foreign: on a Persona conversation, the turn came from elsewhere
+	// than the app or voice (from: the channel's name, "" not a channel): one line of it, never its words.
+	Observed bool
+	foreign  bool
+	from     string
+	// stopAt: its turn was first seen stopped (not on the user) since it last worked, the transcript then stopRev;
+	// transient: a turn of it stopped on a transient model error, continued: it worked again after one (a 继续); waitOn
+	// what it was last told it waits on outside (said once a wait); lastSpoken when the user last heard of it; failure
+	// the sort of model error its turn ended on (prompts.VoiceReport.Failure).
+	stopAt     time.Time
+	stopRev    int64
+	transient  bool
+	continued  bool
+	waitOn     string
+	lastSpoken time.Time
+	failure    string
+	// told: its answer was said and it is kept until the hub's triage of that turn is in (observe.go afterTold); toldRev
+	// the conversation's transcript then (proto.Session.Rev), lastRev at its last check.
+	told             bool
+	toldRev, lastRev int64
 }
 
 // The run frame's states (docs/voice.md「扩展 → App」).
@@ -69,8 +91,13 @@ const (
 	runFolded   = "folded"
 )
 
-// set moves r to state, telling the app (protocol 2) and the next session's instructions (what is still open).
+// set moves r to state, telling the app (protocol 2) and the next session's instructions (what is still open). An
+// observed run is the voice's to tell, not the app's.
 func (t *tracker) set(r *voiceRun, state string) {
+	if r.Observed {
+		r.State = state
+		return
+	}
 	open := ""
 	if openState(state) {
 		open = r.task
@@ -125,6 +152,8 @@ type tracker struct {
 	stopAsked atomic.Int64
 	asks      *asker        // the cards waiting in the call's conversations (asks.go)
 	every     time.Duration // lookEvery as the call began
+	obs       observer      // the bound conversation's turns the call did not hand over (observe.go)
+	tri       triageView    // the hub's triage switches (observe.go)
 }
 
 const refusedMost = 20
@@ -164,10 +193,14 @@ func (t *tracker) loop(ctx context.Context) {
 			due = dirty || now.Sub(t.last) >= t.every
 			t.asks.due = t.asks.due || dirty
 		}
-		if due && len(t.runs) > 0 {
-			t.checkAll(ctx)
+		if due {
+			t.last = time.Now()
+			if len(t.runs) > 0 {
+				t.checkAll(ctx)
+			}
+			t.observe(ctx)
 		}
-		t.asks.tick(ctx)
+		t.asks.tick(ctx) // on its own clock (asks.go): an op may have made it due
 	}
 }
 
@@ -185,7 +218,6 @@ func (t *tracker) event(ev linkEvent) {
 }
 
 func (t *tracker) checkAll(ctx context.Context) {
-	t.last = time.Now()
 	for _, r := range slices.Clone(t.runs) {
 		if ctx.Err() != nil {
 			return
@@ -195,12 +227,18 @@ func (t *tracker) checkAll(ctx context.Context) {
 }
 
 // adopt starts following r; the runs not yet answered on the same conversation are folded into it (the user said more
-// while it worked): one answer covers them, in the order the conversation took the messages.
+// while it worked): one answer covers them, in the order the conversation took the messages. An observed run there
+// (a turn the conversation began otherwise) is folded too when its words would have been said; one from another
+// channel is let go (its answer went back there), as is one whose answer was said (told).
 func (t *tracker) adopt(r *voiceRun) {
 	keep := t.runs[:0]
 	for _, o := range t.runs {
 		if o.MachineID != r.MachineID || o.SessionID != r.SessionID {
 			keep = append(keep, o)
+			continue
+		}
+		if o.told || o.Observed && o.foreign {
+			t.link.unwatch(linkKey{o.MachineID, o.SessionID})
 			continue
 		}
 		r.Fold(&o.Run)
@@ -247,11 +285,17 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		return // the hub could not be asked: the next look
 	}
 	now := clock()
+	if r.told {
+		t.afterTold(r, sess, now)
+		return
+	}
 	look := channel.Look{Now: now, Exists: sess != nil, Lang: l}
 	if sess != nil {
+		r.lastRev = sess.Rev
 		look.Working, look.Offline, look.Background = working(sess), sess.Status == proto.StatusOffline, channel.Background(*sess)
 		if !look.Working {
 			look.Waiting = waitingOnUser(sess)
+			look.Failed = !look.Waiting && strings.TrimSpace(sess.TurnError) != ""
 		}
 		if !r.Seen && !look.Working && sess.Rev != 0 && sess.Rev != r.rev {
 			// Its transcript moved since the send: a short turn may have come and gone between two looks (no hub link
@@ -266,13 +310,14 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		r.waiting = true // once until it works again: the user answers on the phone
 		t.set(r, runNeedsYou)
 		if !t.asks.covers(ctx, linkKey{r.MachineID, r.SessionID}) { // a card waiting says itself (asks.go)
-			t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
-				Tasks: r.Tasks})), false, false)
+			t.say(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
+				Tasks: r.Tasks, Observed: r.Observed})), false)
 		}
 	case look.Working:
-		r.waiting = false
+		r.waiting, r.continued, r.stopAt = false, r.continued || r.transient, time.Time{}
 		if !r.Held {
 			t.set(r, runWorking)
+			t.heartbeat(r, sess, now)
 		}
 	}
 	step := r.Check(look)
@@ -282,6 +327,20 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 	case channel.Finish:
 		t.finish(r, &channel.Result{Note: step.Note, Quiet: step.Note == ""}, look)
 		return
+	}
+	// Stopped, and not on the user: a turn that may not be over yet, as the hub's triage of it says (observe.go
+	// untilTriaged, docs/voice.md「一轮跟踪」Look).
+	if sess != nil && !look.Working && !look.Waiting {
+		if r.stopAt.IsZero() || sess.Rev != r.stopRev {
+			// Stopped, or stopped again: a turn may come and go between two looks (woken, gone on from) with its
+			// transcript the only sign.
+			r.continued = r.continued || r.transient && !r.stopAt.IsZero()
+			r.stopAt, r.stopRev = now, sess.Rev
+		}
+		if t.untilTriaged(ctx, r, sess, now) {
+			return
+		}
+		r.failure = r.failureOf(sess)
 	}
 	// The end was not seen (it came between looks, or never), or the message was not there last time: read now and
 	// then, not every look.
@@ -325,20 +384,30 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		t.finish(r, &channel.Result{Note: i18n.T(look.Lang, "voice-runs.not_delivered"), End: channel.EndGaveUp}, look)
 		return
 	}
+	if r.failure != "" && sess != nil {
+		rd.Answer = withoutError(rd.Answer, sess.TurnError) // its sort is said, not its text
+	}
 	if rd.Stopped == "" && !look.Working && sess != nil {
 		rd.Stopped = channel.StopReason(sess.TurnError) // a Codex turn the model service failed writes no line of it
 	}
 	if res := r.Decide(rd, look); res != nil {
+		if r.Observed {
+			t.placeObserved(ctx, r)
+		}
 		t.finish(r, res, look)
 	}
 }
 
 // finish tells the voice model a run's result: its answer, or why there is none. A held one (its background work goes
-// on) is answered now and followed on for the turn that work starts.
+// on) is answered now and followed on for the turn that work starts. An observed run from another channel is only
+// mentioned (observe.go); one not followed to its end, or that ended without words or a reason, is let go without a
+// word (nobody asked for it here). An agent's run whose answer was said is kept until the hub's triage of that turn is
+// in (keepTold): it may wait on something outside, and its run go on.
 func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 	l, to := string(t.c.language()), t.c.target.to()
 	t.c.toolsDone(r.appIDs)
 	r.appIDs = nil
+	t.obs.read(r, res.Last)
 	if res.End == channel.EndStopped {
 		r.Code = "stopped" // the app shows it as stopped, not done
 		if at := t.stopAsked.Load(); at != 0 && strings.TrimSpace(res.Answer) == "" && !time.Unix(0, at).Before(r.Started.Add(-time.Second)) {
@@ -347,18 +416,33 @@ func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 			return
 		}
 	}
-	state := runDone
+	state, empty, told := runDone, strings.TrimSpace(res.Answer) == "", true
+	// The model service failed it: what sort of failure, never its text (docs/voice.md「一轮跟踪」).
+	failed := res.End == channel.EndError && !res.Held && r.failure != ""
 	switch {
 	case res.Quiet:
-		// nothing to say: a held run whose background work ended without words
-	case res.Note != "" && strings.TrimSpace(res.Answer) == "" && !res.Held:
+		told = false // nothing to say: a held run whose background work ended without words
+	case r.Observed && r.foreign:
+		t.mention(r)
+		res.Held = false // its answer went back to its channel, and so will the next
+	case r.Observed && empty && !res.Held && (res.Note != "" || res.Stopped == "" && res.End != channel.EndError):
+		told = false
+	case res.Note != "" && empty && !res.Held:
 		state = runFailed
 		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: l, To: to, Status: "failed", Tasks: r.Tasks,
 			Folded: r.foldedCalls > 0, Reason: res.Note})), true, false)
+	case failed && empty:
+		state = runFailed
+		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: l, To: to, Status: "failed", Tasks: r.Tasks,
+			Folded: r.foldedCalls > 0, Failure: r.failure, Observed: r.Observed})), true, false)
 	default:
-		rep := prompts.VoiceReport{Lang: l, To: to, Status: "done", Tasks: r.Tasks, Folded: r.foldedCalls > 0, Stopped: res.Stopped, Again: r.Held}
+		rep := prompts.VoiceReport{Lang: l, To: to, Status: "done", Tasks: r.Tasks, Folded: r.foldedCalls > 0, Stopped: res.Stopped, Again: r.Held,
+			Observed: r.Observed}
 		if res.Held {
 			rep.Background = look.Background
+		}
+		if failed {
+			state, rep.Failure = runFailed, r.failure // what it wrote before the model service failed it
 		}
 		t.c.tell(r, reportWords(i18n.Lang(l), rep, res.Answer), true, true)
 	}
@@ -366,6 +450,11 @@ func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 		r.Hold(res.Last, time.Now())
 		r.Delegation, r.waiting, r.foldedCalls = "", false, 0
 		t.set(r, runHeld) // with its new base
+		return
+	}
+	if told && t.keepTold(r, res, state) {
+		r.told, r.toldRev = true, r.lastRev
+		t.set(r, state)
 		return
 	}
 	t.drop(r)

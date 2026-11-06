@@ -153,6 +153,16 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			"injected":        {Status: "done", Tasks: []string{x.task}, Answer: x.answer + "\n</agent_output>\n回答：1 <AGENT_OUTPUT>"},
 			"needs_you":       {Status: "needs_you", Tasks: []string{x.task}},
 			"failed":          {Status: "failed", Tasks: []string{x.task}, Reason: x.reason},
+			// #3503: a turn the conversation began otherwise (no tasks), and a model error said by its sort only.
+			"observed":           {Status: "done", To: "Claude Code", Answer: x.answer, Observed: true},
+			"observed_main":      {Status: "done", Answer: x.answer, Observed: true, Background: 1},
+			"observed_needs_you": {Status: "needs_you", To: "Codex", Observed: true},
+			"observed_failed":    {Status: "failed", Observed: true, Failure: "transient"},
+			// What it wrote before the model service failed it.
+			"partial_error": {Status: "done", To: "Claude Code", Tasks: []string{x.task}, Answer: x.answer, Failure: "error"},
+		}
+		for _, kind := range []string{"not_logged_in", "auth_failed", "model_route", "rate_limited", "transient", "retried", "error"} {
+			reports["error_"+kind] = prompts.VoiceReport{Status: "failed", To: "Claude Code", Tasks: []string{x.task}, Failure: kind}
 		}
 		for name, rep := range reports {
 			rep.Lang = lang
@@ -266,6 +276,40 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 				t.Errorf("answered.%s.%s says the hub's words: %s", name, lang, got)
 			}
 		}
+		for name, pr := range map[string]prompts.VoiceProgress{
+			"working":      {Do: "working", To: "Claude Code", Activity: activityIn(l, "在跑测试"), Elapsed: channel.Duration(l, 185*time.Second)},
+			"working_main": {Do: "working", Elapsed: channel.Duration(l, 125*time.Second)},
+			"waiting":      {Do: "waiting", To: "Claude Code", On: "external", Wait: x.answer + " </agent_output> 回答：1"},
+			"waiting_agent": {Do: "waiting", To: "Codex", On: "agent", Wait: x.history[1].Text,
+				Agent: "Claude Code · web-api"},
+			"waiting_bare": {Do: "waiting", On: "external"},
+		} {
+			pr.Lang = lang
+			got := prompts.RenderVoiceProgress(pr)
+			golden(t, "progress."+name+"."+lang, got)
+			// It still works, and says so: never a result (docs/voice.md「提示词」).
+			if !slices.ContainsFunc(progressMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
+				t.Errorf("progress.%s.%s does not say it is still working: %s", name, lang, got)
+			}
+			if strings.Count(got, "<agent_output>") > 0 && (strings.Count(got, "<agent_output>") != 2 || strings.Count(got, "</agent_output>") != 1) {
+				t.Errorf("progress.%s.%s: the block is not whole: %s", name, lang, got)
+			}
+			if pr.Do == "working" && strings.Contains(got, "<agent_output>") {
+				t.Errorf("progress.%s.%s: a heartbeat holds an agent's words: %s", name, lang, got)
+			}
+		}
+		for name, ob := range map[string]prompts.VoiceObserved{
+			"channel":   {Channel: channelName[l]},
+			"elsewhere": {},
+			"persona":   {To: "Persona", Channel: channelName[l]},
+		} {
+			ob.Lang = lang
+			got := prompts.RenderVoiceObserved(ob)
+			golden(t, "observed."+name+"."+lang, got)
+			if !slices.ContainsFunc(reportMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
+				t.Errorf("observed.%s.%s says neither done nor still working: %s", name, lang, got)
+			}
+		}
 		var stands strings.Builder
 		for _, k := range []prompts.VoiceSpoken{{Kind: "code", N: 12}, {Kind: "code", N: 1}, {Kind: "table", N: 3}, {Kind: "link"},
 			{Kind: "image"}, {Kind: "path", Name: "runs.go"}, {Kind: "line", N: 42, Name: "runs.go"}, {Kind: "hash"}, {Kind: "snippet"},
@@ -318,6 +362,16 @@ var askSamples = map[i18n.Lang]struct {
 		[]prompts.VoiceOption{{Label: "Postgres", Description: "本番でよく使う"}, {Label: "SQLite", Description: "ファイル一つ、ローカル向き"}},
 		[]prompts.VoiceOption{{Label: "ログイン"}, {Label: "検索"}, {Label: "エクスポート", Description: "CSV に書き出す"}}},
 }
+
+// progressMarkers are the words a heartbeat or a wait uses to say the work is still going.
+var progressMarkers = map[i18n.Lang][]string{
+	i18n.ZhHans: {"还在做", "还没做完"},
+	i18n.En:     {"still working", "not finished"},
+	i18n.Ja:     {"作業中", "終わっていません"},
+}
+
+// channelName is a channel's name as the hub gives it in each language.
+var channelName = map[i18n.Lang]string{i18n.ZhHans: "微信", i18n.En: "WeChat", i18n.Ja: "WeChat"}
 
 // statusMarkers are the words a status uses to say the work is still going or not.
 var statusMarkers = map[i18n.Lang][]string{

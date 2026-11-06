@@ -5,6 +5,7 @@
 import { memo, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   answeredItems,
+  cardFiled,
   cardSent,
   dayLabel,
   dismissPlan,
@@ -862,11 +863,13 @@ function MessageCard({ item }: { item: FeedItem }) {
   const todo = useTodo(field(item, "todo_id"));
   const now = useTaskNow(todo);
   const sent = cardSent(item);
+  // handled without a reply from here: nothing left to edit or send
+  const filed = cardFiled(item);
   const busy = useFeed((s) => !!s.busy[item.id]);
   const [text, setText] = useState<string | null>(null);
   const headingId = useId();
   const draft = text ?? field(item, "draft") ?? "";
-  const blank = sent ? undefined : draftPlaceholder(draft);
+  const blank = sent || filed ? undefined : draftPlaceholder(draft);
   const send = async () => {
     try {
       await sendMessage(item, draft);
@@ -897,7 +900,7 @@ function MessageCard({ item }: { item: FeedItem }) {
           {sent ? t("assistant-tasks.replied_as_you") : t("assistant-tasks.draft_from_progress")}
           {sent && <span className="ml-auto font-normal text-ink-3">{clock(sent.at)}</span>}
         </span>
-        {!sent ? (
+        {!sent && !filed ? (
           // Named by the visible heading above it; the global focus ring covers only buttons and links, so it draws its own.
           <textarea
             value={draft}
@@ -907,11 +910,12 @@ function MessageCard({ item }: { item: FeedItem }) {
             className="-mx-1.5 resize-none rounded-control bg-transparent px-1.5 text-[14.5px] outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         ) : (
-          <div className="whitespace-pre-line text-[14.5px]">{sent.text}</div>
+          <div className="whitespace-pre-line text-[14.5px]">{sent ? sent.text : draft}</div>
         )}
       </div>
       {blank && <div className="text-[12px] text-red">{t("assistant-tasks.draft_blank", { blank })}</div>}
-      {!sent && (
+      {filed && <div className="text-[12px] text-ink-2">{t("assistant-tasks.filed_not_sent")}</div>}
+      {!sent && !filed && (
         <div className="flex gap-2">
           <Button tone="accent" busy={busy} disabled={!!blank || !draft.trim()} onClick={send} className="flex-1">
             {t("assistant-tasks.send")}

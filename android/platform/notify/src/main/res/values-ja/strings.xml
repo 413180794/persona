@@ -21,6 +21,8 @@
     <string name="notify_result_readonly_detail">このチャットは閲覧のみです。チャットを開くか、コンピューターで対応してください。</string>
     <string name="notify_result_open_chat">チャットを開いて確認してください。</string>
     <string name="notify_result_check_chat">チャットを開いて結果を確認してください。再送信はしないでください。</string>
+    <string name="notify_result_not_sent_title">送信されていません</string>
+    <string name="notify_result_not_sent_detail">hub に接続できず、送信されませんでした。もう一度タップできます。</string>
     <string name="notify_open_terminal">ターミナルを開く</string>
     <string name="notify_action_deny">拒否</string>
     <string name="notify_action_allow">許可</string>
