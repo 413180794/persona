@@ -64,10 +64,10 @@ func hookReq(event, tool string, mod func(*sockRequest)) sockRequest {
 
 func TestStandbyAnswers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), spoolFile)
-	sb := newStandby(path, t.Logf)
+	sb := newStandby(openSpool(path), t.Logf)
 	now := time.Now()
 	sb.now = func() time.Time { return now }
-	sb.since = now
+	sb.healthy = now
 	reply := func(req sockRequest) map[string]any {
 		b, _ := json.Marshal(sb.answer(req))
 		var m map[string]any
@@ -100,7 +100,19 @@ func TestStandbyAnswers(t *testing.T) {
 	if r := reply(sockRequest{Kind: "notify", Input: json.RawMessage(`{"title":" "}`)}); r["error"] == nil {
 		t.Fatalf("an empty notify: %v", r)
 	}
-	for _, kind := range []string{"mcp.tools", "mcp.call", "launcher.env", "cli.call"} {
+	// MCP gets what a node says when it cannot reach its manager (an older `personad mcp` knows it); the rest no node.
+	if r := reply(sockRequest{Kind: "mcp.tools"}); r["error"] == nil || r["tools"] == nil {
+		t.Fatalf("mcp.tools: %v", r)
+	}
+	if r := reply(sockRequest{Kind: "mcp.call", Name: "agent_send"}); r["is_error"] != true {
+		t.Fatalf("mcp.call: %v, want an error result", r)
+	}
+	for _, req := range []sockRequest{{Kind: "mcp.tools", AwayOK: true}, {Kind: "mcp.call", AwayOK: true}} {
+		if r := reply(req); r["away"] != true {
+			t.Fatalf("%s from a current client: %v, want away", req.Kind, r)
+		}
+	}
+	for _, kind := range []string{"launcher.env", "cli.call"} {
 		if r := reply(sockRequest{Kind: kind}); r["away"] != true {
 			t.Fatalf("%s: %v, want away", kind, r)
 		}
@@ -135,12 +147,12 @@ func TestStandbyOnTheSocket(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
-	sb := newStandby(SpoolPath(), t.Logf)
-	sb.start()
-	defer sb.stop()
+	sb := newStandby(openSpool(SpoolPath()), t.Logf)
+	sb.want()
+	defer sb.unwant()
 	ctx := context.Background()
-	if _, err := nodeclient.Dial(ctx, sockRequest{Kind: "mcp.tools"}); !errors.Is(err, nodeclient.ErrNoNode) {
-		t.Fatalf("mcp.tools in standby: %v, want ErrNoNode", err)
+	if _, err := nodeclient.Dial(ctx, sockRequest{Kind: "launcher.env"}); !errors.Is(err, nodeclient.ErrNoNode) {
+		t.Fatalf("launcher.env in standby: %v, want ErrNoNode", err)
 	}
 	rep, err := nodeclient.NotifyNode(ctx, nodeclient.Dial, nodeclient.NotifyRequest{Title: "built"}, "")
 	if err != nil || !rep.Queued || rep.Sent {
@@ -152,8 +164,8 @@ func TestStandbyOnTheSocket(t *testing.T) {
 	if n := len(openSpool(SpoolPath()).load()); n != 2 {
 		t.Fatalf("spooled %d, want the notification and the Stop", n)
 	}
-	sb.stop()
-	sb.start() // started again (the next manager went away too): still serves
+	sb.unwant()
+	sb.want() // started again (the next manager went away too): still serves
 	if _, err := nodeclient.Dial(ctx, sockRequest{Kind: "ping"}); err != nil {
 		t.Fatalf("ping after a restart of standby: %v", err)
 	}
@@ -225,7 +237,8 @@ func TestReplayHandsTheManagerWhatStandbyTookInOrderOnce(t *testing.T) {
 	add("hook", hookReq("Stop", "", nil), at)
 	add("hook", hookReq("Stop", "", nil), time.Now().Add(-spoolMaxAge-time.Hour)) // too old: dropped
 
-	n.replayed = make(chan struct{})
+	n.replayed, n.stateReady = make(chan struct{}), make(chan struct{})
+	close(n.stateReady)
 	n.replaySpool(context.Background(), sp)
 	select {
 	case <-n.replayed:

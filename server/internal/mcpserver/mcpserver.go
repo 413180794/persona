@@ -199,7 +199,7 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		defer cancel()
 		// pane: an agent's MCP server has no session id of its own; the node knows the session in its pane
 		// (report_to_supervisor and the todo decision tools need to know whose call it is: node callerTools).
-		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
+		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "away_ok": true, "name": p.Name, "args": p.Arguments,
 			"session_id": sessionID(), "assistant": isAssistant(), "guest": isGuest(), "pane": nodeclient.HookPane(os.Getenv)})
 		if err != nil {
 			return toolResult(proto.TextResult(callFailure(ctx, err), true)), nil
@@ -288,7 +288,7 @@ func listTools(ctx context.Context) ([]map[string]any, error) {
 }
 
 func listToolsOnce(ctx context.Context) ([]map[string]any, error) {
-	line, err := dialNode(ctx, map[string]any{"kind": "mcp.tools", "assistant": isAssistant(), "session_id": sessionID(), "guest": isGuest()})
+	line, err := dialNode(ctx, map[string]any{"kind": "mcp.tools", "away_ok": true, "assistant": isAssistant(), "session_id": sessionID(), "guest": isGuest()})
 	if err != nil {
 		return nil, fmt.Errorf("Persona node is not reachable: %w", err)
 	}

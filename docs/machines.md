@@ -73,7 +73,7 @@ Reachability and distance of the hub's own computers in its records come from ma
 - When the manager returns (hub restarts it with backoff beginning at 1 second), it reconnects every computer; hub requests rewatch of App-visible sessions automatically. Persona Link reconnects on its next retry.
   Calls to a machine still connecting after startup (hub-held card answers, new App Agents) wait for its first connection attempt to finish (up to 20 seconds), rather than immediately returning offline.
 - No new Agents, sending messages or observing Agent turn completion while manager is absent: all need its node connection (previously hub connected computers itself, so Agents could still start without assistant).
-- A resident node keeps what its Agents' hooks and `personad notify` send meanwhile, and permission / question hooks wait up to two minutes for the manager instead of dropping to the terminal; the next connection replays it in order, once (`protocol.md` ("When the manager is away")).
+- A resident node keeps what its Agents' hooks and `personad notify` send meanwhile, and permission / question hooks wait up to two minutes for the manager instead of dropping to the terminal; the next connection replays it in order (`protocol.md` ("When the manager is away")).
 
 **Bus sizes**: other messages, including heartbeats, wait until a hub-manager message finishes writing, so large payloads are chunked: downloads, uploads and node update packages ≤ 1 MiB per chunk, forwarded port bytes 32 KB;
 an items page, image or screenshot is one message (same as the former node connection). Maximum bus line is 64 MiB; manager doesn't forward node messages over 60 MiB (drops/logs events, calls return `too_large`), avoiding a bus disconnect.

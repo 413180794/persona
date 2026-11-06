@@ -13,5 +13,16 @@
   "footer_both_offline": "The machine is offline. Your choice applies once it connects. Shows sessions from both engines.",
   "footer_single": "Shows only sessions from the selected engine.",
   "footer_one_offline": "The machine is offline. Your choice applies once it connects. Shows only sessions from the selected engine.",
-  "save_failed": "Couldn't save: {message}"
+  "save_failed": "Couldn't save: {message}",
+  "footer_set_several": "Sessions from every checked engine are shown; new sessions from the web open in {engine} unless you pick another.",
+  "footer_set_single": "Only sessions in {engine} are shown.",
+  "footer_set_empty": "No terminal engine is enabled: only transcripts and sessions from other sources are shown, and none can be started from the web.",
+  "footer_set_offline": "The machine is offline; the choice applies once it connects. {text}",
+  "default": "Default",
+  "make_default": "Make default",
+  "sets_unsupported": "This computer’s node is too old and uses the default engine only; the checked ones apply after updating the node.",
+  "also_open": "Also open in {engines}: messages go here only",
+  "start_in": "Open in",
+  "none": "no terminal engine",
+  "list_separator": ", "
 }

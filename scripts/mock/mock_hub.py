@@ -9409,6 +9409,32 @@ for _m in MACHINES:
                         **({"note": "Orca 协议版本不兼容，请先更新 Orca。"} if _m["id"] == "server" else {})}]
                       if _m.get("online") else [])
 
+# MOCK_ENGINE_SETS=1 (#2576, docs/engines.md "Host sets"): a hub that takes sets of engine hosts. Every machine lists
+# engine_hosts / engine_default; the MacBook enables herdr + Herdr App, the Mac Studio herdr + Orca (Paseo found there
+# too); the widget session on the MacBook is live in Herdr App as well (also_open_in). PUT …/engine takes {hosts, default}.
+ENGINE_SETS = os.environ.get("MOCK_ENGINE_SETS") == "1"
+ENGINE_HOST_IDS = ["herdr", "herdr-core", "orca", "paseo"]
+
+
+def legacy_engine(hosts, default):
+    if len(hosts) == 1: return hosts[0]
+    if hosts == ["herdr", "herdr-core"]: return "herdr-both"
+    return default or "herdr"
+
+
+if ENGINE_SETS:
+    for _m in MACHINES:
+        _m["engine_hosts"], _m["engine_default"] = {"macbook": (["herdr", "herdr-core"], "herdr"),
+                                                     "studio": (["herdr", "orca"], "herdr")}.get(_m["id"], (["herdr"], "herdr"))
+        _m["engine"] = legacy_engine(_m["engine_hosts"], _m["engine_default"])
+        if _m.get("online"):
+            _m["engines"].append({"id": "paseo", "name": "Paseo", "available": _m["id"] == "studio", "version": "0.9"})
+            found = [h for h in ENGINE_HOST_IDS if any(e["id"] == h and e["available"] for e in _m["engines"])] or ["herdr"]
+            _m["engine_suggested"] = {"hosts": found, "default": found[0]}
+    for _s in SESSIONS:
+        if _s.get("session_id") == WIDGET:
+            _s["host"], _s["also_open_in"] = "herdr", ["herdr-core"]
+
 # ---------- MOCK_NEEDS / MOCK_HISTORY: the Jarvis page (docs/android.md "Jarvis page") ----------
 # By default five agent requests and several inbox items in "Needs you" wait: the Jarvis home's "Things that need you now" shows three
 # lines and "N more items in the inbox". MOCK_NEEDS=none: nothing waits (no section); MOCK_NEEDS=two: one request, one inbox item.
@@ -12151,6 +12177,18 @@ class H(BaseHTTPRequestHandler):
             machine = next((m for m in MACHINES if m["id"] == mid), None)
             if machine is None: return self.send_json({"error": "找不到机器"}, 404)
             body = json.loads(self.last_body or b"{}")
+            if ENGINE_SETS and isinstance(body.get("hosts"), list):
+                hosts = [h for h in ENGINE_HOST_IDS if h in body["hosts"]]
+                default = body.get("default") or (hosts[0] if hosts else "")
+                if len(hosts) != len(set(body["hosts"])) or (default and default not in hosts) or (not hosts and default):
+                    return self.send_json({"error": "宿主集合不对"}, 400)
+                if os.environ.get("MOCK_ENGINE_ERROR"): return self.send_json({"error": "暂时无法保存"}, 503)
+                machine["engine_hosts"], machine["engine_default"] = hosts, default
+                machine["engine"] = legacy_engine(hosts, default)
+                for send, _ in list(LIVE):
+                    try: send({"type": "machines", "machines": out_machines()})
+                    except Exception: pass
+                return self.send_json(out_machine(machine))
             engine = body.get("engine")
             if engine not in ("herdr", "herdr-core", "herdr-both", "orca", "paseo") and not any(
                     e["id"] == engine and e["available"] for e in machine["engines"]):

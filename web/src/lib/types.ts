@@ -32,6 +32,13 @@ export interface Machine {
   /** The terminal engine its sessions come from (herdr when absent); `engines`: what its node found, empty while offline. */
   engine?: string;
   engines?: DetectedEngine[];
+  /** The hosts enabled side by side and the default one (#2576, docs/engines.md "Host sets"); absent from older hubs. */
+  engine_hosts?: string[];
+  engine_default?: string;
+  /** What to preselect when the machine is paired: what its node found available, else herdr (only while online). */
+  engine_suggested?: { hosts: string[]; default: string };
+  /** The node is too old for sets and runs `engine` alone until it is updated. */
+  engine_sets_unsupported?: boolean;
   kind?: string;
   arch?: string;
   home?: string;
@@ -126,6 +133,9 @@ export interface TriageSwitches {
 }
 
 export interface Session {
+  /** The engine host it lives in (herdr, herdr-core, orca, paseo…), and the other hosts it is live in at once (#2576). */
+  host?: string;
+  also_open_in?: string[];
   /** Node-verified physical working directory; the original cwd stays available for existing session flows. */
   workspace_cwd?: string;
   /** The main checkout of the repository cwd belongs to, when the host knows it (#2840: Paseo's worktrees); "By repo" groups by it. */

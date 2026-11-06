@@ -152,6 +152,10 @@ type Node struct {
 	// replayed is closed once what standby took while no manager was connected went to this one (spool.go): new
 	// hooks wait for it, so the manager hears them after the older ones. nil (tests' Nodes): nothing waits.
 	replayed chan struct{}
+	// spool is the resident node's (Attach), nil elsewhere: a node that serves by itself neither keeps nor replays.
+	spool *spool
+	// stateReady is closed once the session state came from the manager (loadState).
+	stateReady chan struct{}
 
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
@@ -298,12 +302,16 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	if n.keeper != nil { // before the state loads: a conversation taken over has lost no background task
 		adopted = n.keeper.adopt(n)
 	}
+	n.stateReady = make(chan struct{})
 	go func() {
 		n.loadState(ctx)
+		close(n.stateReady)
 		n.resumeAssistants(adopted)
 	}()
-	n.replayed = make(chan struct{})
-	go n.replaySpool(ctx, openSpool(SpoolPath()))
+	if n.spool != nil { // a resident node's connection: what its standby took goes first (spool.go)
+		n.replayed = make(chan struct{})
+		go n.replaySpool(ctx, n.spool)
+	}
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
 		n.logger.Printf("hook socket: %v", err)

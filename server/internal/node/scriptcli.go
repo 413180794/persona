@@ -147,16 +147,22 @@ func (n *Node) handleNotify(ctx context.Context, req sockRequest) nodeclient.Not
 
 // sendNotify is handleNotify; spoolID marks one standby kept (spool.go), for the manager to drop a repeat.
 func (n *Node) sendNotify(ctx context.Context, req sockRequest, spoolID string) nodeclient.NotifyReply {
+	rep, _ := n.notifyCall(ctx, req, spoolID)
+	return rep
+}
+
+// notifyCall is sendNotify, with the error of the manager's call (nil when it answered, or when nothing was asked).
+func (n *Node) notifyCall(ctx context.Context, req sockRequest, spoolID string) (nodeclient.NotifyReply, error) {
 	var nr nodeclient.NotifyRequest
 	if err := json.Unmarshal(req.Input, &nr); err != nil {
-		return nodeclient.NotifyReply{Error: "bad request"}
+		return nodeclient.NotifyReply{Error: "bad request"}, nil
 	}
 	nr.Title, nr.Body = strings.TrimSpace(nr.Title), strings.TrimSpace(nr.Body)
 	if nr.Title == "" && nr.Body == "" {
-		return nodeclient.NotifyReply{Error: "the notification is empty"}
+		return nodeclient.NotifyReply{Error: "the notification is empty"}, nil
 	}
 	if n.peer == nil {
-		return nodeclient.NotifyReply{Error: "this node is not connected to a hub"}
+		return nodeclient.NotifyReply{Error: "this node is not connected to a hub"}, nil
 	}
 	level := "active"
 	if nr.Error {
@@ -180,7 +186,7 @@ func (n *Node) sendNotify(ctx context.Context, req sockRequest, spoolID string) 
 		Reason string `json:"reason"`
 	}
 	if err := n.peer.Call(ctx, "notify", params, &res); err != nil {
-		return nodeclient.NotifyReply{Error: err.Error()}
+		return nodeclient.NotifyReply{Error: err.Error()}, err
 	}
-	return nodeclient.NotifyReply{Sent: res.Sent, Reason: res.Reason}
+	return nodeclient.NotifyReply{Sent: res.Sent, Reason: res.Reason}, nil
 }

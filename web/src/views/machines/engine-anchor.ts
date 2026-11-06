@@ -3,11 +3,12 @@ import { prefersReducedMotion } from "../../ui/stream/motion";
 
 export const ENGINE_SECTION_ID = "engine";
 
-/** Scroll to Engine (no animation when the system asks for less motion) and move focus to the chosen engine there, else
- * to the section, so the keyboard goes on from it rather than from the header. */
+/** Scroll to Engine (no animation when the system asks for less motion) and move focus to the chosen engine there (the
+ * first checked one with host sets), else to the section, so the keyboard goes on from it rather than from the header. */
 export function openEngineSection() {
   const section = document.getElementById(ENGINE_SECTION_ID);
   if (!section) return;
   section.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-  (section.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]:not(:disabled)') ?? section).focus({ preventScroll: true });
+  const chosen = '[role="radio"][aria-checked="true"]:not(:disabled), [role="checkbox"][aria-checked="true"]:not(:disabled)';
+  (section.querySelector<HTMLElement>(chosen) ?? section).focus({ preventScroll: true });
 }

@@ -13,5 +13,16 @@
   "footer_both_offline": "机器离线，选择会在连接后生效。同时显示两个引擎里的会话。",
   "footer_single": "只显示所选引擎里的会话。",
   "footer_one_offline": "机器离线，选择会在连接后生效。只显示所选引擎里的会话。",
-  "save_failed": "保存失败：{message}"
+  "save_failed": "保存失败：{message}",
+  "footer_set_several": "同时显示勾选的引擎里的会话；从网页新建的会话默认开在 {engine}，新建时可以换。",
+  "footer_set_single": "只显示 {engine} 里的会话。",
+  "footer_set_empty": "没有启用终端引擎：只显示对话记录和其他来源的会话，不能从网页新建。",
+  "footer_set_offline": "机器离线，选择会在连接后生效。{text}",
+  "default": "默认",
+  "make_default": "设为默认",
+  "sets_unsupported": "这台电脑的 node 太旧，只用默认引擎；更新 node 后按勾选的生效。",
+  "also_open": "也在 {engines} 里打开：消息只发到这里",
+  "start_in": "开在",
+  "none": "不启用终端引擎",
+  "list_separator": "、"
 }

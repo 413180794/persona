@@ -108,6 +108,9 @@ func (n *Node) listenOnce(ctx context.Context) (net.Listener, error) {
 
 func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 	defer c.Close()
+	if ctx.Err() != nil { // this node is going away (its listener closes): it answers nothing, not even a ping
+		return
+	}
 	r := bufio.NewReader(c)
 	line, err := r.ReadBytes('\n')
 	if err != nil {
@@ -129,8 +132,16 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 	switch req.Kind {
 	case "hook", "ask", "notify": // after what standby took while the manager was away (spool.go)
 		if n.replayed != nil {
+			// Not for ever: a report-only hook gives up after 3 s (nodeclient.ReportHook), and a replay that takes long
+			// (a manager slow to answer) must not hold the others past what they wait for. Out of order beats lost.
+			wait := replayGateMost
+			if req.ReportOnly {
+				wait = 2 * time.Second
+			}
+			late := time.After(wait)
 			select {
 			case <-n.replayed:
+			case <-late:
 			case <-ctx.Done():
 				return
 			}

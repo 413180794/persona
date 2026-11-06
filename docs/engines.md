@@ -15,7 +15,8 @@ On computers with **botmux**, its sessions appear alongside the selected engine 
 A computer can **enable several engines at once**, any combination of herdr, Herdr App, Orca and Paseo, or none at all, plus a **default engine**:
 where sessions started from the phone, and sessions continued from there, go. Each single choice above is a special case of a set: herdr is `{herdr}`, and
 "herdr + Herdr App" is `{herdr, herdr-core}` with herdr the default. API and storage: `docs/protocol.md` "Engines" ("Host sets").
-The client pickers are not wired yet (all three still pick one engine, and the single engine picked keeps working).
+The web is wired: the machine page's Engine section is a checklist with "Make default", New Agent has "Open in", and a session live in
+two hosts shows "Also open in …" above the composer. iOS and Android still pick one engine, and the single engine picked keeps working.
 
 - **Only enabled hosts are registered.** An engine that is not checked gets no client, no polling and no event subscription; it is only probed once in
   `node.info` (for "Detected"). An engine that is not installed or not running does not slow the others down.
@@ -32,7 +33,7 @@ The client pickers are not wired yet (all three still pick one engine, and the s
   (`node/ownership.go`). The owner is, in order: (1) the pane whose claude process runs it (`~/.claude/sessions/<pid>.json`); (2) the pane whose last
   SessionStart hook named it; (3) the default engine's pane; (4) otherwise herdr, Herdr App, Orca in that order. Messages, keys and interrupts go to
   the owner only, and its state is the only one used; the row's `also_open_in` lists the other hosts that have it open, so clients can warn of the
-  conflict (UI not wired yet). Two panes of the same host, or a live pane and an offline row, behave as before.
+  conflict (the web does; the apps do not yet). Two panes of the same host, or a live pane and an offline row, behave as before.
 - **Performance** (2026-11-06, one Mac with herdr 0.9.5 and Orca 1.4.250, `go test -tags enginehostslive -run EngineHostsLive ./internal/node/ -v`,
   40 rounds each, Orca refreshed once a second meanwhile as its watcher does; three runs, a typical one below, the other two of the same order):
 

@@ -14,15 +14,23 @@ import {
   engineName,
   engineOptions,
   engineSaveError,
+  supportsHostSets,
 } from "../../lib/engines";
 import { applyMachine } from "../../lib/store";
 import type { Machine } from "../../lib/types";
 import { Button, cx, EASE, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { EngineHostsSection } from "./EngineHostsSection";
 import { ENGINE_SECTION_ID } from "./engine-anchor";
 import { t } from "../../i18n";
 
 export function EngineSection({ machine, heading }: { machine: Machine; heading: React.ReactNode }) {
+  // A hub with sets (#2576): several engines checked side by side plus a default; an older hub, one engine.
+  if (supportsHostSets(machine)) return <EngineHostsSection machine={machine} heading={heading} />;
+  return <SingleEngineSection machine={machine} heading={heading} />;
+}
+
+function SingleEngineSection({ machine, heading }: { machine: Machine; heading: React.ReactNode }) {
   const current = currentEngine(machine);
   const [selected, setSelected] = useState(current);
   const [edited, setEdited] = useState(false);

@@ -22,6 +22,7 @@ import { Icon } from "../ui/icons";
 import { ModelPicker, type ModelList } from "../ui/ModelPicker";
 import { t } from "../i18n";
 import { useAddComputer } from "./machines/AddComputerEntry";
+import { currentHosts, engineName, startHosts } from "../lib/engines";
 
 interface Dirs {
   path: string;
@@ -55,6 +56,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const [effort, setEffort] = useState("");
   // Claude Code's permission mode for this start ("": the launcher's), remembered per computer like iOS's mode.<machine>
   const [mode, setMode] = useState("");
+  const [host, setHost] = useState(""); // the engine host to open in (#2576); "": the machine's default
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
@@ -198,6 +200,11 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   };
   useEffect(() => { if (picking) search.current?.focus(); }, [picking]);
 
+  // Where it opens, when the machine enables more than one engine that can start sessions (#2576).
+  const picked = online.find((m) => m.id === mid);
+  const hosts = picked ? startHosts(picked) : [];
+  const hostDefault = picked ? currentHosts(picked).default : "";
+  useEffect(() => { setHost(""); }, [open, mid]);
   const agent = launcherAgent(listLauncher, launchers, models.list);
   const pickedModel = models.list?.models.find((m) => m.id === model);
   const efforts = effortChoices(models.list, model, followed);
@@ -216,7 +223,8 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
       if (mode) localStorage.setItem(`new.mode.${mid}`, mode);
       else localStorage.removeItem(`new.mode.${mid}`);
     }
-    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, permissionMode: permissionMode || undefined, text: prompt.trim(), attachments });
+    const opensIn = host && host !== currentHosts(picked ?? {}).default ? host : undefined; // only a choice away from the default
+    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, permissionMode: permissionMode || undefined, host: opensIn, text: prompt.trim(), attachments });
     attachmentsRef.current = [];
     setAttachments([]);
     setPrompt("");
@@ -335,6 +343,19 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
               ))}
             </div>
           </Field>
+
+          {hosts.length > 1 && (
+            <Field label={t("lib-engines.start_in")}>
+              <div role="radiogroup" aria-label={t("lib-engines.start_in")} data-testid="start-host" className="flex flex-wrap gap-1.5">
+                {hosts.map((h) => (
+                  <Choice key={h} radio selected={(host || hostDefault) === h} onClick={() => setHost(h)}>
+                    {engineName(h, picked)}
+                    {h === hostDefault ? ` · ${t("lib-engines.default")}` : ""}
+                  </Choice>
+                ))}
+              </div>
+            </Field>
+          )}
 
           {(unified || launchers.length > 1) && (
             <Field label={unified ? t("newagent.launcher_override") : t("newagent.launcher")}>

@@ -1,4 +1,5 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
+import { alsoOpenText } from "../../lib/engines";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, errorText, sessionPath } from "../../lib/api";
 import { ago, attentionReason, externalLink, failureReason, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
@@ -1034,6 +1035,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <ChatOnlyNote gate={gate} />
         {gate.dialog}
         {session && !assistant && <AttentionNote session={session} />}
+        {session && !assistant && <ConflictNote session={session} />}
         {session && !assistant && showsFailureNote(session, { readOnly, retried }) && (
           <FailureNote
             session={session}
@@ -1207,6 +1209,18 @@ export function footerRows(session: Session, assistant?: boolean): MenuItem[] {
     ] as [string, string, string | undefined][])),
   ];
   return rows.filter(([, , v]) => v).map(([key, what, v]) => ({ key, label: v!, hint: what, wrap: true, onSelect: key === "source" ? () => {} : () => void copyText(key === "folder" ? session.cwd! : v!) }));
+}
+
+/** The session is live in another engine host too (#2576): this one owns it, and messages go here only. */
+function ConflictNote({ session }: { session: Session }) {
+  const text = alsoOpenText(session);
+  if (!text) return null;
+  return (
+    <div role="status" data-testid="chat-also-open" className="flex items-start gap-2 rounded-[12px] bg-orange-tint px-3 py-2 text-[12.5px]" style={{ animation: "fade-up 200ms ease-out both" }}>
+      <span className="flex h-[18px] shrink-0 items-center text-orange"><Icon name="warning" size={13} /></span>
+      <span className="line-clamp-2 min-w-0 flex-1 text-ink-2">{text}</span>
+    </div>
+  );
 }
 
 /** Above the composer while a session needs you and its host says why (a botmux attention, iOS AttentionNote):

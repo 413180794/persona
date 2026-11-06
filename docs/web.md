@@ -21,6 +21,9 @@ The components are rewritten from the site's React versions and wired to real da
   End-to-end check of draft marks on sidebar rows (#5568: an Agent, a Persona chat and the main row show "Draft: <words>" once you leave them, not while you type, after a reload, not for whitespace, gone after clearing or sending; wide / phone width × light / dark): start the mock hub and `npx vite`, then run `python3 scripts/test/web_draft_rows_e2e.py <web URL> [--shots <dir>]`.
   End-to-end check of the settings entries (#2196: channels before connectors, old extension links still work, channels and connectors link to each other, narrow screen goes back to Settings): start the mock hub with `MOCK_CHANNELS=1 MOCK_PLUGINS=1`,
   run `python3 scripts/test/web_settings_entries_e2e.py <web URL> [--shots <dir>]`; it checks wide / narrow × light / dark.
+  Engine host sets (#2576: the machine page's checklist, Make default, none enabled, Revert, Save sending `{hosts, default}`, New Agent's "Open in",
+  "Also open in …"): start the mock hub with `MOCK_ENGINE_SETS=1`, then run
+  `python3 scripts/test/web_engine_hosts_e2e.py <web URL> --hub <mock hub URL> [--shots <dir>]` (wide / narrow × light / dark).
   The "herdr is not running" notice row in the Agents list (#1916): the mock hub's `GET /mock/herdr?stopped=&start=` picks which machine is stopped and how starting goes;
   run `python3 scripts/test/web_herdr_notice_e2e.py <web URL> --hub <mock hub URL> [--shots <dir>] [--channel msedge]` (wide / narrow × light / dark).
   End-to-end check of task **Retry** (#1396, #4145: the reason and **Retry** are said once, on the card; the failure receipt only points to the card; repeated clicks, failing again, offline; desktop / phone width × light / dark): start the mock hub with `MOCK_TASKS=1`,

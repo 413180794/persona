@@ -46,7 +46,7 @@ import { ComputerSection } from "./ComputerSection";
 import { EngineSection } from "./EngineSection";
 import { openEngineSection } from "./engine-anchor";
 import { BotmuxSwitch } from "./BotmuxSwitch";
-import { currentEngine, engineName } from "../../lib/engines";
+import { currentEngine, currentHosts, engineName, hostsName, supportsHostSets } from "../../lib/engines";
 import { NodeHealth } from "./NodeHealth";
 import { UsageSection } from "./UsageSection";
 import { MachineExtensionSections } from "../extensions/ExtensionSlots";
@@ -217,7 +217,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
                 className="touch-hit inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full bg-inset px-1.5 text-[11px] font-medium text-ink-2 shadow-hairline transition-colors hover:bg-hover"
               >
                 <Icon name="terminal" size={11} />
-                {engineName(currentEngine(m), m)}
+                {supportsHostSets(m) ? hostsName(currentHosts(m), m) : engineName(currentEngine(m), m)}
               </button>
               <BotmuxSwitch key={m.id} machineID={m.id} />
             </div>

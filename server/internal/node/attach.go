@@ -128,10 +128,11 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 
 	keeper := newAssistantKeeper()
 	// No manager connected yet (or between connections): standby answers node.sock (spool.go).
-	sb := newStandby(SpoolPath(), func(f string, a ...any) { fmt.Fprintf(os.Stderr, "node: "+f+"\n", a...) })
-	sb.start()
-	defer sb.stop()
-	var mu sync.Mutex        // served
+	sp := openSpool(SpoolPath())
+	sb := newStandby(sp, func(f string, a ...any) { fmt.Fprintf(os.Stderr, "node: "+f+"\n", a...) })
+	sb.want()
+	defer sb.unwant()
+	var mu sync.Mutex        // served, and standby's want / unwant with it
 	var served chan struct{} // closed when the connection being served has ended
 	var current context.CancelFunc
 	var wg sync.WaitGroup
@@ -162,17 +163,21 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 		mu.Lock()
 		prev, done := served, make(chan struct{})
 		served = done
+		sb.unwant() // the new connection's Node takes node.sock; under mu, so an ending one cannot want it back
 		mu.Unlock()
-		sb.stop() // the new connection's Node takes node.sock
+		began := time.Now()
 		go func() {
 			defer wg.Done()
 			defer func() { // the last connection ended and no other came: standby until the next
 				mu.Lock()
-				last := served == done
-				mu.Unlock()
-				if last && ctx.Err() == nil {
-					sb.start()
+				defer mu.Unlock()
+				if time.Since(began) >= time.Minute { // a connection that held (replaced or not): the hold counts from now
+					sb.managerSeen(time.Now())
 				}
+				if served != done || ctx.Err() != nil {
+					return
+				}
+				sb.want()
 			}()
 			defer close(done)
 			defer c.Close()
@@ -192,6 +197,7 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 				n.runtimeHost = runtimes // Serve attaches it for this connection
 			}
 			n.keeper = keeper                        // conversations go on from one connection to the next (assistant_keep.go)
+			n.spool = sp                             // what standby took goes to this connection first (spool.go)
 			go func() { <-cctx.Done(); c.Close() }() // a replaced connection stops reading at once
 			if err := n.Serve(cctx, c, c); err != nil && !errors.Is(err, io.EOF) && cctx.Err() == nil {
 				n.logger.Printf("connection ended: %v", err)

@@ -58,6 +58,9 @@ type Request struct {
 	AgentStart string `json:"agent_start,omitempty"`
 	// ReportOnly: the hook is one of the global report-only entries (node/globalhooks.go), which never ask the phone.
 	ReportOnly bool `json:"report_only,omitempty"`
+	// AwayOK: the client takes {"away":true} (a resident node in standby) for no node. An older `personad mcp` does
+	// not, so standby gives one without it the answer of a node that cannot reach its manager.
+	AwayOK bool `json:"away_ok,omitempty"`
 }
 
 // Dialer sends one request line to the node's socket and returns its answer line (Dial).

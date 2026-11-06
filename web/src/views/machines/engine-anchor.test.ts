@@ -27,6 +27,12 @@ describe("openEngineSection", () => {
     expect(document.activeElement?.id).toBe("orca");
   });
 
+  it("focuses the first checked engine with host sets", () => {
+    page(`<button role="checkbox" aria-checked="false">herdr</button><button id="orca" role="checkbox" aria-checked="true">Orca</button>`);
+    openEngineSection();
+    expect(document.activeElement?.id).toBe("orca");
+  });
+
   it("does not animate when the system asks for less motion", () => {
     reduce = true;
     const { scroll } = page(`<button role="radio" aria-checked="true">herdr</button>`);

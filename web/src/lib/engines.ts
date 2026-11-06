@@ -69,3 +69,82 @@ export function canSaveEngine(selected: string, m: Pick<Machine, "engine" | "eng
 export function engineSaveError(message: string): string {
   return t("lib-engines.save_failed", { message });
 }
+
+// ---- Host sets (#2576, docs/engines.md "Host sets"): several engines enabled side by side plus a default one. ----
+
+/** The hosts a set may hold, in the hub's canonical order (proto.EngineHostIDs); herdr-both is a set, not a member. */
+export const ENGINE_HOSTS = ["herdr", "herdr-core", "orca", "paseo"];
+
+export interface HostChoice {
+  hosts: string[];
+  default: string;
+}
+
+/** The set a single engine stands for (proto.EngineHostsOf). */
+export function hostsOf(engine: string | undefined): HostChoice {
+  if (engine === "herdr-both") return { hosts: ["herdr", "herdr-core"], default: "herdr" };
+  if (engine && ENGINE_HOSTS.includes(engine)) return { hosts: [engine], default: engine };
+  return { hosts: ["herdr"], default: "herdr" };
+}
+
+/** The hub takes sets: it reports engine_hosts (older hubs keep the single-engine picker). */
+export function supportsHostSets(m: Pick<Machine, "engine_hosts">): boolean {
+  return Array.isArray(m.engine_hosts);
+}
+
+/** The machine's set as the hub says, else the one its single engine stands for. */
+export function currentHosts(m: Pick<Machine, "engine" | "engine_hosts" | "engine_default">): HostChoice {
+  if (Array.isArray(m.engine_hosts)) return { hosts: m.engine_hosts, default: m.engine_default ?? "" };
+  return hostsOf(m.engine);
+}
+
+/** A set in canonical order; the default stays when still enabled, else the first host ("" for none). */
+export function normalizeHosts(hosts: string[], def: string): HostChoice {
+  const out = ENGINE_HOSTS.filter((h) => hosts.includes(h));
+  return { hosts: out, default: out.includes(def) ? def : (out[0] ?? "") };
+}
+
+/** Turns host id on or off in the set. */
+export function toggleHost(c: HostChoice, id: string): HostChoice {
+  const on = c.hosts.includes(id);
+  return normalizeHosts(on ? c.hosts.filter((h) => h !== id) : [...c.hosts, id], c.default);
+}
+
+export function sameHosts(a: HostChoice, b: HostChoice): boolean {
+  return a.default === b.default && a.hosts.length === b.hosts.length && a.hosts.every((h, i) => h === b.hosts[i]);
+}
+
+/** The host options: what the node reports of the set's members, else every one of them (offline, older nodes). */
+export function hostOptions(m: Pick<Machine, "engines">): DetectedEngine[] {
+  const found = (m.engines ?? []).filter((e) => ENGINE_HOSTS.includes(e.id));
+  if (found.length) return ENGINE_HOSTS.map((id) => found.find((e) => e.id === id)).filter((e): e is DetectedEngine => !!e);
+  return ENGINE_HOSTS.map((id) => ({ id, name: known(id)?.name ?? id, available: false }));
+}
+
+/** Herdr App cannot start sessions from the phone; the others can (the capability table in docs/engines.md). */
+export function canStartIn(id: string): boolean {
+  return id !== "herdr-core";
+}
+
+/** The enabled hosts a new session may be opened in: offered as a choice only when there is more than one. */
+export function startHosts(m: Pick<Machine, "engine" | "engine_hosts" | "engine_default">): string[] {
+  return currentHosts(m).hosts.filter(canStartIn);
+}
+
+/** The line under the set picker. */
+/** A set by its engines' names (herdr + Orca); "no terminal engine" for none. */
+export function hostsName(c: HostChoice, m?: Pick<Machine, "engines">): string {
+  return c.hosts.length ? c.hosts.map((id) => engineName(id, m)).join(" + ") : t("lib-engines.none");
+}
+
+export function hostsFooter(c: HostChoice, online: boolean): string {
+  const key = c.hosts.length === 0 ? "footer_set_empty" : c.hosts.length === 1 ? "footer_set_single" : "footer_set_several";
+  const text = t(`lib-engines.${key}`, { engine: engineName(c.default) });
+  return online ? text : t("lib-engines.footer_set_offline", { text });
+}
+
+/** "Also open in X": the other hosts a session is live in, by name; "" when none. */
+export function alsoOpenText(s: { also_open_in?: string[] }, m?: Pick<Machine, "engines">): string {
+  const names = (s.also_open_in ?? []).map((id) => engineName(id, m));
+  return names.length ? t("lib-engines.also_open", { engines: names.join(t("lib-engines.list_separator")) }) : "";
+}

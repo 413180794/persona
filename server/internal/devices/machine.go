@@ -613,8 +613,19 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		return map[string]any{"sessions": out}, nil
 	}
-	if method == "notify" && m.spooled.repeat(params) {
-		return map[string]any{"sent": true, "duplicate": true}, nil // replayed twice (spooldedupe.go)
+	if method == "notify" {
+		if id := spoolID(params); id != "" { // replayed by a resident node (spooldedupe.go)
+			dup, busy := m.spooled.begin(id)
+			switch {
+			case dup:
+				return map[string]any{"sent": true, "duplicate": true}, nil
+			case busy: // the last try is still with the hub: this one is not sent, nor taken for sent
+				return nil, &rpc.Error{Code: spoolBusy, Message: "this notification is still being sent"}
+			}
+			out, err := m.passOn(ctx, method, params)
+			m.spooled.end(id, err == nil) // remembered only once the hub took it: a failed one is tried again
+			return out, err
+		}
 	}
 	if method == "interaction.create" {
 		m.mu.Lock()
@@ -626,6 +637,11 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			m.mu.Unlock()
 		}()
 	}
+	return m.passOn(ctx, method, params)
+}
+
+// passOn answers a node's request through the manager's own answers (Options.Answer), else the hub's.
+func (m *Machine) passOn(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	if a := m.d.opts.Answer; a != nil {
 		if out, ok, err := a(ctx, m.cfg.ID, method, params); ok {
 			return out, err

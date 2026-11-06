@@ -10,6 +10,18 @@ import {
   engineOptions,
   engineSaveError,
   KNOWN_ENGINES,
+  alsoOpenText,
+  canStartIn,
+  currentHosts,
+  ENGINE_HOSTS,
+  hostOptions,
+  hostsFooter,
+  hostsName,
+  normalizeHosts,
+  sameHosts,
+  startHosts,
+  supportsHostSets,
+  toggleHost,
 } from "./engines";
 import type { Machine } from "./types";
 
@@ -87,5 +99,63 @@ describe("engine choice (iOS EngineSelectionModel)", () => {
     expect(engineFooter("herdr-both", true)).toContain("从网页新建的会话仍开在 herdr 里");
     expect(engineFooter("herdr-both", false)).toBe("机器离线，选择会在连接后生效。同时显示两个引擎里的会话。");
     expect(engineSaveError("暂时无法保存")).toBe("保存失败：暂时无法保存");
+  });
+});
+
+describe("engine host sets (#2576)", () => {
+  it("reads the hub's set, else the one the single engine stands for", () => {
+    expect(supportsHostSets(machine())).toBe(false);
+    expect(currentHosts(machine({ engine: "herdr-both" }))).toEqual({ hosts: ["herdr", "herdr-core"], default: "herdr" });
+    expect(currentHosts(machine({ engine: "orca" }))).toEqual({ hosts: ["orca"], default: "orca" });
+    expect(currentHosts(machine())).toEqual({ hosts: ["herdr"], default: "herdr" });
+    const m = machine({ engine: "orca", engine_hosts: ["herdr", "orca"], engine_default: "orca" });
+    expect(supportsHostSets(m)).toBe(true);
+    expect(currentHosts(m)).toEqual({ hosts: ["herdr", "orca"], default: "orca" });
+    expect(currentHosts(machine({ engine_hosts: [], engine_default: "" }))).toEqual({ hosts: [], default: "" });
+  });
+
+  it("toggles hosts in canonical order and keeps the default enabled", () => {
+    let c = { hosts: ["herdr"], default: "herdr" };
+    c = toggleHost(c, "orca");
+    expect(c).toEqual({ hosts: ["herdr", "orca"], default: "herdr" });
+    c = toggleHost(c, "herdr"); // the default goes: the first one left
+    expect(c).toEqual({ hosts: ["orca"], default: "orca" });
+    c = toggleHost(c, "orca"); // none
+    expect(c).toEqual({ hosts: [], default: "" });
+    expect(normalizeHosts(["paseo", "herdr", "nope"], "paseo")).toEqual({ hosts: ["herdr", "paseo"], default: "paseo" });
+    expect(sameHosts({ hosts: ["herdr"], default: "herdr" }, { hosts: ["herdr"], default: "herdr" })).toBe(true);
+    expect(sameHosts({ hosts: ["herdr", "orca"], default: "herdr" }, { hosts: ["herdr", "orca"], default: "orca" })).toBe(false);
+  });
+
+  it("offers the set's members, not the combined engine, in canonical order", () => {
+    const m = machine({
+      online: true,
+      engines: [
+        { id: "orca", name: "Orca", available: true },
+        { id: "herdr-both", name: "herdr + Herdr App", available: false },
+        { id: "herdr", name: "herdr", available: true },
+      ],
+    });
+    expect(hostOptions(m).map((e) => e.id)).toEqual(["herdr", "orca"]);
+    expect(hostOptions(machine()).map((e) => e.id)).toEqual(ENGINE_HOSTS);
+  });
+
+  it("offers a host to start in only among those that can start sessions", () => {
+    expect(startHosts(machine({ engine_hosts: ["herdr", "herdr-core", "orca"], engine_default: "herdr" }))).toEqual(["herdr", "orca"]);
+    expect(startHosts(machine({ engine: "herdr-both" }))).toEqual(["herdr"]);
+    expect(canStartIn("herdr-core")).toBe(false);
+  });
+
+  it("names the other hosts a session is open in", () => {
+    expect(alsoOpenText({})).toBe("");
+    expect(alsoOpenText({ also_open_in: ["orca"] })).toContain("Orca");
+    expect(hostsFooter({ hosts: [], default: "" }, true)).toContain("没有启用终端引擎");
+    expect(hostsFooter({ hosts: ["herdr", "orca"], default: "orca" }, false)).toContain("Orca");
+  });
+
+  it("names a set by its engines, for the header's engine pill", () => {
+    expect(hostsName({ hosts: ["herdr", "orca"], default: "herdr" })).toBe("herdr + Orca");
+    expect(hostsName({ hosts: ["orca"], default: "orca" })).toBe("Orca");
+    expect(hostsName({ hosts: [], default: "" })).not.toBe("");
   });
 });
