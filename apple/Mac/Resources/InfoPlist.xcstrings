@@ -145,19 +145,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone before you choose to share the text with your assistant."
+            "value" : "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "録音や音声入力を始めたときにPersonaが録音します。たとえば会議や口頭のメモです。録音はiPhone上で文字起こしされ、そのテキストをアシスタントに渡すかどうかはあなたが決めます。"
+            "value" : "録音や音声入力を始めたときにPersonaが録音します。たとえば会議や口頭のメモです。録音はiPhone上で文字起こしされ、テキストだけがハブのナレッジに保存されます。音声はiPhoneに残ります。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你开始录音或语音输入时，Persona 会录音，比如录一场会议或一段口述笔记。录音先在 iPhone 上转成文字，由你决定是否把文字交给助手。"
+            "value" : "你开始录音或语音输入时，Persona 会录音，比如录一场会议或一段口述笔记。录音在 iPhone 上转成文字，只有文字存进 hub 上的知识库，音频留在 iPhone 上。"
           }
         }
       }

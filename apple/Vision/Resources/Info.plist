@@ -54,7 +54,7 @@
 	<key>NSContactsUsageDescription</key>
 	<string>Persona lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Persona asks for Optic ID before it types a Mac's remembered password on that Mac's lock screen, when you tap 一键解锁 on the Mac's page.</string>
+	<string>Persona asks for Optic ID before it types a Mac's remembered password on that Mac's lock screen, when you tap One-Tap Unlock on the Mac's page.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Persona shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
 	<key>NSMicrophoneUsageDescription</key>

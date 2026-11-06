@@ -157,11 +157,17 @@ export function ExtensionUI({
     setError("");
     setDrawnAt(Date.now());
   };
+  // Every request that draws the whole view (a draw, a press, a search) takes the next number when it leaves: an answer
+  // whose number is not the latest any more is older than what was asked since (a press, another page, the next search)
+  // and is not drawn, nor its error shown (#4931).
+  const asked = useRef(0);
   const load = useCallback((keep?: boolean) => {
+    const mine = ++asked.current;
     setLoading(true);
     renderUI(extension, top.ui, context, stateRef.current)
-      .then((v) => show(v, keep === true))
+      .then((v) => mine === asked.current && show(v, keep === true))
       .catch((e) => {
+        if (mine !== asked.current) return;
         if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
         else if (onMissing && e instanceof ApiError && e.status === 404 && depth === 1) onMissing();
         else if (onFailed && !drawnRef.current) onFailed(e);
@@ -242,10 +248,13 @@ export function ExtensionUI({
       }
     }
     setBusy(action.id);
+    const mine = ++asked.current;
     try {
       const r = outcome(await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
-      if (r.view) show(r.view, !!(extra && "q" in extra)); // a search keeps what is typed
-      if (r.items) setView((v) => (v ? patchView(v, r.items) : v));
+      // what it says to do is still done; the view it answers only while nothing was asked since
+      const latest = mine === asked.current;
+      if (r.view && latest) show(r.view, !!(extra && "q" in extra)); // a search keeps what is typed
+      if (r.items && latest) setView((v) => (v ? patchView(v, r.items) : v));
       if (r.toast) toast(r.toast, "ok");
       if (r.url) openLink(r.url);
       if (r.source) onOpenSource?.();
@@ -253,8 +262,10 @@ export function ExtensionUI({
       if (r.pop) pop();
       if (r.reload) load();
     } catch (e) {
-      if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
-      else toast(t("settings-extensionview.action_failed", { error: errorText(e) }), "error");
+      // an older one's "unsupported" does not take away a view drawn since; a press that failed still says so
+      if (isUnsupported(e)) {
+        if (mine === asked.current) (setUnsupported(true), onUnsupported?.());
+      } else toast(t("settings-extensionview.action_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy("");
     }
@@ -263,10 +274,12 @@ export function ExtensionUI({
   // its components go in place, a new view is shown as a redraw; it says what was answered, null when it failed
   const fetchQuiet = useCallback(
     async (action: UIAction, extra?: Record<string, string>) => {
+      // it does not take a number (it does not make a draw on its way older), but its view is not drawn over a newer one
+      const at = asked.current;
       try {
         const r = await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: { ...extra, ...action.values } });
         if (r.items?.length) setView((v) => (v ? patchView(v, r.items) : v));
-        if (r.view) show(r.view, true);
+        if (r.view && at === asked.current) show(r.view, true);
         if (r.toast) toast(r.toast, "ok");
         return r;
       } catch (e) {

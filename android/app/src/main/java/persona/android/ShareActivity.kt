@@ -181,6 +181,10 @@ internal data class SharePayload(val title: String = "", val text: String = "", 
     val hasContent get() = title.isNotBlank() || text.isNotBlank() || uris.isNotEmpty()
 }
 
+/** ACTION_SEND with EXTRA_TEXT carries ClipData only as the Sharesheet preview thumbnail, not an attachment (#4817). */
+internal fun <T> sharedUris(multiple: Boolean, streams: List<T>, clipUris: List<T>, hasText: Boolean): List<T> =
+    (if (multiple || !hasText) streams + clipUris else streams).distinct()
+
 @HiltViewModel
 class ShareViewModel @Inject constructor(
     application: Application,
@@ -237,7 +241,8 @@ class ShareViewModel @Inject constructor(
                 IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
             } else listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
             val clips = intent.clipData?.let { clip -> (0 until clip.itemCount).map(clip::getItemAt) }.orEmpty()
-            val uris = (streams + clips.mapNotNull { it.uri }).distinct()
+            val uris = sharedUris(intent.action == Intent.ACTION_SEND_MULTIPLE, streams, clips.mapNotNull { it.uri },
+                intent.getCharSequenceExtra(Intent.EXTRA_TEXT) != null)
             require(uris.all { it.scheme == "content" })
             payload = SharePayload(
                 intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()

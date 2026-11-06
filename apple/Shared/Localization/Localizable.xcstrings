@@ -14689,6 +14689,29 @@
         }
       }
     },
+    "一律不问": {
+      "comment": "Codex approval policy",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never ask"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認しない"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一律不问"
+          }
+        }
+      }
+    },
     "一条最多 %lld 字，长的拆开发": {
       "localizations": {
         "en": {
@@ -16975,6 +16998,7 @@
       }
     },
     "不显示": {
+      "comment": "Codex reasoning summary",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -17300,6 +17324,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "不设"
+          }
+        }
+      }
+    },
+    "不设限（危险）": {
+      "comment": "Codex sandbox mode",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No limits (risky)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "制限なし（危険）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不设限（危险）"
           }
         }
       }
@@ -25536,6 +25583,29 @@
         }
       }
     },
+    "出错了再问": {
+      "comment": "Codex approval policy",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask when something fails"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失敗したら確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出错了再问"
+          }
+        }
+      }
+    },
     "出错自动继续": {
       "localizations": {
         "en": {
@@ -29973,6 +30043,29 @@
         }
       }
     },
+    "只能读": {
+      "comment": "Codex sandbox mode",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read only"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み取りのみ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只能读"
+          }
+        }
+      }
+    },
     "名字不能为空，最多 40 个字。": {
       "localizations": {
         "en": {
@@ -30237,6 +30330,29 @@
         }
       }
     },
+    "它觉得需要时问": {
+      "comment": "Codex approval policy",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask when it needs to"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必要なときに確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它觉得需要时问"
+          }
+        }
+      }
+    },
     "它连上来以后，这里会问你是不是你的电脑。": {
       "localizations": {
         "en": {
@@ -30435,6 +30551,29 @@
         }
       }
     },
+    "最新版": {
+      "comment": "Claude Code update channel",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新版"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新版"
+          }
+        }
+      }
+    },
     "有一台电脑想加入，等你确认是不是你的。": {
       "localizations": {
         "en": {
@@ -30563,6 +30702,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "比如：我的 MacBook"
+          }
+        }
+      }
+    },
+    "没把握的命令都先问": {
+      "comment": "Codex approval policy",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask unless it's clearly safe"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全と分かるもの以外は確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没把握的命令都先问"
           }
         }
       }
@@ -79846,6 +80008,29 @@
         }
       }
     },
+    "稳定版": {
+      "comment": "Claude Code update channel",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安定版"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稳定版"
+          }
+        }
+      }
+    },
     "空": {
       "comment": "VoiceOver: the island side is empty",
       "localizations": {
@@ -81353,6 +81538,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "筛选与排序"
+          }
+        }
+      }
+    },
+    "简短": {
+      "comment": "Codex reasoning summary; also a verbosity",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Short"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短め"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简短"
           }
         }
       }
@@ -83825,6 +84033,29 @@
         }
       }
     },
+    "能改工作目录": {
+      "comment": "Codex sandbox mode",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can change the working folder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業フォルダーを変更できる"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能改工作目录"
+          }
+        }
+      }
+    },
     "能访问": {
       "localizations": {
         "en": {
@@ -83892,7 +84123,7 @@
       }
     },
     "自动": {
-      "comment": "How a compaction started\nPermission mode: the agent judges the risk itself\nThinking effort level",
+      "comment": "Codex reasoning summary\nHow a compaction started\nPermission mode: the agent judges the risk itself\nThinking effort level",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -87257,6 +87488,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "详情"
+          }
+        }
+      }
+    },
+    "详细": {
+      "comment": "Codex reasoning summary; also a verbosity",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detailed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳しく"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详细"
           }
         }
       }
@@ -93933,6 +94187,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台电脑经 Persona Link 连到 hub。"
+          }
+        }
+      }
+    },
+    "适中": {
+      "comment": "Codex verbosity",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medium"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ふつう"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适中"
           }
         }
       }

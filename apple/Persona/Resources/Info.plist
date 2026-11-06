@@ -56,7 +56,7 @@
 	<key>NSContactsUsageDescription</key>
 	<string>Persona lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Persona asks for Face ID before it types a Mac's remembered password on that Mac's lock screen, when you tap 一键解锁 on the Mac's page.</string>
+	<string>Persona asks for Face ID before it types a Mac's remembered password on that Mac's lock screen, when you tap One-Tap Unlock on the Mac's page.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Persona lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night.</string>
 	<key>NSHealthUpdateUsageDescription</key>

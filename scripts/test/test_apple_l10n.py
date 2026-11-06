@@ -22,6 +22,29 @@ class CatalogsTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout[-4000:] + r.stderr[-2000:])
 
 
+class InfoPlistDriftTest(unittest.TestCase):
+    """An InfoPlist catalog's en value is its Info.plist value (#4790)."""
+
+    @staticmethod
+    def catalog(en):
+        return {"strings": {"NSMicrophoneUsageDescription": {"localizations": {
+            "en": {"stringUnit": {"state": "translated", "value": en}},
+            "zh-Hans": {"stringUnit": {"state": "translated", "value": "录音"}}}}}}
+
+    def test_matching_is_fine(self):
+        plist = {"NSMicrophoneUsageDescription": "Records audio.", "CFBundleName": "Persona"}
+        self.assertEqual(apple_l10n.infoplist_drift("c", self.catalog("Records audio."), plist), [])
+
+    def test_a_changed_info_plist_is_caught(self):
+        problems = apple_l10n.infoplist_drift("c", self.catalog("Old words."), {"NSMicrophoneUsageDescription": "New words."})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("NSMicrophoneUsageDescription: en ≠ Info.plist", problems[0])
+
+    def test_a_usage_description_missing_from_the_catalog_is_caught(self):
+        problems = apple_l10n.infoplist_drift("c", {"strings": {}}, {"NSCameraUsageDescription": "Scans QR codes."})
+        self.assertEqual(problems, ["c: NSCameraUsageDescription: in Info.plist but not in the catalog"])
+
+
 class LiteralsTest(unittest.TestCase):
     def test_interpolations_with_strings_inside(self):
         src = 'let a = "共 \\(n) 个，\\(names.joined(separator: "、"))" // 注释里的 "中文" 不算\n/* "块注释" */ let b = #"原样 \\(x)"#'

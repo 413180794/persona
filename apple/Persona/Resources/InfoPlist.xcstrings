@@ -99,13 +99,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Persona asks for Face ID before it types a Mac's remembered password on that Mac's lock screen, when you tap Unlock on the Mac's page."
+            "value" : "Persona asks for Face ID before it types a Mac's remembered password on that Mac's lock screen, when you tap One-Tap Unlock on the Mac's page."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Macのページで「ワンタップでロック解除」をタップすると、PersonaはFace IDで確認してから、そのMacのロック画面に保存済みのパスワードを入力します。"
+            "value" : "Macのページで「ワンタップで解除」をタップすると、PersonaはFace IDで確認してから、そのMacのロック画面に保存済みのパスワードを入力します。"
           }
         },
         "zh-Hans" : {

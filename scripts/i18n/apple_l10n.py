@@ -3,7 +3,8 @@
 
   apple_l10n.py check                 every string in the catalogs has en and ja, with the same placeholders, and
                                       every Chinese literal in the app's sources is in a catalog or marked
-                                      `// i18n-ignore` (fast, no build; run by scripts/test/test_apple_l10n.py)
+                                      `// i18n-ignore`, and each InfoPlist catalog's en matches its Info.plist
+                                      (fast, no build; run by scripts/test/test_apple_l10n.py)
   apple_l10n.py strict <DerivedData>  after a build with SWIFT_EMIT_LOC_STRINGS=YES: every Chinese literal the
                                       compiler did not extract as localizable is marked `// i18n-ignore`
   apple_l10n.py sync <DerivedData>    adds the strings the compiler extracted to the catalogs (xcstringstool sync),
@@ -20,6 +21,7 @@ values, matching hub or terminal text, logs, previews, DEBUG-only pages.
 import glob
 import json
 import os
+import plistlib
 import re
 import subprocess
 import sys
@@ -127,6 +129,26 @@ def check_catalog(path, problems):
     return data
 
 
+def infoplist_drift(rel, catalog, plist):
+    """Where an InfoPlist catalog's en value is not its target's Info.plist value (#4790). The catalog is what the
+    app shows, in every language; Info.plist is the English the catalog is translated from, and the two drifted
+    apart once (#3911 changed Info.plist only). Every localizable Info.plist key needs a catalog entry too."""
+    problems = []
+    strings = catalog.get("strings", {})
+    for key, value in sorted(plist.items()):
+        if not key.endswith("UsageDescription") or not isinstance(value, str):
+            continue
+        if key not in strings:
+            problems.append(f"{rel}: {key}: in Info.plist but not in the catalog")
+            continue
+        units = values(strings[key].get("localizations", {}).get("en", {}))
+        en = units[0].get("value") if units else None
+        if en is not None and en != value:
+            problems.append(f"{rel}: {key}: en ≠ Info.plist (change both, then ja and {SOURCE}):\n"
+                            f"    en:         {en!r}\n    Info.plist: {value!r}")
+    return problems
+
+
 def _plural_one_without_count(loc, text):
     """English "one" may spell the number out ("A file"): allowed only for the plural form `one`."""
     plural = loc.get("variations", {}).get("plural", {})
@@ -229,6 +251,10 @@ def check():
             problems.append(f"apple/{c}: missing")
             continue
         data = check_catalog(path, problems)
+        plist = os.path.join(os.path.dirname(path), "Info.plist")
+        if c.endswith("InfoPlist.xcstrings") and os.path.exists(plist):
+            with open(plist, "rb") as f:
+                problems.extend(infoplist_drift(f"apple/{c}", data, plistlib.load(f)))
         for key in data.get("strings", {}):
             keys.add(normalize(key))
     missing = []

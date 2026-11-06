@@ -37,6 +37,16 @@ class ShareActivityTest {
         assertEquals(1, discarded)
     }
 
+    /** A text share's ClipData is only the Sharesheet preview thumbnail, not an attachment (#4817). */
+    @Test fun textShareIgnoresClipDataThumbnail() {
+        assertEquals(emptyList<String>(), sharedUris(false, emptyList(), listOf("content://example.com/thumb"), true))
+        assertEquals(listOf("content://example.com/a"),
+            sharedUris(false, listOf("content://example.com/a"), listOf("content://example.com/thumb"), true))
+        assertEquals(listOf("content://example.com/a"), sharedUris(false, emptyList(), listOf("content://example.com/a"), false))
+        assertEquals(listOf("content://example.com/a", "content://example.com/b"),
+            sharedUris(true, listOf("content://example.com/a"), listOf("content://example.com/a", "content://example.com/b"), true))
+    }
+
     @Test fun untitledContextUsesTheGivenTitleInTheAppLanguage() {
         val text = formatSharedContent("", "https://example.com/page", emptyList(), "", true, "Shared content")
         assertTrue(text.startsWith("<jarvis-context kind=\"context\" title=\"Shared content\" url=\"https://example.com/page\">"))

@@ -582,7 +582,7 @@ iOS、Mac、visionOS、手表和扩展的界面有简体中文、English、日�
 
 - **词条**：String Catalog，源语言 zh-Hans，**中文原文就是 key**（现有界面、单元测试和像素 / 布局基线都不变）。
   `apple/Shared/Localization/Localizable.xcstrings` 是所有 target 共用的一份（App、Mac、visionOS、手表经 `Shared/` 编进去，小组件在 `project.yml` 里单独加）；
-  快捷指令的说法在 `Persona/Intents/AppShortcuts.xcstrings`；权限说明在各 target 的 `InfoPlist.xcstrings`（iOS、Mac、visionOS、手表各一份，因为文字不完全一样）。
+  快捷指令的说法在 `Persona/Intents/AppShortcuts.xcstrings`；权限说明在各 target 的 `InfoPlist.xcstrings`（iOS、Mac、visionOS、手表各一份，因为文字不完全一样）。运行时显示的是词条不是 `Info.plist`：改权限说明要同时改 `Info.plist` 和词条的三种语言，`check` 拦 en 和 `Info.plist` 不一致、`Info.plist` 里有词条里没有的 `*UsageDescription`（#4790）。
   `knownRegions` 由 XcodeGen 从这些 catalog 里的语言生成，不手改 pbxproj。Info.plist 的 `CFBundleDevelopmentRegion` 是 `en`：系统语言是三种之外的，Bundle 落到英文。
 - **写代码**：`Text("…")`、`Button("…")`、`Label`、`.navigationTitle` 这类 SwiftUI 参数本来就是 `LocalizedStringKey`；其余给人看的 `String` 一律 `String(localized: "…")`，
   App Intents 用 `LocalizedStringResource`。整句带插值写成一个词条（`"共 \(n) 个"`），不拼半句；数量的复数在 catalog 里给英文 one / other；
