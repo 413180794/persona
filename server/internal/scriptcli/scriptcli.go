@@ -269,6 +269,11 @@ func (r Runner) Notify(ctx context.Context, args []string, stdout, stderr io.Wri
 		why = err.Error()
 	case rep.Error != "":
 		why = rep.Error
+	case rep.Queued: // kept on this computer until its manager is back: not sent yet
+		if !*strict {
+			return ExitOK
+		}
+		why = "manager 不在线，node 先存着，回来后再发"
 	case !rep.Sent:
 		why = "hub 没有发送：" + rep.Reason
 	}

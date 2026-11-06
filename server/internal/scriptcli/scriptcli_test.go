@@ -220,6 +220,13 @@ func TestNotifyBestEffort(t *testing.T) {
 	if r := notify(&fake{reply: `{"sent":true}`}, "t", "--strict", "b"); r.code != 0 {
 		t.Fatalf("--strict, sent: %+v", r)
 	}
+	// The manager is away: the node keeps it. Best effort is content; --strict is not, as nothing was sent yet.
+	if r := notify(&fake{reply: `{"sent":false,"queued":true}`}, "t"); r.code != 0 || r.errOut != "" {
+		t.Fatalf("queued: %+v", r)
+	}
+	if r := notify(&fake{reply: `{"sent":false,"queued":true}`}, "t", "--strict"); r.code != 1 || !strings.Contains(r.errOut, "没发出去") {
+		t.Fatalf("queued, --strict: %+v", r)
+	}
 }
 
 func TestNotifyUsage(t *testing.T) {

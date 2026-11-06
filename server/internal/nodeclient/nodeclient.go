@@ -101,6 +101,14 @@ func dial(ctx context.Context, path string, req any, hangUpOnCancel bool) ([]byt
 	if err != nil {
 		return nil, fmt.Errorf("node closed connection: %w", err)
 	}
+	var away struct {
+		Away bool `json:"away"`
+	}
+	if json.Unmarshal(line, &away) == nil && away.Away {
+		// A resident node in standby (its manager is away) that does not serve this request: as if no node listened,
+		// so the caller does what it always did then (nothing was run).
+		return nil, fmt.Errorf("%w: the node's manager is away", ErrNoNode)
+	}
 	return line, nil
 }
 

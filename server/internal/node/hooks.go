@@ -124,6 +124,17 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		cancel()
 	}()
 
+	switch req.Kind {
+	case "hook", "ask", "notify": // after what standby took while the manager was away (spool.go)
+		if n.replayed != nil {
+			select {
+			case <-n.replayed:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+
 	var resp any
 	switch req.Kind {
 	case "hook":
@@ -254,7 +265,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	}
 	// An Orca pane is bound only on a machine whose engine is Orca: elsewhere nothing could drive it, and the hook
 	// reported no pane for it before Orca was a host (a herdr machine behaves as it did).
-	if host.ParsePane(req.Pane).Kind != host.Orca || n.engine() == proto.EngineOrca {
+	if paneKindOK(n, req.Pane) {
 		n.bindPane(req.Pane, in.SessionID)
 	}
 	if in.HookEventName == "SessionStart" {
@@ -453,6 +464,16 @@ func (n *Node) rememberTranscript(in hookInput) {
 // hook card that never comes (hub/machine.go, hasHooks). stopSig lets the hub tell a second completion of the same
 // reply from a new one.
 func (n *Node) notifyHookEvent(in hookInput, stopSig string, reportOnly bool) {
+	_ = n.peer.Notify("hook.event", hookEventParams(in, stopSig, reportOnly))
+}
+
+// paneKindOK: a hook's pane is one this machine's engine can drive (an Orca pane only where the engine is Orca).
+func paneKindOK(n *Node, pane string) bool {
+	return host.ParsePane(pane).Kind != host.Orca || n.engine() == proto.EngineOrca
+}
+
+// hookEventParams is hook.event's params for what a hook saw.
+func hookEventParams(in hookInput, stopSig string, reportOnly bool) map[string]any {
 	p := map[string]any{
 		"session_id": in.SessionID, "event": in.HookEventName, "tool_name": in.ToolName,
 		"message": in.Message, "last_assistant_message": snippet(in.LastAssistantMessage), "cwd": in.Cwd,
@@ -461,7 +482,7 @@ func (n *Node) notifyHookEvent(in hookInput, stopSig string, reportOnly bool) {
 	if reportOnly {
 		p["report_only"] = true
 	}
-	_ = n.peer.Notify("hook.event", p)
+	return p
 }
 
 // reportedEvent: what a global report-only hook (globalhooks.go) may tell the hub; the tools are the cards.

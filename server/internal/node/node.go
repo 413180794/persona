@@ -146,6 +146,9 @@ type Node struct {
 	runtimeHost *RuntimeHost
 	// keeper: a resident node's conversations between hub connections (assistant_keep.go); nil without one.
 	keeper *assistantKeeper
+	// replayed is closed once what standby took while no manager was connected went to this one (spool.go): new
+	// hooks wait for it, so the manager hears them after the older ones. nil (tests' Nodes): nothing waits.
+	replayed chan struct{}
 
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
@@ -296,6 +299,8 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		n.loadState(ctx)
 		n.resumeAssistants(adopted)
 	}()
+	n.replayed = make(chan struct{})
+	go n.replaySpool(ctx, openSpool(SpoolPath()))
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
 		n.logger.Printf("hook socket: %v", err)

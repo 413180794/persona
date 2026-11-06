@@ -62,6 +62,8 @@ type Machine struct {
 	ctx  context.Context
 	stop context.CancelFunc
 
+	spooled spoolSeen // spool_ids of what a resident node replayed (spooldedupe.go)
+
 	mu   sync.Mutex
 	peer *rpc.Peer
 	info proto.NodeInfo
@@ -494,6 +496,9 @@ func (m *Machine) session(id string) (proto.Session, bool) {
 
 // onEvent takes what is the manager's of a node's event, and passes every event on to the hub as it came.
 func (m *Machine) onEvent(event string, params json.RawMessage) {
+	if event == "hook.event" && m.spooled.repeat(params) {
+		return // replayed twice by a resident node (spooldedupe.go)
+	}
 	m.noteClosed(event, params)
 	switch event {
 	case "sessions.changed":
@@ -594,6 +599,9 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			}
 		}
 		return map[string]any{"sessions": out}, nil
+	}
+	if method == "notify" && m.spooled.repeat(params) {
+		return map[string]any{"sent": true, "duplicate": true}, nil // replayed twice (spooldedupe.go)
 	}
 	if method == "interaction.create" {
 		m.mu.Lock()

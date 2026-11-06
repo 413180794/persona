@@ -1,0 +1,262 @@
+package node
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/nodeclient"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+func TestSpoolKeepsOrderBoundsAndPersists(t *testing.T) {
+	defer func(n, b int) { spoolMost, spoolBytesMost = n, b }(spoolMost, spoolBytesMost)
+	spoolMost = 3
+	path := filepath.Join(t.TempDir(), spoolFile)
+	sp := openSpool(path)
+	for i := range 5 {
+		dropped, err := sp.add(spoolEntry{ID: string(rune('a' + i)), At: time.Now(), Kind: "hook"})
+		if want := min(1, max(0, i-2)); err != nil || dropped != want {
+			t.Fatalf("add %d: dropped %d %v", i, dropped, err)
+		}
+	}
+	var ids []string
+	for _, e := range openSpool(path).load() { // a new process reads what the last one kept
+		ids = append(ids, e.ID)
+	}
+	if strings.Join(ids, "") != "cde" {
+		t.Fatalf("kept %v, want the 3 newest in order", ids)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("spool file: %v %v", fi, err)
+	}
+	spoolBytesMost = 400
+	big := sockRequest{Kind: "hook", Input: json.RawMessage(`"` + strings.Repeat("x", 150) + `"`)}
+	_, _ = sp.add(spoolEntry{ID: "f", Kind: "hook", Request: big})
+	_, _ = sp.add(spoolEntry{ID: "g", Kind: "hook", Request: big})
+	if got := sp.load(); len(got) == 0 || got[len(got)-1].ID != "g" {
+		t.Fatalf("by size: %+v", got)
+	}
+	for _, e := range sp.load() {
+		_ = sp.remove(e.ID)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("an empty spool leaves no file: %v", err)
+	}
+}
+
+func hookReq(event, tool string, mod func(*sockRequest)) sockRequest {
+	b, _ := json.Marshal(map[string]any{"hook_event_name": event, "session_id": reportSession, "tool_name": tool, "cwd": "/work/project"})
+	r := sockRequest{Kind: "hook", Input: b, Pane: "w1:p1", Attempt: "att-" + event + tool}
+	if mod != nil {
+		mod(&r)
+	}
+	return r
+}
+
+func TestStandbyAnswers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), spoolFile)
+	sb := newStandby(path, t.Logf)
+	now := time.Now()
+	sb.now = func() time.Time { return now }
+	sb.since = now
+	reply := func(req sockRequest) map[string]any {
+		b, _ := json.Marshal(sb.answer(req))
+		var m map[string]any
+		_ = json.Unmarshal(b, &m)
+		return m
+	}
+
+	if r := reply(hookReq("Stop", "", nil)); r["output"] != nil || r["retry"] != nil {
+		t.Fatalf("a Stop: %v", r)
+	}
+	if r := reply(hookReq("PermissionRequest", "Bash", nil)); r["retry"] != true {
+		t.Fatalf("a permission while the manager was just here: %v, want retry", r)
+	}
+	if r := reply(hookReq("PreToolUse", "Bash", nil)); r["retry"] != nil {
+		t.Fatalf("a Bash PreToolUse is not held: %v", r)
+	}
+	if r := reply(hookReq("PreToolUse", "AskUserQuestion", func(r *sockRequest) { r.Resume = true })); r["retry"] != true {
+		t.Fatalf("a resumed question: %v", r)
+	}
+	if r := reply(hookReq("Stop", "", func(r *sockRequest) { r.ReportOnly = true })); r["output"] != nil {
+		t.Fatalf("report-only: %v", r)
+	}
+	_ = reply(hookReq("PostToolUse", "Read", func(r *sockRequest) { r.ReportOnly = true })) // not a reported event
+	if r := reply(sockRequest{Kind: "ask", Attempt: "a1", Input: json.RawMessage(`{"question":"q"}`)}); r["retry"] != true {
+		t.Fatalf("ask: %v", r)
+	}
+	if r := reply(sockRequest{Kind: "notify", Input: json.RawMessage(`{"title":"built"}`)}); r["queued"] != true {
+		t.Fatalf("notify: %v", r)
+	}
+	if r := reply(sockRequest{Kind: "notify", Input: json.RawMessage(`{"title":" "}`)}); r["error"] == nil {
+		t.Fatalf("an empty notify: %v", r)
+	}
+	for _, kind := range []string{"mcp.tools", "mcp.call", "launcher.env", "cli.call"} {
+		if r := reply(sockRequest{Kind: kind}); r["away"] != true {
+			t.Fatalf("%s: %v, want away", kind, r)
+		}
+	}
+
+	var kept []string
+	for _, e := range sb.sp.load() {
+		var in hookInput
+		_ = json.Unmarshal(e.Request.Input, &in)
+		kept = append(kept, e.Kind+":"+in.HookEventName+in.ToolName)
+	}
+	// The resumed question was reported by the node it first reached; the report-only PostToolUse is not reported.
+	want := "hook:Stop hook:PermissionRequestBash hook:PreToolUseBash hook:Stop notify:"
+	if strings.Join(kept, " ") != want {
+		t.Fatalf("kept %v\nwant %s", kept, want)
+	}
+
+	now = now.Add(standbyHold + time.Second) // the manager is away for long: the terminal asks
+	if r := reply(hookReq("PermissionRequest", "Bash", nil)); r["retry"] != nil {
+		t.Fatalf("after the hold: %v", r)
+	}
+	if r := reply(sockRequest{Kind: "ask", Attempt: "a2", Input: json.RawMessage(`{"question":"q"}`)}); r["status"] != nodeclient.AskUnavailable {
+		t.Fatalf("ask after the hold: %v", r)
+	}
+}
+
+// Through the real socket: clients take standby's "away" for no node, and a hook's card retries.
+func TestStandbyOnTheSocket(t *testing.T) {
+	home, err := os.MkdirTemp("/tmp", "sb") // short: sun_path
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	t.Setenv("HOME", home)
+	sb := newStandby(SpoolPath(), t.Logf)
+	sb.start()
+	defer sb.stop()
+	ctx := context.Background()
+	if _, err := nodeclient.Dial(ctx, sockRequest{Kind: "mcp.tools"}); !errors.Is(err, nodeclient.ErrNoNode) {
+		t.Fatalf("mcp.tools in standby: %v, want ErrNoNode", err)
+	}
+	rep, err := nodeclient.NotifyNode(ctx, nodeclient.Dial, nodeclient.NotifyRequest{Title: "built"}, "")
+	if err != nil || !rep.Queued || rep.Sent {
+		t.Fatalf("notify: %+v %v", rep, err)
+	}
+	if out := nodeclient.Hook(ctx, hookReq("Stop", "", nil).Input, "w1:p1"); out != nil {
+		t.Fatalf("a Stop printed %s", out)
+	}
+	if n := len(openSpool(SpoolPath()).load()); n != 2 {
+		t.Fatalf("spooled %d, want the notification and the Stop", n)
+	}
+	sb.stop()
+	sb.start() // started again (the next manager went away too): still serves
+	if _, err := nodeclient.Dial(ctx, sockRequest{Kind: "ping"}); err != nil {
+		t.Fatalf("ping after a restart of standby: %v", err)
+	}
+}
+
+// replayHub records what the manager gets from a replay.
+type replayHub struct {
+	mu  sync.Mutex
+	got []string
+	ids map[string]int
+}
+
+func newReplayHub(t *testing.T, n *Node) *replayHub {
+	ctx, cancel := context.WithCancel(context.Background())
+	n2hR, n2hW := io.Pipe()
+	h2nR, h2nW := io.Pipe()
+	n.peer = rpc.New("n", n2hW)
+	hub := rpc.New("h", h2nW)
+	rec := &replayHub{ids: map[string]int{}}
+	note := func(what string, params json.RawMessage) {
+		var p map[string]any
+		_ = json.Unmarshal(params, &p)
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		id, _ := p["spool_id"].(string)
+		rec.ids[id]++
+		rec.got = append(rec.got, what)
+	}
+	hub.OnEvent = func(event string, params json.RawMessage) {
+		if event == "hook.event" {
+			var p struct {
+				Event string `json:"event"`
+			}
+			_ = json.Unmarshal(params, &p)
+			note("event:"+p.Event, params)
+		}
+	}
+	hub.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		if method == "notify" {
+			var p struct {
+				Title string `json:"title"`
+			}
+			_ = json.Unmarshal(params, &p)
+			note("notify:"+p.Title, params)
+			return map[string]any{"sent": true}, nil
+		}
+		return nil, nil
+	}
+	go func() { _ = hub.Serve(ctx, n2hR) }()
+	go func() { _ = n.peer.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
+	return rec
+}
+
+func TestReplayHandsTheManagerWhatStandbyTookInOrderOnce(t *testing.T) {
+	n, _ := testNode(t)
+	n.logger = log.New(io.Discard, "", 0)
+	n.panes = map[string]string{}
+	rec := newReplayHub(t, n)
+	sp := openSpool(filepath.Join(t.TempDir(), spoolFile))
+	at := time.Now().Add(-time.Minute)
+	add := func(kind string, req sockRequest, at time.Time) {
+		if _, err := sp.add(spoolEntry{ID: newUUID(), At: at, Kind: kind, Request: req}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("hook", hookReq("UserPromptSubmit", "", nil), at)
+	add("notify", sockRequest{Kind: "notify", Input: json.RawMessage(`{"title":"tests passed"}`)}, at)
+	add("hook", hookReq("Stop", "", nil), at)
+	add("hook", hookReq("Stop", "", nil), time.Now().Add(-spoolMaxAge-time.Hour)) // too old: dropped
+
+	n.replayed = make(chan struct{})
+	n.replaySpool(context.Background(), sp)
+	select {
+	case <-n.replayed:
+	default:
+		t.Fatal("the gate for new hooks stayed shut")
+	}
+	waitFor(t, "the replay to arrive", func() bool {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		return len(rec.got) == 3
+	})
+	rec.mu.Lock()
+	got := strings.Join(rec.got, " ")
+	ids := rec.ids
+	rec.mu.Unlock()
+	if got != "event:UserPromptSubmit notify:tests passed event:Stop" {
+		t.Fatalf("replayed %q", got)
+	}
+	for id, c := range ids {
+		if id == "" || c != 1 {
+			t.Fatalf("spool ids %v: each once, never empty", ids)
+		}
+	}
+	if left := sp.load(); len(left) != 0 {
+		t.Fatalf("left in the spool: %+v", left)
+	}
+	n.replayed = make(chan struct{})
+	n.replaySpool(context.Background(), sp) // nothing again: nothing sent twice
+	time.Sleep(50 * time.Millisecond)
+	if rec.mu.Lock(); len(rec.got) != 3 {
+		t.Fatalf("a second replay sent %v", rec.got)
+	}
+	rec.mu.Unlock()
+}

@@ -127,6 +127,11 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 	}()
 
 	keeper := newAssistantKeeper()
+	// No manager connected yet (or between connections): standby answers node.sock (spool.go).
+	sb := newStandby(SpoolPath(), func(f string, a ...any) { fmt.Fprintf(os.Stderr, "node: "+f+"\n", a...) })
+	sb.start()
+	defer sb.stop()
+	var mu sync.Mutex        // served
 	var served chan struct{} // closed when the connection being served has ended
 	var current context.CancelFunc
 	var wg sync.WaitGroup
@@ -154,10 +159,21 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 		cctx, cancel := context.WithCancel(ctx)
 		current = cancel
 		wg.Add(1)
+		mu.Lock()
 		prev, done := served, make(chan struct{})
 		served = done
+		mu.Unlock()
+		sb.stop() // the new connection's Node takes node.sock
 		go func() {
 			defer wg.Done()
+			defer func() { // the last connection ended and no other came: standby until the next
+				mu.Lock()
+				last := served == done
+				mu.Unlock()
+				if last && ctx.Err() == nil {
+					sb.start()
+				}
+			}()
 			defer close(done)
 			defer c.Close()
 			defer cancel()

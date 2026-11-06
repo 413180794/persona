@@ -2002,6 +2002,16 @@ Deploys are frequent (hub restarts, node binary swaps). Questions / plans / perm
   are reloaded (also waiting 3 minutes), and the rest are marked cancelled. Old nodes don't send `resumable`; behavior is unchanged.
 - Measured locally (fake hub + sandboxed node + real `personad hook`): killing the node during a question and starting a new node 2 seconds later, the hook got the phone's answer after 3.1 seconds, and the hub saw only one id.
 
+### When the manager is away (resident nodes)
+
+A resident node (`personad node --attach`: Persona Link, the Mac's launchd node, a service node) outlives its manager connection. While no connection is served (before the first one, and between one ending and the next), it answers `node.sock` itself, in **standby** (`server/internal/node/spool.go`):
+
+- `hook`: the event is kept in the spool (except a resumed hook, which the node it first reached already reported, and a report-only hook's events that are not reported anyway). A hook that would wait on the phone (`PermissionRequest`, `Elicitation`, `PreToolUse` of `AskUserQuestion`) gets `{"retry":true}` while the manager has been away less than 10 minutes, so it asks again with the same `attempt` (for up to `nodeclient.ResumeWait`) and gets its card once the manager is back. Past 10 minutes, and for every other hook, the answer is `{"output":null}`: the terminal decides, as without a manager. A `PreToolUse` of `Bash` is never held.
+- `ask`: `{"retry":true}` within the same 10 minutes, else `{"status":"unavailable"}`. `notify`: kept → `{"sent":false,"queued":true}` (`personad notify` exits 0; with `--strict` it exits 1 since nothing was sent yet, though the notification still goes out later). `ping` / `hook.decided`: `{"ok":true,"standby":true}`.
+- Anything else (`mcp.*`, `cli.call`, `launcher.env`…) gets `{"away":true}`, which `nodeclient` turns into `ErrNoNode`: callers do what they always did with no node.
+- **The spool** is `~/.persona/node-spool.jsonl` (0600): one entry per line `{id, at, kind: "hook"|"notify", request}`, oldest first, at most 500 entries or 1 MiB (the oldest go first, and the node logs how many it dropped). It survives a restart of the resident node.
+- **Replay.** The next connection's node replays the spool before it handles new `hook` / `ask` / `notify` requests (they wait for the replay), in order. A hook entry gets the bookkeeping a live hook gets (turn counters with the original time, pane binding, transcript path) and a `hook.event` with `spool_id` and `spooled_at`. It never creates a card. A notification goes through the usual `notify` request with `spool_id`. Each entry leaves the file once it was sent; entries older than a day are dropped unsent. An entry sent twice (the node stopped between sending and removing it) is dropped by the manager by `spool_id` (`devices/spooldedupe.go`). A node started over ssh (`node --stdio` with no resident node) ends with its connection and has no standby.
+
 ## Runtime ↔ node (unix socket `~/.persona/runtime.sock`, or a daemon the node connects to)
 
 A **runtime** is an Agent runtime with no terminal that manages its own sessions (currently DSH, `docs/dsh.md`). It is not a "host": the host is where the terminal is opened (herdr / Herdr App / Orca,

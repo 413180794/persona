@@ -142,6 +142,11 @@ func cutRunes(s string, n int) string {
 
 // handleNotify has the hub alert the user's devices (hub "notify" request, the path POST /api/v1/notify takes).
 func (n *Node) handleNotify(ctx context.Context, req sockRequest) nodeclient.NotifyReply {
+	return n.sendNotify(ctx, req, "")
+}
+
+// sendNotify is handleNotify; spoolID marks one standby kept (spool.go), for the manager to drop a repeat.
+func (n *Node) sendNotify(ctx context.Context, req sockRequest, spoolID string) nodeclient.NotifyReply {
 	var nr nodeclient.NotifyRequest
 	if err := json.Unmarshal(req.Input, &nr); err != nil {
 		return nodeclient.NotifyReply{Error: "bad request"}
@@ -164,6 +169,9 @@ func (n *Node) handleNotify(ctx context.Context, req sockRequest) nodeclient.Not
 	}
 	if sid, _ := n.scriptSession(req.Pane, ""); sid != "" {
 		params["session_id"] = sid // a tap opens that session; a muted session gets nothing
+	}
+	if spoolID != "" {
+		params["spool_id"] = spoolID
 	}
 	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
 	defer cancel()

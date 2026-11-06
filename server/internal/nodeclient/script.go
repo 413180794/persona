@@ -101,7 +101,9 @@ type NotifyRequest struct {
 type NotifyReply struct {
 	Sent   bool   `json:"sent"`
 	Reason string `json:"reason,omitempty"` // why not, when the hub did not send it (muted)
-	Error  string `json:"error,omitempty"`  // why the hub could not be asked
+	// Queued: the manager is away; the node keeps it and hands it over when the manager is back (standby).
+	Queued bool   `json:"queued,omitempty"`
+	Error  string `json:"error,omitempty"` // why the hub could not be asked
 }
 
 // AskNode asks the node to put a question in front of the phone and returns the answer. Like Hook, when the node goes
