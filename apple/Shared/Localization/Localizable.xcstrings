@@ -38169,6 +38169,29 @@
       },
       "extractionState": "manual"
     },
+    "Exit code %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exit code %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "終了コード%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出码 %1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Exit code %lld": {
       "localizations": {
         "en": {

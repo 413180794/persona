@@ -537,7 +537,7 @@ struct WatchInteractionView: View {
                     Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
                     Button("Approve & Run") { act(Resolution(approve: true, mode: "bypassPermissions")) }
                         .lineLimit(1).minimumScaleFactor(0.8).buttonStyle(.borderedProminent)
-                    Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }.lineLimit(1) // i18n-ignore: feedback sent to the agent
+                    Button("Send Back [Notification Actions a20f13]") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }.lineLimit(1) // i18n-ignore: feedback sent to the agent
                 case .permission:
                     Text(interaction.summary ?? "").font(.caption2.monospaced())
                     if interaction.requiresInput {
