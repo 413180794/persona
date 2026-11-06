@@ -250,3 +250,25 @@ describe("conversation links", () => {
     }
   });
 });
+
+describe("Markdown tables (#5275)", () => {
+  it("renders table rows with cells containing long links", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    const md = "| 描述 | 链接 |\n| --- | --- |\n| 超长链接测试 | https://example.com/very/long/nested/path/that/exceeds/the/default/column/width/and/should/wrap/cleanly |";
+    const html = renderToStaticMarkup(createElement(Markdown, { text: md }));
+    expect(html).toContain("<table>");
+    expect(html).toContain("<th>描述</th>");
+    expect(html).toContain("<th>链接</th>");
+    expect(html).toContain('<a href="https://example.com/very/long/nested/path/that/exceeds/the/default/column/width/and/should/wrap/cleanly"');
+  });
+
+  it("styles.css allows table cells to break long unbroken strings with overflow-wrap: anywhere", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const css = readFileSync(join(__dirname, "../styles.css"), "utf8");
+    expect(css).toMatch(/\.prose-j th,\s*\.prose-j td\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+  });
+});
+
