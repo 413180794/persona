@@ -48,7 +48,7 @@ extension ChatLines {
         func flush() { out += pending; pending = [] }
         for line in lines {
             switch line.content {
-            case .workStep, .toolRun, .workEnd:
+            case .workStep, .agentOut, .toolRun, .workEnd:
                 out.append(line)
                 continue
             default:

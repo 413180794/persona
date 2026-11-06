@@ -1,0 +1,60 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+/// A subagent's card in the chat (#5602): how it is doing by its call's result (a background one by its notice), and
+/// the line under its title — what it does while it runs, how it went with its steps and time once over.
+@MainActor
+struct SubagentCardTests {
+    private func item(_ seq: Int, _ kind: ItemKind, role: String = "assistant", text: String? = nil, tool: String? = nil,
+                      id: String? = nil, input: [String: JSONValue]? = nil, error: Bool? = nil) -> Item {
+        Item(id: "\(seq)#0", seq: seq, ts: nil, role: role, kind: kind, text: text, toolUseID: id, toolName: tool,
+             toolInput: input.map { .object($0) }, isError: error, image: nil)
+    }
+
+    private func call(_ items: [Item]) -> ToolCall {
+        let use = items.first { $0.kind == .toolUse }!
+        return ToolCall(use: use, result: items.first { $0.kind == .toolResult })
+    }
+
+    @Test func aForegroundSubagentGoesByItsResult() {
+        let use = item(1, .toolUse, tool: "Agent", id: "a", input: ["description": "回归"])
+        #expect(SubagentCardStatus.of(call([use]), tasks: TaskIndex.build([use]), agent: nil) == .running)
+        // Its report ends with its agentId (to go on with SendMessage): done, not one sent to the background.
+        let done = [use, item(2, .toolResult, role: "user", text: "42 passed.\nagentId: x1 (use SendMessage with to: 'x1')", id: "a")]
+        let tasks = TaskIndex.build(done)
+        #expect(!tasks.started.contains("a"))
+        #expect(SubagentCardStatus.of(call(done), tasks: tasks, agent: Subagent(id: "x1", sessionID: "s@x1", toolUseID: "a", running: true)) == .done)
+        let failed = [use, item(2, .toolResult, role: "user", text: "502", id: "a", error: true)]
+        #expect(SubagentCardStatus.of(call(failed), tasks: TaskIndex.build(failed), agent: nil) == .failed)
+    }
+
+    @Test func aBackgroundSubagentGoesByItsNotice() {
+        let use = item(1, .toolUse, tool: "Agent", id: "a", input: ["description": "全量", "run_in_background": .bool(true)])
+        let launched = [use, item(2, .toolResult, role: "user", text: "Async agent launched successfully.\nagentId: x2", id: "a")]
+        var agent = Subagent(id: "x2", sessionID: "s@x2", toolUseID: "a", running: true)
+        #expect(SubagentCardStatus.of(call(launched), tasks: TaskIndex.build(launched), agent: agent) == .running)
+        agent.running = false // gone quiet without a word: stopped
+        #expect(SubagentCardStatus.of(call(launched), tasks: TaskIndex.build(launched), agent: agent) == .stopped)
+        var note = item(3, .notice, role: "system", text: "Agent \"全量\" failed")
+        note.task = TaskNote(kind: "agent", status: "failed", title: "全量", toolUseID: "a")
+        #expect(SubagentCardStatus.of(call(launched), tasks: TaskIndex.build(launched + [note]), agent: agent) == .failed)
+        #expect(SubagentCardStatus.report("a", tasks: TaskIndex.build(launched)) == nil)
+        // Its report is its notice's detail (a SubagentHandback's too, #5886), not the launch receipt.
+        note.task?.detail = "3 failed: checkout"
+        #expect(SubagentCardStatus.report("a", tasks: TaskIndex.build(launched + [note])) == "3 failed: checkout")
+    }
+
+    @Test func theLineSaysWhatItDoesThenHowItWent() {
+        var agent = Subagent(id: "x", sessionID: "s@x", running: true)
+        #expect(SubagentCardText.line(.running, agent: agent, took: nil) == String(localized: "Starting… [Subagent Card]"))
+        agent.steps = 3
+        agent.lastTool = .init(id: "t3", name: "Bash", summary: "跑筛选用例")
+        #expect(SubagentCardText.line(.running, agent: agent, took: nil).hasPrefix("跑筛选用例…"))
+        agent.lastTool?.summary = nil
+        #expect(SubagentCardText.line(.running, agent: agent, took: nil).hasPrefix("Bash…")) // no summary: the tool's name
+        let done = SubagentCardText.line(.done, agent: agent, took: 80)
+        #expect(done.hasPrefix(String(localized: "Done [Subagent Card]")) && done.contains(TaskNoteText.took(80)))
+        #expect(!SubagentCardText.line(.failed, agent: nil, took: nil).contains("·")) // nothing more to say
+    }
+}

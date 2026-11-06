@@ -94,6 +94,7 @@ final class ChatTrace {
         case .userImages(_, let items): "photos\(items.count)"
         case .recaps(_, let items): "recaps\(items.count)"
         case .workStep: "step"
+        case .agentOut: "agent"
         case .toolRun(_, let calls, _, _): "run\(calls.count)"
         case .workEnd: "end"
         case .apiError(let item, _, let count): "err\(item.seq)x\(count)"

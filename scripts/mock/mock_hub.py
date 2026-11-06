@@ -6377,7 +6377,7 @@ def mock_subagent_cards():
                              sub("scrun", "回归：搜索全量", _run, at=9.8, running=True, background=True, last_text="筛选的用例在跑。", steps=3,
                                  last_tool={"id": "toolu_scrunb", "name": "Bash", "summary": "跑筛选用例"}),
                              sub("scdone", "回归：结算流程", _done, at=29.5, last_text="结算流程 42 个用例全部通过。", steps=2,
-                                 updated_at=ago(minutes=27)),
+                                 last_tool={"id": "toolu_scdone2", "name": "Read", "summary": "读 checkout.spec.ts"}, updated_at=ago(minutes=27)),
                              sub("scfail", "回归：支付回调", _fail, at=27, steps=1),
                              sub("scnest", "回归：价格筛选", _nest, at=26, type="Explore", steps=2),
                              sub("scdata", "查价格的测试数据", _data, at=25, parent_id="scnest"),

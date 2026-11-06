@@ -218,6 +218,10 @@ struct ChatView: View {
         return (session?.subagents ?? []).map { $0.shown(in: tasks, sessionWorks: works) }
     }
     /// At work, or waiting on the user (a subagent's question stops its session there).
+    /// The session's subagents by their call, for their cards (`SubagentCard`).
+    private var subagentsByCall: [String: Subagent] {
+        Dictionary(subagents.compactMap { a in a.toolUseID.map { ($0, a) } }, uniquingKeysWith: { a, _ in a })
+    }
     private var sessionWorks: Bool { session?.state == .working || session?.state == .needsYou }
     private var status: SessionStatus {
         if let a = viewedAgent { return a.running ? .working : .idle }
@@ -756,7 +760,8 @@ struct ChatView: View {
         let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: frozen == nil ? store.version : cut,
                                        first: items.first?.id, live: frozen == nil ? liveTurnID : frozen?.live, open: openWork,
                                        runs: openRuns, frozen: frozen, feed: feed.map(\.id),
-                                       streaming: style == .assistant && (frozen.map { !$0.text.isEmpty } ?? liveShown))
+                                       streaming: style == .assistant && (frozen.map { !$0.text.isEmpty } ?? liveShown),
+                                       quietAgents: quietSubagents)
         if scratch.linesKey == key { return scratch.lines }
         var blocks = store.blocks
         if frozen != nil {
@@ -778,7 +783,7 @@ struct ChatView: View {
     /// What builds the lines from the blocks, with what is open now.
     private var lineBuilder: ChatLines {
         ChatLines(openWork: openWork, openAll: Self.debugOpenAll, openRuns: openRuns, openAllRuns: Self.debugOpenRuns, chipRuns: AppStyle.current.usesBeautifulUI,
-                  foldsIntoRun: foldsIntoRun)
+                  foldsIntoRun: foldsIntoRun, showsFolded: showsFolded)
     }
     private func unfoldWork(_ lines: [ChatLine]) -> [ChatLine] { lineBuilder.unfold(lines) }
     private func isOpen(_ work: String) -> Bool { lineBuilder.isOpen(work) }
@@ -787,9 +792,20 @@ struct ChatView: View {
         lineBuilder.runID(holding: call, group: group, items: items)
     }
     private func foldsIntoRun(_ call: ToolCall) -> Bool {
+        if SubagentCard.isAgent(call) { return false } // its card is a line of its own
         guard let id = call.use.toolUseID else { return true }
         return !store.tasks.started.contains(id) && store.tasks.notes[id] == nil
     }
+
+    /// A subagent still at work keeps its card in view under its folded work line; done, it folds with the line.
+    /// A foreground one only while its line runs (with no result after that, it was cut off).
+    private func showsFolded(_ call: ToolCall, live: Bool) -> Bool {
+        guard SubagentCard.isAgent(call), let id = call.use.toolUseID else { return false }
+        guard live || store.tasks.started.contains(id) else { return false }
+        return SubagentCardStatus.of(call, tasks: store.tasks, agent: subagentsByCall[id]) == .running
+    }
+    /// The background subagents the hub says stopped: a card's state that is not in the chat's items (`LinesKey`).
+    private var quietSubagents: Set<String> { Set(subagentsByCall.filter { !$0.value.running }.keys) }
 
     static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] { ChatLines.foldAPIErrors(lines) }
 
@@ -1165,6 +1181,9 @@ struct ChatView: View {
         case .workStep(let group, let item, let first):
             WorkStepView(item: item, first: first).equatable()
                 .unfolding(stepUnfolding(group, item: item))
+        case .agentOut(_, let call):
+            // A card of its own (no rail on the timeline: the line above is shut).
+            SubagentCard(call: call).background { if !WorkCardSlice.timeline { WorkCardSlice(top: true, bottom: true) } }
         case .toolRun(let id, let calls, let open, let first):
             ToolRunRow(calls: calls, open: open, first: first) { toggleRun(id, calls: calls) }
                 .equatable()
@@ -1658,6 +1677,7 @@ struct ChatView: View {
             footerRoom.chrome = style == .dev && !sideBars ? chrome : nil
         }
         .environment(\.openSubagent, actions.openSubagent)
+        .environment(\.subagentsByCall, subagentsByCall)
         .environment(\.openFold, actions.openFold)
         .environment(\.taskIndex, store.tasks)
         .environment(\.jumpToCall, actions.jumpToCall)
@@ -4723,6 +4743,9 @@ struct ChatLine: Identifiable {
         /// Two or more "while you were away" recaps in a row, as one line (they open in one drawer, newest first).
         case recaps(id: String, items: [Item])
         case workStep(group: String, item: WorkItem, first: Bool)
+        /// A running subagent's card under its folded work line (#5602, as the web): it stays in view while the line is
+        /// shut, by the id it has as a step of the open line, so opening the line does not draw it again.
+        case agentOut(group: String, call: ToolCall)
         /// Two or more tool calls in a row of an open work line, as one line of chips.
         case toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool)
         /// The foot of an open work card: Collapse, and the files the work changed (`ChatLines.changedFiles`).
@@ -4743,6 +4766,7 @@ struct ChatLine: Identifiable {
             case .row(let r): r.id
             case .work(let id, _, _, _, _): id
             case .workStep(let group, let item, _): group + "/" + item.id
+            case .agentOut(let group, let call): group + "/" + WorkItem.step(.call(call)).id
             case .workEnd(let group, _, _): group + "-end"
             case .toolRun(let id, _, _, _): id
             case .userImages(let id, _): id
@@ -4772,6 +4796,7 @@ struct ChatLine: Identifiable {
     static func workStep(group: String, item: WorkItem, first: Bool) -> Self {
         Self(.workStep(group: group, item: item, first: first))
     }
+    static func agentOut(group: String, call: ToolCall) -> Self { Self(.agentOut(group: group, call: call)) }
     static func workEnd(group: String, count: Int, files: [ChangedFile] = []) -> Self {
         Self(.workEnd(group: group, count: count, files: files))
     }
@@ -4817,7 +4842,6 @@ nonisolated indirect enum WorkItem: Identifiable, Equatable, Sendable {
 /// One step of an open work line, a line of the chat list itself. The steps read as one card under their header:
 /// each draws its slice of it (`WorkCardSlice`), with a hairline between steps, instead of a tile per step.
 struct WorkStepView: View, Equatable {
-    @Environment(\.openSubagent) private var openSubagent
     nonisolated let item: WorkItem
     nonisolated let first: Bool
 
@@ -4832,19 +4856,10 @@ struct WorkStepView: View, Equatable {
         #endif
         Group {
             switch item {
+            case .step(.call(let c)) where SubagentCard.isAgent(c):
+                SubagentCard(call: c)
             case .step(.call(let c)):
-                VStack(alignment: .leading, spacing: 0) {
-                    ToolCallRow(call: c, autoExpand: false, grouped: true)
-                    if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
-                        Button { open(id) } label: {
-                            Label("View Subagent", systemImage: Theme.Icon.open).font(Theme.Font.labelStrong).lineLimit(1)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Theme.accent)
-                        .padding(.leading, WorkCardSlice.textColumn)
-                        .padding(.bottom, Theme.Space.m)
-                    }
-                }
+                ToolCallRow(call: c, autoExpand: false, grouped: true)
             case .step(.thought(let t)) where t.task != nil && t.wake != true:
                 TaskNoteRow(item: t, grouped: true) // a Monitor event between two commands: one line like theirs
             case .step(.thought(let t)) where t.kind != .notice && AppStyle.current.usesBeautifulUI:
@@ -5416,6 +5431,8 @@ final class ChatScratch {
         var feed: [String] = []
         /// The running turn's next words are streaming (`ChatLines.lines`).
         var streaming = false
+        /// The subagents the hub says stopped: their cards fold with their work lines (`ChatLines.showsFolded`).
+        var quietAgents: Set<String> = []
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
     var sentHere: [(id: UUID, text: String)] = []

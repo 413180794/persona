@@ -984,13 +984,24 @@ nonisolated struct Subagent: Codable, Identifiable, Hashable, Sendable {
     var startedAt: Date?
     var updatedAt: Date?
     var lastText: String?
+    /// How many tool calls it made, and its latest one (what it is doing while it runs); nil from older hubs (#5602).
+    var steps: Int?
+    var lastTool: LastTool?
+
+    /// A subagent's latest tool call.
+    nonisolated struct LastTool: Codable, Hashable, Sendable {
+        var id: String?
+        var name: String?
+        /// What it does, in a few words ("running the tests").
+        var summary: String?
+    }
 
     var title: String { (description?.isEmpty == false ? description : nil) ?? type ?? String(localized: "Subagent [Task Note Row 70da69]") }
 
     enum CodingKeys: String, CodingKey {
-        case id, type, description, running, fork, background
+        case id, type, description, running, fork, background, steps
         case sessionID = "session_id", toolUseID = "tool_use_id", parentID = "parent_id", startedAt = "started_at",
-             updatedAt = "updated_at", lastText = "last_text"
+             updatedAt = "updated_at", lastText = "last_text", lastTool = "last_tool"
     }
 }
 

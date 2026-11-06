@@ -25,6 +25,8 @@ struct ChatLines {
     var chipRuns = false
     /// Whether a call can join a run: a call that went to the background stays on its own line.
     var foldsIntoRun: (ToolCall) -> Bool = { _ in true }
+    /// Whether a call stays in view while its work line is folded (a running subagent's card); `live`: the line runs.
+    var showsFolded: (ToolCall, _ live: Bool) -> Bool = { _, _ in false }
 
     /// The lines of these blocks with the open work lines unfolded.
     func build(_ blocks: [ChatBlock], live: String?, streaming: Bool = false) -> [ChatLine] {
@@ -168,6 +170,9 @@ struct ChatLines {
         out.reserveCapacity(lines.count)
         for line in lines {
             out.append(line)
+            if case .work(let id, let items, let live, _, _) = line.content, !isOpen(id) {
+                for case .step(.call(let c)) in items where showsFolded(c, live) { out.append(.agentOut(group: id, call: c)) }
+            }
             if case .work(let id, let items, _, _, _) = line.content, isOpen(id), !items.isEmpty {
                 // The BeautifulUI style folds runs of tool calls into a line of chips; the others list every step.
                 out += chipRuns ? runLines(group: id, items: items)

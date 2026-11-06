@@ -22,6 +22,7 @@ struct ChatLinesTests {
             case .work: "work"
             case .workStep: "step"
             case .workEnd: "end"
+            case .agentOut: "agent"
             case .toolRun: "run"
             case .apiError: "error"
             default: "other"
@@ -69,6 +70,25 @@ struct ChatLinesTests {
         // DEBUG -openAllWork flips every line: the opened one closes.
         #expect(kinds(ChatLines(openWork: [closed[1].id], openAll: true).build(blocks(oneTurn.map { $0(self) }), live: nil))
                 == ["user", "work", "answer"])
+    }
+
+    /// A running subagent's card stays in view under its folded work line (#5602), by the id it has once the line is
+    /// open; open, it is one of the steps, not a second time.
+    @Test func aRunningSubagentStaysOutOfItsFoldedLine() {
+        let items = [item(1, .text, role: "user", text: "拆给子 Agent"), item(2, .toolUse, tool: "Agent", id: "a"),
+                     item(3, .toolUse, tool: "Bash", id: "b"), item(4, .toolResult, role: "user", text: "ok", id: "b")]
+        var lines = ChatLines(openWork: [])
+        lines.showsFolded = { c, _ in c.name == "Agent" && c.result == nil }
+        let closed = lines.build(blocks(items), live: nil)
+        #expect(kinds(closed) == ["user", "work", "agent"])
+        lines.openWork = [closed[1].id]
+        let open = lines.build(blocks(items), live: nil)
+        #expect(kinds(open) == ["user", "work", "step", "step", "end"])
+        #expect(open[2].id == closed[2].id)
+        // Done: it folds with the line.
+        lines.openWork = []
+        #expect(kinds(lines.build(blocks(items + [item(5, .toolResult, role: "user", text: "42 passed", id: "a")]), live: nil))
+                == ["user", "work"])
     }
 
     @Test func beautifulUIFoldsToolCallsInARowIntoOneRun() {
