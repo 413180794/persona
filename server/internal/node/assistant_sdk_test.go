@@ -30,9 +30,23 @@ while IFS= read -r line; do
   case "$line" in
     *'"type":"control_request"'*)
       id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+      if [ -f "$SDK_FAKE_DIR/control-extra.jsonl" ]; then cat "$SDK_FAKE_DIR/control-extra.jsonl"; fi
+      if [ -f "$SDK_FAKE_DIR/control-hold" ]; then
+        printf '%s\n' "$id" > "$SDK_FAKE_DIR/control-waiting"
+        while [ -f "$SDK_FAKE_DIR/control-hold" ]; do sleep 0.02; done
+      fi
+      if [ -f "$SDK_FAKE_DIR/control-exit" ]; then exit 0; fi
       case "$line" in
         *'"subtype":"set_permission_mode"'*|*'"subtype":"apply_flag_settings"'*)
-          echo "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$id\"}}" ;;
+          case "$line" in
+            *'"subtype":"set_permission_mode"'*) error_file="$SDK_FAKE_DIR/control-mode-error.json" ;;
+            *) error_file="$SDK_FAKE_DIR/control-effort-error.json" ;;
+          esac
+          if [ -f "$error_file" ]; then
+            printf '{"type":"control_response","response":{"subtype":"error","request_id":"%s","error":%s}}\n' "$id" "$(cat "$error_file")"
+          else
+            echo "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"$id\"}}"
+          fi ;;
         *) echo "{\"type\":\"control_response\",\"response\":{\"subtype\":\"error\",\"request_id\":\"$id\",\"error\":\"unsupported\"}}" ;;
       esac ;;
     *'"type":"user"'*)

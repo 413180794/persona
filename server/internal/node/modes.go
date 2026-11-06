@@ -2,7 +2,7 @@ package node
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
 )
 
@@ -95,7 +96,7 @@ func (n *Node) noteModes(id, mode, effort string) {
 // persistModes keeps an assistant conversation's mode / effort set from the app in its session state (the hub's
 // Postgres), so they outlive the node and win over the transcript ("" leaves one as it is).
 func (n *Node) persistModes(id, mode, effort string) {
-	if id == "" || (mode == "" && effort == "") {
+	if n.state == nil || id == "" || (mode == "" && effort == "") {
 		return
 	}
 	st, _ := n.state.get(id)
@@ -183,6 +184,31 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 		return err
 	}
 	if n.isAssistantSession(id) {
+		n.mu.Lock()
+		p := n.procs[id]
+		n.mu.Unlock()
+		if p != nil && p.alive() && p.agent == "claude" {
+			p.settingsMu.Lock()
+			defer p.settingsMu.Unlock()
+			if p.needsRestartFor(mode) {
+				// bypassPermissions requires a new process. Record the choice while holding the same
+				// lock as ordinary changes, so an older ACK cannot overwrite it.
+				n.noteModes(id, mode, "")
+				n.persistModes(id, mode, "")
+				p.mu.Lock()
+				active := p.busy || len(p.tasks) > 0
+				p.mu.Unlock()
+				if !active {
+					n.stopAssistant(id)
+					n.noteModes(id, "", effort)
+					n.persistModes(id, "", effort)
+					n.notifySessions()
+					return nil
+				}
+				mode = "" // Keep the active turn; the next idle message restarts it in bypass mode.
+			}
+			return n.applyAssistantModes(ctx, p, mode, effort)
+		}
 		n.noteModes(id, mode, effort)
 		n.persistModes(id, mode, effort)
 		if n.runtimeAssistant(id) {
@@ -190,22 +216,6 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 				cctx, cancel := context.WithTimeout(ctx, runtimeCallTimeout)
 				_ = h.peer.Call(cctx, "session.modes", map[string]any{"session_id": id, "permission_mode": mode, "effort": effort}, nil)
 				cancel()
-			}
-		}
-		n.mu.Lock()
-		p := n.procs[id]
-		n.mu.Unlock()
-		if p != nil && p.alive() && p.needsRestartFor(mode) {
-			// bypassPermissions takes a process started with it: an idle one ends now and the next message resumes
-			// the conversation with --permission-mode bypassPermissions (spawnAssistant); a busy one (answering, or
-			// running background tasks a restart would kill) switches with the first message after it is idle
-			// (assistantSend). Effort goes along: the new process starts with it.
-			p.mu.Lock()
-			active := p.busy || len(p.tasks) > 0
-			p.mu.Unlock()
-			if !active {
-				n.stopAssistant(id)
-				p = nil
 			}
 		}
 		if p != nil && p.alive() {
@@ -218,7 +228,6 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 					n.state.put(id, st)
 				}
 			}
-			n.syncAssistantModes(p)
 		} // else: applied when the next message starts the process
 		n.notifySessions()
 		return nil
@@ -476,17 +485,18 @@ func effortOutcome(screen, effort string) error {
 	return fmt.Errorf("思考强度可能没改成 %s，请在终端里确认", effort)
 }
 
-// syncAssistantModes sends a headless conversation's wanted mode and effort as control requests (they apply from
-// the next request on, mid-turn included), once per change.
-func (n *Node) syncAssistantModes(p *assistantProc) {
+// syncAssistantModes applies the settings for a new or resumed process before its next message.
+func (n *Node) syncAssistantModes(ctx context.Context, p *assistantProc) error {
 	if p.agent == "codex" {
-		return // Codex gets them with each turn (codexPolicy), and the node answers approvals by the mode it reads then
+		return nil // Codex gets them with each turn (codexPolicy).
 	}
+	p.settingsMu.Lock()
+	defer p.settingsMu.Unlock()
+	n = p.ownerOr(n)
 	mode, effort := n.modesOf(p.id)
 	n.mu.Lock()
 	if n.modes[p.id].Effort == effortAuto {
-		// Only the app changes a headless conversation's effort; the concrete level in its transcript is just what
-		// auto resolved to, and sending it back would pin the conversation to that level.
+		// The concrete level in the transcript is what auto resolved to, not a new choice.
 		effort = effortAuto
 	}
 	n.mu.Unlock()
@@ -494,25 +504,87 @@ func (n *Node) syncAssistantModes(p *assistantProc) {
 	if p.model.UseEffort {
 		effort = p.model.Effort
 	}
-	var reqs []map[string]any
-	if mode != "" && mode != p.mode && !p.needsRestartForLocked(mode) { // that one waits for a new process
-		reqs = append(reqs, map[string]any{"subtype": "set_permission_mode", "mode": mode})
-		p.mode = mode
-	}
-	if effort != "" && effort != p.effort {
-		var level any = effort
-		if effort == effortAuto {
-			level = nil // what Claude Code itself sends for auto: clear the session's level
+	p.mu.Unlock()
+	return n.applyAssistantModes(ctx, p, mode, effort)
+}
+
+// applyAssistantModes commits each field only after Claude acknowledges it. A refused startup setting also
+// restores the previously recorded choice, so the next message does not silently retry it. settingsMu is held.
+func (n *Node) applyAssistantModes(ctx context.Context, p *assistantProc, mode, effort string) error {
+	defer func() { p.ownerOr(n).notifySessions() }()
+	for _, field := range []string{"mode", "effort"} {
+		p.mu.Lock()
+		want, previous := mode, p.mode
+		if field == "effort" {
+			want, previous = effort, p.effort
 		}
-		reqs = append(reqs, map[string]any{"subtype": "apply_flag_settings", "settings": map[string]any{"effortLevel": level}})
-		p.effort = effort
+		restart := field == "mode" && p.needsRestartForLocked(want)
+		p.mu.Unlock()
+		if want == "" || restart {
+			continue
+		}
+		var err error
+		if want != previous {
+			req := map[string]any{"subtype": "set_permission_mode", "mode": want}
+			if field == "effort" {
+				var level any = want
+				if want == effortAuto {
+					level = nil
+				}
+				req = map[string]any{"subtype": "apply_flag_settings", "settings": map[string]any{"effortLevel": level}}
+			}
+			err = p.control(ctx, req)
+		}
+		if err != nil {
+			// Startup may already have recorded both requested values. Restore every field that was not
+			// accepted, including an effort request we never reached after a refused mode.
+			n.recordAssistantMode(p, field, previous)
+			if field == "mode" && effort != "" {
+				p.mu.Lock()
+				previousEffort := p.effort
+				p.mu.Unlock()
+				n.recordAssistantMode(p, "effort", previousEffort)
+			}
+			var refused *rpc.Error
+			if !errors.As(err, &refused) {
+				// An unconfirmed request might still apply later. Retire this process so a late response
+				// cannot leave the conversation running with a setting the client was told had failed.
+				p.stop()
+				return &assistantControlUnconfirmed{refusal("assistant_control_failed", err.Error(), nil)}
+			}
+			return err
+		}
+		n.recordAssistantMode(p, field, want)
+	}
+	return nil
+}
+
+func (n *Node) recordAssistantMode(p *assistantProc, field, value string) {
+	if value == "" {
+		value = "default"
+		if field == "effort" {
+			value = effortAuto
+		}
+	}
+	n = p.ownerOr(n)
+	p.mu.Lock()
+	if field == "mode" {
+		p.mode = value
+	} else {
+		p.effort, p.model.Effort = value, value
 	}
 	p.mu.Unlock()
-	for _, r := range reqs {
-		p.reqSeq.Add(1)
-		line, _ := json.Marshal(map[string]any{"type": "control_request", "request_id": fmt.Sprintf("jarvis-%d", p.reqSeq.Load()), "request": r})
-		if err := p.write(line); err != nil {
-			n.logger.Printf("assistant %s: control request: %v", p.id[:8], err)
+	if field == "mode" {
+		n.noteModes(p.id, value, "")
+		n.persistModes(p.id, value, "")
+	} else {
+		n.noteModes(p.id, "", value)
+		n.persistModes(p.id, "", value)
+		if n.state != nil {
+			if st, ok := n.state.get(p.id); ok && st.ModelEffort != value {
+				st.ModelEffort = value
+				n.state.put(p.id, st)
+			}
 		}
 	}
 }

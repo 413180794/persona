@@ -84,6 +84,31 @@ func TestCallKeepsOtherRefusals(t *testing.T) {
 	}
 }
 
+func TestCallExplainsAssistantControlFailure(t *testing.T) {
+	const reason = "CLAUDE_CODE_EFFORT_LEVEL overrides the session effort"
+	for _, tc := range []struct {
+		name string
+		lang i18n.Lang
+		want string
+	}{
+		{"default", "", "Claude 未能应用这项设置：" + reason},
+		{"English", i18n.En, "Claude could not apply this setting: " + reason},
+		{"Chinese", i18n.ZhHans, "Claude 未能应用这项设置：" + reason},
+		{"Japanese", i18n.Ja, "Claudeはこの設定を適用できませんでした：" + reason},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			refusal := &rpc.Error{Code: "assistant_control_failed", Message: reason,
+				Data: json.RawMessage(`{"delivered":"none","retryable":false}`)}
+			body := call(t, langWriter{rec, tc.lang}, rec, fmt.Errorf("session modes: %w", refusal))
+			if rec.Code != http.StatusConflict || body["code"] != "assistant_control_failed" || body["error"] != tc.want ||
+				body["detail"] != reason || body["delivered"] != "none" || body["retryable"] != false || body["action"] != nil {
+				t.Fatalf("%d %v", rec.Code, body)
+			}
+		})
+	}
+}
+
 // Status codes and retryability stay stable; only exact standard status text is translated for an explicit locale.
 func TestStandardStatusTextLocalization(t *testing.T) {
 	for status, key := range standardStatusKeys {

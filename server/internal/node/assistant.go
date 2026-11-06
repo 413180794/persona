@@ -100,8 +100,11 @@ type assistantProc struct {
 	wmu    sync.Mutex   // one writer on stdin at a time (messages and control requests)
 	reqSeq atomic.Int64 // control request ids
 
+	settingsMu sync.Mutex                               // serializes settings until their control responses arrive
+	controls   map[string]chan assistantControlResponse // guarded by mu
+
 	mu          sync.Mutex
-	mode        string // permission mode / effort level already sent (modes.go)
+	mode        string // permission mode / effort level acknowledged by Claude (modes.go)
 	effort      string
 	model       modelExecution
 	fingerprint string
@@ -524,8 +527,13 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		content = append(content, map[string]any{"type": "text", "text": text})
 	}
 	line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
+	retryMode, retryEffort := n.modesOf(id)
 	for attempt := 1; ; attempt++ {
-		n.syncAssistantModes(p) // a new or resumed process starts without them
+		controlErr := n.syncAssistantModes(ctx, p) // a new or resumed process starts without them
+		var unconfirmed *assistantControlUnconfirmed
+		if controlErr != nil && (!fresh || ctx.Err() != nil || !errors.As(controlErr, &unconfirmed)) {
+			return "", controlErr
+		}
 		p.mu.Lock()
 		p.busy = true
 		p.turnError = ""
@@ -534,7 +542,10 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		p.lastActive = time.Now()
 		p.partial.Reset()
 		p.mu.Unlock()
-		werr := p.write(line)
+		werr := controlErr
+		if werr == nil {
+			werr = p.write(line)
+		}
 		switch {
 		case werr != nil && !fresh:
 			n.stopAssistant(id)
@@ -558,6 +569,10 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 			return "", p.startRefusal(werr)
 		case <-time.After(assistantStartRetryDelay):
 		}
+		// No Claude process accepted or refused the settings while its executable was missing.
+		// Keep the original choices when retrying that transient startup failure.
+		n.noteModes(id, retryMode, retryEffort)
+		n.persistModes(id, retryMode, retryEffort)
 		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false, execution); err != nil {
 			return "", err
 		}
@@ -904,12 +919,9 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			Tasks   []struct {
 				Description string `json:"description"`
 			} `json:"tasks"`
-			Tools    []string `json:"tools"`
-			Response struct {
-				Subtype string `json:"subtype"`
-				Error   string `json:"error"`
-			} `json:"response"`
-			Event struct {
+			Tools    []string                 `json:"tools"`
+			Response assistantControlResponse `json:"response"`
+			Event    struct {
 				Type  string `json:"type"`
 				Delta struct {
 					Type string `json:"type"`
@@ -964,9 +976,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			p.mu.Unlock()
 			n.rememberTasks(p.id, tasks)
 		case "control_response":
-			if ev.Response.Subtype == "error" {
-				n.logger.Printf("assistant %s: control request failed: %s", p.id[:8], ev.Response.Error)
-			}
+			p.controlResponse(ev.Response)
 		case "stream_event":
 			if ev.ParentToolUseID != nil && *ev.ParentToolUseID != "" {
 				// A subagent's stream (#4495): its words are not the conversation's live text, its start does not clear

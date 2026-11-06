@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -176,7 +177,8 @@ func TestSyncAssistantModesAuto(t *testing.T) {
 	n := &Node{modes: map[string]sessionModes{}, paths: map[string]string{"s": path},
 		metas: map[string]quickMeta{path: {size: st.Size(), mtime: st.ModTime()}}} // no reply yet
 	out := &nopWriteCloser{}
-	p := &assistantProc{id: "s", stdin: out}
+	p := &assistantProc{id: "s"}
+	p.stdin = &ackControlWriter{WriteCloser: out, p: p}
 	sent := func() []any {
 		var got []any
 		for _, l := range strings.Split(strings.TrimSpace(out.String()), "\n") {
@@ -192,18 +194,24 @@ func TestSyncAssistantModesAuto(t *testing.T) {
 	}
 
 	n.noteModes("s", "", "high")
-	n.syncAssistantModes(p)
+	if err := n.syncAssistantModes(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
 	if got := sent(); len(got) != 1 || got[0] != "high" {
 		t.Fatalf("high: %v", got)
 	}
 	n.noteModes("s", "", "auto")
-	n.syncAssistantModes(p)
+	if err := n.syncAssistantModes(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
 	if got := sent(); len(got) != 1 || got[0] != nil { // effortLevel: null
 		t.Fatalf("auto: %v", got)
 	}
 	// The next reply runs at the model's default and the transcript says so; that must not pin it to medium.
 	n.metas[path] = quickMeta{size: st.Size(), mtime: st.ModTime(), effort: "medium", effortAt: time.Now().Add(time.Minute)}
-	n.syncAssistantModes(p)
+	if err := n.syncAssistantModes(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
 	if got := sent(); len(got) != 0 {
 		t.Fatalf("re-sent after the reply: %v", got)
 	}
@@ -240,6 +248,7 @@ func fakeAssistant(n *Node, id, startMode string) (*assistantProc, *lineSink) {
 	sink := &lineSink{}
 	p := &assistantProc{id: id, agent: "claude", launcher: "claude", cmd: &exec.Cmd{}, stdin: sink, exited: make(chan struct{}),
 		ready: make(chan struct{}), mode: startMode, canBypass: startMode == proto.ModeBypass}
+	p.stdin = &ackControlWriter{WriteCloser: sink, p: p}
 	n.mu.Lock()
 	n.procs[id] = p
 	n.mu.Unlock()
@@ -341,4 +350,22 @@ func TestSetModesBypassOnAssistant(t *testing.T) {
 	if got := strings.Count(sink2.String(), "set_permission_mode"); got != 2 || q.needsRestartFor(proto.ModeBypass) {
 		t.Fatalf("started in bypass: %d control requests %q", got, sink2.String())
 	}
+}
+
+// ackControlWriter makes in-memory assistant fakes acknowledge the settings they accept.
+type ackControlWriter struct {
+	io.WriteCloser
+	p *assistantProc
+}
+
+func (w *ackControlWriter) Write(b []byte) (int, error) {
+	n, err := w.WriteCloser.Write(b)
+	var request struct {
+		Type      string `json:"type"`
+		RequestID string `json:"request_id"`
+	}
+	if err == nil && json.Unmarshal(b, &request) == nil && request.Type == "control_request" {
+		w.p.controlResponse(assistantControlResponse{RequestID: request.RequestID, Subtype: "success"})
+	}
+	return n, err
 }

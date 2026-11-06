@@ -4,5 +4,6 @@
   "claude_missing": "{machine} にはまだ Claude Code がインストールされていません。",
   "claude_missing_here": "このコンピューターにはまだ Claude Code がインストールされていません。",
   "launcher_missing": "{machine} でモデルの入口「{launcher}」が見つかりません。削除された可能性があります。",
-  "launcher_missing_here": "このコンピューターでモデルの入口「{launcher}」が見つかりません。削除された可能性があります。"
+  "launcher_missing_here": "このコンピューターでモデルの入口「{launcher}」が見つかりません。削除された可能性があります。",
+  "assistant_control_failed": "Claudeはこの設定を適用できませんでした：{reason}"
 }

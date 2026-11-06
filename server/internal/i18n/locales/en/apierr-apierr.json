@@ -4,5 +4,6 @@
   "claude_missing": "Claude Code isn't installed on {machine} yet.",
   "claude_missing_here": "Claude Code isn't installed on this computer yet.",
   "launcher_missing": "Can't find the model entry “{launcher}” on {machine}. It may have been removed.",
-  "launcher_missing_here": "Can't find the model entry “{launcher}” on this computer. It may have been removed."
+  "launcher_missing_here": "Can't find the model entry “{launcher}” on this computer. It may have been removed.",
+  "assistant_control_failed": "Claude could not apply this setting: {reason}"
 }

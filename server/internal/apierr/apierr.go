@@ -179,7 +179,13 @@ func Call(w http.ResponseWriter, err error) {
 			explain(body, code, re.Message, i18n.OfWriter(w))
 		}
 	}
-	if _, explained := codeActions[code]; !explained {
+	if re != nil && code == "assistant_control_failed" {
+		// The SDK's reason must stay visible in clients that show only the summary.
+		body["error"] = i18n.T(i18n.OfWriter(w), "apierr-apierr.assistant_control_failed", i18n.Args{"reason": re.Message})
+		if _, hasDetail := body["detail"]; !hasDetail {
+			body["detail"] = re.Message
+		}
+	} else if _, explained := codeActions[code]; !explained {
 		localizeFailure(body, status, err, i18n.OfWriter(w))
 	}
 	WriteBody(w, status, body)

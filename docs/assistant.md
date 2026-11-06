@@ -305,6 +305,27 @@ Prompts live in `server/internal/prompts/assistant/` (`docs/prompts.md`): CLAUDE
   restart with the new selection on the first idle message. Previously it rejected with "Model configuration changed; wait until the current task ends", trapping users when the assistant kept creating background tasks.
   node's post-restart "Background tasks were lost" message also first asks hub (`assistant.model`, forwarded to assistant `assistant.send_params`, same as phone sends), not starting from the session's last model.
 
+## Permission mode and effort changes (2026-11-06, #5947)
+
+For a running Claude conversation, the node matches each `set_permission_mode` or `apply_flag_settings` request to its
+`control_response.request_id`. Writing the request to stdin does not mean Claude accepted it: `session.modes` waits for
+the matching response before confirming the change. The same check runs before sending a message when a new or resumed
+process needs its settings restored. This applies to both the Claude CLI and the Agent SDK bridge.
+
+- Accepted fields update the process, the session list, and the persisted conversation settings. If a request changes
+  both mode and effort, they are applied in that order; a successful mode change remains applied if effort is refused.
+- A refused field returns to its previous value. The HTTP request fails with `409` and code `assistant_control_failed`,
+  with a localized explanation containing Claude's original reason and the original reason in `detail`. Existing clients
+  show the failure and restore their optimistic selection; no configuration is needed. An environment override such as
+  `CLAUDE_CODE_EFFORT_LEVEL` or a model that cannot use the requested effort can cause a refusal.
+- Unknown or duplicate response IDs cannot confirm another change. A process exit, a failed write, or an unconfirmed
+  request also reports failure instead of claiming that the setting was applied.
+  If the outcome is uncertain, the node stops the child process so a late acknowledgment cannot leave it running with
+  a setting the app reported as failed; the next message resumes the conversation with its recorded settings.
+- Settings chosen while the conversation has no running process are kept for its next start. The existing
+  `bypassPermissions` restart rule remains: a process not started with it cannot switch to it through a control request;
+  a busy process finishes its work before the restart. Ultracode remains available only in Agent sessions.
+
 ## Workspace mentions (2026-11-06, #5594)
 
 In the assistant's composer (web), `@` also lists **workspaces**: the discovered workspaces of `GET /api/v1/workspaces` (host spaces, current session folders and folders bound on the workspace board, on every computer; see [workspace-board.md](workspace-board.md), "Workspaces and status"). The list is read each time the menu opens, works whether or not the board is turned on, shows one row per computer and folder, and leaves out host spaces without a folder. Agents' composers don't offer it: an Agent already works in one folder.
