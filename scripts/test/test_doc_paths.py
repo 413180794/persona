@@ -10,7 +10,7 @@ rename docs, which name the retired paths on purpose.
 Relative Markdown link targets in the same docs, [text](path) and [text](path#anchor), must exist too; only the file is
 checked, not the anchor.
 
-Every top-level doc must also be listed in CLAUDE.md's 文档索引, the place Agents look for the design docs, and every
+Every top-level doc must also be listed in CLAUDE.md's Docs index, the place Agents look for the design docs, and every
 record under docs/archive/ in the table of docs/archive/README.md.
 """
 from pathlib import Path
@@ -85,12 +85,12 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 INLINE_CODE = re.compile(r"(`+).*?\1")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 
-# Top-level docs that stay out of CLAUDE.md's 文档索引: a redirect left by a rename.
+# Top-level docs that stay out of CLAUDE.md's Docs index: a redirect left by a rename.
 UNINDEXED = {"docs/plugins.md"}
 
 
 def doc_files():
-    files = [ROOT / name for name in ("CLAUDE.md", "README.md", "THIRD_PARTY_NOTICES.md", "scripts/README.md")]
+    files = [ROOT / name for name in ("CLAUDE.md", "README.md", "README.zh-CN.md", "THIRD_PARTY_NOTICES.md", "scripts/README.md")]
     files += sorted((ROOT / "docs").glob("*.md")) + sorted((ROOT / "docs/lessons").glob("*.md"))
     files += module_docs()
     return [f for f in files if f.exists() and f.relative_to(ROOT).as_posix() not in SKIP_FILES]
@@ -204,7 +204,7 @@ class DocPathTests(unittest.TestCase):
 
     def test_module_docs_are_checked(self):
         checked = {doc.relative_to(ROOT).as_posix() for doc in doc_files()}
-        for doc in ("spec/README.md", "spec/fixtures/wire/README.md", "spec/tokens/README.md", "sdk/README.md",
+        for doc in ("README.md", "README.zh-CN.md", "spec/README.md", "spec/fixtures/wire/README.md", "spec/tokens/README.md", "sdk/README.md",
                     "sdk/templates/go/README.md", "schema/extension/README.md", "integrations/pi/README.md",
                     "android/feature/chat/INTEGRATION.md"):
             self.assertIn(doc, checked)
@@ -268,11 +268,11 @@ class DocPathTests(unittest.TestCase):
                                   "spec/fixtures/wire/README.md:5: bar(2).md"], missing_links(doc))
 
     def test_top_level_docs_are_in_the_index(self):
-        index = (ROOT / "CLAUDE.md").read_text().split("\n## 文档索引\n", 1)[1]
+        index = (ROOT / "CLAUDE.md").read_text().split("\n## Docs index\n", 1)[1]
         rows = "\n".join(line for line in index.splitlines() if line.startswith("|"))
         docs = sorted(doc.relative_to(ROOT).as_posix() for doc in (ROOT / "docs").glob("*.md"))
         missing = [doc for doc in docs if doc not in UNINDEXED and f"`{doc}`" not in rows]
-        self.assertEqual([], missing, "add these docs to the 文档索引 in CLAUDE.md")
+        self.assertEqual([], missing, "add these docs to the Docs index in CLAUDE.md")
         self.assertEqual([], [doc for doc in UNINDEXED if doc not in docs], "UNINDEXED names docs that are gone")
 
     def test_archive_records_are_in_the_archive_table(self):

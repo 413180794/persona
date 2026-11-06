@@ -85,21 +85,39 @@ def text_width(s, size):
 
 # ---------------------------------------------------------------- banner
 
-CHIPS = [  # the site's hero (site/public/index.html): demo data, not counts from anyone's hub
-    ("#e2553a", "需要你", "photo-sync · 计划等你审批", True),
-    ("#e0a33a", "工作中", "天气 › widget · 工具 5", False),
-    (None, "Persona", "今天有 3 件事需要你", False),
-    ("#3f9b62", "收件箱", "AI 分身起草了 2 条回复", False),
-]
+# README.md is English and README.zh-CN.md Chinese: the banner and the architecture picture are drawn once per
+# language. English keeps the plain file names (banner-light.svg), Chinese adds ".zh-CN" (banner-light.zh-CN.svg).
+LANGS = {"en": "", "zh-CN": ".zh-CN"}
+
+CHIPS = {  # the site's hero (site/public/index.html): demo data, not counts from anyone's hub
+    "en": [
+        ("#e2553a", "Needs you", "photo-sync · review plan", True),
+        ("#e0a33a", "Working", "weather · 5 tools", False),
+        (None, "Persona", "3 things need you today", False),
+        ("#3f9b62", "Inbox", "AI twin drafted 2 replies", False),
+    ],
+    "zh-CN": [
+        ("#e2553a", "需要你", "photo-sync · 计划等你审批", True),
+        ("#e0a33a", "工作中", "天气 › widget · 工具 5", False),
+        (None, "Persona", "今天有 3 件事需要你", False),
+        ("#3f9b62", "收件箱", "AI 分身起草了 2 条回复", False),
+    ],
+}
+
+TAGLINE = {  # (text, font family, size, letter spacing): English is longer, so smaller and without spacing
+    "en": ("Every computer you own, in your pocket.", SERIF, 25, 0),
+    "zh-CN": ("你的每台电脑，都在口袋里。", SERIF_CJK, 32, 2),
+}
 
 
-def banner(theme):
+def banner(theme, lang="en"):
     t = THEMES[theme]
+    tagline, tag_font, tag_size, tag_spacing = TAGLINE[lang]
     W, H = 1280, 320
     cx, cy, S = 176, 160, 200  # the app icon, a side S, corners as on the home screen
     x0, y0, r = cx - S // 2, cy - S // 2, S * 0.2237
     chips, y = [], 40
-    for i, (dot, title, rest, pulse) in enumerate(CHIPS):
+    for i, (dot, title, rest, pulse) in enumerate(CHIPS[lang]):
         x = 812 + (30, 64, 0, 44)[i]
         tw, rw = text_width(title, 20), text_width(rest, 19)
         w = 22 + 16 + 12 + tw + 14 + rw + 24
@@ -118,7 +136,7 @@ def banner(theme):
             f'<text x="{x + 50}" y="{y + 32}" font-family="{SANS}" font-size="20" font-weight="600" fill="{t["fg"]}">{title}</text>'
             f'<text x="{x + 50 + tw + 14:.0f}" y="{y + 32}" font-family="{SANS}" font-size="19" fill="{t["muted"]}">{rest}</text></g>')
         y += 64
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" lang="{lang}">
 <title>Persona</title>
 <style>
   .pulse {{ transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-out infinite; }}
@@ -147,7 +165,7 @@ def banner(theme):
   <g transform="translate({x0} {y0})" clip-path="url(#iconMask)"><use href="#icon"/></g>
   <rect x="{x0 + .5}" y="{y0 + .5}" width="{S - 1}" height="{S - 1}" rx="{r - .5:.1f}" fill="none" stroke="{t["stroke"]}"/>
   <text x="330" y="176" font-family="{SERIF}" font-size="104" font-weight="700" letter-spacing="-1" fill="{t["fg"]}">Persona</text>
-  <text x="334" y="232" font-family="{SERIF_CJK}" font-size="32" letter-spacing="2" fill="{t["muted"]}">你的每台电脑，都在口袋里。</text>
+  <text x="334" y="232" font-family="{tag_font}" font-size="{tag_size}" letter-spacing="{tag_spacing}" fill="{t["muted"]}">{tagline}</text>
   {"".join(chips)}
   <rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="24" fill="none" stroke="{t["stroke"]}"/>
 </g>
@@ -250,8 +268,30 @@ TILE_GLYPHS = {  # drawn around (0, 0), about 26 wide, stroked in the accent
 }
 
 
-def architecture(theme):
+ARCH = {
+    "en": dict(
+        title="How Persona fits together: your devices connect to the hub, the hub to your computers and connectors",
+        devices=(("iPhone · Apple Watch", "App, Live Activity, watch"), ("Mac · Web", "Web app hosted by the hub"),
+                 ("Android", "No push service needed")),
+        machine="An always-on machine", parts=("Assistant", "Inbox", "Knowledge", "Postgres"),
+        duties=("Relays chats · tracks requests", "Runs the assistant · gets messages",
+                "Reaches you over APNs when closed"),
+        connectors="Connectors", sources=("Lark", "Mail", "GitHub", "Telegram"),
+        ssh="SSH or Persona Link", apns="APNs push"),
+    "zh-CN": dict(
+        title="Persona 的结构：你的设备连 hub，hub 连你的各台电脑和连接器",
+        devices=(("iPhone · Apple Watch", "App、灵动岛和手表"), ("Mac · 网页", "网页版由 hub 托管"),
+                 ("Android", "同一套协议，不靠推送服务")),
+        machine="一台常开的机器", parts=("助手", "收件箱", "知识库", "Postgres"),
+        duties=("转发对话 · 管理要你回答的事", "运行助手 · 收消息和邮件", "App 关着时经 APNs 提醒你"),
+        connectors="连接器", sources=("飞书", "邮件", "GitHub", "Telegram"),
+        ssh="SSH 或 Persona Link", apns="APNs 推送"),
+}
+
+
+def architecture(theme, lang="en"):
     t = THEMES[theme]
+    a = ARCH[lang]
     accent = "#d4683f" if theme == "light" else "#ef7c4f"
     line = "#dccbb7" if theme == "light" else "#4a3d33"
     shadow = "#3c1e0a" if theme == "light" else "#000000"
@@ -308,9 +348,7 @@ def architecture(theme):
                f'stroke-dasharray="1 15"/>')
 
     # Your devices.
-    for y, glyph, title, sub in ((110, "phone", "iPhone · Apple Watch", "App、灵动岛和手表"),
-                                 (226, "desktop", "Mac · 网页", "网页版由 hub 托管"),
-                                 (342, "android", "Android", "同一套协议，不靠推送服务")):
+    for (y, glyph), (title, sub) in zip(((110, "phone"), (226, "desktop"), (342, "android")), a["devices"]):
         out += [card(30, y, 300, 96), tile(50, y + 26, glyph), text(110, y + 43, title, 20, 600),
                 text(110, y + 70, sub, 16, 400, t["muted"])]
 
@@ -318,14 +356,12 @@ def architecture(theme):
     out.append(f'<rect x="462" y="102" width="356" height="344" rx="24" fill="{accent}" fill-opacity=".18" filter="url(#glow)"/>')
     out.append(card(470, 110, 340, 328, stroke=accent, width=1.5, opacity=0.7))
     out.append(f'<path d="{spark_path(512, 152, 18, 64)}" fill="url(#spark)"/>')
-    out += [text(546, 150, "personad hub", 24, 700), text(546, 176, "一台常开的机器", 16, 400, t["muted"])]
-    for i, s in enumerate(("助手", "收件箱", "知识库", "Postgres")):
+    out += [text(546, 150, "personad hub", 24, 700), text(546, 176, a["machine"], 16, 400, t["muted"])]
+    for i, s in enumerate(a["parts"]):
         cx, cy = 490 + (i % 2) * 154, 214 + (i // 2) * 58
         out.append(f'<rect x="{cx}" y="{cy}" width="146" height="46" rx="14" fill="{accent}" fill-opacity=".10" '
                    f'stroke="{accent}" stroke-opacity=".35"/>' + text(cx + 73, cy + 29, s, 18, 600, t["fg"], "middle"))
-    out += [text(640, 362, "转发对话 · 管理要你回答的事", 15, 400, t["muted"], "middle"),
-            text(640, 388, "运行助手 · 收消息和邮件", 15, 400, t["muted"], "middle"),
-            text(640, 414, "App 关着时经 APNs 提醒你", 15, 400, t["muted"], "middle")]
+    out += [text(640, 362 + 26 * i, s, 15, 400, t["muted"], "middle") for i, s in enumerate(a["duties"])]
 
     # Your computers.
     for y, glyph, title, items in ((130, "laptop", "Mac", ("Claude Code", "iMessage")),
@@ -334,15 +370,15 @@ def architecture(theme):
                 text(1040, y + 64, "personad node · herdr", 15, 400, t["muted"]), chips(1040, y + 78, items)]
 
     # Connectors.
-    out += [card(470, 500, 340, 96), text(490, 534, "连接器", 18, 600),
-            chips(490, 550, ("飞书", "邮件", "GitHub", "Telegram"), 15, True)]
+    out += [card(470, 500, 340, 96), text(490, 534, a["connectors"], 18, 600),
+            chips(490, 550, a["sources"], 15, True)]
 
     # Wire labels on top.
-    out += [label(400, 274, "HTTPS / WSS"), label(885, 274, "SSH 或 Persona Link", 13), label(410, 57, "APNs 推送")]
+    out += [label(400, 274, "HTTPS / WSS"), label(885, 274, a["ssh"], 13), label(410, 57, a["apns"])]
 
     s1, s2, s3 = t["spark"]
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-<title>Persona 的结构：你的设备连 hub，hub 连你的各台电脑和连接器</title>
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" lang="{lang}">
+<title>{a["title"]}</title>
 <style>
   .flow {{ animation: flow 1.6s linear infinite; }}
   .slow {{ animation-duration: 3.2s; }}
@@ -371,8 +407,9 @@ def architecture(theme):
 
 def cmd_svg():
     for theme in THEMES:
-        write(f"banner-{theme}.svg", banner(theme))
-        write(f"architecture-{theme}.svg", architecture(theme))
+        for lang, suffix in LANGS.items():
+            write(f"banner-{theme}{suffix}.svg", banner(theme, lang))
+            write(f"architecture-{theme}{suffix}.svg", architecture(theme, lang))
     for name in GLYPHS:
         write(f"icon-{name}.svg", icon(name))
     for label, value in versions():

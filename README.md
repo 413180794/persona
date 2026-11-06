@@ -2,10 +2,12 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-dark.svg">
-  <img src="docs/assets/readme/banner-light.svg" alt="Persona：你的每台电脑，都在口袋里" width="100%">
+  <img src="docs/assets/readme/banner-light.svg" alt="Persona: every computer you own, in your pocket" width="100%">
 </picture>
 
-**在手机上看着、指挥你每台电脑上的 Claude Code 和 Codex，<br>再配一个读得懂你日程、消息和邮件的 AI 助手。**
+English · [简体中文](README.zh-CN.md)
+
+**Watch and steer Claude Code and Codex on all your computers from your phone,<br>with an AI assistant that knows your calendar, messages and mail.**
 
 [![iOS 26+](docs/assets/readme/badge-ios.svg)](docs/ios.md)
 [![watchOS 10+](docs/assets/readme/badge-watchos.svg)](docs/ios.md)
@@ -15,7 +17,7 @@
 [![hub: Go 1.27](docs/assets/readme/badge-hub.svg)](docs/server.md)
 [![agents: Claude Code · Codex](docs/assets/readme/badge-agents.svg)](docs/runtimes.md)
 
-[我想用](#我想用) · [我想开发](#我想开发) · [能做什么](#能做什么) · [怎么工作](#怎么工作) · [快速开始](#快速开始) · [平台和连接器](#平台和连接器) · [文档](#文档)
+[Use it](#use-it) · [Build it](#build-it) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Platforms and connectors](#platforms-and-connectors) · [Docs](#docs)
 
 </div>
 
@@ -23,184 +25,186 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/hero-dark.webp">
-  <img src="docs/assets/readme/hero-light.webp" alt="Persona 的 iPhone App：中间的手机从助手切到 Agents，打开在问你的 Claude，点一下回答；两边是收件箱、审批计划、实时过程和机器" width="100%">
+  <img src="docs/assets/readme/hero-light.webp" alt="Persona on iPhone: the phone in the middle switches from the assistant to Agents, opens a Claude that is asking a question, and answers it with one tap; beside it are the Inbox, a plan to approve, live progress and machines" width="100%">
 </picture>
 
-<p align="center"><sub>体验模式录屏，数据是演示用的：从助手切到 Agents，打开在问你的 Claude，点一下回答，它接着干。</sub></p>
+<p align="center"><sub>A demo-mode recording with made-up data: switch from the assistant to Agents, open the Claude that is asking you something, tap an answer, and it carries on.</sub></p>
 
-Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里的一个普通会话），手机只是另一块屏幕。
-出门时在手机上回答它的提问、批准计划；回到电脑前打开 herdr，接着用的还是同一个会话。
+Claude Code always runs on your own computer (an ordinary session in [herdr](https://herdr.dev)); the phone is just another screen.
+Answer its questions and approve its plans from your phone while you are out; back at your desk, open herdr and keep going in the same session.
 
-## 我想用
+## Use it
 
-不写代码也能装起来：在一台常开的电脑上粘贴一行命令装好 hub，用手机扫码连上，再在网页里添加电脑、选一家模型粘贴 Key。
-一步步怎么做、卡片上的提示是什么意思、哪些还要用终端或者暂时做不到，都在 **[开始使用](docs/getting-started.md)**。
+You can set it up without writing code: paste one command on an always-on computer to install the hub, scan a QR code with your phone, then add your computers in the web app and pick a model provider and paste its key.
+The step-by-step guide, what each status card means, and what still needs a terminal or is not possible yet are in **[Getting started](docs/getting-started.md)**.
 
-只想先看看：iPhone 装 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)，在配对页点「没有 hub？先体验一下」，用演示数据把每个功能走一遍。
+Just want a look? Install the [public TestFlight beta](https://testflight.apple.com/join/vsjfy3hE) on an iPhone and tap **No hub? Try a demo** on the pairing screen to walk through every feature with demo data.
 
-## 我想开发
+## Build it
 
-从源码编译、部署 hub 和各端 App，看下面的[快速开始](#快速开始)；约定和协作流程在[参与开发](#参与开发)和 [CLAUDE.md](CLAUDE.md)。
+To build the hub and the apps from source, see [Quick start](#quick-start) below; conventions and the contribution workflow are in [Contributing](#contributing) and [CLAUDE.md](CLAUDE.md).
 
-## 能做什么
+## What it does
 
 <table>
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-agents.svg" width="44" alt=""><br>
-      <b>Agents 随身</b><br>
-      各台电脑 herdr 等引擎里的 Claude Code、Codex 一个列表。点进去实时看它读文件、跑命令、改代码。
+      <b>Agents in your pocket</b><br>
+      One list of the Claude Code and Codex sessions in herdr (or another engine) on every computer. Open one to watch it read files, run commands and edit code live.
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-approve.svg" width="44" alt=""><br>
-      <b>在手机上拍板</b><br>
-      回答提问、审批计划、批准工具权限。通知、Apple Watch 和 Siri 里也能批。
+      <b>Decide from your phone</b><br>
+      Answer questions, approve plans and grant tool permissions, also from notifications, Apple Watch and Siri.
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-assistant.svg" width="44" alt=""><br>
-      <b>Persona 助手</b><br>
-      一个常驻主对话的 Claude，读你的日程、飞书、邮件、知识库和手机数据。会定时做事，可以换形象。
+      <b>The Persona assistant</b><br>
+      A Claude with an always-on main chat that reads your calendar, Lark, mail, knowledge base and phone data. It runs scheduled tasks, and you can change its avatar.
     </td>
   </tr>
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-inbox.svg" width="44" alt=""><br>
-      <b>一个收件箱</b><br>
-      飞书、邮件、GitHub、iMessage、Telegram 一行一件事。AI 先分拣，AI 分身起草回复，你点一下发送。
+      <b>One Inbox</b><br>
+      Lark, mail, GitHub, iMessage and Telegram, one row per thing. AI sorts it first, the AI twin drafts replies, and you send with a tap.
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-island.svg" width="44" alt=""><br>
-      <b>灵动岛和锁屏</b><br>
-      实时活动汇总各台电脑上的 Agent：谁在工作、谁做完了，有事需要你时亮起。
+      <b>Dynamic Island and Lock Screen</b><br>
+      A Live Activity sums up the Agents on all your computers: who is working, who is done, and it lights up when something needs you.
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/readme/icon-hub.svg" width="44" alt=""><br>
-      <b>自建 hub</b><br>
-      数据只在你自己的机器上。公网走 TLS 和公钥钉扎，凭据加密后入库。
+      <b>Your own hub</b><br>
+      Your data stays on your own machine. Public access uses TLS with key pinning, and credentials are encrypted before they are stored.
     </td>
   </tr>
 </table>
 
-Claude 还能用 `phone_*` 工具读写 iPhone 上的通讯录、日历、提醒、照片、健康、位置和剪贴板（[手机数据工具](docs/phone-tools.md)）。
-每类数据都能在设置里单独关掉，建日程、建提醒这类写操作执行前先在手机上确认。
+Claude can also use the `phone_*` tools to read and write contacts, calendar, reminders, photos, health, location and the clipboard on your iPhone ([phone tools](docs/phone-tools.md)).
+Each kind of data can be turned off in Settings, and writes such as creating an event or a reminder are confirmed on the phone first.
 
-## 怎么工作
+## How it works
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.svg">
-  <img src="docs/assets/readme/architecture-light.svg" alt="结构图：iPhone、Apple Watch、Mac、网页和 Android 经 HTTPS / WSS 连 hub；hub 经 SSH 或 Persona Link 连各台电脑上的 personad node，经连接器接飞书、邮件、GitHub、Telegram，经 APNs 推送到手机" width="100%">
+  <img src="docs/assets/readme/architecture-light.svg" alt="Architecture: iPhone, Apple Watch, Mac, the web app and Android connect to the hub over HTTPS / WSS; the hub reaches personad node on each computer over SSH or Persona Link, Lark, mail, GitHub and Telegram through connectors, and the phone through APNs" width="100%">
 </picture>
 
-- **hub**（`personad hub`）是手机唯一连接的地方：转发对话、管理要你回答的事、运行助手、收消息和邮件，状态存在本机的 Postgres 里。App 关着时，它经 Apple 推送提醒你。
-- **各台电脑**上跑 `personad node`：hub 经 SSH 临时启动它，或者电脑装上 node 服务（连接器 [Persona Link](docs/link.md)）主动连 hub。
-  node 驱动 herdr、读 Claude Code 的对话记录，把提问和权限请求（hooks）、手机工具调用（MCP）转给 hub。
-- **手机**用设备 token 连 hub 实时收发。Claude 调用手机工具时，请求经 node 和 hub 到达 iPhone，在本地执行后原路返回。
+- **The hub** (`personad hub`) is the only thing the phone talks to: it relays chats, tracks what needs your answer, runs the assistant, and fetches messages and mail. Its state lives in a local Postgres. When the app is closed, it reaches you through Apple push notifications.
+- **Each computer** runs `personad node`: the hub starts it over SSH on demand, or the computer runs the node service (the [Persona Link](docs/link.md) connector) and connects to the hub itself.
+  The node drives herdr, reads Claude Code transcripts, and forwards questions and permission requests (hooks) and phone tool calls (MCP) to the hub.
+- **The phone** connects to the hub with a device token and syncs in real time. When Claude calls a phone tool, the request travels through the node and the hub to the iPhone, runs there, and the result comes back the same way.
 
-设计和取舍见 [docs/architecture.md](docs/architecture.md)。
+Design and trade-offs: [docs/architecture.md](docs/architecture.md).
 
-## 快速开始
+## Quick start
 
-这一节给开发者：从源码编译、用仓库里的脚本部署。不写代码的看[开始使用](docs/getting-started.md)。
+This section is for developers building from source and deploying with the repository's scripts. If you don't write code, see [Getting started](docs/getting-started.md).
 
-要准备的（完整清单和每个配置字段见 [docs/config.md](docs/config.md)）：
+What you need (the full list and every config field are in [docs/config.md](docs/config.md)):
 
-- **hub**：一台常开的 Linux 机器，或者能跑 Docker 的 NAS
-- **电脑**：装好 Claude Code 或 Codex 的 Mac / Linux，Windows 也能接（[docs/windows.md](docs/windows.md)）
-- **编译**：Go 1.27.1+；iOS 要装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac，Android 要 JDK 21 和 Android SDK
+- **hub**: an always-on Linux machine, or a NAS that can run Docker
+- **computers**: Macs or Linux machines with Claude Code or Codex installed; Windows works too ([docs/windows.md](docs/windows.md))
+- **build tools**: Go 1.27.1+; for iOS, a Mac with Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen); for Android, JDK 21 and the Android SDK
 
-**1. 写配置**：填上 bundle id、开发者团队、hub 在哪台机器、要接入哪些电脑。
+**1. Write the config**: bundle id, developer team, which machine runs the hub, and which computers to connect.
 
 ```sh
 cp config.example.json ~/.config/persona/config.json
 ```
 
-**2. 部署**：编译 `personad`，装到每台电脑上（没有 herdr 的顺便装上），在 hub 机器上启动 Postgres 和 hub。
+**2. Deploy**: build `personad`, install it on every computer (installing herdr where it is missing), and start Postgres and the hub on the hub machine.
 
 ```sh
 ./scripts/deploy/deploy.sh
 ```
 
-hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑和手机访问用的地址（[网络配置](docs/network.md)）。hub 放在 NAS 上时改用 [Docker](docs/docker.md)。
-别的电脑也可以不经 SSH：在网页的「机器 › 添加电脑」拿配对链接（这样加的电脑要在网页里点「是我的电脑」确认），或者在 hub 上运行 `personad hub pair --machine <id> --add`，在那台电脑上用它给的链接一条命令装好 node 服务（Linux：`curl -fsSL <站点>/install.sh | sh -s -- --node --pair '<链接>'`），Mac 用菜单栏 App「Persona Link」（[docs/link.md](docs/link.md)）。
+After the hub's first start, add the addresses the computers and phones use to reach it in its `~/.persona/hub.json` ([network setup](docs/network.md)). For a hub on a NAS, use [Docker](docs/docker.md) instead.
+Computers can also join without SSH: get a pairing link from **Machines › Add computer** in the web app (a computer added this way must be confirmed with **This is my computer** in the web app), or run `personad hub pair --machine <id> --add` on the hub and install the node service on that computer with the one-line command it prints (Linux: `curl -fsSL <site>/install.sh | sh -s -- --node --pair '<link>'`). On a Mac, use the **Persona Link** menu bar app ([docs/link.md](docs/link.md)).
 
-**3. 装 App，配对**
+**3. Install the app and pair**
 
 ```sh
-./scripts/app/sim.sh                 # iOS 模拟器；真机用 Xcode 打开 apple/Persona.xcodeproj
-./scripts/app/android.sh install     # Android：手机开 USB 调试，连上开发机
-~/.persona/bin/personad hub pair     # 在 hub 机器上运行，用 App 扫它打印的二维码
+./scripts/app/sim.sh                 # iOS Simulator; for a device, open apple/Persona.xcodeproj in Xcode
+./scripts/app/android.sh install     # Android: enable USB debugging and connect the phone to your dev machine
+~/.persona/bin/personad hub pair     # run on the hub machine, then scan the QR code it prints with the app
 ```
 
-配好以后，「设置 › 机器」里每台电脑都显示在线，「Agents」里能看到它们引擎（默认 herdr）里的会话。
+Once set up, every computer shows as online in **Settings › Machines**, and **Agents** lists the sessions in their engines (herdr by default).
 
 > [!TIP]
-> 还没有 hub？在 App 的配对页点「没有 hub？先体验一下」，用内置的演示数据把每个功能走一遍，不连任何服务器。
+> No hub yet? Tap **No hub? Try a demo** on the app's pairing screen to walk through every feature with built-in demo data, without connecting to any server.
 
 > [!NOTE]
-> Persona 原名 Jarvis。`jarvisd`、`~/.jarvis`、`~/.config/jarvis/config.json` 和 `JARVIS_*` 继续兼容，现有配对、签名和数据库身份不变。
-> 升级前先看 [命名与兼容](docs/config.md#命名与兼容) 和 [迁移清单](docs/rename.md)。
+> Persona used to be called Jarvis. `jarvisd`, `~/.jarvis`, `~/.config/jarvis/config.json` and `JARVIS_*` still work, and existing pairings, signing and database identities are unchanged.
+> Before upgrading, read [naming and compatibility](docs/config.md#命名与兼容) and the [migration checklist](docs/rename.md).
 
-## 平台和连接器
+## Platforms and connectors
 
-| 客户端 | 最低版本 | 能做什么 | 怎么装 |
+| Client | Minimum | What it does | How to install |
 | --- | --- | --- | --- |
-| iPhone | iOS 26 | 全部功能，加上灵动岛、Siri 和快捷指令 | [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)（商店名 Persona Side），或自己编译（[docs/release.md](docs/release.md)） |
-| Apple Watch | watchOS 10 | 抬腕看谁在等你，直接批准或回答 | 随 iPhone App 安装 |
-| Mac | macOS 26 | 和 iOS 同一套逻辑层的原生 App；菜单栏 App「Persona Link」把这台 Mac 接进 hub | Xcode 编 `PersonaMac`；`./scripts/app/mac-link.sh install`（[指南](docs/persona-link-install.md)） |
-| Apple Vision Pro | visionOS 26 | 和 iOS 同一套逻辑层的原生 App：tab 在窗口侧边的装饰条里，对话可以单独开窗口，主窗口下方的「需要你」装饰条显示等你处理的事；没有灵动岛、拍照和画中画 | Xcode 编 `PersonaVision`（[docs/vision.md](docs/vision.md)） |
-| Android | Android 11 | 助手、Agents、收件箱、知识库、文件、语音入口和部分手机工具，后台通知不依赖推送服务 | `./scripts/app/android.sh install` |
-| 网页 | 现代浏览器 | 由 hub 托管：Agents（连同终端、文件、Git）、助手、收件箱、知识库、待办、健康、机器监控；可以装成 App（PWA） | 打开 hub 的地址 |
+| iPhone | iOS 26 | Everything, plus Dynamic Island, Siri and Shortcuts | [Public TestFlight beta](https://testflight.apple.com/join/vsjfy3hE) (listed as Persona Side), or build it yourself ([docs/release.md](docs/release.md)) |
+| Apple Watch | watchOS 10 | See who is waiting on you at a glance, approve or answer right there | Installed with the iPhone app |
+| Mac | macOS 26 | A native app sharing the iOS logic layer; the **Persona Link** menu bar app connects the Mac to the hub | Build `PersonaMac` in Xcode; `./scripts/app/mac-link.sh install` ([guide](docs/persona-link-install.md)) |
+| Apple Vision Pro | visionOS 26 | A native app sharing the iOS logic layer: tabs in an ornament beside the window, chats in their own windows, and a **Needs you** ornament under the main window for what is waiting on you; no Dynamic Island, camera or picture-in-picture | Build `PersonaVision` in Xcode ([docs/vision.md](docs/vision.md)) |
+| Android | Android 11 | Assistant, Agents, Inbox, knowledge base, files, voice and some phone tools; background notifications work without a push service | `./scripts/app/android.sh install` |
+| Web | Modern browsers | Served by the hub: Agents (with terminal, files and Git), assistant, Inbox, knowledge base, to-dos, health and machine monitoring; installable as an app (PWA) | Open the hub's address |
 
-| 接入 | 支持 |
+Every client's interface is available in English, 简体中文 and 日本語; it follows the system language and can be changed in Settings ([docs/i18n.md](docs/i18n.md)).
+
+| Integration | Support |
 | --- | --- |
-| Agent | Claude Code、Codex；pi、opencode、DSH 等运行时经 [runtime SDK](docs/runtimes.md) 接入 |
-| 引擎 | herdr（默认）、Herdr App、Orca、Paseo，每台电脑选一个；装了 botmux 的电脑，botmux 里的会话也一起显示（[docs/engines.md](docs/engines.md)） |
-| 飞书 | 私聊机器人就是和 Persona 主对话说话；助手可以用官方 lark-cli。消息进收件箱和知识库、群里或文档评论里发 `/agent …` 起 Agent、App 里的飞书聊天，由接飞书的扩展提供（[docs/extensions.md](docs/extensions.md)） |
-| 邮件 | 任意 IMAP / SMTP；Gmail 和 Outlook 用账号登录授权（[docs/mail.md](docs/mail.md)） |
-| GitHub | 收件箱、搜索和读取；评论、review 过确认闸门 |
-| iMessage | 读 Mac 上的「信息」，要给那台 Mac 上的 personad 完全磁盘访问权限 |
-| Telegram | 你自己的账号，只读；从扩展市场装 |
-| 微信 | 个人微信经连接器扩展接入（从扩展市场安装，扩展由它自己的仓库发布），私聊和群里 @ 你的进收件箱；发送要在手机上批准 |
+| Agents | Claude Code and Codex; pi, opencode, DSH and other runtimes through the [runtime SDK](docs/runtimes.md) |
+| Engines | herdr (default), Herdr App, Orca and Paseo, one per computer; on computers with botmux, its sessions show up too ([docs/engines.md](docs/engines.md)) |
+| Lark | Chatting with the bot is talking to the Persona main chat; the assistant can use the official lark-cli. Messages in the Inbox and knowledge base, `/agent …` in a group or a doc comment to start an Agent, and Lark chats in the app come from a Lark extension ([docs/extensions.md](docs/extensions.md)) |
+| Mail | Any IMAP / SMTP account; Gmail and Outlook sign in with your account ([docs/mail.md](docs/mail.md)) |
+| GitHub | Inbox, search and reading; comments and reviews go through a confirmation gate |
+| iMessage | Reads Messages on a Mac; personad on that Mac needs Full Disk Access |
+| Telegram | Your own account, read-only; install it from the extension market |
+| WeChat | Personal WeChat through a connector extension (installed from an extension market, published by its own repository); direct messages and group messages that @ you land in the Inbox; sending requires approval on the phone |
 
-连接器怎么接、怎么加新的，见 [docs/connectors.md](docs/connectors.md)。
+How connectors work and how to add one: [docs/connectors.md](docs/connectors.md).
 
-## 数据和安全
+## Data and security
 
-- 手机只和你自己的 hub 通信，中间没有别的服务器；只有通知经过 Apple 的推送服务。
-- hub 的 token 和数据库密码只在 hub 机器的 `~/.persona/hub.json` 里（权限 0600）；邮箱凭据和模型 Key 用 AES-GCM 加密后存进数据库。
-- 公网入口用显式配置的 TLS 端口（自签证书 + 公钥钉扎），优先 IPv6，默认拒绝公网明文 API。内网和 VPN 保留 HTTP（[docs/network.md](docs/network.md)）。
-- 替你出面的操作（发消息、发邮件、写手机数据）默认先在手机上确认。Persona 只给自己启动的 Claude 会话注入 hooks，不改你的全局 Claude Code 设置。
+- The phone talks only to your own hub, with no other server in between; only notifications go through Apple's push service.
+- The hub token and the database password live only in `~/.persona/hub.json` on the hub machine (mode 0600); mail credentials and model keys are encrypted with AES-GCM before they go into the database.
+- Public access uses an explicitly configured TLS port (self-signed certificate plus key pinning), prefers IPv6, and rejects plain-text API requests from the internet by default. The LAN and VPNs keep HTTP ([docs/network.md](docs/network.md)).
+- Anything done on your behalf (sending a message or an email, writing phone data) is confirmed on the phone first by default. Persona injects hooks only into the Claude sessions it starts itself and leaves your global Claude Code settings alone.
 
-## 目前的限制
+## Current limitations
 
-- iPhone、Apple Watch、Mac 和 Vision Pro 的界面只有中文；网页和 Android 可以选简体中文、English、日本語（[docs/i18n.md](docs/i18n.md)）。
-- Apple 平台没有上架 App Store：iPhone 用 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)安装（不限人数），或自己编译；Vision Pro 版目前只能自己编译。
-- hub 的原生装法只支持 Linux（systemd + Docker 里的 Postgres）；别的系统用 Docker 跑 hub，那台机器不能同时跑 Agent。
-- Android 还没和 iOS 完全对齐：健康数据只能读、不能写，后台通知要在系统设置里放开后台运行（[docs/android.md](docs/android.md)）。
+- The Apple apps are not on the App Store: install the iPhone app from the [public TestFlight beta](https://testflight.apple.com/join/vsjfy3hE) (no tester limit) or build it yourself; the Vision Pro app can only be built yourself for now.
+- The native hub install supports Linux only (systemd plus Postgres in Docker); on other systems run the hub in Docker, and that machine cannot run Agents at the same time.
+- Android is not fully on par with iOS yet: health data is read-only, and background notifications need background activity allowed in system settings ([docs/android.md](docs/android.md)).
 
-## 文档
+## Docs
 
-| 想做什么 | 看这里 |
+| To… | Read |
 | --- | --- |
-| 第一次装、不用终端的说明 | [docs/getting-started.md](docs/getting-started.md) |
-| 配置、接入多台电脑 | [docs/config.md](docs/config.md) |
-| 用 Docker 跑 hub | [docs/docker.md](docs/docker.md) |
-| 公网直连、TLS 和配对 | [docs/network.md](docs/network.md) |
-| 服务端的几种模式和运维 | [docs/server.md](docs/server.md) |
-| 不经 SSH 接入电脑（Persona Link）、Windows 电脑 | [docs/link.md](docs/link.md) · [docs/windows.md](docs/windows.md) |
-| 引擎、接入别的 Agent 运行时 | [docs/engines.md](docs/engines.md) · [docs/runtimes.md](docs/runtimes.md) |
-| hub 的 API 和协议 | [docs/protocol.md](docs/protocol.md) |
-| 助手、收件箱、知识库 | [docs/assistant.md](docs/assistant.md) · [docs/inbox.md](docs/inbox.md) · [docs/knowledge.md](docs/knowledge.md) |
-| 各端 App | [iOS](docs/ios.md) · [Mac](docs/mac.md) · [Vision Pro](docs/vision.md) · [Android](docs/android.md) · [网页](docs/web.md) |
-| 灵动岛、Siri | [docs/live-activity.md](docs/live-activity.md) · [docs/siri.md](docs/siri.md) |
+| Install for the first time, without a terminal | [docs/getting-started.md](docs/getting-started.md) |
+| Configure and connect several computers | [docs/config.md](docs/config.md) |
+| Run the hub in Docker | [docs/docker.md](docs/docker.md) |
+| Connect over the internet: TLS and pairing | [docs/network.md](docs/network.md) |
+| Server modes and operations | [docs/server.md](docs/server.md) |
+| Connect computers without SSH (Persona Link), Windows computers | [docs/link.md](docs/link.md) · [docs/windows.md](docs/windows.md) |
+| Engines, other Agent runtimes | [docs/engines.md](docs/engines.md) · [docs/runtimes.md](docs/runtimes.md) |
+| The hub's API and protocol | [docs/protocol.md](docs/protocol.md) |
+| Assistant, Inbox, knowledge base | [docs/assistant.md](docs/assistant.md) · [docs/inbox.md](docs/inbox.md) · [docs/knowledge.md](docs/knowledge.md) |
+| The apps | [iOS](docs/ios.md) · [Mac](docs/mac.md) · [Vision Pro](docs/vision.md) · [Android](docs/android.md) · [Web](docs/web.md) |
+| Dynamic Island, Siri | [docs/live-activity.md](docs/live-activity.md) · [docs/siri.md](docs/siri.md) |
 
-全部文档的索引在 [CLAUDE.md](CLAUDE.md)「文档索引」。
+The index of all docs is in the "Docs index" section of [CLAUDE.md](CLAUDE.md).
 
-## 参与开发
+## Contributing
 
-- 约定在 [CLAUDE.md](CLAUDE.md)，流程是 issue → 认领 → PR（[docs/collaboration.md](docs/collaboration.md)）。
-- 测试命令和截图清单见 [docs/testing.md](docs/testing.md)。
-  运行中的 DEBUG App 可以用 `scripts/app/personactl.py` 读状态、导航和截图（[Runtime CLI](docs/runtime-cli.md)）。
-- 本页的图由 `scripts/assets/make_readme_assets.py` 生成：截图和录屏来自体验模式，徽章的版本号读自构建配置。
+- Conventions are in [CLAUDE.md](CLAUDE.md); the workflow is issue → claim → PR ([docs/collaboration.md](docs/collaboration.md)).
+- Test commands and the screenshot checklist are in [docs/testing.md](docs/testing.md).
+  A running DEBUG app can be inspected, navigated and screenshotted with `scripts/app/personactl.py` ([Runtime CLI](docs/runtime-cli.md)).
+- The pictures on this page come from `scripts/assets/make_readme_assets.py`, in English and Chinese: screenshots and recordings are taken in demo mode, and the badges read their versions from the build config.
+- Keep README.md and [README.zh-CN.md](README.zh-CN.md) in sync: change both in the same PR.
 
-<sub>第三方组件的许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。</sub>
+<sub>Third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>
