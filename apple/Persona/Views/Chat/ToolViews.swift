@@ -113,10 +113,7 @@ enum ToolPresentation {
         // ask_user is the Jarvis assistant's own question tool (docs/assistant.md); it takes the same questions.
         case "AskUserQuestion", "ask_user": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")
-        case "TodoWrite":
-            let todos = i["todos"]?.array ?? []
-            let done = todos.filter { $0["status"]?.string == "completed" }.count
-            return "\(done)/\(todos.count)"
+        case "TodoWrite": return PlanProgress.text(i["todos"]?.array ?? [])
         default:
             if n.hasPrefix("phone_") || n.hasPrefix("mail_") { return n.split(separator: "_").dropFirst().joined(separator: " ") }
             return i.object?.values.compactMap(\.string).first.map(firstLine) ?? ""
@@ -1006,6 +1003,19 @@ struct TodoList: View {
             default: TaskItem(id: "\(n)", title: content, status: .pending(step: n + 1))
             }
         }
+    }
+}
+
+/// Where a plan (TodoWrite) is, in the one sentence the web says it too (#5901): "Step 3 of 4", the current step being the
+/// first in progress, else the first still to do; "All 4 steps done" once every step is.
+enum PlanProgress {
+    static func text(_ todos: [JSONValue]) -> String {
+        guard !todos.isEmpty else { return "" }
+        let status = todos.map { $0["status"]?.string ?? "pending" }
+        guard let at = status.firstIndex(of: "in_progress") ?? status.firstIndex(of: "pending") else {
+            return String(localized: "All \(todos.count) steps done [Plan Progress]")
+        }
+        return String(localized: "Step \(at + 1) of \(todos.count) [Plan Progress]")
     }
 }
 
