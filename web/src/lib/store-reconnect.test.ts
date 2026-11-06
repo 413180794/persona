@@ -1,7 +1,7 @@
 // The socket's side of #1574: a drop is invisible inside the grace, a restart retries at once, and a resumed hello
 // refetches nothing while an ordinary one refreshes everything as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyMachine, connect, disconnect, getState, onHubEvent, reconnectNow, refresh, reset } from "./store";
+import { applyMachine, checkSocket, connect, disconnect, getState, onHubEvent, reconnectNow, refresh, reset } from "./store";
 import { offlineNow } from "./feedback";
 import { liveEntry, resetLive } from "./live";
 
@@ -59,12 +59,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** Connects and says hello on stream s1 at event 5; returns the socket. */
-function online() {
+/** Connects and says hello on stream s1 at event 5 (with the hub's features, if given); returns the socket. */
+function online(features?: string[]) {
   connect();
   const s = last();
   s.open();
-  s.push({ type: "hello", server_version: "v1", event_stream: "s1", event_seq: 5 });
+  s.push({ type: "hello", server_version: "v1", event_stream: "s1", event_seq: 5, ...(features ? { features } : {}) });
   expect(getState().conn).toBe("online");
   return s;
 }
@@ -358,5 +358,46 @@ describe("a slow refresh() does not put back an older snapshot", () => {
     turns["/machines"][1]({ machines: [{ id: "a", name: "A", online: false }] });
     await next;
     expect(getState().machines[0].online).toBe(false);
+  });
+});
+
+describe("keeping a quiet connection (app_ping)", () => {
+  const pings = (s: FakeSocket) => s.sent.map((m) => JSON.parse(m)).filter((m) => m.type === "ping");
+  /** Lets ms go by, looking at the socket every 5 s as the page does. */
+  const idle = (ms: number, onTick?: () => void) => {
+    for (let t = 0; t < ms; t += 5_000) {
+      vi.advanceTimersByTime(5_000);
+      checkSocket();
+      onTick?.();
+    }
+  };
+
+  it("an idle hub that answers its pings keeps the socket: no reconnect every 70 s", () => {
+    const s = online(["app_ping"]);
+    const sockets = FakeSocket.all.length;
+    let answered = 0;
+    // five quiet minutes: the hub pushes nothing, but answers every ping it is sent
+    idle(300_000, () => {
+      for (const p of pings(s).slice(answered)) s.push({ type: "pong", id: p.id });
+      answered = pings(s).length;
+    });
+    expect(answered).toBeGreaterThan(5);
+    expect(FakeSocket.all.length).toBe(sockets);
+  });
+
+  it("a hub that stops answering is reconnected", () => {
+    const s = online(["app_ping"]);
+    const sockets = FakeSocket.all.length;
+    idle(80_000); // pings go out, no pong comes back
+    expect(pings(s).length).toBeGreaterThan(0);
+    expect(FakeSocket.all.length).toBeGreaterThan(sockets);
+  });
+
+  it("a hub without app_ping is sent no ping, and a quiet socket is still reconnected", () => {
+    const s = online([]);
+    const sockets = FakeSocket.all.length;
+    idle(80_000);
+    expect(pings(s)).toEqual([]);
+    expect(FakeSocket.all.length).toBeGreaterThan(sockets);
   });
 });

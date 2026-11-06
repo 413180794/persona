@@ -166,6 +166,8 @@ export const LARK_FEATURE = "lark";
 
 /** The web reads working Claudes' status lines (`live` pushes, lib/live.ts; docs/protocol.md "Live status"). */
 export const SESSION_LIVE_FEATURE = "session_live";
+/** The hub answers a client's {"type":"ping","id"} with a pong carrying the id (docs/protocol.md). */
+export const APP_PING_FEATURE = "app_ping";
 
 export function larkOn(s: Pick<State, "features"> = state): boolean {
   return hubHas(s.features, LARK_FEATURE, true);
@@ -244,6 +246,7 @@ let ws: WebSocket | null = null;
 let retry = 0;
 let retryTimer: number | undefined;
 let lastMessage = 0;
+let lastPing = 0;
 let stopped = true;
 // A reconnect after a drop is invisible for a while (lib/reconnect.ts): the drop that began while online, the
 // attempts since, the ones in the quick phase after a restart, and the timer that shows the drop once the grace ends.
@@ -275,6 +278,7 @@ export function connect() {
     retry = 0;
     fastTries = 0;
     lastMessage = Date.now();
+    lastPing = Date.now();
   };
   sock.onmessage = (ev) => {
     lastMessage = Date.now();
@@ -346,10 +350,28 @@ export function disconnect() {
   ws = null;
 }
 
-// The hub pings every so often; a socket that went quiet (sleep, network change) is reconnected.
-setInterval(() => {
-  if (ws && ws.readyState === WebSocket.OPEN && Date.now() - lastMessage > 70_000) connect();
-}, 10_000);
+// A socket that went quiet (sleep, network change) is reconnected. The hub's own pings are WebSocket control frames
+// the page never sees, and an idle hub pushes nothing, so a hub that has app_ping is asked: every APP_PING_EVERY a
+// {"type":"ping"} goes out and its pong counts as hearing from the hub (docs/protocol.md). A hub without it is left
+// as before: the quiet limit alone, so a hub with nothing to say is reconnected now and then. Checked every 5 s, so a
+// ping goes out every 25 to 30 s while timers run normally; background tabs can delay it further.
+const APP_PING_EVERY = 25_000;
+let pingSeq = 0;
+
+/** One look at the socket (every 5 s): reconnect a quiet one, or ask a hub with app_ping whether it is there. */
+export function checkSocket() {
+  const now = Date.now();
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (now - lastMessage > 70_000) {
+    connect();
+    return;
+  }
+  if (hubHas(state.features, APP_PING_FEATURE) && now - lastPing >= APP_PING_EVERY) {
+    lastPing = now;
+    send({ type: "ping", id: `web-${++pingSeq}` });
+  }
+}
+setInterval(() => checkSocket(), 5_000);
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && !stopped && (!ws || Date.now() - lastMessage > 40_000)) connect();
@@ -390,8 +412,7 @@ function onMessage(msg: Record<string, unknown>) {
     case "hub_restarting":
       restartNotice = true; // the close that follows is a restart: retry at once, stay quiet longer
       break;
-    case "ping":
-      send({ type: "pong" });
+    case "pong": // an app_ping answer: arriving at all is the point (lastMessage)
       break;
     case "machines":
       machinesRev++;
