@@ -2545,18 +2545,30 @@ export interface MessagingMentionPart {
   text: string;
   user_id?: string;
   all?: boolean;
+  block?: MessagingBlock;
+  list?: MessagingList;
+  /** The block it is in, as a text part's block_id. */
+  block_id?: string;
 }
 
 export interface MessagingLinkPart {
   kind: "link";
   text: string;
   url: string;
+  block?: MessagingBlock;
+  list?: MessagingList;
+  /** The block it is in, as a text part's block_id. */
+  block_id?: string;
 }
 
 export interface MessagingEmojiPart {
   kind: "emoji";
   key: string;
   text: string;
+  block?: MessagingBlock;
+  list?: MessagingList;
+  /** The block it is in, as a text part's block_id. */
+  block_id?: string;
 }
 
 export interface MessagingStickerPart {

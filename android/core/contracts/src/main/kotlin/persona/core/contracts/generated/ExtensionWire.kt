@@ -3614,6 +3614,12 @@ data class ExtensionMessagingMentionPart(
     val text: String = "",
     @SerialName("user_id") val userId: String? = null,
     val all: Boolean? = null,
+    val block: String? = null,
+    val list: ExtensionMessagingList? = null,
+    /**
+     * The block it is in, as a text part's block_id.
+     */
+    @SerialName("block_id") val blockId: String? = null,
 ) : ExtensionMessagingPart
 
 @Serializable
@@ -3621,6 +3627,12 @@ data class ExtensionMessagingLinkPart(
     override val kind: String = "link",
     val text: String = "",
     val url: String = "",
+    val block: String? = null,
+    val list: ExtensionMessagingList? = null,
+    /**
+     * The block it is in, as a text part's block_id.
+     */
+    @SerialName("block_id") val blockId: String? = null,
 ) : ExtensionMessagingPart
 
 @Serializable
@@ -3628,6 +3640,12 @@ data class ExtensionMessagingEmojiPart(
     override val kind: String = "emoji",
     val key: String = "",
     val text: String = "",
+    val block: String? = null,
+    val list: ExtensionMessagingList? = null,
+    /**
+     * The block it is in, as a text part's block_id.
+     */
+    @SerialName("block_id") val blockId: String? = null,
 ) : ExtensionMessagingPart
 
 @Serializable

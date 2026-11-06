@@ -173,9 +173,9 @@ When the extension's cursor is not a position, it goes in `older_cursor` / `newe
 | `kind` | Fields | Drawn as |
 | --- | --- | --- |
 | `text` | `text`, `marks?` (`bold` / `italic` / `underline` / `strike` / `code`), `url?`, `block?` (`paragraph` / `heading1…3` / `quote` / `code` / `list_item`, `list?: {ordered, level, start?}`), `block_id?` | Inline text; consecutive segments with the same `block_id` form one block (the same paragraph, the same list item), a different one starts a new block; without `block_id`, consecutive blocks of the same kind merge into one |
-| `mention` | `text`, `user_id?`, `all?` | @someone (highlighted, tap to view the profile) |
-| `link` | `text`, `url` | Link; hosts in `links` are handed to the source to open |
-| `emoji` | `key`, `text` | Inline emoji (an image from `emojis`), or `text` if there is no image. `key` is case-sensitive and opaque: `emojis`, `reactions/quick`, a message's `reactions` and what is sent back when reacting all use the same spelling |
+| `mention` | `text`, `user_id?`, `all?`, `block?`, `block_id?`, `list?` | @someone (highlighted, tap to view the profile) |
+| `link` | `text`, `url`, `block?`, `block_id?`, `list?` | Link; hosts in `links` are handed to the source to open |
+| `emoji` | `key`, `text`, `block?`, `block_id?`, `list?` | Inline emoji (an image from `emojis`), or `text` if there is no image. `key` is case-sensitive and opaque: `emojis`, `reactions/quick`, a message's `reactions` and what is sent back when reacting all use the same spelling |
 | `sticker` | `media`, `width?`, `height?` | Sticker |
 | `image` | `media`, `width?`, `height?` | Image (tap for full size) |
 | `file` | `name`, `media?`, `size?`, `ext?`, `expired?` | File card |
@@ -187,6 +187,8 @@ When the extension's cursor is not a position, it goes in `older_cursor` / `newe
 | `forward` | `title`, `messages: [Message]` (at most 50) or `previews: [{sender_name, text}]`, `count?` | Merged forward (tap to see all) |
 | `share` | `title`, `subtitle?`, `image?`, `fields?: [{label, value}]`, `url?` | Shared group cards, contact cards, events, meetings… |
 | `system` | `text` | System notice (centered) |
+
+An @, a link or an emoji in a paragraph or a list item says which block it is in with `block`, `block_id` and `list`, as `text` does; otherwise the App draws it in the block of the text around it: the one before it, or the one after when nothing before it is in a block.
 
 `media` is a path relative to the source (`media/<key>` or `messages/<id>/media/<key>`, query allowed); the App builds `/api/v1/messaging/{source}/<media>` and fetches it with credentials and `account`. Absolute https addresses are fetched directly without credentials.
 

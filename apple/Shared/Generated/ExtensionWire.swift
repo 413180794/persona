@@ -7528,17 +7528,27 @@ nonisolated struct ExtensionMessagingMentionPart: Codable, Hashable, Sendable {
     var text: String
     var userId: String?
     var all: Bool?
+    var block: String?
+    var list: ExtensionMessagingList?
+    /// The block it is in, as a text part's block_id.
+    var blockId: String?
 
-    init(text: String = "", userId: String? = nil, all: Bool? = nil) {
+    init(text: String = "", userId: String? = nil, all: Bool? = nil, block: String? = nil, list: ExtensionMessagingList? = nil, blockId: String? = nil) {
         self.text = text
         self.userId = userId
         self.all = all
+        self.block = block
+        self.list = list
+        self.blockId = blockId
     }
 
     enum CodingKeys: String, CodingKey {
         case text
         case userId = "user_id"
         case all
+        case block
+        case list
+        case blockId = "block_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -7546,48 +7556,77 @@ nonisolated struct ExtensionMessagingMentionPart: Codable, Hashable, Sendable {
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
         self.userId = try? c.decodeIfPresent(String.self, forKey: .userId)
         self.all = try? c.decodeIfPresent(Bool.self, forKey: .all)
+        self.block = try? c.decodeIfPresent(String.self, forKey: .block)
+        self.list = try? c.decodeIfPresent(ExtensionMessagingList.self, forKey: .list)
+        self.blockId = try? c.decodeIfPresent(String.self, forKey: .blockId)
     }
 }
 
 nonisolated struct ExtensionMessagingLinkPart: Codable, Hashable, Sendable {
     var text: String
     var url: String
+    var block: String?
+    var list: ExtensionMessagingList?
+    /// The block it is in, as a text part's block_id.
+    var blockId: String?
 
-    init(text: String = "", url: String = "") {
+    init(text: String = "", url: String = "", block: String? = nil, list: ExtensionMessagingList? = nil, blockId: String? = nil) {
         self.text = text
         self.url = url
+        self.block = block
+        self.list = list
+        self.blockId = blockId
     }
 
     enum CodingKeys: String, CodingKey {
         case text
         case url
+        case block
+        case list
+        case blockId = "block_id"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
         self.url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+        self.block = try? c.decodeIfPresent(String.self, forKey: .block)
+        self.list = try? c.decodeIfPresent(ExtensionMessagingList.self, forKey: .list)
+        self.blockId = try? c.decodeIfPresent(String.self, forKey: .blockId)
     }
 }
 
 nonisolated struct ExtensionMessagingEmojiPart: Codable, Hashable, Sendable {
     var key: String
     var text: String
+    var block: String?
+    var list: ExtensionMessagingList?
+    /// The block it is in, as a text part's block_id.
+    var blockId: String?
 
-    init(key: String = "", text: String = "") {
+    init(key: String = "", text: String = "", block: String? = nil, list: ExtensionMessagingList? = nil, blockId: String? = nil) {
         self.key = key
         self.text = text
+        self.block = block
+        self.list = list
+        self.blockId = blockId
     }
 
     enum CodingKeys: String, CodingKey {
         case key
         case text
+        case block
+        case list
+        case blockId = "block_id"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.key = (try? c.decodeIfPresent(String.self, forKey: .key)) ?? ""
         self.text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+        self.block = try? c.decodeIfPresent(String.self, forKey: .block)
+        self.list = try? c.decodeIfPresent(ExtensionMessagingList.self, forKey: .list)
+        self.blockId = try? c.decodeIfPresent(String.self, forKey: .blockId)
     }
 }
 
