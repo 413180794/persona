@@ -115,14 +115,16 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   const items: MenuItem[] = modelsFor
     ? [
         { key: "back", label: t("assistant-assistantchat.back_to_launchers"), onSelect: () => setModelsFor(null), keepOpen: true },
-        { key: "default", label: t("assistant-assistantchat.default_model"), checked: !pickedM, onSelect: () => pick(modelsFor.name, undefined) },
+        { key: "default", label: t("assistant-assistantchat.default_model"), radio: true, checked: !pickedM, onSelect: () => pick(modelsFor.name, undefined) },
         ...(modelsFor.loading
           ? [{ key: "loading", label: t("assistant-assistantchat.models_loading"), disabled: true, onSelect: () => {} }]
           : modelsFor.options.map((m) => ({
               key: m.id,
               label: modelName(m),
-              hint: m.description,
-              checked: m.default ? !pickedM : pickedM === m.id,
+              detail: m.description,
+              radio: true,
+              // the launcher's own default entry picks the same as "Default model" above, which carries the check then
+              checked: pickedM === m.id,
               onSelect: () => pick(modelsFor.name, m.default ? undefined : m.id),
             }))),
       ]

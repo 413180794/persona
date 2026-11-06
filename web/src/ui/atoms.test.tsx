@@ -188,6 +188,37 @@ describe("menu with the new row kinds", () => {
     expect(html).toContain('data-menu="');
   });
 
+  it("puts a row's detail under its label, wrapping, as the row's description (#5584)", () => {
+    const html = render([{ key: "plan", label: "Plan only", detail: "Reads code and writes a plan; acts only once you approve", checked: true, onSelect: () => {} }]);
+    const id = html.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(id).toBeTruthy();
+    expect(html).toMatch(new RegExp(`id="${id}" class="[^"]*break-words[^"]*">Reads code and writes a plan; acts only once you approve<`));
+    expect(html).toMatch(/class="block break-words">Plan only</);
+    expect(html).not.toContain("truncate");
+    // a row without a detail keeps its one truncating line and no description
+    const plain = render([{ key: "a", label: "拷贝目录", hint: "⌘C", checked: false, onSelect: () => {} }]);
+    expect(plain).toContain("truncate");
+    expect(plain).not.toContain("aria-describedby");
+  });
+
+  it("says which choice of a set is selected, and leaves a toggle's check as it was", () => {
+    const html = render([
+      { key: "a", label: "Ask", radio: true, checked: false, onSelect: () => {} },
+      { key: "b", label: "Auto", radio: true, checked: true, onSelect: () => {} },
+    ]);
+    expect(html.match(/role="menuitemradio"/g)).toHaveLength(2);
+    expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
+    expect(html.match(/aria-checked="false"/g)).toHaveLength(1);
+    expect(html).not.toContain("aria-current");
+    // an on/off toggle or a filter (several may be on) is not called "current" or one of a set
+    const toggles = render([
+      { key: "hidden", label: "Show hidden", checked: true, onSelect: () => {} },
+      { key: "select", label: "Select", checked: true, onSelect: () => {} },
+    ]);
+    expect(toggles.match(/role="menuitem"/g)).toHaveLength(2);
+    expect(toggles).not.toMatch(/aria-current|aria-checked|menuitemradio/);
+  });
+
   it("opens at a pointer with no anchor", () => {
     expect(render([{ key: "a", label: "复制", onSelect: () => {} }], { point: { x: 10, y: 20 } })).toContain("复制");
   });

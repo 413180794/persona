@@ -549,6 +549,9 @@ function MenuPanel({
       const { scrollTop } = el;
       const capped = el.style.maxHeight;
       el.style.maxHeight = "";
+      // ...at the width it will have: rows whose text wraps (`detail`, `wrap`) are taller in a narrower panel, and the
+      // first placement has no width yet, so a menu above its anchor came out too short and covered it (#5584)
+      el.style.width = `${Math.min(place.width, innerWidth - 16)}px`;
       const h = el.offsetHeight;
       el.style.maxHeight = capped;
       el.scrollTop = scrollTop;
@@ -654,30 +657,42 @@ function MenuPanel({
 
 function MenuRow({ item: it, asking, working, refCb, onHover, onChoose }: { item: MenuItem; asking: boolean; working: boolean; refCb: (el: HTMLElement | null) => void; onHover: () => void; onChoose: () => void }) {
   const accel = accelLabel(it);
+  const detailId = `${useId()}-detail`;
+  const label = rowLabel(it, asking ? it.key : null);
   return (
     <button
       ref={refCb}
-      role="menuitem"
+      role={it.radio ? "menuitemradio" : "menuitem"}
       type="button"
       title={it.state ? `${it.label} · ${STATE_LABEL[it.state]}` : undefined}
       disabled={it.disabled}
       aria-haspopup={it.children ? "menu" : undefined}
       aria-keyshortcuts={it.accel}
+      aria-checked={it.radio ? Boolean(it.checked) : undefined}
+      aria-describedby={it.detail ? detailId : undefined}
       onMouseEnter={onHover}
       onClick={onChoose}
       className={cx(
         "relative z-10 flex w-full items-center gap-2 rounded-[6px] px-2 pointer-coarse:min-h-11 text-left text-[12.5px] disabled:opacity-40",
-        it.wrap ? "min-h-8 py-1.5" : "h-8",
+        it.wrap || it.detail ? "min-h-8 py-1.5" : "h-8",
         it.danger ? "text-red" : "text-ink",
         asking && "bg-red-tint font-medium",
       )}
     >
       {it.state && <StatusMark state={it.state} />}
       {it.icon && <Icon name={it.icon} size={14} className={it.danger ? "" : "text-ink-3"} />}
-      <span className={cx("min-w-0 flex-1", it.wrap ? "break-all" : "truncate")}>{rowLabel(it, asking ? it.key : null)}</span>
+      {it.detail ? (
+        // label over its explanation, both wrapping: the explanation never pushes the label (or the check) off the row
+        <span className="min-w-0 flex-1">
+          <span className="block break-words">{label}</span>
+          <span id={detailId} className="mt-0.5 block text-[11.5px] leading-snug break-words text-ink-3">{it.detail}</span>
+        </span>
+      ) : (
+        <span className={cx("min-w-0 flex-1", it.wrap ? "break-all" : "truncate")}>{label}</span>
+      )}
       {it.state && <StatePill state={it.state} />}
       {working ? <Spinner size={12} /> : it.hint && <span className="shrink-0 text-[11px] text-ink-3">{it.hint}</span>}
-      {it.checked !== undefined && <Icon name="check" size={13} stroke={2.5} className={it.checked ? "text-ink" : "invisible"} />}
+      {it.checked !== undefined && <Icon name="check" size={13} stroke={2.5} className={cx("shrink-0", it.checked ? "text-ink" : "invisible")} />}
       {accel && !working && <span aria-hidden className={cx("w-3.5 shrink-0 text-center text-[11px]", it.danger ? "" : "text-ink-3")}>{accel}</span>}
       {(it.submenu || it.children) && <Icon name="chevron" size={12} className="-rotate-90 text-ink-3" />}
     </button>

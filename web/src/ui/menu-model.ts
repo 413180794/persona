@@ -14,10 +14,18 @@ export interface MenuRename {
 export interface MenuItem {
   key: string;
   label: string;
+  /** A short note at the row's end that never wraps (a count, a unit, a shortcut). A sentence goes in `detail`. */
   hint?: string;
+  /** A sentence under the label that explains the choice (#5584): it wraps at word breaks instead of crowding the
+   *  label off the row, and screen readers read it as the row's description. */
+  detail?: string;
   icon?: IconName;
   state?: AgentState;
   checked?: boolean;
+  /** The row is one choice of a set and `checked` marks the chosen one (permission mode, effort, model): it is a
+   *  menuitemradio with aria-checked, so screen readers say which is selected. A row that sets only `checked` (an
+   *  on/off toggle, a filter) stays a plain menuitem. */
+  radio?: boolean;
   danger?: boolean;
   disabled?: boolean;
   divider?: boolean; // a hairline above this row

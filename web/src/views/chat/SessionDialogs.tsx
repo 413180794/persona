@@ -300,7 +300,7 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
           side="top"
           width={300}
           header={t("chat-sessiondialogs.permission_mode")}
-          items={switchableModes(assistant || session.assistant, session.agent).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
+          items={switchableModes(assistant || session.assistant, session.agent).map((m) => ({ key: m.id, label: m.title, detail: m.detail, radio: true, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
         />
       )}
       {effortMenu.anchor && !withModel && (
@@ -310,7 +310,7 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
           side="top"
           width={280}
           header={t("chat-sessiondialogs.effort")}
-          items={effortOptions(session).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: session.effort === m.id, onSelect: () => void set({ effort: m.id }) }))}
+          items={effortOptions(session).map((m) => ({ key: m.id, label: m.title, detail: m.detail, radio: true, checked: session.effort === m.id, onSelect: () => void set({ effort: m.id }) }))}
         />
       )}
       {popover && withModel && <ModelEffortPopover session={session} anchor={popover} onClose={() => setPopover(null)} apply={set} />}

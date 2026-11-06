@@ -121,3 +121,20 @@ describe("Menu placement on a visual viewport resize (a phone keyboard)", () => 
     expect(parseFloat(panel().style.top) + NATURAL).toBeLessThanOrEqual(800 - 8);
   });
 });
+
+// #5584: rows that wrap are taller in a narrower panel. Without a width yet the panel is as wide as its text, so a menu
+// measured that way above its anchor came out too short and its bottom covered the chip that opened it.
+describe("Menu placement with wrapping rows", () => {
+  it("measures its height at the width it will have, so a menu above its anchor ends above it", () => {
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (!this.hasAttribute("data-menu")) return 0;
+        return this.style.width === `${WIDTH}px` ? 240 : 120; // wrapped at its width, one line each without one
+      },
+    });
+    anchor.getBoundingClientRect = () => ({ left: 400, right: 440, top: 600, bottom: 624, width: 40, height: 24, x: 400, y: 600, toJSON: () => ({}) });
+    act(() => root.render(<Menu anchor={anchor} side="top" width={WIDTH} onClose={() => {}} items={[{ key: "a", label: "Alpha", detail: "A sentence that wraps", onSelect: () => {} }]} />));
+    expect(panel().style.top).toBe(`${600 - 240 - 6}px`);
+  });
+});
