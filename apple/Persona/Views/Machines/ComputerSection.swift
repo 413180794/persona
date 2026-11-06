@@ -263,9 +263,9 @@ struct ComputerSection: View {
 
     /// deviceOwnerAuthentication is Touch ID (or the password) on macOS, Face ID (or the password) on iOS.
     #if os(macOS)
-    static let oneTapAuthName = "触控 ID"
+    static let oneTapAuthName = String(localized: "触控 ID")
     #else
-    static let oneTapAuthName = "面容"
+    static let oneTapAuthName = String(localized: "面容")
     #endif
 
     /// 一键解锁 on this device (it needs the sign-in kept), and 锁上 while it is on (#1507 a-2).

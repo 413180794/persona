@@ -92001,24 +92001,68 @@
         }
       }
     },
-    "这台 Mac 锁屏时，点「一键解锁」并验证面容（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。": {
+    "触控 ID": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When this Mac is locked, tap One-Tap Unlock and verify with Face ID (or your passcode) to type the saved login password on its lock screen. Once unlocked it won't lock again by itself; tap Lock when you're done."
+            "value": "Touch ID"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このMacがロックされているときに「ワンタップでロック解除」をタップしてFace ID（またはパスコード）で認証すると、保存したログインパスワードをロック画面に入力します。解除後は自動ではロックされないため、使い終わったら「ロック」をタップしてください。"
+            "value": "Touch ID"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这台 Mac 锁屏时，点「一键解锁」并验证面容（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。"
+            "value": "触控 ID"
+          }
+        }
+      }
+    },
+    "面容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "面容"
+          }
+        }
+      }
+    },
+    "这台 Mac 锁屏时，点「一键解锁」并验证%@（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When this Mac is locked, tap One-Tap Unlock and verify with %@ (or your passcode) to type the saved login password on its lock screen. Once unlocked it won't lock again by itself; tap Lock when you're done."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このMacがロックされているときに「ワンタップでロック解除」をタップして%@（またはパスコード）で認証すると、保存したログインパスワードをロック画面に入力します。解除後は自動ではロックされないため、使い終わったら「ロック」をタップしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 Mac 锁屏时，点「一键解锁」并验证%@（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。"
           }
         }
       }

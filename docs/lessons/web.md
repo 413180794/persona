@@ -55,6 +55,7 @@
 - 只在悬停时出现的行内按钮在触屏上要整个藏掉（`@media (hover:hover)`），否则是看不见、一碰就触发的区域。
 - 两栏的页（收件箱、知识库）按页面自己的宽度切单栏（Tailwind v4 的 `@container` / `@3xl:`，#1996 起；消息页仍是 `@4xl:`），不按窗口：右侧面板一开，主区变窄，按窗口判断会挤坏。
 - SVG 曲线按真实像素宽度画（ResizeObserver），不用 `preserveAspectRatio="none"`：坐标轴上的字会被拉伸。
+- 重连后整份重列的 store 不能直接用回答替换（#4574）：hub 不重放的推送（如 `extension_operation`，不进事件日志）在 GET 在途时先到，回答是推送之前读的，最后一次 `succeeded` 被旧的 `running` 盖掉就再也不会更新；在途期间刚开始的操作也会被删掉。给列表请求编号、只用最后一个，在途期间 `track` 过的按 `updated_at` 取新的那份。
 - 订阅模块级 store、第一次拉取要放 `useEffect`，不能在 render 里做：React 会报「渲染中更新别的组件」。
 - `JSON.parse` 会把像整数的键排到最前、让 64 位数字丢精度：只是给人看的格式化，就只重新缩进，不解析值。
 

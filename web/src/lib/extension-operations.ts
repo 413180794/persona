@@ -92,6 +92,12 @@ export const startUninstall = (id: string, keepData = false, cascade = false, me
 let ops = new Map<string, ExtensionOperation>();
 const listeners = new Set<() => void>();
 let started = false;
+// The lists asked for, numbered: an answer older than one already applied is dropped. Each list on its way notes the
+// operations tracked since it went out: the hub read it before those pushes or starts, so its copy of them may be
+// older or missing (#4574).
+let listing = 0;
+let applied = 0;
+const listsOut = new Set<Set<string>>();
 
 function emit() {
   listeners.forEach((l) => l());
@@ -102,20 +108,35 @@ export function track(op: ExtensionOperation): ExtensionOperation {
   const was = ops.get(op.id);
   if (was && Date.parse(was.updated_at) > Date.parse(op.updated_at)) return was;
   ops = new Map(ops).set(op.id, op);
+  listsOut.forEach((since) => since.add(op.id));
   if (op.state === "succeeded" && was?.state !== "succeeded") changed(null);
   emit();
   return op;
 }
 
-/** Lists the hub's operations again (on opening, after a reconnect). */
+/** Lists the hub's operations again (on opening, after a reconnect). What was pushed or started while the list was
+ * on its way stays where it is newer than the list's copy; a list answering after a later one was applied is dropped. */
 export async function reloadOperations() {
   if (!operationsOn()) return;
+  const mine = ++listing;
+  const since = new Set<string>();
+  listsOut.add(since);
   try {
     const list = await listOperations();
-    ops = new Map(list.map((o) => [o.id, o]));
+    if (mine < applied) return;
+    applied = mine;
+    const next = new Map(list.map((o) => [o.id, o]));
+    for (const id of since) {
+      const known = ops.get(id);
+      const listed = next.get(id);
+      if (known && (!listed || Date.parse(known.updated_at) > Date.parse(listed.updated_at))) next.set(id, known);
+    }
+    ops = next;
     emit();
   } catch {
     // a device that may not see them, or the hub is away: keep what is known
+  } finally {
+    listsOut.delete(since);
   }
 }
 
