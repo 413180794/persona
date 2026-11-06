@@ -28,4 +28,22 @@ type Tagging struct {
 	Pinned string `json:"pinned,omitempty"`
 	// LockedFields names update fields that automatic writes must preserve.
 	LockedFields []string `json:"locked_fields,omitempty"`
+	// Provenance says which extension holds a locked field and what it based the value on; a locked field without
+	// an entry is the user's (docs/knowledge.md "Extensions organizing the knowledge base").
+	Provenance map[string]Provenance `json:"provenance,omitempty"`
+}
+
+// Provenance is who last wrote a locked field and from what.
+type Provenance struct {
+	By       string     `json:"by"` // "ext:<extension id>"
+	At       time.Time  `json:"at"`
+	Evidence []Evidence `json:"evidence,omitempty"`
+}
+
+// Evidence points at the source a written value rests on: a chat's day file and, optionally, its line (kb.day's n).
+type Evidence struct {
+	Chat string `json:"chat"`
+	Day  string `json:"day"`         // YYYY-MM-DD in the knowledge base's time zone
+	N    int    `json:"n,omitempty"` // 1-based line in that day's file
+	Note string `json:"note,omitempty"`
 }

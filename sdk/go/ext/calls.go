@@ -156,6 +156,11 @@ func (h *Hub) KBList(ctx context.Context, p wire.KBListParams) (wire.KBListResul
 	return callHub[wire.KBListResult](ctx, h, "kb.list", p)
 }
 
+// KBRecent is what came in from every source since a time, newest first, a page at a time (next_offset).
+func (h *Hub) KBRecent(ctx context.Context, p wire.KBRecentParams) (wire.KBRecentResult, error) {
+	return callHub[wire.KBRecentResult](ctx, h, "kb.recent", p)
+}
+
 // KBGet is one entity, with its most recent messages.
 func (h *Hub) KBGet(ctx context.Context, p wire.KBGetParams) (wire.KBGetResult, error) {
 	return callHub[wire.KBGetResult](ctx, h, "kb.get", p)

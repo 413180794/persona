@@ -886,7 +886,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	byID := map[string]*proc.Conn{}
 	s.Handle = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		switch method {
-		case "kb.list", "kb.get", "kb.day", "kb.search", "kb.update", "kb.owner":
+		case "kb.list", "kb.get", "kb.day", "kb.search", "kb.update", "kb.owner", "kb.recent":
 			return ps.extensionKBCall(ctx, id, method, params)
 		case connector.MethodSentRecord:
 			return ps.extensionSentRecord(ctx, id, params)

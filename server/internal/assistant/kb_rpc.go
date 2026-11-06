@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
@@ -44,6 +46,11 @@ func kbRPCKind(kind string) bool {
 }
 
 func kbRPCError(err error) error {
+	var conflict *kb.ConflictError
+	if errors.As(err, &conflict) {
+		data, _ := json.Marshal(assistantwire.KBConflict{Owners: conflict.Owners})
+		return &rpc.Error{Code: assistantwire.CodeKBConflict, Message: "kb.update: " + conflict.Error(), Data: data}
+	}
 	if errors.Is(err, kb.ErrNotFound) {
 		return &rpc.Error{Code: "not_found", Message: err.Error()}
 	}
@@ -57,7 +64,20 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 	var day assistantwire.KBDayParams
 	var search assistantwire.KBSearchParams
 	var update assistantwire.KBUpdateParams
+	var recent assistantwire.KBRecentParams
+	var since, until time.Time
 	var params any
+	extension := ""
+	if method == assistantwire.MethodKBExtensionUpdate {
+		var env assistantwire.KBExtensionUpdate
+		if err := kbDecodeParams(method, raw, &env); err != nil {
+			return nil, true, err
+		}
+		if strings.TrimSpace(env.Extension) == "" {
+			return nil, true, kbInvalidParams(method, "extension is required")
+		}
+		method, raw, extension = assistantwire.MethodKBUpdate, env.Params, env.Extension
+	}
 	switch method {
 	case assistantwire.MethodKBList:
 		params = &list
@@ -69,6 +89,8 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 		params = &search
 	case assistantwire.MethodKBUpdate:
 		params = &update
+	case assistantwire.MethodKBRecent:
+		params = &recent
 	default:
 		return nil, false, nil
 	}
@@ -83,6 +105,35 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 		}
 		if list.Limit == 0 {
 			list.Limit = 30
+		}
+		if list.Since != "" {
+			if _, err := time.Parse(time.RFC3339, list.Since); err != nil {
+				return invalid("since must be an RFC 3339 time")
+			}
+		}
+	case assistantwire.MethodKBRecent:
+		var err error
+		if since, err = time.Parse(time.RFC3339, recent.Since); err != nil {
+			return invalid("since must be an RFC 3339 time")
+		}
+		if recent.Until != "" {
+			if until, err = time.Parse(time.RFC3339, recent.Until); err != nil {
+				return invalid("until must be an RFC 3339 time")
+			}
+		}
+		if len(recent.Kinds) == 0 {
+			recent.Kinds = []string{kb.KindChat, kb.KindDoc, kb.KindMeeting, kb.KindEvent, kb.KindRecording}
+		}
+		for _, k := range recent.Kinds {
+			if !kbRPCKind(k) {
+				return invalid("kinds must name entity kinds")
+			}
+		}
+		if recent.Limit < 0 || recent.Limit > 200 || recent.Offset < 0 {
+			return invalid("limit must be between 0 and 200; offset must be nonnegative")
+		}
+		if recent.Limit == 0 {
+			recent.Limit = 50
 		}
 	case assistantwire.MethodKBGet:
 		if !kbRPCKind(get.Kind) || strings.TrimSpace(get.ID) == "" {
@@ -113,6 +164,17 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 		if !kbRPCKind(update.Kind) || strings.TrimSpace(update.ID) == "" {
 			return invalid("kind and id are required")
 		}
+		if extension == "" && (len(update.Evidence) > 0 || len(update.Unlock) > 0) {
+			return invalid("evidence and unlock are for extensions' writes")
+		}
+		if msg := kbCheckEvidence(update.Evidence); msg != "" {
+			return invalid(msg)
+		}
+		for _, f := range update.Unlock {
+			if !kb.LockableField(f) {
+				return invalid("unlock: unknown field " + f)
+			}
+		}
 	}
 	e, err := s.kbGet(ctx)
 	if err != nil {
@@ -124,6 +186,10 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 		items := all
 		if list.Tag != "" {
 			items = e.List(list.Kind, list.Tag)
+		}
+		if list.Since != "" {
+			since, _ := time.Parse(time.RFC3339, list.Since)
+			items = slices.DeleteFunc(slices.Clone(items), func(en kb.Entry) bool { return en.Updated.Before(since) })
 		}
 		if items == nil {
 			items = []kb.Entry{}
@@ -141,6 +207,24 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 			tags = []string{}
 		}
 		return assistantwire.KBListResult{Items: items, Tags: tags, Total: total, NextOffset: next}, true, nil
+	case assistantwire.MethodKBRecent:
+		items := []kb.Entry{}
+		for _, k := range slices.Compact(slices.Sorted(slices.Values(recent.Kinds))) {
+			for _, en := range e.List(k, "") {
+				if !en.Updated.Before(since) && (until.IsZero() || en.Updated.Before(until)) {
+					items = append(items, en)
+				}
+			}
+		}
+		slices.SortStableFunc(items, func(a, b kb.Entry) int { return b.Updated.Compare(a.Updated) })
+		total := len(items)
+		start := min(recent.Offset, total)
+		end := start + min(total-start, recent.Limit)
+		var next *int
+		if end < total {
+			next = &end
+		}
+		return assistantwire.KBRecentResult{Items: items[start:end], Total: total, NextOffset: next}, true, nil
 	case assistantwire.MethodKBGet:
 		detail, err := e.Get(get.Kind, get.ID, *get.RecentChars)
 		return assistantwire.KBGetResult{Detail: detail}, true, kbRPCError(err)
@@ -157,7 +241,31 @@ func (s *Service) kbRPCRequest(ctx context.Context, method string, raw json.RawM
 		}
 		return assistantwire.KBSearchResult{Hits: hits}, true, nil
 	default:
+		if extension != "" {
+			res, err := e.ApplyExtension(update.Kind, update.ID, update.Update,
+				kb.ExtensionWrite{Extension: extension, Evidence: update.Evidence, Unlock: update.Unlock})
+			if err != nil {
+				return nil, true, kbRPCError(err)
+			}
+			return assistantwire.KBUpdateResult{ID: res.ID, Before: res.Before}, true, nil
+		}
 		id, err := e.Apply(update.Kind, update.ID, update.Update)
 		return assistantwire.KBUpdateResult{ID: id}, true, kbRPCError(err)
 	}
+}
+
+// kbCheckEvidence is why an update's evidence is invalid; "" when it is fine.
+func kbCheckEvidence(list []kb.Evidence) string {
+	if len(list) > 20 {
+		return "at most 20 evidence entries"
+	}
+	for _, ev := range list {
+		if strings.TrimSpace(ev.Chat) == "" || ev.N < 0 || utf8.RuneCountInString(ev.Note) > 200 {
+			return "evidence needs a chat, a nonnegative n and a note of at most 200 characters"
+		}
+		if _, err := time.Parse("2006-01-02", ev.Day); err != nil {
+			return "evidence day must be YYYY-MM-DD"
+		}
+	}
+	return ""
 }

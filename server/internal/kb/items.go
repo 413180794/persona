@@ -286,7 +286,7 @@ func (e *Engine) List(kind, tag string) []Entry {
 		for _, c := range e.Store.Chats() {
 			if has(c.Tags) {
 				out = append(out, Entry{Kind: kind, ID: c.ID, Name: c.Name, OneLine: c.OneLine, Importance: c.Importance,
-					Relevance: c.Relevance, Tags: c.Tags, Updated: c.LastAt, Extra: c.Kind})
+					Relevance: c.Relevance, Tags: c.Tags, Updated: c.LastAt, Extra: c.Kind, Source: c.Source})
 			}
 		}
 	case KindPerson:

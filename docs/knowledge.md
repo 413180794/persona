@@ -287,7 +287,7 @@ If `kb.ai` is omitted, use `inbox.triage_ai`, then `ai`. `enabled: false` disabl
 
 ## Extensions organizing the knowledge base (#1908)
 
-Extensions can call `kb.list`, `kb.get`, `kb.day`, `kb.search`, `kb.update`, `kb.owner` directly over RPC without a full hub token.
+Extensions can call `kb.list`, `kb.recent`, `kb.get`, `kb.day`, `kb.search`, `kb.update`, `kb.owner` directly over RPC without a full hub token.
 The hub checks the extension's actually granted `kb.read` / `kb.write`, then forwards to the manager owning the knowledge base, including when it runs on another machine.
 `kb.write` does not include read permission. Legacy `hub_api` HTTP and RPC remain available, but internal calls such as `kb.forget` and `kb.posts_*` are not exposed to extensions.
 For parameters, pagination, errors and event subscriptions, see [Extensions](extensions.md#知识库-rpc1908).
@@ -310,6 +310,36 @@ For example, remove a project member while recording a confirmed fact:
 ```
 
 This is not a cross-file transaction and adds neither `If-Match` nor a revision log. Write failures return errors; do not automatically retry a failure as a new user confirmation.
+
+### Who holds a field (#6100)
+
+Locks used to say only "a person wrote this"; an extension's write counted as the user's, so a curation extension could overwrite what the user corrected.
+Now every locked field has a holder, and writes follow **the user > an extension > the built-in pipeline** (`kb/attribution.go`):
+
+- **Holder**: a locked field (in `locked_fields`, the legacy `locked` for importance / relevance / tags, or a non-empty `pinned`) is the user's unless the entity's `provenance` names an extension for it:
+  `"provenance": {"summary": {"by": "ext:<extension id>", "at": "…", "evidence": [{"chat": "<chat id>", "day": "2026-01-02", "n": 12}]}}`. A field nobody holds is free.
+- **The built-in pipeline** writes only free fields (as before: background writes keep `locked_fields`, `pinned` and now `provenance` as they are on disk).
+- **An extension** (`kb.update` over RPC, attributed by the manager; the extension cannot name itself) may write free fields and fields it already holds. A field the user or another extension holds, on the entity or on the other side of a link it adds or removes,
+  refuses the **whole** update with `conflict` and the holders; nothing is written. The fields it writes with a lock (the default) become its own, with its `evidence`. With `lock: false` nothing is held: the value is a suggestion the pipeline may replace.
+  Its importance / relevance are held through `locked_fields`, never the user's legacy `locked`. `unlock` hands fields it holds back to the pipeline (unlocking `pinned` clears it). `merge_into` is refused when anything on the project folded away is held by someone else.
+- **The user** (app, assistant `kb_update`, HTTP `PUT`) writes anything, as before, and takes over every locked field touched: its provenance is dropped, so the extension can no longer change it.
+- The answer carries `before`: each written field's previous value (`summary` the old text), so the extension can keep its own undo log; undo is another `kb.update` with those values, plus `unlock` when the field was free before.
+- **Without extensions nothing changes**: no write adds `provenance`; the user's writes only remove entries that exist. The legacy `hub_api` HTTP `PUT` from an extension token still counts as the user.
+
+### Built-in organization and extensions side by side (#6100)
+
+An extension that curates (a daily and weekly pass: triage, sourced summaries, deterministic checks, proposals for review, merges and splits) runs **on top of** the built-in pipeline, not instead of it:
+
+- **Raw data stays with the built-in pipeline.** Archiving, the per-day message files, compression (`compress`), documents / meetings / events (`items`), project evolution and timelines (`project_commit`), deduplication (`dedupe`) keep running every round, installed extension or not.
+  Every source (Lark, mail, WeChat, iMessage, GitHub, calendar, documents, recordings…) lands in the same entities, so an extension reads all of them the same way: `kb.recent {since, until}` is one feed of what came in across kinds and sources (chats carry `source`), `kb.day` a chat's text with line numbers, `kb.get` anything else.
+  Extensions never write raw messages.
+- **Extension results go in through `kb.update`** (summaries, notes, goals, tags, pinned facts, links and their removal, aliases, timeline lines with `source`, merges), with evidence pointing at the day file and line they rest on.
+- **The pipeline yields per field, by holder, not by a global switch.** A summary the extension holds is not rewritten by compression; held links are not restored; deduplication skips protected projects. Everything the extension doesn't hold keeps being maintained.
+  The extension decides how much it takes over (it can write with `lock: false` to suggest, or hand fields back with `unlock`); the user decides the boundary: granting `kb.read` only (a shadow run that writes nothing), or also `kb.write`, the extension's own settings (sources, kinds, what it may apply without asking), and any edit of their own, which wins.
+- **Order**: the pipeline runs continuously (every 2 minutes, 5 seconds after new data); a curation extension runs its daily pass after the day has closed in the user's time zone (reading `kb.recent` for that day) and its weekly pass on top of the daily ones; between passes it may follow `kb.changed`.
+  A field the extension wrote then holds until the user edits it or the extension unlocks it.
+- **Conflicts**: the user wins over any extension, an extension over the pipeline; between two extensions the first holder keeps the field. A `conflict` answer is a question for the user, not an error to retry: the extension puts it in its review queue (proposals, review and undo are the extension's, kept in its own data directory).
+- **Scheduling** is the extension's own: `on_startup` with its own timer, remembering the last pass in its data directory and catching up after a restart. **Model calls** for extensions are #6102.
 
 ### Owner information and change notifications
 

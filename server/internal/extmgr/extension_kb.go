@@ -14,7 +14,7 @@ import (
 func (ps *extensions) extensionKBCall(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
 	var scope string
 	switch method {
-	case assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBDay, assistantwire.MethodKBSearch, assistantwire.MethodKBOwner:
+	case assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBDay, assistantwire.MethodKBSearch, assistantwire.MethodKBOwner, assistantwire.MethodKBRecent:
 		scope = extension.ScopeKBRead
 	case assistantwire.MethodKBUpdate:
 		scope = extension.ScopeKBWrite
@@ -29,7 +29,11 @@ func (ps *extensions) extensionKBCall(ctx context.Context, id, method string, pa
 		return nil, &rpc.Error{Code: assistantwire.CodeAssistantOffline, Message: errAssistantOffline.Error()}
 	}
 	var out json.RawMessage
-	if err := ps.h.kbAsk(ctx, method, params, &out); err != nil {
+	var ask any = params
+	if method == assistantwire.MethodKBUpdate { // the write is the extension's: say whose (#6100)
+		method, ask = assistantwire.MethodKBExtensionUpdate, assistantwire.KBExtensionUpdate{Extension: id, Params: params}
+	}
+	if err := ps.h.kbAsk(ctx, method, ask, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

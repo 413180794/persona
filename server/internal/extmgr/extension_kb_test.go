@@ -75,10 +75,17 @@ type fakeKB struct {
 
 func withFakeKB(h *Manager) *fakeKB {
 	k := &fakeKB{projects: map[string]string{}, names: map[string]string{}, a: withAssistant(h)}
-	k.a.on(assistantwire.MethodKBUpdate, func(raw json.RawMessage) (any, error) {
-		var p assistantwire.KBUpdateParams
-		if err := json.Unmarshal(raw, &p); err != nil {
+	k.a.on(assistantwire.MethodKBExtensionUpdate, func(raw json.RawMessage) (any, error) {
+		var env assistantwire.KBExtensionUpdate
+		if err := json.Unmarshal(raw, &env); err != nil {
 			return nil, err
+		}
+		var p assistantwire.KBUpdateParams
+		if err := json.Unmarshal(env.Params, &p); err != nil {
+			return nil, err
+		}
+		if env.Extension == "" {
+			return nil, errors.New("no extension on the write")
 		}
 		k.mu.Lock()
 		k.projects[p.ID] = p.Summary
@@ -247,9 +254,13 @@ func TestExtensionKBRPCScopesAndAssistantBridge(t *testing.T) {
 	if summary, ok := e.summary("example"); !ok || summary != "confirmed example" {
 		t.Fatalf("write did not reach the assistant: %q", summary)
 	}
-	if got := e.a.got(assistantwire.MethodKBUpdate); len(got) != 1 || !strings.Contains(string(got[0]), `"name":"Example"`) ||
-		!strings.Contains(string(got[0]), `"tags":["verified"]`) {
+	// The write reaches the assistant as the extension's, under the id the manager knows it by (#6100).
+	if got := e.a.got(assistantwire.MethodKBExtensionUpdate); len(got) != 1 || !strings.Contains(string(got[0]), `"name":"Example"`) ||
+		!strings.Contains(string(got[0]), `"tags":["verified"]`) || !strings.Contains(string(got[0]), `"extension":"example-write"`) {
 		t.Fatalf("the write as the assistant got it: %s", got)
+	}
+	if got := e.a.got(assistantwire.MethodKBUpdate); len(got) != 0 {
+		t.Fatalf("an unattributed write reached the assistant: %s", got)
 	}
 	for _, tc := range []struct{ method, params, contains string }{
 		{assistantwire.MethodKBList, `{"kind":"projects"}`, `"id":"example"`},
@@ -267,7 +278,7 @@ func TestExtensionKBRPCScopesAndAssistantBridge(t *testing.T) {
 	if out, err := callRPC(full, assistantwire.MethodKBGet, `{"kind":"projects","id":"legacy"}`); err != nil || !strings.Contains(out, "Legacy") {
 		t.Fatalf("legacy full read: %s %v", out, err)
 	}
-	for _, method := range []string{"kb.forget", "kb.context", "kb.posts_put", "kb.nope", "kb.owner.update"} {
+	for _, method := range []string{"kb.forget", "kb.context", "kb.posts_put", "kb.nope", "kb.owner.update", assistantwire.MethodKBExtensionUpdate} {
 		_, err := callRPC(full, method, `{}`)
 		var re *rpc.Error
 		if !errors.As(err, &re) || re.Code != extension.CodeUnknownMethod {

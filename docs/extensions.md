@@ -323,27 +323,36 @@ To call the hub's HTTP API, an extension lists the scopes it uses in `permission
 
 ### Knowledge base RPC (#1908)
 
-An extension's program can call the six methods below directly, without passing a token over HTTP. Permissions are still declared only in `permissions.hub`; the hub checks against the permissions actually granted,
+An extension's program can call the seven methods below directly, without passing a token over HTTP. Permissions are still declared only in `permissions.hub`; the hub checks against the permissions actually granted,
 not the ones requested in the manifest. `kb.write` does not imply `kb.read`. The legacy `hub_api` full access stays compatible. Every call is forwarded by the hub to the manager's knowledge base,
 so the extension does not need to read the hub's or the manager's data directory.
 
 | Method | Parameters | Returns | Scope |
 | --- | --- | --- | --- |
-| `kb.list` | `{kind,tag?,limit?,offset?}` | `{items,tags,total,next_offset?}` | `kb.read` |
+| `kb.list` | `{kind,tag?,limit?,offset?,since?}` | `{items,tags,total,next_offset?}` | `kb.read` |
+| `kb.recent` | `{since,until?,kinds?,limit?,offset?}` | `{items,total,next_offset?}`: what came in from every source, newest first | `kb.read` |
 | `kb.get` | `{kind,id,recent_chars?}` | `{detail}` | `kb.read` |
 | `kb.day` | `{id,day}`, day is `YYYY-MM-DD` | `{day,messages,prev,next}`; `messages[].n` is the 1-based line number in the source file | `kb.read` |
 | `kb.search` | `{query,messages?,limit?}` | `{hits}` | `kb.read` |
-| `kb.update` | `{kind,id,...fields to update}` | `{id}` | `kb.write` |
+| `kb.update` | `{kind,id,...fields to update,evidence?,unlock?}` | `{id,before?}` | `kb.write` |
 | `kb.owner` | `{}` | `{name,aliases,handles:[{kind,value}]}` | `kb.read` |
 
-The params, answers, error codes and events are described in `schema/extension/kb.schema.json`; the Go SDK has them as `ext.Hub`'s `KBList`, `KBGet`, `KBDay`, `KBSearch`, `KBUpdate` and `KBOwner`.
+The params, answers, error codes and events are described in `schema/extension/kb.schema.json`; the Go SDK has them as `ext.Hub`'s `KBList`, `KBRecent`, `KBGet`, `KBDay`, `KBSearch`, `KBUpdate` and `KBOwner`.
 
 kind is `projects`, `chats`, `people`, `docs`, `meetings`, `events` or `recordings`. list returns 30 by default, at most 200, with offset starting at 0;
 if not finished, continue with next_offset. Paging is not a snapshot when things change between requests, so extensions should deduplicate and re-read when needed. search searches messages by default, 40 by default, at most 200;
 get includes the most recent 12000 characters of messages by default; recent_chars may be 0, at most 20000. Empty lists return `[]`.
 `kb.get` does not include live Agents; reading Agent state still needs the matching permission. A missing scope returns `permission_denied` with `scope` in the error data;
-unknown fields, missing required fields or bad formats return `invalid_params`, a missing entity returns `not_found`, a manager that is offline returns `assistant_offline`, and a knowledge base that isn't ready returns `kb_unavailable`.
+unknown fields, missing required fields or bad formats return `invalid_params`, a missing entity returns `not_found`, a write touching what someone else holds returns `conflict`, a manager that is offline returns `assistant_offline`, and a knowledge base that isn't ready returns `kb_unavailable`.
 Internal methods such as `kb.forget`, `kb.context`, `kb.posts_*` are not on this allowlist, and even extensions with full access can't call them this way.
+
+`since` / `until` are RFC 3339 times (an entity's update time: a chat's last message, a document's, meeting's or event's time, a recording's start). `kb.recent` defaults to chats, docs, meetings, events and recordings,
+50 a page, at most 200; list entries for chats carry `source` (lark, mail, wechat, github…), so one pass covers every source; read a chat's text with `kb.day` and the rest with `kb.get`.
+
+**Writes are the extension's** (#6100): the manager attributes `kb.update` to the calling extension (internally `kb.extension_update`; an extension cannot call that or name another). It may write fields nobody holds and fields it holds itself;
+a field the user (or another extension) holds refuses the whole update with `conflict`, data `{owners: {<field>: "user" | "ext:<id>"}}` (a linked entity's field as `<kind>/<id>.<field>`), and nothing is written: put it to the user, don't retry.
+The locked fields it writes become its own with `evidence` (`[{chat, day, n?, note?}]`, at most 20, kept in the entity's `meta.provenance`, visible in `kb.get`); `lock: false` holds nothing; `unlock: [fields]` hands back fields it holds.
+`before` is each written field's previous value (`null` when unset, the old `summary` text), for the extension's undo. Rules and how this sits with the built-in pipeline: [Knowledge base](knowledge.md#who-holds-a-field-6100).
 
 The update fields follow the existing knowledge base update API, plus `pinned`, `lock` and `remove_people/remove_chats/remove_aliases/remove_projects`.
 Protection rules, which entities they apply to, encryption of the owner's identity and history limits are in [Knowledge base](knowledge.md#扩展整理知识库1908). The owner's aliases are edited by the user in the assistant settings;

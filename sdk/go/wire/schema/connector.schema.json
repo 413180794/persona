@@ -650,9 +650,30 @@
         "locked": {"type": "boolean"},
         "tagged_at": {"type": "string", "format": "date-time"},
         "pinned": {"type": "string"},
-        "locked_fields": {"type": "array", "items": {"type": "string"}}
+        "locked_fields": {"type": "array", "items": {"type": "string"}},
+        "provenance": {"type": "object", "additionalProperties": {"$ref": "#/$defs/ConnectorKBProvenance"}, "description": "The store's: which extension holds a locked field. A connector's is ignored."}
       },
       "required": ["kind", "id", "title"]
+    },
+    "ConnectorKBProvenance": {
+      "description": "Who holds a locked field of a knowledge-base entity, and from what (kb.schema.json KBProvenance).",
+      "type": "object",
+      "properties": {
+        "by": {"type": "string"},
+        "at": {"type": "string", "format": "date-time"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/ConnectorKBEvidence"}}
+      },
+      "required": ["by", "at"]
+    },
+    "ConnectorKBEvidence": {
+      "type": "object",
+      "properties": {
+        "chat": {"type": "string"},
+        "day": {"type": "string"},
+        "n": {"type": "integer"},
+        "note": {"type": "string"}
+      },
+      "required": ["chat", "day"]
     },
     "ConnectorDocTitleParams": {
       "description": "items.doc_title: the title of a document link in a chat.",

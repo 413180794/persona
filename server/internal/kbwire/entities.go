@@ -90,5 +90,6 @@ type Entry struct {
 	Relevance  int       `json:"relevance"`
 	Tags       []string  `json:"tags,omitempty"`
 	Updated    time.Time `json:"updated"`
-	Extra      string    `json:"extra,omitempty"` // projects: short / long · status; chats: dm / group…
+	Extra      string    `json:"extra,omitempty"`  // projects: short / long · status; chats: dm / group…
+	Source     string    `json:"source,omitempty"` // chats: the source they came from (lark, mail, wechat, github…)
 }

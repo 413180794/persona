@@ -3622,6 +3622,24 @@ export interface ConnectorKBItem {
   tagged_at?: string;
   pinned?: string;
   locked_fields?: string[];
+  /** The store's: which extension holds a locked field. A connector's is ignored. */
+  provenance?: Record<string, ConnectorKBProvenance>;
+}
+
+/**
+ * Who holds a locked field of a knowledge-base entity, and from what (kb.schema.json KBProvenance).
+ */
+export interface ConnectorKBProvenance {
+  by: string;
+  at: string;
+  evidence?: ConnectorKBEvidence[];
+}
+
+export interface ConnectorKBEvidence {
+  chat: string;
+  day: string;
+  n?: number;
+  note?: string;
 }
 
 /**
@@ -4077,11 +4095,43 @@ export const KBKINDS = ["projects", "chats", "people", "docs", "meetings", "even
 
 /**
  * error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing): invalid_params,
- * not_found, assistant_offline (the manager is away), kb_unavailable (not open yet). Both of the last are worth
- * trying again.
+ * not_found, assistant_offline (the manager is away), kb_unavailable (not open yet), conflict (kb.update touches
+ * fields the user or another extension holds; data KBConflict, nothing was written). assistant_offline and
+ * kb_unavailable are worth trying again; conflict is for the user to decide.
  */
-export type KBErrorCode = "invalid_params" | "not_found" | "assistant_offline" | "kb_unavailable" | (string & {});
-export const KBERROR_CODES = ["invalid_params", "not_found", "assistant_offline", "kb_unavailable"] as const;
+export type KBErrorCode = "invalid_params" | "not_found" | "assistant_offline" | "kb_unavailable" | "conflict" | (string & {});
+export const KBERROR_CODES = ["invalid_params", "not_found", "assistant_offline", "kb_unavailable", "conflict"] as const;
+
+/**
+ * The data of a conflict error: field → who holds it (user, or ext:<extension id>); a linked entity's field is
+ * <kind>/<id>.<field>.
+ */
+export interface KBConflict {
+  owners: Record<string, string>;
+}
+
+/**
+ * What a written value rests on: a chat's day (kb.day) and optionally the line n there.
+ */
+export interface KBEvidence {
+  chat: string;
+  /** YYYY-MM-DD in the knowledge base's time zone. */
+  day: string;
+  /** 1-based line in that day's file (kb.day's n). */
+  n?: number;
+  note?: string;
+}
+
+/**
+ * An entry of an entity's meta.provenance (kb.get): which extension holds that locked field, since when, from what. A
+ * locked field without one is the user's.
+ */
+export interface KBProvenance {
+  /** ext:<extension id> */
+  by: string;
+  at: string;
+  evidence?: KBEvidence[];
+}
 
 /**
  * An identity clue: kind (phone, email, a source's user id kind…) and the raw value.
@@ -4100,6 +4150,8 @@ export interface KBListParams {
   /** 0 is 30. */
   limit?: number;
   offset?: number;
+  /** An RFC 3339 time: only entities updated at or after it (a chat: its last message). */
+  since?: string;
 }
 
 export interface KBListResult {
@@ -4124,6 +4176,30 @@ export interface KBEntry {
   updated: string;
   /** A project's short / long · status, a chat's dm / group… */
   extra?: string;
+  /** A chat's source (lark, mail, wechat, github…). */
+  source?: string;
+}
+
+/**
+ * kb.recent (kb.read): what came in from every source in [since, until), newest first, across kinds: one feed for a
+ * curation pass. Read a chat's text with kb.day, anything else with kb.get.
+ */
+export interface KBRecentParams {
+  /** An RFC 3339 time. */
+  since: string;
+  /** An RFC 3339 time; none is now. */
+  until?: string;
+  /** None is chats, docs, meetings, events and recordings. */
+  kinds?: KBKind[];
+  /** 0 is 50. */
+  limit?: number;
+  offset?: number;
+}
+
+export interface KBRecentResult {
+  items: KBEntry[];
+  total: number;
+  next_offset?: number;
 }
 
 /**
@@ -4261,11 +4337,21 @@ export interface KBUpdateParams {
   /** A project's code directories, <machine>:<path>. */
   dirs?: string[];
   projects?: string[];
+  /** Refused (conflict) when the user or another extension holds anything on the project folded away; no before. */
   merge_into?: string;
+  /** Kept as the provenance of the fields this write holds. */
+  evidence?: KBEvidence[];
+  /** Fields this extension holds, handed back to the built-in pipeline; unlocking pinned clears it. */
+  unlock?: string[];
 }
 
 export interface KBUpdateResult {
   id: string;
+  /**
+   * The previous value of each field written (null when unset; summary is the old text), for the extension's own
+   * undo.
+   */
+  before?: Record<string, unknown>;
 }
 
 /**
@@ -4617,6 +4703,7 @@ export const CALLS: Record<string, Call> = {
   "kb.search": { from: "program", params: "KBSearchParams", result: "KBSearchResult" },
   "kb.update": { from: "program", params: "KBUpdateParams", result: "KBUpdateResult" },
   "kb.owner": { from: "program", params: "KBOwnerParams", result: "KBOwner" },
+  "kb.recent": { from: "program", params: "KBRecentParams", result: "KBRecentResult" },
   "event.kb.changed": { from: "hub", params: "KBChangedEvent", event: true },
   "event.kb.forgotten": { from: "hub", params: "KBForgottenEvent", event: true },
   "event.todo.changed": { from: "hub", params: "TodoChangedEvent", event: true },

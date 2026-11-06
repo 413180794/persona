@@ -3473,6 +3473,23 @@ type ConnectorKBItem struct {
 	TaggedAt     time.Time `json:"tagged_at,omitzero"`
 	Pinned       string    `json:"pinned,omitempty"`
 	LockedFields []string  `json:"locked_fields,omitempty"`
+	// The store's: which extension holds a locked field. A connector's is ignored.
+	Provenance map[string]ConnectorKBProvenance `json:"provenance,omitempty"`
+}
+
+// ConnectorKBProvenance: who holds a locked field of a knowledge-base entity, and from what (kb.schema.json
+// KBProvenance).
+type ConnectorKBProvenance struct {
+	By       string                `json:"by"`
+	At       time.Time             `json:"at"`
+	Evidence []ConnectorKBEvidence `json:"evidence,omitempty"`
+}
+
+type ConnectorKBEvidence struct {
+	Chat string `json:"chat"`
+	Day  string `json:"day"`
+	N    int    `json:"n,omitempty"`
+	Note string `json:"note,omitempty"`
 }
 
 // ConnectorDocTitleParams: items.doc_title: the title of a document link in a chat.
@@ -3876,17 +3893,44 @@ const (
 var KBKinds = []string{"projects", "chats", "people", "docs", "meetings", "events", "recordings"}
 
 // KBErrorCode: error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing):
-// invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet). Both of the last
-// are worth trying again.
+// invalid_params, not_found, assistant_offline (the manager is away), kb_unavailable (not open yet), conflict
+// (kb.update touches fields the user or another extension holds; data KBConflict, nothing was written).
+// assistant_offline and kb_unavailable are worth trying again; conflict is for the user to decide.
 const (
 	KBErrorCodeInvalidParams    = "invalid_params"
 	KBErrorCodeNotFound         = "not_found"
 	KBErrorCodeAssistantOffline = "assistant_offline"
 	KBErrorCodeKbUnavailable    = "kb_unavailable"
+	KBErrorCodeConflict         = "conflict"
 )
 
 // KBErrorCodes are the values of KBErrorCode, in order.
-var KBErrorCodes = []string{"invalid_params", "not_found", "assistant_offline", "kb_unavailable"}
+var KBErrorCodes = []string{"invalid_params", "not_found", "assistant_offline", "kb_unavailable", "conflict"}
+
+// KBConflict: the data of a conflict error: field → who holds it (user, or ext:<extension id>); a linked entity's
+// field is <kind>/<id>.<field>.
+type KBConflict struct {
+	Owners map[string]string `json:"owners"`
+}
+
+// KBEvidence: what a written value rests on: a chat's day (kb.day) and optionally the line n there.
+type KBEvidence struct {
+	Chat string `json:"chat"`
+	// YYYY-MM-DD in the knowledge base's time zone.
+	Day string `json:"day"`
+	// 1-based line in that day's file (kb.day's n).
+	N    int    `json:"n,omitempty"`
+	Note string `json:"note,omitempty"`
+}
+
+// KBProvenance: an entry of an entity's meta.provenance (kb.get): which extension holds that locked field, since
+// when, from what. A locked field without one is the user's.
+type KBProvenance struct {
+	// ext:<extension id>
+	By       string       `json:"by"`
+	At       time.Time    `json:"at"`
+	Evidence []KBEvidence `json:"evidence,omitempty"`
+}
 
 // KBHandle: an identity clue: kind (phone, email, a source's user id kind…) and the raw value.
 type KBHandle struct {
@@ -3901,6 +3945,8 @@ type KBListParams struct {
 	// 0 is 30.
 	Limit  int `json:"limit,omitempty"`
 	Offset int `json:"offset,omitempty"`
+	// An RFC 3339 time: only entities updated at or after it (a chat: its last message).
+	Since string `json:"since,omitempty"`
 }
 
 type KBListResult struct {
@@ -3925,6 +3971,28 @@ type KBEntry struct {
 	Updated   time.Time `json:"updated"`
 	// A project's short / long · status, a chat's dm / group…
 	Extra string `json:"extra,omitempty"`
+	// A chat's source (lark, mail, wechat, github…).
+	Source string `json:"source,omitempty"`
+}
+
+// KBRecentParams: kb.recent (kb.read): what came in from every source in [since, until), newest first, across kinds:
+// one feed for a curation pass. Read a chat's text with kb.day, anything else with kb.get.
+type KBRecentParams struct {
+	// An RFC 3339 time.
+	Since string `json:"since"`
+	// An RFC 3339 time; none is now.
+	Until string `json:"until,omitempty"`
+	// None is chats, docs, meetings, events and recordings.
+	Kinds []string `json:"kinds,omitempty"`
+	// 0 is 50.
+	Limit  int `json:"limit,omitempty"`
+	Offset int `json:"offset,omitempty"`
+}
+
+type KBRecentResult struct {
+	Items      []KBEntry `json:"items"`
+	Total      int       `json:"total"`
+	NextOffset *int      `json:"next_offset,omitempty"`
 }
 
 // KBGetParams: kb.get: one entity, with its most recent messages (recent_chars, none is 12000; 0 leaves them out).
@@ -4046,13 +4114,20 @@ type KBUpdateParams struct {
 	Chats   []string `json:"chats,omitempty"`
 	People  []string `json:"people,omitempty"`
 	// A project's code directories, <machine>:<path>.
-	Dirs      []string `json:"dirs,omitempty"`
-	Projects  []string `json:"projects,omitempty"`
-	MergeInto string   `json:"merge_into,omitempty"`
+	Dirs     []string `json:"dirs,omitempty"`
+	Projects []string `json:"projects,omitempty"`
+	// Refused (conflict) when the user or another extension holds anything on the project folded away; no before.
+	MergeInto string `json:"merge_into,omitempty"`
+	// Kept as the provenance of the fields this write holds.
+	Evidence []KBEvidence `json:"evidence,omitempty"`
+	// Fields this extension holds, handed back to the built-in pipeline; unlocking pinned clears it.
+	Unlock []string `json:"unlock,omitempty"`
 }
 
 type KBUpdateResult struct {
 	ID string `json:"id"`
+	// The previous value of each field written (null when unset; summary is the old text), for the extension's own undo.
+	Before map[string]json.RawMessage `json:"before,omitempty"`
 }
 
 // KBOwnerParams: kb.owner takes nothing.
@@ -4878,6 +4953,8 @@ var newDef = map[string]func() any{
 	"ConnectorArchiveMessage":      func() any { return new(ConnectorArchiveMessage) },
 	"ConnectorItems":               func() any { return new(ConnectorItems) },
 	"ConnectorKBItem":              func() any { return new(ConnectorKBItem) },
+	"ConnectorKBProvenance":        func() any { return new(ConnectorKBProvenance) },
+	"ConnectorKBEvidence":          func() any { return new(ConnectorKBEvidence) },
 	"ConnectorDocTitleParams":      func() any { return new(ConnectorDocTitleParams) },
 	"ConnectorDocTitle":            func() any { return new(ConnectorDocTitle) },
 	"ConnectorSnapshotParams":      func() any { return new(ConnectorSnapshotParams) },
@@ -4921,10 +4998,15 @@ var newDef = map[string]func() any{
 	"ChannelSendResult":            func() any { return new(ChannelSendResult) },
 	"ChannelTypingParams":          func() any { return new(ChannelTypingParams) },
 	"ChannelEditParams":            func() any { return new(ChannelEditParams) },
+	"KBConflict":                   func() any { return new(KBConflict) },
+	"KBEvidence":                   func() any { return new(KBEvidence) },
+	"KBProvenance":                 func() any { return new(KBProvenance) },
 	"KBHandle":                     func() any { return new(KBHandle) },
 	"KBListParams":                 func() any { return new(KBListParams) },
 	"KBListResult":                 func() any { return new(KBListResult) },
 	"KBEntry":                      func() any { return new(KBEntry) },
+	"KBRecentParams":               func() any { return new(KBRecentParams) },
+	"KBRecentResult":               func() any { return new(KBRecentResult) },
 	"KBGetParams":                  func() any { return new(KBGetParams) },
 	"KBGetResult":                  func() any { return new(KBGetResult) },
 	"KBDetail":                     func() any { return new(KBDetail) },
@@ -5012,6 +5094,7 @@ var Calls = map[string]Call{
 	"kb.search":                      {Name: "kb.search", From: "program", Params: "KBSearchParams", Result: "KBSearchResult"},
 	"kb.update":                      {Name: "kb.update", From: "program", Params: "KBUpdateParams", Result: "KBUpdateResult"},
 	"kb.owner":                       {Name: "kb.owner", From: "program", Params: "KBOwnerParams", Result: "KBOwner"},
+	"kb.recent":                      {Name: "kb.recent", From: "program", Params: "KBRecentParams", Result: "KBRecentResult"},
 	"event.kb.changed":               {Name: "event.kb.changed", From: "hub", Params: "KBChangedEvent", Result: "", Event: true},
 	"event.kb.forgotten":             {Name: "event.kb.forgotten", From: "hub", Params: "KBForgottenEvent", Result: "", Event: true},
 	"event.todo.changed":             {Name: "event.todo.changed", From: "hub", Params: "TodoChangedEvent", Result: "", Event: true},

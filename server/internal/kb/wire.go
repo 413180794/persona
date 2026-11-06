@@ -6,5 +6,5 @@ import "github.com/nwverse/persona/server/internal/kbwire"
 func ItemFromWire(w kbwire.Item) Item {
 	return Item{Kind: w.Kind, ID: w.ID, Title: w.Title, URL: w.URL, At: w.At, Where: w.Where, Projects: w.Projects,
 		Note: w.Note, Seen: w.Seen, Tagging: Tagging{Importance: w.Importance, Relevance: w.Relevance, Tags: w.Tags,
-			Locked: w.Locked, TaggedAt: w.TaggedAt, Pinned: w.Pinned, LockedFields: w.LockedFields}}
+			Locked: w.Locked, TaggedAt: w.TaggedAt, Pinned: w.Pinned, LockedFields: w.LockedFields}} // provenance is the store's, never a connector's
 }

@@ -98,6 +98,8 @@ var goTypes = map[string]any{
 	"KBSearchResult":   assistantwire.KBSearchResult{},
 	"KBUpdateParams":   assistantwire.KBUpdateParams{},
 	"KBUpdateResult":   assistantwire.KBUpdateResult{},
+	"KBRecentParams":   assistantwire.KBRecentParams{},
+	"KBRecentResult":   assistantwire.KBRecentResult{},
 	"KBOwnerParams":    struct{}{},
 	"KBOwner":          assistantwire.KBOwner{},
 	"KBChangedEvent":   assistantwire.KBChanged{},
@@ -126,7 +128,7 @@ var sentCalls = []string{connector.MethodSentRecord}
 var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit}
 
 var kbCalls = []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBDay,
-	assistantwire.MethodKBSearch, assistantwire.MethodKBUpdate, assistantwire.MethodKBOwner,
+	assistantwire.MethodKBSearch, assistantwire.MethodKBUpdate, assistantwire.MethodKBOwner, assistantwire.MethodKBRecent,
 	"event." + assistantwire.EventKBChanged, "event." + assistantwire.EventKBForgotten}
 
 // The to-do events the hub tells the extensions granted todos.read (todos.schema.json).

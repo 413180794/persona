@@ -42,7 +42,9 @@ type Tagging struct {
 	Pinned string `json:"pinned,omitempty"`
 	// LockedFields names update fields that automatic writes must preserve.
 	LockedFields []string `json:"locked_fields,omitempty"`
-	persisted    bool
+	// Provenance: the extension holding a locked field (attribution.go); without an entry a locked field is the user's.
+	Provenance map[string]Provenance `json:"provenance,omitempty"`
+	persisted  bool
 }
 
 // Chat is one conversation: a Feishu chat (lark-<feedId>) or the mail exchanged with one address (mail-<account>-<addr>).

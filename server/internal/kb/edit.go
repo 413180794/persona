@@ -92,7 +92,7 @@ func (s *Store) putEntity(kind, id string, v any, t *Tagging, manual bool) error
 		raw, _ := json.Marshal(current)
 		_ = json.Unmarshal(raw, &protected)
 		if !manual {
-			for _, field := range append([]string{"pinned", "locked_fields", "locked"}, protected.LockedFields...) {
+			for _, field := range append([]string{"pinned", "locked_fields", "locked", "provenance"}, protected.LockedFields...) {
 				key := fieldKey(field)
 				if value, ok := current[key]; ok {
 					incoming[key] = value

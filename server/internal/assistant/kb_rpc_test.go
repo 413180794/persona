@@ -166,3 +166,104 @@ func TestKBRPCListPagesEveryEntity(t *testing.T) {
 		t.Fatalf("past the end: %+v", page)
 	}
 }
+
+// An extension's kb.update (as the manager hands it over, #6100): attributed, with evidence and the replaced values;
+// refused with conflict on what the user holds; evidence and unlock only for extensions; kb.list since.
+func TestKBRPCExtensionWrites(t *testing.T) {
+	s := kbServiceOn(t, newFakeHub(), newKBStore(), t.TempDir(), nil)
+	e := kbEng(t, s)
+	if err := e.Store.PutChat(&kb.Chat{ID: "example-chat", Source: "example", Name: "Example"}); err != nil {
+		t.Fatal(err)
+	}
+	ask := func(method, raw string) (string, error) {
+		t.Helper()
+		out, ok, err := s.kbRequest(context.Background(), method, json.RawMessage(raw))
+		if !ok {
+			t.Fatalf("%s not handled", method)
+		}
+		b, _ := json.Marshal(out)
+		return string(b), err
+	}
+	ext := func(params string) (string, error) {
+		return ask(assistantwire.MethodKBExtensionUpdate, `{"extension":"curator","params":`+params+`}`)
+	}
+	got, err := ext(`{"kind":"chats","id":"example-chat","summary":"reviewed","evidence":[{"chat":"example-chat","day":"2026-01-02","n":3}]}`)
+	if err != nil || got != `{"id":"example-chat","before":{"summary":""}}` {
+		t.Fatalf("%s %v", got, err)
+	}
+	got, _ = ask(assistantwire.MethodKBGet, `{"kind":"chats","id":"example-chat","recent_chars":0}`)
+	if !strings.Contains(got, `\"by\":\"ext:curator\"`) && !strings.Contains(got, `"by":"ext:curator"`) {
+		t.Fatalf("provenance not in kb.get: %s", got)
+	}
+	if _, err := e.Apply(kb.KindChat, "example-chat", kb.Update{Name: "the user's name"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ext(`{"kind":"chats","id":"example-chat","name":"extension name"}`)
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != assistantwire.CodeKBConflict || string(re.Data) != `{"owners":{"name":"user"}}` {
+		t.Fatalf("conflict: %v", err)
+	}
+	for _, bad := range []string{
+		`{"kind":"chats","id":"example-chat","evidence":[{"chat":"","day":"2026-01-02"}]}`,
+		`{"kind":"chats","id":"example-chat","evidence":[{"chat":"c","day":"Jan 2"}]}`,
+		`{"kind":"chats","id":"example-chat","unlock":["nope"]}`,
+	} {
+		if _, err := ext(bad); !errors.As(err, &re) || re.Code != bus.CodeInvalidParams {
+			t.Fatalf("%s: %v", bad, err)
+		}
+	}
+	if _, err := ask(assistantwire.MethodKBUpdate, `{"kind":"chats","id":"example-chat","unlock":["summary"]}`); !errors.As(err, &re) || re.Code != bus.CodeInvalidParams {
+		t.Fatalf("unlock without an extension: %v", err)
+	}
+	if _, err := ask(assistantwire.MethodKBExtensionUpdate, `{"params":{"kind":"chats","id":"example-chat"}}`); !errors.As(err, &re) || re.Code != bus.CodeInvalidParams {
+		t.Fatalf("no extension: %v", err)
+	}
+	if got, err := ask(assistantwire.MethodKBList, `{"kind":"chats","since":"2999-01-01T00:00:00Z"}`); err != nil || got != `{"items":[],"tags":[],"total":0}` {
+		t.Fatalf("since: %s %v", got, err)
+	}
+	if _, err := ask(assistantwire.MethodKBList, `{"kind":"chats","since":"yesterday"}`); !errors.As(err, &re) || re.Code != bus.CodeInvalidParams {
+		t.Fatalf("bad since: %v", err)
+	}
+}
+
+// kb.recent is one feed over every source: chats of any source (with it), documents, meetings, events, recordings.
+func TestKBRPCRecentAcrossSources(t *testing.T) {
+	s := kbServiceOn(t, newFakeHub(), newKBStore(), t.TempDir(), nil)
+	e := kbEng(t, s)
+	now := time.Now().UTC()
+	for _, c := range []*kb.Chat{
+		{ID: "lark-a", Source: "lark", Name: "A", LastAt: now.Add(-time.Hour)},
+		{ID: "mail-b", Source: "mail", Name: "B", LastAt: now.Add(-2 * time.Hour)},
+		{ID: "wechat-c", Source: "wechat", Name: "C", LastAt: now.Add(-72 * time.Hour)},
+	} {
+		if err := e.Store.PutChat(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.Store.PutItem(&kb.Item{Kind: kb.KindEvent, ID: "ev", Title: "Standup", At: now.Add(-30 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	since := now.Add(-24 * time.Hour).Format(time.RFC3339)
+	out, ok, err := s.kbRequest(context.Background(), assistantwire.MethodKBRecent, json.RawMessage(`{"since":"`+since+`"}`))
+	if !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	r := out.(assistantwire.KBRecentResult)
+	var got []string
+	for _, en := range r.Items {
+		got = append(got, en.Kind+"/"+en.ID+"/"+en.Source)
+	}
+	if strings.Join(got, ",") != "events/ev/,chats/lark-a/lark,chats/mail-b/mail" || r.Total != 3 {
+		t.Fatalf("recent: %v", got)
+	}
+	out, _, _ = s.kbRequest(context.Background(), assistantwire.MethodKBRecent, json.RawMessage(`{"since":"`+since+`","kinds":["chats"],"limit":1}`))
+	if r := out.(assistantwire.KBRecentResult); len(r.Items) != 1 || r.NextOffset == nil || *r.NextOffset != 1 {
+		t.Fatalf("page: %+v", r)
+	}
+	var re *rpc.Error
+	for _, bad := range []string{`{}`, `{"since":"x"}`, `{"since":"` + since + `","kinds":["nope"]}`} {
+		if _, _, err := s.kbRequest(context.Background(), assistantwire.MethodKBRecent, json.RawMessage(bad)); !errors.As(err, &re) || re.Code != bus.CodeInvalidParams {
+			t.Fatalf("%s: %v", bad, err)
+		}
+	}
+}
