@@ -77,6 +77,9 @@ type channelsBook struct {
 	// ended: the cards that ended lately (interaction.ended), by when: one still being sent to a channel then is closed
 	// (or not asked) as soon as it is out.
 	ended map[string]time.Time
+	// lastEnded: channel -> the latest text ask there that ended without being answered there (answered in the app,
+	// in a terminal, withdrawn), by when: a late reply to it is told so instead of going into the conversation.
+	lastEnded map[string]endedAsk
 	// list is the hub's list of the channels, kept a moment (the runs look at it every second).
 	list   []channel.View
 	listAt time.Time

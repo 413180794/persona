@@ -457,10 +457,49 @@ func (s *Service) channelInteractionDone(ix proto.Interaction) {
 		return
 	}
 	n := len(c.st.Asks)
-	c.st.Asks = slices.DeleteFunc(c.st.Asks, func(a *channel.Ask) bool { return a.ID == ix.ID })
+	c.st.Asks = slices.DeleteFunc(c.st.Asks, func(a *channel.Ask) bool {
+		if a.ID != ix.ID {
+			return false
+		}
+		c.noteEndedLocked(a)
+		return true
+	})
 	if len(c.st.Asks) != n {
 		s.saveChannelStateLocked()
 	}
+}
+
+// endedAskFor is how long a reply to a text ask that ended elsewhere is still read as a late answer to it.
+const endedAskFor = 10 * time.Minute
+
+type endedAsk struct {
+	ask *channel.Ask
+	at  time.Time
+}
+
+// noteEndedLocked remembers a as its channel's latest ask that ended without being answered there.
+func (c *channelsBook) noteEndedLocked(a *channel.Ask) {
+	if c.lastEnded == nil {
+		c.lastEnded = map[string]endedAsk{}
+	}
+	c.lastEnded[a.Channel] = endedAsk{ask: a, at: c.clock()}
+}
+
+// channelAnsweredElsewhere: nothing waits in channel id, but text reads as a late reply to its latest ask that ended
+// elsewhere (#5093): the owner is told so, and the words do not go into the conversation as a new message. Any other
+// message forgets that ask: what comes after it is ordinary.
+func (s *Service) channelAnsweredElsewhere(ctx context.Context, id string, m channel.Message, text string) bool {
+	c := &s.chans
+	c.mu.Lock()
+	e, ok := c.lastEnded[id]
+	delete(c.lastEnded, id)
+	fresh := ok && c.clock().Sub(e.at) < endedAskFor
+	c.mu.Unlock()
+	if !fresh || len(m.Images) > 0 || len(m.Files) > 0 || !channel.ReadsAsAnswer(e.ask, text) {
+		return false
+	}
+	_ = s.channelTell(ctx, id, m.ID, i18n.T(s.botLang(ctx), "assistant-channels_plugin.answered_elsewhere"), channel.OutNote)
+	return true
 }
 
 // channelAnswerAsk takes the owner's message as the answer to the latest thing asked in the channel; false when
@@ -475,7 +514,7 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	waits := slices.ContainsFunc(c.st.Asks, func(a *channel.Ask) bool { return a.Channel == id })
 	c.mu.Unlock()
 	if !waits {
-		return false
+		return s.channelAnsweredElsewhere(ctx, id, m, text)
 	}
 	pending := s.pendingIDs(ctx) // before s.chans.mu: a call to the hub is never made under it
 	l := s.botLang(ctx)
@@ -484,7 +523,13 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	}
 	c.mu.Lock()
 	n := len(c.st.Asks)
-	c.st.Asks = slices.DeleteFunc(c.st.Asks, func(a *channel.Ask) bool { return !pending[a.ID] })
+	c.st.Asks = slices.DeleteFunc(c.st.Asks, func(a *channel.Ask) bool {
+		if pending[a.ID] {
+			return false
+		}
+		c.noteEndedLocked(a) // its interaction.ended was missed
+		return true
+	})
 	var a *channel.Ask
 	for _, x := range c.st.Asks {
 		if x.Channel == id {
@@ -496,8 +541,9 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	}
 	if a == nil {
 		c.mu.Unlock()
-		return false
+		return s.channelAnsweredElsewhere(ctx, id, m, text)
 	}
+	delete(c.lastEnded, id) // this reply answers one still waiting: an ask that ended before it is past
 	// A question ask can sit at its final step while it is otherwise still pending: after a crash between ReadAnswer
 	// and its resolve, or while the final resolve is still in flight. ReadAnswer only says "answer it in the app"
 	// there, so step its last question back first, letting this reply finish it.
@@ -526,6 +572,9 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	c.mu.Lock()
 	if err == nil {
 		c.st.Asks = slices.DeleteFunc(c.st.Asks, func(x *channel.Ask) bool { return x.ID == a.ID })
+		if e, ok := c.lastEnded[id]; ok && e.ask.ID == a.ID {
+			delete(c.lastEnded, id) // answered here: interaction.ended came before the resolve returned
+		}
 	} else {
 		// The answer never reached the hub: keep the ask so the owner can send it again, instead of losing a
 		// multi-question ask's answers so far. ReadAnswer took its last question's answer and moved Step on;

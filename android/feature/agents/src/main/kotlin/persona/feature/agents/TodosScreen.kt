@@ -1,5 +1,9 @@
 package persona.feature.agents
 
+import persona.core.domain.tasks.HoldStep
+import persona.core.domain.tasks.HoldUnblock
+import persona.core.domain.tasks.TodoHold
+import persona.core.domain.tasks.hold
 import persona.core.designsystem.text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -278,6 +282,11 @@ fun TodosScreen(
                                     // One line of what is going on (iOS TodoRow): why it finished on its own, the most urgent
                                     // agent's latest (red while it waits for you), the notes, or that no agent has it yet.
                                     TodoActivityLine(todo, urgent, urgent?.let { cards[it.agent.key] })
+                                    // Done as asked but not live yet (#3306): where it is held, while its agents are not
+                                    // at it again.
+                                    todo.hold?.takeIf { state != TodoState.Working && state != TodoState.NeedsYou }?.let {
+                                        TodoHoldLine(it, Modifier.padding(start = Tokens.Space.xxxl))
+                                    }
 
                                     // 底部相对时间与挂靠 Agent 数量
                                     Row(
@@ -389,6 +398,31 @@ fun TodosScreen(
             }
         }
     }
+}
+
+/** Where a task's finished work is held short of live, in a line (iOS `TodoHold.line`): 停在 PR · 卡在「…」 · 要你点头. */
+@Composable
+internal fun TodoHoldLine(hold: TodoHold, modifier: Modifier = Modifier) {
+    val step = stringResource(when (hold.step) {
+        HoldStep.Pr -> R.string.agents_todo_hold_pr
+        HoldStep.Merged -> R.string.agents_todo_hold_merged
+        HoldStep.Off -> R.string.agents_todo_hold_off
+    })
+    val gate = hold.gate?.let { stringResource(R.string.agents_todo_hold_gate, it) }
+    val who = when (hold.unblock) {
+        HoldUnblock.User -> stringResource(R.string.agents_todo_hold_user)
+        HoldUnblock.Agent -> stringResource(R.string.agents_todo_hold_agent)
+        HoldUnblock.Other -> stringResource(R.string.agents_todo_hold_other)
+        null -> null
+    }
+    Text(
+        listOfNotNull(step, gate, who).joinToString(" · "),
+        style = PersonaTheme.type.caption,
+        color = PersonaTheme.palette.cautionText,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+    )
 }
 
 /** Why the to-do finished on its own, when the hub said; null otherwise (iOS `Todo.autoDoneReason`). */

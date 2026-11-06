@@ -357,6 +357,13 @@
     <string name="agents_todo_save_failed">保存できませんでした：%1$s</string>
     <string name="agents_todo_notes_empty">編集をタップして説明と要件を追加…</string>
     <string name="agents_todo_auto_reason">自動完了の理由：%1$s</string>
+    <string name="agents_todo_hold_pr">PR で止まっています</string>
+    <string name="agents_todo_hold_merged">マージ済み・未リリース</string>
+    <string name="agents_todo_hold_off">リリース済み・既定でオフ</string>
+    <string name="agents_todo_hold_gate">「%1$s」で止まっています</string>
+    <string name="agents_todo_hold_user">あなたの承認待ち</string>
+    <string name="agents_todo_hold_agent">エージェントが続行できます</string>
+    <string name="agents_todo_hold_other">他の人 / CI / 環境待ち</string>
     <string name="agents_todo_active_agents">対応中のエージェント</string>
     <string name="agents_todo_no_agents">割り当てられたエージェントはありません</string>
     <string name="agents_todo_no_agents_hint">下の「エージェントに任せる」をタップして割り当てます。</string>

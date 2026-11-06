@@ -27,6 +27,7 @@ import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.Todo
 import persona.core.contracts.TodoAgent
+import persona.core.contracts.TodoDelivery
 import persona.core.contracts.TodoSpace
 import persona.core.designsystem.AppStyle
 import persona.core.designsystem.PersonaTheme
@@ -60,7 +61,9 @@ class TodosParityShotsTest {
             spaces = listOf(TodoSpace("mac", "app"), TodoSpace("box", "ci")),
             agents = listOf(TodoAgent("mac", "s1", title = "修登录页", cwd = "/code/app"),
                 TodoAgent("mac", "s2", title = "补测试", cwd = "/code/app", source = "spawned", via = "mac/s1"))),
-        Todo("t2", title = "写发布说明", notes = "这周合并的 PR 都要提到", createdAt = ago(300), spaces = emptyList()),
+        // Done as asked, held at its PR (#3306): the row and the page say where and who can unhold it.
+        Todo("t2", title = "写发布说明", notes = "这周合并的 PR 都要提到", createdAt = ago(300), spaces = emptyList(), origin = "conv",
+            delivery = TodoDelivery("pr", gate = "等你批准合并", unblock = "user", at = ago(20))),
         Todo("t3", title = "轮换 API Key", createdAt = ago(400), spaces = emptyList()),
         Todo("t4", title = "整理崩溃报告", createdAt = ago(600), doneAt = ago(120), doneBy = "auto", doneReason = "Agent 已经把报告整理好并发到群里",
             spaces = emptyList()),
@@ -73,6 +76,7 @@ class TodosParityShotsTest {
                     when (scene) {
                         "list" -> TodosScreen(todos, sessions, null, onBack = {}, onOpenTodo = {}, now = now)
                         "empty" -> TodosScreen(emptyList(), emptyList(), null, onBack = {}, onOpenTodo = {}, now = now)
+                        "held" -> TodoDetailScreen("t2", todos, machines, sessions, null, onBack = {}, onOpenSession = {}, onHandOff = {}, now = now)
                         "detail" -> TodoDetailScreen("t1", todos, machines, sessions, null, onBack = {}, onOpenSession = {}, onHandOff = {}, now = now)
                         "picker" -> TodoPickerSheet(todos, { k -> sessions.firstOrNull { it.key == k } }, onDismiss = {}, onPick = {},
                             onCreate = {}, unlink = "移出待办" to {})
@@ -96,6 +100,16 @@ class TodosParityShotsTest {
     @Test fun listBriefDark() = shot("list", AppStyle.Brief, true, "还没交给 Agent")
     @Test fun listBoard() = shot("list", AppStyle.Board, false, "还没交给 Agent")
     @Test fun listBoardDark() = shot("list", AppStyle.Board, true, "还没交给 Agent")
+
+    @Test fun listHeldGlass() = shot("list", AppStyle.Glass, false, "停在 PR · 卡在「等你批准合并」 · 要你点头")
+    @Test fun listHeldBoardDark() = shot("list", AppStyle.Board, true, "停在 PR · 卡在「等你批准合并」 · 要你点头")
+
+    @Test fun heldGlass() = shot("held", AppStyle.Glass, false, "卡在「等你批准合并」")
+    @Test fun heldGlassDark() = shot("held", AppStyle.Glass, true, "卡在「等你批准合并」")
+    @Test fun heldBrief() = shot("held", AppStyle.Brief, false, "卡在「等你批准合并」")
+    @Test fun heldBriefDark() = shot("held", AppStyle.Brief, true, "卡在「等你批准合并」")
+    @Test fun heldBoard() = shot("held", AppStyle.Board, false, "卡在「等你批准合并」")
+    @Test fun heldBoardDark() = shot("held", AppStyle.Board, true, "卡在「等你批准合并」")
 
     @Test fun emptyGlass() = shot("empty", AppStyle.Glass, false, "新建待办")
     @Test fun emptyGlassDark() = shot("empty", AppStyle.Glass, true, "新建待办")

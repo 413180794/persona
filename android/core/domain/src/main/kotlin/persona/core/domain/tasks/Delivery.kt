@@ -1,0 +1,32 @@
+package persona.core.domain.tasks
+
+import persona.core.contracts.Todo
+
+// Where a task's finished work is held short of live (#3306, docs/todos.md「交付」): stopped at a PR, merged but not
+// live, or live but off by default; with what holds it and who can unhold it. iOS `TodoHold`.
+
+enum class HoldStep { Pr, Merged, Off }
+
+enum class HoldUnblock { User, Agent, Other }
+
+data class TodoHold(val step: HoldStep, val gate: String?, val unblock: HoldUnblock?)
+
+/** The hold while the to-do is open; null once done, live, with nothing to ship, or from a hub that does not judge it. */
+val Todo.hold: TodoHold?
+    get() {
+        if (isDone) return null
+        val d = delivery ?: return null
+        val step = when (d.state) {
+            "pr" -> HoldStep.Pr
+            "merged" -> HoldStep.Merged
+            "off" -> HoldStep.Off
+            else -> return null
+        }
+        val unblock = when (d.unblock) {
+            "user" -> HoldUnblock.User
+            "agent" -> HoldUnblock.Agent
+            "other" -> HoldUnblock.Other
+            else -> null
+        }
+        return TodoHold(step, d.gate?.trim()?.takeIf(String::isNotEmpty), unblock)
+    }

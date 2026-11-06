@@ -275,7 +275,7 @@ curl -X POST '<hub 地址>/api/v1/todos/retitle' -H 'Authorization: Bearer <toke
 - **只有 `live` 和 `none` 才自动完成**：`verdict` 是 `done` 而交付没到位的，结论改成 `undelivered`，待办留着。
   主对话督办的任务（#3124，本来就不由 hub 关）这时不进「等验收」，督办消息写「做完了但还没上线：…（停在 PR，卡在「…」）」，交给主对话去追或拿给用户批。
 - **待办上写着卡在哪**：判断结果（除了 `not_done`）记在待办的 `delivery`（`{"state", "gate", "unblock", "at"}`，和阶段条一起存在 settings `assistant.todo_stages`，没有新表），阶段条至少走到对应的一步（PR → 审查、合入 → 合入、默认关 / 上线 → 部署）。
-  网页的待办行在开着、`state` 是 `pr` / `merged` / `off` 时多一行「停在 PR · 卡在「…」· 要你点头」；iOS / Android 还没画（字段可选，老客户端不受影响）。
+  网页的待办行在开着、`state` 是 `pr` / `merged` / `off` 时多一行「停在 PR · 卡在「…」· 要你点头」；Android 的待办行（Agent 没在工作、没在等你时）和待办详情页同样画这一行（`core:domain` 的 `Todo.hold`）；iOS / Mac 还没画（字段可选，老客户端不受影响）。
 - **等用户点头的一次批**：助手的实时快照里，每个任务后面写着交付卡在哪；`unblock = user` 的开着的任务另列一组「等用户点头才能上线的」（最早的十件）。
   助手的 CLAUDE.md 让它把这些合成一条一次列给用户，用户一句话批完后用 `agent_send` 分头告诉对应的 Agent，不再每冒出一件就单独问一次。
 

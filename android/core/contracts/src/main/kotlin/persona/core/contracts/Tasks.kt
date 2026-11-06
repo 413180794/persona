@@ -155,6 +155,8 @@ data class Todo(
     val spaces: List<TodoSpace>? = null,
     /** The main conversation supervises it (#3124): what done means and where its review stands; null from an older hub. */
     val supervision: Supervision? = null,
+    /** How far its finished work went out, and short of live where it is held (#3306); null from an older hub or before judged. */
+    val delivery: TodoDelivery? = null,
 ) {
     val isDone: Boolean get() = doneAt != null
     val activeAgents get() = agents.filter { it.releasedAt == null }
@@ -164,6 +166,19 @@ data class Todo(
     val updated: Instant? get() = parseTime(updatedAt)
     val done: Instant? get() = parseTime(doneAt)
 }
+
+/**
+ * How far a task's finished work went out (#3306, docs/todos.md「交付」): [state] live, pr, merged, off or none (kept as
+ * the hub sent it), [gate] what holds it, [unblock] who can unhold it (user, agent, other).
+ */
+@KeepGeneratedSerializer
+@Serializable(with = TodoDeliverySerializer::class)
+data class TodoDelivery(
+    val state: String = "",
+    val gate: String? = null,
+    val unblock: String? = null,
+    @WireTime val at: String? = null,
+)
 
 /** One criterion as a review found it (#3124). */
 @KeepGeneratedSerializer
@@ -333,6 +348,7 @@ object TodoSerializer : WireSerializer<Todo>(Todo.generatedSerializer())
 object ReviewCheckSerializer : WireSerializer<ReviewCheck>(ReviewCheck.generatedSerializer())
 object TaskReviewSerializer : WireSerializer<TaskReview>(TaskReview.generatedSerializer())
 object SupervisionSerializer : WireSerializer<Supervision>(Supervision.generatedSerializer())
+object TodoDeliverySerializer : WireSerializer<TodoDelivery>(TodoDelivery.generatedSerializer())
 object TodosResponseSerializer : WireSerializer<TodosResponse>(TodosResponse.generatedSerializer())
 object FeedResponseSerializer : WireSerializer<FeedResponse>(FeedResponse.generatedSerializer())
 object TodosEventSerializer : WireSerializer<TodosEvent>(TodosEvent.generatedSerializer())

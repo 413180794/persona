@@ -357,6 +357,13 @@
     <string name="agents_todo_save_failed">保存失败：%1$s</string>
     <string name="agents_todo_notes_empty">点击编辑添加任务说明与要求…</string>
     <string name="agents_todo_auto_reason">自动完成理由：%1$s</string>
+    <string name="agents_todo_hold_pr">停在 PR</string>
+    <string name="agents_todo_hold_merged">已合未上线</string>
+    <string name="agents_todo_hold_off">默认关待启用</string>
+    <string name="agents_todo_hold_gate">卡在「%1$s」</string>
+    <string name="agents_todo_hold_user">要你点头</string>
+    <string name="agents_todo_hold_agent">Agent 能接着做</string>
+    <string name="agents_todo_hold_other">等别人 / CI / 环境</string>
     <string name="agents_todo_active_agents">正在做的 Agent</string>
     <string name="agents_todo_no_agents">暂无分配的 Agent</string>
     <string name="agents_todo_no_agents_hint">点击底部「交给 Agent」指派任务。</string>

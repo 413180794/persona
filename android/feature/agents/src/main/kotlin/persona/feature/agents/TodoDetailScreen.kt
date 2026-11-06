@@ -1,5 +1,6 @@
 package persona.feature.agents
 
+import persona.core.domain.tasks.hold
 import persona.feature.chat.ReviewChecklist
 import persona.core.designsystem.text
 import androidx.compose.foundation.background
@@ -294,6 +295,8 @@ fun TodoDetailScreen(
                                 color = PersonaTheme.palette.ink3
                             )
                         }
+                        // Done as asked but not live yet: where it is held and who can unhold it (#3306).
+                        todo.hold?.let { TodoHoldLine(it) }
                         // What done means for a task the main conversation supervises, and where its review stands (#3124).
                         ReviewChecklist(todo)
                     }

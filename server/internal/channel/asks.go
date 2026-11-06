@@ -268,6 +268,30 @@ func ReadAnswer(l i18n.Lang, a *Ask, text string) (r proto.Resolution, done bool
 	return r, false, i18n.T(l, "channel-asks.again_app")
 }
 
+// ReadsAsAnswer says whether text reads as a reply to a, not an ordinary message: 允许 / 拒绝, a plan's numbers or
+// approve words, a terminal dialog's option number, or one of the current question's options. Free words do not: they
+// may be a new message. It is used for an ask that ended elsewhere, whose late reply must not go into the conversation.
+func ReadsAsAnswer(a *Ask, text string) bool {
+	switch a.Kind {
+	case proto.IxPermission:
+		return is(text, yes) || is(text, no)
+	case proto.IxPlan:
+		n, numbered := number(text)
+		return numbered && (n == 1 || n == 2) || is(text, planRun) || is(text, planApprove) || is(text, yes) || is(text, no)
+	case proto.IxScreen:
+		n, ok := number(text)
+		return ok && n >= 1 && n <= len(a.Options)
+	case proto.IxQuestion:
+		step := min(a.Step, len(a.Questions)-1)
+		if step < 0 || len(a.Questions[step].Options) == 0 {
+			return false
+		}
+		_, ok := MatchOption(a.Questions[step], text)
+		return ok
+	}
+	return false
+}
+
 // optionAnswer is text as an answer to q: the options it names (MatchOption: numbers, ordinals, labels; several for a
 // multi-select) become their labels, anything else is the answer itself.
 func optionAnswer(q proto.Question, text string) string {
