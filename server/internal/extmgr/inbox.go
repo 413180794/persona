@@ -708,8 +708,8 @@ func (h *Manager) connectorOf(id string) connector.Connector {
 }
 
 // inboxConfigView is what the inbox goes by of the hub's: the triage rules and the AI 分身's (settings over hub.json),
-// hub.json's inbox.agent and lark.account, the plugins' connectors, and the languages the devices want mail translated
-// into.
+// hub.json's inbox.agent, the default Feishu account (the Feishu extension's, inboxLarkAccount), the plugins'
+// connectors, and the languages the devices want mail translated into.
 func (h *Manager) inboxConfigView(ctx context.Context) assistantwire.InboxConfig {
 	out := assistantwire.InboxConfig{Rules: h.inboxRules(ctx), AgentRules: h.inboxAgentRules(ctx)}
 	extensionConnectors.Range(func(id, _ any) bool { // the plugins' connectors, before a round lists them
@@ -718,8 +718,9 @@ func (h *Manager) inboxConfigView(ctx context.Context) assistantwire.InboxConfig
 	})
 	slices.Sort(out.Extensions)
 	if h.cfg != nil {
-		out.Agent, out.LarkAccount = h.cfg.Inbox.Agent, h.cfg.Lark.Account
+		out.Agent = h.cfg.Inbox.Agent
 	}
+	out.LarkAccount = h.inboxLarkAccount(ctx)
 	if h.mail != nil {
 		out.Translate = h.mailTargets(ctx)
 	}

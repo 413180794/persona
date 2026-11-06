@@ -68,7 +68,7 @@ token 是好的；以前 hub 把所有 401 都当 token 错，丢掉配置里的
 或 `ol_account` 参数选账号，账号编号是 `/accounts` 的 `id`，不是飞书用户 ID；添加账号的账号的资源 URL 自带 `ol_account`）。
 Persona 都读（#1321，之前只读 `lark.account` 一个）：
 
-- **默认账号**：不带 `ol_account` 的 `/api/v1/lark/*` 请求由扩展按自己的飞书网关配置选默认账号（hub 不把 `hub.json` 的 `lark.account` 交给扩展；这个字段现在只给助手的收件箱用，省略是主账号 1）。旧客户端（Android、网页）
+- **默认账号**：不带 `ol_account` 的 `/api/v1/lark/*` 请求由扩展按自己的飞书网关配置选默认账号（hub 不把 `hub.json` 的 `lark.account` 交给扩展；收件箱也以扩展的默认账号为准：管理者向扩展消息来源 `lark` 的 `GET accounts` 取 `default`，取不到时用上次取到的，一次都没取到才用 `lark.account`，省略是主账号 1，#5098）。旧客户端（Android、网页）
   不带 `ol_account`，照旧只看到默认账号。助手（`lark_*` 工具、`ol`）、知识库、`/agent`、风灵月影设置、文档阅读也只用它；助手的 `lark_messages` 可传 `account`
   读别的账号的会话，扩展的命令怎么选账号见扩展带的说明。
 - **按请求选账号**：`/api/v1/lark/*` 全部认 `ol_account=<编号>`（接飞书的扩展提供，原来是 hub 的 lark_accounts.go，每个账号一个飞书网关客户端）；编号不合法回 400，不存在由飞书网关拒绝，不会落回默认账号。媒体 URL 里带的 `ol_account` 原样带回来就对了。

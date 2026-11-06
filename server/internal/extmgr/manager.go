@@ -104,6 +104,7 @@ type Manager struct {
 	channels      channelsHub
 	chans         struct{ in inbound }
 	inbox         inboxSources
+	larkDefault   larkDefault
 	admin         struct {
 		extensions extensionGate
 		now        func() time.Time // the admin UI's clock (tests move it)

@@ -284,7 +284,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   hub 启动时在日志里提示一行。Agent token、容器、地址和加密消息的独立授权（`native_olk_token`）改在接飞书扩展的设置里填，hub.json 里的可以删掉。
 - `lark.account`（可选整数，仍生效）：默认的飞书网关账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号，允许范围 1–999999999，
   例如 `"lark": {"account": 2}`。账号编号来自飞书网关 `/accounts` 的 `id`，不是飞书用户 ID。收件箱里来自默认账号的飞书条目操作时不带 `ol_account`，
-  来自其他账号的带上它们自己的编号；收件箱 Agent 处理飞书条目时也以它为默认账号（`docs/feishu.md`「多账号」）。修改后重启 hub（`systemctl --user restart jarvisd`）。
+  来自其他账号的带上它们自己的编号；收件箱 Agent 处理飞书条目时也用这个默认账号（`docs/feishu.md`「多账号」）。默认账号以接飞书扩展的为准（它的消息来源 `GET accounts` 的 `default`，#5098）：
+  扩展取不到时用上次取到的，管理者启动后一次都没取到才用这个字段。修改后重启 hub（`systemctl --user restart jarvisd`）。
   不同账号的服务端收件箱记录隔离并保留，切回后可继续查看。
 - `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为接飞书扩展（飞书网关）之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
   `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
