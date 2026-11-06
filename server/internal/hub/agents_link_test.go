@@ -86,8 +86,7 @@ func workMachine(t *testing.T, h *Hub) (*Machine, *workNode) {
 	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
 	m := newMachine(h, MachineConfig{ID: "box", Name: "示例电脑", Kind: "local"})
 	m.peer, m.online = hubSide, true
-	h.machines = append(h.machines, m)
-	h.byID["box"] = m
+	registerMachine(h, m)
 	return m, n
 }
 

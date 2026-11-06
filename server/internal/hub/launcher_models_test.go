@@ -20,8 +20,7 @@ import (
 func modelsNode(t *testing.T, h *Hub, cfg MachineConfig, fn func(method string, params map[string]any) (any, error)) {
 	t.Helper()
 	m := newMachine(h, cfg)
-	h.byID[m.cfg.ID] = m
-	h.machines = append(h.machines, m)
+	registerMachine(h, m)
 	hubIn, nodeOut := io.Pipe()
 	nodeIn, hubOut := io.Pipe()
 	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
@@ -132,9 +131,7 @@ func TestSessionStartTakesPickedModel(t *testing.T) {
 func TestProviderModelsAsksAMachineWithTheLauncher(t *testing.T) {
 	h, mux := modelTestHub(t)
 	for _, id := range []string{"a", "c"} {
-		offline := newMachine(h, MachineConfig{ID: id})
-		h.byID[id] = offline
-		h.machines = append(h.machines, offline)
+		registerMachine(h, newMachine(h, MachineConfig{ID: id}))
 	}
 	var asked []string
 	modelsNode(t, h, MachineConfig{ID: "b"}, func(method string, p map[string]any) (any, error) {

@@ -21,8 +21,7 @@ import (
 func startReceiptNode(t *testing.T, h *Hub, start func(context.Context, json.RawMessage) (any, error)) {
 	t.Helper()
 	m := newMachine(h, MachineConfig{ID: "machine"})
-	h.byID[m.cfg.ID] = m
-	h.machines = append(h.machines, m)
+	registerMachine(h, m)
 	hubIn, nodeOut := io.Pipe()
 	nodeIn, hubOut := io.Pipe()
 	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)

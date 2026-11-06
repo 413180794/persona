@@ -15,8 +15,7 @@ import (
 func boardNode(t *testing.T, h *Hub, id string, fn rpc.Handler) *Machine {
 	t.Helper()
 	m := newMachine(h, MachineConfig{ID: id, Name: id})
-	h.byID[id] = m
-	h.machines = append(h.machines, m)
+	registerMachine(h, m)
 	hi, no := io.Pipe()
 	ni, ho := io.Pipe()
 	hp, np := rpc.New("h", ho), rpc.New("n", no)

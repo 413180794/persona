@@ -44,8 +44,7 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 	t.Helper()
 	tn := &taskNode{}
 	m := newMachine(h, MachineConfig{ID: id, Name: id})
-	h.byID[id] = m
-	h.machines = append(h.machines, m)
+	registerMachine(h, m)
 	hubIn, nodeOut := io.Pipe()
 	nodeIn, hubOut := io.Pipe()
 	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)

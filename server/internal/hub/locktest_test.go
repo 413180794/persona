@@ -39,7 +39,10 @@ func lockTestConnection(t *testing.T, h *Hub, device, hello string) *client {
 		t.Fatal(err)
 	}
 	c := &client{device: device, deviceSessionID: id, since: now, out: make(chan []byte, 8)}
+	// A hello starts fleetClientsChanged, which ranges h.clients under h.mu.
+	h.mu.Lock()
 	h.clients[c] = struct{}{}
+	h.mu.Unlock()
 	if hello != "" {
 		h.onClientHello(c, []byte(hello))
 		<-c.out

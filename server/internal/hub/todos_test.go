@@ -221,7 +221,7 @@ func TestTodoHandoffReadOnlyForbidden(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newMachine(h, MachineConfig{ID: "macbook", Name: "MacBook"})
-	h.machines, h.byID["macbook"] = append(h.machines, m), m
+	registerMachine(h, m)
 	for _, c := range []struct{ method, path, body string }{
 		{"POST", "/api/v1/todos", `{"title":"手表写待办"}`},
 		{"PUT", "/api/v1/todos/any_id/agents/m/s", ""},
@@ -414,11 +414,12 @@ func TestHandoffCarriesDecisions(t *testing.T) {
 // answers session.send only, and sees no parameters).
 func capturingNode(t *testing.T, h *Hub, id string, answer func(method string, params json.RawMessage) any) *Machine {
 	t.Helper()
+	h.fleet.mu.Lock()
 	m := h.byID[id]
+	h.fleet.mu.Unlock()
 	if m == nil {
 		m = newMachine(h, MachineConfig{ID: id, Name: id})
-		h.byID[id] = m
-		h.machines = append(h.machines, m)
+		registerMachine(h, m)
 	}
 	hubIn, nodeOut := io.Pipe()
 	nodeIn, hubOut := io.Pipe()
