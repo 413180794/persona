@@ -15,6 +15,11 @@ struct TodoDetailView: View {
     @State private var showHandoff = false
     @State private var showDeleteConfirm = false
     @State private var showReleased = false
+    /// The title the field was last filled with: only a change from it is the user's edit. A title changed elsewhere
+    /// while the field had focus is not taken into it, and must not be written back over (#3330).
+    @State private var titleBaseline = ""
+    /// The title being saved, so one edit is not sent twice.
+    @State private var savingTitle: String?
     /// The PR its work is in, opened in the app's link sheet (docs/ios.md, links open inside the app).
     @State private var link: LinkTarget?
 
@@ -71,8 +76,16 @@ struct TodoDetailView: View {
         .onChange(of: currentTodo) { _, todo in
             // Another todo (the Mac list picked it), or an edit made elsewhere: take the stored text, but never over a
             // field the user is typing in.
-            if let todo { text.reseed(from: todo, editingTitle: titleFocused, editingNotes: isEditingNotes) }
+            if let todo {
+                text.reseed(from: todo, editingTitle: titleFocused, editingNotes: isEditingNotes)
+                if !titleFocused { titleBaseline = todo.title }
+            }
         }
+        // Return is not the only way out of the title: tapping elsewhere or leaving the page saves it too (#3330).
+        .onChange(of: titleFocused) { _, focused in
+            if !focused { commitTitle() }
+        }
+        .onDisappear { commitTitle() }
         .onAppear {
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "showTodoHandoff") {
@@ -81,7 +94,27 @@ struct TodoDetailView: View {
             #endif
             if let todo = currentTodo {
                 text = TodoEditorText(todo)
+                titleBaseline = todo.title
             }
+        }
+    }
+
+    /// Saves the edited title if the user changed it. An emptied title goes back to the stored one rather than staying
+    /// blank.
+    private func commitTitle() {
+        guard let todo = currentTodo else { return }
+        let t = text.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Nothing typed (or only spaces around it): show the stored title, which may have changed elsewhere meanwhile.
+        guard !t.isEmpty, t != titleBaseline, t != todo.title else {
+            if !titleFocused, savingTitle == nil { text.title = todo.title; titleBaseline = todo.title }
+            return
+        }
+        // Return and the focus change that follows it both land here: send each new title once.
+        guard t != savingTitle else { return }
+        savingTitle = t
+        Task {
+            do { _ = try await store.update(id: todo.id, title: t) } catch { model.show(error) }
+            if savingTitle == t { savingTitle = nil }
         }
     }
 
@@ -113,14 +146,7 @@ struct TodoDetailView: View {
                     TextField(String(localized: "To-do title"), text: $text.title)
                         .font(Theme.Font.title)
                         .focused($titleFocused)
-                        .onSubmit {
-                            let t = text.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !t.isEmpty && t != todo.title {
-                                Task {
-                                    do { _ = try await store.update(id: todo.id, title: t) } catch { model.show(error) }
-                                }
-                            }
-                        }
+                        .onSubmit { commitTitle() }
 
                     HStack(spacing: Theme.Space.sm) {
                         Chip(text: todo.statusLabel(status), look: .tone(status.todoTone))

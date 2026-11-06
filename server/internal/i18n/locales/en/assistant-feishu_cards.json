@@ -126,5 +126,6 @@
   "elicitation_fields": "To fill in: {fields}",
   "elicitation_in_app": "Fill it in and submit it in the Persona app.",
   "elicitation_host": "Opens: {host}",
-  "elicitation_confirm_in_app": "After authorizing, confirm in the Persona app."
+  "elicitation_confirm_in_app": "After authorizing, confirm in the Persona app.",
+  "command_typo": "Didn't recognise {got}. Did you mean {want}? To send it to Persona as it is, add one more slash: /{got}. Send /help for every command."
 }

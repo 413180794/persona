@@ -583,7 +583,8 @@ struct PlanForm: View {
             .scaledFrame(maxHeight: Theme.Size.box200)
             .scrollBounceBehavior(.basedOnSize)
             if rejecting {
-                TextField(String(localized: "Tell Claude what to change…"), text: $feedback, axis: .vertical)
+                // The card's own agent: a runtime's plan (DSH…) names it, as AgentPermissionForm does; nil is Claude Code.
+                TextField(String(localized: "Tell \(interaction.agentName ?? "Claude") what to change…"), text: $feedback, axis: .vertical)
                     .lineLimit(2...6)
                     .padding(Theme.Space.m)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))

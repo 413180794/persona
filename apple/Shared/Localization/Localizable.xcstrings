@@ -90523,6 +90523,29 @@
       },
       "extractionState": "manual"
     },
+    "Tell %@ what to change…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tell %1$@ what to change…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@に変更点を伝える…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "告诉 %1$@ 要怎么改…"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Tell %@ what to do instead": {
       "localizations": {
         "en": {

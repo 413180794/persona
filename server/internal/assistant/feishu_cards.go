@@ -1430,9 +1430,76 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		}
 		reply(feishubot.NewCard("", "", i18n.T(l, "assistant-feishu_cards.status_title")).Markdown(strings.TrimSpace(b.String())), "")
 	default:
+		// A command the bot does not know goes on as it is (an agent's own, like /compact). A bare one a letter off
+		// one of the bot's (/stpo for /stop) sent to a Persona conversation would sit in line behind the turn it
+		// meant to stop and be answered: the owner is asked instead. Words after it (/news 今天有什么新闻) make it a
+		// message; an agent's may be the project's own (/lint), so it goes. A doubled slash (//stpo) sends the text
+		// itself, one slash off, but only before a bot command or a slip of one and outside an agent: other text that
+		// starts with // (a "// TODO" note, "//example.com/x") goes as written.
+		toAgent := s.botTargetFor(root, parent).agent()
+		if word, ok := strings.CutPrefix(cmd, "/"); ok && strings.HasPrefix(word, "/") {
+			if literal, ok := strings.CutPrefix(strings.TrimLeftFunc(text, unicode.IsSpace), "/"); ok && !toAgent && (slices.Contains(botCommandNames, word) || botCommandTypo(word) != "") {
+				return false, literal
+			}
+			return false, text
+		}
+		if want := botCommandTypo(cmd); want != "" && rest == "" && !toAgent {
+			s.botNote(ctx, messageID, i18n.T(l, "assistant-feishu_cards.command_typo", i18n.Args{"got": cmd, "want": want}))
+			return true, ""
+		}
 		return false, text
 	}
 	return true, ""
+}
+
+// botCommandNames are the bot's own commands a typo is matched against (the Chinese ones are too short to mistype).
+var botCommandNames = []string{"/help", "/main", "/jarvis", "/new", "/list", "/agents", "/start", "/stop", "/status"}
+
+// agentCommandNames are Claude Code's and Codex's own commands, and plain words, a slip off one of the bot's: they go
+// on as they are.
+var agentCommandNames = map[string]bool{"/stats": true, "/model": true, "/mcp": true, "/init": true, "/exit": true, "/quit": true,
+	"/clear": true, "/cost": true, "/diff": true, "/plan": true, "/undo": true, "/todos": true, "/hooks": true,
+	"/man": true, "/star": true, "/stat": true}
+
+// botCommandTypo is the bot's command cmd is a slip of (a letter dropped, or two side by side swapped), "" when none
+// or when cmd is an agent's own. A letter added or changed is not counted: those make real words (/news, /now,
+// /step, /shop) more often than slips.
+func botCommandTypo(cmd string) string {
+	if agentCommandNames[cmd] {
+		return ""
+	}
+	for _, want := range botCommandNames {
+		if cmd != want && slipOf(cmd, want) {
+			return want
+		}
+	}
+	return ""
+}
+
+// slipOf: got is want with one rune dropped, or with two adjacent runes swapped.
+func slipOf(got, want string) bool {
+	x, y := []rune(got), []rune(want)
+	switch len(y) - len(x) {
+	case 0:
+		var diff []int
+		for i := range x {
+			if x[i] != y[i] {
+				diff = append(diff, i)
+			}
+		}
+		if len(diff) != 2 {
+			return false
+		}
+		i, j := diff[0], diff[1]
+		return j == i+1 && x[i] == y[j] && x[j] == y[i]
+	case 1:
+		i := 0
+		for i < len(x) && x[i] == y[i] {
+			i++
+		}
+		return string(x[i:]) == string(y[i+1:])
+	}
+	return false
 }
 
 // botListNameMost bounds a conversation / agent / device name in a list card: the title is often a whole command
