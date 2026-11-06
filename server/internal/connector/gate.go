@@ -107,17 +107,23 @@ func larkRule(r Rule) (proto.LarkRule, bool) {
 // matching rule's decision, Confirm when none matches. An action the manifest lists in ConfirmAlways is never
 // Allow: a rule that allows it (a "*" one, say) still has the user confirm on the phone. Deny stays Deny.
 func Decide(rules []Rule, m Manifest, id, name string, args json.RawMessage) string {
+	d, _ := decide(rules, m, id, name, args)
+	return d
+}
+
+// decide is Decide and the rule that said so (nil when none did, or when ConfirmAlways turned its Allow into Confirm).
+func decide(rules []Rule, m Manifest, id, name string, args json.RawMessage) (string, *Rule) {
 	var fields map[string]any
 	_ = json.Unmarshal(args, &fields)
 	for _, r := range rules {
 		if matches(r.Connector, id) && matches(r.Action, name) && matchFields(r.Match, fields) {
 			if r.Decision == Allow && m.AlwaysConfirms(name) {
-				return Confirm
+				return Confirm, nil
 			}
-			return r.Decision
+			return r.Decision, &r
 		}
 	}
-	return Confirm
+	return Confirm, nil
 }
 
 type confirmEachKey struct{}
@@ -145,32 +151,36 @@ func card(summary string) string {
 
 // gate lets the action name of c through or answers instead of it: Deny refuses, Confirm asks the user with the
 // card's words (Describe, and who will see it) and refuses unless they allow it, Allow says nothing. A nil result
-// means run it, with the very args the card was made from.
-func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string, args json.RawMessage, ask Ask) *proto.ToolResult {
-	d := Decide(rules, c.Manifest(), c.ID(), name, args)
+// means run it, with the very args the card was made from; how it was let through comes with it.
+func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string, args json.RawMessage, ask Ask) (*proto.ToolResult, LetThrough) {
+	d, rule := decide(rules, c.Manifest(), c.ID(), name, args)
 	if d == Allow && confirmsEach(ctx) {
 		d = Confirm
 	}
+	var through LetThrough
 	switch d {
 	case Deny:
 		res := proto.ErrorResult(proto.ToolErrorDeclined, "The hub's rules (connector_gate) do not allow "+name+".", 0)
-		return &res
+		return &res, through
+	case Allow:
+		through = LetThrough{Kind: ThroughRule, Rule: rule}
 	case Confirm:
 		act, summary, err := a.Describe(ctx, name, args)
 		if err != nil {
 			res := proto.TextResult(err.Error(), true)
-			return &res
+			return &res, through
 		}
 		summary = card(summary)
+		through = LetThrough{Kind: ThroughCard, Summary: summary}
 		if act.Visible != "" {
 			summary += "\n\n谁会看到：" + act.Visible
 		}
 		if ask == nil || !ask(ctx, summary, args) {
 			res := proto.ErrorResult(proto.ToolErrorDeclined, "The user declined "+name+".", 0)
-			return &res
+			return &res, through
 		}
 	}
-	return nil
+	return nil, through
 }
 
 func matches(pattern, s string) bool {

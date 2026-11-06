@@ -309,6 +309,7 @@ The Unix socket and its immediate parent directory must belong to the current us
   The assistant's Lark write rules also go here: `connector` is `lark`, `action` is "method path", e.g. `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`,
   or lark-cli's `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}` (`*` matches one path segment, `**` the rest, `"*"` any call; `match` matches top-level body fields).
   These precede the old `lark_gate`, followed by built-in rules (`docs/assistant.md` ("Lark: the skill shipped with the Lark extension")).
+- `sent_ledger_days` (optional): how many days the ledger of what was written as the user is kept (`docs/connectors.md` "Sent as the user"); omitted or 0 means 90, below 0 keeps it for good.
 - `github` (optional): GitHub connector. `{"auth": {"from_machine": "<machine id>"}}`: use `gh`'s login on that machine (the hub runs `gh auth token` via the node,
   keeping the token only in hub memory, never in the database or logs, or exposing it to the App or assistant). Keep `gh` signed in there, with the login in `~/.config/gh/hosts.yml`
   (keychain credentials cannot be read via ssh: `gh auth login --insecure-storage`). `auth.host` defaults to `github.com`; put a GitHub Enterprise host name here (not implemented yet).

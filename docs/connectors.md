@@ -86,6 +86,20 @@ the hub drops unknown tiers and leaves classification to the model.
   `connector:"lark"` in `connector_gate` (`action` is "method path"), plus the old `lark_gate` and built-in rules (M5).
 - Tapping "Send" in the Inbox is itself confirmation, so `Reply` shows no extra card; the conversation-page composer works the same way (above).
 
+### Sent as the user
+
+Every write that went out through the gate is kept in the ledger `sent_as_user` (migration `manager/0420`, #5278), so the user can see what Persona wrote in their name, where, and why it was allowed. The ledger is on the manager's side: the gate runs there, and so do the approval card and the conversation that asked.
+
+- **What is a row**: a gated call (`Registry.Call`) whose action (`Do`) returned without an error; `Registry.SetSent` tells the manager (`recordSent` in `extmgr/sent_ledger.go`). Not a row: a write the gate denied, one the user declined on the phone, one whose `Do` failed (a program's `Do` that timed out may have happened anyway; nothing is kept for it), and everything the user sent by their own hand (`Registry.Run`: the conversation-page composer, Inbox "Send", Lark sends). Lark writes by the node's gate and recall are not part of this ledger yet.
+- **Columns**: `id`, `at`, `connector`, `action`, `target` (where it went), `text` (what it said, at most 4000 characters), `summary` (one line), `origin`, `let_through`, `message_ref`, `recalled_at`.
+  - `target` is read from the arguments: GitHub comments and reviews `{ref: "owner/name#12"}` (a review also `event`); mail `{to, cc?, bcc?, subject, account_id?}`; any other connector (an extension's too) the fields they usually name a destination by (`chat`, `thread`, `channel`, `conversation`, `recipient`, `to`, `reply_to`, `subject`, `repo`, `number`), and when none is there `{arg_keys: [...]}`, the names of the arguments it was given.
+  - `summary` is the first line of the card's words when the user was asked, else the action and its target.
+  - `origin` is the conversation that asked, `{machine_id, session_id}`; `{}` when the request named none (a pairing token's reply in a connector's thread).
+  - `let_through` says how the gate let it through: `{kind: "rule", rule: {connector, action, match?, decision}}` for the `connector_gate` rule that allowed it, or `{kind: "card", interaction_id, answered_by?}` for the phone card (`answered_by` is `assistant` when the assistant answered it for the user, absent when the user did). A rule's `allow` that `confirm_always` or a health conversation clamped to a card is a card.
+  - `message_ref` (the sent message's id on the other side) and `recalled_at` are not written yet: `mail_send` has no Message-ID to keep, and extension connectors return no message reference.
+- **Retention**: rows older than `sent_ledger_days` (hub.json, 90 when omitted or 0, below 0 keeps them for good) are deleted when the manager starts and every six hours.
+- **Reading**: `GET /api/v1/connectors/sent` (`docs/protocol.md` "Connector API"), for the user's own full devices and the owner on the hub machine only (not answer-only devices, pairing tokens or extensions' tokens). Only the default manager's ledger is read; a second manager keeps its own.
+
 ### Inbox ingestion
 
 The connector provides `InboxThing` (one thing: `Thread` is its key, `Kind` its own kind, `Tier` / `Why` the tier chosen by its rules, and `Done` means it observed completion);

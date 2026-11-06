@@ -66,14 +66,20 @@ func (h *Manager) callConnector(ctx context.Context, by asker, name string, args
 	if inHealth(h.askerCwd(by)) { // a health conversation's writes: on the phone each time (assistant.go inHealth)
 		ctx = connector.ConfirmEach(ctx)
 	}
+	// The ledger of what went out (sent_ledger.go) is told of the write with this ctx: who asked, and the card the user answered.
+	trace := &sentTrace{by: by}
+	ctx = context.WithValue(ctx, sentTraceKey{}, trace)
 	return h.connectors.Call(ctx, name, args, func(ctx context.Context, summary string, input json.RawMessage) bool {
-		return h.approve(ctx, by, name, summary, input)
+		r, id := h.approveCard(ctx, by, name, summary, input)
+		trace.card, trace.answeredBy = id, r.AnsweredBy
+		return r.Allow != nil && *r.Allow
 	})
 }
 
 func (h *Manager) connectorRoutes(api *http.ServeMux) {
 	h.githubAuthRoutes(api)
 	h.connectorThreadRoutes(api)
+	h.sentRoutes(api)
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context(), r.URL.Query().Get("all") == "1")})
 	})

@@ -18,7 +18,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -41,7 +40,7 @@ func (h *Manager) Run(ctx context.Context) error {
 		}
 	}
 	h.initAgents()
-	h.connectors = connector.NewRegistry(h.cfg.ConnectorGate)
+	h.connectors = h.newConnectors(h.cfg.ConnectorGate)
 	h.migrateWeChatState(ctx) // into the channels' state before the assistant and the WeChat program read it
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
@@ -54,6 +53,7 @@ func (h *Manager) Run(ctx context.Context) error {
 	h.startExtensions(ctx)
 	go h.extensionUpgradeLoop(ctx)
 	go h.extensionMetricsLoop(ctx)
+	go h.sentLedgerLoop(ctx)
 	h.apiMux = http.NewServeMux()
 	h.registerRoutes(h.apiMux)
 	close(h.started)

@@ -37,6 +37,10 @@ type Config struct {
 	LegacyExtensions        []ExtensionConfig `json:"plugins,omitempty"`
 	TrustedExtensionMarkets []string          `json:"trusted_extension_markets,omitempty"`
 
+	// SentLedgerDays is how many days the ledger of what was written as the user is kept (sent_ledger.go): 0 or
+	// absent is 90, below 0 keeps it for good.
+	SentLedgerDays int `json:"sent_ledger_days,omitempty"`
+
 	dir string
 }
 

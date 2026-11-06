@@ -33,6 +33,8 @@ type Registry struct {
 	// run is what Start was given, to start a connector switched on later; stop cancels a running one's Run / Watch.
 	run  *starter
 	stop map[string]context.CancelFunc
+	// sent is told of every gated write that went out (SetSent).
+	sent func(ctx context.Context, s Sent)
 }
 
 type starter struct {
@@ -331,15 +333,27 @@ func (r *Registry) call(ctx context.Context, name string, args json.RawMessage, 
 	if !ok || !has(a.Actions(), name) {
 		return proto.TextResult("unknown tool "+name, true)
 	}
+	var through LetThrough
 	if gated {
 		r.mu.RLock()
 		rules := r.rules
 		r.mu.RUnlock()
-		if res := gate(ctx, rules, c, a, name, args, ask); res != nil {
+		res, how := gate(ctx, rules, c, a, name, args, ask)
+		if res != nil {
 			return *res
 		}
+		through = how
 	}
-	return result(a.Do(ctx, name, args))
+	text, err := a.Do(ctx, name, args)
+	if gated && err == nil {
+		r.mu.RLock()
+		sent := r.sent
+		r.mu.RUnlock()
+		if sent != nil {
+			sent(ctx, Sent{At: time.Now(), Connector: c.ID(), Action: name, Args: args, Text: writtenText(args), Result: text, Through: through})
+		}
+	}
+	return result(text, err)
 }
 
 // result is a tool's answer, or its error: a program's error with code rate_limited (serve.CodeRateLimited) is a
