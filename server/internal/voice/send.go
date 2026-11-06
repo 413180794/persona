@@ -97,7 +97,7 @@ func (c *conversation) handOverBound(task, delegation string, gen int, at time.T
 	if kind == "answer" {
 		task = rest
 	}
-	c.whenSpoken(at, func(spoken bool) {
+	c.whenSaid(at, func(spoken bool) {
 		c.mu.Lock()
 		if task == "" { // the model said nothing of what to do: what the user said
 			task = c.lastUserLine()

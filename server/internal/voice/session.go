@@ -40,7 +40,19 @@ const (
 
 type line struct {
 	id, text, source string
+	at               time.Time // a user's line: when they stopped saying it; the model's: when it began
 }
+
+// heardLine is a line of what was said, with its line's at (zero: not known, a line the app handed back).
+type heardLine struct {
+	prompts.VoiceLine
+	at time.Time
+}
+
+// captionLateMost is the longest a user's caption comes after the voice it is of: the measured service sends the whole
+// line 1.2–1.4 s after they stop (docs/lessons/voice.md "Timeline"). The app's voice older than that is of something
+// before the caption (a line too quiet for the energy rule): the caption is then placed as it came.
+const captionLateMost = 3 * time.Second
 
 type conversation struct {
 	pl     *Plugin
@@ -79,9 +91,9 @@ type conversation struct {
 
 	userSeq, asstSeq int
 	user, asst       *line
-	history          []prompts.VoiceLine
-	sawTranscript    bool // the service sends the model's speech as transcript deltas (text deltas are then the same words)
-	dropAudio        bool // the app interrupted: drop the rest of the answer
+	history          []heardLine // in the order it was said (place)
+	sawTranscript    bool        // the service sends the model's speech as transcript deltas (text deltas are then the same words)
+	dropAudio        bool        // the app interrupted: drop the rest of the answer
 	lastAudio        time.Time
 	delegations      map[string]int         // open delegation id -> the session (gen) it belongs to
 	pending          map[string]*time.Timer // delegations waiting for their tool call
@@ -287,7 +299,9 @@ func (c *conversation) negotiate(s *startFrame) error {
 	go func() { c.prep <- c.prepare(c.ctx, machine, session, recent) }()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.history = historyOf(s.History)
+	for _, l := range historyOf(s.History) {
+		c.history = append(c.history, heardLine{VoiceLine: l})
+	}
 	if s.Resume != nil {
 		for _, r := range s.Resume.Runs {
 			if r.ID == "" || !openState(r.State) || len(c.resume) == resumeMost {
@@ -390,7 +404,7 @@ func upstreamCode(err error) string {
 func (c *conversation) connect(woken bool) error {
 	c.mu.Lock()
 	p, w, model, voice := c.p, c.w, c.model, c.voice
-	history := append([]prompts.VoiceLine(nil), c.history...)
+	history := voiceLines(c.history)
 	if !c.started && !c.resumed {
 		history = nil
 	}
@@ -679,7 +693,7 @@ func (c *conversation) handle(gen int, e event) {
 			c.gate.user = time.Now()
 			c.userAt = c.gate.user
 		}
-		c.userText(e.text, e.replace, e.final)
+		c.userText(e.text, e.replace, e.final, c.spokeAt(time.Now()))
 	case evAssistant:
 		c.asstText(e.text, e.replace, e.final, e.name)
 	case evReply:
@@ -748,18 +762,51 @@ func (c *conversation) handle(gen int, e event) {
 	}
 }
 
-func (c *conversation) remember(role, text string) {
+// remember adds a finished line to what was said (mu held), in the order it was said.
+func (c *conversation) remember(role, text string, at time.Time) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return
 	}
-	c.history = append(c.history, prompts.VoiceLine{Role: role, Text: text})
+	c.history = place(c.history, heardLine{VoiceLine: prompts.VoiceLine{Role: role, Text: text}, at: at})
 	if len(c.history) > historyLines {
 		c.history = c.history[len(c.history)-historyLines:]
 	}
 }
 
-func (c *conversation) userText(text string, replace, final bool) {
+// place adds l to lines in the order they were said. The user's caption comes after they stop, often after the model
+// has begun to answer them (docs/lessons/voice.md "Timeline"): a user's line goes before the model's lines at the end
+// that began after the user stopped saying it. Never before another line of the user's, nor a line whose time is not
+// known.
+func place(lines []heardLine, l heardLine) []heardLine {
+	i := len(lines)
+	if l.Role == "user" && !l.at.IsZero() {
+		for i > 0 && lines[i-1].Role == "assistant" && !lines[i-1].at.IsZero() && lines[i-1].at.After(l.at) {
+			i--
+		}
+	}
+	return slices.Insert(lines, i, l)
+}
+
+func voiceLines(lines []heardLine) []prompts.VoiceLine {
+	out := make([]prompts.VoiceLine, len(lines))
+	for i, l := range lines {
+		out[i] = l.VoiceLine
+	}
+	return out
+}
+
+// spokeAt is when the user stopped saying what a caption arriving at now is of (mu held): the app's audio last had
+// their voice in it, unless that is too long ago to be it (captionLateMost) or there is none (no audio: now).
+func (c *conversation) spokeAt(now time.Time) time.Time {
+	if v := c.pace.voice; !v.IsZero() && !v.After(now) && now.Sub(v) <= captionLateMost {
+		return v
+	}
+	return now
+}
+
+// userText adds to the user's line; spoke is when they stopped saying text (zero for no text).
+func (c *conversation) userText(text string, replace, final bool, spoke time.Time) {
 	if c.user == nil {
 		if text == "" && !final {
 			return
@@ -773,16 +820,19 @@ func (c *conversation) userText(text string, replace, final bool) {
 	} else {
 		c.user.text += text
 	}
+	if strings.TrimSpace(text) != "" && !spoke.IsZero() {
+		c.user.at = spoke
+	}
 	c.sendApp(map[string]any{"type": "transcript", "id": c.user.id, "role": "user", "text": strings.TrimSpace(c.user.text), "final": final})
 	if final {
-		c.remember("user", c.user.text)
+		c.remember("user", c.user.text, c.user.at)
 		c.user = nil
 	}
 }
 
 func (c *conversation) closeUser() {
 	if c.user != nil {
-		c.userText("", false, true)
+		c.userText("", false, true, time.Time{})
 	}
 }
 
@@ -799,7 +849,7 @@ func (c *conversation) asstText(text string, replace, final bool, source string)
 		}
 		c.closeUser()
 		c.asstSeq++
-		c.asst = &line{id: fmt.Sprintf("a%d", c.asstSeq), source: source}
+		c.asst = &line{id: fmt.Sprintf("a%d", c.asstSeq), source: source, at: time.Now()}
 	}
 	if source == "transcript" && c.asst.source == "text" {
 		c.asst.text, c.asst.source = "", source
@@ -811,7 +861,7 @@ func (c *conversation) asstText(text string, replace, final bool, source string)
 	}
 	c.sendApp(map[string]any{"type": "transcript", "id": c.asst.id, "role": "assistant", "text": strings.TrimSpace(c.asst.text), "final": final})
 	if final {
-		c.remember("assistant", c.asst.text)
+		c.remember("assistant", c.asst.text, c.asst.at)
 		c.asst = nil
 	}
 }
@@ -918,7 +968,7 @@ func (c *conversation) handOver(task, delegation string, gen int, at time.Time) 
 		c.answerCard(card, task, delegation, gen, at)
 		return
 	}
-	c.whenSpoken(at, func(spoken bool) {
+	c.whenSaid(at, func(spoken bool) {
 		// What was said, taken now: the caption of the user's request often comes after the model's call (gate.go).
 		c.mu.Lock()
 		if task == "" { // the model said nothing of what to do: what the user said
@@ -950,14 +1000,23 @@ func (c *conversation) handOver(task, delegation string, gen int, at time.Time) 
 // whenSpoken calls f, in a goroutine, with whether the user-speech gate is open for what the model did when the gate's
 // agent time was at: at once when it is, else once it opens within gateWait (the caption of what the user just said
 // can come after the model acted on it).
-func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) {
+func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) { c.waitGate(at, false, f) }
+
+// whenSaid is whenSpoken for a handover that is sent with what was said: while the user's caption of what they said
+// last is still to come (captionDue), it waits for it too, the gate open or not, within the same gateWait. The
+// caption of the request the model acts on comes 0.1–0.4 s after its call on the measured service (#5506); without
+// it the message would go without the user's own words.
+func (c *conversation) whenSaid(at time.Time, f func(spoken bool)) { c.waitGate(at, true, f) }
+
+func (c *conversation) waitGate(at time.Time, caption bool, f func(spoken bool)) {
 	go func() {
 		deadline := time.Now().Add(gateWait)
 		for {
 			c.mu.Lock()
 			open := c.gate.openSince(at, time.Now())
+			due := caption && c.captionDue()
 			c.mu.Unlock()
-			if open || !time.Now().Before(deadline) {
+			if open && !due || !time.Now().Before(deadline) {
 				f(open)
 				return
 			}
@@ -968,6 +1027,13 @@ func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) {
 			}
 		}
 	}()
+}
+
+// captionDue: the app's audio had the user's voice in it after their last caption (or typed line) came, within
+// captionLateMost (mu held): a caption of it is on its way.
+func (c *conversation) captionDue() bool {
+	v := c.pace.voice
+	return !v.IsZero() && v.After(c.gate.user) && time.Since(v) <= captionLateMost
 }
 
 // tell gives the model a run's words: on its delegation (that delegation's one commentary) when final and the
@@ -1182,16 +1248,17 @@ func (c *conversation) serviceRefused(e event) {
 	go c.deliver(&again)
 }
 
-// recent is the conversation's last n lines, the user's line still open (its caption so far) last.
+// recent is the conversation's last n lines in the order they were said, the user's line still open (its caption so
+// far) among them.
 func (c *conversation) recent(n int) []prompts.VoiceLine {
-	lines := append([]prompts.VoiceLine(nil), c.history...)
+	lines := slices.Clone(c.history)
 	if c.user != nil && strings.TrimSpace(c.user.text) != "" {
-		lines = append(lines, prompts.VoiceLine{Role: "user", Text: strings.TrimSpace(c.user.text)})
+		lines = place(lines, heardLine{VoiceLine: prompts.VoiceLine{Role: "user", Text: strings.TrimSpace(c.user.text)}, at: c.user.at})
 	}
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
-	return clipHistory(lines)
+	return clipHistory(voiceLines(lines))
 }
 
 // heard is when the call was last not quiet: the model's speech played out, the user's voice, a caption or a line of
@@ -1329,7 +1396,7 @@ func (c *conversation) readApp() {
 			}
 			c.mu.Lock()
 			c.closeUser()
-			c.userText(text, true, true)
+			c.userText(text, true, true, time.Now())
 			c.gate.user = time.Now()
 			w := c.w
 			held := c.holdText(text) // paused or waking: it wakes the upstream, and goes to the next session (suspend.go)

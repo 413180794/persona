@@ -460,6 +460,8 @@ type voiceRun struct {
 - **Body**:
   - Main chat uses `voice/delegated.md`, Agent `voice/agent_message.md`.
   - Both use "original task + `<jarvis-context kind="context" title="语音对话">` (Voice chat) with last 6 original utterances, at most 200 characters each".
+  - #5506: the utterances are in the order they were said, not the order their captions came. A user caption arrives 1.2–1.4 s after they stop, after the fast layer began answering (lessons "Timeline"), so it is placed before the fast layer's lines that began after the user's voice (PCM energy) last ended; the App's `transcript` frames are unchanged. Reconnect / wake instructions ("what was said") use the same order.
+  - #5506: when the gate is already open (the user spoke earlier) but the App's audio had the user's voice after their last caption, the caption of the request that triggered the delegation is still on its way (it comes 0.1–0.4 s after the call): wait for it too, within the same `gateWait`, then build the message. Without it after `gateWait`, send what was captioned.
   - Agent messages do not request "keep replies brief".
   - Still `<jarvis-context>`: attributed blocks have not migrated (`protocol.md` ("Rename")).
 - **Timeout**:

@@ -664,8 +664,10 @@ struct PermissionForm: View {
                 #if os(macOS)
                 // A text link as on iOS: the Mac's default style made it a third push button under Deny / Allow.
                 .buttonStyle(.link)
-                .lineLimit(1)
                 #endif
+                // One line on every platform (button labels never wrap): large text or a narrow card shrinks it.
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .font(Theme.Font.caption)
                 .frame(maxWidth: .infinity)
             }

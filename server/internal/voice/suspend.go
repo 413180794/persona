@@ -283,7 +283,7 @@ func (c *conversation) flushRing() {
 			}
 		case len(c.sus.texts) > 0:
 			text, c.sus.texts = c.sus.texts[0], c.sus.texts[1:]
-			c.remember("user", text)
+			c.remember("user", text, time.Now())
 			c.gate.user = time.Now()
 			out = append(out, w.text(text))
 		default:
