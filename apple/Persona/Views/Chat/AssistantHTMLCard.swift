@@ -246,6 +246,9 @@ struct AssistantHTMLCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let fallback, !fallback.isEmpty {
                 Text(fallback).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(enabled ? 4 : nil)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(fallback)
+                    .accessibilityIdentifier("html-card-fallback")
             }
             if enabled {
                 Button { running = true; stopped = false; actions.restart() } label: {

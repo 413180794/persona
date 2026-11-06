@@ -1986,10 +1986,16 @@ struct ChatView: View {
                     .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
                     .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
             }
-            if !store.loadedOnce && rows.isEmpty {
-                ChatSkeleton().flippedBack()
-            } else if rows.isEmpty && store.pending.isEmpty { // a first message on its way is not 还没有消息
-                EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "还没有消息"), message: String(localized: "发一句话开始吧。")).flippedBack()
+            switch ChatLines.placeholder(lines: lines, hasTranscript: !rows.isEmpty,
+                                         hasPending: !pending.isEmpty || !store.pending.isEmpty || !store.arriving.isEmpty,
+                                         hasLiveText: style == .assistant && !(frozen?.text ?? store.liveText).isEmpty,
+                                         loadedOnce: store.loadedOnce) {
+            case .loading:
+                ChatSkeleton().flippedBack().accessibilityIdentifier("chat-loading-placeholder")
+            case .empty:
+                EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "还没有消息"), message: String(localized: "发一句话开始吧。"))
+                    .flippedBack().accessibilityIdentifier("chat-empty-placeholder")
+            case .none: EmptyView()
             }
             if store.hasMore {
                 // Reaching the far (oldest) end loads the page before it — only once the user has dragged the list.

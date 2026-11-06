@@ -38,6 +38,24 @@ struct ChatLinesTests {
         { (s: ChatLinesTests) in s.item(6, .text, text: "做完了") },
     ]
 
+    @Test(arguments: [false, true]) func placeholdersOnlyAppearWithoutAnyContent(loaded: Bool) {
+        let empty = ChatLines.placeholder(lines: [], hasTranscript: false, hasPending: false,
+                                          hasLiveText: false, loadedOnce: loaded)
+        #expect(empty == (loaded ? .empty : .loading))
+        for (transcript, pending, live) in [(true, false, false), (false, true, false), (false, false, true)] {
+            #expect(ChatLines.placeholder(lines: [], hasTranscript: transcript, hasPending: pending,
+                                          hasLiveText: live, loadedOnce: loaded) == .none)
+        }
+        let feed = FeedItem(id: "card-only", conversation: "example", at: .distantPast, kind: .view, ref: "view_example", body: nil)
+        let liveCard = ChatLines.daySections(ChatLines.mergeFeed([], [feed]))
+        #expect(!liveCard.isEmpty)
+        #expect(ChatLines.placeholder(lines: liveCard, hasTranscript: false, hasPending: false,
+                                      hasLiveText: false, loadedOnce: loaded) == .none)
+        let message = ChatLines(openWork: []).build(blocks([item(1, .text, role: "user", text: "示例消息")]), live: nil)
+        #expect(ChatLines.placeholder(lines: message, hasTranscript: true, hasPending: false,
+                                      hasLiveText: false, loadedOnce: loaded) == .none)
+    }
+
     @Test func aMessageItsWorkAndItsAnswer() {
         let lines = ChatLines(openWork: []).build(blocks(oneTurn.map { $0(self) }), live: nil)
         #expect(kinds(lines) == ["user", "work", "answer"])

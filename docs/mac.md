@@ -225,6 +225,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   `scripts/app/mac_shot.sh jarvis -tab assistant`、`scripts/app/mac_shot.sh inbox -tab mail`、`scripts/app/mac_shot.sh settings -tab settings`。
   背后是 DEBUG 开关 `-macSnapshot <png> [-macSnapshotDelay 秒] [-macSnapshotQuit YES] [-macWindowSize WxH] [-macAppearance dark|light] [-macSnapshotScroll 点数]`（`Mac/App/MacSnapshot.swift`）：
   App 自己用 `cacheDisplay` 把窗口画进 PNG，不经过屏幕。`-macSnapshotScroll` 截图前把窗口里能竖着滚的列表都往下滚这么多点（看滚上去的内容和标题栏那一行，#1243）。
+- 主对话富 UI 的批量截图：DEBUG 的 `-macSnapshot <计划.json>` 使用 `MacRichSnapshotBatch`，一次 App 启动完成六个共享示例 × 深浅色。计划包含 `hub`（必须为带端口的 `http://127.0.0.1`）、合成 `conversation`、`output`（`file://` 的新任务临时目录，限 `/tmp` 或 `/private/tmp`，不覆盖已有输出）；启动时还要给同一夹具的 `-pairURL` 和 `-openAssistant server/<合成会话>`。只接受与当前临时配对一致的 loopback 地址，不触碰钥匙串。
+  运行前把 `HOME`、`CFFIXED_USER_HOME` 设为新的任务临时目录，用独立 bundle id 的未签名 Debug 构建；外层加总超时并只清理自己启动的进程。App 在窗口创建前设为禁止激活，不置前、不抢焦点、不为每张图片重启。每次先完成夹具 feed 读取，再等待真实窗口的卡片 ID、标题和无空态／骨架，最后沿用 `cacheDisplay`。HTML 安全 gate 关闭时截 fallback；这不是 HTML 执行验收，也不证明玻璃材质的屏幕效果。
 - 截图和屏幕上的差别（2026-10-31 试出来的）：
   - Liquid Glass / 毛玻璃画不出模糊，露出的是窗口底色；玻璃按钮只剩边框。看布局和文字够用，看材质要真机。
   - SwiftUI `List`（NSTableView）的行作为窗口的一部分画时是空的：截图时每一行单独再画一次、贴回原处（按行上面所有裁剪的视图裁，`.clipped()` 挡掉的不画）；选中行的材质离屏画成黑块，改成画非激活窗口的选中色。

@@ -2,6 +2,10 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 给单表达式 getter 增加提前返回后，末尾 `switch` 要显式写 `return switch`（2026-11-06，#2024）：截图的 `colorScheme` 原本靠整个 getter 的单表达式推断类型，加入批量截图分支后，Mac 实编报 `.dark`／`.light` 无上下文、`nil` 缺类型。保留分支，只补显式返回；不能拿 iOS 编过代替 Mac 验证。
+
+- 助手富卡片也不能挂页面级链接包装（2026-11-06，#2024）：`InteractiveAssistantViewCard` 是聊天的 lazy row，Mac 的 `.pluginLinks` 即使没有打开链接也引入 `GeometryReader`，行高不能跟着正文，截图只露标题、正文跑到下一行输入区后面。Mac 行去掉包装，HTTPS 仍交给 `ChatView` 已有的整页 `openLink`／链接面板；iOS 的原包装不变，不给卡片补固定高度，也不先改翻转或滚动。截图先检查正文标记，不能只等标题。
+
 - 同名的系统文字样式在 Mac 上比 iPhone 小一截，级差也不一样（2026-11-03，#779）：Mac 的 body 13、callout 12、subheadline 11、footnote 和 caption 都是 10。
   照搬 iPhone 的选法（说明用 footnote、标签用 caption），时间、来源都只有 10pt；而 Markdown 的基础字号写死 17（iPhone 的 body），回答和档案比用户消息大一截，
   同一页上忽大忽小。`Theme.Font` 在 Mac 上按自己的字号表画系统字体，`Theme.Level.size` 跟着分两套，凡是按「正文大小」算的地方（Markdown、表格、飞书的 `LarkTextBase`）取 `Theme.Level`。

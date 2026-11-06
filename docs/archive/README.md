@@ -29,4 +29,5 @@
 | `extension-notification-apple-acceptance.md` | 2026-11-06 Apple 扩展通知阶段验收：类别注册、点击和前后台动作、深浅色 UI，以及 #1862 尚未完成的系统位置 |
 | `assistant-rich-ui-predeployment-2026-11-06.md` | 2026-11-06 主对话富 UI：统一正式源码的真实模型预部署闭环、旧失败记录、SDK looks 未过与生产暂停边界（#2017） |
 | `apple-html-mac-normal-20261106.md` | 2026-11-06 最新 Apple Coordinator 的 Mac 正常矩阵：13 方法／21 展开用例、终止保护、原样抽取指纹和未完成的死循环／真实 OS 终止边界（#2025） |
+| `apple-rich-ui-shots-20261106.md` | 2026-11-06 Apple 富 UI 空态和截图收尾：五风格深浅色 60 张、Mac 实际 App 正文截图、行高修复与失败记录（#2024） |
 | `plan-telegram.md` | 2026-11-03 Telegram 连接器的方案（gotd、分步登录、收件箱、`tg` 命令行）；2026-11-05 起它是扩展（#1704；0.1.3 起代码在 `nwverse/persona-extensions`，#2057），不在本仓库 |

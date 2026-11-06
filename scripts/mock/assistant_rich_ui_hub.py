@@ -135,6 +135,12 @@ def main():
                     options = json.loads(self.body() or b"{}")
                     select_sample(name, inline=options.get("inline", False))
                     return self.send_json({"ok": True})
+                if route == "/mock/rich/empty":
+                    self.body()
+                    select_sample("decision")
+                    state["feed"] = []
+                    base.TASK_FEED[conversation] = []
+                    return self.send_json({"ok": True})
                 if route == "/mock/rich/update-silent":
                     self.body()
                     state["envelope"]["version"] += 1

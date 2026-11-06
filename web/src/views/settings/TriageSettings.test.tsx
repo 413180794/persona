@@ -1,0 +1,124 @@
+// @vitest-environment jsdom
+// 设置 › 会话分诊 (#4491): while the hub has not answered there are no switches to flip; a read that fails says why and
+// 重试 reads again, and is never drawn as "all off" (a flip would PUT off over the switches the hub has on); a hub
+// without the route says it does not support it.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type Pending = { method: string; json?: unknown; resolve: (v: unknown) => void; reject: (e: unknown) => void };
+const pending: Pending[] = [];
+vi.mock("../../lib/api", async (orig) => ({
+  ...(await orig<typeof import("../../lib/api")>()),
+  api: (_path: string, init?: { method?: string; json?: unknown }) =>
+    new Promise((resolve, reject) => pending.push({ method: init?.method ?? "GET", json: init?.json, resolve, reject })),
+}));
+const toast = vi.fn();
+vi.mock("../../ui/atoms", async (orig) => ({ ...(await orig<typeof import("../../ui/atoms")>()), toast: (...a: unknown[]) => toast(...a) }));
+
+const { TriageSettings } = await import("./TriageSettings");
+const { ApiError } = await import("../../lib/api");
+
+let root: Root;
+let host: HTMLDivElement;
+beforeEach(() => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  pending.length = 0;
+  toast.mockClear();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+});
+
+const ON = { enabled: true, auto_continue: true, wake: true, decide: true };
+const render = () => act(async () => root.render(<TriageSettings />));
+const switches = () => [...host.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
+const named = (label: string) => switches().find((b) => b.getAttribute("aria-label") === label);
+const retry = () => [...host.querySelectorAll("button")].find((b) => b.textContent === "重试");
+const answer = async (i: number, v: unknown) => act(async () => pending[i].resolve(v));
+const fail = async (i: number, e: Error) => act(async () => pending[i].reject(e));
+const hubSays = (status: number, msg: string) => new ApiError(status, msg, { error: msg }, true);
+
+describe("设置 › 会话分诊", () => {
+  it("hub 还没答时只写加载中，没有能点的开关", async () => {
+    await render();
+    expect(switches()).toHaveLength(0);
+    expect(host.textContent).toContain("加载中");
+    await answer(0, ON);
+    expect(switches()).toHaveLength(4);
+    expect(named("会话分诊")!.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("读不到时不画成全关：说为什么，没有开关可点，点重试再读", async () => {
+    await render();
+    await fail(0, hubSays(503, "hub 没回答"));
+    expect(switches()).toHaveLength(0);
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("没读到会话分诊的开关：hub 没回答");
+    await act(async () => retry()!.click());
+    expect(pending).toHaveLength(2);
+    expect(pending[1].method).toBe("GET");
+    expect(host.textContent).not.toContain("没读到");
+    await answer(1, ON);
+    expect(retry()).toBeUndefined();
+    expect(named("出错自动继续")!.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("重试读到后改一项，其余几项照 hub 的值发出去", async () => {
+    await render();
+    await fail(0, hubSays(503, "busy"));
+    await act(async () => retry()!.click());
+    await answer(1, ON);
+    await act(async () => named("到点叫醒")!.click());
+    expect(pending[2].method).toBe("PUT");
+    expect(pending[2].json).toEqual({ ...ON, wake: false });
+  });
+
+  it("hub 不让改：开关回到原来的样子，并提示没改成", async () => {
+    await render();
+    await answer(0, ON);
+    await act(async () => named("要你决定的开卡片")!.click());
+    expect(named("要你决定的开卡片")!.getAttribute("aria-checked")).toBe("false"); // optimistic
+    await fail(1, hubSays(500, "500"));
+    expect(named("要你决定的开卡片")!.getAttribute("aria-checked")).toBe("true");
+    expect(toast).toHaveBeenCalledWith("没改成：500", "error");
+  });
+
+  it("重试又失败：写新的原因，还能再点重试", async () => {
+    await render();
+    await fail(0, hubSays(503, "第一次"));
+    await act(async () => retry()!.click());
+    await fail(1, new TypeError("Failed to fetch"));
+    expect(switches()).toHaveLength(0);
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("没读到会话分诊的开关：连不上 hub");
+    await act(async () => retry()!.click());
+    expect(pending).toHaveLength(3);
+    await answer(2, ON);
+    expect(switches()).toHaveLength(4);
+  });
+
+  it("hub 没有这个接口（太旧）：说不支持，不给重试", async () => {
+    await render();
+    await fail(0, hubSays(404, "not found"));
+    expect(switches()).toHaveLength(0);
+    expect(retry()).toBeUndefined();
+    expect(host.textContent).toContain("这台 hub 还不支持会话分诊");
+  });
+
+  it("会话分诊关着时另外三项不能点；正在保存时四项都不能点", async () => {
+    await render();
+    await answer(0, { enabled: false, auto_continue: false, wake: false, decide: false });
+    expect(named("会话分诊")!.disabled).toBe(false);
+    expect(named("要你决定的开卡片")!.disabled).toBe(true);
+    expect(named("出错自动继续")!.disabled).toBe(true);
+    expect(named("到点叫醒")!.disabled).toBe(true);
+    await act(async () => named("会话分诊")!.click());
+    expect(switches().every((b) => b.disabled)).toBe(true);
+    await answer(1, { enabled: true, auto_continue: false, wake: false, decide: false });
+    expect(named("会话分诊")!.disabled).toBe(false);
+    expect(named("到点叫醒")!.disabled).toBe(false);
+  });
+});

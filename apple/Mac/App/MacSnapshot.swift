@@ -10,11 +10,17 @@ import SwiftUI
 /// bar's row, #1243). `scripts/app/mac_shot.sh` drives it.
 @MainActor enum MacSnapshot {
     /// Before any window exists.
-    static func applyAppearanceIfAsked() { applyAppearance(UserDefaults.standard.string(forKey: "macAppearance")) }
+    static func applyAppearanceIfAsked() {
+        if isRichBatch { NSApplication.shared.setActivationPolicy(.prohibited) }
+        applyAppearance(UserDefaults.standard.string(forKey: "macAppearance"))
+    }
+
+    static var isRichBatch: Bool { UserDefaults.standard.string(forKey: "macSnapshot")?.hasSuffix(".json") == true }
 
     /// `-macAppearance` for SwiftUI too: `NSApp.appearance` alone left List rows in the light scheme's colors.
     static var colorScheme: ColorScheme? {
-        switch UserDefaults.standard.string(forKey: "macAppearance")?.lowercased() {
+        if isRichBatch { return MacRichSnapshotBatch.shared.scheme }
+        return switch UserDefaults.standard.string(forKey: "macAppearance")?.lowercased() {
         case "dark": .dark
         case "light": .light
         default: nil
@@ -23,6 +29,10 @@ import SwiftUI
 
     static func scheduleIfAsked() {
         let d = UserDefaults.standard
+        if isRichBatch {
+            Task { await MacRichSnapshotBatch.shared.run() }
+            return
+        }
         let size = d.string(forKey: "macWindowSize").flatMap(parseSize)
         if let size {
             // The window exists a moment after launch; size it as soon as it does.

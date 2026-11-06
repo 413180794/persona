@@ -6,6 +6,15 @@ import PersonaKit
 /// their steps as lines. A plain function of the blocks and what is open, so `ChatView` memoizes it by
 /// `ChatStore.version` (`ChatScratch.LinesKey`) and `ChatLinesTests` checks it without a view.
 struct ChatLines {
+    enum Placeholder: Equatable { case loading, empty, none }
+
+    /// Feed cards and messages still arriving are content too, even before transcript history has loaded.
+    static func placeholder(lines: [ChatLine], hasTranscript: Bool, hasPending: Bool,
+                            hasLiveText: Bool, loadedOnce: Bool) -> Placeholder {
+        guard lines.isEmpty, !hasTranscript, !hasPending, !hasLiveText else { return .none }
+        return loadedOnce ? .empty : .loading
+    }
+
     /// Work lines the user opened; `openAll` flips them all (DEBUG `-openAllWork`).
     var openWork: Set<String>
     var openAll = false

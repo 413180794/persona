@@ -67,9 +67,22 @@ final class AssistantRichCardTests: XCTestCase {
                 XCTAssertTrue(button.waitForExistence(timeout: 30), "the HTML sample was captured before its page became ready")
                 reachHTML(button)
             }
+            XCTAssertFalse(app.otherElements["chat-empty-placeholder"].exists, "a feed-only card is not an empty conversation")
+            XCTAssertFalse(app.staticTexts["还没有消息"].exists)
+            XCTAssertFalse(app.otherElements["chat-loading-placeholder"].exists, "a rendered card must replace the transcript skeleton")
             shot("sample-" + sample)
             app.terminate()
         }
+    }
+
+    @MainActor func testAReallyEmptyConversationStillShowsTheEmptyPrompt() async throws {
+        try await post("mock/rich/empty")
+        try launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["还没有消息"].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.otherElements["assistant-view-card"].exists)
+        XCTAssertFalse(app.otherElements["chat-loading-placeholder"].exists)
+        shot("empty-control")
     }
 
     @MainActor func testHTMLReplyUsesNativeConfirmationAndTheSharedAnswerLock() async throws {
