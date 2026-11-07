@@ -126,10 +126,10 @@ func (h *Manager) pageLegacy(ctx context.Context, p *extension.Extension, hp *hu
 		if in.Action != "" {
 			return extension.ActionResult{}, true, pageError("stale")
 		}
-		canonical := params
-		canonical.UIVersion = extension.UIVersion
+		// The source chooses version-aware behavior as well as drawing. Final
+		// fitting cannot recover in-page navigation after unsupported push/pop.
 		var err error
-		s, err = h.pageReserve(identity, p.Record.ID, item.ID, hp.proc, slot, canonical)
+		s, err = h.pageReserve(identity, p.Record.ID, item.ID, hp.proc, slot, params)
 		if err != nil {
 			return extension.ActionResult{}, true, err
 		}

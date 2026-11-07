@@ -6,6 +6,10 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 
 - Removing a built-in drawing does not make its ID available to extensions. A saved setting can outlive that drawing; letting a new package reclaim the ID would silently change the user's choice. Share reserved-ID validation between hub disk packs and extension manifests, test old manager reports as well as new installs, and always send a valid `current.effective` fallback. Keep the raw choice and timestamp so temporary extension unavailability retains its existing restore behavior.
 
+## Legacy component-page UI versions (#6305)
+
+- Preserve the HTTP caller's UI version when mounting a component-page session. Fitting a modern tree afterward cannot recover a version-aware callback's in-page navigation: forcing version 6 makes it choose push/pop, which older clients correctly omit. Source context and final snapshot fitting have distinct responsibilities; keep both the requested context and unsupported-effect gates, with regressions for old in-page state transitions and modern native navigation. The manager's private callback tree must still be fitted to the canonical version: downgrading that internal tree strips required keys and rejects the session. Copy render parameters for canonical fitting without changing the source's mount context.
+
 ## Lost initial native snapshots (#6251)
 
 - A successful open can allocate a page before its first snapshot reaches the client. Retrying that request after disconnect must reuse the same owner-bound allocation, not reserve another quota slot. Store only a request ID, a bounded-body digest and a completion channel on each live session; concurrent duplicates wait outside the session mutex. Changed payloads and live-connection theft remain rejected. A disconnected retry uses the existing authorized snapshot-first resume path. Independent page instances need independent open IDs; legacy HTTP checkpoints do not share this identity.

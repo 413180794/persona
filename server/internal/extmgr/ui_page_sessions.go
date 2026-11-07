@@ -690,7 +690,13 @@ type pageRenderState struct {
 }
 
 func pageRenderInput(s *pageSession) pageRenderState {
-	return pageRenderState{id: s.id, epoch: s.epoch, native: s.native, manifest: s.manifest, item: s.item, components: s.components, slot: s.slot, params: s.params, tree: s.tree}
+	params := s.params
+	if s.legacy {
+		// HTTP source context retains the caller's version, while the manager's
+		// private callback tree needs canonical keys. Downgrade only its response.
+		params.UIVersion = extension.UIVersion
+	}
+	return pageRenderState{id: s.id, epoch: s.epoch, native: s.native, manifest: s.manifest, item: s.item, components: s.components, slot: s.slot, params: params, tree: s.tree}
 }
 
 // pagePrepare is pure bounded tree work, independent of session mutation and RPC.

@@ -11,6 +11,18 @@ let update: (n: number) => void = () => {};
 let prompt = "Synthetic confirmation", effectUpdates = false, renders = 0, disposes = 0;
 let rootGate: Promise<void> | undefined, releaseRoot: (() => void) | undefined;
 let nativeResult: unknown, reviewEnabled = false, lastValues: unknown;
+let navigationEnabled = false, mountUIVersion = 0;
+function Navigation({ uiVersion }: { uiVersion: number }) {
+  const [page, setPage] = useState("home");
+  const push = { state: "detail", title: "Synthetic detail" };
+  return <View key="root"><Section key="main">
+    <Text key="location" text={page} />
+    <Button key="navigate" title="Synthetic navigation" action={callback(() => {
+      if (uiVersion < 3) { setPage(page === "home" ? "detail" : "home"); return; }
+      return { push };
+    }, uiVersion < 3 ? {} : { push })} />
+  </Section></View>;
+}
 const save = (values: unknown) => { writes++; lastValues = values; return nativeResult; };
 function Page() {
   renders++;
@@ -32,7 +44,7 @@ const service = setInterval(() => serviceTicks++, 10);
 function start(inputStream: NodeJS.ReadableStream, outputStream: NodeJS.WritableStream) {
 let heldMethod = "";
 const methods = new Map<string, string>(), held: string[] = [];
-const protocol = connect({ id:"example-page",version:"1.0.0",ui:{home:componentPage(async () => { if (rootGate) await rootGate; return <Page key="page" />; })},
+const protocol = connect({ id:"example-page",version:"1.0.0",ui:{home:componentPage(async request => { if (rootGate) await rootGate; mountUIVersion = request.ui_version; return navigationEnabled ? <Navigation key="page" uiVersion={request.ui_version} /> : <Page key="page" />; })},
  namespaces:{ test: async (method, params) => {
   if(method==="delay") { heldMethod=params.method; return {}; }
   if(method==="release") { heldMethod=""; for (const line of held.splice(0)) outputStream.write(line+"\n"); return {}; }
@@ -45,7 +57,8 @@ const protocol = connect({ id:"example-page",version:"1.0.0",ui:{home:componentP
   if(method==="update") { update(params.count); await new Promise(resolve => setTimeout(resolve, 5)); return {}; }
   if(method==="prompt") { prompt=params.prompt; update(params.count); await new Promise(resolve => setTimeout(resolve, 5)); return {}; }
   if(method==="restart") process.exit(0);
-  if(method==="stats") return {writes,uiTicks,serviceTicks,renders,disposes,mounts,held:held.length};
+  if(method==="navigation") { navigationEnabled=params.enabled; return {}; }
+  if(method==="stats") return {writes,uiTicks,serviceTicks,renders,disposes,mounts,mountUIVersion,held:held.length};
   throw new Error("unknown fixture method");
  }},
 }, line => {
