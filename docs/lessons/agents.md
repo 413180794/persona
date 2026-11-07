@@ -528,3 +528,7 @@ Closing is not durable merely because the card vanished: persist the interaction
   change.
 - Probing herdr from Python with `subprocess.run` in another thread of the same process shows a ~110 ms stall on many
   of the spawns. That is the probe, not herdr: the same spawns from a separate process show none.
+
+## Profile acceptance must include launcher defaults
+
+A purpose-level model override does not change the managed launcher's default. Launcher health checks invoke the launcher without that override, and small-model and subagent paths read their own environment aliases. When testing a model profile, read back the launcher's main, small, subagent and alias fields, then exercise a real health check. Preserve sealed credentials and unrelated fields; capture the before-image in the same transaction as the switch. A purpose-only readback is not evidence that every execution path changed.

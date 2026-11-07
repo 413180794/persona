@@ -39,6 +39,8 @@ type PlanTask struct {
 	Cwd        string `json:"cwd"`
 	Launcher   string `json:"launcher,omitempty"`
 	Model      string `json:"model,omitempty"`
+	Effort     string `json:"effort,omitempty"`
+	Tier       string `json:"tier,omitempty"`
 	Permission string `json:"permission,omitempty"`
 	Readonly   bool   `json:"readonly,omitempty"`
 	// UserRequested: the user asked for this very task in the turn that planned it (#2559); with
@@ -301,7 +303,13 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		if !s.placeTask(ctx, t) {
 			return "", fmt.Errorf("task %d: unknown machine %q (machines: %s)", i+1, t.Machine, s.machineIDs(ctx))
 		}
-		s.healthyPlace(ctx, t) // the card shows where it will really run
+		// Validate the tier now without pinning its model: it is resolved again at dispatch.
+		preview := *t
+		if err := s.applyTaskTier(ctx, &preview); err != nil {
+			return "", fmt.Errorf("task %d: %w", i+1, err)
+		}
+		s.healthyPlace(ctx, &preview) // health follows the resolved launcher
+		t.Machine, t.Cwd, t.Why = preview.Machine, preview.Cwd, preview.Why
 	}
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return "", fmt.Errorf("todos are unavailable: %v", err)
@@ -608,6 +616,12 @@ func applyPlanEdit(t *PlanTask, e PlanTask) {
 	if s := strings.TrimSpace(e.Model); s != "" {
 		t.Model = s
 	}
+	if s := strings.TrimSpace(e.Tier); s != "" {
+		t.Tier = s
+	}
+	if s := strings.TrimSpace(e.Effort); s != "" {
+		t.Effort = s
+	}
 	if s := strings.TrimSpace(e.Permission); s != "" {
 		t.Permission = s
 	}
@@ -907,6 +921,16 @@ func (s *Service) healthyPlace(ctx context.Context, t *PlanTask) bool {
 // and answers the machine's id and the session's: the machine it reached is the one the agent is linked to (looking it
 // up again after the start could find another, or none). A failed start counts against the launcher there.
 func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (mid, sid string, err error) {
+	params := map[string]any{"launcher": t.Launcher, "model": t.Model, "effort": t.Effort, "tier": t.Tier}
+	if err := s.applyStartTier(ctx, params); err != nil {
+		return "", "", err
+	}
+	if err := s.applyModel(ctx, "agent.new", params); err != nil {
+		return "", "", err
+	}
+	t.Launcher, _ = params["launcher"].(string)
+	t.Model, _ = params["model"].(string)
+	t.Effort, _ = params["effort"].(string)
 	s.healthyPlace(ctx, t)
 	m, ok := s.machineByName(ctx, t.Machine)
 	if !ok {
@@ -922,15 +946,12 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (mid, sid str
 	// The project background, and the todo's decisions (a task started again may have some), go before the prompt
 	// (#2820, #1618); the tab is named from the title.
 	prompt = s.withProjectContext(ctx, m.ID, t.Cwd, s.withTodoDecisions(ctx, t.TodoID, prompt))
-	params := map[string]any{"cwd": t.Cwd, "launcher": t.Launcher, "prompt": prompt, "tab_name": s.tabName(ctx, t.Title)}
+	params["cwd"], params["prompt"], params["tab_name"] = t.Cwd, prompt, s.tabName(ctx, t.Title)
 	if t.Model != "" {
 		params["model"] = t.Model
 	}
 	if t.Permission != "" {
 		params["permission_mode"] = t.Permission
-	}
-	if err := s.applyModel(ctx, "agent.new", params); err != nil {
-		return "", "", err
 	}
 	var res struct {
 		Session proto.Session `json:"session"`
@@ -950,6 +971,7 @@ func (s *Service) updatePlanTask(ctx context.Context, planID string, i int, t Pl
 		return
 	}
 	p.Tasks[i].Machine, p.Tasks[i].Cwd, p.Tasks[i].Why = t.Machine, t.Cwd, t.Why
+	p.Tasks[i].Launcher, p.Tasks[i].Model, p.Tasks[i].Effort = t.Launcher, t.Model, t.Effort
 	if _, err := s.movePlan(ctx, p, planStarted); err != nil {
 		s.logf("plan %s: %v", planID, err)
 		return

@@ -3,7 +3,9 @@ Hand the user a plan of one or more tasks for agents on their computers, instead
 ```json
 {
   "type": "object",
-  "required": ["tasks"],
+  "required": [
+    "tasks"
+  ],
   "properties": {
     "tasks": {
       "type": "array",
@@ -11,7 +13,15 @@ Hand the user a plan of one or more tasks for agents on their computers, instead
       "maxItems": 8,
       "items": {
         "type": "object",
-        "required": ["title", "prompt", "machine", "cwd", "readonly", "user_requested", "why"],
+        "required": [
+          "title",
+          "prompt",
+          "machine",
+          "cwd",
+          "readonly",
+          "user_requested",
+          "why"
+        ],
         "properties": {
           "title": {
             "type": "string",
@@ -39,7 +49,12 @@ Hand the user a plan of one or more tasks for agents on their computers, instead
           },
           "permission": {
             "type": "string",
-            "enum": ["default", "acceptEdits", "plan", "bypassPermissions"],
+            "enum": [
+              "default",
+              "acceptEdits",
+              "plan",
+              "bypassPermissions"
+            ],
             "description": "permission mode; empty: the default"
           },
           "readonly": {
@@ -57,7 +72,9 @@ Hand the user a plan of one or more tasks for agents on their computers, instead
           "done_when": {
             "type": "array",
             "maxItems": 6,
-            "items": {"type": "string"},
+            "items": {
+              "type": "string"
+            },
             "description": "what done means: results you will check before you accept it (Chinese, one each), e.g. 「PR 合并到 master」「浅色 / 深色截图贴进 PR」「线上 hub 已部署并验证」; the agent is told them"
           },
           "expect_minutes": {
@@ -68,6 +85,14 @@ Hand the user a plan of one or more tasks for agents on their computers, instead
           "todo_id": {
             "type": "string",
             "description": "optional: the todo this task runs on instead of a new one, when this conversation opened it and no agent is on it yet (the id the Lark-topic message gave you); at most one task per todo; leave it out for a task with no such todo"
+          },
+          "tier": {
+            "type": "string",
+            "description": "Execution tier from the active model profile (strong, standard, fast, bulk, longread or a custom tier). Resolved at actual start. Explicit launcher/model/effort override its defaults."
+          },
+          "effort": {
+            "type": "string",
+            "description": "Explicit effort override; omit to use the tier or purpose default."
           }
         }
       }

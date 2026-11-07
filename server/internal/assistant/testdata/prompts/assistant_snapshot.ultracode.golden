@@ -1,4 +1,5 @@
 - 现在：2026-11-06 周五 00:00（UTC）
+- 模型档位：未设置（model_profiles_list 查看，model_profile_switch 切换）
 - 在线的电脑：
 - Agents：需要你 1 个，完成未看 1 个，工作中 2 个（详情用 agents_list）
   - 需要你：审查方案〔ultracode=on：每个实质任务都会跑多 Agent workflow，等结果时别催〕（box，session_id=needson）

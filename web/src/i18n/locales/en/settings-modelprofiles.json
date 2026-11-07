@@ -1,0 +1,9 @@
+{
+  "title": "Model profiles",
+  "footer": "Profiles apply on the next call or Agent start. Edit or add profiles through the hub API or ask Persona to switch.",
+  "active": "Active",
+  "rollback": "Roll back",
+  "custom": "Previous custom configuration",
+  "apply": "Apply profile",
+  "changes": "Model fields that will change: {count}"
+}

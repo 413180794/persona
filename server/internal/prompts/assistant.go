@@ -183,6 +183,7 @@ type SnapshotWorkflow struct {
 
 // Snapshot is the live context a starting assistant gets in its system prompt.
 type Snapshot struct {
+	ModelProfile  string    // always refreshed outside the cached sources
 	Now           time.Time // in the user's zone
 	Zone          string
 	Machines      []SnapshotMachine

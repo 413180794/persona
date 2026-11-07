@@ -1,4 +1,5 @@
 - 现在：YYYY-MM-DD 周X HH:MM（Asia/Shanghai）
+- 模型档位：unavailable (model_profiles_list to retry)
 - 在线的电脑：服务器（server）；离线：笔记本（laptop）、台式机（desk）
 - Agents：需要你 1 个，完成未看 2 个，工作中 0 个（详情用 agents_list）
   - 需要你：在问（server，session_id=eeeeeeee，链接 http://hub.example.com:18660/s/server/eeeeeeee-5）：删掉这个分支吗？

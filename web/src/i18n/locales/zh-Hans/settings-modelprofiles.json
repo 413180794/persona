@@ -1,0 +1,9 @@
+{
+  "title": "模型档位",
+  "footer": "下一次模型调用或 Agent 启动时生效。通过 hub API 编辑或新增档位，也可以让 Persona 切换。",
+  "active": "当前",
+  "rollback": "回滚",
+  "custom": "之前的自定义配置",
+  "apply": "应用档位",
+  "changes": "将修改的模型字段：{count}"
+}

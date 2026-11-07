@@ -87,3 +87,34 @@ func TestNodeAppModesArePersisted(t *testing.T) {
 		t.Fatalf("lost app modes: %+v", got)
 	}
 }
+
+// PutSettings writes all its keys or none: a model profile's switch is never half applied.
+func TestPutSettingsIsAllOrNothing(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if err := d.PutSettings(ctx, map[string]any{"model_config.a": map[string]int{"revision": 1}, "model_profiles": []string{"x"}}); err != nil {
+		t.Fatal(err)
+	}
+	var r struct{ Revision int64 }
+	if _, err := d.Setting(ctx, "model_config.a", &r); err != nil || r.Revision != 1 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	// A value that cannot be stored fails the whole write, before anything is written.
+	err := d.PutSettings(ctx, map[string]any{"model_config.a": map[string]int{"revision": 2}, "model_config.b": func() {}})
+	if err == nil {
+		t.Fatal("an unmarshalable value was written")
+	}
+	if _, err := d.Setting(ctx, "model_config.a", &r); err != nil || r.Revision != 1 {
+		t.Fatalf("half written: %+v %v", r, err)
+	}
+	// A failing statement rolls the earlier ones back: "\u0000" is valid JSON Postgres' jsonb refuses.
+	err = d.PutSettings(ctx, map[string]any{"model_config.a": map[string]int{"revision": 3}, "model_config.z": "\u0000"})
+	if err == nil {
+		t.Fatal("jsonb took a NUL")
+	}
+	if _, err := d.Setting(ctx, "model_config.a", &r); err != nil || r.Revision != 1 {
+		t.Fatalf("not rolled back: %+v %v", r, err)
+	}
+	if ok, _ := d.Setting(ctx, "model_config.z", &r); ok {
+		t.Fatal("the failing key was written")
+	}
+}

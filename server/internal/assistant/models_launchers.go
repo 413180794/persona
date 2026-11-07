@@ -998,11 +998,11 @@ func (s *Service) launcherRoutes() {
 	})
 	s.handle("DELETE /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, name := r.Context(), r.PathValue("name")
+		s.models.mu.Lock()
 		list := s.storedLaunchers(ctx)
 		if i := slices.IndexFunc(list, func(l storedLauncher) bool { return l.Name == name }); i >= 0 {
 			// Not under a category that runs on it (checked and deleted under the configuration's lock; the nodes are
 			// told after it).
-			s.models.mu.Lock()
 			uses, err := s.providerModelUses(ctx, launcherProvider(name))
 			if err == nil && len(uses) == 0 {
 				err = s.putSetting(ctx, launchersManagedKey, slices.Delete(list, i, i+1))
@@ -1020,6 +1020,7 @@ func (s *Service) launcherRoutes() {
 			apierr.WriteJSON(w, map[string]any{"ok": true, "deleted": true})
 			return
 		}
+		s.models.mu.Unlock()
 		if name == "claude" { // plain claude is every machine's default launcher: there is nothing to hide
 			apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models_launchers.err_builtin_hide"))
 			return
@@ -1170,6 +1171,17 @@ func (s *Service) machineLauncherRoutes() {
 
 // saveLauncher stores in (over old on an update) and tells the nodes.
 func (s *Service) saveLauncher(ctx context.Context, in launcherInput, old *storedLauncher) (storedLauncher, error) {
+	s.models.mu.Lock()
+	defer s.models.mu.Unlock()
+	// Refresh the stored object under the same lock as profile switches: omitted fields keep today's values.
+	if old != nil {
+		list := s.storedLaunchers(ctx)
+		i := slices.IndexFunc(list, func(l storedLauncher) bool { return l.Name == in.Name })
+		if i < 0 {
+			return storedLauncher{}, i18n.Err("assistant-models_launchers.err_not_managed")
+		}
+		old = &list[i]
+	}
 	now := time.Now().UTC()
 	l := storedLauncher{Created: now, Updated: now}
 	if old != nil {

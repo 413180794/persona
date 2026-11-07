@@ -257,3 +257,26 @@ func TestLaunchKeepsTheAssistantsOwnWindowAndLevel(t *testing.T) {
 		t.Fatalf("agent: %v %v", c, e)
 	}
 }
+
+// A profile must change actual launcher defaults, not just purpose overrides: health probes start the managed
+// launcher with no model override, while small and subagent calls use these aliases.
+func TestEconomyLauncherDefaultsReachHealthAndSubagents(t *testing.T) {
+	l := proto.ManagedLauncher{Name: "profile-launcher", Model: "available-supervisor", SmallModel: "long-context", SubagentModel: "mechanical-model", OpusModel: "available-supervisor", SonnetModel: "available-supervisor", FableModel: "available-supervisor", HaikuModel: "long-context"}
+	env := providerEnv(l, "", "", false)
+	for key, want := range map[string]string{
+		"ANTHROPIC_MODEL": "available-supervisor", "ANTHROPIC_DEFAULT_OPUS_MODEL": "available-supervisor", "ANTHROPIC_DEFAULT_SONNET_MODEL": "available-supervisor", "ANTHROPIC_DEFAULT_FABLE_MODEL": "available-supervisor", "ANTHROPIC_DEFAULT_HAIKU_MODEL": "long-context", "ANTHROPIC_SMALL_FAST_MODEL": "long-context", "CLAUDE_CODE_SUBAGENT_MODEL": "mechanical-model",
+	} {
+		if got := env[key]; got != want {
+			t.Fatalf("%s=%q want %q", key, got, want)
+		}
+	}
+	n := &Node{bin: "/test/personad"}
+	n.setManaged([]proto.ManagedLauncher{l})
+	if cmd := n.launcherCommand(l.Name); !strings.Contains(cmd, "launch "+l.Name) {
+		t.Fatalf("health would bypass managed configuration: %s", cmd)
+	}
+	got, ok := n.managedLauncher(l.Name)
+	if !ok || got.Model != l.Model || got.SubagentModel != l.SubagentModel {
+		t.Fatal("node did not receive profile defaults")
+	}
+}

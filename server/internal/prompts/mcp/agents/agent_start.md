@@ -5,7 +5,11 @@ When the work needs a branch and checkout of its own (work in parallel with what
 ```json
 {
   "type": "object",
-  "required": ["machine", "cwd", "prompt"],
+  "required": [
+    "machine",
+    "cwd",
+    "prompt"
+  ],
   "properties": {
     "machine": {
       "type": "string"
@@ -24,13 +28,27 @@ When the work needs a branch and checkout of its own (work in parallel with what
     "worktree": {
       "type": "object",
       "description": "start the agent in a new worktree of cwd's repository, made by the machine's engine",
-      "required": ["branch"],
+      "required": [
+        "branch"
+      ],
       "properties": {
         "branch": {
           "type": "string",
           "description": "the branch to check out (made from the workspace's HEAD when it does not exist)"
         }
       }
+    },
+    "tier": {
+      "type": "string",
+      "description": "Execution tier from the active model profile (strong, standard, fast, bulk, longread or a custom tier). Resolved at actual start. Explicit launcher/model/effort override its defaults."
+    },
+    "effort": {
+      "type": "string",
+      "description": "Explicit effort override; omit to use the tier or purpose default."
+    },
+    "model": {
+      "type": "string",
+      "description": "Explicit model override; omit to use the tier or purpose default."
     }
   }
 }

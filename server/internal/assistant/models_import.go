@@ -237,6 +237,8 @@ func (s *Service) sealImported(g importGroup, now time.Time) (storedLauncher, er
 
 // importLaunchers saves the picked groups: new ones created, ones already stored get the new models only.
 func (s *Service) importLaunchers(ctx context.Context, groups []importGroup, names []string) (created, updated []string, err error) {
+	s.models.mu.Lock()
+	defer s.models.mu.Unlock()
 	list := s.storedLaunchers(ctx)
 	taken := map[string]bool{}
 	for _, v := range s.launcherViews(ctx) {

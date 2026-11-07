@@ -357,6 +357,11 @@ const ExtensionHeader = "X-Persona-Extension"
 // Its value is the one extwire.HeaderAdmin carries on the extensions' relay.
 const AdminHeader = "X-Persona-Admin"
 
+// DeviceNameHeader carries the name of the device a relayed request came from ("" for the hub's own token), so a
+// manager can say who did something (a model profile's switch, docs/assistant/model-profiles.md); set by the hub like
+// RoleHeader, never the client's.
+const DeviceNameHeader = "X-Persona-Device-Name"
+
 // ToolCall is assistant.tool's params.
 type ToolCall struct {
 	Name      string          `json:"name"`

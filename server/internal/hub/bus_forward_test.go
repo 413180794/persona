@@ -12,8 +12,85 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
+
+// Exercise authentication and the bus codec with in-memory tokens and an RPC pipe, without Postgres.
+func TestBusForwardsTrustedDeviceActor(t *testing.T) {
+	h := newTestHub(t)
+	const token = "test-device-token"
+	h.store = &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{
+		hashToken(token): {ID: "device-1", Name: "Trusted device", Role: roleFull},
+	}, rev: map[string]bool{}}
+	hubIn, assistantOut := io.Pipe()
+	assistantIn, hubOut := io.Pipe()
+	hp, ap := rpc.New("h", hubOut), rpc.New("a", assistantOut)
+	got := make(chan assistantwire.HTTPRequest, 1)
+	ap.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		var req assistantwire.HTTPRequest
+		if method != assistantwire.MethodHTTP {
+			return nil, errors.New("unexpected " + method)
+		}
+		if err := json.Unmarshal(params, &req); err != nil {
+			return nil, err
+		}
+		got <- req
+		return assistantwire.HTTPResponse{Status: http.StatusOK, Body: []byte(`{"ok":true}`)}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go hp.Serve(ctx, hubIn)
+	go ap.Serve(ctx, assistantIn)
+	t.Cleanup(func() {
+		cancel()
+		hp.Close(io.EOF)
+		ap.Close(io.EOF)
+		_ = hubIn.Close()
+		_ = assistantIn.Close()
+		_ = hubOut.Close()
+		_ = assistantOut.Close()
+	})
+	h.bus.current = map[string]*busConn{busAssistant: {peer: hp}}
+	routes := h.routes()
+	for _, tt := range []struct{ name, forged string }{{"device name", ""}, {"forged header", "Forged device"}} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/api/v1/model-profiles/economy/apply", strings.NewReader(`{}`))
+			r.RemoteAddr = "127.0.0.1:12345"
+			r.Header.Set("Authorization", "Bearer "+token)
+			r.Header.Set("Cookie", "test-cookie=private")
+			r.Header.Set(assistantwire.RoleHeader, roleAnswer)
+			r.Header.Set(assistantwire.ExtensionHeader, "forged-extension")
+			r.Header.Set(assistantwire.AdminHeader, "1")
+			if tt.forged != "" {
+				r.Header.Set(assistantwire.DeviceNameHeader, tt.forged)
+				r.Header.Add(assistantwire.DeviceNameHeader, "Another forged device")
+			}
+			w := httptest.NewRecorder()
+			routes.ServeHTTP(w, r)
+			if w.Code != http.StatusOK || w.Body.String() != `{"ok":true}` {
+				t.Fatalf("forward: %d %s", w.Code, w.Body)
+			}
+			select {
+			case req := <-got:
+				if req.Method != http.MethodPost || req.Path != r.URL.Path || string(req.Body) != `{}` {
+					t.Fatalf("forwarded request: %+v", req)
+				}
+				for name, want := range map[string]string{assistantwire.DeviceNameHeader: "Trusted device", assistantwire.RoleHeader: roleFull} {
+					if values := req.Header[name]; len(values) != 1 || values[0] != want {
+						t.Errorf("forwarded %s=%v want [%s]", name, values, want)
+					}
+				}
+				for _, name := range []string{"Authorization", "Cookie", assistantwire.ExtensionHeader, assistantwire.AdminHeader} {
+					if _, ok := req.Header[name]; ok {
+						t.Errorf("forwarded untrusted or private header %s", name)
+					}
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("no request reached the assistant")
+			}
+		})
+	}
+}
 
 // The assistant's routes (assistantwire.Routes) are its to answer, unchanged; the hub's own stay the hub's; while the
 // assistant is not connected they answer 503 assistant_offline.
@@ -40,6 +117,7 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 		req.Header.Set(assistantwire.RoleHeader, "forged")
 		req.Header.Set(assistantwire.ExtensionHeader, "forged")
+		req.Header.Set(assistantwire.DeviceNameHeader, "forged")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -54,7 +132,8 @@ func TestBusForwardsTheAssistantRoutes(t *testing.T) {
 	}
 	req := <-got
 	if req.Method != "POST" || req.Path != "/api/v1/assistant/conversations/c1/route" || req.Query != "x=1" || string(req.Body) != `{"text":"你好"}` ||
-		req.Header[assistantwire.RoleHeader][0] != roleFull || req.Header["Authorization"] != nil || req.Header[assistantwire.ExtensionHeader] != nil {
+		req.Header[assistantwire.RoleHeader][0] != roleFull || req.Header["Authorization"] != nil || req.Header[assistantwire.ExtensionHeader] != nil ||
+		req.Header[assistantwire.DeviceNameHeader] != nil { // the hub's own token names no device
 		t.Fatalf("the assistant got %+v", req)
 	}
 	if resp, body := do("GET", "/api/v1/assistant/runs", ""); resp.StatusCode != http.StatusBadGateway || !strings.Contains(body, "boom") {

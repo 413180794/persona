@@ -71,6 +71,7 @@ func (s *Service) contextSnapshot(ctx context.Context) string {
 	}
 	out := *snap
 	out.Now = time.Now().In(s.location(ctx))
+	out.ModelProfile = s.modelProfileContext(ctx)
 	return prompts.RenderSnapshot(out)
 }
 

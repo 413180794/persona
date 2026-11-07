@@ -611,6 +611,31 @@ func (m *memStore) PutSetting(_ context.Context, key string, v any) error {
 	return nil
 }
 
+// PutSettings marshals every value before taking the lock and committing the complete batch.
+func (m *memStore) PutSettings(ctx context.Context, values map[string]any) error {
+	encoded := make(map[string][]byte, len(values))
+	for key, value := range values {
+		b, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		encoded[key] = b
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if m.vals == nil {
+		m.vals = map[string][]byte{}
+	}
+	for key, b := range encoded {
+		m.vals[key] = b
+	}
+	m.puts += len(encoded)
+	return nil
+}
+
 // newTestService is an assistant on f with an in-memory store.
 // testLogf is t.Logf until the test ends, nothing after: the service's goroutines (a run's watcher, a snapshot being
 // published) can still log when the test is over, and t.Logf then panics and fails the whole package.

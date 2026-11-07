@@ -52,6 +52,13 @@ func (s *downStore) PutSetting(ctx context.Context, key string, v any) error {
 	return s.memStore.PutSetting(ctx, key, v)
 }
 
+func (s *downStore) PutSettings(ctx context.Context, values map[string]any) error {
+	if s.down() {
+		return errors.New("database unavailable")
+	}
+	return s.memStore.PutSettings(ctx, values)
+}
+
 // modelService is an assistant on a fake hub with one machine (server) whose hub.json has no model connection; the
 // test sets f.hello.Models.
 func modelService(t *testing.T) (*Service, *fakeHub, *downStore) {

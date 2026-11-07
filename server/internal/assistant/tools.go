@@ -30,6 +30,7 @@ import (
 var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
 	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_interrupt", "agent_start", "agent_supervise", "interaction_answer", "inbox_suggest", "inbox_draft",
 	"kb_search", "kb_list", "kb_get", "kb_update", "persona_settings",
+	"model_profiles_list", "model_profile_get", "model_profile_switch", "model_profile_rollback",
 	"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
 	"conversation_new", "conversation_send", "task_plan", "task_review"}
 
@@ -101,6 +102,8 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		return s.toolView(ctx, machine, self, name, args)
 	case "task_plan":
 		return s.toolTaskPlan(ctx, self, args)
+	case "model_profiles_list", "model_profile_get", "model_profile_switch", "model_profile_rollback":
+		return s.toolModelProfile(ctx, self, name, args)
 	case "task_review":
 		return s.toolTaskReview(ctx, self, args) // supervise.go
 	case "kb_search", "kb_list", "kb_get", "kb_update":
@@ -225,6 +228,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			Cwd      string `json:"cwd"`
 			Prompt   string `json:"prompt"`
 			Launcher string `json:"launcher"`
+			Model    string `json:"model"`
+			Effort   string `json:"effort"`
+			Tier     string `json:"tier"`
 			Worktree struct {
 				Branch string `json:"branch"`
 			} `json:"worktree"`
@@ -254,7 +260,10 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), agentStartTimeout)
 		defer cancel()
 		// The tab is named from the prompt as written; the agent gets its project's background before it (#2820).
-		params := map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "tab_name": s.tabName(sctx, a.Prompt)}
+		params := map[string]any{"cwd": a.Cwd, "launcher": a.Launcher, "model": a.Model, "effort": a.Effort, "tier": a.Tier, "tab_name": s.tabName(sctx, a.Prompt)}
+		if err := s.applyStartTier(sctx, params); err != nil {
+			return "", err
+		}
 		params["prompt"] = s.withProjectContext(sctx, am.ID, a.Cwd, a.Prompt)
 		if err := s.applyModel(sctx, "agent.new", params); err != nil {
 			return "", err

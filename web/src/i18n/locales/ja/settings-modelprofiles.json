@@ -1,0 +1,9 @@
+{
+  "title": "モデルプロファイル",
+  "footer": "次のモデル呼び出しまたは Agent 起動時に適用されます。hub API で編集・追加するか、Persona に切り替えを依頼できます。",
+  "active": "使用中",
+  "rollback": "元に戻す",
+  "custom": "以前のカスタム設定",
+  "apply": "適用",
+  "changes": "変更されるモデル項目：{count}"
+}

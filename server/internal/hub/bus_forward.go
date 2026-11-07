@@ -72,6 +72,10 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send,
 	req.Header[assistantwire.RoleHeader] = []string{p.Role}
 	delete(req.Header, assistantwire.ExtensionHeader) // only the hub says which extension asks
 	delete(req.Header, assistantwire.AdminHeader)     // and whether an admin session asks
+	delete(req.Header, assistantwire.DeviceNameHeader)
+	if p.Name != "" { // and which device: the manager records who switched a model profile
+		req.Header[assistantwire.DeviceNameHeader] = []string{p.Name}
+	}
 	if admin {
 		req.Header[assistantwire.AdminHeader] = []string{"1"}
 	}

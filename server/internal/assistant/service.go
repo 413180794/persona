@@ -160,6 +160,7 @@ func New(o Options) *Service {
 	s.kbRoutes()
 	s.inboxRoutes()
 	s.modelConfigRoutes()
+	s.modelProfileRoutes()
 	s.launcherRoutes()
 	s.machineLauncherRoutes()
 	s.launcherQuotaRoutes()

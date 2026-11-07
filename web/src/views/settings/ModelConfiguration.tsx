@@ -13,6 +13,7 @@ import { Segmented } from "../assistant/parts";
 import { Icon } from "../../ui/icons";
 import { ModelPicker, type ModelList } from "../../ui/ModelPicker";
 import { Group, Pill, Row } from "./SettingsParts";
+import { ModelProfiles } from "./ModelProfiles";
 
 function larkAgentStatus(binding: ModelBinding): string {
   return binding.provider || binding.model || binding.effort
@@ -38,6 +39,7 @@ export function ModelConfiguration({ open, onOpen, onProviders }: { open: string
 
   return (
     <>
+      <ModelProfiles onChanged={() => void load()} />
       <div className="mb-4 flex items-center gap-2">
         <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-control bg-surface px-3 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
           <Icon name="search" size={13} stroke={2} className="text-ink-3" />

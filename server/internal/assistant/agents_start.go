@@ -45,6 +45,9 @@ func (s *Service) AgentStartParams(ctx context.Context, p AgentStartParams) (map
 		params = map[string]any{}
 	}
 	if resume, _ := params["resume_session_id"].(string); resume == "" {
+		if err := s.applyStartTier(ctx, params); err != nil {
+			return nil, badRequest(err)
+		}
 		if err := s.applyModel(ctx, "agent.new", params); err != nil {
 			return nil, badRequest(err)
 		}
