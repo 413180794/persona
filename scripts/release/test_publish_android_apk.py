@@ -143,6 +143,12 @@ class ApkValidationTests(unittest.TestCase):
         self.assertEqual(result["source_sha"], "b" * 40)
         self.assertEqual(result["sha256"], atomic.digest_file(self.apk))
 
+    def test_sdk37_minimum_sdk_badging_is_supported(self):
+        with mock.patch.object(publisher, "tool", side_effect=lambda name: name):
+            with mock.patch.object(publisher, "run", side_effect=[BADGING.replace("sdkVersion:'26'", "minSdkVersion:'30'"), SIGNING]):
+                result = publisher.inspect_apk(self.apk, self.args)
+        self.assertEqual(result["min_sdk"], 30)
+
     def test_explicit_metadata_cannot_override_actual_apk(self):
         self.args.version_code = 999
         with self.assertRaisesRegex(ValueError, "differs from actual"):

@@ -65,7 +65,7 @@ def parse_signer_certificate(verification):
 def inspect_apk(apk, args):
     badging = run(tool("aapt2"), "dump", "badging", str(apk))
     package = re.search(r"^package: name='([^']+)' versionCode='([^']+)' versionName='([^']*)'", badging, re.M)
-    sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
+    sdk = re.search(r"^(?:sdkVersion|minSdkVersion):'(\d+)'", badging, re.M)
     if not package or not sdk:
         raise ValueError("cannot read APK package/version/min-sdk metadata")
     release = dict(package_name=package[1], version_code=int(package[2]),
