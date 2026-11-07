@@ -162,7 +162,7 @@ struct SettingsView: View {
                         }
                         .settingsListRow(SettingsPage.devices)
                         NavigationLink(value: SettingsPage.notifications) {
-                            SettingsRow(title: String(localized: "Notifications"), symbol: Theme.Icon.notifications, tint: Theme.danger)
+                            SettingsRow(title: String(localized: "Notifications"), symbol: Theme.Icon.notifications, tint: Theme.needsYou)
                         }
                         .settingsListRow(SettingsPage.notifications)
                         NavigationLink(value: SettingsPage.translation) {

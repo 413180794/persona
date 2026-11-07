@@ -200,7 +200,7 @@ struct CompactionNote: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
-        .surface(tint: isFailed ? Theme.danger.opacity(0.06) : nil, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.compaction")
     }

@@ -156,7 +156,7 @@ struct GitHubThreadHeader: View {
                 Text(GitHubThread.reference(chat.id)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     .truncationMode(.middle)
                 if let label = item.kindLabel {
-                    Chip(text: label, look: item.kind == "mention" ? .tint(Theme.danger) : .neutral)
+                    Chip(text: label, look: item.kind == "mention" ? .tone(StatusPalette.needsYou) : .neutral)
                 }
             }
             Text(chat.name).font(Theme.Font.title).textSelection(.enabled)
@@ -345,7 +345,7 @@ struct GitHubCommentCard: View {
         guard m.kind == "review" else { return .secondary }
         switch m.review {
         case "approved": return Theme.positive
-        case "changes_requested": return Theme.danger
+        case "changes_requested": return Theme.cautionText
         default: return .secondary
         }
     }

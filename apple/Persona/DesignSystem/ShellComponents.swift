@@ -198,12 +198,12 @@ private struct WaitingBadge: View {
     var body: some View {
         let waiting = model.agentsWaiting
         if waiting > 0, AppStyle.current.usesBeautifulUI {
-            BUIPill(waiting > 99 ? "99+" : "\(waiting)", tone: .custom(ink: .white, fill: Theme.needsYou))
+            BUIPill(waiting > 99 ? "99+" : "\(waiting)", tone: .custom(ink: StatusPalette.needsYou.text, fill: StatusPalette.needsYou.tint))
                 .offset(offset)
                 .allowsHitTesting(false)
                 .accessibilityLabel(StateName.count(.needsYou, waiting))
         } else if waiting > 0 {
-            CountBadge(count: waiting, look: .solid(Theme.needsYou))
+            CountBadge(count: waiting, look: .tone(StatusPalette.needsYou))
                 .offset(offset)
                 .allowsHitTesting(false)
                 .accessibilityLabel(StateName.count(.needsYou, waiting))

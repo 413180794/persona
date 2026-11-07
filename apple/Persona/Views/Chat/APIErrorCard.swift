@@ -116,7 +116,7 @@ struct APIErrorCard: View {
         }
         .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.danger.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Theme.danger.opacity(0.22), lineWidth: 1))
     }
 
@@ -135,7 +135,7 @@ struct APIErrorCard: View {
                     Haptics.tap()
                     retry()
                 } label: {
-                    BUIPill(String(localized: "Retry [Components b8784c]"), tone: .red, icon: .retry)
+                    BUIPill(String(localized: "Retry [Components b8784c]"), tone: .accent, icon: .retry)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Retry [Components b8784c]")

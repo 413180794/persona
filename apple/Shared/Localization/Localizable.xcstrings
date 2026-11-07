@@ -112932,24 +112932,24 @@
       },
       "extractionState": "manual"
     },
-    "When an agent needs you, the left side always switches to a red count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above.": {
+    "When an agent needs you, the left side always switches to a highlighted count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When an agent needs you, the left side always switches to a red count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above."
+            "value": "When an agent needs you, the left side always switches to a highlighted count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エージェントが要対応のときは、左側が常に赤い件数に切り替わります。ほかのアプリにもライブアクティビティがある場合、Dynamic IslandはPersonaに小さな領域しか残さないため、最も急ぎの種類の件数だけを表示します（要対応 > 作業中 > 未確認）。上のスタイルには影響されません。"
+            "value": "エージェントが要対応のときは、左側が常に強調色の件数に切り替わります。ほかのアプリにもライブアクティビティがある場合、Dynamic IslandはPersonaに小さな領域しか残さないため、最も急ぎの種類の件数だけを表示します（要対応 > 作業中 > 未確認）。上のスタイルには影響されません。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "有 Agent 需要你时，左侧总是换成红色的数量。别的 App 也有实时活动时，灵动岛只留给 Persona 一小块，只显示最急的一类的数量（需要你 > 在工作 > 做完未看），不受上面的样式影响。"
+            "value": "有 Agent 需要你时，左侧总是换成强调色的数量。别的 App 也有实时活动时，灵动岛只留给 Persona 一小块，只显示最急的一类的数量（需要你 > 在工作 > 做完未看），不受上面的样式影响。"
           }
         }
       },

@@ -28,7 +28,7 @@ struct IslandSettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Space.sm)
             } footer: {
-                Text("When an agent needs you, the left side always switches to a red count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above.")
+                Text("When an agent needs you, the left side always switches to a highlighted count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above.")
             }
 
             Section("Style") {

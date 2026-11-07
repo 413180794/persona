@@ -18,7 +18,7 @@ struct ComposerMicButton: View {
             Image(systemName: dictation.isListening ? Theme.Icon.dictating : Theme.Icon.dictate)
                 .font(Theme.Font.heading)
                 .fontWeight(.medium)
-                .foregroundStyle(dictation.isListening ? Theme.danger : ComposerInk.icon(theme))
+                .foregroundStyle(dictation.isListening ? Theme.accent : ComposerInk.icon(theme))
                 .symbolEffect(.pulse, isActive: dictation.isListening)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)

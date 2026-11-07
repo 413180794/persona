@@ -464,7 +464,7 @@ struct InboxRow: View {
                             .accessibilityLabel("Translated")
                     }
                     if let label = item.kindLabel {
-                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == String(localized: "@Me") ? .tint(Theme.danger) : .neutral)
+                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == String(localized: "@Me") ? .tone(StatusPalette.needsYou) : .neutral)
                     }
                     Spacer(minLength: 4)
                     Text(LarkTime.short(item.updatedAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()

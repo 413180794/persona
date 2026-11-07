@@ -290,7 +290,7 @@ struct TodoRow: View {
                 } else if let summary = mostUrgentSummary(urgent: urgent) {
                     Text(summary)
                         .font(Theme.Font.caption)
-                        .foregroundStyle(urgent?.status == .needsYou ? Theme.danger : .secondary)
+                        .foregroundStyle(urgent?.status == .needsYou ? StatusPalette.needsYou.text : .secondary)
                         .lineLimit(2)
                 } else if let notes = todo.notes, !notes.isEmpty {
                     Text(notes)

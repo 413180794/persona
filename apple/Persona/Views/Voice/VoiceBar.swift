@@ -136,9 +136,9 @@ struct VoiceBar: View {
             Image(systemName: call.muted ? Theme.Icon.voiceUnmute : Theme.Icon.voiceMute)
                 .font(Theme.Font.heading)
                 .fontWeight(.medium)
-                .foregroundStyle(call.muted ? Theme.danger : ComposerInk.icon(theme))
+                .foregroundStyle(call.muted ? Theme.accent : ComposerInk.icon(theme))
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                .background { if call.muted { Circle().fill(Theme.danger.opacity(0.12)) } }
+                .background { if call.muted { Circle().fill(Theme.Fill.chip) } }
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)

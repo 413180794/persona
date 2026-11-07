@@ -36,7 +36,7 @@ struct NoticeBanner<Action: View>: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
-        .surface(tint: color.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 

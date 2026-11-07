@@ -12,19 +12,16 @@ nonisolated struct StatusTone: Sendable {
     init(dot: Color, text: Color, tint: Color? = nil) {
         self.dot = dot
         self.text = text
-        self.tint = tint ?? dot.opacity(0.14)
+        self.tint = tint ?? Color.secondary.opacity(0.08)
     }
 }
 
 nonisolated enum StatusPalette {
-    /// Needs You: the only color allowed to call for attention — lists, cards, panels, the inbox, the watch, the island.
-    static let needsYou = StatusTone(dot: Color(light: 0xE5484D, dark: 0xFF6369), text: Color(light: 0xC62B33, dark: 0xFF6369))
+    static let needsYou = StatusTone(dot: Palette.systemBlue, text: Color(light: 0x0064C8, dark: 0x409CFF))
     /// Working.
     static let working = StatusTone(dot: Color(light: 0xE8890C, dark: 0xFFB224), text: Color(light: 0xA35A00, dark: 0xFFB224))
     /// Unread.
     static let unread = StatusTone(dot: Color(light: 0x30A46C, dark: 0x4CC38A), text: Color(light: 0x1D7A4C, dark: 0x4CC38A))
-    /// Awaiting Reply (#5096): seen, but the agent asked the user something nobody answered. The same green as Unread:
-    /// it waits on the user too, without calling like Needs You's red.
     static let awaitingReply = unread
     /// Seen / Unknown.
     static let idle = StatusTone(dot: Color.secondary.opacity(0.55), text: .secondary, tint: Color.secondary.opacity(0.12))

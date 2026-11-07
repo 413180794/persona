@@ -30,7 +30,11 @@ import SwiftUI
     static func scheduleIfAsked() {
         let d = UserDefaults.standard
         if isRichBatch {
-            Task { await MacRichSnapshotBatch.shared.run() }
+            if let path = d.string(forKey: "macSnapshot"), let plan = MacDemoSnapshotBatch.plan(at: path) {
+                Task { await MacDemoSnapshotBatch.run(plan) }
+            } else {
+                Task { await MacRichSnapshotBatch.shared.run() }
+            }
             return
         }
         let size = d.string(forKey: "macWindowSize").flatMap(parseSize)

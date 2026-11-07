@@ -573,6 +573,7 @@ nonisolated enum Theme {
     static var card: Color { spec.card }
     static var cardStroke: Color { spec.cardStroke }
 
+    static let primaryText = Color(light: 0x1C1C1E, dark: 0xF2F2F7)
     static let codeBackground = Color(light: 0xF3F1EC, dark: 0x1C1D21)
 
     /// Syntax colors in the file viewer (docs/ios.md「文件查看器」), on `codeBackground` in every style (it does not
@@ -601,10 +602,7 @@ nonisolated enum Theme {
     static var needsYou: Color { StatusPalette.needsYou.dot }
     static var busy: Color { StatusPalette.working.dot }
     static var unread: Color { StatusPalette.unread.dot }
-    /// The inbox's dot on the persona's face (`ShellPersonaButton`): a soft red that says "something's there" without
-    /// calling like Needs You's red (2026-11-04 user request: smaller, paler, not drawing the eye). Visible on every built-in
-    /// face's disc (Mochi's paper, Visor's accent, Circuit's dark) in both appearances, ringed in the page's color.
-    static let inboxDot = Color(light: 0xEE8E8E, dark: 0xC9706F)
+    static var inboxDot: Color { StatusPalette.needsYou.dot.opacity(0.65) }
 }
 
 extension AgentState {
@@ -619,7 +617,6 @@ extension AgentState {
         }
     }
 
-    /// Red needs you, amber works, green finished-unseen, gray seen — same meaning as herdr's sidebar dots.
     var tone: StatusTone {
         switch self {
         case .needsYou: StatusPalette.needsYou

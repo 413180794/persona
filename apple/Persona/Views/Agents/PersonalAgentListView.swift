@@ -226,10 +226,7 @@ private struct PersonalAgentRow: View {
                 Image(systemName: Theme.Icon.locked).foregroundStyle(.secondary)
             }
             if session.unreadCount > 0 {
-                Text("\(session.unreadCount)")
-                    .font(Theme.Font.labelStrong).foregroundStyle(.white)
-                    .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs)
-                    .background(Capsule().fill(Theme.danger))
+                CountBadge(count: session.unreadCount, look: .tone(StatusPalette.unread))
             }
         }
     }

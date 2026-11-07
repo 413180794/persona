@@ -84,7 +84,6 @@ struct InteractionPreviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
-                // Every interaction is Needs You: the same red as the agent's dot and the section's count.
                 Image(systemName: interaction.kind.symbol)
                     .foregroundStyle(StatusPalette.needsYou.dot)
                     .scaledFrame(width: Theme.Size.icon) // one column: the titles line up card to card
@@ -287,6 +286,7 @@ struct InteractionPanel: View {
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.m)
         .padding(.bottom, Theme.Space.l)
+        .foregroundStyle(Theme.primaryText)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -454,7 +454,7 @@ struct QuestionForm: View {
             .multilineTextAlignment(.leading)
             .padding(.horizontal, Theme.Space.l)
             .padding(.vertical, Theme.Space.m)
-            .background(selected ? Theme.accent.opacity(0.08) : .clear)
+            .background(selected ? Theme.Fill.chip : .clear)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -597,6 +597,7 @@ struct PlanForm: View {
             ScrollView {
                 Markdown(MarkdownMemo.content(interaction.plan ?? ""))
                     .markdownTheme(.persona)
+                    .markdownTextStyle { ForegroundColor(Theme.primaryText) }
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scaledFrame(maxHeight: Theme.Size.box200)
@@ -634,7 +635,8 @@ struct PlanForm: View {
         .sheet(isPresented: $showFull) {
             NavigationStack {
                 ScrollView {
-                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.persona).padding()
+                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.persona)
+                        .markdownTextStyle { ForegroundColor(Theme.primaryText) }.padding()
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)
@@ -917,7 +919,7 @@ struct ScreenForm: View {
             .multilineTextAlignment(.leading)
             .padding(.horizontal, Theme.Space.l)
             .padding(.vertical, Theme.Space.m)
-            .background(sending == opt.key ? Theme.accent.opacity(0.08) : .clear)
+            .background(sending == opt.key ? Theme.Fill.chip : .clear)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -975,7 +977,7 @@ struct ScreenForm: View {
             .multilineTextAlignment(.leading)
             .padding(.horizontal, Theme.Space.l)
             .padding(.vertical, Theme.Space.m)
-            .background(on ? Theme.accent.opacity(0.08) : .clear)
+            .background(on ? Theme.Fill.chip : .clear)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -1339,6 +1341,7 @@ struct BUIPlanForm: View {
             ScrollView {
                 Markdown(MarkdownMemo.content(interaction.plan ?? ""))
                     .markdownTheme(.persona)
+                    .markdownTextStyle { ForegroundColor(Theme.primaryText) }
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scaledFrame(maxHeight: Theme.Size.box200)
@@ -1347,7 +1350,8 @@ struct BUIPlanForm: View {
         .sheet(isPresented: $showFull) {
             NavigationStack {
                 ScrollView {
-                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.persona).padding()
+                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.persona)
+                        .markdownTextStyle { ForegroundColor(Theme.primaryText) }.padding()
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)

@@ -177,7 +177,7 @@ private struct ShellErrorNote: View {
         .foregroundStyle(theme.colors.red)
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.sm)
-        .background(theme.colors.redTint, in: .rect(cornerRadius: theme.radii.card, style: .continuous))
+        .background(Theme.Fill.well, in: .rect(cornerRadius: theme.radii.card, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }

@@ -71,7 +71,7 @@ struct InboxConnectorTextView: View {
                         Text([item.accountName, connector?.reference ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         if let label = item.kindLabel {
-                            Chip(text: label, look: item.kind == "mention" ? .tint(Theme.danger) : .neutral)
+                            Chip(text: label, look: item.kind == "mention" ? .tone(StatusPalette.needsYou) : .neutral)
                         }
                     }
                     Text(item.title).font(Theme.Font.title).textSelection(.enabled)

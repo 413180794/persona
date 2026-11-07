@@ -65,7 +65,7 @@ struct SessionAvatar: View {
         let tint: Color = state == .idle || state == .offline || state == .unknown ? .secondary : state.color
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                .fill(tint.opacity(state == .offline ? 0.06 : 0.12))
+                .fill(Theme.Fill.chip)
                 .frame(width: size, height: size)
                 .overlay {
                     Image(systemName: symbol ?? machine?.symbol ?? Theme.Icon.terminal)
@@ -82,9 +82,6 @@ struct SessionAvatar: View {
     }
 }
 
-/// The BeautifulUI style's mark for an agent's state, its task badge (docs/agent-states.md): Needs You a red badge with "!", working the
-/// turning ring, Unread the green check, seen an empty ring; offline and unknown a gray dot. Still, apart from the
-/// working ring: the red badge says Needs You without the breathing dot's 30 fps redraw.
 struct AgentStateBadge: View {
     var state: AgentState
     private static let attention = BUIGlyph("M12 6v8M12 18.5v.01")

@@ -1006,7 +1006,7 @@ struct BackgroundTasksStrip: View {
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.vertical, Theme.Space.m)
-        .surface(tint: Theme.busy.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 
     private func row(_ t: BackgroundTask) -> some View {
@@ -1225,7 +1225,7 @@ struct LoopStrip: View {
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.vertical, Theme.Space.m)
-        .surface(tint: Theme.loop.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .confirmationDialog("Stop this loop?", isPresented: $confirming, titleVisibility: .visible) {
             Button("Stop Loop", role: .destructive, action: stop)
         } message: {

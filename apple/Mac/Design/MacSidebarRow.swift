@@ -7,9 +7,7 @@ import SwiftUI
 /// shell's gray well (2026-11-02 user: the inbox's middle column text is hard to read).
 struct MacSidebarRow: View {
     enum Badge: Equatable {
-        /// Things waiting for the user (the tab bar's red number).
         case count(Int)
-        /// A quiet word or number in place of the red one (Settings in Demo Mode, a filter's count).
         case word(String)
     }
 
@@ -35,7 +33,7 @@ struct MacSidebarRow: View {
                     Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                     Spacer(minLength: Theme.Space.s)
                     switch badge {
-                    case .count(let n): CountBadge(count: n, look: .solid(Theme.needsYou))
+                    case .count(let n): CountBadge(count: n, look: .tone(StatusPalette.needsYou))
                     case .word(let w): Text(w).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     case nil: EmptyView()
                     }

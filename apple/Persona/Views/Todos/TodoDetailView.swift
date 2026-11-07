@@ -366,7 +366,7 @@ struct TodoDetailView: View {
 
                     Text(subtitle)
                         .font(Theme.Font.secondary)
-                        .foregroundStyle(isFailed || s?.state == .needsYou ? Theme.danger : .secondary)
+                        .foregroundStyle(isFailed ? Theme.danger : s?.state == .needsYou ? StatusPalette.needsYou.text : .secondary)
                         .lineLimit(2)
                 }
                 Image(systemName: Theme.Icon.disclosure)

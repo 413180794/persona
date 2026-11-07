@@ -528,7 +528,7 @@ struct WatchInteractionView: View {
                         }
                     }
                     if (interaction.questions ?? []).count > 1 || (interaction.questions ?? []).contains(where: \.multiSelect) {
-                        Button("Submit") { submit() }.lineLimit(1).buttonStyle(.borderedProminent)
+                        Button("Submit") { submit() }.lineLimit(1).buttonStyle(.borderedProminent).tint(Theme.accent)
                     }
                     if triedEarly && !allAnswered {
                         Label("Some questions are unanswered", systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.caution)
@@ -536,7 +536,7 @@ struct WatchInteractionView: View {
                 case .plan:
                     Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
                     Button("Approve & Run") { act(Resolution(approve: true, mode: "bypassPermissions")) }
-                        .lineLimit(1).minimumScaleFactor(0.8).buttonStyle(.borderedProminent)
+                        .lineLimit(1).minimumScaleFactor(0.8).buttonStyle(.borderedProminent).tint(Theme.accent)
                     Button("Send Back [Notification Actions a20f13]") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }.lineLimit(1) // i18n-ignore: feedback sent to the agent
                 case .permission:
                     Text(interaction.summary ?? "").font(.caption2.monospaced())
@@ -544,7 +544,7 @@ struct WatchInteractionView: View {
                         Text("Fill this in on your iPhone to allow it").font(Theme.Font.caption)
                     } else {
                         Button { act(Resolution(allow: true)) } label: { Text("Allow [Notification Actions ce7ef2]").lineLimit(1) }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.borderedProminent).tint(Theme.accent)
                     }
                     Button { act(Resolution(allow: false)) } label: { Text("Deny").lineLimit(1) }
                 case .screen:
@@ -570,6 +570,7 @@ struct WatchInteractionView: View {
                         }
                         .lineLimit(1)
                         .buttonStyle(.borderedProminent)
+                        .tint(Theme.accent)
                         .disabled(ticked.isEmpty)
                     } else if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
                         ForEach(d.options.filter { $0.kind == nil }, id: \.key) { opt in
@@ -595,6 +596,8 @@ struct WatchInteractionView: View {
                     .lineLimit(1).minimumScaleFactor(0.8).font(.caption2).foregroundStyle(.secondary)
             }
         }
+        .buttonStyle(.bordered)
+        .tint(Theme.primaryText)
         .navigationTitle(interaction.kind.watchTitle)
         .disabled(!model.canAnswer(interaction))
     }
@@ -839,7 +842,7 @@ struct WatchInboxRow: View {
                 else { Image(systemName: Theme.Icon.mailFilled) }
             }
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(item.kind == "mention" ? Theme.danger : Theme.accent)
+                .foregroundStyle(item.kind == "mention" ? StatusPalette.needsYou.text : Theme.accent)
             Text(item.title).font(.headline).lineLimit(2)
             Text(item.summary?.isEmpty == false ? item.summary! : item.preview).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
         }

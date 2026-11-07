@@ -3438,7 +3438,7 @@ struct StartingNote: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
-        .surface(tint: error == nil ? nil : Theme.danger.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("chat.starting")
     }
@@ -3451,14 +3451,14 @@ struct AttentionNote: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
-            Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(Theme.caution)
+            Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text)
             Text(reason).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
             Spacer(minLength: 0)
             if let link { FeishuLink(url: link).font(Theme.Font.secondaryStrong) }
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
-        .surface(tint: Theme.caution.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.attention")
     }
@@ -3481,14 +3481,14 @@ struct NextNeedsYouStrip: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: Theme.Space.s) {
-                Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(Theme.caution)
+                Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text)
                 Text("Next Needing You").font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
                 Text(title).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
                 Image(systemName: Theme.Icon.forward).font(Theme.Font.label).foregroundStyle(.secondary)
             }
             .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
-            .surface(tint: Theme.caution.opacity(0.06), interactive: true, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .contentShape(.rect(cornerRadius: Theme.Radius.card))
         }
         .buttonStyle(.plain).accessibilityElement(children: .combine).accessibilityIdentifier("chat.nextNeedsYou")
@@ -3519,7 +3519,7 @@ struct FailureNote: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
-        .surface(tint: Theme.danger.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.failure")
     }

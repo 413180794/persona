@@ -62,7 +62,7 @@ struct ReadinessCard: View {
         }
         .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .surface(tint: color.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("readiness-card")
     }
@@ -139,7 +139,7 @@ struct ReadinessCard: View {
                                 Haptics.tap()
                                 action()
                             } label: {
-                                BUIPill(actionTitle, tone: tone == .danger ? .red : .accent)
+                                BUIPill(actionTitle, tone: .accent)
                             }
                             .buttonStyle(.plain)
                             .disabled(busy)

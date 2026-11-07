@@ -2875,10 +2875,9 @@ nonisolated struct SlotRow: View, Equatable {
                         AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                         sourceLabel
                         #if os(macOS)
-                        // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-                        if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                        if pendingCount { CountBadge(count: session.pendingInteractions, look: .tone(StatusPalette.needsYou)) }
                         #endif
-                        if session.state == .needsYou && !muted && !hideState && !pendingCount { BUIPill(session.state.label, tone: .red) }
+                        if session.state == .needsYou && !muted && !hideState && !pendingCount { BUIPill(session.state.label, tone: .custom(ink: StatusPalette.needsYou.text, fill: StatusPalette.needsYou.tint)) }
                         if awaitingWord {
                             let tone = StatusPalette.awaitingReply
                             BUIPill(session.stateLabel(muted: muted), tone: .custom(ink: tone.text, fill: tone.tint))
@@ -2930,8 +2929,7 @@ nonisolated struct SlotRow: View, Equatable {
                             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                                 AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                                 #if os(macOS)
-                                // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-                                if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                                if pendingCount { CountBadge(count: session.pendingInteractions, look: .tone(StatusPalette.needsYou)) }
                                 #endif
                             }
                             sourceLabel
@@ -2949,8 +2947,6 @@ nonisolated struct SlotRow: View, Equatable {
         if let source = rowSource { SourceLabel(source: source, link: session.externalLink) }
     }
 
-    /// Mac: the red count of the questions and approvals waiting at the row's end, as the web's (#2695); it says Needs You
-    /// on its own, so the state word and pill give way to it. Not for a muted agent (it should not catch the eye).
     private var pendingCount: Bool {
         #if os(macOS)
         session.pendingInteractions > 0 && !muted
@@ -3086,14 +3082,12 @@ nonisolated struct CompactSlotRow: View, Equatable {
             if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("Notifications muted") }
             AgentTimeText(time: time, fallback: session.updatedAt, font: CompactList.meta.monospacedDigit())
             #if os(macOS)
-            // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-            if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+            if pendingCount { CountBadge(count: session.pendingInteractions, look: .tone(StatusPalette.needsYou)) }
             #endif
         }
         .opacity(muted ? 0.8 : 1)
     }
 
-    /// As SlotRow's: the red count on Mac, not for a muted agent.
     private var pendingCount: Bool {
         #if os(macOS)
         session.pendingInteractions > 0 && !muted
