@@ -4,21 +4,27 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
 func TestPreparedResourcesAlwaysDisposed(t *testing.T) {
+	// Where true is differs (/bin/true on Linux, only /usr/bin/true on macOS).
+	truePath, err := exec.LookPath("true")
+	if err != nil {
+		t.Skip("no true on PATH")
+	}
 	for _, tc := range []struct {
 		name, command string
 		failure       bool
 	}{
-		{"exit", "/bin/true", false}, {"start-failure", "/no-such-prepared-command", true}, {"prepare-failure", "/bin/true", true}, {"stopped", "/bin/sh", false},
+		{"exit", truePath, false}, {"start-failure", "/no-such-prepared-command", true}, {"prepare-failure", truePath, true}, {"stopped", "/bin/sh", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var disposed atomic.Int32
-			p := &Proc{spec: Spec{Command: "/bin/true", Prepare: func(string, []string) (string, []string, []string, []*os.File, func(), error) {
+			p := &Proc{spec: Spec{Command: truePath, Prepare: func(string, []string) (string, []string, []string, []*os.File, func(), error) {
 				var err error
 				if tc.name == "prepare-failure" {
 					err = errors.New("prepare failed")
