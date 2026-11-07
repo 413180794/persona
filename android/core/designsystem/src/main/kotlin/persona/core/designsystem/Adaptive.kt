@@ -68,9 +68,10 @@ fun Modifier.selectedRow(selected: Boolean): Modifier = if (!selected) this else
     val plate = palette.statusSurface
     val outset = if (brief) 12.dp else 0.dp
     semantics { this.selected = true }.drawWithContent {
-        drawContent()
         val out = outset.toPx()
+        // The plate is an opaque surface: it lies behind the row's content, the edge over it.
         drawRoundRect(plate, topLeft = Offset(-out, 0f), size = Size(size.width + 2 * out, size.height), cornerRadius = CornerRadius(12.dp.toPx()))
+        drawContent()
         drawRoundRect(edge, topLeft = Offset(-out, size.height * 0.2f), size = Size(3.dp.toPx(), size.height * 0.6f), cornerRadius = CornerRadius(2.dp.toPx()))
     }
 }
