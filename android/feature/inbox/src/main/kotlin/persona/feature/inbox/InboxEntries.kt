@@ -25,10 +25,12 @@ fun EntryProviderScope<NavKey>.inboxEntries(
     mailTransport: persona.core.contracts.api.MailTransport? = null,
     onMailAskAi: ((MailAiContext) -> Unit)? = null,
     onMailOpenLink: ((String) -> Unit)? = null,
+    /** Opens a request card outside any session on Agents (#5610). */
+    onOpenCard: ((persona.core.navigation.RequestRef) -> Unit)? = null,
 ) {
     entry<InboxRoute> {
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
-        InboxScreen(source, navigator)
+        InboxScreen(source, navigator, onOpenCard)
     }
     entry<MailRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()

@@ -26,8 +26,9 @@ import persona.core.navigation.LocalDetailKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+/** [onOpenCard]: the app opens a request card outside any session on Agents (#5610); without it, Agents opens. */
 @Composable
-fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
+fun InboxScreen(repository: InboxRepository, navigator: Navigator, onOpenCard: ((persona.core.navigation.RequestRef) -> Unit)? = null) {
     val snapshot by repository.snapshot.collectAsStateWithLifecycle()
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
     val onlineSince = rememberOnlineSince(connection)
@@ -301,7 +302,12 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                         interactions[row.id]?.let { interaction ->
                             MessageItem(sender = "Persona", title = interaction.sessionTitle.ifBlank { interaction.title },
                                 preview = interaction.summary ?: interaction.title, position = position, status = Status.NeedsYou,
-                                onClick = { navigator.navigate(ChatRoute(interaction.machineId, interaction.sessionId)) })
+                                onClick = {
+                                    // A card outside any session (`personad ask` in a plain terminal) has no chat to open.
+                                    if (interaction.sessionId.isNotBlank()) navigator.navigate(ChatRoute(interaction.machineId, interaction.sessionId))
+                                    else onOpenCard?.invoke(persona.core.navigation.RequestRef(interaction.machineId, interaction.id))
+                                        ?: navigator.selectTab(persona.core.navigation.AppTab.Agents)
+                                })
                         }
                     } else records[row.id]?.let { record ->
                         val done = pending[record.item.id] ?: record.item.isDone
