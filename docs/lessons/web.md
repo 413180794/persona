@@ -126,6 +126,8 @@
 
 ### Talking to hub
 
+- **A failed to-do read is not an empty list** (#5173): both the full refresh and the dedicated retry must record the shared `errorText` result and clear it on success. Apply the existing request-order guard to errors as well as lists: a late failure must not overwrite a newer success or repopulate state after sign-out. Show the failure only when the underlying list is empty, not when a search merely filters out existing rows; retain 404 as the unsupported-hub case. Hide the header counts during an empty-list failure too: zero counts imply a successful empty read even when the body explains the failure.
+
 - **Check error-text consumers before localizing shared errors** (#3728): besides display, `errorText` drives login, worktree compatibility checks, missing-session explanations, and offline-toast coalescing. After adding explanations to 5xx errors, `^unsupported` no longer matches the localized prefix; compatibility checks use `ApiError.message` instead. Display retains full original text and HTTP status, preserving session-specific explanations and coalesced 502 / 503 / 504 offline notices. Keep 401 `invalid token` unchanged.
 
 - When one page fetches multiple areas through `Promise.allSettled`, handle each area's failure separately (2026-11-06, #4494). Keeping `null` for first load but omitting a run-history rejected branch leaves a failed request permanently at "Loading." Record errors individually and clear on success; retries reuse the same loader and request sequence, so old failures cannot overwrite newer results.

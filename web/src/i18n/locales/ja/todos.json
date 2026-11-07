@@ -7,6 +7,7 @@
   "title": "ToDo",
   "summary": "未完了{open} · 完了{done}",
   "new_todo": "新規ToDo",
+  "load_failed": "ToDoを読み込めませんでした",
   "search_placeholder": "ToDoを検索",
   "done_section": "完了 · {count}",
   "pick_hint": "左のToDoを選ぶと詳細が表示されます",

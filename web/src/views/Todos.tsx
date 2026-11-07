@@ -61,6 +61,7 @@ export function TodosView({
 }) {
   const todos = useStore((s) => s.todos);
   const todosLoaded = useStore((s) => s.todosLoaded);
+  const todosError = useStore((s) => s.todosError);
   const machines = useStore((s) => s.machines);
   const interactions = useStore((s) => s.interactions);
   const allSessions = useAgentSessions();
@@ -74,6 +75,7 @@ export function TodosView({
   const [handoverOpen, setHandoverOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [showReleased, setShowReleased] = useState(false);
 
@@ -170,6 +172,16 @@ export function TodosView({
     }
   }, []);
 
+  const retryTodos = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await refreshTodos();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!activeTodo || deleting) return;
     const id = activeTodo.id;
@@ -203,9 +215,11 @@ export function TodosView({
           {onToggleSidebar && <IconButton icon="sidebar" label={t("agents-agentsview.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />}
           <div className="flex items-baseline gap-2">
             <h1 className="text-[16px] font-semibold text-ink">{t("todos.title")}</h1>
-            <span className="text-[12px] text-ink-3">
-              {t("todos.summary", { open: uncompleted.length, done: completed.length })}
-            </span>
+            {!(todos.length === 0 && todosError) && (
+              <span className="text-[12px] text-ink-3">
+                {t("todos.summary", { open: uncompleted.length, done: completed.length })}
+              </span>
+            )}
           </div>
         </div>
         <Button tone="secondary" icon="plus" onClick={() => setNewOpen(true)} className="h-8 text-[12.5px]">
@@ -233,6 +247,18 @@ export function TodosView({
               <div className="flex justify-center py-16" data-testid="todos-loading">
                 <Loading />
               </div>
+            ) : todos.length === 0 && todosError ? (
+              <Empty
+                icon="todo"
+                title={t("todos.load_failed")}
+                action={
+                  <Button tone="secondary" icon="retry" busy={retrying} onClick={() => void retryTodos()}>
+                    {t("todos.retry")}
+                  </Button>
+                }
+              >
+                {todosError}
+              </Empty>
             ) : filteredUncompleted.length === 0 && filteredCompleted.length === 0 ? (
               search.trim() ? (
                 <Empty icon="search" title={t("todos.no_match_title")}>

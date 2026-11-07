@@ -75,6 +75,7 @@ export interface State {
   todos: Todo[];
   todosSupported: boolean;
   todosLoaded: boolean;
+  todosError: string | null;
   spacesSupported: boolean;
 }
 
@@ -101,6 +102,7 @@ let state: State = {
   todos: [],
   todosSupported: true,
   todosLoaded: false,
+  todosError: null,
   spacesSupported: true,
 };
 
@@ -905,17 +907,16 @@ export async function refresh() {
   await Promise.all([todosDone, assistantDone]);
 }
 
-/** refresh()'s GET /todos: the list, or a hub without todos (404), unless a later request's answer is in place (`fresh`);
- *  loaded either way. */
+/** Both refresh paths share the list, error and unsupported-hub (404) handling; only a fresh answer finishes loading. */
 function applyTodos(todos: PromiseSettledResult<{ todos: Todo[] }>, fresh: () => boolean) {
+  if (!fresh()) return; // a later answer is in place, or this one belongs to a login reset() ended
   if (todos.status === "fulfilled") {
-    if (!fresh()) return; // a later answer is in place, or this one belongs to a login reset() ended
     const list = todos.value.todos ?? [];
-    return set({ todos: list, todosSupported: true, todosLoaded: true, spacesSupported: computeSpacesSupported(list) });
+    return set({ todos: list, todosSupported: true, todosLoaded: true, todosError: null, spacesSupported: computeSpacesSupported(list) });
   }
   const reason = todos.reason;
-  if (reason instanceof ApiError && reason.status === 404 && fresh()) return set({ todosSupported: false, todosLoaded: true, spacesSupported: false });
-  set({ todosLoaded: true });
+  if (reason instanceof ApiError && reason.status === 404) return set({ todosSupported: false, todosLoaded: true, todosError: null, spacesSupported: false });
+  set({ todosLoaded: true, todosError: errorText(reason) });
 }
 
 export function computeSpacesSupported(todos: Todo[]): boolean {
@@ -942,13 +943,9 @@ export async function refreshTodos() {
   const asked = todosAsked.ask();
   try {
     const res = await asked.answer;
-    if (!asked.fresh()) return;
-    const todos = res.todos ?? [];
-    set({ todos, todosSupported: true, todosLoaded: true, spacesSupported: computeSpacesSupported(todos) });
+    applyTodos({ status: "fulfilled", value: res }, asked.fresh);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404 && asked.fresh()) {
-      set({ todosSupported: false, todosLoaded: true, spacesSupported: false });
-    }
+    applyTodos({ status: "rejected", reason: err }, asked.fresh);
   }
 }
 
@@ -1053,6 +1050,7 @@ export function reset() {
     todos: [],
     todosSupported: true,
     todosLoaded: false,
+    todosError: null,
     spacesSupported: true,
     loaded: false,
     conn: "connecting",

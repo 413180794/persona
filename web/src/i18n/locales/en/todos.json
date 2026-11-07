@@ -7,6 +7,7 @@
   "title": "To-dos",
   "summary": "{open} open · {done} done",
   "new_todo": "New to-do",
+  "load_failed": "Couldn't load to-dos",
   "search_placeholder": "Search to-dos",
   "done_section": "Done · {count}",
   "pick_hint": "Pick a to-do on the left to see it",
