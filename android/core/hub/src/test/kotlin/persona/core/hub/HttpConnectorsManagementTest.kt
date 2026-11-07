@@ -123,6 +123,21 @@ class HttpConnectorsManagementTest {
     }
 
     @Test
+    fun googleConfigAndNoneOnAnOlderHub() = withHub { server, api ->
+        server.enqueue(MockResponse().setBody("""{"configured":false}"""))
+        assertEquals(false, api.googleConfig()?.configured)
+        val req = server.takeRequest()
+        assertEquals("GET", (req.method).zhAny())
+        assertEquals("/api/v1/mail/oauth/google/config", (req.path).zhAny())
+
+        server.enqueue(MockResponse().setResponseCode(404))
+        assertNull(api.googleConfig())
+
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"internal"}"""))
+        assertTrue(runCatching { api.googleConfig() }.exceptionOrNull() is HubFailure)
+    }
+
+    @Test
     fun larkStatusAndAccounts() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"configured":true,"connected":true,"name":"张三","last_event_at":1700000000}"""))
         val status = api.larkStatus()

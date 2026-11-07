@@ -27,7 +27,9 @@ data class MailAccountForm(
     fun request(): AddMailAccountRequest {
         val base = AddMailAccountRequest(name = email, email = email, auth = "password", password = password)
         return when (kind) {
-            Kind.GMAIL -> base.copy(provider = "gmail")
+            // Google's servers spelled out: a Google Workspace address has its own domain, which no preset knows.
+            Kind.GMAIL -> base.copy(provider = "gmail", imapHost = "imap.gmail.com", imapPort = 993,
+                smtpHost = "smtp.gmail.com", smtpPort = 465, smtpSecurity = "tls")
             Kind.OUTLOOK -> base.copy(provider = "outlook")
             Kind.FEISHU -> base.copy(provider = "feishu")
             Kind.IMAP -> {

@@ -75,6 +75,12 @@ class HttpConnectorsManagement internal constructor(
         return decode { JsonCodec.decodeFromJsonElement(MailAccount.serializer(), account) }
     }
 
+    override suspend fun googleConfig(): GoogleConfig? = try {
+        read(call("/api/v1/mail/oauth/google/config", "GET"), GoogleConfig.serializer())
+    } catch (failure: HubFailure) {
+        if (failure.status == 404) null else throw failure
+    }
+
     override suspend fun larkStatus(): LarkStatus =
         read(call("/api/v1/lark/status", "GET"), LarkStatus.serializer())
 

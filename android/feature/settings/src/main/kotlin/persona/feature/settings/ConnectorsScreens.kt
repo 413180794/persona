@@ -233,6 +233,13 @@ internal fun AddMailAccountPage(
         }
     }
 
+    // A hub without Google sign-in goes straight to the app-password form; an older hub or a failed read keeps the button.
+    LaunchedEffect(connectors) {
+        if (connectors == null || gmailFallback != null) return@LaunchedEffect
+        val config = try { connectors.googleConfig() } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+        if (config?.configured == false) gmailFallback = res.getString(R.string.settings_src_mail_google_not_configured)
+    }
+
     fun save() {
         if (connectors == null) return
         saving = true

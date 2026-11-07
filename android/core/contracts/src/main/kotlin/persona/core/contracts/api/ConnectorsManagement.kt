@@ -67,6 +67,10 @@ data class GoogleStart(
 @Serializable
 data class GoogleFinish(val state: String, val code: String? = null, val error: String? = null)
 
+/** `GET /api/v1/mail/oauth/google/config`: whether this hub can start "Sign in with Google" (google.client_id in the manager's manager.json). */
+@Serializable
+data class GoogleConfig(val configured: Boolean)
+
 /** `GET /api/v1/lark/status` (Settings › Connectors › Lark): whether the hub reaches the Lark gateway and who is signed in there. */
 @Serializable
 data class LarkStatus(
@@ -153,6 +157,9 @@ interface ConnectorsManagement {
     suspend fun testMailAccount(id: String): MailTestResult
     suspend fun googleSignInStart(loginHint: String? = null): GoogleStart
     suspend fun googleSignInFinish(finish: GoogleFinish): MailAccount
+
+    /** `GET /api/v1/mail/oauth/google/config`; null from a hub too old to answer it, which counts as configured. */
+    suspend fun googleConfig(): GoogleConfig? = null
 
     // Lark API
     suspend fun larkStatus(): LarkStatus

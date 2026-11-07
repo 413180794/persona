@@ -267,6 +267,7 @@ object MachineManagementModule {
         override suspend fun testMailAccount(id: String) = api().testMailAccount(id)
         override suspend fun googleSignInStart(loginHint: String?) = api().googleSignInStart(loginHint)
         override suspend fun googleSignInFinish(finish: GoogleFinish) = api().googleSignInFinish(finish)
+        override suspend fun googleConfig() = api().googleConfig()
         override suspend fun larkStatus() = api().larkStatus()
         override suspend fun larkAccounts() = api().larkAccounts()
         override suspend fun larkChatChoices() = api().larkChatChoices()

@@ -93,10 +93,10 @@ Steps (for reference when recreating):
 7. Write it into the built-in manager's `~/.persona/managers/assistant/manager.json` on the hub machine: `"google": {"client_id": "…apps.googleusercontent.com"}`, and restart the hub (`scripts/deploy/deploy.sh <hub machine id>`).
    An iOS client's client ID is public information, not a secret.
 
-Without `google.client_id` the hub can't start Google sign-in (#2442). iOS / Mac and web ask `GET /api/v1/mail/oauth/google/config` when the Gmail form opens; on `{"configured": false}`
+Without `google.client_id` the hub can't start Google sign-in (#2442). iOS / Mac, web and Android ask `GET /api/v1/mail/oauth/google/config` when the add-account page opens; on `{"configured": false}`
 they don't show "Sign In with Google" but say that an admin adds `google.client_id` here, and offer Gmail address + app-specific password instead (`auth: password`, `imap.gmail.com:993` / `smtp.gmail.com:465`).
 A hub too old to answer `config` (404) counts as configured. `POST …/google/start` on such a hub answers 400 with `code: google_not_configured` and the same explanation in the client's language;
-every language's text keeps the phrase "not configured", which Android matches (below).
+every language's text keeps the phrase "not configured", which older Android apps match (below).
 
 ### Android
 
@@ -108,8 +108,8 @@ the flow survives process death: the awaited `state` is stored in SharedPreferen
 - Android can't register arbitrary schemes at runtime: the intent filter's scheme comes from `android.google_oauth_scheme` in the build config `~/.config/persona/config.json`
   (`scripts/app/android.sh` passes it to gradle; the env var `PERSONA_GOOGLE_OAUTH_SCHEME` also works), never in the repo. When unset it is a placeholder;
   the App uses `PackageManager.queryIntentActivities` to check whether it can catch the `callback_scheme` the hub returns, and if not, explains why
-  and falls back to "Gmail + app-specific password" (the hub still supports `auth: password`). It falls back to the same form when the hub has no `google.client_id`:
-  Android doesn't read `google/config` yet; it decides from the `start` error containing "not configured" (case-insensitive), so it only finds out after the tap. Moving it to `google/config` like iOS and web is still open.
+  and falls back to "Gmail + app-specific password" (the hub still supports `auth: password`). A hub without `google.client_id` gets the same form from the start, read from `google/config` like iOS and web.
+  On a hub too old to answer `config`, the app still finds out after the tap, from the `start` error containing "not configured" (case-insensitive); app versions before this read only that error.
 - Not verified on a real device: whether Google allows a callback to an iOS client's custom scheme when initiated from an Android browser (custom schemes are already disabled for the Android client type).
   If not, either add an Android / Web type client on the hub (Web needs a client secret and an https callback), or keep using app-specific passwords.
 - When the user returns from the browser directly (without authorizing), no callback within 1.5 s of returning to the page counts as cancelled.

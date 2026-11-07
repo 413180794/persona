@@ -33,7 +33,7 @@ import java.time.Instant
 
 /**
  * Settings › Connectors › Messages (its steps on the Mac, "Hand to Persona", "Conversations" and a conversation), Settings › Lark › Message display and "Add mail account" ›
- * Outlook, in the three styles, light and dark (#3045). Written as PNGs to `build/parity-shots/` to look at.
+ * Outlook and Gmail (with and without the hub's Google sign-in, #2442), in the three styles, light and dark (#3045). Written as PNGs to `build/parity-shots/` to look at.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -42,7 +42,7 @@ class ParityInboxShotsTest {
 
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/parity-shots").also { it.mkdirs() }
 
-    private enum class Page { MessagesGuide, MessagesOk, MessagesChats, MessagesThread, Display, OutlookRegister, OutlookSignIn }
+    private enum class Page { MessagesGuide, MessagesOk, MessagesChats, MessagesThread, Display, OutlookRegister, OutlookSignIn, GmailSignIn, GmailNoGoogle }
 
     @Config(sdk = [35], qualifiers = "zh-w400dp-h1100dp-xhdpi")
     @Test fun pages() {
@@ -62,6 +62,8 @@ class ParityInboxShotsTest {
                                 start = MailAccountForm(MailAccountForm.Kind.OUTLOOK))
                             Page.OutlookSignIn -> AddMailAccountPage(Api(ok = true, outlook = true), onBack = {}, onAdded = {},
                                 start = MailAccountForm(MailAccountForm.Kind.OUTLOOK))
+                            Page.GmailSignIn -> AddMailAccountPage(Api(ok = true, google = true), onBack = {}, onAdded = {})
+                            Page.GmailNoGoogle -> AddMailAccountPage(Api(ok = true, google = false), onBack = {}, onAdded = {})
                         }
                     }
                 }
@@ -86,6 +88,11 @@ class ParityInboxShotsTest {
                     Page.Display -> { rule.assertText("防撤回"); rule.assertText("编辑历史") }
                     Page.OutlookRegister -> rule.assertText("保存 client ID")
                     Page.OutlookSignIn -> rule.assertText("使用 Microsoft 账号登录")
+                    Page.GmailSignIn -> rule.assertText("使用 Google 账号登录")
+                    Page.GmailNoGoogle -> {
+                        rule.assertText("hub 还没有配置 Google 登录"); rule.assertText("邮箱地址")
+                        assertTrue(rule.onAllNodesWithText("使用 Google 账号登录").fetchSemanticsNodes().isEmpty())
+                    }
                 }
                 capture("parity-${next.name.lowercase()}-${s.name.lowercase()}-${if (d) "dark" else "light"}")
             }
@@ -103,7 +110,7 @@ class ParityInboxShotsTest {
 
     // ---- made-up data
 
-    private class Api(val ok: Boolean, val outlook: Boolean = false) : ConnectorsApiStub() {
+    private class Api(val ok: Boolean, val outlook: Boolean = false, val google: Boolean? = null) : ConnectorsApiStub() {
         private val now = Instant.now()
         override suspend fun messagesStatus() = if (ok) MessagesStatus("Studio", "ok", ai = true)
             else MessagesStatus("Studio", "no_permission", error = "authorization denied",
@@ -125,5 +132,6 @@ class ParityInboxShotsTest {
         override suspend fun larkMessageDisplay() = LarkMessageDisplay("acct", antiRecall = true, showEditHistory = false)
         override suspend fun microsoftConfig() = MicrosoftConfig(configured = outlook, clientId = if (outlook) "00000000-0000-0000-0000-000000000000" else null,
             redirectUri = "persona-mail-oauth://outlook")
+        override suspend fun googleConfig() = google?.let(::GoogleConfig)
     }
 }

@@ -44,7 +44,10 @@ class MailAccountFormTest {
         val g = MailAccountForm(MailAccountForm.Kind.GMAIL, "me@example.com", "abcd efgh")
         assertFalse(g.canConnect(gmailPasswordAllowed = false))
         assertTrue(g.canConnect(gmailPasswordAllowed = true))
-        assertEquals("gmail", g.request().provider)
+        val r = g.request()
+        assertEquals("gmail", r.provider)
+        assertEquals("imap.gmail.com" to 993, r.imapHost to r.imapPort)
+        assertEquals(Triple("smtp.gmail.com", 465, "tls"), Triple(r.smtpHost, r.smtpPort, r.smtpSecurity))
         assertFalse(MailAccountForm(MailAccountForm.Kind.IMAP, "nope", "pw").canConnect(false))
     }
 
