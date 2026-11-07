@@ -765,6 +765,7 @@ func (h *Hub) moveMachineMoving(ctx context.Context, mid, to string) (from strin
 	d.mu.Lock()
 	d.assign = next
 	d.mu.Unlock()
+	h.handMachineEntry(mid, from, to) // shown as last reported until to reports it (machine_entries.go)
 	h.machineHandedOver(mid, to)
 	h.logf("managers: [%s] moved from %s to %s", mid, from, to)
 	return from, nil

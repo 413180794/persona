@@ -111,19 +111,22 @@ func (h *Hub) machineList() []proto.Machine {
 	return out
 }
 
-// recordEntries are this hub's hub.json computers as its mesh record lists them: how the manager says it reaches
-// each now.
+// recordEntries are this hub's hub.json computers as its mesh record lists them: how each one's manager says it
+// reaches it now (another manager's report of it counts for nothing).
 func (h *Hub) recordEntries() []recMachine {
 	d := &h.devices
 	d.mu.Lock()
-	reach := map[string]devicewire.RecMachine{}
-	for _, e := range d.recEntries {
-		reach[e.ID] = e
+	reach := map[string]map[string]devicewire.RecMachine{} // by manager
+	for owner, list := range d.recEntries {
+		reach[owner] = map[string]devicewire.RecMachine{}
+		for _, e := range list {
+			reach[owner][e.ID] = e
+		}
 	}
 	d.mu.Unlock()
 	var out []recMachine
 	for _, mc := range h.cfgEntries() {
-		e := reach[mc.ID]
+		e := reach[h.entryOwner(mc.ID)][mc.ID]
 		out = append(out, recMachine{ID: mc.ID, Cfg: mc.forMesh(), Kind: kindOf(mc), Avail: e.Avail, RTTMS: e.RTTMS})
 	}
 	return out

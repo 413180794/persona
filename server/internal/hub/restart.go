@@ -45,6 +45,7 @@ func (h *Hub) beginStop() {
 	// The machines as the managers report them, for the next hub process (devices_link.go); each manager hands its
 	// own to its next process apart (internal/devices warm.go).
 	h.saveDevicesWarm(context.Background())
+	h.saveMachineEntries(context.Background()) // and what each one has, each machine last seen as of now (machine_entries.go)
 }
 
 // rememberLiveText keeps a session's message being generated (session.delta: the whole text so far, "" once it is in

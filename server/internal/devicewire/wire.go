@@ -204,7 +204,9 @@ type States struct {
 	Machines []State `json:"machines"`
 	// Absorbed: a hub.json entry whose computer another entry has → that machine's id (the id still reaches it).
 	Absorbed map[string]string `json:"absorbed,omitempty"`
-	// Entries are this hub's hub.json computers as its mesh record lists them.
+	// Entries are the manager's own entries, every one it was handed (an absorbed one too): each one's entry as it
+	// has it (Cfg; a manager from before leaves it out) and how it reaches it. The hub's mesh record lists them, and
+	// the hub keeps what each manager has from them (hub machine_entries.go).
 	Entries []RecMachine `json:"entries,omitempty"`
 }
 

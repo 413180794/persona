@@ -439,7 +439,8 @@ func (d *Devices) states() devicewire.States {
 	d.fleet.mu.Unlock()
 	for _, m := range d.cfgMachines() {
 		avail, rtt := m.reachableHere()
-		out.Entries = append(out.Entries, devicewire.RecMachine{ID: m.cfg.ID, Kind: kindOf(m.cfg), Avail: avail, RTTMS: rtt})
+		// Its entry too, an absorbed one's included: the hub keeps what each manager has (hub machine_entries.go).
+		out.Entries = append(out.Entries, devicewire.RecMachine{ID: m.cfg.ID, Cfg: m.raw, Kind: kindOf(m.cfg), Avail: avail, RTTMS: rtt})
 	}
 	return out
 }

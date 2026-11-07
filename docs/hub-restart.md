@@ -133,7 +133,7 @@ SIGTERM no longer cancels the hub's ctx directly; it runs `beginStop` first:
 
 1. Mark `stopping`;
 2. Send every client `{"type":"hub_restarting","back_in_ms":3000}`, waiting up to 300 ms for it to go out;
-3. Hand the `NodeInfo` and session lists of the machines online at this moment, as the managers reported them, to the next hub (its own settings, `hub_settings` `hub.devices_warm`);
+3. Hand the `NodeInfo` and session lists of the machines online at this moment, as the managers reported them, to the next hub (its own settings, `hub_settings` `hub.devices_warm`), and write what each manager has (`hub.machine_entries`; a machine connected at this moment is last seen now);
 4. Then cancel the ctx and stop in the original order: close the listener → close WebSockets with 1001 (reason changed to "hub restarting") → drain HTTP → wait for node connections → **hand over the event log** → close the database.
 
 During shutdown, node connections drop, machines go offline and their interactions end; all of this is caused by the shutdown itself, so it is **no longer broadcast** (`detach` / `markOffline` check `stopping`).
@@ -164,6 +164,9 @@ wait for it (up to 30 s) instead of returning "offline" immediately. The new man
 clients that reconnect do not see the Mac go offline and come back. If a node has not connected after 30 s, it is shown offline the old way (sessions marked unknown) and broadcast.
 This warm start is display only: when the hub's self-update confirms "everything that was online has reconnected" before updating each node, it waits for the node to really connect (`connected` reported by the manager), the same as the hub's own warm start used to.
 On the restart that upgrades to the split settings (#5457), the stopping hub has not written `hub.devices_warm` yet: for those seconds the hub shows the machines offline until the manager reports, while the manager's own warm start works as before.
+The 30 seconds end for every manager's machines alike: those no manager reported by then show offline (sessions unknown) even when another manager is back.
+
+Beyond the warm start, the hub keeps what each manager last reported of its machines (`hub_settings` `hub.machine_entries`, [managers.md](managers.md) ("What the hub keeps of each manager")). A machine that is not shown as before (the hub crashed, or was stopped for longer than 2 minutes) shows offline with what it last was until its manager reports it: host name, OS, versions, and `last_seen`; the machines of a manager that stays away keep showing so.
 
 ### Text being generated
 

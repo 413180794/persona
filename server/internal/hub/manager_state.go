@@ -89,6 +89,7 @@ func (h *Hub) forgetManagerState(id string) {
 	for _, ixID := range gone {
 		h.broadcast(map[string]any{"type": "interaction_resolved", "id": ixID})
 	}
+	h.forgetMachineEntries(id) // what it reported of its machines (machine_entries.go)
 }
 
 // conversation is the manager whose own conversation sid is, and how its snapshot lists it; "" for none. A session

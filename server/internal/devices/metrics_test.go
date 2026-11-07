@@ -261,3 +261,26 @@ func TestForgetMachineKeepsAnIDStillInUse(t *testing.T) {
 		t.Fatal("the id still in use lost its live metrics")
 	}
 }
+
+// The report names every entry the manager has with the entry itself, so the hub keeps what each manager has (hub
+// machine_entries.go).
+func TestTheReportCarriesEachEntry(t *testing.T) {
+	d := newTestDevices(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	d.mu.Lock()
+	d.ctx = ctx
+	d.mu.Unlock()
+	t.Cleanup(func() { cancel(); d.workers.Wait() })
+	entry := func(id string) json.RawMessage {
+		b, _ := json.Marshal(MachineConfig{ID: id, Name: "Name of " + id, Kind: kindLink})
+		return b
+	}
+	d.Configure(devicewire.Config{Machines: []json.RawMessage{entry("one"), entry("two")}})
+	got := map[string]string{}
+	for _, e := range d.states().Entries {
+		got[e.ID] = string(e.Cfg)
+	}
+	if len(got) != 2 || got["one"] != string(entry("one")) || got["two"] != string(entry("two")) {
+		t.Fatalf("entries: %v", got)
+	}
+}

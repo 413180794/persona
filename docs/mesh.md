@@ -140,7 +140,7 @@ Only after opening does it return `101 Switching Protocols`; bytes are then copi
 ## Multiple paths to one computer
 
 (Since 2026-11-04, in the manager connecting computers: `server/internal/devices/paths.go`, `conn.go`. The hub supplies the group's view in `mesh` of `devices.config`: whether this hub is a member,
-which other hubs are reachable and how far away, and computers in member records. The manager deduplicates, selects, and switches paths, reports each machine's paths (`devices.state`), and the hub also uses its report for local-computer availability in records.)
+which other hubs are reachable and how far away, and computers in member records. The manager deduplicates, selects, and switches paths, reports each machine's paths (`devices.state`), and the hub also uses its report for local-computer availability in records: each computer's `avail` and RTT come from the manager that owns it, and none while that manager is away.)
 
 - **Path**: each entry in the primary's hub.json is a path (`local` / `service` / `link` / `ssh` / `tailcat`; `ssh` with `tailcat_addr` remains one path, trying ssh then tailcat).
   Each computer in each member record is a "via member" path (`hub`).
