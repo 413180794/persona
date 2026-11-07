@@ -3,7 +3,7 @@ import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { stateColor } from "../lib/format";
 import type { AgentState } from "../lib/types";
-import { Button, copyText, Dialog, IconButton, Loading, Menu, useMenu } from "./atoms";
+import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, useMenu } from "./atoms";
 import { markOf } from "./StatusMark";
 import { STATE_LABEL } from "../lib/state-labels";
 
@@ -29,6 +29,21 @@ function renderMenu(state?: AgentState) {
     />,
   );
 }
+
+describe("state pill semantic fills", () => {
+  it("gives completed unread work a green success tint", () => {
+    expect(renderToStaticMarkup(<StatePill state="unread" />)).toContain("bg-green-tint text-green");
+  });
+
+  it("keeps pending replies and Needs you neutral", () => {
+    const pending = renderToStaticMarkup(<StatePill state="idle" awaiting />);
+    expect(pending).toContain("bg-field text-green");
+    expect(pending).not.toContain("bg-green-tint");
+    const needs = renderToStaticMarkup(<StatePill state="needs_you" />);
+    expect(needs).toContain("bg-field text-attention");
+    expect(needs).not.toMatch(/bg-(red|orange|green)-tint/);
+  });
+});
 
 describe("menu anchor", () => {
   it("captures the button before a deferred state updater loses currentTarget", () => {

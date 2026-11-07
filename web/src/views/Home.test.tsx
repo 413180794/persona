@@ -61,6 +61,14 @@ const heading = (html: string, title: string) => html.indexOf(`>${title}</h2>`);
 const buttonLabels = (html: string) => (html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g) ?? []).map((button) => button.replace(/<[^>]*>/g, ""));
 
 describe("the overview", () => {
+  it("restores green unread success badges without tinting Needs you rows", () => {
+    const html = render([agent(1, 0, "unread"), agent(2, 0, "needs_you")]);
+    expect(html).toMatch(/class="[^"]*bg-green-tint text-green" aria-label="完成未看"/);
+    expect(html).toMatch(/class="[^"]*bg-field text-attention" aria-label="需要你"/);
+    expect(html).not.toContain("bg-orange-tint");
+    expect(html).not.toContain("bg-red-tint");
+  });
+
   it("says what each waiting card asks, from whatever field has it (#3780)", () => {
     const a = agent(1, 0, "needs_you");
     const html = render([a], [

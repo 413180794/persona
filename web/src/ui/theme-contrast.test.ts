@@ -27,16 +27,30 @@ describe("default palette contrast", () => {
       })).filter(Boolean);
       expect(short).toEqual([]);
     });
-    it(`${scheme}: status and selection fills are neutral surfaces`, () => {
-      const block = (scheme === "light" ? /:root\s*\{([^}]+)\}/ : /\.dark\s*\{([^}]+)\}/).exec(css)?.[1] ?? "";
-      const tints = Object.fromEntries([...block.matchAll(/--([\w-]+-tint):\s*(#[0-9a-f]{3,8})\s*;/gi)].map((m) => [m[1], m[2]]));
-      for (const role of ["red", "orange", "green", "ai"]) expect(tints[`${role}-tint`]).toBe(t.inset);
-      expect(tints["accent-tint"]).toBe(t["hover-2"]);
+    it(`${scheme}: semantic tints are pale while error and selection fills stay neutral`, () => {
+      const expected = scheme === "light"
+        ? { green: "#e8f5ed", orange: "#fdf1e5", ai: "#efedfb" }
+        : { green: "#3dbb7224", orange: "#f68f3c24", ai: "#9c94ff24" };
+      for (const [role, value] of Object.entries(expected)) expect(t[`${role}-tint`]).toBe(value);
+      expect(t["red-tint"]).toBe(t.inset);
+      expect(t["accent-tint"]).toBe(t["hover-2"]);
       expect(contrast(t["danger-fill"], "#ffffff")).toBeGreaterThanOrEqual(4.5);
       expect(contrast(t["accent-ink"], t.surface)).toBeGreaterThanOrEqual(4.5);
-      const bubble = [...css.matchAll(/--neutral-bubble:\s*(#[0-9a-f]{6})/gi)][scheme === "light" ? 0 : 1]?.[1] ?? "";
-      expect(bubble).toMatch(/^#[0-9a-f]{6}$/i);
-      for (const role of ["ink", "ink-2", "ink-3"]) expect(contrast(t[role], bubble)).toBeGreaterThanOrEqual(4.5);
+    });
+    it(`${scheme}: neutral and user bubbles keep body, quote, attachment and focus contrast at 4.5:1`, () => {
+      for (const token of ["neutral-bubble", "user-bubble"]) {
+        const bubble = [...css.matchAll(new RegExp(`--${token}:\\s*(#[0-9a-f]{6})`, "gi"))][scheme === "light" ? 0 : 1]?.[1] ?? "";
+        expect(bubble).toMatch(/^#[0-9a-f]{6}$/i);
+        if (token === "user-bubble") expect(bubble).toBe(scheme === "light" ? "#dceaff" : "#1d3557");
+        for (const role of ["ink", "ink-2", "ink-3"]) {
+          // The dark blue bubble locally strengthens muted labels without changing page text.
+          const fg = token === "user-bubble" && scheme === "dark" && role === "ink-3" ? t["ink-2"] : t[role];
+          expect(contrast(fg, bubble), `${role} on ${token}`).toBeGreaterThanOrEqual(4.5);
+        }
+        if (token === "user-bubble") expect(contrast(t.ink, bubble)).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(css).toContain(".dark .bg-user-bubble { --ink-3: var(--ink-2); }");
+      expect(css).toContain(".bg-user-bubble :is(button, a, summary):focus-visible { outline-color: var(--ink); --tw-ring-color: var(--ink); }");
     });
     it(`${scheme}: --ink-3 stays a step quieter than --ink-2`, () => {
       expect(contrast(t["ink-3"], t.surface)).toBeLessThan(contrast(t["ink-2"], t.surface));

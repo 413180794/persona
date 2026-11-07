@@ -119,9 +119,16 @@ describe("code review (UI version 5)", () => {
     const sent: Sent[] = [];
     const root = mount(sent);
     const d = diff(root, "src/upload/client.go");
+    expect(d.querySelector('[role="checkbox"] > span')!.classList.contains("border-line-strong")).toBe(true);
     click(d.querySelector('[role="checkbox"]'));
     expect(sent.at(-1)).toEqual(["mark_viewed", { path: "src/upload/client.go", viewed: "true" }]);
     expect(d.querySelector('[role="checkbox"]')!.getAttribute("aria-checked")).toBe("true");
+    const viewedMark = d.querySelector('[role="checkbox"] > span')!;
+    expect(viewedMark.classList.contains("bg-green-tint")).toBe(true);
+    expect(viewedMark.classList.contains("text-green")).toBe(true);
+    const treeMark = root.querySelector('[role="tree"] button[title="src/upload/client.go"] > span[aria-label]')!;
+    expect(treeMark.classList.contains("bg-green-tint")).toBe(true);
+    expect(treeMark.classList.contains("text-green")).toBe(true);
     expect(d.querySelector(".code-hl")).toBeNull();
     expect(root.textContent).toContain("已看 2 / 5");
   });

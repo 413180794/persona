@@ -306,7 +306,7 @@ function Bubble({ id, m, head, group, lit, onQuote, onReply }: {
         {head && group && !mine && <span className="mb-0.5 px-1 text-[11.5px] font-medium text-ink-2">{m.sender.name}</span>}
         {pictures.map((x, i) => <Picture key={i} id={id} media={x} />)}
         {!bare && (
-          <div className={cx("rounded-[16px] px-3 py-1.5 text-[13px] leading-relaxed break-words", mine ? "bg-neutral-bubble text-ink" : "bg-surface text-ink shadow-card", pictures.length > 0 && "mt-1")}>
+          <div className={cx("rounded-[16px] px-3 py-1.5 text-[13px] leading-relaxed break-words", mine ? "bg-user-bubble text-ink" : "bg-surface text-ink shadow-card", pictures.length > 0 && "mt-1")}>
             {m.reply_to && (() => {
               const quote = `${m.reply_to.from ? t("inbox-connectorthread.quoted_sender", { name: m.reply_to.from }) : ""}${m.reply_to.text || t("inbox-connectorthread.a_message")}`;
               const look = "mb-1 block w-full truncate border-l-2 border-line-strong pl-2 text-left text-[12px] text-ink-3";

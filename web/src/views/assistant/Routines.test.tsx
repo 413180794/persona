@@ -53,6 +53,14 @@ const retry = () => [...history().querySelectorAll("button")].find((b) => b.text
 const refresh = () => act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="刷新"]')!.click());
 
 describe("routine run history loading", () => {
+  it("uses green success marks for completed runs without coloring failed-run surfaces", async () => {
+    runsReply = () => json({ runs: [run, { ...run, id: "failed-run", title: "Failed summary", status: "failed" }] });
+    await render();
+    const marks = [...history().querySelectorAll('[role="img"]')];
+    expect(marks.some((mark) => mark.classList.contains("bg-green-tint") && mark.classList.contains("text-green"))).toBe(true);
+    expect(marks.some((mark) => mark.classList.contains("bg-field") && mark.classList.contains("text-red"))).toBe(true);
+  });
+
   it("shows a failed request's reason and retry while keeping the tasks visible", async () => {
     await render();
 

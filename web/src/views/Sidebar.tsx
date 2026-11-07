@@ -1014,7 +1014,7 @@ function isOpenAuto(conversations: readonly Session[] | undefined, activeKey: st
 function TallyMark({ tally }: { tally: OriginTally }) {
   if (tally.needsYou > 0) {
     return (
-      <span title={t("sidebar.auto_needs_you", { count: tally.needsYou })} className={cx("flex h-4.5 min-w-4.5 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10.5px] font-semibold tabular-nums", BADGE_CLASS.red)}>
+      <span title={t("sidebar.auto_needs_you", { count: tally.needsYou })} className={cx("flex h-4.5 min-w-4.5 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10.5px] font-semibold tabular-nums", BADGE_CLASS.attention)}>
         {tally.needsYou}
       </span>
     );

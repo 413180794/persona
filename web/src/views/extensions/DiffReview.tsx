@@ -1163,7 +1163,7 @@ export function DiffView({ item, act, busy, local, fetch, canFetch }: { item: UI
           title={`${t("extensions-review.viewed")} (v)`}
           className={cx("flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-1.5 text-[11.5px] whitespace-nowrap transition-colors hover:bg-hover", viewed ? "text-green" : "text-ink-3")}
         >
-          <span className={cx("flex size-3.5 items-center justify-center rounded-[4px]", viewed ? "bg-field text-green" : "border border-line-strong")}>{viewed && <Icon name="check" size={10} stroke={3} />}</span>
+          <span className={cx("flex size-3.5 items-center justify-center rounded-[4px]", viewed ? "bg-green-tint text-green" : "border border-line-strong")}>{viewed && <Icon name="check" size={10} stroke={3} />}</span>
           <span className="hidden sm:inline">{t("extensions-review.viewed")}</span>
         </button>
         {roomy && open && raw.length > 0 && (

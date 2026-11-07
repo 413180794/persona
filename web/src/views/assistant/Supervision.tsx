@@ -14,7 +14,7 @@ const TONE: Record<ReviewTone, string> = {
   accent: "bg-field text-accent-ink",
   red: "bg-field text-red",
   orange: "bg-field text-orange",
-  green: "bg-field text-green",
+  green: "bg-green-tint text-green",
   muted: "bg-field text-ink-2",
 };
 

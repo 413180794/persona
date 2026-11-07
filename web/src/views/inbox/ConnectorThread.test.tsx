@@ -65,7 +65,7 @@ afterEach(() => {
 });
 
 describe("连接器会话页", () => {
-  it("keeps own-message quotes, attachment details and focus readable on neutral bubbles", async () => {
+  it("keeps own-message quotes, attachment details and focus readable on blue bubbles", async () => {
     pages.newest = {
       chat: { id: "demo", name: "Demo group", kind: "group" },
       messages: [msg("demo-own", { mine: true, text: "Demo reply", reply_to: { id: "demo-earlier", text: "Demo quote" }, media: [{ kind: "file", name: "demo.txt", size: 120 }] })],
@@ -73,7 +73,7 @@ describe("连接器会话页", () => {
     act(() => root.render(<ConnectorBody item={item} />));
     await flush();
     const row = host.querySelector('[data-mid="demo-own"]')!;
-    expect(row.querySelector(".bg-neutral-bubble")).not.toBeNull();
+    expect(row.querySelector(".bg-user-bubble")).not.toBeNull();
     expect(row.querySelector("button.border-l-2")?.className).toContain("text-ink-3");
     expect(row.querySelector("button.border-l-2")?.className).toContain("focus-visible:outline-accent");
     expect(row.querySelector("button.border-l-2")?.className).toContain("hover:text-ink");

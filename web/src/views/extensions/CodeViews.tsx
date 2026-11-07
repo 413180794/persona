@@ -208,7 +208,7 @@ export function FileTree({ item, act, busy, reveal, onPicked, local }: { item: U
           style={{ paddingLeft: 10 + depth * 14 + 17 }}
         >
           {seen ? (
-            <span className="flex size-[13px] shrink-0 items-center justify-center rounded-[4px] bg-field text-green" aria-label={t("extensions-review.viewed")}>
+            <span className="flex size-[13px] shrink-0 items-center justify-center rounded-[4px] bg-green-tint text-green" aria-label={t("extensions-review.viewed")}>
               <Icon name="check" size={9} stroke={3} />
             </span>
           ) : (

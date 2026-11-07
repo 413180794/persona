@@ -22,6 +22,14 @@ const todo: Todo = {
 };
 
 describe("a supervised task", () => {
+  it("tints accepted work green but keeps reviews requiring user input neutral", () => {
+    const accepted = renderToStaticMarkup(<ReviewBadge todo={{ ...todo, done_at: "2026-11-05T10:00:00Z", supervision: { ...todo.supervision!, state: "accepted" } }} />);
+    expect(accepted).toContain("bg-green-tint text-green");
+    const pending = renderToStaticMarkup(<ReviewBadge todo={{ ...todo, supervision: { ...todo.supervision!, state: "needs_user" } }} />);
+    expect(pending).toContain("bg-field text-orange");
+    expect(pending).not.toContain("bg-orange-tint");
+  });
+
   it("shows its review state and the criteria met on its card", () => {
     const html = renderToStaticMarkup(<ReviewBadge todo={todo} />);
     expect(html).toContain("返工第 1 轮");

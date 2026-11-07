@@ -78,6 +78,14 @@ afterEach(async () => {
 });
 
 describe("todo rows on a sessions push", () => {
+  it("keeps the selected Needs you detail neutral while working retains its orange tint", async () => {
+    const { TODO_STATUS_INFO } = await import("../lib/todos");
+    expect(host.querySelector(".bg-orange-tint.text-orange")?.textContent).toContain(TODO_STATUS_INFO.working.label);
+    await act(async () => upsertSession(session("s1", { state: "needs_you", status: "blocked" })));
+    expect([...host.querySelectorAll(".bg-field.text-attention")].some((el) => el.textContent?.includes(TODO_STATUS_INFO.needs_you.label))).toBe(true);
+    expect([...host.querySelectorAll(".bg-orange-tint")].some((el) => el.textContent?.includes(TODO_STATUS_INFO.needs_you.label))).toBe(false);
+  });
+
   it("re-render only the row whose agent changed", async () => {
     await act(async () => upsertSession(session("s1", { last_text: "改完了，在提交" })));
     expect(renders.get("ta")).toBe(1);

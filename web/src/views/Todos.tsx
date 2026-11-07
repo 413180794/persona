@@ -787,7 +787,7 @@ function TodoDetail({
   const toneClass = {
     red: "bg-red-tint text-red",
     green: "bg-green-tint text-green",
-    amber: "bg-orange-tint text-orange",
+    amber: status === "needs_you" ? "bg-field text-attention" : "bg-orange-tint text-orange",
     idle: "bg-hover text-ink-2",
     off: "bg-hover text-ink-3",
   }[statusInfo.tone];

@@ -22,13 +22,13 @@
   --stripe-bg: #f5f5f5;
   --accent: #0285ff;
   --accent-ink: #0166cc;
-  /* Status fills stay neutral, including the legacy tint names consumed by extensions.
-     Color belongs to small marks, labels and outlines, not whole cards or banners. */
+  /* Semantic status tints stay pale; approvals and Needs you use explicit neutral surfaces.
+     Selection and error fills remain neutral, including selected extension themes. */
   --accent-tint: #e7e9eb;
   --green: #107638;
-  --green-tint: #f7f8f9;
+  --green-tint: #e8f5ed;
   --orange: #a64c00;
-  --orange-tint: #f7f8f9;
+  --orange-tint: #fdf1e5;
   --red: #bd3038;
   --red-tint: #f7f8f9;
   --attention: #8f5c00;
@@ -36,7 +36,7 @@
   /* The AI role (iOS Theme.ai): what the AI runs on its own, such as ultracode's workflow icon (#3428) and a
      workflow run (#3434). */
   --ai: #5b4fd6;
-  --ai-tint: #f7f8f9;
+  --ai-tint: #efedfb;
   /* where an agent was opened (#2526): a Feishu group's topic (botmux) or a terminal pane (herdr) */
   --source-feishu: #1d5fd6;
   --source-feishu-tint: #e6eefc;
@@ -80,15 +80,15 @@
   --accent-ink: #7ec0ff;
   --accent-tint: #313236;
   --green: #6dd697;
-  --green-tint: #1f2022;
+  --green-tint: #3dbb7224;
   --orange: #eea66d;
-  --orange-tint: #1f2022;
+  --orange-tint: #f68f3c24;
   --red: #ff9499;
   --red-tint: #1f2022;
   --attention: #f1b969;
   --danger-fill: #bd3038;
   --ai: #9c94ff;
-  --ai-tint: #1f2022;
+  --ai-tint: #9c94ff24;
   --source-feishu: #82aaff;
   --source-feishu-tint: #4d7cff2e;
   --source-terminal: #bea3ff;
@@ -187,8 +187,8 @@ body {
 
 
 /* ── Persona additions ──────────────────────────────────── */
-:root { --status-needs: var(--attention); --status-working: var(--orange); --status-waiting: color-mix(in srgb, var(--status-working) 55%, var(--ink-3)); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: var(--neutral-bubble); --neutral-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
-.dark { --user-bubble: var(--neutral-bubble); --neutral-bubble: #2c2d31; --term-magenta: #c678dd; --term-cyan: #4fb6c4; }
+:root { --status-needs: var(--attention); --status-working: var(--orange); --status-waiting: color-mix(in srgb, var(--status-working) 55%, var(--ink-3)); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #dceaff; --neutral-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
+.dark { --user-bubble: #1d3557; --neutral-bubble: #2c2d31; --term-magenta: #c678dd; --term-cyan: #4fb6c4; }
 /* The chat's trace (aligned with cindy's defaults, #1963): tool rows and their chevrons, the work group's rail, thought
    text, diff counts and the running status bar's accent. */
 :root { --tool-ink: #525252; --tool-rail: #ddd6cb; --thinking-ink: #a3a3a3; --diff-add-fg: #22863a; --diff-del-fg: #b31d28; --diff-add-bg: #e6ffec; --diff-del-bg: #ffebe9; --diff-add-word: #abf2bc; --diff-del-word: #ffcecb; --status-accent: #ea6b17; --tool-hover: #ececec; }
@@ -205,8 +205,8 @@ body {
    teal is under 3:1 on a light card, so the legend always writes the numbers. Same values as the apps' UsageColor. */
 :root { --usage-input: #2a78d6; --usage-output: #eb6834; --usage-cache-write: #6250d6; --usage-cache-read: #1baf7a; }
 .dark { --usage-input: #3987e5; --usage-output: #d95926; --usage-cache-write: #9085e9; --usage-cache-read: #199e70; }
-/* The user's own and relayed messages share neutral fills; alignment distinguishes the sender.
-   Color remains a small status detail rather than a repeated block in the reading column. */
+/* The user's own messages: iOS Agents' pale blue (apple/Shared/Design/Styles/Glass.swift, ColorSpec.blue, #2672);
+   a message relayed from another conversation and a tool's inline detail keep the neutral gray. */
 @theme inline { --color-user-bubble: var(--user-bubble); --color-neutral-bubble: var(--neutral-bubble); --color-status-waiting: var(--status-waiting); }
 @keyframes breathe{0%,to{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
 @keyframes slide-up{0%{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
@@ -237,6 +237,10 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* A row that scrolls sideways without a bar (still by wheel, trackpad and touch); WebKit before 18.2 needs the pseudo. */
 @utility scrollbar-none { scrollbar-width: none; &::-webkit-scrollbar { display: none; } }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
+/* Blue bubbles need stronger muted text in dark mode and a readable focus indicator in both schemes.
+   Keep this local: page text and extension accent colors are unchanged. */
+.dark .bg-user-bubble { --ink-3: var(--ink-2); }
+.bg-user-bubble :is(button, a, summary):focus-visible { outline-color: var(--ink); --tw-ring-color: var(--ink); }
 button { cursor: pointer; }
 button:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {

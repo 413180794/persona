@@ -13,13 +13,34 @@ from urllib.parse import urlparse
 from playwright.sync_api import expect, sync_playwright
 
 AT = "2026-11-07T00:00:00Z"
+
+
+def contrast_check(locator, property_name="color"):
+    """Measure resolved browser colors on the actual sent-message fill."""
+    ratio = locator.evaluate("""(e, property) => {
+        const rgb = value => value.match(/[\\d.]+/g).slice(0, 3).map(Number);
+        const luminance = value => rgb(value).map(c => c / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((n, c, i) => n + c * [.2126, .7152, .0722][i], 0);
+        const bg = luminance(getComputedStyle(e.closest('.bg-user-bubble')).backgroundColor);
+        const fg = luminance(getComputedStyle(e)[property]);
+        return (Math.max(bg, fg) + .05) / (Math.min(bg, fg) + .05);
+    }""", property_name)
+    assert ratio >= 4.5, f"{property_name} contrast {ratio:.2f}:1 is below 4.5:1"
+    return ratio
+
+
 MACHINE = {"id": "demo", "name": "Demo computer", "online": True, "os": "linux", "host": "herdr"}
 SESSIONS = [
     {"machine_id": "demo", "session_id": "review", "title": "Review the demo change", "name": "Review the demo change", "state": "needs_you", "status": "needs_you", "agent": "claude", "online": True, "cwd": "/demo/project", "updated_at": AT, "pending_interactions": 2, "capabilities": {"approve": True, "send": True}},
     {"machine_id": "demo", "session_id": "attention", "title": "Choose the next step", "name": "Choose the next step", "state": "needs_you", "status": "needs_you", "agent": "claude", "online": True, "cwd": "/demo/project", "updated_at": AT, "pending_interactions": 0, "attention_reason": "The draft is ready. Confirm the next step when convenient."},
     {"machine_id": "demo", "session_id": "working", "title": "Run the demo checks", "name": "Run the demo checks", "state": "working", "status": "working", "agent": "claude", "online": True, "cwd": "/demo/project", "updated_at": AT, "state_since": AT, "pending_interactions": 0},
     {"machine_id": "demo", "session_id": "done", "title": "Read the test summary", "name": "Read the test summary", "state": "unread", "status": "unread", "agent": "claude", "online": True, "cwd": "/demo/project", "updated_at": AT, "pending_interactions": 0},
+    {"machine_id": "demo", "session_id": "status", "title": "Demo workflow statuses", "state": "idle", "status": "idle", "agent": "claude", "online": True, "cwd": "/demo/project", "updated_at": AT, "pending_interactions": 0, "workflows": [
+        {"task_id": "demo-" + status, "tool_use_id": "call-" + status, "name": name, "summary": "Synthetic workflow status preview", "status": status, "running": status == "running", "agents_started": 1, "agents_done": int(status == "completed"), "agents_running": int(status == "running"), "started_at": AT}
+        for status, name in (("completed", "Demo checks passed"), ("stalled", "Demo workflow paused"), ("running", "Demo AI work"))
+    ]},
 ]
+SESSIONS[0].update(model="demo-model", context_tokens=95000, context_window=100000)
+ASSISTANT_SESSION = {**SESSIONS[-1], "session_id": "receipt", "title": "Demo completion receipt", "workflows": [], "started_by_persona": True}
 INTERACTIONS = [
     {"id": "demo-permission", "machine_id": "demo", "session_id": "review", "session_title": "Review the demo change", "kind": "permission", "agent": "claude", "tool_name": "Bash", "tool_input": {"command": "npm test", "description": "Run the demo unit tests"}, "summary": "Run the demo unit tests", "created_at": AT},
     {"id": "demo-plan", "machine_id": "demo", "session_id": "review", "session_title": "Review the demo change", "kind": "plan", "agent": "claude", "plan": "## Demo change\n1. Read the existing components.\n2. Use neutral surfaces and small status details.\n3. Run tests and check both appearances.", "created_at": AT},
@@ -49,7 +70,9 @@ def run(args):
                 elif path == "/interactions":
                     data = {"interactions": remaining}
                 elif path == "/assistant":
-                    data = {"conversations": [], "tasks": [], "memory": []}
+                    data = {"machine_id": "demo", "main": "receipt", "conversations": [ASSISTANT_SESSION], "tasks": [], "memory": []}
+                elif path == "/assistant/conversations/receipt/feed":
+                    data = {"items": [{"id": "demo-completion", "conversation": "receipt", "at": AT, "kind": "receipt", "body": {"state": "done", "title": "Demo checks passed", "summary": "All synthetic demo checks completed successfully."}}]}
                 elif path == "/todos":
                     data = {"todos": []}
                 elif path == "/inbox":
@@ -60,9 +83,14 @@ def run(args):
                     data = {"agents": []}
                 elif re.fullmatch(r"/sessions/demo/[^/]+", path):
                     sid = path.rsplit("/", 1)[-1]
-                    data = {"session": next(s for s in SESSIONS if s["session_id"] == sid)}
+                    data = {"session": ASSISTANT_SESSION if sid == "receipt" else next(s for s in SESSIONS if s["session_id"] == sid)}
                 elif path.endswith("/items"):
-                    data = {"items": [{"id": "demo-user", "seq": 1, "role": "user", "kind": "text", "text": "Prepare a small demo change and ask before running checks.", "ts": AT}, {"id": "demo-answer", "seq": 2, "role": "assistant", "kind": "text", "text": "The demo change is ready for review. The plan and permission are below.", "ts": AT}], "has_more": False}
+                    items = [{"id": "demo-user", "seq": 1, "role": "user", "kind": "text", "text": "Prepare a small demo change and ask before running checks.", "ts": AT}]
+                    if "/status/" in path:
+                        for index, run_status in enumerate(("completed", "stalled", "running"), start=2):
+                            items.append({"id": "demo-call-" + run_status, "seq": index, "role": "assistant", "kind": "tool_use", "tool_name": "Workflow", "tool_use_id": "call-" + run_status, "tool_input": {"description": "Demo " + run_status}, "ts": AT})
+                    items.append({"id": "demo-answer", "seq": 5, "role": "assistant", "kind": "text", "text": "The demo change is ready for review. The plan and permission are below.", "ts": AT})
+                    data = {"items": items, "has_more": False}
                 elif path.startswith("/interactions/") and route.request.method == "POST":
                     replies.append(json.loads(route.request.post_data or "{}"))
                     ixid = path.split("/")[2]
@@ -85,7 +113,7 @@ def run(args):
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.set_default_timeout(15000)
-            for name, path in (("overview", "/overview"), ("approvals", "/s/demo/review"), ("attention", "/s/demo/attention"), ("connector", "/inbox/demo-thread")):
+            for name, path in (("overview", "/overview"), ("approvals", "/s/demo/review"), ("statuses", "/s/demo/status"), ("success", "/persona/receipt"), ("attention", "/s/demo/attention"), ("connector", "/inbox/demo-thread")):
                 page.goto(args.url.rstrip("/") + path)
                 expect(page.locator("main")).to_be_visible()
                 if name == "overview":
@@ -93,6 +121,12 @@ def run(args):
                 elif name == "approvals":
                     expect(page.get_by_role("button", name="Approve", exact=True)).to_be_visible()
                     expect(page.get_by_role("button", name="Allow", exact=True)).to_be_visible()
+                elif name == "statuses":
+                    for status in ("completed", "stalled", "running"):
+                        expect(page.locator(f'[data-workflow-status="{status}"]').first).to_be_visible()
+                elif name == "success":
+                    expect(page.locator('[data-receipt]')).to_be_visible()
+                    expect(page.locator('[data-receipt]').get_by_text("All synthetic demo checks completed successfully.")).to_be_visible()
                 elif name == "attention":
                     expect(page.locator('[data-testid="chat-attention"]')).to_be_visible()
                 else:
@@ -102,12 +136,41 @@ def run(args):
                 expect(page.locator("vite-error-overlay")).to_have_count(0)
                 assert not errors, errors
                 if args.phase == "after":
-                    expect(page.locator(".text-red, .bg-red, .bg-red-tint")).to_have_count(0)
+                    expect(page.locator(".text-red, .bg-red-tint")).to_have_count(0)
+                    if name == "statuses":
+                        assert page.locator(".bg-red").evaluate_all("nodes => nodes.every(e => e.getBoundingClientRect().width === 0)"), "no visible failed-workflow progress segment"
+                    else:
+                        expect(page.locator(".bg-red")).to_have_count(0)
+                    if name == "approvals":
+                        for label in ("Allow", "Approve"):
+                            button = page.get_by_role("button", name=label, exact=True)
+                            assert button.evaluate("e => { const card=e.closest('.bg-surface.shadow-card'); const footer=card.querySelector('.bg-inset'); return !!card && !!footer && !card.querySelector('.bg-orange-tint, .bg-red-tint, .bg-ai-tint'); }"), "approval card and footer remain neutral"
+                        expect(page.locator('[role="progressbar"] .bg-orange')).to_have_count(1)
+                        expect(page.locator('[role="progressbar"] .bg-red')).to_have_count(0)
+                    if name == "statuses":
+                        for status, token in (("completed", "green"), ("stalled", "orange"), ("running", "ai")):
+                            chip = page.locator(f'[data-workflow-status="{status}"]').first
+                            assert chip.evaluate("(e, token) => { const n=document.createElement('i'); n.style.background='var(--'+token+'-tint)'; document.body.append(n); const ok=getComputedStyle(e).backgroundColor===getComputedStyle(n).backgroundColor; n.remove(); return ok; }", token), "workflow chip uses its restored semantic tint"
                     if name == "connector":
                         own = page.locator('[data-mid="demo-own"]')
                         expect(own.locator('[class*="text-white"]')).to_have_count(0)
-                        own.locator("button.border-l-2").hover()
-                        assert own.locator("button.border-l-2").evaluate("e => { const n=document.createElement('i'); n.style.color='var(--ink)'; document.body.append(n); const ok=getComputedStyle(e).color===getComputedStyle(n).color; n.remove(); return ok; }"), "quote hover keeps readable semantic text"
+                        quote = own.locator("button.border-l-2")
+                        body_ratio = contrast_check(own.locator(".bg-user-bubble"))
+                        quote_ratio = contrast_check(quote)
+                        file_ratio = contrast_check(own.locator("p.text-ink-2"))
+                        # A keyboard event establishes focus-visible mode before targeting the quote.
+                        page.keyboard.press("Tab")
+                        quote.focus()
+                        assert quote.evaluate("e => e === document.activeElement && e.matches(':focus-visible')"), "quote has keyboard-visible focus"
+                        expect(quote).to_have_css("outline-color", page.locator("body").evaluate("e => getComputedStyle(e).color"))
+                        expect(quote).to_have_css("outline-style", "solid")
+                        expect(quote).to_have_css("outline-width", "2px")
+                        focus_ratio = contrast_check(quote, "outlineColor")
+                        page.screenshot(path=str(shots / f"after-connector-focus-{theme}.png"))
+                        quote.evaluate("e => e.blur()")
+                        print(f"PASS {theme} bubble contrast: body={body_ratio:.2f}, quote={quote_ratio:.2f}, attachment={file_ratio:.2f}, focus={focus_ratio:.2f}", flush=True)
+                        quote.hover()
+                        expect(quote).to_have_css("color", page.locator("body").evaluate("e => getComputedStyle(e).color"))
                         page.mouse.move(0, 0)
                     if name == "attention":
                         neutral = page.locator('[data-testid="chat-attention"]').evaluate("e => { const n=document.createElement('i'); n.style.background='var(--inset)'; document.body.append(n); const ok=getComputedStyle(e).backgroundColor===getComputedStyle(n).backgroundColor; n.remove(); return ok; }")

@@ -416,7 +416,7 @@ function Badge({ state }: { state: AgentState }) {
   }
   if (state === "unread")
     return (
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-green" aria-label={STATE_LABEL[state]}>
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-green-tint text-green" aria-label={STATE_LABEL[state]}>
         <Icon name="check" size={11} stroke={3.2} />
       </span>
     );

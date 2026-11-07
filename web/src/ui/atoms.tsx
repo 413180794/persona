@@ -74,12 +74,12 @@ export function Loading({ label = t("common.loading") }: { label?: string }) {
   );
 }
 
-/** A state as a word in a pill; `awaiting`: seen and awaiting the user's reply, "Awaiting your reply" in the unread tint (#5096). */
+/** A state as a word in a pill; `awaiting`: seen and awaiting the user's reply, a quiet pending mark (#5096). */
 export function StatePill({ state, awaiting = false, waiting = false }: { state: AgentState; awaiting?: boolean; /** working only on background commands that wait (#6045) */ waiting?: boolean }) {
   const tone: Record<AgentState, string> = {
     needs_you: "bg-field text-attention",
     working: "bg-field text-orange",
-    unread: "bg-field text-green",
+    unread: "bg-green-tint text-green",
     idle: "bg-field text-ink-2",
     offline: "bg-field text-ink-3",
     unknown: "bg-field text-ink-3",
@@ -87,7 +87,7 @@ export function StatePill({ state, awaiting = false, waiting = false }: { state:
   const reply = awaiting && state === "idle";
   const bg = waiting && state === "working";
   return (
-    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${reply ? tone.unread : bg ? "bg-field text-ink-2" : tone[state]}`} data-bg-waiting={bg || undefined}>
+    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium ${reply ? "bg-field text-green" : bg ? "bg-field text-ink-2" : tone[state]}`} data-bg-waiting={bg || undefined}>
       {(state === "working" || state === "needs_you") && <StatusMark state={state} size="sm" label={false} waiting={bg} />}
       {reply ? stateName("awaits_reply") : bg ? stateName("bg_waiting") : STATE_LABEL[state]}
     </span>
