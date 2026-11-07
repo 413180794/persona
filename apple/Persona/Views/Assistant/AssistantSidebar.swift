@@ -1086,7 +1086,11 @@ struct AssistantSidebar: View {
             HStack(spacing: macPlacesGroup ? Theme.Space.m : Theme.Space.l) {
                 // Where the places below have their symbol, the same width (on the Mac's plain list, `macPlace`'s).
                 AppGlyph(size: macPlacesGroup ? Theme.Size.wellM : Theme.Size.icon, scaled: true)
-                Text(Self.mainTitle).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                // The small "Main Chat" under the name keeps the row readable as a conversation, not a heading (#6328, as the web, #6293).
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(Self.mainTitle).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                    Text("Main Chat").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 Spacer(minLength: 0)
                 if let main { mark(main) }
             }
@@ -1100,7 +1104,7 @@ struct AssistantSidebar: View {
         }
         .buttonStyle(.plain)
         .macListRow(selected: selected, in: Rectangle(), drawsShade: false) // the row draws its own (`selectedFill`)
-        .accessibilityLabel([Self.mainTitle, main.flatMap(stateWord)].compactMap { $0 }.joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label")))
+        .accessibilityLabel([Self.mainTitle, String(localized: "Main Chat"), main.flatMap(stateWord)].compactMap { $0 }.joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("sidebar-main")
         .disabled(key == nil && model.assistantConfig == nil)
