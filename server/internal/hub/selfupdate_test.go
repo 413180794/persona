@@ -496,6 +496,8 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 	os.WriteFile(filepath.Join(staged, "personad-darwin-arm64"), []byte("node for macs"), 0o755)
 	os.WriteFile(filepath.Join(staged, "personad-darwin-arm64.gz"), []byte("the download"), 0o644)
 	os.WriteFile(filepath.Join(nodes, "personad-darwin-arm64"), []byte("old node"), 0o755)
+	// What the old one was said to be (docs/operations/docker.md "Node builds"): not the release's, so it goes with it.
+	os.WriteFile(filepath.Join(nodes, "personad-darwin-arm64.version"), []byte("v1-202611010000\n"), 0o644)
 	h := newTestHub(t)
 	h.version = "v2"
 	local := newMachine(h, MachineConfig{ID: "hub", Name: "Hub", Kind: "local"})
@@ -507,6 +509,9 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(nodes, "personad-darwin-arm64.gz")); !os.IsNotExist(err) {
 		t.Fatal("the download itself went in with the binaries")
+	}
+	if _, err := os.Stat(filepath.Join(nodes, "personad-darwin-arm64.version")); !os.IsNotExist(err) {
+		t.Fatal("the old build's version file stayed beside the release's")
 	}
 	_ = local // the manager decides what to redeploy (internal/devices TestUpdateNodesSkipsTheHubsOwn)
 }

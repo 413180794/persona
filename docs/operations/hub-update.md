@@ -132,6 +132,9 @@ The binary gets three more `-X` variables (`cmd/personad`):
   Telegram's `personad-telegram` was also here up to #1704; after that it is an extension and goes through the extension market):
   `{"personad-wechat": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`. Old hubs ignore this field and still only swap personad.
 
+- `nodes`: the other programs a node can run, published with personad (`update.NodePrograms`: `persona-node`, the device's own): `{"persona-node": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`.
+  `node_protocol`, `node_protocol_min`, `node_capabilities`: what the release's nodes announce in `node.info` (`docs/protocol/protocol.md` ("Node handshake")), so a manager of another build sends one only when it drives it (`docs/operations/node-update.md` ("Node packages")). Old hubs ignore all three.
+- Every release is also kept at `dl/<version>/` (its node builds, `personad-*` and `persona-node-*`, and this manifest as `manifest.json`; also `dl/X.Y.Z/` for the tag `vX.Y.Z`), where managers fetch the node build of their hub's version; `dl/latest.json` and `dl/*.gz` stay the newest release.
 - A downloaded file must match both `sha256` (archive) and `binary_sha256` (decompressed), and the new binary's `version -v` must report the version and build number in the manifest.
   `SHA256SUMS` stays for install.sh.
 - `min_app_build`: Apps below it cannot use this hub version. For `protocol`, see "Compatibility".
@@ -158,7 +161,8 @@ User: "Why sign at all? Skip signing for the Linux service, it's too complicated
 - **Does not protect against**: the publish site (the Worker at `publish.site_url`, the publisher's Cloudflare account) being impersonated or compromised. Then an attacker could replace both the binary and the sha256 in `latest.json`,
   and every hub with automatic updates on would install it, running as the user that runs the hub.
 - The user knows this and decided against signing. To add it later: put a signature next to the manifest, compile the public key into the binary, and have the hub install only what verifies (step 1 once implemented this; see git history).
-- Hubs that do not want this risk: turn automatic updates off in the App, or deploy with Docker (you decide when you pull the image).
+- Hubs that do not want this risk: turn automatic updates off in the App, or deploy with Docker (you decide when you pull the image; but see the next point for the node builds a Docker hub fetches).
+- Node builds the manager fetches for the computers (`docs/operations/node-update.md` ("Node packages")) are checked the same way: the manifest's sha256s over HTTPS, the build's platform and kind, and `version -v` where it can run (the manager's own platform; over the node RPC the node's `node-update-check` reads the version too, the ssh and tailcat paths do not). Not signed either. A hub sends builds of its own version (the release's of that version included) to its computers by itself, Docker hubs too and whatever the automatic-update setting; a fallback build (another version) only when someone chooses **Redeploy**, and an update queued for the hub's version never resumes as one. A build put in `bin/nodes` by hand with a `.version` of another version goes out by itself too: putting it there is the owner's choice. `node_packages.url` set to `off`, or builds put in `bin/nodes` by hand, avoids the site for them.
 
 ## 6. Direct deploys (when a master change is urgently needed)
 
@@ -283,7 +287,7 @@ Download → Verify → Prepare → Wait for idle → Replace → Restart → Co
 | Update | Automatic (on by default) / one tap in the App | Suggest `docker compose pull && docker compose up -d` (edit `.env` first if a version is pinned) | None |
 | Restart | `exec` the new binary itself | User recreates the container | — |
 | Rollback | Automatic (`.prev`, bad versions are not retried) | Restore the previous tag | — |
-| node | Automatically redeployed with the hub | Image includes node binaries; **Redeploy** works as before after recreation | — |
+| node | Automatically redeployed with the hub | An image built with `UPDATE_URL` carries its own platform's build only, and the manager fetches the others from the release of the image's version, or the newest one it drives; one built without carries all four platforms' personad (`docs/operations/node-update.md` ("Node packages"), `docs/operations/docker.md` ("Node builds")) | The hub's `bin/nodes` (`deploy.sh`) |
 | Urgent master change | Direct deploy (stamped `release` and build time; an older public release will not downgrade it, a newer one takes over automatically) | — | — |
 
 ### Docker (step 4)

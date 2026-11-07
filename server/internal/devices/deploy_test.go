@@ -255,6 +255,8 @@ func isolateNodeBinaries(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("PERSONA_NODE_BINARIES", dir)
+	t.Setenv("PERSONA_NODE_BUNDLED", "")                             // the machine running the test may be a Docker hub's
+	t.Setenv("PERSONA_HOME", filepath.Join(t.TempDir(), ".persona")) // the package cache, nowhere real
 }
 
 // shellEnv is the environment the deploy script runs in under each login shell: HOME is home, the PATH is stubs then the
@@ -345,7 +347,7 @@ func TestDeployOverFailedSSHDoesNotLeakTheWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &Machine{cfg: MachineConfig{ID: "test-node"}}
-	err := m.deploy(context.Background(), bin)
+	err := m.deploy(context.Background(), bin, "test")
 	if err == nil || !strings.Contains(err.Error(), "Permission denied") {
 		t.Fatalf("deploy: %v", err)
 	}
@@ -377,7 +379,7 @@ func TestDeployThatDoesNotComeBackSaysSo(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		m.markOffline(errors.New("ssh: connect to host away port 22: Connection refused"))
 	}()
-	err := m.waitDeployed(context.Background())
+	err := m.waitDeployed(context.Background(), d.hubVersion())
 	if err == nil {
 		t.Fatal("waitDeployed: no error for a machine that never came back")
 	}
@@ -391,7 +393,7 @@ func TestDeployThatDoesNotComeBackSaysSo(t *testing.T) {
 	// Back, but on another build: that is what it still runs.
 	m2 := newMachine(d, MachineConfig{ID: "back", Name: "back", Kind: "ssh"})
 	m2.online, m2.info.Version = true, "old-build"
-	if err := m2.waitDeployed(context.Background()); err == nil || !strings.Contains(err.Error(), "跑的还是 old-build") {
+	if err := m2.waitDeployed(context.Background(), d.hubVersion()); err == nil || !strings.Contains(err.Error(), "跑的还是 old-build") {
 		t.Errorf("online on another build: %v", err)
 	}
 }
@@ -404,7 +406,7 @@ func TestDeployThatDoesNotComeBackHidesItsOwnReconnect(t *testing.T) {
 	d := newTestDevices(t)
 	m := newMachine(d, MachineConfig{ID: "away", Name: "away", Kind: "ssh"})
 	m.info.Version, m.err = "old-build", "reconnect requested"
-	err := m.waitDeployed(context.Background())
+	err := m.waitDeployed(context.Background(), d.hubVersion())
 	if err == nil || strings.Contains(err.Error(), "reconnect requested") || !strings.Contains(err.Error(), "没有重新连上") {
 		t.Errorf("waitDeployed: %v", err)
 	}

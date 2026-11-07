@@ -261,6 +261,7 @@ func (h *Hub) devicesConfigFor(id string) devicewire.Config {
 	if h.cfg != nil {
 		out.TailcatDERPMapURL = h.cfg.Tailcat.DERPMapURL
 	}
+	out.NodePackagesURL, out.NodePackagesProxy = h.nodePackages()
 	if every, timeout, set := h.linkPingTimes(); set {
 		out.LinkPingMS, out.LinkPingTimeoutMS = int(every.Milliseconds()), int(timeout.Milliseconds())
 	}
@@ -279,6 +280,21 @@ func (h *Hub) devicesConfigFor(id string) devicewire.Config {
 		}
 	}
 	return out
+}
+
+// nodePackages is where the manager fetches node builds (hub.json's node_packages): its url, else this build's update
+// URL (a release hub's, a Docker image built with one); "off" none.
+func (h *Hub) nodePackages() (url, proxy string) {
+	if h.cfg != nil {
+		url, proxy = h.cfg.NodePackages.URL, h.cfg.NodePackages.Proxy
+	}
+	switch strings.TrimSpace(url) {
+	case "off":
+		return "", ""
+	case "":
+		url = h.build.UpdateURL
+	}
+	return strings.TrimRight(strings.TrimSpace(url), "/"), proxy
 }
 
 // devicesMesh is the mesh as the manager needs it (nil without one).

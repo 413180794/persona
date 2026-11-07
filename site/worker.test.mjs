@@ -157,7 +157,33 @@ test("the other files under /dl/ stay the site's static files", async () => {
     const r = await worker.fetch(new Request("https://site.example/dl/" + name), { ASSETS: dlAssets("a"), DL: bucket({}) });
     if (name !== "SLOT") assert.equal(await r.text(), "asset /dl/" + name);
   }
-  // a name with a slash or a dot-dot is not a download
-  const r = await worker.fetch(new Request("https://site.example/dl/a/x.gz"), { ASSETS: dlAssets("a"), DL: bucket({ "a/a/x.gz": "x" }) });
-  assert.equal(await r.text(), "asset /dl/a/x.gz");
+  // deeper paths, other files under a version and a dot-dot are not downloads
+  for (const p of ["/dl/a/b/x.gz", "/dl/v1/latest.json", "/dl/../x.gz", "/dl/v1/.x.gz"]) {
+    const r = await worker.fetch(new Request("https://site.example" + p), { ASSETS: dlAssets("a"), DL: bucket({ "a/b/x.gz": "x" }) });
+    assert.equal(await r.text(), "asset " + new URL("https://site.example" + p).pathname, p);
+  }
+});
+
+test("/dl/<version>/ comes from the kept release, never a slot", async () => {
+  const DL = bucket({
+    "release/v1-202611060000/personad-linux-amd64.gz": "kept bytes", "release/v1-202611060000/manifest.json": '{"version":"v1"}',
+    "a/personad-linux-amd64.gz": "slot bytes",
+  });
+  const env = { ASSETS: dlAssets("a"), DL };
+  let r = await worker.fetch(new Request("https://site.example/dl/v1-202611060000/personad-linux-amd64.gz"), env);
+  assert.equal(r.status, 200);
+  assert.equal(await r.text(), "kept bytes");
+  r = await worker.fetch(new Request("https://site.example/dl/v1-202611060000/manifest.json"), env);
+  assert.equal(await r.text(), '{"version":"v1"}');
+  r = await worker.fetch(new Request("https://site.example/dl/v1-202611060000/personad-linux-amd64.gz", { headers: { range: "bytes=5-" } }), env);
+  assert.equal(r.status, 206);
+  assert.equal(await r.text(), "bytes");
+  r = await worker.fetch(new Request("https://site.example/dl/v1-202611060000/personad-linux-amd64.gz", { method: "HEAD" }), env);
+  assert.equal(r.headers.get("content-length"), "10");
+  r = await worker.fetch(new Request("https://site.example/dl/a/personad-linux-amd64.gz"), env); // a slot is not a version
+  assert.equal(r.status, 404);
+  r = await worker.fetch(new Request("https://site.example/dl/v2/manifest.json"), env);
+  assert.equal(r.status, 404);
+  r = await worker.fetch(new Request("https://site.example/dl/v1-202611060000/manifest.json", { method: "POST", body: "x" }), env);
+  assert.equal(r.status, 405);
 });

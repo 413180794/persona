@@ -3,6 +3,7 @@ package update
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,6 +43,43 @@ func TestBuildManifestPrograms(t *testing.T) {
 	writeGz(t, filepath.Join(only, "personad-wechat-linux-amd64.gz"), []byte("x"))
 	if _, err := BuildManifest(only, Manifest{Version: "v1", Build: 1}); err == nil {
 		t.Fatal("a release without personad")
+	}
+}
+
+// A node program (persona-node-<os>-<arch>.gz) is listed under Nodes, and NodeFile gives a node that runs it its own
+// download, any other node (or a platform without one) personad's; the node protocol fields round-trip.
+func TestBuildManifestNodes(t *testing.T) {
+	dir := t.TempDir()
+	writeGz(t, filepath.Join(dir, "personad-linux-amd64.gz"), []byte("personad"))
+	writeGz(t, filepath.Join(dir, "personad-darwin-arm64.gz"), []byte("personad for a Mac"))
+	writeGz(t, filepath.Join(dir, "persona-node-linux-amd64.gz"), []byte("persona-node"))
+	m, err := BuildManifest(dir, Manifest{Version: "v1", Build: 202611030000, NodeProtocol: 2, NodeProtocolMin: 1,
+		NodeCapabilities: []string{"sessions"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Files) != 2 || m.Files["linux-amd64"].Name != "personad-linux-amd64.gz" {
+		t.Fatalf("files %+v", m.Files)
+	}
+	if n := m.Nodes["persona-node"]; len(n) != 1 || n["linux-amd64"].Name != "persona-node-linux-amd64.gz" || n["linux-amd64"].BinarySHA256 == "" {
+		t.Fatalf("nodes %+v", m.Nodes)
+	}
+	for _, c := range []struct{ program, plat, want string }{
+		{"persona-node", "linux-amd64", "persona-node-linux-amd64.gz"},
+		{"persona-node", "darwin-arm64", "personad-darwin-arm64.gz"}, // none of its own there: personad runs it
+		{"personad", "linux-amd64", "personad-linux-amd64.gz"}, {"", "linux-amd64", "personad-linux-amd64.gz"},
+	} {
+		if f, ok := m.NodeFile(c.program, c.plat); !ok || f.Name != c.want {
+			t.Errorf("%s on %s: %+v %v, want %s", c.program, c.plat, f, ok, c.want)
+		}
+	}
+	if _, ok := m.NodeFile("persona-node", "windows-amd64"); ok {
+		t.Error("a platform the release has no build for")
+	}
+	b, _ := json.Marshal(m)
+	back, err := ParseManifest(b)
+	if err != nil || back.NodeProtocol != 2 || back.NodeProtocolMin != 1 || len(back.NodeCapabilities) != 1 || len(back.Nodes) != 1 {
+		t.Fatalf("round trip: %+v %v", back, err)
 	}
 }
 

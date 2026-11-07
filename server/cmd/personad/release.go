@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/update"
 )
@@ -45,8 +46,10 @@ func runRelease(args []string) error {
 		if err != nil {
 			return err
 		}
+		// The release's nodes are this build's: they announce its node protocol (managers of other builds check it).
 		m, err := update.BuildManifest(*dir, update.Manifest{Version: *ver, Build: n, Commit: *commit, Released: time.Now().UTC().Truncate(time.Second),
-			MinAppBuild: *minApp, Protocol: proto.Protocol, Notes: *notes, Ancestors: ancestors})
+			MinAppBuild: *minApp, Protocol: proto.Protocol, Notes: *notes, Ancestors: ancestors, NodeProtocol: nodeproto.Version,
+			NodeProtocolMin: nodeproto.MinManagerVersion, NodeCapabilities: nodeproto.Announced})
 		if err != nil {
 			return err
 		}

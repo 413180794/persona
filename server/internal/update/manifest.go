@@ -32,7 +32,20 @@ type Manifest struct {
 	// Programs are the programs released with personad that the hub runs beside it (personad-wechat): name ->
 	// "linux-amd64" -> its download. The hub swaps them with personad, and goes back with it. Older hubs ignore them.
 	Programs map[string]map[string]File `json:"programs,omitempty"`
+	// Nodes are the other programs a computer's node can run (NodePrograms: persona-node, the device's own): name ->
+	// "linux-amd64" -> its download. A manager sends one to a node that runs it (docs/operations/node-update.md); personad's own
+	// downloads (Files) run a node too. Older hubs ignore them.
+	Nodes map[string]map[string]File `json:"nodes,omitempty"`
+	// NodeProtocol, NodeProtocolMin and NodeCapabilities are what this release's nodes announce in node.info
+	// (internal/nodeproto, docs/protocol/protocol.md "Node handshake"): a manager of another build sends one only when it
+	// drives such a node. Releases from before leave them out (0: unknown, never taken in another build's place).
+	NodeProtocol     int      `json:"node_protocol,omitempty"`
+	NodeProtocolMin  int      `json:"node_protocol_min,omitempty"`
+	NodeCapabilities []string `json:"node_capabilities,omitempty"`
 }
+
+// NodePrograms are the programs in Manifest.Nodes, each built from server/cmd/<name>.
+var NodePrograms = []string{"persona-node"}
 
 // ProgramNames are the programs released with personad, each built from server/cmd/<name>.
 var ProgramNames = []string{"personad-wechat"}
@@ -127,12 +140,32 @@ func ParseManifest(b []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-// BuildManifest describes the downloads in dir: every personad-<os>-<arch>.gz there, and every program's
-// <program>-<os>-<arch>.gz, with its hashes and the hash of what it unpacks to.
+// BuildManifest describes the downloads in dir: every personad-<os>-<arch>.gz there, every program's
+// <program>-<os>-<arch>.gz and every node program's (persona-node-<os>-<arch>.gz), with its hashes and the hash of
+// what it unpacks to.
 func BuildManifest(dir string, m Manifest) (*Manifest, error) {
 	gzs, err := manifestArtifacts(dir)
 	if err != nil {
 		return nil, err
+	}
+	for _, p := range NodePrograms {
+		more, err := filepath.Glob(filepath.Join(dir, p+"-*-*.gz"))
+		if err != nil {
+			return nil, err
+		}
+		for _, gz := range more {
+			f, err := describe(gz)
+			if err != nil {
+				return nil, err
+			}
+			if m.Nodes == nil {
+				m.Nodes = map[string]map[string]File{}
+			}
+			if m.Nodes[p] == nil {
+				m.Nodes[p] = map[string]File{}
+			}
+			m.Nodes[p][strings.TrimSuffix(strings.TrimPrefix(filepath.Base(gz), p+"-"), ".gz")] = f
+		}
 	}
 	m.Files = map[string]File{}
 	for _, p := range gzs {
@@ -207,4 +240,14 @@ func CheckNext(served *Manifest, build int64, commit string, isAncestor func(old
 		return fmt.Errorf("the served release's commit %.12s is not an ancestor of %.12s: this would publish an older branch as newer", served.Commit, commit)
 	}
 	return nil
+}
+
+// NodeFile is the download of a node that runs program on plat ("linux-amd64"): program's own (Nodes) when the
+// release has it, else personad's (personad runs every node). program is "" or personad for personad's.
+func (m *Manifest) NodeFile(program, plat string) (File, bool) {
+	if f, ok := m.Nodes[program][plat]; ok && program != "" {
+		return f, true
+	}
+	f, ok := m.Files[plat]
+	return f, ok
 }

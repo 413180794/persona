@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -189,11 +191,40 @@ func TestSSHDeployTargetAndGuard(t *testing.T) {
 		m.info = proto.NodeInfo{Program: tc.program, Executable: tc.executable}
 		m.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := m.deploy(ctx, bin)
+		err := m.deploy(ctx, bin, m.d.hubVersion())
 		cancel()
 		got := strings.Join(sshCalls(t, calls), "\n")
 		if err == nil || !strings.Contains(got, tc.target) || strings.Contains(got, "node-update-check") != tc.guard {
 			t.Errorf("%s from %s: err %v, want %s guard %v in %q", tc.build, tc.executable, err, tc.target, tc.guard, got)
 		}
+	}
+}
+
+// Connecting never waits on the release site: a machine whose build needs it to be looked up (another platform, another
+// build, nothing of the hub's own) is served, and the calls that waited for it go, while the site has not answered.
+func TestConnectNeverWaitsOnTheSite(t *testing.T) {
+	release := make(chan struct{})
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select { // a site that takes the connection and does not answer
+		case <-release:
+		case <-r.Context().Done():
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(site.Close)
+	t.Cleanup(func() { close(release) })
+	isolateNodeBinaries(t)
+	d := newTestDevices(t)
+	d.cfg.HubVersion, d.cfg.NodePackagesURL = "1.2.3", site.URL
+	n := &buildNode{info: proto.NodeInfo{Hostname: "box", OS: "linux", Arch: "riscv64", Version: "old-build", NodeUpdate: true}}
+	start := time.Now()
+	m := connectMachine(t, d, MachineConfig{ID: "box", Name: "box", Kind: kindLink}, n)
+	select {
+	case <-m.first:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the calls that waited for the machine are still waiting on the release site")
+	}
+	if took := time.Since(start); took > 3*time.Second {
+		t.Fatalf("connecting took %s", took)
 	}
 }

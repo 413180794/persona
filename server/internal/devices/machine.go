@@ -168,7 +168,15 @@ func (m *Machine) snapshot() proto.Machine {
 	d := m.d
 	engine := d.engineOf(m.cfg.ID) // before m.mu: it may read settings
 	choice := d.engineChoiceOf(m.cfg.ID)
-	version := d.hubVersion()
+	m.mu.Lock()
+	info := m.info
+	m.mu.Unlock()
+	// The build its platform resolves to (packages.go: the hub's own, or the newest release this manager drives), and
+	// why none can be sent; before m.mu, as they read the hub's handover.
+	version, noPackage := d.hubVersion(), error(nil)
+	if m.cfg.Kind != "local" { // the hub's own machine runs the hub's binary: nothing to look up
+		version, noPackage = d.nodeTarget(info), d.packageBlocked(info)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
@@ -188,6 +196,9 @@ func (m *Machine) snapshot() proto.Machine {
 		icon = "laptop"
 	}
 	blocked := m.canDeployLocked()
+	if blocked == nil {
+		blocked = noPackage
+	}
 	canDeploy, deployReason := blocked == nil, ""
 	if blocked != nil {
 		deployReason = blocked.Error()

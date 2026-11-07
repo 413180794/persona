@@ -1,6 +1,8 @@
-# The hub as a container image (docs/operations/docker.md): personad hub with the web client inside, and every node build for the
-# app's "Redeploy". Built for linux/amd64 and linux/arm64 (.github/workflows/hub-image.yml); the binaries are cross
-# compiled on the build machine, only the last stage runs on the target platform.
+# The hub as a container image (docs/operations/docker.md): personad hub with the web client inside, which is also the node build
+# the app's "Redeploy" sends computers of the image's platform (the others' are built in, or come from the release when
+# the image is built with UPDATE_URL, docs/operations/docker.md "Node builds"). Built for linux/amd64 and linux/arm64
+# (.github/workflows/hub-image.yml); the binaries are cross compiled on the build machine, only the last stage runs on
+# the target platform.
 #
 #   docker build -t persona-hub .
 #
@@ -31,6 +33,10 @@ FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 # tags of IMAGE (the workflow passes ghcr.io/<owner>/<repo>) unless the compose file says which image it runs.
 ARG VERSION=dev
 ARG IMAGE=
+# UPDATE_URL: a release's dl/ (the publisher's site; empty: none, node_packages in hub.json can still say). The
+# manager fetches the node builds for the computers' platforms from there, of this version or the newest it drives
+# (docs/operations/node-update.md "Node packages"); the image never updates itself from it (channel docker).
+ARG UPDATE_URL=
 WORKDIR /src/server
 # The extension SDK's wire types (sdk/go): server/go.mod replaces the module with ../sdk/go.
 COPY sdk/go/ /src/sdk/go/
@@ -46,16 +52,22 @@ COPY integrations/paseo/ /src/integrations/paseo/
 COPY integrations/pi/ /src/integrations/pi/
 COPY integrations/runtime-sdk/ /src/integrations/runtime-sdk/
 RUN go generate ./internal/runtimepkg
-# NODE_PLATFORMS: the node builds in /opt/persona/nodes. It must include linux/<the image's architecture>, which the hub
-# itself runs. The PR smoke build passes linux/amd64 only (it never starts the others); everything else builds all four.
+# The node builds. With UPDATE_URL (a release's dl/ to fetch from), the image's own build only, for its platform: the
+# hub runs it, and it is the node build of that platform too; other platforms' builds and persona-node (the device's
+# own program) come from the release (node_packages in hub.json can point elsewhere), or an air-gapped hub's owner puts
+# them in the data volume's bin/nodes (docs/operations/docker.md "Node builds"). Without one, nothing could be fetched: every
+# platform in NODE_PLATFORMS is built in, as before (it must include linux/<the image's architecture>, which the hub
+# itself runs; the PR smoke build passes linux/amd64 only).
+ARG TARGETARCH
 ARG NODE_PLATFORMS="linux/amd64 linux/arm64 darwin/arm64 darwin/amd64"
-RUN for t in $NODE_PLATFORMS; do \
+RUN if [ -n "$UPDATE_URL" ]; then plats="linux/$TARGETARCH"; else plats="$NODE_PLATFORMS"; fi; \
+    for t in $plats; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
-        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/personad-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
+        -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE -X main.updateURL=$UPDATE_URL" \
+        -o /out/nodes/personad-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
     done
 # The built-in plugins' programs (the WeChat bot, docs/extensions/wechat.md), for this image's platform only: the hub runs them next to personad, and starts one only when its `version -v` is
 # personad's (the same -X).
-ARG TARGETARCH
 RUN for p in wechat; do \
       CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
         -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker" -o /out/personad-$p ./cmd/personad-$p || exit 1; \
@@ -85,11 +97,12 @@ RUN ln -s personad /usr/local/bin/jarvisd \
  && mkdir -p /home/jarvis \
  && chown persona:persona /home/jarvis \
  && ln -s /home/jarvis/.ssh /home/persona/.ssh
-# ~/.persona is the data volume (hub.json, keys, the knowledge base): the node builds live outside it. No local node:
-# this machine has no herdr or claude for the hub to drive.
+# ~/.persona is the data volume (hub.json, keys, the knowledge base, ~/.persona/bin/nodes where node builds of other
+# platforms can be put, ~/.persona/cache/nodes where the fetched ones are kept); the image's own build is bundled outside
+# it. No local node: this machine has no herdr or claude for the hub to drive.
 ENV HOME=/home/persona \
     PERSONA_LOCAL_NODE=0 \
-    PERSONA_NODE_BINARIES=/opt/persona/nodes
+    PERSONA_NODE_BUNDLED=/opt/persona/nodes
 # 18660 the hub (HTTP), 18662 its TLS port (public.tls_listen: on for a first start, deploy/docker/entrypoint.sh).
 EXPOSE 18660 18662
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \

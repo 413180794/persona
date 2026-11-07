@@ -3,6 +3,7 @@ package devices
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -20,39 +21,16 @@ import (
 
 // Redeploying a node from the hub (POST /api/v1/machines/{id}/deploy, the button where a machine is not the hub's
 // build): deploy.sh leaves every node binary of the build it deployed on the hub machine
-// (~/.persona/bin/nodes/personad-<os>-<arch>), so the hub sends a machine its own build over ssh, kills the resident node
+// (~/.persona/bin/nodes/personad-<os>-<arch>, and persona-node-<os>-<arch> with its .version), and the manager fetches
+// the release's where the hub has none (packages.go), so the hub sends a machine the build of its platform and kind of
+// program over ssh, kills the resident node
 // if there is one (launchd starts it again from the new binary; `launchctl kickstart` from an ssh session did not always
 // take, which is how two Macs kept an old node through deploys), and connects again.
 
 func nodeBinaryDir() string { return identity.NodeBinaryDir() }
 
-// nodeBinary is the hub's build (version) for a machine's OS and architecture, of the kind of program its node runs:
-// the device's own persona-node where it runs that and the hub has it for this version, else personad
-// (personad-<os>-<arch>), which does everything. A node that runs personad gets personad: it may run a hub or a
-// manager too, and it is switched to persona-node on the computer itself (persona-link node switch), never by an update.
-func nodeBinary(goos, arch, program, version string) (string, error) {
-	if goos == "" || arch == "" {
-		return "", i18n.Err("devices-deploy.os_unknown")
-	}
-	p := filepath.Join(nodeBinaryDir(), "personad-"+goos+"-"+arch)
-	if _, err := os.Stat(p); err != nil {
-		return "", i18n.Err("devices-deploy.no_binary", i18n.Args{"os": goos, "arch": arch})
-	}
-	if program == nodeproto.ProgramPersonaNode {
-		// Only deploy.sh puts persona-node here, with the version it is in <name>.version. The hub's own updates
-		// replace personad-* alone (persona-node is not in the release manifest yet), so a persona-node left from an
-		// earlier deploy would bring the node another build than the hub's: it goes only when it says the hub's.
-		node := filepath.Join(nodeBinaryDir(), nodeproto.ProgramPersonaNode+"-"+goos+"-"+arch)
-		if b, err := os.ReadFile(node + ".version"); err == nil && version != "" && strings.TrimSpace(string(b)) == version {
-			if _, err := os.Stat(node); err == nil {
-				return node, nil
-			}
-		}
-	}
-	return p, nil
-}
-
-// isPersonaNodeBuild: bin is one of the node binary dir's persona-node builds (nodeBinary picked it).
+// isPersonaNodeBuild: bin is a persona-node build (packages.go picked it: the node binary dir's, or the release's in
+// the cache), which the deploy script never puts where personad is.
 func isPersonaNodeBuild(bin string) bool {
 	return strings.HasPrefix(filepath.Base(bin), nodeproto.ProgramPersonaNode+"-")
 }
@@ -87,25 +65,44 @@ func remoteTarget(cfg MachineConfig, info proto.NodeInfo, bin string) string {
 	return "~/.persona/bin/personad"
 }
 
-// startDeploy checks a deploy can start and runs it in the background; the machine list shows its progress.
-func (m *Machine) startDeploy() error {
+// errFallbackOnRedeploy: an update the manager makes by itself found a fallback build (the newest release, another
+// version than the hub's), which only an explicit Redeploy sends.
+var errFallbackOnRedeploy = errors.New("a fallback build is sent only on Redeploy")
+
+// startDeploy checks a deploy can start and runs it in the background; the machine list shows its progress. It is the
+// explicit Redeploy: any build the node's platform resolves to goes, a fallback too.
+func (m *Machine) startDeploy() error { return m.startDeployOf(false) }
+
+// startAutoDeploy is startDeploy for the updates the manager makes by itself (a machine back on another build, the
+// update after the hub's): only a build of the hub's own version goes, the hub's or its release's; a fallback build
+// is left to Redeploy (errFallbackOnRedeploy), as nobody chose to run another version than the hub's.
+func (m *Machine) startAutoDeploy() error { return m.startDeployOf(true) }
+
+func (m *Machine) startDeployOf(auto bool) error {
 	m.mu.Lock()
 	if m.deploying {
 		m.mu.Unlock()
 		return nil
 	}
 	blocked := m.canDeployLocked()
-	goos, arch, program, linked := m.info.OS, m.info.Arch, nodeProgram(m.info), m.rpcDeploymentLocked()
+	info, linked := m.info, m.rpcDeploymentLocked()
 	m.mu.Unlock()
 	if blocked != nil {
 		return blocked
 	}
-	bin, err := nodeBinary(goos, arch, program, m.d.hubVersion())
+	// The build for its platform and kind of program (packages.go): looked up afresh, a release's manifest at most.
+	lookup, cancel := context.WithTimeout(m.d.deployContext(), packageLookup)
+	pkg, err := m.d.nodePackageFor(lookup, info.OS, info.Arch, nodeProgram(info))
+	cancel()
+	m.d.changed() // what the machine should run may be another build now
 	if err != nil {
 		return err
 	}
+	if auto && pkg.Fallback {
+		return errFallbackOnRedeploy
+	}
 	if linked {
-		return m.startRPCDeployment(bin, nil)
+		return m.startRPCDeployment(pkg, nil)
 	}
 	m.mu.Lock()
 	if m.deploying {
@@ -115,10 +112,13 @@ func (m *Machine) startDeploy() error {
 	m.deploying, m.deployErr, m.deployPhase = true, "", "transferring"
 	m.mu.Unlock()
 	m.d.changed()
-	target := m.d.hubVersion()
+	target := pkg.Version
 	go func() {
 		ctx := m.d.deployContext()
-		err := m.deploy(ctx, bin)
+		bin, err := m.d.fetchPackage(ctx, pkg) // a release's: downloaded and checked first (still "transferring")
+		if err == nil {
+			err = m.deploy(ctx, bin, target)
+		}
 		m.mu.Lock()
 		m.deploying, m.deployPhase = false, ""
 		if err != nil {
@@ -128,7 +128,7 @@ func (m *Machine) startDeploy() error {
 		if err != nil {
 			m.d.logf("[%s] deploy: %v", m.cfg.ID, err)
 		} else {
-			m.d.logf("[%s] deployed the hub's build %s", m.cfg.ID, target)
+			m.d.logf("[%s] deployed build %s", m.cfg.ID, target)
 		}
 		m.saveDeployOutcome(ctx, target, err)
 		m.d.changed()
@@ -179,7 +179,8 @@ func anyShellQuote(s string) string {
 	return "'" + strings.NewReplacer(`'`, `'\''`, `\`, `'\\'`, `!`, `'\!'`).Replace(s) + "'"
 }
 
-func (m *Machine) deploy(ctx context.Context, bin string) error {
+// deploy installs bin, the build target, on the machine and waits for its node to come back running it.
+func (m *Machine) deploy(ctx context.Context, bin, target string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute) // a slow link: about 8 MB gzipped
 	defer cancel()
 	m.mu.Lock()
@@ -195,7 +196,7 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 			return ctx.Err()
 		case <-time.After(5 * time.Second):
 		}
-		return m.waitDeployed(ctx)
+		return m.waitDeployed(ctx, target)
 	}
 	m.mu.Lock()
 	remote := remoteTarget(m.cfg, m.info, bin)
@@ -234,7 +235,7 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 		}
 		return i18n.Err("devices-deploy.install_failed", i18n.Args{"err": msg})
 	}
-	return m.waitDeployed(ctx)
+	return m.waitDeployed(ctx, target)
 }
 
 // deployWait bounds how long waitDeployed waits for the machine to come back (a variable for tests): the new node
@@ -251,7 +252,7 @@ func waitText(l i18n.Lang, d time.Duration) string {
 }
 
 // waitDeployed reconnects and waits for the machine to come back on the hub's build.
-func (m *Machine) waitDeployed(ctx context.Context) error {
+func (m *Machine) waitDeployed(ctx context.Context, target string) error {
 	start := time.Now()
 	m.reconnect()
 	deadline := start.Add(deployWait)
@@ -264,7 +265,7 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 		m.mu.Lock()
 		online, version := m.online, m.info.Version
 		m.mu.Unlock()
-		if online && !buildDiffers(m.d.hubVersion(), version) {
+		if online && !buildDiffers(target, version) {
 			return nil
 		}
 	}
@@ -274,7 +275,7 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 		why = "" // how the old connection ended (our own reconnect), not why the new node is not reached
 	}
 	m.mu.Unlock()
-	if online && !buildDiffers(m.d.hubVersion(), version) {
+	if online && !buildDiffers(target, version) {
 		return nil // came back just now
 	}
 	if !online {
@@ -293,10 +294,9 @@ func (m *Machine) waitDeployed(ctx context.Context) error {
 // update of an offline one reached over its link or connector (devices.update_nodes: the hub updated itself and put
 // the release's node binaries where "Redeploy" takes them).
 func (d *Devices) updateNodes(ctx context.Context) {
-	version := d.hubVersion()
 	for _, m := range d.machinesNow() {
 		m.mu.Lock()
-		need := m.cfg.Kind != "local" && m.online && buildDiffers(version, m.info.Version)
+		local, online, info := m.cfg.Kind == "local", m.online, m.info
 		offlineLinked := !m.online && m.rpcDeploymentLocked()
 		m.mu.Unlock()
 		if offlineLinked {
@@ -305,10 +305,20 @@ func (d *Devices) updateNodes(ctx context.Context) {
 			}
 			continue
 		}
-		if !need {
+		if local || !online {
 			continue
 		}
-		if err := m.startDeploy(); err != nil {
+		// The build its platform resolves to (the hub's, or the newest release this manager drives); not known while
+		// the release site is away, and then left alone. A fallback build is offered, sent only on Redeploy.
+		pkg, known := d.resolvedPackageKnown(ctx, info)
+		if !known || !buildDiffers(pkg.Version, info.Version) {
+			continue
+		}
+		if pkg.Fallback {
+			d.logf("update: [%s] node %s is not build %s, a fallback (not the hub's version): sent only on Redeploy", m.cfg.ID, info.Version, pkg.Version)
+			continue
+		}
+		if err := m.startAutoDeploy(); err != nil {
 			d.logf("update: [%s] %v", m.cfg.ID, err)
 			continue
 		}
@@ -339,11 +349,26 @@ func (d *Devices) updateNodes(ctx context.Context) {
 // a failed start) is not sent again on every reconnect. Redeploy still tries. When that record cannot be read it
 // does not deploy either: it could not record the outcome, so a flapping machine would get a transfer per reconnect.
 func (m *Machine) updateOnConnect(ctx context.Context) {
-	version := m.d.hubVersion()
 	m.mu.Lock()
 	online, deploying, info := m.online, m.deploying, m.info
 	m.mu.Unlock()
-	if m.cfg.Kind == "local" || version == "" || !online || deploying || !nodeMismatch(version, info) {
+	if m.cfg.Kind == "local" || m.d.hubVersion() == "" || !online || deploying {
+		return
+	}
+	// The hub's build, or the release's its platform resolves to. Not known while the release site is away: nothing is
+	// sent or recorded then (a queued update waits too), and the next connection looks again.
+	pkg, known := m.d.resolvedPackageKnown(ctx, info)
+	if !known {
+		m.d.logf("[%s] node %s: which build it should run is not known now (the release site does not answer)", m.cfg.ID, info.Version)
+		return
+	}
+	version := pkg.Version
+	if !nodeMismatch(version, info) {
+		return
+	}
+	if pkg.Fallback {
+		// Another version than the hub's: offered on the machine's card, sent only when someone chooses Redeploy.
+		m.d.logf("[%s] node %s is not build %s, a fallback (not the hub's version): sent only on Redeploy", m.cfg.ID, info.Version, version)
 		return
 	}
 	if m.d.opts.Store != nil {
@@ -357,8 +382,10 @@ func (m *Machine) updateOnConnect(ctx context.Context) {
 			return // this build was tried already: a queued one continues in nodeUpdateConnected, a failed one waits for Redeploy
 		}
 	}
-	m.d.logf("[%s] node %s is not the hub's build %s: send it the hub's", m.cfg.ID, info.Version, version)
-	if err := m.startDeploy(); err != nil {
+	m.d.logf("[%s] node %s is not build %s: send it that", m.cfg.ID, info.Version, version)
+	if err := m.startAutoDeploy(); errors.Is(err, errFallbackOnRedeploy) {
+		m.d.logf("[%s] build %s turned out a fallback: sent only on Redeploy", m.cfg.ID, version)
+	} else if err != nil {
 		m.d.logf("[%s] update: %v", m.cfg.ID, err)
 		// the reason stays on the machine's card, as a failed Redeploy's does
 		m.mu.Lock()

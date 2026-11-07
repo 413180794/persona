@@ -314,9 +314,11 @@ for t in "${TARGETS[@]}"; do
     "$HUB")
       python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/db.sh | ssh "$PERSONA_HUB_SSH" 'bash -s'
       for plat in "${PLATFORMS[@]}"; do
-        remote_state "$PERSONA_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; cat > "$PERSONA_HOME/bin/nodes/'"personad-$plat"'"' < "bin/personad-$plat"
+        remote_state "$PERSONA_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin/nodes"; n="$PERSONA_HOME/bin/nodes/'"personad-$plat"'"; rm -f "$n.version"; cat > "$n"' < "bin/personad-$plat"
+        # This deploy's personad is the hub's version: a version file beside it (a release's build put there by hand,
+        # docs/operations/docker.md "Node builds") would say it is another, so it went above.
         # persona-node says which build it is in a file beside it, and Redeploy sends it only while that is the hub's
-        # version (the hub's own updates replace personad-* alone; devices/deploy.go nodeBinary). So the old version file
+        # version (the hub's own updates replace personad-* alone; devices/packages.go). So the old version file
         # goes first, the binary lands whole (a temporary file renamed), and the new version file comes last: a deploy
         # that stops half way leaves persona-node unused, never a new or torn binary under the old version.
         remote_state "$PERSONA_HUB_SSH" 'n="$PERSONA_HOME/bin/nodes/'"persona-node-$plat"'"; rm -f "$n.version"; cat > "$n.new" && mv "$n.new" "$n"' < "bin/persona-node-$plat"

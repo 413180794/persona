@@ -185,12 +185,24 @@ func isStateDir(path, name string) bool {
 	return err == nil && os.SameFile(a, b)
 }
 
-// NodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own;
-// PERSONA_NODE_BINARIES overrides it (Docker carries them in /opt/persona/nodes).
+// NodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own (the hub's updates put the release's
+// there too, the manager deploys them from there, and an air-gapped Docker hub's owner drops them there, in the data
+// volume); PERSONA_NODE_BINARIES points elsewhere.
 func NodeBinaryDir() string {
 	if d := Getenv("PERSONA_NODE_BINARIES"); d != "" {
 		return d
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(DataDir(home), "bin", "nodes")
+}
+
+// NodeBundledDir is where the program running carries node builds of its own version beside NodeBinaryDir:
+// PERSONA_NODE_BUNDLED, the Docker image's /opt/persona/nodes with its own platform's build; "" for none.
+func NodeBundledDir() string { return Getenv("PERSONA_NODE_BUNDLED") }
+
+// NodePackageCacheDir is where a manager keeps the node builds it fetched from the release (docs/operations/node-update.md),
+// by version: <data dir>/cache/nodes, in a Docker hub's data volume too.
+func NodePackageCacheDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(DataDir(home), "cache", "nodes")
 }

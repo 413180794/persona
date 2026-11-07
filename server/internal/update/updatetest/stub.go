@@ -27,6 +27,12 @@ var goCache = func() string {
 // the executable's path. Skips the test when there is no go tool.
 func Program(t testing.TB, name, goos, goarch string) string {
 	t.Helper()
+	return ProgramSource(t, name, goos, goarch, "package main\n\nfunc main() {}\n")
+}
+
+// ProgramSource is Program with main.go's source given.
+func ProgramSource(t testing.TB, name, goos, goarch, mainGo string) string {
+	t.Helper()
 	goBin, err := exec.LookPath("go")
 	if err != nil {
 		t.Skip("no go tool:", err)
@@ -39,7 +45,7 @@ func Program(t testing.TB, name, goos, goarch string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(t.TempDir(), name)

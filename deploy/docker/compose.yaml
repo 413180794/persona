@@ -26,6 +26,9 @@ services:
       JARVIS_IMAGE: ${PERSONA_IMAGE-${JARVIS_IMAGE:-}}
       PERSONA_REGISTRY_TOKEN: ${PERSONA_REGISTRY_TOKEN-${JARVIS_REGISTRY_TOKEN:-}}
       JARVIS_REGISTRY_TOKEN: ${PERSONA_REGISTRY_TOKEN-${JARVIS_REGISTRY_TOKEN:-}}
+      # Where node builds for the computers' other platforms come from (a release's dl/, a mirror, or off; empty: the
+      # image's own, docs/operations/docker.md "Node builds").
+      PERSONA_NODE_PACKAGES: ${PERSONA_NODE_PACKAGES:-}
     ports:
       - "${PERSONA_PORT-${JARVIS_PORT:-18660}}:18660"
       - "${PERSONA_TLS_PORT-${JARVIS_TLS_PORT:-18662}}:18662"

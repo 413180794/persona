@@ -128,6 +128,8 @@ type Devices struct {
 	reportDue chan struct{}
 	lastSent  string // the last devices.state sent (stateKey), to send only changes
 
+	packages nodePackages // the node builds for the machines' platforms (packages.go)
+
 	metrics metricsBook // the machines' monitoring (metrics.go)
 	usage   usageBook   // their token usage (metrics.go)
 	// usageWrites: the usage notifications to store, in order (usage.go's usageLoop).

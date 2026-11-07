@@ -18,8 +18,10 @@
 # The downloads (dl/*.gz) live in the R2 bucket DL_BUCKET, not in the site: a Workers static file is at most 25 MiB
 # (#2541). A release goes to one of two slots, <slot>/<name>, the one not served now; the deploy then switches dl/SLOT
 # (a static file, deployed with latest.json) to it. The slot left keeps the release before until the next one, so a
-# download that started before the deploy finishes. Only the newest version is served. release.sh runs this after
-# uploading to TestFlight.
+# download that started before the deploy finishes. Only the newest version is served there. Every release also goes
+# to release/<version>/ (its node builds and its manifest as manifest.json), kept: a hub's manager fetches the node build
+# of the hub's own version from there (dl/<version>/…, docs/operations/node-update.md), a Docker image's version too (X.Y.Z, when
+# the release is the tag vX.Y.Z). release.sh runs this after uploading to TestFlight.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 _env=$(python3 scripts/persona_config.py env) || exit $?
@@ -54,6 +56,25 @@ settled() {
   "$@" || { echo "$what still differs about two minutes after the deploy" >&2; return 1; }
 }
 served_is() { [ "$(curl -fsSL "$PERSONA_PUBLISH_URL/dl/$1" 2>/dev/null)" = "$(cat "$2")" ]; }
+# node_archives <dir>: the node builds among the downloads (personad-<os>-<arch>.gz, persona-node-<os>-<arch>.gz),
+# the only ones a manager fetches from dl/<version>/.
+node_archives() {
+  local gz
+  for gz in "$1"/*.gz; do
+    [[ "${gz##*/}" =~ ^(personad|persona-node)-(linux|darwin)-(amd64|arm64)\.gz$ ]] && printf '%s\n' "$gz"
+  done
+  return 0
+}
+# check_versioned <dir> <version>: dl/<version>/ serves that release: its manifest, and every node build at its size.
+check_versioned() {
+  local dir="$1" v="$2" gz size got
+  curl -fsSL "$PERSONA_PUBLISH_URL/dl/$v/manifest.json" | cmp -s - "$dir/latest.json" || { echo "served dl/$v/manifest.json differs" >&2; return 1; }
+  while IFS= read -r gz; do
+    size="$(wc -c <"$gz" | tr -d ' ')"
+    got="$(curl -fsSI "$PERSONA_PUBLISH_URL/dl/$v/${gz##*/}" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}')"
+    [ "$got" = "$size" ] || { echo "served dl/$v/${gz##*/} is ${got:-missing}, not $size bytes" >&2; return 1; }
+  done < <(node_archives "$dir")
+}
 same_as_served() { curl -fsSL "$PERSONA_PUBLISH_URL/$1" | cmp -s - "$2"; }
 # deploy_site <dir>: deploy that copy of site/ (with dl/ and install.sh in it), the log in <dir>/../deploy.log.
 deploy_site() {
@@ -140,7 +161,8 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/persona-link-${t%/*}-${t#*/}" ./cmd/persona-link)
   # The device's own program (cmd/persona-node): install.sh --node puts it at ~/.persona/bin/persona-node. It is in
-  # SHA256SUMS, not in latest.json, so hubs keep updating as before (docs/operations/hub-update.md).
+  # SHA256SUMS, and in latest.json under nodes (a hub's own update still swaps personad alone; its manager fetches
+  # persona-node from dl/<version>/ for a device that runs it, docs/operations/node-update.md "Node packages").
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/persona-node-${t%/*}-${t#*/}" ./cmd/persona-node)
 done
@@ -211,11 +233,33 @@ fi
 # each file, and once more before the one retry.
 refresh_cf() { command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true; }
 # put <file>: upload it into the slot. Absolute paths: wr runs wrangler inside the site copy.
-put() { wr "$OUT/site" r2 object put "$DL_BUCKET/$SLOT/${1##*/}" --file "$1" --content-type application/gzip --remote >>"$OUT/upload.log" 2>&1; }
-for gz in "$PWD/$OUT/bin/"*.gz; do
+# put_at <key> <file> <content type>: upload it to that key of the bucket, once more after a refresh when it fails.
+put_at() {
+  local key="$1" file="$2" type="$3"
   refresh_cf
-  put "$gz" || { sleep 5; refresh_cf; put "$gz"; } \
-    || { tail -20 "$OUT/upload.log" >&2; echo "upload of ${gz##*/} to R2 failed; see $OUT/upload.log" >&2; exit 1; }
+  up() { wr "$OUT/site" r2 object put "$DL_BUCKET/$key" --file "$file" --content-type "$type" --remote >>"$OUT/upload.log" 2>&1; }
+  up || { sleep 5; refresh_cf; up; } \
+    || { tail -20 "$OUT/upload.log" >&2; echo "upload of $key to R2 failed; see $OUT/upload.log" >&2; exit 1; }
+}
+for gz in "$PWD/$OUT/bin/"*.gz; do
+  put_at "$SLOT/${gz##*/}" "$gz" application/gzip
+done
+# The versioned copies, kept: release/<version>/ (and release/X.Y.Z/ when the release is the tag vX.Y.Z, the version
+# of the Docker image built from that tag), the node builds and the manifest only: a manager fetches a node build from
+# there (docs/operations/node-update.md). The tag is looked up among all the commit's tags (release.sh tags it testflight/<build>
+# too, and a lightweight vX.Y.Z is not what git describe picks).
+VERSIONS=("$VERSION")
+# A build with changes not committed (-dirty) is not the tag's release, and gets no alias.
+if [[ "$VERSION" != *-dirty* ]] && tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)" && [ -n "$tag" ]; then
+  VERSIONS+=("${tag#v}")
+fi
+NODE_ARCHIVES=()
+while IFS= read -r gz; do NODE_ARCHIVES+=("$gz"); done < <(node_archives "$PWD/$OUT/bin")
+for v in "${VERSIONS[@]}"; do
+  for gz in "${NODE_ARCHIVES[@]}"; do
+    put_at "release/$v/${gz##*/}" "$gz" application/gzip
+  done
+  put_at "release/$v/manifest.json" "$PWD/$OUT/bin/latest.json" application/json
 done
 deploy_site "$OUT/site"
 
@@ -225,4 +269,7 @@ settled "served dl/VERSION" served_is VERSION "$OUT/bin/VERSION" \
 settled "served dl/SHA256SUMS" same_as_served dl/SHA256SUMS "$OUT/bin/SHA256SUMS" || exit 1
 settled "served dl/latest.json" same_as_served dl/latest.json "$OUT/bin/latest.json" || exit 1
 settled "the served downloads" check_served "$OUT/bin/SHA256SUMS" "$SLOT" || exit 1
+for v in "${VERSIONS[@]}"; do
+  settled "dl/$v/" check_versioned "$OUT/bin" "$v" || exit 1
+done
 echo "personad $VERSION published: curl -fsSL $PERSONA_PUBLISH_URL/install.sh | sh"

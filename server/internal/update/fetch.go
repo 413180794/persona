@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -98,12 +99,30 @@ func Download(ctx context.Context, client *http.Client, base string, f File, dir
 	}
 	bin := filepath.Join(dir, strings.TrimSuffix(f.Name, ".gz"))
 	if err := unpack(gz, bin, f.BinarySHA256); err != nil {
+		var local *fs.PathError
+		if !errors.Is(err, errMismatch) && !errors.As(err, &local) {
+			// An archive that matched the manifest's sha256 and does not unpack: the release's, broken.
+			err = fmt.Errorf("%w: %s does not unpack: %v", errMismatch, f.Name, err)
+		}
 		return "", err
 	}
 	return bin, nil
 }
 
 var errMismatch = errors.New("the download does not match the release's manifest")
+
+// IsMismatch: err is Download finding that what was served is not what the manifest says (sizes or sha256s; a file
+// that stayed shorter than the manifest's size over every attempt too), not a download that could not be made.
+func IsMismatch(err error) bool {
+	var short shortError
+	return errors.Is(err, errMismatch) || errors.As(err, &short)
+}
+
+// shortError is a download that ended before the manifest's size without a transfer error: cut short, or a file that
+// is not the manifest's.
+type shortError struct{ error }
+
+func (e shortError) Unwrap() error { return e.error }
 
 func fetchFile(ctx context.Context, client *http.Client, url, path string, f File) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -137,7 +156,7 @@ func fetchFile(ctx context.Context, client *http.Client, url, path string, f Fil
 	}
 	if n != f.Size || hex.EncodeToString(h.Sum(nil)) != f.SHA256 {
 		if n < f.Size {
-			return fmt.Errorf("%s: got %d of %d bytes", url, n, f.Size)
+			return shortError{fmt.Errorf("%s: got %d of %d bytes", url, n, f.Size)} // tried again: a transfer cut short
 		}
 		return fmt.Errorf("%w: %s", errMismatch, f.Name)
 	}

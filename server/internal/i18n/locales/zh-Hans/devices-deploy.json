@@ -1,6 +1,10 @@
 {
   "os_unknown": "还不知道这台电脑的系统，连上以后再试",
-  "no_binary": "hub 上没有 {os}/{arch} 的 personad：在开发机上跑一次 scripts/deploy/deploy.sh（Docker 部署的 hub 用镜像里带的）",
+  "no_binary": "hub 上没有 {os}/{arch} 的 node 程序，也没有可以下载的发布：在开发机上跑一次 scripts/deploy/deploy.sh，或者把 hub 这个版本的 {name} 放进它的 bin/nodes 目录，或者在 hub.json 里设置 node_packages（docs/operations/docker.md「Node builds」）",
+  "no_package": "最新的发布 {version} 里没有这个 hub 能驱动的 {os}/{arch} node 程序，hub 这个版本的也没有：先更新 hub，或者把它这个版本的 {name} 放进它的 bin/nodes 目录（docs/operations/docker.md「Node builds」）",
+  "no_release": "没有 hub 这个版本的 {os}/{arch} node 程序，它的 node 程序下载地址上也没有发布：把 hub 这个版本的 {name} 放进它的 bin/nodes 目录，或者在 hub.json 里设置 node_packages.url（docs/operations/docker.md「Node builds」）",
+  "package_unreachable": "连不上发布站，拿不到 {os}/{arch} 的 node 程序：{err}。检查 hub 的外网，或 hub.json 里的 node_packages.proxy，也可以把程序放进它的 bin/nodes 目录（docs/operations/docker.md「Node builds」）",
+  "package_bad": "从发布站下载的 {os}/{arch} node 程序没有通过校验，没有使用：{err}",
   "install_failed": "装不上：{err}",
   "minutes_other": "{count} 分钟",
   "seconds_other": "{count} 秒",

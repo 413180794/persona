@@ -50,8 +50,8 @@ Packages settings. Postgres uses `postgres:18-alpine` from Docker Hub: on networ
 `PERSONA_POSTGRES_IMAGE` in `.env` to the same image on a registry mirror or local registry (e.g. `<registry>/library/postgres:18-alpine`).
 
 The image contains:
-- `personad` (the hub uses the `linux/<arch>` one) and node builds for four platforms (`/opt/persona/nodes`, `PERSONA_NODE_BINARIES`): **Redeploy** in the App
-  takes them from here, so hub and node are always the same version;
+- `personad` for the image's own platform (`linux/<arch>`, in `/opt/persona/nodes`, `PERSONA_NODE_BUNDLED`): the hub runs it, and **Redeploy** sends it to computers of that platform.
+  An image built with a release to fetch from (the build argument `UPDATE_URL`) carries no node builds for the other platforms (macOS, the other Linux architecture) and no persona-node: they come from the release, see "Node builds" below. One built without it carries personad for all four platforms, as before;
 - the web app embedded in the binary (`docs/web/web.md`): just open the hub's address;
 - the built-in extensions' programs (the WeChat bot, `docs/extensions/wechat.md`), the same version as personad;
 - `openssh-client`, certificates, time zone data.
@@ -125,12 +125,34 @@ then `docker compose restart hub`.
 | `PERSONA_LISTEN` | The address the hub listens on (default `:18660`; changing it also requires changing the compose port mapping and the image's health check) |
 | `PERSONA_LOCAL_NODE=0` | Don't write the "this machine" entry on first start (already set in the image) |
 | `PERSONA_ADMIN_ACCESS`, `PERSONA_ADMIN_CIDRS` | Who can open the admin UI (`/admin`): `loopback` / `lan` / `cidrs` (comma-separated ranges) / `any`; see "Admin UI" below. When unset, the entry script prints a reminder and uses `admin.access` from hub.json (`lan` if not set) |
-| `PERSONA_NODE_BINARIES` | Where the node builds used by **Redeploy** live (`/opt/persona/nodes` in the image; `~/.persona/bin/nodes` for the native method) |
+| `PERSONA_NODE_BINARIES` | Where node builds of the hub's version for **Redeploy** are put (default `~/.persona/bin/nodes`, in the image `data/bin/nodes` of the data volume); see "Node builds" |
+| `PERSONA_NODE_BUNDLED` | The image's own build (`/opt/persona/nodes`, set in the image) |
+| `PERSONA_NODE_PACKAGES` | Where the other node builds are fetched from: a release's `dl/` or a mirror of it, `off` for never (overrides hub.json's `node_packages.url`; see "Node builds") |
 | `PUID` / `PGID`, `TZ` | See above (when `PUID` / `PGID` are unset, the owner of `data/` is used) |
 | `PERSONA_IMAGE`, `PERSONA_POSTGRES_IMAGE`, `PERSONA_PORT`, `PERSONA_TLS_PORT` | Used by compose: where to pull the two images from, and which host ports the hub's HTTP / TLS ports map to. `PERSONA_IMAGE` is also passed into the hub container: the hub checks its tags for a newer image (see "Upgrading" below) |
 | `PERSONA_REGISTRY_TOKEN` | For a private image, a token that can read it (GitHub: a Personal Access Token with `read:packages`); the hub uses it to check for new images. Not needed for public images |
 
 The native method also honors these variables (e.g. systemd's `Environment=`), but normally doesn't need them.
+
+## Node builds
+
+**Redeploy** (and the update of every computer after the hub's) sends each computer the node build for its OS and architecture, and persona-node to a device that runs it (`docs/operations/node-update.md` ("Node packages")):
+
+1. a build of the hub's version that you put in the data volume's `data/bin/nodes/` (`personad-<os>-<arch>`, as `scripts/release/publish.sh` publishes it, unpacked; a release's `persona-node-<os>-<arch>` is not used from there, as only one of the hub's own version counts, which a release build never reports on an image hub: devices get personad from there instead);
+2. the image's own builds (its platform's, or all four in an image built without `UPDATE_URL`);
+3. the release of the hub's version from the publisher's site: the image knows where if it was built with one (the build argument `UPDATE_URL`, a release's `dl/`), or `node_packages.url` in hub.json (or `PERSONA_NODE_PACKAGES` in `.env`) says;
+4. when there is no release of the hub's version (an `edge` image, or one built with a version of your own; a build with the default `VERSION=dev` never fetches), the newest release whose node this hub drives (the node protocol, `docs/protocol/protocol.md` ("Node handshake")); the computer's card then shows the build it got, and no update is offered while it runs it. Such a build (another version than the hub's) is never sent by itself: a computer on another build is offered it, and gets it when you choose **Redeploy**;
+5. otherwise **Redeploy** is not offered, and the card says why.
+
+A device that runs persona-node gets personad into its file when there is no persona-node of the build it should run; it does everything persona-node does.
+
+Fetched builds are checked before they are used (the release manifest's sha256 of the archive and of the binary, over HTTPS; that it is a build of that platform and kind; nothing is signed, `docs/operations/hub-update.md` ("Security: no signing")) and kept in `data/cache/nodes/` (the hub's version, and other versions until a day after they were last used). Downloads go through `node_packages.proxy` in hub.json when set (an `http://` proxy; the container's `HTTPS_PROXY` is not used). When the site does not answer, the builds found or fetched before are used again.
+
+**Without internet access** (air-gapped, or the publisher's site blocked): put the builds into `data/bin/nodes/` as `personad-<os>-<arch>` (for example from another machine: `curl -fsSLO <site>/dl/<version>/personad-darwin-arm64.gz && gunzip personad-darwin-arm64.gz`, then copy it over and `chmod 755` it; `<version>` is what `docker compose exec hub personad version` prints, the tag's release for a tagged image), and when a build is not the hub's own (a release's, whose version reads like `v1.2.3-<build time>`), put that version in `personad-<os>-<arch>.version` beside it (`"version"` in that release's `manifest.json`), so a computer running it counts as up to date. Or mount a directory of them and point `PERSONA_NODE_BINARIES` at it (in `compose.yaml`'s hub `environment`: `.env` alone does not reach the container); or serve a mirror of the release (`latest.json`, `<version>/manifest.json` and the archives) on your network and set `node_packages.url` (or `PERSONA_NODE_PACKAGES`) to it; it must answer 404 for a file it does not have (any other error counts as the site being away). `PERSONA_NODE_PACKAGES=off` stops fetching altogether.
+
+An image built with `UPDATE_URL` also uses that address for the install commands it hands out: "Add a computer" shows the one-line Linux install (`install.sh --node`), and the manager install command (`docs/assistant/managers.md`) downloads the published personad, which the script says when it is not the hub's own version.
+
+Builds you put in `data/bin/nodes/` win over the image's and the release's, also after you upgrade the image: replace or remove them when you upgrade. A stale one with a `.version` keeps computers on that build and shows them up to date; one without makes every deploy wait for a version the build does not report.
 
 ## Upgrading
 
@@ -148,6 +170,7 @@ If the image is private and `PERSONA_REGISTRY_TOKEN` isn't set, Settings › hub
 Upgrading from 0.1.1 or earlier, the App won't prompt; switch manually: back then the repo was still called persona and the image was `ghcr.io/<owner>/persona`; from 0.1.2 it's
 `ghcr.io/<owner>/persona`, and the old name won't get new versions. Change `PERSONA_IMAGE` in `.env` to the new name and version, replace `compose.yaml` with the new one
 (it passes `PERSONA_IMAGE` and `PERSONA_REGISTRY_TOKEN` to the hub, which is what lets later versions be announced), then run the command above.
+To set where node builds are fetched from with `PERSONA_NODE_PACKAGES` in `.env` (see "Node builds"), take the new `compose.yaml` as well: an older one does not pass it to the hub (`node_packages` in hub.json works either way).
 
 ## Network
 
@@ -247,8 +270,8 @@ When LAN clients need access, you can bind `PERSONA_PORT` to an explicit LAN add
 ## Verification
 
 `.github/workflows/hub-image.yml` builds the image on every PR that touches the server (including `sdk/go`), the web app, or the image, and runs it once with compose: health check, pairing,
-tailcat key, web app, owner of `hub.json`. On PRs only the linux/amd64 node is built (`--build-arg NODE_PLATFORMS=linux/amd64`, the only one the smoke test runs);
-releases and local builds build all four by default. You can do the same locally (OrbStack / Docker Desktop):
+tailcat key, web app, owner of `hub.json`. The workflow passes no `UPDATE_URL`, so the image carries personad for every platform (for a PR, `linux/amd64` only); one built with `UPDATE_URL` carries its own platform's and fetches the others ("Node builds").
+You can do the same locally (OrbStack / Docker Desktop):
 
 ```sh
 docker build --build-arg VERSION=dev-local -t persona-hub .

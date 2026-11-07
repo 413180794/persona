@@ -23,6 +23,9 @@ type nodeDeployRecord struct {
 	Phase  string    `json:"phase,omitempty"`
 	Error  string    `json:"error,omitempty"`
 	At     time.Time `json:"at"`
+	// Fallback: the target is a fallback build (another version than the hub's), which only an explicit Redeploy
+	// sends; a record queued for the hub's own version never resumes as one.
+	Fallback bool `json:"fallback,omitempty"`
 }
 
 func (d *Devices) deployContext() context.Context {
@@ -80,7 +83,7 @@ func (m *Machine) deploymentPhase(ctx context.Context, record *nodeDeployRecord,
 	return nil
 }
 
-func (m *Machine) startRPCDeployment(bin string, saved *nodeDeployRecord) error {
+func (m *Machine) startRPCDeployment(pkg nodePackage, saved *nodeDeployRecord) error {
 	m.mu.Lock()
 	if m.deploying {
 		m.mu.Unlock()
@@ -92,7 +95,7 @@ func (m *Machine) startRPCDeployment(bin string, saved *nodeDeployRecord) error 
 	}
 	m.deploying, m.deployErr, m.deployPhase = true, "", "waiting_idle"
 	m.mu.Unlock()
-	record := nodeDeployRecord{Target: m.d.hubVersion(), State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
+	record := nodeDeployRecord{Target: pkg.Version, State: "queued", Phase: "waiting_idle", At: time.Now().UTC(), Fallback: pkg.Fallback}
 	if saved != nil {
 		record = *saved
 	}
@@ -104,12 +107,27 @@ func (m *Machine) startRPCDeployment(bin string, saved *nodeDeployRecord) error 
 		return explain(i18n.Err("devices-deploy.save_task_failed", i18n.Args{"err": err.Error()}), err)
 	}
 	m.d.changed()
-	go m.runRPCDeployment(ctx, bin, record)
+	go m.runRPCDeployment(ctx, pkg, record)
 	return nil
 }
 
-func (m *Machine) runRPCDeployment(ctx context.Context, bin string, record nodeDeployRecord) {
-	err := m.performRPCDeployment(ctx, bin, &record)
+func (m *Machine) runRPCDeployment(ctx context.Context, pkg nodePackage, record nodeDeployRecord) {
+	m.mu.Lock()
+	already := m.online && m.info.Version == record.Target
+	m.mu.Unlock()
+	var bin string
+	var err error
+	if !already { // a release's build is downloaded and checked first (phase transferring)
+		if pkg.path == "" {
+			err = m.deploymentPhase(ctx, &record, "transferring")
+		}
+		if err == nil {
+			bin, err = m.d.fetchPackage(ctx, pkg)
+		}
+	}
+	if err == nil {
+		err = m.performRPCDeployment(ctx, bin, &record)
+	}
 	if ctx.Err() == nil {
 		record.State, record.Phase, record.Error, record.At = "succeeded", "", "", time.Now().UTC()
 		if err != nil {
@@ -321,7 +339,7 @@ func (m *Machine) confirmNodeDeployment(ctx context.Context, record *nodeDeployR
 // Confirm a healthy replacement even if the hub restarted during transfer. An
 // unconfirmed target must never remain installed just because a worker vanished.
 func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info proto.NodeInfo) {
-	if info.NodeUpdate && info.Version == m.d.hubVersion() {
+	if info.NodeUpdate && (info.Version == m.d.hubVersion() || info.Version == m.d.nodeTarget(info)) {
 		confirm, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := peer.Call(confirm, "node.update.confirm", map[string]any{"version": info.Version}, nil)
 		cancel()
@@ -357,19 +375,39 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 		}
 		return
 	}
-	if record.Target != m.d.hubVersion() {
-		err = i18n.Err("devices-deploy.hub_changed")
-	} else if info.Version != record.Target && (record.Phase == "restarting" || record.Phase == "confirming") {
-		// An accepted install may have rolled back while the hub was down.
-		// Do not automatically reinstall a build that just failed to start.
-		err = i18n.Err("devices-deploy.rolled_back")
+	installed := record.Phase == "restarting" || record.Phase == "confirming"
+	if installed && info.Version == record.Target {
+		// Running what it was sent: confirmed, whatever the target is now (a newer one, or one not known while the
+		// release site is away, is no reason to let the node roll a working update back; updateOnConnect moves it on).
+		err = m.startRPCDeployment(nodePackage{Version: record.Target}, &record)
 	} else {
-		var bin string
-		if info.Version != record.Target {
-			bin, err = nodeBinary(info.OS, info.Arch, nodeProgram(info), record.Target)
-		}
-		if err == nil {
-			err = m.startRPCDeployment(bin, &record)
+		target, known := m.d.resolvedTargetKnown(ctx, info)
+		switch {
+		case !known:
+			// The release site does not answer, so what the node should run is not known: the record waits for the
+			// next connection rather than fail because of the site.
+			m.d.logf("[%s] queued node update to %s: which build it should run is not known now; it waits", m.cfg.ID, record.Target)
+			return
+		case record.Target != target:
+			err = i18n.Err("devices-deploy.hub_changed")
+		case installed:
+			// An accepted install may have rolled back while the hub was down.
+			// Do not automatically reinstall a build that just failed to start.
+			err = i18n.Err("devices-deploy.rolled_back")
+		default:
+			pkg := nodePackage{Version: record.Target} // running it already: only confirmed
+			if info.Version != record.Target {
+				pkg, err = m.d.nodePackageFor(ctx, info.OS, info.Arch, nodeProgram(info))
+				if err == nil && (pkg.Version != record.Target || pkg.Fallback && !record.Fallback) {
+					// The build found now is another one than the record's, or the same version now as a fallback (the
+					// hub moved to a version without a release of its own): what was queued for the hub's version
+					// does not go out as a fallback by itself.
+					err = i18n.Err("devices-deploy.hub_changed")
+				}
+			}
+			if err == nil {
+				err = m.startRPCDeployment(pkg, &record)
+			}
 		}
 	}
 	if err != nil {
@@ -383,6 +421,17 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 }
 
 func (m *Machine) queueOfflineNodeUpdate(ctx context.Context) error {
-	record := nodeDeployRecord{Target: m.d.hubVersion(), State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
+	m.mu.Lock()
+	info := m.info // as it was last connected
+	m.mu.Unlock()
+	pkg, known := m.d.resolvedPackageKnown(ctx, info)
+	if !known {
+		return errors.New("which build it should run is not known now (the release site does not answer): queued on its next connection instead")
+	}
+	if pkg.Fallback {
+		m.d.logf("update: [%s] build %s is a fallback (not the hub's version): not queued, sent only on Redeploy", m.cfg.ID, pkg.Version)
+		return nil
+	}
+	record := nodeDeployRecord{Target: pkg.Version, State: "queued", Phase: "waiting_idle", At: time.Now().UTC()}
 	return m.saveDeployRecord(ctx, record)
 }

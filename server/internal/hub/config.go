@@ -81,6 +81,15 @@ type MachineConfig struct {
 	ClaudeStartDir string `json:"claude_start_dir,omitempty"`
 }
 
+// NodePackagesConfig is where the manager fetches the node builds for the computers that the hub has none of its own
+// for (docs/operations/node-update.md "Node packages", docs/operations/docker.md "Node builds"): URL is a release's dl/ (a mirror of the
+// publisher's), "" the hub build's own update URL, "off" never; Proxy an http://[user:pass@]host:port proxy for it
+// (internal/netproxy; "" direct, the environment's proxies are not used).
+type NodePackagesConfig struct {
+	URL   string `json:"url,omitempty"`
+	Proxy string `json:"proxy,omitempty"`
+}
+
 // TailcatConfig: DERPMapURL is a DERP map of your own relays (a derper) instead of Tailscale's public ones; the nodes
 // were set up with the same (`personad node tailcat init --derp-map-url`).
 type TailcatConfig struct {
@@ -132,6 +141,8 @@ type Config struct {
 	Admin AdminConfig `json:"admin,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
+	// NodePackages is where node builds the hub has none of come from.
+	NodePackages NodePackagesConfig `json:"node_packages,omitzero"`
 	// Mesh tunes the links to other hubs (docs/server/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
 	// Link tunes the heartbeat with the computers' Persona Links (config_link.go, docs/operations/link.md "Heartbeat").
@@ -180,6 +191,7 @@ var envOverrides = []struct {
 	{"PERSONA_DATABASE_URL", func(c *Config) *string { return &c.DatabaseURL }},
 	{"PERSONA_PUBLIC_URL", func(c *Config) *string { return &c.PublicURL }},
 	{"PERSONA_LISTEN", func(c *Config) *string { return &c.Listen }},
+	{"PERSONA_NODE_PACKAGES", func(c *Config) *string { return &c.NodePackages.URL }}, // a compose file's mirror, or off
 }
 
 func (c *Config) applyEnv() {

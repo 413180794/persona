@@ -37,6 +37,7 @@ type updatingNode struct {
 	background  bool
 	installErr  error
 	stayOld     bool
+	target      string // the build it confirms ("" the fixture hub's, new-build)
 	committed   chan struct{}
 }
 
@@ -109,7 +110,7 @@ func (n *updatingNode) handle(_ context.Context, method string, params json.RawM
 	case "node.update.confirm":
 		var p struct{ Version string }
 		_ = json.Unmarshal(params, &p)
-		if p.Version != "new-build" {
+		if want := n.target; p.Version != want && (want != "" || p.Version != "new-build") {
 			return nil, errors.New("wrong confirmation version")
 		}
 		n.confirms++
@@ -411,7 +412,7 @@ func TestLinkedDeployPersistsRejectedInstallation(t *testing.T) {
 	h.opts.Store = newMemStore()
 	n.installErr = &rpc.Error{Code: "invalid_update", Message: "binary self-check failed"}
 	record := nodeDeployRecord{Target: h.hubVersion(), State: "queued"}
-	m.runRPCDeployment(context.Background(), bin, record)
+	m.runRPCDeployment(context.Background(), nodePackage{Version: record.Target, path: bin}, record)
 	var saved nodeDeployRecord
 	_, err := h.opts.Store.Setting(context.Background(), m.deployRecordKey(), &saved)
 	if err != nil || saved.State != "failed" || !strings.Contains(saved.Error, "binary self-check failed") {

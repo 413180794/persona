@@ -252,6 +252,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 	onlineAt := time.Now()
 	rewatch := map[string]int{}
+	updates := false // listed: a queued update and a build check follow (below)
 	for id := range m.watched {
 		rewatch[id] = m.lastSeq[id]
 	}
@@ -282,8 +283,8 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	if compat.Incompatible != "" {
 		m.d.logf("[%s] node %s speaks node protocol %d (min manager %d, missing %v): this manager speaks %d (min node %d), %s: update it",
 			m.cfg.ID, info.Version, info.Protocol, info.ProtocolMin, compat.Missing, nodeproto.Version, nodeproto.MinVersion, compat.Incompatible)
-	} else if v := m.d.hubVersion(); buildDiffers(v, info.Version) {
-		m.d.logf("[%s] node %s is not the hub's build %s (node protocol %d): an update is offered", m.cfg.ID, info.Version, v, info.Protocol)
+	} else if v := m.d.nodeTarget(info); buildDiffers(v, info.Version) {
+		m.d.logf("[%s] node %s is not build %s (node protocol %d): an update is offered", m.cfg.ID, info.Version, v, info.Protocol)
 	}
 	// The hub has it connected before it is asked to hand the node what is the hub's (devices.connected).
 	m.d.reportNow()
@@ -314,13 +315,21 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		if err := c.peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
 			m.setSessions(list.Sessions)
 			m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
-			m.nodeUpdateConnected(ctx, c.peer, info)
-			m.updateOnConnect(ctx) // back on another build: give it the hub's (updateOnConnect, deploy.go)
+			updates = true
 		}
 	} else {
 		rewatch = nil
 	}
 	m.firstTried() // configured and listed: the calls that waited for it go now
+	if updates {
+		// A queued update goes on, and a node back on another build is given the one it should run (deploy_rpc.go,
+		// deploy.go). Which build that is may take the release site (packages.go): looked up off this path, so the
+		// calls that waited for the machine and its live sessions never wait on it.
+		go func() {
+			m.nodeUpdateConnected(ctx, c.peer, info)
+			m.updateOnConnect(ctx)
+		}()
+	}
 	if f := m.d.opts.OnConnected; f != nil && compat.Incompatible == "" {
 		go f(m.cfg.ID)
 	}

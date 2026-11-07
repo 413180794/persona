@@ -6,6 +6,9 @@
 // that started before a deploy still finishes. The small files (VERSION, SHA256SUMS, latest.json, SLOT) stay static
 // files, deployed with the site: the manifest and the slot it points at change in one deploy.
 //
+// /dl/<version>/<name>.gz and /dl/<version>/manifest.json come from the bucket's release/<version>/, where publish.sh
+// keeps every release (managers fetch the node build of their hub's version there).
+//
 // /relay/*: the push relay (docs/operations/push-relay.md), which runs elsewhere (`personad relay`)
 // and is reached at RELAY_ORIGIN, e.g. a Cloudflare Tunnel hostname. Both values are Worker secrets, not in the repo:
 //   npx wrangler secret put RELAY_ORIGIN         # https://<tunnel host>
@@ -31,6 +34,9 @@ function sameSecret(a, b) {
 }
 
 const download = /^\/dl\/([A-Za-z0-9][A-Za-z0-9._-]*\.gz)$/;
+// /dl/<version>/<file>: a release kept in the bucket at release/<version>/ (its node builds and manifest.json), where a
+// hub's manager fetches the node build of the hub's own version (docs/operations/node-update.md). Never a slot's.
+const versioned = /^\/dl\/([A-Za-z0-9][A-Za-z0-9._-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*\.gz|manifest\.json)$/;
 
 async function servedSlot(request, env) {
   const r = await env.ASSETS.fetch(new Request(new URL("/dl/SLOT", request.url)));
@@ -52,14 +58,17 @@ function rangeOf(object) {
   return { start, end: start + length - 1 };
 }
 
-async function serveDownload(request, env, name) {
+async function serveDownload(request, env, name, version) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
   }
   if (!env.DL) return new Response("downloads not configured", { status: 503 });
-  const slot = await servedSlot(request, env);
-  if (!slot) return new Response("not found", { status: 404 });
-  const key = `${slot}/${name}`;
+  let key = `release/${version}/${name}`;
+  if (version === undefined) {
+    const slot = await servedSlot(request, env);
+    if (!slot) return new Response("not found", { status: 404 });
+    key = `${slot}/${name}`;
+  }
   const ranged = request.method === "GET" && request.headers.has("range");
   const object = request.method === "HEAD"
     ? await env.DL.head(key)
@@ -67,7 +76,7 @@ async function serveDownload(request, env, name) {
   if (!object) return new Response("not found", { status: 404 });
   const headers = new Headers();
   object.writeHttpMetadata(headers);
-  if (!headers.has("content-type")) headers.set("content-type", "application/gzip");
+  if (!headers.has("content-type")) headers.set("content-type", name.endsWith(".json") ? "application/json" : "application/gzip");
   headers.set("etag", object.httpEtag);
   headers.set("accept-ranges", "bytes");
   headers.set("cache-control", "public, max-age=0, must-revalidate");
@@ -94,6 +103,8 @@ export default {
     const url = new URL(request.url);
     const dl = download.exec(url.pathname);
     if (dl) return serveDownload(request, env, dl[1]);
+    const kept = versioned.exec(url.pathname);
+    if (kept) return serveDownload(request, env, kept[2], kept[1]);
     if (!url.pathname.startsWith("/relay/")) return env.ASSETS.fetch(request);
     if (!env.RELAY_ORIGIN || !env.RELAY_PROXY_SECRET) {
       return Response.json({ error: "push relay not configured" }, { status: 503 });
