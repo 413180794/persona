@@ -86,7 +86,8 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
         }
         if (!list.isNullOrEmpty()) {
             item("top") { JSectionHeader(stringResource(R.string.settings_ext_list_header), count = list.size) }
-            itemsIndexed(list, key = { _, it -> "plugin-${it.id}" }) { index, extension ->
+            // The hub merges every manager's list (docs/managers.md), and each manager has the built-ins, so an id can come twice.
+            itemsIndexed(list, key = { index, it -> "plugin-$index-${it.id}" }) { index, extension ->
                 JGroupItem(GroupPosition.of(index, list.size)) {
                     JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.listLine(res, extension), leadingIcon = PhIcons.PuzzlePiece,
                         trailing = { ExtensionStateMark(extension) }, chevron = true,
@@ -179,7 +180,8 @@ fun ExtensionPage(
     var hubConnectors by remember(connectors, extensionId) { mutableStateOf<List<HubConnector>>(emptyList()) }
     LaunchedEffect(connectors, contributed) {
         if (connectors == null || contributed.isEmpty()) return@LaunchedEffect
-        hubConnectors = try { connectors.connectors(all = true).filter { it.id in contributed } }
+        // The first of an id is the default manager's, the one this page's requests go to (the list is every manager's).
+        hubConnectors = try { connectors.connectors(all = true).filter { it.id in contributed }.distinctBy { it.id } }
         catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() } // the connector's page says what is wrong
     }
     val hasForm = detail != null && !detail.readOnly && detail.form.isNotEmpty()
