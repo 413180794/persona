@@ -118,4 +118,22 @@ internal class AppNavigator(
         }
         openedFrom.keys.retainAll { page -> stacks.values.any { page in it } }
     }
+
+    /**
+     * The chat's hub group went away: its pages become [moved] (the same session under its new id) where they stand,
+     * else they go. Visited tabs stay composed, so this can come from a hidden tab: the tab on screen stays as it is.
+     */
+    fun groupGone(chat: ChatRoute, moved: ChatRoute?) {
+        fun shows(key: NavKey) = key == chat || key is InteractionRoute && key.chat == chat
+        stacks.values.forEach { stack ->
+            val at = stack.indexOfFirst { shows(it) }.takeIf { it >= 0 } ?: return@forEach
+            val from = stack.firstNotNullOfOrNull { page -> openedFrom[page]?.takeIf { shows(page) } }
+            stack.removeAll { shows(it) }
+            if (moved != null && moved !in stack) {
+                stack.add(at, moved)
+                from?.let { openedFrom[moved] = it }
+            }
+        }
+        openedFrom.keys.retainAll { page -> stacks.values.any { page in it } }
+    }
 }

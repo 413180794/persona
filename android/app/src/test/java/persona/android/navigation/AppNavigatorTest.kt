@@ -31,6 +31,37 @@ class AppNavigatorTest {
     private var selected = AppTab.Agents
     private val navigator = AppNavigator(stacks, { selected }, { selected = it })
 
+    @Test fun aChatWhoseGroupWentAwayLeavesItsOwnTabNotTheOneOnScreen() {
+        // Disconnecting the chat's group from Settings › Hubs (#5714): the chat under Agents still renders there.
+        val chat = ChatRoute("mac~g0a1b2c3d", "s")
+        val hubs = SettingsPageRoute(SettingsPage.Hubs)
+        stacks.getValue(AppTab.Agents).add(chat)
+        stacks.getValue(AppTab.Settings).add(hubs)
+        selected = AppTab.Settings
+        navigator.groupGone(chat, null)
+        assertEquals(AppTab.Settings, selected)
+        assertEquals(listOf(SettingsRoute, hubs), stacks.getValue(AppTab.Settings))
+        assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
+
+        // Merged into another group: the page becomes the session's new id where it stands.
+        val moved = ChatRoute("mac", "s")
+        stacks.getValue(AppTab.Agents).add(InteractionRoute(chat, "request"))
+        navigator.groupGone(chat, moved)
+        assertEquals(AppTab.Settings, selected)
+        assertEquals(listOf(SettingsRoute, hubs), stacks.getValue(AppTab.Settings))
+        assertEquals(listOf(AgentsRoute, moved), stacks.getValue(AppTab.Agents))
+
+        // On screen, opened from the Persona home: back from its new id still returns there.
+        val router = agentsOwnAgentChats()
+        stacks.getValue(AppTab.Agents).remove(moved)
+        selected = AppTab.Persona
+        router.navigate(chat)
+        router.groupGone(chat, moved)
+        assertEquals(listOf(AgentsRoute, moved), stacks.getValue(AppTab.Agents))
+        router.back()
+        assertEquals(AppTab.Persona, selected)
+    }
+
     @Test fun switchingTabsKeepsEachStackAndBackNeverRemovesTheRoot() {
         val chat = ChatRoute("machine", "session")
         navigator.navigate(chat)

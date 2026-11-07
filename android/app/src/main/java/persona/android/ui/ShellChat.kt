@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.flow
 
 @Composable
 internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navigator, feedback: AppFeedback, requestId: String? = null,
-    onSessionClosed: (SessionKey) -> Unit = {}, onOpenCard: (ResolvedRoute) -> Unit) {
+    onSessionClosed: (SessionKey) -> Unit = {}, onOpenCard: (ResolvedRoute) -> Unit, onGroupGone: (ChatRoute, ChatRoute?) -> Unit) {
     // The services of the session's own hub group, which need not be the selected one (docs/android/android.md "Multiple hubs").
     val source = chatWiringSource()
     val activeWiring by remember(source, route.machineId) { source.bindingsFor(SessionKey(route.machineId, route.sessionId)) }
@@ -49,7 +49,7 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
         }
     } }
     if (session.demo == null && wiring == null) {
-        GroupGoneRedirect(route, session, navigator)
+        GroupGoneRedirect(route, session, onGroupGone)
         androidx.compose.material3.CircularProgressIndicator()
         return
     }
@@ -142,10 +142,10 @@ private fun rememberWaitingRequests(session: ShellSession, sessions: List<person
 
 /**
  * The session's hub group went away under the page: it merged into another group (its machines lost their suffix)
- * or was disconnected (docs/android/android.md "Multiple hubs"). The page moves to the same session under its new id, else goes back.
+ * or was disconnected (docs/android/android.md "Multiple hubs"). The page becomes the same session under its new id, else leaves its stack.
  */
 @Composable
-private fun GroupGoneRedirect(route: ChatRoute, session: ShellSession, navigator: Navigator) {
+private fun GroupGoneRedirect(route: ChatRoute, session: ShellSession, onGroupGone: (ChatRoute, ChatRoute?) -> Unit) {
     val namespace = persona.core.contracts.GroupKeys.namespaceOf(route.machineId) ?: return
     val groups by session.groups.groups.collectAsStateWithLifecycle()
     val sessions by session.sessions.sessions.collectAsStateWithLifecycle()
@@ -155,8 +155,7 @@ private fun GroupGoneRedirect(route: ChatRoute, session: ShellSession, navigator
     LaunchedEffect(route, moved?.machineId) {
         // The merged group's list may still be on its way: give the session a moment to show up under its new id.
         if (moved == null) kotlinx.coroutines.delay(2_000)
-        navigator.back()
-        moved?.let { navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = route.kind)) }
+        onGroupGone(route, moved?.let { ChatRoute(it.machineId, it.sessionId, kind = route.kind) })
     }
 }
 

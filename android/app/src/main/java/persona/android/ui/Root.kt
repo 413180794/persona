@@ -535,10 +535,12 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             agentsEntries(navigator, agents, machine, { machine = it },
                 terminalPanes = if (session.demo == null) shell.terminalPanes.available else kotlinx.coroutines.flow.flowOf(false))
             spaceEntries(navigator, agents)
-            chatEntries(navigator) { ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed,
-                onOpenCard = ::openWithCard) }
+            chatEntries(navigator) {
+                ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed, onOpenCard = ::openWithCard,
+                    onGroupGone = navigator::groupGone)
+            }
             entry<InteractionRoute> { ShellChat(it.chat, session, navigator, shell.feedback, it.requestId, navigator::sessionClosed,
-                ::openWithCard) }
+                ::openWithCard, navigator::groupGone) }
             inboxEntries(navigator, session.inbox, connectors = services.connectors.takeUnless { services.demo }, onOpenCard = { card ->
                 openWithCard(ResolvedRoute(AppTab.Agents, AgentsRoute, card = card))
             })
