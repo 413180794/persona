@@ -52,6 +52,27 @@ func TestWorktreeSlug(t *testing.T) {
 	}
 }
 
+// An ASCII branch keeps its slug; a branch with letters the slug drops, or nothing to slug, gets a folder of its own.
+func TestWorktreeDirName(t *testing.T) {
+	if got := WorktreeDirName("feat/2431-worktree"); got != "feat-2431-worktree" {
+		t.Errorf("an ASCII branch is named %q", got)
+	}
+	if got := WorktreeDirName("worktree"); got != "worktree" {
+		t.Errorf("the word worktree alone is named %q", got)
+	}
+	seen := map[string]string{}
+	for _, b := range []string{"修复登录", "fix/登录", "fix/注册", "_"} {
+		got := WorktreeDirName(b)
+		if got == "" || seen[got] != "" {
+			t.Errorf("%q: %q (also %q)", b, got, seen[got])
+		}
+		if !strings.HasPrefix(got, "fix-") && !strings.HasPrefix(got, "worktree-") {
+			t.Errorf("%q: %q, want a fix- or worktree- prefix", b, got)
+		}
+		seen[got] = b
+	}
+}
+
 func TestWorktreeCreateSendsWorkspaceBranchAndPath(t *testing.T) {
 	var got map[string]any
 	sock := fakeServer(t, func(method string, params map[string]any) string {

@@ -77,9 +77,6 @@ func TestAgentStartWorktreeForABranchWithNoASCIIName(t *testing.T) {
 		}
 		paths[branch] = p
 	}
-	if got := worktreeDirName("feat/2431-worktree"); got != "feat-2431-worktree" {
-		t.Fatalf("an ASCII branch is named %q", got)
-	}
 	seen := map[string]string{}
 	for b, p := range paths {
 		if other, dup := seen[p]; dup {

@@ -1,10 +1,13 @@
 package herdr
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode"
 )
 
 // WorktreesDir is the directory herdr puts Git worktree checkouts under (`<dir>/<repo>/<branch-slug>`): the
@@ -108,4 +111,30 @@ func WorktreeSlug(branch string) string {
 		dash = true
 	}
 	return b.String()
+}
+
+// WorktreeDirName is the folder of a branch's checkout in a worktrees directory: its slug, as the dialog names it, plus
+// a short hash of the whole name (four bytes, eight hex digits) when the slug drops non-ASCII letters or digits or is
+// empty. Otherwise "修复登录" would be "" (the checkouts directory itself) and "fix/登录", "fix/注册" both "fix"
+// (#5775). Branches that differ only in case share a folder; that is a pre-existing constraint of WorktreeSlug.
+func WorktreeDirName(branch string) string {
+	slug := WorktreeSlug(branch)
+	if slug != "" && !hasNonASCIIWord(branch) {
+		return slug
+	}
+	sum := sha256.Sum256([]byte(branch))
+	if slug == "" {
+		slug = "worktree"
+	}
+	return slug + "-" + hex.EncodeToString(sum[:4])
+}
+
+// hasNonASCIIWord: s has a letter or digit the slug drops.
+func hasNonASCIIWord(s string) bool {
+	for _, r := range s {
+		if r > unicode.MaxASCII && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return true
+		}
+	}
+	return false
 }

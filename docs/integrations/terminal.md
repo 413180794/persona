@@ -696,7 +696,7 @@ Same shape as Moshi `worktree/prepare` + `worktree/create`.
 - **iOS / Mac** (#3099): space ⋯ in Agents list has New Worktree…, same two routes/form rules (`WorktreeForm`); success opens New Chat prefilled with new workspace instead of terminal (`docs/apple/ios.md`, "New worktree…").
 - **Tests**: `node/worktree_test.go` (real Git + fake herdr: prepare repo name/branch/config directory/linked worktree/detached HEAD/nonrepo; herdr creation with new/existing branches; rejected paths/branches never touch herdr; Git errors; Git fallback/repeated checkout; `panes.list` includes `worktree`),
   `node/hostorca_worktree_test.go` (real Git + a fake Orca whose `worktree.create` behaves like Orca 1.4: Orca's default folder; a new branch from the source workspace's branch, under it, not activated, to the terminal Orca opened; an existing branch without a base; a detached HEAD's commit; a branch in use and an existing empty folder refused without asking Orca; Orca's own folder taken as it is; a renamed branch is an error; a workspace Orca does not list),
-  `herdr/worktrees_test.go` (config parsing, slug, socket args, CLI fallback), `hub/panes_test.go` (permissions, named fields only), `web/src/lib/worktree.test.ts`, `node-actions.test.ts`, `node-palette.test.ts`, `views/NewWorktree.test.tsx`.
+  `herdr/worktrees_test.go` (config parsing, slug, folder name, socket args, CLI fallback), `hub/panes_test.go` (permissions, named fields only), `web/src/lib/worktree.test.ts`, `node-actions.test.ts`, `node-palette.test.ts`, `views/NewWorktree.test.tsx`.
 
 ### A new agent in a worktree (#6115)
 
@@ -704,7 +704,7 @@ A new agent can start in a Git worktree of its own, so agents on the same reposi
 
 - `worktree/add` (node `worktree.add`, `node/agentworktree.go`) makes one from the agent's folder:
   - **Branch:** `persona/<the agent's name as a slug>`; `-2`, `-3`… while the branch or its folder is taken; `persona/agent` for a name with no ASCII letters or digits.
-  - **Path:** under the same checkouts directory as section 23 (`worktree/prepare`'s `path`).
+  - **Path:** `<checkouts directory of section 23>/<herdr.WorktreeDirName(branch)>`: the slug, plus a short hash of the whole name when the slug drops letters (a Chinese name) or is empty, as `agent_start` does (#5775).
   - **How:** a plain `git worktree add -b` from the repository's HEAD. It opens no workspace; the agent's start does.
   - **A branch given** is used as it is: an existing one is checked out, a new one is made.
 - `worktree/status` says whether a folder is a linked worktree and whether it is one of Persona's: it lies under that checkouts directory, so no state is kept. It also reports what removing it would lose: changed files (`dirty`), and commits not on the branch the main checkout is on (`unmerged`, `main_branch`). For any folder in a repository it also gives that checkouts directory (`checkouts`), so New agent can show where the worktree will go.

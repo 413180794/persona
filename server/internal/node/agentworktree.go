@@ -63,7 +63,7 @@ func (n *Node) worktreeAdd(ctx context.Context, kind, cwd, branch, nameHint stri
 		}
 	}
 	for _, b := range candidates {
-		dest := filepath.Join(base, herdr.WorktreeSlug(b))
+		dest := filepath.Join(base, herdr.WorktreeDirName(b))
 		exists := branchExists(ctx, repo.root, b)
 		if len(candidates) > 1 && (exists || pathTaken(dest)) {
 			continue // the agent's own name is taken: the next
