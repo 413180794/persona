@@ -2630,8 +2630,11 @@ func (n *Node) dirs(path string) (*proto.DirList, error) {
 	return res, nil
 }
 
-func (n *Node) recentDirs() []proto.RecentDir {
+// dirsByUse is every working directory a session on this node is known to have run in, with when it was last used
+// (its newest transcript); a running agent's without a transcript yet has the zero time. Nothing is read from disk.
+func (n *Node) dirsByUse() map[string]time.Time {
 	n.mu.Lock()
+	defer n.mu.Unlock()
 	last := map[string]time.Time{}
 	for _, m := range n.metas {
 		if m.cwd != "" && m.mtime.After(last[m.cwd]) {
@@ -2643,7 +2646,11 @@ func (n *Node) recentDirs() []proto.RecentDir {
 			last[a.Cwd] = time.Time{} // running but no transcript yet: listed, oldest
 		}
 	}
-	n.mu.Unlock()
+	return last
+}
+
+func (n *Node) recentDirs() []proto.RecentDir {
+	last := n.dirsByUse()
 	var out []proto.RecentDir
 	for p, t := range last {
 		if identity.IsAssistantDir(p) {

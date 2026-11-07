@@ -777,7 +777,9 @@ func (s *Service) claudeVersion(ctx context.Context, machine string, wait time.D
 	return b.claude[machine], true
 }
 
-// askClaudeVersion asks machine's node for its self-check and keeps what it says of Claude Code.
+// askClaudeVersion asks machine's node for its self-check and keeps what it says of Claude Code. The path-access check
+// is left out ("preflight": false): it is not needed here, takes up to about 20 s, and would read the user's folders
+// on every ask (older nodes ignore the parameter and have no such check).
 func (s *Service) askClaudeVersion(machine string, done chan struct{}) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -789,7 +791,7 @@ func (s *Service) askClaudeVersion(machine string, done chan struct{}) {
 		} `json:"checks"`
 	}
 	seen := claudeSeen{at: time.Now()}
-	if err := s.call(ctx, machine, deviceNodeDoctor, map[string]any{}, &rep); err != nil {
+	if err := s.call(ctx, machine, deviceNodeDoctor, map[string]any{"preflight": false}, &rep); err != nil {
 		s.logf("assistant: readiness: node.doctor on %s: %v", machine, err) // an old node has none: unknown
 	} else {
 		for _, c := range rep.Checks {

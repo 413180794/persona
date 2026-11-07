@@ -294,6 +294,10 @@ func TestNodeServiceMac(t *testing.T) {
 	if !strings.Contains(body, "<string>"+f.nodeBin()+"</string><string>node</string><string>--attach</string>") {
 		t.Fatalf("plist:\n%s", body)
 	}
+	// Not throttled like a background job (#5944): `personad node doctor` reports a plist without it.
+	if !strings.Contains(body, "\n  <key>ProcessType</key><string>Interactive</string>\n") {
+		t.Fatalf("no ProcessType Interactive:\n%s", body)
+	}
 	if runtime.GOOS == "darwin" {
 		if out, err := exec.Command("plutil", "-lint", plist).CombinedOutput(); err != nil {
 			t.Fatalf("plutil: %s", out)

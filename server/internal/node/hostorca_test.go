@@ -29,6 +29,15 @@ func TestMain(m *testing.M) {
 	if mode := os.Getenv("NODE_TEST_PLUGIN"); mode != "" { // the test binary as a plugin's program (plugins_test.go)
 		runTestPlugin(mode)
 	}
+	if os.Getenv("NODE_TEST_PREFLIGHT") == "1" { // the test binary as the preflight's child (preflight_test.go)
+		preflightChild(os.Args[1:], os.Stdout)
+		os.Exit(0)
+	}
+	// Nor `node doctor` as the preflight's child: the test binary again, in that mode.
+	preflightChildCmd = func(string) ([]string, []string) {
+		self, _ := os.Executable()
+		return []string{self}, []string{"NODE_TEST_PREFLIGHT=1"}
+	}
 	// No test may reach the user's running Orca: the default metadata path points nowhere.
 	os.Setenv("ORCA_USER_DATA_PATH", "/tmp/persona-test-no-orca")
 	// Nor the user's botmux: a node registers no botmux host unless a test gives it one.

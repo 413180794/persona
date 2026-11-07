@@ -172,6 +172,8 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		resp = map[string]any{"ok": true}
 	case "ping": // personad node doctor: a round trip that changes nothing
 		resp = map[string]any{"ok": true}
+	case "preflight": // personad node doctor's path-access check, read with this node's permissions (preflight.go)
+		resp = n.preflight(ctx)
 	case "ask": // personad ask (scriptcli.go)
 		resp = n.handleAsk(ctx, req)
 	case "notify": // personad notify (scriptcli.go)

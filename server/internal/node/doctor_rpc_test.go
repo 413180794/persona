@@ -147,4 +147,47 @@ func TestDoctorRPCCheckNamesAreWhatTheWebGroups(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("checks = %v\nwant     %v", got, want)
 	}
+	// On a Mac, and wherever the preflight runs, two more (#5944): the web shows them under "Other checks" when they
+	// are not fine, and offers no Fix for them (their state is "").
+	e.opts.LaunchAgent, e.opts.LaunchdTarget = filepath.Join(e.n.home, "none.plist"), "gui/501/"+NodeLaunchdLabel
+	e.opts.Preflight = func(context.Context) DoctorCheck {
+		return DoctorCheck{Name: pathAccessCheck, Status: DoctorWarn, Detail: "x"}
+	}
+	rep = callDoctor(t, e, "node.doctor", `{}`)
+	got = got[:0]
+	for _, c := range rep.Checks {
+		got = append(got, c.Name)
+		if (c.Name == launchdCheck || c.Name == pathAccessCheck) && c.State != "" {
+			t.Errorf("%s: state %q", c.Name, c.State)
+		}
+	}
+	if want = append(want, launchdCheck, pathAccessCheck); !slices.Equal(got, want) {
+		t.Errorf("checks = %v\nwant     %v", got, want)
+	}
+}
+
+// {"preflight": false} (the assistant's readiness, which only wants Claude Code's version) leaves the path-access
+// check out: nothing read, nothing waited for. Without it, or true, the check runs.
+func TestDoctorRPCWithoutThePreflight(t *testing.T) {
+	e := newDoctorEnv(t)
+	e.healthy(t)
+	runs := 0
+	e.opts.Preflight = func(context.Context) DoctorCheck {
+		runs++
+		return DoctorCheck{Name: pathAccessCheck, Status: DoctorOK, Detail: "x"}
+	}
+	has := func(rep DoctorReport) bool {
+		return slices.ContainsFunc(rep.Checks, func(c DoctorCheck) bool { return c.Name == pathAccessCheck })
+	}
+	if rep := callDoctor(t, e, "node.doctor", `{"preflight":false}`); has(rep) || runs != 0 {
+		t.Errorf("runs %d checks %+v", runs, rep.Checks)
+	}
+	for _, params := range []string{`{}`, `{"preflight":true}`} {
+		if rep := callDoctor(t, e, "node.doctor", params); !has(rep) {
+			t.Errorf("%s: no %s", params, pathAccessCheck)
+		}
+	}
+	if runs != 2 {
+		t.Errorf("runs %d", runs)
+	}
 }

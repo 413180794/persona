@@ -46,6 +46,8 @@ class PersonaServiceEnvironmentTests(unittest.TestCase):
                         self.assertEqual(configuration['ProgramArguments'][0], str(binary))
                         self.assertEqual(configuration['EnvironmentVariables'], {'PERSONA_HOME': str(state)})
                         self.assertEqual(configuration['StandardErrorPath'], str(state / 'node-attach.log'))
+                        # Not throttled like a background job (#5944).
+                        self.assertEqual(configuration['ProcessType'], 'Interactive')
                     else:
                         configuration = (home / '.config/systemd/user/personad-node.service').read_text()
                         self.assertIn('Environment="PERSONA_HOME=' + str(state).replace('%', '%%') + '"', configuration)

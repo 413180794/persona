@@ -63,7 +63,9 @@ WantedBy=default.target
 `
 }
 
-// nodePlist is the resident node's launchd agent: scripts/deploy/node-launchd.sh's.
+// nodePlist is the resident node's launchd agent: scripts/deploy/node-launchd.sh's. ProcessType Interactive: without it
+// launchd throttles the node and the Claude Code it starts like a background job, and claude may not start in time
+// (#5944; `personad node doctor --fix` adds it to an older plist).
 func nodePlist(bin, logPath string) string {
 	x := html.EscapeString
 	return `<?xml version="1.0" encoding="UTF-8"?>
@@ -77,6 +79,7 @@ func nodePlist(bin, logPath string) string {
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
+  <key>ProcessType</key><string>Interactive</string>
   <key>StandardErrorPath</key><string>` + x(logPath) + `</string>
 </dict></plist>
 `

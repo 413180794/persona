@@ -35,8 +35,10 @@ const NodeUsage = `  personad node --stdio     run the node protocol on stdin/st
                            print this machine's tailcat address again
   personad node doctor [--json] [--fix]
                            read-only check of this machine's node: node.sock / runtime.sock answer, the generated hook,
-                           MCP and plugin files match this binary, the programs they run exist, claude's version;
-                           --fix rewrites Persona's own generated files only (docs/claude-integration.md「node doctor」)
+                           MCP and plugin files match this binary, the programs they run exist, claude's version, the
+                           Mac LaunchAgent's ProcessType, and whether what claude reads at start can be read;
+                           --fix rewrites Persona's own generated files, and on a Mac writes ProcessType=Interactive
+                           into the LaunchAgent and reloads it (docs/claude-integration.md「node doctor」)
   personad node reset-uid   give this computer a new machine uid (~/.persona/machine-uid): for a virtual machine cloned
                            with another's home directory, which hubs would take for that one (docs/mesh.md)`
 

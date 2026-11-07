@@ -131,6 +131,21 @@ func TestReadinessFullButUnverified(t *testing.T) {
 	if len(f.checked) != 0 {
 		t.Fatalf("checked without a probe: %v", f.checked)
 	}
+	// The self-check is asked for Claude Code's version only: without the path-access reads (#5944).
+	f.mu.Lock()
+	asked := 0
+	for _, c := range f.calls {
+		if c.Method == deviceNodeDoctor {
+			asked++
+			if string(c.Params) != `{"preflight":false}` {
+				t.Errorf("node.doctor params %s", c.Params)
+			}
+		}
+	}
+	f.mu.Unlock()
+	if asked == 0 {
+		t.Error("node.doctor not asked")
+	}
 	if len(r.Suggestions) < 3 || r.Suggestions[2].ID != "today" || len(r.Suggestions[2].Needs) != 1 || r.Suggestions[2].Prompt == "" {
 		t.Fatalf("suggestions = %+v", r.Suggestions)
 	}

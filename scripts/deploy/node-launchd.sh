@@ -84,6 +84,9 @@ fi
 
 LABEL=com.persona.node
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+# ProcessType Interactive: without it launchd throttles the node and the claude it starts like a background job, and
+# claude may not start in time (#5944). It grants no privacy (TCC) permission. `personad node doctor --fix` adds it to
+# a plist written before.
 DOMAIN="gui/$(id -u)"
 case "${1:-install}" in
   install)
@@ -102,6 +105,7 @@ case "${1:-install}" in
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
+  <key>ProcessType</key><string>Interactive</string>
   <key>StandardErrorPath</key><string>$(xml_escape "$ROOT/node-attach.log")</string>
 </dict></plist>
 PL

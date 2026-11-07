@@ -1,0 +1,490 @@
+package node
+
+import (
+	"bytes"
+	"context"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// The resident node on a Mac is a launchd agent (scripts/deploy/node-launchd.sh, persona-link's nodesvc.go). A plist
+// without ProcessType gets launchd's default limits ("spawn type = daemon" in `launchctl print`): the node and the
+// Claude Code it starts are throttled like a background job. One such node got 15.45 CPU seconds in 139 s (scheduling
+// priority 4 instead of 31), and Claude did not start in time. ProcessType=Interactive lifts the limits; it grants no
+// privacy (TCC) permission. New installs write it. An existing plist is not rewritten behind the user's back:
+// `node doctor` reports it, and `node doctor --fix` writes it and loads the agent again (#5944, docs/server.md
+// "Persistent node").
+
+// NodeLaunchdLabel is the resident node's launchd agent, as both installers name it (and write it on a new install).
+const NodeLaunchdLabel = "com.persona.node"
+
+// legacyNodeLaunchdLabel is the name the installers gave the agent before the rename (#277). Both leave an agent that
+// is already installed as it is, so a Mac set up before then keeps running its node under this label.
+const legacyNodeLaunchdLabel = "com.jarvis.node"
+
+// nodeLaunchdLabels are the labels the resident node's agent can have, today's first.
+var nodeLaunchdLabels = []string{NodeLaunchdLabel, legacyNodeLaunchdLabel}
+
+// isNodeLaunchdLabel says whether name is one of the resident node's labels. launchd sets XPC_SERVICE_NAME to the
+// label of the job it started, and the node's children inherit it.
+func isNodeLaunchdLabel(name string) bool { return slices.Contains(nodeLaunchdLabels, name) }
+
+const (
+	launchdCheck = "launchd-process-type"
+	// launchdReloaded is the name --fix reports (DoctorReport.Fixed) when it loaded the agent again; launchdCheck there
+	// means it rewrote the plist.
+	launchdReloaded    = "launchd-reload"
+	processInteractive = "Interactive"
+)
+
+// NodeLaunchAgentPath is where the resident node's launchd agent called label is described.
+func NodeLaunchAgentPath(home, label string) string {
+	return filepath.Join(home, "Library", "LaunchAgents", label+".plist")
+}
+
+// launchdDomain is this user's login session as launchctl names it; an agent there is domain + "/" + label.
+func launchdDomain() string { return "gui/" + strconv.Itoa(os.Getuid()) }
+
+// pickNodeLaunchdLabel says which of the resident node's agents the doctor looks at, and --fix rewrites and reloads:
+// the one whose plist is in home's LaunchAgents; today's label when there is none.
+//
+// With both there (an agent from before the rename next to one installed again under today's label), it is the one
+// launchd has loaded. That is the node that is running: the check is about how launchd runs it (spawn type), and it
+// is the one --fix has to reload. The other plist is a file launchd is not running now; loading it would start a
+// second node next to the running one. self is this process's XPC_SERVICE_NAME: under one of the agents, that one is
+// loaded, without asking launchctl. Both loaded (two nodes), neither loaded, or nobody to ask (launchctl nil):
+// today's, which is what a new install writes.
+func pickNodeLaunchdLabel(ctx context.Context, home, domain, self string,
+	launchctl func(context.Context, ...string) (string, error)) string {
+	var present []string
+	for _, label := range nodeLaunchdLabels {
+		// Missing means what it means to inspectLaunchAgent; a plist it cannot look at is there, and reported so.
+		if _, err := os.Stat(NodeLaunchAgentPath(home, label)); !errors.Is(err, fs.ErrNotExist) {
+			present = append(present, label)
+		}
+	}
+	switch {
+	case len(present) == 1:
+		return present[0]
+	case len(present) == 0:
+		return NodeLaunchdLabel
+	case slices.Contains(present, self):
+		return self
+	}
+	if launchctl != nil {
+		var loaded []string
+		for _, label := range present {
+			if _, err := launchctl(ctx, "print", domain+"/"+label); err == nil {
+				loaded = append(loaded, label)
+			}
+		}
+		if len(loaded) == 1 {
+			return loaded[0]
+		}
+	}
+	return NodeLaunchdLabel
+}
+
+// runLaunchctl is DoctorOptions.Launchctl on a Mac.
+func runLaunchctl(ctx context.Context, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/bin/launchctl", args...).CombinedOutput()
+	return string(out), err
+}
+
+// launchAgent is what the doctor found about the agent.
+type launchAgent struct {
+	exists      bool
+	readErr     error
+	plist       []byte
+	parseErr    error
+	processType string // "" when the plist has none
+	logPath     string // the plist's StandardErrorPath: where a node that does not come back says why
+	loaded      bool   // launchctl print knows it
+	spawnType   string // launchctl print's "spawn type" (daemon, interactive, background, adaptive); "" when not asked
+}
+
+var spawnTypeLine = regexp.MustCompile(`(?m)^\s*spawn type = ([A-Za-z]+)`)
+
+func inspectLaunchAgent(ctx context.Context, opts DoctorOptions) launchAgent {
+	var a launchAgent
+	b, err := os.ReadFile(opts.LaunchAgent)
+	if errors.Is(err, fs.ErrNotExist) {
+		return a
+	}
+	a.exists = true
+	if err != nil {
+		a.readErr = err
+		return a
+	}
+	a.plist = b
+	if entries, _, err := plistTop(b); err != nil {
+		a.parseErr = err
+	} else {
+		if e, ok := entries["ProcessType"]; ok {
+			a.processType = strings.TrimSpace(e.text)
+		}
+		if e := entries["StandardErrorPath"]; e.elem == "string" {
+			a.logPath = strings.TrimSpace(e.text)
+		}
+	}
+	if opts.Launchctl != nil && opts.LaunchdTarget != "" {
+		if out, err := opts.Launchctl(ctx, "print", opts.LaunchdTarget); err == nil {
+			a.loaded = true
+			if m := spawnTypeLine.FindStringSubmatch(out); m != nil {
+				a.spawnType = m[1]
+			}
+		}
+	}
+	return a
+}
+
+// staleLoad: launchd runs the agent from a plist read before ProcessType=Interactive was written into it.
+func (a launchAgent) staleLoad() bool {
+	return a.loaded && a.spawnType != "" && a.spawnType != "interactive"
+}
+
+const (
+	launchdFixHint = "在这台 Mac 上运行 personad node doctor --fix：写上 ProcessType=Interactive 并重新加载（常驻 node 会重启，进行中的助手对话会中断）"
+	// launchdFixHintInside is the hint inside the node (the web page's self-check, a claude the node started): the
+	// same command, from a terminal of the Mac's own.
+	launchdFixHintInside = "在这台 Mac 的终端里运行 personad node doctor --fix（在常驻 node 启动的进程里运行不行：重新加载会把 node 自己停掉）：" +
+		"写上 ProcessType=Interactive 并重新加载（常驻 node 会重启，进行中的助手对话会中断）"
+)
+
+// checkLaunchAgent says what a is. Inside the node --fix leaves the agent alone (RunDoctor), so the hint sends the
+// user to a terminal, and a --fix there says it did nothing to it.
+func checkLaunchAgent(a launchAgent, opts DoctorOptions) DoctorCheck {
+	c := checkLaunchAgentFile(a, opts.LaunchAgent)
+	if opts.InsideNode && c.Hint == launchdFixHint {
+		c.Hint = launchdFixHintInside
+		if opts.Fix {
+			c.Detail += "；这次修复没动它：在常驻 node 启动的进程里重新加载，会把 node 连同这次检查一起停掉"
+		}
+	}
+	return c
+}
+
+func checkLaunchAgentFile(a launchAgent, path string) DoctorCheck {
+	c := DoctorCheck{Name: launchdCheck, Items: []string{}}
+	switch {
+	case !a.exists:
+		c.Status, c.Detail = DoctorOK, "没有常驻 node 的 LaunchAgent（node 经 ssh 启动，或者没装）"
+		return c
+	case a.readErr != nil:
+		c.Status, c.Detail = DoctorWarn, "读不了常驻 node 的 LaunchAgent（"+shorten(a.readErr.Error(), 80)+"）"
+	case errors.Is(a.parseErr, errBinaryPlist):
+		c.Status, c.Detail = DoctorWarn, "常驻 node 的 LaunchAgent 是二进制格式的 plist，看不了"
+		c.Hint = "先运行 plutil -convert xml1 " + shellQuote(path) + "，再检查一次"
+	case a.parseErr != nil:
+		c.Status, c.Detail = DoctorWarn, "常驻 node 的 LaunchAgent 不是能读懂的 plist（"+shorten(a.parseErr.Error(), 80)+"）"
+		c.Hint = "重新安装常驻 node 的服务：scripts/deploy/node-launchd.sh install"
+	case a.processType == "":
+		c.Status = DoctorWarn
+		c.Detail = "常驻 node 的 LaunchAgent 没写 ProcessType：launchd 按后台任务限制 node 和它启动的 Claude 的 CPU 和 IO，Claude 可能来不及启动"
+		c.Hint = launchdFixHint
+	case a.processType != processInteractive:
+		c.Status = DoctorWarn
+		c.Detail = "常驻 node 的 LaunchAgent 的 ProcessType 是 " + a.processType + "，不是 Interactive：launchd 会限制 node 和它启动的 Claude 的 CPU 和 IO"
+		c.Hint = launchdFixHint
+	case a.staleLoad():
+		c.Status = DoctorWarn
+		c.Detail = "LaunchAgent 写了 ProcessType=Interactive，但 launchd 还按加载时的旧设置运行常驻 node（spawn type = " + a.spawnType + "）"
+		c.Hint = launchdFixHint
+	default:
+		c.Status, c.Detail = DoctorOK, "ProcessType=Interactive"
+		if a.loaded && a.spawnType != "" {
+			c.Detail += "，launchd 按 " + a.spawnType + " 运行"
+		}
+		return c
+	}
+	c.Items = []string{path}
+	return c
+}
+
+// launchdRetries and launchdRetryEvery: right after bootout, launchd may still be taking the old job down and refuse
+// the bootstrap (5: Input/output error) for a moment.
+const (
+	launchdRetries    = 10
+	launchdRetryEvery = 300 * time.Millisecond
+)
+
+// fixLaunchAgent writes ProcessType=Interactive into the agent's plist (nothing else in it changes) and, when launchd
+// has the agent loaded, loads it again so that the running node gets it. An agent that is not loaded stays unloaded:
+// launchd reads the new plist at the next login. wrote and reloaded say what it did; a reload that failed is err
+// (wrote stays true when the plist was rewritten before it).
+func fixLaunchAgent(ctx context.Context, opts DoctorOptions, a launchAgent) (wrote, reloaded bool, err error) {
+	if !a.exists || a.readErr != nil || a.parseErr != nil {
+		return false, false, nil
+	}
+	rewrite := a.processType != processInteractive
+	reload := a.loaded && (rewrite || a.staleLoad())
+	if rewrite {
+		b, err := withProcessType(a.plist)
+		if err != nil {
+			return false, false, fmt.Errorf("改写 %s 失败：%w", opts.LaunchAgent, err)
+		}
+		if err := replaceFile(opts.LaunchAgent, b); err != nil {
+			return false, false, fmt.Errorf("改写 %s 失败：%w", opts.LaunchAgent, err)
+		}
+		wrote = true
+	}
+	if reload && opts.Launchctl != nil {
+		if err := reloadLaunchAgent(ctx, opts); err != nil {
+			return wrote, false, err
+		}
+		reloaded = true
+	}
+	return wrote, reloaded, nil
+}
+
+// nodeRestartWait is how long --fix waits, after loading the agent again, for the restarted node to answer: launchd
+// returns from bootstrap at once, a node publishes its sockets about a second after it starts, and launchd starts one
+// that exited at once again after its ThrottleInterval (10 s in both installers).
+const nodeRestartWait = 15 * time.Second
+
+// restartSockets are the checks of what the resident node serves, which a reload takes away until the new node is up.
+var restartSockets = map[string]func(context.Context, DoctorOptions) DoctorCheck{
+	"node.sock":    func(ctx context.Context, o DoctorOptions) DoctorCheck { return checkNodeSocket(ctx, o.NodeSock) },
+	"runtime.sock": func(ctx context.Context, o DoctorOptions) DoctorCheck { return checkRuntimeSocket(ctx, o.RuntimeSock) },
+}
+
+// waitForRestart waits, at most opts.RestartWait (nodeRestartWait when 0), for the sockets that answered before the
+// reload (in before) to answer again, so that the report after --fix is about the restarted node rather than the gap
+// before it. It returns the ones that still do not.
+func waitForRestart(ctx context.Context, opts DoctorOptions, before DoctorReport) []string {
+	var want []string
+	for _, c := range before.Checks {
+		if restartSockets[c.Name] != nil && c.Status == DoctorOK {
+			want = append(want, c.Name)
+		}
+	}
+	wait := opts.RestartWait
+	if wait <= 0 {
+		wait = nodeRestartWait
+	}
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	for {
+		want = slices.DeleteFunc(want, func(name string) bool { return restartSockets[name](ctx, opts).Status == DoctorOK })
+		if len(want) == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return want
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// notBackYet marks the checks of the sockets the reloaded node did not bring back in time (waitForRestart): still
+// failing, but said to be right after a restart, with where the node says why.
+func notBackYet(rep *DoctorReport, names []string, wait time.Duration, logPath string) {
+	if wait <= 0 {
+		wait = nodeRestartWait
+	}
+	for i := range rep.Checks {
+		c := &rep.Checks[i]
+		if c.Status == DoctorOK || !slices.Contains(names, c.Name) {
+			continue
+		}
+		c.Detail += fmt.Sprintf("（常驻 node 刚重新加载过，%s 内还没有应答）", wait)
+		c.Hint = "等一会儿再运行 personad node doctor；一直这样就是常驻 node 没起来"
+		if logPath != "" {
+			c.Hint += "，原因看它的日志 " + logPath
+		}
+	}
+}
+
+// reloadLaunchAgent takes the agent out of launchd and loads it again from its plist: kickstart would restart it
+// from the definition launchd already has.
+func reloadLaunchAgent(ctx context.Context, opts DoctorOptions) error {
+	target := opts.LaunchdTarget
+	domain := target[:max(strings.LastIndex(target, "/"), 0)]
+	bootOut, bootErr := opts.Launchctl(ctx, "bootout", target)
+	var last string
+	for i := 1; ; i++ {
+		out, err := opts.Launchctl(ctx, "bootstrap", domain, opts.LaunchAgent)
+		if err == nil {
+			return nil
+		}
+		last = firstLine(out)
+		if last == "" {
+			last = err.Error()
+		}
+		if i == launchdRetries || ctx.Err() != nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(launchdRetryEvery):
+		}
+	}
+	if bootErr != nil {
+		if s := firstLine(bootOut); s != "" {
+			last += "；bootout：" + s
+		}
+	}
+	return fmt.Errorf("launchctl bootstrap 失败（%s）：常驻 node 现在可能没在运行，运行 launchctl bootstrap %s %s 把它加载回来",
+		last, domain, shellQuote(opts.LaunchAgent))
+}
+
+// replaceFile writes b over path in one step, keeping its permissions; through a symlink, the file it points to.
+func replaceFile(path string, b []byte) error {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	mode := fs.FileMode(0o644)
+	if st, err := os.Stat(path); err == nil {
+		mode = st.Mode().Perm()
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	_, err = f.Write(b)
+	if err == nil {
+		err = f.Chmod(mode)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
+		os.Remove(tmp)
+	}
+	return err
+}
+
+var errBinaryPlist = errors.New("binary property list")
+
+// plistEntry is one key of an XML property list's top-level dictionary: the element of its value ("string", "true",
+// "dict"...), the text of a simple value, and where the value is in the file.
+type plistEntry struct {
+	elem, text string
+	start, end int64
+}
+
+// plistTop reads an XML property list's top-level dictionary, and where it closes (the offset of its </dict>).
+func plistTop(b []byte) (map[string]plistEntry, int64, error) {
+	if bytes.HasPrefix(b, []byte("bplist")) {
+		return nil, 0, errBinaryPlist
+	}
+	d := xml.NewDecoder(bytes.NewReader(b))
+	for _, name := range []string{"plist", "dict"} {
+		if err := plistEnter(d, name); err != nil {
+			return nil, 0, err
+		}
+	}
+	entries := map[string]plistEntry{}
+	key, haveKey := "", false
+	for {
+		at := d.InputOffset()
+		tok, err := d.Token()
+		if err != nil {
+			return nil, 0, err
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Local == "key" {
+				if err := d.DecodeElement(&key, &t); err != nil {
+					return nil, 0, err
+				}
+				haveKey = true
+				continue
+			}
+			if !haveKey {
+				return nil, 0, fmt.Errorf("<%s> without a key", t.Name.Local)
+			}
+			e := plistEntry{elem: t.Name.Local, start: at}
+			switch t.Name.Local {
+			case "dict", "array":
+				err = d.Skip()
+			default:
+				err = d.DecodeElement(&e.text, &t)
+			}
+			if err != nil {
+				return nil, 0, err
+			}
+			e.end = d.InputOffset()
+			entries[key] = e
+			key, haveKey = "", false
+		case xml.EndElement:
+			if t.Name.Local != "dict" || at == d.InputOffset() { // <dict/> closes where it opens: no room for a key
+				return nil, 0, errors.New("empty top-level dictionary")
+			}
+			return entries, at, nil
+		}
+	}
+}
+
+// plistEnter reads up to and including the start of element name, the next element.
+func plistEnter(d *xml.Decoder, name string) error {
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return err
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Local != name {
+				return fmt.Errorf("<%s> where <%s> should be", t.Name.Local, name)
+			}
+			return nil
+		case xml.EndElement:
+			return fmt.Errorf("</%s> where <%s> should be", t.Name.Local, name)
+		}
+	}
+}
+
+// withProcessType is the plist b with ProcessType set to Interactive: its value replaced when there is one, a line
+// added at the end of the dictionary otherwise. Everything else stays byte for byte.
+func withProcessType(b []byte) ([]byte, error) {
+	entries, closeAt, err := plistTop(b)
+	if err != nil {
+		return nil, err
+	}
+	const value = "<string>" + processInteractive + "</string>"
+	var out []byte
+	if e, ok := entries["ProcessType"]; ok {
+		out = append(append(append(out, b[:e.start]...), value...), b[e.end:]...)
+	} else {
+		line := "  <key>ProcessType</key>" + value + "\n"
+		if closeAt > 0 && b[closeAt-1] != '\n' {
+			line = "\n" + line
+		}
+		out = append(append(append(out, b[:closeAt]...), line...), b[closeAt:]...)
+	}
+	// What was written reads back as the same dictionary but for ProcessType.
+	got, _, err := plistTop(out)
+	if err != nil {
+		return nil, err
+	}
+	if got["ProcessType"].elem != "string" || got["ProcessType"].text != processInteractive {
+		return nil, errors.New("ProcessType did not take")
+	}
+	for k, e := range entries {
+		if g, ok := got[k]; k != "ProcessType" && (!ok || g.elem != e.elem || g.text != e.text) {
+			return nil, fmt.Errorf("%s changed", k)
+		}
+	}
+	if len(got) != len(entries) && !(len(got) == len(entries)+1 && entries["ProcessType"].elem == "") {
+		return nil, errors.New("keys changed")
+	}
+	return out, nil
+}
