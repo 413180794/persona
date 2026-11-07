@@ -55,6 +55,10 @@ type fakeRelease struct {
 func newFakeRelease(t *testing.T) *fakeRelease {
 	r := &fakeRelease{files: map[string][]byte{}}
 	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet && req.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, req)
+			return
+		}
 		r.mu.Lock()
 		r.asked = append(r.asked, req.URL.Path)
 		b, ok := r.files[req.URL.Path]
@@ -73,6 +77,20 @@ func newFakeRelease(t *testing.T) *fakeRelease {
 	}))
 	t.Cleanup(r.srv.Close)
 	return r
+}
+
+// A node's port probe of the release site (GET /, node/ports.go) is not counted as a request the hub made: tests check
+// that the hub asked the site for nothing.
+func TestFakeReleaseIgnoresPortProbes(t *testing.T) {
+	site := newFakeRelease(t)
+	res, err := http.Get(site.srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound || len(site.requests()) != 0 {
+		t.Fatalf("a port probe: %d, requests %v", res.StatusCode, site.requests())
+	}
 }
 
 func (r *fakeRelease) requests() []string {
