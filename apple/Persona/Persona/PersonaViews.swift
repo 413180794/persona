@@ -26,8 +26,7 @@ struct PersonaAvatar: View {
             } else {
                 // The built-in in the accent it would have chosen (it brings no colors: under Match Avatar, the style's own),
                 // also while another persona is on (Settings' card).
-                AssistantAvatar(size: size, design: p.avatarDesign, state: working ? .working : .idle,
-                             tint: p.isBuiltin ? model.builtinAccent : nil)
+                AssistantAvatar(size: size, design: p.avatarDesign, state: working ? .working : .idle)
             }
         }
         .frame(width: size, height: size)
@@ -52,8 +51,7 @@ struct PersonaDot: View {
             if !p.isBuiltin, let frames = model.personas.frames(p, state) {
                 PersonaFramesView(frames: frames, animating: !still)
             } else {
-                AssistantAvatar(size: size, design: p.avatarDesign, state: state, still: still,
-                             tint: p.isBuiltin ? model.builtinAccent : nil)
+                AssistantAvatar(size: size, design: p.avatarDesign, state: state, still: still)
             }
         }
         .frame(width: size, height: size)

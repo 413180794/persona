@@ -1,10 +1,6 @@
 import XCTest
 
-/// The home screen icon is the Avatar's (docs/persona.md「App 图标」, #3203): choosing Visor in Settings › Appearance › Avatar really
-/// changes the home screen icon, through the system's alert; a launch on another Avatar (the old App Icon setting left
-/// the icon apart from it) brings the icon back to that Avatar's. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB).
-/// The icon on now is the value of the page's note (`persona-icon-note`). Screenshots go to PERSONA_ICON_SHOTS when set:
-/// the page and the home screen after each switch.
+/// Both remaining personas use the default icon. Against mock_hub.py with MOCK_PERSONAS=builtin.
 final class AppIconTests: XCTestCase {
     private var hub: String!
 
@@ -66,16 +62,13 @@ final class AppIconTests: XCTestCase {
         acceptIconAlert() // a simulator left on another icon goes back to Mochi's first
         waitIcon(app, "standard", "团子 should be on the default icon")
 
-        let visor = app.buttons["persona-persona"]
-        XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")
-        visor.tap()
-        acceptIconAlert()
-        waitIcon(app, "visor", "choosing 面罩 did not change the icon")
-        try shot("look-visor-page", app.screenshot())
-        try home("look-visor-home")
+        let frog = app.buttons["persona-nwverse"]
+        XCTAssertTrue(frog.waitForExistence(timeout: 20), "Milk Frog is not offered")
+        frog.tap()
+        waitIcon(app, "standard", "Milk Frog should use the default icon")
+        try shot("look-milk-frog-page", app.screenshot())
+        try home("look-standard-home")
 
-        // The old setting's case: the icon is apart from the Avatar (here Visor's icon with Mochi chosen). The first time
-        // the app is in front the Avatar wins.
         app.terminate()
         let again = launch("persona")
         acceptIconAlert()

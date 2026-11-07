@@ -156,8 +156,7 @@ nonisolated struct AppearanceChoice: Equatable, Sendable {
 
     static let styleKey = "ui.style"
     static let colorKey = "ui.color"
-    /// `PersonaStore.chosenKey`; the built-ins' ids are "persona" (the default), "persona-visor", "persona-circuit", "persona-pixel",
-    /// "persona-facet" and "persona-blob".
+    /// `PersonaStore.chosenKey`, shared with the watch and extension targets.
     static let personaKey = "persona.id"
 
     static func resolve(style: String?, color: String?, persona: String?) -> AppearanceChoice {
@@ -166,7 +165,7 @@ nonisolated struct AppearanceChoice: Equatable, Sendable {
         if let c = color.flatMap(ThemeColor.init(rawValue:)) {
             return AppearanceChoice(style: s, color: wasClaude && c == .style ? .coral : c)
         }
-        let personaChosen = persona.map { !$0.isEmpty && !["persona", "persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob"].contains($0) } ?? false
+        let personaChosen = PersonaSelection.resolve(persona) == PersonaSelection.packageID
         return AppearanceChoice(style: s, color: personaChosen ? .persona : wasClaude ? .coral : .style)
     }
 

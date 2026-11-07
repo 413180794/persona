@@ -14,8 +14,7 @@ final class LiveActivityShots: XCTestCase {
             app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["PERSONA_FLEET_DETAILS"] ?? "NO",
                                    "-fleetIsland", env["PERSONA_FLEET_ISLAND"] ?? "a", "-tab", "settings",
                                    "-showFleetCount", env["PERSONA_FLEET_COUNT"] ?? "0"]
-            // The persona on the activity (`persona`, the default, `persona` (Visor), `persona-circuit`, or a hub package such as mock_hub's
-            // `demo`, which needs PERSONA_MOCK_HUB to be downloaded from).
+            // The persona on the activity (`persona`, the default, or the hub's `nwverse`, which needs PERSONA_MOCK_HUB to be downloaded from).
             if let persona = env["PERSONA_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
             if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
             // PERSONA_UI_LANGUAGE=en|ja|zh-Hans: the activity in that interface language (docs/ios.md「界面语言」).
@@ -74,9 +73,9 @@ final class LiveActivityShots: XCTestCase {
     }
 
     /// A persona chosen in Settings › Appearance › Avatar while the activity runs reaches the island within seconds, without a new
-    /// activity (docs/live-activity.md「形象」). `PERSONA_PERSONA_SWITCH=demo,persona-circuit,persona`: starts on the first,
+    /// activity (docs/live-activity.md「形象」). `PERSONA_PERSONA_SWITCH=nwverse,persona`: starts on the first,
     /// then picks each next one in Settings and photographs the island 3 s after leaving the app. A hub package needs
-    /// PERSONA_MOCK_HUB (scripts/mock/mock_hub.py with MOCK_PERSONAS=demo).
+    /// PERSONA_MOCK_HUB (scripts/mock/mock_hub.py with MOCK_PERSONAS=builtin).
     @MainActor func testSwitchingPersonaRedrawsTheIsland() throws {
         let env = ProcessInfo.processInfo.environment
         guard let ids = env["PERSONA_PERSONA_SWITCH"]?.split(separator: ",").map(String.init), let first = ids.first else {

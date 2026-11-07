@@ -265,7 +265,7 @@ final class LiveActivityController {
 extension LiveActivityController {
     /// `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`-fleetDetails YES` for names on the lock screen,
     /// `-fleetIsland b`, `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in
-    /// each kind there is; `-openPersona persona-circuit` for the persona): starts the activity with made-up agents, no
+    /// each kind there is; `-openPersona nwverse` for the persona): starts the activity with made-up agents, no
     /// hub needed, for screenshots. `thinking` is only the assistant answering (beside one finished agent);
     /// `assistant` is the assistant alone, nothing to count (the minimal island then shows the persona); `offline` is
     /// the working sample made stale once it shows.
@@ -337,7 +337,7 @@ extension AppModel {
 
 nonisolated extension FleetLook {
     /// A built-in in the accent it has in the app; a package as its pictures (`FleetFaces`), and while they cannot be
-    /// read Visor in its primary color (Visor takes a tint; Mochi, the default, keeps the icon's colors). From the persona itself, not `Theme`: the spec is recomposed after
+    /// read Mochi, which keeps the app icon's colors. From the persona itself, not `Theme`: the spec is recomposed after
     /// the persona changes.
     init(persona p: Persona, builtinAccent: Color) {
         guard !p.isBuiltin else {
@@ -345,7 +345,7 @@ nonisolated extension FleetLook {
             return
         }
         let color = p.palette?.primary
-        self.init(design: PersonaFace.Design.visor.rawValue, light: color?.light ?? Self.standard.light,
+        self.init(design: PersonaFace.Design.mochi.rawValue, light: color?.light ?? Self.standard.light,
                   dark: color?.dark ?? Self.standard.dark, package: "\(p.id)/\(p.rev)")
     }
 }

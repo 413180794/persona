@@ -142,7 +142,7 @@ struct SupervisionTests {
         reviewed.doneReason = "  不需要了 "
         #expect(reviewed.closedReason == "不需要了")
         // Open: the state's own label, the chip says the rest.
-        #expect(sup(.init(supervisor: "main", state: "rework")).statusLabel(.working) == "进行中")
+        #expect(sup(.init(supervisor: "main", state: "rework")).statusLabel(.working) == "工作中")
     }
 
     // MARK: The checklist

@@ -1,8 +1,7 @@
 import XCTest
 
 /// Settings › Appearance's three choices of how the app looks (docs/ios.md「设计语言」): Avatar, Theme Color and Interface Style, each on its own page
-/// and apart from the others. Against scripts/mock/mock_hub.py started with MOCK_PERSONAS=<dir with a package that brings
-/// colors> (or demo) and PERSONA_MOCK_HUB. Screenshots go to PERSONA_LOOK_SHOTS when set (the appearance is the simulator's).
+/// and apart from the others. Against scripts/mock/mock_hub.py started with MOCK_PERSONAS=builtin and PERSONA_MOCK_HUB. Screenshots go to PERSONA_LOOK_SHOTS when set (the appearance is the simulator's).
 final class LookPickerTests: XCTestCase {
     private var hub: String!
 
@@ -87,7 +86,7 @@ final class LookPickerTests: XCTestCase {
 
     /// Clay with the persona's colors: Match Avatar is offered; choosing Coral keeps Clay and the persona, choosing Island keeps Coral.
     @MainActor func testTheThreeChoicesStayApart() throws {
-        let app = launch("color", ["-ui.style", "clay", "-ui.color", "persona", "-openPersona", "doudou"])
+        let app = launch("color", ["-ui.style", "clay", "-ui.color", "persona", "-openPersona", "nwverse"])
         let follow = app.buttons["color-persona"]
         XCTAssertTrue(follow.waitForExistence(timeout: 20), "跟随形象 is not offered for a persona with colors:\n\(app.debugDescription)")
         waitSelected(follow, "跟随形象 is not chosen")
@@ -123,8 +122,8 @@ final class LookPickerTests: XCTestCase {
         XCTAssertTrue(row(app, "settings-style", says: "Island"), "the 界面风格 row: \(app.buttons["settings-style"].label)")
 
         app.buttons["settings-persona"].tap()
-        XCTAssertTrue(app.buttons["persona-doudou"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["persona-doudou"].isSelected, "the persona changed")
+        XCTAssertTrue(app.buttons["persona-nwverse"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["persona-nwverse"].isSelected, "the persona changed")
     }
 
     /// The built-in brings no colors: no Match Avatar to choose.

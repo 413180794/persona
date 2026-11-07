@@ -105,8 +105,8 @@ Minimal / limited  ⚙3                   when sharing with other apps there's o
 
 | Fleet | Avatar state | Look |
 | --- | --- | --- |
-| Something needs you | Waiting for you | Red ring |
-| Working | Working | Eyes looking aside, orange arc resting on the circle's edge (Mochi) / eyes looking aside (visor) / looking at the traces (Circuit) |
+| Something needs you | Waiting for you | needs-you 状态环，颜色取自共享的 StatusPalette |
+| Working | Working | 团子：眼睛侧看，橙色弧线停在圆周；奶蛙：使用形象包的工作中静帧 |
 | Only finished-unseen, or nothing | Idle | Eyes open |
 | No Agent busy, only the assistant replying (`assistant`) | Thinking | Eyes up, thought bubble |
 | Content stale (no push from the hub for 15 minutes, `isStale`) | Offline | Gray, eyes closed |
@@ -114,7 +114,8 @@ Minimal / limited  ⚙3                   when sharing with other apps there's o
 - "Error": Fleet has no separate error state; the closest is content going stale because the hub disconnected, so stale uses offline (gray).
 - "Thinking": Fleet can't tell whether an Agent is thinking or writing, so it's only used while the assistant replies; `assistant` is only pushed to devices whose Dynamic Island shows the assistant, others see idle.
 - **No motion, only a crossfade on state change**: TimelineView and repeating symbol animations don't run in Live Activities (see "Pitfalls"), so what's drawn is each state's still frame (the same as in the App under Reduce Motion, `PersonaFace(moving: false)`), with `.transition(.opacity)` on state change. No bitmap frame sequences, no pushes for animation.
-- **Shared drawing code**: the Mochi, visor and Circuit drawings are in `apple/Shared/Design/PersonaFace.swift`; the App's `AssistantAvatar` wraps it in a TimelineView to animate it, while the extension draws the still frame directly; the extension compiles only this one extra file.
+- **共享绘制**：`apple/Shared/Design/PersonaFace.swift` 只绘制团子（`mochi`）。App 的 `AssistantAvatar` 用 TimelineView 驱动动画，扩展直接绘制静帧；奶蛙（`nwverse`）使用 App Group 中的形象包图片。
+- **旧内容回落**：`FleetLook.supported` 在读取旧 hub 推送和缓存活动内容时归一已删除的 design；其他形象包回落团子，不能从旧图片缓存重新出现。`FleetFace` 只使用当前奶蛙包对应的图片，没有图片时绘制团子。
 - **Which one, and what color**: the extension can't read the App's settings. `FleetLook` is the avatar's drawing + the accent color's light / dark values, plus `<id>/<rev>` for avatar packs.
   It lives in the Live Activity content (`FleetState.look`, after build 99):
   - the App includes it when it updates the activity itself;
@@ -126,14 +127,14 @@ Minimal / limited  ⚙3                   when sharing with other apps there's o
   No keychain: the Live Activity extension can't read or write the keychain on a phone (measured on build 103, see "Why the avatar pack was still wrong in build 103" below).
   After writing, it updates the activity once right away instead of waiting for the next push: the content is unchanged, so the stale date is pushed 1 second later, so the system doesn't treat an identical update as no change (measured in the simulator: switches within 3 seconds, no need to restart the activity).
   Every time the App returns to the foreground it compares again and writes whatever didn't get written before.
-  When nothing was written or it can't be read, the avatar from the content is drawn, and for an avatar pack the default visor in its color; that's what happens when the signature has no App Group (free personal team, missing entitlements).
+  未写入或读取失败时，优先按活动内容里的形象绘制；奶蛙包的图片不可读时回落团子，保持团子的 App 图标配色。缺少 App Group 签名也走这个兜底。
 - **Avatar packs (the hub's `~/.persona/personas`, bitmaps)**: after the App downloads an avatar pack from the hub, it takes one image per state: the first frame of the dot animation (how the top bar dot looks frozen under Reduce Motion; 144px in the pack),
   and renders one @3x image per face size used by the activity: compact 22pt (66px), minimal / limited 24pt (72px), expanded and Lock Screen 26pt (78px), scaled straight from the pack's original with high-quality interpolation, lossless PNG.
   Pixels are no longer cut to save bytes (#349: the 4 KB cap dated from the keychain era, when 6 images were crammed into one item; on build 106 images of 36–42px drawn at 26pt were "still a bit blurry"). The portrait is only stored when a state has no frame, scaled from the portrait file that is at least 78px.
   One file per image: `Fleet/faces/<id>_<rev>_3x/<state>_<pt>.png`, `avatar_<pt>.png` (the `_3x` in the directory name means the small 4 KB images stored by older versions get redone). Only the current pack is kept; on a pack change the whole directory is swapped (written alongside, then moved in, so the extension never reads half of two packs).
   The extension reads only the one image for the current presentation's size (`FleetLookStore.face`), decodes it at that size and 3x (`FleetFaces.image`), and crops it to a circle. For why, see "Why build 98 was still wrong" below.
   When the pack has no frame for some state, it uses the portrait with a hint in the style of the built-in avatars: a red ring for needs you, gray for offline. The images exist only on the phone (in the pack the App downloaded and in the App Group container), never in the repository or the installer package; tests use solid-color placeholders.
-  When the image can't be read (not written yet, write failed) it draws the visor (the Mochi doesn't take colors; the visor can switch to this pack's accent color), in this pack's accent color, and never another pack's images (the directory name is the pack's `<id>/<rev>`).
+  图片不可读（尚未写入、写入失败）时绘制团子，不再用面罩换成包的配色；也不读取其他包的图片。目录名仍是形象包的 `<id>/<rev>`。
 - **Put into ContentState** (it wasn't before build 98: we thought the keychain was enough, but hub pushes replace the whole content-state, and the hub didn't know which avatar the phone had chosen):
   hence the App tells the hub about the avatar. Content without `look` (old hub) still decodes, and the extension falls back to the `look.json` the App stored; a `look` it can't understand (a future format) drops only that field.
 - The preview in **Settings › Notifications › Dynamic Island** (`IslandPreview`) also shows the avatar on the left, reading the same data the extension reads, consistent with the compact view.
@@ -314,9 +315,9 @@ On the user's real hub, Dynamic Island content changed about 180 times per hour.
 
 ## Verification
 
-- Layout: `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`thinking`: only the assistant replying, plus one finished-unseen item; `assistant`: only the assistant, nothing countable, so the minimal view draws the avatar; `offline`: a working activity marked stale immediately; `-fleetDetails YES` shows Lock Screen details, `-fleetIsland b|c|custom:assistant,load` selects the island sides, `-openPersona persona-circuit` changes the avatar) starts an activity with fabricated data, no hub needed.
-  UI test `LiveActivityShots` reads `PERSONA_FLEET_ISLAND` and `PERSONA_PERSONA` (avatar packs need `PERSONA_MOCK_HUB`: mock_hub with `MOCK_PERSONAS=demo`, downloaded by the App first).
-  `testSwitchingPersonaRedrawsTheIsland` reads `PERSONA_PERSONA_SWITCH=demo,persona-circuit,persona`: while the activity runs, switch through them in **Settings › Appearance › Avatar**, returning home for 3 seconds and capturing the island each time. Two compact shots 0.4 seconds apart (`compact` / `compact2`) check for animation, then another 3 seconds later (`compact3`; just after going home, the island may still be animating and empty).
+- Layout: `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`thinking`: only the assistant replying, plus one finished-unseen item; `assistant`: only the assistant, nothing countable, so the minimal view draws the avatar; `offline`: a working activity marked stale immediately; `-fleetDetails YES` shows Lock Screen details, `-fleetIsland b|c|custom:assistant,load` selects the island sides, `-openPersona persona` selects the default Mochi) starts an activity with fabricated data, no hub needed.
+  UI test `LiveActivityShots` reads `PERSONA_FLEET_ISLAND` and `PERSONA_PERSONA` (avatar packs need `PERSONA_MOCK_HUB`: mock_hub with `MOCK_PERSONAS=builtin`, downloaded by the App first).
+  `testSwitchingPersonaRedrawsTheIsland` reads `PERSONA_PERSONA_SWITCH=nwverse,persona`: while the activity runs, switch through them in **Settings › Appearance › Avatar**, returning home for 3 seconds and capturing the island each time. Two compact shots 0.4 seconds apart (`compact` / `compact2`) check for animation, then another 3 seconds later (`compact3`; just after going home, the island may still be animating and empty).
   `PERSONA_ISLAND_PEER` (another app's activity, landscape) and `PERSONA_FLEET_COUNT` (`-showFleetCount`, changes the number of count digits) are described under "Sharing the Dynamic Island with other apps" above.
   In the simulator a stale activity only appears on the Lock Screen (gray avatar + "Waiting for hub update…"), not the Dynamic Island.
   Settings page: `-tab settings -openNotificationSettings YES -openIslandSettings YES`.

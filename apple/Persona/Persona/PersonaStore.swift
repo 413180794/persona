@@ -12,7 +12,7 @@ import AppKit
 /// the hub answers or without it.
 @MainActor @Observable
 final class PersonaStore {
-    /// The built-ins first (the default, then Circuit), then what the hub listed last (kept across launches).
+    /// Mochi first, then Milk Frog when the hub has listed it (kept across launches).
     private(set) var offered: [Persona] = Persona.builtins
     /// The chosen one as it can be shown now: the built-in until its package is on the phone.
     private(set) var current: Persona = .builtin {
@@ -41,7 +41,7 @@ final class PersonaStore {
     }
 
     /// The user's choice; kept when its package is gone from the hub, so it comes back with it.
-    var chosenID: String { defaults.string(forKey: Self.chosenKey) ?? Persona.builtinID }
+    var chosenID: String { PersonaSelection.resolve(defaults.string(forKey: Self.chosenKey)) }
 
     /// The hub's list came this launch.
     @ObservationIgnored private var listed = false
@@ -59,13 +59,17 @@ final class PersonaStore {
         self.defaults = defaults
         frameCache.countLimit = 6
         if let data = try? Data(contentsOf: indexURL), let list = try? JSONDecoder().decode([PersonaInfo].self, from: data) {
-            offered = Persona.builtins + list.map(Persona.init(info:))
+            offered = Persona.builtins + list.filter(Self.supportedPackage).map(Persona.init(info:))
         }
         #if DEBUG
         // `-openPersona <id>`: start with that one (on the phone already, or downloaded when the list comes).
         if let id = defaults.string(forKey: "openPersona"), !id.isEmpty { defaults.set(id, forKey: Self.chosenKey) }
         #endif
         if let p = offered.first(where: { $0.id == chosenID }), isOnPhone(p) { current = p }
+    }
+
+    private static func supportedPackage(_ info: PersonaInfo) -> Bool {
+        info.id == PersonaSelection.packageID && info.manifest.id == info.id && info.manifest.problem == nil
     }
 
     private var indexURL: URL { root.appending(path: "index.json") }
@@ -91,7 +95,7 @@ final class PersonaStore {
     private func load(_ api: APIClient) async {
         let list: [PersonaInfo]
         do {
-            list = try await api.personas().filter { $0.manifest.problem == nil && $0.manifest.id == $0.id }
+            list = try await api.personas().filter(Self.supportedPackage)
         } catch let e as APIError where e.status == 404 {
             error = String(localized: "This hub can't host avatars yet. Update the hub and check again.")
             return
@@ -101,7 +105,7 @@ final class PersonaStore {
         }
         self.error = nil
         listed = true
-        offered = Persona.builtins + list.map(Persona.init(info:))
+        offered = Persona.builtins + list.filter(Self.supportedPackage).map(Persona.init(info:))
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try? JSONEncoder().encode(list).write(to: indexURL, options: .atomic)
         if let chosen = offered.first(where: { $0.id == chosenID }) {
@@ -130,6 +134,10 @@ final class PersonaStore {
     /// Picks a persona; a package is downloaded first (on failure, or with no hub to download from, the choice stays
     /// as it was and `error` says why).
     func choose(_ p: Persona, api: APIClient?) async {
+        guard PersonaSelection.supports(p.id) else {
+            await choose(.builtin, api: api)
+            return
+        }
         if !isOnPhone(p) {
             guard let api else {
                 error = String(localized: "“\(p.name)” isn’t on this phone yet. Connect to the hub, then choose it.")

@@ -1,30 +1,16 @@
 import Foundation
 
 /// A look for Persona (docs/persona.md), the one Avatar setting: its name, its face, the animated dot in the Persona
-/// tab's top bar, its colors and the home screen icon (`appIcon`). Built-ins and packages are the same model. The built-in ones are the app's own drawings (PersonaAvatar: Mochi in the icon's colors, the others in the
-/// style's accent); every other one is a
-/// package on the hub (~/.persona/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
+/// tab's top bar, its colors and the home screen icon (`appIcon`). Mochi is drawn locally in the app icon's colors; Milk Frog is a
+/// package on the hub that the client downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
     /// The default's id: Mochi, distinct from every optional built-in design.
-    static let builtinID = "persona"
+    static let builtinID = PersonaSelection.builtinID
     /// The default: Mochi, the app icon's character, in the icon's colors.
     static let builtin = Persona(id: builtinID, name: "Persona", subtitle: String(localized: "The waving blob from the app icon"), rev: "", manifest: nil,
                                  design: "mochi", title: String(localized: "Mochi"))
-    /// Visor, an optional built-in design named Persona, in the accent.
-    static let visor = Persona(id: "persona-visor", name: "Persona", subtitle: String(localized: "Visor, in the theme color"), rev: "", manifest: nil,
-                               design: "visor", title: String(localized: "Visor"))
-    /// Circuit (three traces running into a core with two eyes), a choice next to the default; still named Persona.
-    static let circuit = Persona(id: "persona-circuit", name: "Persona", subtitle: String(localized: "Circuit, in the theme color"), rev: "", manifest: nil,
-                                 design: "circuit", title: String(localized: "Circuit"))
-    /// Pixel, Facet and Jelly (#350, from the style candidates the user picked): after Circuit, in the accent, still named Persona.
-    static let pixel = Persona(id: "persona-pixel", name: "Persona", subtitle: String(localized: "Pixel, in the theme color"), rev: "", manifest: nil,
-                               design: "pixel", title: String(localized: "Pixel"))
-    static let facet = Persona(id: "persona-facet", name: "Persona", subtitle: String(localized: "Facet, in the theme color"), rev: "", manifest: nil,
-                               design: "facet", title: String(localized: "Facet"))
-    static let blob = Persona(id: "persona-blob", name: "Persona", subtitle: String(localized: "Jelly, in the theme color"), rev: "", manifest: nil,
-                              design: "blob", title: String(localized: "Jelly"))
-    /// What Settings › Appearance › Avatar offers before the hub's packages, the default first.
-    static let builtins = [builtin, visor, circuit, pixel, facet, blob]
+    /// Only Mochi is drawn locally; Milk Frog is supplied by the hub.
+    static let builtins = [builtin]
 
     var id: String
     var name: String
@@ -41,7 +27,7 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     var isBuiltin: Bool { manifest == nil }
     var cardTitle: String { title ?? name }
     /// A built-in's line under its card in Settings: whose colors it is drawn in.
-    var builtinNote: String { design == PersonaFace.Design.mochi.rawValue ? String(localized: "The app icon's colors") : String(localized: "Follows the theme color") }
+    var builtinNote: String { String(localized: "The app icon's colors") }
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
     }

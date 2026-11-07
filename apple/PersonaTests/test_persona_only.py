@@ -156,18 +156,25 @@ class PersonaOnlyTests(unittest.TestCase):
         look = re.search(r"enum ExtensionBuiltinLook\s*\{([^}]+)\}", wire).group(1)
         names = re.findall(r"static let (\w+)\s*=", look)
         self.assertEqual(len(names), len(set(names)))
-        self.assertIn('static let personaVisor = "persona-visor"', look)
+        self.assertIn('static let all = ["persona"]', look)
+        self.assertNotIn('personaVisor', look)
+        self.assertNotIn('personaCircuit', look)
 
-    def test_mochi_and_visor_keep_distinct_drawings_and_ids(self):
+    def test_only_mochi_is_drawn_and_milk_frog_is_a_package(self):
         model = source("Persona/Persona/Persona.swift")
-        ids = re.findall(r'static let \w+ = Persona\(id: "([^"]+)"', model)
-        self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual(set(ids), {"persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob"})
-        self.assertIn('static let builtinID = "persona"', model)
+        self.assertIn('static let builtins = [builtin]', model)
+        self.assertIn('static let builtinID = PersonaSelection.builtinID', model)
         self.assertRegex(model, r'static let builtin = Persona\(id: builtinID,[\s\S]*?design: "mochi"')
-        self.assertRegex(model, r'static let visor = Persona\(id: "persona-visor",[\s\S]*?design: "visor"')
-        self.assertIn('"persona-visor"', source("Shared/Design/ColorSpec.swift"))
-        self.assertIn("case .visor: Persona.visor.id", source("Persona/App/AppIconChoice.swift"))
+        policy = source("Shared/PersonaSelection.swift")
+        self.assertIn('static let builtinID = "persona"', policy)
+        self.assertIn('static let packageID = "nwverse"', policy)
+        design = re.search(r'enum Design[^\{]*\{([^}]+)\}', source("Shared/Design/PersonaFace.swift")).group(1)
+        self.assertEqual(re.findall(r'\bcase\s+(\w+)', design), ["mochi"])
+        for name in ["Visor", "Circuit", "Pixel", "Facet", "Blob"]:
+            self.assertFalse((APPLE / f"Persona/Resources/Assets.xcassets/AppIcon-{name}.appiconset").exists())
+            self.assertFalse((APPLE / f"Persona/Resources/Assets.xcassets/AppIcons/app-icon-{name.lower()}.imageset").exists())
+        self.assertNotIn("FACES", (APPLE.parent / "scripts/assets/make_alt_icons.py").read_text())
+        self.assertFalse((APPLE.parent / "scripts/assets/persona_face").exists())
 
     def test_context_parsers_have_no_dual_brand_branches(self):
         for path in ["Shared/ContextText.swift", "Shared/Injected.swift", "Shared/WatchText.swift",

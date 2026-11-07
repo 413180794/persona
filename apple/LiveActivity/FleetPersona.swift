@@ -22,7 +22,16 @@ nonisolated extension FleetLook {
     }
 
     var faceDesign: PersonaFace.Design { PersonaFace.Design(rawValue: design) ?? .mochi }
-    var tint: Color { Color(light: light, dark: dark) }
+
+    /// Old hub pushes and cached activity content must not resurrect removed package faces.
+    var supported: FleetLook {
+        if let package {
+            guard package.split(separator: "/").first.map(String.init) == PersonaSelection.packageID else { return .standard }
+            return FleetLook(design: "mochi", light: light, dark: dark, package: package)
+        }
+        return design == "mochi" ? self : .standard
+    }
+
 
     /// What the app saved last; `standard` when nothing is readable. Cheap enough to call on every render. The widget
     /// extension tells what it read (`FleetLookReport`).
@@ -81,7 +90,7 @@ nonisolated extension FleetState {
     var drawnLook: FleetLook {
         let kept = FleetLook.saved
         FleetLookReport.note { $0.content(look) }
-        return look ?? kept
+        return (look ?? kept).supported
     }
 }
 
@@ -425,8 +434,10 @@ struct FleetFace: View {
     var faces: FleetFaces?
 
     var body: some View {
+        let look = look.supported
+        let matchingFaces = faces.flatMap { $0.package == look.package ? $0 : nil }
         Group {
-            if let face = faces?.face(state, points: size) ?? look.face(state, points: size),
+            if let face = matchingFaces?.face(state, points: size) ?? look.face(state, points: size),
                let image = FleetFaces.image(face.png, points: CGFloat(FleetFaces.size(size))) {
                 Image(uiImage: image)
                     .resizable()
@@ -442,7 +453,7 @@ struct FleetFace: View {
                         }
                     }
             } else {
-                PersonaFace(size: size, design: look.faceDesign, state: state, tint: look.tint, mark: FleetPalette.mark)
+                PersonaFace(size: size, design: look.faceDesign, state: state)
             }
         }
         .frame(width: size, height: size)

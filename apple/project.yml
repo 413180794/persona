@@ -107,7 +107,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The avatar's home screen icon (AppIconChoice, scripts/assets/make_alt_icons.py); the Mac target shares the catalog but not these.
-        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Visor AppIcon-Circuit AppIcon-Pixel AppIcon-Facet AppIcon-Blob AppIcon-PaperLight AppIcon-PaperDark"
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-PaperLight AppIcon-PaperDark"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
@@ -372,6 +372,7 @@ targets:
     sources:
       - path: PersonaWidgets
       - path: LiveActivity
+      - path: Shared/PersonaSelection.swift
       - path: Shared/FleetState.swift
       # The state names the Live Activity shows (#3960).
       - path: Shared/StateNames.swift
@@ -578,6 +579,7 @@ targets:
       - path: PersonaTests/UsageWindowsTests.swift
       - path: PersonaTests/SessionListTests.swift
       - path: PersonaTests/AgentListFallbackTests.swift
+      - path: PersonaTests/PersonaSelectionTests.swift
       - path: PersonaTests/FakeHub.swift
     dependencies:
       - target: PersonaMac

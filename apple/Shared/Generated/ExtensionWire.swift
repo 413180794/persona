@@ -991,12 +991,10 @@ nonisolated struct ExtensionThemeItem: Codable, Hashable, Sendable {
     }
 }
 
-/// A look every app draws itself: Mochi (the default), Visor, Circuit.
+/// The look every app draws itself: Mochi (the default).
 nonisolated enum ExtensionBuiltinLook {
     static let persona = "persona"
-    static let personaVisor = "persona-visor"
-    static let personaCircuit = "persona-circuit"
-    static let all = ["persona", "persona-visor", "persona-circuit"]
+    static let all = ["persona"]
 }
 
 /// A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub

@@ -3,111 +3,38 @@ import SwiftUI
 import UIKit
 #endif
 
-// The home screen icon is the Avatar's (docs/persona.md「App 图标」, #3203): there is no setting of its own. Each built-in
-// Avatar has an icon in the asset catalog: Mochi, the default, is the app's own `AppIcon` (Paper, the hand-drawn helper on
-// paper, #709); Visor, Circuit, Pixel, Facet and Jelly are alternate icon sets (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`) of
-// their faces, drawn by scripts/assets/make_alt_icons.py. iOS switches only to icons the app ships, so an Avatar from the hub or an
-// extension puts on the built-in one it names (`Persona.appIcon`). The system remembers the icon itself, so there is
-// nothing to store: what is set now is `alternateIconName`. iPhone and iPad only: the watch and the Mac keep their one icon.
+// Both supported personas use the default app icon. Paper's fixed light and dark sets remain available.
 
-/// One icon the app ships.
 nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
     case standard
-    case visor
-    case circuit
-    case pixel
-    case facet
-    case blob
 
     var id: String { rawValue }
+    var iconName: String? { nil }
+    var preview: String { "app-icon-default" }
+    var lookID: String { PersonaSelection.builtinID }
 
-    /// The icon set's name for `setAlternateIconName`; nil is the primary icon.
-    var iconName: String? {
-        switch self {
-        case .standard: nil
-        case .visor: "AppIcon-Visor"
-        case .circuit: "AppIcon-Circuit"
-        case .pixel: "AppIcon-Pixel"
-        case .facet: "AppIcon-Facet"
-        case .blob: "AppIcon-Blob"
-        }
-    }
+    init(lookID: String?) { self = .standard }
+    init(iconName: String?) { self = .standard }
 
-    /// The picture the app draws it with (an image set with any / dark, read from the icon set by the script): the
-    /// logo beside Persona's name.
-    var preview: String {
-        switch self {
-        case .standard: "app-icon-default"
-        case .visor: "app-icon-visor"
-        case .circuit: "app-icon-circuit"
-        case .pixel: "app-icon-pixel"
-        case .facet: "app-icon-facet"
-        case .blob: "app-icon-blob"
-        }
-    }
+    var followsScheme: Bool { true }
 
-    /// The built-in Avatar whose icon it is.
-    var lookID: String {
-        switch self {
-        case .standard: Persona.builtinID
-        case .visor: Persona.visor.id
-        case .circuit: Persona.circuit.id
-        case .pixel: Persona.pixel.id
-        case .facet: Persona.facet.id
-        case .blob: Persona.blob.id
-        }
-    }
-
-    /// The icon of the built-in Avatar with that id; the default's for any other (a built-in with no icon yet, a typo
-    /// in a package's `app_icon_fallback`, none given).
-    init(lookID: String?) {
-        self = Self.allCases.first { $0.lookID == lookID } ?? .standard
-    }
-
-    /// Paper (the default) follows Settings › Appearance › Light & Dark (#710). The system picks a set's look by the home screen's
-    /// appearance, not the app's, so it also has a set with only its light picture and one with only its dark
-    /// picture (`AppIcon-PaperLight` / `…Dark`); the others are one set whatever the app is.
-    private var fixedLooks: (light: String, dark: String)? {
-        switch self {
-        case .standard: ("AppIcon-PaperLight", "AppIcon-PaperDark")
-        case .visor, .circuit, .pixel, .facet, .blob: nil
-        }
-    }
-
-    var followsScheme: Bool { fixedLooks != nil }
-
-    /// The icon set for the app's Light & Dark: Match System is the set with both looks (nil: the primary icon).
     func iconName(for scheme: ColorSchemeChoice) -> String? {
-        guard let fixed = fixedLooks else { return iconName }
         switch scheme {
-        case .system: return iconName
-        case .light: return fixed.light
-        case .dark: return fixed.dark
+        case .system: nil
+        case .light: "AppIcon-PaperLight"
+        case .dark: "AppIcon-PaperDark"
         }
     }
 
-    /// The look the home screen shows it in: Paper under Light / Dark takes that look; the others, and Match System, the
-    /// system's (`system`).
     func homeScreenLook(_ scheme: ColorSchemeChoice, system: ColorScheme) -> ColorScheme {
-        guard followsScheme else { return system }
         switch scheme {
-        case .system: return system
-        case .light: return .light
-        case .dark: return .dark
+        case .system: system
+        case .light: .light
+        case .dark: .dark
         }
     }
 
-    /// The alternate icon sets the choice can be on (all of them ship); the primary icon is not one.
-    var iconNames: [String] { [iconName, fixedLooks?.light, fixedLooks?.dark].compactMap { $0 } }
-
-    /// An alternate icon set this build ships.
-    static func ships(_ name: String) -> Bool { allCases.contains { $0.iconNames.contains(name) } }
-
-    /// The choice an icon name stands for; an unknown name (an icon a later build dropped: Ember, Mint, Graphite went in
-    /// #709, Peach, p., Aura in #3203) reads as the default, which is what the home screen shows for it.
-    init(iconName: String?) {
-        self = iconName.flatMap { name in Self.allCases.first { $0.iconNames.contains(name) } } ?? .standard
-    }
+    var iconNames: [String] { ["AppIcon-PaperLight", "AppIcon-PaperDark"] }
 }
 
 /// What the picker needs from the system, so tests can stand in for it.
@@ -138,7 +65,7 @@ extension UIApplication: AppIconSetting {}
     }
 
     /// The Avatar's icon the home screen should have; nil until the Avatar is known (a package the list has not named yet).
-    @ObservationIgnored private var wanted: AppIconChoice?
+    @ObservationIgnored private var wanted: AppIconChoice? = .standard
     /// The app's Light & Dark the icon should match (#710).
     @ObservationIgnored private var scheme: ColorSchemeChoice = .system
 
@@ -159,9 +86,8 @@ extension UIApplication: AppIconSetting {}
         while let wanted, !switching {
             let name = wanted.iconName(for: scheme)
             let shown = system.alternateIconName
-            // A set this build no longer ships (Peach, p., Aura…) already shows as the primary icon: putting the primary
-            // on would only pop the system's alert.
-            if name == shown || (name == nil && shown.map { !AppIconChoice.ships($0) } == true) {
+            // Reset removed alternate icons explicitly, even when the system reports a name absent from this build.
+            if name == shown {
                 current = wanted
                 return
             }

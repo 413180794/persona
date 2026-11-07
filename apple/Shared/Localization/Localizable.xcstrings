@@ -22818,52 +22818,6 @@
       },
       "extractionState": "manual"
     },
-    "Circuit": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Circuit"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "サーキット"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "汇流"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Circuit, in the theme color": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Circuit, in the theme color"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "サーキット。テーマカラーに合わせた色"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "汇流，颜色随主题色"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Claude": {
       "shouldTranslate": true,
       "localizations": {
@@ -39852,52 +39806,6 @@
       },
       "extractionState": "manual"
     },
-    "Facet": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Facet"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ファセット"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "晶面"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Facet, in the theme color": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Facet, in the theme color"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ファセット。テーマカラーに合わせた色"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "晶面，颜色随主题色"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Failed": {
       "localizations": {
         "en": {
@@ -41366,29 +41274,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "跟着分支名走；改过之后不再跟，清空后恢复"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Follows the theme color": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Follows the theme color"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "テーマカラーに合わせた色"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "颜色随主题色"
           }
         }
       },
@@ -43276,29 +43161,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Haiku 档位"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Halo": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Halo"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ヘイロー"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "光环"
           }
         }
       },
@@ -48066,52 +47928,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "日语"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Jelly": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jelly"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "グミ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "软糖"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Jelly, in the theme color": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jelly, in the theme color"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "グミ。テーマカラーに合わせた色"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "软糖，颜色随主题色"
           }
         }
       },
@@ -71262,52 +71078,6 @@
       },
       "extractionState": "manual"
     },
-    "Persona's name, avatar, status dot in the top bar and in-app logo change with the avatar; the app's colors stay the same. To use the avatar's colors, choose Match Avatar under Theme Color. Avatar packs live in ~/.persona/personas on the hub and download to this Mac when selected.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona's name, avatar, status dot in the top bar and in-app logo change with the avatar; the app's colors stay the same. To use the avatar's colors, choose Match Avatar under Theme Color. Avatar packs live in ~/.persona/personas on the hub and download to this Mac when selected."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personaの名前、アバター、上部バーのステータスドット、アプリ内のロゴはアバターに合わせて変わりますが、アプリの色は変わりません。アバターの配色を使うには、テーマカラーで「アバターと同じ」を選んでください。アバターパックはハブの~/.persona/personasにあり、選択するとこのMacにダウンロードされます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona 的名字、头像、顶栏的状态圆点和 App 里的标志跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到这台 Mac。"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Persona's name, avatar, status dot in the top bar, in-app logo and Home Screen icon change with the avatar; the app's colors stay the same. To use the avatar's colors, choose Match Avatar under Theme Color. Avatar packs live in ~/.persona/personas on the hub and download to your phone when selected.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona's name, avatar, status dot in the top bar, in-app logo and Home Screen icon change with the avatar; the app's colors stay the same. To use the avatar's colors, choose Match Avatar under Theme Color. Avatar packs live in ~/.persona/personas on the hub and download to your phone when selected."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personaの名前、アバター、上部バーのステータスドット、アプリ内のロゴ、ホーム画面のアイコンはアバターに合わせて変わりますが、アプリの色は変わりません。アバターの配色を使うには、テーマカラーで「アバターと同じ」を選んでください。アバターパックはハブの~/.persona/personasにあり、選択するとスマートフォンにダウンロードされます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Persona 的名字、头像、顶栏的状态圆点、App 里的标志和桌面图标跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Persona's notifications and scheduled task results are also sent to Lark": {
       "localizations": {
         "en": {
@@ -72304,52 +72074,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "固定済み：%1$@\\n現在：%2$@\\n\\nサーバーの再インストールや鍵の変更のほか、中間者攻撃の可能性もあります。サーバーの鍵が変わったことを確認してから信頼してください。"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Pixel": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pixel"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ピクセル"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "像素"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Pixel, in the theme color": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pixel, in the theme color"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ピクセル。テーマカラーに合わせた色"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "像素，颜色随主题色"
           }
         }
       },
@@ -88680,29 +88404,6 @@
       },
       "extractionState": "manual"
     },
-    "Spark": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spark"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スパーク"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "火花"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Spawned": {
       "localizations": {
         "en": {
@@ -94466,29 +94167,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "卡片要替你回复"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "The Home Screen icon can only use the few built into the app. Avatars from the hub or extensions apply fully in the app, while the icon uses the built-in avatar they name, or the default if they name none.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The Home Screen icon can only use the few built into the app. Avatars from the hub or extensions apply fully in the app, while the icon uses the built-in avatar they name, or the default if they name none."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ホーム画面のアイコンはアプリに内蔵された数種類のみ使えます。ハブや拡張機能のアバターはアプリ内ではすべて反映され、アイコンは指定された内蔵アバターのもの、指定がなければデフォルトを使います。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "桌面图标只能用 App 自带的几张：hub 上或扩展的形象在 App 里全部生效，桌面图标用它指定的内置形象的，没指定就用默认。"
           }
         }
       },
@@ -110975,52 +110653,6 @@
       },
       "extractionState": "manual"
     },
-    "Visor": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visor"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バイザー"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "面罩"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Visor, in the theme color": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visor, in the theme color"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バイザー。テーマカラーに合わせた色"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "面罩，颜色随主题色"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Voice": {
       "localizations": {
         "en": {
@@ -125151,6 +124783,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "这里的正文在 %@ 个字处被截断，实际发出的可能更长。"
+          }
+        }
+      }
+    },
+    "Choose Mochi or Milk Frog. Milk Frog downloads from the hub when selected. To use its colors, choose Match Avatar under Theme Color.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Mochi or Milk Frog. Milk Frog downloads from the hub when selected. To use its colors, choose Match Avatar under Theme Color."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "団子かミルクガエルを選べます。ミルクガエルは選択時に hub からダウンロードされます。配色を使うには、テーマカラーで「アバターに合わせる」を選んでください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择团子或奶蛙。选中奶蛙时会从 hub 下载；想用奶蛙的配色，在主题色里选「跟随形象」。"
+          }
+        }
+      }
+    },
+    "Both avatars use the default Home Screen icon. Older alternate icons reset to the default.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Both avatars use the default Home Screen icon. Older alternate icons reset to the default."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "どちらもデフォルトのホーム画面アイコンを使います。古い代替アイコンはデフォルトに戻ります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两种形象都使用默认桌面图标。旧的备用图标会切回默认。"
           }
         }
       }

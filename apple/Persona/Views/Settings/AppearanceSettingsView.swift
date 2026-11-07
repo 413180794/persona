@@ -74,16 +74,13 @@ struct PersonaSettingsPage: View {
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
             } footer: {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    #if os(macOS)
                     Text(model.isDemo ? String(localized: "Demo mode only has the default avatar.") :
-                        String(localized: "Persona's name, avatar, status dot in the top bar and in-app logo change with the avatar; the app's colors stay the same. To use the avatar's colors, choose Match Avatar under Theme Color. Avatar packs live in ~/.persona/personas on the hub and download to this Mac when selected."))
-                    #else
-                    Text(model.isDemo ? String(localized: "Demo mode only has the default avatar.") :
-                        String(localized: "Persona's name, avatar, status dot in the top bar, in-app logo and Home Screen icon change with the avatar; the app's colors stay the same. To use the avatar's colors, choose Match Avatar under Theme Color. Avatar packs live in ~/.persona/personas on the hub and download to your phone when selected."))
+                        String(localized: "Choose Mochi or Milk Frog. Milk Frog downloads from the hub when selected. To use its colors, choose Match Avatar under Theme Color."))
+                    #if !os(macOS)
                     if let failure = model.appIcon.failure {
                         Text(failure).foregroundStyle(Theme.danger)
                     }
-                    Text("The Home Screen icon can only use the few built into the app. Avatars from the hub or extensions apply fully in the app, while the icon uses the built-in avatar they name, or the default if they name none.")
+                    Text("Both avatars use the default Home Screen icon. Older alternate icons reset to the default.")
                         // The icon on now, or that the system cannot switch it here (AppIconTests).
                         .accessibilityValue(model.appIcon.available ? model.appIcon.current.rawValue : "unavailable")
                         .accessibilityIdentifier("persona-icon-note")

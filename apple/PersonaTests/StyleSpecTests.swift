@@ -172,11 +172,11 @@ struct StyleSpecTests {
         #expect(C.resolve(style: "claude", color: nil, persona: nil) == C(style: .glass, color: .coral))
         #expect(C.resolve(style: "island", color: nil, persona: "persona") == C(style: .island, color: .style))
         // A persona chosen colored the app: it still does.
-        #expect(C.resolve(style: "clay", color: nil, persona: "doudou") == C(style: .clay, color: .persona))
-        #expect(C.resolve(style: "claude", color: nil, persona: "doudou") == C(style: .glass, color: .persona))
+        #expect(C.resolve(style: "clay", color: nil, persona: "nwverse") == C(style: .clay, color: .persona))
+        #expect(C.resolve(style: "claude", color: nil, persona: "nwverse") == C(style: .glass, color: .persona))
         // Chosen since: kept as chosen.
-        #expect(C.resolve(style: "lark", color: "coral", persona: "doudou") == C(style: .lark, color: .coral))
-        #expect(C.resolve(style: "island", color: "style", persona: "doudou") == C(style: .island, color: .style))
+        #expect(C.resolve(style: "lark", color: "coral", persona: "nwverse") == C(style: .lark, color: .coral))
+        #expect(C.resolve(style: "island", color: "style", persona: "nwverse") == C(style: .island, color: .style))
         // `-ui.style claude` as a launch argument over a saved choice still means coral.
         #expect(C.resolve(style: "claude", color: "style", persona: nil) == C(style: .glass, color: .coral))
         #expect(C.resolve(style: "neon", color: "plaid", persona: nil) == C(style: .glass, color: .style))

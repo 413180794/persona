@@ -36,101 +36,40 @@ import UIKit
         #expect(AppIconChoice(iconName: "AppIcon-Gone") == .standard)
     }
 
-    @Test func startsOnWhatTheSystemHas() {
-        #expect(AppIconModel(system: FakeSystem("AppIcon-Visor")).current == .visor)
+    @Test func startsOnTheDefault() {
         #expect(AppIconModel(system: FakeSystem("AppIcon-PaperLight")).current == .standard)
-        // An icon this build dropped (Ember / Mint / Graphite, #709; Peach / p. / Aura, #3203) reads as the default.
-        #expect(AppIconModel(system: FakeSystem("AppIcon-Graphite")).current == .standard)
-        #expect(AppIconModel(system: FakeSystem("AppIcon-Aura")).current == .standard)
         #expect(AppIconModel(system: FakeSystem()).current == .standard)
         #expect(!AppIconModel(system: nil).available)
     }
 
-    /// Every built-in Avatar has its own icon; a package takes the built-in it names in `app_icon_fallback`, the default's
-    /// when it names none or one that is not there.
-    @Test func eachLookPutsOnItsIcon() throws {
+    @Test func bothPersonasUseTheDefaultIcon() throws {
         #expect(Persona.builtin.appIcon == .standard)
-        #expect(Persona.visor.appIcon == .visor)
-        #expect(Persona.circuit.appIcon == .circuit)
-        for p in Persona.builtins { #expect(p.appIcon.lookID == p.id, "\(p.id) has no icon of its own") }
-        #expect(Set(Persona.builtins.map(\.appIcon)).count == Persona.builtins.count)
-
-        func package(_ fallback: String?) throws -> Persona {
-            var json = #"{"format":1,"id":"mint","name":"小薄荷","avatar":{"sizes":{"128":"a.png"}},"dot":{"states":{"idle":{"file":"i.png"}}}"#
-            if let fallback { json += #","app_icon_fallback":"\#(fallback)""# }
-            let m = try JSONDecoder().decode(PersonaManifest.self, from: Data((json + "}").utf8))
-            return Persona(info: PersonaInfo(id: m.id, rev: "1", bytes: 1, manifest: m))
-        }
-        #expect(try package("persona-circuit").appIcon == .circuit)
-        #expect(try package("persona-visor").appIcon == .visor)
-        #expect(try package("persona").appIcon == .standard)
-        #expect(try package(nil).appIcon == .standard)
-        #expect(try package("gone").appIcon == .standard)
-        #expect(try package("persona").manifest?.problem == nil)
+        let m = try JSONDecoder().decode(PersonaManifest.self, from: Data(#"{"format":1,"id":"nwverse","name":"奶蛙","avatar":{"sizes":{"128":"a.png"}},"dot":{"states":{"idle":{"file":"i.png"}}},"app_icon_fallback":"persona-circuit"}"#.utf8))
+        #expect(Persona(info: PersonaInfo(id: m.id, rev: "1", bytes: 1, manifest: m)).appIcon == .standard)
     }
 
-    /// Choosing an Avatar puts its icon on; the same again does nothing (the system would alert again); back to Mochi.
-    @Test func followsTheLook() async {
+    @Test func followingTheSameIconDoesNotPromptAgain() async {
         let sys = FakeSystem()
         let m = AppIconModel(system: sys)
-        await m.follow(.visor)
-        #expect(m.current == .visor && sys.alternateIconName == "AppIcon-Visor")
-        await m.follow(.visor)
-        await m.follow(nil) // Avatar not known yet: the last one stays
         await m.follow(.standard)
-        #expect(m.current == .standard && sys.calls == ["AppIcon-Visor", nil])
-        #expect(!m.switching && m.failure == nil)
+        await m.follow(nil)
+        #expect(m.current == .standard && sys.calls.isEmpty)
     }
 
-    /// The migration from the separate App Icon setting (#3203): the Avatar wins. Someone on Visor with the default icon gets
-    /// Visor's the first time the app is in front; someone on Mochi with a dropped icon (Aura) is left alone, as the home
-    /// screen already shows the default; someone on Mochi with Visor's icon goes back to the default.
-    @Test func theLookDecidesForTheOldSetting() async {
-        let plain = FakeSystem()
-        await AppIconModel(system: plain).follow(.visor, scheme: .system)
-        #expect(plain.calls == ["AppIcon-Visor"])
-
-        let dropped = FakeSystem("AppIcon-Aura")
-        let d = AppIconModel(system: dropped)
-        await d.follow(.standard, scheme: .system)
-        #expect(dropped.calls.isEmpty && d.current == .standard)
-        await d.follow(.circuit)
-        #expect(dropped.calls == ["AppIcon-Circuit"])
-
-        let other = FakeSystem("AppIcon-Visor")
-        await AppIconModel(system: other).follow(.standard, scheme: .system)
-        #expect(other.calls == [nil])
-    }
-
-    /// Mochi's Paper takes the app's Light & Dark (#710): under Light it goes on in its light-only set, and a change of Light & Dark moves
-    /// it; an icon with one set stays put.
     @Test func paperFollowsTheAppsScheme() async {
-        #expect(AppIconChoice.standard.iconName(for: .system) == nil)
-        #expect(AppIconChoice.standard.iconName(for: .dark) == "AppIcon-PaperDark")
-        #expect(AppIconChoice.standard.iconName(for: .light) == "AppIcon-PaperLight")
-        #expect(AppIconChoice.visor.iconName(for: .dark) == "AppIcon-Visor")
-
         let sys = FakeSystem()
         let m = AppIconModel(system: sys)
         await m.follow(.standard, scheme: .dark)
-        #expect(m.current == .standard && sys.alternateIconName == "AppIcon-PaperDark")
-        await m.follow(nil, scheme: .dark) // already on: no second call
-        await m.follow(.circuit)
-        await m.follow(nil, scheme: .light) // Circuit has one set
-        #expect(sys.calls == ["AppIcon-PaperDark", "AppIcon-Circuit"])
+        await m.follow(nil, scheme: .dark)
+        await m.follow(nil, scheme: .light)
         await m.follow(.standard, scheme: .system)
-        #expect(sys.calls == ["AppIcon-PaperDark", "AppIcon-Circuit", nil])
+        #expect(sys.calls == ["AppIcon-PaperDark", "AppIcon-PaperLight", nil])
     }
 
-    /// The look an icon is drawn in (Persona's logo, #1312): Paper takes a set Light & Dark, the others and Match System the system's.
     @Test func homeScreenLook() {
         #expect(AppIconChoice.standard.homeScreenLook(.light, system: .dark) == .light)
         #expect(AppIconChoice.standard.homeScreenLook(.dark, system: .light) == .dark)
         #expect(AppIconChoice.standard.homeScreenLook(.system, system: .dark) == .dark)
-        for c in [AppIconChoice.visor, .circuit] {
-            #expect(c.homeScreenLook(.light, system: .dark) == .dark)
-            #expect(c.homeScreenLook(.dark, system: .light) == .light)
-        }
     }
 
     /// A system that holds each switch until the test lets it go, as while its alert is up.
@@ -159,7 +98,7 @@ import UIKit
         for _ in 0..<1000 where !ready() { await Task.yield() }
     }
 
-    /// Dark then quickly Light (geminiwen's review of #714): the second change comes while the system is still asking
+    /// Dark then quickly Light: the second change comes while the system is still asking
     /// about the first, and the icon still ends on Light's set.
     @Test func aChangeWhileSwitchingIsNotLost() async {
         let sys = SlowSystem()
@@ -175,34 +114,11 @@ import UIKit
         #expect(sys.alternateIconName == "AppIcon-PaperLight" && !m.switching && m.current == .standard)
     }
 
-    /// Another Avatar chosen while the system is still asking about the first: the icon ends on the last one's.
-    @Test func aLookChosenWhileSwitchingIsNotLost() async {
-        let sys = SlowSystem()
-        let m = AppIconModel(system: sys)
-        let first = Task { await m.follow(.visor) }
-        await until { sys.holding }
-        await m.follow(.circuit)
-        sys.letGo()
-        await until { sys.calls.count == 2 && sys.holding }
-        sys.letGo()
-        await first.value
-        #expect(sys.calls == ["AppIcon-Visor", "AppIcon-Circuit"] && m.current == .circuit)
-    }
-
-    /// An icon this build dropped (Ember…) is left as it is: the home screen shows the primary icon already, and a switch
-    /// on coming to the front would pop the system's alert.
-    @Test func aDroppedIconIsNotSwitchedOnItsOwn() async {
-        let sys = FakeSystem("AppIcon-Ember")
-        let m = AppIconModel(system: sys)
-        await m.follow(.standard)
-        #expect(sys.calls.isEmpty && m.current == .standard)
-    }
-
     @Test func aFailureKeepsTheIconAndSaysSo() async {
         let sys = FakeSystem()
         sys.fail = NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "不行"])
         let m = AppIconModel(system: sys)
-        await m.follow(.circuit)
+        await m.follow(.standard, scheme: .light)
         #expect(m.current == .standard)
         #expect(m.failure?.contains("不行") == true)
     }
@@ -211,7 +127,7 @@ import UIKit
         let sys = FakeSystem()
         sys.supportsAlternateIcons = false
         let m = AppIconModel(system: sys)
-        await m.follow(.circuit)
+        await m.follow(.standard, scheme: .light)
         #expect(sys.calls.isEmpty && m.current == .standard)
     }
 

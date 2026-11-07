@@ -32,9 +32,9 @@ struct FleetPersonaTests {
 
     /// The look carries the color the app resolved in each appearance, so the extension draws the same accent.
     @Test func lookResolvesLightAndDark() {
-        let look = FleetLook(design: .circuit, tint: Palette.coral)
-        #expect(look.design == "circuit")
-        #expect(look.faceDesign == .circuit)
+        let look = FleetLook(design: .mochi, tint: Palette.coral)
+        #expect(look.design == "mochi")
+        #expect(look.faceDesign == .mochi)
         #expect(look.light == 0xD4683F)
         #expect(look.dark == 0xE8835C)
     }
@@ -43,7 +43,19 @@ struct FleetPersonaTests {
         let look = try JSONDecoder().decode(FleetLook.self, from: Data(#"{"design":"later","light":1,"dark":2}"#.utf8))
         #expect(look.faceDesign == .mochi)
         #expect(FleetLook(persona: .builtin, builtinAccent: Palette.coral).faceDesign == .mochi)
-        #expect(FleetLook(persona: .visor, builtinAccent: Palette.coral).faceDesign == .visor)
+        #expect(FleetLook(persona: .builtin, builtinAccent: Palette.coral).faceDesign == .mochi)
+    }
+
+    @Test func removedHubAndCachedLooksFallBackToMochi() {
+        for design in ["visor", "circuit", "pixel", "facet", "blob", "spark", "halo"] {
+            let old = FleetLook(design: design, light: 1, dark: 2)
+            #expect(FleetState(look: old).drawnLook == .standard)
+            #expect(old.supported == .standard)
+        }
+        let removed = FleetLook(design: "mochi", light: 1, dark: 2, package: "other/1")
+        #expect(removed.supported == .standard)
+        let frog = FleetLook(design: "visor", light: 1, dark: 2, package: "nwverse/1")
+        #expect(frog.supported.package == "nwverse/1" && frog.supported.faceDesign == .mochi)
     }
 
     @Test func lookRoundTrips() throws {
@@ -55,7 +67,7 @@ struct FleetPersonaTests {
     /// A look saved by a build before packages had faces still reads: a built-in.
     @Test func anOlderLookStillReads() throws {
         let look = try JSONDecoder().decode(FleetLook.self, from: Data(#"{"design":"circuit","light":1,"dark":2}"#.utf8))
-        #expect(look.package == nil && look.faceDesign == .circuit)
+        #expect(look.package == nil && look.faceDesign == .mochi)
     }
 
     /// The persona rides in the ContentState (build 98: the extension did not get it from the keychain on a phone):
@@ -71,12 +83,12 @@ struct FleetPersonaTests {
         let pushed = #"{"phase":"working","working":1,"look":{"design":"circuit","light":13919295,"dark":15238012}}"#
         let state = try JSONDecoder().decode(FleetState.self, from: Data(pushed.utf8))
         #expect(state.look == FleetLook(design: "circuit", light: 0xD4643F, dark: 0xE8837C))
-        #expect(state.drawnLook.faceDesign == .circuit)
+        #expect(state.drawnLook.faceDesign == .mochi)
         // A look the extension cannot read (a later hub's) is dropped, not the whole content.
         let odd = try JSONDecoder().decode(FleetState.self, from: Data(#"{"phase":"working","look":{"design":7}}"#.utf8))
         #expect(odd.phase == .working && odd.look == nil)
 
-        let mine = FleetLook(design: "visor", light: 1, dark: 2, package: "a/1")
+        let mine = FleetLook(design: "mochi", light: 1, dark: 2, package: "a/1")
         #expect(old.tailored(island: IslandPrefs(), details: true, look: mine).look == mine)
         #expect(state.tailored(island: IslandPrefs(), details: true).look == state.look)
     }
@@ -97,7 +109,7 @@ struct FleetPersonaTests {
     /// for idle / working / thinking and none for needs you or offline.
     static let colors: [String: UInt32] = ["idle": 0x40B2A0, "working": 0xE08A2E, "thinking": 0x7D5BDC, "avatar": 0x3D89BC]
     static let manifest = """
-    {"format":1,"id":"mint","name":"小薄荷","avatar":{"sizes":{"128":"avatar/128.png"}},
+    {"format":1,"id":"nwverse","name":"小薄荷","avatar":{"sizes":{"128":"avatar/128.png"}},
      "dot":{"size":144,"states":{"idle":{"file":"dot/idle.png"},"working":{"file":"dot/working.png"},"thinking":{"file":"dot/thinking.png"}}},
      "colors":{"light":{"primary":"#40B2A0"},"dark":{"primary":"#40B2A0"}}}
     """
@@ -115,16 +127,16 @@ struct FleetPersonaTests {
     /// The package chosen in Settings the way the app does it: listed by the hub, downloaded, on screen.
     @MainActor private func chosen() async throws -> PersonaStore {
         let hub = FakeHub()
-        hub.on("GET", "/api/v1/personas", json: #"{"personas":[{"id":"mint","rev":"r1","bytes":10,"manifest":\#(Self.manifest)}]}"#)
+        hub.on("GET", "/api/v1/personas", json: #"{"personas":[{"id":"nwverse","rev":"r1","bytes":10,"manifest":\#(Self.manifest)}]}"#)
         for (name, file) in [("avatar", "avatar/128.png"), ("idle", "dot/idle.png"), ("working", "dot/working.png"), ("thinking", "dot/thinking.png")] {
             let png = Self.disc(Self.colors[name]!)
-            hub.on("GET", "/api/v1/personas/mint/\(file)") { _ in png }
+            hub.on("GET", "/api/v1/personas/nwverse/\(file)") { _ in png }
         }
         let root = FileManager.default.temporaryDirectory.appending(path: "fleet-personas-\(UUID().uuidString)")
         let personas = PersonaStore(root: root, defaults: UserDefaults(suiteName: "fleet-persona-\(UUID().uuidString)")!)
         await personas.refresh(hub.client)
-        await personas.choose(try #require(personas.offered.first { $0.id == "mint" }), api: hub.client)
-        #expect(personas.current.id == "mint")
+        await personas.choose(try #require(personas.offered.first { $0.id == "nwverse" }), api: hub.client)
+        #expect(personas.current.id == "nwverse")
         return personas
     }
 
@@ -155,7 +167,7 @@ struct FleetPersonaTests {
         let personas = try await chosen()
         let shared = Shared()
         let look = FleetLook(persona: personas.current, builtinAccent: Palette.systemBlue)
-        #expect(look.package == "mint/r1")
+        #expect(look.package == "nwverse/r1")
         #expect(FleetLook.save(look, faces: { FleetFaces(persona: personas.current, personas: personas) }, to: shared.store))
 
         // The extension's side: only what is in the shared container.
@@ -163,21 +175,21 @@ struct FleetPersonaTests {
         #expect(read == look)
         #expect(read.light == 0x40B2A0) // the package's primary, for the moments its faces cannot be read
         let faces = try #require(read.faces(shared.store))
-        #expect(faces.package == "mint/r1")
+        #expect(faces.package == "nwverse/r1")
         // A file a picture and size: the three states the package draws and its avatar for the other two, each at
         // the compact (22), minimal (24) and expanded / lock screen (26) size, × 3.
         #expect(FleetFaces.sizes == [22, 24, 26])
         let files = try #require(shared.store.files())
         let names: [String] = ["avatar", "idle", "thinking", "working"].flatMap { (n: String) -> [String] in
-            FleetFaces.sizes.map { "faces/mint_r1_3x/\(n)_\($0).png" }
+            FleetFaces.sizes.map { "faces/nwverse_r1_3x/\(n)_\($0).png" }
         }
         #expect(files.map(\.name) == names + ["look.json"])
         for picture in faces.states.values {
             for (size, png) in picture { #expect(UIImage(data: png)?.cgImage?.width == size * 3) }
         }
-        #expect(shared.store.face("mint/r1", .working, points: IslandMetrics.face)?.file == "working_22.png")
-        #expect(shared.store.face("mint/r1", .working, points: IslandMetrics.lockFace)?.file == "working_26.png")
-        let needsYou = shared.store.face("mint/r1", .needsYou, points: IslandMetrics.limitedContent)
+        #expect(shared.store.face("nwverse/r1", .working, points: IslandMetrics.face)?.file == "working_22.png")
+        #expect(shared.store.face("nwverse/r1", .working, points: IslandMetrics.lockFace)?.file == "working_26.png")
+        let needsYou = shared.store.face("nwverse/r1", .needsYou, points: IslandMetrics.limitedContent)
         #expect(needsYou?.file == "avatar_24.png" && needsYou?.own == false)
         let size = IslandMetrics.face
         for (state, name) in [(PersonaState.idle, "idle"), (.working, "working"), (.thinking, "thinking")] {
@@ -206,12 +218,12 @@ struct FleetPersonaTests {
         let shared = Shared()
         FleetLook.save(FleetLook(persona: personas.current, builtinAccent: Palette.systemBlue),
                        faces: { FleetFaces(persona: personas.current, personas: personas) }, to: shared.store)
-        #expect(shared.packages == ["mint_r1_3x"])
+        #expect(shared.packages == ["nwverse_r1_3x"])
 
-        let circuit = FleetLook(persona: .circuit, builtinAccent: Palette.coral)
+        let circuit = FleetLook(persona: .builtin, builtinAccent: Palette.coral)
         #expect(FleetLook.save(circuit, faces: { nil }, to: shared.store))
         let read = FleetLook.load(shared.store)
-        #expect(read.faceDesign == .circuit && read.package == nil && read.light == 0xD4683F)
+        #expect(read.faceDesign == .mochi && read.package == nil && read.light == 0xD4683F)
         #expect(read.faces(shared.store) == nil)
         #expect(shared.packages.isEmpty)
     }
@@ -220,8 +232,8 @@ struct FleetPersonaTests {
     @Test func facesBelongToTheirPackage() throws {
         let shared = Shared()
         let a = FleetFaces(package: "a/1", states: ["idle": try #require(Self.picture(0x40B2A0))], avatar: nil)
-        FleetLook.save(FleetLook(design: "visor", light: 1, dark: 1, package: "a/1"), faces: { a }, to: shared.store)
-        let b = FleetLook(design: "visor", light: 0x24418F, dark: 0x24418F, package: "b/1")
+        FleetLook.save(FleetLook(design: "mochi", light: 1, dark: 1, package: "a/1"), faces: { a }, to: shared.store)
+        let b = FleetLook(design: "mochi", light: 0x24418F, dark: 0x24418F, package: "b/1")
         #expect(FleetLook.save(b, faces: { nil }, to: shared.store))
         let read = FleetLook.load(shared.store)
         #expect(read.package == "b/1" && read.light == 0x24418F)
@@ -251,7 +263,7 @@ struct FleetPersonaTests {
     @Test func nothingReadableIsTheDefault() {
         let none = FleetLookStore(root: nil)
         #expect(FleetLook.load(none) == .standard)
-        #expect(!FleetLook.save(FleetLook(persona: .circuit, builtinAccent: Palette.coral), faces: { nil }, to: none))
+        #expect(!FleetLook.save(FleetLook(persona: .builtin, builtinAccent: Palette.coral), faces: { nil }, to: none))
         #expect(none.files() == nil)
         #expect(FleetLook.load(Shared().store) == .standard)
     }
@@ -321,7 +333,7 @@ struct FleetPersonaTests {
 
     /// Dynamic Island Diagnostics names the first step that fails, in the order the look travels from Settings to the island.
     @Test func diagnosticsNameTheFailingStep() {
-        let look = FleetLook(design: "visor", light: 1, dark: 1, package: "a/1")
+        let look = FleetLook(design: "mochi", light: 1, dark: 1, package: "a/1")
         var i = IslandDiagnostics.Input(look: look, group: "group.example")
         i.hub = .some(nil)
         #expect(IslandDiagnostics.verdict(i).contains("hub 没有这台手机的形象"))
@@ -356,7 +368,7 @@ struct FleetPersonaTests {
         let rows = IslandDiagnostics.sections(i, now: .now)
         #expect(rows.map(\.title) == ["结论", "形象", "App 这次启动写进 App Group", "容器里", "扩展最近一次"])
         let text = IslandDiagnostics.text(rows)
-        #expect(text.contains("实时活动的内容里：visor · a/1"))
+        #expect(text.contains("实时活动的内容里：mochi · a/1"))
         #expect(text.contains("faces/a_1：成功 · 9,000 字节"))
         #expect(text.contains("容器：/AppGroup/1/Fleet"))
         #expect(text.contains("形象包的图：idle.png · 3,600 字节 · a/1"))

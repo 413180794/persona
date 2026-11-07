@@ -1,121 +1,38 @@
 import SwiftUI
 
-/// The built-in personas' faces (docs/persona.md「内置形象」): drawn from shapes, so they stay sharp at any size; no
-/// bitmap assets. Mochi keeps the app icon's colors; the others are in the current style's accent. As the top bar's dot each moves for the state:
-/// a blink now and then (Idle), eyes looking up under a thought bubble (Thinking), eyes scanning (Visor) or signals
-/// running down the traces into the core (Circuit) (Working), a pulsing ring in Needs You's red (Waiting for you), dimmed and gray (Offline).
+/// Mochi's animated face, shared with the still drawing in the Live Activity.
 struct AssistantAvatar: View {
-    /// The designs that were tried (docs/assistant.md「头像」): `.mochi` is the default persona's (the app icon's
-    /// character), `.visor` the built-in Visor's (`Persona.visor`, the default until 2026-11-03), `.circuit` Circuit's.
     enum Design: String, CaseIterable, Identifiable {
-        case mochi, visor, circuit, pixel, facet, blob, spark, halo
+        case mochi
         var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .mochi: String(localized: "Mochi")
-            case .circuit: String(localized: "Circuit")
-            case .visor: String(localized: "Visor")
-            case .pixel: String(localized: "Pixel")
-            case .facet: String(localized: "Facet")
-            case .blob: String(localized: "Jelly")
-            case .spark: String(localized: "Spark")
-            case .halo: String(localized: "Halo")
-            }
-        }
+        var title: String { String(localized: "Mochi") }
     }
 
     @Environment(\.tabIsActive) private var inFront
     var size: CGFloat
     var design: Design = .mochi
     var state: PersonaState = .idle
-    /// Hold still (Reduce Motion, Low Power Mode): the state's look without its motion.
+    /// Hold still in Reduce Motion and Low Power Mode.
     var still = false
-    /// Defaults to the current style's accent.
-    var tint: Color?
 
-    init(size: CGFloat, design: Design = .mochi, state: PersonaState = .idle, still: Bool = false, tint: Color? = nil) {
-        self.size = size
-        self.design = design
-        self.state = state
-        self.still = still
-        self.tint = tint
-    }
-
-    private var accent: Color { state == .offline ? Color(white: 0.62) : tint ?? Theme.accent }
-    /// Moving every frame: only these states, and never when still or on a page behind another (the Mac keeps the
-    /// Persona page in the window, `MacPageStack`: its face blinked and moved while nobody could see it).
     private var moving: Bool { !still && inFront && [.thinking, .working, .needsYou].contains(state) }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("PersonaAvatar")
         #endif
-        Group {
-            switch design {
-            case .mochi: face(.mochi)
-            case .circuit: face(.circuit)
-            case .visor: face(.visor)
-            case .pixel: face(.pixel)
-            case .facet: face(.facet)
-            case .blob: face(.blob)
-            case .spark: spark
-            case .halo: halo
-            }
+        TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in
+            PersonaFace(size: size, design: PersonaFace.Design(rawValue: design.rawValue) ?? .mochi, state: state,
+                        time: tl.date.timeIntervalSinceReferenceDate, moving: moving,
+                        blink: still || !inFront ? nil : Theme.Motion.blink)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
-
-    // MARK: Mochi, Visor, Circuit, Pixel, Facet and Jelly: PersonaFace (shared with the Live Activity), on a clock while moving.
-
-    private func face(_ d: PersonaFace.Design) -> some View {
-        TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in
-            PersonaFace(size: size, design: d, state: state, tint: tint ?? Theme.accent, mark: Theme.Icon.persona,
-                        time: tl.date.timeIntervalSinceReferenceDate, moving: moving, blink: still || !inFront ? nil : Theme.Motion.blink)
-        }
-    }
-
-    // MARK: Spark: the app icon's sparkle on a dark disc tinted with the accent.
-
-    private var spark: some View {
-        ZStack {
-            Circle().fill(LinearGradient(colors: [accent.mix(with: .black, by: 0.72), accent.mix(with: .black, by: 0.88)],
-                                         startPoint: .top, endPoint: .bottom))
-            Image(systemName: Theme.Icon.persona)
-                .font(.system(size: size * 0.5, weight: .semibold))
-                .foregroundStyle(LinearGradient(colors: [accent.mix(with: .white, by: 0.45), accent], startPoint: .top, endPoint: .bottom))
-        }
-        .overlay(Circle().strokeBorder(accent.opacity(0.35), lineWidth: max(0.5, size * 0.02)))
-    }
-
-    // MARK: Halo: a broken ring around a glowing core, like a heads-up display.
-
-    private var halo: some View {
-        ZStack {
-            Circle().fill(LinearGradient(colors: [Color(white: 0.14), Color(white: 0.04)], startPoint: .top, endPoint: .bottom))
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: !moving)) { tl in
-                let angle = moving ? tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3) * 120 : 0
-                ZStack {
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .trim(from: Double(i) / 3 + 0.03, to: Double(i + 1) / 3 - 0.03)
-                            .stroke(accent, style: StrokeStyle(lineWidth: size * 0.07, lineCap: .round))
-                    }
-                }
-                .frame(width: size * 0.66, height: size * 0.66)
-                .rotationEffect(.degrees(angle - 90))
-            }
-            Circle()
-                .fill(RadialGradient(colors: [accent.mix(with: .white, by: 0.6), accent], center: .center, startRadius: 0, endRadius: size * 0.12))
-                .frame(width: size * 0.24, height: size * 0.24)
-                .shadow(color: accent, radius: size * 0.08)
-        }
-    }
 }
 
 #if DEBUG
-/// The designs that were tried, at the sizes they are used, light and dark, and the chosen one in every
-/// style's accent (under PersonaGallery, `-openAssistantPage avatars`).
+/// The remaining built-in face at its display sizes, in both appearances.
 enum AssistantAvatarGallery {
     struct Panels: View {
         var body: some View {
@@ -126,24 +43,11 @@ enum AssistantAvatarGallery {
         }
 
         private func panel(_ scheme: ColorScheme) -> some View {
-            VStack(alignment: .leading, spacing: Theme.Space.l) {
-                ForEach(AssistantAvatar.Design.allCases) { d in
-                    HStack(spacing: Theme.Space.l) {
-                        Text(d.title).font(Theme.Font.secondaryStrong).scaledFrame(width: Theme.Size.avatar, alignment: .leading)
-                        AssistantAvatar(size: 28, design: d)
-                        AssistantAvatar(size: 44, design: d)
-                        AssistantAvatar(size: 84, design: d)
-                        Spacer(minLength: 0)
-                    }
-                }
-                HStack(spacing: Theme.Space.m) {
-                    ForEach(ThemeColor.presets) { c in
-                        VStack(spacing: Theme.Space.xs) {
-                            AssistantAvatar(size: 40, tint: c.preset?.accent ?? Theme.accent)
-                            Text(c.title).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                }
+            HStack(spacing: Theme.Space.l) {
+                Text(AssistantAvatar.Design.mochi.title).font(Theme.Font.secondaryStrong)
+                AssistantAvatar(size: Theme.Size.avatar)
+                AssistantAvatar(size: PersonaStore.thumbnailPoints)
+                Spacer(minLength: 0)
             }
             .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)

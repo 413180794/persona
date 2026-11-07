@@ -56,7 +56,7 @@ import SwiftUI
                               NSWorkspace.shared.frontmostApplication?.processIdentifier != getpid()
                         else { throw Failure.focusChanged }
                         window = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true && $0.contentView != nil && !($0 is NSPanel) }
-                        if let window, !model.allSessions.isEmpty {
+                        if let window, !model.sessionsNow.isEmpty {
                             let size = NSSize(width: 1280, height: 900)
                             if window.contentView?.bounds.size != size { window.setContentSize(size) }
                             if !window.isVisible { window.orderBack(nil) }

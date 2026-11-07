@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 @MainActor
 struct PersonaTests {
     static let manifest = """
-    {"format":1,"id":"doudou","name":"豆豆","subtitle":"圆滚滚",
+    {"format":1,"id":"nwverse","name":"奶蛙","subtitle":"圆滚滚",
      "avatar":{"sizes":{"64":"avatar/64.png","128":"avatar/128.png","512":"avatar/512.png"},"safe":1},
      "dot":{"size":144,"states":{"idle":{"file":"dot/idle.png","fps":8},"needs_you":{"file":"dot/needs_you.png","fps":6}}},
      "colors":{"light":{"primary":"#F2C230","accent":"#F2C230","bubble":"#F2C230","bubble_text":"#FFFFFF"},
@@ -54,11 +54,9 @@ struct PersonaTests {
         func problem(_ from: String, _ to: String) throws -> String? {
             try Self.decode(Self.manifest.replacingOccurrences(of: from, with: to)).problem
         }
-        #expect(try problem(#""id":"doudou""#, #""id":"persona""#) != nil) // the built-ins' ids
-        #expect(try problem(#""id":"doudou""#, #""id":"persona""#) != nil)
-        #expect(try problem(#""id":"doudou""#, #""id":"persona-circuit""#) != nil)
-        #expect(try problem(#""id":"doudou""#, #""id":"persona-blob""#) != nil)
-        #expect(try problem(#""id":"doudou""#, #""id":"Dou Dou""#) != nil)
+        #expect(try problem(#""id":"nwverse""#, #""id":"persona""#) != nil) // the built-ins' ids
+        #expect(try problem(#""id":"nwverse""#, #""id":"persona""#) != nil)
+        #expect(try problem(#""id":"nwverse""#, #""id":"Dou Dou""#) != nil)
         #expect(try problem(#""format":1"#, #""format":2"#) != nil)
         #expect(try problem(#""idle":"#, #""thinking":"#) != nil)
         #expect(try problem("avatar/64.png", "../64.png") != nil)
@@ -113,7 +111,7 @@ struct PersonaTests {
     // MARK: The phone's copy
 
     private static func info(rev: String) -> String {
-        #"{"personas":[{"id":"doudou","rev":"\#(rev)","bytes":10,"manifest":\#(manifest)}]}"#
+        #"{"personas":[{"id":"nwverse","rev":"\#(rev)","bytes":10,"manifest":\#(manifest)}]}"#
     }
 
     private func store() -> (PersonaStore, URL, UserDefaults) {
@@ -125,110 +123,49 @@ struct PersonaTests {
     @Test func choosingDownloadsTheWholePackageAndKeepsIt() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
-        for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/doudou/\(f)", json: "png:\(f)") }
+        for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/nwverse/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
-        #expect(s.offered.map(\.id) == Persona.builtins.map(\.id) + ["doudou"])
+        #expect(s.offered.map(\.id) == Persona.builtins.map(\.id) + ["nwverse"])
         #expect(s.current.isBuiltin) // offered, not chosen
         let p = try #require(s.offered.last)
         #expect(!s.isOnPhone(p))
         // Only its face for Settings' card: 64 pt at 3x, the smallest avatar that big (the 128 is too small).
-        #expect(hub.sent("GET", "/api/v1/personas/doudou/avatar/512.png").count == 1)
-        #expect(hub.sent("GET", "/api/v1/personas/doudou/avatar/128.png").isEmpty)
-        #expect(hub.sent("GET", "/api/v1/personas/doudou/dot/idle.png").isEmpty)
+        #expect(hub.sent("GET", "/api/v1/personas/nwverse/avatar/512.png").count == 1)
+        #expect(hub.sent("GET", "/api/v1/personas/nwverse/avatar/128.png").isEmpty)
+        #expect(hub.sent("GET", "/api/v1/personas/nwverse/dot/idle.png").isEmpty)
 
         await s.choose(p, api: hub.client)
-        #expect(s.current.id == "doudou")
-        #expect(defaults.string(forKey: PersonaStore.chosenKey) == "doudou")
-        let idle = root.appending(path: "doudou/r1/dot/idle.png")
+        #expect(s.current.id == "nwverse")
+        #expect(defaults.string(forKey: PersonaStore.chosenKey) == "nwverse")
+        let idle = root.appending(path: "nwverse/r1/dot/idle.png")
         #expect((try? String(contentsOf: idle, encoding: .utf8)) == "png:dot/idle.png")
 
         // The next launch shows it from disk, before the hub answers.
         let again = PersonaStore(root: root, defaults: defaults)
-        #expect(again.current.id == "doudou" && again.current.rev == "r1")
+        #expect(again.current.id == "nwverse" && again.current.rev == "r1")
 
         // A new rev on the hub: downloaded, shown, and the old one removed.
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r2"))
         await s.refresh(hub.client)
         #expect(s.current.rev == "r2")
-        #expect(FileManager.default.fileExists(atPath: root.appending(path: "doudou/r2/dot/idle.png").path(percentEncoded: false)))
-        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "doudou/r1").path(percentEncoded: false)))
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r2/dot/idle.png").path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r1").path(percentEncoded: false)))
 
         // Gone from the hub: the built-in again (the choice is kept for when it comes back).
         hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
         await s.refresh(hub.client)
         #expect(s.current.isBuiltin)
-        #expect(s.chosenID == "doudou")
+        #expect(s.chosenID == "nwverse")
     }
 
-    /// Mochi is the default; each optional built-in has a distinct Persona-only id that stays chosen across launches.
-    @Test func mochiIsTheDefaultAndEachExplicitChoiceStays() async throws {
-        let (fresh, _, freshDefaults) = store()
-        #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil)
-        #expect(fresh.chosenID == "persona" && fresh.current.id == Persona.builtinID)
-        #expect(fresh.current.avatarDesign == .mochi && fresh.current.cardTitle == "团子" && fresh.current.name == "Persona")
-        #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil) // nothing written for them
-
-        #expect(Set(Persona.builtins.map(\.id)).count == Persona.builtins.count)
-        for kept in Persona.builtins {
-            let (_, root, defaults) = store()
-            defaults.set(kept.id, forKey: PersonaStore.chosenKey)
-            let s = PersonaStore(root: root, defaults: defaults)
-            #expect(s.current.id == kept.id && s.current.avatarDesign == kept.avatarDesign)
-            // The hub answering doesn't move them to the new default.
-            let hub = FakeHub()
-            hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
-            await s.refresh(hub.client)
-            #expect(s.current.id == kept.id && s.current.avatarDesign == kept.avatarDesign)
-        }
-        #expect(Persona.visor.id == "persona-visor" && Persona.visor.cardTitle == "面罩")
-
-        await fresh.choose(Persona.visor, api: nil)
-        let visorAgain = PersonaStore(root: fresh.root, defaults: freshDefaults).current
-        #expect(visorAgain.id == "persona-visor" && visorAgain.avatarDesign == .visor)
-        #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: visorAgain.id).color == .style)
-        await fresh.choose(Persona.builtin, api: nil)
-        #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == Persona.builtinID)
-    }
-
-    /// Pixel, Facet and Jelly (#350) come after Circuit, are drawn by the app (no download), keep their own card titles, and
-    /// their ids are taken from hub packages.
-    @Test func pixelFacetAndBlobAreBuiltInChoices() async throws {
+    @Test func mochiIsTheOnlyBuiltIn() async {
         let (s, _, defaults) = store()
-        #expect(Persona.builtins.map(\.id).suffix(4) == [Persona.circuit.id, "persona-pixel", "persona-facet", "persona-blob"])
-        for (p, title, design) in [(Persona.pixel, "像素", AssistantAvatar.Design.pixel), (Persona.facet, "晶面", .facet), (Persona.blob, "软糖", .blob)] {
-            #expect(p.isBuiltin && s.isOnPhone(p))
-            #expect(p.name == "Persona" && p.cardTitle == title && p.avatarDesign == design)
-            #expect(PersonaFace.Design(rawValue: p.design ?? "") != nil, "the Live Activity can draw it")
-        }
-        await s.choose(Persona.blob, api: nil)
-        #expect(defaults.string(forKey: PersonaStore.chosenKey) == "persona-blob")
-        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == "persona-blob")
-        // The accent is still the style's: a built-in is not Match Avatar.
-        #expect(AppearanceChoice.resolve(style: nil, color: nil, persona: "persona-blob").color == .style)
-    }
-
-    /// Circuit is offered next to the default before the hub answers (or with no hub at all), is chosen without a
-    /// download, and stays chosen across launches; it is still called Persona, with its own card title.
-    @Test func circuitIsABuiltInChoice() async throws {
-        let (s, _, defaults) = store()
-        #expect(s.offered.map(\.id) == Persona.builtins.map(\.id))
-        #expect(s.current.id == Persona.builtinID) // the default stays Mochi
-        let circuit = try #require(s.offered.first { $0.id == Persona.circuit.id })
-        #expect(circuit.isBuiltin && s.isOnPhone(circuit))
-        #expect(circuit.name == "Persona" && circuit.cardTitle == "汇流")
-        #expect(circuit.avatarDesign == .circuit && Persona.builtin.avatarDesign == .mochi && Persona.visor.avatarDesign == .visor)
-
-        await s.choose(circuit, api: nil)
-        #expect(s.current.id == Persona.circuit.id)
-        #expect(defaults.string(forKey: PersonaStore.chosenKey) == Persona.circuit.id)
-        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == Persona.circuit.id)
-
-        // A hub that lists no packages keeps it.
-        let hub = FakeHub()
-        hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
-        await s.refresh(hub.client)
-        #expect(s.current.id == Persona.circuit.id)
+        #expect(Persona.builtins.map(\.id) == ["persona"])
+        #expect(s.current.avatarDesign == .mochi && s.current.cardTitle == "团子")
+        #expect(s.chosenID == "persona" && defaults.string(forKey: PersonaStore.chosenKey) == nil)
+        await s.choose(.builtin, api: nil)
+        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == "persona")
     }
 
     /// Two refreshes at once (connecting to the hub and Settings opening, 2026-10-31): the second must not clean away the
@@ -237,9 +174,9 @@ struct PersonaTests {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
         let files = try Self.decode().files
-        for f in files { hub.on("GET", "/api/v1/personas/doudou/\(f)", json: "png:\(f)") }
+        for f in files { hub.on("GET", "/api/v1/personas/nwverse/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
-        defaults.set("doudou", forKey: PersonaStore.chosenKey)
+        defaults.set("nwverse", forKey: PersonaStore.chosenKey)
         // Every answer takes 20 ms, as over the network; the second refresh starts when the first has the list and
         // one file (at 40 ms) and is fetching the rest.
         var slow = hub.client
@@ -254,15 +191,15 @@ struct PersonaTests {
         let second = Task { await s.refresh(api) }
         await first.value
         await second.value
-        #expect(s.current.id == "doudou")
-        let missing = files.filter { !FileManager.default.fileExists(atPath: root.appending(path: "doudou/r1/\($0)").path(percentEncoded: false)) }
+        #expect(s.current.id == "nwverse")
+        let missing = files.filter { !FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r1/\($0)").path(percentEncoded: false)) }
         #expect(missing.isEmpty, "the package on the phone lacks \(missing)")
     }
 
     @Test func aFailedDownloadChangesNothing() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
-        hub.on("GET", "/api/v1/personas/doudou/avatar/64.png", json: "png") // the others 404
+        hub.on("GET", "/api/v1/personas/nwverse/avatar/64.png", json: "png") // the others 404
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
         await s.choose(try #require(s.offered.last), api: hub.client)
@@ -270,7 +207,7 @@ struct PersonaTests {
         #expect(defaults.string(forKey: PersonaStore.chosenKey) == nil)
         #expect(s.error != nil)
         // Nothing half-written is left where a package would be read from.
-        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "doudou/r1").path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r1").path(percentEncoded: false)))
     }
 
     /// With no hub, a package not on the phone cannot be chosen, and Settings says why instead of doing nothing.
@@ -284,8 +221,8 @@ struct PersonaTests {
         #expect(defaults.string(forKey: PersonaStore.chosenKey) == nil)
         #expect(s.error?.contains("连上 hub") == true)
         // Choosing one that is on the phone then clears the message.
-        await s.choose(Persona.visor, api: nil)
-        #expect(s.current.id == Persona.visor.id)
+        await s.choose(Persona.builtin, api: nil)
+        #expect(s.current.id == Persona.builtinID)
         #expect(s.error == nil)
     }
 
