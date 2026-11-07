@@ -398,6 +398,7 @@ func TestTopicChatCardPressIsTheOwnersAlone(t *testing.T) {
 	if out := press("ou_me", "oc_p2p"); !strings.Contains(out, "李四") || pressed() != 2 {
 		t.Fatalf("the owner's press in the private chat: %s", out)
 	}
+	w.api.inChat("om_card", "oc_p2p") // a press that names no chat goes by where its card is (the next test)
 	if out := press("ou_me", ""); !strings.Contains(out, "李四") || pressed() != 3 {
 		t.Fatalf("a press that names no chat: %s", out)
 	}
@@ -405,6 +406,63 @@ func TestTopicChatCardPressIsTheOwnersAlone(t *testing.T) {
 	w.topicsOn(t)
 	if out := press("ou_me", topicChat); !strings.Contains(out, "没有为机器人开启") || pressed() != 3 {
 		t.Fatalf("a press after the group was taken out: %s", out)
+	}
+}
+
+// A press whose callback names no chat is judged by the chat of the card's message, not let through: a card in a group
+// the owner did not opt in (or took out again) is dead whether or not the callback says where it is.
+func TestCardPressWithoutChatIsJudgedByItsMessage(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	w.topicsOn(t, topicChat)
+	w.a.on(assistantwire.MethodFeishuAction, func(json.RawMessage) (any, error) {
+		return map[string]any{"toast": map[string]any{"type": "success", "content": "已选：李四"}}, nil
+	})
+	press := func(from, msg string) string {
+		b, _ := json.Marshal(map[string]any{"schema": "2.0", "header": map[string]any{"event_type": "card.action.trigger"},
+			"event": map[string]any{"operator": map[string]any{"open_id": from},
+				"action":  map[string]any{"value": map[string]any{"a": "ix", "id": "ix_q", "q": "0", "v": "李四"}, "tag": "button"},
+				"context": map[string]any{"open_message_id": msg}}})
+		res, err := w.h.botEvent(w.ctx, b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(res)
+		return string(raw)
+	}
+	pressed := func() int { return len(w.a.got(assistantwire.MethodFeishuAction)) }
+	w.api.inChat("om_card_out", topicOther) // a card in a group that is not opted in
+	w.api.inChat("om_card_dm", "oc_p2p")
+	w.api.inChat("om_card_topic", topicChat)
+	w.api.mu.Lock()
+	w.api.readCode["om_card_err"] = 99991
+	w.api.mu.Unlock()
+
+	if out := press("ou_me", "om_card_out"); !strings.Contains(out, "没有为机器人开启") || pressed() != 0 {
+		t.Fatalf("the owner's press on a card in a group not opted in, naming no chat: %s", out)
+	}
+	w.api.mu.Lock()
+	w.api.read["om_card_other"] = []map[string]any{{"message_id": "om_somebody_else", "chat_id": "oc_p2p"}} // not about that message
+	w.api.mu.Unlock()
+	for _, id := range []string{"om_card_err", "om_card_other", "om_card_unseen", ""} { // the chat cannot be told
+		if out := press("ou_me", id); !strings.Contains(out, "判断不出") || pressed() != 0 {
+			t.Fatalf("a press whose card's chat cannot be told (%q): %s", id, out)
+		}
+	}
+	if out := press("ou_me", "om_card_dm"); !strings.Contains(out, "李四") || pressed() != 1 {
+		t.Fatalf("a press on a card in the private chat: %s", out)
+	}
+	if out := press("ou_me", "om_card_topic"); !strings.Contains(out, "李四") || pressed() != 2 {
+		t.Fatalf("a press on a card in the opted-in group: %s", out)
+	}
+	// Opted out, a card the hub remembers (from the lookup above) is dead, with no callback naming its chat.
+	w.topicsOn(t)
+	if out := press("ou_me", "om_card_topic"); !strings.Contains(out, "没有为机器人开启") || pressed() != 2 {
+		t.Fatalf("a press after the group was taken out: %s", out)
+	}
+	// Someone else is still turned away first.
+	if out := press("ou_stranger", "om_card_dm"); !strings.Contains(out, "只有机器人的主人") || pressed() != 2 {
+		t.Fatalf("someone else's press: %s", out)
 	}
 }
 

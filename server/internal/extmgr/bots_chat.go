@@ -315,15 +315,24 @@ func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEve
 
 // botCardAction answers a press on one of the bot's cards: only the owner's count, and the assistant answers them.
 func (h *Manager) botCardAction(ctx context.Context, a *feishubot.CardAction, raw json.RawMessage) any {
-	_, set := h.botAPI()
+	api, set := h.botAPI()
 	if set.Owner == nil || a.Operator.OpenID != set.Owner.OpenID {
 		return toast("error", i18n.T(h.userLang(), "hub-bots_chat.owner_only_action"))
 	}
-	// A press from a group counts only in a group the owner has opted in (so a card left in one the owner took out
-	// again is dead), and only the owner's: a card shown to a group is shown to everyone in it. A press that names no
-	// chat is as it always was.
-	if a.Context.ChatID != "" && !botChatAllowed(set, a.Context.ChatID) {
-		return toast("error", i18n.T(h.userLang(), "hub-bots_chat.chat_not_enabled"))
+	// A press counts only in the owner's private chat or a group the owner has opted in (so a card left in a group the
+	// owner took out again is dead), and only the owner's: a card shown to a group is shown to everyone in it. Where
+	// the callback names no chat, the chat of the card's message decides, as for a reply's parent; one that cannot be
+	// told is refused rather than let through.
+	chat := a.Context.ChatID
+	if chat == "" {
+		chat = h.cardChat(ctx, api, a.Context.MessageID)
+	}
+	if !botChatAllowed(set, chat) {
+		key := "hub-bots_chat.chat_not_enabled"
+		if chat == "" {
+			key = "hub-bots_chat.chat_unknown"
+		}
+		return toast("error", i18n.T(h.userLang(), key))
 	}
 	// The owner pressed it (checked here): the assistant answers the card with this, once (interactions.resolve).
 	action := ""
@@ -343,6 +352,34 @@ func (h *Manager) botCardAction(ctx context.Context, a *feishubot.CardAction, ra
 		return nil
 	}
 	return out
+}
+
+// cardChat is the chat of the message a card press names when the callback does not say: what the hub remembers of the
+// message, else the Open Platform's answer, asked within the time Feishu leaves for the callback. "" when it cannot be
+// told. Only a chat the bot may use is remembered, as in checkReplyParent.
+func (h *Manager) cardChat(ctx context.Context, api *feishubot.Client, messageID string) string {
+	if messageID == "" || api == nil {
+		return ""
+	}
+	if chat := h.messageChat(messageID); chat != "" {
+		return chat
+	}
+	ctx, cancel := context.WithTimeout(ctx, 700*time.Millisecond)
+	defer cancel()
+	items, err := api.Message(ctx, messageID)
+	if err != nil {
+		h.logf("bots: which chat is the card %s in: %v", messageID, err)
+		return ""
+	}
+	for _, it := range items {
+		if it.MessageID == messageID {
+			if _, set := h.botAPI(); botChatAllowed(set, it.ChatID) {
+				h.rememberMessageChat(messageID, it.ChatID)
+			}
+			return it.ChatID
+		}
+	}
+	return ""
 }
 
 func toast(kind, text string) *feishubot.CardResponse {

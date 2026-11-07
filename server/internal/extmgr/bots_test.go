@@ -472,6 +472,7 @@ func TestBotCardPressGoesToTheAssistantWithTheOwnersAction(t *testing.T) {
 	w.a.on(assistantwire.MethodFeishuAction, func(json.RawMessage) (any, error) {
 		return map[string]any{"toast": map[string]any{"type": "success", "content": "已选：李四"}}, nil
 	})
+	w.api.inChat("om_card", "oc_p2p") // the callback below names no chat: the card's message says where it is
 	press := func(from string) map[string]any {
 		b, _ := json.Marshal(map[string]any{"schema": "2.0", "header": map[string]any{"event_type": "card.action.trigger"},
 			"event": map[string]any{"operator": map[string]any{"open_id": from},
@@ -612,7 +613,8 @@ func TestBotSaysTheAssistantIsAwayAndRecovers(t *testing.T) {
 	w.api.find(t, "/messages/om_away/reply", "助手暂时连不上")
 	b, _ := json.Marshal(map[string]any{"schema": "2.0", "header": map[string]any{"event_type": "card.action.trigger"},
 		"event": map[string]any{"operator": map[string]any{"open_id": "ou_me"},
-			"action": map[string]any{"value": map[string]any{"a": "ix", "id": "ix_x"}, "tag": "button"}}})
+			"action":  map[string]any{"value": map[string]any{"a": "ix", "id": "ix_x"}, "tag": "button"},
+			"context": map[string]any{"open_message_id": "om_x", "open_chat_id": "oc_p2p"}}})
 	res, _ := w.h.botEvent(w.ctx, b)
 	if raw, _ := json.Marshal(res); !strings.Contains(string(raw), "助手暂时连不上") {
 		t.Fatalf("a press while away: %s", raw)
