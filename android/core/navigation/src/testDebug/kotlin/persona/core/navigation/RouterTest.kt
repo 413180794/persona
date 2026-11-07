@@ -98,6 +98,14 @@ class RouterTest {
         assertEquals(NewTodoRoute, newTodo.key)
     }
 
+    @Test fun askPersonaLandsOnTheComposerOverPagesPushedOntoThePersonaTab() {
+        val stacks = AppTab.entries.associateWith { mutableListOf(tabRoot(it)) }
+        // Knowledge and To-dos (feature modules) are pushed onto whichever tab is selected, Persona included.
+        stacks.getValue(AppTab.Persona).add(PushedPage)
+        assertEquals(AppTab.Persona, router.parse(RouteInput.DeepLink(AskPersonaLink))!!.restore(stacks))
+        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Persona))
+    }
+
     @Test fun restoredIdentityReusesExistingEntriesAndKeepsSourcesSerializable() {
         val stacks = AppTab.entries.associateWith { mutableListOf(tabRoot(it)) }
         val sources = listOf(RouteSource.InboxItem("item"), RouteSource.LarkConversation("chat"),
@@ -134,3 +142,5 @@ class RouterTest {
         assertEquals(key, actual.key)
     }
 }
+
+private data object PushedPage : NavKey

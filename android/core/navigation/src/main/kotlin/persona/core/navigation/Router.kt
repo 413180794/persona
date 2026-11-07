@@ -152,8 +152,8 @@ fun tabRoot(tab: AppTab): NavKey = when (tab) {
 fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>): AppTab {
     val stack = stacks.getValue(tab)
     if (stack.isEmpty()) stack.add(tabRoot(tab))
-    // The card is listed on the tab's root: a conversation left open there is closed first.
-    if (card != null) while (stack.size > 1) stack.removeAt(stack.lastIndex)
+    // The card is listed on the tab's root and the composer to focus sits there: pages left open on top are closed first.
+    if (card != null || focusComposer) while (stack.size > 1) stack.removeAt(stack.lastIndex)
     if (key == tabRoot(tab)) return tab
     // Move legacy entries out of the wrong tab, then pop to an existing target.
     stacks.filterKeys { it != tab }.values.forEach { other -> other.removeAll { sameTarget(it, key) } }
