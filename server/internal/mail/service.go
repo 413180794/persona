@@ -548,7 +548,7 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 }
 
 func dialAndLogin(a *MailAccount, token string, proxy *url.URL) (*imapclient.Client, error) {
-	addr := fmt.Sprintf("%s:%d", a.IMAPHost, a.IMAPPort)
+	addr := serverAddr(a.IMAPHost, a.IMAPPort)
 	opts := &imapclient.Options{
 		TLSConfig:   &tls.Config{ServerName: a.IMAPHost},
 		WordDecoder: mailWordDecoder(),

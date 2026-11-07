@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // fakeConnectProxy is a minimal HTTP CONNECT proxy that counts tunnels and checks basic auth.
@@ -135,5 +136,79 @@ func TestDialTCPKeepsBytesAfterConnectReply(t *testing.T) {
 	line, err := bufio.NewReader(c).ReadString(10)
 	if err != nil || line != "* OK IMAP4rev1 ready\r\n" {
 		t.Fatalf("greeting = %q, %v", line, err)
+	}
+}
+
+func TestServerAddr(t *testing.T) {
+	for _, c := range []struct{ host, want string }{
+		{"imap.example.com", "imap.example.com:993"},
+		{"192.0.2.1", "192.0.2.1:993"},
+		{"2001:db8::1", "[2001:db8::1]:993"},
+		{"[2001:db8::1]", "[2001:db8::1]:993"},
+	} {
+		if got := serverAddr(c.host, 993); got != c.want {
+			t.Errorf("serverAddr(%q, 993) = %q, want %q", c.host, got, c.want)
+		}
+	}
+}
+
+// Every IMAP and SMTP dial connects to a mail server set as an IPv6 literal, with or without brackets.
+func TestDialMailServerAtIPv6Literal(t *testing.T) {
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	reached := make(chan struct{}, 16)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			reached <- struct{}{}
+			c.Close()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	srv := newTestIMAP(t)
+	s := newServiceWithAccount(t, srv)
+	ctx := context.Background()
+	for _, host := range []string{"::1", "[::1]"} {
+		a := srv.testAccount()
+		a.IMAPHost, a.IMAPPort, a.SMTPHost, a.SMTPPort = host, port, host, port
+		dials := []struct {
+			name string
+			dial func() error
+		}{
+			{"IMAP", func() error {
+				c, err := dialAndLogin(a, "", nil)
+				if c != nil {
+					c.Close()
+				}
+				return err
+			}},
+			{"raw IMAP", func() error {
+				c, err := s.rawDial(ctx, a)
+				if c != nil {
+					c.conn.Close()
+				}
+				return err
+			}},
+			{"SMTP check", func() error { return s.checkSMTP(ctx, a) }},
+			{"SMTP send", func() error { return s.smtpSend(ctx, a, a.Email, []string{"li@example.com"}, []byte("x")) }},
+		}
+		for _, d := range dials {
+			for len(reached) > 0 {
+				<-reached
+			}
+			err := d.dial()
+			select {
+			case <-reached:
+			case <-time.After(2 * time.Second):
+				t.Errorf("%s at %q never reached the server: %v", d.name, host, err)
+			}
+		}
 	}
 }

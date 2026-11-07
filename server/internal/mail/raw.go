@@ -71,7 +71,7 @@ type rawConn struct {
 }
 
 func (s *Service) rawDial(ctx context.Context, a *MailAccount) (*rawConn, error) {
-	addr := fmt.Sprintf("%s:%d", a.IMAPHost, a.IMAPPort)
+	addr := serverAddr(a.IMAPHost, a.IMAPPort)
 	proxy := s.proxyFor(a)
 	var (
 		c   net.Conn

@@ -223,7 +223,7 @@ func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcp
 			security = "starttls"
 		}
 	}
-	addr := fmt.Sprintf("%s:%d", a.SMTPHost, a.SMTPPort)
+	addr := serverAddr(a.SMTPHost, a.SMTPPort)
 	tlsConfig := &tls.Config{ServerName: a.SMTPHost}
 
 	type dialResult struct {
@@ -324,7 +324,7 @@ func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
 			security = "starttls"
 		}
 	}
-	addr := fmt.Sprintf("%s:%d", a.SMTPHost, a.SMTPPort)
+	addr := serverAddr(a.SMTPHost, a.SMTPPort)
 	tlsConfig := &tls.Config{ServerName: a.SMTPHost}
 	var (
 		client *smtp.Client

@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/emersion/go-smtp"
@@ -41,6 +43,12 @@ func (s *Service) proxyFor(a *MailAccount) *url.URL {
 		return s.googleProxy
 	}
 	return nil
+}
+
+// serverAddr is the address to dial for a server setting. An IPv6 literal may be set with or without brackets; either
+// way it goes in brackets before the port.
+func serverAddr(host string, port int) string {
+	return net.JoinHostPort(strings.TrimSuffix(strings.TrimPrefix(host, "["), "]"), strconv.Itoa(port))
 }
 
 // dialTCP connects to addr directly or through an HTTP CONNECT tunnel.
