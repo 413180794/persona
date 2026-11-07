@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Builds the Apple Watch's Milk Frog (docs/apple/persona.md "The Milk Frog on the watch") into the built-in nwverse package.
 
-  python3 scripts/assets/make_watch_pet.py SOURCE [--out server/internal/hub/personas/nwverse/pet]
+  python3 scripts/assets/make_watch_pet.py SOURCE [--out DIR]
 
 SOURCE holds the finished art, which stays out of the repo: frames/<clip>/000.png onward, and face-<state>.png. Each
 clip becomes one animated PNG the watch plays, each face a small picture for the row and the watch face. pet.json
-names them with their hashes, so a watch fetches only what changed. Needs ffmpeg.
+names them with their hashes, so a watch fetches only what changed. DIR defaults to the package's pet/. Needs ffmpeg.
 """
 import argparse
 import hashlib
@@ -13,6 +13,7 @@ import json
 import pathlib
 import subprocess
 
+OUT = pathlib.Path("server/internal/hub/personas") / "nwverse" / "pet"
 SIZE = 288  # pixels: the page draws it 144 points wide at 2x
 FACE = 128
 # fps; still is the frame that shows the state alone (the always-on display, while the wrist is down).
@@ -34,7 +35,7 @@ def sha256(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=pathlib.Path)
-    parser.add_argument("--out", type=pathlib.Path, default=pathlib.Path("server/internal/hub/personas/nwverse/pet"))
+    parser.add_argument("--out", type=pathlib.Path, default=OUT)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 

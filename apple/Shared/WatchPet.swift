@@ -15,9 +15,9 @@ nonisolated struct WatchPetStatus: Equatable, Sendable {
 
     var title: String {
         switch state {
-        case .needsYou: String(localized: "\(count) waiting for you [Watch Pet]")
-        case .working: String(localized: "\(count) working [Watch Pet]")
-        case .done: String(localized: "\(count) finished [Watch Pet]")
+        case .needsYou: StateName.count(.needsYou, count)
+        case .working: StateName.count(.working, count)
+        case .done: StateName.count(.unread, count)
         case .idle: String(localized: "Nothing going on [Watch Pet]")
         case .sleep: String(localized: "Asleep [Watch Pet]")
         case .offline: String(localized: "Can't reach the hub")

@@ -5529,29 +5529,6 @@
       },
       "extractionState": "manual"
     },
-    "%lld finished [Watch Pet]": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld finished"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件が完了"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个做完了"
-          }
-        }
-      }
-    },
     "%lld h": {
       "localizations": {
         "en": {
@@ -7704,29 +7681,6 @@
       },
       "extractionState": "manual"
     },
-    "%lld waiting for you [Watch Pet]": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld waiting for you"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件があなたを待っています"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个在等你"
-          }
-        }
-      }
-    },
     "%lld working [State Names]": {
       "extractionState": "manual",
       "localizations": {
@@ -7746,29 +7700,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld 个工作中"
-          }
-        }
-      }
-    },
-    "%lld working [Watch Pet]": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld working"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件が作業中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个在干活"
           }
         }
       }

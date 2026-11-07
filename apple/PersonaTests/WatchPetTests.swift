@@ -60,6 +60,13 @@ struct WatchPetTests {
         #expect(status(cards: [card("1", session: "a")], partly: true).state == .needsYou)
     }
 
+    /// Counted states use the one set of state names (#3960), not words of the frog's own.
+    @Test func countsUseTheSharedStateNames() {
+        #expect(WatchPetStatus(state: .needsYou, count: 2).title == StateName.count(.needsYou, 2))
+        #expect(WatchPetStatus(state: .working, count: 3).title == StateName.count(.working, 3))
+        #expect(WatchPetStatus(state: .done, count: 1).title == StateName.count(.unread, 1))
+    }
+
     private func manifest() -> WatchPetManifest {
         let hash = String(repeating: "a", count: 64)
         let clip = WatchPetManifest.Clip(file: "pet/x.png", sha256: hash, fps: 10, frames: 4, still: 1)
@@ -98,11 +105,11 @@ struct WatchPetTests {
     /// The package the hub really serves: what the watch would fetch.
     @Test func theShippedManifestIsUsable() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let dir = root.appending(path: "server/internal/hub/personas/nwverse/pet")
-        let m = try JSONDecoder().decode(WatchPetManifest.self, from: Data(contentsOf: dir.appending(path: "pet.json")))
+        let package = root.appending(path: "server/internal/hub/personas").appending(path: PersonaSelection.packageID)
+        let m = try JSONDecoder().decode(WatchPetManifest.self, from: Data(contentsOf: package.appending(path: "pet/pet.json")))
         #expect(m.isUsable)
         for file in m.clips.values.map(\.file) + m.faces.values.map(\.file) {
-            #expect(FileManager.default.fileExists(atPath: root.appending(path: "server/internal/hub/personas/nwverse/\(file)").path))
+            #expect(FileManager.default.fileExists(atPath: package.appending(path: file).path))
         }
     }
 }
