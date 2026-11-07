@@ -127,6 +127,8 @@ const P: Record<string, React.ReactNode> = {
 };
 
 export type IconName = keyof typeof P;
+/** Capability checks must not confuse an empty SVG with a supported native icon. */
+export const supportsIcon = (name: string): boolean => Object.prototype.hasOwnProperty.call(P, name);
 
 export function Icon({
   name,

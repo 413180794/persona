@@ -5,7 +5,8 @@
 // section's "Load more". An unknown item is left out. Shared by an extension's pages (settings/ExtensionView.tsx, which loads them and carries out what a
 // press answers) and the assistant's cards (ui/AssistantCard.tsx, which says which actions may be pressed now, which
 // one was answered, and when the fields are locked). A tone becomes a role color.
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { useNativeState, type NativeLocal } from "./native-state";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "../../ui/remark-gfm-parse";
 import { lazyPage } from "../../lib/lazy-page";
@@ -45,6 +46,8 @@ export interface ViewHandlers {
   onChoose: (item: UIItem, value: string) => void;
   /** A section's "Load more" (by scrolling to it or pressing it). */
   onMore?: (more: UIMore) => void;
+  /** Opt-in observation deduplication across native stream remounts; explicit presses still use onMore. */
+  onObserveMore?: (more: UIMore) => boolean;
   /** Whether an action may be pressed now (all of them when absent). */
   canPress?: (a: UIAction) => boolean;
   /** The id of the action answered: marked, the others stay as they are. */
@@ -53,6 +56,15 @@ export interface ViewHandlers {
   locked?: boolean;
   /** UI version 4: an action sent with values of the component's own (a file's path, a line, a comment typed). */
   onAct?: (a: UIAction, values?: Record<string, string>) => void;
+  onNativeAct?: (a: UIAction, values?: Record<string, string>) => Promise<boolean>;
+  /** Opt-in native stream binding: callbacks and controlled drafts belong to the stable node, not an action ID. */
+  nodeHandlers?: (key: string) => ViewHandlers;
+  draft?: { value: string; setValue: (value: string) => void };
+  nativeAvailable?: () => boolean;
+  nativeFetch?: (a: UIAction, values?: Record<string, string>) => Promise<import("../../lib/extension-ui").UIActionResult | null>;
+  local?: NativeLocal;
+  /** Native-only vocabulary supplement; undefined delegates to the unchanged legacy drawing. */
+  renderItem?: (item: UIItem, handlers: ViewHandlers) => ReactNode | undefined;
 }
 
 /** Nothing acts (an assistant's card): what a press would do is never asked for. */
@@ -90,7 +102,7 @@ function sideLabel(sections: UISection[]): string {
 function SplitSections({ view, ...handlers }: ViewHandlers & { view: UIView }) {
   const side = view.sections.filter((s) => s.pane === "side");
   const main = view.sections.filter((s) => s.pane !== "side");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useNativeState(handlers.local, "side-open", false);
   const label = sideLabel(side);
   const picked = () => setOpen(false);
   return (
@@ -137,6 +149,8 @@ interface SectionProps extends ViewHandlers {
 const STANDALONE = new Set(["code", "diff", "comment_thread"]);
 
 function Section({ section, embedded, compact, bare, onPicked, ...rest }: SectionProps) {
+  // Section-level callbacks (including MoreLine) use the section's key under the explicit stream adapter.
+  if (section.key && rest.nodeHandlers) rest = { ...rest, ...rest.nodeHandlers(section.key), nodeHandlers: rest.nodeHandlers };
   const items = section.items ?? [];
   const more = section.more && rest.onMore ? section.more : undefined;
   // runs of ordinary items share the section's card; a code, a diff or a thread is a card of its own
@@ -160,7 +174,7 @@ function Section({ section, embedded, compact, bare, onPicked, ...rest }: Sectio
           <Run key={run.items[0]?.key ?? `r${ri}`} items={run.items} embedded={embedded} compact={compact} bare={bare} onPicked={onPicked} more={ri === runs.length - 1 ? more : undefined} {...rest} />
         ),
       )}
-      {more && runs[runs.length - 1].standalone && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} divided={false} />}
+      {more && runs[runs.length - 1].standalone && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} onObserveMore={rest.onObserveMore} preserveObserver={!!rest.nodeHandlers} divided={false} />}
       {section.footer && <p className={cx("leading-relaxed text-ink-3", compact ? "px-4 pb-1 text-[11px]" : "mt-1.5 px-1 text-[11.5px]")}>{section.footer}</p>}
     </section>
   );
@@ -179,12 +193,13 @@ function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<S
     const afterRow = b.kind === "item" && (nextEntry || (b.item.type === "chart" && prev === "chart"));
     // an item's key keeps it (and the list's place) when the extension draws the view again
     const key = (b.kind === "item" ? b.item.key : b.items[0]?.key) ?? `#${i}`;
-    if (b.kind === "metrics") return { key, draw: (style) => <Metrics key={key} items={b.items} style={style} /> };
+    if (b.kind === "metrics" && !rest.renderItem) return { key, draw: (style) => <Metrics key={key} items={b.items} style={style} /> };
+    if (b.kind === "metrics") return { key, draw: (style) => <div key={key} style={style}>{b.items.map((item) => <Item key={item.key} item={item} {...rest} />)}</div> };
     if (b.kind === "buttons")
       return { key, draw: (style) => (
         <div key={key} className="flex flex-wrap items-center gap-2 px-4 py-2.5" style={style}>
           {b.items.map((it, j) => (
-            <ItemButton key={it.key ?? j} item={it} busy={rest.busy} onPress={rest.onPress} canPress={rest.canPress} chosen={rest.chosen} />
+            <ItemButton key={it.key ?? j} item={it} busy={rest.busy} onPress={rest.onPress} nodeHandlers={rest.nodeHandlers} canPress={rest.canPress} chosen={rest.chosen} />
           ))}
         </div>
       ) };
@@ -199,7 +214,7 @@ function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<S
   return (
       <div className={cx("overflow-hidden", compact || bare ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
         {drawn.map(({ entry, phase }) => entry.draw(presenceStyle(phase)))}
-        {more && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} divided={bs.length > 0} />}
+        {more && <MoreLine more={more} busy={rest.busy} onMore={rest.onMore!} onObserveMore={rest.onObserveMore} preserveObserver={!!rest.nodeHandlers} divided={bs.length > 0} />}
       </div>
   );
 }
@@ -208,23 +223,28 @@ function Run({ items, embedded, compact, bare, onPicked, more, ...rest }: Omit<S
  * "Load more" at a section's end: asked for once when it scrolls into view (the extension answers with the longer view), or
  * when pressed. The line is a new one each time the view changes, so the next page is asked for when it shows again.
  */
-function MoreLine({ more, busy, onMore, divided }: { more: UIMore; busy: string; onMore: (m: UIMore) => void; divided: boolean }) {
+function MoreLine({ more, busy, onMore, onObserveMore, divided, preserveObserver = false }: { more: UIMore; busy: string; onMore: (m: UIMore) => void; onObserveMore?: (m: UIMore) => boolean; divided: boolean; preserveObserver?: boolean }) {
   const ref = useRef<HTMLButtonElement>(null);
   const asked = useRef(false);
+  const latestOnMore = useRef<(m: UIMore) => boolean | void>(onObserveMore ?? onMore);
+  latestOnMore.current = onObserveMore ?? onMore;
+  const observerCallback = preserveObserver ? undefined : onMore;
   const pending = busy === more.action.id;
   useEffect(() => {
     asked.current = false; // a new view: its "Load more" may ask once
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver((entries) => {
+      if (preserveObserver && busy) return;
       if (entries.some((e) => e.isIntersecting) && !asked.current) {
-        asked.current = true;
-        onMore(more);
+        const accepted = latestOnMore.current(more);
+        asked.current = !preserveObserver || accepted !== false;
       }
     }, { rootMargin: "120px" });
     io.observe(el);
     return () => io.disconnect();
-  }, [more, onMore]);
+    // Stream handlers are version-bound; rebinding alone must not replay an unchanged callback.
+  }, [more, observerCallback, preserveObserver ? !!busy : undefined]);
   return (
     <button
       ref={ref}
@@ -253,7 +273,12 @@ function Metrics({ items, style }: { items: UIItem[]; style?: React.CSSPropertie
   );
 }
 
-function ItemButton({ item, busy, onPress, canPress, chosen }: { item: UIItem; busy: string; onPress: SectionProps["onPress"]; canPress?: ViewHandlers["canPress"]; chosen?: string }) {
+function ItemButton(props: { item: UIItem; busy: string; onPress: SectionProps["onPress"]; canPress?: ViewHandlers["canPress"]; chosen?: string; nodeHandlers?: ViewHandlers["nodeHandlers"] }) {
+  const scoped = props.item.key ? props.nodeHandlers?.(props.item.key) : undefined;
+  return <NativeItemButton {...props} {...scoped} />;
+}
+
+function NativeItemButton({ item, busy, onPress, canPress, chosen }: { item: UIItem; busy: string; onPress: SectionProps["onPress"]; canPress?: ViewHandlers["canPress"]; chosen?: string }) {
   if (!item.action) return null;
   const destructive = item.role === "destructive";
   const picked = !!chosen && chosen === item.action.id;
@@ -273,12 +298,20 @@ function ItemButton({ item, busy, onPress, canPress, chosen }: { item: UIItem; b
   );
 }
 
-function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, canPress, chosen, locked, onAct, onPicked }: Omit<SectionProps, "section" | "embedded" | "onMore" | "bare"> & { item: UIItem }) {
+function Item(props: Omit<SectionProps, "section" | "embedded" | "onMore" | "bare"> & { item: UIItem }) {
+  const scoped = props.item.key ? props.nodeHandlers?.(props.item.key) : undefined;
+  if (!scoped) return <NativeItem {...props} />;
+  const handlers = { ...props, ...scoped };
+  const custom = props.renderItem?.(props.item, handlers);
+  return <div data-native-key={props.item.key}>{custom === undefined ? <NativeItem {...handlers} /> : custom}</div>;
+}
+
+function NativeItem({ item: it, compact, values, setValue, busy, onPress, onChoose, canPress, chosen, locked, onAct, onPicked, draft, local, nativeFetch, nativeAvailable }: Omit<SectionProps, "section" | "embedded" | "onMore" | "bare"> & { item: UIItem }) {
   const pressable = (a: UIAction) => (canPress ? canPress(a) : true);
-  const code = { act: onAct ?? ((a: UIAction) => onPress(a)), busy, reveal: revealDiff };
+  const code = { act: onAct ?? ((a: UIAction) => onPress(a)), busy: locked ? busy || "stream-locked" : busy, reveal: revealDiff, local, fetch: nativeFetch, canFetch: nativeAvailable };
   switch (it.type) {
     case "header":
-      return <Header item={it} />;
+      return <Header item={it} native={!!local} />;
     case "breadcrumb":
       return <Breadcrumb item={it} {...code} />;
     case "file_tree":
@@ -286,11 +319,11 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, ca
     case "code":
       return <CodeView item={it} {...code} />;
     case "diff":
-      return <DiffView item={it} {...code} />;
+      return <DiffView key={local?.identity} item={it} {...code} />;
     case "comment_thread":
       return <CommentThread item={it} {...code} />;
     case "composer":
-      return locked ? null : <Composer item={it} {...code} />;
+      return locked && !local ? null : <Composer item={it} draft={draft} {...code} />;
     case "chart":
       return (
         // the chart's own frame (header, detail) around an empty plot of its height while its chunk loads, so the
@@ -402,7 +435,7 @@ function Item({ item: it, compact, values, setValue, busy, onPress, onChoose, ca
       );
     }
     case "field":
-      return <Field item={it} value={values[it.name ?? ""] ?? ""} locked={locked} onChange={(v) => it.name && setValue(it.name, v)} />;
+      return <><Field item={it} value={values[it.name ?? ""] ?? ""} locked={locked || !!local && it.kind === "secret"} onChange={(v) => it.name && setValue(it.name, v)} />{local && it.detail !== undefined && <p className="px-4 pb-2 text-xs text-ink-3">{it.detail}</p>}</>;
     case "divider":
       return <div role="separator" className="mx-4 my-1 border-t border-line" />;
     default:

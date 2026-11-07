@@ -1,7 +1,7 @@
 // The socket's side of #1574: a drop is invisible inside the grace, a restart retries at once, and a resumed hello
 // refetches nothing while an ordinary one refreshes everything as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyMachine, checkSocket, connect, disconnect, getState, onHubEvent, reconnectNow, refresh, reset } from "./store";
+import { appSocketReady, applyMachine, checkSocket, connect, disconnect, getState, onAppSocket, onPrivateUIStream, onHubEvent, reconnectNow, refresh, reset } from "./store";
 import { offlineNow } from "./feedback";
 import { liveEntry, resetLive } from "./live";
 
@@ -70,14 +70,44 @@ function online(features?: string[]) {
 }
 
 describe("reconnecting", () => {
+  it("gates private native frames on the current authenticated hello, not cached features or socket open", () => {
+    const connections: boolean[] = [], frames: string[] = [];
+    const offConnection = onAppSocket((value) => connections.push(value));
+    const offFrames = onPrivateUIStream((raw) => frames.push(raw));
+    try {
+      const old = online(["extension_ui_stream_v1"]);
+      expect(appSocketReady()).toBe(true);
+      reconnectNow();
+      const next = last(); next.open();
+      expect(appSocketReady()).toBe(false);
+      expect(getState().features).toContain("extension_ui_stream_v1");
+      next.push({ type: "extension_ui_stream", event_seq: 999, kind: "snapshot" });
+      old.push({ type: "extension_ui_stream", kind: "snapshot" });
+      expect(frames).toEqual([]);
+      next.push({ type: "hello", event_stream: "s1", event_seq: 5, resumed: true, features: ["extension_ui_stream_v1"] });
+      const native = { type: "extension_ui_stream", event_seq: 999, kind: "snapshot" };
+      next.push(native);
+      expect(frames).toEqual([JSON.stringify(native)]);
+      expect(appSocketReady()).toBe(true);
+      next.drop(); vi.advanceTimersByTime(600);
+      expect(last().url).toContain("event_seq=5"); // private session traffic is never broadcast replay
+      expect(connections).toContain(false);
+      expect(appSocketReady()).toBe(false);
+    } finally { offConnection(); offFrames(); }
+  });
+  it("refuses an existing connection after its credential changes", () => {
+    online(["extension_ui_stream_v1"]);
+    vi.stubGlobal("localStorage", { getItem: () => "changed-token" });
+    expect(appSocketReady()).toBe(false);
+  });
   it("first connect sends no resume point; reconnects resume from the last broadcast seen", () => {
     const s = online();
-    expect(s.url).toBe("ws://hub/api/v1/ws?token=tok&features=sessions_list,sessions_delta,session_live"); // the session list comes as deltas; status lines are pushed
+    expect(s.url).toBe("ws://hub/api/v1/ws?token=tok&features=sessions_list,sessions_delta,session_live,extension_ui_stream_v1"); // the session list comes as deltas; status lines are pushed
     s.push({ type: "todos", event_seq: 6 });
     s.push({ type: "items", machine_id: "m", session_id: "x", items: [] });
     s.drop();
     vi.advanceTimersByTime(600);
-    expect(last().url).toBe("ws://hub/api/v1/ws?token=tok&event_stream=s1&event_seq=6&features=sessions_list,sessions_delta,session_live");
+    expect(last().url).toBe("ws://hub/api/v1/ws?token=tok&event_stream=s1&event_seq=6&features=sessions_list,sessions_delta,session_live,extension_ui_stream_v1");
   });
 
   it("an ordinary drop stays invisible for 8 s, then shows as before", () => {

@@ -324,6 +324,23 @@ export function listenSession(mid: string, sid: string, l: SessionListener) {
 
 type HubListener = (msg: Record<string, unknown>) => void;
 const hubListeners = new Map<string, Set<HubListener>>();
+// Private UI trees retain their original JSON for strict numeric/schema validation.
+const privateStreamListeners = new Set<(raw: string) => void>();
+const socketListeners = new Set<(connected: boolean) => void>();
+export function onPrivateUIStream(listener: (raw: string) => void) {
+  privateStreamListeners.add(listener);
+  return () => { privateStreamListeners.delete(listener); };
+}
+export function onAppSocket(listener: (connected: boolean) => void) {
+  socketListeners.add(listener);
+  return () => { socketListeners.delete(listener); };
+}
+function socketChanged(connected: boolean) {
+  if (!connected) authenticatedSocket = null;
+  socketListeners.forEach((listener) => listener(connected));
+}
+/** A WebSocket open event or cached features cannot substitute for this connection's authenticated hello. */
+export function appSocketReady() { return authenticatedSocket !== null && authenticatedSocket === ws && socketToken === getToken() && isOpen(); }
 
 /** Listen to one type of WebSocket message (`inbox`, `lark`, `terminal`, `terminal_control`…); returns the unsubscribe. */
 export function onHubEvent(type: string, l: HubListener) {
@@ -342,6 +359,8 @@ export function isOpen() {
 // ── WebSocket ───────────────────────────────────────────
 
 let ws: WebSocket | null = null;
+let authenticatedSocket: WebSocket | null = null;
+let socketToken = "";
 let retry = 0;
 let retryTimer: number | undefined;
 let lastMessage = 0;
@@ -364,8 +383,10 @@ export function connect() {
   stopped = false;
   clearTimeout(retryTimer);
   ws?.close();
+  socketChanged(false);
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_LIST_FEATURE, SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
+  socketToken = getToken();
+  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(socketToken, cursor, [SESSIONS_LIST_FEATURE, SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE, "extension_ui_stream_v1"])}`);
   ws = sock;
   restartNotice = false;
   // an attempt does not move offline back to connecting: the pill stays on one phase while the hub is down instead of
@@ -380,6 +401,7 @@ export function connect() {
     lastPing = Date.now();
   };
   sock.onmessage = (ev) => {
+    if (ws !== sock) return;
     lastMessage = Date.now();
     let msg: Record<string, unknown>;
     try {
@@ -387,9 +409,15 @@ export function connect() {
     } catch {
       return;
     }
+    if (msg.type === "extension_ui_stream") {
+      if (appSocketReady()) privateStreamListeners.forEach((listener) => listener(ev.data));
+      return; // Private trees never enter the global replay cursor or store.
+    }
+    if (msg.type === "hello") authenticatedSocket = sock;
     pushing = true;
     try {
       onMessage(msg);
+      if (msg.type === "hello") socketChanged(true);
     } finally {
       pushing = false;
     }
@@ -397,6 +425,7 @@ export function connect() {
   sock.onclose = (ev) => {
     if (ws !== sock) return;
     ws = null;
+    socketChanged(false);
     if (stopped) return;
     const now = Date.now();
     const restart = restartNotice || ev.code === 1001;
@@ -452,6 +481,7 @@ export function disconnect() {
   back();
   ws?.close();
   ws = null;
+  socketChanged(false);
 }
 
 // A socket that went quiet (sleep, network change) is reconnected. The hub's own pings are WebSocket control frames

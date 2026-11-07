@@ -6,8 +6,8 @@
 // browser's back pops it on a full page); the view's search box and filter and a section's "Load more" go to the
 // extension; extension_ui {invalidate} draws the view on screen again (one off screen when it comes back). A view with
 // refresh_after is drawn again while it is on screen. Logic in lib/extension-ui.ts.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, errorText } from "../../lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ApiError, credentialOwner, errorText, getToken } from "../../lib/api";
 import { extIdOf } from "../../lib/extension-api";
 import { openLink } from "../../lib/links";
 import {
@@ -16,13 +16,16 @@ import {
 } from "../../lib/extension-ui";
 import { navigate } from "../../lib/router";
 import { isResumed } from "../../lib/reconnect";
-import { onHubEvent } from "../../lib/store";
+import { appSocketReady, onAppSocket, onHubEvent } from "../../lib/store";
 import { wideView } from "../../lib/code-view";
 import { ViewSections } from "../extensions/ViewBody";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { keepLoaded, patchView } from "../../lib/code-review";
 import { KeysHelp, ReviewBar, ReviewKeys, ReviewProvider, ReviewToolbar, reviewing } from "../extensions/DiffReview";
 import { Icon } from "../../ui/icons";
+import { NativeExtensionUI } from "./NativeExtensionUI";
+import { useStore } from "../../lib/store";
+import { canTryUIStream } from "../../lib/extension-ui-app-stream";
 import { t } from "../../i18n";
 
 const inputClass =
@@ -117,12 +120,37 @@ export function pageHref(extension: string, ui: string, state?: string): string 
  * on this view's own stack (`stack`, the default; with `history`, the browser's back pops it), or the full page of it
  * (`open`, the default for a card and a section inside another page). `state`: the first page's state (a full page opened by a push).
  */
-export function ExtensionUI({
-  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState, onWide,
+const HELLO_NEGOTIATION_MS = 5000;
+export function ExtensionUI(props: Parameters<typeof LegacyExtensionUI>[0]) {
+  const supported = useStore((s) => canTryUIStream(s.features));
+  const group = useStore((s) => s.mesh?.find((h) => h.self)?.hub_id) ?? (typeof location !== "undefined" ? location.origin : "offline");
+  const owner = typeof localStorage !== "undefined" ? credentialOwner() : "offline";
+  const ready = useSyncExternalStore(onAppSocket, appSocketReady, appSocketReady);
+  const negotiated = useRef(false);
+  const [legacyNegotiation, setLegacyNegotiation] = useState(false);
+  if (ready) negotiated.current = true;
+  const waitingHello = !props.embedded && !props.compact && typeof localStorage !== "undefined" && !!getToken() && !ready && !negotiated.current;
+  useEffect(() => {
+    if (!waitingHello || legacyNegotiation) return;
+    const timer = setTimeout(() => setLegacyNegotiation(true), HELLO_NEGOTIATION_MS);
+    return () => clearTimeout(timer);
+  }, [waitingHello, legacyNegotiation]);
+  // Bound initial negotiation when HTTP works but WebSocket upgrades do not. Once HTTP
+  // mounts, retain it even if a late hello arrives: never allocate a second source page.
+  if (waitingHello && !legacyNegotiation) return <Loading />;
+  // System/embedded slots remain full fitted snapshots. Old hubs keep the exact existing component.
+  if (legacyNegotiation || !supported || props.embedded || props.compact) return <LegacyExtensionUI {...props} />;
+  return <NativeExtensionUI key={JSON.stringify([owner, group, props.extension, props.ui, props.state ?? ""])} {...props} legacy={(page) => <LegacyExtensionUI {...page} />} />;
+}
+export function LegacyExtensionUI({
+  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState, onWide, navigation, active = true,
 }: {
   extension: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
   onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
   pages?: "stack" | "open"; history?: boolean; state?: string;
+  /** A native/legacy mixed stack has one history owner; HTTP entries delegate navigation. */
+  navigation?: { push: (page: UIPush) => void; pop: () => void };
+  active?: boolean;
   /** The view drawn needs a wide page (UI version 4: split, code, diffs) or not. */
   onWide?: (wide: boolean) => void;
 }) {
@@ -198,11 +226,11 @@ export function ExtensionUI({
   useEffect(() => {
     if (view) onWide?.(wide);
   }, [wide, view, onWide]);
-  useRefresh(refreshDelay(view), drawnAt, () => {
+  useRefresh(active ? refreshDelay(view) : 0, drawnAt, () => {
     if (!busy) load(true);
   });
   useInvalidate(extension, top.ui, () => {
-    if (!busy) load(true);
+    if (active && !busy) load(true);
   });
   const drawnFor = useRef(revision);
   useEffect(() => {
@@ -212,7 +240,7 @@ export function ExtensionUI({
   }, [revision, load]);
 
   // the browser's back pops a page pushed here (a full page only: a section or a card never holds one)
-  const historied = withHistory ?? (!embedded && !compact && mode === "stack");
+  const historied = !navigation && (withHistory ?? (!embedded && !compact && mode === "stack"));
   useEffect(() => {
     if (!historied) return;
     const onPop = (e: PopStateEvent) => {
@@ -224,6 +252,7 @@ export function ExtensionUI({
   }, [historied]);
 
   const push = (p: UIPush) => {
+    if (navigation) { navigation.push(p); return; }
     if (mode === "open") {
       navigate(pageHref(extension, p.ui || top.ui, p.state));
       return;
@@ -233,6 +262,7 @@ export function ExtensionUI({
     setStack(next);
   };
   const pop = () => {
+    if (navigation) { navigation.pop(); return; }
     if (stack.length <= 1) return;
     if (historied) history.back(); // the popstate above takes the page off
     else setStack((s) => s.slice(0, -1));

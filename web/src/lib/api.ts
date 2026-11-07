@@ -6,6 +6,14 @@ import { currentLanguage, t } from "../i18n";
 import type { Item } from "./types";
 
 const TOKEN_KEY = "persona.token";
+let ownerToken: string | undefined;
+let ownerGeneration = 0;
+/** Opaque in-memory auth partition; never expose credentials in tree keys or persisted drafts. */
+export function credentialOwner(): string {
+  const token = getToken();
+  if (token !== ownerToken) { ownerToken = token; ownerGeneration++; }
+  return `credential-${ownerGeneration}`;
+}
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
@@ -14,6 +22,7 @@ export function getToken(): string {
 export function setToken(token: string) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
+  credentialOwner();
 }
 
 export class ApiError extends Error {
@@ -48,7 +57,7 @@ export const CLIENT_PLATFORM = "web";
 export const CLIENT_VERSION = "1";
 /** What this page can render beyond the basics (client_hello `features`). */
 /** `managers`: the hub pushes {"type":"managers"} when its roster changes (Settings › Managers, lib/managers.ts). */
-export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth", "managers"];
+export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth", "managers", "extension_ui_stream_v1"];
 
 // A read the hub has not answered by then fails instead of loading forever (#4492): a restarting hub, a stuck node or a
 // half-dead network. Longer than the hub's own cut-offs for asking a computer (30–40 s), so when the hub has an error

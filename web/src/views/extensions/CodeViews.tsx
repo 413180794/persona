@@ -3,7 +3,9 @@
 // comment box at any line, hidden lines to show: DiffReview.tsx), a discussion and a comment box with its buttons. What they send goes
 // through `act` (ViewBody's onAct): the action with the values it carries and the component's own (a path, a line, the
 // text typed). Logic in lib/code-view.ts; how a section holds them is ViewBody.tsx.
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { NativeMediaContext } from "./native-media";
+import type { Avatar as WireAvatar } from "../../lib/extension-wire";
 import { ago } from "../../lib/format";
 import { ancestors, buildTree, filterEntries, highlightLines, languageOf, statusMark, useHighlighter, type Comment, type Token, type TreeNode } from "../../lib/code-view";
 import { findIn, isGenerated, lineLink, lineTyped, overlay, type Span } from "../../lib/code-review";
@@ -15,6 +17,8 @@ import { Button, cx, Spinner, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Pill } from "../settings/SettingsParts";
 import { ROW_ICON, ViewMarkdown } from "./ViewBody";
+import { nativeIcon } from "../../ui/ExtensionNative";
+import { scopeLocal, useNativeState, type NativeLocal } from "./native-state";
 import "./code-view.css";
 
 /** What a code component needs from the page: to send an action with values, and which one is under way. */
@@ -23,6 +27,9 @@ export interface CodeHandlers {
   busy: string;
   /** Scroll to a file's diff on the page (a file tree without an action). */
   reveal?: (path: string) => void;
+  local?: NativeLocal;
+  canFetch?: () => boolean;
+  fetch?: import("./review-context").ReviewApi["fetch"];
 }
 
 export const PILL: Record<UITone, "green" | "orange" | "red" | undefined> = { neutral: undefined, positive: "green", caution: "orange", danger: "red" };
@@ -31,9 +38,10 @@ export const MARK: Record<UITone, string> = { neutral: "text-ink-3", positive: "
 export const card = "overflow-hidden rounded-card bg-surface shadow-card";
 export const LH = 20; // a code line's height, px
 
-export function Avatar({ avatar, name, size = 28 }: { avatar?: { url?: string; text?: string }; name: string; size?: number }) {
+export function Avatar({ avatar, name, size = 28 }: { avatar?: WireAvatar; name: string; size?: number }) {
   const [failed, setFailed] = useState(false);
-  const url = imageURL(avatar?.url);
+  const media = useContext(NativeMediaContext);
+  const url = avatar?.ref && media ? media(avatar) : imageURL(avatar?.url);
   return (
     <span
       className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-tint font-medium text-accent-ink"
@@ -51,7 +59,7 @@ const iconOf = (name?: string): IconName | undefined => {
 
 // ── header ────────────────────────────────────────────
 
-export function Header({ item }: { item: UIItem }) {
+export function Header({ item, native = false }: { item: UIItem; native?: boolean }) {
   return (
     <div className="flex gap-3 px-4 py-4 sm:px-5">
       {item.avatar && <Avatar avatar={item.avatar} name={item.title ?? ""} size={40} />}
@@ -66,7 +74,7 @@ export function Header({ item }: { item: UIItem }) {
               </Pill>
             ))}
             {item.facts?.map((f, i) => {
-              const icon = iconOf(f.icon);
+              const icon = native && f.icon ? nativeIcon(f.icon) : iconOf(f.icon);
               return (
                 <span key={`f${i}`} className="flex min-w-0 items-center gap-1 text-[12.5px] whitespace-nowrap text-ink-2" title={f.label}>
                   {icon && <Icon name={icon} size={13} className="shrink-0 text-ink-3" />}
@@ -114,14 +122,16 @@ export function Breadcrumb({ item, act, busy }: { item: UIItem } & CodeHandlers)
 
 // ── file tree ─────────────────────────────────────────
 
-export function FileTree({ item, act, busy, reveal, onPicked }: { item: UIItem; onPicked?: () => void } & CodeHandlers) {
+export function FileTree({ item, act, busy, reveal, onPicked, local }: { item: UIItem; onPicked?: () => void } & CodeHandlers) {
   const entries = item.entries ?? [];
   const review = useReview();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useNativeState(local, "filter", "");
   const shown = useMemo(() => filterEntries(entries, q), [entries, q]);
   const tree = useMemo(() => buildTree(shown), [shown]);
-  const [closed, setClosed] = useState<Set<string>>(() => new Set());
-  const [asked, setAsked] = useState<string>("");
+  const [closedPaths, setClosedPaths] = useNativeState<string[]>(local, "closed", []);
+  const closed = new Set(closedPaths);
+  const setClosed = (update: (paths: Set<string>) => Set<string>) => setClosedPaths((paths) => [...update(new Set(paths))]);
+  const [asked, setAsked] = useNativeState(local, "asked", "");
   const selected = item.selected ?? "";
   // the selected file's directories stay open
   useEffect(() => {
@@ -306,7 +316,7 @@ function Found({ tokens, text, spans, current }: { tokens?: Token[] | null; text
  * in it (⌘/Ctrl+F while in it, Enter for the next), go to a line, long lines wrapped or not (kept in this browser), and
  * lines picked on their numbers (shift for a range) to copy a link to them on the site (line_url, UI version 5).
  */
-export function CodeView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
+export function CodeView({ item, act, busy, local }: { item: UIItem } & CodeHandlers) {
   const text = item.text ?? "";
   const lines = useMemo(() => text.replace(/\n$/, "").split("\n"), [text]);
   const lang = languageOf(item.language, item.path);
@@ -318,17 +328,17 @@ export function CodeView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   const hl = item.highlight;
   const marked = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
-  const [wrap, setWrap] = useState(() => {
+  const [wrap, setWrap] = useNativeState(local, "wrap", () => {
     try {
       return localStorage.getItem(WRAP_KEY) === "1";
     } catch {
       return false;
     }
   });
-  const [tool, setTool] = useState<"" | "find" | "goto">("");
-  const [q, setQ] = useState("");
-  const [at, setAt] = useState(0);
-  const [pick, setPick] = useState<{ start: number; end: number } | null>(null);
+  const [tool, setTool] = useNativeState<"" | "find" | "goto">(local, "tool", "");
+  const [q, setQ] = useNativeState(local, "query", "");
+  const [at, setAt] = useNativeState(local, "at", 0);
+  const [pick, setPick] = useNativeState<{ start: number; end: number } | null>(local, "pick", null);
   const anchor = useRef<number | null>(null);
   const found = useMemo(() => (tool === "find" ? findIn(lines, q) : []), [tool, lines, q]);
   const spansAt = useMemo(() => new Map(found.map((f) => [f.line, f.spans])), [found]);
@@ -536,12 +546,12 @@ export function Box({ value, onChange, placeholder, autoFocus, onSubmit, disable
 }
 
 /** A small comment box: text and one button (a reply, an inline comment), with cancel when it can close. */
-function MiniComposer({ placeholder, send, busy, disabled, onCancel, autoFocus }: { placeholder: string; send: (body: string) => void; busy: boolean; disabled: boolean; onCancel?: () => void; autoFocus?: boolean }) {
-  const [body, setBody] = useState("");
+function MiniComposer({ placeholder, send, busy, disabled, onCancel, autoFocus, local }: { placeholder: string; send: (body: string) => void; busy: boolean; disabled: boolean; onCancel?: () => void; autoFocus?: boolean; local?: NativeLocal }) {
+  const [body, setBody] = useNativeState(local, "body", "");
   const go = () => {
     if (!body.trim() || disabled) return;
     send(body.trim());
-    setBody("");
+    if (!local) setBody("");
   };
   return (
     <div className="flex flex-col gap-2">
@@ -561,9 +571,9 @@ function MiniComposer({ placeholder, send, busy, disabled, onCancel, autoFocus }
 }
 
 /** A discussion: its comments in order, and a reply box. */
-export function CommentThread({ item, act, busy }: { item: UIItem } & CodeHandlers) {
+export function CommentThread({ item, act, busy, local }: { item: UIItem } & CodeHandlers) {
   const comments = item.comments ?? [];
-  const [replying, setReplying] = useState(false);
+  const [replying, setReplying] = useNativeState(local, "replying", false);
   return (
     <div className={card}>
       {item.title && (
@@ -582,6 +592,7 @@ export function CommentThread({ item, act, busy }: { item: UIItem } & CodeHandle
         <div className="border-t border-line px-4 py-3">
           {replying ? (
             <MiniComposer
+              local={scopeLocal(local, "reply")}
               autoFocus
               placeholder={t("extensions-codeviews.reply")}
               busy={busy === item.reply.id}
@@ -589,7 +600,7 @@ export function CommentThread({ item, act, busy }: { item: UIItem } & CodeHandle
               onCancel={() => setReplying(false)}
               send={(body) => {
                 act(item.reply!, { body });
-                setReplying(false);
+                if (!local) setReplying(false);
               }}
             />
           ) : (
@@ -606,9 +617,12 @@ export function CommentThread({ item, act, busy }: { item: UIItem } & CodeHandle
 const BUTTON_TONE: Record<UITone, "primary" | "secondary" | "danger" | "accent"> = { neutral: "secondary", positive: "accent", caution: "secondary", danger: "danger" };
 
 /** A comment box with its buttons: the one pressed sends the text as the composer's name. */
-export function Composer({ item, act, busy }: { item: UIItem } & CodeHandlers) {
-  const [body, setBody] = useState(item.value ?? "");
-  useEffect(() => setBody(item.value ?? ""), [item.value]);
+export function Composer({ item, act, busy, draft }: { item: UIItem; draft?: { value: string; setValue: (value: string) => void } } & CodeHandlers) {
+  const [localBody, setLocalBody] = useState(item.value ?? "");
+  useEffect(() => setLocalBody(item.value ?? ""), [item.value]);
+  // HTTP/assistant behavior stays unchanged; a stream owns drafts outside React run/section lifetimes.
+  const body = draft?.value ?? localBody;
+  const setBody = draft?.setValue ?? setLocalBody;
   const buttons = item.buttons ?? [];
   const press = (a: UIAction) => act(a, { [item.name ?? "body"]: body });
   return (

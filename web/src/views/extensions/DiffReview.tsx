@@ -24,6 +24,7 @@ import { Pill } from "../settings/SettingsParts";
 import { Avatar, Box, card, LH, LoadLine, MARK, PILL, type CodeHandlers } from "./CodeViews";
 import { ViewMarkdown } from "./ViewBody";
 import { ReviewContext, useReview, type ReviewApi } from "./review-context";
+import { scopeLocal, useNativeState, type NativeLocal } from "./native-state";
 import "./review.css";
 
 // ── the page around the diffs ─────────────────────────
@@ -49,10 +50,11 @@ export const reviewing = (view: UIView | null | undefined) => !!view?.sections.s
  * The review state of one page: viewed marks (the extension's own, changed at once and sent with mark_viewed; or kept
  * in this browser when it has none), whitespace, and the lines that came, per page.
  */
-export function ReviewProvider({ view, page, fetch, children }: { view: UIView | null; page: string; fetch: ReviewApi["fetch"]; children: React.ReactNode }) {
+export function ReviewProvider({ view, page, fetch, children, local, nativeCaches }: { view: UIView | null; page: string; fetch: ReviewApi["fetch"]; children: React.ReactNode; local?: NativeLocal; nativeCaches?: Map<string, LineCache> }) {
   const [over, setOver] = useState<Map<string, boolean>>(() => new Map());
+  const [nativeOver, setNativeOver] = useNativeState<Record<string, boolean>>(local, "viewed", {});
   const [here, setHere] = useState<Set<string>>(viewedHere);
-  const [whitespace, setWs] = useState(() => {
+  const [whitespace, setWs] = useNativeState(local, "whitespace", () => {
     try {
       return localStorage.getItem(WS_KEY) === "1";
     } catch {
@@ -72,15 +74,19 @@ export function ReviewProvider({ view, page, fetch, children }: { view: UIView |
     return {
       fetch: (a, v) => fetchRef.current(a, v),
       viewed: (path) => {
-        const o = over.get(path);
-        if (o !== undefined) return o;
         const d = index.diffs.get(path);
+        const o = local && d ? nativeOver[localId(d)] : over.get(path);
+        if (o !== undefined) return o;
+        if (local && d) return !!d.viewed;
         if (d && !d.mark_viewed) return here.has(localId(d));
         return d ? !!d.viewed : !!index.entries.get(path);
       },
       setViewed: (path, v) => {
-        setOver((m) => new Map(m).set(path, v));
         const d = index.diffs.get(path);
+        if (local && d) setNativeOver((m) => ({ ...m, [localId(d)]: v }));
+        else setOver((m) => new Map(m).set(path, v));
+        // Native mark_viewed dispatch belongs to the displayed diff's handler, never this provider's latest index.
+        if (local) return;
         if (d?.mark_viewed) void fetchRef.current(d.mark_viewed, { path, viewed: String(v) });
         else if (d) {
           setViewedHere(localId(d), v);
@@ -97,12 +103,15 @@ export function ReviewProvider({ view, page, fetch, children }: { view: UIView |
         }
       },
       lines: (path) => {
-        if (!cache.current.has(path)) cache.current.set(path, new LineCache());
-        return cache.current.get(path)!;
+        const d = index.diffs.get(path);
+        const key = nativeCaches && d ? localId(d) : path;
+        const caches = nativeCaches ?? cache.current;
+        if (!caches.has(key)) caches.set(key, new LineCache());
+        return caches.get(key)!;
       },
       drafts: view?.review?.count ?? 0,
     };
-  }, [over, here, index, whitespace, view?.review?.count]);
+  }, [over, here, index, whitespace, view?.review?.count, local, nativeOver, nativeCaches]);
   return <ReviewContext.Provider value={api}>{children}</ReviewContext.Provider>;
 }
 
@@ -561,17 +570,16 @@ function ReviewComment({ c, original }: { c: Comment; original: string[] }) {
 }
 
 /** Inline comments at a line: folded to its first one when resolved; a reply, resolve or reopen. */
-function ThreadCard({ thread, act, busy, original }: { thread: Thread; original: string[] } & Pick<CodeHandlers, "act" | "busy">) {
-  const [open, setOpen] = useState(!thread.resolved);
-  const [replying, setReplying] = useState(false);
-  const [body, setBody] = useState("");
+function ThreadCard({ thread, act, busy, original, local }: { thread: Thread; original: string[]; local?: NativeLocal } & Pick<CodeHandlers, "act" | "busy">) {
+  const [open, setOpen] = useNativeState(local, "open", !thread.resolved);
+  const [replying, setReplying] = useNativeState(local, "replying", false);
+  const [body, setBody] = useNativeState(local, "body", "");
   const first = thread.comments[0];
   const range = thread.start_line && thread.start_line < thread.line ? `${thread.start_line}–${thread.line}` : "";
   const send = () => {
     if (!body.trim() || !thread.reply) return;
     act(thread.reply as UIAction, { ...(thread.id ? { thread: thread.id } : {}), body: body.trim() });
-    setBody("");
-    setReplying(false);
+    if (!local) { setBody(""); setReplying(false); }
   };
   return (
     <div
@@ -640,8 +648,8 @@ function ThreadCard({ thread, act, busy, original }: { thread: Thread; original:
  * The box for a comment on the lines picked: send it alone (comment) or keep it as a draft of the review (draft; first
  * once a review is under way), or start a suggestion with the lines picked.
  */
-function LineComposer({ pick, body, setBody, item, act, busy, original, onCancel }: {
-  pick: LinePick; body: string; setBody: (b: string) => void; item: UIItem; original: string[]; onCancel: () => void;
+function LineComposer({ pick, body, setBody, item, act, busy, original, onCancel, local }: {
+  pick: LinePick; body: string; setBody: (b: string) => void; item: UIItem; original: string[]; onCancel: () => void; local?: NativeLocal;
 } & Pick<CodeHandlers, "act" | "busy">) {
   const { drafts } = useReview();
   const values = (b: string) => ({
@@ -654,8 +662,7 @@ function LineComposer({ pick, body, setBody, item, act, busy, original, onCancel
   const go = (a: UIAction | undefined) => {
     if (!a || !body.trim()) return;
     act(a, values(body.trim()));
-    onCancel();
-    setBody("");
+    if (!local) { onCancel(); setBody(""); }
   };
   const draftFirst = !!item.draft && drafts > 0;
   const primary = draftFirst ? item.draft : item.comment;
@@ -716,8 +723,9 @@ function GapBar({ hidden, first, last, header, loading, onShow }: { hidden: numb
 const FOLD_NOTE: Record<string, string> = { generated: "extensions-review.folded_generated", big: "extensions-review.folded_big", viewed: "extensions-review.folded_viewed" };
 
 /** One file's diff. */
-export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
-  const review = useReview();
+export function DiffView({ item, act, busy, local, fetch, canFetch }: { item: UIItem } & CodeHandlers) {
+  const sharedReview = useReview();
+  const review = fetch ? { ...sharedReview, fetch } : sharedReview;
   const path = item.path ?? "";
   const raw = useMemo(() => item.hunks ?? [], [item.hunks]);
   const [mode, setMode] = useDiffMode();
@@ -726,7 +734,7 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   const split = mode === "split" && roomy;
   const viewed = review.viewed(path);
   const [reason] = useState(() => foldedAtFirst({ ...item, viewed }));
-  const [open, setOpen] = useState(!reason);
+  const [open, setOpen] = useNativeState(local, "open", !reason);
   const root = useRef<HTMLDivElement>(null);
   // a diff that came without its lines opens once they come
   const had = useRef(raw.length > 0);
@@ -739,7 +747,7 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
 
   // hidden lines: what is shown of each gap, and the file's lines as they come
   const cache = review.lines(path);
-  const [shown, setShown] = useState<Record<number, Shown>>({});
+  const [shown, setShown] = useNativeState<Record<number, Shown>>(local, "shown", {});
   const [gapBusy, setGapBusy] = useState<number | null>(null);
   // a new file is all in its diff: nothing hidden
   const gapList = useMemo(() => (item.context && item.status !== "added" ? gaps(raw, cache.total) : []), [item.context, item.status, raw, cache.total, shown]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -751,8 +759,14 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
       setGapBusy(null);
       if (!res?.lines) return;
       cache.put(res.lines.start, res.lines.lines, res.lines.total);
+      if (local && !Number.isFinite(r.shown.top)) r.shown.top = Math.max(0, (res.lines.total ?? res.lines.start + res.lines.lines.length - 1) - g.from + 1);
     }
-    setShown((x) => ({ ...x, [g.at]: r.shown }));
+    // reveal uses Infinity for an unknown trailing end. Keyed native state is JSON-only;
+    // retain the finite extent returned by the manager instead of persisting that sentinel.
+    const next = local && !Number.isFinite(r.shown.top)
+      ? { ...r.shown, top: Math.max(0, (cache.total ?? g.from - 1) - g.from + 1) }
+      : r.shown;
+    setShown((x) => ({ ...x, [g.at]: next }));
   };
 
   // the rows, whitespace ignored or not; the words that changed; highlighting
@@ -822,9 +836,9 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
 
   // picking lines for a comment: press a number, drag over others or shift-press one; on a touch screen press another
   const canComment = !!(item.comment || item.draft);
-  const [pick, setPick] = useState<LinePick | null>(null);
-  const [box, setBox] = useState<LinePick | null>(null);
-  const [draftBody, setDraftBody] = useState("");
+  const [pick, setPick] = useNativeState<LinePick | null>(local, "pick", null);
+  const [box, setBox] = useNativeState<LinePick | null>(local, "box", null);
+  const [draftBody, setDraftBody] = useNativeState(local, "draft", "");
   const anchor = useRef<Spot | null>(null);
   const dragging = useRef(false);
   const pickRef = useRef<LinePick | null>(null);
@@ -859,7 +873,7 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
         setBox(pickRef.current);
       },
     }),
-    [canComment, coarse],
+    [canComment, coarse, local],
   );
   useEffect(() => {
     const up = () => picker.up();
@@ -869,10 +883,15 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   const closeBox = useCallback(() => {
     setBox(null);
     setPick(null);
-  }, []);
+  }, [local]);
 
   // keys sent to this diff (useReviewKeys): viewed, fold, comment on the first changed line in view
   const setViewed = (v: boolean) => {
+    if (local && busy) return;
+    if (local && item.mark_viewed && fetch) {
+      const was = viewed;
+      void fetch(item.mark_viewed, { path, viewed: String(v) }).then((result) => { if (!result) review.setViewed(path, was); });
+    }
     review.setViewed(path, v);
     if (v) {
       setOpen(false);
@@ -904,23 +923,27 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
   }, []);
 
   // a diff given without its lines loads them when it comes near (not a generated one: pressed for)
-  const [loadState, setLoadState] = useState<"" | "loading" | "failed">("");
+  const [loadState, setLoadState] = useNativeState<"" | "loading" | "failed" | "asked">(local, `load/${JSON.stringify(item.load)}`, "");
   const autoLoad = !raw.length && !!item.load && !item.binary && reason !== "generated";
   useEffect(() => {
     const el = root.current;
-    if (!autoLoad || !el || loadState || typeof IntersectionObserver === "undefined") return;
+    if (!autoLoad || !el || loadState || local && busy || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       (es) => {
         if (!es.some((e) => e.isIntersecting)) return;
+        const observation = `observed-load/${JSON.stringify(item.load)}`;
+        if (local && (busy || canFetch?.() === false)) return;
+        if (local?.get<boolean>(observation)) return;
+        local?.set(observation, true);
         io.disconnect();
         setLoadState("loading");
-        void review.fetch(item.load!, { path }).then((r) => setLoadState(r ? "" : "failed"));
+        void review.fetch(item.load!, { path }).then((r) => setLoadState(r ? local ? "asked" : "" : "failed"));
       },
       { rootMargin: "800px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [autoLoad, loadState, item.load, path, review]);
+  }, [autoLoad, loadState, item.load, path, review, busy, canFetch]);
 
   const digits = useMemo(() => String(raw.reduce((m, h) => Math.max(m, h.old_start + h.lines.length, h.new_start + h.lines.length), cache.total ?? 99)).length, [raw, cache.total]);
   const width = `calc(${digits}ch + 14px)`;
@@ -932,12 +955,12 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
     const out: React.ReactNode[] = [];
     for (const sp of spots) {
       for (const th of at.get(`${sp.side}:${sp.line}`) ?? [])
-        out.push(<ThreadCard key={`t:${th.id ?? sp.line}`} thread={th} act={act} busy={busy} original={original({ side: th.side, line: th.line, start_line: th.start_line })} />);
+        out.push(<ThreadCard key={`t:${th.id ?? sp.line}`} thread={th} local={scopeLocal(local, `thread/${th.id ?? `${th.side}:${th.line}`}`)} act={act} busy={busy} original={original({ side: th.side, line: th.line, start_line: th.start_line })} />);
       if (box && box.side === sp.side && box.line === sp.line)
         out.push(
           <div key="box" className="border-y border-line bg-surface px-3 py-2.5 font-sans">
             <div className="sm:max-w-[760px]">
-              <LineComposer pick={box} body={draftBody} setBody={setDraftBody} item={item} act={act} busy={busy} original={original(box)} onCancel={closeBox} />
+              <LineComposer local={local} pick={box} body={draftBody} setBody={setDraftBody} item={item} act={act} busy={busy} original={original(box)} onCancel={closeBox} />
             </div>
           </div>,
         );
@@ -1004,7 +1027,7 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
     return (
       <>
         {drawRows(top, -1, `g${i}t`)}
-        {hidden > 0 && <GapBar hidden={hidden} first={i === 0} last={i === raw.length} header={header} loading={gapBusy === i} onShow={(d) => void showGap(g, d)} />}
+        {hidden > 0 && <GapBar hidden={hidden} first={i === 0} last={i === raw.length} header={header} loading={gapBusy === i || !!local && !!busy} onShow={(d) => void showGap(g, d)} />}
         {drawRows(bottom, -1, `g${i}b`)}
         {hidden === 0 && header && top.length + bottom.length === 0 && i < raw.length && (
           <div className="flex h-7 items-center bg-accent-tint/40 text-[11.5px] text-ink-3">
@@ -1094,7 +1117,7 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
           <div className="border-t border-line py-1 font-sans">
             <p className="px-4 pt-1.5 text-[11.5px] text-ink-3">{t("extensions-codeviews.elsewhere")}</p>
             {rest.map((th, i) => (
-              <ThreadCard key={th.id ?? i} thread={th} act={act} busy={busy} original={[]} />
+              <ThreadCard key={th.id ?? i} thread={th} local={scopeLocal(local, `thread/${th.id ?? `${th.side}:${th.line}`}`)} act={act} busy={busy} original={[]} />
             ))}
           </div>
         )}
@@ -1134,6 +1157,7 @@ export function DiffView({ item, act, busy }: { item: UIItem } & CodeHandlers) {
         <button
           type="button"
           role="checkbox"
+          disabled={local ? !!busy : undefined}
           aria-checked={viewed}
           onClick={() => setViewed(!viewed)}
           title={`${t("extensions-review.viewed")} (v)`}
