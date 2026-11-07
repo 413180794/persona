@@ -1114,13 +1114,19 @@ func (s *Service) taskWorking(ctx context.Context, mid, sid string) {
 }
 
 type receiptBody struct {
-	Title   string `json:"title"`
-	State   string `json:"state"` // done, failed, interrupted
-	Summary string `json:"summary,omitempty"`
-	PR      string `json:"pr,omitempty"`
-	Machine string `json:"machine,omitempty"`
+	Title   string         `json:"title"`
+	State   string         `json:"state"` // done, failed, interrupted
+	Summary string         `json:"summary,omitempty"`
+	PR      string         `json:"pr,omitempty"`
+	Machine string         `json:"machine,omitempty"`
+	Review  *receiptReview `json:"review,omitempty"`
 	// Error: what the model service answered when the turn was cut off (interrupted), for the card's detail.
 	Error string `json:"error,omitempty"`
+}
+
+type receiptReview struct {
+	State    string `json:"state"` // awaiting
+	Criteria int    `json:"criteria"`
 }
 
 // interruptedSummary is an interrupted task's receipt: the error itself is no conclusion (#1516).
@@ -1220,6 +1226,13 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		text = answer
 	}
 	body := receiptBody{Title: t.Title, State: "done", Summary: clipMarkdown(text, 600), Machine: name}
+	// Persona follows up on a supervised stop through sigReview or sigIdle after judgment; the receipt need not wait.
+	// needs_user waits on the user instead. Read the latest todo in case it changed while reading the reply.
+	if current, ok := s.todoNow(t.ID); ok && current.DoneAt == nil {
+		if v := current.Supervision; v != nil && v.state(current) != reviewNeedsUser {
+			body.Review = &receiptReview{State: "awaiting", Criteria: len(v.DoneWhen)}
+		}
+	}
 	if body.Summary == "" {
 		body.Summary = i18n.T(s.lang(cctx), "assistant-tasks.done")
 	}

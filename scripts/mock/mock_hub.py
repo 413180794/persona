@@ -2850,6 +2850,19 @@ if MOCK_TASKS:
         _cut_at = ago(minutes=_cut)
         ITEMS[ASK1] = [x for x in ITEMS[ASK1] if (x.get("ts") or "") <= _cut_at]
         TASK_FEED[ASK1] = [x for x in TASK_FEED[ASK1] if x["at"] <= _cut_at]
+    # MOCK_TASKS_REVIEW=1: open tasks awaiting Persona's review, with and without explicit criteria (#4893).
+    if os.environ.get("MOCK_TASKS_REVIEW") == "1":
+        for _n, _title in [(3, "整理发布说明"), (0, "检查任务清单")]:
+            _tid = "todo_receipt_review_%d" % _n
+            _criteria = ["Include the changes", "Group related entries", "Check the links"][:_n]
+            _todo = dict(_task_todo(_tid, _title, "", "macbook", "", "/Users/me/code/example", 5, ""),
+                         agents=[], supervision={"supervisor": ASK1, "done_when": _criteria,
+                                                 "state": "pending_review", "round": 0, "reviews": [], "updated_at": ago()})
+            TODOS_INIT.append(_todo)
+            TODOS.append(copy.deepcopy(_todo))
+            TASK_FEED[ASK1].append(_feed("feed_receipt_review_%d" % _n, 0.2 - _n / 100, "receipt", _tid,
+                                        {"title": _title, "state": "done", "summary": "检查结果已整理好，等待验收。",
+                                         "review": {"state": "awaiting", "criteria": _n}}))
 
 
 RETRY_TASK_STARTED = "a1f3c2d4-0000-4000-8000-0000000000a1"
@@ -5450,7 +5463,59 @@ if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
 
 BRAVE_CLIMB_ALPHABET = "[removed]"
 def brave_climb(text):
-    """The Lark gateway''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+    """The Lark gateway's "Brave Climb" words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
+    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
+    while True:
+        n, d = divmod(n, 34)
+        out = BRAVE_CLIMB_ALPHABET[d] + out
+        if n == 0:
+            return "**字" + out + "**"
+
+# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and the design review (f2) has "Brave Climb" words: a whole message, one split over
+# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
+# the list is words too.
+if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
+    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
+    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
+    words = brave_climb("标签栏改粗一号")
+    split = _lm("211", "Lucy Wang", words, mins=39)
+    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
+    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
+    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
+    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
+    reply = _lm("214", "我", "好的", mine=True, mins=36)
+    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
+    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
+    LARK_CHATS[0]["preview"] = whole["text"]
+if os.environ.get("MOCK_LARK_TRAINER"):
+    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
+    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
+    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
+    missing.update(recalled=True, retained=False)
+    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
+    edited.update(edited=True, edit_history=[
+        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
+        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
+            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
+    ])
+    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
+    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
+    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
+    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
+    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
+    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
+    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
+
+# The weekend hiking group chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
+# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
+# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
+# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose Lark gateway
+# lost its Feishu session.
+LARK_LOGGED_OUT = "lark: 飞书网关未登录飞书 (AUTH_SESSION_EXPIRED)"
+_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
+                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
+# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}

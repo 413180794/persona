@@ -2361,6 +2361,13 @@ Tasks dispatched from an assistant chat ([unified-entry.md](unified-entry.md)). 
 //   screen dialogs carry the selected option and text typed into options; form fields are written "Label: value". 4000 characters per segment, 12000 per entry, at most 20; anything beyond is truncated.
 //   Password fields (Field.secret, the screen's secret, MCP form password / writeOnly, names that look like passwords / tokens) are written only as "(filled in, not saved)"; values are never stored.
 // receipt: {"title":"…","state":"done|failed|interrupted","summary":"the Agent's last reply (Markdown, cut by lines to about 600 characters, never inside a markup token)","pr":"https://github.com/…/pull/N","machine":"…"}
+//   review (#4893), optional on done receipts only: {"state":"awaiting","criteria":3}. criteria is the number of done_when entries (0 is included).
+//   Present when the latest to-do is open, has a supervision ledger and its effective state is not needs_user (waiting on the user).
+//   This names Persona's next follow-up, not the judge's verdict: superviseJudged signals review for finished work or idle for unfinished work.
+//   Reopened accepted / cancelled tasks have an ongoing effective state and qualify. The receipt is written before judgment, without waiting for a model;
+//   judgment and supervision signals follow as before. Failed / interrupted receipts omit review.
+//   Older clients ignore review; older receipts omit it. Web shows "Waiting for Persona's review" (with the criterion count when positive) only while
+//   the linked to-do is present and open, retaining the neutral stopped heading; once done it shows the existing green completion card without the hint.
 //   interrupted (#1516): the Agent's turn was interrupted by a model service error; summary is "The model service errored and was interrupted", error is the original error text; clients draw it in red with "Continue".
 //   A turn with no reply, no tool calls and no error (the model service returned 200 with empty content, #2349) is also interrupted, with error "This turn produced no output: …"
 // routed: {"text":"…"} (the note sent to the Agent when the supervisor sends work back is also a routed);
