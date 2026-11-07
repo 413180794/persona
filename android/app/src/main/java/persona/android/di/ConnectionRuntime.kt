@@ -367,6 +367,9 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         mutableGroups.value = next
         paired.value = next.isNotEmpty()
         publishSelectionLocked()
+        // A group that went away takes its entries (and buttons no hub answers now) out of the ongoing notification.
+        // Emitted outside the gate: emit waits for every collector.
+        fleets.retainFleets(next.map { it.id }, mutableSelected.value?.id)?.let { scope.launch { mutableEvents.emit(FleetEvent(it)) } }
         refreshNetwork()
         moveUnsentLocked()
     }

@@ -357,4 +357,22 @@ class GroupRoutingTest {
         assertEquals(listOf("macbook~g0a1b2c3d/s1"), fleets.putFleet("work", other, FleetState(needsYou = 1,
             items = listOf(FleetItem("macbook/s1"))), listOf("work"), "work").items.map { it.id })
     }
+
+    @Test fun aGroupThatGoesAwayTakesItsEntriesOutOfTheMergedFleet() {
+        val fleets = mutableMapOf<String, FleetState>()
+        fleets.putFleet("home", primary, FleetState(phase = "working", working = 1, items = listOf(FleetItem("mini/a", kind = "working"))),
+            listOf("home", "work"), "home")
+        assertEquals(1, fleets.putFleet("work", other, FleetState(phase = "needsYou", needsYou = 1,
+            items = listOf(FleetItem("macbook/s1", kind = "permission", interaction = "i1"))), listOf("home", "work"), "home").needsYou)
+        // Disconnecting the other group: its permission request (and Allow button, answered by no hub now) leaves.
+        val merged = fleets.retainFleets(listOf("home"), "home")!!
+        assertEquals("working", merged.phase)
+        assertEquals(0, merged.needsYou)
+        assertEquals(listOf("mini/a"), merged.items.map { it.id })
+        assertEquals(setOf("home"), fleets.keys)
+        assertNull(fleets.retainFleets(listOf("home"), "home"))
+        // The last known fleet going leaves an empty one, not the stale one.
+        val alone = mutableMapOf("work" to other.fleet(FleetState(phase = "needsYou", needsYou = 1, items = listOf(FleetItem("macbook/s1")))))
+        assertEquals(FleetState(), alone.retainFleets(listOf("home"), "home"))
+    }
 }

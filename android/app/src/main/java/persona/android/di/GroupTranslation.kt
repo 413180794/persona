@@ -397,6 +397,12 @@ internal fun MutableMap<String, FleetState>.putFleet(group: String, names: Group
     return mergeFleets(ids.mapNotNull { this[it] }, selected?.let { this[it] })
 }
 
+/** Forgets the fleets of groups no longer in [open]; the merged fleet of the rest when that dropped one, else null. */
+internal fun MutableMap<String, FleetState>.retainFleets(open: List<String>, selected: String?): FleetState? {
+    if (!keys.retainAll(open.toSet())) return null
+    return mergeFleets(open.mapNotNull { this[it] }, selected?.let { this[it] })
+}
+
 /**
  * The fleet the ongoing notification shows, over every group: counts add up, the most urgent phase wins, items
  * follow one another with every group's requests first (iOS FleetMerge), since only the first few are drawn. One
