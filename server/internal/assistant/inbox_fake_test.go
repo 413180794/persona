@@ -349,6 +349,7 @@ type inboxMemStore struct {
 	done map[string]*time.Time
 	ids  map[string]int
 	fail error // InboxItems fails
+	down error // PutInboxItem fails (writeFails)
 }
 
 func newInboxMemStore() *inboxMemStore {
@@ -358,6 +359,9 @@ func newInboxMemStore() *inboxMemStore {
 func (s *inboxMemStore) PutInboxItem(_ context.Context, id string, data []byte, _ time.Time, doneAt *time.Time) error {
 	s.imu.Lock()
 	defer s.imu.Unlock()
+	if s.down != nil {
+		return s.down
+	}
 	s.rows[id], s.done[id] = data, doneAt
 	s.ids[id]++
 	return nil
@@ -386,6 +390,16 @@ func (s *inboxMemStore) DeleteInboxItems(_ context.Context, ids []string) error 
 		delete(s.done, id)
 	}
 	return nil
+}
+
+// writeFails makes every row write fail (on) or succeed again.
+func (s *inboxMemStore) writeFails(on bool) {
+	s.imu.Lock()
+	defer s.imu.Unlock()
+	s.down = nil
+	if on {
+		s.down = errMuteStoreDown
+	}
 }
 
 func (s *inboxMemStore) saved(id string) bool {

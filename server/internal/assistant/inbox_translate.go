@@ -345,13 +345,16 @@ func (s *Service) translateInbox(ctx context.Context) {
 				b.mu.Unlock()
 				continue
 			}
+			w := beginWrite(j.it)
 			if j.it.Translations == nil {
 				j.it.Translations = map[string]*InboxTranslation{}
 			}
 			j.it.Translations[j.target] = &InboxTranslation{Subject: t.Subject, Preview: clip(oneLine(t.Text), 200), Text: t.Text,
 				Clipped: t.Clipped, Of: j.last, ModelFingerprint: t.ModelFingerprint}
+			b.settle(w)
 			b.mu.Unlock()
-			s.saveInbox(ctx, []*InboxItem{j.it})
+			// Undone (#4981), the item holds what its row does: the next pass makes this one again, from the cache.
+			s.saveWrites(ctx, []*inboxWrite{w}, "its translation")
 		}
 	}()
 }

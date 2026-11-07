@@ -342,3 +342,74 @@ func TestInboxWriteRestoreKeepsRecords(t *testing.T) {
 		t.Fatal("a moved item still holds the change")
 	}
 }
+
+// A new plugin item whose row could not be written is forgotten again (#4981): not listed, not announced, and no
+// round is asked for at once, though more wait (it would only triage the same ones again). The connector hands it in
+// again next round; with the store back it is triaged anew and comes in, stored.
+func TestInboxAdmitRollsBackFailedRows(t *testing.T) {
+	window, timeout := admitWindow, admitTimeout
+	admitWindow, admitTimeout = 50*time.Millisecond, 5*time.Second
+	t.Cleanup(func() { admitWindow, admitTimeout = window, timeout })
+	model, client := newTriageModel(t, "slow", `{"tier":"action","summary":"示例","reason":"示例"}`)
+	model.delay = 300 * time.Millisecond
+	var things []connector.InboxThing
+	for _, n := range []string{"21", "22", "23", "24", "25", "26"} {
+		things = append(things, genericThing("example-org/example-repo#"+n, "a", "示例 "+n))
+	}
+	h, st := admitHub(t, client, &inboxConnector{things: things})
+	listed := func() (n int) {
+		for _, th := range things {
+			if itemOf(h, "example", th.Thread) != nil {
+				n++
+			}
+		}
+		return n
+	}
+
+	st.writeFails(true)
+	collectAndAdmit(h)
+	if n := listed(); n != 0 || len(st.ids) != 0 || h.in.kicks != 0 {
+		t.Fatalf("the failed admission stuck: %d listed, stored %v, %d kick(s)", n, st.ids, h.in.kicks)
+	}
+	for _, c := range h.in.changes() {
+		if len(c.Items) != 0 {
+			t.Fatalf("an item whose row failed was announced: %+v", c.Items)
+		}
+	}
+
+	st.writeFails(false)
+	asked := len(model.asked())
+	collectAndAdmit(h)
+	if n := len(model.asked()) - asked; n != triageConcurrency {
+		t.Fatalf("the next round asked about %d, want %d", n, triageConcurrency)
+	}
+	if n := listed(); n != triageConcurrency || len(st.ids) != triageConcurrency || h.in.kicks == 0 {
+		t.Fatalf("the next round: %d listed, stored %v, %d kick(s)", n, st.ids, h.in.kicks)
+	}
+}
+
+// A translation whose row could not be written is undone (#4981): the item holds what its row does and nothing is
+// announced. The next pass, with the store back, stores it from the cache: the model is not asked again.
+func TestInboxTranslateRollsBackAFailedRow(t *testing.T) {
+	h, en, _, translated := translateHub(t)
+	ctx := context.Background()
+	h.st.writeFails(true)
+	h.translateInbox(ctx)
+	h.passOver()
+	h.inbox.mu.Lock()
+	kept := en.Translations
+	h.inbox.mu.Unlock()
+	if kept != nil || h.st.saved(en.ID) || changedTo(h, en.ID) || translated() != 1 {
+		t.Fatalf("the failed translation stuck: %+v (stored %v, %d asked)", kept, h.st.saved(en.ID), translated())
+	}
+
+	h.st.writeFails(false)
+	h.translateInbox(ctx)
+	h.passOver()
+	h.inbox.mu.Lock()
+	tr := en.Translations["zh-Hans"]
+	h.inbox.mu.Unlock()
+	if tr == nil || tr.Of != en.Last || !h.st.saved(en.ID) || !changedTo(h, en.ID) || translated() != 1 {
+		t.Fatalf("the next pass: %+v (stored %v, %d asked)", tr, h.st.saved(en.ID), translated())
+	}
+}
