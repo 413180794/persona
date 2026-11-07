@@ -921,6 +921,8 @@ A process only runs when "something needs it":
 
 ## Source runtime (#5956)
 
+The [2026-11-07 migration and acceptance record](archive/source-extension-migration-2026-11-07.md) separates merged implementation, native-client evidence, complete source-package acceptance and outstanding production/platform gates. It is a historical snapshot, not deployment authorization.
+
 Executable packages retain the default `runtime.mode: "process"` behavior. A source package explicitly selects `"deno"` and carries a prebuilt, self-contained JavaScript module:
 
 ```json

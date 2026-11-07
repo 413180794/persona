@@ -11,6 +11,7 @@ Current docs, code comments and lessons cite them to explain "why it is done thi
 
 | File | Contents |
 | --- | --- |
+| `source-extension-migration-2026-11-07.md` | Server-rendered TypeScript/JSX implementation and native-client evidence, deduplicated migration checklist, source-package compatibility and outstanding production/platform gates (#5956) |
 | `rolling-upgrade-compatibility-verification.md` | 2026-11-07 bidirectional hub/manager/node binary matrix, current clients against the pinned baseline, inspected synthetic screenshots, test results and no-production boundaries (#6223) |
 | `android-visual-noise-6184/` | Synthetic native-rendered Android before/after decision and outcome screenshots, all three styles × light/dark; no completed emulator boot or device/refraction verification (#6184) |
 | `web-visual-noise-6183.md` | 2026-11-07 web approval/status color inventory, neutral semantic surfaces, before/after browser screenshot method, local verification and no-deployment boundary (#6183) |

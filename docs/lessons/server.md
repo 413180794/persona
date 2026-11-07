@@ -32,6 +32,10 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 
 - Implementing a manager's stream RPC and accepting a client's opt-in does not advertise server support. Both real client adapters fell back because the authenticated hello lacked `extension_ui_stream_v1`. Report the manager-owned transport capability through the existing extension report and hub feature aggregation, independently of installed pages. This is not a renderer, source-runtime availability, permission or resource-enforcement claim: client opt-in, native context/vocabulary checks and all activation/authorization gates still apply.
 
+## Equivalent cached results on source UI resume (#5956)
+
+- Resuming hooks can read the same cached data and still publish a fresh wrapper, unnecessarily changing the render version and invalidating a displayed legacy callback. Preserve equivalent results using their service/request identity, cached timestamps, item references and missed/error semantics, while still publishing genuine changes and new requests. A bundled Program regression plus actual HTTP callback/navigation tests catches this; merely checking that a fitted View loads does not.
+
 ## Copied SDK commands need their development inputs (#6132)
 
 - Copying a package's scripts without their referenced configs, helper scripts and typecheck fixtures leaves a plausible-looking but unusable SDK. Keep the official TypeScript copy complete, including its dependency lockfile; exclude installed dependencies and build output. Test a fresh destination, not only the source checkout, and verify selective copying leaves the other SDK untouched. Schema-conformance fixtures must also be collected from their canonical source into the SDK package and archive; tests cannot depend on an outer repository schema directory or silently skip missing fixtures. Installing these declared development dependencies is a build-time operation, never source-runtime dependency resolution.
