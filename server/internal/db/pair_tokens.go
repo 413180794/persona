@@ -18,10 +18,10 @@ type PairToken struct {
 	MachineID string
 }
 
-// pairEndedNow is the expiry a revocation gives a pairing code ($2: the hub's time.Now()), never later than the one it
-// had. Redemption checks the expiry by the database's clock (RedeemPairToken), the hub by its own (#6543): the code is
-// over by both, also when Postgres runs in a VM whose clock is ahead of the hub's.
-const pairEndedNow = `LEAST(expires_at, now(), $2)`
+// endedNow is the expiry a revocation gives a code (a pairing code, a manager install code; $2: the hub's time.Now()),
+// never later than the one it had. Redemption checks the expiry by the database's clock (RedeemPairToken), the hub by
+// its own (#6543, #6553): the code is over by both, also when Postgres runs in a VM whose clock is ahead of the hub's.
+const endedNow = `LEAST(expires_at, now(), $2)`
 
 func (d *DB) CreatePairToken(ctx context.Context, hash string, expiresAt time.Time, machine string) error {
 	_, err := d.pool.Exec(ctx, `INSERT INTO pair_tokens (token_hash, expires_at, machine_id) VALUES ($1, $2, NULLIF($3, ''))`,

@@ -1414,7 +1414,7 @@ func (d *DB) RevokeDeviceToken(ctx context.Context, id string) (bool, error) {
 
 // dropDeviceRows invalidates its pairing credentials and removes what a revoked credential registered.
 func dropDeviceRows(ctx context.Context, tx pgx.Tx, id string) error {
-	if _, err := tx.Exec(ctx, `UPDATE pair_tokens SET expires_at = `+pairEndedNow+` WHERE device_id = $1`, id, time.Now()); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE pair_tokens SET expires_at = `+endedNow+` WHERE device_id = $1`, id, time.Now()); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM devices WHERE credential_id = $1 OR device_id = $1`, id); err != nil {

@@ -206,8 +206,8 @@ func (d *DB) ManagerInstallCodeByHash(ctx context.Context, hash string) (*Manage
 // now (the roster shows its manager's code as expired, and the app offers a new one). For a code that crossed the
 // internet in the clear (hub/managers.go): whoever saw it on the way can't trade it. It reports whether there was one.
 func (d *DB) ExpireManagerInstallCode(ctx context.Context, hash string) (bool, error) {
-	tag, err := d.pool.Exec(ctx, `UPDATE manager_install_codes SET expires_at = now()
-		WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()`, hash)
+	tag, err := d.pool.Exec(ctx, `UPDATE manager_install_codes SET expires_at = `+endedNow+`
+		WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()`, hash, time.Now())
 	if err != nil {
 		return false, err
 	}

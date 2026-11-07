@@ -2,9 +2,9 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
-## An expiry written by one clock and checked by another (2026-11-07, #6543)
+## An expiry written by one clock and checked by another (2026-11-07, #6543, #6553)
 
-Revocation ended pairing codes with `expires_at = now()` (Postgres's clock) while the hub judged them by its own `time.Now()`: with Postgres in a VM whose clock runs ahead (a macOS hub with Docker Desktop or colima), a revoked code kept working for the difference. When a time is written on one side and compared on the other, make it past by both (`LEAST(expires_at, now(), $hub_now)`, `pairEndedNow`). Checks done in SQL against the same `now()` that wrote the time (manager install codes) are not affected. Tests that compare a database-written time with `time.Now()` fail on such a machine for the same reason, while Linux CI, with Postgres on the same kernel clock, never shows it: `hub` `TestManagerJoinRefusesPublicPlaintext` still does.
+Revocation ended pairing codes with `expires_at = now()` (Postgres's clock) while the hub judged them by its own `time.Now()`: with Postgres in a VM whose clock runs ahead (a macOS hub with Docker Desktop or colima), a revoked code kept working for the difference. When a time is written on one side and compared on the other, make it past by both (`LEAST(expires_at, now(), $hub_now)`, `endedNow`). A time the hub hands out has the same problem even when every check is in SQL: a voided manager install code still showed a future expiry in the roster (#6553). Tests that compare a database-written time with `time.Now()` fail on such a machine, while Linux CI, with Postgres on the same kernel clock, never shows it.
 
 ## Rolling-upgrade identity contracts (#6223)
 
