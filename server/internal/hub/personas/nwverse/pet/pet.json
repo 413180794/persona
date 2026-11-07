@@ -18,7 +18,7 @@
     },
     "done": {
       "file": "pet/done.png",
-      "sha256": "620ce203c3f6720cef2c7113f9064193a656a5b6fe9f0422e1137fad7bb1c609",
+      "sha256": "9df8517e40f3bfba458eab11947ca7bc263d4a8e946916220164850e059c9199",
       "fps": 12,
       "frames": 48,
       "still": 20
@@ -39,9 +39,9 @@
     },
     "offline": {
       "file": "pet/offline.png",
-      "sha256": "7538fbd54330effab40885c5288f5c9a93bfa2674d887a8fecc99e7d32b6fd3e",
+      "sha256": "d591df25d59ecd9d535f8785605ca686855fe89327e59670ec42eef05771c68e",
       "fps": 10,
-      "frames": 41,
+      "frames": 51,
       "still": 10
     },
     "tap": {
@@ -75,7 +75,7 @@
     },
     "offline": {
       "file": "pet/face-offline.png",
-      "sha256": "99a5b6c5b9a6bff7e11dee43cb8abbcbf0889d4c0e4ba234ae71fa6feb4ababe"
+      "sha256": "15b790b97786937a727e7463df20a77956e459ea40f247391ab85f449917d2bd"
     }
   }
 }
