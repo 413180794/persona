@@ -91,6 +91,8 @@ internal fun mergedInteractions(stacks: GroupStacks): InteractionCenter = object
         s.mapped(s.repositories.interactions.pending) { list -> list.map(::interaction) }
     }) { it.flatten() }
     override suspend fun refresh() = stacks.forEach { it.repositories.interactions.refresh() }
+    // Only the request's own group: another group answering says nothing about this one (#5697).
+    override suspend fun refresh(id: String) = stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.refresh() }
     override suspend fun resolve(id: String, resolution: Resolution) {
         // Merged interaction ids carry their group's suffix like machine ids (GroupNames.interactionId).
         stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.resolve(GroupKeys.raw(id), resolution) }

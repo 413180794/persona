@@ -40,8 +40,9 @@ internal class NotificationActionExecutor(
             onInteraction(cached)
         }
         onProgress(PendingStatus.Verifying)
-        // Always query the hub: a locally pending request may already be handled elsewhere.
-        try { center.refresh() }
+        // Always query the hub: a locally pending request may already be handled elsewhere. Its own hub group, since another
+        // group answering would leave this one's stale card to be claimed (#5697).
+        try { center.refresh(id) }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { return NotificationActionResult.NotSent }
         val ix = center.pending.value.firstOrNull { it.id == id } ?: return NotificationActionResult.Gone

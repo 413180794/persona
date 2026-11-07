@@ -159,6 +159,22 @@ class NotificationExecutionTest {
         assertEquals(1, center.writes)
     }
 
+    @Test fun theRequestsOwnGroupThatCannotBeAskedMeansNothingWasSentEvenWhenAnotherGroupAnswers() = runBlocking {
+        // #5697: with two hub groups, the merged refresh succeeds when any group does; only the request's own group counts.
+        val center = object : InteractionCenter {
+            override val pending = MutableStateFlow(listOf(request))
+            var writes = 0
+            override suspend fun refresh() = Unit
+            override suspend fun refresh(id: String) { throw java.io.IOException("Unreachable") }
+            override suspend fun resolve(id: String, resolution: Resolution) { writes++ }
+        }
+        val claims = mutableSetOf<String>()
+        val executor = NotificationActionExecutor(center, { synchronized(claims) { claims.add(it) } }, { now })
+        assertEquals(NotificationActionResult.NotSent, executor.execute(request.id, "allow", null, { false }))
+        assertTrue(claims.isEmpty())
+        assertEquals(0, center.writes)
+    }
+
     @Test fun aSessionThatCannotApproveIsAnsweredOnTheComputer() = runBlocking {
         val center = Center(request)
         val history = Session(machineId = "machine", sessionId = "session", sourceKind = "codex_app_server",
