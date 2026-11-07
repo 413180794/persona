@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import persona.android.navigation.waitingRoute
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
 import persona.core.designsystem.AppFeedback
@@ -21,7 +22,7 @@ import kotlinx.coroutines.flow.flow
 
 @Composable
 internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navigator, feedback: AppFeedback, requestId: String? = null,
-    onSessionClosed: (SessionKey) -> Unit = {}) {
+    onSessionClosed: (SessionKey) -> Unit = {}, onOpenCard: (ResolvedRoute) -> Unit) {
     // The services of the session's own hub group, which need not be the selected one (docs/android/android.md "Multiple hubs").
     val source = chatWiringSource()
     val activeWiring by remember(source, route.machineId) { source.bindingsFor(SessionKey(route.machineId, route.sessionId)) }
@@ -93,7 +94,8 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
                 onOpenSession = { navigator.navigate(ChatRoute(it.machineId, it.sessionId)) },
                 waiting = waiting,
                 onOpenRequest = { chat, request ->
-                    navigator.navigate(InteractionRoute(ChatRoute(chat.machineId, chat.sessionId, ConversationKind.Agent), request))
+                    val target = waitingRoute(chat, request)
+                    if (target.card != null) onOpenCard(target) else navigator.navigate(target.key)
                 },
                 onOpenAssistant = { navigator.navigate(persona.feature.chat.conversationRoute(it, assistant = true)) },
                 onConnectionDetails = { navigator.navigate(SettingsPageRoute(SettingsPage.Diagnostics)) },

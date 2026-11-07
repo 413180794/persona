@@ -275,6 +275,11 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     }
     fun openResolved(route: ResolvedRoute): AppTab =
         if (openAssistant(route.key, true)) AppTab.Persona else route.open(stacks)
+    /** Opens [route]; a card outside any session (#4808) also has Agents open its sheet, as its notification does. */
+    fun openWithCard(route: ResolvedRoute) {
+        selected = openResolved(route)
+        route.card?.let(persona.feature.agents.AgentsCardOpen::request)
+    }
     remember {
         initialRoute?.let { route ->
             // The first frame already shows the requested conversation, not the home's default one.
@@ -519,7 +524,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                     pins, connectionLabel = connection.title(),
                     hubOnline = connection == ConnectionState.Online || connection == ConnectionState.Updating, demo = session.demo != null,
                     requestedSession = assistantRequest, onKnowledge = { navigator.navigate(KnowledgeRoute) },
-                    needsYou = needsYou, onOpenNeed = { line -> selected = openResolved(needsYouRoute(line)) },
+                    needsYou = needsYou, onOpenNeed = { line -> openWithCard(needsYouRoute(line)) },
                     onOpenInbox = { navigator.selectTab(AppTab.Inbox) },
                     onTogglePin = { key -> session.preferences.togglePin(key.path) },
                     onVoice = voiceExtension?.let { extension -> { navigator.navigate(VoiceRoute(extension.id, extension.name)) } },
@@ -530,12 +535,12 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             agentsEntries(navigator, agents, machine, { machine = it },
                 terminalPanes = if (session.demo == null) shell.terminalPanes.available else kotlinx.coroutines.flow.flowOf(false))
             spaceEntries(navigator, agents)
-            chatEntries(navigator) { ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed) }
-            entry<InteractionRoute> { ShellChat(it.chat, session, navigator, shell.feedback, it.requestId, navigator::sessionClosed) }
+            chatEntries(navigator) { ShellChat(it, session, navigator, shell.feedback, onSessionClosed = navigator::sessionClosed,
+                onOpenCard = ::openWithCard) }
+            entry<InteractionRoute> { ShellChat(it.chat, session, navigator, shell.feedback, it.requestId, navigator::sessionClosed,
+                ::openWithCard) }
             inboxEntries(navigator, session.inbox, connectors = services.connectors.takeUnless { services.demo }, onOpenCard = { card ->
-                // A card outside any session opens on Agents, as its notification does (#4808).
-                selected = openResolved(ResolvedRoute(AppTab.Agents, AgentsRoute, card = card))
-                persona.feature.agents.AgentsCardOpen.request(card)
+                openWithCard(ResolvedRoute(AppTab.Agents, AgentsRoute, card = card))
             })
             entry<InboxItemRoute> { InboxLink(it, session.inbox, navigator, ::replace) }
             entry<LarkChatRoute> { InboxLink(it, session.inbox, navigator, ::replace) }
