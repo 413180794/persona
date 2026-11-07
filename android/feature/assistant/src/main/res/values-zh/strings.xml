@@ -66,6 +66,7 @@
     <string name="assistant_phone_permissions_pending">手机权限待确认</string>
     <string name="assistant_search_chats">搜索对话</string>
     <string name="assistant_start_main">开始主对话</string>
+    <string name="assistant_main_chat">主对话</string>
     <string name="assistant_pinned">置顶</string>
     <string name="assistant_pinned_actions">置顶操作</string>
     <string name="assistant_unpin_all">全部取消置顶</string>

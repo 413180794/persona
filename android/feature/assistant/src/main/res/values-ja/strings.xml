@@ -66,6 +66,7 @@
     <string name="assistant_phone_permissions_pending">スマホの権限を確認待ち</string>
     <string name="assistant_search_chats">チャットを検索</string>
     <string name="assistant_start_main">メインチャットを開始</string>
+    <string name="assistant_main_chat">メインチャット</string>
     <string name="assistant_pinned">ピン留め</string>
     <string name="assistant_pinned_actions">ピン留めの操作</string>
     <string name="assistant_unpin_all">すべてのピン留めを解除</string>

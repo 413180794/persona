@@ -67,6 +67,7 @@
     <string name="assistant_phone_permissions_pending">Phone permissions pending</string>
     <string name="assistant_search_chats">Search chats</string>
     <string name="assistant_start_main">Start the main chat</string>
+    <string name="assistant_main_chat">Main chat</string>
     <string name="assistant_pinned">Pinned</string>
     <string name="assistant_pinned_actions">Pinned actions</string>
     <string name="assistant_unpin_all">Unpin all</string>

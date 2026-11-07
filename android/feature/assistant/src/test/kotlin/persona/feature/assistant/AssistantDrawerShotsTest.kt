@@ -86,16 +86,21 @@ class AssistantDrawerShotsTest {
                 }
             }
         }
-        // The main conversation reads "Persona" (the session keeps its own title), and "Profile" is gone.
-        rule.onAllNodesWithText("主对话").assertCountEquals(0)
+        // The main conversation reads "Persona" (the session keeps its own title), with a small 主对话 under it so it
+        // reads as a chat (#6327, as the web, #6293), and "Profile" is gone.
+        rule.onAllNodesWithText("主对话").assertCountEquals(1)
         rule.onAllNodesWithText("资料页").assertCountEquals(0)
         rule.onAllNodesWithText("认识 Persona").assertCountEquals(0)
         // #2004 on every platform: the first row is the main conversation as "Persona" with the app's mark, then a
         // line; Persona is not listed again (no header of its own, no second main row).
         rule.onAllNodesWithText("Persona").assertCountEquals(1)
         val persona = rule.onNodeWithText("Persona").fetchSemanticsNode().boundsInRoot
+        // The texts themselves, not the row they merge into.
+        val name = rule.onNodeWithText("Persona", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val mark = rule.onNodeWithText("主对话", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("主对话 is under Persona", name.bottom <= mark.top)
         val search = rule.onNodeWithText("搜索对话").fetchSemanticsNode().boundsInRoot
-        assertTrue("Persona is above the search", persona.bottom <= search.top)
+        assertTrue("Persona is above the search", persona.bottom <= search.top && mark.bottom <= search.top)
         rule.onNodeWithText("Persona").performClick()
         assertTrue(mainTapped)
         assertEquals(null, opened)

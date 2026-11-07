@@ -1074,7 +1074,8 @@ private fun PersonaRow(main: Session?, selected: Boolean, hasMain: Boolean, onMa
     val status = main?.conversationStatus()
     val pending = main?.pendingInteractions ?: 0
     JRow(name, onClick = onMain, onLongClick = main?.let { { menu = true } }, selected = selected,
-        subtitle = if (main == null && !hasMain) stringResource(R.string.assistant_start_main) else null,
+        // "Main chat" under the name keeps the row readable as a conversation, not a brand heading (#6327, as the web, #6293).
+        subtitle = stringResource(if (main == null && !hasMain) R.string.assistant_start_main else R.string.assistant_main_chat),
         leading = { JAppMark(Tokens.Space.xxl) }, chevron = false,
         trailing = if (main == null) null else ({
             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
