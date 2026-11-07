@@ -11,7 +11,7 @@ The prototype is the UI and interaction standard; compare screen by screen durin
 - **Do not change the Agents page or the top-bar "Assistant | Agents" switch at all**, or move them behind any secondary entry point (requested 2026-11-03). Tasks started from the main chat are ordinary
   Agent sessions that appear normally in Agents; both sides share the same data. This feature changes only the assistant side.
 - No separate task system: **a task is a to-do** with attached Agents (`docs/assistant/todos.md`), plus a record of which chat created it.
-- No second Lark client or source-specific browsing pages (`CLAUDE.md`): messages appear in the chat only in relation to tasks.
+- No second Lark client or source-specific browsing pages (`docs/extensions/feishu.md`): messages appear in the chat only in relation to tasks.
 
 ## Three layers
 

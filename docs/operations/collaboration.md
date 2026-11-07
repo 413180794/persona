@@ -1,7 +1,7 @@
 # Working with other people and Agents: claim the issue before you start
 
 Several people work in this repository, each alongside their own Agents. Two people have fixed the same bug, and someone has found halfway through a fix that it was already fixed. So:
-**claim the issue before you start, and every PR must link an issue**. The overall flow (branching, English PRs, merging yourself) is in `CLAUDE.md` ("Development workflow"); this page has the claiming details, comment templates and commands you can copy.
+**claim the issue before you start, and every PR must link an issue**. The overall flow (branching, English PRs, merging once CI passes) is in `CLAUDE.md` ("Development workflow"); this page has the claiming details, comment templates and commands you can copy.
 
 ## Rules
 
@@ -167,7 +167,7 @@ EOF
   conflicts are resolved once instead of once per commit, and the push is a plain push with no force while other Agents work in the repository (#5988).
   In a merge "ours" is your branch and "theirs" is master, the reverse of a rebase: mind it with `git checkout --ours/--theirs` and `scripts/i18n/apple_l10n.py merge`.
   A rebase is still allowed, for example for a single-commit branch.
-- Merging: `scripts/hooks/merge-pr.sh <number>`, not `gh pr merge` directly. It first scans the PR's changed files, commit messages, title and body with this machine's private values, and only squash-merges and deletes the branch if that passes (`docs/operations/testing.md`, "Privacy scan").
+- Merging: once the PR's CI passes, `scripts/hooks/merge-pr.sh <number>`, not `gh pr merge` directly. It first scans the PR's changed files, commit messages, title and body with this machine's private values, and only squash-merges and deletes the branch if that passes (`docs/operations/testing.md`, "Privacy scan").
 - `Fixes #N` / `Closes #N`: GitHub closes the issue automatically after merging. `Refs #N`: links without closing (an issue split into several PRs, or only partly fixed).
 - PR titles and bodies are in English (after a squash merge they are the commit on master); issues and comments are also in English.
 
