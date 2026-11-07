@@ -126,14 +126,16 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
     suspend fun choose(p: PersonaInfo) {
         if (!p.usable) return
         val asked = ++choices
-        lock.withLock {
-            if (!onPhone(p)) download(p, packs() ?: return@withLock)
+        val shown = lock.withLock {
+            if (!onPhone(p)) download(p, packs() ?: return@withLock false)
             // Another choice made while this one downloaded wins.
-            if (!onPhone(p) || asked != choices) return@withLock
+            if (!onPhone(p) || asked != choices) return@withLock false
             style.setPersonaId(p.id)
             _current.value = p
+            true
         }
-        tellHub(p.id)
+        // The hub pushes what it keeps back to every device, this one too: only a choice shown here goes there.
+        if (shown) tellHub(p.id)
     }
 
     /** Picks a built-in face at once (a download under way for an earlier choice is then not applied). */
