@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -291,5 +292,24 @@ func TestCgroupMemory(t *testing.T) {
 				t.Fatalf("got %d / %d %v, want %d / %d %v", used, limit, ok, c.used, c.limit, c.ok)
 			}
 		})
+	}
+}
+
+// LoadAverage reads the kernel value (no locale-dependent CLI). On darwin and linux it must be a finite non-negative number.
+func TestLoadAverage(t *testing.T) {
+	v := LoadAverage()
+	if v < 0 || v != v { // NaN
+		t.Fatalf("LoadAverage = %v", v)
+	}
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		// A live machine's 1-minute load is almost never exactly 0 for long; 0 usually meant the old text parse failed.
+		if v == 0 {
+			t.Log("LoadAverage is 0; unusual on a busy CI host but legal")
+		}
+	default:
+		if v != 0 {
+			t.Fatalf("LoadAverage = %v on %s, want 0", v, runtime.GOOS)
+		}
 	}
 }

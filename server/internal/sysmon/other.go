@@ -21,3 +21,5 @@ func NewCollector(ctx context.Context) Collector { return noCollector{} }
 
 func (noCollector) Sample(now time.Time) proto.MetricSample { return proto.MetricSample{T: now.Unix()} }
 func (noCollector) Close()                                  {}
+
+func loadAverageOS() *float64 { return nil }

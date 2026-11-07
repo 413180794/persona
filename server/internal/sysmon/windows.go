@@ -274,3 +274,5 @@ func volumeExtent(drive string) (string, bool) {
 	}
 	return parseDiskExtents(b[:n])
 }
+
+func loadAverageOS() *float64 { return nil }

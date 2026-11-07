@@ -219,3 +219,11 @@ func parseLoadavgRaw(b []byte) *float64 {
 	v := float64(int64(float64(binary.LittleEndian.Uint32(b))/float64(scale)*100+0.5)) / 100
 	return &v
 }
+
+// loadAverageOS reads vm.loadavg as a C struct (no process, no locale).
+func loadAverageOS() *float64 {
+	if b, err := unix.SysctlRaw("vm.loadavg"); err == nil {
+		return parseLoadavgRaw(b)
+	}
+	return nil
+}

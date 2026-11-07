@@ -125,3 +125,11 @@ func physical(name string) bool {
 	}
 	return !virtualName(name)
 }
+
+func loadAverageOS() *float64 {
+	b, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return nil
+	}
+	return parseLoadavg(b)
+}

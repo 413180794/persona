@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/sysmon"
 )
 
 // Token usage of every agent on this machine, for the Dynamic Island's TPM / today's tokens / requests (docs/apple/live-activity.md).
@@ -364,20 +364,7 @@ func firstTime(b []byte) time.Time {
 	return t
 }
 
-// loadAverage is the 1-minute load average (0 when unknown).
-func loadAverage() float64 {
-	if b, err := os.ReadFile("/proc/loadavg"); err == nil {
-		if f := strings.Fields(string(b)); len(f) > 0 {
-			v, _ := strconv.ParseFloat(f[0], 64)
-			return v
-		}
-	}
-	if runtime.GOOS == "darwin" {
-		out, err := exec.Command("sysctl", "-n", "vm.loadavg").Output() // "{ 1.23 1.45 1.67 }"
-		if f := strings.Fields(strings.Trim(strings.TrimSpace(string(out)), "{}")); err == nil && len(f) > 0 {
-			v, _ := strconv.ParseFloat(f[0], 64)
-			return v
-		}
-	}
-	return 0
-}
+// loadAverage is the 1-minute load average (0 when unknown). It uses sysmon's kernel read: the old path ran
+// `sysctl -n vm.loadavg` and parsed its text, which under a decimal-comma locale (de_DE, fr_FR) made ParseFloat
+// fail and the usage notification report a load of 0.
+func loadAverage() float64 { return sysmon.LoadAverage() }
