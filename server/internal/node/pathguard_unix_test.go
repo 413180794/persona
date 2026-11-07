@@ -146,3 +146,84 @@ func TestPathGuardManagerDirEdges(t *testing.T) {
 		t.Errorf("a manager whose folder is the home: %v", err)
 	}
 }
+
+// The extensions' data is refused wherever it is kept: extensions/data/, what an uninstall or an upgrade sets aside in
+// extensions/staging/, the plugins/ folder of a hub from before #1844; the folders themselves too (their listing names
+// the extensions); and a link standing where such a folder, or a folder on the way to one, is named is not followed.
+func TestPathGuardExtensionsData(t *testing.T) {
+	home := t.TempDir()
+	state := filepath.Join(t.TempDir(), "persona-state")
+	t.Setenv("PERSONA_HOME", state)
+	t.Setenv("JARVIS_HOME", "")
+	n := &Node{home: home}
+	write := func(p string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(`{"token":"x"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mgr := filepath.Join(t.TempDir(), "mgr2")
+	write(filepath.Join(mgr, "manager.json"))
+	if err := os.WriteFile(filepath.Join(mgr, "manager.json"), []byte(`{"id":"m","hub":"https://hub.example.com","token":"jb"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere")
+	write(filepath.Join(elsewhere, "data", "notes", "token.json"))
+	refused := []string{
+		filepath.Join(state, "extensions", "data", "notes", "token.json"),
+		filepath.Join(state, "extensions", "staging", "uninstall-notes-1", "0", "token.json"),
+		filepath.Join(state, "extensions", "staging", "plan-2", "data", "token.json"),
+		filepath.Join(state, "plugins", "data", "notes", "token.json"),
+		filepath.Join(state, "plugins", "notes", "data", "token.json"), // a node's from before #1921
+		filepath.Join(state, "node-plugins", "notes", "data", "session.json"),
+		filepath.Join(mgr, "extensions", "data", "notes", "token.json"),
+		filepath.Join(mgr, "extensions", "staging", "uninstall-notes-1", "0", "token.json"),
+	}
+	for _, p := range refused {
+		write(p)
+		if _, err := n.readFile(p, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read %s: %v, want it refused", p, err)
+		}
+	}
+	for _, d := range []string{filepath.Join(state, "extensions", "data"), filepath.Join(mgr, "extensions", "data")} {
+		if _, err := n.listDir(d, ""); !errors.Is(err, errOffLimits) {
+			t.Errorf("list %s: %v, want it refused", d, err)
+		}
+	}
+	if _, err := n.listDir(filepath.Join(state, "extensions"), ""); err != nil {
+		t.Errorf("list the extensions folder: %v", err)
+	}
+	// Links standing where extensions/ or extensions/data/ are named, in the data folder and in a manager's.
+	if err := os.RemoveAll(filepath.Join(mgr, "extensions")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(mgr, "extensions")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := n.readFile(filepath.Join(mgr, "extensions", "data", "notes", "token.json"), "", 0, false); !errors.Is(err, errOffLimits) {
+		t.Errorf("read through a manager's extensions link: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(state, "extensions", "data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(elsewhere, "data"), filepath.Join(state, "extensions", "data")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := n.readFile(filepath.Join(state, "extensions", "data", "notes", "token.json"), "", 0, false); !errors.Is(err, errOffLimits) {
+		t.Errorf("read through the data folder's extensions/data link: %v", err)
+	}
+	// A project's own folders of these names, and a link named data elsewhere, stay readable.
+	project := filepath.Join(home, "code", "app")
+	write(filepath.Join(project, "extensions", "data", "fixture.json"))
+	if _, err := n.readFile(filepath.Join(project, "extensions", "data", "fixture.json"), "", 0, false); err != nil {
+		t.Errorf("a project's extensions/data: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(elsewhere, "data"), filepath.Join(project, "data")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := n.readFile(filepath.Join(project, "data", "notes", "token.json"), "", 0, false); err != nil {
+		t.Errorf("a project's link named data: %v", err)
+	}
+}

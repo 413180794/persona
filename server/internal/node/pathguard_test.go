@@ -205,6 +205,9 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 		filepath.Join(state, "relay.secret"),
 		filepath.Join(state, "devices.json.migrated"),
 		filepath.Join(state, "mail_accounts.json"),
+		filepath.Join(state, "extensions/data/notes/token.json"),
+		filepath.Join(home, ".persona/extensions/data/notes/token.json"),
+		filepath.Join(state, "managers/m1/extensions/data/notes/token.json"),
 		filepath.Join(home, ".claude.json"),
 		filepath.Join(home, ".claude-custom-oauth.json"),
 	}
@@ -212,6 +215,8 @@ func TestPathGuardDataDirCredentials(t *testing.T) {
 		filepath.Join(home, ".persona/data/people/a.md"),
 		filepath.Join(state, "data/people/a.md"),
 		filepath.Join(home, "code/link.json"), // a project's file of the same name
+		filepath.Join(home, "code/extensions/data/token.json"),
+		filepath.Join(state, "extensions/notes/manifest.json"),
 		filepath.Join(home, "persona-state-notes/hub.json"),
 	}
 	// Key backups remain secret in default, legacy, custom and manager data folders.
@@ -409,10 +414,12 @@ func TestPathGuardManagerDirAnywhere(t *testing.T) {
 		filepath.Join(mgr, "hub.json.before-manager-json-20261106T000000.000000000Z"),
 		filepath.Join(mgr, "tailcat-hub.json"),
 		filepath.Join(mgr, "launcher-settings", "work-claude-settings.json"),
+		filepath.Join(mgr, "extensions", "data", "notes", "token.json"),
 	}
 	readable := []string{
 		filepath.Join(mgr, "data", "people", "a.md"),
 		filepath.Join(mgr, "notes.md"),
+		filepath.Join(mgr, "extensions", "notes", "manifest.json"),
 		filepath.Join(project, "link.json"),
 		filepath.Join(project, "certs", "dev.pem"),
 		filepath.Join(project, "manager.json"),

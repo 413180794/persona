@@ -124,8 +124,8 @@ func WrapAgent(plan AgentPlan, argv, env []string) ([]string, []string, AgentSta
 // agentClosedDirs are the folders of the data directory the agent sandbox closes whole besides identity's secret
 // folders: only Persona's own processes use them. agentSocketDirs hold sockets an agent may not connect to.
 var (
-	agentClosedDirs = []string{"managers", "extensions/data", "extensions/run", "run"}
-	agentSocketDirs = []string{"extensions/run", "run"}
+	agentClosedDirs = []string{"managers", "extensions/run", "run"}
+	agentSocketDirs = []string{"extensions/run", "plugins/run", "run"}
 )
 
 // agentWorkspaces are the folders in the data directory Persona's own agents run in (the assistant, the health
@@ -138,8 +138,8 @@ var agentWorkspaces = []string{"assistant", identity.SpaceHealth, "guest"}
 //     temporary file a rewrite renames into place) and anything in a folder by such a name; the key files and their
 //     backups (identity.DataKeyPattern); the secret folders (identity.DataSecretDirs) whole;
 //   - deny the folders only Persona's own processes use, whole: managers/ (a manager's manager.json and key),
-//     extensions/data/ (the extensions' sign-ins), extensions/run/ and run/ (their sockets and the hub's edge), and
-//     connecting to the sockets in the last two;
+//     extensions/run/ and run/ (the extensions' sockets and the hub's edge), and connecting to those sockets and to
+//     plugins/run/'s (a hub's from before #1844);
 //   - deny writing the data directory itself, every folder above it and its other names, and the folders in it that
 //     hold a closed one (extensions/): renaming one would move the secrets out from under the rules; and the switch file;
 //   - allow reading this start's own launcher settings.

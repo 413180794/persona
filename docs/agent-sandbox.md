@@ -110,7 +110,7 @@ data directory goes by is resolved and written once.
 | --- | --- |
 | Read and write, by the start of the name, with an optional leading dot, and anything inside a folder by such a name | `identity.DataSecrets` at the top: `hub.json`, `link.json`, `tailcat.json`, `tailcat-hub.json`, `daemons.json`, `manager.json`, `apns`, `relay.json`, `relay.secret`, `devices.json`, `mail_accounts.json` |
 | Read and write, key files with their backups | `identity.DataKeyPattern` at the top: `\.(key|p8|pem|crt)([.~-][^/]*)?$` |
-| Read and write, whole folders | `identity.DataSecretDirs` (`launcher-settings/`, `tls/`, `link-tls/`), and `managers/`, `extensions/data/`, `extensions/run/`, `run/` |
+| Read and write, whole folders | `identity.DataSecretDirs` (`launcher-settings/`, `tls/`, `link-tls/`, `extensions/data/`, `extensions/staging/`, `plugins/`, `node-plugins/`), and `managers/`, `extensions/run/`, `run/`; connecting to the sockets in `extensions/run/`, `plugins/run/` and `run/` |
 | Connect | Unix sockets under `extensions/run/` and `run/` |
 | Write | The data directory itself, every folder above it, its other names (the `~/.persona` link), every folder in it that holds a closed folder (`extensions/`), `agent-sandbox.on` |
 | Allow read | This start's own files in `launcher-settings/` (what it passes with `--settings`) |
@@ -123,7 +123,7 @@ pins each difference:
 | --- | --- | --- |
 | `managers/<id>/` | The same names, keys and folders at its top | The whole folder |
 | `.hub.json.*` and other dot-prefixed copies | Readable | Refused |
-| `extensions/data/`, `extensions/run/`, `run/` | Readable | Refused, sockets included |
+| `extensions/run/`, `run/` | Readable | Refused, sockets included |
 | This start's own launcher settings | Refused | Readable |
 | A manager's folder outside the data directory (`--dir`, one holding a manager's `manager.json`) | The same names, keys and folders at its top | Not closed |
 

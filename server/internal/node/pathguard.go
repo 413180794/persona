@@ -107,8 +107,15 @@ func dataSecret(rel string) bool {
 	if len(parts) > 2 && parts[0] == "managers" {
 		parts = parts[2:]
 	}
+	// A secret folder, and anything in it: the folder itself too (its listing names what is in it).
+	if slices.ContainsFunc(identity.DataSecretDirs, func(dir string) bool {
+		d := strings.Split(dir, "/")
+		return len(parts) >= len(d) && slices.Equal(parts[:len(d)], d)
+	}) {
+		return true
+	}
 	if len(parts) > 1 {
-		return slices.Contains(identity.DataSecretDirs, parts[0])
+		return false
 	}
 	base := parts[0]
 	if hubKeyExt.MatchString(base) {
@@ -145,11 +152,51 @@ func inManagerDir(path string) bool {
 		return true
 	}
 	for d := path; d != filepath.Dir(d); d = filepath.Dir(d) {
-		if slices.Contains(identity.DataSecretDirs, fold(filepath.Base(d))) && isManagerDir(filepath.Dir(d)) {
+		if root, ok := secretDirOf(d); ok && isManagerDir(root) {
 			return true
 		}
 	}
 	return false
+}
+
+// secretBehind says whether the link at next (its folder real) stands where a secret folder, or a folder on the way to
+// one, is named (tls, or extensions of extensions/data): what is behind it would be refused by name there, and
+// followed, it would not be.
+func (n *Node) secretBehind(next string) bool {
+	base := fold(filepath.Base(next))
+	for _, dir := range identity.DataSecretDirs {
+		names := strings.Split(dir, "/")
+		for i, name := range names {
+			if name == base {
+				probe := filepath.Join(append(append([]string{next}, names[i+1:]...), "x")...)
+				if errors.Is(n.offLimitsResolved(probe), errOffLimits) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// secretDirOf says whether the folder d is one of identity.DataSecretDirs by its last components (extensions/data:
+// its last two), and the folder that holds it.
+func secretDirOf(d string) (string, bool) {
+	for _, dir := range identity.DataSecretDirs {
+		root := d
+		names := strings.Split(dir, "/")
+		matched := true
+		for i := len(names) - 1; i >= 0; i-- {
+			if fold(filepath.Base(root)) != names[i] || root == filepath.Dir(root) {
+				matched = false
+				break
+			}
+			root = filepath.Dir(root)
+		}
+		if matched {
+			return root, true
+		}
+	}
+	return "", false
 }
 
 // isManagerDir says whether dir holds a manager's manager.json: a plain file naming its hub and its token, or one that
@@ -321,6 +368,9 @@ func (n *Node) realPath(path string) (string, error) {
 		if st.Mode()&fs.ModeSymlink == 0 {
 			done = next
 			continue
+		}
+		if n.secretBehind(next) {
+			return "", errOffLimits
 		}
 		if links++; links > maxLinks {
 			return "", fmt.Errorf("too many links: %s", path)
