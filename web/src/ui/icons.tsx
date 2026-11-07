@@ -19,6 +19,7 @@ const P: Record<string, React.ReactNode> = {
   x: <path d="M18 6L6 18M6 6l12 12" />,
   check: <path d="M20 6L9 17l-5-5" />,
   search: <g><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></g>,
+  // a prompt with no frame: a command run, and the sidebar's mark for a terminal pane (unlike appWindow, it has no box)
   run: <path d="M4 17l6-5-6-5M12 19h8" />,
   read: <g><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></g>,
   write: <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />,
@@ -71,7 +72,7 @@ const P: Record<string, React.ReactNode> = {
   shield: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
   key: <g><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></g>,
   terminal: <g><rect x="2" y="4" width="20" height="16" rx="2.5" /><path d="m6 9 3 3-3 3M12 15h5" /></g>,
-  // a desktop app's window, terminal's frame with a title bar: an agent in an app's own chat (the sidebar's source marks)
+  // a desktop app's window, a frame with a title bar: an agent in an app's own chat (the sidebar's source marks; a terminal's is `run`)
   appWindow: <g><rect x="2" y="4" width="20" height="16" rx="2.5" /><path d="M2 9h20M5.5 6.5h.01M8.5 6.5h.01" /></g>,
   inbox: <g><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></g>,
   clock: <g><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></g>,

@@ -18,7 +18,7 @@ import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
 import { agentLabel } from "../lib/mentions";
-import { ago, backgroundWaiting, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, backgroundWaiting, baseName, sessionCan, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, firstAndCurrent, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
 import { arrangePages, useSidebarPrefs } from "../lib/sidebar-pages";
@@ -1918,7 +1918,8 @@ const NavRow = memo(function NavRow({ k, reg, hover, active, to, go, icon, label
   );
 }, sameProps);
 
-const SOURCE_ICON = { terminal: { name: "terminal", tone: "text-source-terminal" }, desktop: { name: "appWindow", tone: "text-source-desktop" } } as const;
+// two shapes as well as two colors, so they tell apart without color: a bare prompt (no frame) and a window with a title bar
+const SOURCE_ICON = { terminal: { name: "run", tone: "text-source-terminal" }, desktop: { name: "appWindow", tone: "text-source-desktop" } } as const;
 
 /** Where the agent was opened (#2526), as a mark: a terminal or a desktop app's window in its own color, Lark's mark for a
  *  Lark group (a click opens its Feishu topic). Nothing for other sources. Its name is the tooltip and what a screen reader
@@ -1981,7 +1982,13 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const st = stateOf(s);
   // Awaiting Reply (#5096): seen, but it asked you something you have not answered
   const awaiting = useStore((x) => awaitsReply(s, x.mutes));
-  const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
+  // where it was opened, marked at the row's end: not on a tab with several panes (endRoom), where a herdr tab is a
+  // terminal by definition, each pane's row under it says so, and the mark's room is the title's
+  const source = showState && !s.assistant && !endRoom ? sessionSource(s) : undefined;
+  // a desktop app's runtime that can be written to: its mark says where it is and the agent's mark which agent, so the
+  // runtime's name at the end only repeats them (it stays in the tooltip); a read-only one still says why
+  const sameAsMarks = source === "desktop" && s.source_kind === "runtime" && sessionCan(s, "send");
+  const tail = [sameAsMarks ? "" : sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
   const row = useRef<HTMLAnchorElement | null>(null);
   // Settings › Appearance › show details on agent rows (#2430): a second line under an agent's title — folder · model · context · age
@@ -2003,6 +2010,8 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   const aside = active ? undefined : "group-hover/row:invisible";
   // behind a prefix (a tab's name, a pane's agent) the title keeps room for a few characters: the prefix shrinks first
   const titleMin = prefix ? ROW_TITLE_MIN : "min-w-0";
+  // with words at the end (where it came from, a hint) the title keeps its own width first: those words give way before it does
+  const titleFirst = tail ? "basis-auto" : undefined;
   // one ref per key, so letting go takes out only this row's entry (keyedRefs)
   const regRow = useMemo(() => reg(k), [reg, k]);
   // words left unsent in its box, once you are not in it (#5568): in place of what it asks or did
@@ -2011,9 +2020,6 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   // ultracode on (#3428): the workflow mark in the AI colour right after the title; a row without it is drawn as before.
   // Not on an offline row: the node keeps the last value it saw after the process is gone, and a resume starts it off.
   const ultra = showState && st !== "offline" && ultracodeOn(s);
-  // where it was opened, marked at the row's end: not on a tab with several panes (endRoom), where a herdr tab is a
-  // terminal by definition, each pane's row under it says so, and the mark's room is the title's
-  const source = showState && !s.assistant && !endRoom ? sessionSource(s) : undefined;
   const link = (
     <a
       ref={(el) => {
@@ -2041,7 +2047,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       {/* with the mark, the title sits in the column whether a second line shows or not: the same element through a
           workflow's start and end, so the mark does not fade in again */}
       {ultra || detail.length > 0 || workflow || line || plan ? (
-        <span className={cx("flex flex-1 flex-col", titleMin)}>
+        <span className={cx("flex flex-1 flex-col", titleMin, titleFirst)}>
           {ultra ? (
             <span className="flex min-w-0 items-center gap-1">
               <span className={cx("min-w-0 truncate text-[13px]", active ? "font-medium text-ink" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
@@ -2079,7 +2085,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
           </span>}
         </span>
       ) : (
-        <span className={cx("flex-1 truncate text-[13px]", titleMin, active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
+        <span className={cx("flex-1 truncate text-[13px]", titleMin, titleFirst, active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
           {label ?? sessionTitle(s)}
         </span>
       )}
@@ -2095,7 +2101,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       )}
       {source && <SourceTag s={s} className={aside} />}
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
-      {tail && <span className={cx("max-w-[72px] shrink-0 truncate text-[11px] text-ink-3", aside)}>{tail}</span>}
+      {tail && <span className={cx("max-w-[72px] min-w-6 shrink-[20] truncate text-[11px] text-ink-3", aside)}>{tail}</span>}
       {!tail && (st === "offline" || !showState) && <span className={cx("shrink-0 text-[11px] text-ink-3", aside)}>{ago(s.updated_at)}</span>}
       {(s.pending_interactions ?? 0) > 0 && <span className={cx("flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-field px-1 text-[10px] font-semibold text-attention tabular-nums", aside)}>{s.pending_interactions}</span>}
     </a>

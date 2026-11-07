@@ -77,6 +77,28 @@ describe("where an agent was opened, as a mark at its row's end (#2526)", () => 
     expect(mark(render({ pane_id: "w1:p1" }))).toContain("group-hover/row:invisible");
     expect(mark(renderToStaticMarkup(<SessionRow {...rowProps} s={{ ...session, pane_id: "w1:p1" }} active />))).not.toContain("invisible");
   });
+  it("tells terminal and desktop apart by shape too: a bare prompt, and a framed window", () => {
+    const svg = (html: string) => mark(html)!.match(/<svg[^>]*>(.*?)<\/svg>/)![1];
+    const terminal = svg(render({ pane_id: "w1:p1" }));
+    const desktop = svg(render({ space_kind: "codex_app", source_kind: "codex_history" }));
+    expect(terminal).not.toContain("<rect"); // no frame: a prompt chevron and an underscore
+    expect(desktop).toContain("<rect");
+    expect(terminal).not.toBe(desktop);
+  });
+  it("drops a writable desktop runtime's name from the row's end, where its marks already say it", () => {
+    const paseo = { host: "paseo", source_kind: "runtime", source_instance_id: "paseo", agent_label: "Paseo" };
+    const writable = render({ ...paseo, capabilities: { read: true, send: true } });
+    expect(writable).not.toMatch(/>Paseo</);
+    expect(link(writable)).toContain("Paseo"); // still in the row's tooltip
+    // read-only: the end still says why
+    expect(render({ ...paseo, capabilities: { read: true, send: false } })).toMatch(/>[^<]*Paseo[^<]*</);
+  });
+  it("keeps the title's width first when words sit at the row's end", () => {
+    const html = render({ space_kind: "codex_app", source_kind: "codex_history", agent_name: "Codex App" });
+    expect(html).toMatch(/<span class="[^"]*flex-1 truncate[^"]*basis-auto[^"]*">整理文档<\/span>/);
+    expect(html).toMatch(/<span class="[^"]*min-w-6 shrink-\[20\][^"]*">[^<]*Codex/);
+    expect(render({ pane_id: "w1:p1" })).not.toContain("basis-auto"); // nothing at the end: as before
+  });
 });
 
 describe("an agent's row with 「Agent 行显示详情」 (#2430)", () => {

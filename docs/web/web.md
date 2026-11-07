@@ -1207,12 +1207,15 @@ Conventions (languages, fallback, glossary) are in [i18n.md](../protocol/i18n.md
   Sources and terms are in the file header comments and `THIRD_PARTY_NOTICES.md`; agents whose terms are unclear get the first character rather than a drawn mark. Check: `scripts/test/web_agent_marks_e2e.py` (mock hub with `MOCK_AGENT_MARKS=1`).
 - Button text is always one line (`whitespace-nowrap`); when it doesn't fit, use an icon + `title`.
 - Source marks: where a sidebar agent was opened is an icon at its row's end, not a word (`SourceTag` in `Sidebar.tsx`, `sessionSource` in `lib/agent-groups.ts`).
-  A pane of a terminal engine (herdr, the Herdr App's and Orca's terminals) is the `terminal` icon in `--source-terminal`; a desktop app's own chat
-  (a Codex App thread, `space_kind: codex_app`; a Paseo agent, `host: paseo`; an Orca native chat, the `orca` runtime) is a window (`appWindow`) in
+  A pane of a terminal engine (herdr, the Herdr App's and Orca's terminals) is a bare prompt (`run`: chevron and underscore, no frame) in `--source-terminal`; a desktop app's own chat
+  (a Codex App thread, `space_kind: codex_app`; a Paseo agent, `host: paseo`; an Orca native chat, the `orca` runtime) is a framed window (`appWindow`) in
   `--source-desktop`; a Lark group (botmux) is Lark's own mark (`BrandMark`), a link to its topic when the row has one. Other runtimes and history no
   host lists get none. Each mark is `role=img` with its name as `aria-label` and `title` (`lib-agent-groups.source_*`), and the row's own tooltip names
   it too, since everything at the row's end steps aside while the row is hovered. A tab with several panes leaves the mark to its pane rows. Both colors
-  are checked at 4.5:1 on every background (`theme-contrast.test.ts`).
+  are checked at 4.5:1 on every background (`theme-contrast.test.ts`); the two shapes differ too, so the marks do not rely on color alone.
+  Words at the row's end (a source subtitle such as "Codex history", a hint) give way before the title does (the title keeps its own width, `basis-auto`;
+  the words shrink first, down to 24 px). A desktop runtime that can be written to drops its runtime name from the end: the window mark and the agent's
+  mark already say it, and the name stays in the row's tooltip; a read-only one keeps its "read-only: why" words.
 - Link rules are the same as in the App (`Links`): a bare link ends at whitespace or a non-ASCII character, and is written as `<url>` before going to Markdown (`linkify` in `src/ui/Markdown.tsx`), so a link inside Chinese text doesn't swallow the rest of the sentence.
 - Respect `prefers-reduced-motion`: all animations shrink to 1ms. **Busy indicators are the exception** (#3475): spinners (`Spinner`), the breathing dots for Working / connecting, `Loading`'s pixel grid and shimmer, and skeleton pulses all carry the `busy-motion` class (`src/lib/busy-motion.ts`).
   With reduced motion they still spin, just slowed to 2.4 s per turn (Moshi's approach), and breathing keeps only opacity, no scaling; otherwise the "busy" signal would be lost. Any new looping busy animation gets this class; `busy-motion.test.ts` scans the source and fails if one is missing. Spinners always use `spinStyle(ms per turn)` (the `spin-long` keyframes run 100 turns per cycle, so 100× fewer loop events; see `docs/lessons/web.md` ("Infinite CSS animations are expensive even when idle")), never `spin … infinite`. Scrolling from script (`scrollTo` / `scrollIntoView`) is not covered by this CSS rule, so it always uses `scrollBehavior()` (`src/ui/stream/motion.ts`);
