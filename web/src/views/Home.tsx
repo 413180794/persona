@@ -18,6 +18,8 @@ import { href, navigate, onLinkClick, type Route } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { getSession, useStore } from "../lib/store";
+import { homeTasks, type HomeTask } from "../lib/home-tasks";
+import { heldDelivery, TODO_STATUS_INFO, TODO_TONE_CLASS, todoStatusLabel } from "../lib/todos";
 import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
 import type { AgentState, Interaction, Machine, Session } from "../lib/types";
 import { Button, Collapse, cx, EASE, IconButton, Loading, useNow } from "../ui/atoms";
@@ -25,9 +27,10 @@ import { RecommendedTag } from "../ui/RecommendedTag";
 import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
-import { answeredSessions } from "./assistant/answered-lookup";
+import { answeredLookup, answeredSessions } from "./assistant/answered-lookup";
 import { resolve } from "./chat/Interactions";
 import { OverviewCards } from "./extensions/ExtensionSlots";
+import { TodoStageBar } from "./TodoStageBar";
 import { t } from "../i18n";
 import { markAllSeenLabel, STATE_LABEL, stateCount, stateName } from "../lib/state-labels";
 
@@ -53,6 +56,10 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   // the agents of one herdr tab are one row (#2320), filed under the most urgent of them; a card waiting counts as
   // something to do, and "Mark all as seen" marks every unread agent, wherever its tab is filed
   const { groups, unread, markAllAt, quiet } = useMemo(() => homeOverview(sessions, interactions), [sessions, interactions]);
+  // every open task with where it stands (#6450, the web side of the Lark bot's /tasks)
+  const todos = useStore((s) => s.todos);
+  // read as the Tasks page reads them: a card answered here moves its task at once too
+  const tasks = useMemo(() => homeTasks(todos, answeredLookup(agentSessions, interactions, answered)), [todos, agentSessions, interactions, answered]);
   const name = (mid: string) => machineWithHub(mid, machines);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   const markAll = <MarkAllSeen count={unread.length} onClick={() => setConfirmSeen(unread)} />;
@@ -150,6 +157,19 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             <Group title={t("home.waiting_on_computer")} count={groups.needs.length} hint={t("home.waiting_on_computer_hint")} grid>
               {groups.needs.map((g, i) => (
                 <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<Pill>{stateName("needs_you")}</Pill>} />
+              ))}
+            </Group>
+          )}
+
+          {loaded && tasks.rows.length > 0 && (
+            <Group
+              title={t("home.tasks")}
+              count={tasks.total}
+              right={tasks.total > tasks.rows.length && <a href={href({ name: "todos" })} onClick={(e) => onLinkClick(e, { name: "todos" })} className="text-[12px] text-ink-3 hover:text-ink-2">{t("home.tasks_all")}</a>}
+              grid
+            >
+              {tasks.rows.map((r) => (
+                <TaskCard key={r.todo.id} task={r} />
               ))}
             </Group>
           )}
@@ -253,6 +273,26 @@ function Group({ title, count, children, right, hint, grid }: { title: string; c
       {hint && <p className="mb-2.5 text-[12.5px] leading-[1.5] text-ink-2">{hint}</p>}
       <div className={grid ? GRID[grid === true ? "rows" : grid] : "flex flex-col gap-1.5"}>{children}</div>
     </section>
+  );
+}
+
+// One task on the overview: its title (opens the task), its status, the stage bar with its PR, and what holds its
+// delivery or how many agents it has (the Tasks page's words). The PR link is beside the title link, not inside it.
+function TaskCard({ task: { todo, status, agents } }: { task: HomeTask }) {
+  const to: Route = { name: "todos", id: todo.id };
+  const held = heldDelivery(todo);
+  const line = [held && t(`todos.delivery_${held.state}`), agents > 0 && t("todos.agent_count", { count: agents })].filter(Boolean).join(" · ");
+  return (
+    <div className="flex flex-col gap-2 rounded-card bg-surface px-3 py-2.5 shadow-card" data-task={todo.id}>
+      <div className="flex min-w-0 items-center gap-2">
+        <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink hover:underline">
+          {todo.title}
+        </a>
+        <span className={cx("inline-flex h-5 shrink-0 items-center rounded-full bg-field px-1.5 text-[11px] font-medium whitespace-nowrap", TODO_TONE_CLASS[TODO_STATUS_INFO[status].tone])}>{todoStatusLabel(todo, status)}</span>
+      </div>
+      <TodoStageBar stage={todo.stage} prURL={todo.pr_url} />
+      {line && <p className={cx("truncate text-[11.5px]", held ? "text-orange" : "text-ink-3")}>{line}</p>}
+    </div>
   );
 }
 

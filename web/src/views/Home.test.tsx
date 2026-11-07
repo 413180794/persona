@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Interaction, Machine, Session } from "../lib/types";
+import type { Todo } from "../lib/todos";
 
 vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
@@ -16,11 +17,11 @@ vi.mock("react-dom", async (importOriginal) => ({
   createPortal: (children: React.ReactNode) => children,
 }));
 
-const fake = vi.hoisted(() => ({ loaded: true, sessions: [] as Session[], interactions: [] as Interaction[], machines: [] as Machine[] }));
+const fake = vi.hoisted(() => ({ loaded: true, sessions: [] as Session[], interactions: [] as Interaction[], machines: [] as Machine[], todos: [] as Todo[], answered: {} as Record<string, unknown> }));
 
 vi.mock("../lib/store", async (importOriginal) => {
   const real = await importOriginal<typeof import("../lib/store")>();
-  return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: fake.loaded, machines: fake.machines, interactions: fake.interactions }) };
+  return { ...real, useStore: <T,>(select: (s: ReturnType<typeof real.getState>) => T) => select({ ...real.getState(), loaded: fake.loaded, machines: fake.machines, interactions: fake.interactions, todos: fake.todos, answered: fake.answered as ReturnType<typeof real.getState>["answered"] }) };
 });
 vi.mock("../lib/sessions", async (importOriginal) => {
   const real = await importOriginal<typeof import("../lib/sessions")>();
@@ -246,5 +247,55 @@ describe("an offline computer's line on the overview (#4038)", () => {
   it("reads it in the machines page's order: waiting to be confirmed, then the hub's error_code", () => {
     expect(offlineLine({ id: "b", name: "b", online: false, trust: "pending", error: "ssh: connect to host b port 22: Operation timed out" } as Machine)).toBe("还没连上来过");
     expect(offlineLine({ id: "b", name: "b", online: false, error_code: "node_service_down", error: "dial tcp: i/o timeout" } as Machine)).not.toBe("连接超时");
+  });
+});
+
+// Tasks in progress (#6450): every open task with its stage, PR and held delivery, above the working agents; none, no section.
+describe("tasks in progress", () => {
+  const todo = (id: string, o: Partial<Todo> = {}): Todo => ({ id, title: `task ${id}`, created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z", ...o });
+  it("lists open tasks with their stage, PR and delivery", () => {
+    fake.todos = [
+      todo("a", { stage: "review", pr_url: "https://example.com/o/r/pull/42", agents: [{ machine_id: "mac", session_id: "w", linked_at: "x" }] }),
+      todo("b", { delivery: { state: "merged" } }),
+      todo("c", { done_at: "2026-11-02T00:00:00Z" }),
+    ];
+    const html = render([agent(1, 1, "working", { session_id: "w" })]);
+    fake.todos = [];
+    expect(heading(html, "进行中的任务")).toBeGreaterThan(-1);
+    expect(heading(html, "进行中的任务")).toBeLessThan(heading(html, "工作中"));
+    expect(html).toContain('data-task="a"');
+    expect(html).toContain('data-task="b"');
+    expect(html).not.toContain('data-task="c"');
+    expect(html).toContain('data-stage="review" data-state="current"');
+    expect(html).toContain("https://example.com/o/r/pull/42");
+    expect(html).toContain("1 个 Agent");
+    expect(html).not.toContain("查看全部");
+    expect(html).toContain("已合未上线");
+  });
+  it("offers See all past six tasks", () => {
+    fake.todos = Array.from({ length: 7 }, (_, i) => todo(`t${i}`));
+    const html = render([]);
+    fake.todos = [];
+    expect(html.match(/data-task=/g)?.length).toBe(6);
+    expect(html).toContain("查看全部");
+  });
+  it("moves a task whose card was answered here out of Needs you at once", () => {
+    const s = agent(1, 1, "needs_you", { session_id: "w" });
+    const ix = { id: "ix1", machine_id: "mac", session_id: "w", kind: "question" } as Interaction;
+    fake.todos = [todo("a", { agents: [{ machine_id: "mac", session_id: "w", linked_at: "x" }] })];
+    const before = render([s], [ix]);
+    fake.answered = { ix1: { ix, resolution: {}, at: Date.now() } };
+    const after = render([s], []);
+    fake.todos = [];
+    fake.answered = {};
+    const pill = (html: string) => html.slice(html.indexOf('data-task="a"')).match(/rounded-full[^>]*>([^<]+)</)?.[1];
+    expect(pill(before)).toBe("需要你");
+    expect(pill(after)).not.toBe("需要你");
+  });
+  it("draws nothing without open tasks", () => {
+    fake.todos = [todo("c", { done_at: "2026-11-02T00:00:00Z" })];
+    const html = render([]);
+    fake.todos = [];
+    expect(heading(html, "进行中的任务")).toBe(-1);
   });
 });

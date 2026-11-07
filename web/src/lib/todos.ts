@@ -102,6 +102,15 @@ export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
   done: 8,
 };
 
+/** The text color of a status's tone (TODO_STATUS_INFO), as the Tasks page and the overview draw it. */
+export const TODO_TONE_CLASS: Record<(typeof TODO_STATUS_INFO)[TodoStatus]["tone"], string> = {
+  red: "text-red",
+  green: "text-green",
+  amber: "text-orange",
+  idle: "text-ink-3",
+  off: "text-ink-3",
+};
+
 /** A supervised task whose work was judged finished and waits for the user to accept it (#3124): nothing of it runs or
  *  asks, so it is the user's to review rather than just stopped or finished-unseen (#4896). */
 export function awaitsReview(todo: Todo, status: TodoStatus): boolean {

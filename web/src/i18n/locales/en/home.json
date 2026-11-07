@@ -38,5 +38,7 @@
   "agent_preview": "{agent}: {preview}",
   "kind_elicitation": "MCP request",
   "answered": "Answered: {answer}",
-  "permission_detail": "{tool}: {what}"
+  "permission_detail": "{tool}: {what}",
+  "tasks": "Tasks in progress",
+  "tasks_all": "See all ›"
 }

@@ -25,6 +25,7 @@ import {
   sortTodos,
   TODO_STATUS_INFO,
   heldDelivery,
+  TODO_TONE_CLASS,
   isAutoDone,
   todoStatusLabel,
   todoStatus,
@@ -554,13 +555,7 @@ function todoRowViews(todos: Todo[], lookup: SessionLookup, interactions: Intera
   return new Map(todos.map((td) => [td.id, todoRowView(td, lookup, interactions)]));
 }
 
-const TONE_CLASS = {
-  red: "text-red",
-  green: "text-green",
-  amber: "text-orange",
-  idle: "text-ink-3",
-  off: "text-ink-3",
-};
+const TONE_CLASS = TODO_TONE_CLASS;
 
 const TodoListItem = memo(function TodoListItem({
   todo,
