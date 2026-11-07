@@ -101,8 +101,16 @@ type Devices struct {
 	cfg   devicewire.Config
 	got   bool          // a config came from the hub
 	gotCh chan struct{} // closed when the first one came
-	// ready is closed once the machines of the first config are made: nothing is reported before (an empty list
-	// would have the hub forget them).
+	// early: the machines were started from the manager's own list before the hub's first config (ownlist.go); that
+	// one then changes them as any later one does. ownMu keeps the writes of that list one at a time, each the config
+	// as it is then.
+	early   bool
+	ownMu   sync.Mutex
+	ownSaid string        // the last trouble keeping the list said (ownMu)
+	ownWait time.Duration // ownListWait as New found it
+	// ready is closed once the machines of the first config are made (the hub's, or the own list's: ownlist.go):
+	// nothing is reported before (an empty list would have the hub forget them). The hello's config is taken before
+	// BusUp reports, so the hub is reported its own list.
 	ready     chan struct{}
 	readyOnce sync.Once
 	ctx       context.Context
@@ -148,7 +156,7 @@ func New(o Options) *Devices {
 	if o.Logf == nil {
 		o.Logf = func(string, ...any) {}
 	}
-	d := &Devices{opts: o, logf: o.Logf, gotCh: make(chan struct{}), ready: make(chan struct{}), byID: map[string]*Machine{},
+	d := &Devices{opts: o, logf: o.Logf, gotCh: make(chan struct{}), ready: make(chan struct{}), byID: map[string]*Machine{}, ownWait: ownListWait,
 		reportDue: make(chan struct{}, 1), usageWrites: make(chan usageWrite, 1024), reqPrefix: strconv.FormatInt(time.Now().UnixNano(), 36)}
 	// The account-pool gateways' usage windows (usagegateways.go, #2595): manager.json's usage section as it is now.
 	var usage UsageConfig
@@ -186,6 +194,15 @@ func (d *Devices) Run(ctx context.Context) error {
 	go d.metricsLoop(mctx)
 	go d.usageLoop(mctx)
 	go d.usageGW.run(ctx) // the account-pool gateways (usagegateways.go)
+	// The hub's hand-over, or after ownListWait the manager's own list (ownlist.go) until it comes.
+	wait := time.NewTimer(d.ownWait)
+	select {
+	case <-d.gotCh:
+	case <-wait.C:
+		d.startOwnList(mctx)
+	case <-ctx.Done():
+	}
+	wait.Stop()
 	select {
 	case <-d.gotCh:
 		d.startMachines(mctx)
@@ -207,7 +224,7 @@ func (d *Devices) Run(ctx context.Context) error {
 // those gone stop.
 func (d *Devices) Configure(cfg devicewire.Config) {
 	d.mu.Lock()
-	first := !d.got
+	first, early := !d.got, d.early
 	wasMember := d.cfg.Mesh != nil && d.cfg.Mesh.Member
 	old := d.cfg
 	d.cfg, d.got = cfg, true
@@ -217,8 +234,11 @@ func (d *Devices) Configure(cfg devicewire.Config) {
 		d.cfgChanged = nil
 	}
 	d.mu.Unlock()
+	d.keepOwnList() // in manager.json, for a start without the hub (ownlist.go)
 	if first {
 		close(d.gotCh) // Run starts them, if it is not running yet
+	}
+	if first && !early {
 		if ctx != nil {
 			d.startMachines(ctx)
 		}
@@ -226,6 +246,9 @@ func (d *Devices) Configure(cfg devicewire.Config) {
 	}
 	if ctx != nil {
 		d.startMachines(ctx)
+		if first { // after a start from the own list: what its connections could not do without the hub
+			d.afterOwnList(ctx)
+		}
 	}
 	d.fleetRegroup()
 	// Where the hub is, what it is called, whether the computer waits to be confirmed: Persona Link shows them.
@@ -291,6 +314,9 @@ func (d *Devices) startMachines(ctx context.Context) {
 		seen[mc.ID] = true
 		old := d.byID[mc.ID]
 		if old != nil && sameConfig(old.cfg, mc) {
+			old.mu.Lock()
+			old.raw = raw // keys it does not read may have changed: reported as the hub has them (states)
+			old.mu.Unlock()
 			keep = append(keep, old)
 			continue
 		}
@@ -442,7 +468,10 @@ func (d *Devices) states() devicewire.States {
 	for _, m := range d.cfgMachines() {
 		avail, rtt := m.reachableHere()
 		// Its entry too, an absorbed one's included: the hub keeps what each manager has (hub machine_entries.go).
-		out.Entries = append(out.Entries, devicewire.RecMachine{ID: m.cfg.ID, Cfg: m.raw, Kind: kindOf(m.cfg), Avail: avail, RTTMS: rtt})
+		m.mu.Lock()
+		raw := m.raw
+		m.mu.Unlock()
+		out.Entries = append(out.Entries, devicewire.RecMachine{ID: m.cfg.ID, Cfg: raw, Kind: kindOf(m.cfg), Avail: avail, RTTMS: rtt})
 	}
 	return out
 }
@@ -453,7 +482,7 @@ func (d *Devices) busUp() bool { return d.opts.Connected == nil || d.opts.Connec
 // BusUp is told once the connection to the hub is up (after every handshake): the hub gets every machine and every
 // session list again (it may have restarted and know nothing), and does its part of every live connection again.
 func (d *Devices) BusUp() {
-	select { // the machines of the hub's config first: their report is the hub's list
+	select { // the machines of the first config first (the hello's is taken before this): their report is the hub's list
 	case <-d.ready:
 	case <-time.After(10 * time.Second):
 	}

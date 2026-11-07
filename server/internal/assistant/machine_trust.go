@@ -111,14 +111,21 @@ func (b *trustBook) verdict(machine string) error {
 	return nil
 }
 
-// trustChanged forgets the last read (the hub's machines changed) and gives the machines the hello lists now and did
-// not before (a computer just confirmed) the managed launchers.
-func (s *Service) trustChanged(ctx context.Context, before, now []string) {
+// forgetPendingRead forgets the last read of the computers waiting to be confirmed: it is asked again next time. A new
+// handshake does so (bus.go onHello): a read that failed before the hub's hand-over (the manager connected its own list
+// first: devices ownlist.go) is not kept for the connections the hand-over sets up again.
+func (s *Service) forgetPendingRead() {
 	b := &s.trust
 	b.mu.Lock()
 	b.at, b.failedAt = time.Time{}, time.Time{}
 	b.gen++
 	b.mu.Unlock()
+}
+
+// trustChanged forgets the last read (the hub's machines changed) and gives the machines the hello lists now and did
+// not before (a computer just confirmed) the managed launchers.
+func (s *Service) trustChanged(ctx context.Context, before, now []string) {
+	s.forgetPendingRead()
 	var added []string
 	for _, id := range now {
 		if !slices.Contains(before, id) {

@@ -175,10 +175,14 @@ func Edit(path string, edit func(o *Object) error) error {
 	return editIf(path, func(o *Object) (bool, error) { return true, edit(o) })
 }
 
-// editIf is Edit that writes only when edit says the object changed.
+// editIf is Edit that writes only when edit says the object changed. A path that is a link (to a file on a volume)
+// is written where it leads: the link stays.
 func editIf(path string, edit func(o *Object) (bool, error)) error {
 	fileMu.Lock()
 	defer fileMu.Unlock()
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
 	dir := filepath.Dir(path)
 	if err := danglingLink(dir); err != nil {
 		return err

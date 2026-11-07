@@ -197,6 +197,9 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	}
 	if d := b.opts.Devices; d != nil && ctx != nil {
 		d.Hello(res)
+		if svc != nil {
+			svc.forgetPendingRead() // the hand-over is in: read again for the connections BusUp sets up (machine_trust.go)
+		}
 		reported.Add(1)
 		go func() { // once the connection counts as up (after this returns)
 			defer reported.Done()

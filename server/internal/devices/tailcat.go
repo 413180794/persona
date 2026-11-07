@@ -84,28 +84,48 @@ func (m *Machine) transports() []string {
 }
 
 // tailcatDialer is the manager's tailcat client, made the first time a machine needs it: its key file
-// (Options.TailcatKey) is created then (`personad hub tailcat-key` prints the built-in manager's for the nodes).
+// (Options.TailcatKey) is created then (`personad hub tailcat-key` prints the built-in manager's for the nodes). It
+// is made again when the hub's DERP map changed since (a start from the manager's own list used the last hand-over's:
+// ownlist.go); the tunnels through the old one end, and their machines connect again.
 type tailcatDialer struct {
-	once sync.Once
-	d    *tunnel.Dialer
-	err  error
+	mu     sync.Mutex
+	d      *tunnel.Dialer
+	url    string
+	err    error
+	closed bool
 }
 
+// errTailcatClosed: the manager is stopping.
+var errTailcatClosed = errors.New("tailcat: the manager is stopping")
+
 func (d *Devices) tailcatClient() (*tunnel.Dialer, error) {
+	url := d.config().TailcatDERPMapURL
 	t := &d.tailcat
-	t.once.Do(func() {
-		path := d.opts.TailcatKey
-		if path == "" {
-			path = tunnel.HubKeyPath()
-		}
-		k, err := tunnel.LoadOrCreateHubKey(path)
-		if err != nil {
-			t.err = err
-			return
-		}
-		t.d = &tunnel.Dialer{Key: k.Key, DERPMapURL: d.config().TailcatDERPMapURL, Logf: d.logf}
-	})
-	return t.d, t.err
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	switch {
+	case t.closed:
+		return nil, errTailcatClosed
+	case t.err != nil:
+		return nil, t.err
+	case t.d != nil && t.url == url:
+		return t.d, nil
+	}
+	path := d.opts.TailcatKey
+	if path == "" {
+		path = tunnel.HubKeyPath()
+	}
+	k, err := tunnel.LoadOrCreateHubKey(path)
+	if err != nil {
+		t.err = err
+		return nil, err
+	}
+	if old := t.d; old != nil {
+		d.logf("tailcat: the hub's DERP map changed: its tunnels start over")
+		go old.Close()
+	}
+	t.d, t.url = &tunnel.Dialer{Key: k.Key, DERPMapURL: url, Logf: d.logf}, url
+	return t.d, nil
 }
 
 func (m *Machine) tailcatDial(ctx context.Context) (net.Conn, error) {
@@ -306,8 +326,12 @@ func (m *Machine) deployTailcat(ctx context.Context, bin string) error {
 
 // closeTailcat ends every tunnel when the hub stops.
 func (d *Devices) closeTailcat() {
-	d.tailcat.once.Do(func() {}) // never made: nothing to close (and none made after this)
-	if d.tailcat.d != nil {
-		d.tailcat.d.Close()
+	t := &d.tailcat
+	t.mu.Lock()
+	t.closed = true // none made after this
+	c := t.d
+	t.mu.Unlock()
+	if c != nil {
+		c.Close()
 	}
 }

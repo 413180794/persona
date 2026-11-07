@@ -83,6 +83,15 @@ A manager made in the app installs and runs on its own: its own id, directory an
 - Its knowledge base (`data/`), `secret.key` and extensions are all under this directory; it never writes to the hub's. While it runs, `PERSONA_HOME` points at it, so the programs it starts use it too.
 - Moving to another computer: copy the whole directory, and the same token still connects; or get a new code for it in the app and install it again there (the old token stops working at once).
 
+### Each manager's computers
+
+A manager keeps the computers it connects in its `manager.json` (`machines`, each entry as the hub's hand-over has it; `server/internal/managerconf/machines.go`, `server/internal/devices/ownlist.go`):
+
+- **Taken over from the hub's hand-over.** The first hand-over (`devices` in the hello's answer, then `devices.config`) is written there, and `machines_from_hub` records when it was first taken over, which hub handed it over (`hub_id`), whether the hub was in a mesh group (`mesh`), and the hub's tailcat DERP map. Each later hand-over that differs is written over it: the hub still edits the lists (adding, removing or moving a computer), so an edit by hand lasts only until the next one. An entry that doesn't read (no id, an id twice) is left out, and a list that doesn't read is written over by the next hand-over; the log says so once. A `manager.json` that is a link (to a volume) is written where it leads.
+- **A start without the hub.** A manager whose hub hasn't answered within 20 seconds of its start connects the computers of its list, as the last hand-over had them; a hub that is up answers well within that (the built-in manager is started by its hub), so then nothing connects before the hub's hand-over. Local, ssh and tailcat computers work while the hub is away; Persona Link and connector computers need the hub anyway. It waits for the hub instead when the hub was in a mesh group at the last hand-over (which computers are this hub's to connect, and when, are the group's), and when the list is another hub's (the manager joined another hub since: its `hub_id` differs).
+- **When the hub comes.** Its hand-over is the list: a computer it no longer has is let go, a new one connected, one whose entry changed connected again with it, and the hub is reported each entry as it has it. What the early connections couldn't do without the hub is done then: the computers waiting to be confirmed are read again (the managed launchers go out with the hub's part of each connection), a node on another build is offered the hub's, and tailcat makes its tunnels again with the hub's DERP map, at the next dial, when it differs from the one the list had. A computer moved away while this manager was stopped is connected until then, and so is the list of a manager that was installed again elsewhere (its old copy's token no longer works, but it connects its list before it learns that): stop the old copy's service.
+- What the hub knows of each manager's computers in turn is in "What the hub keeps of each manager" below.
+
 ### Database
 
 A manager owns its database: a Postgres of its own, never the hub's.
