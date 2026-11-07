@@ -27,6 +27,9 @@ final class HubLink: Identifiable {
         self.fallback = config
         self.pins = pins
         live.usesSessionList = true
+        #if os(iOS) || os(macOS)
+        live.usesExtensionUIStream = true
+        #endif
     }
 
     /// The hub requests go to: the one the socket is on.

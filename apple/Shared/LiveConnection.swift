@@ -321,7 +321,58 @@ final class LiveConnection {
         case failed(String)
     }
 
-    private(set) var state: State = .idle { didSet { if state != oldValue { onChange?() } } }
+    private(set) var state: State = .idle { didSet {
+        if state != oldValue {
+            onChange?()
+            if state != .connected { extensionStreamFeatures = nil; notifyExtensionStreams(.disconnected) }
+        }
+    } }
+    /// Only native full-page clients opt in. Watch/system surfaces keep fitted HTTP snapshots.
+    @ObservationIgnored var usesExtensionUIStream = false
+    @ObservationIgnored private(set) var extensionStreamFeatures: Set<String>?
+    @ObservationIgnored private var extensionStreamObservers: [UUID: (ExtensionStreamSignal) -> Void] = [:]
+
+    enum ExtensionStreamSignal { case hello(Set<String>), frame(Data), hostInteraction(Interaction), disconnected }
+    func observeExtensionStream(_ observer: @escaping (ExtensionStreamSignal) -> Void) -> UUID {
+        let id = UUID(); extensionStreamObservers[id] = observer; return id
+    }
+    func removeExtensionStreamObserver(_ id: UUID) { extensionStreamObservers[id] = nil }
+    /// A mount can finish after its page disappears. Retire only that correlated mount on this
+    /// connection, even when the original page/controller has already been disposed.
+    func retireExtensionStreamOpen(_ requestID: String, manager: String?) {
+        let id = UUID()
+        extensionStreamObservers[id] = { [weak self] signal in
+            guard let self else { return }
+            if case .disconnected = signal { self.extensionStreamObservers[id] = nil; return }
+            guard case .frame(let data) = signal, data.count <= 1_048_576,
+                  let raw = try? ExtensionStreamJSON.parse(data), raw["request_id"]?.string == requestID,
+                  (manager == nil || raw["manager"] == nil || raw["manager"]?.string == manager),
+                  (try? ExtensionStreamSchema.check(raw, definition: "UIStreamServerEnvelope")) != nil,
+                  case .snapshot(let frame)? = try? JSONDecoder().decode(ExtensionUIStreamServerEnvelope.self, from: data) else { return }
+            self.send(encodable: ExtensionUIStreamClientEnvelope(type: "extension_ui_stream", manager: frame.manager ?? manager,
+                request: .close(.init(protocol: 1, requestId: UUID().uuidString, session: frame.snapshot.session, epoch: frame.snapshot.epoch))))
+            self.extensionStreamObservers[id] = nil
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            self?.extensionStreamObservers[id] = nil
+        }
+    }
+    private func notifyExtensionStreams(_ signal: ExtensionStreamSignal) {
+        for observer in Array(extensionStreamObservers.values) { observer(signal) }
+    }
+    private func extensionStreamFrame(_ data: Data?, event: ServerEvent?) {
+        if case .hello(let hello) = event {
+            extensionStreamFeatures = Set(hello.features)
+            notifyExtensionStreams(.hello(Set(hello.features)))
+        }
+        if case .interaction(let interaction) = event, interaction.toolName == "extension.ui" {
+            notifyExtensionStreams(.hostInteraction(interaction))
+        }
+        // Private trees never enter ServerEvent, the broadcast cursor, replay or a different connection.
+        if let data, data.range(of: Data(#""extension_ui_stream""#.utf8)) != nil,
+           FrameMeta.decode(data).type == "extension_ui_stream" { notifyExtensionStreams(.frame(data)) }
+    }
     /// Connected, but a ping has gone unanswered for `slowAfter`, or its pong came that late: a weak or stalled
     /// network. Only a prompt pong clears it (a late one alone made the title flip every ping), and pings go every
     /// `slowPingEvery` meanwhile. The socket is only declared dead after `deadAfter`; until then the app says
@@ -507,7 +558,7 @@ final class LiveConnection {
         if config != given { self.config = config }
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
-        comps.queryItems = Self.queryItems(cursor, sessionList: usesSessionList)
+        comps.queryItems = Self.queryItems(cursor, sessionList: usesSessionList, extensionStream: usesExtensionUIStream)
         var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url))
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
@@ -527,8 +578,8 @@ final class LiveConnection {
     /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), the
     /// extensions' install steps (`extension_operation`, #3307), the managers' roster changes (`managers`,
     /// docs/assistant/managers.md), and where to resume the broadcasts from once a hello gave a stream.
-    static func queryItems(_ cursor: EventCursor, sessionList: Bool = false) -> [URLQueryItem] {
-        [URLQueryItem(name: "features", value: (sessionList ? "sessions_list," : "") + "sessions_delta,extension_operations,managers," + HubNaming.feature)] + cursor.queryItems
+    static func queryItems(_ cursor: EventCursor, sessionList: Bool = false, extensionStream: Bool = false) -> [URLQueryItem] {
+        [URLQueryItem(name: "features", value: (extensionStream ? "extension_ui_stream_v1," : "") + (sessionList ? "sessions_list," : "") + "sessions_delta,extension_operations,managers," + HubNaming.feature)] + cursor.queryItems
     }
 
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {
@@ -589,7 +640,7 @@ final class LiveConnection {
                     self.lastHeard = .now
                     let first = self.state != .connected
                     if first { self.endDrop() }
-                    self.note(meta) // before onConnected: it reads whether this hello resumed
+                    if meta.type != "extension_ui_stream" { self.note(meta) } // private sessions have no broadcast cursor
                     if case .hello(let hello)? = event { self.personaContracts = hello.features.contains(HubNaming.feature) }
                     if first {
                         self.state = .connected
@@ -598,6 +649,7 @@ final class LiveConnection {
                         self.rejected = false
                         self.onConnected?()
                     }
+                    self.extensionStreamFrame(data, event: event)
                     if let event { self.onEvent?(event) }
                     self.receive(t, gen)
                 case .failure(let err):
@@ -626,15 +678,17 @@ final class LiveConnection {
         state = .connecting
         let prepare = prepareEvent
         socket.open { [weak self] data in
-            guard let self, gen == self.generation, let event = ServerEvent.decode(data) else { return }
-            prepare?(event)
-            if case .hello(let hello) = event { self.personaContracts = hello.features.contains(HubNaming.feature) }
+            guard let self, gen == self.generation else { return }
+            let event = ServerEvent.decode(data)
+            if let event { prepare?(event) }
+            if case .hello(let hello)? = event { self.personaContracts = hello.features.contains(HubNaming.feature) }
             if self.state != .connected {
                 self.state = .connected
                 self.onConnected?()
             }
             self.lastHeard = .now
-            self.onEvent?(event)
+            self.extensionStreamFrame(data, event: event)
+            if let event { self.onEvent?(event) }
         }
     }
 

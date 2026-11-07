@@ -11,6 +11,7 @@ protocol ExtensionViewControlling: AnyObject {
     var managesConfirmation: Bool { get }
     func isEnabled(_ action: ExtensionAction) -> Bool
     func selected(_ action: String) -> Bool
+    func prepared(_ action: ExtensionAction, with chosen: [String: String], displayed: ExtensionDisplayedRevision?) -> @MainActor () async -> ExtensionViewModel.Outcome
     func perform(_ action: ExtensionAction, with chosen: [String: String]) async -> ExtensionViewModel.Outcome
     func choose(_ name: String, _ value: String, action: ExtensionAction) async -> ExtensionViewModel.Outcome
     func filter(_ value: String) async -> ExtensionViewModel.Outcome
@@ -23,6 +24,9 @@ extension ExtensionViewControlling {
     var managesConfirmation: Bool { false }
     func isEnabled(_ action: ExtensionAction) -> Bool { running == nil }
     func selected(_ action: String) -> Bool { false }
+    func prepared(_ action: ExtensionAction, with chosen: [String: String] = [:], displayed: ExtensionDisplayedRevision? = nil) -> @MainActor () async -> ExtensionViewModel.Outcome {
+        { await self.perform(action, with: chosen) }
+    }
     func perform(_ action: ExtensionAction) async -> ExtensionViewModel.Outcome { await perform(action, with: [:]) }
 }
 

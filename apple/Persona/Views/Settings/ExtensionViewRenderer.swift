@@ -52,7 +52,7 @@ struct ExtensionParts: Identifiable {
         var component: ExtensionComponent
     }
 
-    var id: Int
+    var id: String
     var title: String?
     var footer: String?
     var more: ExtensionMore?
@@ -73,7 +73,7 @@ struct ExtensionParts: Identifiable {
             for (j, part) in parts.enumerated() {
                 let title = j == 0 ? (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)) : nil
                 let last = j == parts.count - 1
-                out.append(ExtensionParts(id: out.count, title: title, footer: last ? s.footer : nil, more: last ? s.more : nil,
+                out.append(ExtensionParts(id: s.key.map { "k:" + $0 + ".part:\(j)" } ?? "\(out.count)", title: title, footer: last ? s.footer : nil, more: last ? s.more : nil,
                                           items: part))
             }
         }
@@ -263,6 +263,12 @@ extension EnvironmentValues {
 /// heading and a card of its components, a divider a line between them. The same components as
 /// `ExtensionViewRenderer`, drawn by `ExtensionItemRow`.
 struct ExtensionViewStack: View {
+    struct SectionEntry: Identifiable {
+        var index: Int
+        var section: ExtensionSection
+        var id: String { section.key.map { "k:" + $0 } ?? "\(index)" }
+    }
+
     @Environment(\.assistantHTMLRendering) private var htmlContext
     var view: ExtensionView
     var model: (any ExtensionViewControlling)?
@@ -280,7 +286,9 @@ struct ExtensionViewStack: View {
                 ExtensionSearchRow(search: search, model: model, link: $link)
             }
             if let f = view.filter, let model { ExtensionFilterChips(filter: f, model: model, link: $link) }
-            ForEach(Array(view.sections.enumerated()), id: \.offset) { i, s in
+            ForEach(view.sections.enumerated().map { SectionEntry(index: $0.offset, section: $0.element) }) { entry in
+                let i = entry.index
+                let s = entry.section
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     if titles ?? cards, let t = (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)), !t.isEmpty {
                         Text(t).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
@@ -346,6 +354,7 @@ nonisolated struct ExtensionPushTarget: Hashable, Sendable {
     var title: String
     var depth: Int
     var group: String
+    var manager: String?
     var context: ExtensionUIContext
 
     @MainActor init(model: ExtensionViewModel, push: ExtensionPush) {
@@ -355,6 +364,7 @@ nonisolated struct ExtensionPushTarget: Hashable, Sendable {
         title = push.title ?? ""
         depth = model.depth + 1
         group = model.group
+        manager = model.selectedManager
         context = model.context
         context.size = nil
     }
@@ -393,7 +403,7 @@ private struct ExtensionPushes: ViewModifier {
                 Task { await asking.refresh() }
             })) { t in
                 ExtensionPageView(plugin: t.plugin, ui: t.ui, title: t.title, state: t.state, depth: t.depth,
-                                  group: t.group, context: t.context)
+                                  group: t.group, context: t.context, manager: t.manager)
             }
         }
     }
@@ -404,7 +414,7 @@ extension View {
     func extensionPushDestination() -> some View {
         navigationDestination(for: ExtensionPushTarget.self) { t in
             ExtensionPageView(plugin: t.plugin, ui: t.ui, title: t.title, state: t.state, depth: t.depth,
-                                  group: t.group, context: t.context).splitDetailPage()
+                                  group: t.group, context: t.context, manager: t.manager).splitDetailPage()
         }
     }
 }
@@ -416,23 +426,29 @@ struct ExtensionPageView: View {
     @State private var link: LinkTarget?
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var phase
+    @Environment(\.tabIsActive) private var tabActive
+    @State private var pageVisible = false
+    @FocusState private var focusedField: String?
     var title: String
     var initial: ExtensionSystemOpen?
 
     init(plugin: String, ui: String, title: String, state: String? = nil, depth: Int = 1,
-         group: String? = nil, context: ExtensionUIContext = .here(), initial: ExtensionSystemOpen? = nil) {
+         group: String? = nil, context: ExtensionUIContext = .here(), initial: ExtensionSystemOpen? = nil,
+         manager: String? = nil) {
         let deps: ExtensionViewModel.Deps = group.map { group in
-            .init(api: { AppModel.shared.api(group) })
+            .init(api: { AppModel.shared.api(group) }, connection: { AppModel.shared.socket(group) })
         } ?? .live
         // A whole page draws UI version 4's code-hosting parts (#2961); cards and sections keep the shared version.
         _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui, context: context.forPage(), state: state, depth: depth,
-                                                       deps: deps))
+                                                       deps: deps, manager: manager))
         self.title = title
         self.initial = initial
     }
 
     var body: some View {
-        Group {
+        // Keep one page host while a committed snapshot changes the native renderer.
+        ZStack {
             if page.view?.wantsCodePage == true {
                 // UI version 4's code-hosting parts (#2961): tabs, a split, a tree, diffs, code, comments.
                 ExtensionCodePage(model: page, link: $link)
@@ -444,12 +460,27 @@ struct ExtensionPageView: View {
             }
         }
         .accessibilityIdentifier(page.view == nil ? "extension-ui-waiting" : "extension-ui-ready")
+        .modifier(ExtensionStreamProbe(stream: page.stream,
+            lifecycle: "mounted=\(pageVisible):tab=\(tabActive):phase=\(String(describing: phase))"))
         .overlay { if page.view == nil && page.error == nil && !page.unsupported { ProgressView() } }
         .detailTitle(page.view?.title ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .extensionSearch(page)
         .pluginLinks($link)
+        .environment(\.extensionFieldFocus, $focusedField)
+        .environment(\.extensionDisplayedRevision, page.stream?.displayedRevision)
         .extensionPushes([page])
+        // Alert dismissal writes its binding before running the selected action. Consent/cancellation
+        // is owned by the explicit buttons (and page lifecycle), never by that presentation write.
+        .alert(page.confirmation?.action.confirm ?? "", isPresented: Binding(
+            get: { page.confirmation != nil }, set: { _ in })) {
+            Button { page.approveConfirmation() } label: { Text("Confirm").lineLimit(1) }
+                .accessibilityIdentifier("plugin-ui-confirm")
+            Button(role: .cancel) { page.cancelConfirmation() } label: { Text("Cancel").lineLimit(1) }
+        }
+        .onTabVisibility(appear: { pageVisible = true; updateVisibility() },
+                         disappear: { pageVisible = false; updateVisibility() })
+        .onChange(of: phase) { _, _ in updateVisibility() }
         .onChange(of: page.popped) { _, popped in
             guard popped else { return }
             if page.depth > 1 { dismiss() }
@@ -465,6 +496,10 @@ struct ExtensionPageView: View {
         }
         .pluginRefresh(page)
         .refreshable { await page.load() }
+    }
+
+    private func updateVisibility() {
+        page.setVisible(pageVisible && tabActive && phase == .active)
     }
 
     private var form: some View {
@@ -496,6 +531,7 @@ extension View {
 /// A page's `search`: the search field in the navigation bar while the View has one; what is typed goes to the
 /// extension once the typing pauses for 0.3 s.
 private struct ExtensionSearchField: ViewModifier {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     @Bindable var page: ExtensionViewModel
     @Environment(AppModel.self) private var app
 
@@ -507,9 +543,15 @@ private struct ExtensionSearchField: ViewModifier {
                 .task(id: page.query) {
                     // Only what was typed since the last search: coming back to the page asks nothing again.
                     guard page.query != page.searchedQuery else { return }
+                    let query = page.query
+                    var chosen = ["q": query]
+                    if let filter = page.view?.filter { chosen[filter.name] = page.values[filter.name] ?? filter.value }
+                    let execute = displayed.map { page.prepared(s.action, with: chosen, displayed: $0) }
                     try? await Task.sleep(for: .milliseconds(300))
                     guard !Task.isCancelled else { return }
-                    let o = await page.search()
+                    let o: ExtensionViewModel.Outcome
+                    if let execute { o = await execute(); page.searched(query, outcome: o) }
+                    else { o = await page.search() }
                     if let e = o.error { app.toast = Toast(e, style: .error) }
                 }
         } else {

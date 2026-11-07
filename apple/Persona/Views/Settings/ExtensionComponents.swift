@@ -174,6 +174,7 @@ struct ExtensionTable: View {
 
 /// An extension's `empty`: the app's empty state with its icon, words and at most one button.
 struct ExtensionEmpty: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     @Environment(AppModel.self) private var app
     var empty: ExtensionEmptyComponent
     var model: (any ExtensionViewControlling)?
@@ -204,13 +205,15 @@ struct ExtensionEmpty: View {
 
     private func run() {
         guard let b = empty.button, let model, model.isEnabled(b.action) else { return }
-        Task { ExtensionOutcome.show(await model.perform(b.action), app: app, link: $link) }
+        let execute = model.prepared(b.action, with: [:], displayed: displayed)
+        Task { ExtensionOutcome.show(await execute(), app: app, link: $link) }
     }
 }
 
 /// A section's `more`: a row at its end that loads the next part when it scrolls into view (once, until the extension
 /// answers) or is tapped.
 struct ExtensionMoreRow: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     @Environment(AppModel.self) private var app
     var more: ExtensionMore
     var model: any ExtensionViewControlling
@@ -231,13 +234,17 @@ struct ExtensionMoreRow: View {
 
     private func load() {
         guard model.loadingMore == nil else { return }
-        Task { ExtensionOutcome.show(await model.more(more), app: app, link: $link) }
+        if let page = model as? ExtensionViewModel, let displayed {
+            let execute = page.preparedMore(more, displayed: displayed)
+            Task { ExtensionOutcome.show(await execute(), app: app, link: $link) }
+        } else { Task { ExtensionOutcome.show(await model.more(more), app: app, link: $link) } }
     }
 }
 
 /// The page's `filter`: its choices as chips under the search field, the picked one on; picking another asks the
 /// extension for the view at once.
 struct ExtensionFilterChips: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     @Environment(AppModel.self) private var app
     var filter: ExtensionFilter
     var model: any ExtensionViewControlling
@@ -249,7 +256,16 @@ struct ExtensionFilterChips: View {
             HStack(spacing: Theme.Space.s) {
                 ForEach(filter.choices.prefix(20)) { c in
                     FilterChip(title: c.label, on: c.value == picked) {
-                        Task { ExtensionOutcome.show(await model.filter(c.value), app: app, link: $link) }
+                        if let displayed {
+                            let before = model.values[filter.name]
+                            model.values[filter.name] = c.value
+                            let execute = model.prepared(filter.action, with: [filter.name: c.value, "q": model.query], displayed: displayed)
+                            Task {
+                                let outcome = await execute()
+                                if outcome.error != nil || outcome.cancelled { model.values[filter.name] = before }
+                                ExtensionOutcome.show(outcome, app: app, link: $link)
+                            }
+                        } else { Task { ExtensionOutcome.show(await model.filter(c.value), app: app, link: $link) } }
                     }
                     .accessibilityIdentifier("plugin-ui-filter-\(c.value)")
                 }
@@ -386,6 +402,7 @@ struct ExtensionStatGrid: View {
 /// An extension's `segmented`: a few choices, one picked; picking another sends it to the extension at once (its
 /// action, with `{name: value}`), whose answer is the view for it.
 struct ExtensionSegmented: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     @Environment(AppModel.self) private var app
     var item: ExtensionSegmentedComponent
     var model: any ExtensionViewControlling
@@ -397,7 +414,16 @@ struct ExtensionSegmented: View {
             SegmentedChoice(item.name, choices.map { ($0.value, $0.label) }, selection: Binding(
                 get: { model.values[item.name] ?? (item.value.isEmpty ? choices[0].value : item.value) },
                 set: { v in
-                    Task { ExtensionOutcome.show(await model.choose(item.name, v, action: item.action), app: app, link: $link) }
+                    if let displayed {
+                        let before = model.values[item.name]
+                        model.values[item.name] = v
+                        let execute = model.prepared(item.action, with: [item.name: v], displayed: displayed)
+                        Task {
+                            let outcome = await execute()
+                            if outcome.error != nil || outcome.cancelled { model.values[item.name] = before }
+                            ExtensionOutcome.show(outcome, app: app, link: $link)
+                        }
+                    } else { Task { ExtensionOutcome.show(await model.choose(item.name, v, action: item.action), app: app, link: $link) } }
                 }))
             // It has no label of its own (the name is the extension's key): a Mac picker would write the key beside it.
             .labelsHidden()
@@ -411,6 +437,7 @@ struct ExtensionSegmented: View {
 /// A button or row that sends its action back to the extension, asking first when it says so (a `push` opens its page
 /// without asking the extension); the answer's word is a toast, its link opens in the app.
 struct ExtensionActionButton<Content: View>: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     @Environment(AppModel.self) private var app
     var action: ExtensionAction
     var title: String
@@ -438,11 +465,12 @@ struct ExtensionActionButton<Content: View>: View {
     }
 
     private func run() {
-        if model.managesConfirmation { Keyboard.dismiss() }
+        let execute = model.prepared(action, with: [:], displayed: displayed)
+        if model.managesConfirmation && displayed == nil { Keyboard.dismiss() }
         Task {
             // Let the conversation's simultaneous focus-dismiss gesture settle before presenting a native alert.
-            if model.managesConfirmation { await Task.yield() }
-            ExtensionOutcome.show(await model.perform(action), app: app, link: $link)
+            if model.managesConfirmation && displayed == nil { await Task.yield() }
+            ExtensionOutcome.show(await execute(), app: app, link: $link)
         }
     }
 }
@@ -450,13 +478,24 @@ struct ExtensionActionButton<Content: View>: View {
 /// A field of an extension's View: text, a secret (typed in hidden, never filled in for you), a number, a switch, a
 /// choice.
 struct ExtensionFieldItem: View {
+    @Environment(\.extensionFieldFocus) private var focus
+    @Environment(\.extensionDisplayedRevision) private var displayed
+    @Environment(\.scenePhase) private var phase
+    @State private var secretDraft = ""
     var field: ExtensionFieldComponent
     var model: any ExtensionViewControlling
 
     private var name: String { field.name }
     private var label: String { field.label.isEmpty ? name : field.label }
+    private var privateInput: Bool {
+        guard let page = model as? ExtensionViewModel else { return false }
+        return page.stream?.tree != nil
+    }
     private var text: Binding<String> {
-        Binding(get: { model.values[name] ?? "" }, set: { model.values[name] = $0 })
+        if field.kind == "secret", privateInput {
+            return Binding(get: { secretDraft }, set: { secretDraft = $0 })
+        }
+        return Binding(get: { model.values[name] ?? "" }, set: { model.values[name] = $0 })
     }
 
     var body: some View {
@@ -476,14 +515,19 @@ struct ExtensionFieldItem: View {
                     Text(label).lineLimit(2)
                 }
             case "secret":
-                labeled { SecretField(field.placeholder ?? "", filled: String(localized: "Filled in; sent when you submit"), text: text) }
+                labeled {
+                    SecretField(field.placeholder ?? "", filled: privateInput ? String(localized: "Hidden") : String(localized: "Filled in; sent when you submit"), text: text)
+                        .modifier(ExtensionFieldFocus(binding: focus, key: field.key ?? name))
+                }
             case "number":
                 labeled {
                     TextField(field.placeholder ?? "", text: text).keyboardType(.decimalPad)
+                        .modifier(ExtensionFieldFocus(binding: focus, key: field.key ?? name))
                 }
             default:
                 labeled {
                     TextField(field.placeholder ?? "", text: text)
+                        .modifier(ExtensionFieldFocus(binding: focus, key: field.key ?? name))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
@@ -491,6 +535,11 @@ struct ExtensionFieldItem: View {
         }
         .disabled(!model.fieldsEnabled)
         .accessibilityIdentifier("plugin-ui-field-\(name)")
+        .onDisappear { secretDraft = "" }
+        .onChange(of: displayed) { _, _ in secretDraft = "" }
+        .onChange(of: field.kind) { _, _ in secretDraft = "" }
+        .onChange(of: phase) { _, phase in if phase != .active { secretDraft = "" } }
+        .onTabVisibility(appear: {}, disappear: { secretDraft = "" })
     }
 
     /// The label above the field.

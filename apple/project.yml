@@ -592,6 +592,8 @@ targets:
       - path: PersonaTests/HubNamingCompatibilityTests.swift
       - path: PersonaTests/OldHubCompatibilityIntegrationTests.swift
       - path: PersonaTests/PersonaSelectionTests.swift
+      - path: PersonaTests/ExtensionStreamTreeTests.swift
+      - path: PersonaTests/ExtensionPageStreamTests.swift
       - path: PersonaTests/FakeHub.swift
     dependencies:
       - target: PersonaMac
@@ -603,6 +605,21 @@ targets:
         CODE_SIGN_STYLE: Automatic
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Persona.app/Contents/MacOS/Persona"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  PersonaMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: PersonaUITests/ExtensionStreamUITests.swift
+      - path: PersonaUITests/UITestStyle.swift
+      - path: PersonaUITests/LaunchLayout.swift
+    dependencies:
+      - target: PersonaMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(PERSONA_BUNDLE_ID).macuitests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: PersonaMac
   # UI tests drive the real app in the simulator against the configured hub (scripts/app/ui-test.sh); not in the
   # default test run, which must work offline.
   PersonaUITests:
@@ -647,6 +664,17 @@ schemes:
       config: Debug
     test:
       targets: [PersonaMacTests]
+      language: zh-Hans
+      region: CN
+  PersonaMacExtensionUI:
+    build:
+      targets:
+        PersonaMac: all
+        PersonaMacUITests: [test]
+    run:
+      config: Debug
+    test:
+      targets: [PersonaMacUITests]
       language: zh-Hans
       region: CN
   PersonaVision:

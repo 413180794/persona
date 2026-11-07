@@ -127,9 +127,10 @@ extension APIClient {
 
     /// Draws (no action) or uses a control (an action, with the fields' values it sends).
     func pluginUI(_ ext: String, _ ui: String, context: ExtensionUIContext, state: String?, action: String? = nil,
-                  values: [String: String]? = nil) async throws -> ExtensionActionResult {
+                  values: [String: String]? = nil, manager: String? = nil) async throws -> ExtensionActionResult {
         let body = ExtensionUIRequest(context: context, state: state, action: action, values: values)
-        return try JSON.decoder.decode(ExtensionActionResult.self, from: try await request("POST", extensionPath("/\(ext)/-/ui/\(ui)"), body: body))
+        let query = manager.map { ["manager": $0] } ?? [:]
+        return try JSON.decoder.decode(ExtensionActionResult.self, from: try await request("POST", extensionPath("/\(ext)/-/ui/\(ui)"), query: query, body: body))
     }
 }
 
@@ -161,7 +162,11 @@ extension APIClient {
 @Observable final class ExtensionViewModel {
     struct Deps {
         var api: () -> APIClient?
-        static var live: Deps { .init(api: { AppModel.shared.api }) }
+        var connection: () -> LiveConnection? = { nil }
+        static var live: Deps {
+            let group = AppModel.shared.hub?.group ?? ""
+            return .init(api: { AppModel.shared.api(group) }, connection: { AppModel.shared.socket(group) })
+        }
     }
 
     /// What using a control came to, for the page to show: a word (a toast), a link to open in the app, or why it failed.
@@ -169,6 +174,60 @@ extension APIClient {
         var toast: String?
         var url: URL?
         var error: String?
+        var lines: ExtensionUIStreamFileLines?
+        var cancelled = false
+    }
+
+    private(set) var fileLines: [String: ExtensionUIStreamFileLines] = [:]
+    @ObservationIgnored private(set) var stream: ExtensionPageStream?
+    private(set) var confirmation: ExtensionPageStream.Frozen?
+    @ObservationIgnored private var confirmReply: CheckedContinuation<Outcome, Never>?
+    var managesConfirmation: Bool { stream?.supported == true }
+    var fieldsEnabled: Bool { true } // Local drafts remain editable during snapshot recovery.
+    func isEnabled(_ action: ExtensionAction) -> Bool { running == nil && (stream == nil || stream?.supported == false || stream?.ready == true) }
+
+    func setVisible(_ visible: Bool) {
+        if !visible { cancelConfirmation(); clearSecrets() }
+        stream?.setVisible(visible)
+    }
+    func cancelConfirmation() {
+        confirmation = nil; confirmReply?.resume(returning: Outcome(cancelled: true)); confirmReply = nil
+    }
+    func approveConfirmation() {
+        guard let frozen = confirmation, let reply = confirmReply else { return }
+        confirmation = nil; confirmReply = nil
+        Task { reply.resume(returning: await performFrozen(frozen, confirmed: true)) }
+    }
+    private func clearSecrets() {
+        for case .field(let field) in components where field.kind == "secret" { values[field.name] = "" }
+    }
+    private func performFrozen(_ frozen: ExtensionPageStream.Frozen, confirmed: Bool = false) async -> Outcome {
+        guard let stream else { return Outcome() }
+        do {
+            if let push = frozen.action.push {
+                guard stream.isCurrent(frozen) else {
+                    throw ExtensionStreamJSON.Failure.version
+                }
+                if depth < Self.maxDepth { pushed = push }
+                return Outcome()
+            }
+            let result = try await stream.perform(frozen, confirmed: confirmed)
+            guard let result else { return Outcome() }
+            guard stream.canPresent(frozen) else { return Outcome(cancelled: true) }
+            if let lines = result.lines, lines.path == frozen.chosen["path"],
+               lines.side == nil || lines.side == frozen.chosen["side"],
+               components.contains(where: { $0.key == frozen.interaction.key }) {
+                if fileLines.count < 64 || fileLines[frozen.interaction.key] != nil { fileLines[frozen.interaction.key] = lines }
+            }
+            if let push = result.push, depth < Self.maxDepth {
+                pushed = ExtensionPush(ui: push.ui, state: push.state, title: push.title)
+            }
+            if result.pop == true { popped = true }
+            let url = result.openUrl.flatMap(URL.init(string:)).flatMap { Self.opens($0, item: context.item, owner: plugin) ? $0 : nil }
+            return Outcome(toast: result.toast, url: url, lines: result.lines)
+        } catch {
+            return stream.visible ? Outcome(error: String(localized: "Couldn't Load This Page")) : Outcome(cancelled: true)
+        }
     }
 
     let plugin: String
@@ -218,6 +277,8 @@ extension APIClient {
     @ObservationIgnored private let deps: Deps
     /// The state the page starts with (a pushed page's `push.state`).
     @ObservationIgnored private let initialState: String?
+    @ObservationIgnored private let initialManager: String?
+    var selectedManager: String? { stream?.manager ?? initialManager }
 
     /// When the view on screen was last drawn (its `refresh_after` counts from here).
     private(set) var drawnAt: Date?
@@ -225,17 +286,56 @@ extension APIClient {
     static let maxDepth = 8
 
     init(plugin: String, ui: String, context: ExtensionUIContext = .here(), state: String? = nil, depth: Int = 1,
-         deps: Deps = .live) {
+         deps: Deps = .live, manager: String? = nil) {
         self.plugin = plugin
+        self.initialManager = manager
         self.ui = ui
         self.context = context
         self.initialState = state
         self.depth = depth
         self.deps = deps
         ExtensionUIRegistry.shared.add(self)
+        #if os(iOS) || os(macOS)
+        if context.uiVersion == ExtensionUIContext.pageVersion, let connection = deps.connection() {
+            let stream = ExtensionPageStream(connection: connection, owner: plugin, contribution: ui,
+                                             context: context, state: state ?? "", manager: manager)
+            self.stream = stream
+            stream.onView = { [weak self] view in
+                guard let self else { return }
+                let old = self.components
+                let next = view.sections.flatMap(\.items)
+                self.fileLines = self.fileLines.filter { key, _ in
+                    let previous = old.first { $0.key == key }
+                    let current = next.first { $0.key == key }
+                    return previous != nil && previous == current
+                }
+                self.clearSecrets()
+                self.show(view, keeping: self.values)
+            }
+            stream.onFailure = { [weak self] _ in self?.error = String(localized: "Couldn't Load This Page") }
+            stream.onLegacy = { [weak self] in Task { await self?.load() } }
+            stream.resolveHostConfirmation = { [weak self] id in
+                guard let self, let api = self.deps.api() else { throw ExtensionStreamJSON.Failure.unsupported }
+                _ = try await api.resolve(id, Resolution(allow: true))
+            }
+        }
+        #endif
+    }
+
+    deinit {
+        if let stream { Task { @MainActor in stream.close() } }
     }
 
     func load() async {
+        if let stream {
+            if stream.tree != nil { stream.refresh(); return }
+            // Negotiate only with this connection's hello; a declaration is not support.
+            for _ in 0..<30 where stream.supported == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+                if Task.isCancelled { return }
+            }
+            if stream.supported == true { stream.refresh(); return }
+        }
         guard !loading else { return }
         loading = true
         defer { loading = false; completedOperations += 1 }
@@ -256,16 +356,73 @@ extension APIClient {
         }
     }
 
+    /// Capture on the native control's tap, before scheduling a Task or showing confirmation.
+    func prepared(_ action: ExtensionAction, with chosen: [String: String] = [:],
+                  displayed: ExtensionDisplayedRevision? = nil) -> @MainActor () async -> Outcome {
+        guard let stream, stream.supported != false else {
+            return { [weak self] in
+                guard let self else { return Outcome(cancelled: true) }
+                guard self.stream == nil || self.stream?.supported == false else { return Outcome(error: String(localized: "Couldn't Load This Page")) }
+                return await self.perform(action, with: chosen)
+            }
+        }
+        do {
+            let sent = (action.submit == true ? submitted : [:]).merging(chosen) { _, c in c }
+                .merging(action.values ?? [:]) { _, own in own }
+            let secretNames = Set(components.compactMap { item -> String? in
+                if case .field(let field) = item, field.kind == "secret" { return field.name }; return nil
+            })
+            let frozen = try stream.freeze(action, values: sent.filter { !secretNames.contains($0.key) }, displayed: displayed)
+            return { [weak self] in
+                guard let self else { return Outcome(cancelled: true) }
+                guard self.running == nil, stream.isCurrent(frozen) else { return Outcome(error: String(localized: "Couldn't Load This Page")) }
+                self.running = action.id
+                defer { self.running = nil; self.completedOperations += 1 }
+                if action.confirm?.isEmpty == false {
+                    return await withCheckedContinuation { reply in self.confirmation = frozen; self.confirmReply = reply }
+                }
+                return await self.performFrozen(frozen)
+            }
+        } catch { return { Outcome(error: String(localized: "Couldn't Load This Page")) } }
+    }
+
+    func preparedMore(_ more: ExtensionMore, displayed: ExtensionDisplayedRevision) -> @MainActor () async -> Outcome {
+        var chosen: [String: String] = [:]
+        if view?.search != nil { chosen["q"] = query }
+        if let filter = view?.filter { chosen[filter.name] = values[filter.name] ?? filter.value }
+        let execute = prepared(more.action, with: chosen, displayed: displayed)
+        return { [weak self] in
+            guard let self, self.loadingMore == nil else { return Outcome(cancelled: true) }
+            self.loadingMore = more.action.id
+            defer { self.loadingMore = nil }
+            return await execute()
+        }
+    }
+
     /// Uses a button or row (asked first by the page when it has `confirm`). A `push` opens its page without asking the
     /// extension; otherwise a new view replaces this one, and nothing in the answer draws it again.
     func perform(_ action: ExtensionAction, with chosen: [String: String] = [:]) async -> Outcome {
-        if let push = action.push {
+        if let push = action.push, stream == nil || stream?.supported == false {
             if depth < Self.maxDepth { pushed = push }
             return Outcome()
         }
         guard running == nil else { return Outcome() }
         running = action.id
         defer { running = nil; completedOperations += 1 }
+        if let stream, stream.supported != false {
+            do {
+                let sent = (action.submit == true ? submitted : [:]).merging(chosen) { _, c in c }
+                    .merging(action.values ?? [:]) { _, own in own }
+                let safe = sent.filter { key, _ in !components.contains { item in
+                    if case .field(let field) = item { return field.name == key && field.kind == "secret" }; return false
+                } }
+                let frozen = try stream.freeze(action, values: safe)
+                if action.confirm?.isEmpty == false {
+                    return await withCheckedContinuation { reply in confirmation = frozen; confirmReply = reply }
+                }
+                return await performFrozen(frozen)
+            } catch { return Outcome(error: String(localized: "Couldn't Load This Page")) }
+        }
         do {
             // The page's fields (submit), then the component's own values (a path, a line, what was written), then the
             // action's own (UI version 4): the later wins (docs/extensions/extensions.md「UI 版本 4」).
@@ -299,7 +456,7 @@ extension APIClient {
         let before = values[name]
         values[name] = value
         let o = await perform(action, with: [name: value])
-        if o.error != nil { values[name] = before }
+        if o.error != nil || o.cancelled { values[name] = before }
         return o
     }
 
@@ -315,10 +472,20 @@ extension APIClient {
         return o
     }
 
+    func searched(_ query: String, outcome: Outcome) {
+        if outcome.error == nil && !outcome.cancelled { searchedQuery = query }
+    }
+
     /// The page's search: its action with `{q}` (and the filter's value), once the typing pauses (the page waits). A
     /// newer search makes an older one's answer moot: only the last one's is shown.
     func search() async -> Outcome {
         guard let s = view?.search else { return Outcome() }
+        if stream?.supported == true {
+            searchedQuery = query
+            var sent = ["q": query]
+            if let filter = view?.filter { sent[filter.name] = values[filter.name] ?? filter.value }
+            return await perform(s.action, with: sent)
+        }
         searches += 1
         let mine = searches
         defer { completedOperations += 1 }
@@ -353,6 +520,12 @@ extension APIClient {
     /// whole new view.
     func more(_ m: ExtensionMore) async -> Outcome {
         guard loadingMore == nil, running == nil else { return Outcome() }
+        if stream?.supported == true {
+            var sent: [String: String] = [:]
+            if view?.search != nil { sent["q"] = query }
+            if let filter = view?.filter { sent[filter.name] = values[filter.name] ?? filter.value }
+            return await perform(m.action, with: sent)
+        }
         loadingMore = m.action.id
         defer { loadingMore = nil; completedOperations += 1 }
         do {
@@ -384,7 +557,7 @@ extension APIClient {
 
     /// When the view asks to be drawn again (`refresh_after`), nil: it does not.
     var refreshDue: Date? {
-        guard let s = view?.refreshAfter, s > 0, let at = drawnAt else { return nil }
+        guard let s = view?.refreshAfter, stream?.supported != true, s > 0, let at = drawnAt else { return nil }
         return at.addingTimeInterval(TimeInterval(max(s, Self.refreshFloor)))
     }
 
@@ -394,6 +567,7 @@ extension APIClient {
     /// Draws it again because its `refresh_after` is up, `ui.invalidate` came or the page on top of it closed: what the
     /// user is typing in its fields stays, a failure keeps the view that is there (the next one tries again).
     func refresh() async {
+        if stream?.supported == true || stream?.tree != nil { stream?.refresh(); stale = false; return }
         guard !loading, running == nil, loadingMore == nil else { return }
         let version = invalidationVersion
         loading = true
@@ -412,6 +586,10 @@ extension APIClient {
     private func show(_ v: ExtensionView?, keeping typed: [String: String] = [:], searched: Bool = false) {
         guard let v else { return }
         view = v
+        fileLines = fileLines.filter { key, lines in v.sections.flatMap(\.items).contains { item in
+            guard item.key == key else { return false }
+            switch item { case .code(let code): return code.path == lines.path; case .diff(let diff): return diff.path == lines.path; default: return false }
+        } }
         drawnAt = .now
         error = nil
         unsupported = false
@@ -439,8 +617,12 @@ extension APIClient {
     }
 
     private func call(_ action: String?, values: [String: String]?) async throws -> ExtensionActionResult {
+        if let stream, stream.hasMountedNative || (action != nil && stream.supported != false) { throw ExtensionStreamJSON.Failure.version }
         guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
-        return try await api.pluginUI(plugin, ui, context: context, state: view?.state ?? initialState, action: action, values: values)
+        let generation = stream?.tree?.version
+        let result = try await api.pluginUI(plugin, ui, context: context, state: view?.state ?? initialState, action: action, values: values, manager: selectedManager)
+        guard stream?.supported != true, generation == stream?.tree?.version else { throw ExtensionStreamJSON.Failure.version }
+        return result
     }
 
     static func isUnsupported(_ e: APIError) -> Bool { e.status == 404 && e.code == "unsupported" }
@@ -449,7 +631,7 @@ extension APIClient {
     /// `ExtensionSettingsLink`), never another's; on an inbox item's page (`item`), also that item's own source
     /// (`InboxSourceLink`), never another item's.
     static func opens(_ url: URL, item: String?, owner: String? = nil) -> Bool {
-        if url.scheme?.lowercased() == "https" { return true }
+        if url.scheme?.lowercased() == "https" { return url.host()?.isEmpty == false && url.user == nil && url.password == nil }
         if let settings = ExtensionSettingsLink.extensionID(url) { return owner != nil && settings == owner }
         guard let item, let source = InboxSourceLink.item(url) else { return false }
         return source == item

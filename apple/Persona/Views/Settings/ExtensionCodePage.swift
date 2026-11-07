@@ -146,7 +146,8 @@ enum CodePageBlock: Identifiable {
             var runStart = 0
             func flush(_ last: Bool) {
                 guard !run.isEmpty || (last && s.more != nil) else { return }
-                out.append(.legacy(id: "legacy:\(si).\(runStart)", title: runTitle, footer: last ? s.footer : nil, items: run,
+                let runID = s.key.map { "\($0).\(run.first?.key ?? String(runStart))" } ?? "\(si).\(runStart)"
+                out.append(.legacy(id: "legacy:\(runID)", title: runTitle, footer: last ? s.footer : nil, items: run,
                                    more: last ? s.more : nil))
                 run = []
                 runTitle = nil

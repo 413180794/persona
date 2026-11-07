@@ -1139,7 +1139,13 @@ def outputs(defs: dict[str, Def]) -> dict[Path, str]:
     # The calls are what a program and the hub say to each other: the SDKs' only.
     calls = load_calls(defs)
     ts, ts_apps = gen_ts(defs, calls), gen_ts(apps)
-    out = {GO_OUT: gofmt(gen_go(defs, calls)), SWIFT_OUT: gen_swift(apps), KOTLIN_OUT: gen_kotlin(apps)}
+    # Apple stream reduction validates original JSON before projecting permissive legacy native models.
+    # Keep validation constraints generated from the same schemas as the wire types.
+    schema_docs = {f: json.loads((SCHEMA_DIR / f).read_text())
+                   for f in ("stream.schema.json", "view.schema.json", "protocol.schema.json")}
+    schema_json = json.dumps(schema_docs, ensure_ascii=True, separators=(",", ":"))
+    swift_schemas = '\nnonisolated enum ExtensionWireSchemas {\n    static let json = ###"' + schema_json + '"###\n}\n'
+    out = {GO_OUT: gofmt(gen_go(defs, calls)), SWIFT_OUT: gen_swift(apps) + swift_schemas, KOTLIN_OUT: gen_kotlin(apps)}
     for p in TS_OUTS:
         out[p] = ts if p == TS_SDK_OUT else ts_apps
     for f in SCHEMA_FILES:

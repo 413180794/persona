@@ -6,6 +6,7 @@ import SwiftUI
 /// The blocks in a lazy stack (or a plain one for the few rows over a split). A tree's tap and a diff's controls go
 /// to the page's model with the values the protocol names (docs/extensions/extensions.md「UI 版本 4」).
 struct CodeBlockStack: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     var blocks: [CodePageBlock]
     @Bindable var model: ExtensionViewModel
     var state: CodePageState
@@ -66,6 +67,13 @@ struct CodeBlockStack: View {
         }
         ForEach(blocks) { b in
             block(b)
+            if case .gap(let id) = b, id.hasPrefix("gap:"), let lines = model.fileLines[String(id.dropFirst(4))] {
+                CodeFileBlock(code: .init(key: "context:" + id, path: lines.path,
+                                         text: lines.lines.joined(separator: "\n"), startLine: lines.start),
+                              model: model, link: $link, fills: false)
+                    .padding(.horizontal, Theme.Space.page).padding(.vertical, Theme.Space.s)
+                    .accessibilityIdentifier("extension-file-context")
+            }
             if case .gap(let id) = b, id == CodePageBlocks.openMainSlot, let openMain {
                 Button(action: openMain) {
                     HStack(spacing: Theme.Space.s) {
@@ -95,9 +103,11 @@ struct CodeBlockStack: View {
                         .padding(.horizontal, Theme.Space.xs)
                 }
                 VStack(alignment: .leading, spacing: Theme.Space.m) {
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, c in
-                        if case .divider = c { Divider() } else {
-                            ExtensionItemRow(item: c, model: model, link: $link).frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(items.enumerated().map { offset, item in
+                        ExtensionParts.Item(id: item.key ?? String(offset), component: item)
+                    }) { entry in
+                        if case .divider = entry.component { Divider() } else {
+                            ExtensionItemRow(item: entry.component, model: model, link: $link).frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     if let more { ExtensionMoreRow(more: more, model: model, link: $link) }
@@ -298,9 +308,10 @@ struct CodeBlockStack: View {
     /// Sends what was written; an empty box sends nothing. What was written goes once it went through.
     private func send(_ a: ExtensionAction, id: String, _ values: [String: String], done: (() -> Void)? = nil) {
         guard !(values["body"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let execute = model.prepared(a, with: values, displayed: displayed)
         Task {
-            let o = await model.perform(a, with: values)
-            if o.error == nil {
+            let o = await execute()
+            if o.error == nil && !o.cancelled {
                 state.drafts[id] = nil
                 done?()
             }
@@ -309,8 +320,9 @@ struct CodeBlockStack: View {
     }
 
     private func composerRun(_ b: ExtensionComposerButton, name: String) {
-        let go = { run(b.action, [name: model.values[name] ?? ""]) }
-        if b.action.confirm?.isEmpty == false { pendingConfirm = (b, go) } else { go() }
+        let saved = [name: model.values[name] ?? ""]
+        let go = { run(b.action, saved) }
+        if b.action.confirm?.isEmpty == false, !model.managesConfirmation { pendingConfirm = (b, go) } else { go() }
     }
 
     @State private var pendingConfirm: (ExtensionComposerButton, () -> Void)?
@@ -321,7 +333,8 @@ struct CodeBlockStack: View {
     }
 
     private func run(_ a: ExtensionAction, _ values: [String: String] = [:]) {
-        Task { ExtensionOutcome.show(await model.perform(a, with: values), app: app, link: $link) }
+        let execute = model.prepared(a, with: values, displayed: displayed)
+        Task { ExtensionOutcome.show(await execute(), app: app, link: $link) }
     }
 }
 
@@ -440,6 +453,7 @@ struct CodeBreadcrumbView: View {
 /// The page's tabs: one row of them (scrolling sideways when they do not fit), the picked one filled, each with its
 /// count; picking one sends the tabs' action with `{name: value}` (and the search).
 struct CodeTabsBar: View {
+    @Environment(\.extensionDisplayedRevision) private var displayed
     var tabs: ExtensionTabs
     @Bindable var model: ExtensionViewModel
     @Binding var link: LinkTarget?
@@ -466,7 +480,18 @@ struct CodeTabsBar: View {
             ForEach(tabs.items, id: \.value) { t in
                 let picked = t.value == current
                 Button {
-                    Task { ExtensionOutcome.show(await model.pickTab(t.value), app: app, link: $link) }
+                    if let displayed {
+                        let before = model.values[tabs.name]
+                        model.values[tabs.name] = t.value
+                        var chosen = [tabs.name: t.value]
+                        if model.view?.search != nil { chosen["q"] = model.query }
+                        let execute = model.prepared(tabs.action, with: chosen, displayed: displayed)
+                        Task {
+                            let outcome = await execute()
+                            if outcome.error != nil || outcome.cancelled { model.values[tabs.name] = before }
+                            ExtensionOutcome.show(outcome, app: app, link: $link)
+                        }
+                    } else { Task { ExtensionOutcome.show(await model.pickTab(t.value), app: app, link: $link) } }
                 } label: {
                     HStack(spacing: Theme.Space.xs) {
                         Text(t.title?.isEmpty == false ? t.title! : t.value).lineLimit(1)
@@ -499,6 +524,7 @@ struct CodeTabsBar: View {
 /// A file's code: the viewer's lines view (line numbers, colors, both-way scrolling, only the lines on screen drawn),
 /// filling the column (`fills`) or a block of its own height in a stack; Load More when the extension cut it.
 struct CodeFileBlock: View {
+    @Environment(\.extensionDisplayedRevision) private var displayedRevision
     var code: ExtensionCodeComponent
     @Bindable var model: ExtensionViewModel
     @Binding var link: LinkTarget?
@@ -509,19 +535,32 @@ struct CodeFileBlock: View {
     /// A block in a stack shows at most this many lines (it scrolls inside itself past them).
     static let blockLines = 24
 
+    private var displayed: ExtensionCodeComponent {
+        guard let key = code.key, let lines = model.fileLines[key], lines.path == code.path else { return code }
+        var value = code
+        let original = code.text.components(separatedBy: "\n")
+        let start = code.startLine ?? 1
+        if lines.start == start + original.count, original.count + lines.lines.count <= 20_000 {
+            value.text = (original + lines.lines).joined(separator: "\n")
+        } else { value.text = lines.lines.joined(separator: "\n"); value.startLine = lines.start }
+        if let total = lines.total { value.truncated = (value.startLine ?? 1) + value.text.components(separatedBy: "\n").count - 1 < total }
+        return value
+    }
+
     var body: some View {
         VStack(spacing: Theme.Space.flush) {
-            if let src = snippet.current(code) {
+            if let src = snippet.current(displayed) {
                 CodeLines(source: src, version: src.version)
                     .accessibilityLabel(code.path.map { String(localized: "Code of \($0)") } ?? String(localized: "Code"))
                     .accessibilityIdentifier("code-file")
                     .frame(height: fills ? nil : CGFloat(min(src.lineCount, Self.blockLines)) * src.lineHeight + Theme.Space.xl * 2)
                     .frame(maxHeight: fills ? .infinity : nil)
-                if code.truncated == true, let load = code.load {
+                if displayed.truncated == true, let load = code.load {
                     Button {
-                        var v = ["from": String((code.startLine ?? 1) + src.lineCount)]
+                        var v = ["from": String((displayed.startLine ?? 1) + src.lineCount)]
                         if let p = code.path { v["path"] = p }
-                        Task { ExtensionOutcome.show(await model.perform(load, with: v), app: app, link: $link) }
+                        let execute = model.prepared(load, with: v, displayed: displayedRevision)
+                        Task { ExtensionOutcome.show(await execute(), app: app, link: $link) }
                     } label: {
                         HStack(spacing: Theme.Space.s) {
                             if model.running == load.id { ProgressView().controlSize(.small) }
@@ -544,8 +583,8 @@ struct CodeFileBlock: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: fills ? 0 : Theme.Radius.control, style: .continuous))
-        .onChange(of: code, initial: true) { _, c in snippet.update(c) }
-        .task(id: CodeSnippetInput(code)) { await snippet.load(code) }
+        .onChange(of: displayed, initial: true) { _, c in snippet.update(c) }
+        .task(id: CodeSnippetInput(displayed)) { await snippet.load(displayed) }
     }
 }
 
