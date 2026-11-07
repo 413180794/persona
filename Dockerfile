@@ -23,6 +23,10 @@ COPY web/ ./
 # The shared cases a web test imports (src/lib/injected.test.ts reads ../../../spec/fixtures/injected): tsc -b in the
 # build checks the tests too. Only this folder, so other fixtures' changes keep the cache.
 COPY spec/fixtures/injected/ /src/spec/fixtures/injected/
+# The extension schema, which the web app builds in: src/lib/extension-ui-stream.ts imports its *.schema.json (?raw),
+# the admin page's assistant card preview and the showcase glob its examples (import.meta.glob, which comes out empty
+# without them), and tests import example JSON (TS2307 in tsc -b without it).
+COPY schema/extension/ /src/schema/extension/
 # Without prebuild's privacy check: it scans the whole checkout (scripts/, git), which is not in this context. It
 # runs on the checkout before the image is built (.github/workflows/hub-image.yml; locally the hooks and web builds).
 RUN npm run build --ignore-scripts

@@ -1,5 +1,6 @@
-# Only server/, web/, deploy/docker/, the shared cases a web test reads (spec/fixtures/injected/) and the runtime packages'
-# sources (integrations/, go generate) go into the hub image (Dockerfile).
+# Only server/, web/, deploy/docker/, the shared cases a web test reads (spec/fixtures/injected/), the extension schema
+# the web build uses (schema/extension/) and the runtime packages' sources (integrations/, go generate) go into the hub
+# image (Dockerfile).
 *
 !server/
 !web/
@@ -13,6 +14,8 @@
 !sdk/go/
 # the cases web/src/lib/injected.test.ts reads: the web build's tsc checks the tests too (Dockerfile)
 !spec/fixtures/injected/
+# the extension schema and its examples: the web app builds them in and its tests import them (Dockerfile)
+!schema/extension/
 integrations/**/node_modules/
 server/bin/
 server/internal/hub/webdist/*
