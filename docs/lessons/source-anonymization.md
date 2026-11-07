@@ -30,6 +30,8 @@ A zero regex count does not establish the provenance of an opaque XMP creator or
 
 Strip `tEXt`, `zTXt`, and `iTXt` chunks without re-encoding the image. Validate chunk checksums and compare every retained chunk byte-for-byte, including `IDAT`, color profiles, gamma and pixel density; also compare decoded RGBA pixels. This keeps the icon's appearance unchanged. Update current assets through the source PR and remove the same metadata from all matching historical blobs before claiming synchronized clean-history publication.
 
+The same export identifier can have an XMP copy and a nested EXIF `UserComment` copy in `eXIf`. Enumerate nested TIFF directories and decode the comment's character-set prefix when checking fingerprints; scanning only `dc:creator` does not establish that every copy is gone. Remove the comment entry and its stored payload bytes, including bytes no longer referenced by a directory entry. Preserve other EXIF fields and offsets, particularly orientation and color space. Verify both raw RGBA pixels and orientation-applied pixels, and test little- and big-endian metadata, inline values, invalid offsets and cycles.
+
 ## Compare source identities with file contents
 
 Anonymizing author and committer headers does not remove those identities from historical documentation. A scan limited to configured runtime secrets can miss a personal author-signature line. Derive individual email identifiers from the original commit history and check current files, every historical blob, and decoded metadata separately. A public email-provider domain is not proof that an individual address is a public project contact.
