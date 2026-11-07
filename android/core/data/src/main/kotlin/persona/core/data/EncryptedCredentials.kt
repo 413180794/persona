@@ -9,7 +9,6 @@ import androidx.datastore.core.Serializer
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.tink.AeadSerializer
 import com.google.crypto.tink.Aead
-import com.google.crypto.tink.BinaryKeysetReader
 import com.google.crypto.tink.BinaryKeysetWriter
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.AeadConfig
@@ -23,6 +22,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import persona.core.contracts.ProtocolCompatibility
 
 @Serializable
 data class HubCredentials(
@@ -91,11 +91,11 @@ internal class EncryptedCredentials(context: Context) {
     private fun createAead(): Aead {
         AeadConfig.register()
         val keyset = AtomicFile(File(root, "keyset.enc"))
-        val uri = "android-keystore://persona.hub-data.master"
-        val handle = if (keyset.baseFile.exists()) {
-            // A missing or unusable Keystore key must fail closed, preserving the original ciphertext.
-            val master = AndroidKeystoreKmsClient().getAead(uri)
-            keyset.openRead().use { KeysetHandle.read(BinaryKeysetReader.withInputStream(it), master) }
+        val uri = ProtocolCompatibility.pairingMasterKeyUris.first()
+        val handle = if (keyset.baseFile.exists() || File(root, "keyset.enc.bak").exists()) {
+            // Read through AtomicFile to recover an interrupted write before looking up wrapping keys.
+            val wrapped = keyset.openRead().use { it.readBytes() }
+            CredentialKeyset.read(wrapped) { AndroidKeystoreKmsClient().getAead(it) }
         } else {
             val master = AndroidKeystoreKmsClient.getOrGenerateNewAeadKey(uri)
             val generated = KeysetHandle.generateNew(AeadKeyTemplates.AES256_GCM)

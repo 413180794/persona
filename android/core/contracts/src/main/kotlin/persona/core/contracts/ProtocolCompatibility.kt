@@ -3,6 +3,7 @@ package persona.core.contracts
 /** Rolling-upgrade contracts for baseline 39a706a338. Keep legacy names out of product code and copy. */
 object ProtocolCompatibility {
     const val CAPABILITY = "persona_contracts_v1"
+    val pairingMasterKeyUris = listOf("android-keystore://persona.hub-data.master", "android-keystore://jarvis.hub-data.master")
     const val LEGACY_PANE_PREFERENCES = "jarvis-panes"
     fun legacyPaneKey(key: String) = if (key == "split.persona") "split.jarvis" else key
     fun isUpdateAPK(name: String) = name.endsWith(".apk") && (name.startsWith("persona-update-") || name.startsWith("jarvis-update-"))

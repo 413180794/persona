@@ -293,3 +293,9 @@ Overlay size comes from both WindowManager.LayoutParams and Compose content. Shr
 Android rejects the desktop JVM's inline `(?U)` flag. A file-level regex initializer can therefore crash unrelated notification entry points, including foreground service startup. Robolectric runs regex on the host JVM and cannot prove Android compatibility. Use a Unicode White_Space class supported by both engines, and run the same notification regression suite from `src/sharedTest` as unit tests and device instrumentation tests. The library test APK has its own package and does not replace the installed app.
 
 - Interaction source approval capability must gate answers, not local card dismissal (#6393). Hub `dismiss` can still call the source (for example `codex.answer`), so device-only discard uses a separate API and a pairing-scoped durable ID set. Commit the discard before removing the card; suppress both snapshot restoration and replayed events, and never mark its session as answered.
+
+## Wrapping-key aliases are persistent identities (#6494)
+
+Changing a Keystore alias changes the key used to unwrap an existing Tink keyset; it does not rename the OS key. An installed app can therefore retain every ciphertext file and still lose access after a presentation rename. Read existing keysets with both known aliases, without generating replacement keys or rewriting the wrapped keyset. Retaining the same data key also preserves associated-data paths and rollback to older clients.
+
+An AtomicFile can retain only its recovery `.bak` after an interrupted write. Treat that as an existing keyset and read through AtomicFile before deciding to initialize a new store. Real Tink round trips cover both wrapping keys, unavailable/wrong keys and unchanged ciphertext on the JVM; Android Keystore and AtomicFile recovery still require the separate library instrumentation package or a device upgrade check.
