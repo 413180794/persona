@@ -197,6 +197,45 @@ func TestThemePickerAcceptKeys(t *testing.T) {
 	}
 }
 
+// Claude Code 2.1.318 on a fresh machine draws its choices without numbers, "Auto (match terminal)" first and the cursor
+// on the default (screen fixture captured 2026-11-07). The numbered match never fired on it and the start timed out on
+// this screen; Enter takes the highlighted choice.
+func TestThemePickerUnnumberedChoices(t *testing.T) {
+	picker := screenFixture(t, "claude-2.1.318-theme-picker-120.txt")
+	if got := themePickerKeys(picker); !reflect.DeepEqual(got, []string{"enter"}) {
+		t.Fatalf("2.1.318 picker: got %v", got)
+	}
+	if got := firstRunKeys(picker); !reflect.DeepEqual(got, []string{"enter"}) {
+		t.Fatalf("firstRunKeys on the picker: got %v", got)
+	}
+	// The list is drawn but not its cursor yet; the ❯ above the question is the shell prompt that ran claude.
+	noCursor := strings.Join([]string{
+		"❯ claude --settings /tmp/s.json",
+		"Choose the text style that looks best with your terminal",
+		"To change this later, run /theme",
+		"",
+		"    Auto (match terminal)",
+		"    Dark mode",
+	}, "\n")
+	if got := themePickerKeys(noCursor); got != nil {
+		t.Fatalf("no cursor in the list yet: got %v", got)
+	}
+}
+
+// After the style picker a fresh 2.1.318 shows its security notes, which wait only for Enter.
+func TestSecurityNotesKeys(t *testing.T) {
+	notes := screenFixture(t, "claude-2.1.318-security-notes-120.txt")
+	if got := firstRunKeys(notes); !reflect.DeepEqual(got, []string{"enter"}) {
+		t.Fatalf("security notes: got %v", got)
+	}
+	for _, screen := range []string{"", "⏺ done\n\n> \n  ? for shortcuts", "Press Enter to continue…", "Security notes: see below",
+		screenFixture(t, "claude-2.1.318-theme-picker-120.txt")} {
+		if got := securityNotesKeys(screen); got != nil {
+			t.Fatalf("screen %q produced %v", screen, got)
+		}
+	}
+}
+
 // Anything that is not the theme picker produces no keys, so waitReady keeps polling instead of pressing Enter into
 // a prompt that would send it as the first message.
 func TestThemePickerNotShown(t *testing.T) {

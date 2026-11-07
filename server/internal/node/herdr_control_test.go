@@ -390,6 +390,31 @@ func TestHerdrStartThatNeverGetsReady(t *testing.T) {
 	}
 }
 
+// A machine whose Claude Code never ran (2.1.318): the start answers the style picker, then the security notes, then the
+// folder's trust dialog, and comes back with the agent ready. Before, the picker's unnumbered choices were not recognised
+// and the start timed out on it; nothing answered the security notes after it either.
+func TestHerdrStartThroughTheFirstRunScreens(t *testing.T) {
+	n, f, home := herdrNode(t)
+	withStartWaits(n, time.Minute, 20*time.Second)
+	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
+	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
+	startHerdr(f, "w1:p2", proto.StatusIdle)
+	f.reply("pane.list", map[string]any{"panes": []any{map[string]any{"pane_id": "w1:p2", "tab_id": "w1:t2"}}})
+	f.screenSteps("w1:p2", isKeys(),
+		screenFixture(t, "claude-2.1.318-theme-picker-120.txt"),
+		screenFixture(t, "claude-2.1.318-security-notes-120.txt"),
+		screenFixture(t, "claude-2.1.312-trust-162.txt"),
+		screenFixture(t, "claude-2.1.312-empty-162.txt"))
+	if _, err := request(t, n, "session.start", map[string]any{"cwd": home, "workspace_id": "w1"}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	assertTrace(t, f.trace("pane.send_keys"), []string{
+		sendKeys("w1:p2", "enter"),         // the style picker: its default
+		sendKeys("w1:p2", "enter"),         // the security notes
+		sendKeys("w1:p2", "down", "enter"), // the trust dialog, cursor on "No, exit"
+	})
+}
+
 // Resuming a session that is already live does nothing in herdr but refresh the layout; herdr not running fails
 // before anything is created.
 func TestHerdrStartOfALiveSessionAndWithoutHerdr(t *testing.T) {

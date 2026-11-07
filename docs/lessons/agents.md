@@ -8,6 +8,10 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
 - Multiple Claude Code PermissionRequest hooks run concurrently. The first `allow` grants permission; the others aren't ended and run until their own timeouts (2.1.308, #2648), leaving an expired phone card from the waiting hook. The answering hook must send `hook.decided` (`docs/integrations/claude-integration.md`). In bypass mode, remaining prompts mainly come from rm targets that can't be resolved statically (relative globs after `cd`, runtime-only targets); length, heredocs, and `eval` don't prompt.
 - When starting claude in a new herdr tab, an untrusted cwd first prompts "trust this folder"; text sent by `agent prompt` becomes a selection → selects No and exits.
   node must check for a blocked screen after starting a session (`docs/integrations/claude-integration.md`).
+- A fresh Claude Code 2.1.318 (never run on the machine) shows three screens before its input box (2026-11-07): the style picker with **unnumbered** choices
+  (`Auto (match terminal)` first, cursor on `✔ Dark mode`), then "Security notes … Press Enter to continue…", then the folder's trust dialog (cursor on `No, exit`).
+  The node's picker match expected numbered choices (a hand-written fixture), so starts on a new machine timed out after 1 minute on the picker.
+  `firstRunKeys` answers the picker and the notes; fixtures now come from a real capture (`claude-2.1.318-theme-picker-120.txt`, `-security-notes-120.txt`).
 - Seeing an input box doesn't mean Claude can receive text (2026-11-05, #2423): an automatic update on Claude Code startup ("Updated to latest…") also showed an Auto mode explanation.
   After node waited for the input box, `agent prompt` swallowed the first message. The transcript was only 1 KB, with no user message, and the Agent sat idle for 1.5 hours. Check the transcript after sending;
   if it didn't arrive, wait for readiness and resend, finally mark "Needs you" (`node/firstprompt.go`). Sending alone isn't success.

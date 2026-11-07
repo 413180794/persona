@@ -364,9 +364,10 @@ func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) 
 			time.Sleep(time.Second)
 			continue
 		}
-		// A machine that never ran claude stops at its first-run screens: the style picker is answered with its default,
-		// and a screen that waits for a person ends the wait now instead of at the timeout.
-		if keys := themePickerKeys(screen); keys != nil {
+		// A machine that never ran claude stops at its first-run screens: the style picker is answered with its default
+		// and the security notes with Enter (the folder's trust dialog comes next, above), and a screen that waits for a
+		// person ends the wait now instead of at the timeout.
+		if keys := firstRunKeys(screen); keys != nil {
 			_ = n.sendKeys(ctx, pane, keys...)
 			readyStreak = 0
 			time.Sleep(time.Second)
@@ -474,14 +475,31 @@ func trustKeys(screen string) []string {
 // best with your terminal"). The node accepts its default so an agent can start on a machine where claude never ran.
 const themePickerQuestion = "Choose the text style that looks best with your terminal"
 
-// themePickerKeys returns the keys that accept the default theme on Claude Code's first-run style picker: the cursor
-// starts on the first choice, so walking it back to the top and pressing Enter selects it.
+// firstRunKeys returns the keys that get past one of Claude Code's first-run screens the node can answer by itself:
+// the style picker, then the security notes. A fresh 2.1.318 shows them in that order, then the folder's trust dialog.
+func firstRunKeys(screen string) []string {
+	if keys := themePickerKeys(screen); keys != nil {
+		return keys
+	}
+	return securityNotesKeys(screen)
+}
+
+// themePickerKeys returns the keys that accept a theme on Claude Code's first-run style picker. With numbered choices
+// the cursor is walked back to the first one and Enter pressed. Claude Code 2.1.318 draws its choices without numbers
+// ("Auto (match terminal)" first, the cursor on its default "✔ Dark mode"), so the old match never fired and the start
+// timed out on the picker: there Enter takes the highlighted choice. Which theme it is does not matter.
 func themePickerKeys(screen string) []string {
 	if !strings.Contains(unframed(screen), themePickerQuestion) {
 		return nil
 	}
-	cur, top := -1, -1
+	cur, top, question := -1, -1, -1
 	for i, l := range strings.Split(screen, "\n") {
+		if question < 0 && strings.Contains(l, "Choose the text") {
+			question = i
+		}
+		if question < 0 {
+			continue // above the picker: the shell's own prompt may draw a ❯
+		}
 		if top < 0 && styleChoice(l) != "" {
 			top = i
 		}
@@ -490,7 +508,10 @@ func themePickerKeys(screen string) []string {
 		}
 	}
 	if top < 0 {
-		return nil
+		if cur < 0 {
+			return nil // unnumbered choices whose cursor is not drawn yet
+		}
+		return []string{"enter"}
 	}
 	if cur < top {
 		cur = top // no cursor rendered yet: the first choice is already selected
@@ -500,6 +521,15 @@ func themePickerKeys(screen string) []string {
 		keys = append(keys, "up")
 	}
 	return append(keys, "enter")
+}
+
+// securityNotesKeys returns Enter for Claude Code's first-run "Security notes" page, which waits only for it ("Press
+// Enter to continue…", 2.1.318).
+func securityNotesKeys(screen string) []string {
+	if !strings.Contains(screen, "Security notes:") || !strings.Contains(screen, "Press Enter to continue") {
+		return nil
+	}
+	return []string{"enter"}
 }
 
 // unframed is the screen with a box's borders and padding taken out and its wrapped lines joined, which is how the
