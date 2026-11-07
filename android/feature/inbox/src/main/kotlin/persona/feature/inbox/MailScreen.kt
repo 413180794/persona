@@ -129,7 +129,7 @@ private fun MailDetail(
             try {
                 transport.setFlagged(requireNotNull(reference), mail.uid, targetFlag)
                 flagsChanged = true
-                message = message?.copy(flagged = targetFlag)
+                message = message.updatedIf(mail.uid) { it.copy(flagged = targetFlag) }
                 syncInbox()
                 error = null
             } catch (e: CancellationException) { throw e }
@@ -166,7 +166,7 @@ private fun MailDetail(
                     try {
                         transport.setSeen(ref, loaded.uid, true)
                         flagsChanged = true
-                        message = message?.copy(seen = true)
+                        message = message.updatedIf(loaded.uid) { it.copy(seen = true) }
                     } catch (_: Exception) {}
                 }
             }
@@ -456,3 +456,7 @@ internal fun mailAiText(mail: MailMessage): String = buildString {
         "${it.filename}（${it.mime.ifBlank { "未知类型" }}，${it.size.coerceAtLeast(0)} 字节）" // i18n-ignore: context for the model
     }.ifBlank { "无附件" }}") // i18n-ignore: context for the model
 }
+
+/** Applies [change] only while the page still shows message [uid]; a late reply for another message is dropped. */
+internal fun MailMessage?.updatedIf(uid: Long, change: (MailMessage) -> MailMessage): MailMessage? =
+    this?.let { if (it.uid == uid) change(it) else it }

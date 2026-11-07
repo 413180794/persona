@@ -86,7 +86,9 @@ fun ComposeMailPage(
         MailCompose.fieldValid(bcc, required = false)
 
     fun leave() {
-        if (edited && !sending) confirmDiscard = true else onDone()
+        // Closing mid-send would cancel the request with no result shown; wait for it to finish (#5706).
+        if (sending) return
+        if (edited) confirmDiscard = true else onDone()
     }
 
     LaunchedEffect(leaveRequest) {
