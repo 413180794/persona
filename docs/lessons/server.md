@@ -588,6 +588,11 @@ home volume (docs/operations/link.md "Without systemd").
   Walk components ourselves (`realPath` in `node/pathguard.go`), checking `offLimits` before each `Lstat`; lowercase comparisons because macOS is case-insensitive by default.
 - **One hung stat mustn't stall the batch**: network drives and sleeping disks hang too. `statPaths` runs 8 concurrently, waits at most 3 seconds overall, and treats nonresponses as `missing`.
 
+## Upload names the file system cannot take
+
+- **Name limits differ by file system**: Linux takes 255 bytes per name, APFS 255 characters, so a 100-character Chinese name (300 bytes) lands on a Mac and is refused on Linux. A folder upload keeps the file's own name, so `beginInto` probes with `Lstat` and, on `ENAMETOOLONG`, shortens with `splitName` before any byte is sent (and refuses at begin if the shortened name is still too long for that file system). Before, begin accepted the name and the node only refused after the whole body (up to 2 GB) had been received. Windows is unchanged: Go does not surface `ENAMETOOLONG` there.
+- **Test with more than 255 characters**: a shorter multibyte name passes on a Mac and fails on Linux, so the test would mean different things locally and in CI.
+
 ## ego cookies (2026-11-04, #1304)
 
 - **`task.cdp` permits only Target / Browser**: cookies use page `page.cdp("Network.setCookies" / "getAllCookies" / "deleteCookies")`; `Storage.getCookies` reports "task.cdp only supports Target. and Browser. commands".

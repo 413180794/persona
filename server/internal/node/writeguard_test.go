@@ -151,6 +151,23 @@ func TestDirUploadKeepsItsName(t *testing.T) {
 	}
 }
 
+// A name the file system cannot take (over 255 bytes on Linux, 255 characters on a Mac) is shortened as a numbered
+// copy's is, so the upload lands instead of failing once every byte has been sent.
+func TestDirUploadShortensANameTooLong(t *testing.T) {
+	n, home := writeNode(t)
+	long := strings.Repeat("长", 300)
+	out, err := dirUpload(t, n, "~/proj", "", "", long+".pdf", []byte("%PDF"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := long[:180] + ".pdf"; out.Name != want || out.Path != filepath.Join(home, "proj", want) {
+		t.Fatalf("got %+v, want name %s", out, want)
+	}
+	if b, err := os.ReadFile(out.Path); err != nil || string(b) != "%PDF" {
+		t.Fatalf("content %q %v", b, err)
+	}
+}
+
 // A taken name: refused before any byte with no policy, "name 2.ext" with keep, overwritten (keeping its
 // permissions) with replace; a folder of that name is never replaced.
 func TestDirUploadConflicts(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -116,8 +117,9 @@ func (u *uploads) chunk(id string, offset int64, data []byte) (int64, error) {
 	return up.written, nil
 }
 
-// beginInto opens an upload into a folder of the home (dest=dir) under the file's own name. With no conflict
-// policy a taken name is refused here already, before any byte is sent.
+// beginInto opens an upload into a folder of the home (dest=dir) under the file's own name, shortened as a numbered
+// copy's is when the file system cannot take it. With no conflict policy a taken name is refused here already, before
+// any byte is sent.
 func (n *Node) beginInto(dir, cwd, name, conflict string, size int64) (string, error) {
 	switch conflict {
 	case "", proto.UploadConflictReplace, proto.UploadConflictKeep:
@@ -129,6 +131,13 @@ func (n *Node) beginInto(dir, cwd, name, conflict string, size int64) (string, e
 		return "", err
 	}
 	clean := cleanName(name)
+	if _, err := os.Lstat(filepath.Join(real, clean)); errors.Is(err, syscall.ENAMETOOLONG) {
+		stem, ext := splitName(clean)
+		clean = stem + ext
+		if _, err := os.Lstat(filepath.Join(real, clean)); errors.Is(err, syscall.ENAMETOOLONG) {
+			return "", err // still too long for this file system (a lower limit, or the whole path)
+		}
+	}
 	if err := n.writable(filepath.Join(real, clean)); err != nil {
 		return "", err
 	}
