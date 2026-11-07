@@ -96,6 +96,13 @@ func engineHostsFor(c proto.EngineChoice, logf func(format string, args ...any))
 		case proto.EngineHerdr:
 			hc := herdr.New()
 			hc.Log = logf
+			if own := herdr.OwnSession(); logf != nil && own != "" {
+				if hc.Session == own {
+					logf("herdr: session %s (%s): this node's data directory has a herdr server of its own", own, hc.Socket)
+				} else { // HERDR_SESSION / HERDR_SOCKET_PATH in the node's environment (a node started in a herdr pane has them)
+					logf("herdr: this node's data directory has its own herdr session (%s), but its environment points at %s: using that, so its Agents belong to whichever node started that server", own, hc.Socket)
+				}
+			}
 			hs = append(hs, &herdrHost{c: hc})
 		case proto.EngineHerdrCore:
 			cc := herdrcore.New()

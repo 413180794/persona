@@ -65,6 +65,9 @@ func TestLiveHerdr(t *testing.T) {
 	cli := func(args ...string) string {
 		cmd := exec.Command(herdrBin, args...)
 		cmd.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + os.Getenv("XDG_CONFIG_HOME"), "PATH=/usr/bin:/bin"}
+		if s := herdr.Session(); s != "" { // the server of this data directory's session, not the default one
+			cmd.Env = append(cmd.Env, "HERDR_SESSION="+s)
+		}
 		out, _ := cmd.CombinedOutput()
 		return string(out)
 	}

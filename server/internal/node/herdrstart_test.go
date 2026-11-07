@@ -337,6 +337,67 @@ func TestHerdrServerEnvKeepsTheDataDirectory(t *testing.T) {
 	}
 }
 
+// Two nodes on one account with different data directories do not share one herdr server (#6482): the node of a
+// custom PERSONA_HOME talks to a herdr session of its own, and starts that server with the session in its environment,
+// so the panes (and the personad launch in them) belong to that node. The node of the default data directory keeps the
+// default server, and a server already running there — started by another data directory's node before this — is not
+// the custom node's.
+func TestHerdrServerOfACustomDataDirIsItsOwn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the session layout is not checked on Windows")
+	}
+	home := t.TempDir()
+	short, err := os.MkdirTemp("/tmp", "hs") // a unix socket's path is short (104 bytes on macOS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(short) })
+	cfg := filepath.Join(short, "cfg")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("HERDR_SOCKET_PATH", "")
+	t.Setenv("HERDR_SESSION", "")
+	clientOf := func(persona string) *herdr.Client {
+		t.Setenv("PERSONA_HOME", persona)
+		return engineHostsFor(proto.EngineChoice{Hosts: []string{proto.EngineHerdr}}, nil)[0].(*herdrHost).c
+	}
+	def, a, b := clientOf(""), clientOf(filepath.Join(home, "test-a")), clientOf(filepath.Join(home, "test-b"))
+	if def.Session != "" || def.Socket != filepath.Join(cfg, "herdr", "herdr.sock") {
+		t.Fatalf("the default data directory moved: session %q, socket %s", def.Session, def.Socket)
+	}
+	if a.Session == "" || b.Session == "" || a.Session == b.Session || a.Socket == def.Socket || a.Socket == b.Socket {
+		t.Fatalf("nodes share a server: %q %s / %q %s / default %s", a.Session, a.Socket, b.Session, b.Socket, def.Socket)
+	}
+	// A server answering on the default socket (another data directory's) is not an answer for the custom node.
+	if err = os.MkdirAll(filepath.Dir(def.Socket), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := herdr.Listen(def.Socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	if !herdrAlive(context.Background(), def.Socket) || herdrAlive(context.Background(), a.Socket) {
+		t.Fatalf("default alive %v, custom alive %v", herdrAlive(context.Background(), def.Socket), herdrAlive(context.Background(), a.Socket))
+	}
+	// What the server of the custom directory starts with.
+	env := withHerdrSession(herdrServerEnv(append(os.Environ(), "ANTHROPIC_API_KEY=sk-test"), "/bin/sh"), a.Session)
+	if !slices.Contains(env, "HERDR_SESSION="+a.Session) || slices.Contains(env, "ANTHROPIC_API_KEY=sk-test") {
+		t.Fatalf("server env %q", env)
+	}
+	if got := herdrUnitOf(a.Session); got == herdrUnit || strings.ContainsAny(got, "./ ") || herdrUnitOf("") != herdrUnit {
+		t.Fatalf("unit %q for session %q", got, a.Session)
+	}
+	if got := withHerdrSession([]string{"HOME=/h"}, ""); !slices.Equal(got, []string{"HOME=/h"}) {
+		t.Fatalf("default server env changed: %q", got)
+	}
+	for _, own := range []string{"HERDR_SESSION=mine", "HERDR_SOCKET_PATH=/s/h.sock"} { // what the user set stands
+		if got := withHerdrSession([]string{own}, a.Session); !slices.Equal(got, []string{own}) {
+			t.Fatalf("%s overridden: %q", own, got)
+		}
+	}
+}
+
 // The node starting with herdr down starts it — after the hub said it may (node.configure), not before.
 func TestHerdrAtNodeStartWaitsForTheHub(t *testing.T) {
 	n, _ := downHerdrNode(t)

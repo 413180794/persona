@@ -46,7 +46,7 @@ func (c *Client) StartControl(ctx context.Context, pane string, cols, rows int, 
 	if takeover {
 		args = append(args, "--takeover")
 	}
-	cmd := exec.Command(c.Bin, args...) // ctx ending lets go through Close: stdin first, a kill only if that fails
+	cmd := c.command(args...) // ctx ending lets go through Close: stdin first, a kill only if that fails
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

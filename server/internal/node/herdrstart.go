@@ -137,7 +137,7 @@ func (n *Node) startHerdr(ctx context.Context, h *herdrHost, why string) error {
 		n.logf("herdr: not running and not installed, not started (%s)", why)
 		return errHerdrNotInstalled
 	}
-	n.logf("herdr: not running, starting its server (%s): %s", why, bin)
+	n.logf("herdr: not running, starting its server (%s): %s%s", why, bin, sessionNote(h.c.Session))
 	start := time.Now()
 	exited, err := launchHerdr(ctx, bin, sock)
 	if err != nil {
@@ -209,12 +209,13 @@ func herdrBinary(ctx context.Context, bin string) string {
 }
 
 // herdrServerKeep are the variables the server's clean environment takes from the node's: who and where the user is,
-// the locale, where herdr's socket and config are (so it listens where the node looks), and where Persona's data
+// the locale, where herdr's socket, session and config are (so it listens where the node looks), and where Persona's data
 // directory is (PERSONA_HOME, and the older name the node still reads): every pane inherits it, and `personad launch`
 // and the hooks find the node's socket in that directory. Nothing else — no ANTHROPIC_*, no proxies, no PATH: the
 // login shell sets its own.
 var herdrServerKeep = append([]string{"HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE",
-	"XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_SOCKET_PATH"}, personaHomeNames()...)
+	"XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_SOCKET_PATH", "HERDR_SESSION"},
+	personaHomeNames()...)
 
 // personaHomeNames are the names identity.DataDir reads the data directory from.
 func personaHomeNames() []string {
@@ -237,6 +238,25 @@ func herdrServerEnv(environ []string, shell string) []string {
 		}
 	}
 	return append(out, "SHELL="+shell, "TERM=xterm-256color", "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
+}
+
+// withHerdrSession names the herdr session of the node's data directory in the server's environment (herdr.Session:
+// a custom PERSONA_HOME gets a session of its own, so two nodes on one account do not share a server, #6482), unless
+// the environment already says which session or socket the server is for. session "" (the default server): as is.
+func withHerdrSession(env []string, session string) []string {
+	if session == "" {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		if k, v, _ := strings.Cut(kv, "="); (k == "HERDR_SESSION" || k == "HERDR_SOCKET_PATH") && v != "" {
+			return env
+		} else if k == "HERDR_SESSION" || k == "HERDR_SOCKET_PATH" { // set but empty: as unset
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "HERDR_SESSION="+session)
 }
 
 // herdrServerArgv runs the server in the user's login shell with only env: env -i, so nothing else is inherited.
@@ -270,4 +290,12 @@ func (n *Node) herdrAtStart(ctx context.Context) {
 		!errors.Is(err, errHerdrInstalling) {
 		n.logf("herdr: not started at node start: %v", err)
 	}
+}
+
+// sessionNote tells a log line which herdr session the node uses when it is not the default server.
+func sessionNote(session string) string {
+	if session == "" {
+		return ""
+	}
+	return " (session " + session + ", the one of this data directory)"
 }

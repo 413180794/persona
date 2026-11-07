@@ -157,6 +157,8 @@ func TestReadLineCapsLength(t *testing.T) {
 }
 
 func TestSocketPath(t *testing.T) {
+	t.Setenv("HERDR_SESSION", "")
+	t.Setenv("PERSONA_HOME", "") // a custom data directory has a herdr session of its own (session.go)
 	t.Setenv("HERDR_SOCKET_PATH", "/x/h.sock")
 	if p := SocketPath(); p != "/x/h.sock" {
 		t.Fatal(p)
@@ -165,6 +167,62 @@ func TestSocketPath(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/cfg")
 	if p, want := SocketPath(), filepath.Join("/cfg", "herdr", "herdr.sock"); p != want {
 		t.Fatal(p)
+	}
+}
+
+// Two nodes on one account (a test node with a PERSONA_HOME of its own next to the everyday one) must not share one
+// herdr server: the panes of a shared server reach whichever node started it (#6482). A custom data directory gets a
+// herdr session of its own — its own socket and saved workspaces beside the default's — and the default data
+// directory stays on the default server.
+func TestSocketPathFollowsTheDataDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the session layout is not checked on Windows")
+	}
+	home := t.TempDir()
+	cfg := filepath.Join(t.TempDir(), "cfg")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("HERDR_SOCKET_PATH", "")
+	t.Setenv("HERDR_SESSION", "")
+	def := filepath.Join(cfg, "herdr", "herdr.sock")
+	at := func(persona string) string {
+		t.Setenv("PERSONA_HOME", persona)
+		return SocketPath()
+	}
+	for _, d := range []string{"", filepath.Join(home, ".persona"), "~/.persona", ".persona"} { // the default layouts
+		if got := at(d); got != def {
+			t.Errorf("PERSONA_HOME=%q: %s, want the default server's %s", d, got, def)
+		}
+	}
+	a, b := at(filepath.Join(home, "test-a")), at(filepath.Join(home, "test-b"))
+	sessions := filepath.Join(cfg, "herdr", "sessions") + string(filepath.Separator)
+	for _, got := range []string{a, b} {
+		if !strings.HasPrefix(got, sessions) || filepath.Base(got) != "herdr.sock" {
+			t.Errorf("a custom data directory is on %s, want a socket of a session under %s", got, sessions)
+		}
+	}
+	if a == b {
+		t.Errorf("two data directories share %s", a)
+	}
+	if again := at(filepath.Join(home, "test-a")); again != a {
+		t.Errorf("the same data directory moved from %s to %s", a, again)
+	}
+	if rel := at("test-a"); rel != a { // relative to HOME, as identity.DataDir reads it
+		t.Errorf("PERSONA_HOME=test-a: %s, want %s", rel, a)
+	}
+	t.Setenv("PERSONA_HOME", filepath.Join(home, "test-a"))
+	t.Setenv("HERDR_SOCKET_PATH", "/x/h.sock") // what the user chose wins
+	if got := SocketPath(); got != "/x/h.sock" {
+		t.Errorf("explicit socket: %s", got)
+	}
+	t.Setenv("HERDR_SOCKET_PATH", "")
+	t.Setenv("HERDR_SESSION", "default") // the default session is the default server
+	if got := SocketPath(); got != def {
+		t.Errorf("session default: %s, want %s", got, def)
+	}
+	t.Setenv("HERDR_SESSION", "mine") // so does a session the user chose
+	if got, want := SocketPath(), filepath.Join(cfg, "herdr", "sessions", "mine", "herdr.sock"); got != want {
+		t.Errorf("explicit session: %s, want %s", got, want)
 	}
 }
 

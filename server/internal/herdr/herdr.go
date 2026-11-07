@@ -26,6 +26,9 @@ type Client struct {
 	Bin string
 	// Socket is herdr's API socket; empty: the CLI only.
 	Socket string
+	// Session is the herdr session Socket belongs to ("" the default server): the CLI is told, so it reaches the
+	// same server as the socket (session.go).
+	Session string
 	// Log gets one line when calls to herdr start failing, more and more rarely while they go on (LogBackoff: 30 s
 	// after the first, up to an hour apart, with how many failed meanwhile), and one when they work again; nil: silent.
 	// Snapshot also logs once per streak of truncated session snapshots.
@@ -77,21 +80,27 @@ func (c *Client) note(method string, err error) {
 	}
 }
 
-func New() *Client { return &Client{Bin: "herdr", Socket: SocketPath()} }
+func New() *Client { return &Client{Bin: "herdr", Socket: SocketPath(), Session: Session()} }
 
-// SocketPath is where herdr listens: $HERDR_SOCKET_PATH, else herdr.sock in its config directory ($XDG_CONFIG_HOME/herdr,
-// else the platform's: ~/.config/herdr, %APPDATA%\herdr on Windows). On Windows the socket is a named pipe named after
-// this path (dialSocket); the path itself is not a file.
+// SocketPath is where herdr listens: $HERDR_SOCKET_PATH, else herdr.sock in the directory of its session (Session; the
+// default server's is its config directory: $XDG_CONFIG_HOME/herdr, else the platform's: ~/.config/herdr,
+// %APPDATA%\herdr on Windows; another session's is sessions/<name> below it). On Windows the socket is a named pipe
+// named after this path (dialSocket); the path itself is not a file.
 func SocketPath() string {
 	if p := os.Getenv("HERDR_SOCKET_PATH"); p != "" {
 		return p
 	}
-	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "herdr", "herdr.sock")
+	var d string
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
+		d = filepath.Join(x, "herdr")
+	} else {
+		d = platformConfigDir()
 	}
-	d := platformConfigDir()
 	if d == "" {
 		return ""
+	}
+	if s := Session(); s != "" {
+		d = filepath.Join(d, "sessions", s)
 	}
 	return filepath.Join(d, "herdr.sock")
 }
@@ -257,6 +266,7 @@ func (c *Client) run(ctx context.Context, out any, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.Bin, args...)
+	cmd.Env = c.env()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
@@ -555,7 +565,9 @@ func (c *Client) PaneRead(ctx context.Context, pane, source string, lines int) (
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, c.Bin, "pane", "read", pane, "--source", source, "--lines", fmt.Sprint(lines)).Output()
+	cmd := exec.CommandContext(ctx, c.Bin, "pane", "read", pane, "--source", source, "--lines", fmt.Sprint(lines))
+	cmd.Env = c.env()
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("herdr pane read: %w", err)
 	}
@@ -577,7 +589,9 @@ func (c *Client) PaneReadANSI(ctx context.Context, pane, source string, lines in
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, c.Bin, "pane", "read", pane, "--source", source, "--lines", fmt.Sprint(lines), "--format", "ansi").Output()
+	cmd := exec.CommandContext(ctx, c.Bin, "pane", "read", pane, "--source", source, "--lines", fmt.Sprint(lines), "--format", "ansi")
+	cmd.Env = c.env()
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("herdr pane read: %w", err)
 	}

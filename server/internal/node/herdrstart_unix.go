@@ -13,6 +13,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/osproc"
 )
 
@@ -23,13 +24,14 @@ import (
 // itself; systemd-run, which returns once the unit started).
 func launchHerdrServer(ctx context.Context, bin, sock string) (<-chan error, error) {
 	shell := userShell()
-	env := herdrServerEnv(os.Environ(), shell)
+	session := herdr.Session()
+	env := withHerdrSession(herdrServerEnv(os.Environ(), shell), session)
 	argv := herdrServerArgv(shell, bin, env)
 	sd, viaSystemd := systemdRun()
 	if viaSystemd {
-		argv = append([]string{sd, "--user", "--quiet", "--collect", "--unit=" + herdrUnit}, argv...)
+		argv = append([]string{sd, "--user", "--quiet", "--collect", "--unit=" + herdrUnitOf(session)}, argv...)
 	}
-	log := filepath.Join(os.TempDir(), "persona-herdr-server.log")
+	log := filepath.Join(os.TempDir(), herdrUnitOf(session)+".log")
 	out, err := os.OpenFile(log, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return nil, err
@@ -59,8 +61,23 @@ func launchHerdrServer(ctx context.Context, bin, sock string) (<-chan error, err
 	return exited, nil
 }
 
-// herdrUnit is the transient systemd unit the server runs as: one name, so a second start while it runs fails.
+// herdrUnit is the transient systemd unit the default server runs as: one name, so a second start while it runs fails.
+// A server of a herdr session (a custom data directory's, herdr.Session) is a unit of its own, so the servers of
+// two nodes on one account do not stop each other from starting; its log file is too.
 const herdrUnit = "persona-herdr-server"
+
+// herdrUnitOf is the unit (and log file) name of the server of session ("" the default one).
+func herdrUnitOf(session string) string {
+	if session == "" {
+		return herdrUnit
+	}
+	return herdrUnit + "-" + strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			return r
+		}
+		return '_' // systemd unit names allow little more than these
+	}, session)
+}
 
 // systemdRun is systemd-run when the node runs under a systemd user manager (Linux).
 func systemdRun() (string, bool) {

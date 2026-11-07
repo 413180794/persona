@@ -10,6 +10,8 @@ import (
 
 func TestSocketPathUnix(t *testing.T) {
 	t.Setenv("HERDR_SOCKET_PATH", "")
+	t.Setenv("HERDR_SESSION", "")
+	t.Setenv("PERSONA_HOME", "") // a custom data directory has a herdr session of its own (session.go)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("HOME", "/home/me")
 	if got, want := SocketPath(), "/home/me/.config/herdr/herdr.sock"; got != want {

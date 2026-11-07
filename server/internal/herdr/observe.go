@@ -49,6 +49,7 @@ type Frame struct {
 // left of the screen cut out, not the screen laid out again.
 func (c *Client) Observe(ctx context.Context, pane string, cols, rows int, fn func(Frame)) error {
 	cmd := exec.CommandContext(ctx, c.Bin, "terminal", "session", "observe", pane, "--cols", fmt.Sprint(cols), "--rows", fmt.Sprint(rows))
+	cmd.Env = c.env()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
