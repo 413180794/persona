@@ -220,6 +220,10 @@ func TestAllAPIModelPurposesReachTheSelectedModel(t *testing.T) {
 	var mu sync.Mutex
 	var model string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		var in struct{ Model string }
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		mu.Lock()
@@ -274,6 +278,10 @@ func TestBearerLauncherSavedSentAndCalled(t *testing.T) {
 	s, f, _ := modelService(t)
 	ctx := context.Background()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.Header.Get("authorization") != "Bearer private-test-key" || r.Header.Get("x-api-key") != "" {
 			t.Errorf("credential sent as authorization %q, x-api-key %q", r.Header.Get("authorization"), r.Header.Get("x-api-key"))
 		}
@@ -359,6 +367,10 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 	var mu sync.Mutex
 	var model string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		var in struct{ Model string }
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		mu.Lock()

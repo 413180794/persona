@@ -37,6 +37,10 @@ func TestParse(t *testing.T) {
 func TestHTTPClient(t *testing.T) {
 	var proxied atomic.Int32
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // not a proxy request: a node's port probe (GET /, node/ports.go) asks this server directly
+			http.NotFound(w, r)
+			return
+		}
 		proxied.Add(1)
 		if r.Method == http.MethodConnect {
 			w.WriteHeader(http.StatusForbidden) // enough to know the client came here; no tunnel needed
@@ -47,6 +51,10 @@ func TestHTTPClient(t *testing.T) {
 	t.Cleanup(proxy.Close)
 	var direct atomic.Int32
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/origin" { // only this test's request counts: a node's port probe (node/ports.go) asks GET /
+			http.NotFound(w, r)
+			return
+		}
 		direct.Add(1)
 		_, _ = io.WriteString(w, "direct")
 	}))
@@ -77,7 +85,7 @@ func TestHTTPClient(t *testing.T) {
 	t.Setenv("HTTPS_PROXY", proxy.URL)
 	t.Setenv("NO_PROXY", "")
 	c = HTTPClient(nil, 5*time.Second)
-	resp, err = c.Get(origin.URL)
+	resp, err = c.Get(origin.URL + "/origin")
 	if err != nil {
 		t.Fatal(err)
 	}

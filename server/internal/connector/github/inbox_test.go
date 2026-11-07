@@ -29,6 +29,10 @@ type fakeNotifications struct {
 
 func (f *fakeNotifications) server(t *testing.T) *Connector {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.requests = append(f.requests, r.Method+" "+r.URL.Path)

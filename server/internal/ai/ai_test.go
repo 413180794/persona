@@ -31,6 +31,10 @@ func TestFirstObject(t *testing.T) {
 
 func TestJSONCallsMessagesAPI(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.URL.Path != "/v1/messages" || r.Header.Get("x-api-key") != "k" {
 			t.Errorf("bad request %s %s", r.URL.Path, r.Header.Get("x-api-key"))
 		}
@@ -48,6 +52,10 @@ func TestJSONCallsMessagesAPI(t *testing.T) {
 
 func TestMessagesAPIWithBearer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.Header.Get("authorization") != "Bearer k" || r.Header.Get("x-api-key") != "" {
 			t.Errorf("a bearer gateway gets only Authorization: %q, x-api-key %q", r.Header.Get("authorization"), r.Header.Get("x-api-key"))
 		}
@@ -62,6 +70,10 @@ func TestMessagesAPIWithBearer(t *testing.T) {
 
 func TestJSONCallsResponsesAPI(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		var req struct {
 			Stream bool `json:"stream"`
 			Input  []struct {
@@ -116,6 +128,10 @@ func truncatingServer(t *testing.T, replies ...map[string]any) (*Client, *[]int)
 	t.Helper()
 	var seen []int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		var req struct {
 			MaxTokens int `json:"max_tokens"`
 		}

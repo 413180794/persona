@@ -37,6 +37,10 @@ func TestDownloadRetriesACutDownload(t *testing.T) {
 	f, gz := fileFor("personad-linux-amd64.gz", bin)
 	var tries atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if tries.Add(1) == 1 {
 			w.Header().Set("Content-Length", "999999")
 			w.Write(gz[:len(gz)/2]) // then the connection drops
@@ -68,7 +72,14 @@ func TestDownloadRefusesAnotherFile(t *testing.T) {
 	_, other := fileFor("personad-linux-amd64.gz", []byte("something else entirely, same name"))
 	f.Size = int64(len(other))
 	var tries atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { tries.Add(1); w.Write(other) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
+		tries.Add(1)
+		w.Write(other)
+	}))
 	defer srv.Close()
 	dir := t.TempDir()
 	if _, err := Download(context.Background(), srv.Client(), srv.URL, f, dir); !errors.Is(err, errMismatch) {

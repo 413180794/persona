@@ -43,6 +43,10 @@ func TestDDNSCloudflareAddressChange(t *testing.T) {
 	old, next := ddnsTestAddress(1), ddnsTestAddress(2)
 	var lists, patches atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.Header.Get("Authorization") != "Bearer "+token {
 			t.Error("missing bearer authorization")
 		}
@@ -121,6 +125,10 @@ func TestDDNSWebhookRetryAndSelection(t *testing.T) {
 	var calls atomic.Int32
 	received := make(chan ddnsAddresses, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/json" {
 			t.Error("incorrect webhook method or content type")
 		}

@@ -186,6 +186,10 @@ func TestProxyRefusesNamesThatLeadInside(t *testing.T) {
 func TestProxyGoesOutThroughTheHubsProxy(t *testing.T) {
 	var asked []string
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // not a proxy request: a node's port probe (GET /, node/ports.go) asks this server directly
+			http.NotFound(w, r)
+			return
+		}
 		asked = append(asked, r.Method+" "+r.Host+" "+r.Header.Get("Proxy-Authorization"))
 		if r.Method != http.MethodConnect {
 			http.Error(w, "connect only", 400)

@@ -21,6 +21,11 @@ type collapseAPNs struct {
 }
 
 func (f *collapseAPNs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Only pushes count: a node's port probe (GET /, node/ports.go) reaches this server too.
+	if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/3/device/") {
+		http.NotFound(w, r)
+		return
+	}
 	f.mu.Lock()
 	f.ids = append(f.ids, r.Header.Get("apns-collapse-id"))
 	first := len(f.ids) == 1

@@ -274,6 +274,10 @@ func TestRuntimeBodyTimeoutReleasesBrokerSlot(t *testing.T) {
 	p.Register("a", Rule{})
 	finished := make(chan struct{}, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 100*time.Millisecond)
 		defer cancel()
 		p.handler("a").ServeHTTP(w, r.WithContext(ctx))
@@ -302,6 +306,10 @@ func TestRuntimeBodyTimeoutReleasesBrokerSlot(t *testing.T) {
 
 func TestRuntimeHEADPreservesMetadataWithoutTruncatingPOST(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != http.MethodHead {
 			t.Error("upstream did not receive HEAD")
 		}

@@ -19,6 +19,10 @@ func TestProxyCarriesEverything(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // not a proxy request: a node's port probe (GET /, node/ports.go) asks this server directly
+			http.NotFound(w, r)
+			return
+		}
 		_ = r.ParseForm()
 		mu.Lock()
 		seen = append(seen, r.Method+" "+r.URL.Host+r.URL.Path)
@@ -66,6 +70,10 @@ func TestProxyCarriesEverything(t *testing.T) {
 // Without github.proxy the connector talks to GitHub directly, even when the environment names a proxy.
 func TestNoProxyIsDirect(t *testing.T) {
 	trap := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Host == "" { // not a proxy request: a node's port probe (GET /, node/ports.go) asks this server directly
+			http.NotFound(w, r)
+			return
+		}
 		t.Errorf("went through the environment's proxy: %s %s", r.Method, r.URL)
 		w.WriteHeader(http.StatusBadGateway)
 	}))
@@ -90,6 +98,10 @@ func TestNoProxyIsDirect(t *testing.T) {
 func TestBadProxy(t *testing.T) {
 	ctx := context.Background()
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		t.Errorf("went direct: %s", r.URL)
 	}))
 	t.Cleanup(gh.Close)

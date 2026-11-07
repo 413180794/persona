@@ -31,6 +31,10 @@ func TestPairURLMetadataContract(t *testing.T) {
 func TestPairCLIUsesLoopbackAndTemporaryToken(t *testing.T) {
 	p := pairCode{URL: "http://example.com:18660", Token: "jp_temporary", ExpiresAt: time.Now().Add(pairLifetime), HubID: "hub-example", FP: strings.Repeat("A", 43), TLSPort: 18662, Alt: []string{"https://example.com:18662"}}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != "POST" || r.URL.Path != "/api/v1/auth/pair-codes" || r.Header.Get("Authorization") != "Bearer master-secret" {
 			t.Error("bad local pairing request")
 		}

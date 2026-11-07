@@ -26,6 +26,10 @@ type fake struct {
 func newFake(t *testing.T, h func(w http.ResponseWriter, r *http.Request, body map[string]any)) *fake {
 	f := &fake{t: t, handler: h}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		var body map[string]any
 		if b, _ := io.ReadAll(r.Body); len(b) > 0 {
 			if err := json.Unmarshal(b, &body); err != nil {

@@ -30,6 +30,10 @@ func fakeArchiveAPI(t *testing.T) (*Connector, *[]string) {
 			{"id":5,"user":{"login":"bob"},"body":"这里要判空","path":"src/example.go","line":42,"created_at":"2026-11-01T09:05:00Z"}]`,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		seen = append(seen, r.URL.RequestURI())
 		mu.Unlock()

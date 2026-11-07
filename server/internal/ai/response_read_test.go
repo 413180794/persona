@@ -16,6 +16,10 @@ func TestMessagesResponseReadFailure(t *testing.T) {
 		t.Run(entry, func(t *testing.T) {
 			var calls atomic.Int32
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+					http.NotFound(w, r)
+					return
+				}
 				calls.Add(1)
 				body := `{"content":[{"type":"text","text":"{\"keep\":true}"}],"stop_reason":"end_turn"}`
 				status := http.StatusOK

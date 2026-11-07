@@ -38,6 +38,10 @@ func extensionModelService(t *testing.T, replies ...string) (*Service, *fakeHub,
 	var mu sync.Mutex
 	var calls []upstreamCall
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		var c upstreamCall
 		_ = json.NewDecoder(r.Body).Decode(&c)
 		c.Header = r.Header
@@ -236,6 +240,10 @@ func TestExtensionCompleteRespectsAHeldConnection(t *testing.T) {
 	var mu sync.Mutex
 	sent := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		sent++
 		mu.Unlock()

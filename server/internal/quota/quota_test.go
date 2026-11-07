@@ -77,6 +77,10 @@ func TestDoTakesOutTheEscapedKey(t *testing.T) {
 // The key goes nowhere it did not already go: another host, scheme or a redirect off the gateway is refused.
 func TestDoStaysOnTheGateway(t *testing.T) {
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		t.Errorf("the key reached another host: %s", r.Header.Get("Authorization"))
 	}))
 	defer other.Close()

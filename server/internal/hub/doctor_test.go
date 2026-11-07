@@ -37,6 +37,10 @@ func TestDoctorReadOnly(t *testing.T) {
 	var paths []string
 	redirect := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		paths = append(paths, r.URL.Path)
 		if r.Method != http.MethodGet || r.Header.Get("Authorization") != "Bearer "+token {
 			t.Error("doctor request must be authenticated and read-only")

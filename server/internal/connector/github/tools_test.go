@@ -44,6 +44,10 @@ func fakeAPI(t *testing.T) (*Connector, *[]string) {
 	}
 	var seen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		seen = append(seen, r.URL.RequestURI())
 		body, ok := routes[r.URL.Path]
 		if !ok {

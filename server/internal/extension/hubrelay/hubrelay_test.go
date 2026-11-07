@@ -16,7 +16,13 @@ import (
 // Without a proof key the relay sends no proof, and none an extension made either.
 func TestNoKeyNoProof(t *testing.T) {
 	var got http.Header
-	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Header.Clone() }))
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
+		got = r.Header.Clone()
+	}))
 	defer hub.Close()
 	h, err := Handler(Options{Hub: hub.URL, Manager: "work", Knows: func(tok string) bool { return tok == "pext_x" }})
 	if err != nil {
@@ -101,7 +107,15 @@ func relayDo(t *testing.T, relay, method, body string) (int, http.Header) {
 func TestNotReadyIsAnsweredHere(t *testing.T) {
 	var mu sync.Mutex
 	hits := 0
-	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { mu.Lock(); hits++; mu.Unlock() }))
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
+		mu.Lock()
+		hits++
+		mu.Unlock()
+	}))
 	defer hub.Close()
 	var ready sync.Mutex
 	up := false
@@ -134,6 +148,10 @@ func TestReplayedIsSentAgainWithANewProof(t *testing.T) {
 	var mu sync.Mutex
 	var proofs []string
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		proofs = append(proofs, r.Header.Get(extwire.HeaderManagerProof))
 		first := len(proofs)%2 == 1
@@ -178,6 +196,10 @@ func TestARefusalHoldsUntilTheNextConnection(t *testing.T) {
 	hits := 0
 	answer := func(w http.ResponseWriter) {} // what the hub says now
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		hits++
 		a := answer

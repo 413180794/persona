@@ -37,6 +37,10 @@ func newGateway(t *testing.T, accounts string, usage func(ids []string) (int, st
 }
 
 func (g *fakeGateway) serve(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+		http.NotFound(w, r)
+		return
+	}
 	g.mu.Lock()
 	g.calls = append(g.calls, r.Method+" "+r.URL.Path)
 	g.mu.Unlock()

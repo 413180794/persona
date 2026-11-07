@@ -37,6 +37,10 @@ func newCommentsServer(t *testing.T, m *machine) (*Connector, *commentsServer) {
 	t.Helper()
 	s := &commentsServer{answer: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		s.mu.Lock()
 		s.seen = append(s.seen, r.Method+" "+r.URL.Path)
 		s.auth = append(s.auth, r.Header.Get("Authorization"))
@@ -335,6 +339,10 @@ func TestRecallIsNotFooledByARedirect(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		seen = append(seen, r.Method+" "+r.URL.Path)
 		mu.Unlock()

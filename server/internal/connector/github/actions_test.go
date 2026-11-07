@@ -146,6 +146,10 @@ func TestAnUnreadableIDNeverFailsAPost(t *testing.T) {
 	posts := 0
 	id := ""
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		posts++
 		answer := `{"id":` + id + `,"html_url":"https://github.com/example-org/example-repo/issues/12#issuecomment-1"}`

@@ -3,6 +3,7 @@ package hub
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +25,11 @@ type flakyAPNs struct {
 }
 
 func (f *flakyAPNs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Only pushes count: a node's port probe (GET /, node/ports.go) reaches this server too.
+	if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/3/device/") {
+		http.NotFound(w, r)
+		return
+	}
 	f.mu.Lock()
 	f.n++
 	n := f.n

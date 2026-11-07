@@ -19,6 +19,10 @@ const (
 func fakeGitHub(t *testing.T, valid ...string) (*httptest.Server, *int) {
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" { // a node's port probe (node/ports.go), not this test's client
+			http.NotFound(w, r)
+			return
+		}
 		n++
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		for _, v := range valid {
