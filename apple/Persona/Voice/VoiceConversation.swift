@@ -403,11 +403,11 @@ struct VoiceDeps {
 
     // MARK: Socket
 
-    /// What `start` says now: the target, the conversation's last turns, and when it picks up again the captions so
-    /// far and the runs not over yet, each as last reported.
+    /// What `start` says now: the target, the conversation's last turns, whether the microphone cancels echo, and when
+    /// it picks up again the captions so far and the runs not over yet, each as last reported.
     var startFrame: VoiceStart {
         VoiceStart(model: model, voice: voice, target: VoiceTarget(key), recent: recent, history: history,
-                   resume: runs.filter { $0.state.isOpen })
+                   resume: runs.filter { $0.state.isOpen }, echoCancellation: audio?.cancelsEcho)
     }
 
     var history: [VoiceLine] {

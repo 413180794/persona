@@ -289,6 +289,7 @@ func (c *conversation) flushRing() {
 			text, c.sus.texts = c.sus.texts[0], c.sus.texts[1:]
 			c.remember("user", text, time.Now())
 			c.gate.user = time.Now()
+			c.gate.typed = c.gate.user
 			out = append(out, w.text(text))
 		default:
 			c.sus.state, c.sus.flush, c.sus.failed, c.sus.spoke = "", false, 0, false

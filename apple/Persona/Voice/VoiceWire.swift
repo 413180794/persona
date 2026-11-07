@@ -365,6 +365,8 @@ nonisolated struct VoiceStart: Equatable, Sendable {
     var history: [VoiceLine] = []
     /// The runs not over yet, as last reported: only when it picks up again.
     var resume: [VoiceRun] = []
+    /// False: the microphone records without echo cancellation, so a caption of the user's may be the voice's own.
+    var echoCancellation: Bool?
 }
 
 /// Text frames the app sends.
@@ -373,7 +375,8 @@ nonisolated enum VoiceMessage {
         encode(StartFrame(model: nonEmpty(s.model), voice: nonEmpty(s.voice), protocolVersion: s.protocolVersion,
                           target: s.target.map { TargetFrame(machineID: $0.machineID, sessionID: $0.sessionID) },
                           recent: s.recent.isEmpty ? nil : s.recent, history: s.history.isEmpty ? nil : s.history,
-                          resume: s.resume.isEmpty ? nil : ResumeFrame(runs: s.resume.map(ResumeRun.init))))
+                          resume: s.resume.isEmpty ? nil : ResumeFrame(runs: s.resume.map(ResumeRun.init)),
+                          echoCancellation: s.echoCancellation))
     }
 
     /// Stops what the voice is saying (not the agent).
@@ -415,10 +418,12 @@ nonisolated enum VoiceMessage {
         var recent: [VoiceLine]?
         var history: [VoiceLine]?
         var resume: ResumeFrame?
+        var echoCancellation: Bool?
 
         enum CodingKeys: String, CodingKey {
             case type, model, voice, target, recent, history, resume
             case protocolVersion = "protocol"
+            case echoCancellation = "echo_cancellation"
         }
     }
 

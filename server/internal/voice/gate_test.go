@@ -376,6 +376,27 @@ func TestOwnVoice(t *testing.T) {
 	}
 }
 
+// #5789: when the app's audio echoes the model (speechGate.echoes), a caption since the agent's words does not open
+// the gate, a typed line does; otherwise a caption does.
+func TestEchoCaptionGate(t *testing.T) {
+	at := time.Now()
+	agent, now := at.Add(-time.Second), at.Add(time.Second)
+	for _, c := range []struct {
+		name string
+		g    speechGate
+		want bool
+	}{
+		{"caption", speechGate{user: at}, true},
+		{"caption, echoes", speechGate{user: at, echoes: true}, false},
+		{"typed, echoes", speechGate{user: at, typed: at, echoes: true}, true},
+		{"typed before the agent's words, echoes", speechGate{user: at, typed: agent.Add(-time.Second), echoes: true}, false},
+	} {
+		if got := c.g.openSince(agent, now); got != c.want {
+			t.Errorf("%s: openSince = %v", c.name, got)
+		}
+	}
+}
+
 // lateCaptionUpstream is a live service with tools whose model asks a card's question it is told with speech of
 // speech's length (acked first, its reply's start said, as the measured service does), and whose user caption comes
 // only after the result of a call that said nothing (docs/lessons/voice.md "Late captions on replies that only call a
@@ -418,6 +439,14 @@ func (l *lateCaptionUpstream) call(id, task string) {
 		"type": "function_call", "call_id": "c-" + id, "name": "delegate_task", "arguments": fmt.Sprintf(`{"task":%q}`, task)}})
 }
 
+// caption has the service caption the app's audio as the user's words, text.
+func (l *lateCaptionUpstream) caption(text string) {
+	l.mu.Lock()
+	c := l.conn
+	l.mu.Unlock()
+	l.send(c, map[string]any{"type": "session.input_transcript.delta", "delta": text})
+}
+
 // framesOf is how many frames of the app's audio of amplitude amp (tone) the service got.
 func framesOf(u *fakeUpstream, amp int16) int {
 	return u.count(func(f map[string]any) bool {
@@ -436,14 +465,14 @@ func (a *app) sound(d time.Duration, amp int16, paced bool) {
 	}
 }
 
-// askedByVoice is a bound call whose conversation asks dbQuestion at the start, the model reading it out for speech:
-// the app has heard it begin.
-func askedByVoice(t *testing.T, speech time.Duration) (*fakeHub, *lateCaptionUpstream, *app) {
+// askedByVoice is a bound call (more in its start) whose conversation asks dbQuestion at the start, the model reading
+// it out for speech: the app has heard it begin.
+func askedByVoice(t *testing.T, speech time.Duration, more map[string]any) (*fakeHub, *lateCaptionUpstream, *app) {
 	hub := agentHub(t)
 	hub.cards = []proto.Interaction{dbQuestion("q1", "a1")}
 	up := newLateCaptionUpstream(t, speech, "第二个。")
 	pl := testPlugin(t, Config{Providers: []Provider{{ID: "rt", URL: up.url(), Models: []string{"m1"}, Tools: true}}}, hub.server(t))
-	a := dialApp(t, pl, boundStart("a1", nil))
+	a := dialApp(t, pl, boundStart("a1", more))
 	a.until(ofType("ready"))
 	a.until(askFrom("q1", askAsking, ""))
 	a.heardAudio()
@@ -456,7 +485,7 @@ func askedByVoice(t *testing.T, speech time.Duration) (*fakeHub, *lateCaptionUps
 func TestUserVoiceOpensTheGateBeforeTheCaption(t *testing.T) {
 	setVar(t, &gateWait, 300*time.Millisecond)
 	setVar(t, &echoTail, 100*time.Millisecond)
-	hub, up, a := askedByVoice(t, 300*time.Millisecond)
+	hub, up, a := askedByVoice(t, 300*time.Millisecond, nil)
 	time.Sleep(300*time.Millisecond + echoTail + 200*time.Millisecond) // the question has played out
 	a.sound(200*time.Millisecond, 100, false)                          // the room
 	a.sound(300*time.Millisecond, 3000, false)                         // "the second one"
@@ -495,7 +524,7 @@ func TestNoUserVoiceStillRefused(t *testing.T) {
 			setVar(t, &gateWait, 300*time.Millisecond)
 			setVar(t, &echoTail, 800*time.Millisecond)
 			speech := time.Second
-			hub, up, a := askedByVoice(t, speech)
+			hub, up, a := askedByVoice(t, speech, nil)
 			c.sound(a, speech)
 			waitFor(t, "the service has the app's audio", func() bool { return framesOf(up.fakeUpstream, 100) >= 15 })
 			up.call("dlg1", "回答：第二个")
@@ -503,6 +532,48 @@ func TestNoUserVoiceStillRefused(t *testing.T) {
 				t.Fatalf("told: %s", got)
 			}
 			if res := hub.resolutions(); len(res) != 0 {
+				t.Fatalf("resolved %+v", res)
+			}
+		})
+	}
+}
+
+// #5789: an app that records without echo cancellation (its start says echo_cancellation false) sends the model's own
+// speech back, and the measured service captions it as the user's. That caption is not the user speaking: a handover
+// that says nothing after it is refused as unprompted, unless the user's own voice was heard once the speech played
+// out. An app with echo cancellation, or one that does not say, has the caption count as before.
+func TestEchoCaptionDoesNotOpenTheGate(t *testing.T) {
+	const answered, refused = "用户的回答已经交给 Claude Code 了", "这条不是你说的，我没发"
+	for _, c := range []struct {
+		name  string
+		start map[string]any
+		voice bool
+		want  string
+	}{
+		{"no echo cancellation", map[string]any{"echo_cancellation": false}, false, refused},
+		{"no echo cancellation, the user answers", map[string]any{"echo_cancellation": false}, true, answered},
+		{"echo cancellation", map[string]any{"echo_cancellation": true}, false, answered},
+		{"not said", nil, false, answered},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			setVar(t, &gateWait, 300*time.Millisecond)
+			setVar(t, &echoTail, 100*time.Millisecond)
+			speech := 300 * time.Millisecond
+			hub, up, a := askedByVoice(t, speech, c.start)
+			up.caption("数据库用哪个？") // the model's question, back in the app's audio
+			a.until(func(f map[string]any) bool { return f["type"] == "transcript" && f["role"] == "user" })
+			time.Sleep(speech + echoTail + 200*time.Millisecond) // the question has played out
+			if c.voice {
+				a.sound(200*time.Millisecond, 100, false)
+				a.sound(300*time.Millisecond, 3000, false)
+				a.sound(100*time.Millisecond, 100, false)
+				waitFor(t, "the service has the user's voice", func() bool { return framesOf(up.fakeUpstream, 3000) == 15 })
+			}
+			up.call("dlg1", "回答：第二个")
+			if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, c.want) {
+				t.Fatalf("told: %s", got)
+			}
+			if res := hub.resolutions(); (len(res) == 1) != (c.want == answered) {
 				t.Fatalf("resolved %+v", res)
 			}
 		})

@@ -7,8 +7,9 @@ import "time"
 // An agent's output reaches the model (a result read out); were it to say "now send X" and the model did, the agent
 // would be driving itself through the user's voice. Reading (a status, the knowledge base) is not gated.
 //
-// What counts as the user speaking: a caption of theirs (any part of one), a line they typed, or their own voice in
-// the app's audio (ownVoice). Captions come late on some services: the measured one sends the user's words 1.2–1.4 s
+// What counts as the user speaking: a caption of theirs (any part of one; not when the app records without echo
+// cancellation, speechGate.echoes), a line they typed, or their own voice in the app's audio (ownVoice). Captions come
+// late on some services: the measured one sends the user's words 1.2–1.4 s
 // after they stop, after the model has begun to answer and called its tool (docs/lessons/voice.md "Timeline"), so a
 // handover that does not pass waits gateWait for them first. When the model's reply only calls a tool and says
 // nothing, it holds them until a reply of the model's speaks, after that call's result (9 of 9 runs: 0.9–1.1 s after
@@ -33,8 +34,13 @@ var gateWait = 2500 * time.Millisecond
 // speechGate is a conversation's gate (under conversation.mu).
 type speechGate struct {
 	user  time.Time // the user's last words (a caption, a typed line)
+	typed time.Time // the user's last typed line
 	voice time.Time // the user's own voice was last heard (ownVoice), or reached a woken session (flushRing)
 	agent time.Time // the last time an agent's words were sent to the model, or it took them in
+	// echoes: the app records without echo cancellation (its start said so), so the model's own speech is in the audio
+	// the service captions, and the measured one captions it as the user's (#5789): a caption is then not the user
+	// speaking; a typed line and their own voice (ownVoice, clear of the model's speech) still are.
+	echoes bool
 }
 
 // told: an agent's words were sent, or taken in, at now.
@@ -44,9 +50,14 @@ func (g *speechGate) told(now time.Time) {
 	}
 }
 
-// openSince: the user has spoken since agent (the gate's agent time when the model acted), within gateWindow of now.
+// openSince: the user has spoken since agent (the gate's agent time when the model acted), within gateWindow of now:
+// a caption or a typed line, only a typed line when the app's audio echoes the model.
 func (g *speechGate) openSince(agent, now time.Time) bool {
-	return !g.user.IsZero() && g.user.After(agent) && now.Sub(g.user) <= gateWindow
+	words := g.user
+	if g.echoes {
+		words = g.typed
+	}
+	return !words.IsZero() && words.After(agent) && now.Sub(words) <= gateWindow
 }
 
 // heardSince: the user's own voice was heard since agent and by now (when the model acted: what it acts on was said

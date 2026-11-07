@@ -212,6 +212,7 @@ enum VoiceSample: String, CaseIterable {
         func cue(_ pcm: Data) {}
         func clear() {}
         func stop() { task?.cancel() }
+        var cancelsEcho: Bool { true }
     }
 
     /// No microphone (it sends nothing up; the extension hears silence) and no speaker: the voice's PCM is counted, and
@@ -228,6 +229,9 @@ enum VoiceSample: String, CaseIterable {
         }
 
         func reconfigure(_ format: VoiceAudioFormat) throws { rate = format.outputRate }
+
+        /// Nothing goes up, so nothing of the voice comes back.
+        var cancelsEcho: Bool { true }
 
         func play(_ pcm: Data) {
             let now = Date.now

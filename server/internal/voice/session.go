@@ -313,6 +313,7 @@ func (c *conversation) begin() error {
 	}
 	c.mu.Lock()
 	c.p, c.w, c.model, c.modelID = p, newWire(p.Dialect), model, p.ID+"/"+model
+	c.gate.echoes = start.EchoCancellation != nil && !*start.EchoCancellation
 	if voicePattern.MatchString(start.Voice) && !gone { // a voice of the other upstream's may not exist here
 		c.voice = start.Voice
 	}
@@ -1513,6 +1514,7 @@ func (c *conversation) readApp() {
 			c.closeUser()
 			c.userText(text, true, true, time.Now())
 			c.gate.user = time.Now()
+			c.gate.typed = c.gate.user
 			w := c.w
 			held := c.holdText(text) // paused or waking: it wakes the upstream, and goes to the next session (suspend.go)
 			c.mu.Unlock()

@@ -104,6 +104,9 @@ nonisolated enum VoiceCapture: Equatable, Sendable {
     /// Drops everything queued and not yet played.
     func clear()
     func stop()
+    /// The microphone records with echo cancellation: what the speaker plays is taken out of it. Without it the voice
+    /// can come back as the user's caption, which the `start` frame tells the extension (docs/voice.md 3.2).
+    var cancelsEcho: Bool { get }
 }
 
 /// The microphone and the voice's loudness, about 20 times a second: an object of its own, so only the orb redraws.
@@ -186,4 +189,5 @@ final class NoVoiceAudio: VoiceAudio {
     func cue(_ pcm: Data) {}
     func clear() {}
     func stop() {}
+    var cancelsEcho: Bool { true }
 }

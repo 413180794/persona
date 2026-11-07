@@ -33,6 +33,7 @@ struct VoiceConversationTests {
         #expect(start["voice"] as? String == "marin")
         #expect(start["model"] == nil, "no model configuration: the extension's default")
         #expect(start["history"] == nil && start["resume"] == nil, "nothing to pick up on the first connection")
+        #expect(start["echo_cancellation"] as? Bool == true)
         #expect(rig.audio.running, "the microphone records from the start")
         #expect(rig.audio.format == .provisional)
 
@@ -40,6 +41,13 @@ struct VoiceConversationTests {
         #expect(call.phase == .live(.listening))
         #expect(call.target?.agentLabel == "Claude Code")
         #expect(call.features.contains("resume"))
+    }
+
+    @Test func startSaysTheMicrophoneHasNoEchoCancellation() async throws {
+        let rig = VoiceRig()
+        rig.audio.cancelsEcho = false
+        let (_, socket) = await started(rig)
+        #expect(try #require(socket.start)["echo_cancellation"] as? Bool == false)
     }
 
     @Test func theModelComesFromTheUseAndUnverifiedIsUsable() async throws {

@@ -118,6 +118,7 @@ final class FakeVoiceSocket: VoiceSocket, @unchecked Sendable {
 /// The call's audio without a microphone or speaker.
 @MainActor final class FakeVoiceAudio: VoiceAudio {
     var failStart = false
+    var cancelsEcho = true
     /// What a failing start throws.
     var startError = VoiceAudioError.engine
     private(set) var format: VoiceAudioFormat?

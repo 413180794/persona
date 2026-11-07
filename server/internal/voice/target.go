@@ -35,6 +35,8 @@ type startFrame struct {
 	Resume  *struct {
 		Runs []resumeRun `json:"runs"`
 	} `json:"resume"`
+	// EchoCancellation false: the app records without echo cancellation (absent: not said, taken as with it).
+	EchoCancellation *bool `json:"echo_cancellation"`
 }
 
 type wireLine struct {

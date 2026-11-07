@@ -165,6 +165,11 @@ struct VoiceWireTests {
         #expect(((stamp["resume"] as? [String: Any])?["runs"] as? [[String: Any]])?.first?["started_at"] as? String == "2026-11-06T10:00:00Z")
     }
 
+    @Test func startSaysWhetherTheMicrophoneCancelsEcho() throws {
+        #expect(object(VoiceMessage.start(VoiceStart(echoCancellation: false)))?["echo_cancellation"] as? Bool == false)
+        #expect(object(VoiceMessage.start(VoiceStart(echoCancellation: true)))?["echo_cancellation"] as? Bool == true)
+    }
+
     @Test func interruptTextAndResend() {
         #expect(object(VoiceMessage.interrupt)?["type"] as? String == "interrupt")
         let text = object(VoiceMessage.text("说个笑话 \"好\" 换行\n"))
