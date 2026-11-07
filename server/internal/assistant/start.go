@@ -119,7 +119,7 @@ func (s *Service) prepareSpace(ctx context.Context, machine, space string) (stri
 
 // startOn starts a new conversation on machine: the directory prepared, the model configuration of p.Purpose ("" is
 // the main chat's) applied, then the node's assistant.send (headless: no herdr tab, streamed tokens, any launcher per message).
-func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (proto.Session, error) {
+func (s *Service) startOn(ctx context.Context, machine string, p StartParams, main bool) (proto.Session, error) {
 	if p.Space != "" && p.Space != SpaceHealth {
 		return proto.Session{}, badRequest(fmt.Errorf("space %q: health or none", p.Space))
 	}
@@ -134,7 +134,7 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 		return proto.Session{}, err
 	}
 	params := map[string]any{"cwd": cwd, "launcher": p.Launcher, "text": p.Text, "images": p.Images, "permission_mode": p.PermissionMode,
-		"effort": p.Effort}
+		"effort": p.Effort, "is_main": main}
 	if p.GuestTools != nil {
 		// The node starts it with no built-in tools and only these of Persona's (node/assistant_guest.go).
 		params["guest"] = map[string]any{"tools": p.GuestTools}
@@ -175,6 +175,10 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 	if p.Main {
 		return s.startMain(ctx, p)
 	}
+	return s.startConversationOn(ctx, p, false)
+}
+
+func (s *Service) startConversationOn(ctx context.Context, p StartParams, main bool) (proto.Session, error) {
 	machine := p.MachineID
 	if machine == "" {
 		machine = s.settings(ctx).MachineID
@@ -186,7 +190,7 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 	// manager's authorization until the resulting conversation's origin is recorded.
 	finishStart := s.beginAssistantStart(machine)
 	defer finishStart()
-	sess, err := s.startOn(ctx, machine, p)
+	sess, err := s.startOn(ctx, machine, p, main)
 	if errors.Is(err, ErrNoDevice) && p.MachineID == "" {
 		return proto.Session{}, errNoAssistantMachine
 	}
@@ -282,7 +286,7 @@ func (s *Service) startMain(ctx context.Context, p StartParams) (proto.Session, 
 	}
 	p.MachineID, p.Purpose, p.Main = "", "", false
 	p.Origin, p.OriginRef = OriginUser, "" // the main conversation is the user's, whatever channel opened it
-	sess, err := s.start(ctx, p)
+	sess, err := s.startConversationOn(ctx, p, true)
 	if err != nil {
 		return proto.Session{}, err
 	}
@@ -571,6 +575,7 @@ func (s *Service) SendParams(ctx context.Context, p SendParams) (map[string]any,
 	if params == nil {
 		params = map[string]any{}
 	}
+	params["is_main"] = false
 	if s.isGuest(ctx, p.MachineID, p.SessionID) {
 		// A guest conversation keeps what it started on: no launcher, model, runtime or mode picked for a message
 		// (the node refuses a change too, node/assistant_guest.go).
@@ -608,6 +613,7 @@ func (s *Service) SendParams(ctx context.Context, p SendParams) (map[string]any,
 // schedules for itself (runTask) all go through here.
 func (s *Service) sendModel(ctx context.Context, machine, sid string, p map[string]any) error {
 	cfg := s.settings(ctx)
+	p["is_main"] = cfg.Main != "" && cfg.Main == sid && cfg.MachineID == machine
 	followsSetting := cfg.Main != "" && cfg.Main == sid && cfg.MachineID == machine || s.isTaskConversation(ctx, machine, sid)
 	l, _ := p["launcher"].(string)
 	if l == "" && !followsSetting {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/runtimepkg"
 )
@@ -129,6 +130,7 @@ type sdkStart struct {
 	plugin                         string         // --plugin-dir, or ""
 	launcherArgs                   []string       // a managed launcher's own claude args
 	env                            map[string]string
+	compaction                     *assistantCompaction
 }
 
 // options are the persona_start options: the SDK's query() options for the start (CONTRACT §3).
@@ -172,6 +174,17 @@ func (s sdkStart) options(claude string) (map[string]any, error) {
 			env = map[string]any{}
 		}
 		for k, v := range pinnedEnv(s.env) {
+			env[k] = v
+		}
+		settings["env"] = env
+	}
+	if s.compaction != nil {
+		env, _ := settings["env"].(map[string]any)
+		if env == nil {
+			env = map[string]any{}
+		}
+		for _, kv := range s.compaction.env() {
+			k, v, _ := strings.Cut(kv, "=")
 			env[k] = v
 		}
 		settings["env"] = env
@@ -247,6 +260,9 @@ func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []strin
 		base = withoutDeadProxies(base, own, l.BaseURL, func(msg string) { n.logf("assistant: launcher %s: %s", launcher, msg) })
 	} else if d := n.claudeStartDir.Load(); d != nil && *d != "" { // plain claude: as launcherCommand
 		base = append(base, "CLAUDE_CONFIG_DIR="+proto.ExpandHome(*d, userHome()))
+	}
+	if s.compaction != nil {
+		base = identity.Environment(base, s.compaction.env()...)
 	}
 	opts, err := s.options(b.claude)
 	if err != nil {

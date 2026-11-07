@@ -95,12 +95,12 @@ func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := got.(map[string]any)
-	if p["launcher"] != "conv" || p["model"] != nil || p["effort"] != "high" || p["model_fingerprint"] == nil || p["model_fingerprint"] != phone["model_fingerprint"] {
+	if p["launcher"] != "conv" || p["model"] != nil || p["effort"] != "high" || p["model_fingerprint"] == nil || p["model_fingerprint"] != phone["model_fingerprint"] || p["is_main"] != true || phone["is_main"] != true {
 		t.Fatalf("assistant.model = %v, the phone's message runs on %v", p, phone)
 	}
 	// Another conversation the hub doesn't list yet (the node just started) keeps its own: nothing to say.
 	params, _ = json.Marshal(map[string]any{"session_id": "side"})
-	if got, err := nodeAsks(ctx, n.m, "assistant.model", params); err != nil || len(got.(map[string]any)) != 0 {
+	if got, err := nodeAsks(ctx, n.m, "assistant.model", params); err != nil || len(got.(map[string]any)) != 1 || got.(map[string]any)["is_main"] != false {
 		t.Fatalf("an unlisted conversation: %v %v", got, err)
 	}
 }

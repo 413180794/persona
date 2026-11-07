@@ -51,6 +51,7 @@ type sessionState struct {
 	ModelEffort      string    `json:"model_effort,omitempty"`
 	Runtime          string    `json:"runtime,omitempty"` // the assistant runtime it was asked to run on (assistant_sdk.go)
 	Cwd              string    `json:"cwd"`
+	IsMain           bool      `json:"is_main,omitempty"`
 	StartedAt        time.Time `json:"started_at"`
 	// AppMode / AppEffort: the permission mode and effort the app set on an assistant conversation (modes.go). They
 	// win over what its transcript recorded and outlive the node: an old "default" there no longer locks it in.

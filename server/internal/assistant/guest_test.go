@@ -220,7 +220,7 @@ func TestGuestConversationContextAndSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(params) != 1 || params["text"] != "more" {
+	if len(params) != 2 || params["text"] != "more" || params["is_main"] != false {
 		t.Fatalf("a guest's send params: %v", params)
 	}
 }

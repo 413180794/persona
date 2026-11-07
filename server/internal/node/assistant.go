@@ -43,8 +43,10 @@ const assistantIdleTimeout = 20 * time.Minute
 // interactive sessions, so a process about to be let go with more than assistantIdleCompact in context is sent
 // /compact first, while its cache is still warm: the next start reads a summary instead, and nobody waits for it.
 const (
-	assistantCompactWindow = "200000"
-	assistantIdleCompact   = 150_000
+	assistantCompactWindow     = 200_000
+	assistantIdleCompact       = 150_000
+	assistantMainCompactWindow = 400_000
+	assistantMainIdleCompact   = 300_000
 )
 
 // A process with background tasks or monitors running is kept: they are its children, and their notifications are
@@ -104,26 +106,27 @@ type assistantProc struct {
 	settingsMu sync.Mutex                               // serializes settings until their control responses arrive
 	controls   map[string]chan assistantControlResponse // guarded by mu
 
-	mu          sync.Mutex
-	mode        string // permission mode / effort level acknowledged by Claude (modes.go)
-	effort      string
-	model       modelExecution
-	fingerprint string
-	canBypass   bool // started with --permission-mode bypassPermissions: only then can it switch there (needsRestartFor)
-	busy        bool
-	lastActive  time.Time
-	partial     strings.Builder // text of the assistant message being generated
-	lastDelta   time.Time
-	tasks       []string // running background tasks and monitors (descriptions), from background_tasks_changed
-	context     int      // tokens in the conversation's context at its last request (claude), or after a compaction
-	compacting  bool     // an idle compaction is running (compactIdle)
-	compacted   bool     // compactIdle ran in this process: it is let go when idle again
-	manual      bool     // the compaction running is the user's (assistant_compact.go): its end is reported
-	requested   bool     // its first request was logged
-	stderrTail  []string // its last assistantStderrTail stderr lines (watchAssistantStderr)
-	runtime     string   // proto.AssistantRuntimeAgentSDK when it runs on the bridge (assistant_sdk.go), "" on the CLI
-	fallback    string   // why it runs on the CLI though asked to run on the Agent SDK
-	sdkVersion  string   // the bridge's SDK version (its ready line)
+	mu            sync.Mutex
+	mode          string // permission mode / effort level acknowledged by Claude (modes.go)
+	effort        string
+	model         modelExecution
+	fingerprint   string
+	canBypass     bool // started with --permission-mode bypassPermissions: only then can it switch there (needsRestartFor)
+	busy          bool
+	lastActive    time.Time
+	partial       strings.Builder // text of the assistant message being generated
+	lastDelta     time.Time
+	tasks         []string // running background tasks and monitors (descriptions), from background_tasks_changed
+	context       int      // tokens in the conversation's context at its last request (claude), or after a compaction
+	compactIdleAt int
+	compacting    bool     // an idle compaction is running (compactIdle)
+	compacted     bool     // compactIdle ran in this process: it is let go when idle again
+	manual        bool     // the compaction running is the user's (assistant_compact.go): its end is reported
+	requested     bool     // its first request was logged
+	stderrTail    []string // its last assistantStderrTail stderr lines (watchAssistantStderr)
+	runtime       string   // proto.AssistantRuntimeAgentSDK when it runs on the bridge (assistant_sdk.go), "" on the CLI
+	fallback      string   // why it runs on the CLI though asked to run on the Agent SDK
+	sdkVersion    string   // the bridge's SDK version (its ready line)
 
 	// usageChecked: how far the transcript was checked for an impossible usage at the end of its turns
 	// (assistant_usage.go); 0: from the start.
@@ -344,6 +347,10 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	st, _ := n.state.get(id)
+	isMain := executionOption(options).IsMain
+	if len(options) == 0 {
+		isMain = st.IsMain
+	}
 	// A guest conversation (assistant_guest.go): a new one asked for, or one that is.
 	guest := st.Guest
 	if !resume {
@@ -405,6 +412,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 			return "", err
 		}
 	}
+	execution.IsMain = isMain && guest == nil
 	agent, err := n.assistantAgent(ctx, launcher)
 	if err != nil {
 		return "", err
@@ -485,13 +493,14 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 			return "", err
 		}
 	}
-	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd || st.Model != execution.Model || st.ModelFingerprint != execution.Fingerprint || st.ModelEffort != execution.Effort || st.Runtime != execution.Runtime {
+	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd || st.Model != execution.Model || st.ModelFingerprint != execution.Fingerprint || st.ModelEffort != execution.Effort || st.Runtime != execution.Runtime || st.IsMain != execution.IsMain {
 		started := st.StartedAt
 		if started.IsZero() {
 			started = time.Now().UTC()
 		}
 		st.Launcher, st.Cwd, st.StartedAt = launcher, cwd, started
 		st.Model, st.ModelFingerprint, st.ModelEffort, st.Runtime = execution.Model, execution.Fingerprint, execution.Effort, execution.Runtime
+		st.IsMain = execution.IsMain
 		n.state.put(id, st)
 	}
 
@@ -733,6 +742,15 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		"--include-partial-messages"}
 	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
 	settings, hooks := n.claudeStartSettings(context.Background(), launcher, "assistant", cwd)
+	compaction := n.assistantCompactionPolicy(launcher, cwd, settings, execution)
+	if hooks == "" && n.launcherOwnSettings(context.Background(), launcher) != "" {
+		compaction.ownSettings = ""
+	}
+	var settingsErr error
+	settings, settingsErr = n.assistantCompactionSettings(id, cwd, settings, compaction)
+	if settingsErr != nil {
+		return nil, settingsErr
+	}
 	if settings != "" {
 		args = append(args, "--settings", settings)
 	}
@@ -758,7 +776,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		args = append(args, "--session-id", id)
 	}
 	// Persona's own tools are few and used all the time: load them up front instead of behind ToolSearch.
-	env := identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
+	env := identity.Environment(os.Environ(), append([]string{"PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false"}, compaction.env()...)...)
 	guest := n.guestOf(id) != nil
 	if guest && execution.Runtime == proto.AssistantRuntimeAgentSDK {
 		return nil, errGuestAgent // the bridge takes no --tools (assistant_guest.go)
@@ -792,7 +810,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		}}}
 		compat.AddMCPAliases(mcpConfig["mcpServers"].(map[string]any))
 		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
-			allowedTools: strings.Join(append([]string{n.assistantTools()}, healthReportRules(cwd)...), ","), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks}
+			allowedTools: strings.Join(append([]string{n.assistantTools()}, healthReportRules(cwd)...), ","), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks, compaction: &compaction}
 		var err error
 		if cmd, first, err = n.sdkCommand(bridge, launcher, start, env); err != nil {
 			return nil, err
@@ -826,7 +844,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	started = true
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
 		stderrDone: make(chan struct{}), born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution),
-		fallback: fallback}
+		fallback: fallback, compactIdleAt: compaction.idle}
 	if first != nil {
 		p.runtime = proto.AssistantRuntimeAgentSDK
 		if err := p.write(first); err != nil {
@@ -1195,7 +1213,11 @@ func (p *assistantProc) reapable(now time.Time) bool {
 
 // idleCompactable: about to be let go with a context worth compacting first (assistantIdleCompact); p.mu is held.
 func (p *assistantProc) idleCompactable() bool {
-	return p.agent == "claude" && !p.compacting && !p.compacted && p.context >= assistantIdleCompact
+	threshold := p.compactIdleAt
+	if threshold == 0 {
+		threshold = assistantIdleCompact
+	}
+	return p.agent == "claude" && !p.compacting && !p.compacted && p.context >= threshold
 }
 
 // compactIdle sends /compact to an idle process. It is not a turn: the conversation stays as it was in the app (the

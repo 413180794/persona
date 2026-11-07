@@ -331,6 +331,13 @@ func providerEnv(l proto.ManagedLauncher, model, effort string, mainConversation
 			}
 		}
 	}
+	if mainConversation {
+		c := compactionLimits(false, providerCapacity(l, model))
+		env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = strconv.Itoa(c.window)
+		if c.capacity > 0 {
+			env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = strconv.Itoa(c.capacity)
+		}
+	}
 	return env
 }
 

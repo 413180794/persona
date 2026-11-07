@@ -159,7 +159,11 @@ func (c *codexConn) turn() string {
 // codexArgs are app-server's own flags: the persona MCP server (its session is the conversation's key until the
 // thread exists) with a timeout long enough for ask_user, nothing else; sandbox and approvals go with each thread
 // and turn.
-func codexArgs(bin, key string) []string {
+func codexArgs(bin, key string, windows ...int) []string {
+	window := fmt.Sprint(assistantCompactWindow)
+	if len(windows) > 0 {
+		window = fmt.Sprint(windows[0])
+	}
 	q := func(s string) string { b, _ := json.Marshal(s); return string(b) } // a JSON string is a TOML basic string
 	return compat.CodexMCPAliases([]string{
 		"-c", "mcp_servers.persona.command=" + q(bin),
@@ -176,7 +180,7 @@ func codexArgs(bin, key string) []string {
 		// own (~/.codex/memories) is one store for every Codex on the machine, so it stays off here.
 		"-c", "features.memories=false",
 		// Compact at about 200K like Claude (assistant.go assistantCompactWindow), not near the model's whole window.
-		"-c", "model_auto_compact_token_limit=" + assistantCompactWindow,
+		"-c", "model_auto_compact_token_limit=" + window,
 	})
 }
 
@@ -204,7 +208,8 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "persona"}, codexArgs(n.bin, key)...)...)
+	compaction := n.assistantCompactionPolicy(launcher, cwd, "", execution)
+	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "persona"}, codexArgs(n.bin, key, compaction.window)...)...)
 	cmd.Dir = root
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
 	gateEnv, releaseGates, nameGates := n.assistantLarkEnvNamed(cwd, id) // its addresses at the gate proxy go with the process

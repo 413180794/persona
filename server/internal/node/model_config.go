@@ -21,6 +21,7 @@ type modelExecution struct {
 	// Runtime: the assistant's runtime, proto.AssistantRuntimeAgentSDK or "" (the CLI; "cli" reads as ""). Omitted
 	// when empty so a fingerprint from before #2455 stays the same.
 	Runtime string `json:",omitempty"`
+	IsMain  bool   `json:",omitempty"`
 }
 
 func (m modelExecution) check() error {
@@ -63,9 +64,10 @@ func (n *Node) assistantModel(ctx context.Context, id string) (string, modelExec
 		Effort           string `json:"effort"`
 		ModelFingerprint string `json:"model_fingerprint"`
 		Runtime          string `json:"runtime"`
+		IsMain           bool   `json:"is_main"`
 	}
 	if n.peer == nil || n.peer.Call(ctx, "assistant.model", map[string]any{"session_id": id}, &res) != nil {
 		return "", modelExecution{}
 	}
-	return res.Launcher, modelExecution{Model: res.Model, Effort: res.Effort, UseEffort: res.ModelFingerprint != "", Fingerprint: res.ModelFingerprint, Runtime: res.Runtime}
+	return res.Launcher, modelExecution{Model: res.Model, Effort: res.Effort, UseEffort: res.ModelFingerprint != "", Fingerprint: res.ModelFingerprint, Runtime: res.Runtime, IsMain: res.IsMain}
 }
