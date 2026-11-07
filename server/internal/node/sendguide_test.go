@@ -27,7 +27,7 @@ func guidePane(t *testing.T, f *fakeHerdr, home, cwd string, guideAt func(prompt
 		case c.Method == "agent.prompt":
 			np++
 			if slices.Contains(lands, np) {
-				writeUserLine(t, home, cwd, sidA, str(c.Params["text"]))
+				appendTranscript(t, home, cwd, sidA, promptLine(cwd, str(c.Params["text"]), 0))
 			}
 			if s := guideAt(np); s != "" {
 				f.setScreens("w1:p1", s, s)

@@ -415,7 +415,7 @@ func TestDismissNoticeNeedsTheWholeScreen(t *testing.T) {
 }
 
 // A prompt left in the input box (seen once with an image: `[Image #1]` and the text, the agent done) gets one Enter;
-// a box that empties, or shows someone else's text, gets none.
+// a box that empties, or shows someone else's text, gets none. No transcript to watch: one look.
 func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 	withSubmitGrace(t, 100*time.Millisecond)
 	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi") // the box shows "fix the flaky test"
@@ -424,7 +424,7 @@ func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 
 	stuck := &fakePane{screens: []string{typed, empty}}
 	n := &Node{hosts: herdrHosts(stuck.serve(t))}
-	n.ensureSubmitted(ctx, "w1:p1", "fix the flaky test\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>")
+	n.ensureSubmitted(ctx, "w1:p1", "fix the flaky test\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>", time.Now(), nil)
 	if len(stuck.keys) != 1 || stuck.keys[0][0] != "enter" {
 		t.Fatalf("stuck prompt: keys %v", stuck.keys)
 	}
@@ -433,21 +433,21 @@ func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 	late := &fakePane{screens: []string{empty, typed}}
 	late.state = 1
 	l := &Node{hosts: herdrHosts(late.serve(t))}
-	l.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
+	l.ensureSubmitted(ctx, "w1:p1", "fix the flaky test", time.Now(), nil)
 	if len(late.keys) != 1 || late.keys[0][0] != "enter" {
 		t.Fatalf("late paste: keys %v", late.keys)
 	}
 
 	taken := &fakePane{screens: []string{empty}} // Claude took it by the time the grace ends
 	m := &Node{hosts: herdrHosts(taken.serve(t))}
-	m.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
+	m.ensureSubmitted(ctx, "w1:p1", "fix the flaky test", time.Now(), nil)
 	if len(taken.keys) != 0 {
 		t.Fatalf("pressed enter on a prompt Claude took: %v", taken.keys)
 	}
 
 	other := &fakePane{screens: []string{typed}}
 	o := &Node{hosts: herdrHosts(other.serve(t))}
-	o.ensureSubmitted(ctx, "w1:p1", "something else entirely")
+	o.ensureSubmitted(ctx, "w1:p1", "something else entirely", time.Now(), nil)
 	if len(other.keys) != 0 {
 		t.Fatalf("pressed enter on someone else's draft: %v", other.keys)
 	}
@@ -455,7 +455,7 @@ func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 	// A pane herdr cannot send whole even without colors: its bottom rows still show the stuck prompt (#6308).
 	cut := &fakePane{screens: []string{strings.Repeat("一行很长的中文输出\r\n", 40) + typed}, cutOver: 10, plainCutOver: 24}
 	c := &Node{hosts: herdrHosts(cut.serve(t))}
-	c.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
+	c.ensureSubmitted(ctx, "w1:p1", "fix the flaky test", time.Now(), nil)
 	if len(cut.keys) != 1 || cut.keys[0][0] != "enter" {
 		t.Fatalf("stuck prompt on a cut pane: keys %v (reads %v)", cut.keys, cut.readLines)
 	}
@@ -469,6 +469,8 @@ func TestStillPromptedIgnoresChips(t *testing.T) {
 		{"[Image #1]What two colors <attached_images> </attached_images>", "What two colors are in this picture?\n\n<attached_images>\n/x.jpg\n</attached_images>", true},
 		{"[Pasted text #1 +40 lines]", "a long paste", false},
 		{"fix the flaky test", "fix the flaky test", true},
+		{"[Image #1] fix the flaky test", "\n\nfix the flaky test\n\n<attached_images>\n/x.jpg\n</attached_images>", true}, // its first words, not a blank line
+		{"[Image #1]", "<attached_images>\n/x.jpg\n</attached_images>", false},                                             // only a picture: nothing to tell by
 		{"fix", "fix the flaky test", false},
 		{"", "anything", false},
 	} {

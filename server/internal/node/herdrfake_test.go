@@ -423,6 +423,13 @@ func withSubmitGrace(t *testing.T, grace time.Duration) {
 	t.Cleanup(func() { submitGrace = g })
 }
 
+// withSubmitWindow shortens how long a send waits for the transcript to take its prompt, and how often it looks.
+func withSubmitWindow(t *testing.T, window, poll time.Duration) {
+	w, p := submitWindow, submitPoll
+	submitWindow, submitPoll = window, poll
+	t.Cleanup(func() { submitWindow, submitPoll = w, p })
+}
+
 // hubPush is one notification the node sent the hub.
 type hubPush struct {
 	Event  string          `json:"event"`

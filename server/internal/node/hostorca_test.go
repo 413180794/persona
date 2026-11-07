@@ -49,6 +49,9 @@ func TestMain(m *testing.M) {
 	os.Unsetenv("CLAUDE_CONFIG_DIR")
 	// Nor the user's login shell: herdr's panes run zsh, whatever the machine's is (a test that wants another sets it).
 	herdrPaneShell = func() string { return "/bin/zsh" }
+	// A send looks at the box once after typing and confirms nothing: most fakes never write what was typed into the
+	// transcript, and would wait out the window (#6428). sendconfirm_test.go turns it on (withSubmitWindow).
+	submitWindow = 0
 	os.Exit(m.Run())
 }
 
