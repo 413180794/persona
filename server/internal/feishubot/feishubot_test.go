@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -148,6 +149,17 @@ func TestCardMarkdown(t *testing.T) {
 	}
 	if e := EscapeMarkdown("a*b_c <x>"); strings.ContainsAny(e, "*_<>") {
 		t.Fatalf("escaped %q", e)
+	}
+}
+
+// "~" is escaped as the numeric &#126; like every other character: in HTML &sim; is "∼" (U+223C), not "~" (#4420).
+func TestEscapeMarkdownTilde(t *testing.T) {
+	e := EscapeMarkdown("cd ~/work")
+	if !strings.Contains(e, "&#126;") || strings.Contains(e, "&sim;") {
+		t.Fatalf("escaped %q", e)
+	}
+	if got := html.UnescapeString(e); got != "cd ~/work" {
+		t.Fatalf("unescaped %q", got)
 	}
 }
 

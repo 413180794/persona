@@ -291,7 +291,7 @@ func linkAddress(u string) string {
 }
 
 var mdEscaper = strings.NewReplacer("\\", "&#92;", "*", "&#42;", "_", "&#95;", "`", "&#96;", "[", "&#91;", "]", "&#93;",
-	"~", "&sim;", "<", "&#60;", ">", "&#62;", "#", "&#35;", "|", "&#124;")
+	"~", "&#126;", "<", "&#60;", ">", "&#62;", "#", "&#35;", "|", "&#124;")
 
 // EscapeMarkdown makes text show as it is in a card's Markdown (names, titles, what a user typed).
 func EscapeMarkdown(s string) string { return mdEscaper.Replace(s) }
