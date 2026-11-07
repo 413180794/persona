@@ -8,6 +8,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db/dbtest"
+	"github.com/nwverse/persona/server/internal/testhome"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -20,5 +21,13 @@ func TestMain(m *testing.M) {
 		}
 		return
 	}
-	os.Exit(dbtest.Main(m))
+	os.Exit(testhome.Main(func() int { return dbtest.Main(m) }))
+}
+
+// The package's tests never see the developer's HOME or PERSONA_HOME (testhome); the two tests that start the
+// assistant need a database and skip in CI, this one keeps the TestMain wiring from being dropped there.
+func TestTestsRunInAThrowAwayHome(t *testing.T) {
+	if !testhome.Active() || os.Getenv("PERSONA_HOME") != "" {
+		t.Fatalf("not isolated: active %v, PERSONA_HOME %q", testhome.Active(), os.Getenv("PERSONA_HOME"))
+	}
 }

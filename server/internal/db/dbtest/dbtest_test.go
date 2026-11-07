@@ -69,20 +69,30 @@ func TestOwnDatabases(t *testing.T) {
 	tag := hex.EncodeToString(buf)
 	old := "persona_test_" + itoa(time.Now().Add(-7*time.Hour).Unix()) + "_" + tag
 	other := "persona_test_sweep_" + tag
-	for _, n := range []string{old, other} {
+	oldManager := old + "_manager" // the assistant's second database of a run that was killed
+	for _, n := range []string{old, oldManager, other} {
 		_, _ = admin.Exec(ctx, `DROP DATABASE IF EXISTS "`+n+`"`)
 		if _, err := admin.Exec(ctx, `CREATE DATABASE "`+n+`"`); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Cleanup(func() { _, _ = admin.Exec(context.Background(), `DROP DATABASE IF EXISTS "`+other+`"`) })
-	_, done, err := Own(ctx, base)
+	runURL, done, err := Own(ctx, base)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The assistant a test starts makes a second database next to the run's (assistant/owndb.go): done drops it too.
+	runPath, _ := url.Parse(runURL)
+	ownManager := "/" + strings.TrimPrefix(runPath.Path, "/") + "_manager"
+	if _, err := admin.Exec(ctx, `CREATE DATABASE "`+strings.TrimPrefix(ownManager, "/")+`"`); err != nil {
+		t.Fatal(err)
+	}
 	done()
-	if exists("/"+old) || !exists("/"+other) {
-		t.Fatalf("sweep: old %v, other %v", exists("/"+old), exists("/"+other))
+	if exists("/"+old) || exists("/"+oldManager) || !exists("/"+other) {
+		t.Fatalf("sweep: old %v, old manager %v, other %v", exists("/"+old), exists("/"+oldManager), exists("/"+other))
+	}
+	if exists(ownManager) {
+		t.Fatal("the run's second database is still there")
 	}
 }
 

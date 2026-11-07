@@ -34,6 +34,10 @@ const stale = 6 * time.Hour
 
 var ownName = regexp.MustCompile(`^persona_test_(\d{10})_[0-9a-f]{8}$`)
 
+// ownLeftover is a run's database or the second one the assistant made next to it (owndb.go, "<database>_manager"): a
+// test that starts the assistant with a state directory of its own gets one, and it outlives the run unless dropped.
+var ownLeftover = regexp.MustCompile(`^persona_test_(\d{10})_[0-9a-f]{8}(_manager)?$`)
+
 // ownedBy says whether u is already a run's own database (set by a parent test binary).
 func ownedBy(u string) bool {
 	pu, err := url.Parse(u)
@@ -93,6 +97,7 @@ func Own(ctx context.Context, base string) (string, func(), error) {
 	return own.String(), func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		drop(ctx, admin, name+"_manager")
 		drop(ctx, admin, name)
 		_ = admin.Close(ctx)
 	}, nil
@@ -117,7 +122,7 @@ func sweep(ctx context.Context, admin *pgx.Conn) {
 		if rows.Scan(&name) != nil {
 			continue
 		}
-		m := ownName.FindStringSubmatch(name)
+		m := ownLeftover.FindStringSubmatch(name)
 		if m == nil {
 			continue // not one of ours (persona_test_deploy…)
 		}

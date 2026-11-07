@@ -19,6 +19,8 @@ CI runs server `go vet ./...` and `go test -count=1 ./...` on Linux (`.github/wo
 (`server/`, `sdk/go/`, `spec/fixtures/`, `schema/extension/`, `integrations/`, etc.; list in the workflow). New pushes on the same branch cancel old running jobs.
 If server tests start reading other repository files, add their paths. CI has no Postgres; database tests skip without `PERSONA_TEST_DATABASE_URL`, still relying on `scripts/test/test-server.sh` on the hub machine.
 
+A test binary never touches the developer's real `~/.persona`: the packages that start Persona processes (`internal/hub`, `internal/assistant`) run through `testhome.Main` in their `TestMain`, with `HOME` set to an empty directory and `PERSONA_HOME` unset, and the run fails if anything created `<HOME>/.persona`. A test that needs state sets `PERSONA_HOME` (`t.Setenv`) to a directory of its own, as the two assistant-process tests in `internal/hub` do. A test started by hand with `go test` used to rewrite the real hub's assistant `manager.json` and `secret.key` (the next run's assistant then never came up); `scripts/test/test-server.sh` runs with a throw-away `HOME` already.
+
 ## Fast local checks (`scripts/check-fast.sh`, #2849)
 
 Runs only relevant second-scale checks based on git changes, with independent checks in parallel; useful before committing:

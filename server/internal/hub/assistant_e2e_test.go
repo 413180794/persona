@@ -210,6 +210,7 @@ func TestAssistantProcessIsSupervised(t *testing.T) {
 	h, srv, _ := newBusHub(t)
 	t.Setenv("PERSONA_TEST_ASSISTANT", "1") // the test binary is the assistant (TestMain)
 	t.Setenv("PERSONA_DATABASE_URL", os.Getenv("PERSONA_TEST_DATABASE_URL"))
+	t.Setenv("PERSONA_HOME", shortTempDir(t)) // the child keeps its manager state here, not in the real ~/.persona
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -265,6 +266,7 @@ func TestAssistantProcessIsSupervised(t *testing.T) {
 func TestAssistantStopsWithItsHub(t *testing.T) {
 	h, srv, _ := newBusHub(t)
 	tok := busToken(t, h, busAssistant, "助手")
+	t.Setenv("PERSONA_HOME", shortTempDir(t)) // the child keeps its manager state here, not in the real ~/.persona
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
