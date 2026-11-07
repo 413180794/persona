@@ -377,7 +377,6 @@ find_personad() {
 		[ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
 	done
 	command -v personad 2>/dev/null && return 0
-	command -v personad 2>/dev/null && return 0
 	return 1
 }
 
@@ -407,7 +406,6 @@ if [ -z "$BIN" ]; then
 	dest="${PERSONA_HOME:-$HOME/.persona}/bin"
 	mkdir -p "$dest"
 	gzip -dc "$tmp/$archive" > "$tmp/personad" && chmod 755 "$tmp/personad" && mv "$tmp/personad" "$dest/personad" || fail "could not unpack $archive"
-	ln -sf personad "$dest/personad"
 	BIN="$dest/personad"
 	echo "personad installed at $BIN"
 fi

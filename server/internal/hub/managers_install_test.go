@@ -1,15 +1,21 @@
 package hub
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +112,52 @@ func TestManagerInstallScript(t *testing.T) {
 	runDockerScript(t, n, id, srv.URL, again.Code, script)
 	if status, _ := get("/i/mi_0123456789abcdef0123456789abcdef/docker"); status != 404 {
 		t.Fatalf("unknown code's docker script: %d", status)
+	}
+}
+
+// On a computer with no personad, the service script downloads it (checked against the sums the hub gave) to
+// bin/personad and joins with it: the file is the program itself, not a link, and the join runs.
+func TestManagerInstallScriptDownloadsPersonad(t *testing.T) {
+	plat := map[string]string{"linux": "linux", "darwin": "darwin"}[runtime.GOOS] + "-" + map[string]string{"amd64": "amd64", "arm64": "arm64"}[runtime.GOARCH]
+	if strings.HasPrefix(plat, "-") || strings.HasSuffix(plat, "-") {
+		t.Skip("no build for this platform")
+	}
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	_, _ = zw.Write([]byte("#!/bin/sh\necho \"personad $*\" >> \"$HOME/calls\"\n"))
+	_ = zw.Close()
+	sum := sha256.Sum256(gz.Bytes())
+	dl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/personad-"+plat+".gz" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(gz.Bytes())
+	}))
+	defer dl.Close()
+	script := managerInstallScript(managerScript{ID: "m-0a1b2c", Name: "Work", Hub: "https://hub.example.com", Code: "mi_x", DL: dl.URL,
+		Version: "v1", Sums: map[string]string{"personad-" + plat + ".gz": hex.EncodeToString(sum[:])}})
+	f := filepath.Join(t.TempDir(), "install.sh")
+	if err := os.WriteFile(f, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	for _, dir := range []string{home, filepath.Join(home, ".persona", "bin")} { // where it is run from matters to ln
+		_ = os.MkdirAll(dir, 0o755)
+		cmd := exec.Command("sh", f)
+		cmd.Dir = dir
+		// No proxy of the machine running the test: the download comes from this test's own server.
+		cmd.Env = append(os.Environ(), "HOME="+home, "PERSONA_HOME=", "PATH=/usr/bin:/bin", "http_proxy=", "HTTP_PROXY=",
+			"https_proxy=", "HTTPS_PROXY=", "all_proxy=", "ALL_PROXY=", "no_proxy=*", "NO_PROXY=*", "CURL_HOME="+home)
+		out, err := cmd.CombinedOutput()
+		bin := filepath.Join(home, ".persona", "bin", "personad")
+		fi, lerr := os.Lstat(bin)
+		calls, _ := os.ReadFile(filepath.Join(home, "calls"))
+		if err != nil || lerr != nil || fi.Mode()&os.ModeSymlink != 0 || !strings.Contains(string(calls), "personad manager join https://hub.example.com mi_x") {
+			t.Fatalf("from %s: %v %v\n%s\ncalls:\n%s", dir, err, lerr, out, calls)
+		}
+		_ = os.Remove(bin)
+		_ = os.Remove(filepath.Join(home, "calls"))
 	}
 }
 
