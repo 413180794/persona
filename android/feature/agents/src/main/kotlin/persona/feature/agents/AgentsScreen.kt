@@ -297,8 +297,9 @@ internal fun AgentsScreen(
                 }
             }
             if (connection != ConnectionState.Online) item("connection") { ConnectionNotice(connection, ::connectionSettings) }
-            if (model.herdr != null && connection == ConnectionState.Online && page.preferences.range != AgentRange.History) {
-                items(page.machines.filter { it.herdrStopped(herdrStates[it.id]) && (page.settings.machineFilter.isEmpty() || page.settings.machineFilter == it.id) },
+            if (model.herdr != null && page.preferences.range != AgentRange.History) {
+                items(page.machines.filter { it.herdrStopped(herdrStates[it.id]) && groups.stateFor(it.id, connection) == ConnectionState.Online &&
+                    (page.settings.machineFilter.isEmpty() || page.settings.machineFilter == it.id) },
                     key = { "herdr:${it.id}" }) { machine ->
                     HerdrNotice(names[machine.id] ?: machine.displayName, machine.id in startingHerdr, { model.herdr.start(machine.id) },
                         failure = herdrFailures[machine.id])

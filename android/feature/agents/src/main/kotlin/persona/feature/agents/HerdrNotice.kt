@@ -29,6 +29,7 @@ import persona.core.contracts.Machine
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HerdrState
 import persona.core.contracts.api.HubConnection
+import persona.core.contracts.api.HubGroups
 import persona.core.contracts.api.MachineManagement
 import persona.core.contracts.api.SessionsRepository
 import persona.core.designsystem.JNotice
@@ -89,6 +90,8 @@ internal class HerdrStarter(
     private val api: MachineManagement,
     private val repository: SessionsRepository,
     private val connection: HubConnection,
+    /** Each computer is read and started through its own hub group's connection (AgentGroups.kt stateFor). */
+    private val hubGroups: HubGroups,
     private val scope: CoroutineScope,
     private val notice: (AgentText) -> Unit,
 ) {
@@ -103,8 +106,7 @@ internal class HerdrStarter(
 
     suspend fun refresh() {
         val before = generation
-        val machines = if (connection.state.value == ConnectionState.Online) repository.machines.value
-            .filter { it.online && it.engine in setOf("herdr", "herdr-both") } else emptyList()
+        val machines = repository.machines.value.filter { it.online && it.engine in setOf("herdr", "herdr-both") && reachable(it.id) }
         val results = coroutineScope {
             machines.map { machine -> async {
                 try { machine.id to api.herdr(machine.id) }
@@ -118,7 +120,7 @@ internal class HerdrStarter(
     }
 
     fun start(machineId: String) {
-        if (machineId in pending.value || connection.state.value != ConnectionState.Online) return
+        if (machineId in pending.value || !reachable(machineId)) return
         if (repository.machines.value.none { it.id == machineId && it.herdrStopped(statuses.value[machineId]) }) return
         generation++
         pending.update { it + machineId }
@@ -142,6 +144,8 @@ internal class HerdrStarter(
             }
         }
     }
+
+    private fun reachable(machineId: String) = hubGroups.groups.value.stateFor(machineId, connection.state.value) == ConnectionState.Online
 }
 
 @OptIn(ExperimentalFoundationApi::class)

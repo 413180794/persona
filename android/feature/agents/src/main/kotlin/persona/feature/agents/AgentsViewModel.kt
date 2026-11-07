@@ -89,7 +89,7 @@ internal class AgentsViewModel(
     val refreshing = _refreshing.asStateFlow()
     private val _notice = MutableStateFlow<AgentText?>(null)
     val notice = _notice.asStateFlow()
-    val herdr = machineManagement?.let { HerdrStarter(it, repository, connection, viewModelScope) { _notice.value = it } }
+    val herdr = machineManagement?.let { HerdrStarter(it, repository, connection, hubGroups, viewModelScope) { _notice.value = it } }
     private val _haptics = MutableSharedFlow<Haptic>(extraBufferCapacity = 4)
     /**
      * What the screen plays as the answers land (iOS AppModel.resolve): success; a nudge when the terminal's dialog

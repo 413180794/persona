@@ -45,9 +45,10 @@ class HerdrNoticeTest {
 
     private class Api : MachineManagement {
         val calls = mutableListOf<String>()
+        val reads = mutableListOf<String>()
         val answer = CompletableDeferred<HerdrState>()
         var status: suspend () -> HerdrState = { HerdrState(false, false, true) }
-        override suspend fun herdr(machineId: String) = status()
+        override suspend fun herdr(machineId: String): HerdrState { reads += machineId; return status() }
         override suspend fun startHerdr(machineId: String): HerdrState { calls += machineId; return answer.await() }
         override suspend fun launchers(machineId: String) = error("unused")
         override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = error("unused")
@@ -64,7 +65,7 @@ class HerdrNoticeTest {
         val api = Api()
         val repository = Repository(stopped)
         val notices = mutableListOf<AgentText>()
-        val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
+        val starter = HerdrStarter(api, repository, Connection(), HubGroups.None, backgroundScope, notices::add)
         runCurrent()
         assertTrue(api.calls.isEmpty())
         starter.refresh()
@@ -87,7 +88,7 @@ class HerdrNoticeTest {
         val api = Api()
         val repository = Repository(stopped)
         val notices = mutableListOf<AgentText>()
-        val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
+        val starter = HerdrStarter(api, repository, Connection(), HubGroups.None, backgroundScope, notices::add)
         starter.refresh()
         starter.start("desk"); runCurrent()
         api.answer.completeExceptionally(IllegalStateException("engine_missing")); runCurrent()
@@ -102,7 +103,7 @@ class HerdrNoticeTest {
         val api = Api()
         val repository = Repository(stopped)
         val connection = Connection()
-        val starter = HerdrStarter(api, repository, connection, backgroundScope) { fail(it.toString()) }
+        val starter = HerdrStarter(api, repository, connection, HubGroups.None, backgroundScope) { fail(it.toString()) }
         connection.state.value = ConnectionState.WaitingForNetwork
         starter.start("desk")
         connection.state.value = ConnectionState.Online
@@ -112,11 +113,42 @@ class HerdrNoticeTest {
         assertTrue(starter.starting.value.isEmpty())
     }
 
+    private val work = stopped.copy(id = "mac~g0a1b2c3d")
+
+    private class Groups(home: ConnectionState, work: ConnectionState) : HubGroups by HubGroups.None {
+        override val groups = MutableStateFlow(listOf(
+            HubGroupInfo("g11111111", "Home", null, true, home, emptyList()),
+            HubGroupInfo("g0a1b2c3d", "Work", "g0a1b2c3d", false, work, emptyList())))
+    }
+
+    /** With several hub groups a computer goes through its own group's connection, not the selected one's (#5726). */
+    @Test fun anOnlineGroupsComputerIsReadAndStartedWhileTheSelectedOneIsDown() = runTest {
+        val api = Api()
+        val connection = Connection().apply { state.value = ConnectionState.Connecting }
+        val starter = HerdrStarter(api, Repository(work), connection, Groups(ConnectionState.Connecting, ConnectionState.Online), backgroundScope) { }
+        starter.refresh()
+        assertEquals(listOf(work.id), api.reads)
+        assertTrue(work.herdrStopped(starter.states.value[work.id]))
+        starter.start(work.id); runCurrent()
+        assertEquals(listOf(work.id), api.calls)
+    }
+
+    @Test fun anOfflineGroupsComputerIsNeitherReadNorStartedWhileTheSelectedOneIsOnline() = runTest {
+        val api = Api()
+        val groups = Groups(ConnectionState.Online, ConnectionState.Online)
+        val starter = HerdrStarter(api, Repository(work), Connection(), groups, backgroundScope) { fail(it.toString()) }
+        starter.refresh()
+        groups.groups.value = groups.groups.value.map { if (it.selected) it else it.copy(state = ConnectionState.Connecting) }
+        starter.start(work.id); starter.refresh(); runCurrent()
+        assertEquals(listOf(work.id), api.reads)
+        assertTrue(api.calls.isEmpty())
+    }
+
     @Test fun anUnconfirmedReplyDoesNotClaimSuccess() = runTest {
         val api = Api()
         val repository = Repository(stopped)
         val notices = mutableListOf<AgentText>()
-        val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
+        val starter = HerdrStarter(api, repository, Connection(), HubGroups.None, backgroundScope, notices::add)
         starter.refresh()
         starter.start("desk"); runCurrent()
         api.answer.complete(HerdrState(true, false, true)); runCurrent()
@@ -128,7 +160,7 @@ class HerdrNoticeTest {
         val api = Api()
         val repository = Repository(stopped)
         val notices = mutableListOf<AgentText>()
-        val starter = HerdrStarter(api, repository, Connection(), backgroundScope, notices::add)
+        val starter = HerdrStarter(api, repository, Connection(), HubGroups.None, backgroundScope, notices::add)
         starter.refresh()
         starter.start("desk"); runCurrent()
         api.answer.cancel(); runCurrent()
@@ -140,7 +172,7 @@ class HerdrNoticeTest {
     @Test fun anOldStatusReadCannotUndoAConfirmedStart() = runTest {
         val api = Api()
         val repository = Repository(stopped)
-        val starter = HerdrStarter(api, repository, Connection(), backgroundScope) { }
+        val starter = HerdrStarter(api, repository, Connection(), HubGroups.None, backgroundScope) { }
         starter.refresh()
         val stale = CompletableDeferred<HerdrState>()
         api.status = { stale.await() }
@@ -154,7 +186,7 @@ class HerdrNoticeTest {
 
     @Test fun anUnavailableStatusIsUnknownAndCannotOfferStart() = runTest {
         val api = Api()
-        val starter = HerdrStarter(api, Repository(stopped), Connection(), backgroundScope) { fail(it.toString()) }
+        val starter = HerdrStarter(api, Repository(stopped), Connection(), HubGroups.None, backgroundScope) { fail(it.toString()) }
         starter.refresh()
         assertTrue(starter.states.value.getValue("desk").known)
         api.status = { throw IllegalStateException("old hub") }
@@ -167,7 +199,7 @@ class HerdrNoticeTest {
     @Test fun aFailedStartStaysOnTheRowUntilTheNextStartOrUntilHerdrRuns() = runTest {
         val api = Api()
         val repository = Repository(stopped)
-        val starter = HerdrStarter(api, repository, Connection(), backgroundScope) { }
+        val starter = HerdrStarter(api, repository, Connection(), HubGroups.None, backgroundScope) { }
         starter.refresh()
         starter.start("desk"); runCurrent()
         api.answer.completeExceptionally(IllegalStateException("engine_missing")); runCurrent()
@@ -181,7 +213,7 @@ class HerdrNoticeTest {
 
     @Test fun anUnconfirmedReplyIsKeptAsItsOwnFailure() = runTest {
         val api = Api()
-        val starter = HerdrStarter(api, Repository(stopped), Connection(), backgroundScope) { }
+        val starter = HerdrStarter(api, Repository(stopped), Connection(), HubGroups.None, backgroundScope) { }
         starter.refresh()
         starter.start("desk"); runCurrent()
         api.answer.complete(HerdrState(true, false, true)); runCurrent()
