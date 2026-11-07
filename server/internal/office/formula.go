@@ -403,8 +403,11 @@ func (e callExpr) eval(b *xbook, sh *xsheet) (value, error) {
 		return num(m), nil
 	case "COUNT", "COUNTA":
 		n := 0
-		for _, v := range vals {
-			if e.name == "COUNT" && v.kind == 'n' || e.name == "COUNTA" && v.kind != 0 {
+		for i, v := range vals {
+			// COUNT: numbers; typed in, true / false and text that reads as a number too.
+			_, numeric := toNum(v)
+			typedIn := !fromRef[i] && (v.kind == 'b' || v.kind == 's' && numeric)
+			if e.name == "COUNT" && (v.kind == 'n' || typedIn) || e.name == "COUNTA" && v.kind != 0 {
 				n++
 			}
 		}
@@ -430,20 +433,24 @@ func (e callExpr) eval(b *xbook, sh *xsheet) (value, error) {
 		scaled, _ := strconv.ParseFloat(strconv.FormatFloat(x*p, 'g', 15, 64), 64)
 		return num(math.Round(scaled) / p), nil
 	case "AND", "OR":
-		if len(vals) == 0 {
-			return errv("#VALUE!"), nil
-		}
-		acc := e.name == "AND"
-		for _, v := range vals {
+		acc, judged := e.name == "AND", false
+		for i, v := range vals {
+			if fromRef[i] && (v.kind == 0 || v.kind == 's') {
+				continue // a reference's blanks and text are skipped
+			}
 			n, ok := toNum(v)
 			if !ok {
 				return errv("#VALUE!"), nil
 			}
+			judged = true
 			if e.name == "AND" {
 				acc = acc && n != 0
 			} else {
 				acc = acc || n != 0
 			}
+		}
+		if !judged {
+			return errv("#VALUE!"), nil
 		}
 		return boolv(acc), nil
 	case "NOT":

@@ -321,3 +321,25 @@ func TestFormulas(t *testing.T) {
 		t.Fatalf("a circle: %v", err)
 	}
 }
+
+// As in Excel, typed-in arguments and references count differently: COUNT counts typed-in true / false and text that
+// reads as a number, but only numbers in a reference; AND and OR skip a reference's blanks and text, and with nothing
+// left to judge are #VALUE!.
+func TestFormulaArgumentsTypedOrReferenced(t *testing.T) {
+	spec := `{"sheets":[{"rows":[[true,null,"x",1],` +
+		`["=COUNT(1,\"2\",TRUE,\"x\")","=COUNT(A1:D1)","=AND(A1:C1)","=OR(B1)","=OR(B1,FALSE)"]]}]}`
+	data, err := Xlsx([]byte(spec), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := parts(t, data)["xl/worksheets/sheet1.xml"]
+	for _, want := range []string{
+		`<c r="A2"><f>COUNT(1,&quot;2&quot;,TRUE,&quot;x&quot;)</f><v>3</v></c>`, `<c r="B2"><f>COUNT(A1:D1)</f><v>1</v></c>`,
+		`<c r="C2" t="b"><f>AND(A1:C1)</f><v>1</v></c>`, `<c r="D2" t="e"><f>OR(B1)</f><v>#VALUE!</v></c>`,
+		`<c r="E2" t="b"><f>OR(B1,FALSE)</f><v>0</v></c>`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("no %s", want)
+		}
+	}
+}

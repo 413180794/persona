@@ -86,6 +86,9 @@ Excel and Numbers still recompute everything on open (`fullCalcOnLoad`).
 
 - Supported: `+ - * / ^ & %`, comparisons, cells and ranges (other sheets too: `Sheet!A1`, `'with space'!A1:B2`), and SUM AVERAGE MIN MAX COUNT COUNTA ROUND ABS IF IFERROR AND OR NOT.
   `ROUND` follows Excel's 15 significant digits: `2.345` rounds to `2.35`.
+  Arguments are read as Excel reads them: SUM, AVERAGE, MIN, MAX and COUNT take only the numbers of a reference; typed-in
+  arguments also count when they are `TRUE` / `FALSE` or text that reads as a number. AND and OR skip a reference's blanks
+  and text (`#VALUE!` when nothing is left to judge).
 - When another function appears (VLOOKUP etc.), that formula gets no value and is left for Excel to compute; it will be blank in viewers that do not compute formulas.
 - Circular references are written as `#REF!`.
 
