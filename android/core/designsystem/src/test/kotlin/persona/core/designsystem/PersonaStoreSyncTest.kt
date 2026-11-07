@@ -46,7 +46,7 @@ class PersonaStoreSyncTest {
     }
 
     private fun store(hub: FakeHub): Pair<AppStyleStore, PersonaStore> {
-        context.getSharedPreferences("jarvis-appearance", 0).edit().clear().commit()
+        context.getSharedPreferences("persona-appearance", 0).edit().clear().commit()
         File(context.filesDir, "personas").deleteRecursively()
         val style = AppStyleStore(context)
         val store = PersonaStore(context, style) { hub }
@@ -54,13 +54,15 @@ class PersonaStoreSyncTest {
         return style to store
     }
 
-    /** What the store sent the hub: a built-in chosen last marks the end, its call going out after any earlier one. */
+    /** What the store sent the hub: the built-in face chosen once more marks the end, and its own call is left out. */
     private fun sent(hub: FakeHub, store: PersonaStore): List<String> {
-        store.choose(PersonaDesign.Circuit)
+        val marker = PersonaDesign.Default.id
+        val before = hub.chosen.count { it == marker }
+        store.choose(PersonaDesign.Default)
         val end = System.currentTimeMillis() + 5_000
-        while ("jarvis-circuit" !in hub.chosen && System.currentTimeMillis() < end) Thread.sleep(20)
+        while (hub.chosen.count { it == marker } <= before && System.currentTimeMillis() < end) Thread.sleep(20)
         Thread.sleep(200)
-        return hub.chosen - "jarvis-circuit"
+        return hub.chosen.toMutableList().apply { removeAt(lastIndexOf(marker)) }
     }
 
     @Test fun aFailedDownloadStaysOffTheHub() {
@@ -80,12 +82,12 @@ class PersonaStoreSyncTest {
         runBlocking {
             val download = launch { store.choose(pack) }
             asked.await()
-            store.choose(PersonaDesign.Visor)
+            store.choose(PersonaDesign.Default)
             gate.complete(byteArrayOf(1))
             download.join()
         }
-        assertEquals("jarvis", style.personaId.value)
+        assertEquals(PersonaDesign.Default.id, style.personaId.value)
         assertNull(store.current.value)
-        assertEquals(listOf("jarvis"), sent(hub, store))
+        assertEquals(listOf(PersonaDesign.Default.id), sent(hub, store))
     }
 }
