@@ -24,7 +24,7 @@ English · [简体中文](README.zh-CN.md)
   <img src="docs/assets/readme/hero-light.webp" alt="Persona on iPhone: the assistant hands off to Agents, a Claude asks a question, and one tap answers it; beside it are the Inbox, a plan waiting for approval, live progress and machines" width="100%">
 </picture>
 
-<p align="center"><sub>Demo mode with made-up data. This recording still shows the Chinese UI.</sub></p>
+<p align="center"><sub>Demo mode with made-up data.</sub></p>
 
 ## Features
 
