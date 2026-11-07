@@ -24,10 +24,6 @@
     <string name="designsystem_persona_button_state">Persona，%1$s</string>
     <string name="designsystem_face_mochi">团子</string>
     <string name="designsystem_face_mochi_summary">App 图标的配色</string>
-    <string name="designsystem_face_visor">面罩</string>
-    <string name="designsystem_face_visor_summary">颜色随主题色</string>
-    <string name="designsystem_face_circuit">汇流</string>
-    <string name="designsystem_face_circuit_summary">走线汇进核心，颜色随主题色</string>
     <string name="designsystem_avatars_list_failed">没取到形象列表：%1$s</string>
     <string name="designsystem_avatars_missing_file">缺少 %1$s</string>
     <string name="designsystem_avatars_not_saved">没能存到手机上</string>

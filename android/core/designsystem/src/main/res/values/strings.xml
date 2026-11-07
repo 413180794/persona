@@ -28,10 +28,6 @@
     <string name="designsystem_persona_button_state">Persona, %1$s</string>
     <string name="designsystem_face_mochi">Mochi</string>
     <string name="designsystem_face_mochi_summary">The app icon\'s colors</string>
-    <string name="designsystem_face_visor">Visor</string>
-    <string name="designsystem_face_visor_summary">Follows the theme color</string>
-    <string name="designsystem_face_circuit">Circuit</string>
-    <string name="designsystem_face_circuit_summary">Traces flow into the core, in the theme color</string>
     <!-- The hub's avatar packages (Settings › Appearance › Persona look) -->
     <string name="designsystem_avatars_list_failed">Couldn\'t get the avatar list: %1$s</string>
     <string name="designsystem_avatars_missing_file">Missing %1$s</string>

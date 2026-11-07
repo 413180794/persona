@@ -1,13 +1,13 @@
 // Persona's look in the page (avatar, docs/persona.md, docs/extensions.md "Avatar"; the app's PersonaStore / PersonaViews /
 // PersonaPicker): the looks the hub offers (GET /looks: the built-in ones, its packages and the extensions'), the one
 // chosen — the user's, kept on the hub so every device shows it — and its face (a still avatar) and dot (the state's
-// APNG, which the browser animates by itself). The built-in ones the page draws: Mochi (the default, MochiFace), Visor and
-// Circuit (BuiltinFaces); the default shows too while a chosen package is not there. An older hub without /looks gets the
+// APNG, which the browser animates by itself). The default dumpling (MochiFace) is drawn locally and also shows while
+// a chosen package is not there. An older hub without /looks gets the
 // packages from /personas and the choice stays this browser's.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, errorText, getToken } from "../../lib/api";
 import {
-  avatarFile, BUILTIN_PERSONA, CIRCUIT_PERSONA, dotFile, isBuiltinPersona, localized, lookPackages, MARK_PERSONA, PERSONA_STATES, personaFileURL,
+  avatarFile, BUILTIN_PERSONA, dotFile, isBuiltinPersona, localized, lookPackages, normalizePersonaChoice, PERSONA_STATES, personaFileURL,
   personaFiles, usablePersonas, withChosenReady, type LookCurrent, type LookView, type PersonaInfo, type PersonaState,
 } from "../../lib/persona";
 import { isResumed } from "../../lib/reconnect";
@@ -16,7 +16,6 @@ import { Button, cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
 import { useReducedMotion } from "./face-motion";
-import { CircuitFace, VisorFace } from "./BuiltinFaces";
 import { personaAccent, setPersonaAccent } from "../../ui/look";
 import { currentLanguage, t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
@@ -48,7 +47,10 @@ let unsent = false;
 
 function readChosen() {
   try {
-    return localStorage.getItem(CHOSEN_KEY) || BUILTIN_PERSONA;
+    const saved = localStorage.getItem(CHOSEN_KEY) || BUILTIN_PERSONA;
+    const chosen = normalizePersonaChoice(saved);
+    if (saved !== chosen) saveChosen(chosen);
+    return chosen;
   } catch {
     return BUILTIN_PERSONA;
   }
@@ -79,20 +81,20 @@ function setPS(patch: Partial<PersonaStoreState>) {
   const shown = ps.list.find((p) => p.id === ps.chosen);
   if (isBuiltinPersona(ps.chosen)) setPersonaAccent(null);
   else if (shown || (ps.loaded && !ps.error)) setPersonaAccent(personaAccent(shown?.manifest.colors));
-  setLookIcon(shown ?? null, isBuiltinPersona(ps.chosen) ? ps.chosen : BUILTIN_PERSONA);
+  setLookIcon(shown ?? null);
   listeners.forEach((l) => l());
 }
 
 /** The choice to keep given the hub's: the hub's once it has one; else this browser's moves up (once, if unset there). */
 async function settleChoice(cur: LookCurrent): Promise<string> {
-  if (cur.id) return cur.id;
+  if (cur.id) return normalizePersonaChoice(cur.id);
   // one chosen on this page before this answer is sent as it is once the answer is in (refreshPersonas)
   if (unsent) return BUILTIN_PERSONA;
   const mine = choseHere();
   if (!mine) return BUILTIN_PERSONA;
   try {
     const r = await api<LookCurrent>("/looks/current", { method: "PUT", json: { id: mine, if_unset: true } });
-    return r.id ?? BUILTIN_PERSONA;
+    return normalizePersonaChoice(r.id ?? BUILTIN_PERSONA);
   } catch {
     // the hub does not know it (the page's old mark, a package gone): the default
     return BUILTIN_PERSONA;
@@ -166,8 +168,9 @@ onHubEvent("hello", (msg) => {
 });
 // Another device chose a look (or the hub went back to the default when its extension went).
 onHubEvent("look", (m) => {
-  const id = typeof m.id === "string" ? m.id : "";
-  if (!id) return;
+  const pushed = typeof m.id === "string" ? m.id : "";
+  if (!pushed) return;
+  const id = normalizePersonaChoice(pushed);
   choices++; // the hub's choice now, even when this page already shows it: a list read that left before is older
   if (id === ps.chosen) return;
   saveChosen(id);
@@ -177,7 +180,8 @@ onHubEvent("look", (m) => {
 
 /** Choosing one keeps it when its package leaves the hub (the built-in shows meanwhile), as on the phone; on a hub that
  *  keeps the choice, every device follows. */
-export function choosePersona(id: string) {
+export function choosePersona(choice: string) {
+  const id = normalizePersonaChoice(choice);
   choices++;
   saveChosen(id);
   setPS({ chosen: id });
@@ -233,13 +237,6 @@ export function useDarkPage(): boolean {
   return dark;
 }
 
-/** A built-in look drawn at a size and state. */
-export function BuiltinLookFace({ id, size, state = "idle", className }: { id: string; size: number; state?: PersonaState; className?: string }) {
-  if (id === MARK_PERSONA) return <VisorFace size={size} state={state} className={className} />;
-  if (id === CIRCUIT_PERSONA) return <CircuitFace size={size} state={state} className={className} />;
-  return <MochiFace size={size} state={state} className={className} />;
-}
-
 /**
  * A still face in a circle: the package's avatar at the size it needs (its SVG, its dark one on a dark page), else the
  * built-in look on screen. With `persona` given (a card in the picker), that package's, or `fallback` when its file
@@ -252,7 +249,7 @@ export function PersonaAvatar({ size, persona, fallback, className }: { size: nu
   const [broken, setBroken] = useState(false);
   const file = p ? avatarFile(p.manifest, size * Math.max(2, Math.ceil(typeof devicePixelRatio === "number" ? devicePixelRatio : 2)), dark) : undefined;
   useEffect(() => setBroken(false), [p?.id, p?.rev]);
-  if (!p || !file || broken) return persona === undefined ? <BuiltinLookFace id={current.builtin ?? BUILTIN_PERSONA} size={size} className={className} /> : <>{fallback}</>;
+  if (!p || !file || broken) return persona === undefined ? <MochiFace size={size} className={className} /> : <>{fallback}</>;
   return (
     <img
       src={personaFileURL(p, file, getToken())}
@@ -281,7 +278,7 @@ export function PersonaDot({ size, state, persona, fallback, className }: { size
   const file = p ? dotFile(p.manifest, state) : undefined;
   const url = p && file ? personaFileURL(p, file, getToken()) : "";
   useEffect(() => setBroken(false), [url]);
-  if (!p || !file || broken) return persona === undefined ? <BuiltinLookFace id={current.builtin ?? BUILTIN_PERSONA} size={size} state={state} className={className} /> : <>{fallback}</>;
+  if (!p || !file || broken) return persona === undefined ? <MochiFace size={size} state={state} className={className} /> : <>{fallback}</>;
   if (still) return <StillFrame url={url} size={size} className={className} onError={() => setBroken(true)} />;
   return (
     <img
@@ -339,7 +336,7 @@ function Swatches({ p }: { p: PersonaInfo }) {
 
 /**
  * Avatar (Settings › General and the profile page; the app's Settings › Appearance › Avatar): the one setting for Persona's face, name, the
- * page's mark and icon (#3200): the built-in looks (Mochi the default, Visor, Circuit), then the hub's packages and the
+ * page's mark and icon (#3200): the default dumpling, then the hub's packages (including the bundled frog) and the
  * extensions' looks, and the chosen one's dot in each state. On a hub that keeps the choice every device follows it; the
  * page's colors follow it only with theme color "Match avatar" (ui/look.ts).
  */
@@ -379,14 +376,9 @@ export function PersonaPicker({ onExtensions }: { onExtensions?: () => void } = 
   };
   useEffect(load, []);
   const sub = (text: string) => <span className="max-w-full truncate text-[11px] whitespace-nowrap text-ink-3">{text}</span>;
-  const builtins: { id: string; title: string; sub: string }[] = [
-    { id: BUILTIN_PERSONA, title: t("assistant-persona.mochi"), sub: t("assistant-persona.default_avatar") },
-    { id: MARK_PERSONA, title: t("assistant-persona.visor"), sub: t("assistant-persona.follows_theme") },
-    { id: CIRCUIT_PERSONA, title: t("assistant-persona.circuit"), sub: t("assistant-persona.follows_theme") },
-  ];
   const lookOf = (id: string) => s.looks?.find((l) => l.id === id);
   const cards: { id: string; title: string; label: string; sub: React.ReactNode; face: React.ReactNode }[] = [
-    ...builtins.map((b) => ({ id: b.id, title: b.title, label: b.id === BUILTIN_PERSONA ? t("assistant-persona.mochi_default") : b.title, sub: sub(b.sub), face: <BuiltinLookFace id={b.id} size={56} /> })),
+    { id: BUILTIN_PERSONA, title: t("assistant-persona.mochi"), label: t("assistant-persona.mochi_default"), sub: sub(t("assistant-persona.default_avatar")), face: <MochiFace size={56} /> },
     ...s.list.map((p) => {
       const title = localized(p.manifest.name, p.manifest.names, lang);
       const from = lookOf(p.id)?.extension_name ?? p.manifest.source?.extension_name;
@@ -404,7 +396,7 @@ export function PersonaPicker({ onExtensions }: { onExtensions?: () => void } = 
     <div className="flex flex-col gap-3 p-3">
       <div role="radiogroup" aria-label={t("assistant-persona.avatar")} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {cards.map((c) => {
-          const selected = c.id === s.chosen;
+          const selected = c.id === (current.info?.id ?? BUILTIN_PERSONA);
           return (
             <button
               key={c.id}

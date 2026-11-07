@@ -30,7 +30,7 @@ Provisioning profile display names and service labels are operational configurat
 | Header / runtime subprotocol | `X-Persona-*`, `persona-runtime.v1` |
 | Default database / container names for new installs | `persona`, `persona_test`, `persona-postgres` |
 
-The `/` front door still opens the main conversation. Previous short assistant URLs are not aliases; previously sent links stop working. The existing avatar data model and `personas/` directory remain. Mochi's built-in ID is `persona`; Visor's is **`persona-visor`**; Circuit's is `persona-circuit`. Visor records in configuration, persisted settings, installed extensions and device preferences require the one-time data migration, not a runtime fallback.
+The `/` front door still opens the main conversation. Previous short assistant URLs are not aliases; previously sent links stop working. The existing avatar data model and `personas/` directory remain. Mochi's built-in ID is `persona` and the bundled frog pack is `nwverse`. The one-time naming cutover preserves old appearance IDs as data, but the five retired bundled choices now display Mochi through the look API's effective-ID fallback; they are not runtime brand aliases. See [Avatars](persona.md).
 
 ## Runtime root: one directory, no automatic migration
 

@@ -8,7 +8,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PersonaState } from "../../lib/persona";
-import { CircuitFace, VisorFace } from "./BuiltinFaces";
 import { FACE_LOOPS } from "./face-motion";
 import { MochiFace } from "./MochiFace";
 
@@ -75,13 +74,6 @@ describe("the faces' loops", () => {
   it("the compact face has no motion lines, so working pulses none of them", () => {
     mochi("working", 24);
     expect(running().map(loopOf)).toEqual(["mochi-spin"]);
-  });
-
-  it("run on the other built-in looks too", () => {
-    act(() => root.render(<VisorFace size={40} state="needs_you" />));
-    expect(running().map(loopOf)).toEqual(["mochi-pulse"]);
-    act(() => root.render(<CircuitFace size={40} state="idle" />));
-    expect(running().map(loopOf)).toEqual(["mochi-blink"]);
   });
 
   it("none runs under reduced motion, and they stop when it is asked for", () => {

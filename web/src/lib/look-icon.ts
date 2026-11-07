@@ -1,15 +1,12 @@
 // The look's icon (#3200, docs/extensions.md "Looks"): the picture the page's mark (AppMark: the sidebar's header, the
 // sign-in page) and the tab's favicon show for the chosen look. Mochi, the default, is the app icon itself (the files
-// in public/); another look is its avatar (a package's PNG or SVG, light and dark) or the built-in face drawn, made
-// into a 128 px PNG. The last one is kept in localStorage, so the sign-in page and the first paint show it before the
+// in public/); another look uses its package's PNG or SVG, light and dark, made into a 128 px PNG. The last one is kept
+// in localStorage, so the sign-in page and the first paint show it before the
 // hub answers. The installed app's icon (the PWA's manifest) stays the app icon: it is fixed when the app is installed.
 import { useSyncExternalStore } from "react";
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
-import { flushSync } from "react-dom";
 import { getToken } from "./api";
 import { setFaviconBase } from "./attention-signals";
-import { avatarFile, BUILTIN_PERSONA, personaFileURL, type PersonaInfo } from "./persona";
+import { avatarFile, BUILTIN_PERSONA, normalizePersonaChoice, personaFileURL, type PersonaInfo } from "./persona";
 
 const KEY = "persona.look-icon";
 const SIDE = 128;
@@ -28,6 +25,11 @@ let seq = 0;
 function read(): LookIcon | null {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? "null");
+    const chosen = normalizePersonaChoice(localStorage.getItem("persona.persona") ?? BUILTIN_PERSONA);
+    if (chosen === BUILTIN_PERSONA || typeof v?.key !== "string" || !v.key.startsWith(`${chosen}@`)) {
+      localStorage.removeItem(KEY);
+      return null;
+    }
     return v && typeof v.light === "string" && typeof v.dark === "string" && v.light.startsWith("data:image/") && v.dark.startsWith("data:image/") ? v : null;
   } catch {
     return null;
@@ -67,43 +69,21 @@ function rasterize(src: string): Promise<string> {
   });
 }
 
-/** A built-in face as an SVG data URL, the page's accent written in (a picture outside the page has no CSS variables). */
-async function builtinSVG(id: string, dark: boolean): Promise<string> {
-  const { BuiltinLookFace } = await import("../views/assistant/Persona");
-  const div = document.createElement("div");
-  if (dark) div.className = "dark";
-  const root = createRoot(div);
-  flushSync(() => root.render(createElement(BuiltinLookFace, { id, size: SIDE })));
-  let svg = div.innerHTML;
-  root.unmount();
-  const css = getComputedStyle(document.documentElement);
-  const accent = css.getPropertyValue("--accent").trim() || "#4f6bed";
-  // On its own (an image, not in the page) an SVG needs its namespace, which React leaves out.
-  svg = svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ').replaceAll("var(--accent)", accent).replaceAll("var(--mochi-needs-you)", css.getPropertyValue("--attention").trim() || accent);
-  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-}
-
-/**
- * The icon for the look on screen: a package (`info`), else the built-in one (`builtin`). Mochi is the app icon's files:
- * nothing to draw. A picture that does not load leaves the last icon as it is.
- */
-export function setLookIcon(info: PersonaInfo | null, builtin: string): void {
+/** The package's avatar supplies the icon; every missing or retired look uses the default app icon. */
+export function setLookIcon(info: PersonaInfo | null): void {
   if (typeof document === "undefined" || typeof Image === "undefined") return;
-  // A built-in face is in the theme's accent: another accent, another icon.
-  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
-  const key = info ? `${info.id}@${info.rev}` : `${builtin}@${accent}`;
-  if (!info && builtin === BUILTIN_PERSONA) {
+  if (!info) {
+    ++seq; // Cancel a previous package's rasterization even when there is no cached icon yet.
     if (icon) set(null);
     return;
   }
+  const key = `${info.id}@${info.rev}`;
   if (icon?.key === key) return;
   const mine = ++seq;
-  const made = info
-    ? Promise.all([false, true].map((dark) => {
-        const f = avatarFile(info.manifest, SIDE, dark);
-        return f ? rasterize(personaFileURL(info, f, getToken())) : Promise.reject(new Error("no avatar"));
-      }))
-    : Promise.all([false, true].map((dark) => builtinSVG(builtin, dark).then(rasterize)));
+  const made = Promise.all([false, true].map((dark) => {
+    const f = avatarFile(info.manifest, SIDE, dark);
+    return f ? rasterize(personaFileURL(info, f, getToken())) : Promise.reject(new Error("no avatar"));
+  }));
   made.then(
     ([light, dark]) => mine === seq && set({ key, light, dark }),
     () => undefined,

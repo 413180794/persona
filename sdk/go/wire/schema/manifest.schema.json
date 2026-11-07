@@ -353,7 +353,7 @@
       "required": ["id", "name", "light", "dark"]
     },
     "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
-    "BuiltinLook": {"type": "string", "enum": ["persona", "persona-visor", "persona-circuit"], "description": "A look every app draws itself: Mochi (the default), Visor, Circuit."},
+    "BuiltinLook": {"type": "string", "enum": ["persona"], "description": "The look every app draws itself: Mochi (the default)."},
     "LookTexts": {
       "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
       "type": "object",

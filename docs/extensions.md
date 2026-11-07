@@ -2046,14 +2046,14 @@ Extensions add avatars to Persona: name, avatar image (multisize PNG, optional S
 
 | Field | Rules |
 | --- | --- |
-| `id` | Avatar-package id rules (clients use it as a cache-directory name); globally unique among `looks`; cannot be a built-in avatar (`persona`, `persona`, `persona-circuit`) or an avatar package compiled into personad (`nwverse`). An avatar package with the same id in `~/.persona/personas/` takes precedence |
+| `id` | Avatar-package id rules (clients use it as a cache-directory name); globally unique among `looks`. `persona` and all five retired bundled IDs remain reserved (see [persona.md](persona.md)); `nwverse` belongs to the compiled hub pack and the hub's version wins. A valid disk pack with the same nonreserved id takes precedence over an extension |
 | `name` / `names` | Source language 1–20 characters; `names` only allows `zh-Hans` / `en` / `ja`, each 1–40. Clients resolve `names[UI language]` → `names.en` → `name` |
 | `subtitle` / `subtitles` | Second line on the Settings card, ≤40 characters |
 | `avatar.sizes` | Side length (16–1024) → square PNG in the package, actual side length matching the key; at least one (bitmaps for watch, Lock Screen and places without SVG rendering) |
 | `avatar.svg` / `avatar.dark` / `avatar.safe` | Optional vector avatar (≤256 KB, sanitized by the hub before delivery, preferred by web); dark `sizes` / `svg` (missing entries use light ones); `safe` as for avatar packages |
 | `colors` | `light` / `dark`, keys only `primary`, `secondary`, `accent`, `bubble`, `bubble_text` (aligned with Apple's `PersonaPalette`, docs/persona.md ("Color families")), `#RRGGBB`. Insufficient contrast is darkened by clients under avatar-package rules, not rejected |
 | `dot` | Optional APNG or PNG per each of five states (`idle` required), frame side ≤512, matching `size` if specified. Without `dot`, the hub uses the largest avatar PNG as `idle` |
-| `app_icon_fallback` | Must be a built-in avatar id: iOS / Android desktop icons and installed PWA icons can only use bundled images, so show this built-in avatar's icon |
+| `app_icon_fallback` | New manifests must name `persona`, the only bundled drawing/icon. For a valid custom look in an older manager report, the hub normalizes retired or unknown icon values to Mochi without dropping the custom picture |
 
 **Hub delivery** (`server/internal/hub/looks.go`):
 
@@ -2069,6 +2069,7 @@ Extensions add avatars to Persona: name, avatar image (multisize PNG, optional S
 
 **The selected avatar is stored on the hub** (setting `look`); one hub belongs to one person, and clients follow it: `PUT /api/v1/looks/current {"id"}`, broadcasting `look` on change.
 
+- **Retired bundled IDs**: neither disk packs nor extension reports can reclaim them. A saved retired or unknown choice receives `current.effective: "persona"`; the raw ID and timestamp remain for compatibility. Clients never try to draw a removed built-in option.
 - **Disable** the extension or contribution: selection remains, `current.effective` returns `persona`; re-enabling restores it. **Uninstall**: if its avatar is selected, reset selection to `persona` and broadcast `look`.
 - **Migration from old local client settings** (iOS `UserDefaults persona.id`, Android `persona` in `persona-appearance`, web `localStorage persona.persona`):
   connect to a hub with `/api/v1/looks`; if hub `current.id` is `null` and a local choice was explicitly made → `PUT {"id": local selection, "if_unset": true}`, honoring the response (the first connected device's choice becomes everyone's); if the hub already has a choice → use it;

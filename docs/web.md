@@ -1283,7 +1283,7 @@ Compared item by item with iOS as the reference and Android for comparison. #297
 | Memory, About me | Yes | #297 | Settings › Assistant |
 | Knowledge base (types, tags, search, entries, tagging, Ask Persona) | Yes | #297 | |
 | "Start Agent" on knowledge base entries | Yes | #433 | Project entries; one step more than iOS: when the project has a code folder and that computer is online, the computer and folder are filled in too. The first message is the verbatim `<persona-context>` (same as iOS) |
-| Avatar (name, picture, status animation), profile page | Yes | #433 | `/assistant`; the default avatar is the mochi drawn from the same icon coordinates as iOS (`MochiFace`), and the old star mark stays as an optional "Mark"; iOS's mask and convergence are not ported; the avatar's colors only reach the web's colors when the theme color is set to Match avatar (#2980); no profile card in the sidebar |
+| Avatar (name, picture, status animation), profile page | Yes | #6219 | The bundled picker has only Mochi (`persona`, drawn by `MochiFace`) and Milk Frog (`nwverse`, downloaded from the hub). All five retired IDs fall back to Mochi and remain reserved against package takeover. Valid custom extension packs still work; avatar colors affect the UI only with Match avatar selected. No profile card in the sidebar |
 | Seeing the sending bubble in the chat after "Ask Persona" | Yes | #433 | Cross-page pending messages (store `outbox`); the same for Inbox "Hand to AI", Agents "Hand to Persona", and the new chat page |
 
 ### Inbox
@@ -1336,11 +1336,7 @@ Compared item by item with iOS as the reference and Android for comparison. #297
 | Model provider "Usage" | Yes | #1326 | In the provider dialog, above "Availability" |
 | Assistant (proactive work, About me, memory, where it runs) | Yes | #297 | Changing the assistant's machine is not done (iOS can't change it either) |
 | Claude Code settings, Codex settings | Yes | #297 | |
-| Connectors: mail | Yes | #297, #2968 | Gmail and Outlook can only be added on the phone (the sign-in callback is a custom scheme only the App can receive); Outlook's client ID can be filled in on the web beforehand, and the account list marks Outlook |
-| Connectors: Lark | Yes | #297 | Read-only status |
-| Connectors: Lark › Show messages on home screen | Yes | #1327 | Only applies to the current browser |
-| Lark anti-recall and edit history (Message display) | Yes | #2900 | The toggles are shared with the Lark gateway web page for the current account; encrypted old versions only show the public display (iOS can show the body after unlocking) |
-| Lark [removed] ("Brave Climb") word-encoded text: read and send | Yes | #3102 | The input box has no draft and the mode isn't saved; topic groups can't send in this mode (same as iOS) |
+| Connectors: mail | Yes | #297, #2968 | Gmail and Outlook can only be added on the phone (the sign-in callback is a custom scheme only the App can receive); Outlook''t saved; topic groups can't send in this mode (same as iOS) |
 | Connectors: Lark bot (status, credentials, pairing, what it can do) | Yes | #1325 | Settings › Connectors, opens as a dialog; copying the pairing code uses the clipboard (falls back to execCommand over http) |
 | hub version and updates (check, update, update now, auto-update, history, Docker commands) | Yes | #1325, #2897 | Settings › hub; the hub notice row below the filter bar in the sidebar's Agents block (`views/agents/HubNoticeRow.tsx`, chosen by `hubNotice` in `lib/hub-update.ts`); the two App / hub version compatibility notices don't apply to the web (the hub hosts the web app itself) |
 | Assistant Skills | Yes | #1325 | Settings › Assistant, read-only (same as iOS) |

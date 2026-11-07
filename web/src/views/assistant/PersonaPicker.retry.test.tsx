@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Retry the look store from the picker, retaining the built-in choices while the hub is unavailable (#4493).
+// Retry the look store from the picker, retaining the default choice while the hub is unavailable (#4493).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -33,7 +33,7 @@ const retry = () => [...host.querySelectorAll("button")].find((button) => button
 it("retries a failed look list, prevents duplicate retries, and shows the recovered looks", async () => {
   await act(async () => root.render(<PersonaPicker />));
   expect(pending).toHaveLength(1);
-  expect(host.querySelectorAll('[role="radio"]')).toHaveLength(3);
+  expect(host.querySelectorAll('[role="radio"]')).toHaveLength(1);
 
   await act(async () => pending[0].reject(new Error("hub unavailable")));
   expect(host.querySelector('[role="alert"]')?.textContent).toContain("hub unavailable");
@@ -42,7 +42,7 @@ it("retries a failed look list, prevents duplicate retries, and shows the recove
   await act(async () => retry()!.click());
   expect(pending).toHaveLength(2);
   expect(retry()!.disabled).toBe(true);
-  expect(host.querySelectorAll('[role="radio"]')).toHaveLength(3);
+  expect(host.querySelectorAll('[role="radio"]')).toHaveLength(1);
   await act(async () => retry()!.click());
   expect(pending).toHaveLength(2);
 
@@ -66,6 +66,7 @@ it("retries a failed look list, prevents duplicate retries, and shows the recove
   }));
   expect(host.querySelector('[role="alert"]')).toBeNull();
   expect(retry()).toBeUndefined();
+  expect(host.querySelectorAll('[role="radio"]')).toHaveLength(2);
   expect(host.querySelector('[role="radio"][aria-label="Example look"]')).not.toBeNull();
   expect(host.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("aria-label")).toContain("团子");
 });

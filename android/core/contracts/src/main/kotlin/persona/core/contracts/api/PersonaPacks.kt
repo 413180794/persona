@@ -118,7 +118,7 @@ data class PersonaManifest(
     /** What the hub checks too (server/internal/hub/persona.go), so a package it would leave out is refused here. */
     val problem: String? get() = when {
         format != FORMAT -> "format $format"
-        id in BUILT_IN || !ID.matches(id) -> "id $id"
+        id in RESERVED_IDS || !ID.matches(id) -> "id $id"
         name.isBlank() -> "no name"
         avatar.sizes.isEmpty() -> "no avatar"
         "idle" !in dot.states -> "no idle dot"
@@ -128,8 +128,9 @@ data class PersonaManifest(
 
     companion object {
         const val FORMAT = 1
-        /** The built-in faces' ids; a package may not take them. */
-        val BUILT_IN = setOf("persona", "persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob")
+        /** Retired drawing identities remain reserved so a package cannot revive or impersonate them. */
+        val RETIRED_IDS = setOf("persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob")
+        val RESERVED_IDS = RETIRED_IDS + "persona"
         private val ID = Regex("^[a-z0-9][a-z0-9-]{0,31}$")
     }
 }

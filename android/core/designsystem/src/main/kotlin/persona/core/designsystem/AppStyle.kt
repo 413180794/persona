@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import persona.core.contracts.api.PersonaManifest
 
 /**
  * The three interface styles (Settings › Interface style). Pages are written once against the components in this module;
@@ -43,6 +44,10 @@ enum class GlassPreference(val key: String, @StringRes val labelRes: Int) {
 /** How glass is drawn: refraction (API 33+), plain blur, or opaque tinted panels. */
 enum class GlassLevel { Liquid, Frosted, Solid }
 
+/** Retired choices cannot return; unknown package ids keep their intent and draw the default until available. */
+internal fun restoredPersonaId(id: String?): String =
+    id?.takeUnless { it.isBlank() || it in PersonaManifest.RETIRED_IDS } ?: PersonaDesign.Default.id
+
 /** Device-wide appearance choices; not tied to a hub, so they survive re-pairing. */
 class AppStyleStore(context: Context) {
     private val app = context.applicationContext
@@ -57,7 +62,7 @@ class AppStyleStore(context: Context) {
         preferences.edit().putString(KEY_THEME, key).apply()
         currentTheme.value = key
     }
-    private val currentPersona = MutableStateFlow(preferences.getString(KEY_PERSONA, null) ?: PersonaDesign.Default.id)
+    private val currentPersona = MutableStateFlow(restoredPersonaId(preferences.getString(KEY_PERSONA, null)))
     /** Settings › Appearance › Persona look: a built-in's id or a hub package's ([PersonaStore]), kept while the package is away. */
     val personaId: StateFlow<String> = currentPersona.asStateFlow()
     private val currentFace = MutableStateFlow(PersonaDesign.fromId(currentPersona.value))
@@ -104,9 +109,10 @@ class AppStyleStore(context: Context) {
     val personaChosen: Boolean get() = preferences.contains(KEY_PERSONA)
 
     fun setPersonaId(id: String) {
-        preferences.edit().putString(KEY_PERSONA, id).apply()
-        currentPersona.value = id
-        currentFace.value = PersonaDesign.fromId(id)
+        val restored = restoredPersonaId(id)
+        preferences.edit().putString(KEY_PERSONA, restored).apply()
+        currentPersona.value = restored
+        currentFace.value = PersonaDesign.fromId(restored)
     }
 
     /** The level glass actually renders at, before any runtime downgrade. */

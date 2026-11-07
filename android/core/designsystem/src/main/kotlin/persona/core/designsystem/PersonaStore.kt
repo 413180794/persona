@@ -124,6 +124,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
 
     /** Picks a package, downloading it first; on failure the choice stays as it was and [error] says why. */
     suspend fun choose(p: PersonaInfo) {
+        if (!p.usable) return
         val asked = ++choices
         lock.withLock {
             if (!onPhone(p)) download(p, packs() ?: return@withLock)
@@ -152,8 +153,9 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
 
     /** Another device chose [id] (the hub's `look` push): show it here, downloading its package first. */
     suspend fun follow(id: String) {
-        if (id.isEmpty() || id == style.personaId.value) return
-        val design = PersonaDesign.entries.firstOrNull { it.id == id }
+        val restored = restoredPersonaId(id)
+        if (restored == style.personaId.value) return
+        val design = PersonaDesign.entries.firstOrNull { it.id == restored }
         if (design != null) {
             choices++
             style.setFace(design)
@@ -161,8 +163,9 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
             return
         }
         val asked = ++choices
-        style.setPersonaId(id)
-        val p = _offered.value.firstOrNull { it.id == id } ?: run { refresh(); return }
+        style.setPersonaId(restored)
+        _current.value = null
+        val p = _offered.value.firstOrNull { it.id == restored } ?: run { refresh(); return }
         lock.withLock {
             if (!onPhone(p)) download(p, packs() ?: return@withLock)
             if (asked == choices && onPhone(p)) _current.value = p

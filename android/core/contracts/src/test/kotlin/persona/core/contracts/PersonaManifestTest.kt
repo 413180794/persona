@@ -40,8 +40,11 @@ class PersonaManifestTest {
 
     @Test fun refusesWhatTheHubWouldLeaveOut() {
         assertNull(manifest().problem)
-        assertEquals("id persona-circuit", (manifest(id = "persona-circuit").problem).zhAny())
-        assertEquals("id persona", (manifest(id = "persona").problem).zhAny())
+        PersonaManifest.RESERVED_IDS.forEach { id ->
+            assertEquals("id $id", manifest(id = id).problem)
+        }
+        assertNull(manifest(id = "nwverse").problem)
+        assertNull(manifest(id = "custom-look").problem)
         assertEquals("id Bad_Id", (manifest(id = "Bad_Id").problem).zhAny())
         assertEquals("no idle dot", (manifest(idle = false).problem).zhAny())
         assertEquals("file ../x.png", (manifest(file = "../x.png").problem).zhAny())

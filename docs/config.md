@@ -19,7 +19,7 @@ Persona is the only supported spelling. The canonical binary is `personad`, the 
 
 See [the naming contract](rename.md) and [the approval-gated cutover](persona-cutover.md). Existing installations require explicit, one-time service/config/data/MCP migration before running this version. A source merge does not change live services. Back up and identify the actual storage first; two independent stores must never be merged automatically.
 
-Actual registered bundle / application IDs, App Groups, iCloud containers and keychain access groups come from private configuration and stay unchanged. Naming their carrier variables `PERSONA_*` does not change their values. Other runtime contracts, caches and persisted preferences need the cutover described above. The avatar model remains `persona`: Mochi's ID is `persona`, Visor's is `persona-visor`.
+Actual registered bundle / application IDs, App Groups, iCloud containers and keychain access groups come from private configuration and stay unchanged. Naming their carrier variables `PERSONA_*` does not change their values. Other runtime contracts, caches and persisted preferences need the cutover described above. The avatar model remains `persona`: the two bundled choices are Mochi (`persona`) and Milk Frog (`nwverse`); retired choices resolve to Mochi, see [Avatars](persona.md).
 
 The role-specific root resolver reads only canonical service definitions, including HOME-only environment-file overrides; it does not execute shell configuration or expose credentials. Missing required files fail closed. Queries are read-only, and `--prepare` initializes only the selected root without compatibility links.
 

@@ -11,8 +11,5 @@
   "missing": "选中的形象现在不在 hub 上，先用默认形象；回来后会自动换回。",
   "none": "hub 上还没有别的形象。到{extensions}装一个带形象的扩展。",
   "none_extensions": "设置 › 扩展",
-  "visor": "面罩",
-  "circuit": "汇流",
-  "follows_theme": "颜色随主题色",
   "from_extension": "来自 {name}"
 }

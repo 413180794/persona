@@ -108,11 +108,11 @@ func TestExtensionLooks(t *testing.T) {
 	app := appClient(h)
 
 	_, out := call(t, mux, "GET", "/api/v1/looks", master, "")
-	if len(out["looks"].([]any)) != 3 || lookByID(t, out, "persona-visor")["source"] != "builtin" || lookByID(t, out, "persona")["app_icon"] != "persona" {
-		t.Fatalf("before: the built-in looks only: %v", out)
+	if len(out["looks"].([]any)) != 1 || lookByID(t, out, "persona")["source"] != "builtin" || lookByID(t, out, "persona")["app_icon"] != "persona" {
+		t.Fatalf("before: the built-in look only: %v", out)
 	}
-	if lookByID(t, out, "persona")["name"] != "团子" || lookByID(t, out, "persona-visor")["name"] != "面罩" {
-		t.Fatalf("Mochi and Visor must retain distinct identities: %v", out)
+	if lookByID(t, out, "persona")["name"] != "团子" {
+		t.Fatalf("Mochi must retain its identity: %v", out)
 	}
 	if cur := out["current"].(map[string]any); cur["id"] != nil || cur["effective"] != "persona" {
 		t.Fatalf("never chosen: %v", cur)
@@ -131,7 +131,7 @@ func TestExtensionLooks(t *testing.T) {
 		aurora["names"].(map[string]any)["en"] != "Aurora" || aurora["rev"] == "" {
 		t.Fatalf("%v", aurora)
 	}
-	if p := lookByID(t, out, "pebble"); p == nil || p["app_icon"] != "persona-circuit" {
+	if p := lookByID(t, out, "pebble"); p == nil || p["app_icon"] != "persona" {
 		t.Fatalf("%v", p)
 	}
 	var m struct {
@@ -220,7 +220,7 @@ func TestExtensionLooks(t *testing.T) {
 	reportLooks(h, nil)
 	h.looksGone(context.Background(), []string{"aurora", "pebble"}) // extensions.looks_gone
 	_, out = call(t, mux, "GET", "/api/v1/looks", master, "")
-	if c := out["current"].(map[string]any); c["id"] != "persona" || c["effective"] != "persona" || len(out["looks"].([]any)) != 3 {
+	if c := out["current"].(map[string]any); c["id"] != "persona" || c["effective"] != "persona" || len(out["looks"].([]any)) != 1 {
 		t.Fatalf("%v", out)
 	}
 	if n := broadcasts(app, "look"); n != 1 {

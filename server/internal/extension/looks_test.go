@@ -29,7 +29,7 @@ func TestExampleLooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	looks := m.Looks()
-	if len(looks) != 2 || looks[0].ID != "aurora" || looks[0].Names["en"] != "Aurora" || looks[1].AppIconFallback != "persona-circuit" {
+	if len(looks) != 2 || looks[0].ID != "aurora" || looks[0].Names["en"] != "Aurora" || looks[1].AppIconFallback != "persona" {
 		t.Fatalf("%+v", looks)
 	}
 	for _, l := range looks {
@@ -39,6 +39,23 @@ func TestExampleLooks(t *testing.T) {
 	}
 	if n := len(looks[0].Files()); n != 11 {
 		t.Fatalf("aurora names %d files, want 11", n)
+	}
+}
+
+func TestReservedLookIDsAndRetiredIconFallbacks(t *testing.T) {
+	for _, id := range append([]string{DefaultLook}, RetiredLookIDs...) {
+		t.Run(id, func(t *testing.T) {
+			l := LookItem{ID: id, Name: "Custom look", AppIconFallback: DefaultLook, Avatar: LookAvatar{Sizes: map[string]string{"128": "a.png"}}}
+			if err := l.check(); err == nil {
+				t.Fatal("a package can reclaim a reserved drawing ID")
+			}
+			if id != DefaultLook {
+				l.ID, l.AppIconFallback = "custom-look", id
+				if err := l.check(); err == nil {
+					t.Fatal("a new manifest can request a removed app icon")
+				}
+			}
+		})
 	}
 }
 

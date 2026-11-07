@@ -1,6 +1,6 @@
 // Persona's look (avatar, docs/persona.md, docs/extensions.md "Avatar"): its name, its face and the animated dot, from a
-// package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or one the page draws: Mochi (the
-// default, MochiFace), Visor and Circuit (BuiltinFaces). The choice is the user's, kept on the hub (PUT /looks/current) so
+// package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or the default dumpling (MochiFace).
+// The choice is the user's, kept on the hub (PUT /looks/current) so
 // every device shows the same one; localStorage keeps the last one for the first paint and for older hubs.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
 import { BASE } from "./base";
@@ -9,16 +9,22 @@ import { stateName } from "./state-labels";
 
 /** The default, Mochi (nothing saved means it). */
 export const BUILTIN_PERSONA = "persona";
-/** Visor, the apps' default until 2026-11-03 (the page showed its own mark for this id until #3200). */
-export const MARK_PERSONA = "persona-visor";
-/** Circuit. */
-export const CIRCUIT_PERSONA = "persona-circuit";
-/** The built-ins every app draws: a package may not take their ids. */
-const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA, "persona-pixel", "persona-facet", "persona-blob"];
+/** Retired bundled IDs stay reserved so a package cannot hijack an existing user's selection. */
+export const RETIRED_PERSONAS = ["persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob"] as const;
+const RESERVED: readonly string[] = [BUILTIN_PERSONA, ...RETIRED_PERSONAS];
+
+export function isRetiredPersona(id: string): boolean {
+  return (RETIRED_PERSONAS as readonly string[]).includes(id);
+}
+
+/** A retired selection always becomes the default, including before the hub is reachable. */
+export function normalizePersonaChoice(id: string): string {
+  return !id || isRetiredPersona(id) ? BUILTIN_PERSONA : id;
+}
 
 /** Whether a choice is drawn by the page rather than a package. */
 export function isBuiltinPersona(id: string): boolean {
-  return RESERVED.includes(id);
+  return id === BUILTIN_PERSONA;
 }
 
 export type PersonaState = "idle" | "thinking" | "working" | "needs_you" | "offline";

@@ -8027,7 +8027,7 @@ def personas():
         for pid in sorted(os.listdir(base)):
             root = os.path.join(base, pid)
             mpath = os.path.join(root, "persona.json")
-            if pid.startswith(".") or pid in seen or not os.path.isfile(mpath):
+            if pid == "persona" or pid in RETIRED_LOOK_IDS or pid.startswith(".") or pid in seen or not os.path.isfile(mpath):
                 continue
             seen.add(pid)
             m = json.load(open(mpath))
@@ -8049,6 +8049,8 @@ def personas():
 def persona_file(rest):
     """<id>/<file> inside its package, or None."""
     pid, _, f = rest.partition("/")
+    if pid == "persona" or pid in RETIRED_LOOK_IDS:
+        return None
     ext = _ext_looks().get(pid)
     if ext:
         return os.path.join(LOOKS_ROOT, f) if f in ext[1] else None
@@ -8078,8 +8080,8 @@ _LOOKS_ARG = os.environ.get("MOCK_LOOKS", "")
 LOOKS_ROOT = (os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "schema", "extension", "examples", "example-looks")
               if _LOOKS_ARG == "example" else _LOOKS_ARG)
 LOOK_CHOICE = {"id": os.environ.get("MOCK_LOOK") or None, "updated_at": "2026-11-05T12:00:00Z"}
-BUILTIN_LOOKS = [("persona", "团子", {"en": "Mochi", "ja": "だんご"}), ("persona-visor", "面罩", {"en": "Visor", "ja": "バイザー"}),
-                 ("persona-circuit", "汇流", {"en": "Circuit", "ja": "サーキット"})]
+BUILTIN_LOOKS = [("persona", "团子", {"en": "Mochi", "ja": "だんご"})]
+RETIRED_LOOK_IDS = {"persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob"}
 
 
 def _ext_looks():
@@ -8089,6 +8091,8 @@ def _ext_looks():
     ext = json.load(open(os.path.join(LOOKS_ROOT, "persona-extension.json")))
     out = {}
     for l in ext.get("contributes", {}).get("looks", []):
+        if l["id"] in RETIRED_LOOK_IDS or l["id"] in {"persona", "nwverse"}:
+            continue
         av = l["avatar"]
         files = sorted(set(av["sizes"].values()) | ({av["svg"]} if av.get("svg") else set())
                        | set((av.get("dark") or {}).get("sizes", {}).values())

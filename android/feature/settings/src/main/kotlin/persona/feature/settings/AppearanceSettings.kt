@@ -188,7 +188,8 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
     // Shown at once on tap: the choice may wait for a refresh already fetching thumbnails.
     var asked by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(packs) { packs?.refresh() }
-    val chosen = if (demo) PersonaDesign.Default.id else chosenId
+    val chosen = if (demo || (chosenId != PersonaDesign.Default.id && offered.none { it.id == chosenId }))
+        PersonaDesign.Default.id else chosenId
     val pack = offered.firstOrNull { it.id == chosen }?.takeIf { packs?.onPhone(it) == true }
     val design = PersonaDesign.fromId(chosen)
     val palette = PersonaTheme.palette

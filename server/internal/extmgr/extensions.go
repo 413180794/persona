@@ -375,9 +375,9 @@ func (h *Manager) attachExtensions(ctx context.Context) {
 		}
 	}
 	reg.Reserve("connectors", own...)
-	// The looks the apps draw and the ones built into personad (looks.go): no extension's look takes their ids.
-	// (The hub's own persona packages win over an extension's look of the same id: the hub leaves that one out.)
+	// Current and retired app-drawn IDs stay reserved; the hub separately gives its own packs precedence.
 	reg.Reserve("looks", extension.BuiltinLooks...)
+	reg.Reserve("looks", extension.RetiredLookIDs...)
 	// No agent_sources id is reserved: the hub has no personal agents source of its own (extension_agents.go).
 	if path := siblingProgram(wechat.Program); path != "" {
 		if err := reg.AddBuiltin(wechatManifest(h, path), filepath.Dir(path), true); err != nil {

@@ -552,13 +552,11 @@ data class ExtensionThemeItem(
 )
 
 /**
- * A look every app draws itself: Mochi (the default), Visor, Circuit.
+ * The look every app draws itself: Mochi (the default).
  */
 object ExtensionBuiltinLook {
     const val PERSONA = "persona"
-    const val PERSONA_VISOR = "persona-visor"
-    const val PERSONA_CIRCUIT = "persona-circuit"
-    val ALL = listOf("persona", "persona-visor", "persona-circuit")
+    val ALL = listOf("persona")
 }
 
 /**

@@ -18,6 +18,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/extension"
 )
 
 // Personas (docs/persona.md): a look for Persona — its name, face, the animated dot in the Persona tab's top bar and the
@@ -44,9 +46,6 @@ const (
 var builtinPersonas embed.FS
 
 var personaIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
-
-// personaBuiltins are the looks the apps draw themselves (Mochi, the default; Visor; Circuit): a package may not take their ids.
-var personaBuiltins = map[string]bool{"persona": true, "persona-visor": true, "persona-circuit": true, "persona-pixel": true, "persona-facet": true, "persona-blob": true}
 
 // personaStates are the dot's states; idle is the one a package must have (the app shows it for any it lacks).
 var personaStates = []string{"idle", "thinking", "working", "needs_you", "offline"}
@@ -351,8 +350,8 @@ func openPersona(fsys fs.FS, id string) (*personaPackage, error) {
 	if !personaIDPattern.MatchString(id) {
 		return nil, errors.New("the directory's name is not an id (a-z, 0-9, -)")
 	}
-	if personaBuiltins[id] {
-		return nil, fmt.Errorf("%q is a built-in look's id", id)
+	if extension.ReservedLookID(id) {
+		return nil, fmt.Errorf("%q is a reserved look id", id)
 	}
 	files, total, err := personaFiles(fsys)
 	if err != nil {

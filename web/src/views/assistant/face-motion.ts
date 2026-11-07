@@ -1,4 +1,4 @@
-// The built-in faces' loops (MochiFace, BuiltinFaces): the blink, the working arc, the needs-you rock and the pulses.
+// The default face's loops (MochiFace): the blink, the working arc, the needs-you rock and the pulses.
 // They run as Web Animations, not CSS animations: a looping CSS animation sends an animationiteration event every cycle,
 // React listens for those at the root, and each one cost the page a style recalc plus (an SVG's) a layout. Five faces
 // in the persona picker's status strip kept /settings busy while nothing happened, off-screen too. A Web Animation

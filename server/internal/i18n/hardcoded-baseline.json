@@ -104,7 +104,7 @@
   "internal/hub/devices_link.go": 1,
   "internal/hub/devicetokens.go": 2,
   "internal/hub/herdrclient.go": 1,
-  "internal/hub/looks.go": 6,
+  "internal/hub/looks.go": 2,
   "internal/hub/peer_node.go": 1,
   "internal/hub/peer_pair.go": 1,
   "internal/hub/proxy_protocol.go": 1,

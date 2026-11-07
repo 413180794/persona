@@ -362,15 +362,13 @@ type ThemeItem struct {
 	Dark  ThemeColors `json:"dark"`
 }
 
-// BuiltinLook: A look every app draws itself: Mochi (the default), Visor, Circuit.
+// BuiltinLook: the look every app draws itself: Mochi (the default).
 const (
-	BuiltinLookPersona        = "persona"
-	BuiltinLookPersonaVisor   = "persona-visor"
-	BuiltinLookPersonaCircuit = "persona-circuit"
+	BuiltinLookPersona = "persona"
 )
 
 // BuiltinLooks are the values of BuiltinLook, in order.
-var BuiltinLooks = []string{"persona", "persona-visor", "persona-circuit"}
+var BuiltinLooks = []string{"persona"}
 
 // LookTexts: A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters
 // (the hub checks).

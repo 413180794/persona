@@ -361,10 +361,10 @@ export interface ThemeItem {
 }
 
 /**
- * A look every app draws itself: Mochi (the default), Visor, Circuit.
+ * The look every app draws itself: Mochi (the default).
  */
-export type BuiltinLook = "persona" | "persona-visor" | "persona-circuit" | (string & {});
-export const BUILTIN_LOOKS = ["persona", "persona-visor", "persona-circuit"] as const;
+export type BuiltinLook = "persona" | (string & {});
+export const BUILTIN_LOOKS = ["persona"] as const;
 
 /**
  * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub

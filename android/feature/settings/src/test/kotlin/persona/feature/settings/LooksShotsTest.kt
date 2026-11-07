@@ -18,6 +18,13 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -31,6 +38,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -91,11 +100,14 @@ class LooksShotsTest {
         }
     }
 
-    private inner class FakeHub(var current: LookCurrent) : PersonaPacks {
+    private inner class FakeHub(
+        var current: LookCurrent,
+        val looks: List<LookView> = PersonaDesign.entries.map { LookView(it.id, "builtin", it.id, appIcon = it.id) } + extensionLooks(),
+        private val files: File = example,
+    ) : PersonaPacks {
         val chosen = mutableListOf<Pair<String, Boolean>>()
-        val looks = PersonaDesign.entries.map { LookView(it.id, "builtin", it.id, appIcon = it.id) } + extensionLooks()
         override suspend fun list(): List<PersonaInfo> = looks.mapNotNull { it.pack }
-        override suspend fun file(id: String, file: String): ByteArray = File(example, file).readBytes()
+        override suspend fun file(id: String, file: String): ByteArray = File(files, file).readBytes()
         override suspend fun looks(): LookListing = LookListing(looks, current)
         override suspend fun choose(id: String, ifUnset: Boolean): LookCurrent {
             chosen += id to ifUnset
@@ -126,7 +138,7 @@ class LooksShotsTest {
         val hub = FakeHub(LookCurrent(null, "persona"))
         val store = PersonaStore(context, style) { hub }
         runBlocking { store.refresh() }
-        // This phone's old choice ("Visor") moved up to a hub that had none.
+        // This phone's explicit default moved up to a hub that had none.
         assertEquals(listOf("persona" to true), hub.chosen)
         assertEquals(listOf("aurora", "pebble"), store.offered.value.map { it.id })
 
@@ -154,7 +166,7 @@ class LooksShotsTest {
                 }
             }
         }
-        for (look in listOf("aurora", "pebble", "persona-circuit")) {
+        for (look in listOf("aurora", "pebble", "persona")) {
             val design = PersonaDesign.entries.firstOrNull { it.id == look }
             if (design != null) store.choose(design) else runBlocking { store.choose(store.offered.value.first { it.id == look }) }
             for (d in listOf(false, true)) {
@@ -163,6 +175,95 @@ class LooksShotsTest {
             }
         }
         // Choosing here goes to the hub, for every device.
-        rule.waitUntil(5_000) { hub.current.id == "persona-circuit" }
+        rule.waitUntil(5_000) { hub.current.id == "persona" }
+    }
+
+    @Test fun retiredPreferencesAndHubChoicesFallBackWithoutBlockingExtensions() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val preferences = context.getSharedPreferences("persona-appearance", 0)
+        PersonaManifest.RETIRED_IDS.forEach { id ->
+            preferences.edit().clear().putString("persona", id).commit()
+            val style = AppStyleStore(context)
+            assertEquals("persona", style.personaId.value)
+            assertEquals(PersonaDesign.Default, style.face.value)
+            val hub = FakeHub(LookCurrent(), emptyList())
+            val store = PersonaStore(context, style) { hub }
+            runBlocking { store.refresh() }
+            assertEquals(listOf("persona" to true), hub.chosen)
+            style.setPersonaId("custom-look")
+            runBlocking { store.follow(id) }
+            assertEquals("persona", style.personaId.value)
+            assertNull(store.current.value)
+            assertEquals("persona", AppStyleStore(context).personaId.value)
+        }
+    }
+
+    @Test fun unknownHubChoiceStopsShowingThePreviousPackageAndKeepsItsIntent() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("persona-appearance", 0).edit().clear().commit()
+        val style = AppStyleStore(context)
+        val hub = FakeHub(LookCurrent("pebble", "pebble"))
+        val store = PersonaStore(context, style) { hub }
+        runBlocking { store.refresh() }
+        assertEquals("pebble", store.current.value?.id)
+        hub.current = LookCurrent("future-look", "persona")
+        runBlocking { store.follow("future-look") }
+        assertNull(store.current.value)
+        assertEquals(PersonaDesign.Default, style.face.value)
+        assertEquals("future-look", style.personaId.value)
+        assertEquals("future-look", AppStyleStore(context).personaId.value)
+    }
+
+    @Test fun drawsOnlyTheTwoBundledLooksInEveryStyleAndAppearance() {
+        val frog = generateSequence(File("").absoluteFile) { it.parentFile }
+            .map { File(it, "server/internal/hub/personas/nwverse") }.first { it.isDirectory }
+        android.graphics.BitmapFactory.decodeFile(File(frog, "tiers/frog/avatar/256.png").path)
+        val manifest = JsonCodec.decodeFromString<PersonaManifest>(File(frog, "tiers/frog/persona.json").readText())
+        val hub = FakeHub(LookCurrent("persona", "persona"), listOf(
+            LookView("persona", "builtin"),
+            LookView("nwverse", "hub", rev = "0123456789abcdef", manifest = manifest),
+        ), frog)
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.getSharedPreferences("persona-appearance", 0).edit().clear().commit()
+        val appearance = AppStyleStore(context)
+        val store = PersonaStore(context, appearance) { hub }
+        runBlocking { store.refresh() }
+        assertEquals(listOf("nwverse"), store.offered.value.map { it.id })
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        rule.setContent {
+            PersonaTheme(style = style, darkTheme = dark, reduceMotion = true) {
+                val pack by store.current.collectAsState()
+                CompositionLocalProvider(LocalAppStyleStore provides appearance, LocalPersonaStore provides store,
+                    LocalPersonaPack provides pack) {
+                    Box(Modifier.testTag("shot").width(400.dp).height(760.dp)
+                        .background(PersonaTheme.palette.background).padding(Tokens.Space.l)) {
+                        PersonaSettings(demo = false)
+                    }
+                }
+            }
+        }
+        rule.waitUntil(5_000) { store.pictures.value > 0 }
+        rule.onAllNodes(hasClickAction()).assertCountEquals(2)
+        rule.onNodeWithText("团子").assertIsSelected()
+        rule.onNode(hasText(manifest.name) and hasClickAction()).performClick()
+        rule.waitUntil(5_000) { store.current.value?.id == "nwverse" }
+        rule.onNode(hasText(manifest.name) and hasClickAction()).assertIsSelected()
+        rule.onNodeWithText("团子").performClick()
+        rule.waitUntil(5_000) { appearance.personaId.value == "persona" && hub.current.id == "persona" }
+        val shots = mutableListOf<ByteArray>()
+        for (s in AppStyle.entries) {
+            style = s
+            for (d in listOf(false, true)) {
+                dark = d
+                Snapshot.sendApplyNotifications()
+                capture("bundled-${s.key}-${if (d) "dark" else "light"}")
+                shots += File(out(), "bundled-${s.key}-${if (d) "dark" else "light"}.png").readBytes()
+            }
+            assertNotEquals(shots[shots.lastIndex - 1].contentHashCode(), shots.last().contentHashCode())
+        }
+        appearance.setPersonaId("unknown-look")
+        Snapshot.sendApplyNotifications()
+        rule.onNodeWithText("团子").assertIsSelected()
     }
 }

@@ -31,9 +31,7 @@ var builtinLookNames = map[string]struct {
 	name  string
 	names map[string]string
 }{
-	"persona":         {"团子", map[string]string{"en": "Mochi", "ja": "だんご"}},
-	"persona-visor":   {"面罩", map[string]string{"en": "Visor", "ja": "バイザー"}},
-	"persona-circuit": {"汇流", map[string]string{"en": "Circuit", "ja": "サーキット"}},
+	"persona": {"团子", map[string]string{"en": "Mochi", "ja": "だんご"}},
 }
 
 // lookView is one look as the apps list it.
@@ -135,7 +133,7 @@ func extensionLookPackage(lp extwire.LookPackage, l extension.LookItem) (*person
 	if err != nil {
 		return nil, err
 	}
-	pkg.source = &lookSource{extension: lp.Extension, name: lp.ExtensionName, appIcon: l.AppIconFallback}
+	pkg.source = &lookSource{extension: lp.Extension, name: lp.ExtensionName, appIcon: extension.DefaultLook}
 	extLooks.mu.Lock()
 	if len(extLooks.pkgs) > 256 { // versions come and go; a hub has a handful of looks
 		clear(extLooks.pkgs)
@@ -180,7 +178,7 @@ func lookManifest(lp extwire.LookPackage, l extension.LookItem) map[string]any {
 	}
 	m := map[string]any{
 		"format": personaFormat, "id": l.ID, "name": l.Name, "avatar": avatar, "dot": dot,
-		"app_icon_fallback": l.AppIconFallback,
+		"app_icon_fallback": extension.DefaultLook, // old manager reports may still name a retired icon
 		"source":            map[string]any{"kind": "extension", "extension": lp.Extension, "extension_name": lp.ExtensionName},
 	}
 	if l.Subtitle != "" {

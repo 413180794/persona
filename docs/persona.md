@@ -1,6 +1,6 @@
 # Avatar (persona)
 
-Here `persona` still means the avatar (name / picture / status dot); it is not renamed because the product is now called Persona. The built-in avatar IDs `persona` (the default Mochi) / `persona` (Visor) / `persona-circuit` (Circuit) / `persona-pixel` (Pixel) / `persona-facet` (Facet) / `persona-blob` (Jelly), `persona.json`, protocol fields, and cache identities stay compatible; the new default pack directory is `~/.persona/personas`, and the old `~/.persona/personas` keeps working, see [Naming and compatibility](config.md#命名与兼容).
+Here `persona` means the avatar (name / picture / status dot), not a separate product. The bundled catalog contains only **Mochi** (`persona`, the default) and **Milk Frog** (`nwverse`, the hub's downloadable pack). The former Visor, Circuit, Pixel, Facet and Jelly drawings are retired. Their IDs remain reserved only for compatibility; they are not selectable and saved choices display Mochi. Pack manifests and protocol fields retain their `persona` names; see [Naming and configuration](config.md#naming-and-configuration).
 
 An avatar = Persona's **name**, **picture**, the **animated status dot** in Persona's top bar, and the **App icon** (the logo inside the App and the home screen icon), optionally with a **color scheme**.
 You pick it in **Settings › Appearance › Avatar**, and once picked all of these change together: the face and name in the top bar (only the face, top left, in the new shell), the sidebar card, the profile page, the input field's "Ask xxx…",
@@ -10,22 +10,10 @@ the Dynamic Island and Lock Screen Live Activity, the logo in front of the main 
 avatar (this document), theme color (`ThemeColor`), and interface style (`AppStyle`, which only governs how components are drawn); see `docs/ios.md` ("Design language").
 An avatar's color scheme is only used when the theme color is set to **Match Avatar**; previously picking an avatar overrode the interface style's colors (pick Clay, then Milk Baby, and the purple was gone).
 
-- **Built-in avatars**: drawn by the App itself (`AssistantAvatar` → `Shared/Design/PersonaFace.swift`, vector, crisp at any size), with no color scheme, all named Persona. They are the only ones in the repo:
-  - **Default avatar "Mochi"** (id `persona`, made the default on request 2026-11-03): the waving white mochi from the App icon, drawn with the icon's shape and colors:
-    a paper-colored round base (in dark mode, the dark brown base of the icon's dark variant), black outline, two eyes, orange blush, a raised little hand, and three motion lines. **It doesn't follow the theme color**: its colors are what make it look like the icon.
-    Below 36 pt the motion lines and highlights are dropped and the eyes and blush enlarged, so it's still recognizable as a small avatar in lists. The card reads "Mochi · App icon colors".
-  - **Visor** (id `persona`, the default before 2026-11-03, now optional): drawn in the current theme color. The card reads "Visor".
-  - **Circuit** (id `persona-circuit`, set by the user on 2026-11-01 as an option, not the default): three traces flowing into a core with two eyes, drawn in the current theme color. No download needed; the card reads "Circuit".
-  - **Pixel / Facet / Jelly** (id `persona-pixel` / `persona-facet` / `persona-blob`, #350, chosen by the user from a set of style candidates): listed after Circuit, also drawn in the current theme color, no download needed, animated in all five states; the Dynamic Island / Lock Screen use each state's still frame.
-    Pixel is a small 8 × 8 grid face on a dark base whose eyes move cell by cell, with four cells on the mouth lighting up in turn like a loading bar while working; Facet is nine folded facets fanning out from the center with slanted eyes, with light and shade rotating like a passing sweep of light while working; Jelly is a blob of jelly on a light base with big eyes and blush that squashes and springs back, edges wobbling gently, while working.
-- **Changing the default leaves people who already chose alone**: the choice is stored in UserDefaults `persona.id`, written only when a card is tapped. A phone that never chose has no such key, and `PersonaStore.chosenID` falls back to the new default `persona`;
-  someone who chose Visor has `persona` stored and still gets Visor; same for Circuit or an avatar pack. That's why the new default got a new id instead of redrawing `persona` as Mochi (`PersonaTests.mochiIsTheDefaultAndAnEarlierChoiceStays`).
-- **Android** (`PersonaFace.kt` in `core/designsystem`, `PersonaDesign.Mochi`): a Canvas drawing from the same icon coordinates with the same five states, also the default since 2026-11-04, with the same migration rule (`AppStyleStore.personaId`).
-- **Web** (`web/src/views/assistant/MochiFace.tsx`): an SVG drawn from the same icon coordinates, colors from `--mochi-*` in `styles.css` (light / dark sets), animated with Web Animations (`face-motion.ts`; CSS animations made the whole page recompute styles every cycle), stopped under Reduce Motion.
-  The web's old built-in avatar was the page's own logo (id `persona`; choosing it stored nothing in `localStorage`); the default is now Mochi.
-  Because people who chose the built-in stored nothing, "never chose" can't be told apart from "chose the logo", so on the web they all switch to Mochi; those who chose an avatar pack are unchanged.
-  Since 2026-11-06 (#3200) the web's `persona` is Visor like on the other platforms, and Circuit is available too (`web/src/views/assistant/BuiltinFaces.tsx`, drawn from the coordinates in Android's `PersonaFace.kt`, in the accent color);
-  "logo" is no longer a separate option: the web's brand mark (`AppMark`: top of the sidebar, login page) and the tab icon follow the avatar (`web/src/lib/look-icon.ts`; for Mochi it is the App icon itself).
+- **Built-in drawing**: only **Mochi** (id `persona`), the waving white dumpling from the App icon. Its paper-colored base, black outline, eyes, orange blush and raised hand use the icon's own light / dark colors, not the selected theme color. Small sizes omit motion lines and highlights and enlarge the eyes and blush.
+- **Restoring a choice**: the hub stores the raw choice and timestamp, but `current.effective` resolves an unavailable or unknown ID to `persona`. Clients use that effective ID, reject retired IDs in downloaded manifests, and normalize retired local drawing settings to Mochi. An extension cannot reclaim a retired ID and unexpectedly replace an earlier choice.
+- **Android**: `PersonaFace.kt` in `core/designsystem` draws only `PersonaDesign.Mochi`, with the same five states and icon coordinates. `AppStyleStore.personaId` caches the choice.
+- **Web**: `web/src/views/assistant/MochiFace.tsx` draws the SVG in the `--mochi-*` light / dark colors from `styles.css`. Web Animations (`face-motion.ts`) stop under Reduce Motion. The selected pack supplies the in-app brand mark; the packaged icon fallback is always Mochi (`web/src/lib/look-icon.ts`).
 - On **Android**, what follows the avatar: the top bar face, the sidebar / chat list, the floating capsule, and the cards in Settings (all through `PersonaFace` / `LocalPersonaPack`). What doesn't: the launcher icon (only Mochi is packaged, see extensions.md ("Avatars")),
   the small notification icon, and the icons of the Quick Settings tile and widgets (`ic_stat`: the system requires monochrome vector resources, so it can only be the packaged image).
 - **Hub built-in avatars**: avatar packs compiled into personad (`server/internal/hub/personas/<id>/`), present on every hub with no manual install; the phone downloads and caches one when it's selected.
@@ -86,14 +74,14 @@ Avatars are often third-party characters found online (sometimes with another pl
 | Field | Description |
 | --- | --- |
 | `format` | 1. Neither hub nor App accepts any other value (an incompatible format change later bumps it, and old Apps simply don't see new packs) |
-| `id` | `a-z0-9-`, at most 32 characters, must match the directory name; `persona`, `persona`, `persona-circuit`, `persona-pixel`, `persona-facet`, `persona-blob` are reserved for built-in avatars (rejected by hub, phone, and web; hubs before 2026-11-03 only block `persona`) |
+| `id` | `a-z0-9-`, at most 32 characters, matching the directory name. `persona` and the five retired IDs (`persona-visor`, `persona-circuit`, `persona-pixel`, `persona-facet`, `persona-blob`) are reserved and rejected as pack IDs, including extension packs. `nwverse` belongs to the bundled hub pack |
 | `name` / `subtitle` | `name` is used in the top bar, sidebar, profile page, and input field; `subtitle` only in Settings |
 | `avatar.sizes` | Side length (pixels) → file, square PNGs. The App picks the smallest one that's big enough for "display points × screen scale" and crops it to a circle. `safe` is the ratio of the circle holding the important content to the inscribed circle (1 = the whole inscribed circle is safe; the script's images are already round) |
 | `dot.size` | Frame side length (pixels). The top bar shows it at 46 pt; 144 px is exactly 48 pt @3x |
 | `dot.states` | One APNG per state for five states (a plain PNG when there's only one frame); `idle` is required, and the App uses `idle` for any missing state. `fps` is only used when the file doesn't specify per-frame durations; `frames` is only for humans |
 | `colors` | One set of `#RRGGBB` per appearance, see "Color scheme" below. The whole block can be omitted (change only the face, not the colors) |
 | `about` | Optional, a few words (no more than 10; Milk Frog's is "NWVERSE level"): the second line of the card in **Settings › Appearance › Avatar**, replacing the color swatches (built-in avatars show "Follows the theme color" there); on Android, the option's description line |
-| `app_icon_fallback` | Optional, the id of a built-in avatar (`persona` / `persona` / `persona-circuit`): the home screen icon uses that one, see "App icon" below. Missing or an unknown id means the default (Mochi). The logo inside the App still uses the pack's own picture |
+| `app_icon_fallback` | Optional; the only supported built-in icon is `persona` (Mochi). Missing, retired or unknown values fall back to Mochi. The logo inside the App still uses the pack's own picture |
 | `tiers` | Optional, only for tiered avatars: where the level comes from, the default tier, and each tier's manifest, see "Tiered avatars" below. The hub doesn't send it to phones |
 
 **Validation rules**
@@ -107,14 +95,9 @@ Avatars are often third-party characters found online (sometimes with another pl
 - **Script**: `make_persona.py check` checks these rules together with the contrast floor.
 ## App icon
 
-The avatar decides the App icon (requested 2026-11-05, #3203): previously **Settings › Appearance › App Icon** was a separate item and the sidebar logo was hardcoded to the default icon, so after choosing Visor the home screen and sidebar still showed Mochi.
-Now the avatar is the only choice; the App icon follows it and has no settings page of its own.
+The avatar decides the in-app logo; there is no separate App icon picker. Only Mochi's packaged home screen icon remains. Downloadable hub and extension packs retain their own in-app picture but use Mochi for surfaces that require a bundled icon. Retired or unknown icon fallbacks also resolve to Mochi.
 
-- **One packaged icon per built-in avatar** (`AppIconChoice`, mapped by avatar id, `Persona.appIcon`): Mochi = the primary icon `AppIcon` (paper-colored, and it also follows **Settings › Appearance › Light / Dark**,
-  see `docs/ios.md` ("Light and dark")); Visor = `AppIcon-Visor` (the visor face in system blue, on light blue for light and near-black for dark); Circuit = `AppIcon-Circuit` (the circuit face in teal, on misty teal / near-black);
-  Pixel = `AppIcon-Pixel` (indigo), Facet = `AppIcon-Facet` (purple), Jelly = `AppIcon-Blob` (orange), likewise pale on a light base and near-black on a dark base (#350).
-  These historical icon assets were rendered from the App's own `PersonaFace`. The small Mac rendering helper formerly used by `scripts/assets/make_alt_icons.py` was removed with the reduced built-in avatar set (#6220);
-  icons can't follow the theme color, so each has a fixed color. A built-in avatar added without an icon gets the default (`AppIconChoice(lookID:)`); adding an icon = an entry in the script, a case in `AppIconChoice`, and a name in the alternate icon list in `project.yml` (`AppIconChoiceTests` checks the three agree and that every built-in avatar has its own icon).
+- **Packaged icon**: Mochi uses the primary `AppIcon`, plus its fixed Light / Dark variants. The preview is read from the same art by `scripts/assets/make_alt_icons.py`; no retired drawing is generated. The former Mac face-rendering helper was removed with the retired icons (#6220).
 - **The logo inside the App** (`AppGlyph`: the main chat row in the sidebar, the top of Settings, the welcome / pairing pages): built-in avatars draw their icon; avatar packs draw the pack's own picture (cropped to the icon's rounded square).
 - **Home screen icon** (`AppIconModel.follow`): checked once when an avatar is chosen, when light / dark changes, and every time the App returns to the foreground; if it doesn't match, it calls `setAlternateIconName`, and the system shows its "icon changed" alert once (unavoidable); if it matches, nothing happens and nothing pops up.
   While an avatar pack is still downloading, it switches to the icon the pack declares in the list (`PersonaStore.appIcon`), so it doesn't switch back to the default first and then back again. Demo mode uses Mochi's. The watch and Mac have only one icon.
@@ -123,7 +106,7 @@ Now the avatar is the only choice; the App icon follows it and has no settings p
 - **Migrating old settings: the avatar wins**. The system remembers the home screen icon and the App doesn't store it, so there's no data to migrate: the first time the App returns to the foreground after updating, `follow` finds the icon doesn't match the avatar and switches to the avatar's icon (one alert).
   - Mochi + default icon (the vast majority): already matches; nothing changes.
   - Mochi + Peach / p. / Aura: these three have been removed from the bundle (they don't correspond to any avatar), so the system can't find that icon set and the home screen already shows the primary icon; `follow` recognizes the removed icon and doesn't switch or alert.
-  - Visor / Circuit + any icon: switches to Visor's / Circuit's new icon.
+  - A retired drawing or icon choice resolves to Mochi; existing downloaded packs remain available when still installed.
   - Mochi with light-only / dark-only chosen: still the light-only / dark-only set as before.
 
 ## Tiered avatars (Milk Frog)
@@ -206,7 +189,7 @@ Playback uses `UIImageView.animationImages` (`PersonaFramesView`):
 
 One state at 144 px × 24 frames is about 2 MB decoded; a whole pack is about 1–2 MB.
 
-Built-in avatars (Mochi, Visor, Circuit, Pixel, Facet, Jelly) don't use bitmaps; `AssistantAvatar` draws the same five states:
+The built-in Mochi drawing doesn't use bitmaps; `AssistantAvatar` draws the same five states:
 
 - Idle blinks every 3.6 seconds: a periodic TimelineView plus a short phase animation, with no redraws between blinks.
 - Thinking, working, and needs you animate at 15 fps.

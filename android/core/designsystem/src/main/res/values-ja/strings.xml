@@ -24,10 +24,6 @@
     <string name="designsystem_persona_button_state">Persona、%1$s</string>
     <string name="designsystem_face_mochi">だんご</string>
     <string name="designsystem_face_mochi_summary">アプリアイコンの配色</string>
-    <string name="designsystem_face_visor">バイザー</string>
-    <string name="designsystem_face_visor_summary">テーマカラーに合わせた色</string>
-    <string name="designsystem_face_circuit">サーキット</string>
-    <string name="designsystem_face_circuit_summary">配線がコアに集まる。テーマカラーに合わせた色</string>
     <string name="designsystem_avatars_list_failed">アバターの一覧を取得できませんでした：%1$s</string>
     <string name="designsystem_avatars_missing_file">%1$sがありません</string>
     <string name="designsystem_avatars_not_saved">スマートフォンに保存できませんでした</string>

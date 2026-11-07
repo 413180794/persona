@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { href, parse } from "./router";
 import { linkRoute } from "./links";
-import { BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA, isBuiltinPersona } from "./persona";
+import { BUILTIN_PERSONA, isBuiltinPersona } from "./persona";
 import { BUILTIN_LOOKS } from "./extension-wire";
 
 describe("Persona-only routing and builtin IDs", () => {
@@ -17,11 +17,10 @@ describe("Persona-only routing and builtin IDs", () => {
     expect(linkRoute("https://hub.example.com/j/session", false, "https://hub.example.com").kind).toBe("web");
     expect(linkRoute("https://hub.example.com/persona/session", false, "https://hub.example.com")).toEqual({ kind: "conversation", sid: "session" });
   });
-  it("keeps Mochi and Visor distinct and agrees with the generated schema", () => {
+  it("draws only the default locally and agrees with the generated schema", () => {
     expect(BUILTIN_PERSONA).toBe("persona");
-    expect(MARK_PERSONA).toBe("persona-visor");
-    expect(BUILTIN_LOOKS).toEqual([BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA]);
-    expect(new Set(BUILTIN_LOOKS).size).toBe(3);
+    expect(BUILTIN_LOOKS).toEqual([BUILTIN_PERSONA]);
+    expect(new Set(BUILTIN_LOOKS).size).toBe(1);
     for (const id of BUILTIN_LOOKS) expect(isBuiltinPersona(id)).toBe(true);
   });
 });

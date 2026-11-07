@@ -75,9 +75,16 @@ const (
 	LookMinSide    = wire.LookMinSide
 )
 
-// BuiltinLooks are the looks every app draws itself (the default Mochi, Visor, Circuit): no package takes their ids, and they
-// are what app_icon_fallback names.
-var BuiltinLooks = []string{"persona", "persona-visor", "persona-circuit"}
+// BuiltinLooks are the looks every app draws itself. Only Mochi remains; downloaded packs use its app icon.
+var BuiltinLooks = []string{DefaultLook}
+
+// RetiredLookIDs stay reserved so an extension cannot hijack a saved choice after its built-in artwork is removed.
+var RetiredLookIDs = []string{"persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob"}
+
+// ReservedLookID excludes both the current built-in drawing and retired choices from downloadable packages.
+func ReservedLookID(id string) bool {
+	return slices.Contains(BuiltinLooks, id) || slices.Contains(RetiredLookIDs, id)
+}
 
 // DefaultLook is the look of one who never chose (and of one whose look went away).
 const DefaultLook = "persona"
@@ -115,8 +122,8 @@ func (l LookItem) check() error {
 	if !lookID.MatchString(l.ID) {
 		return fmt.Errorf("look id %q: a-z, 0-9 and -, at most 32", l.ID)
 	}
-	if slices.Contains(BuiltinLooks, l.ID) {
-		return fmt.Errorf("look %s: a built-in look's id", l.ID)
+	if ReservedLookID(l.ID) {
+		return fmt.Errorf("look %s: a reserved look id", l.ID)
 	}
 	if n := utf8.RuneCountInString(strings.TrimSpace(l.Name)); n == 0 || n > 20 {
 		return fmt.Errorf("look %s: name: 1 to 20 characters", l.ID)

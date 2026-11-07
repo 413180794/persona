@@ -2,6 +2,10 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Retired look IDs are still reserved (#6219)
+
+- Removing a built-in drawing does not make its ID available to extensions. A saved setting can outlive that drawing; letting a new package reclaim the ID would silently change the user's choice. Share reserved-ID validation between hub disk packs and extension manifests, test old manager reports as well as new installs, and always send a valid `current.effective` fallback. Keep the raw choice and timestamp so temporary extension unavailability retains its existing restore behavior.
+
 ## Lost initial native snapshots (#6251)
 
 - A successful open can allocate a page before its first snapshot reaches the client. Retrying that request after disconnect must reuse the same owner-bound allocation, not reserve another quota slot. Store only a request ID, a bounded-body digest and a completion channel on each live session; concurrent duplicates wait outside the session mutex. Changed payloads and live-connection theft remain rejected. A disconnected retry uses the existing authorized snapshot-first resume path. Independent page instances need independent open IDs; legacy HTTP checkpoints do not share this identity.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avatarFile, dotFile, isBuiltinPersona, personaFileURL, personaProblem, personaState, usablePersonas, withChosenReady, type PersonaInfo } from "./persona";
+import { avatarFile, dotFile, isBuiltinPersona, normalizePersonaChoice, personaFileURL, personaProblem, personaState, RETIRED_PERSONAS, usablePersonas, withChosenReady, type PersonaInfo } from "./persona";
 
 const pack = (patch: Partial<PersonaInfo["manifest"]> = {}, id = "doudou"): PersonaInfo => ({
   id,
@@ -8,7 +8,7 @@ const pack = (patch: Partial<PersonaInfo["manifest"]> = {}, id = "doudou"): Pers
   manifest: {
     format: 1,
     id,
-    name: "豆豆",
+    name: "Sample look",
     avatar: { sizes: { "64": "avatar/64.png", "256": "avatar/256.png", "128": "avatar/128.png" } },
     dot: { size: 144, states: { idle: { file: "dot/idle.png", fps: 8 }, working: { file: "dot/working.png" } } },
     ...patch,
@@ -20,10 +20,8 @@ describe("persona packages", () => {
     expect(personaProblem(pack())).toBeNull();
     expect(personaProblem(pack({ format: 2 }))).toBe("format 2");
     expect(personaProblem(pack({}, "persona"))).toMatch(/^id/);
-    expect(personaProblem(pack({}, "persona-circuit"))).toMatch(/^id/);
-    expect(personaProblem(pack({}, "persona-pixel"))).toMatch(/^id/);
-    expect(personaProblem(pack({}, "persona"))).toMatch(/^id/);
-    expect(isBuiltinPersona("persona") && isBuiltinPersona("persona") && !isBuiltinPersona("doudou")).toBe(true);
+    expect(isBuiltinPersona("persona")).toBe(true);
+    expect(isBuiltinPersona("doudou")).toBe(false);
     expect(personaProblem({ ...pack(), id: "other" })).toMatch(/^id/);
     expect(personaProblem(pack({ id: "Bad_ID" }, "Bad_ID"))).toMatch(/^id/);
     expect(personaProblem(pack({ name: " " }))).toBe("no name");
@@ -34,6 +32,19 @@ describe("persona packages", () => {
     expect(personaProblem(pack({ avatar: { sizes: { "64": "/abs.png" } } }))).toMatch(/^file/);
     expect(usablePersonas([pack(), pack({ format: 9 }, "two")]).map((p) => p.id)).toEqual(["doudou"]);
     expect(usablePersonas(null)).toEqual([]);
+  });
+
+  it.each(RETIRED_PERSONAS)("reserves retired ID %s without treating it as a drawable look", (id) => {
+    expect(isBuiltinPersona(id)).toBe(false);
+    expect(normalizePersonaChoice(id)).toBe("persona");
+    expect(personaProblem(pack({}, id))).toBe(`id ${id}`);
+    expect(usablePersonas([pack({}, id), pack({}, "nwverse"), pack({}, "new-look")]).map((p) => p.id)).toEqual(["nwverse", "new-look"]);
+  });
+
+  it("keeps generic extension choices and defaults empty selections", () => {
+    expect(normalizePersonaChoice("new-look")).toBe("new-look");
+    expect(normalizePersonaChoice("")).toBe("persona");
+    expect(normalizePersonaChoice("persona")).toBe("persona");
   });
 
   it("picks the smallest avatar that is big enough, else the largest", () => {
@@ -57,7 +68,7 @@ describe("persona packages", () => {
 
 describe("a tiered look moving to another tier", () => {
   const before = [{ ...pack(), rev: "rev-egg" }, pack({}, "other")];
-  const after = [{ ...pack({ about: "NWVERSE 等级" }), rev: "rev-frog" }, pack({}, "other")];
+  const after = [{ ...pack({ about: "NWVERSE level" }), rev: "rev-frog" }, pack({}, "other")];
 
   it("shows the new tier once its files are in", () => {
     expect(withChosenReady(after, before, "doudou", true)).toBe(after);
@@ -70,7 +81,7 @@ describe("a tiered look moving to another tier", () => {
   });
 
   it("reads the words for the card", () => {
-    expect(after[0].manifest.about).toBe("NWVERSE 等级");
+    expect(after[0].manifest.about).toBe("NWVERSE level");
     expect(personaProblem(after[0])).toBeNull();
   });
 });
@@ -119,10 +130,10 @@ describe("looks (#3200)", () => {
   it("takes the packages of the looks, not the built-in ones", async () => {
     const { lookPackages, isBuiltinPersona } = await import("./persona");
     const got = lookPackages([
-      { id: "persona", source: "builtin", name: "团子", app_icon: "persona" },
-      { id: "doudou", source: "extension", name: "豆豆", app_icon: "persona", rev: "abc123", manifest: pack().manifest },
+      { id: "persona", source: "builtin", name: "Mochi", app_icon: "persona" },
+      { id: "doudou", source: "extension", name: "Sample look", app_icon: "unsupported-icon", rev: "abc123", manifest: pack().manifest },
     ]);
     expect(got.map((p) => p.id)).toEqual(["doudou"]);
-    expect(isBuiltinPersona("persona-circuit")).toBe(true);
+    expect(isBuiltinPersona("nwverse")).toBe(false);
   });
 });
