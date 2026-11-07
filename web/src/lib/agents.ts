@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import { api, errorText } from "./api";
 import { SessionList, compareListIds } from "./session-list";
+import { toast } from "../ui/atoms";
 
 export interface AgentSession {
   id: string;
@@ -94,6 +95,85 @@ export function sendMessage(id: string, clientId: string, text: string) {
 
 export function markRead(id: string) {
   return api(`${agentPath(id)}/read`, { method: "POST" });
+}
+
+// "Remove from list" (POST …/hide): the conversation stays in its source and comes back by itself when it gets a new
+// message; …/unhide brings it back by hand. Hidden ones are left out of the list and its counts by the hub.
+export function hideSession(id: string) {
+  return api(`${agentPath(id)}/hide`, { method: "POST" });
+}
+export function unhideSession(id: string) {
+  return api(`${agentPath(id)}/unhide`, { method: "POST" });
+}
+export function fetchHiddenSessions() {
+  return api<{ sessions: AgentSession[] | null }>("/agents/hidden").then((r) => r.sessions ?? []);
+}
+
+// Removed here and not yet re-pulled from the hub: rows leave the list at once, and come back if the hub refuses.
+let goingIds: ReadonlySet<string> = new Set();
+const goingListeners = new Set<() => void>();
+function setGoing(next: ReadonlySet<string>) {
+  goingIds = next;
+  goingListeners.forEach((l) => l());
+}
+export function useGoingIds(): ReadonlySet<string> {
+  return useSyncExternalStore(
+    (l) => {
+      goingListeners.add(l);
+      return () => goingListeners.delete(l);
+    },
+    () => goingIds,
+  );
+}
+
+/** What the hub does for a remove / restore; tests swap it. */
+export interface HideDeps {
+  hide: (id: string) => Promise<unknown>;
+  unhide: (id: string) => Promise<unknown>;
+  refresh: () => Promise<unknown>;
+  notify: (text: string, tone: "ok" | "error", action?: { label: string; run: () => void }) => void;
+}
+
+/** The hub and the toasts, for the app; tests pass their own. */
+export const personalHideDeps: HideDeps = {
+  hide: hideSession,
+  unhide: unhideSession,
+  refresh: () => refreshAgentSessions(),
+  notify: (text, tone, action) => toast(text, tone, action),
+};
+
+/** "Remove from list": the row goes at once; the toast offers Undo; a refusal puts it back and says why. */
+export async function removeAgentSession(s: Pick<AgentSession, "id" | "title">, deps: HideDeps): Promise<boolean> {
+  const title = s.title || t("lib-format.untitled_session");
+  setGoing(new Set([...goingIds, s.id]));
+  try {
+    await deps.hide(s.id);
+    deps.notify(t("lib-agents.removed_toast", { title }), "ok", { label: t("lib-agents.undo"), run: () => void restoreAgentSession(s, deps) });
+    return true;
+  } catch (e) {
+    deps.notify(t("lib-agents.hide_failed", { error: errorText(e) }), "error");
+    return false;
+  } finally {
+    await deps.refresh().catch(() => {});
+    const next = new Set(goingIds);
+    next.delete(s.id);
+    setGoing(next);
+  }
+}
+
+/** "Restore": back in the list. */
+export async function restoreAgentSession(s: Pick<AgentSession, "id" | "title">, deps: HideDeps): Promise<boolean> {
+  const title = s.title || t("lib-format.untitled_session");
+  try {
+    await deps.unhide(s.id);
+    deps.notify(t("lib-agents.restored_toast", { title }), "ok");
+    return true;
+  } catch (e) {
+    deps.notify(t("lib-agents.unhide_failed", { error: errorText(e) }), "error");
+    return false;
+  } finally {
+    await deps.refresh().catch(() => {});
+  }
 }
 
 // ── pure helpers (tested) ───────────────────────────────
@@ -291,6 +371,8 @@ export interface AgentPrefs {
   view: AgentView;
   sections: AgentSectionDef[];
   assign: Record<string, string>; // session id → section id
+  /** Removed from the list: session id → when (ms). Changed only through hide / unhide; the hub keeps it on a save. */
+  hidden?: Record<string, number>;
 }
 export const DEFAULT_VIEW: Required<AgentView> = { group: "date", sort: "updated", show: "all", providers: [] };
 export const emptyPrefs = (): AgentPrefs => ({ pins: [], view: {}, sections: [], assign: {} });
@@ -398,7 +480,7 @@ export function toggleProvider(p: AgentPrefs, provider: string): AgentPrefs {
 }
 
 export function normalizePrefs(x: Partial<AgentPrefs> | null | undefined): AgentPrefs {
-  return { pins: Array.isArray(x?.pins) ? x!.pins : [], view: x?.view && typeof x.view === "object" ? x.view : {}, sections: Array.isArray(x?.sections) ? x!.sections : [], assign: x?.assign && typeof x.assign === "object" ? x.assign : {} };
+  return { pins: Array.isArray(x?.pins) ? x!.pins : [], view: x?.view && typeof x.view === "object" ? x.view : {}, sections: Array.isArray(x?.sections) ? x!.sections : [], assign: x?.assign && typeof x.assign === "object" ? x.assign : {}, ...(x?.hidden && typeof x.hidden === "object" ? { hidden: x.hidden } : {}) };
 }
 
 // Hub-backed (GET/PUT /agents/prefs) so web and iOS share pins; mirrored to localStorage, which is also the

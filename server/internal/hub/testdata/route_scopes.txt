@@ -83,6 +83,7 @@ todos.write          DELETE /api/v1/todos/{id}/spaces/{mid}/{space...}
 -                    GET /api/v1/admin/state
 -                    GET /api/v1/admin/usage-sources
 agents.read          GET /api/v1/agents
+-                    GET /api/v1/agents/hidden
 -                    GET /api/v1/agents/outbox
 -                    GET /api/v1/agents/prefs
 agents.read          GET /api/v1/agents/sessions
@@ -264,8 +265,10 @@ todos.write          PATCH /api/v1/todos/{id}
 -                    POST /api/v1/admin/setup-code
 -                    POST /api/v1/admin/usage-sources
 -                    POST /api/v1/admin/usage-sources/test
+-                    POST /api/v1/agents/sessions/{id}/hide
 agents.control       POST /api/v1/agents/sessions/{id}/messages
 agents.control       POST /api/v1/agents/sessions/{id}/read
+-                    POST /api/v1/agents/sessions/{id}/unhide
 assistant.ask        POST /api/v1/assistant/conversations
 -                    POST /api/v1/assistant/conversations/{id}/archive
 -                    POST /api/v1/assistant/conversations/{id}/compact

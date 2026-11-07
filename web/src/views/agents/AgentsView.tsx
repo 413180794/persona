@@ -23,13 +23,13 @@ import {
 import { errorText } from "../../lib/api";
 import { ago, clock, uuid } from "../../lib/format";
 import { href, onLinkClick } from "../../lib/router";
-import { Button, cx, EASE, IconButton, Loading, Spinner } from "../../ui/atoms";
+import { Button, Collapse, cx, EASE, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { SearchField } from "../../ui/SearchField";
 import { formatDate, t } from "../../i18n";
 import { composing } from "../../lib/send-history";
-import { personalOrder, personalSessions, type AgentSession } from "../../lib/agents";
+import { fetchHiddenSessions, personalHideDeps, personalOrder, personalSessions, restoreAgentSession, type AgentSession } from "../../lib/agents";
 import { SESSIONS_LIST_FEATURE } from "../../lib/session-list";
 import { useStore } from "../../lib/store";
 import { PagedSessionList } from "./PagedSessionList";
@@ -70,8 +70,50 @@ function BoundedAgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) 
         </a>
         <button type="button" aria-label={t(prefs.pins.includes(s.id) ? "agents-agentsview.unpin" : "agents-agentsview.pin")} onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))} className={SESSION_LIST_STYLE.pinButton}><Icon name="pin" size={SESSION_LIST_METRICS.icon} /></button>
       </div>} />
+      <RemovedAgents />
     </div></div>
   </div>;
+}
+
+/** "Removed (N)" at the end of the page, folded (as All chats keeps its archived ones): the conversations removed from
+ *  the list, each with Restore. Re-read when the list changes (a hide, a restore, a new message bringing one back). */
+export function RemovedAgents() {
+  const [list, setList] = useState<AgentSession[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const read = () => void fetchHiddenSessions().then((x) => live && setList(x)).catch(() => {});
+    read();
+    const off = onAgentsChanged(() => read());
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+  if (!list.length) return null;
+  return (
+    <section className="mt-2 mb-4">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="mb-1.5 flex items-center gap-1.5 whitespace-nowrap rounded-[6px] px-1 text-[12px] font-medium text-ink-3 transition-colors hover:text-ink-2">
+        <Icon name="archive" size={13} />
+        {t("lib-agents.removed_count", { count: list.length })}
+        <Icon name="chevron" size={12} stroke={2.2} className={cx("transition-transform duration-200", !open && "-rotate-90")} />
+      </button>
+      <Collapse open={open}>
+        <div inert={!open}>
+          <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
+            {list.map((s) => (
+              <div key={s.id} className={SESSION_LIST_STYLE.personalRow}>
+                <AgentAvatar s={s} size={SESSION_LIST_METRICS.avatar} />
+                <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{s.title || t("lib-format.untitled_session")}</span>
+                <Button tone="quiet" onClick={() => void restoreAgentSession(s, personalHideDeps).then((ok) => ok && setList((x) => x.filter((y) => y.id !== s.id)))}>{t("lib-agents.restore")}</Button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("lib-agents.removed_footer")}</p>
+        </div>
+      </Collapse>
+    </section>
+  );
 }
 
 function LegacyAgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
@@ -118,6 +160,7 @@ function LegacyAgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               ))}
             </section>
           ))}
+          <RemovedAgents />
         </div>
       </div>
     </div>

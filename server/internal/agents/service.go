@@ -181,10 +181,21 @@ func (s *Service) sessionsOf(ctx context.Context, src Source, fresh bool) ([]Ses
 	return list, nil
 }
 
-// Sessions lists sessions of every source (or one), optionally of one provider, ordered as the sources rank them.
-// Of all of them, one that fails is left out (its status says why) so it does not take the others' away; asked
-// for by name, its error is the answer.
+// Sessions lists sessions of every source (or one), optionally of one provider, ordered as the sources rank them,
+// less the ones the user removed (hidden.go). Of all of them, one that fails is left out (its status says why) so
+// it does not take the others' away; asked for by name, its error is the answer.
 func (s *Service) Sessions(ctx context.Context, source, provider string) ([]Session, error) {
+	list, err := s.listed(ctx, source, provider)
+	if err != nil {
+		return nil, err
+	}
+	return withoutHidden(list, s.hiddenNow(ctx)), nil
+}
+
+// allSessions is every source's list, removed ones included.
+func (s *Service) allSessions(ctx context.Context) ([]Session, error) { return s.listed(ctx, "", "") }
+
+func (s *Service) listed(ctx context.Context, source, provider string) ([]Session, error) {
 	out := []Session{}
 	for _, src := range s.all() {
 		if source != "" && src.Name() != source {

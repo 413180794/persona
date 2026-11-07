@@ -476,6 +476,7 @@ use it only on the intranet / VPN, and put an HTTPS reverse proxy in front befor
   `<persona-context>` attributes are written in the order `kind`, `title`, `url`: iOS parsing requires this order, otherwise the card does not show on the phone.
 - **Personal agents** (`/a`, `/a/<entire id encoded>`, `src/lib/agents.ts`, `src/views/agents/`): personal Agents paired through the Lark gateway (`/api/v1/agents/*`,
   `docs/protocol/protocol.md`). **Personal agents** in the sidebar are grouped by provider, sorted by recency within groups, with unread counts, and filterable when there are more than 6 sessions; `/a` is the full list with search.
+  A row's ⋯ / right click has **Remove from list** (`POST …/hide`): the row leaves at once, the toast offers Undo, and a new message brings it back by itself; `/a` ends with a folded **Removed (N)** with **Restore** (`GET /agents/hidden`, `POST …/unhide`). The gateway keeps the conversation.
   Session page: opening sends `POST …/read`; **Loading earlier messages** uses `nextCursor`, deduplicated by `externalId` and sorted by `position`; tool calls are folded, unknown blocks are shown as raw JSON.
   Sends carry a new UUID `clientId` and can be retried on failure (same `clientId`, the hub is idempotent); persisted messages have no `clientId`, so local bubbles converge by text + time; with `canSend=false` the input is disabled.
   On WS `{"type":"agents","session_ids":[...]}` the list refreshes, and an open session re-fetches its latest page when its id matches (or the list is empty).

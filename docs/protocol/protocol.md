@@ -2789,10 +2789,24 @@ the Lark plugin picks its own source id; keeping the same id across upgrades kee
  "view":{"group":"date|provider|none","sort":"updated|unread|name","show":"all|unread|sendable","providers":["grok_bot"]},
  "sections":[{"id":"s1","name":"Work"}],
  "assign":{"<sessionId>":"s1"},
+ "hidden":{"<sessionId>":1762500000000},
  "updatedAt":"…"}
 ```
 
 - Omitted fields = defaults (group by date, sort by latest update, show all, all sources). `pins` is ordered and deduplicated; `assign` entries pointing to missing sections are dropped.
+- `hidden` is what the user removed from the list (session id → when, ms). It changes only through `POST …/hide` / `…/unhide` below: a PUT keeps the stored set whatever it carries, so an app that does not know the field cannot bring removed conversations back by saving its pins.
+
+### Removing a personal Agent from the list
+
+The conversation belongs to its source (the Lark gateway through its extension), which can't delete or archive one, and the hub pulls the list from it again every minute. So removing is Persona's own: the extension manager (`server/internal/agents/hidden.go`) keeps the id in `hidden`, and leaves it out of `GET /api/v1/agents/sessions` (whole list, pages and counts, its unread included) until the source reports a message after the removal (`rankTimeMs` past the stored time). Then it is back by itself, like a deleted Agent session that is used again.
+
+| Request | Response | Permission |
+|---|---|---|
+| `POST /api/v1/agents/sessions/{id}/hide` | `{"ok":true,"hidden":true}`; a conversation no source lists 404 | full |
+| `POST /api/v1/agents/sessions/{id}/unhide` | `{"ok":true,"hidden":false}` | full |
+| `GET /api/v1/agents/hidden` | `{"sessions":[Session]}`: the removed ones the sources still list and that got nothing new since | full |
+
+Each write broadcasts `{"type":"agents"}` (the list) and `{"type":"agents.prefs"}`. Extension tokens can't use these routes. The web offers **Remove from list** in a personal Agent row's ⋯ and right-click menu (with Undo in the toast), and a folded **Removed (N)** section with **Restore** at the end of `/a`.
 - Pinned sessions always appear in "Pinned" at the top, followed by custom sections, then groups from `view.group`.
 - After a successful PUT, broadcasts `{"type":"agents.prefs"}`, and other clients GET again. When an old hub lacks this endpoint (404), clients store preferences only locally.
 

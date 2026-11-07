@@ -188,6 +188,35 @@ func (h *Manager) agentRoutes(api *http.ServeMux) {
 		h.broadcast(map[string]any{"type": "agents.prefs"})
 		writeJSON(w, p)
 	})
+	// Removing a conversation from the list (agents/hidden.go): the source keeps it, a new message brings it back.
+	api.HandleFunc("GET /api/v1/agents/hidden", func(w http.ResponseWriter, r *http.Request) {
+		list, err := h.agents.Hidden(r.Context())
+		if err != nil {
+			agentsErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"sessions": list})
+	})
+	hide := func(on bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if principalOf(r.Context()).Role != roleFull {
+				writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+				return
+			}
+			do := h.agents.Unhide
+			if on {
+				do = h.agents.Hide
+			}
+			if _, err := do(r.Context(), r.PathValue("id")); err != nil {
+				agentsErr(w, err)
+				return
+			}
+			h.broadcast(map[string]any{"type": "agents.prefs"})
+			writeJSON(w, map[string]any{"ok": true, "hidden": on})
+		}
+	}
+	api.HandleFunc("POST /api/v1/agents/sessions/{id}/hide", hide(true))
+	api.HandleFunc("POST /api/v1/agents/sessions/{id}/unhide", hide(false))
 	api.HandleFunc("GET /api/v1/agents/outbox", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		writeJSON(w, map[string]any{"outbox": h.agents.Outbox(r.Context(), q.Get("session_id"), atoi(q.Get("limit")))})

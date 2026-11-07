@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -24,13 +25,18 @@ type Section struct {
 	Name string `json:"name"`
 }
 
-// Prefs is shared by every app of the user: pinned sessions (in pin order), the list view, and custom sections.
+// Prefs is shared by every app of the user: pinned sessions (in pin order), the list view, custom sections, and the
+// conversations the user removed from the list.
 type Prefs struct {
-	Pins      []string          `json:"pins"`
-	View      View              `json:"view"`
-	Sections  []Section         `json:"sections"`
-	Assign    map[string]string `json:"assign"`
-	UpdatedAt time.Time         `json:"updatedAt,omitzero"`
+	Pins     []string          `json:"pins"`
+	View     View              `json:"view"`
+	Sections []Section         `json:"sections"`
+	Assign   map[string]string `json:"assign"`
+	// Hidden is what the user removed from the list (a session id → when): the source keeps the conversation, it
+	// only leaves Persona's list and unread counts until it gets a new message after that time (hidden.go). An app
+	// that does not know the field sends it back empty; put keeps the stored ones then (keepHidden).
+	Hidden    map[string]int64 `json:"hidden,omitempty"`
+	UpdatedAt time.Time        `json:"updatedAt,omitzero"`
 }
 
 type prefsStore struct {
@@ -48,6 +54,11 @@ func (p *Prefs) normalize() {
 	}
 	if p.Assign == nil {
 		p.Assign = map[string]string{}
+	}
+	for k, at := range p.Hidden {
+		if k == "" || at <= 0 {
+			delete(p.Hidden, k)
+		}
 	}
 	seen := map[string]bool{}
 	pins := p.Pins[:0]
@@ -72,6 +83,10 @@ func (p *Prefs) normalize() {
 func (s *prefsStore) get(ctx context.Context) (Prefs, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.readLocked(ctx)
+}
+
+func (s *prefsStore) readLocked(ctx context.Context) (Prefs, error) {
 	var p Prefs
 	if s.kv != nil {
 		if _, err := s.kv.Setting(ctx, prefsKey, &p); err != nil {
@@ -79,13 +94,25 @@ func (s *prefsStore) get(ctx context.Context) (Prefs, error) {
 		}
 	} else if s.mem != nil {
 		p = *s.mem
+		p.Hidden = maps.Clone(p.Hidden)
 	}
 	p.normalize()
 	return p, nil
 }
 
-func (s *prefsStore) put(ctx context.Context, p Prefs) (Prefs, error) {
-	if len(p.Pins) > 1000 || len(p.Sections) > 100 || len(p.Assign) > 5000 {
+// update reads the stored prefs, lets change edit them and saves the result, all under the store's lock: two apps
+// saving at once, or a hide during a pin, cannot drop each other's change.
+func (s *prefsStore) update(ctx context.Context, change func(*Prefs) error) (Prefs, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, err := s.readLocked(ctx)
+	if err != nil {
+		return p, err
+	}
+	if err := change(&p); err != nil {
+		return p, err
+	}
+	if len(p.Pins) > 1000 || len(p.Sections) > 100 || len(p.Assign) > 5000 || len(p.Hidden) > maxHidden {
 		return p, fail(http.StatusBadRequest, "agents: prefs too large")
 	}
 	for _, sec := range p.Sections {
@@ -95,14 +122,13 @@ func (s *prefsStore) put(ctx context.Context, p Prefs) (Prefs, error) {
 	}
 	p.normalize()
 	p.UpdatedAt = time.Now().UTC()
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.kv != nil {
 		if err := s.kv.PutSetting(ctx, prefsKey, p); err != nil {
 			return p, err
 		}
 	} else {
 		c := p
+		c.Hidden = maps.Clone(p.Hidden)
 		s.mem = &c
 	}
 	return p, nil
@@ -111,5 +137,13 @@ func (s *prefsStore) put(ctx context.Context, p Prefs) (Prefs, error) {
 // Prefs returns the shared list preferences (defaults when never saved).
 func (s *Service) Prefs(ctx context.Context) (Prefs, error) { return s.prefs.get(ctx) }
 
-// PutPrefs replaces the shared list preferences.
-func (s *Service) PutPrefs(ctx context.Context, p Prefs) (Prefs, error) { return s.prefs.put(ctx, p) }
+// PutPrefs replaces the shared list preferences. Hidden conversations are changed only through Hide / Unhide: an app
+// that does not know them (an older one, the web's pin toggle) must not bring them back by saving its prefs.
+func (s *Service) PutPrefs(ctx context.Context, p Prefs) (Prefs, error) {
+	return s.prefs.update(ctx, func(cur *Prefs) error {
+		hidden := cur.Hidden
+		*cur = p
+		cur.Hidden = hidden
+		return nil
+	})
+}

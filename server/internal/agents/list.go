@@ -21,8 +21,10 @@ func (s *Service) indexSessions(source string, list []Session) {
 	}
 	items := make([]sessionlist.Item, 0, len(list))
 	seen := make(map[string]bool, len(list))
+	// what the user removed stays out of the pages and the counts (hidden.go); read once per refresh, not per request
+	hidden := s.hiddenNow(context.Background())
 	for _, row := range list {
-		if row.ID == "" || seen[row.ID] {
+		if row.ID == "" || seen[row.ID] || hiddenStill(row, hidden) {
 			continue
 		}
 		seen[row.ID] = true

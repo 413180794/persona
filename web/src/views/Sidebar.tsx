@@ -82,7 +82,7 @@ import { SESSION_LIST_STYLE } from "../ui/list-metrics";
 import { runtimeIdentity, runtimeOrder, runtimeRemoval, runtimeSessions } from "../lib/runtime-list";
 import { heldSeen } from "../lib/seen-outbox";
 import { SESSIONS_LIST_FEATURE } from "../lib/session-list";
-import { personalOrder, personalSessions } from "../lib/agents";
+import { personalHideDeps, personalOrder, personalSessions, removeAgentSession, useGoingIds, type HideDeps } from "../lib/agents";
 import { NoComputers, useAddComputer } from "./machines/AddComputerEntry";
 import { neverConnected } from "../lib/add-computer";
 
@@ -2164,14 +2164,16 @@ function agentViewItems(page: MenuPage, setPage: (p: MenuPage) => void, p: Agent
   ];
 }
 
-// Row actions (context menu on web): pin, move to a custom section, remove a section.
-function agentRowItems(s: AgentSession, p: AgentPrefs): MenuItem[] {
+
+// Row actions (⋯ and right click): pin, move to a custom section, remove a section, remove from the list.
+export function agentRowItems(s: AgentSession, p: AgentPrefs, deps: HideDeps = personalHideDeps): MenuItem[] {
   const pinned = p.pins.includes(s.id);
   const cur = p.assign[s.id];
   return [
     { key: "pin", label: pinned ? t("sidebar.unpin") : t("sidebar.pin"), icon: "pin", onSelect: () => updateAgentPrefs((x) => togglePin(x, s.id)) },
     ...p.sections.map((sec, i) => ({ key: `sec:${sec.id}`, label: t("sidebar.move_to_group", { name: sec.name }), divider: i === 0, checked: cur === sec.id, onSelect: () => updateAgentPrefs((x) => assignSection(x, s.id, cur === sec.id ? null : sec.id)) })),
     ...(cur ? [{ key: "unsec", label: t("sidebar.remove_from_group"), onSelect: () => updateAgentPrefs((x) => assignSection(x, s.id, null)) }] : []),
+    { key: "hide", label: t("lib-agents.remove"), icon: "archive", divider: true, onSelect: () => void removeAgentSession(s, deps) },
   ];
 }
 
@@ -2189,16 +2191,20 @@ function BoundedPersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hove
   const onMenu = useCallback((s: AgentSession, el: HTMLElement) => setRowMenu({ s, el }), []);
   const [folded, toggle] = useFolded("personal-agents", false, { holds: activeKey.startsWith("a:") });
   const page = useSyncExternalStore(personalSessions.subscribe, personalSessions.getSnapshot, personalSessions.getSnapshot);
+  const going = useGoingIds();
   if (page.loaded && !page.total && !page.error) return null;
   return <Section title={t("sidebar.personal_agents")} folded={folded} onToggle={toggle} right={<GroupCount n={page.total} label={t("sidebar.agent_count", { count: page.total })} />}>
     {!folded && <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} event="agents" personal
-      renderRow={(s) => <AgentRow s={s} reg={reg} hover={hover} active={activeKey === `a:${s.id}`} go={go} pinned={prefs.pins.includes(s.id)} onMenu={onMenu} />} />}
+      renderRow={(s) => (going.has(s.id) ? null : <AgentRow s={s} reg={reg} hover={hover} active={activeKey === `a:${s.id}`} go={go} pinned={prefs.pins.includes(s.id)} onMenu={onMenu} />)} />}
     {rowMenu && <Menu anchor={rowMenu.el} onClose={() => setRowMenu(null)} align="right" width={200} items={agentRowItems(rowMenu.s, prefs)} />}
   </Section>;
 }
 
 const LegacyPersonalAgents = memo(function LegacyPersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
-  const { sessions, loaded, error } = useAgentList();
+  const { sessions: listed, loaded, error } = useAgentList();
+  // a row removed here leaves at once, before the hub's re-pull
+  const going = useGoingIds();
+  const sessions = useMemo(() => (going.size ? listed.filter((s) => !going.has(s.id)) : listed), [listed, going]);
   const [retrying, setRetrying] = useState(false);
   const retry = async () => {
     if (retrying) return;
