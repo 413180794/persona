@@ -207,15 +207,21 @@ type fakeSMTPServer struct {
 type fakeSession struct {
 	srv  *fakeSMTPServer
 	from string
+	utf8 bool
 }
 
 func (s *fakeSession) Reset()        {}
 func (s *fakeSession) Logout() error { return nil }
 func (s *fakeSession) Mail(from string, opts *smtp.MailOptions) error {
 	s.from = from
+	s.utf8 = opts != nil && opts.UTF8
 	return nil
 }
 func (s *fakeSession) Rcpt(to string, opts *smtp.RcptOptions) error {
+	// As RFC 6531 servers do: a non-ASCII address only after MAIL FROM declared SMTPUTF8.
+	if !s.utf8 && !isASCII(to) {
+		return &smtp.SMTPError{Code: 553, EnhancedCode: smtp.EnhancedCode{5, 6, 7}, Message: "SMTPUTF8 required"}
+	}
 	s.srv.mu.Lock()
 	s.srv.rcpts = append(s.srv.rcpts, to)
 	s.srv.mu.Unlock()
@@ -264,6 +270,7 @@ func newFakeSMTPServer(t *testing.T) *fakeSMTPServer {
 	}))
 	srv.Domain = "example.com"
 	srv.AllowInsecureAuth = true
+	srv.EnableSMTPUTF8 = true
 	srv.ReadTimeout = 5e9
 	srv.WriteTimeout = 5e9
 	fs.backend = srv
@@ -349,6 +356,31 @@ func TestSendOverSMTP(t *testing.T) {
 	}
 	if !res.Messages[0].Seen {
 		t.Error("appended message should be marked seen")
+	}
+}
+
+// A non-ASCII recipient address (RFC 6531) gets SMTPUTF8 declared on MAIL FROM even when the sender's own address is
+// ASCII: a server that offers SMTPUTF8 refuses the recipient otherwise.
+func TestSendDeclaresSMTPUTF8ForNonASCIIRecipient(t *testing.T) {
+	srv := newTestIMAP(t)
+	fs := newFakeSMTPServer(t)
+	s := newServiceWithAccount(t, srv)
+	useFakeSMTP(t, s, srv, fs)
+
+	err := s.Send(context.Background(), SendRequest{
+		AccountID: "acc_test",
+		To:        []Address{{Email: "用户@例子.测试"}},
+		Cc:        []Address{{Email: "cc@example.com"}},
+		Subject:   "x",
+		Text:      "y",
+	})
+	if err != nil {
+		t.Fatalf("Send = %v, want the non-ASCII recipient accepted", err)
+	}
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	if got := strings.Join(fs.rcpts, ","); got != "用户@例子.测试,cc@example.com" {
+		t.Errorf("RCPT TO = %q", got)
 	}
 }
 

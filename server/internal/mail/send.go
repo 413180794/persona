@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -253,9 +254,12 @@ func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcp
 		}
 	}
 
-	// MAIL FROM with UTF-8 support when the server offers SMTPUTF8.
+	// MAIL FROM with UTF-8 support when the server offers SMTPUTF8 and an address needs it: a server refuses a non-ASCII
+	// recipient in RCPT TO unless MAIL FROM declared SMTPUTF8 (RFC 6531).
 	var mailOpts *smtp.MailOptions
-	if ok, _ := client.Extension("SMTPUTF8"); ok && (!isASCII(from) || !isASCII(a.Username)) {
+	needUTF8 := !isASCII(from) || !isASCII(a.Username) ||
+		slices.ContainsFunc(rcpts, func(r string) bool { return !isASCII(r) })
+	if ok, _ := client.Extension("SMTPUTF8"); ok && needUTF8 {
 		mailOpts = &smtp.MailOptions{UTF8: true}
 	}
 	if err := client.Mail(from, mailOpts); err != nil {
