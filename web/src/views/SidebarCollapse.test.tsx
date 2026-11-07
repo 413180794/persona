@@ -268,7 +268,7 @@ describe("the Agents list menu (#3027)", () => {
   });
 });
 
-describe("the main conversation: the column's first row, Persona with the app's mark (#2004, #5109)", () => {
+describe("the main conversation: the column's first row, Persona with the app's mark (#2004, #5109), marked 主对话 (#6293)", () => {
   const conv = (id: string, title: string): Session => ({ machine_id: "hub", session_id: id, title, cwd: "/", status: "idle", state: "idle", assistant: true, pending_interactions: id === "main" ? 2 : 0 });
   const assistant: AssistantInfo = { machine_id: "hub", main: "main", conversations: [conv("main", "Persona"), conv("c1", "整理周报")] };
   const block = (title: string) => button(title)!.closest(".mt-1, .mt-3") as HTMLElement;
@@ -283,12 +283,14 @@ describe("the main conversation: the column's first row, Persona with the app's 
     await flush();
   };
 
-  it("is the first row, above the pages, with the app's mark, a line under it, and nowhere else", async () => {
+  it("is the first row, above the pages, with the app's mark, a 主对话 mark, a line under it, and nowhere else", async () => {
     await load();
     const rows = [...host.querySelectorAll<HTMLAnchorElement>("[data-sidebar-rows] a")];
     expect(rows[0]).toBe(mainRow());
     expect(mainRow().textContent).toContain("Persona");
-    expect(mainRow().textContent).not.toContain("主对话");
+    // the brand row reads as a conversation, not a heading: a small "主对话" under the name (#6293)
+    const mark = mainRow().querySelector("[data-row-line]:not([data-draft])");
+    expect(mark?.textContent).toBe("主对话");
     expect(mainRow().querySelector('img[src$="/app-icon.png"]')).not.toBeNull();
     expect(mainRow().textContent).toContain("2"); // its pending count
     // the line parts it from the pages, which come after it

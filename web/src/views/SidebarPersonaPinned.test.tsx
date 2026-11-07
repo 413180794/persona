@@ -59,9 +59,10 @@ describe("the pinned Persona row", () => {
     // it is the list's first block (after the highlight), so the pages and everything else scroll under it
     expect([...list.children].filter((c) => c.getAttribute("aria-hidden") !== "true")[0]).toBe(pinned);
     expect(pinned.textContent).not.toContain("页面");
-    // Tab stops a row below it: 48px for a 30px row, 64px where a coarse pointer makes it 44px (4 + 44 + 9 = 57px)
-    expect(list.className).toMatch(/(^| )scroll-pt-12( |$)/);
-    expect(list.className).toContain("[@media(pointer:coarse)]:scroll-pt-16");
+    // Tab stops a row below it: the pinned box is about 62px with the 主对话 line (4 + 48 + 1 + 1 + 8), 58px on a
+    // coarse pointer (44px touch row): 64px covers both
+    expect(list.className).toMatch(/(^| )scroll-pt-16( |$)/);
+    expect(list.className).not.toContain("scroll-pt-12");
   });
 
   it("shows the fog under it only once the list has scrolled", async () => {

@@ -380,8 +380,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         </button>
       </div>
 
-      {/* scroll-pt: a row reached by Tab doesn't stop under the pinned Persona row (taller on a coarse pointer: 4 + 44 + 9px) */}
-      <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 scroll-pt-12 overflow-y-auto [@media(pointer:coarse)]:scroll-pt-16 overscroll-contain px-2.5 pb-3">
+      {/* scroll-pt: a row reached by Tab doesn't stop under the pinned Persona row — about 62px with its 主对话 line
+          (4 + 48 + 1 gap + 1 line + 8 margins), 58px on a coarse pointer (44px touch row): 64px covers both */}
+      <div ref={nav} data-sidebar-rows onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 scroll-pt-16 overflow-y-auto overscroll-contain px-2.5 pb-3">
         {highlight}
         {/* the main conversation is the column's first row, Persona with the app's mark, and only there (#2004, #5109); it
             stays at the top while the rest scrolls (#5581), its line and a fog under it once rows go beneath */}
@@ -1754,6 +1755,8 @@ type NodeMenuFn = (node: MenuNode, at: MenuAt, header?: string, toggle?: boolean
 
 // Persona's main conversation: the column's first and strongest entry (the app's mark, always in ink, #2004), with the
 // conversation's state when it is working or wants you. A line under it parts it from the pages.
+// The small "Main chat" under the name keeps the brand row readable as a conversation, not a heading (#6293); a draft
+// waiting in the box takes that line (#5568).
 // Its menu (Copy session ID, End…: iOS's long press on the main row) opens on a right click, the menu key or its ⋯.
 export function PersonaRow({ reg, hover, active, go, main, chord, onMenu }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session; /** The "Open Persona" shortcut as bound now ("": none). */ chord?: string; onMenu?: (anchor: HTMLElement, at?: MenuAt) => void }) {
   const to: Route = { name: "persona" };
@@ -1783,14 +1786,10 @@ export function PersonaRow({ reg, hover, active, go, main, chord, onMenu }: { re
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-[background-color,transform] duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active ? CURRENT_ROW : "hover:bg-hover focus-visible:bg-hover", onMenu && active && "pr-8", onMenu && "[@media(hover:none)]:pr-11")}
     >
       <AppMark size={18} radius={5} className="shadow-hairline" />
-      {draft ? (
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[13.5px] font-semibold text-ink">Persona</span>
-          <SecondLine line={draft} draft />
-        </span>
-      ) : (
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
-      )}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13.5px] font-semibold text-ink">Persona</span>
+        {draft ? <SecondLine line={draft} draft /> : <SecondLine line={{ text: t("sidebar.main_chat") }} draft={false} />}
+      </span>
       {chord && <span aria-hidden data-persona-chord className={cx("hidden sm:inline-flex [@media(hover:none)]:hidden", aside)}><Kbd>{formatChord(chord)}</Kbd></span>}
       {pending > 0 ? (
         <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-field px-1 text-[10.5px] font-semibold text-attention tabular-nums", aside)}>{pending}</span>
