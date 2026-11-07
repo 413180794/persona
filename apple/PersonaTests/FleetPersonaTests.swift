@@ -8,6 +8,8 @@ import UIKit
 /// The persona on the Live Activity (docs/live-activity.md「形象」): which state it shows for a fleet, and the look
 /// the app hands the widget extension.
 struct FleetPersonaTests {
+    private nonisolated static let packID = "nwverse"
+
     @Test func stateFollowsThePhase() {
         #expect(FleetPersona.state(FleetState(phase: .needsYou, needsYou: 1, working: 2), stale: false) == .needsYou)
         #expect(FleetPersona.state(FleetState(phase: .working, working: 2), stale: false) == .working)
@@ -54,8 +56,8 @@ struct FleetPersonaTests {
         }
         let removed = FleetLook(design: "mochi", light: 1, dark: 2, package: "other/1")
         #expect(removed.supported == .standard)
-        let frog = FleetLook(design: "visor", light: 1, dark: 2, package: "nwverse/1")
-        #expect(frog.supported.package == "nwverse/1" && frog.supported.faceDesign == .mochi)
+        let frog = FleetLook(design: "visor", light: 1, dark: 2, package: "\(Self.packID)/1")
+        #expect(frog.supported.package == "\(Self.packID)/1" && frog.supported.faceDesign == .mochi)
     }
 
     @Test func lookRoundTrips() throws {
@@ -130,7 +132,7 @@ struct FleetPersonaTests {
         hub.on("GET", "/api/v1/personas", json: #"{"personas":[{"id":"nwverse","rev":"r1","bytes":10,"manifest":\#(Self.manifest)}]}"#)
         for (name, file) in [("avatar", "avatar/128.png"), ("idle", "dot/idle.png"), ("working", "dot/working.png"), ("thinking", "dot/thinking.png")] {
             let png = Self.disc(Self.colors[name]!)
-            hub.on("GET", "/api/v1/personas/nwverse/\(file)") { _ in png }
+            hub.on("GET", "/api/v1/personas/\(Self.packID)/\(file)") { _ in png }
         }
         let root = FileManager.default.temporaryDirectory.appending(path: "fleet-personas-\(UUID().uuidString)")
         let personas = PersonaStore(root: root, defaults: UserDefaults(suiteName: "fleet-persona-\(UUID().uuidString)")!)
@@ -167,7 +169,7 @@ struct FleetPersonaTests {
         let personas = try await chosen()
         let shared = Shared()
         let look = FleetLook(persona: personas.current, builtinAccent: Palette.systemBlue)
-        #expect(look.package == "nwverse/r1")
+        #expect(look.package == "\(Self.packID)/r1")
         #expect(FleetLook.save(look, faces: { FleetFaces(persona: personas.current, personas: personas) }, to: shared.store))
 
         // The extension's side: only what is in the shared container.
@@ -175,21 +177,21 @@ struct FleetPersonaTests {
         #expect(read == look)
         #expect(read.light == 0x40B2A0) // the package's primary, for the moments its faces cannot be read
         let faces = try #require(read.faces(shared.store))
-        #expect(faces.package == "nwverse/r1")
+        #expect(faces.package == "\(Self.packID)/r1")
         // A file a picture and size: the three states the package draws and its avatar for the other two, each at
         // the compact (22), minimal (24) and expanded / lock screen (26) size, × 3.
         #expect(FleetFaces.sizes == [22, 24, 26])
         let files = try #require(shared.store.files())
         let names: [String] = ["avatar", "idle", "thinking", "working"].flatMap { (n: String) -> [String] in
-            FleetFaces.sizes.map { "faces/nwverse_r1_3x/\(n)_\($0).png" }
+            FleetFaces.sizes.map { "faces/\(Self.packID)_r1_3x/\(n)_\($0).png" }
         }
         #expect(files.map(\.name) == names + ["look.json"])
         for picture in faces.states.values {
             for (size, png) in picture { #expect(UIImage(data: png)?.cgImage?.width == size * 3) }
         }
-        #expect(shared.store.face("nwverse/r1", .working, points: IslandMetrics.face)?.file == "working_22.png")
-        #expect(shared.store.face("nwverse/r1", .working, points: IslandMetrics.lockFace)?.file == "working_26.png")
-        let needsYou = shared.store.face("nwverse/r1", .needsYou, points: IslandMetrics.limitedContent)
+        #expect(shared.store.face("\(Self.packID)/r1", .working, points: IslandMetrics.face)?.file == "working_22.png")
+        #expect(shared.store.face("\(Self.packID)/r1", .working, points: IslandMetrics.lockFace)?.file == "working_26.png")
+        let needsYou = shared.store.face("\(Self.packID)/r1", .needsYou, points: IslandMetrics.limitedContent)
         #expect(needsYou?.file == "avatar_24.png" && needsYou?.own == false)
         let size = IslandMetrics.face
         for (state, name) in [(PersonaState.idle, "idle"), (.working, "working"), (.thinking, "thinking")] {
@@ -218,7 +220,7 @@ struct FleetPersonaTests {
         let shared = Shared()
         FleetLook.save(FleetLook(persona: personas.current, builtinAccent: Palette.systemBlue),
                        faces: { FleetFaces(persona: personas.current, personas: personas) }, to: shared.store)
-        #expect(shared.packages == ["nwverse_r1_3x"])
+        #expect(shared.packages == ["\(Self.packID)_r1_3x"])
 
         let circuit = FleetLook(persona: .builtin, builtinAccent: Palette.coral)
         #expect(FleetLook.save(circuit, faces: { nil }, to: shared.store))

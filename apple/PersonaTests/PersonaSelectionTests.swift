@@ -5,6 +5,8 @@ import Testing
 
 /// The two-persona product policy, run against both native apps. Legacy preferences remain available to older builds.
 @MainActor struct PersonaSelectionTests {
+    private nonisolated static let packID = "nwverse"
+
     nonisolated static let removed = ["persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob", "spark", "halo", "jarvis-visor", "jarvis-circuit", "unknown"]
 
     private final class Icons: AppIconSetting {
@@ -75,8 +77,8 @@ import Testing
         let hub = FakeHub()
         let data = try JSONEncoder().encode(entries)
         hub.on("GET", "/api/v1/personas", json: "{\"personas\":\(String(decoding: data, as: UTF8.self))}")
-        hub.on("GET", "/api/v1/personas/nwverse/avatar.png", json: "avatar")
-        hub.on("GET", "/api/v1/personas/nwverse/idle.png", json: "idle")
+        hub.on("GET", "/api/v1/personas/\(Self.packID)/avatar.png", json: "avatar")
+        hub.on("GET", "/api/v1/personas/\(Self.packID)/idle.png", json: "idle")
         await store.refresh(hub.client)
         #expect(store.offered.map(\.id) == ["persona", "nwverse"])
         await store.choose(try #require(store.offered.last), api: hub.client)

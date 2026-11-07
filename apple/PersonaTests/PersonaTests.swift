@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 /// style, and the phone's copy of a package (downloaded whole, kept per rev, the old rev removed).
 @MainActor
 struct PersonaTests {
+    private nonisolated static let packID = "nwverse"
+
     static let manifest = """
     {"format":1,"id":"nwverse","name":"奶蛙","subtitle":"圆滚滚",
      "avatar":{"sizes":{"64":"avatar/64.png","128":"avatar/128.png","512":"avatar/512.png"},"safe":1},
@@ -123,7 +125,7 @@ struct PersonaTests {
     @Test func choosingDownloadsTheWholePackageAndKeepsIt() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
-        for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/nwverse/\(f)", json: "png:\(f)") }
+        for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/\(Self.packID)/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
         #expect(s.offered.map(\.id) == Persona.builtins.map(\.id) + ["nwverse"])
@@ -131,14 +133,14 @@ struct PersonaTests {
         let p = try #require(s.offered.last)
         #expect(!s.isOnPhone(p))
         // Only its face for Settings' card: 64 pt at 3x, the smallest avatar that big (the 128 is too small).
-        #expect(hub.sent("GET", "/api/v1/personas/nwverse/avatar/512.png").count == 1)
-        #expect(hub.sent("GET", "/api/v1/personas/nwverse/avatar/128.png").isEmpty)
-        #expect(hub.sent("GET", "/api/v1/personas/nwverse/dot/idle.png").isEmpty)
+        #expect(hub.sent("GET", "/api/v1/personas/\(Self.packID)/avatar/512.png").count == 1)
+        #expect(hub.sent("GET", "/api/v1/personas/\(Self.packID)/avatar/128.png").isEmpty)
+        #expect(hub.sent("GET", "/api/v1/personas/\(Self.packID)/dot/idle.png").isEmpty)
 
         await s.choose(p, api: hub.client)
         #expect(s.current.id == "nwverse")
         #expect(defaults.string(forKey: PersonaStore.chosenKey) == "nwverse")
-        let idle = root.appending(path: "nwverse/r1/dot/idle.png")
+        let idle = root.appending(path: "\(Self.packID)/r1/dot/idle.png")
         #expect((try? String(contentsOf: idle, encoding: .utf8)) == "png:dot/idle.png")
 
         // The next launch shows it from disk, before the hub answers.
@@ -149,8 +151,8 @@ struct PersonaTests {
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r2"))
         await s.refresh(hub.client)
         #expect(s.current.rev == "r2")
-        #expect(FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r2/dot/idle.png").path(percentEncoded: false)))
-        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r1").path(percentEncoded: false)))
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "\(Self.packID)/r2/dot/idle.png").path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "\(Self.packID)/r1").path(percentEncoded: false)))
 
         // Gone from the hub: the built-in again (the choice is kept for when it comes back).
         hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
@@ -174,7 +176,7 @@ struct PersonaTests {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
         let files = try Self.decode().files
-        for f in files { hub.on("GET", "/api/v1/personas/nwverse/\(f)", json: "png:\(f)") }
+        for f in files { hub.on("GET", "/api/v1/personas/\(Self.packID)/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
         defaults.set("nwverse", forKey: PersonaStore.chosenKey)
         // Every answer takes 20 ms, as over the network; the second refresh starts when the first has the list and
@@ -192,14 +194,14 @@ struct PersonaTests {
         await first.value
         await second.value
         #expect(s.current.id == "nwverse")
-        let missing = files.filter { !FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r1/\($0)").path(percentEncoded: false)) }
+        let missing = files.filter { !FileManager.default.fileExists(atPath: root.appending(path: "\(Self.packID)/r1/\($0)").path(percentEncoded: false)) }
         #expect(missing.isEmpty, "the package on the phone lacks \(missing)")
     }
 
     @Test func aFailedDownloadChangesNothing() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
-        hub.on("GET", "/api/v1/personas/nwverse/avatar/64.png", json: "png") // the others 404
+        hub.on("GET", "/api/v1/personas/\(Self.packID)/avatar/64.png", json: "png") // the others 404
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
         await s.choose(try #require(s.offered.last), api: hub.client)
@@ -207,7 +209,7 @@ struct PersonaTests {
         #expect(defaults.string(forKey: PersonaStore.chosenKey) == nil)
         #expect(s.error != nil)
         // Nothing half-written is left where a package would be read from.
-        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "nwverse/r1").path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "\(Self.packID)/r1").path(percentEncoded: false)))
     }
 
     /// With no hub, a package not on the phone cannot be chosen, and Settings says why instead of doing nothing.
