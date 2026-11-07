@@ -73,6 +73,11 @@ Read the old way, the report was nowhere: the hidden line was skipped, the notic
 `transcript` now reads the call as the subagent's last words (a text item, `LastText`; its "Report delivered to your caller." result is not shown) and gives the parent's notice the handed-back report as its detail (`reportFor`; a pointer with no report known is dropped).
 When Claude Code changes how something reports back, record a real session and look at what is hidden (`isMeta`) as well as what is shown.
 
+Claude Code 2.1.319 adds two more shapes (#6381). A hand-back that arrives while the session works is a `queued_command` attachment with the same peer origin, so it was drawn as a message "from general-purpose" with Claude Code's `[Subagent hand-back]` framing; it now goes to the notification like the hidden line.
+A subagent that waits on its own background work gets an interim notification ("This agent has not reported yet … SubagentHandback"), and the notification that ends it names only the subagent, no `<tool-use-id>`.
+The apps find a task's card by `tool_use_id`, else by the id in the launch receipt, and the 2.1.319 receipt's first sentence says "including the agentId below": their pattern took "below" for the id. So the report stayed off the card, which kept the interim text as its result.
+The node now gives such a notification the call an earlier notification of the task named (`noteCall`), drops the interim text, and seeds both, with the reports handed back, into windows read from a file's end (`window.go`), so a cold open of a big file gives the same notices.
+
 ## Work opened in the App folded again by the same page (2026-11-07, #6038)
 
 As a chat opens, the latest page can arrive twice: once over HTTP (`loadInitial`, when the socket is not up yet) and once in the socket's subscribe backlog, both with `fold_work`. With "open all work" on, the first fold row fetched its steps (`AppModel.unfold`) before the second page came; that page carried the same fold, `dropFolded` took the steps out again and the fold came back under the same row id.

@@ -207,6 +207,9 @@ type Meta struct {
 	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
 	// as a queued_command attachment). The same task reporting again with other content is a new event and shows.
 	notified map[string]bool
+	// taskCalls: a background task's id → the call that started it, from its notifications that name both, for a
+	// later one that names only the task (noteCall). It grows like notified.
+	taskCalls map[string]string
 	// handbacks: a subagent's id → the report it handed back (SubagentHandback), until its task notification takes it
 	// as its detail. handbackCalls: those calls in the subagent's own transcript, whose results are not shown.
 	handbacks     map[string]string
@@ -1184,6 +1187,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		meta.notified[trimmed] = true
 		it := mk(0, "system", proto.KindNotice)
 		it.Task, it.Text = taskNote(trimmed)
+		meta.noteCall(it.Task)
 		meta.reportFor(it.Task)
 		return []proto.Item{it}
 	}

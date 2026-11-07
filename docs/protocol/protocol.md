@@ -556,7 +556,7 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "compact":{"trigger":"manual|auto","pre_tokens":151467}, // notice only: the context was compacted here (Claude Code's compact_boundary); the App draws a divider and folds the following "已从压缩的上下文继续" ("continued from compacted context") and the idle-compaction note into it
  "task":{"kind":"shell|monitor|agent|workflow|task",     // notice only: a background task notification (command, Monitor event / end, subagent, workflow); text is a one-line summary
          "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description or the command's first line",
-         "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",
+         "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…", // tool_use_id: the call that started the task, also when the notification names only the task (an earlier one of the task named it)
          "detail":"the Monitor event / the subagent's result / the whole command (entities decoded)"},
  "fold":{"items":1294,"tools":647,"thoughts":110,     // kind=fold only (only when the request carries fold_work): a folded stretch of work, see "Folded work"; may carry tasks, images
          "until":"...","through_seq":6890,"through_id":"…#0"},

@@ -219,5 +219,26 @@ func (m *Meta) reportFor(n *proto.TaskNote) {
 		n.Detail = r
 	} else if strings.HasPrefix(n.Detail, "This agent's report was delivered to you") && strings.Contains(n.Detail, handbackTool) {
 		n.Detail = ""
+	} else if n.Status == "waiting" && strings.HasPrefix(n.Detail, "This agent has not reported yet") && strings.Contains(n.Detail, handbackTool) {
+		n.Detail = "" // Claude Code telling the session to wait for the hand-back: the notice's line already says it waits
 	}
+}
+
+// noteCall gives a notification that names only its task the call that started it, as an earlier notification of
+// the task named it. A subagent that waited on its own background work, then handed its report back, is announced
+// done by one that names only the subagent: without the call, apps could not put the report on the subagent's card
+// and kept the earlier "has not reported yet" one there. (They also look the call up by the launch receipt's id, and
+// since Claude Code 2.1.319 the receipt's first sentence mentions "the agentId below", which they took for it.)
+func (m *Meta) noteCall(n *proto.TaskNote) {
+	if n == nil || n.TaskID == "" {
+		return
+	}
+	if n.ToolUseID == "" {
+		n.ToolUseID = m.taskCalls[n.TaskID]
+		return
+	}
+	if m.taskCalls == nil {
+		m.taskCalls = map[string]string{}
+	}
+	m.taskCalls[n.TaskID] = n.ToolUseID
 }

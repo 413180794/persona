@@ -21,8 +21,9 @@ import (
 //
 // The items are exactly the ones a full read gives: what a line turns into depends on earlier lines only through
 // the state below, and a window starts with it as it would be — the background-task notifications already
-// shown (a repeat is dropped) and the last "! cmd" input (its output line becomes the call) are read from the earlier
-// lines that mention them, as is ultracode's pending command (its delayed attachment repeats command output).
+// shown (a repeat is dropped) and the calls they name, the reports subagents handed back before their
+// notification, and the last "! cmd" input (its output line becomes the call) are read from the earlier lines that
+// mention them, as is ultracode's pending command (its delayed attachment repeats command output).
 // Those lines are found by a byte search while counting lines, so a Claude window may start at any line; a
 // Codex rollout records an item twice only within its turn, so its windows start at a turn (task_started).
 
@@ -41,7 +42,8 @@ type window struct {
 	ids       map[string]bool // tasks whose earlier notifications the File's meta has seen
 }
 
-// notifSeed is a line mentioning a background-task notification, and the task's id ("" when it could not be read).
+// notifSeed is a line mentioning a background-task notification, or a subagent handing its report back, and the
+// task's id ("" when it could not be read).
 type notifSeed struct {
 	line int
 	id   string
@@ -52,6 +54,7 @@ var (
 	seedBash         = []byte("<bash-")
 	seedUltracode    = []byte("ultra_effort_")
 	seedStdout       = []byte("local-command-stdout")
+	seedHandback     = []byte(`"senderTaskId":"`) // a subagent's message (a hand-back among them): its id follows
 )
 
 // scanLines reads a file once without parsing it: where each complete line starts, which lines mention a seed marker,
@@ -59,7 +62,7 @@ var (
 // byte searches: a few hundred MB in a fraction of a second.
 func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash, ultracode []int, first []byte, lastNL int64, err error) {
 	const block = 4 << 20
-	keep := int64(max(len(seedNotification), len(seedStdout)) - 1) // a marker split across two blocks
+	keep := int64(max(len(seedNotification), len(seedStdout), len(seedHandback)) - 1) // a marker split across two blocks
 	buf := make([]byte, block+keep)
 	type hit struct {
 		off       int64
@@ -77,14 +80,19 @@ func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash
 		}
 		data := buf[:n]
 		own := min(int64(block), n) // bytes this block owns; the rest is the next block's start, read for markers
-		for _, m := range [][]byte{seedNotification, seedBash, seedUltracode, seedStdout} {
+		for _, m := range [][]byte{seedNotification, seedBash, seedUltracode, seedStdout, seedHandback} {
 			for i := 0; ; {
 				j := bytes.Index(data[i:], m)
 				if j < 0 || int64(i+j) >= own {
 					break
 				}
 				h := hit{off: off + int64(i+j), bash: bytes.Equal(m, seedBash), ultracode: bytes.Equal(m, seedUltracode) || bytes.Equal(m, seedStdout)}
-				if !h.bash && !h.ultracode { // the task id follows the marker: "<task-notification>\n<task-id>…</task-id>"
+				if bytes.Equal(m, seedHandback) {
+					near := data[i+j+len(m) : min(len(data), i+j+len(m)+200)]
+					if z := bytes.IndexByte(near, '"'); z > 0 {
+						h.id = string(near[:z])
+					}
+				} else if !h.bash && !h.ultracode { // the task id follows the marker: "<task-notification>\n<task-id>…</task-id>"
 					near := data[i+j : min(len(data), i+j+300)]
 					if a := bytes.Index(near, []byte("<task-id>")); a >= 0 {
 						if z := bytes.Index(near[a:], []byte("</task-id>")); z > 0 {
@@ -203,7 +211,8 @@ func (f *File) seeNotifications(data []byte) {
 		return
 	}
 	defer fh.Close()
-	scratch := Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, notified: f.meta.notified}
+	scratch := Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, notified: f.meta.notified, taskCalls: f.meta.taskCalls,
+		handbacks: f.meta.handbacks}
 	last := 0
 	for _, s := range w.notif {
 		if s.line >= w.start {
@@ -218,7 +227,7 @@ func (f *File) seeNotifications(data []byte) {
 			ParseLine(s.line, bytes.TrimRight(line, "\n"), &scratch)
 		}
 	}
-	f.meta.notified = scratch.notified
+	f.meta.notified, f.meta.taskCalls, f.meta.handbacks = scratch.notified, scratch.taskCalls, scratch.handbacks
 }
 
 // lineStart is where line n (1-based) starts; one past the last line known gives end.
@@ -272,8 +281,8 @@ func (f *File) startsTurn(_ int, line []byte, _ bool) bool {
 }
 
 // seeded is the parser state for a window starting at line b whose bytes are window: what the earlier lines leave
-// behind that changes what later lines turn into. Notifications already shown (a repeat is dropped): only the
-// earlier ones for a task the window mentions are read. The pending "! cmd": the last earlier line that is a "! cmd"
+// behind that changes what later lines turn into. Notifications already shown (a repeat is dropped), the calls
+// they name and the reports handed back: only the earlier lines for a task the window mentions are read. The pending "! cmd": the last earlier line that is a "! cmd"
 // input or output decides it.
 func (f *File) seeded(fh *os.File, w *window, b int, end int64, window []byte) Meta {
 	readLine := func(n int) []byte {
@@ -330,7 +339,8 @@ func (f *File) seeded(fh *os.File, w *window, b int, end int64, window []byte) M
 			ParseLine(n, line, &ultra)
 		}
 	}
-	return Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, notified: scratch.notified, bashInput: bash,
+	return Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, notified: scratch.notified, taskCalls: scratch.taskCalls,
+		handbacks: scratch.handbacks, bashInput: bash,
 		Ultracode: ultra.Ultracode, UltracodeAt: ultra.UltracodeAt, UltracodeSince: ultra.UltracodeSince, ultracodeCommand: ultra.ultracodeCommand}
 }
 

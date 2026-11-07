@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -266,5 +267,113 @@ func TestQueuedHandbackGoesToTheAgentsNotification(t *testing.T) {
 	// handback without the subagent's id is no hand-back either
 	if got := ParseLine(1, []byte(queued(`{"kind":"peer","name":"general-purpose","body":"hi","handback":true}`, "hi")), &Meta{}); len(got) != 1 || got[0].From != "general-purpose" {
 		t.Fatalf("items %+v, want the peer message", got)
+	}
+}
+
+// A background subagent that waited on its own background work, then handed its report back, is announced done by a
+// notification naming only the subagent (Claude Code 2.1.319); it gets the call from the earlier notification that
+// named both. The interim "has not reported yet" note is Claude Code talking to the session and is no report.
+func TestHandedBackNotificationNamesTheSubagentsCall(t *testing.T) {
+	const receipt = "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: a1b2c3 (internal ID - do not mention to user. Use SendMessage with to: 'a1b2c3' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes."
+	r, _ := json.Marshal(receipt)
+	launch := []string{
+		`{"type":"assistant","uuid":"a1","timestamp":"2026-11-07T06:09:48Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_launch","name":"Agent","input":{"description":"Check the tests","prompt":"x","run_in_background":true}}]}}`,
+		`{"type":"user","uuid":"u1","timestamp":"2026-11-07T06:10:10Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_launch","content":` + string(r) + `}]}}`,
+	}
+	note := func(uuid, status, toolUse, summary, result string) string {
+		x := "<task-notification>\n<task-id>a1b2c3</task-id>\n"
+		if toolUse != "" {
+			x += "<tool-use-id>" + toolUse + "</tool-use-id>\n"
+		}
+		x += "<status>" + status + "</status>\n<summary>Agent \"Check the tests\" " + summary + "</summary>\n<result>" + result + "\n</result>\n</task-notification>"
+		p, _ := json.Marshal(x)
+		return `{"type":"attachment","uuid":"` + uuid + `","isSidechain":false,"attachment":{"type":"queued_command","commandMode":"task-notification","origin":{"kind":"task-notification","producer":"session-task"},"prompt":` + string(p) + `}}`
+	}
+	waiting := note("q1", "waiting", "toolu_launch", "is waiting on its own background work",
+		"This agent has not reported yet: it is waiting on its own background work and will deliver its report through SubagentHandback when that finishes.")
+	handback := `{"type":"attachment","uuid":"q2","isSidechain":false,"attachment":{"type":"queued_command","commandMode":"prompt","isMeta":true,"prompt":"<agent-message from=\"a1b2c3\">\n  ## Summary\n</agent-message>","origin":{"kind":"peer","from":"a1b2c3","senderTaskId":"a1b2c3","name":"general-purpose","handback":true,"handbackReportText":"## Summary\n\nAll tests pass."}}}`
+	done := note("q3", "completed", "", "finished", "This agent's report was delivered to you as a message from \"a1b2c3\" (its SubagentHandback call). Read it there; it is not repeated here.")
+
+	notices := func(lines ...string) []*proto.TaskNote {
+		var meta Meta
+		var out []*proto.TaskNote
+		for i, l := range lines {
+			for _, it := range ParseLine(i+1, []byte(l), &meta) {
+				if it.Task != nil {
+					out = append(out, it.Task)
+				}
+			}
+		}
+		return out
+	}
+	got := notices(append(launch, waiting, handback, done)...)
+	if len(got) != 2 || got[0].Status != "waiting" || got[1].Status != "completed" {
+		t.Fatalf("notices %+v, want waiting then completed", got)
+	}
+	if got[0].ToolUseID != "toolu_launch" || got[0].Detail != "" {
+		t.Errorf("waiting %+v: want the call, and no detail (Claude Code's note to the session)", got[0])
+	}
+	if got[1].ToolUseID != "toolu_launch" || got[1].Detail != "## Summary\n\nAll tests pass." {
+		t.Errorf("completed %+v: want the call and the report", got[1])
+	}
+	// a task no earlier notification named the call of gets none
+	if got := notices(append(launch, handback, done)...); len(got) != 1 || got[0].ToolUseID != "" {
+		t.Errorf("no earlier notification: %+v", got)
+	}
+}
+
+// A file opened by its end gets the call and the report the same way when the earlier notification and the
+// hand-back are before the window.
+func TestHandedBackNotificationNamesTheCallAcrossWindows(t *testing.T) {
+	defer func(w int64) { windowBytes = w }(windowBytes)
+	windowBytes = 4 << 10
+	pad := strings.Repeat("x", 3000)
+	note := func(uuid, status, toolUse string) string {
+		x := "<task-notification>\n<task-id>a1b2c3</task-id>\n"
+		if toolUse != "" {
+			x += "<tool-use-id>" + toolUse + "</tool-use-id>\n"
+		}
+		x += "<status>" + status + "</status>\n<summary>Agent \"Check the tests\" finished</summary>\n</task-notification>"
+		// as Claude Code writes it: "<" as it is (json.Marshal would hide it from the window's byte search)
+		c := strings.NewReplacer("\n", `\n`, `"`, `\"`).Replace(x)
+		return `{"type":"user","uuid":"` + uuid + `","message":{"role":"user","content":"` + c + `"}}`
+	}
+	l := &tline{}
+	l.user("u1", "", "go", 1)
+	l.add(note("n1", "waiting", "toolu_launch"))
+	l.add(`{"type":"attachment","uuid":"q2","isSidechain":false,"attachment":{"type":"queued_command","commandMode":"prompt","isMeta":true,"prompt":"<agent-message from=\"a1b2c3\">\n  ## Summary\n</agent-message>","origin":{"kind":"peer","from":"a1b2c3","senderTaskId":"a1b2c3","name":"general-purpose","handback":true,"handbackReportText":"## Summary\n\nAll tests pass."}}}`)
+	for i := range 6 {
+		l.add(fmt.Sprintf(`{"type":"file-history-snapshot","messageId":"m%d","snapshot":{"pad":%q}}`, i, pad))
+	}
+	l.add(note("n2", "completed", ""))
+	p := writeLines(t, l)
+	calls := func(items []proto.Item) []string {
+		var out []string
+		for _, it := range items {
+			if it.Task != nil {
+				out = append(out, it.Task.Status+":"+it.Task.ToolUseID+":"+it.Task.Detail)
+			}
+		}
+		return out
+	}
+	windowed := NewFile(p)
+	fresh, _, err := windowed.RefreshSpan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if windowed.base == 0 {
+		t.Fatal("the file was not read in a window")
+	}
+	const want = "completed:toolu_launch:## Summary\n\nAll tests pass."
+	if got := calls(fresh); len(got) != 1 || got[0] != want {
+		t.Fatalf("the window's notices %q, want the call and the report from the lines before the window", got)
+	}
+	windowBytes = 1 << 40
+	whole := NewFile(p)
+	if _, _, err := whole.RefreshSpan(); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls(allItems(whole)); len(got) != 2 || got[0] != "waiting:toolu_launch:" || got[1] != want {
+		t.Fatalf("whole read %q", got)
 	}
 }
