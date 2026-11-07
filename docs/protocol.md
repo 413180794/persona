@@ -1423,9 +1423,13 @@ Typing into someone else's terminal is the riskiest thing this App does. Before 
 - herdr 0.9.4 on macOS loses an answer over 8 KB: it writes it to its socket once, and past the socket's 8192-byte buffer the rest is gone (`herdr.ErrTruncated`).
   A wide pane with Claude Code's status bar takes more than that in 60 colored lines, so its colored read always failed. The check then went on without colors, and every send to a box showing Claude's suggestion
   was refused, with Clear and Send failing again (#6039). Such a read is now made of two smaller ones (`node/hosts.go` `spliceRead`): the whole screen without colors,
-  and its bottom 20 (or 10) rows with colors (herdr keeps the newest), where the box and a dialog's keys are. Dialogs are judged on the whole screen; box rows above the colored ones have no colors, so they count as typed.
+  and its bottom 20 (or 10) rows with colors (herdr keeps the newest), where the box and a dialog's keys are. Dialogs are judged on the whole plain screen; box rows above the colored ones have no colors, so they count as typed.
   The two are lined up from their last row with something on it, the colored rows reaching past the blank ones at the bottom, and compared without trailing white space (herdr's plain read drops the no-break space after an empty box's `❯`). When the colored rows don't match the plain ones (the screen moved between the reads) they are read again once, then the read fails.
-  When herdr can't send even the plain screen whole, the read fails rather than return fewer rows taken for the whole, and the send is refused (`not_delivered`).
+  When herdr can't send even the plain screen whole (a wide pane full of CJK text is past 8 KB in 30 plain rows), `spliceRead` fails rather than return fewer rows taken for the whole.
+  The send check then reads the most bottom rows that fit (40, 30, 24, 16, 12; `node/hosts.go` `bottomRead`), with colored rows spliced on when the reads line up, else plain (as does the after-send check,
+  `ensureSubmitted`, whenever its colored read is cut). The rows are used only when the read judged shows Claude's box or a dialog: Claude draws no box while a dialog has the keyboard, and a dialog's keys and footer end it.
+  Without either, or when a newer read shows neither, the send is refused (`not_delivered`) as before (#6308).
+  Judged on its bottom rows, a dialog is never a notice that Enter closes (its head may be above them): a send with `dismiss_notice` presses nothing there and is refused as `dialog_open`.
   A refusal logs whether the read had colors and the box row's styles, never its text (`screen.BoxStyle`).
 - `clear_draft`: after seeing the draft in the App, the user picks **Clear and Send**, and the App resends the same message (same `client_msg_id`) with the `clearable` it received;
   the node clears it with `ctrl+k ctrl+u` only if the input box **still has that same text**, then reads again to confirm it's empty before sending. Multi-line drafts can only be handled on the computer (those two keys clear one line at a time).

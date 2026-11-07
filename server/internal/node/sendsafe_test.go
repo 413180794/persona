@@ -99,6 +99,9 @@ func (f *fakePane) serve(t *testing.T) *herdr.Client {
 						text = screen.Plain(text) // a plain read has no colors
 					}
 					text = bottom(text, int(lines))
+					if !ansi {
+						text += "\n" // herdr ends a plain read's every row, the last one too; a colored read's last row has none
+					}
 					if limit := map[bool]int{true: f.cutOver, false: f.plainCutOver}[ansi]; limit > 0 && int(lines) > limit {
 						b, _ := json.Marshal(map[string]any{"id": req.ID, "result": map[string]any{"read": map[string]any{"text": text}}})
 						f.mu.Unlock()
@@ -347,6 +350,17 @@ func screenDialogRev(t *testing.T, s string) string {
 	return d.Rev
 }
 
+// A send asked to close a notice first presses nothing on a screen read only by its bottom rows: what looks like a
+// notice there may be a dialog whose head is above them (#6308).
+func TestDismissNoticeNeedsTheWholeScreen(t *testing.T) {
+	notice := screenFixture(t, "claude-2.1.309-auto-mode-notice-120.txt")
+	f := &fakePane{screens: []string{strings.Repeat("一行很长的中文输出\r\n", 40) + notice}, cutOver: 10, plainCutOver: 24}
+	err := (&Node{hosts: herdrHosts(f.serve(t))}).checkPaneFor(context.Background(), "w1:p1", "claude", sendOpts{DismissNotice: true})
+	if code, data := refusalOf(t, err); code != "dialog_open" || data["notice"] == true || len(f.keys) != 0 {
+		t.Fatalf("%s %v, keys %v", code, data, f.keys)
+	}
+}
+
 // A prompt left in the input box (seen once with an image: `[Image #1]` and the text, the agent done) gets one Enter;
 // a box that empties, or shows someone else's text, gets none.
 func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
@@ -384,6 +398,14 @@ func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 	if len(other.keys) != 0 {
 		t.Fatalf("pressed enter on someone else's draft: %v", other.keys)
 	}
+
+	// A pane herdr cannot send whole even without colors: its bottom rows still show the stuck prompt (#6308).
+	cut := &fakePane{screens: []string{strings.Repeat("一行很长的中文输出\r\n", 40) + typed}, cutOver: 10, plainCutOver: 24}
+	c := &Node{hosts: herdrHosts(cut.serve(t))}
+	c.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
+	if len(cut.keys) != 1 || cut.keys[0][0] != "enter" {
+		t.Fatalf("stuck prompt on a cut pane: keys %v (reads %v)", cut.keys, cut.readLines)
+	}
 }
 
 func TestStillPromptedIgnoresChips(t *testing.T) {
@@ -406,7 +428,8 @@ func TestStillPromptedIgnoresChips(t *testing.T) {
 // herdr 0.9.4 loses an answer over 8 KB, so a 60-line colored read of a wide pane with a status bar never arrived and
 // the check went on without colors, where Claude's grey suggestion is a draft: every send to it was refused, and Clear
 // and Send failed again (#6039). The screen is now read without colors and its bottom rows with them (spliceRead): the
-// suggestion is told apart, a typed draft is still one, dialogs are judged on the whole screen.
+// suggestion is told apart, a typed draft is still one, dialogs are judged on the whole screen. When even the plain
+// screen is cut (#6308), its bottom rows are judged when they show the box or a dialog (bottomRead).
 func TestCheckPaneReadsTheBoxDespiteCutAnswers(t *testing.T) {
 	ctx := context.Background()
 	check := func(f *fakePane, clear string) error {
@@ -442,10 +465,58 @@ func TestCheckPaneReadsTheBoxDespiteCutAnswers(t *testing.T) {
 	if code, data := refusalOf(t, check(&fakePane{screens: []string{list}, cutOver: 10}, "")); code != "dialog_open" || data["notice"] == true {
 		t.Fatalf("rewind list: %s %v", code, data)
 	}
-	// The plain read is cut too: no shorter screen is taken for the whole one (a box above it unseen); nothing is
-	// known of the box, nothing is typed.
-	if code, _ := refusalOf(t, check(&fakePane{screens: []string{menu}, cutOver: 10, plainCutOver: 30}, "")); code != notDelivered {
-		t.Fatalf("plain cut: %s", code)
+	// The plain read is cut too (a wide pane full of CJK text): the bottom rows that fit are judged when they show the
+	// box, which Claude draws only while no dialog has the keyboard (bottomRead). An empty box with its suggestion
+	// takes the message; a typed draft and the box over a menu are still drafts.
+	cjk := strings.Repeat("一行很长的中文输出\r\n", 40)
+	h := &fakePane{screens: []string{cjk + suggestion}, cutOver: 20, plainCutOver: 30}
+	if err := check(h, ""); err != nil {
+		t.Fatalf("plain cut, the box in the bottom rows: %v (reads %v)", err, h.readLines)
+	}
+	if code, data := refusalOf(t, check(&fakePane{screens: []string{cjk + typed}, cutOver: 20, plainCutOver: 30}, "")); code != "input_draft" || data["clearable"] != "fix the flaky test" {
+		t.Fatalf("plain cut, typed: %s %v", code, data)
+	}
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{menu}, cutOver: 10, plainCutOver: 30}, "")); code != "input_draft" {
+		t.Fatalf("plain cut, the box over a menu: %s", code)
+	}
+	// A dialog in the bottom rows refuses as one.
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{cjk + list}, cutOver: 10, plainCutOver: 30}, "")); code != "dialog_open" {
+		t.Fatalf("plain cut, a dialog: %s", code)
+	}
+	// No box and no dialog in any bottom rows that fit (a box above a long menu): nothing is known, nothing typed.
+	longMenu := rule + "\r\n❯ /re\r\n" + rule + strings.Repeat("\r\n  /review   review a pull request", 40)
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{longMenu}, cutOver: 10, plainCutOver: 16}, "")); code != notDelivered {
+		t.Fatalf("plain cut, no box in the rows that fit: %s", code)
+	}
+	// The screen changes after the read that showed the box (a long menu pushes it out): the newer read the splice
+	// makes lines up and shows neither, so nothing is typed.
+	pushed := &fakePane{screens: []string{cjk + suggestion, longMenu}, clearAfter: 1, cutOver: 10, plainCutOver: 30}
+	if code, _ := refusalOf(t, check(pushed, "")); code != notDelivered {
+		t.Fatalf("the box pushed out after the first read: %s (reads %v)", code, pushed.readLines)
+	}
+	// No colored rows fit at all: a fresh plain read of the bottom rows is judged, without colors (an empty box takes
+	// the message; any text in it would be a draft).
+	empty := screenFixture(t, "claude-2.1.312-empty-162.ansi")
+	plainOnly := &fakePane{screens: []string{cjk + empty}, cutOver: 2, plainCutOver: 30}
+	if err := check(plainOnly, ""); err != nil {
+		t.Fatalf("plain rows only, an empty box: %v (reads %v)", err, plainOnly.readLines)
+	}
+	if code, _ := refusalOf(t, check(&fakePane{screens: []string{cjk + suggestion}, cutOver: 2, plainCutOver: 30}, "")); code != "input_draft" {
+		t.Fatalf("plain rows only, a suggestion without colors: %s", code)
+	}
+	// Only 12 plain rows fit: the colored rows spliced on are no more than those (a plain read's last line end is no
+	// row), so the suggestion is still told from a draft.
+	small := &fakePane{screens: []string{cjk + suggestion}, cutOver: 10, plainCutOver: 12}
+	if err := check(small, ""); err != nil {
+		t.Fatalf("12 rows: %v (reads %v)", err, small.readLines)
+	}
+	// A dialog seen only in the bottom rows is never a notice that Enter closes: its head may be above them.
+	notice := screenFixture(t, "claude-2.1.309-auto-mode-notice-120.txt")
+	if code, data := refusalOf(t, check(&fakePane{screens: []string{notice}, cutOver: 10}, "")); code != "dialog_open" || data["notice"] != true {
+		t.Fatalf("the notice read whole: %s %v", code, data)
+	}
+	if code, data := refusalOf(t, check(&fakePane{screens: []string{cjk + notice}, cutOver: 10, plainCutOver: 24}, "")); code != "dialog_open" || data["notice"] == true {
+		t.Fatalf("the notice in the bottom rows: %s %v", code, data)
 	}
 	// A short session in a tall pane: the box, then many blank rows. The colored rows reach past them to the box.
 	tall := strings.Replace(typed, "\r\n", "\r\n", -1) + strings.Repeat("\r\n", 25)

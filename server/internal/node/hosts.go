@@ -78,11 +78,12 @@ func spliceRead(ctx context.Context, h host.Host, ref host.PaneRef, source strin
 		return "", err
 	}
 	for range 2 {
-		all := screenRows(plain)
+		all := screenRows(strings.TrimSuffix(strings.ReplaceAll(plain, "\r\n", "\n"), "\n")) // the read's last line end is no row
 		rows := contentRows(all)
 		// The colored rows reach past the blank ones at the bottom (a short session in a tall pane), to the box.
 		blank := len(all) - len(rows)
-		for _, n := range []int{min(len(all), blank+20), min(len(all), blank+10)} {
+		// Never more rows than the plain read asked for: it ends in a line end, so all has an empty row past them.
+		for _, n := range []int{min(len(all), blank+20, lines), min(len(all), blank+10, lines)} {
 			colored, err := h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: n, ANSI: true})
 			if errors.Is(err, herdr.ErrTruncated) {
 				continue
@@ -102,6 +103,41 @@ func spliceRead(ctx context.Context, h host.Host, ref host.PaneRef, source strin
 		}
 	}
 	return "", herdr.ErrTruncated
+}
+
+// bottomRead is the bottom of a screen herdr cannot send whole even without colors (spliceRead's plain read cut too: a
+// wide pane full of CJK text is past 8192 bytes in 30 plain rows): the most rows that fit, colored where spliceRead can
+// splice them on, else plain (#6308). It is used only when those rows show Claude's input box or a dialog, which sit at
+// the bottom: Claude draws no box while a dialog has the keyboard, and a dialog's keys and footer end it. Without
+// either nothing is known of what is above (ok false), and the caller refuses as before. What is above stays unseen:
+// a dialog's head among it, so whether it is a notice that Enter closes is not known either.
+func (n *Node) bottomRead(ctx context.Context, pane string) (s string, colored, ok bool) {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return "", false, false
+	}
+	shows := func(s string) bool { return screen.ClaudeInput(s).Box || screen.Choosing(screen.Plain(s)) }
+	for _, lines := range []int{40, 30, 24, 16, 12} {
+		plain, err := h.Read(ctx, ref, host.ReadOpts{Source: "visible", Lines: lines})
+		if errors.Is(err, herdr.ErrTruncated) {
+			continue
+		}
+		if err != nil || !shows(plain) {
+			return "", false, false
+		}
+		// The splice reads again, and the screen it gives is the one judged: a newer read that lines up and shows
+		// neither says they left these rows. When no colors line up, a fresh plain read stands for it, judged the same.
+		c, err := spliceRead(ctx, h, ref, "visible", lines)
+		spliced := err == nil
+		if err != nil {
+			c, err = h.Read(ctx, ref, host.ReadOpts{Source: "visible", Lines: lines})
+		}
+		if err != nil || !shows(c) {
+			return "", false, false
+		}
+		return c, spliced, true
+	}
+	return "", false, false
 }
 
 // screenRows are a read's rows (\r\n or \n ends a row).

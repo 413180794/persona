@@ -192,11 +192,19 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 	unread := false  // the last read failed: it says nothing of the box
 	cut := false     // … because herdr cut its every answer (herdr.ErrTruncated): it is there, the screen is not
 	colored := false // the last read had colors: only they tell Claude's grey suggestion from a draft
+	partial := false // the last read is the screen's bottom rows only (bottomRead): a dialog's head may be above them
 	read := func() string {
 		s, err := n.readPaneANSI(ctx, pane, "visible", 60) // a big one in two smaller reads (spliceRead, #6039)
 		colored = err == nil
 		if err != nil {
 			s, err = n.readPane(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
+		}
+		partial = false
+		if errors.Is(err, herdr.ErrTruncated) {
+			// Cut without colors too: the bottom rows, when they show the box or a dialog (bottomRead).
+			if b, c, ok := n.bottomRead(ctx, pane); ok {
+				s, err, colored, partial = b, nil, c, true
+			}
 		}
 		unread, cut = err != nil, errors.Is(err, herdr.ErrTruncated)
 		return s
@@ -205,7 +213,8 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 	if unread && (opts.readBox || cut) {
 		return refusal(notDelivered, unreadBoxMessage, nil)
 	}
-	if opts.DismissNotice {
+	// Only a whole screen tells a notice from a dialog whose head is above the bottom rows: Enter there would answer it.
+	if opts.DismissNotice && !partial {
 		var err error
 		if shown, err = n.closeNotices(ctx, pane, shown, true); err != nil {
 			return err
@@ -232,6 +241,9 @@ func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpt
 	}
 	switch code {
 	case screen.DialogOpen:
+		if partial {
+			return dialogRefusalOf(screen.Plain(shown), false)
+		}
 		return dialogRefusal(screen.Plain(shown))
 	case screen.InputDraft:
 		// What the box was drawn with, never its text: a style the reader takes for typed words shows here.
@@ -292,8 +304,12 @@ const dialogMessage = "电脑上的终端正开着一个对话框（确认、选
 
 // dialogRefusal refuses a send into a pane whose screen (plain) shows a dialog, saying which: its first line, and
 // notice when Enter only closes it (a send with dismiss_notice would close it and go through).
-func dialogRefusal(plain string) error {
-	head, notice := screen.DialogHead(plain), screen.NoticeOnly(plain)
+func dialogRefusal(plain string) error { return dialogRefusalOf(plain, true) }
+
+// dialogRefusalOf is dialogRefusal for a screen read whole or only its bottom rows (bottomRead): those never make a
+// notice, since the dialog's head and other options may be above them.
+func dialogRefusalOf(plain string, whole bool) error {
+	head, notice := screen.DialogHead(plain), whole && screen.NoticeOnly(plain)
 	msg := dialogMessage
 	if head != "" {
 		msg = "电脑上的终端正开着一个对话框（「" + clipDialog(head, 120) + "」），这条消息没有发出去："
@@ -515,6 +531,12 @@ func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) string {
 	case <-time.After(submitGrace):
 	}
 	s, err := n.readPaneANSI(ctx, pane, "visible", 60)
+	if errors.Is(err, herdr.ErrTruncated) {
+		// A pane herdr cannot send whole even without colors: its bottom rows, which hold the box (#6308).
+		if b, _, ok := n.bottomRead(ctx, pane); ok {
+			s, err = b, nil
+		}
+	}
 	if err != nil {
 		return ""
 	}
