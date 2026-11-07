@@ -109,7 +109,7 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun larkChangePin(feedId: String, messageId: String, pinId: String?, accountId: String?): Unit = error("Chat pins unavailable")
     /** Read receipts of my messages; ones the Lark gateway has none for are left out. */
     suspend fun larkReadStates(feedId: String, messageIds: List<String>): List<LarkReadState> = emptyList()
-    /** The account's message display settings ("Keep recalled messages", "Edit history", Brave Climb, #882); null when they can't be read (then kept content stays hidden and nothing is decoded). */
+
     suspend fun larkMessageDisplay(): LarkMessageDisplay? = null
 }
 
@@ -254,9 +254,7 @@ data class ReplyRequest(val text: String, @SerialName("client_id") val clientId:
 
 /** [ai]: the text came from AI (the AI twin, or "AI draft"); sending it asks first, sending the user's own words does not. */
 @Serializable
-data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString(), val ai: Boolean = false,
-    /** Sent as Brave Climb words (#882): [text] is the words typed, encoded only when it goes. */
-    val braveClimb: Boolean = false)
+data class ReplyDraft(val text: String, val clientId: String = UUID.randomUUID().toString(), val ai: Boolean = false)
 
 data class LarkConversation(
     val title: String = "",
@@ -317,8 +315,6 @@ data class LarkMessage(
     /** The chat can pin it ("Add pin"), and unpin it. */
     val canPin: Boolean = false,
     val canUnpin: Boolean = false,
-    /** Shown decoded from Brave Climb words ([LarkMessage.shown]): the bubble says so under them. */
-    val braveClimb: Boolean = false,
 )
 
 /** One earlier version of an edited message. */

@@ -152,7 +152,6 @@ function ChatHeader({ chat, account }: { chat?: LarkConversation; account?: stri
 }
 
 function ChatList({ selected, store: larkChats, accounts }: { selected?: string; store: LarkChatsStore; accounts: LarkAccountsState }) {
-  // "Brave climb" encoded words in a row read decoded while the account's switch is on (lib/lark-display.ts).
   const display = useLarkDisplayState(accounts.request).snapshot ?? HIDDEN_DISPLAY;
   const s = useLarkChats(larkChats);
   const [query, setQuery] = useState("");

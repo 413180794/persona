@@ -24,7 +24,6 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     var canRetry: Bool { state != .sent && (attachment?.kind != .file || state != .unconfirmed) }
     /// Who Feishu notifies (the @ picker), kept for Resend and Back to Composer.
     var mentions: [LarkMention] = []
-    /// The message box mode it goes in on a messaging source (`brave_climb`…, #2138): the source handles the text.
     var mode: String? = nil
     /// What the source's `compose` gave for a mode that prepares (sealed): sent with it, once.
     var prepared: String? = nil
@@ -80,7 +79,6 @@ enum LarkOutbox {
             return try await api.larkSendAttachment(feed, attachment: attachment, clientID: o.clientID,
                                                     replyTo: o.replyTo?.id, thread: o.thread, threadRoot: o.threadRoot)
         }
-        // A mode (sealed, Brave Climb) is the source's to apply: without it the typed words must not go out as they are.
         if o.mode != nil, api.messagingSource == nil {
             throw APIError(status: 409, message: String(localized: "The message source is unavailable right now. This message wasn't sent."), fields: ["code": "lark_mode_unavailable"])
         }

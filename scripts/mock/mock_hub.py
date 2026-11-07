@@ -5501,39 +5501,7 @@ def lark_pin_rows():
         rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
     return rows
 
-LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
-                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB"))}
-# MOCK_LARK_OLD_DISPLAY=1: a Feishu extension older than 0.10.0, whose settings have no "Brave Climb" switch.
-if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
-    del LARK_DISPLAY["brave_climb_codec"]
-
-BRAVE_CLIMB_ALPHABET = "[removed]"
-def brave_climb(text):
-    """The Lark gateway's "Brave Climb" words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
-    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
-    while True:
-        n, d = divmod(n, 34)
-        out = BRAVE_CLIMB_ALPHABET[d] + out
-        if n == 0:
-            return "**字" + out + "**"
-
-# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and the design review (f2) has "Brave Climb" words: a whole message, one split over
-# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
-# the list is words too.
-if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
-    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
-    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
-    words = brave_climb("标签栏改粗一号")
-    split = _lm("211", "Lucy Wang", words, mins=39)
-    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
-    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
-    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
-    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
-    reply = _lm("214", "我", "好的", mine=True, mins=36)
-    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
-    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
-    LARK_CHATS[0]["preview"] = whole["text"]
+LARK_DISPLAY = {'account_id': LARK_ACCOUNT_ID, 'anti_recall': False, 'show_edit_history': False}
 if os.environ.get("MOCK_LARK_TRAINER"):
     retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
     retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
@@ -13191,22 +13159,22 @@ class H(BaseHTTPRequestHandler):
             if body.get("name") == "idless-receipt.txt":
                 return self.send_json({"message_id": ""})
             return self.send_json({"message_id": m["id"]})
-        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # Send Lark messages: the Lark gateway takes a moment
-            body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
-            if lark_check_mentions(body): return self.send_json({"error": lark_check_mentions(body)}, 400)
-            if body.get("text", "").startswith("**字") and not LARK_DISPLAY.get("brave_climb_codec"):  # the Lark gateway refuses them
-                return self.send_json({"error": "Enable the Brave Climb message codec in FLiNG Trainer before sending encoded messages",
-                                       "code": "BRAVE_CLIMB_CODEC_DISABLED"}, 403)
+        if p.startswith('/api/v1/lark/conversations/') and p.endswith('/messages'):
+            body, feed = (json.loads(self.last_body or b'{}'), p.split('/')[5])
+            if lark_check_mentions(body):
+                return self.send_json({'error': lark_check_mentions(body)}, 400)
+            pass
             time.sleep(lark_send_seconds())
-            if "#fail" in body.get("text", ""):
-                return self.send_json({"error": "lark: send timed out"}, 502)
+            if '#fail' in body.get('text', ''):
+                return self.send_json({'error': 'lark: send timed out'}, 502)
             msgs = LARK_MESSAGES.setdefault(feed, [])
-            pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
-            m = _lm(pos, "我", body.get("text", ""), mine=True, mins=0)
-            if body.get("mentions"): m["parts"] = lark_mention_parts(m["text"], body["mentions"])
-            m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
+            pos = str(max([int(m['position']) for m in msgs] or [0]) + 1)
+            m = _lm(pos, '我', body.get('text', ''), mine=True, mins=0)
+            if body.get('mentions'):
+                m['parts'] = lark_mention_parts(m['text'], body['mentions'])
+            m['created_at'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             msgs.append(m)
-            return self.send_json({"ok": True, "message_id": m["id"]})
+            return self.send_json({'ok': True, 'message_id': m['id']})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read-states"):  # Lark read receipts of my messages
             ids = json.loads(self.last_body or b"{}").get("message_ids") or []
             if len(ids) > 100: return self.send_json({"error": "at most 100 message_ids"}, 400)

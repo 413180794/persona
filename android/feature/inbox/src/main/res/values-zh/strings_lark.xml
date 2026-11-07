@@ -19,10 +19,6 @@
     <string name="inbox_lark_loading">正在加载…</string>
     <string name="inbox_lark_older">查看更早的消息</string>
     <string name="inbox_lark_edited">已编辑</string>
-    <string name="inbox_lark_brave_climb_decoded">[removed] · 已解码</string>
-    <string name="inbox_lark_brave_climb_placeholder">[removed]编码消息</string>
-    <string name="inbox_lark_brave_climb_mode">[removed]编码</string>
-    <string name="inbox_lark_brave_climb_off">请先在飞书网关的设置里开启[removed]编码</string>
     <plurals name="inbox_lark_replies">
         <item quantity="other">%1$d 条回复</item>
     </plurals>

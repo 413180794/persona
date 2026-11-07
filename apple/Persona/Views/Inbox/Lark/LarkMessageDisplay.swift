@@ -5,36 +5,28 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
     var accountID: String
     var antiRecall: Bool
     var showEditHistory: Bool
-    /// The Lark gateway's Brave Climb switch (#882); nil from a Feishu extension older than 0.10.0, which has no such setting:
-    /// then Settings does not offer it and the words stay as they came.
-    var braveClimb: Bool? = nil
     /// A messaging source offers its sealed mode (`GET status` modes, #2138); nil on the old API, which checks its
     /// encryption service when Encrypted message is chosen.
     var sealed: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case accountID = "account_id", antiRecall = "anti_recall", showEditHistory = "show_edit_history"
-        case braveClimb = "brave_climb_codec", sealed
+        case sealed
     }
     static let hidden = Self(accountID: "", antiRecall: false, showEditHistory: false)
 
-    /// Brave Climb words are read and written: the switch is on.
-    var climbs: Bool { braveClimb == true }
     /// A messaging source's sealed messages can be sent.
     var seals: Bool { sealed == true }
-    /// A message's parts as the chat shows them: Brave Climb words decoded while the switch is on, as they came otherwise.
-    func shown(_ parts: [LarkPart]) -> [LarkPart] { climbs ? LarkBraveClimb.decode(parts) ?? parts : parts }
-    /// A message's text as the chat shows it (see `shown(_:)`).
-    func shown(_ text: String) -> String { climbs ? LarkBraveClimbCodec.decodeText(text) ?? text : text }
-    /// A one-line summary of a message (a quote, the chat list), see `LarkBraveClimb.summary`.
-    func summary(_ text: String) -> String { LarkBraveClimb.summary(text, on: climbs) }
+    /// Preserve the text and parts supplied by the message source.
+    func shown(_ parts: [LarkPart]) -> [LarkPart] { parts }
+    func shown(_ text: String) -> String { text }
+    func summary(_ text: String) -> String { text }
 
     /// The switch behind a key of POST /api/v1/lark/message-display.
     func value(of key: String) -> Bool? {
         switch key {
         case "anti_recall": antiRecall
         case "show_edit_history": showEditHistory
-        case "brave_climb_codec": braveClimb
         default: nil
         }
     }
@@ -80,15 +72,14 @@ extension EnvironmentValues {
 }
 
 extension APIClient {
-    /// On a messaging source the settings are the source's to apply (#2138): what it sends is shown, retained recalls
-    /// and edit history included; Brave Climb and Encrypted message can be chosen in the box while the source offers
-    /// the mode (`GET status`).
+    /// On a messaging source the settings are the source's to apply (#2138): retained recalls and edit history
+    /// are included; encrypted messages can be chosen while the source offers the sealed mode.
     func messagingDisplay(_ source: String) async throws -> LarkMessageDisplay {
         struct Status: Decodable { var modes: [String]? }
         let user = try await messagingCall { try await messagingUser(source) }
         let status = try JSON.decoder.decode(Status.self, from: await request("GET", messagingPath(source, "status"), query: messagingQuery()))
         return LarkMessageDisplay(accountID: user, antiRecall: true, showEditHistory: true,
-                                  braveClimb: status.modes?.contains("brave_climb") == true, sealed: status.modes?.contains("sealed") == true)
+                                  sealed: status.modes?.contains("sealed") == true)
     }
     func larkMessageDisplay() async throws -> LarkMessageDisplay { try await get("/api/v1/lark/message-display") }
     func larkMessageDisplayChange(_ snapshot: LarkMessageDisplay, key: String, value: Bool, expected: Bool) async throws -> LarkMessageDisplay {
@@ -194,11 +185,6 @@ private struct LarkMessageDisplaySettingsContent: View {
             Section {
                 setting("Edit History", key: "show_edit_history", value: state.policy.showEditHistory)
             } footer: { Text("Tap Edited under a message to see the earlier versions that were kept.") }
-            if let climb = state.policy.braveClimb {
-                Section {
-                    setting("Brave Climb Encoding", key: "brave_climb_codec", value: climb)
-                } footer: { Text("When on, Brave Climb encoded text in chats is shown decoded, and you can choose to send with it from the composer. It's a reversible encoding, not encryption: anyone with this turned on can read it.") }
-            }
             Section {
                 if state.loading || state.saving { ProgressView(state.saving ? String(localized: "Saving…") : String(localized: "Loading… [File Viewer 86b6d0]")) }
                 if let problem = state.problem {

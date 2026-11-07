@@ -4,7 +4,6 @@ import type { LarkMessage } from "./inbox";
 import {
   HIDDEN_DISPLAY, LarkDisplayModel, quoteSummary, shownParts, showsBody, showsHistory, summaryText, versionParts, type LarkDisplayDeps, type LarkMessageDisplay,
 } from "./lark-display";
-import { encodeBraveClimb } from "./lark-brave-climb";
 import { pinSummary } from "./lark-pins";
 
 const on: LarkMessageDisplay = { account_id: "acct", anti_recall: true, show_edit_history: true };
@@ -110,34 +109,20 @@ describe("LarkDisplayModel", () => {
     const bodies: unknown[] = [];
     const m = new LarkDisplayModel(deps([async () => on], async (b) => (bodies.push(b), on)));
     await m.refresh();
-    await m.change("brave_climb_codec", true);
+    await m.change("unsupported_setting" as never, true);
     expect(bodies).toHaveLength(0);
   });
 });
 
-describe("", () => {
-  const words = encodeBraveClimb("周五见");
-  const climbing: LarkMessageDisplay = { ...on, brave_climb_codec: true };
+describe("message source text", () => {
+  const text = "**raw source text**";
 
-  it("decodes a message, a quote, a Pin and a summary only with the switch on", () => {
-    expect(shownParts(climbing, [{ kind: "text", text: words }])).toEqual({ parts: [{ kind: "text", text: "周五见" }], decoded: true });
-    for (const d of [on, { ...on, brave_climb_codec: false }]) {
-      expect(shownParts(d, [{ kind: "text", text: words }])).toEqual({ parts: [{ kind: "text", text: words }], decoded: false });
-      expect(summaryText(d, words)).toBe("");
+  it("preserves the message, quote, pin and summary without interpreting its contents", () => {
+    for (const display of [on, HIDDEN_DISPLAY]) {
+      expect(shownParts(display, [{ kind: "text", text }])).toEqual({ parts: [{ kind: "text", text }] });
+      expect(summaryText(display, text)).toBe(text);
+      expect(quoteSummary(display, { text })).toBe(text);
+      expect(pinSummary({ id: "p1", message_id: "m1", message: msg({ text }) }, display)).toBe(text);
     }
-    expect(summaryText(climbing, words)).toBe("周五见");
-    expect(quoteSummary(climbing, { text: words })).toBe("周五见");
-    expect(quoteSummary(climbing, { text: words, recalled: true, retained: true })).toBe("周五见 · 已撤回");
-    expect(pinSummary({ id: "p1", message_id: "m1", message: msg({ text: words }) }, climbing)).toBe("周五见");
-    expect(pinSummary({ id: "p1", message_id: "m1", message: msg({ text: words }) }, on)).toBe("");
-  });
-
-  it("writes the switch when the extension has it", async () => {
-    const bodies: unknown[] = [];
-    const m = new LarkDisplayModel(deps([async () => ({ ...on, brave_climb_codec: false })], async (b) => (bodies.push(b), climbing)));
-    await m.refresh();
-    await m.change("brave_climb_codec", true);
-    expect(bodies).toEqual([{ account_id: "acct", key: "brave_climb_codec", value: true, expected: false }]);
-    expect(m.policy.brave_climb_codec).toBe(true);
   });
 });

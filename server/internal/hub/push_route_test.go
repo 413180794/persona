@@ -91,7 +91,7 @@ func TestRelayFailureIsShownUntilAPushGoes(t *testing.T) {
 
 	h.push.pushed(Device{DeviceID: "phone"}, errString("503 relay down"))
 	d, _ := h.push.device("phone")
-	d.APNSToken = "removed-secret-value"
+	d.APNSToken = "b2c3d4e5f60718a9b2c3d4e5f60718a9"
 	h.push.register(d)
 	if r, _ := h.push.routeOfID("phone"); r.Reason != "" {
 		t.Fatalf("a new token kept the old failure: %+v", r)

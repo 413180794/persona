@@ -400,8 +400,6 @@
     <string name="settings_src_display_anti_recall_caption">Lark ゲートウェイが保存した取り消し済みの内容を表示し、「取り消し済み」の印は残します。保存されていない内容は戻せません。</string>
     <string name="settings_src_display_history">編集履歴</string>
     <string name="settings_src_display_history_caption">メッセージの下の「編集済み」をタップすると、保存された以前の版を見られます。</string>
-    <string name="settings_src_display_climb">[removed]エンコード</string>
-    <string name="settings_src_display_climb_caption">オンにすると、チャット内の[removed]エンコードの文字を復元して表示し、入力欄でもこれで送信できます。復元可能なエンコードで暗号化ではありません：この機能をオンにした人は誰でも読めます。</string>
     <string name="settings_src_display_saving">保存中…</string>
     <string name="settings_src_display_reading">読み込み中…</string>
     <string name="settings_src_display_reload">再読み込み</string>

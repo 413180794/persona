@@ -197,7 +197,6 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var reactions: [LarkReaction]?
     var clientID: String?
     var localState: String?
-    /// Small lines under the body a messaging source adds (「[removed] · 已解码」, 「加密消息 · 对外展示」), #2138.
     var decorations: [LarkDecoration]? = nil
 
     enum CodingKeys: String, CodingKey {

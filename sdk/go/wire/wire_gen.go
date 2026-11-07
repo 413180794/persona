@@ -2429,8 +2429,7 @@ type MessagingReaction struct {
 	Users []string `json:"users,omitempty"`
 }
 
-// MessagingDecoration: A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted
-// Message · Public).
+// MessagingDecoration: A mode supported by the message source.
 type MessagingDecoration struct {
 	Text string `json:"text"`
 	Icon string `json:"icon,omitempty"`

@@ -100,6 +100,5 @@
   "discard": "Remove local copy",
   "check_found": "Sent",
   "check_missing": "Not found in the latest messages; it may not have been sent",
-  "thread_placeholder": "Reply in thread…",
-  "climb_placeholder": ""
+  "thread_placeholder": "Reply in thread…"
 }

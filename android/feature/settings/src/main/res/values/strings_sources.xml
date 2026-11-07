@@ -416,8 +416,6 @@
     <string name="settings_src_display_anti_recall_caption">Shows what the Lark gateway kept of a recalled message, still marked Recalled. What was not kept can\'t be brought back.</string>
     <string name="settings_src_display_history">Edit history</string>
     <string name="settings_src_display_history_caption">Tap Edited under a message to see the earlier versions that were kept.</string>
-    <string name="settings_src_display_climb">Brave Climb encoding</string>
-    <string name="settings_src_display_climb_caption">When on, Brave Climb encoded text in chats is shown decoded, and the composer can send with it. It is a reversible encoding, not encryption: anyone with this on can read it.</string>
     <string name="settings_src_display_saving">Saving…</string>
     <string name="settings_src_display_reading">Reading…</string>
     <string name="settings_src_display_reload">Read again</string>

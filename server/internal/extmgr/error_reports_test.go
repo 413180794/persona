@@ -83,7 +83,7 @@ func TestErrorReports(t *testing.T) {
 		"message": "send \"hello my secret plan\" failed at https://hub.example.com/api/v1/inbox?token=abc123 from 203.0.113.7 on studio-mini",
 		"exceptions": [{"type": "TypeError", "value": "x is undefined",
 			"frames": [{"function": "load", "file": "/Users/alice/src/app.js", "line": 3, "in_app": true}]}],
-		"breadcrumbs": [{"category": "fetch", "message": "GET /api/v1/inbox Authorization: removed-secret-value"}],
+		"breadcrumbs": [{"category": "fetch", "message": "GET /api/v1/inbox Authorization: Bearer test-example-token"}],
 		"fingerprint": "made-up", "count": 99}]}`
 	if code, out := call(t, mux, "POST", "/api/v1/error-reports", master, report); code != 200 || out["enabled"] != false {
 		t.Fatalf("no extension takes them: off, nothing taken: %d %v", code, out)

@@ -161,18 +161,21 @@ func assertNoSecret(t *testing.T, d proto.LauncherDetail, secret string) {
 }
 
 func TestRedactSecretsInHelperCalls(t *testing.T) {
-	got := redactSecrets(`_claude_proxy https://gw.example.com removed-secret-value "deepseek-v4-pro[1m]" 786432 "$@"
-_claude_proxy https://gw.example.com "removed-secret-value" openai_qwen3.7-max "$@"
-_claude_proxy https://gw.example.com removed-secret-value opensource/glm5.2 700000 "$@"
+	api := "sk-test-" + strings.Repeat("a1", 16)
+	bearer := "test-bearer-" + strings.Repeat("b2", 16)
+	vendor := "plat_" + strings.Repeat("c3", 24)
+	got := redactSecrets("_claude_proxy https://gw.example.com " + api + ` "model-alpha" 786432 "on"
+_claude_proxy https://gw.example.com "Bearer ` + bearer + `" model-beta "on"
+_claude_proxy https://gw.example.com ` + vendor + ` model-gamma 700000 "on"
 unset CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR ANTHROPIC_AUTH_TOKEN`)
-	for _, secret := range []string{"removed-secret-value", "haCTqQzmGJKng40t2VhngFF10wk8oOh6_GPT_AK", "ealXySu-x5uFSjX2Z-T7TYlmridk8N"} {
+	for _, secret := range []string{api, bearer, vendor, api[:12], bearer[len(bearer)-12:], vendor[:12]} {
 		if strings.Contains(got, secret) {
-			t.Errorf("%s shows:\n%s", secret, got)
+			t.Errorf("a synthetic secret or excerpt remains in the redacted helper output")
 		}
 	}
-	for _, kept := range []string{"https://gw.example.com", "deepseek-v4-pro[1m]", "786432", "opensource/glm5.2", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"} {
+	for _, kept := range []string{"https://gw.example.com", "model-alpha", "model-beta", "model-gamma", "786432", "700000", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", "ANTHROPIC_AUTH_TOKEN"} {
 		if !strings.Contains(got, kept) {
-			t.Errorf("%s was masked:\n%s", kept, got)
+			t.Errorf("a non-secret helper option or environment-variable name was removed: %s", kept)
 		}
 	}
 }

@@ -14,9 +14,8 @@ import persona.core.designsystem.*
 import persona.core.hub.HubFailure
 
 /**
- * Settings › Lark › Message display (iOS `LarkMessageDisplaySettingsView`): "Keep recalled messages", "Edit history" and, from an extension that has it,
- * "Brave Climb encoding", shared with the Lark gateway's web for the signed-in account. A switch changes from what it was read as; anything
- * unclear reads the settings again instead of guessing.
+ * Settings › Lark › Message display: retained recalls and edit history, shared with the signed-in account.
+ * A switch changes from its last confirmed value; an unclear result reloads the settings.
  */
 @Composable
 internal fun LarkMessageDisplayPage(connectors: ConnectorsManagement?, onBack: () -> Unit) {
@@ -81,14 +80,6 @@ internal fun LarkMessageDisplayPage(connectors: ConnectorsManagement?, onBack: (
             }
         }
         item("history-caption") { SettingsCaption(stringResource(R.string.settings_src_display_history_caption), Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s)) }
-        policy.braveClimb?.let { climb ->
-            item("climb") {
-                JGroupItem(GroupPosition.Single) {
-                    JSwitchRow(stringResource(R.string.settings_src_display_climb), climb, { set("brave_climb_codec", it) }, enabled = enabled)
-                }
-            }
-            item("climb-caption") { SettingsCaption(stringResource(R.string.settings_src_display_climb_caption), Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s)) }
-        }
         if (loading || saving) item("busy") { JLoading(text = stringResource(if (saving) R.string.settings_src_display_saving else R.string.settings_src_display_reading)) }
         problem?.let { p ->
             item("problem") {

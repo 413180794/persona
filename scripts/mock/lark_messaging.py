@@ -1,11 +1,4 @@
-"""The messaging extension point over the mock's Feishu (MOCK_MESSAGING=1, #2138, docs/extension-messaging.md).
-
-The mock answers /api/v1/messaging/lark/… the way the Lark extension will: it reads its own /api/v1/lark/… (every
-Feishu fixture of the mock: MOCK_LARK, the trainer's, brave_climb, encryption, pins…) and turns the answers into the
-protocol's shapes, with the vendor's handling (brave_climb decoded, sealed messages opened or covered, cards turned into
-views) done here, not in the app. The settings page is the extension's `display` page (POST /api/v1/extensions/
-larkext/-/ui/display).
-"""
+"""Mock messaging-source routes backed by deterministic local fixtures."""
 import base64
 import json
 import os
@@ -19,14 +12,11 @@ SOURCE = "lark"
 EXTENSION = "larkext"
 CAPABILITIES = ["accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions",
                 "read_receipts", "chat_pins", "profiles", "url_previews", "posts", "edit_history", "translation"]
-MODES = [{"id": "sealed", "title": "加密消息", "icon": "lock", "description": "只有拥有密钥的成员能读到正文",
-          "attachments": False, "mentions": False, "prepare": True},
-         {"id": "brave_climb", "title": "", "icon": "shield", "description": "可还原的编码，不是加密",
-          "attachments": False, "mentions": False, "threads": True}]
+MODES = [{'id': 'sealed', 'title': '加密消息', 'icon': 'lock', 'description': '只有拥有密钥的成员能读到正文', 'attachments': False, 'mentions': False, 'prepare': True}]
 
-ALPHABET = "[removed]"
-_VALUES = {c: i for i, c in enumerate(ALPHABET)}
-_LEGACY = {c: i for i, c in enumerate("")}
+
+
+
 
 
 def source():
@@ -36,60 +26,17 @@ def source():
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# The brave_climb encoding (the extension's own handling now): decode for reading, encode for sending.
-
-def climb_encode(text):
-    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
-    while True:
-        n, d = divmod(n, 34)
-        out = ALPHABET[d] + out
-        if n == 0:
-            return "**字" + out + "**"
 
 
-def climb_decode_whole(value):
-    if not (value.startswith("**") and value.endswith("**")) or len(value) < 5:
-        return None
-    payload = value[2:-2]
-    if all(c in _LEGACY for c in payload):
-        if len(payload) % 4:
-            return None
-        data = bytes(sum(_LEGACY[c] << (6 - 2 * k) for k, c in enumerate(payload[i:i + 4])) for i in range(0, len(payload), 4))
-    else:
-        if payload[0] != "字" or len(payload) < 2 or any(c not in _VALUES for c in payload[1:]):
-            return None
-        n = 0
-        for c in payload[1:]:
-            n = n * 34 + _VALUES[c]
-        data = n.to_bytes((n.bit_length() + 7) // 8, "big")
-        if not data or data[0] != 1:
-            return None
-        data = data[1:]
-        if climb_encode(data.decode("utf-8", "replace")) != value:
-            return None
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-    if not text or any((ord(c) < 32 and c not in "\t\n\r") or ord(c) == 127 for c in text):
-        return None
-    return text
 
 
-_INLINE = re.compile(r"\*\*字[" + re.escape(ALPHABET) + r"]+\*\*")
 
 
-def climb_decode(value):
-    whole = climb_decode_whole(value)
-    if whole is not None:
-        return whole
-    decoded, out = False, value
-    for m in reversed(list(_INLINE.finditer(value))):
-        t = climb_decode_whole(m.group(0))
-        if t is not None:
-            out = out[:m.start()] + t + out[m.end():]
-            decoded = True
-    return out if decoded else None
+
+
+
+
+
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -383,32 +330,11 @@ def forwarded(m):
     return out
 
 
-def climb_parts(parts):
-    """The parts with their brave_climb words decoded (a run of text parts joined first), and whether any were."""
-    out, decoded, i = [], False, 0
-    while i < len(parts):
-        if parts[i].get("kind") != "text":
-            out.append(parts[i]); i += 1; continue
-        j = i
-        while j < len(parts) and parts[j].get("kind") == "text":
-            j += 1
-        joined = "".join(p.get("text", "") for p in parts[i:j])
-        whole = climb_decode_whole(joined)
-        if whole is not None:
-            out.append({"kind": "text", "text": whole}); decoded = True
-        else:
-            for p in parts[i:j]:
-                t = climb_decode(p.get("text", ""))
-                if t is not None:
-                    p = dict(p, text=t); decoded = True
-                out.append(p)
-        i = j
-    return out, decoded
+
 
 
 def message(m, display):
-    """One Feishu message as the protocol's, with the extension's handling: retained recall content and edit history
-    only as the display settings allow, brave_climb decoded while the switch is on, a sealed message opened or covered."""
+    """Map source content without interpreting plain text as a private encoding."""
     sender = {"name": m.get("sender_name") or ""}
     if m.get("sender_id"):
         sender["id"] = m["sender_id"]
@@ -439,11 +365,7 @@ def message(m, display):
         parts = [{"kind": "text", "text": text}]  # a plain message the hub keeps as text only
     if m.get("recalled") and not (display.get("anti_recall") and m.get("retained")):
         parts, text = [], "消息已撤回"
-    if display.get("brave_climb_codec") and not olk:
-        parts, decoded = climb_parts(parts)
-        if decoded:
-            decorations.append({"text": "", "icon": "shield"})
-            text = climb_decode(text) or "".join(p.get("text", "") for p in parts if p.get("kind") == "text") or text
+    pass
     if m.get("type") == "SYSTEM" and not parts:
         parts = [{"kind": "system", "text": text}]
     out["parts"], out["text"] = parts, text[:20000]
@@ -453,17 +375,13 @@ def message(m, display):
     if m.get("local_state") in ("pending", "failed"):
         out["state"] = m["local_state"]
     r = m.get("reply_to")
-    if isinstance(r, dict) and r.get("id"):
-        summary = r.get("text") or ""
-        if r.get("recalled") and not (display.get("anti_recall") and r.get("retained")):
-            summary = "消息已撤回"
-        elif display.get("brave_climb_codec"):
-            summary = climb_decode(summary) or summary
-        elif climb_decode_whole(summary.strip()) is not None:
-            summary = ""
-        out["reply_to"] = {"id": r["id"], "sender_name": r.get("sender_name") or "", "summary": summary[:2000]}
-        if r.get("recalled") and display.get("anti_recall") and r.get("retained"):
-            out["reply_to"]["recalled"] = True  # the summary is the kept words (the extension's mark, docs「五」)
+    if isinstance(r, dict) and r.get('id'):
+        summary = r.get('text') or ''
+        if r.get('recalled') and (not (display.get('anti_recall') and r.get('retained'))):
+            summary = '消息已撤回'
+        out['reply_to'] = {'id': r['id'], 'sender_name': r.get('sender_name') or '', 'summary': summary[:2000]}
+        if r.get('recalled') and display.get('anti_recall') and r.get('retained'):
+            out['reply_to']['recalled'] = True  # the summary is the kept words (the extension's mark, docs「五」)
     count = m.get("thread_reply_count") or 0
     if count:
         out["thread"] = {"count": count}
@@ -597,18 +515,15 @@ def route(handler, method, path, query, body):
     lark = _Lark(handler, account)
     q1 = lambda k, d=None: (query.get(k) or [d])[0]
 
-    if method == "GET" and rest == "status":
-        status, s = lark.json("GET", "/status")
+    if method == 'GET' and rest == 'status':
+        status, s = lark.json('GET', '/status')
         disp = _display(lark)
-        est, enc = lark.json("GET", "/encryption")
+        est, enc = lark.json('GET', '/encryption')
         modes = []
-        if est == 200 and enc.get("configured"):
-            modes.append("sealed")
-        if disp.get("brave_climb_codec"):
-            modes.append("brave_climb")
-        return handler.send_json({"configured": bool(s.get("configured", True)), "connected": bool(s.get("connected", True)),
-                                  "signed_in": status == 200 and not s.get("error"), **({"name": s["name"]} if s.get("name") else {}),
-                                  **({"error": s["error"]} if s.get("error") else {}), "modes": modes}) or True
+        if est == 200 and enc.get('configured'):
+            modes.append('sealed')
+        pass
+        return handler.send_json({'configured': bool(s.get('configured', True)), 'connected': bool(s.get('connected', True)), 'signed_in': status == 200 and (not s.get('error')), **({'name': s['name']} if s.get('name') else {}), **({'error': s['error']} if s.get('error') else {}), 'modes': modes}) or True
     if method == "GET" and rest == "me":
         user = me(lark)
         if not user:
@@ -622,24 +537,20 @@ def route(handler, method, path, query, body):
                                                 **{k: x[k] for k in ("name", "avatar", "tenant", "unread") if x.get(k) is not None}}
                                                for x in a.get("accounts") or []],
                                   "default": str(a.get("default") or 1)}) or True
-    if method == "GET" and rest in ("conversations", "pinned"):
-        q = {"account_bound": "1"}
-        if rest == "conversations":
-            q.update(scope="chats", limit=q1("limit", "60"))
-            if q1("cursor"):
-                q["cursor"] = q1("cursor")
-        status, c = lark.json("GET", "/" + rest, q)
+    if method == 'GET' and rest in ('conversations', 'pinned'):
+        q = {'account_bound': '1'}
+        if rest == 'conversations':
+            q.update(scope='chats', limit=q1('limit', '60'))
+            if q1('cursor'):
+                q['cursor'] = q1('cursor')
+        status, c = lark.json('GET', '/' + rest, q)
         if status != 200:
             return _error(handler, status, c) or True
-        out = {"conversations": [conversation(x) for x in c.get("conversations") or []]}
+        out = {'conversations': [conversation(x) for x in c.get('conversations') or []]}
         if account:
-            out["account"] = account
-        if c.get("next_cursor"):
-            out["next_cursor"] = c["next_cursor"]
-        disp = _display(lark)
-        for x in out["conversations"]:
-            x["preview"] = (climb_decode(x["preview"]) or x["preview"]) if disp.get("brave_climb_codec") else (
-                "[removed]编码消息" if climb_decode_whole(x["preview"].strip()) is not None else x["preview"])
+            out['account'] = account
+        if c.get('next_cursor'):
+            out['next_cursor'] = c['next_cursor']
         return handler.send_json(out) or True
     if len(seg) == 3 and seg[0] == "conversations" and seg[2] == "messages" and method == "GET":
         q = {k: q1(k) for k in ("before", "after", "around", "limit", "topic") if q1(k)}
@@ -840,11 +751,7 @@ def send(handler, lark, feed, body):
             if status != 200:
                 return _error(handler, status, last)
         return handler.send_json({k: last[k] for k in ("message_id",) if last.get(k)})
-    if mode == "brave_climb":
-        if not _display(lark).get("brave_climb_codec"):
-            return handler.send_json({"error": "请先在设置里开启[removed]编码", "code": "unsupported"}, 403)
-        text = climb_encode(text)
-        req["mentions"] = []
+    pass
     out = {"text": text, "client_id": req["client_id"]}
     if req.get("mentions"):
         out["mentions"] = req["mentions"]
@@ -982,9 +889,7 @@ def settings_page(handler, body):
                 d = d2
             else:
                 toast = "设置已变化，请重新读取"
-    rows = [("anti_recall", "防撤回", "查看飞书网关已留存的撤回内容，保留「已撤回」标记。"),
-            ("show_edit_history", "编辑历史", "点击消息下方的「已编辑」，查看已留存的旧版本。"),
-            ("brave_climb_codec", "[removed]编码", "开启后聊天里的[removed]编码文字还原显示，输入框可以选它发送。")]
+    rows = [('anti_recall', '防撤回', '查看飞书网关已留存的撤回内容，保留「已撤回」标记。'), ('show_edit_history', '编辑历史', '点击消息下方的「已编辑」，查看已留存的旧版本。')]
     items = []
     for key, title, sub in rows:
         if key in d:

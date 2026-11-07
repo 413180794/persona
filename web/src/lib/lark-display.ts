@@ -7,7 +7,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import { api, ApiError } from "./api";
 import type { LarkMessage, LarkPart } from "./inbox";
-import { braveClimbSummary, decodeBraveClimbParts } from "./lark-brave-climb";
 import { larkPath, olAccount } from "./lark-accounts";
 import { fromDefaultManager, itemHeaders, messageManager, useItemManager } from "./manager-choice";
 import { isResumed } from "./reconnect";
@@ -17,11 +16,9 @@ export interface LarkMessageDisplay {
   account_id: string;
   anti_recall: boolean;
   show_edit_history: boolean;
-  /** The Lark gateway's brave-climb switch; absent from a Feishu extension that has no such setting. */
-  brave_climb_codec?: boolean;
 }
 
-export type LarkDisplayKey = "anti_recall" | "show_edit_history" | "brave_climb_codec";
+export type LarkDisplayKey = "anti_recall" | "show_edit_history";
 
 /** One earlier version of an edited message (`edit_history`, docs/protocol.md LarkMessage). */
 export type LarkEditVersion = NonNullable<LarkMessage["edit_history"]>[number];
@@ -45,17 +42,13 @@ export function showsHistory(d: LarkMessageDisplay, m: LarkMessage): boolean {
   return d.show_edit_history && showsBody(d, m) && (m.edit_history ?? []).length > 0;
 }
 
-/** Brave-climb words are read and written: the switch is there and on. */
-export const climbs = (d: LarkMessageDisplay) => d.brave_climb_codec === true;
-
-/** A message's parts as the chat shows them, and whether brave-climb words in them were decoded (the switch is on). */
-export function shownParts(d: LarkMessageDisplay, parts: LarkPart[]): { parts: LarkPart[]; decoded: boolean } {
-  const decoded = climbs(d) ? decodeBraveClimbParts(parts) : undefined;
-  return decoded ? { parts: decoded, decoded: true } : { parts, decoded: false };
+/** Preserve the parts supplied by the message source. */
+export function shownParts(_d: LarkMessageDisplay, parts: LarkPart[]): { parts: LarkPart[] } {
+  return { parts };
 }
 
-/** A one-line summary of a message's text (a quote, a Pin, the chat list): see `braveClimbSummary`. */
-export const summaryText = (d: LarkMessageDisplay, text: string) => braveClimbSummary(text, climbs(d));
+/** Message summaries preserve the original text. */
+export const summaryText = (_d: LarkMessageDisplay, text: string) => text;
 
 /** A quoted message in one line: what it said (marked "Recalled" when recalled and kept), or that it was recalled. */
 export function quoteSummary(d: LarkMessageDisplay, q: NonNullable<LarkMessage["reply_to"]>): string {

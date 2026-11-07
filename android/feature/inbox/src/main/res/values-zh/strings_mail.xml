@@ -87,7 +87,6 @@
     <string name="inbox_reply_error_not_sent">尚未发送，可以重试</string>
     <string name="inbox_reply_error_cant_confirm">还不知道送到没有。去原会话看看；不会自动重发</string>
     <string name="inbox_reply_error_check_failed">没核对成，过一会儿再试</string>
-    <string name="inbox_reply_error_brave_climb_too_long">文字太长，无法用[removed]编码发送，草稿已保留</string>
     <string name="inbox_reply_confirm_title">以你的身份发送？</string>
     <string name="inbox_reply_to_lark">发到飞书「%1$s」</string>
     <string name="inbox_reply_to_mail">回复邮件「%1$s」</string>

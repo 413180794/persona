@@ -248,11 +248,9 @@ private struct LarkTopicContent: View {
                 } else if parts.isEmpty {
                     let text = display.shown(m.text)
                     Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : text).font(Theme.Font.body)
-                    if text != m.text { LarkBraveClimbMark() }
                 } else {
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
-                    if parts != source { LarkBraveClimbMark() }
                     if let d = m.decorations { LarkDecorationsView(decorations: d) }
                 }
             }

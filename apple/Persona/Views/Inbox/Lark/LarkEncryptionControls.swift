@@ -2,10 +2,7 @@ import SwiftUI
 
 struct LarkEncryptionModeBar: View {
     @Binding var draft: LarkEncryptedDraft?
-    /// Brave Climb words (#882), offered while the account's switch is on.
-    @Binding var climbing: Bool
     var canEncrypt: Bool
-    var canClimb = false
     var checking = false
     var selectEncrypted: () -> Void
     var pickCover: () -> Void
@@ -17,16 +14,11 @@ struct LarkEncryptionModeBar: View {
     var body: some View {
         HStack(spacing: Theme.Space.m) {
             Menu {
-                Button { draft = nil; climbing = false } label: { Text("Regular").lineLimit(1) }
+                Button { draft = nil } label: { Text("Regular").lineLimit(1) }
                     .accessibilityIdentifier("lark.encryption.plain")
                 Button(action: selectEncrypted) { Text("Encrypted message").lineLimit(1) }
                     .disabled(!canEncrypt)
                     .accessibilityIdentifier("lark.encryption.encrypted")
-                if canClimb || climbing {
-                    Button { draft = nil; climbing = true } label: { Text("Brave Climb Encoding").lineLimit(1) }
-                        .disabled(!canClimb)
-                        .accessibilityIdentifier("lark.encryption.braveClimb")
-                }
             } label: {
                 HStack(spacing: Theme.Space.xs) {
                     Label(mode.title, systemImage: mode.icon)
@@ -45,10 +37,6 @@ struct LarkEncryptionModeBar: View {
                 .accessibilityIdentifier("lark.encryption.cover")
                 .disabled(checking)
             }
-            if climbing && draft == nil {
-                Text(canClimb ? String(localized: "Reversible encoding, not encryption") : String(localized: "Turn on Brave Climb encoding in Settings first"))
-                    .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
-            }
             if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking encryption service") }
             Spacer(minLength: 0)
         }
@@ -59,7 +47,6 @@ struct LarkEncryptionModeBar: View {
 
     private var mode: (title: String, icon: String) {
         if draft != nil { (String(localized: "Encrypted message"), Theme.Icon.locked) }
-        else if climbing { (String(localized: "Brave Climb Encoding"), Theme.Icon.braveClimb) }
         else { (String(localized: "Regular"), Theme.Icon.message) }
     }
 }

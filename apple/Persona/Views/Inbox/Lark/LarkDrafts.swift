@@ -4,8 +4,6 @@ import Foundation
 nonisolated struct LarkDraft: Codable, Hashable, Sendable {
     var text = ""
     var encryption: LarkEncryptedDraft? = nil
-    /// Sent as Brave Climb words (#882); nil in drafts kept before there were any.
-    var braveClimb: Bool? = nil
     var replyTo: LarkReplyTo?
     /// Picked with the @ picker (their `@name` is in `text`); nil in drafts kept before there was one.
     var mentions: [LarkMention]?

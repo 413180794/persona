@@ -88,7 +88,7 @@ func relayHubVia(t *testing.T, front func(http.Handler) http.Handler) (*Hub, *re
 	t.Cleanup(srv.Close)
 	// The phone registers with the relay itself.
 	resp, err := srv.Client().Post(srv.URL+"/relay/v1/register", "application/json",
-		strings.NewReader(`{"apns_token":"removed-secret-value","env":"sandbox","topic":"app.example"}`))
+		strings.NewReader(`{"apns_token":"a1b2c3d4e5f60718a1b2c3d4e5f60718","env":"sandbox","topic":"app.example"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestRelayLateGoneKeepsReregisteredDevice(t *testing.T) {
 	hp.waitArrived(t)
 
 	renewed := old
-	renewed.APNSToken = "removed-secret-value"
+	renewed.APNSToken = "b2c3d4e5f60718a9b2c3d4e5f60718a9"
 	renewed.Prefs = nil // registration carries the token, not the settings
 	h.push.register(renewed)
 	close(hp.release)

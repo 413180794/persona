@@ -14,7 +14,6 @@ import { AttachmentTray } from "../../ui/AttachmentTray";
 import { Button, cx, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { LarkPeopleMenu, useLarkPeoplePicker } from "../../ui/LarkPeoplePicker";
-import { useBraveClimbMode } from "./LarkBraveClimb";
 
 export interface LarkReplyTarget {
   id: string;
@@ -43,12 +42,10 @@ export interface LarkComposerProps {
   placeholder?: string;
   /** Smaller, under a thread. */
   compact?: boolean;
-  /** The Brave Climb mode may be picked (LarkBraveClimb.tsx): the switch is on and the chat takes plain text. */
-  canClimb?: boolean;
 }
 
 export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(function LarkComposer(
-  { replyTo = null, onClearReply, onSend, attachments: canAttach = false, placeholder, compact = false, canClimb = false, draft, group = false, feed, account }, ref,
+  { replyTo = null, onClearReply, onSend, attachments: canAttach = false, placeholder, compact = false, draft, group = false, feed, account }, ref,
 ) {
   const [stored] = useState(() => (draft ? loadDraft(draft) : { text: "", mentions: undefined }));
   const [text, setText] = useState(stored.text);
@@ -66,17 +63,12 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   const filesRef = useRef(files);
   filesRef.current = files;
   const stagingRef = useRef(0);
-  const climb = useBraveClimbMode(canClimb);
 
   // previews left in the box go with it
   useEffect(() => () => releaseLarkAttachments(filesRef.current), []);
 
   const addFiles = (list: FileList | File[]) => {
     if (!canAttach) return;
-    if (climb.on) {
-      toast(t("inbox-larkbraveclimb.text_only"), "error");
-      return;
-    }
     const { take, dropped } = fitPick(filesRef.current.length + stagingRef.current, Array.from(list));
     if (dropped) toast(t("inbox-larkcomposer.too_many", { count: dropped }), "error");
     if (!take.length) return;
@@ -162,13 +154,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   const submit = async () => {
     if (!ready || sending) return;
     const chosen = files;
-    if (climb.on && chosen.length) {
-      toast(t("inbox-larkbraveclimb.text_only"), "error");
-      return;
-    }
-    // Brave Climb words go encoded, as the Lark gateway's web sends them; refused here keeps the text in the box
-    const trimmed = text.trim() && climb.prepare(text.trim());
-    if (trimmed === undefined) return;
+    const trimmed = text.trim();
     setSending(true);
     try {
       const sent = await onSend(trimmed, chosen, replyTo ?? undefined, mentionsIn(text.trim(), picked));
@@ -250,7 +236,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
         )}
         <div className="relative flex items-end gap-2">
           {group && <LarkPeopleMenu picker={people} label={t("inbox-larkthread.mention_label")} />}
-          {canAttach && !climb.on && (
+          {canAttach && (
             <>
               <input
                 ref={picker}
@@ -274,7 +260,6 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
               </button>
             </>
           )}
-          {climb.toggle}
           <textarea
             ref={input}
             value={text}
@@ -290,7 +275,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
                 addFiles(pasted);
               }
             }}
-            placeholder={climb.on ? t("inbox-larkthread.climb_placeholder") : placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : group ? t(phone ? "inbox-larkthread.group_placeholder_short" : "inbox-larkthread.group_placeholder") : t("inbox-larkthread.reply_placeholder"))}
+            placeholder={placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : group ? t(phone ? "inbox-larkthread.group_placeholder_short" : "inbox-larkthread.group_placeholder") : t("inbox-larkthread.reply_placeholder"))}
             aria-label={t("inbox-larkcomposer.message")}
             rows={1}
             className={cx(

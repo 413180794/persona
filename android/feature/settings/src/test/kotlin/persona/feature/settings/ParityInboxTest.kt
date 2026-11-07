@@ -65,7 +65,7 @@ class ParityInboxTest {
         val d = LarkMessageDisplay("acct", antiRecall = true, showEditHistory = false)
         assertEquals(true, d.value("anti_recall"))
         assertEquals(false, d.value("show_edit_history"))
-        assertNull(d.value("brave_climb_codec"))
+        assertNull(d.value("unsupported_setting"))
         assertNull(d.value("unknown"))
     }
 }

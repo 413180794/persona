@@ -4,7 +4,6 @@ import SwiftUI
 /// (`LarkConversationsView`) and the Mac's Messages section (`MacLarkMessagesPage`, #3162) draw the same row.
 struct LarkConversationRow: View {
     let conversation: LarkConversation
-    /// The account's message display settings, for Brave Climb words in the summary (#882).
     let display: LarkMessageDisplay
 
     var body: some View {

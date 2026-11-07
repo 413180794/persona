@@ -2491,7 +2491,7 @@ export interface MessagingReaction {
 }
 
 /**
- * A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted Message · Public).
+ * A mode supported by the message source.
  */
 export interface MessagingDecoration {
   text: string;

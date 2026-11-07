@@ -98,23 +98,8 @@ Migration list:
 | Keep recalled messages, edit history | This phase, #882 |
 | Encrypted body, external display, key distribution prompts | #764 merged |
 | Unlock on phone, encrypted sending | #689 migrated; protocol in [encrypted messages](lark-encryption.md) |
-| Brave Climb encoding / decoding | Text migrated ("Brave Climb" below); images are handled by the Lark gateway's media API according to the switch |
 | Disable read receipts | Later; must cover both chats and threads, and an old web switch must not be passed off as supported on the phone |
 | Auto-recall, auto-signature, stand-in | Stay under the Lark gateway's existing server-side control; must not be turned on automatically by the migration |
 | Watermark, Moments anti-deletion, desktop floating window, decorative counters | Web features; not copied as phone messaging features |
 
 [Simulator screenshots and flows](screenshots/lark-trainer/README.md) for keep-recalled-messages and edit history.
-
-### Brave Climb (#882)
-
-The Lark gateway''s Chinese name) can also be read. It is a reversible encoding, not encryption: anyone with the switch on can read it. The App's encoder / decoder is in `LarkBraveClimb.swift` (ported from the web implementation; unit tests use the web's known vectors).
-
-- The switch is the Lark gateway's local setting `braveClimbCodec`, read and written together with keep-recalled-messages and edit history via `/api/v1/lark/message-display` (`brave_climb_codec`, from Lark extension 0.10.0). Old extensions' responses don't have this field, so the item doesn't appear in **Message Tweaks** and text is shown as is.
-- Switch on: encoded text in chats, thread cards, merged forwards and edit history is shown decoded, labeled **Brave Climb · Decoded** underneath; when rich text splits one encoded run into several segments, they are joined before decoding; encoding embedded mid-sentence replaces only those segments. Quotes, thread reply summaries and chat list summaries are decoded too.
-- Switch off: bubbles keep the original text (like the official Lark client); in one-line summaries a fully encoded message shows as **Brave Climb encoded message** instead of a string of encoded characters.
-- Sending: the composer's mode menu gets an extra **Brave Climb Encoding** item, selectable only when the switch is on, there are no attachments and it isn't a topic group; the selected mode is saved with the draft. What's sent is the encoded text, without @ (it can't be recognized after encoding); exceeding the Lark gateway's 10000-character limit shows a prompt and keeps the draft. If the switch was turned off elsewhere before sending, it prompts you to turn it on in settings and doesn't send; the Lark gateway also rejects it with `BRAVE_CLIMB_CODEC_DISABLED`. When a failed send is put back in the composer, it's restored to the original text and back in this mode.
-- The composer in thread details (replying to a thread) doesn't offer this mode yet.
-
-[Simulator screenshots](screenshots/lark-brave-climb/README.md).
-
-Android (`LarkBraveClimb.kt` in `feature/inbox`, same set of known vectors): opening a Lark chat reads `/api/v1/lark/message-display` once; with the switch on, bubbles (including merged forwards and the thread overlay) and quotes are decoded, labeled **Brave Climb · Decoded** underneath; with it off, bubbles keep the original text, and quotes of fully encoded messages read **Brave Climb encoded message**. The chat page gets a **Brave Climb Encoding** switch chip above the composer (shown when the switch is on, or the draft is already in this mode); the mode is stored in the draft (`InboxStoredDraft.braveClimb`); what's sent is the encoded text, while the draft and the text put back after a failure are still the original. Android has no **Message Tweaks** settings page, so the switch has to be changed on the web or iOS; Android's Lark chats only send text, don't distinguish topic groups, and have no chat list summaries or edit history, so those parts don't apply. Screenshots: `./gradlew :feature:inbox:testDebugUnitTest --tests '*LarkBraveClimbShotsTest*'`.

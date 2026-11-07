@@ -348,7 +348,6 @@ final class AppModel {
         if isHub { LarkSync.shared.received(feedIDs, account: account) }
         guard settingsChanged || feedIDs.isEmpty, let source = link(group) else { return }
         // Message display settings are the hub's own account's (LarkMessageDisplay). A messaging source applies each
-        // account's itself (retained recalls, edit history, Brave Climb): what is on screen is read again for any (#2138).
         let messaging = source.api.messagingSource != nil
         guard account == nil || messaging else { return }
         Task {

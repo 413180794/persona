@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 /** The host sets this while an in-app sheet or overlay covers the conversation. */
 val LocalLarkReadOccluded = staticCompositionLocalOf { false }
 
-/** The account's message display settings (Brave Climb, #882) for the bubbles under it; hidden until read. */
+
 internal val LocalLarkMessageDisplay = staticCompositionLocalOf { LarkMessageDisplay.Hidden }
 
 @Composable
@@ -125,13 +125,10 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     val customEmojis by produceState<JsonObject?>(null, repository) {
         value = runCatching { repository.emojis() }.getOrNull()
     }
-    // Read once per chat; unreadable settings decode nothing and offer no Brave Climb mode.
     val display by produceState<LarkMessageDisplay?>(null, repository) {
         value = try { repository.larkMessageDisplay() } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
     }
-    val climbs = display?.climbs == true
     var editingDraft by remember { mutableStateOf(false) }
-    // Message display ("Keep recalled messages", "Edit history", Brave Climb) for the chat and its sheets: hidden until read, and when it cannot be.
     val shownDisplay = display ?: LarkMessageDisplay.Hidden
     var showingPins by remember { mutableStateOf(false) }
     var addingPin by remember { mutableStateOf<LarkMessage?>(null) }
@@ -365,15 +362,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                 JIconButton(PhIcons.DotsThree, stringResource(R.string.inbox_more), { more = true })
             })
     }, bottomBar = {
-        ReplyComposerField(reply, composer::update, onSend = {
-                // The Lark gateway refuses Brave Climb words while the switch is off; say so and keep the draft.
-                if (reply.draft.braveClimb && !climbs) error = res.getString(R.string.inbox_lark_brave_climb_off)
-                else composer.send()
-            }, stringResource(R.string.inbox_lark_reply_to, title),
+        ReplyComposerField(reply, composer::update, onSend = { composer.send() }, stringResource(R.string.inbox_lark_reply_to, title),
             modifier = Modifier.imePadding(), accessory = {
-                if (climbs || reply.draft.braveClimb) JChip(stringResource(R.string.inbox_lark_brave_climb_mode),
-                    modifier = Modifier.testTag("lark.braveClimb.mode"), selected = reply.draft.braveClimb,
-                    onClick = { composer.setBraveClimb(!reply.draft.braveClimb) }, icon = PhIcons.ShieldCheck)
                 // Opened in place of the item's extension page, which broke: one line with "Retry" (inbox_item, #1683).
                 InboxExtensionNotice(route.itemId, route, Modifier)
                 record?.let { InboxAiActions(onDraft = { drafting = true }, onHandOff = { handingOff = true }) }
@@ -506,7 +496,7 @@ internal fun LarkBubble(
             ) {
                 message.quote?.let { quote ->
                     JNotice(if (quote.recalled) stringResource(R.string.inbox_lark_recalled)
-                        else display.summary(quote.text, stringResource(R.string.inbox_lark_brave_climb_placeholder)), title = quote.sender)
+                        else display.summary(quote.text), title = quote.sender)
                 }
                 message.parts.forEach { part ->
                     LarkPartContent(
@@ -517,11 +507,6 @@ internal fun LarkBubble(
                         onPlayVideo = onPlayVideo,
                         onOpenProfile = { uid -> onProfile?.invoke(LarkPersonRef(uid, uid, null, feedId)) }
                     )
-                }
-                if (message.braveClimb) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs), verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.testTag("lark.braveClimb.decoded")) {
-                    JIcon(PhIcons.ShieldCheck, null, size = Tokens.Space.m, tint = PersonaTheme.palette.ink3)
-                    Text(stringResource(R.string.inbox_lark_brave_climb_decoded), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1)
                 }
                 if (message.recalled) Text(stringResource(R.string.inbox_lark_recalled_mark), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
                 // "Edit history" on and old versions kept: "Edited" opens them.

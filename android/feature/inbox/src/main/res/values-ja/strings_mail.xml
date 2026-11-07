@@ -87,7 +87,6 @@
     <string name="inbox_reply_error_not_sent">まだ送信していません。もう一度送信できます。</string>
     <string name="inbox_reply_error_cant_confirm">届いたかまだ確認できません。元の会話を確認してください。自動で再送信はしません。</string>
     <string name="inbox_reply_error_check_failed">確認できませんでした。しばらくしてからもう一度お試しください。</string>
-    <string name="inbox_reply_error_brave_climb_too_long">長すぎるため[removed]コードでは送信できません。下書きは残っています。</string>
     <string name="inbox_reply_confirm_title">あなたとして送信しますか？</string>
     <string name="inbox_reply_to_lark">Larkの「%1$s」に送信</string>
     <string name="inbox_reply_to_mail">メール「%1$s」に返信</string>

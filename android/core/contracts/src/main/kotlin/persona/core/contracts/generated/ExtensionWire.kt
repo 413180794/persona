@@ -3503,7 +3503,7 @@ data class ExtensionMessagingReaction(
 )
 
 /**
- * A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted Message · Public).
+ * A mode supported by the message source.
  */
 @Serializable
 data class ExtensionMessagingDecoration(

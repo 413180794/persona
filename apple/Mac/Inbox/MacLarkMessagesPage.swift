@@ -52,8 +52,6 @@ private struct MacLarkMessagesContent: View {
         _store = State(initialValue: LarkConversationsModel(deps: .live(config, account: choice.requestAccount,
                                                                           accountName: choice.selectedName)))
     }
-
-    /// The account''s summary (#882).
     private var display: LarkMessageDisplay { model.hub?.larkDisplay.policy ?? .hidden }
 
     private var filtered: [LarkConversation] {

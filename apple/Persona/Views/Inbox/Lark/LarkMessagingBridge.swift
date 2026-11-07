@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The messaging extension point under the Feishu screens (#2138, docs/extension-messaging.md): while the hub has a
 /// messaging source, the `lark…` requests of APIClient go to `/api/v1/messaging/<source>/…` and what comes back is
-/// turned into the models these screens draw. The vendor's own handling (Brave Climb, sealed messages, recall and edit
 /// history by the display settings, cards) is the extension's now; this only reshapes. Stage 3a of the migration:
 /// the screens move onto the generic models next, and this goes with the old API.
 nonisolated enum MessagingSources {
@@ -600,7 +599,7 @@ struct LarkDecorationsView: View {
     static func symbol(_ icon: String?) -> String {
         switch icon {
         case "lock": Theme.Icon.locked
-        case "shield": Theme.Icon.braveClimb
+        case "shield": Theme.Icon.protection
         default: Theme.Icon.info
         }
     }

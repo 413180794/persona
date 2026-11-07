@@ -10,8 +10,6 @@ The product name is now Persona (previously under another product name). Note fi
 | Note | Contents |
 | --- | --- |
 | [bh-architecture.md](bh-architecture.md) | The reference iOS app's overall architecture and engineering method: layering, concurrency templates, three-state results and idempotent receipts, scopes and generations, capability negotiation, storage, testing; what to borrow / not borrow |
-| [bh-herdr.md](bh-herdr.md) | The reference iOS app's Herdr / Claude Code client: session page, native interactions, write-operation safety, reading tools; item-by-item comparison with Persona Agents |
-| [bh-lark.md](bh-lark.md) | The reference iOS app's Lark client over the Lark gateway: reading position, read-receipt gating, idempotent sending, gap filling after disconnects; problems with Persona's Lark page; what to port / not port |
 | [bh-ui-qa.md](bh-ui-qa.md) | The reference iOS app's design system, first-time onboarding, prototypes and reviews, acceptance levels, test pyramid; the state and adoption rate of Persona's design system |
 | [persona-ios-arch.md](persona-ios-arch.md) | Persona iOS's current architecture and tech debt: `AppModel` responsibilities, sync, caching, rules implemented in several places, list of platform-independent logic (the parts Android must match) |
 | [persona-features.md](persona-features.md) | Persona iOS's complete feature list (213 items) and the Android equivalent for each (draft of [../parity.md](../parity.md)) |

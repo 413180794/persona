@@ -55,8 +55,6 @@ private struct LarkConversationsPage: View {
         _store = State(initialValue: LarkConversationsModel(deps: .live(config, account: choice.requestAccount,
                                                                           accountName: choice.selectedName)))
     }
-
-    /// The account's message display settings, for Brave Climb words in a chat's summary (#882).
     private var display: LarkMessageDisplay { model.hub?.larkDisplay.policy ?? .hidden }
 
     private var filtered: [LarkConversation] {

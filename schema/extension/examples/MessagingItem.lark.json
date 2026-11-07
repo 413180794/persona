@@ -29,14 +29,6 @@
       "attachments": false,
       "mentions": false,
       "prepare": true
-    },
-    {
-      "id": "brave_climb",
-      "title": "",
-      "icon": "shield",
-      "description": "可还原的编码，不是加密",
-      "attachments": false,
-      "mentions": false
     }
   ],
   "settings_ui": "display",

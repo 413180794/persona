@@ -92,7 +92,6 @@ struct LarkForwardedView: View {
                                     let parts = display.shown(source)
                                     LarkPartsView(parts: parts)
                                         .environment(\.larkContext, LarkRenderContext(messageID: m.isRecalled == true ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
-                                    if parts != source { LarkBraveClimbMark() }
                                 } else {
                                     Text(display.shown(m.textPreview ?? "")).font(Theme.Font.body)
                                 }

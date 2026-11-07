@@ -39,8 +39,6 @@ struct LarkChatView: View {
     var conversation: LarkConversation
     var messageComposer = false
     @State private var encryptionDraft: LarkEncryptedDraft?
-    /// The words go as Brave Climb words (#882), while the account's switch is on.
-    @State private var climbing = false
     @State private var encryptionStatus: LarkNativeEncryptionStatus?
     @State private var pinsModel: LarkChatPinsModel?
     @State private var showPins = false
@@ -494,12 +492,10 @@ struct LarkChatView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if messageComposer {
-                LarkEncryptionModeBar(draft: $encryptionDraft, climbing: $climbing,
+                LarkEncryptionModeBar(draft: $encryptionDraft,
                     canEncrypt: attachments.isEmpty && !isTopic && !checkingEncryption
                         && (chatAPI?.messagingSource == nil || chatLink?.larkDisplay.policy.seals == true),
-                    canClimb: attachments.isEmpty && !isTopic && chatLink?.larkDisplay.policy.climbs == true,
                     checking: checkingEncryption, selectEncrypted: {
-                        climbing = false
                         if encryptionDraft == nil { encryptionDraft = LarkEncryptedDraft() }
                         checkEncryption(openCovers: false)
                     }, pickCover: { checkEncryption(openCovers: true) }, picksCover: chatAPI?.messagingSource == nil,
@@ -540,9 +536,9 @@ struct LarkChatView: View {
             LarkComposer(placeholder: isTopic ? String(localized: "Post a topic") : String(localized: "Replying to \(conversation.name)"), text: $text, focused: $composerFocused,
                          replyTo: replyTo, cancelReply: { replyTo = nil },
                          attachmentPicker: { pickAttachment(photo: $0) },
-                         canAddAttachments: encryptionDraft == nil && !climbing && attachments.count < LarkAttachment.selectionLimit,
+                         canAddAttachments: encryptionDraft == nil && attachments.count < LarkAttachment.selectionLimit,
                          hasAttachments: !attachments.isEmpty, preparingAttachment: preparingAttachment,
-                          mentionFeed: encryptionDraft == nil && !climbing && conversation.isGroup ? conversation.id : nil,
+                          mentionFeed: encryptionDraft == nil && conversation.isGroup ? conversation.id : nil,
                           me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
                 .disabled(!messageComposer && encryptionDraft != nil)
         }
@@ -1119,7 +1115,6 @@ struct LarkChatView: View {
         mentions = composer.draft.mentions ?? []
         encryptionDraft = composer.draft.encryption
         // The mode is chosen on Messages' box, where its bar shows; an inbox box sends what it shows.
-        climbing = messageComposer && composer.draft.braveClimb == true && encryptionDraft == nil
         attachments = composer.attachments
         if !messageComposer, text.isEmpty, replyTo == nil, attachments.isEmpty { encryptionDraft = nil }
         draftLoaded = true
@@ -1131,7 +1126,7 @@ struct LarkChatView: View {
     }
 
     private var draft: LarkDraft {
-        LarkDraft(text: text, encryption: encryptionDraft, braveClimb: climbing ? true : nil, replyTo: replyTo,
+        LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo,
                   mentions: mentions.isEmpty ? nil : mentions)
     }
 
@@ -1235,27 +1230,7 @@ struct LarkChatView: View {
             }
         }
         var batch: [LarkOutgoing] = []
-        if climbing {
-            // The words go encoded, as the web sends them; the Lark gateway refuses them while the switch is off.
-            guard chatLink?.larkDisplay.policy.climbs == true else {
-                model.toast = Toast(String(localized: "Turn on Brave Climb encoding in Settings › Message Tweaks first."), style: .error); return
-            }
-            guard attachments.isEmpty, !isTopic else {
-                model.toast = Toast(String(localized: "Brave Climb encoding only works for text messages."), style: .error); return
-            }
-            // Too long to encode is said here, before it is on its way (a source would refuse it the same).
-            guard let words = try? LarkBraveClimbCodec.encode(t) else {
-                model.toast = Toast(String(localized: "The text is too long to send with Brave Climb encoding."), style: .error); return
-            }
-            if chatAPI?.messagingSource != nil {
-                // A messaging source encodes it itself (the mode), and gives the words back decoded (#2138).
-                var o = LarkOutgoing(text: t, replyTo: replyTo, mentions: [])
-                o.mode = "brave_climb"
-                batch.append(o)
-            } else {
-                batch.append(LarkOutgoing(text: words, replyTo: replyTo, mentions: []))
-            }
-        } else if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
+        if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
         batch += attachments.map { LarkOutgoing(text: "", replyTo: replyTo, attachment: $0) }
         savingOutgoing = true
         Task {
@@ -1356,13 +1331,9 @@ struct LarkChatView: View {
     private func restore(_ outgoing: LarkOutgoing) {
         guard !savingOutgoing else { return }
         let queue = outbox
-        // Brave Climb words go back as the words typed, in that mode.
-        // A sealed one (the old path's encrypted, or a source's sealed mode) only goes back into an empty box, sealed.
+        // Encrypted messages can only be restored into an empty, encrypted composer.
         let sealed = outgoing.encrypted != nil || outgoing.mode == "sealed"
-        let words = outgoing.mode == "brave_climb" ? outgoing.text
-            : !sealed && outgoing.attachment == nil ? LarkBraveClimbCodec.decodeMessage(outgoing.text) : nil
-        if sealed && (!text.isEmpty || !attachments.isEmpty) || !sealed && encryptionDraft != nil
-            || words != nil && (!attachments.isEmpty || !climbing && !text.isEmpty) || words == nil && climbing && outgoing.attachment == nil {
+        if sealed && (!text.isEmpty || !attachments.isEmpty) || !sealed && encryptionDraft != nil {
             model.toast = Toast(String(localized: "Deal with the draft in the input field before restoring this message."), style: .error)
             return
         }
@@ -1372,7 +1343,6 @@ struct LarkChatView: View {
             draft.encryption = LarkEncryptedDraft(cover: "", again: .init(id: outgoing.id,
                 digest: LarkEncryptedDraft.Again.digest(text: outgoing.text, reply: outgoing.replyTo?.id)))
         }
-        if words != nil { draft.braveClimb = true }
         if let attachment = outgoing.attachment {
             guard files.count < LarkAttachment.selectionLimit else {
                 model.toast = Toast(String(localized: "Remove an attachment before putting this back in the input field."), style: .error)
@@ -1380,7 +1350,7 @@ struct LarkChatView: View {
             }
             files.append(attachment)
         } else {
-            let text = words ?? outgoing.text
+            let text = outgoing.text
             draft.text = draft.text.isEmpty ? text : draft.text + "\n" + text
             if draft.replyTo == nil { draft.replyTo = outgoing.replyTo }
             draft.mentions = (draft.mentions ?? []) + outgoing.mentions
@@ -1662,7 +1632,6 @@ struct LarkMessageRow: View {
                     if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
                     let text = display.shown(m.text)
                     Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : text).font(Theme.Font.body)
-                    if text != m.text { LarkBraveClimbMark() }
                     if let d = m.decorations { LarkDecorationsView(decorations: d) }
                 }
             }
@@ -1681,7 +1650,6 @@ struct LarkMessageRow: View {
                     if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
-                    if parts != source { LarkBraveClimbMark() }
                     if let d = m.decorations { LarkDecorationsView(decorations: d) }
                 }
             }
@@ -1901,4 +1869,3 @@ struct LarkReactionChip: View {
 private extension Optional where Wrapped == Bool {
     var isTrue: Bool { self == true }
 }
-

@@ -4,13 +4,9 @@ import persona.feature.inbox.ReplyRequest
 import persona.feature.inbox.ReplyTarget
 import kotlinx.serialization.Serializable
 
-/**
- * [ai]: AI wrote the text (sending it asks first); [braveClimb]: it goes as Brave Climb words (#882). Both omitted on
- * disk when false, so older journals read the same.
- */
+/** AI-authored drafts require confirmation; the flag is omitted on disk when false. */
 @Serializable
-internal data class InboxStoredDraft(val text: String, val clientId: String, val version: String? = null, val ai: Boolean = false,
-    val braveClimb: Boolean = false)
+internal data class InboxStoredDraft(val text: String, val clientId: String, val version: String? = null, val ai: Boolean = false)
 
 @Serializable
 internal data class InboxPendingReply(
@@ -59,4 +55,3 @@ internal data class InboxReplyDocument(
             reply.copy(state = "sent", serverId = serverId ?: reply.serverId, seen = seen || reply.seen) else reply },
     )
 }
-

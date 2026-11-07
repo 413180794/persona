@@ -20,7 +20,7 @@ import {
   cardButtons, chatImages, draftKey, isVoice, loadDraft, mergeAround, reactionsOf, readMark, ReadReceipts, readStates, react,
   statusOf, toggledReactions, type ReadState,
 } from "../../lib/lark-chat";
-import { climbs, HIDDEN_DISPLAY, quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
+import { quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
 import type { LarkPerson } from "../../lib/lark-people";
 import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
 import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, screensFromEnd, showsJumpToLatest } from "../../lib/lark-history";
@@ -37,7 +37,6 @@ import { Icon } from "../../ui/icons";
 import { scrollBehavior } from "../../ui/stream/motion";
 import { ImageViewer } from "../chat/ImageViewer";
 import { Monogram } from "./InboxParts";
-import { ClimbedParts } from "./LarkBraveClimb";
 import { LarkEditHistoryDialog } from "./LarkEditHistory";
 import { LarkComposer, type LarkComposerHandle, type LarkReplyTarget } from "./LarkComposer";
 import { CardButtons, FilePart, ProfileDialog, ReactionPicker, Reactions, ReadMarkView, VideoPart, VoicePart } from "./LarkExtras";
@@ -173,8 +172,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
   const topicReplies = useTopicReplies(feed, ol);
   const [openTopic, setOpenTopic] = useState<LarkMessage | null>(null);
-  // "Keep recalled messages" / "Edit history" / Brave Climb (lark-display.ts): read while the chat shows
-  const display = useLarkDisplayState(ol).snapshot ?? HIDDEN_DISPLAY;
+  useLarkDisplayState(ol);
 
   useEffect(() => {
     let live = true;
@@ -619,7 +617,6 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
         feed={feed}
         account={ol}
         group={Boolean(chat.group) && !topicGroup}
-        canClimb={climbs(display) && !topic && !page.topic}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
         onSend={handleSend}
@@ -964,7 +961,7 @@ function MessageBody({ m, translateTo }: { m: LarkMessage; translateTo?: string 
           {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
         </p>
       )}
-      {shown ? <ClimbedParts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} display={display} render={(parts) => <Parts parts={parts} />} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+      {shown ? <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
       {shown && m.recalled && <p className="mt-0.5 text-[11px] text-ink-3">{t("inbox-larkthread.recalled_mark")}</p>}
       {translateTo && <TranslationLine m={m} target={translateTo} />}
     </>
@@ -1111,7 +1108,7 @@ function Message({
             {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
           </p>
         )}
-        {shown ? <ClimbedParts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} display={display} render={(parts) => <Parts mid={m.id} parts={parts} />} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+        {shown ? <Parts mid={m.id} parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
         {((shown && m.recalled) || (compact && m.edited)) && (
           <p className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-3">
             {shown && m.recalled && <span>{t("inbox-larkthread.recalled_mark")}</span>}

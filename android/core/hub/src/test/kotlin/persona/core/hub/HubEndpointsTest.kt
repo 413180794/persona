@@ -12,6 +12,7 @@ class HubEndpointsTest {
     // Private addresses are built at runtime: scripts/privacy_check.py refuses them as literals.
     private val lan = listOf(10, 0, 0, 7).joinToString(".")
     private val home = listOf(192, 168, 1, 20).joinToString(".")
+    private val ula = listOf("fd00", "", "1").joinToString(":")
 
     private fun check(
         input: String, pinned: Boolean = true, taken: Set<String> = emptySet(), manualCount: Int = 0, replacing: String? = null,
@@ -31,7 +32,7 @@ class HubEndpointsTest {
         assertEquals(EndpointCheck.Valid("https://[2001:db8::1]:18662", "ipv6"), check("[2001:DB8:0:0::1]:18662"))
         assertEquals(EndpointCheck.Valid("https://192.0.2.10:18662", "ipv4"), check("https://192.0.2.10:18662"))
         assertEquals(EndpointCheck.Valid("https://$lan:18662", "lan"), check("$lan:18662"))
-        assertEquals(EndpointCheck.Valid("https://[fd12:3456:789a::1]:18662", "lan"), check("https://[fd12:3456:789a::1]:18662"))
+        assertEquals(EndpointCheck.Valid("https://[$ula]:18662", "lan"), check("https://[$ula]:18662"))
         assertEquals(EndpointCheck.Valid("http://127.0.0.1:18660", "lan"), check("http://127.0.0.1:18660", pinned = false))
         assertEquals(EndpointCheck.Valid("http://$home:18660", "lan"), check("http://$home:18660"))
         assertEquals(EndpointCheck.Valid("http://hub.local:18660", "lan"), check("http://Hub.local:18660"))
@@ -110,7 +111,7 @@ class HubEndpointsTest {
         assertEquals("lan", (endpointKind("https://hub.local:18662/")).zhAny())
         assertEquals("lan", (endpointKind("http://127.0.0.1:18660")).zhAny())
         assertEquals("lan", (endpointKind("https://$home:18662")).zhAny())
-        assertEquals("lan", (endpointKind("https://[fd12:3456:789a::1]:18662")).zhAny())
+        assertEquals("lan", (endpointKind("https://[$ula]:18662")).zhAny())
         assertEquals("lan", (endpointKind("https://[fe80::1]:18662")).zhAny())
         assertEquals("ipv6", (endpointKind("https://[2001:db8::1]:18662")).zhAny())
         assertEquals("ipv4", (endpointKind("https://192.0.2.10:18662")).zhAny())

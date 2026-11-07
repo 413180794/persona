@@ -196,7 +196,7 @@
       "required": ["key", "count"]
     },
     "MessagingDecoration": {
-      "description": "A small line under a message's body the extension adds (Brave Climb · Decoded, Encrypted Message · Public).",
+      "description": "A mode supported by the message source.",
       "type": "object",
       "properties": {
         "text": {"type": "string", "minLength": 1, "maxLength": 60},

@@ -33,8 +33,7 @@ assistant tools and knowledge-base archiving stay with connectors / `assistant`.
                      "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments",
                      "edit_history", "translation"],
     "composer_modes": [
-      {"id": "sealed", "title": "Encrypted message", "icon": "lock", "attachments": false, "mentions": false, "prepare": true},
-      {"id": "brave_climb", "title": "Brave Climb encoding", "icon": "shield", "attachments": false, "mentions": false}
+      {"id": "sealed", "title": "Encrypted message", "icon": "lock", "attachments": false, "mentions": false, "prepare": true}
     ],
     "settings_ui": "display",
     "links": [{"hosts": ["*.feishu.cn", "*.larkoffice.com", "*.larksuite.com"], "opens": "document"}]
@@ -161,7 +160,7 @@ When the extension's cursor is not a position, it goes in `older_cursor` / `newe
 | `reactions?` | `[{key, count, mine?, users?: [name]}]` |
 | `edited?`, `edit_history?` | Edited; `edit_history: [{edited_at, parts, text}]` (the extension decides whether to provide it: when Lark's **Edit History** switch is off, it doesn't) |
 | `recalled?` | Recalled: if there are `parts`, draw the body and mark it **Recalled** (kept by the extension, viewable when the switch allows); otherwise draw **Message recalled** |
-| `decorations?` | `[{text, icon?, tone?}]`: small text under the body, such as "Brave Climb · decoded" or "Encrypted message · display text"; at most 3 |
+| `decorations?` | `[{text, icon?, tone?}]`: small text under the body, such as "Encrypted message · display text"; at most four entries |
 | `private?` | The body must not be written to disk (a decrypted encrypted message): the App keeps it only in memory, and the cache stores `private_text` (the display text) in place of `text` |
 | `private_text?` | See above |
 | `actions?` | The extension's actions in the long-press menu: `[{id, title, icon?, destructive?, confirm?}]`; tapping one calls `POST messages/{id}/actions/{id}` |
@@ -204,9 +203,9 @@ The answer is `SendReceipt {message_id?}`: with `message_id`, the source confirm
 ## 7. Composer modes
 
 The manifest's `composer_modes` are the modes besides "normal": `id`, `title`, `icon`, `description?` (a line above the composer when it is selected), `attachments` (whether attachments are allowed), `mentions` (whether @ is allowed), `threads?` (whether it can send into threads; omitted means no), `prepare?`.
-Whether a mode is usable depends on the account (Lark's Brave Climb needs its switch on): `GET status` returns `modes: [id]`, the modes usable right now; modes not listed are grayed out in the menu.
+Whether a mode is usable depends on the account: `GET status` returns `modes: [id]`, the modes usable right now.
 
-- Modes without `prepare` (Brave Climb): the App sends `Outgoing` as usual with `mode`; the extension processes it before sending (encoding), and processes the same message back when it is received (decoding + decoration).
+- Modes without `prepare`: the app sends `Outgoing` with `mode`; the extension processes its text before sending.
 - Modes with `prepare` (encryption): before sending, the App calls `POST conversations/{id}/compose {mode, text, reply_to?, values?}`:
   - `{ready: true, token}`: send with `prepared: token`;
   - `{view}`: the user must do something first (pick the display text, enter the keystore password): the App shows this View, and after the user submits, calls `compose` again with `values`. This View **may only contain** `text` / `field` (including `choice` and `secret`) and a `button` with `submit`: the App sends back only the field values; button `id`s and row actions never reach the extension (use `choice` to pick an option). The same goes for the View carried by an `input_required` error.
@@ -268,7 +267,6 @@ The App draws it natively, with tapping comments and commenting on selected text
 | `/raw/messages/{id}` delivery confirmation | `GET messages/{id}` |
 | Card element tree (`LarkCard`), summary cards (merged forwards, shares) | `card` (converted to a View), `forward`, `share` |
 | Anti-recall and edit-history switches | The extension decides by these switches whether to provide the `recalled` body and `edit_history`; the switch page is `settings_ui` |
-| Brave Climb | Composer mode `brave_climb`; on read, the extension decodes and adds the decoration "Brave Climb · decoded" |
 | Encryption | Composer mode `sealed` (`prepare`: pick the display text, unlock); on read, the extension decrypts (when the keystore is unlocked), marks it `private` and decorates it "Encrypted message"; if it can't decrypt, it provides the display text |
 | `lark_not_logged_in`, `lark_account_changed`, `VAULT_LOCKED` | `not_signed_in`, `account_changed`, `input_required` (with an unlock View) |
 | Documents (`/raw/documents/*`) | `GET documents` (converted to `Document` by the extension) |

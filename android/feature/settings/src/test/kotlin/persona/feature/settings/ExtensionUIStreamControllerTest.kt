@@ -152,7 +152,7 @@ class ExtensionUIStreamControllerTest {
         open(controller, connection, snapshot.replace("{\"id\":\"callback\"}", confirmedAction))
         controller.adapter.session.event("button", "callback", "press", JsonObject(emptyMap()))
         val permission = permission()
-        for (other in listOf(permission.copy(manager = "another-manager"), permission.copy(sessionId = "removed-secret-value"), permission.copy(summary = "Replacement summary"),
+        for (other in listOf(permission.copy(manager = "another-manager"), permission.copy(sessionId = "other-fixture-session"), permission.copy(summary = "Replacement summary"),
             permission.copy(toolInput = JsonCodec.parseToJsonElement(confirmedAction.replace("frozen", "replacement"))),
             permission.copy(expiresAt = "2000-01-01T00:00:00Z"))) {
             connection.events.emit(InteractionEvent(other)); runCurrent(); assertNull(controller.adapter.permission)

@@ -17936,98 +17936,6 @@
       },
       "extractionState": "manual"
     },
-    "Brave Climb Encoding": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brave Climb Encoding"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Brave Climb encoded message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brave Climb encoded message"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Brave Climb encoding only works for text messages.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brave Climb encoding only works for text messages."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Brave Climb · Decoded": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brave Climb · Decoded"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Briefly report your progress so far and what's left": {
       "comment": "Message sent to the agent when the command is picked",
       "localizations": {
@@ -49386,93 +49294,33 @@
     "Categories provide defaults. A separately configured use keeps its own settings. Changes take effect from the next run.": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Categories provide defaults. A separately configured use keeps its own settings. Changes take effect from the next run."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "カテゴリの設定が既定値になります。個別に設定した用途は、その設定を使います。変更は次の実行から適用されます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "分类提供默认设置。单独配置的用途使用自己的设置。修改从下次运行起生效。"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Categories provide defaults. A separately configured use keeps its own settings. Changes take effect from the next run." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "カテゴリの設定が既定値になります。個別に設定した用途は、その設定を使います。変更は次の実行から適用されます。" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "分类提供默认设置。单独配置的用途使用自己的设置。修改从下次运行起生效。" } }
       }
     },
     "Configuration": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Configuration"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "配置方式"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Configuration" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "設定" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "配置方式" } }
       }
     },
     "Follow Agents": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Follow Agents"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agents に従う"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跟随 Agents"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Follow Agents" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Agents に従う" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "跟随 Agents" } }
       }
     },
     "Only applies to Lark /agent, not other Agents. Empty fields follow Agents. Changing the provider clears the previous model and thinking effort. Choose Follow Agents and save to clear the independent settings.": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Only applies to Lark /agent, not other Agents. Empty fields follow Agents. Changing the provider clears the previous model and thinking effort. Choose Follow Agents and save to clear the independent settings."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lark /agent のみに適用され、他の Agents には影響しません。空欄は Agents の設定に従います。プロバイダーを変更すると、以前のモデルと思考量がクリアされます。「Agents に従う」を選んで保存すると、個別設定を解除できます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅用于飞书 /agent，不影响其他 Agents。留空的字段跟随 Agents。更换供应商会清除原来的模型和思考强度。选择「跟随 Agents」并保存，即可清除独立设置。"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Only applies to Lark /agent, not other Agents. Empty fields follow Agents. Changing the provider clears the previous model and thinking effort. Choose Follow Agents and save to clear the independent settings." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Lark /agent のみに適用され、他の Agents には影響しません。空欄は Agents の設定に従います。プロバイダーを変更すると、以前のモデルと思考量がクリアされます。「Agents に従う」を選んで保存すると、個別設定を解除できます。" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "仅用于飞书 /agent，不影响其他 Agents。留空的字段跟随 Agents。更换供应商会清除原来的模型和思考强度。选择「跟随 Agents」并保存，即可清除独立设置。" } }
       }
     },
     "Seen [State Names]": {
@@ -49501,24 +49349,9 @@
     "Separately configured": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Separately configured"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "個別に設定済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "单独配置"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Separately configured" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "個別に設定済み" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "单独配置" } }
       }
     },
     "Lark /agent": {
@@ -80002,29 +79835,6 @@
       },
       "extractionState": "manual"
     },
-    "Reversible encoding, not encryption": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reversible encoding, not encryption"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "復元可能なエンコードで、暗号化ではありません"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可还原的编码，不是加密"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Review Permissions": {
       "localizations": {
         "en": {
@@ -99361,29 +99171,6 @@
       },
       "extractionState": "manual"
     },
-    "The text is too long to send with Brave Climb encoding.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The text is too long to send with Brave Climb encoding."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "The triage model hit an error": {
       "localizations": {
         "en": {
@@ -105985,52 +105772,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "关掉 ego 的使用统计：在那台 Mac 的 ego lite 里打开「设置 › 同步和服务」，关掉「Automatically sends usage statistics and crash reports to Citro Labs」"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Turn on Brave Climb encoding in Settings first": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Turn on Brave Climb encoding in Settings first"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Turn on Brave Climb encoding in Settings › Message Tweaks first.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Turn on Brave Climb encoding in Settings › Message Tweaks first."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
           }
         }
       },
@@ -113617,29 +113358,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭时先直连 hub，连不上才走隧道。只有 Persona 连 hub 的流量经过它，其他 App 不受影响；Persona 进后台时隧道断开，回到前台再连上。"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "When on, Brave Climb encoded text in chats is shown decoded, and you can choose to send with it from the composer. It's a reversible encoding, not encryption: anyone with this turned on can read it.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "When on, Brave Climb encoded text in chats is shown decoded, and you can choose to send with it from the composer. It's a reversible encoding, not encryption: anyone with this turned on can read it."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
           }
         }
       },

@@ -155,7 +155,7 @@ test('a wrong token, a missing subprotocol or another path is refused before the
   t.after(() => rt.stop())
   const { port } = await rt.start()
   for (const [url, opts, status] of [
-    [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'removed-secret-value' }, 401],
+    [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'wrong-fixture-token' }, 401],
     [`ws://127.0.0.1:${port}/persona/runtime`, {}, 401],
     [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'tok-R4ND0M', protocols: [] }, 400],
     [`ws://127.0.0.1:${port}/persona/runtime`, { token: 'tok-R4ND0M', protocols: ['something-else'] }, 400],

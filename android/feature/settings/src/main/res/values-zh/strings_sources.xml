@@ -400,8 +400,6 @@
     <string name="settings_src_display_anti_recall_caption">查看飞书网关已留存的撤回内容，保留「已撤回」标记。未留存的内容无法恢复。</string>
     <string name="settings_src_display_history">编辑历史</string>
     <string name="settings_src_display_history_caption">点击消息下方的「已编辑」，查看已留存的旧版本。</string>
-    <string name="settings_src_display_climb">[removed]编码</string>
-    <string name="settings_src_display_climb_caption">开启后，聊天里的[removed]编码文字会还原显示，输入框也可以选择用它发送。这是可还原的编码，不是加密：开启了此功能的人都能读到。</string>
     <string name="settings_src_display_saving">正在保存…</string>
     <string name="settings_src_display_reading">正在读取…</string>
     <string name="settings_src_display_reload">重新读取</string>

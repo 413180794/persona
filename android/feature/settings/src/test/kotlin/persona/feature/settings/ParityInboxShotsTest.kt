@@ -122,7 +122,7 @@ class ParityInboxShotsTest {
                 MessagesMessage("m4", now.minusSeconds(300).toString(), sender = MessagesPerson("+1 555 0100", "Alex"), text = "周五见", service = "SMS",
                     attachments = listOf(MessagesAttachment("image", "photo.jpg"))),
             ), more = true, before = "m1")
-        override suspend fun larkMessageDisplay() = LarkMessageDisplay("acct", antiRecall = true, showEditHistory = false, braveClimb = false)
+        override suspend fun larkMessageDisplay() = LarkMessageDisplay("acct", antiRecall = true, showEditHistory = false)
         override suspend fun microsoftConfig() = MicrosoftConfig(configured = outlook, clientId = if (outlook) "00000000-0000-0000-0000-000000000000" else null,
             redirectUri = "persona-mail-oauth://outlook")
     }

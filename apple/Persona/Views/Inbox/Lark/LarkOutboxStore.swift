@@ -180,7 +180,6 @@ actor LarkOutboxStore {
     }
 
     private struct Record: Codable {
-        /// 2 when a row goes in a mode (sealed, Brave Climb): its words are what the mode turns, and an App from before
         /// modes (which reads only 1) would send them as they are.
         var version = 1
         var draft: LarkDraft

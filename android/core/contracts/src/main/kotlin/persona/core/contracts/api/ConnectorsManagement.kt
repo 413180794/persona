@@ -242,22 +242,17 @@ data class MicrosoftFinish(
     @SerialName("error_description") val errorDescription: String? = null,
 )
 
-/**
- * "Message display" for the signed-in Feishu account: "Keep recalled messages" (a recalled message's kept words), "Edit history" and the Lark gateway's
- * "Brave Climb" (null from an extension without it: not offered). An unknown account hides kept content ([Hidden]).
- */
+
 @Serializable
 data class LarkMessageDisplay(
     @SerialName("account_id") val accountId: String = "",
     @SerialName("anti_recall") val antiRecall: Boolean = false,
     @SerialName("show_edit_history") val showEditHistory: Boolean = false,
-    @SerialName("brave_climb_codec") val braveClimb: Boolean? = null,
 ) {
     /** The switch behind a key of `POST /api/v1/lark/message-display`. */
     fun value(key: String): Boolean? = when (key) {
         "anti_recall" -> antiRecall
         "show_edit_history" -> showEditHistory
-        "brave_climb_codec" -> braveClimb
         else -> null
     }
 
