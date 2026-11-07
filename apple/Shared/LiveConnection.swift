@@ -352,6 +352,8 @@ final class LiveConnection {
     /// This connection's hello resumed the hub's broadcast stream (`resumed: true`): it replays what this app missed,
     /// so nothing needs fetching again (AppModel.didConnect). Set before `onConnected`.
     @ObservationIgnored private(set) var resumed = false
+    /// Only this connection's authenticated hello may enable canonical outbound contracts.
+    private(set) var personaContracts = false
     /// Where the app is in the hub's numbered broadcasts: kept across reconnects, cleared with another hub.
     @ObservationIgnored private(set) var cursor = EventCursor()
     /// iOS/Mac list clients opt in; watch/extension consumers retain their existing full-list contract.
@@ -423,6 +425,7 @@ final class LiveConnection {
     }
 
     func disconnect() {
+        personaContracts = false
         generation += 1
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
@@ -471,6 +474,7 @@ final class LiveConnection {
 
     private func open() {
         guard let config, !suspended else { return }
+        personaContracts = false
         generation += 1
         let gen = generation
         task?.cancel(with: .goingAway, reason: nil)
@@ -524,7 +528,7 @@ final class LiveConnection {
     /// extensions' install steps (`extension_operation`, #3307), the managers' roster changes (`managers`,
     /// docs/assistant/managers.md), and where to resume the broadcasts from once a hello gave a stream.
     static func queryItems(_ cursor: EventCursor, sessionList: Bool = false) -> [URLQueryItem] {
-        [URLQueryItem(name: "features", value: (sessionList ? "sessions_list," : "") + "sessions_delta,extension_operations,managers")] + cursor.queryItems
+        [URLQueryItem(name: "features", value: (sessionList ? "sessions_list," : "") + "sessions_delta,extension_operations,managers," + HubNaming.feature)] + cursor.queryItems
     }
 
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {
@@ -586,6 +590,7 @@ final class LiveConnection {
                     let first = self.state != .connected
                     if first { self.endDrop() }
                     self.note(meta) // before onConnected: it reads whether this hello resumed
+                    if case .hello(let hello)? = event { self.personaContracts = hello.features.contains(HubNaming.feature) }
                     if first {
                         self.state = .connected
                         self.sayHello()
@@ -596,6 +601,7 @@ final class LiveConnection {
                     if let event { self.onEvent?(event) }
                     self.receive(t, gen)
                 case .failure(let err):
+                    self.personaContracts = false
                     let planned = self.restartNotice || (!self.closedQuiet && t.closeCode == .goingAway)
                     self.dropped(restart: planned)
                     // The handshake's answer: 401 is the hub refusing this credential, not the hub being away.
@@ -622,6 +628,7 @@ final class LiveConnection {
         socket.open { [weak self] data in
             guard let self, gen == self.generation, let event = ServerEvent.decode(data) else { return }
             prepare?(event)
+            if case .hello(let hello) = event { self.personaContracts = hello.features.contains(HubNaming.feature) }
             if self.state != .connected {
                 self.state = .connected
                 self.onConnected?()
@@ -705,10 +712,10 @@ final class LiveConnection {
     }
 
     /// client_hello (docs/protocol/protocol.md, docs/protocol/i18n.md「协议」): this connection's interface language, so the hub's
-    /// notices and errors on it, and the user's language for what it produces later, match the app. Only `locale`:
-    /// features, heartbeat and platform stay as before (the URL, the legacy-iOS defaults). Old hubs ignore it.
+    /// notices and errors on it, and the user's language for what it produces later, match the app. The naming
+    /// contract is also advertised here; older hubs ignore unknown fields and keep their existing defaults.
     private func sayHello() {
-        send(["type": "client_hello", "locale": LanguageStore.shared.launched])
+        send(["type": "client_hello", "locale": LanguageStore.shared.launched, "features": [HubNaming.feature]])
     }
 
     func send(_ object: [String: Any]) {

@@ -7,10 +7,13 @@ nonisolated struct RecordingReceipt: Codable, Sendable {
     var index: Int?
     var total: Int?
     static let key = "personaRecordingReceipt"
-    var dictionary: [String: Any] { [Self.key: (try? JSONEncoder().encode(self)) ?? Data()] }
+    var dictionary: [String: Any] {
+        let data = (try? JSONEncoder().encode(self)) ?? Data()
+        return [Self.key: data, LegacyNames.recordingReceiptKey: data]
+    }
     init(id: UUID, index: Int? = nil, total: Int? = nil) { self.id = id; self.index = index; self.total = total }
     init?(dictionary: [String: Any]) {
-        guard let data = dictionary[Self.key] as? Data, let value = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
+        guard let data = (dictionary[Self.key] ?? dictionary[LegacyNames.recordingReceiptKey]) as? Data, let value = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
         self = value
     }
 }

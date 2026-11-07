@@ -90,8 +90,7 @@ nonisolated final class LanguageStore: @unchecked Sendable {
     }
 
     static func groupDefaults() -> UserDefaults? {
-        guard let name = Bundle.main.object(forInfoDictionaryKey: "PersonaAppGroup") as? String, !name.isEmpty,
-              !name.hasPrefix("$(") else { return nil }
+        guard let name = NativeStateMigration.infoString("PersonaAppGroup") else { return nil }
         return UserDefaults(suiteName: name)
     }
 

@@ -13,7 +13,7 @@ nonisolated enum MacOpenURL {
     }
 
     static func route(_ url: URL) -> Route {
-        guard url.scheme?.lowercased() == "persona" else { return .ignore }
+        guard HubNaming.accepts(scheme: url.scheme) else { return .ignore }
         switch url.host()?.lowercased() {
         case "open":
             // The same query as the iPhone's Live Activity links (FleetLink).

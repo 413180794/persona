@@ -615,7 +615,7 @@ nonisolated extension APIClient {
             enum CodingKeys: String, CodingKey { case text, todoID = "todo_id" }
         }
         let id = conversation.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? conversation
-        return try await post("/api/v1/assistant/conversations/\(id)/route", body: Body(todoID: todoID, text: text), as: ItemResponse.self).item
+        return try await post("/api/v1/assistant/conversations/\(id)/route", body: Body(todoID: todoID, text: HubNaming.outbound(text, canonical: personaNaming)), as: ItemResponse.self).item
     }
 
     nonisolated(unsafe) private static let feedTime: ISO8601DateFormatter = {

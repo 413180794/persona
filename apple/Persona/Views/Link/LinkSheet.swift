@@ -39,7 +39,7 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
     }
 
     /// One `<persona-context>` block, its attributes in any order and any of them missing (a Lark /agent request's context has no url).
-    private static let tagRe = try! NSRegularExpression(pattern: #"<persona-context\b([^>]*)>\s*([\s\S]*?)\s*</persona-context>\s*"#)
+    private static let tagRe = try! NSRegularExpression(pattern: "<" + HubNaming.contextPattern + #"\b([^>]*)>\s*([\s\S]*?)\s*</"# + HubNaming.contextPattern + #">\s*"#)
     private static let attrRe = try! NSRegularExpression(pattern: #"(\w+)="([^"]*)""#)
 
     /// The contexts in a message and the message without them.

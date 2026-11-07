@@ -43,7 +43,7 @@ nonisolated enum HubPageLink {
         case "t" where p.count == 5 && !p[1].isEmpty && !p[4].isEmpty:
             // /t/<machine>/<space>/<slot>/<session>: the tab's agent. Without the session it names a place, not a chat.
             return .agent(machine: p[1], session: p[4], item: at)
-        case "persona":
+        case "persona", LegacyNames.conversationPath:
             guard p.count == 2, !p[1].isEmpty, p[1] != "new" else { return nil }
             return .conversation(id: p[1], item: at)
         case "todos":

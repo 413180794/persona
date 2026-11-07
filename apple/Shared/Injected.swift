@@ -59,7 +59,7 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
     private static let noticeHead = try! NSRegularExpression(pattern: #"^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$"#) // i18n-ignore: matches the hub's text
     private static let followupHead = try! NSRegularExpression(pattern: #"^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$"#) // i18n-ignore: matches the hub's text
     private static let wakeHead = try! NSRegularExpression(pattern: #"^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」"#) // i18n-ignore: matches the hub's text
-    private static let leadContext = try! NSRegularExpression(pattern: #"^\s*<persona-context\b[^>]*>[\s\S]*?</persona-context>"#) // i18n-ignore: matches the hub's text
+    private static let leadContext = try! NSRegularExpression(pattern: #"^\s*<"# + HubNaming.contextPattern + #"\b[^>]*>[\s\S]*?</"# + HubNaming.contextPattern + ">") // i18n-ignore: matches the hub's text
     private static let noticeMarker = "这是 Persona 的任务通知" // i18n-ignore: matches the hub's text
     private static let lostTasksHead = "⚠️ 运行你的 node 刚重启过" // i18n-ignore: matches the hub's text
     private static let kbHintHead = "（知识库" // i18n-ignore: matches the hub's text

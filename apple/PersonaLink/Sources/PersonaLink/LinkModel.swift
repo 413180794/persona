@@ -225,6 +225,7 @@ enum LinkText {
     nonisolated static var helperEnvironment: [String: String] {
         var environment = stateEnvironment
         environment["PERSONA_HOME"] = stateURL.path
+        environment[LegacyNames.product.uppercased() + "_HOME"] = stateURL.path
         return environment
     }
     nonisolated static let configURL = stateURL.appendingPathComponent("link.json")
@@ -452,7 +453,7 @@ enum LinkText {
         if !l.isEmpty { args.append(l) }
         let r = await Self.runHelper(args, stdin: nil, split: true)
         readConfig()
-        guard r.ok, r.out.hasPrefix("persona://connector?") else { return (false, r.message, nil) }
+        guard r.ok, PairLink.isConnectorOutput(r.out) else { return (false, r.message, nil) }
         return (true, r.err, r.out)
     }
 

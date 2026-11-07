@@ -9,6 +9,7 @@ Place necessary historical text under its module directory and list it below.
 
 | File | Contents |
 | --- | --- |
+| `apple/apple-rolling-compatibility-6192-acceptance.md` | Actual pre-rename hub interoperability, final Apple full-suite counts, inspected GUI evidence, preserved baseline failures and native-system limits (#6192 / #6277) |
 | `android/android-p0-acceptance.md` | Android P0 round 4 joint acceptance checklist |
 | `android/android-p0-status.md` | Android v1 P0 status |
 | `apple/agents-grouping-5766.md` | iPhone Agents grouping and initial long-list limits (#5766) |

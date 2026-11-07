@@ -34,7 +34,10 @@ nonisolated extension ContextRef {
         refs.isEmpty || !refs.allSatisfy(\.isQuote) ? nil : refs
     }
 
-    var isSession: Bool { url.hasPrefix("persona://session/") }
+    var isSession: Bool {
+        guard let components = URLComponents(string: url) else { return false }
+        return HubNaming.accepts(scheme: components.scheme) && components.host == "session" && components.path.hasPrefix("/")
+    }
 
     #if DEBUG
     /// `-showSampleQuotes YES`: what Add as Context on a page and @ on a session put over the box.

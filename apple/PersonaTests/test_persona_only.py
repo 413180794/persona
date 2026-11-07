@@ -117,29 +117,35 @@ class PersonaOnlyTests(unittest.TestCase):
             self.assertEqual(path.name, "Persona.xcodeproj")
             self.assertFalse(path.is_symlink(), "project aliases must not return")
 
-    def test_plists_have_unique_keys_and_one_persona_url_scheme(self):
+    def test_plists_have_unique_keys_and_exact_compatible_url_schemes(self):
         registered = set()
+        expected = {"Persona/Resources/Info.plist", "Mac/Resources/Info.plist",
+                    "Vision/Resources/Info.plist", "PersonaLink/Info.plist"}
         for path in sorted(APPLE.rglob("*")):
             if path.suffix not in {".plist", ".entitlements"}:
                 continue
-            with self.subTest(path=path.relative_to(APPLE)):
+            relative = path.relative_to(APPLE).as_posix()
+            with self.subTest(path=relative):
                 tree = ET.parse(path)
                 for dictionary in tree.iter("dict"):
                     keys = [key.text for key in dictionary if key.tag == "key"]
                     self.assertEqual(len(keys), len(set(keys)), keys)
                 values = plistlib.loads(path.read_bytes())
                 if "CFBundleURLTypes" in values:
-                    schemes = [scheme for entry in values["CFBundleURLTypes"] for scheme in entry["CFBundleURLSchemes"]]
-                    self.assertEqual(schemes, ["persona"])
-                    registered.add(path.relative_to(APPLE).as_posix())
-        self.assertEqual(registered, {"Persona/Resources/Info.plist", "Mac/Resources/Info.plist",
-                                      "Vision/Resources/Info.plist", "PersonaLink/Info.plist"})
+                    self.assertIn(relative, expected)
+                    schemes = [scheme for entry in values["CFBundleURLTypes"]
+                               for scheme in entry["CFBundleURLSchemes"]]
+                    self.assertEqual(schemes, ["persona", "jarvis"])
+                    registered.add(relative)
+        self.assertEqual(registered, expected)
         project = yaml.safe_load(source("project.yml"))
         for target in ["Persona", "PersonaMac", "PersonaVision"]:
-            properties = project["targets"][target]["info"]["properties"]
-            self.assertEqual(properties["CFBundleURLTypes"][0]["CFBundleURLSchemes"], ["persona"])
+            settings = project["targets"][target]
+            properties = settings["info"]["properties"]
+            self.assertEqual(len(properties["CFBundleURLTypes"]), 1)
+            self.assertEqual(properties["CFBundleURLTypes"][0]["CFBundleURLSchemes"], ["persona", "jarvis"])
             self.assertEqual(properties["PersonaPushKeychainGroup"], "$(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push")
-            plist = plistlib.loads((APPLE / project["targets"][target]["info"]["path"]).read_bytes())
+            plist = plistlib.loads((APPLE / settings["info"]["path"]).read_bytes())
             for key in ["PersonaPushRelay", "PersonaGettingStartedURL", "PersonaPushKeychainGroup"]:
                 self.assertEqual(plist[key], properties[key])
         for target in ["Persona", "PersonaWidgets"]:
@@ -198,36 +204,58 @@ class PersonaOnlyTests(unittest.TestCase):
         self.assertNotIn("FACES", (APPLE.parent / "scripts/assets/make_alt_icons.py").read_text())
         self.assertFalse((APPLE.parent / "scripts/assets/persona_face").exists())
 
-    def test_context_parsers_have_no_dual_brand_branches(self):
+    def test_context_parsers_share_the_exact_dual_contract(self):
+        naming = source("Shared/HubNaming.swift")
+        self.assertIn('NSRegularExpression.escapedPattern(for: LegacyNames.product)', naming)
+        self.assertIn('static var contextPattern: String { productPattern + "-context" }', naming)
+        self.assertIn('static var filePattern: String { productPattern + "-file" }', naming)
         for path in ["Shared/ContextText.swift", "Shared/Injected.swift", "Shared/WatchText.swift",
                      "Persona/Voice/VoiceWire.swift", "Persona/Views/Link/LinkSheet.swift"]:
             with self.subTest(path=path):
                 text = source(path)
+                self.assertIn("HubNaming.contextPattern", text)
                 self.assertNotIn("persona|", text)
                 self.assertNotIn("|persona", text)
-                self.assertIn("persona-context", text)
-        closing = re.search(r'pattern: #"([^"]+)"#', source("Shared/ContextText.swift")).group(1)
+        closing_source = source("Shared/ContextText.swift")
+        pieces = re.search(r'pattern: #"([^"\n]+)"# \+ HubNaming.contextPattern \+ #"([^"\n]+)"#', closing_source)
+        self.assertIsNotNone(pieces, "the sanitizer must use the shared context pattern")
+        previous = re.search(r'static let product = "([^"\n]+)"', source("Shared/NativeStateMigration.swift")).group(1)
+        closing = pieces.group(1) + "(?:persona|" + re.escape(previous) + ")-context" + pieces.group(2)
         regex = re.compile(closing, re.IGNORECASE)
-        for tag in ["</persona-context>", "</PERSONA-CONTEXT>", "< / Persona-context\t>"]:
-            self.assertEqual(regex.sub("", f"a{tag}b"), "ab")
+        for product in ["persona", previous]:
+            for tag in [f"</{product}-context>", f"</{product.upper()}-CONTEXT>", f"< / {product}-context\t>"]:
+                self.assertEqual(regex.sub("", f"a{tag}b"), "ab")
         self.assertIsNone(regex.search("</other-context>"))
+        self.assertIn('let removed = replace(text, with: "")', closing_source)
+        self.assertIn('return replace(removed, with: "&lt;$1")', closing_source)
+        for path in ["Shared/WatchText.swift", "Persona/Views/Chat/VideoAttach.swift"]:
+            self.assertIn("HubNaming.filePattern", source(path))
 
-    def test_link_paths_and_helper_environment_have_no_duplicate_names(self):
+    def test_link_paths_and_helpers_share_compatible_names_without_duplicates(self):
         paths = source("PersonaLink/Sources/PersonaLink/LinkStatePaths.swift")
-        self.assertIn('environment["PERSONA_HOME"] ?? ""', paths)
+        self.assertIn('environment["PERSONA_HOME"] ?? environment[previousHomeKey] ?? ""', paths)
+        self.assertIn('LegacyNames.product.uppercased() + "_HOME"', paths)
         self.assertIn('home.appendingPathComponent(".persona", isDirectory: true)', paths)
-        self.assertNotIn("lstat(", paths)
-        self.assertNotIn("import Darwin", paths)
+        self.assertIn('home.appendingPathComponent("." + LegacyNames.product, isDirectory: true)', paths)
+        self.assertIn("lstat(previous.path, &old)", paths)
+        self.assertIn("a.st_dev == b.st_dev, a.st_ino == b.st_ino", paths)
+        self.assertNotIn("moveItem(", paths)
+        self.assertNotIn("removeItem(", paths)
         helper = source("PersonaLink/Sources/PersonaLink/LinkModel.swift")
         self.assertEqual(helper.count('environment["PERSONA_HOME"] = stateURL.path'), 1)
+        self.assertIn('LegacyNames.product.uppercased() + "_HOME"', helper)
         route = source("Shared/HubPageLink.swift")
-        self.assertIn('case "persona":', route)
-        self.assertNotIn('case "j"', route)
-        for path in ["Shared/APIClient.swift", "Shared/ExtensionSystemLink.swift", "Mac/App/MacOpenURL.swift",
-                     "LiveActivity/PersonaActivityAttributes.swift"]:
-            self.assertIn('.scheme?.lowercased() == "persona"', source(path))
-        self.assertIn('static let schemes: Set<String> = ["persona"]', source("PersonaLink/Sources/PersonaLink/PairLink.swift"))
-        self.assertIn('case "persona":', source("Persona/Views/Chat/AssistantHTMLCard.swift"))
+        self.assertIn('case "persona", LegacyNames.conversationPath:', route)
+        for path in ["Shared/APIClient.swift", "Shared/ExtensionSystemLink.swift", "Mac/App/MacOpenURL.swift"]:
+            self.assertIn("HubNaming.accepts(scheme:", source(path))
+        self.assertIn('["persona", LegacyNames.urlScheme].contains(url.scheme?.lowercased() ?? "")',
+                      source("LiveActivity/PersonaActivityAttributes.swift"))
+        self.assertIn('static let schemes: Set<String> = ["persona", LegacyNames.product]',
+                      source("PersonaLink/Sources/PersonaLink/PairLink.swift"))
+        self.assertIn('case "persona", LegacyNames.urlScheme:', source("Persona/Views/Chat/AssistantHTMLCard.swift"))
+        compatibility = APPLE / "PersonaLink/Sources/PersonaLink/NativeCompatibility.swift"
+        self.assertTrue(compatibility.is_symlink())
+        self.assertEqual(compatibility.resolve(), (APPLE / "Shared/NativeStateMigration.swift").resolve())
         for path in APPLE.rglob("*.swift"):
             with self.subTest(path=path.relative_to(APPLE)):
                 text = path.read_text(encoding="utf-8")
@@ -235,6 +263,7 @@ class PersonaOnlyTests(unittest.TestCase):
                 self.assertNotIn("persona|persona", text)
                 self.assertNotRegex(text, r'replacingOccurrences\(of: "([^"]+)", with: "\1"\)')
                 self.assertNotRegex(text, r'\["PERSONA_HOME"\][^\n]*(?:\|\||\?\?)[^\n]*\["PERSONA_HOME"\]')
+
 
 
 if __name__ == "__main__":

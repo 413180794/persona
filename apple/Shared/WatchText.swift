@@ -6,7 +6,7 @@ import Foundation
 /// fences, quotes, link targets; list dashes become •): the watch draws plain text, and the marks were shown as typed.
 nonisolated enum WatchText {
     private static let context = try! NSRegularExpression(
-        pattern: #"<persona-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</persona-context>\s*"#)
+        pattern: "<" + HubNaming.contextPattern + #"\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</"# + HubNaming.contextPattern + #">\s*"#)
     /// The marks a phone shows for what the watch cannot draw, in the interface language.
     private static var rules: [(String, String)] {
         let image = String(localized: "[Photo]", comment: "Watch: stands in for an image in a message")
@@ -15,8 +15,8 @@ nonisolated enum WatchText {
         return [
             (#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#, "\n" + image + "\n"),
             // Videos sent as files (<persona-file kind="video" …/>, VideoAttach.swift).
-            (#"\s*<persona-file\b[^>]*?kind="video"[^>]*>(?:\s*</persona-file>)?\s*"#, "\n" + video + "\n"),
-            (#"\s*<persona-file\b[^>]*>(?:\s*</persona-file>)?\s*"#, "\n" + file + "\n"),
+            (#"\s*<"# + HubNaming.filePattern + #"\b[^>]*?kind="video"[^>]*>(?:\s*</"# + HubNaming.filePattern + #">)?\s*"#, "\n" + video + "\n"),
+            (#"\s*<"# + HubNaming.filePattern + #"\b[^>]*>(?:\s*</"# + HubNaming.filePattern + #">)?\s*"#, "\n" + file + "\n"),
             ("(" + NSRegularExpression.escapedPattern(for: video) + #"\s*)+"#, video + " "),
             (#"\[Image #\d+\]\s*"#, image),
             (#"</?pasted_content[^>]*>"#, ""),

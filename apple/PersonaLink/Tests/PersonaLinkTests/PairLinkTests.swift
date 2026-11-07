@@ -7,8 +7,8 @@ import XCTest
 final class PairLinkTests: XCTestCase {
     private let full = "persona://link?url=http%3A%2F%2F192.0.2.10%3A18660&token=jp_example&machine=macbook&hub=h_example&fp=Zm9v&tls=18662"
 
-    func testOnlyPersonaSchemeParsesIgnoringCase() throws {
-        for scheme in ["persona", "PERSONA"] {
+    func testBothSchemeGenerationsParseIgnoringCase() throws {
+        for scheme in ["persona", "PERSONA", LegacyNames.product, LegacyNames.product.uppercased()] {
             let raw = full.replacingOccurrences(of: "persona://", with: "\(scheme)://")
             guard case .link(let l) = PairLink.parse(URL(string: raw)!) else { return XCTFail("\(scheme) not parsed") }
             XCTAssertEqual(l.raw, raw)
@@ -16,6 +16,30 @@ final class PairLinkTests: XCTestCase {
             XCTAssertEqual(l.hubHost, "192.0.2.10:18660")
             XCTAssertTrue(l.pinned)
         }
+    }
+
+    func testLegacyOpeningStillRequiresAnExplicitPair() {
+        let raw = full.replacingOccurrences(of: "persona://", with: LegacyNames.product + "://")
+        let model = LinkModel()
+        model.openLink(URL(string: raw)!)
+        XCTAssertEqual(model.incoming?.raw, raw)
+        XCTAssertEqual(model.pairRuns, 0)
+        XCTAssertEqual(PairLink.parse(LegacyNames.product + "://pair?token=fixture"), .otherApp)
+        XCTAssertEqual(PairLink.parse(LegacyNames.product + "://link?token="), .incomplete)
+    }
+
+    func testBothSchemesAreRegistered() throws {
+        let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: package.appendingPathComponent("Info.plist")), format: nil) as? [String: Any]
+        let types = plist?["CFBundleURLTypes"] as? [[String: Any]]
+        XCTAssertEqual(Set(types?.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] } ?? []), Set(["persona", LegacyNames.product]))
+    }
+
+    func testPassiveOutputAcceptsEitherContractOnly() {
+        XCTAssertTrue(PairLink.isConnectorOutput("persona://connector?code=fixture"))
+        XCTAssertTrue(PairLink.isConnectorOutput(LegacyNames.product + "://connector?code=fixture"))
+        XCTAssertFalse(PairLink.isConnectorOutput("otherapp://connector?code=fixture"))
+        XCTAssertFalse(PairLink.isConnectorOutput(LegacyNames.product + "://pair?token=fixture"))
     }
 
     func testWithoutFingerprintOrMachine() throws {

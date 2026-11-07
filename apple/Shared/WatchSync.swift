@@ -21,6 +21,17 @@ nonisolated struct WatchSummary: Codable, Sendable {
     /// Open inbox items that need the user (docs/assistant/inbox.md); nil from an older phone.
     var inbox: [InboxItem]? = nil
     var at: Date = .now
+
+    enum CodingKeys: String, CodingKey { case sessions, interactions, machines, inbox, at }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(sessions.map { NativeSessionEnvelope(session: $0) }, forKey: .sessions)
+        try c.encode(interactions, forKey: .interactions)
+        try c.encode(machines, forKey: .machines)
+        try c.encodeIfPresent(inbox, forKey: .inbox)
+        try c.encode(at, forKey: .at)
+    }
 }
 
 #if canImport(WatchConnectivity)

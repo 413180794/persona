@@ -43,7 +43,7 @@ struct PersonaToolNamesTests {
         #expect(PersonaToolNames.server("mcp__plugin_x_y__tool") == "plugin_x_y")
         #expect(PersonaToolNames.server("mcp____tool") == nil)
         #expect(PersonaToolNames.server("Read") == nil)
-        #expect(PersonaToolNames.servers == ["persona"])
+        #expect(PersonaToolNames.servers == ["persona", LegacyNames.product, "plugin_persona", "plugin_" + LegacyNames.product])
         #expect(PersonaToolNames.isPersona("mcp__persona__kb_get"))
         for server in ["other-product", "personas", "personad"] {
             #expect(!PersonaToolNames.isPersona("mcp__\(server)__kb_get"))

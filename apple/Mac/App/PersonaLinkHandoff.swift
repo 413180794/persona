@@ -15,7 +15,8 @@ nonisolated enum PersonaLinkHandoff {
 
     /// The bundle is Persona Link.
     static func isPersonaLink(_ info: [String: Any]?) -> Bool {
-        (info?["CFBundleExecutable"] as? String) == executable
+        guard let name = info?["CFBundleExecutable"] as? String else { return false }
+        return name == executable || name == LegacyNames.capitalizedProduct + "Link"
     }
 
     /// Persona Link's bundle: a registered handler of the link first, else the places `mac-link.sh install` puts it
@@ -25,8 +26,10 @@ nonisolated enum PersonaLinkHandoff {
     }
 
     static var fallbacks: [URL] {
-        [URL(fileURLWithPath: "/Applications").appendingPathComponent(bundleName),
-         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications").appendingPathComponent(bundleName)]
+        let names = [bundleName, LegacyNames.capitalizedProduct + " Link.app"]
+        let roots = [URL(fileURLWithPath: "/Applications"),
+                     FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
+        return names.flatMap { name in roots.map { $0.appendingPathComponent(name) } }
     }
 
     @MainActor static func installedApp(for url: URL) -> URL? {

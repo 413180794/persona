@@ -8,7 +8,7 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
     /// (`isComputerLink`, for Persona Link on that computer): its one-time code would pair this device in its place.
     init?(pairURL: String) {
         guard let comps = URLComponents(string: pairURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              comps.scheme?.lowercased() == "persona",
+              HubNaming.accepts(scheme: comps.scheme),
               comps.host?.lowercased() != "link",
               let u = comps.queryItems?.first(where: { $0.name == "url" })?.value, let url = URL(string: u),
               let token = comps.queryItems?.first(where: { $0.name == "token" })?.value, !token.isEmpty
@@ -21,13 +21,13 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
     /// or no `token`: copied in part, wrapped in a chat) is still someone trying to pair, and is told so (#4273).
     static func isPairLink(_ link: String) -> Bool {
         guard let comps = URLComponents(string: link.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
-        return comps.scheme?.lowercased() == "persona" && comps.host?.lowercased() == "pair"
+        return HubNaming.accepts(scheme: comps.scheme) && comps.host?.lowercased() == "pair"
     }
 
     /// `persona://link?…`: the pairing link a signed-in device made for one computer (「添加电脑」, Add computer).
     /// It is opened on that computer, by Persona Link; a phone or the Mac app only says so.
     static func isComputerLink(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == "persona" && url.host()?.lowercased() == "link"
+        HubNaming.accepts(scheme: url.scheme) && url.host()?.lowercased() == "link"
     }
 
     init(url: URL, token: String) {
@@ -125,6 +125,8 @@ nonisolated struct APIClient: Sendable {
     /// The hub has the extension routes (`features` has `extensions`, #1844): extension requests go to
     /// /api/v1/extensions and answer with the new keys; an older hub only has /api/v1/plugins (docs/extensions/extensions.md「命名和兼容」).
     var extensionsAPI = false
+    /// Explicitly advertised by this hub's hello; absent/unknown stays compatible with pre-rename hubs.
+    var personaNaming = false
     /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
     nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
 
@@ -184,7 +186,7 @@ nonisolated struct APIClient: Sendable {
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
                  timeout: TimeInterval = 30, opID: UUID? = nil) async throws -> Data {
         let query = larkScoped(path, query)
-        let headers = opID.map { [OpRetry.header: $0.uuidString.lowercased()] } ?? [:]
+        let headers = opID.map(HubNaming.operationHeaders) ?? [:]
         if let answer = transport ?? (config.isDemo ? Self.local : nil) {
             let data = try await answer(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
                                                      body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }, headers: headers))
@@ -588,7 +590,9 @@ nonisolated struct APIClient: Sendable {
     }
 
     func start(_ req: StartRequest) async throws -> Session {
-        stamp(try await post("/api/v1/sessions", body: req, timeout: req.async == true ? 20 : 110, as: SessionResponse.self).session)
+        var body = req
+        body.prompt = req.prompt.map { HubNaming.outbound($0, canonical: personaNaming) }
+        return stamp(try await post("/api/v1/sessions", body: body, timeout: req.async == true ? 20 : 110, as: SessionResponse.self).session)
     }
 
     private func sp(_ k: SessionKey) -> String { "/api/v1/sessions/\(k.machineID)/\(k.sessionID)" }
@@ -698,7 +702,7 @@ nonisolated struct APIClient: Sendable {
     /// opID: the message's op id (the outbox passes its id, the same as clientMsgID: docs/protocol/protocol.md「操作回执」).
     func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil, model: String? = nil,
               clientMsgID: String? = nil, clearDraft: String? = nil, todoID: String? = nil, opID: UUID? = nil) async throws {
-        try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher,
+        try await post(sp(k) + "/messages", body: SendBody(text: HubNaming.outbound(text, canonical: personaNaming), images: images.isEmpty ? nil : images, launcher: launcher,
                                                            model: model, clientMsgID: clientMsgID, clearDraft: clearDraft, todoID: todoID),
                        timeout: 100, opID: opID)
     }
@@ -1186,7 +1190,7 @@ nonisolated struct APIClient: Sendable {
     /// `main`: the new conversation becomes the main one. `space`: the space it opens in (nil: the assistant's own).
     func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil, permissionMode: String? = nil,
                            effort: String? = nil, main: Bool = false, space: String? = nil) async throws -> Session {
-        var s = try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
+        var s = try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: HubNaming.outbound(prompt, canonical: personaNaming), images: images.isEmpty ? nil : images,
                                                                                       launcher: launcher, permissionMode: permissionMode, effort: effort,
                                                                                       main: main ? true : nil, space: space),
                                timeout: 110, as: SessionResponse.self).session

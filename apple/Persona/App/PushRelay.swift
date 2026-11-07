@@ -9,7 +9,7 @@ nonisolated enum PushRelay {
 
     /// From the build config (`app.push_relay`, Info.plist `PersonaPushRelay`); nil: this build uses no relay.
     static var url: URL? {
-        guard let s = Bundle.main.object(forInfoDictionaryKey: "PersonaPushRelay") as? String,
+        guard let s = NativeStateMigration.infoString("PersonaPushRelay"),
               !s.isEmpty, let u = URL(string: s), u.scheme == "https" else { return nil } // the grant must not cross in the clear
         return u
     }

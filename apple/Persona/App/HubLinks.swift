@@ -34,6 +34,7 @@ final class HubLink: Identifiable {
     var api: APIClient {
         var c = APIClient(config: config, group: group)
         c.extensionsAPI = hello.features.isEmpty ? Self.remembersExtensions(group) : features.contains("extensions")
+        c.personaNaming = live.personaContracts
         return c
     }
 
@@ -191,7 +192,7 @@ extension AppModel {
     /// has its session (docs/protocol/multi-hub.md「推送」).
     func pushGroup(_ info: [AnyHashable: Any]) -> String? {
         if let id = info["hub_id"] as? String, let g = registry.group(hubID: id), link(g) != nil { return g }
-        if let g = info[PushCrypto.groupKey] as? String, link(g) != nil { return g }
+        if let g = PushCrypto.group(from: info), link(g) != nil { return g }
         return nil
     }
 }
@@ -401,7 +402,7 @@ nonisolated struct PushRef: Sendable, Equatable {
         self.machine = machine
         self.session = session
         hubID = info["hub_id"] as? String
-        group = info[PushCrypto.groupKey] as? String
+        group = PushCrypto.group(from: info)
     }
 
     /// The session in its group: the hub that sent the push, the key that opened it, else the group that has such a

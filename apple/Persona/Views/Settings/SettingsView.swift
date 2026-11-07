@@ -862,7 +862,7 @@ struct WelcomeView: View {
 /// Info.plist `PersonaGettingStartedURL`); nil when the build has none, and "No hub yet?" is not shown.
 enum GettingStarted {
     static var url: URL? {
-        guard let s = Bundle.main.object(forInfoDictionaryKey: "PersonaGettingStartedURL") as? String,
+        guard let s = NativeStateMigration.infoString("PersonaGettingStartedURL"),
               s.hasPrefix("https://"), let u = URL(string: s) else { return nil }
         return u
     }

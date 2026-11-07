@@ -34,7 +34,7 @@ struct HubPageLinkTests {
         #expect(page("http://hub.example.com:18660/persona/c-123?at=u1") == .conversation(id: "c-123", item: "u1"))
         #expect(page("http://hub.example.com:18660/persona/new") == nil) // the new-conversation page
         #expect(page("http://hub.example.com:18660/persona") == nil)
-        #expect(page("http://hub.example.com:18660/j/c-123") == nil) // no abbreviated product route
+        #expect(page("http://hub.example.com:18660/" + LegacyNames.conversationPath + "/c-123") == .conversation(id: "c-123", item: nil))
     }
 
     @Test func todos() {

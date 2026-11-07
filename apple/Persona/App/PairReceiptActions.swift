@@ -37,7 +37,7 @@ nonisolated struct PairPush: Sendable, Equatable {
         guard let pair = info["pair"] as? [String: Any], let kind = (pair["kind"] as? String).flatMap(Kind.init) else { return nil }
         func id(_ key: String) -> String? { (pair[key] as? String).flatMap { $0.isEmpty ? nil : $0 } }
         self.init(kind: kind, deviceID: id("device_id"), machine: id("machine"),
-                  hubID: info["hub_id"] as? String, keyGroup: info[PushCrypto.groupKey] as? String)
+                  hubID: info["hub_id"] as? String, keyGroup: PushCrypto.group(from: info))
         switch kind {
         case .device: if deviceID == nil { return nil }
         case .computerCode, .computerJoining, .machine: if machine == nil { return nil }

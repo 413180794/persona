@@ -6,7 +6,7 @@ import Foundation
 /// "Call Persona · agent read", never the raw `agent_read`.
 enum PersonaToolNames {
     /// The MCP server name for Persona itself.
-    nonisolated static let servers: Set<String> = ["persona"]
+    nonisolated static let servers: Set<String> = ["persona", LegacyNames.product, "plugin_persona", "plugin_" + LegacyNames.product]
 
     /// The server of an MCP tool's full name ("mcp__persona__agent_read" → "persona"), nil for any other tool.
     nonisolated static func server(_ name: String) -> String? {
@@ -45,7 +45,7 @@ enum PersonaToolNames {
         case "agents_list", "list_agents": String(localized: "List Agents")
         case "agent_start", "task_plan": String(localized: "Assign Task")
         case "interaction_answer": String(localized: "Answer for You")
-        case "ask_persona": String(localized: "Hand to Persona")
+        case "ask_persona", "ask_" + LegacyNames.product: String(localized: "Hand to Persona")
         // The knowledge base (docs/assistant/knowledge.md).
         case "kb_get", "kb_list", "kb_search", "search_knowledge": String(localized: "Search Knowledge")
         case "kb_update": String(localized: "Update Knowledge")
@@ -58,7 +58,7 @@ enum PersonaToolNames {
         case "schedule_routine": String(localized: "Schedule Task")
         case "delete_routine": String(localized: "Delete Scheduled Task [Persona Tool Names 24bbfb]")
         case "inbox_draft": String(localized: "Draft Reply")
-        case "persona_settings": String(localized: "Persona Settings")
+        case "persona_settings", LegacyNames.product + "_settings": String(localized: "Persona Settings")
         // Live cards (docs/assistant/assistant-views.md).
         case "view_show": String(localized: "Draw Card")
         case "view_get": String(localized: "Read Card")

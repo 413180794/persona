@@ -38,7 +38,7 @@ nonisolated enum FleetLink {
 
     /// The session a link opens, or nil for anything else (`persona://open` alone just opens the app).
     static func session(_ url: URL) -> (machine: String, session: String)? {
-        guard url.scheme?.lowercased() == "persona", url.host == "open",
+        guard ["persona", LegacyNames.urlScheme].contains(url.scheme?.lowercased() ?? ""), url.host == "open",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
               let m = items.first(where: { $0.name == "machine" })?.value, !m.isEmpty,
               let s = items.first(where: { $0.name == "session" })?.value, !s.isEmpty else { return nil }

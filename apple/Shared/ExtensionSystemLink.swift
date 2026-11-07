@@ -15,7 +15,7 @@ nonisolated struct ExtensionSystemLink: Hashable, Sendable {
     }
 
     init?(url: URL) {
-        guard url.scheme?.lowercased() == "persona", url.host == "extension",
+        guard HubNaming.accepts(scheme: url.scheme), url.host == "extension",
               url.user == nil, url.password == nil, url.port == nil, url.fragment == nil,
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         let path = url.pathComponents.filter { $0 != "/" }

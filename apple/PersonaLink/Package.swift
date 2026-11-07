@@ -6,7 +6,7 @@ let package = Package(
     name: "PersonaLink",
     platforms: [.macOS(.v15)],
     targets: [
-        .executableTarget(name: "PersonaLink", path: "Sources/PersonaLink"),
+        .executableTarget(name: "PersonaLink", path: "Sources/PersonaLink", swiftSettings: [.define("NATIVE_MIGRATION_STORAGE_ONLY")]),
         .testTarget(name: "PersonaLinkTests", dependencies: ["PersonaLink"], path: "Tests/PersonaLinkTests")
     ],
     swiftLanguageModes: [.v5]

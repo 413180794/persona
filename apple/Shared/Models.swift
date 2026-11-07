@@ -819,7 +819,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         efforts = try c.decodeIfPresent([String].self, forKey: .efforts)
         contextTokens = try? c.decodeIfPresent(Int.self, forKey: .contextTokens) // an odd one never drops the session
         contextWindow = try? c.decodeIfPresent(Int.self, forKey: .contextWindow)
-        startedByPersona = try c.decodeIfPresent(Bool.self, forKey: .startedByPersona) ?? false
+        let legacy = try decoder.container(keyedBy: HubNaming.Field.self)
+        startedByPersona = try c.decodeIfPresent(Bool.self, forKey: .startedByPersona)
+            ?? legacy.decodeIfPresent(Bool.self, forKey: HubNaming.Field(LegacyNames.startedByField)) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived)
         assistantSpace = try c.decodeIfPresent(String.self, forKey: .assistantSpace).flatMap { $0.isEmpty ? nil : $0 }

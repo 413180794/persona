@@ -57,7 +57,7 @@ nonisolated extension VoiceLine {
     static let historyLines = 40
 
     private static let contextBlock = try! NSRegularExpression(
-        pattern: #"<persona-context\b[^>]*>[\s\S]*?</persona-context>"#)
+        pattern: "<" + HubNaming.contextPattern + #"\b[^>]*>[\s\S]*?</"# + HubNaming.contextPattern + ">")
 
     /// The conversation's last three turns as `start.recent`: what the user and the agent wrote, nothing else (tool calls,
     /// thinking and notices stay out; the extension says 「用了 Bash」 itself when it reads them), context blocks taken out,

@@ -34,6 +34,38 @@ final class LinkStatePathsTests: XCTestCase {
         XCTAssertEqual(LinkStatePaths.serviceEnvironment(home: home, environment: ["PATH": "/usr/bin"]), ["PATH": "/usr/bin"])
     }
 
+    func testPreviousRootEnvironmentAndInstalledServiceAreReadable() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let oldKey = LegacyNames.product.uppercased() + "_HOME"
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [oldKey: "~/profile"]).path, home.path + "/profile")
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: ["PERSONA_HOME": "", oldKey: "wrong"]).path, home.path + "/.persona")
+        let oldFile = home.appendingPathComponent("Library/LaunchAgents/com." + LegacyNames.product + ".node.plist")
+        try FileManager.default.createDirectory(at: oldFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try PropertyListSerialization.data(fromPropertyList: ["EnvironmentVariables": [oldKey: "~/profile", "OTHER_HOME": "ignored"]], format: .xml, options: 0)
+        try data.write(to: oldFile)
+        let environment = LinkStatePaths.serviceEnvironment(home: home, environment: ["PATH": "/usr/bin"])
+        XCTAssertEqual(environment, ["PATH": "/usr/bin", "PERSONA_HOME": "~/profile"])
+        XCTAssertEqual(try Data(contentsOf: oldFile), data)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: home.path + "/profile"))
+    }
+
+    func testExistingPreviousRootAndSameInodeAliasAreNotMoved() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let old = home.appendingPathComponent("." + LegacyNames.product, isDirectory: true)
+        let current = home.appendingPathComponent(".persona", isDirectory: true)
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        let file = old.appendingPathComponent("link.json"), bytes = Data("opaque fixture".utf8)
+        try bytes.write(to: file)
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), old)
+        try FileManager.default.createSymbolicLink(at: current, withDestinationURL: old)
+        XCTAssertEqual(LinkStatePaths.root(home: home, environment: [:]), current)
+        XCTAssertEqual(try Data(contentsOf: file), bytes)
+    }
+
     func testDefaultAlwaysNamesPersonaWithoutInspectingOrMovingOtherRoots() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)

@@ -25,7 +25,12 @@ struct PairLink: Equatable {
         case notOurs
     }
 
-    static let schemes: Set<String> = ["persona"]
+    static let schemes: Set<String> = ["persona", LegacyNames.product]
+
+    /// The helper's passive pairing link, not a request to pair this app automatically.
+    static func isConnectorOutput(_ raw: String) -> Bool {
+        schemes.contains { raw.hasPrefix($0 + "://connector?") }
+    }
 
     static func parse(_ url: URL) -> Parsed {
         parse(url.absoluteString)

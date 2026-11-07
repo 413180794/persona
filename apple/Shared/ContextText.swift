@@ -6,7 +6,7 @@ import Foundation
 nonisolated enum ContextText {
     /// What a reader may take as the end of a block: any case, spaces around the slash and before `>`.
     static let closingTag = try! NSRegularExpression(
-        pattern: #"<(\s*/\s*persona-context\s*>)"#, options: [.caseInsensitive])
+        pattern: #"<(\s*/\s*"# + HubNaming.contextPattern + #"\s*>)"#, options: [.caseInsensitive])
 
     /// Closing tags are removed, and one that the removal itself puts together (`</persona-</persona-context>context>`)
     /// has its `<` written as `&lt;`, which joins nothing. Two passes, linear in the text.

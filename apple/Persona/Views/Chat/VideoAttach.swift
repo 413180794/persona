@@ -41,13 +41,13 @@ nonisolated struct AttachedFile: Hashable, Sendable {
         files.isEmpty ? text : text + "\n\n" + files.map(\.xml).joined(separator: "\n")
     }
 
-    private static let tagRe = try! NSRegularExpression(pattern: #"\s*<persona-file\b([^>]*?)/?>(?:\s*</persona-file>)?\s*"#)
+    private static let tagRe = try! NSRegularExpression(pattern: #"\s*<"# + HubNaming.filePattern + #"\b([^>]*?)/?>(?:\s*</"# + HubNaming.filePattern + #">)?\s*"#)
     private static let attrRe = try! NSRegularExpression(pattern: #"(\w+)="([^"]*)""#)
     private static let memo = TextMemo<(files: [AttachedFile], rest: String)>()
 
     /// The files in a message and the message without their tags. A tag without a path is dropped, not drawn.
     static func parse(_ text: String) -> (files: [AttachedFile], rest: String) {
-        guard text.contains("<persona-file") else { return ([], text) }
+        guard text.contains("<persona-file") || text.contains("<" + LegacyNames.fileTag) else { return ([], text) }
         return memo(text, scan)
     }
 

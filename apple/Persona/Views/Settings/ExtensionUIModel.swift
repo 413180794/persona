@@ -92,7 +92,7 @@ nonisolated extension ExtensionComponent {
 nonisolated enum InboxSourceLink {
     /// The item `url` opens the source of, nil when it is no such link.
     static func item(_ url: URL) -> String? {
-        guard url.scheme?.lowercased() == "persona",
+        guard HubNaming.accepts(scheme: url.scheme),
               let c = URLComponents(url: url, resolvingAgainstBaseURL: false), c.host?.lowercased() == "inbox" else { return nil }
         let parts = c.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
         guard parts.count == 3, parts[0].isEmpty, parts[2] == "source",
@@ -106,7 +106,7 @@ nonisolated enum InboxSourceLink {
 nonisolated enum ExtensionSettingsLink {
     /// The extension whose settings `url` opens, nil when it is no such link.
     static func extensionID(_ url: URL) -> String? {
-        guard url.scheme?.lowercased() == "persona",
+        guard HubNaming.accepts(scheme: url.scheme),
               let c = URLComponents(url: url, resolvingAgainstBaseURL: false), c.host?.lowercased() == "settings" else { return nil }
         let parts = c.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
         guard parts.count == 3, parts[0].isEmpty, parts[1] == "extensions",

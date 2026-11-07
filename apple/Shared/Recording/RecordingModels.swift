@@ -58,13 +58,16 @@ nonisolated struct RecordingTransfer: Codable, Sendable {
     var marks: [Double]
 
     static let key = "personaRecording"
-    var dictionary: [String: Any] { [Self.key: (try? JSONEncoder().encode(self)) ?? Data()] }
+    var dictionary: [String: Any] {
+        let data = (try? JSONEncoder().encode(self)) ?? Data()
+        return [Self.key: data, LegacyNames.recordingKey: data]
+    }
     init(entry: RecordingEntry, segment: RecordingSegment? = nil) {
         id = entry.id; createdAt = entry.createdAt; locale = entry.locale
         self.segment = segment; total = segment == nil ? entry.expectedSegments : nil; marks = entry.marks
     }
     init?(dictionary: [String: Any]?) {
-        guard let data = dictionary?[Self.key] as? Data,
+        guard let data = (dictionary?[Self.key] ?? dictionary?[LegacyNames.recordingKey]) as? Data,
               let value = try? JSONDecoder().decode(Self.self, from: data), value.valid else { return nil }
         self = value
     }
