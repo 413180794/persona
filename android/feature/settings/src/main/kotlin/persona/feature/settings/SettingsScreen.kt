@@ -324,18 +324,20 @@ private fun SettingsContent(
             item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = stringResource(R.string.settings_devices_title), leadingIcon = PhIcons.DeviceMobile, subtitle = stringResource(R.string.settings_row_devices_subtitle), onClick = { open(SettingsPage.Devices) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 2, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Diagnostics), title = stringResource(R.string.settings_diag_title), leadingIcon = PhIcons.Gauge, subtitle = stringResource(R.string.settings_row_diag_subtitle), onClick = { open(SettingsPage.Diagnostics) }) } }
             item { JSectionHeader(stringResource(R.string.settings_section_notifications)) }
-            if (services.capsule != null) item { JGroupItem(GroupPosition.Single) {
+            val capsuleRows = if (services.capsule != null) 1 else 0
+            val desktopRow = desktops.isNotEmpty() && !services.demo
+            val notifyRows = capsuleRows + 2 + if (desktopRow) 1 else 0
+            if (services.capsule != null) item { JGroupItem(GroupPosition.of(0, notifyRows)) {
                 val mode by services.capsule.mode.collectAsState()
                 JRow(title = stringResource(R.string.settings_capsule_title), leadingIcon = PhIcons.ChatCircle, value = CapsuleSettingsText.label(mode),
                     subtitle = stringResource(R.string.settings_row_capsule_subtitle), selected = detailKey == SettingsPageRoute(SettingsPage.Capsule),
                     onClick = { open(SettingsPage.Capsule) })
             } }
             // "Persona on Mac is signed in" while a desktop app is connected (iOS shows it over the Agents list).
-            val notifyRows = if (desktops.isNotEmpty() && !services.demo) 3 else 2
-            item { JGroupItem(GroupPosition.of(0, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = stringResource(R.string.settings_ready_notifications), leadingIcon = PhIcons.BellSimple, subtitle = stringResource(R.string.settings_row_notifications_subtitle), onClick = { open(SettingsPage.Notifications) }) } }
-            item { JGroupItem(GroupPosition.of(1, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = stringResource(R.string.settings_row_background), leadingIcon = PhIcons.BatteryCharging, subtitle = stringResource(R.string.settings_row_background_subtitle), onClick = { open(SettingsPage.Readiness) }) } }
-            if (notifyRows == 3) item { DesktopPresenceRow(desktops, deviceState.preferences?.muteWhileDesktop == true,
-                selected = detailKey == SettingsPageRoute(SettingsPage.Desktops), GroupPosition.of(2, 3), onClick = { open(SettingsPage.Desktops) }) }
+            item { JGroupItem(GroupPosition.of(capsuleRows, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = stringResource(R.string.settings_ready_notifications), leadingIcon = PhIcons.BellSimple, subtitle = stringResource(R.string.settings_row_notifications_subtitle), onClick = { open(SettingsPage.Notifications) }) } }
+            item { JGroupItem(GroupPosition.of(capsuleRows + 1, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = stringResource(R.string.settings_row_background), leadingIcon = PhIcons.BatteryCharging, subtitle = stringResource(R.string.settings_row_background_subtitle), onClick = { open(SettingsPage.Readiness) }) } }
+            if (desktopRow) item { DesktopPresenceRow(desktops, deviceState.preferences?.muteWhileDesktop == true,
+                selected = detailKey == SettingsPageRoute(SettingsPage.Desktops), GroupPosition.of(capsuleRows + 2, notifyRows), onClick = { open(SettingsPage.Desktops) }) }
             item { JSectionHeader("AI") }
             // iOS's order: "Model providers", "Model configuration", "Assistant" (a page of the Persona tab, so only with a navigation host), then the uses.
             val assistantRow = onNavigate != null
