@@ -260,7 +260,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const items = useRef(tr.items);
   items.current = tr.items;
   const draftKey = `${mid}/${sid}`;
-  const canCompose = sessionCan(session, "send");
+  const canCompose = !readOnly && sessionCan(session, "send");
+  // The main conversation is always Persona (#1313): not its first message, the node's title for it.
+  const mainConversation = useStore((s) => s.assistant?.main);
+  const isMain = Boolean(assistant && sid === mainConversation);
+  const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
   const canFork = Boolean(session?.can_fork) && !readOnly;
   // "Rewind to here" (#2436): offered on your messages of a session in a terminal; off with a reason while it cannot
   const rewindOff = rewindBlock(session, working);
@@ -268,13 +272,15 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const actions = useMemo<ChatActions>(
     () => ({
       draftKey,
+      title,
+      isAgent: !assistant,
       canCompose,
       speaker: assistant ? persona.name : "Agent",
       images: () => items.current.filter((i) => i.kind === "image"),
       fork: canFork ? (itemId: string) => void forkAt(mid, sid, itemId, Boolean(assistant), session?.space) : undefined,
       rewind: canRewind ? { block: rewindOff, run: (messageId, text, restore) => rewindTo(mid, sid, draftKey, items.current, messageId, text, restore) } : undefined,
     }),
-    [draftKey, canCompose, canFork, canRewind, rewindOff, mid, sid, assistant, persona.name],
+    [draftKey, title, canCompose, canFork, canRewind, rewindOff, mid, sid, assistant, persona.name],
   );
   // the assistant works on any computer, so its @ menu offers workspaces too
   const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current), workspaces: Boolean(assistant) }), [session?.cwd, draftKey, assistant]);
@@ -589,7 +595,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return deliver(out, uuid(), undefined, fromBox);
   };
   // The assistant's tasks (docs/unified-entry.md): the conversation's feed, and the main one's "Today" card.
-  const mainConversation = useStore((s) => s.assistant?.main);
   const feed = useFeed((s) => (assistant ? (s.feeds[sid] ?? NO_FEED) : NO_FEED));
   useEffect(() => {
     if (!assistant) return;
@@ -637,8 +642,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // The same for an agent that only waits on background commands (#6045): its turn is drawn finished.
   const backgroundOnly = (waitingOnWorkflow(session) || Boolean(session && backgroundWaiting(session))) && !tr.streaming && !outgoing && !awaiting;
   const lastLive = (readOnly ? Boolean(viewed?.running) : working && !backgroundOnly) && !tr.loading;
-  // The main conversation is always Persona (#1313): not its first message, the node's title for it.
-  const isMain = Boolean(assistant && sid === mainConversation);
   // the main conversation's readiness: the card for what is missing, and the send button saying it (4.4)
   const gate = useReadinessGate(isMain && !readOnly);
   blockedRef.current = gate.blocked;
@@ -646,7 +649,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const failedFromBox = Boolean(failure && sendFailure?.fromBox);
   // the hub's word on the last turn's model error, for its card (5.2 turn_error_code)
   const turnFix = assistant ? turnErrorFix(session?.turn_error_code) : null;
-  const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
   // a line that comes out the same as last time keeps its object, so a push re-renders only the lines it changed
   // (lib/stable-lines.ts); the task index likewise, or every row reading the context would render again
   const lastLines = useRef<ChatLine[] | undefined>(undefined);

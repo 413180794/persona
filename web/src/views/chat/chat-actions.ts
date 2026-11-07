@@ -6,7 +6,11 @@ import type { Item } from "../../lib/types";
 
 export interface ChatActions {
   draftKey: string;
-  /** The composer can send here (a read-only source cannot): "Quote" / "Edit" / "Edit image" are offered only then. */
+  /** The conversation title for message context cards, separate from the reply's speaker. */
+  title: string;
+  /** Agent chats can hand messages to Persona, including when this chat is read-only. */
+  isAgent: boolean;
+  /** The composer can send here: "Quote" / "Use as context" / "Edit" / "Edit image" are offered only then. */
   canCompose: boolean;
   /** Who the replies are from, for "Quote"'s "Quote Persona · 16:45" (the assistant's name, or the agent). */
   speaker: string;

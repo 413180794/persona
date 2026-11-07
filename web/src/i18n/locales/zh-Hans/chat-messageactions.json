@@ -9,5 +9,9 @@
   "copy_reply": "拷贝回复",
   "more": "更多",
   "done": "完成",
-  "copy_all": "全部拷贝"
+  "copy_all": "全部拷贝",
+  "hand_to_persona": "交给 Persona",
+  "use_as_context": "作为上下文",
+  "context_title": "{title} · 消息",
+  "handoff_ask": "看看这条消息，告诉我该怎么处理。"
 }

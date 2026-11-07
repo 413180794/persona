@@ -1,13 +1,19 @@
 // What you can do with a message (iOS MessageMenu.swift: "Copy" / "Select" / "Quote" / "Edit"): with a mouse, a small bar under it
 // on hover and the same items on right-click; on a touch screen, a long press opens them (and "Select" shows the text to
 // select, since the press no longer selects). "Quote" puts it as a quote in front of the draft, "Edit" (your own messages)
-// puts it back in the composer to change and send again. Sharing as a card is the phone's. A reply's bar ends in a ⋯
+// puts it back in the composer to change and send again. "Hand to Persona" sends an Agent message to the main chat;
+// "Use as context" attaches it to this chat's next message. Sharing as a card is the phone's. A reply's bar ends in a ⋯
 // whose menu has "Branch to new chat" (#2137: a new conversation with what was said up to this reply) when the session can.
+// Beside your own bubbles, the two context actions live in ⋯ to keep the hover bar compact.
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { clock } from "../../lib/format";
 import { sendDraft, type QuotedTask } from "../../lib/drafts";
-import { Button, copyText, cx, Dialog, Menu, type MenuItem } from "../../ui/atoms";
+import { errorText } from "../../lib/api";
+import { contextXml } from "../../lib/kb";
+import { addContext, newContext } from "../../lib/links";
+import { askPersona } from "../../lib/outbox";
+import { Button, copyText, cx, Dialog, Menu, toast, type MenuItem } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import type { RewindRestore } from "../../lib/rewind";
 import { isNoHover } from "../../ui/media-query";
@@ -36,8 +42,31 @@ function useActions(text: string, isUser: boolean, ts: string | undefined, task:
   if (isNoHover()) out.push({ key: "select", label: t("chat-messageactions.select_text"), icon: "read", onSelect: select });
   if (chat?.canCompose) {
     out.push({ key: "quote", label: t("chat-messageactions.quote"), icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text, from: isUser ? t("chat-messageactions.me") : chat.speaker, ts, task }) });
-    if (isUser) out.push({ key: "edit", label: t("chat-messageactions.edit"), icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
   }
+  out.push(...messageContextActions(text, chat));
+  if (chat?.canCompose && isUser) out.push({ key: "edit", label: t("chat-messageactions.edit"), icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
+  return out;
+}
+
+/** The message goes to Persona now, or to its own conversation's next message (Android MessageMenu). */
+export function messageContextActions(text: string, chat: ChatActions | null): Action[] {
+  if (!chat || !text.trim()) return [];
+  const title = t("chat-messageactions.context_title", { title: chat.title });
+  const out: Action[] = [];
+  if (chat.isAgent) out.push({
+    key: "handToPersona", label: t("chat-messageactions.hand_to_persona"), icon: "spark",
+    onSelect: async () => {
+      try {
+        await askPersona(`${contextXml({ kind: "context", title, url: "", text })}\n\n${t("chat-messageactions.handoff_ask")}`);
+      } catch (e) {
+        toast(t("lib-agent-actions.send_failed", { error: errorText(e) }), "error");
+      }
+    },
+  });
+  if (chat.canCompose) out.push({
+    key: "context", label: t("chat-messageactions.use_as_context"), icon: "clip",
+    onSelect: () => addContext(chat.draftKey, newContext("context", title, "", text)),
+  });
   return out;
 }
 
@@ -101,7 +130,9 @@ export function MessageActions({
   const [selecting, setSelecting] = useState(false);
   const actions = useActions(text, Boolean(isUser), ts, task, () => setSelecting(true));
   const chat = useChatActions();
-  const more = [...moreActions(itemId, chat?.fork), ...(isUser ? rewindActions(messageId, text, chat?.rewind) : [])];
+  const extras = [...moreActions(itemId, chat?.fork), ...(isUser ? rewindActions(messageId, text, chat?.rewind) : [])];
+  const contextActions = side ? actions.filter((a) => a.key === "handToPersona" || a.key === "context") : [];
+  const more: MenuItem[] = [...contextActions, ...extras].map((a, i) => ({ ...a, divider: i === contextActions.length && i > 0 }));
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
@@ -128,7 +159,7 @@ export function MessageActions({
 
   if (!actions.length) return <div className={className}>{children}</div>;
 
-  const items: MenuItem[] = [...actions, ...more].map((a, i) => ({ ...a, divider: i === actions.length && i > 0 }));
+  const items: MenuItem[] = [...actions, ...extras].map((a, i) => ({ ...a, divider: i === actions.length && i > 0 }));
 
   return (
     <div className={cx("group/msg", (side || corner) && "relative", className)}>
@@ -183,7 +214,7 @@ export function MessageActions({
         )}
       >
         {actions
-          .filter((a) => a.key !== "select")
+          .filter((a) => a.key !== "select" && !contextActions.includes(a))
           .map((a) => (
             <button
               key={a.key}

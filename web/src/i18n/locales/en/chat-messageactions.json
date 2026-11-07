@@ -9,5 +9,9 @@
   "copy_reply": "Copy reply",
   "more": "More",
   "done": "Done",
-  "copy_all": "Copy all"
+  "copy_all": "Copy all",
+  "hand_to_persona": "Hand to Persona",
+  "use_as_context": "Use as context",
+  "context_title": "{title} · Message",
+  "handoff_ask": "Take a look at this message and tell me how to handle it."
 }

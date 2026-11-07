@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Outgoing } from "./Composer";
-import type { Session } from "../../lib/types";
+import type { Item, Session } from "../../lib/types";
 import { getFeedState, setRoute } from "../../lib/feed";
 import { toast } from "../../ui/atoms";
 import { t } from "../../i18n";
@@ -10,6 +10,7 @@ import { ChatView, footerRows } from "./ChatView";
 const captured = vi.hoisted(() => ({
   onSend: undefined as ((out: Outgoing) => Promise<boolean>) | undefined,
   session: { machine_id: "hub", session_id: "c1", title: "Conversation", cwd: "/code", status: "idle" } as Session,
+  items: [] as Item[],
 }));
 
 vi.mock("./Composer", async (importOriginal) => ({
@@ -20,7 +21,7 @@ vi.mock("./Composer", async (importOriginal) => ({
   },
 }));
 vi.mock("./useTranscript", () => ({
-  useTranscript: () => ({ items: [], loading: false, error: "", hasMore: false, streaming: "" }),
+  useTranscript: () => ({ items: captured.items, loading: false, error: "", hasMore: false, streaming: "" }),
 }));
 vi.mock("../../lib/store", async (importOriginal) => {
   const store = await importOriginal<typeof import("../../lib/store")>();
@@ -69,6 +70,9 @@ let fetcher: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   setRoute("c1", null);
   captured.onSend = undefined;
+  captured.items = [];
+  delete captured.session.source_kind;
+  delete captured.session.capabilities;
   vi.mocked(toast).mockClear();
   vi.stubGlobal("localStorage", { getItem: () => "", setItem: vi.fn(), removeItem: vi.fn() });
   fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => "{}" });
@@ -105,6 +109,24 @@ describe("ChatView composer task routing", () => {
     const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe("/api/v1/sessions/hub/c1/messages");
     expect(JSON.parse(init.body)).toMatchObject({ text: "Look at this", images: [image] });
+  });
+});
+
+describe("ChatView message context availability", () => {
+  it.each([
+    [false, false, true, true, true],
+    [true, false, true, false, true],
+    [false, true, true, true, false],
+    [false, false, false, true, false],
+  ])("uses the chat's actual send capability (assistant=%s, readOnly=%s, send=%s)", (assistant, readOnly, send, handoff, context) => {
+    captured.items = [{ id: "reply#0", seq: 1, kind: "text", role: "assistant", text: "A reply" }];
+    if (!send) {
+      captured.session.source_kind = "codex_history";
+      captured.session.capabilities = { read: true };
+    }
+    const html = renderToStaticMarkup(<ChatView mid="hub" sid="c1" assistant={assistant} readOnly={readOnly} />);
+    expect(html.includes('aria-label="交给 Persona"')).toBe(handoff);
+    expect(html.includes('aria-label="作为上下文"')).toBe(context);
   });
 });
 
