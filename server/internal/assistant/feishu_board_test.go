@@ -644,7 +644,7 @@ func TestBoardTakesADeployedTaskAndDropsItWhenPassed(t *testing.T) {
 	if c := last(); !strings.Contains(c, "请验收：修登录崩溃") {
 		t.Fatalf("the task is not on the board:\n%s", c)
 	}
-	if !s.acceptReply(ctx, "om_pass", "通过", askOf(s, todo.ID).MessageID) {
+	if !s.acceptReply(ctx, "om_pass", "通过", false, askOf(s, todo.ID).MessageID) {
 		t.Fatal("not passed")
 	}
 	clk.advance(boardSettle)

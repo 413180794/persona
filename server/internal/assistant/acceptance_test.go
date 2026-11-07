@@ -77,7 +77,7 @@ func TestDeployedTaskAsksForAcceptance(t *testing.T) {
 		}
 	}
 	mid := askOf(s, todo.ID).MessageID
-	if !s.acceptReply(context.Background(), "om_reply", "通过", mid, "") {
+	if !s.acceptReply(context.Background(), "om_reply", "通过", false, mid, "") {
 		t.Fatal("a reply to the card was not taken as one")
 	}
 	if got := onlyTodo(s); got.Stage != "verify" {
@@ -112,7 +112,7 @@ func TestAcceptanceFeedbackGoesToTheAgent(t *testing.T) {
 	}
 	mid := askOf(s, todo.ID).MessageID
 	before := len(f.agentSent)
-	if !s.acceptReply(context.Background(), "om_r2", "开关名字改成「任务进展」", "", mid) {
+	if !s.acceptReply(context.Background(), "om_r2", "开关名字改成「任务进展」", false, "", mid) {
 		t.Fatal("not taken")
 	}
 	f.mu.Lock()
@@ -124,7 +124,7 @@ func TestAcceptanceFeedbackGoesToTheAgent(t *testing.T) {
 	if askOf(s, todo.ID) != nil {
 		t.Fatal("a change asked for leaves the ask in place: the next deploy would not ask again")
 	}
-	if s.acceptReply(context.Background(), "om_r3", "随便聊聊", "om_other", "") {
+	if s.acceptReply(context.Background(), "om_r3", "随便聊聊", false, "om_other", "") {
 		t.Fatal("a message about something else was taken")
 	}
 }
@@ -215,7 +215,7 @@ func TestAcceptanceFeedbackReopensTheClosedTask(t *testing.T) {
 	f.mu.Lock()
 	f.onSend = func(*fakeHub, map[string]any) { _, followedAtSend = s.taskOf(ctx, "box", "s1") }
 	f.mu.Unlock()
-	if !s.acceptReply(ctx, "om_r2", "按钮改成蓝色", mid, "") {
+	if !s.acceptReply(ctx, "om_r2", "按钮改成蓝色", false, mid, "") {
 		t.Fatal("not taken")
 	}
 	f.mu.Lock()
@@ -347,25 +347,68 @@ func TestAcceptanceAskEndedElsewhere(t *testing.T) {
 	}
 }
 
+// askedToAccept is acceptService with a task deployed until its "Please verify" card is out; notes are the bot's text
+// replies so far.
+func askedToAccept(t *testing.T) (s *Service, f *fakeHub, posts, notes func() []string, id string) {
+	t.Helper()
+	s, f, posts = acceptService(t)
+	var mu sync.Mutex
+	var said []string
+	f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+		var m map[string]string
+		json.Unmarshal(p, &m)
+		mu.Lock()
+		said = append(said, m["text"])
+		mu.Unlock()
+		return map[string]any{}, nil
+	})
+	todo := startedTask(t, s, f)
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, deployedReply, 0)
+	waitAcceptCard(t, s, todo.ID, posts)
+	return s, f, posts, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), said...) }, todo.ID
+}
+
+// A reply to the card that carries a picture or a file is told that only words go on (#5107): a picture alone is answered
+// with just that and the card still waits; a picture with words sends the words to the agent as words alone do.
+func TestAcceptanceReplyWithMedia(t *testing.T) {
+	for _, c := range []struct {
+		name, msgType, content string
+		routed, dropped        bool
+	}{
+		{"a picture alone", "image", `{"image_key":"img_1"}`, false, true},
+		{"a picture with words", "post", `{"title":"","content":[[{"tag":"text","text":"按钮改成蓝色"}],[{"tag":"img","image_key":"img_1"}]]}`, true, true},
+		{"words alone", "text", `{"text":"按钮改成蓝色"}`, true, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, f, _, notes, id := askedToAccept(t)
+			card := askOf(s, id).MessageID
+			ev := dmReply("om_reply", "", card, card)
+			ev.Message.MessageType, ev.Message.Content = c.msgType, c.content
+			st, err := s.feishuStatus(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.mu.Lock()
+			before := len(f.agentSent)
+			f.mu.Unlock()
+			s.feishuMessage(ev, st, "")
+			f.mu.Lock()
+			sent := f.agentSent[before:]
+			f.mu.Unlock()
+			got := notes()
+			routed := len(sent) == 1 && strings.Contains(sent[0]["text"].(string), "按钮改成蓝色")
+			if routed != c.routed || (askOf(s, id) == nil) != c.routed || len(got) != 1 ||
+				strings.Contains(got[0], "图片和文件没交给 Agent") != c.dropped || c.routed != strings.Contains(got[0], "交给原来的 Agent 改了") {
+				t.Fatalf("to the agent %v, ask kept %v, notes %q", sent, askOf(s, id) != nil, got)
+			}
+		})
+	}
+}
+
 func TestAcceptanceReopenRound(t *testing.T) {
 	ctx := context.Background()
-	setup := func(t *testing.T) (*Service, *fakeHub, func() []string, func() []string, string) {
-		s, f, posts := acceptService(t)
-		var mu sync.Mutex
-		var notes []string
-		note := func(s string) { mu.Lock(); notes = append(notes, s); mu.Unlock() }
-		f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
-			var m map[string]string
-			json.Unmarshal(p, &m)
-			note(m["text"])
-			return map[string]any{}, nil
-		})
-		todo := startedTask(t, s, f)
-		agentTurn(s, f, proto.StatusWorking, "", 0)
-		agentTurn(s, f, proto.StatusDone, deployedReply, 0)
-		waitAcceptCard(t, s, todo.ID, posts)
-		return s, f, posts, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), notes...) }, todo.ID
-	}
+	setup := askedToAccept
 	closeReopen := func(s *Service, id string) {
 		s.autoDoneTodo(ctx, id, "做完了", time.Now().Add(-time.Minute))
 		s.reopenTodo(ctx, id)
@@ -388,7 +431,7 @@ func TestAcceptanceReopenRound(t *testing.T) {
 		if n := countAcceptCards(posts()); n != 2 {
 			t.Fatalf("%d 请验收 cards, want 2", n)
 		}
-		if !s.acceptReply(ctx, second.MessageID, "通过", second.MessageID) || onlyTodo(s).Stage != "verify" {
+		if !s.acceptReply(ctx, second.MessageID, "通过", false, second.MessageID) || onlyTodo(s).Stage != "verify" {
 			t.Fatal("the new card did not accept the new round")
 		}
 	})
@@ -413,7 +456,7 @@ func TestAcceptanceReopenRound(t *testing.T) {
 		}
 		before := len(f.agentSent)
 		for _, text := range []string{"通过", "再改一下这个开关"} {
-			if !s.acceptReply(ctx, "om_reply", text, old) {
+			if !s.acceptReply(ctx, "om_reply", text, false, old) {
 				t.Fatalf("a reply %q to the first round's card went on to the chat", text)
 			}
 		}
@@ -436,7 +479,7 @@ func TestAcceptanceReopenRound(t *testing.T) {
 				mid := askOf(s, id).MessageID
 				closeReopen(s, id)
 				before := len(f.agentSent)
-				if !s.acceptReply(ctx, "om_old", c.text, mid) {
+				if !s.acceptReply(ctx, "om_old", c.text, false, mid) {
 					t.Fatal("the old-card reply was not consumed")
 				}
 				if a, got := askOf(s, id), notes(); len(f.agentSent)-before != 0 || a == nil || !a.AcceptedAt.IsZero() ||
@@ -494,7 +537,7 @@ func TestAcceptanceReopenRound(t *testing.T) {
 				}()
 			}
 			for i := 0; i < 4; i++ {
-				loop(func() { s.acceptReply(ctx, "om_race", "通过", mid) })
+				loop(func() { s.acceptReply(ctx, "om_race", "通过", false, mid) })
 			}
 			loop(func() {
 				s.accept.mu.Lock()
@@ -513,7 +556,7 @@ func TestAcceptanceReopenRound(t *testing.T) {
 	t.Run("a round never reopened is unchanged", func(t *testing.T) {
 		s, _, _, _, id := setup(t)
 		s.autoDoneTodo(ctx, id, "做完了", time.Now().Add(-time.Minute))
-		if !s.acceptReply(ctx, "om_fresh", "通过", askOf(s, id).MessageID) || onlyTodo(s).Stage != "verify" {
+		if !s.acceptReply(ctx, "om_fresh", "通过", false, askOf(s, id).MessageID) || onlyTodo(s).Stage != "verify" {
 			t.Fatal("the ordinary card was not accepted")
 		}
 	})

@@ -270,8 +270,9 @@ func (s *Service) acceptAskLocked(id string) *acceptAsk {
 var passWords = regexp.MustCompile(`(?i)^\s*(验收)?(通过|没问题|可以|好的?|ok|okay|lgtm|pass(ed)?|approved?|👍)(?:[了啦呀咯喽呗哒啊]{1,2})?\s*[。.!！]?\s*$`)
 
 // acceptReply answers a reply to a "Please verify" card (true: it was one): "Pass" marks it verified, anything else is the
-// user's change, written into the todo's decisions and sent to its agent.
-func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids ...string) bool {
+// user's change, written into the todo's decisions and sent to its agent. media: the reply also carried pictures or files;
+// only the words go on, and the answer says the rest did not (#5107).
+func (s *Service) acceptReply(ctx context.Context, messageID, text string, media bool, ids ...string) bool {
 	id, earlier := s.acceptFor(ids...)
 	if id == "" {
 		return false
@@ -279,6 +280,9 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	l := s.botLang(ctx)
 	text = strings.TrimSpace(text)
 	if text == "" {
+		if media {
+			s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accept_media_dropped"))
+		}
 		return true
 	}
 	if earlier { // a card of a round before the one asking now: answered, it neither accepts nor changes this round
@@ -328,7 +332,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	msg := i18n.T(l, "assistant-reports.accept_to_agent", i18n.Args{"feedback": text})
 	if _, err := s.routeToTask(ctx, t.Origin, id, msg); err != nil {
 		s.logf("task %s: acceptance to agent: %v", id, err)
-		s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accept_not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 120)}))
+		s.botNote(ctx, messageID, withMediaDropped(l, i18n.T(l, "assistant-reports.accept_not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 120)}), media))
 		return true
 	}
 	// Changed again: the next deploy asks again.
@@ -337,8 +341,16 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	delete(b.asks, id)
 	s.saveAcceptLocked(ctx)
 	b.mu.Unlock()
-	s.botNote(ctx, messageID, i18n.T(l, "assistant-reports.accept_sent"))
+	s.botNote(ctx, messageID, withMediaDropped(l, i18n.T(l, "assistant-reports.accept_sent"), media))
 	return true
+}
+
+// withMediaDropped is note with, when the reply carried pictures or files, the line saying they did not go to the agent.
+func withMediaDropped(l i18n.Lang, note string, media bool) string {
+	if !media {
+		return note
+	}
+	return note + "\n" + i18n.T(l, "assistant-reports.accept_media_dropped")
 }
 
 // accepted marks task id verified; false when already handled, never asked, or asked before the latest reopen. A card-less
