@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "size": 288,
+  "clips": {
+    "needs_you": {
+      "file": "pet/needs_you.png",
+      "sha256": "85ca16191fb13d02334b79e508aa9e7d0ecf7c0f6329904ee560f57035c75a8e",
+      "fps": 10,
+      "frames": 48,
+      "still": 0
+    },
+    "working": {
+      "file": "pet/working.png",
+      "sha256": "bf9046cab1fc0d0f84549c706a7839cc1382a73affec74393d99328703fe3e96",
+      "fps": 10,
+      "frames": 48,
+      "still": 2
+    },
+    "done": {
+      "file": "pet/done.png",
+      "sha256": "620ce203c3f6720cef2c7113f9064193a656a5b6fe9f0422e1137fad7bb1c609",
+      "fps": 12,
+      "frames": 48,
+      "still": 20
+    },
+    "idle": {
+      "file": "pet/idle.png",
+      "sha256": "3c9195da798432711989d3429b5b953b9266f8a8b6c84afe855c1296f41771c7",
+      "fps": 10,
+      "frames": 60,
+      "still": 0
+    },
+    "sleep": {
+      "file": "pet/sleep.png",
+      "sha256": "f8714057acd19a976872279cad1b7f7753fe02297df356b01130c83d21cd2d30",
+      "fps": 10,
+      "frames": 60,
+      "still": 15
+    },
+    "offline": {
+      "file": "pet/offline.png",
+      "sha256": "7538fbd54330effab40885c5288f5c9a93bfa2674d887a8fecc99e7d32b6fd3e",
+      "fps": 10,
+      "frames": 41,
+      "still": 10
+    },
+    "tap": {
+      "file": "pet/tap.png",
+      "sha256": "66472ab2da1598001a07ba31bbfc91b84118b2cf15d57db024f0529cb708ecaf",
+      "fps": 10,
+      "frames": 14,
+      "still": 0
+    }
+  },
+  "faces": {
+    "needs_you": {
+      "file": "pet/face-needs_you.png",
+      "sha256": "bce3c385bd4c3ad760df9addc4267616406d34df092da918429cbfdc57478d87"
+    },
+    "working": {
+      "file": "pet/face-working.png",
+      "sha256": "b2b242ad366b42f75830929a1c54e152f2bbdf0cc4a34d8f3cbf4747ed1c63dc"
+    },
+    "done": {
+      "file": "pet/face-done.png",
+      "sha256": "16d6ac9c44a93b5ef826f0755dab1dc1c5f0afda275518795c85856d028ff030"
+    },
+    "idle": {
+      "file": "pet/face-idle.png",
+      "sha256": "031caf05f9df7bcd504f4d6377c6c528136d9e6f86cce11d34f6f244c4255ca3"
+    },
+    "sleep": {
+      "file": "pet/face-sleep.png",
+      "sha256": "4c33d8119ad4c7ef5799a0ac8f5dcf2ce6d3b12aa2acc55bad6d990301333a68"
+    },
+    "offline": {
+      "file": "pet/face-offline.png",
+      "sha256": "99a5b6c5b9a6bff7e11dee43cb8abbcbf0889d4c0e4ba234ae71fa6feb4ababe"
+    }
+  }
+}

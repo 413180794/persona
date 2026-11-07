@@ -41,6 +41,25 @@ final class WatchModel {
     /// Failed groups whose earlier cards and agents stay on screen: each gets a line at the top (#4369).
     var groupFailures: [String] = []
     var lastUpdate: Date?
+    /// The persona chosen on the phone: the Milk Frog shows only for its own.
+    var persona = UserDefaults.standard.string(forKey: WatchModel.personaKey)
+    /// The Milk Frog's files on this watch.
+    let pet = WatchPetPack()
+    private static let personaKey = "persona"
+    private var petWanted: Bool { persona == PersonaSelection.packageID }
+
+    /// The frog's state, once it has something to go on; nil without the Milk Frog or before its files are here.
+    var petStatus: WatchPetStatus? {
+        guard petWanted, pet.manifest != nil, lastUpdate != nil || error != nil else { return nil }
+        #if DEBUG
+        // `-showPetState needs_you|working|done|idle|sleep|offline`: the frog in that state (screenshots).
+        if let raw = UserDefaults.standard.string(forKey: "showPetState"), let state = WatchPetState(rawValue: raw) {
+            return WatchPetStatus(state: state, count: 3)
+        }
+        #endif
+        return WatchPet.status(sessions: sessions, interactions: interactions, unreachable: error != nil,
+                               partlyUnreachable: !groupFailures.isEmpty)
+    }
 
     /// Each group's last successful fetch, kept in memory: a group whose refresh failed keeps it instead of being
     /// blanked by the groups that answered (#4369).
@@ -63,6 +82,8 @@ final class WatchModel {
         }
         #if DEBUG
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let c = ServerConfig(pairURL: s) { configs = ["": c] }
+        // `-showWatchPet YES`: the Milk Frog as if chosen on the phone (screenshots).
+        if UserDefaults.standard.bool(forKey: "showWatchPet") { persona = PersonaSelection.packageID }
         // `-showWatchMissing Office,Home`: those groups have no credential for the watch (#1185); `""`: the default group,
         // none at all without -pairURL.
         if let s = UserDefaults.standard.string(forKey: "showWatchMissing") {
@@ -84,6 +105,11 @@ final class WatchModel {
             self?.missing = all.missing ?? []
             UserDefaults.standard.set(try? JSONEncoder().encode(all), forKey: "configs")
             Task { await self?.refresh() }
+        }
+        WatchSync.shared.onPersona = { [weak self] id in
+            self?.persona = id
+            UserDefaults.standard.set(id, forKey: WatchModel.personaKey)
+            Task { await self?.fetchPet() }
         }
         WatchSync.shared.onSummary = { [weak self] s in
             guard let self, WatchGroupRefresh.acceptsSummary(at: s.at, lastUpdate: self.lastUpdate) else { return }
@@ -182,6 +208,13 @@ final class WatchModel {
         }
         if let xx = try? await first.inbox(connectors: true) { applyInbox(xx) }
         error = failure.flatMap { allFailed ? $0.watchShown : nil }
+        await fetchPet()
+    }
+
+    /// The first group's hub, like the inbox's: every hub has the same built-in package.
+    private func fetchPet() async {
+        guard petWanted, let api else { return }
+        await pet.fetch(api)
     }
 
     private func poll() async {
@@ -276,6 +309,7 @@ struct WatchRootView: View {
     #if DEBUG
     @State private var openedInteraction: Interaction?
     @State private var openedSession: Session?
+    @State private var openedPet = false
     /// `-openWatchItem running`: the list without Needs You, so the running sessions are on screen (screenshots).
     private static let runningFirst = UserDefaults.standard.string(forKey: "openWatchItem") == "running"
     /// `-openWatchItem inbox`: Needs You without the agents' requests, so the inbox rows are on screen (screenshots).
@@ -291,6 +325,9 @@ struct WatchRootView: View {
                 WatchPairView()
             } else {
                 List {
+                    if let status = model.petStatus {
+                        WatchPetRow(status: status).watchCard()
+                    }
                     // A group this refresh could not reach: its cards and agents below are its earlier ones (#4369).
                     if !model.groupFailures.isEmpty {
                         Section {
@@ -404,6 +441,13 @@ struct WatchRootView: View {
                     guard UserDefaults.standard.bool(forKey: "openInboxFirst") else { return }
                     for _ in 0..<20 where model.inbox.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
                     openedItem = model.inbox.first
+                }
+                // `-openWatchItem pet`: the Milk Frog's page (screenshots).
+                .navigationDestination(isPresented: $openedPet) { WatchPetView() }
+                .task {
+                    guard UserDefaults.standard.string(forKey: "openWatchItem") == "pet" else { return }
+                    for _ in 0..<120 where model.petStatus == nil { try? await Task.sleep(for: .milliseconds(500)) }
+                    openedPet = model.petStatus != nil
                 }
                 // `-openWatchItem question|plan|permission|screen|session`: open the first request of that kind, or the
                 // first running session (screenshots). `running` and `inbox` are handled by `runningFirst` / `inboxFirst`.

@@ -154,3 +154,30 @@ func TestPersonasNoDirectory(t *testing.T) {
 		t.Fatalf("list = %#v, want an empty list", list)
 	}
 }
+
+// The watch's Milk Frog (#6272) sits in the built-in package without touching it: the package still checks out within
+// its limits, and a phone's rev covers only its tier's files, so the clips never reach a phone's download.
+func TestBuiltinMilkFrogCarriesTheWatchPet(t *testing.T) {
+	h := newTestHub(t)
+	h.builtinLooks = builtinPersonaFS()
+	p, err := h.personaPackage("nwverse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.files["pet/pet.json"]; !ok {
+		t.Fatal("no pet/pet.json in the package")
+	}
+	var pet int64
+	for f, size := range p.files {
+		if strings.HasPrefix(f, "pet/") {
+			pet += size
+		}
+	}
+	info, err := h.personaInfo(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Bytes > p.total-pet {
+		t.Fatalf("a phone's download includes the watch's files: %d of %d, %d of them the pet's", info.Bytes, p.total, pet)
+	}
+}

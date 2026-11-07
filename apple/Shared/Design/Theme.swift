@@ -349,6 +349,10 @@ nonisolated enum Theme {
         static let blockSpacing: CGFloat = 10
         /// Inside a message bubble.
         static let bubblePadding: CGFloat = 8
+        /// The Milk Frog on its page: its clips' pixels at 2x.
+        static let petSize: CGFloat = 144
+        /// The Milk Frog's round face on the list's row.
+        static let petFaceSize: CGFloat = 40
     }
 
     /// Sizes of what is drawn next to text, at the default text size. Use them with `scaledFrame` so they follow

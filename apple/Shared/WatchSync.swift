@@ -33,6 +33,8 @@ final class WatchSync: NSObject, WCSessionDelegate {
     /// Every group's credential (a phone that knows several hubs).
     var onConfigs: ((WatchConfigs) -> Void)?
     var onSummary: ((WatchSummary) -> Void)?
+    /// The persona chosen on the phone (the watch shows the Milk Frog only for its own).
+    var onPersona: ((String) -> Void)?
     /// Called once the session is activated; the phone pushes its pairing then (pushes before that are dropped).
     var onActivated: (() -> Void)?
     /// iPhone side: answers the watch's "send me the pairing" request.
@@ -70,6 +72,11 @@ final class WatchSync: NSObject, WCSessionDelegate {
     /// The iPhone's interface language (docs/i18n.md: the watch follows the phone), as a code.
     func push(language: String) {
         update(["language": language])
+    }
+
+    /// The persona chosen on the phone, by id.
+    func push(persona: String) {
+        update(["persona": persona])
     }
 
     #if os(iOS) || os(visionOS)
@@ -129,6 +136,7 @@ final class WatchSync: NSObject, WCSessionDelegate {
         #if os(watchOS)
         if let language = ctx["language"] as? String { LanguageStore.shared.follow(language) }
         #endif
+        if let persona = ctx["persona"] as? String { onPersona?(persona) }
         if let data = ctx["configs"] as? Data, let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
             onConfigs?(all)
         } else if let data = ctx["config"] as? Data, let cfg = try? JSONDecoder().decode(ServerConfig.self, from: data) {

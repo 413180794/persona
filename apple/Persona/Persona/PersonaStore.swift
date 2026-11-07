@@ -149,6 +149,7 @@ final class PersonaStore {
         error = nil
         defaults.set(p.id, forKey: Self.chosenKey)
         current = p
+        WatchSync.shared.push(persona: p.id)
     }
 
     /// Fetches the package's files beside its place and moves them in whole.

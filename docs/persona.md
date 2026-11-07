@@ -109,6 +109,25 @@ The avatar decides the in-app logo; there is no separate App icon picker. Only M
   - A retired drawing or icon choice resolves to Mochi; existing downloaded packs remain available when still installed.
   - Mochi with light-only / dark-only chosen: still the light-only / dark-only set as before.
 
+## The Milk Frog on the watch
+
+With Milk Frog chosen on the phone (`WatchSync.push(persona:)`), the watch's list starts with a row showing the frog and what the agents are doing; tapping it opens a page where the frog moves. With any other avatar the watch is unchanged (#6272).
+
+| State | When (first match wins) | The frog |
+| --- | --- | --- |
+| Offline | No hub answered | Alone in the rain under a leaf |
+| Needs you | An agent is waiting; counts agents, not cards | Rings a little bell |
+| Working | An agent is working | Types on a laptop balanced on its belly |
+| Offline | A hub is out of reach and none of the above | Same as above: a hub it cannot see might not be calm |
+| Finished | An agent finished and is unread | Lifts a DONE sign |
+| Asleep / Idle | Nothing going on: 23:00 to 07:00 / otherwise | Sleeps / sips its milk |
+
+`WatchPet.status` in `apple/Shared/WatchPet.swift` holds these rules. Tapping the frog buzzes; when idle it glances at you (`tap`, drawn on the idle pose), otherwise the state's clip plays again. With the wrist down the system stops the animation and the page draws the clip's `still` frame.
+
+**Where the art lives.** Like the rest of Milk Frog, `pet/` sits in the built-in package and the App bundle has none of it. The watch fetches it directly with the existing `GET /api/v1/personas/nwverse/{file…}`: first `pet/pet.json`, then every file named there, by SHA-256, shown only once all of them are here. A hub without `pet/` answers 404 and the watch shows no frog. A tier's rev and `bytes` cover only that tier's files, so phones never download `pet/`.
+
+`scripts/assets/make_watch_pet.py` builds `pet/` from the finished frames, which stay out of the repo. Each clip is an animated PNG of 288 px at 10 to 12 fps; the whole of `pet/` is about 8 MB of personad. Keeping the frog's body fixed from frame to frame is what keeps these small and free of flicker, so new clips should warp or composite a still rather than regenerate frames.
+
 ## Tiered avatars (Milk Frog)
 
 One avatar with several looks: the hub picks a tier for the phone based on the user's level. To the phone it's just a regular format 1 pack, and a tier change is that pack's rev changing,

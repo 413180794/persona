@@ -319,6 +319,7 @@ final class AppModel {
         WatchSync.shared.onActivated = { [weak self] in
             WatchSync.shared.push(language: language)
             guard let self, self.isPaired, !self.isDemo else { return }
+            WatchSync.shared.push(persona: self.personas.chosenID)
             self.pushWatchConfigs()
             WatchSync.shared.push(summary: self.watchSummary())
         }

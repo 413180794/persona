@@ -5494,6 +5494,29 @@
       },
       "extractionState": "manual"
     },
+    "%lld finished [Watch Pet]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld finished"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld件が完了"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个做完了"
+          }
+        }
+      }
+    },
     "%lld h %lld min left": {
       "localizations": {
         "zh-Hans": {
@@ -7600,6 +7623,29 @@
       },
       "extractionState": "manual"
     },
+    "%lld waiting for you [Watch Pet]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld waiting for you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld件があなたを待っています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个在等你"
+          }
+        }
+      }
+    },
     "%lld working [State Names]": {
       "extractionState": "manual",
       "localizations": {
@@ -7619,6 +7665,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld 个工作中"
+          }
+        }
+      }
+    },
+    "%lld working [Watch Pet]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld working"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld件が作業中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个在干活"
           }
         }
       }
@@ -15494,6 +15563,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Asleep [Watch Pet]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asleep"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "おやすみ中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "睡着了"
+          }
+        }
+      }
     },
     "Assign Task": {
       "localizations": {
@@ -42131,6 +42223,29 @@
         }
       }
     },
+    "Last updated %@ [Watch Pet]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last updated %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最終更新 %1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次更新 %1$@"
+          }
+        }
+      }
+    },
     "Manual": {
       "extractionState": "manual",
       "localizations": {
@@ -42314,6 +42429,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Nothing going on [Watch Pet]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing going on"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "何もありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没什么事"
+          }
+        }
+      }
     },
     "Offline · showing the last sync (%@)": {
       "localizations": {
