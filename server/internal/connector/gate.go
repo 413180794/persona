@@ -1,12 +1,14 @@
 package connector
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
 	"strings"
+	"unicode"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -105,25 +107,91 @@ func larkRule(r Rule) (proto.LarkRule, bool) {
 
 // Decide is what the gate says about the action name of connector id (whose manifest is m) with args: the first
 // matching rule's decision, Confirm when none matches. An action the manifest lists in ConfirmAlways is never
-// Allow: a rule that allows it (a "*" one, say) still has the user confirm on the phone. Deny stays Deny.
+// Allow: a rule that allows it (a "*" one, say) still has the user confirm on the phone. A call whose args give a field
+// more than once is Deny whatever the rules say (repeatedField): no rule is read for it. A Deny or a Confirm with a
+// Match reads a name whatever its capitals, so a field spelled in other capitals cannot slip past it (matchFieldsAny);
+// an Allow reads the exact names.
 func Decide(rules []Rule, m Manifest, id, name string, args json.RawMessage) string {
 	d, _ := decide(rules, m, id, name, args)
 	return d
 }
 
-// decide is Decide and the rule that said so (nil when none did, or when ConfirmAlways turned its Allow into Confirm).
+// decide is Decide and the rule that said so: nil when no rule did (Confirm because none matched, or because
+// ConfirmAlways turned an Allow into one; Deny because args give a field more than once).
 func decide(rules []Rule, m Manifest, id, name string, args json.RawMessage) (string, *Rule) {
+	if _, repeated := repeatedField(args); repeated {
+		return Deny, nil
+	}
 	var fields map[string]any
 	_ = json.Unmarshal(args, &fields)
 	for _, r := range rules {
-		if matches(r.Connector, id) && matches(r.Action, name) && matchFields(r.Match, fields) {
-			if r.Decision == Allow && m.AlwaysConfirms(name) {
-				return Confirm, nil
-			}
-			return r.Decision, &r
+		if !matches(r.Connector, id) || !matches(r.Action, name) {
+			continue
 		}
+		hit := matchFields(r.Match, fields)
+		if r.Decision != Allow {
+			hit = matchFieldsAny(r.Match, fields)
+		}
+		if !hit {
+			continue
+		}
+		if r.Decision == Allow && m.AlwaysConfirms(name) {
+			return Confirm, nil
+		}
+		return r.Decision, &r
 	}
 	return Confirm, nil
+}
+
+// repeatedField is the first top-level field args give more than once, as it was first written, and whether there is one.
+// Two names are the same field when they are written alike or when encoding/json would take them for one (they
+// differ only in capitals, by its case folding). A connector that decodes its arguments into a struct reads such a
+// call by rules a map of the same text does not follow: it takes the last value in the plain case, but ignores a null
+// and decodes an object or an array onto what the earlier one left. A rule reads the exact names and cannot know which
+// value the write will use, and an extension written in another language may read the names some other way. So such a
+// call is not run and no rule sees it; the model is told to give each field once (repeatedText). Only the top level is
+// read, which is all a rule's Match reads.
+func repeatedField(args json.RawMessage) (string, bool) {
+	dec := json.NewDecoder(bytes.NewReader(args))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return "", false
+	}
+	first := map[string]string{} // a name as folded -> as first written
+	for dec.More() {
+		t, err := dec.Token()
+		key, isName := t.(string)
+		if err != nil || !isName {
+			return "", false
+		}
+		folded := strings.Map(foldRune, key)
+		if was, again := first[folded]; again {
+			return was, true
+		}
+		first[folded] = key
+		var value json.RawMessage
+		if dec.Decode(&value) != nil {
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// repeatedText is what the model is told when repeatedField refuses its call: which field, and what to do.
+func repeatedText(name, field string) string {
+	if r := []rune(field); len(r) > 60 {
+		field = string(r[:60]) + "…"
+	}
+	return fmt.Sprintf("The hub's gate does not run %s: the field %q is written more than once in its arguments (names that differ only in capitals count as the same field). Write each field once, spelled as the tool defines it.", name, field)
+}
+
+// foldRune is the smallest rune of r's case-folding orbit, so that names equal under strings.EqualFold map to the same
+// string.
+func foldRune(r rune) rune {
+	m := r
+	for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+		m = min(m, f)
+	}
+	return m
 }
 
 type confirmEachKey struct{}
@@ -160,7 +228,12 @@ func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string
 	var through LetThrough
 	switch d {
 	case Deny:
-		res := proto.ErrorResult(proto.ToolErrorDeclined, "The hub's rules (connector_gate) do not allow "+name+".", 0)
+		text := "The hub's rules (connector_gate) do not allow " + name + "."
+		if rule == nil { // no rule said it: the arguments give a field more than once
+			field, _ := repeatedField(args)
+			text = repeatedText(name, field)
+		}
+		res := proto.ErrorResult(proto.ToolErrorDeclined, text, 0)
 		return &res, through
 	case Allow:
 		through = LetThrough{Kind: ThroughRule, Rule: rule}
@@ -199,6 +272,27 @@ func matchFields(want, got map[string]any) bool {
 				return false
 			}
 		} else if !reflect.DeepEqual(w, g) {
+			return false
+		}
+	}
+	return true
+}
+
+// matchFieldsAny is matchFields that reads names without regard to capitals: a field of want is met when a key that is
+// the same name as it, under encoding/json's case folding, has a value that meets it. A Deny or a Confirm uses it, so
+// that a call cannot get past one by spelling a field in other capitals (a rule's own key may be spelled so, too). If
+// several keys were the same name it would be enough that one of them met the field. Each field is judged by
+// matchFields itself, so a pattern and a value compare as they always do.
+func matchFieldsAny(want, got map[string]any) bool {
+	for k, w := range want {
+		name, met := strings.Map(foldRune, k), false
+		for gk, g := range got {
+			if strings.Map(foldRune, gk) == name && matchFields(map[string]any{k: w}, map[string]any{k: g}) {
+				met = true
+				break
+			}
+		}
+		if !met {
 			return false
 		}
 	}

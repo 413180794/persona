@@ -395,7 +395,7 @@ A manager's own sections of the configuration are in its `manager.json`, not in 
 - `connector_gate` (optional): gate rules for connector writes (such as `github_comment`); first match wins, no match means confirm each operation on the phone:
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
   (`connector`, `action` allow `*` wildcards; `match` matches top-level tool arguments, strings may also use wildcards; `decision` is `allow` / `confirm` / `deny`,
-  an invalid list is reported in the manager's log at start; `server/internal/connector/gate.go`, `docs/plan-connectors.md`). Writes matching `confirm_always` in an extension manifest clamp even an `allow` rule to `confirm` (`docs/extensions.md`).
+  an invalid list is reported in the manager's log at start; `server/internal/connector/gate.go`, `docs/plan-connectors.md`). Writes matching `confirm_always` in an extension manifest clamp even an `allow` rule to `confirm` (`docs/extensions.md`). A call whose arguments give a field more than once is refused before any rule is read, and a `deny` or `confirm` rule's `match` reads field names without regard to capitals (`docs/connectors.md`, "Gate").
   The assistant's Lark write rules also go here: `connector` is `lark`, `action` is "method path", e.g. `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`,
   or lark-cli's `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}` (`*` matches one path segment, `**` the rest, `"*"` any call; `match` matches top-level body fields).
   These precede the old `lark_gate`, followed by built-in rules (`docs/assistant.md` ("Lark: the skill shipped with the Lark extension")).
