@@ -47,6 +47,28 @@ def source(path):
 
 
 class PersonaOnlyTests(unittest.TestCase):
+    def test_retired_native_identifiers_are_confined_to_one_compatibility_source(self):
+        # The user-approved exception is one physical compatibility source, never a global relaxation.
+        migration = APPLE / "Shared/NativeStateMigration.swift"
+        former = "jar" + "vis"
+        allowed = {migration.resolve()}
+        for path in APPLE.rglob("*.swift"):
+            if former in path.read_text(encoding="utf-8").lower():
+                self.assertIn(path.resolve(), allowed, path.relative_to(APPLE))
+        text = migration.read_text(encoding="utf-8")
+        self.assertIn("Compatibility never deletes a previous store", text)
+
+    def test_native_controls_keep_stable_kinds_and_register_interim_kinds_once(self):
+        controls = source("PersonaWidgets/PersonaControls.swift")
+        for stable in ["controlAskKind", "controlAgentsKind"]:
+            self.assertEqual(controls.count(f"Self.configuration(kind: LegacyNames.{stable})"), 1)
+        for interim in ["persona.control.ask", "persona.control.agents"]:
+            self.assertEqual(controls.count(f'configuration(kind: "{interim}")'), 1)
+        bundle = source("PersonaWidgets/PersonaWidgetsBundle.swift")
+        for widget in ["AskPersonaControl", "PersonaAgentsControl", "CompatibleAssistantControl", "CompatibleAgentsControl",
+                       "FleetLiveActivity", "CompatibleFleetLiveActivity"]:
+            self.assertEqual(len(re.findall(rf"\b{widget}\(\)", bundle)), 1)
+
     def test_duplicate_key_guards_reject_silent_overwrites(self):
         with self.assertRaises(ValueError):
             json.loads('{"Persona": 1, "Persona": 2}', object_pairs_hook=unique_pairs)

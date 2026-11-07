@@ -35,8 +35,26 @@ final class LiveActivityController {
     private var endTask: Task<Void, Never>?
     private var started = false
 
-    private var activity: Activity<PersonaActivityAttributes>? {
+    private var activity: Activity<LegacyFleetActivityAttributes>? {
+        Activity<LegacyFleetActivityAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
+    }
+
+    /// Keep activities created by the interim canonical-identity builds alive too.
+    private var canonicalActivity: Activity<PersonaActivityAttributes>? {
         Activity<PersonaActivityAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
+    }
+    private var runningContent: ActivityContent<FleetState>? { canonicalActivity?.content ?? activity?.content }
+    private var hasActivity: Bool { activity != nil || canonicalActivity != nil }
+
+    private func updateRunning(_ content: ActivityContent<FleetState>) {
+        if let activity { Self.update(activity, content) }
+        if let canonicalActivity { Self.update(canonicalActivity, content) }
+    }
+
+    private func needsUpdate(_ state: FleetState) -> Bool {
+        let legacy = activity.map { Self.worthUpdating($0.content.state, staleDate: $0.content.staleDate, to: state, now: .now) } ?? false
+        let canonical = canonicalActivity.map { Self.worthUpdating($0.content.state, staleDate: $0.content.staleDate, to: state, now: .now) } ?? false
+        return legacy || canonical
     }
 
     /// The device's settings changed (or were loaded from the hub): remember them, and apply at once — off ends the
@@ -52,10 +70,10 @@ final class LiveActivityController {
             endAll()
             return
         }
-        if let activity {
+        if let content = runningContent {
             // At once from what is showing (another machine's load comes with the hub's fleet below).
-            let state = activity.content.state.tailored(island: prefs.island, details: prefs.lockDetails, look: AppModel.shared.fleetLook)
-            Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate, relevanceScore: Self.relevance(state)))
+            let state = content.state.tailored(island: prefs.island, details: prefs.lockDetails, look: AppModel.shared.fleetLook)
+            updateRunning(ActivityContent(state: state, staleDate: content.staleDate, relevanceScore: Self.relevance(state)))
         }
         // Every group's fleet, merged (docs/multi-hub.md「实时活动」).
         let model = AppModel.shared
@@ -67,13 +85,17 @@ final class LiveActivityController {
         guard !started else { return }
         started = true
         Task {
-            for await token in Activity<PersonaActivityAttributes>.pushToStartTokenUpdates {
+            for await token in Activity<LegacyFleetActivityAttributes>.pushToStartTokenUpdates {
                 report(.init(pushToStartToken: token.hex))
             }
         }
         Task {
+            for await activity in Activity<LegacyFleetActivityAttributes>.activityUpdates { watch(activity) }
+        }
+        Task {
             for await activity in Activity<PersonaActivityAttributes>.activityUpdates { watch(activity) }
         }
+        for activity in Activity<LegacyFleetActivityAttributes>.activities { watch(activity) }
         for activity in Activity<PersonaActivityAttributes>.activities { watch(activity) }
     }
 
@@ -84,7 +106,7 @@ final class LiveActivityController {
             endAll()
             return
         }
-        let step = Self.step(state, running: activity != nil, active: UIApplication.shared.applicationState == .active)
+        let step = Self.step(state, running: hasActivity, active: UIApplication.shared.applicationState == .active)
         if step == .endSoon {
             // Agents flicker between turns: end only when nothing came back for a minute (the hub does the same).
             guard endTask == nil else { return }
@@ -101,8 +123,8 @@ final class LiveActivityController {
         let content = ActivityContent(state: state, staleDate: .now.addingTimeInterval(15 * 60), relevanceScore: Self.relevance(state))
         switch step {
         case .update:
-            guard let activity, Self.worthUpdating(activity.content.state, staleDate: activity.content.staleDate, to: state, now: .now) else { return }
-            Self.update(activity, content)
+            guard needsUpdate(state) else { return }
+            updateRunning(content)
         case .start:
             request(content)
         case .endSoon, .nothing:
@@ -125,13 +147,13 @@ final class LiveActivityController {
 
     /// Takes a settled request off the activity at once (the hub's update follows).
     func resolvedLocally(_ interactionID: String) {
-        guard let activity else { return }
-        var state = activity.content.state
+        guard let content = runningContent else { return }
+        var state = content.state
         guard let i = state.items.firstIndex(where: { $0.interaction == interactionID }) else { return }
         state.items.remove(at: i)
         state.needsYou = max(0, state.needsYou - 1)
         if state.needsYou == 0 { state.phase = state.working > 0 ? .working : (state.unread > 0 ? .done : .none) }
-        Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate))
+        updateRunning(ActivityContent(state: state, staleDate: content.staleDate))
     }
 
     /// The persona and its color changed, or the app started or came back (what failed is tried again). It goes three
@@ -149,18 +171,17 @@ final class LiveActivityController {
         }
         let saved = FleetLook.save(look, faces: faces)
         tellHub(look)
-        guard let activity else { return }
-        let content = activity.content
+        guard let content = runningContent else { return }
         guard content.state.look != look || saved || force else { return }
         var state = content.state
         state.look = look
         // A new stale date too: an update identical to what is showing may draw nothing.
         let stale = (content.staleDate ?? .now.addingTimeInterval(15 * 60)).addingTimeInterval(1)
-        Self.update(activity, ActivityContent(state: state, staleDate: stale, relevanceScore: content.relevanceScore))
+        updateRunning(ActivityContent(state: state, staleDate: stale, relevanceScore: content.relevanceScore))
     }
 
     /// The look in the running activity's content: nil without an activity (Dynamic Island Diagnostics).
-    var runningLook: FleetLook?? { activity.map { $0.content.state.look } }
+    var runningLook: FleetLook?? { runningContent.map { $0.state.look } }
 
     /// The look the hub has for this device (nil: not told since launch).
     private var toldHub: FleetLook?
@@ -191,10 +212,13 @@ final class LiveActivityController {
     func endAll() {
         endTask?.cancel()
         endTask = nil
-        for activity in Activity<PersonaActivityAttributes>.activities {
-            nonisolated(unsafe) let a = activity
-            Task { await a.end(nil, dismissalPolicy: .immediate) }
-        }
+        for activity in Activity<LegacyFleetActivityAttributes>.activities { Self.end(activity) }
+        for activity in Activity<PersonaActivityAttributes>.activities { Self.end(activity) }
+    }
+
+    private static func end<Attributes: ActivityAttributes>(_ activity: Activity<Attributes>) where Attributes.ContentState == FleetState {
+        nonisolated(unsafe) let value = activity
+        Task { await value.end(nil, dismissalPolicy: .immediate) }
     }
 
     // Activity is not Sendable, but its methods are safe from any thread (ActivityKit does its own locking).
@@ -205,7 +229,8 @@ final class LiveActivityController {
         shown != state || (staleDate ?? .distantPast) < now.addingTimeInterval(5 * 60)
     }
 
-    private static func update(_ activity: Activity<PersonaActivityAttributes>, _ content: ActivityContent<FleetState>) {
+    private static func update<Attributes: ActivityAttributes>(_ activity: Activity<Attributes>, _ content: ActivityContent<FleetState>)
+    where Attributes.ContentState == FleetState {
         nonisolated(unsafe) let a = activity
         Task { await a.update(content) }
     }
@@ -220,16 +245,16 @@ final class LiveActivityController {
 
     private func request(_ content: ActivityContent<FleetState>) {
         do {
-            watch(try Activity.request(attributes: PersonaActivityAttributes(), content: content, pushType: .token))
+            watch(try Activity.request(attributes: LegacyFleetActivityAttributes(), content: content, pushType: .token))
         } catch {
             // The simulator without APNs, or the user turned Live Activities off for Persona.
-            if let local = try? Activity.request(attributes: PersonaActivityAttributes(), content: content, pushType: nil) {
+            if let local = try? Activity.request(attributes: LegacyFleetActivityAttributes(), content: content, pushType: nil) {
                 watch(local)
             }
         }
     }
 
-    private func watch(_ activity: Activity<PersonaActivityAttributes>) {
+    private func watch<Attributes: ActivityAttributes>(_ activity: Activity<Attributes>) where Attributes.ContentState == FleetState {
         guard watching.insert(activity.id).inserted else { return }
         let id = activity.id
         Task {

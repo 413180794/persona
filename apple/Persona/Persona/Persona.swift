@@ -33,7 +33,10 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     }
     /// The home screen icon (docs/persona.md「App 图标」): a built-in's own; a package's `app_icon_fallback`, the
     /// built-in whose icon it takes, as iOS switches only to icons the app ships; else the default's.
-    var appIcon: AppIconChoice { AppIconChoice(lookID: isBuiltin ? id : manifest?.appIconFallback) }
+    var appIcon: AppIconChoice {
+        let look = isBuiltin ? id : manifest?.appIconFallback
+        return AppIconChoice(lookID: look.map(NativeStateMigration.lookID))
+    }
 
     init(id: String, name: String, subtitle: String?, rev: String, manifest: PersonaManifest?, design: String? = nil,
          title: String? = nil) {

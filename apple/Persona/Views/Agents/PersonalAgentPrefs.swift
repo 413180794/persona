@@ -158,19 +158,21 @@ nonisolated enum PersonalAgentArrange {
 @MainActor @Observable
 final class PersonalAgentPrefsStore {
     static let shared = PersonalAgentPrefsStore()
-    private static let key = "persona.agents.prefs"
 
     private(set) var prefs: PersonalAgentPrefs
+    private let defaults: UserDefaults
     private var hubBacked = true
     private var seq = 0
 
     init(defaults: UserDefaults = .standard) {
-        prefs = defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(PersonalAgentPrefs.self, from: $0) } ?? PersonalAgentPrefs()
+        self.defaults = defaults
+        _ = NativeStateMigration.defaults(defaults)
+        prefs = NativeStateMigration.readPrefs(PersonalAgentPrefs.self, defaults: defaults) ?? PersonalAgentPrefs()
     }
 
     private func cache(_ p: PersonalAgentPrefs) {
         prefs = p
-        if let d = try? JSONEncoder().encode(p) { UserDefaults.standard.set(d, forKey: Self.key) }
+        if let d = try? JSONEncoder().encode(p) { NativeStateMigration.writePrefs(d, defaults: defaults) }
     }
 
     func load(_ api: APIClient?) async {

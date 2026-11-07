@@ -36,6 +36,14 @@ import UIKit
         #expect(AppIconChoice(iconName: "AppIcon-Gone") == .standard)
     }
 
+    @Test func unitHostDoesNotTouchRealSystemIcons() async {
+        let model = AppIconModel.live()
+        #expect(!model.available && model.current == .standard)
+        await model.follow(.standard, scheme: .dark)
+        #expect(!model.switching && model.failure == nil)
+        #expect(!AppModel().appIcon.available)
+    }
+
     @Test func startsOnTheDefault() {
         #expect(AppIconModel(system: FakeSystem("AppIcon-PaperLight")).current == .standard)
         #expect(AppIconModel(system: FakeSystem()).current == .standard)

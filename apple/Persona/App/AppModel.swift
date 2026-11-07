@@ -10,7 +10,10 @@ import UserNotifications
 /// App-wide state: server pairing, live connection, machines, sessions, interactions and per-session chats.
 @Observable
 final class AppModel {
-    static let shared = AppModel()
+    static let shared: AppModel = {
+        NativeStateMigration.prepare()
+        return AppModel()
+    }()
 
     /// Every hub paired and the groups they form (HubStore, docs/multi-hub.md). Changed only through the group
     /// functions (HubLinks.swift), which save it (`saveRegistry`).
@@ -2300,6 +2303,15 @@ final class AppModel {
         var sessions: [Session]
         var interactions: [Interaction]
         var assistant: APIClient.AssistantState?
+
+        private enum CodingKeys: String, CodingKey { case machines, sessions, interactions, assistant }
+        func encode(to encoder: Encoder) throws {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encode(machines, forKey: .machines)
+            try values.encode(sessions.map { NativeSessionEnvelope(session: $0) }, forKey: .sessions)
+            try values.encode(interactions, forKey: .interactions)
+            try values.encodeIfPresent(assistant, forKey: .assistant)
+        }
     }
 
     @ObservationIgnored private let snapshotWriter = Debouncer(.seconds(2))

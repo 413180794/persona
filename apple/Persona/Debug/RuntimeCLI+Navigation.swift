@@ -1,6 +1,9 @@
 #if DEBUG && (os(iOS) || os(visionOS))
 import SwiftUI
 import UIKit
+#if os(iOS)
+import ActivityKit
+#endif
 
 /// Moving the app (docs/runtime-cli.md「导航和风格」): `reset`, `navigate`, `set-style`, `set-appearance`, `defaults`.
 extension RuntimeCLI {
@@ -10,7 +13,28 @@ extension RuntimeCLI {
         "set-style": { a in setStyle(a) },
         "set-appearance": { a in setAppearance(a) },
         "defaults": { a in defaults(a) },
+        "native-upgrade-proof": { a in nativeUpgradeProof(a) },
     ]
+
+    /// Read-only local upgrade evidence; no credentials, writes, network calls or queue replay.
+    private static func nativeUpgradeProof(_ args: Args) -> Reply {
+        let model = AppModel.shared
+        let recordings = RecordingLibrary.shared.entries
+        var reply: Reply = ["chosenPersona": model.personas.chosenID, "displayedPersona": model.personas.current.id,
+                            "outboxCount": model.outboxCount, "recordingCount": recordings.count,
+                            "undeliveredSegments": recordings.reduce(0) { $0 + $1.segments.filter { !$0.delivered }.count },
+                            "pinnedAgents": PersonalAgentPrefsStore.shared.prefs.pins]
+        if let chat = args["draftChat"] as? String { reply["draftCharacters"] = LarkDrafts.shared[.chat(chat)].text.count }
+        if args["includePaths"] as? Bool == true { reply["recordingRoot"] = RecordingLibrary.directory.path }
+        #if os(iOS)
+        reply["legacyActivityIDs"] = Activity<LegacyFleetActivityAttributes>.activities.map(\.id)
+        reply["legacyActivityWorkingCounts"] = Dictionary(uniqueKeysWithValues: Activity<LegacyFleetActivityAttributes>.activities.map {
+            ($0.id, $0.content.state.working)
+        })
+        reply["canonicalActivityIDs"] = Activity<PersonaActivityAttributes>.activities.map(\.id)
+        #endif
+        return reply
+    }
 
     /// "machine/session", or "group|machine/session" for another group of hubs.
     static func key(_ s: String?) -> SessionKey? {

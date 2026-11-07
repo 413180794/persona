@@ -275,11 +275,12 @@ struct MultiHubTests {
         let (out, outcome) = PushCrypto.service(content, keys: { [("", home), ("g1", work)] })
         #expect(outcome == .opened && out.title == "需要你授权")
         #expect(out.userInfo[PushCrypto.groupKey] as? String == "g1")
-        // The default group's key: no group in it, as before.
+        // The authenticated default key overrides any untrusted outer group, including a non-default one.
         let mine = try Self.seal(payload, to: home.publicKey)
-        content.userInfo = ["e": mine]
+        content.userInfo = ["e": mine, PushCrypto.groupKey: "untrusted"]
         let (plain, _) = PushCrypto.service(content, keys: { [("", home), ("g1", work)] })
-        #expect(plain.userInfo[PushCrypto.groupKey] == nil)
+        #expect(plain.userInfo[PushCrypto.groupKey] as? String == "")
+        #expect(plain.userInfo[LegacyNames.pushGroupKey] as? String == "")
         #expect(PushCrypto.opened(["e": sealed], keys: [("", home), ("g1", work)])?.group == "g1")
         #expect(PushCrypto.account(group: "") == "push-key" && PushCrypto.account(group: "g1") == "push-key.g1")
     }

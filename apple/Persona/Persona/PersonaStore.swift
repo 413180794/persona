@@ -35,13 +35,13 @@ final class PersonaStore {
     @ObservationIgnored private let frameCache = NSCache<NSString, PersonaFrames>()
     @ObservationIgnored private let imageCache = NSCache<NSString, UIImage>()
 
-    static let chosenKey = AppearanceChoice.personaKey
+    static let chosenKey = NativeStateMigration.personaKey
     static var defaultRoot: URL {
         URL.applicationSupportDirectory.appending(path: "Personas", directoryHint: .isDirectory)
     }
 
     /// The user's choice; kept when its package is gone from the hub, so it comes back with it.
-    var chosenID: String { PersonaSelection.resolve(defaults.string(forKey: Self.chosenKey)) }
+    var chosenID: String { PersonaSelection.resolve(NativeStateMigration.readPersonaID(from: defaults)) }
 
     /// The hub's list came this launch.
     @ObservationIgnored private var listed = false
@@ -57,13 +57,14 @@ final class PersonaStore {
     init(root: URL = PersonaStore.defaultRoot, defaults: UserDefaults = .standard) {
         self.root = root
         self.defaults = defaults
+        _ = NativeStateMigration.defaults(defaults)
         frameCache.countLimit = 6
         if let data = try? Data(contentsOf: indexURL), let list = try? JSONDecoder().decode([PersonaInfo].self, from: data) {
             offered = Persona.builtins + list.filter(Self.supportedPackage).map(Persona.init(info:))
         }
         #if DEBUG
         // `-openPersona <id>`: start with that one (on the phone already, or downloaded when the list comes).
-        if let id = defaults.string(forKey: "openPersona"), !id.isEmpty { defaults.set(id, forKey: Self.chosenKey) }
+        if let id = defaults.string(forKey: "openPersona"), !id.isEmpty { NativeStateMigration.writePersonaID(id, defaults: defaults) }
         #endif
         if let p = offered.first(where: { $0.id == chosenID }), isOnPhone(p) { current = p }
     }
@@ -147,7 +148,7 @@ final class PersonaStore {
             guard isOnPhone(p) else { return }
         }
         error = nil
-        defaults.set(p.id, forKey: Self.chosenKey)
+        NativeStateMigration.writePersonaID(p.id, defaults: defaults)
         current = p
         WatchSync.shared.push(persona: p.id)
     }

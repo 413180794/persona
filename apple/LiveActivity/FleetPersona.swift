@@ -184,7 +184,7 @@ nonisolated struct FleetLookStore: Sendable {
 
     /// The group's id, `group.<bundle id>` unless the config says otherwise, in both bundles' Info.plist.
     static var group: String? {
-        (Bundle.main.object(forInfoDictionaryKey: "PersonaAppGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
+        NativeStateMigration.infoString("PersonaAppGroup")
     }
 
     static var container: URL? {

@@ -376,6 +376,7 @@ targets:
       - path: Shared/FleetState.swift
       # The state names the Live Activity shows (#3960).
       - path: Shared/StateNames.swift
+      - path: Shared/NativeStateMigration.swift
       - path: Shared/StatusPalette.swift
       - path: Shared/Design/Palette.swift
       - path: Shared/Design/IslandMetrics.swift
@@ -419,6 +420,7 @@ targets:
       - path: PersonaNotify
         excludes: ["*.plist", "*.entitlements"]
       - path: Shared/PushCrypto.swift
+      - path: Shared/NativeStateMigration.swift
       - path: Shared/Generated/ExtensionWire.swift
       - path: Shared/JSONValue.swift
       - path: Shared/ExtensionNotificationActions.swift
@@ -434,6 +436,7 @@ targets:
         INFOPLIST_FILE: PersonaNotify/Info.plist
         # The system calls the extension on its own queue; the project's MainActor default does not fit its base class.
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NATIVE_MIGRATION_STORAGE_ONLY"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
@@ -496,6 +499,7 @@ targets:
       - path: PersonaNotify
         excludes: ["*.plist", "*.entitlements"]
       - path: Shared/PushCrypto.swift
+      - path: Shared/NativeStateMigration.swift
       - path: Shared/Generated/ExtensionWire.swift
       - path: Shared/JSONValue.swift
       - path: Shared/ExtensionNotificationActions.swift
@@ -511,6 +515,7 @@ targets:
         PRODUCT_NAME: PersonaNotify
         INFOPLIST_FILE: PersonaNotify/Info.plist
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) NATIVE_MIGRATION_STORAGE_ONLY"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
@@ -575,6 +580,7 @@ targets:
       - path: PersonaTests/MachineMetricsTests.swift
       - path: PersonaTests/NotificationActionsTests.swift
       - path: PersonaTests/NotifyPrefsTests.swift
+      - path: PersonaTests/NativeStateMigrationTests.swift
       - path: PersonaTests/PushCryptoTests.swift
       - path: PersonaTests/UsageWindowsTests.swift
       - path: PersonaTests/SessionListTests.swift

@@ -172,8 +172,9 @@ nonisolated struct AppearanceChoice: Equatable, Sendable {
     /// Read once at launch; settings from before the split are written back as what they became.
     static let saved: AppearanceChoice = {
         let d = UserDefaults.standard
+        _ = NativeStateMigration.defaults(d, domainName: Bundle.main.bundleIdentifier)
         let style = d.string(forKey: styleKey), color = d.string(forKey: colorKey)
-        let choice = resolve(style: style, color: color, persona: d.string(forKey: personaKey))
+        let choice = resolve(style: style, color: color, persona: NativeStateMigration.readPersonaID(from: d))
         if color == nil || style == "claude" {
             d.set(choice.style.rawValue, forKey: styleKey)
             d.set(choice.color.rawValue, forKey: colorKey)

@@ -48,7 +48,8 @@ struct NotificationServiceTests {
         ]
         let shown = await Self.deliver(try Self.relayed(payload, to: key.publicKey))
         #expect(shown.categoryIdentifier == PairReceiptActions.joiningCategory)
-        #expect(PairPush(shown.userInfo) == PairPush(kind: .computerJoining, machine: "mach_office", hubID: "hub_b"))
+        // The default key contributes an authenticated empty routing group, not an absent/outer-supplied group.
+        #expect(PairPush(shown.userInfo) == PairPush(kind: .computerJoining, machine: "mach_office", hubID: "hub_b", keyGroup: ""))
         #expect(!shown.body.contains("mach_office"))
     }
 

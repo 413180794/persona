@@ -123,10 +123,17 @@ extension AppIconChoice {
 extension AppIconModel {
     /// The app's own: UIApplication on iPhone and iPad, nothing on the Mac.
     static func live() -> AppIconModel {
+        #if DEBUG
+        // Unit hosts must not read or change LaunchServices icons; an in-flight system switch can block its queue.
+        // UI-test target apps are not injected XCTest hosts and still use the real UIApplication below.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return AppIconModel(system: nil)
+        }
+        #endif
         #if os(iOS) || os(visionOS)
-        AppIconModel(system: UIApplication.shared)
+        return AppIconModel(system: UIApplication.shared)
         #else
-        AppIconModel(system: nil)
+        return AppIconModel(system: nil)
         #endif
     }
 }

@@ -10,7 +10,10 @@ struct PersonaWidgetsBundle: WidgetBundle {
 
     var body: some Widget {
         FleetLiveActivity()
+        CompatibleFleetLiveActivity()
         AskPersonaControl()
         PersonaAgentsControl()
+        CompatibleAssistantControl()
+        CompatibleAgentsControl()
     }
 }

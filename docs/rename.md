@@ -1,12 +1,20 @@
 # Persona naming cutover
 
-The repository uses **Persona** exclusively. The #277 cutover has no previous-brand command aliases, environment fallbacks, directory aliases, dual writes, URL schemes, or compatibility build targets. It changes runtime contracts, not just display text. **Merging this code does not authorize a deployment or release.** Follow the approval-gated [operational cutover](persona-cutover.md) before starting the new binaries on an existing installation.
+代码与界面使用 **Persona**；2026-11-07 的新约定取代 #277 的一次性硬切换方案，原生端保留旧数据读取、显式保存双写和稳定系统身份，支持回装旧版。网络与服务端兼容由关联任务接入，不能从原生端验收推导为全链路已完成。**合并代码不授权部署或发布**；历史[切换操作](persona-cutover.md)也不能因此直接执行。
 
 ## Registered application identities remain unchanged
 
 Keep the actual values in private configuration for `app.bundle_id`, `app.app_group`, `android.application_id`, iCloud containers, keychain access groups, and App Store / Google registration. Only the variables that carry them change. Examples in the repository are placeholders, not registration values. Do not register a new app, regenerate keys, or discard pairing credentials.
 
 Provisioning profile display names and service labels are operational configuration, not registered app IDs. Make sure the configured signing profiles exist before archiving on a Mac. The old app's pending notifications, queued workers, saved Shortcuts and caches are not guaranteed to survive renamed class/type/storage identities; test and migrate them explicitly during the maintenance window.
+
+### 可逆的原生端兼容（#6152）
+
+2026-11-07 的约定要求新旧版本兼容和回装，不再做破坏性转换。历史字面量集中在 `apple/Shared/NativeStateMigration.swift`；独立 target 通过 storage-only 条件编译同一物理文件，不复制第二份常量。读取先用有效的新偏好、选择和 Keychain 数据，再回退到旧数据。启动只补齐缺失的新值，显式保存同时写新旧值，不删除旧存储。兼容逻辑不递归重写目录、图片、草稿、发件箱、录音或不透明归档。冲突的推送密钥保留两份身份：新键优先读取，旧键仍可解开经过认证的旧推送。
+
+公开 App Intent 的 Swift 名称和标题可以更新，系统 `persistentIdentifier` 保持稳定；隐藏适配器接纳中间版本保存的新身份。具体类型 extension 中的标识必须直接写成字面量，仍只放在兼容文件。验收分别检查编译后的 metadata、旧版实际保存的 Shortcut，以及保存后回装旧版的结果。不能修改 action blob 来让测试通过。
+
+Control Center 的旧 kind 继续注册，共用同一绘制和操作配方。Live Activity 同时注册旧的真实 attributes 类型和中间版本的新类型；新建和 push-to-start 使用旧 hub 认识的稳定类型。Swift alias 或编译成功不是系统验收，必须检查原位升级后旧活动的实际 ID 和更新结果。Session 快照保留旧 started-by 字段，供旧 App 和手表读取。合并代码不授权部署、线上重启、执行维护 apply 或发布 TestFlight。
 
 <a id="源码位置构建入口与兼容名字"></a>
 

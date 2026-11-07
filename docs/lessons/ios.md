@@ -8,6 +8,24 @@ Pitfalls, odd behavior and the decisions made at the time (formerly "Lessons" in
 
 - Helper extensions referenced by shared views must compile into every target too: after replacing `Color.mix` with `blended` for watchOS 10 compatibility, leaving the helper in `Theme.swift` causes Release archives to fail for Dynamic Island widgets that only include `PersonaFace`. Compile the helper with `PersonaFace.swift` into every target; do not drag the entire app theme into extensions or declare it twice.
 
+## 稳定系统身份与可逆升级（#6152）
+
+系统身份不等于显示品牌。公开助手操作保留稳定的 `persistentIdentifier`，Swift 类型和标题使用新名；隐藏适配器接纳中间版本的身份，让新版创建的操作在回装旧版后仍可识别。历史字面量与真实兼容类型声明只放在 `apple/Shared/NativeStateMigration.swift`。
+
+Xcode 27.1 的 metadata extractor 会忽略间接常量引用：App 编译成功，却把新的 Swift 类型名当成系统身份。兼容文件内具体类型 extension 的字面量 static 属性可以正确提取。必须读回 `Metadata.appintents/extract.actionsdata`，再用相同 Bundle ID 原位覆盖，执行旧版实际保存的操作。不能重写 action blob 来通过测试。
+
+2026-11-07 的兼容约定取代删除旧数据的一次性迁移：读取优先使用有效的新数据，再回退旧数据；启动只补缺失的新值，显式保存镜像旧键。兼容逻辑不删除旧键，不递归改写目录、图片、草稿、发件箱和录音。推送密钥双向补缺，保留字节和保护属性，不覆盖冲突身份，不删除来源。锁定或复制失败不能成为生成替代身份的理由。
+
+ActivityKit 必须保留真实 nominal attributes 类型，不能用 Swift alias 冒充系统迁移。旧稳定类型和中间版本的新类型共用绘制配方。原位升级必须核对旧活动的实际 ID；编译、metadata 与运行验收是三种不同证据。
+
+本次 iOS 27.0 模拟器的对照中，重复安装完全相同的旧构建也会丢弃原活动 ID；系统日志在安装阶段记录活动被视为 uninstalled。因此保留真实类型不能证明模拟器覆盖安装无损，新建的 ID 不能代替旧 ID 通过断言。这不证明真机 App Store 升级的行为，仍需另行验收。
+
+原位安装后 App 可能已经被系统拉起，普通 `simctl launch` 不保证重新读取传入参数；探针启动用 `--terminate-running-process`，不注入新配对。图标变更和通知许可弹窗会令 App 保持 inactive，使活动截图样例不创建；用有超时的 XCUITest 处理这些系统弹窗，不把它们误判成迁移死锁。
+
+通知扩展成功解密后会移除 sealed 标记。此时必须用经过认证的 payload 重建 `userInfo`，不能保留外层路由字段，否则 App 将扩展结果视为普通明文推送，外层 wake 或撤回字段便绕过了密文校验。默认组也从成功的密钥得出，并显式覆盖新旧 group 字段。
+
+全量单测也不能读取或切换真实系统图标。两条独立运行都卡在 `LarkFeaturesTests` 构造 `AppModel` 的路径：`AppIconModel.live` 读取 `UIApplication.alternateIconName`，同步等待已有图标切换占用的 LaunchServices 队列；采样中没有兼容迁移或 Keychain 的阻塞帧。DEBUG 且注入了 `XCTestConfigurationFilePath` 的单测 host 使用无系统后端的图标模型；业务断言继续注入 FakeSystem，UI 测试目标 App 未注入 XCTest host，仍检查真实系统行为。Release 不包含此分支，不能把测试挂起写成通过。
+
 ## 产品改名不等于签名资源改名（#6150）
 
 2026-11-07，源码中的默认描述文件名称随产品名更新，Apple 账号中原有的有效描述文件没有改名，导致发版在归档前停止。不要把字符串替换当成账号迁移，也不要直接重建所有描述文件来消除名称差异。

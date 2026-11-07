@@ -243,10 +243,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         // Through the relay the reason is sealed (docs/push-relay.md): open it here, in the app's own process, with
         // each group's key (the one that opens it says whose hub needs the phone).
-        var info = userInfo
-        if PushCrypto.isSealed(userInfo), let opened = PushCrypto.opened(userInfo, keys: PushCrypto.allKeys()) {
-            for (k, v) in opened.payload { info[k] = v }
-            if !opened.group.isEmpty { info[PushCrypto.groupKey] = opened.group }
+        guard let info = PushCrypto.notificationInfo(userInfo) else {
+            completionHandler(.noData)
+            return
         }
         if let ids = info["resolved_interaction_ids"] as? [String] {
             // Cards answered elsewhere while suspended (#4349): their notifications leave the lock screen.
@@ -254,7 +253,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             AppModel.shared.withdrawResolved(ids, group: AppModel.shared.pushGroup(info)) { done(.newData) }
             return
         }
-        let wake = info["persona_wake"]
+        let wake = info["persona_wake"] ?? info[LegacyNames.wakeKey]
         guard wake != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {
             completionHandler(.noData)
             return
@@ -274,7 +273,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // queue, do the work there and call back from there.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let ref = Self.sessionRef(notification.request.content.userInfo)
+        let ref = PushCrypto.notificationInfo(notification.request.content.userInfo).flatMap(Self.sessionRef)
         nonisolated(unsafe) let content = notification.request.content.copy() as! UNNotificationContent
         nonisolated(unsafe) let done = completionHandler
         Task { @Sendable in
@@ -292,7 +291,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
-        let info = response.notification.request.content.userInfo
+        guard let info = PushCrypto.notificationInfo(response.notification.request.content.userInfo) else {
+            completionHandler()
+            return
+        }
         let ref = Self.sessionRef(info)
         let action = response.actionIdentifier
         let text = (response as? UNTextInputNotificationResponse)?.userText

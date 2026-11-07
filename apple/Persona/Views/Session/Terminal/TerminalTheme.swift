@@ -54,7 +54,10 @@ nonisolated struct TerminalTheme: Sendable {
 
     static let all = [ink, midnight, persona, solarized]
     static let defaultID = ink.id
-    static func named(_ id: String) -> TerminalTheme { all.first { $0.id == id } ?? ink }
+    static func named(_ id: String) -> TerminalTheme {
+        let resolved = id == LegacyNames.product ? persona.id : id
+        return all.first { $0.id == resolved } ?? ink
+    }
 
     /// Dark whatever the app's appearance.
     var alwaysDark: Bool { light.background == dark.background }

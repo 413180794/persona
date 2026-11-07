@@ -17,8 +17,11 @@ struct FleetLiveActivity: Widget {
     static let expandedFace = IslandMetrics.expandedFace
     static let lockFace = IslandMetrics.lockFace
 
-    var body: some WidgetConfiguration {
-        ActivityConfiguration(for: PersonaActivityAttributes.self) { context in
+    var body: some WidgetConfiguration { Self.configuration(for: PersonaActivityAttributes.self) }
+
+    static func configuration<Attributes: ActivityAttributes>(for attributes: Attributes.Type) -> some WidgetConfiguration
+    where Attributes.ContentState == FleetState {
+        ActivityConfiguration(for: attributes) { context in
             FleetLockScreen(state: context.state, stale: context.isStale)
                 // The lock screen is cut at about 160 pt: larger text would push the rows off it.
                 .dynamicTypeSize(...DynamicTypeSize.large)
@@ -81,6 +84,11 @@ struct FleetLiveActivity: Widget {
         }
         .supplementalActivityFamilies([.small])
     }
+}
+
+/// Retains the previous OS activity identity with exactly the same drawing recipe.
+struct CompatibleFleetLiveActivity: Widget {
+    var body: some WidgetConfiguration { FleetLiveActivity.configuration(for: LegacyFleetActivityAttributes.self) }
 }
 
 // MARK: - Pieces

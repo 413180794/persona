@@ -53,6 +53,7 @@ at 7 s. With `personactl.py settle` after launch, each shot measured 4.3–5.3 s
 | `set-style` | `style` (glass / clay / island / lark / beautiful), `color` (theme color) | Like `state`; the whole tree is rebuilt in the new style |
 | `set-appearance` | `value` (light / dark / system) | Changes only the App: goes through **Settings › Appearance › Light & Dark** (`AppModel.colorScheme`, which is persisted; restore with `system` afterwards); `personactl.py appearance` by default changes the whole simulator (`simctl ui appearance`, the status bar changes too; screenshot scripts use this) |
 | `defaults` | `set` (valid only for this run, written to the registration domain, not persisted), `remove` (delete stored keys, what `-openAgentsFresh` does), `get` | `values` |
+| `native-upgrade-proof` | 可选 `draftChat`（合成草稿的会话键）、`includePaths`（默认 false） | 只读升级证据：选择与显示的形象 ID、置顶 Agent、发件箱数量、录音数量、未送达段数和可选草稿字数；iOS 另返回两类真实活动 ID，以及旧活动的工作中数量。`includePaths` 只供本机诊断，不公开路径。不会读取凭据、联网、写入状态或重放队列。 |
 
 Every answer has `ok` and `ms` (time spent in the App); errors are `{"ok": false, "error": …}`, and `personactl.py` exits non-zero.
 

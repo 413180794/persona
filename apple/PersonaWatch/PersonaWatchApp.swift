@@ -74,6 +74,7 @@ final class WatchModel {
     func api(_ group: String) -> APIClient? { configs[group].map { APIClient(config: $0, group: group) } }
 
     init() {
+        NativeStateMigration.prepare()
         seenInteractionUids = UserDefaults.standard.stringArray(forKey: Self.seenUidsKey) ?? []
         if let data = UserDefaults.standard.data(forKey: "configs"), let all = try? JSONDecoder().decode(WatchConfigs.self, from: data) {
             (configs, names, missing) = (all.configs, all.names, all.missing ?? [])

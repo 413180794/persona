@@ -4,8 +4,11 @@ import WidgetKit
 
 /// Control Center / Lock Screen / Action Button: open the assistant to ask something.
 struct AskPersonaControl: ControlWidget {
-    var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "persona.control.ask") {
+    // New controls keep the previous stable kind so they remain usable after reinstalling the previous app.
+    var body: some ControlWidgetConfiguration { Self.configuration(kind: LegacyNames.controlAskKind) }
+
+    static func configuration(kind: String) -> some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: kind) {
             ControlWidgetButton(action: OpenPersonaAssistantIntent()) {
                 Label("Ask Persona", systemImage: "sparkles")
             }
@@ -17,8 +20,10 @@ struct AskPersonaControl: ControlWidget {
 
 /// Control: open the Agents page.
 struct PersonaAgentsControl: ControlWidget {
-    var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "persona.control.agents") {
+    var body: some ControlWidgetConfiguration { Self.configuration(kind: LegacyNames.controlAgentsKind) }
+
+    static func configuration(kind: String) -> some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: kind) {
             ControlWidgetButton(action: OpenPersonaAgentsIntent()) {
                 Label("Agents", systemImage: "person.crop.circle.badge.checkmark")
             }
@@ -26,4 +31,13 @@ struct PersonaAgentsControl: ControlWidget {
         .displayName("Persona Agents")
         .description("Opens the Agents tab in Persona.")
     }
+}
+
+/// Also retain kinds saved by interim canonical-identity builds, with the same drawing and action.
+struct CompatibleAssistantControl: ControlWidget {
+    var body: some ControlWidgetConfiguration { AskPersonaControl.configuration(kind: "persona.control.ask") }
+}
+
+struct CompatibleAgentsControl: ControlWidget {
+    var body: some ControlWidgetConfiguration { PersonaAgentsControl.configuration(kind: "persona.control.agents") }
 }

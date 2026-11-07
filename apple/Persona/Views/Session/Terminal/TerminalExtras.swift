@@ -10,7 +10,7 @@ enum TerminalPrefs {
     static let autoHide = "terminalAutoHideKeys"
     static let fontSize = "terminalFontSize"
     static let font = "terminalFont"
-    static let theme = "terminalTheme"
+    static let theme = NativeStateMigration.terminalKey
     static let wrap = "terminalWrap"
     /// "direct": the keyboard types into the terminal; "field": a text field under it sends what is written.
     static let inputMode = "terminalInputMode"
@@ -126,7 +126,7 @@ struct TerminalSettingsView: View {
                         .frame(height: TerminalPreview.height(fontSize))
                         .listRowInsets(EdgeInsets())
                     ForEach(TerminalTheme.all, id: \.id) { t in
-                        Button { themeID = t.id } label: { ThemeRow(theme: t, on: t.id == themeID) }
+                        Button { NativeStateMigration.writeTerminalID(t.id, defaults: .standard) } label: { ThemeRow(theme: t, on: t.id == themeID) }
                             .buttonStyle(.plain)
                     }
                 } header: {
