@@ -35,6 +35,7 @@ type report struct {
 	// Passive is passive mode's pairing, whichever mode is on.
 	Passive *passiveReport `json:"passive,omitempty"`
 	Service *serviceState  `json:"service,omitempty"`
+	Tray    *trayState     `json:"tray,omitempty"` // Windows
 	Config  string         `json:"config"`
 	Log     string         `json:"log"`
 	Error   string         `json:"error,omitempty"` // link.json there but unreadable
@@ -50,6 +51,12 @@ type passiveReport struct {
 	PairedAt    *time.Time `json:"paired_at,omitempty"`
 	CodeExpires *time.Time `json:"code_expires,omitempty"` // a pairing code from pair --listen is waiting until then
 	FP          string     `json:"fp,omitempty"`           // the connector's pin (public: anyone reaching the port sees the key)
+}
+
+// trayState is the Windows tray: running now, and started at sign-in.
+type trayState struct {
+	Running   bool `json:"running"`
+	Autostart bool `json:"autostart"`
 }
 
 // serviceState is the systemd user service (Linux) or the scheduled task (Windows).
@@ -109,6 +116,7 @@ func gather(e *env) report {
 	}
 	if e.goos == "windows" {
 		r.Service = e.taskState() // winservice.go
+		r.Tray = trayStatus(e)
 	}
 	return r
 }
@@ -154,6 +162,7 @@ func (r report) text(now time.Time, user string) string {
 	if r.Mode == link.ModePassive {
 		r.passiveText(line, now, live)
 		r.serviceText(line, user)
+		r.trayText(line)
 		if live {
 			line("进程：pid %d · 版本 %s", st.PID, st.Version)
 		}
@@ -220,6 +229,7 @@ func (r report) text(now time.Time, user string) string {
 		}
 	}
 	r.serviceText(line, user)
+	r.trayText(line)
 	if live {
 		line("进程：pid %d · 版本 %s", st.PID, st.Version)
 	}
@@ -295,6 +305,22 @@ func (r report) passiveText(line func(string, ...any), now time.Time, live bool)
 	if r.Paired {
 		line("主动模式也配对过（hub 上的「%s」）：persona-link mode active 切回去", r.Machine)
 	}
+}
+
+// trayText is the report's line about the Windows tray.
+func (r report) trayText(line func(string, ...any)) {
+	t := r.Tray
+	if t == nil {
+		return
+	}
+	running, at := "没在运行（persona-link tray，或者重新 install）", "登录时不启动"
+	if t.Running {
+		running = "在运行"
+	}
+	if t.Autostart {
+		at = "登录时启动"
+	}
+	line("托盘图标：%s · %s", running, at)
 }
 
 // serviceText is the report's line about the systemd user service or the scheduled task.

@@ -99,7 +99,7 @@ func install(e *env, args []string) error {
 	var pairLink, machine, listen, personad string
 	var addrs []string
 	nodeBinAny := false // --node-bin: either program, asked which (nodeInstall)
-	pairing, passive, withNode := false, false, true
+	pairing, passive, withNode, withTray := false, false, true, true
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
 		case a == "--pair": // the link, or - or nothing for stdin
@@ -112,6 +112,8 @@ func install(e *env, args []string) error {
 			pairing, pairLink = true, strings.TrimPrefix(a, "--pair=")
 		case a == "--no-node":
 			withNode = false
+		case a == "--no-tray":
+			withTray = false
 		default:
 			if v, next, ok := optionalValue(args, i, "--listen"); ok {
 				passive, listen, i = true, v, next
@@ -190,7 +192,7 @@ func install(e *env, args []string) error {
 		}
 	}
 	if e.goos == "windows" {
-		return installTask(e, withNode, personad, invite) // winservice.go
+		return installTask(e, withNode, withTray, personad, invite) // winservice.go
 	}
 	bin, copied, err := e.installBinary()
 	if err != nil {

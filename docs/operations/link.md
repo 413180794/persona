@@ -13,7 +13,7 @@ the computer can connect to the hub or accept a connection from it. The recommen
 
 ## Two modes
 
-The same persona-link supports both, selected during pairing and changeable anytime (`persona-link mode active|passive`, or the menu bar App's pairing window). Each mode stores its pairing separately, so switching back doesn't require pairing again.
+The same persona-link supports both, selected during pairing and changeable anytime (`persona-link mode active|passive`, or the pairing window of the Mac menu bar App or the Windows tray). Each mode stores its pairing separately, so switching back doesn't require pairing again.
 
 | Mode | Who connects to whom | Best for | Requirements |
 | --- | --- | --- | --- |
@@ -50,9 +50,9 @@ an existing agent is left unchanged (for example one from `scripts/deploy/node-l
 The agent it writes has `ProcessType=Interactive` (the same as `node-launchd.sh`), so launchd doesn't throttle the node like a background job. Since an existing installation is left unchanged, one written before #5944 lacks it: `personad node doctor` reports it and `personad node doctor --fix` adds it (docs/server/server.md "Scheduling and privacy on the Mac").
 App updates don't replace the installed resident node. Nodes supporting the update protocol can be remotely updated by the hub over the existing connection, with backup, rollback and online confirmation; first-time local upgrades for old nodes, progress and installation boundaries are in [node-update.md](node-update.md) (#1158).
 
-**Windows** (Orca engine, [windows.md](windows.md) ("Installation and startup")): `persona-link install --personad <personad.exe> [--pair '<link>']`, without admin privileges.
+**Windows** (Orca engine, [windows.md](windows.md) ("Install and start at logon")): `persona-link install --personad <personad.exe> [--pair '<link>']`, without admin privileges.
 Registers the current user's scheduled task **Persona Link**, starting at sign-in and checked every 5 minutes; it runs a windowless supervisor (`persona-link supervise`), which starts
-persona-link and the resident node and restarts them on exit. Both are in one task (no separate `node install`). There is no one-command installer script or installation package (#1179).
+persona-link and the resident node and restarts them on exit. Both are in one task (no separate `node install`). It also installs and starts the tray icon ([windows.md](windows.md), "Tray"; `--no-tray` skips it). There is no one-command installer script or installation package (#1179).
 
 ### The device's program
 
@@ -94,7 +94,7 @@ A device runs persona-node (`server/cmd/persona-node`), the node and the command
   - When the link disconnects, this computer goes offline immediately; while the manager is away the hub returns 503 on `/api/v1/link`, and Persona Link backs off normally and connects when the manager returns.
 - **Mac** uses the **Persona Link** menu bar App (`apple/PersonaLink/`), with persona-link packaged as a helper and started and supervised by the App.
   On **Linux** (servers, NAS, Raspberry Pi, no GUI), `persona-link install` installs itself as a systemd user service; see "Linux (headless)";
-  on **Windows**, it installs as a sign-in scheduled task supervising both it and the resident node; see [windows.md](windows.md), "Installation and startup".
+  on **Windows**, it installs as a sign-in scheduled task supervising both it and the resident node, plus a tray icon that does what the Mac App's menu does; see [windows.md](windows.md), "Install and start at logon" and "Tray".
 
 ## Link (active mode)
 
@@ -170,8 +170,8 @@ persona-link ── WSS /api/v1/link ──▶ hub TLS port (public.tls_listen)
   - If the link's original local address is gone, reconnect immediately;
   - If still present, ping immediately (3 seconds, or the hub-configured heartbeat timeout if longer), reconnecting on failure;
   - If already disconnected, retry immediately.
-- Linux: persona-link watches address changes itself with netlink (`internal/netaddr`).
-- **Reconnect now** is `SIGUSR2`. Waiting for pong blocks neither this nor the network-change check: on a slow link, ping may wait the hub's entire configured timeout.
+- Linux: persona-link watches address changes itself with netlink (`internal/netaddr`); Windows: with `NotifyIpInterfaceChange` (same package).
+- **Reconnect now** is `SIGUSR2`. Windows has no such signals: there the two are named events the tray sets ([windows.md](windows.md), "Tray"). Waiting for pong blocks neither this nor the network-change check: on a slow link, ping may wait the hub's entire configured timeout.
 
 **Forwarding**
 - Only forwards to `~/.persona/node-attach.sock` and only connects back to the hub address used by this link; stream ids may contain only letters, digits, `-`, `_`. The hub can't make it connect elsewhere.
@@ -470,7 +470,7 @@ On servers, NAS boxes and Raspberry Pis without a GUI, `persona-link` alone is e
 
 **Build**
 - Pure Go, no cgo: `cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o persona-link ./cmd/persona-link`.
-  Builds for `amd64`, `arm64` and 32-bit Raspberry Pi (`GOARCH=arm GOARM=7`); Windows also builds (file locks and signals in platform-specific files), but has no tray app yet (#299).
+  Builds for `amd64`, `arm64` and 32-bit Raspberry Pi (`GOARCH=arm GOARM=7`); Windows also builds (file locks and signals in platform-specific files), with a tray icon instead of the menu bar App ([windows.md](windows.md), "Tray").
 - `personad` also builds for Windows (`GOOS=windows go build ./...`; process groups, signals, file locks and CPU time are platform-specific in `internal/osproc` and each package's `_windows.go`),
   and the Windows resident node works with Orca; `persona-link install` installs a sign-in scheduled task on Windows (the Windows paragraph under "Install the node service"), see [windows.md](windows.md).
 - The resident node runs the device's program, persona-node, built from the same commit (`~/.persona/bin/persona-node`; personad where the computer has no persona-node or runs a hub or a manager, "The device's program"); `scripts/deploy/node-launchd.sh install` installs a personad node on Linux as systemd user service `personad-node`.

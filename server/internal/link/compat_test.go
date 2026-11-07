@@ -116,3 +116,20 @@ func TestCompatTLSIdentityKeepsLegacyCertificateAndPin(t *testing.T) {
 		t.Fatal("renewal changed the pin")
 	}
 }
+
+// The exported pair: what the Windows tray asks Windows to open and accepts as a pairing link.
+func TestPairSchemesAreTheCurrentAndTheBaseline(t *testing.T) {
+	if got := PairSchemes(); len(got) != 2 || got[0] != "persona" || got[1] != legacyPairScheme {
+		t.Fatalf("%q", got)
+	}
+	for _, s := range []string{"persona", "PERSONA", legacyPairScheme, strings.ToUpper(legacyPairScheme)} {
+		if !PairScheme(s) {
+			t.Errorf("%q not a pairing scheme", s)
+		}
+	}
+	for _, s := range []string{"", "https", "persona-link", "j"} {
+		if PairScheme(s) {
+			t.Errorf("%q taken for a pairing scheme", s)
+		}
+	}
+}

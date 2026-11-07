@@ -41,6 +41,21 @@ Read this before changing the Windows node (#1090), or developing or testing `pe
   so when it disappears (`/End`, a crash, or a kill), its children disappear too.
 - A running `.exe` cannot be overwritten or deleted. Before reinstalling, `/End` the task and wait for persona-link to release the run lock; during uninstall, the daemon file may take a moment to become deletable.
 
+## Tray (WebView2, notification area)
+
+`internal/linktray`; see [windows.md](../operations/windows.md) ("Tray"). Found on a physical Windows 11 machine on 2026-11-07:
+
+- **WebView2 holds back its callbacks while one of them runs**: creating a WebView inside a `WebMessageReceived` handler gets the environment back, but the controller's completion waits until the handler returns.
+  go-webview2's `Embed` spins a nested message loop until then, so it never returned: the pairing window stayed hidden, and the tray's thread stayed inside that loop (which also swallowed the quit message). Handle page messages after the event has returned (`app.fromPage` queues them).
+- **go-webview2's `PutRasterizationScale` passes a pointer to the double**: the COM method takes the double itself. On windows/amd64 Go's syscall also copies the integer arguments into the XMM registers, so pass `math.Float64bits(scale)`, as its `PutZoomFactor` does.
+  With the pointer, pages rendered at scale 0.5: `devicePixelRatio` was 0.5 and everything was half size.
+- **go-webview2 clears `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`** (and the other override variables) before it creates the environment, so Microsoft's documented way to add `--remote-debugging-port` does nothing. Pass flags through `AdditionalBrowserArgs` (`PERSONA_TRAY_DEVTOOLS=<port>`).
+- **Windows 11 puts new notification icons in the overflow**: UI Automation on the taskbar doesn't see them. `HKCU\Control Panel\NotifyIconSettings\<id>` (`ExecutablePath`, `InitialTooltip`) shows that the shell took the icon.
+  A tray run from a temporary directory leaves an entry there; delete it after testing.
+- **Tests must not touch the real registry**: the install tests once wrote the HKCU Run entry and the pairing link handlers, pointing at a test's temporary directory. Everything the tray does to the computer goes through `trayControl`, which tests fake.
+- **A page that loses focus hides the flyout**: while scripting the panel over CDP, Playwright's clicks wait for it to be visible forever; click with `element.click()` in the page.
+- **Push the new view to a hidden panel after an action**: the tray pushed views only while the panel was visible, so a switch flipped from the right-click menu, or an action that ended after the panel closed, left the page showing the old state, and the next open showed it too. After a user's action the tray pushes the view whether the panel is shown or not (`app.changed`).
+
 ## Machine monitoring (sysmon)
 
 `sysmon/windows.go`; see [machines.md](../server/machines.md) for measurement definitions. Findings tested on a physical machine on 2026-11-04:

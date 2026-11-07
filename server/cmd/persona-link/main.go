@@ -37,13 +37,14 @@ const usage = `用法：
                                                  看 / 切换模式：active 我去连 hub，passive 让 hub 来连；
                                                  两种模式的配对各自留着，切回去不用重新配对
   persona-link install [--pair <链接>|-] [--machine <id>] [--listen [<监听地址>]] [--addr <地址>]…
-                    [--node-bin <路径> | --personad <路径>] [--no-node]
+                    [--node-bin <路径> | --personad <路径>] [--no-node] [--no-tray]
                                                  Linux：装成 systemd 用户服务并启动，等它连上 hub（被动模式：等它开始监听）；
                                                  --pair 先配对（主动），--listen 改成被动模式、还没配对时打印配对链接；
                                                  常驻 node 的服务没装时一起装上（--no-node 不装）。
                                                  没有 systemd 时告诉你别的办法。
                                                  Windows：装成登录时启动的计划任务「Persona Link」，常驻 node 和
-                                                 persona-link 都在里面，退出了重启；--personad 给的 personad.exe 每次都换上
+                                                 persona-link 都在里面，退出了重启；--personad 给的 personad.exe 每次都换上；
+                                                 再装上任务栏的托盘图标（登录时启动，--no-tray 不装）
   persona-link node install [--node-bin <路径> | --personad <路径>] | switch [--to personad] | status [--json] | uninstall
                                                  常驻 node（node --attach）的服务：Linux systemd 用户服务
                                                  personad-node，Mac launchd 的 com.persona.node；已经装了的保持原样。
@@ -60,11 +61,13 @@ const usage = `用法：
   persona-link run [--parent] [--log <文件>]      保持链路（前台），状态一行一个 JSON 打到标准输出；
                                                  --parent：标准输入关掉就退出（菜单栏 App 这样启动它）；
                                                  --log：日志写进这个文件（满 1 MB 换一个），不写标准错误
+  persona-link tray [--open <配对链接>]           Windows 的托盘图标：看状态、立即重连、配对、开机启动（install 装好的
+                                                 会在登录时自己启动）；--open 打开配对窗口并填上这条链接
   persona-link address add <地址>                 手动加一个 hub 的候选地址（https://域名:端口，或 域名）
   persona-link address remove <地址>              去掉手动加的地址
   persona-link version
 
-信号（Linux、Mac）：SIGUSR1 网络变了，马上看一眼链路；SIGUSR2 断开重连。`
+信号（Linux、Mac）：SIGUSR1 网络变了，马上看一眼链路；SIGUSR2 断开重连。Windows 上是同名的命名事件（托盘发）。`
 
 // exitCode ends the program with a code and nothing printed: what it had to say is already out.
 type exitCode int
@@ -109,6 +112,8 @@ func main() {
 		err = run(args)
 	case "supervise": // what the Windows scheduled task runs (supervise_windows.go); not for people
 		err = supervise(e, args)
+	case "tray":
+		err = trayCmd(e, args)
 	case "address":
 		err = address(args)
 	case "version", "--version", "-v":
@@ -136,7 +141,8 @@ var errUsage = errors.New("usage")
 
 // helpTopics are the subcommands `<sub> -h` answers for (supervise is not for people: its -h shows the whole usage).
 var helpTopics = map[string]bool{"pair": true, "mode": true, "node": true, "discover": true, "install": true,
-	"uninstall": true, "status": true, "logs": true, "log": true, "run": true, "supervise": true, "address": true}
+	"uninstall": true, "status": true, "logs": true, "log": true, "run": true, "supervise": true, "address": true,
+	"tray": true}
 
 // wantsHelp says whether args ask for help (-h, -help or --help anywhere).
 func wantsHelp(args []string) bool {
@@ -349,7 +355,7 @@ func keepLink(ctx context.Context, path, logPath string, stdout io.Writer) error
 		default:
 		}
 	}
-	notifySignals(func() { poke(check) }, func() { poke(redial) })
+	notifySignals(ctx, path, func() { poke(check) }, func() { poke(redial) })
 	// Address changes: netlink on Linux; elsewhere a slow poll, and the menu bar app signals as soon as it sees one.
 	go func() {
 		first := true
