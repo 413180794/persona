@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -305,6 +306,34 @@ func TestHerdrServerEnvIsClean(t *testing.T) {
 	}
 	if a := herdrServerArgv("/bin/zsh", "/Users/me/my tools/herdr", nil); a[len(a)-1] != "exec '/Users/me/my tools/herdr' server" {
 		t.Fatalf("quoted %q", a[len(a)-1])
+	}
+}
+
+// The data directory a node was told to use (PERSONA_HOME) reaches the server, and so every pane's shell: `personad
+// launch` and the hooks find the node's socket by it (nodeclient.SocketPath). Without it a pane looks for
+// ~/.persona/node.sock while the node listens in the custom directory.
+func TestHerdrServerEnvKeepsTheDataDirectory(t *testing.T) {
+	custom := filepath.Join(t.TempDir(), "data")
+	for _, name := range []string{"PERSONA_HOME", "JARVIS_HOME"} { // the second is the older name the node still reads
+		t.Run(name, func(t *testing.T) {
+			environ := []string{"HOME=/Users/me", name + "=" + custom, "ANTHROPIC_API_KEY=sk-test"}
+			got := herdrServerEnv(environ, "/bin/sh")
+			if !slices.Contains(got, name+"="+custom) {
+				t.Fatalf("%s is not in the server's environment: %q", name, got)
+			}
+			if slices.Contains(got, "ANTHROPIC_API_KEY=sk-test") {
+				t.Fatalf("the clean environment let a secret through: %q", got)
+			}
+			if runtime.GOOS == "windows" {
+				return
+			}
+			// What a pane's shell sees, started the way the node starts the server.
+			argv := append([]string{"-i"}, got...)
+			out, err := exec.Command("/usr/bin/env", append(argv, "/bin/sh", "-c", "printf %s \"$"+name+"\"")...).Output()
+			if err != nil || string(out) != custom {
+				t.Fatalf("a process in the clean environment sees %s=%q (%v), want %q", name, out, err, custom)
+			}
+		})
 	}
 }
 

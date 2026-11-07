@@ -171,7 +171,7 @@ After reboot, launchd / systemd starts node, but no terminal has started classic
   Linux systemd-user nodes instead use `systemd-run --user --unit=persona-herdr-server` (stopping the node unit kills its whole cgroup).
   Wait for connectable socket (at most 20 seconds) before create / continue.
 - **Clean environment**: herdr server passes its environment to every pane and claude. Node uses `env -i` with only `HOME`, `USER`, `LOGNAME`, `TMPDIR`, language,
-  `XDG_*`, `HERDR_SOCKET_PATH`, then user's login shell (`$SHELL -l -c 'exec herdr server'`; if launchd has no `SHELL`, read account login shell).
+  `XDG_*`, `HERDR_SOCKET_PATH`, `PERSONA_HOME` (panes find the node socket in that directory), then user's login shell (`$SHELL -l -c 'exec herdr server'`; if launchd has no `SHELL`, read account login shell).
   PATH comes from that shell; no node / launcher `ANTHROPIC_*` or proxy variables. Find herdr on node PATH first, then ask login shell.
 - **Only one**: in-node mutex plus `flock` on herdr configuration directory (another node for the same account); recheck socket after locking.
 - **Switch**: per machine, "Automatically start herdr when needed" below **Settings › Machines › Engine**. hub.json

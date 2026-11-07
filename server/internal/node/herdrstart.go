@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -208,10 +209,18 @@ func herdrBinary(ctx context.Context, bin string) string {
 }
 
 // herdrServerKeep are the variables the server's clean environment takes from the node's: who and where the user is,
-// the locale, and where herdr's socket and config are (so it listens where the node looks). Nothing else — no
-// ANTHROPIC_*, no proxies, no PATH: the login shell sets its own.
-var herdrServerKeep = []string{"HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE",
-	"XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_SOCKET_PATH"}
+// the locale, where herdr's socket and config are (so it listens where the node looks), and where Persona's data
+// directory is (PERSONA_HOME, and the older name the node still reads): every pane inherits it, and `personad launch`
+// and the hooks find the node's socket in that directory. Nothing else — no ANTHROPIC_*, no proxies, no PATH: the
+// login shell sets its own.
+var herdrServerKeep = append([]string{"HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE",
+	"XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_SOCKET_PATH"}, personaHomeNames()...)
+
+// personaHomeNames are the names identity.DataDir reads the data directory from.
+func personaHomeNames() []string {
+	current, legacy := compat.EnvNames("PERSONA_HOME")
+	return []string{current, legacy}
+}
 
 // herdrServerEnv is the environment the login shell starts with: the kept variables of environ, the shell, a
 // terminal type and the system PATH (the login shell's profile builds on it).
