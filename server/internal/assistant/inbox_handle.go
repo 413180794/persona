@@ -187,7 +187,7 @@ func (s *Service) conversationsByEvent(ctx context.Context) map[string]SessionRe
 	}
 	out, at := map[string]SessionRef{}, map[string]time.Time{}
 	for sid, o := range b.m {
-		if o.Origin == OriginInbox && o.Ref != "" && (at[o.Ref].IsZero() || o.At.After(at[o.Ref])) {
+		if o.Origin == OriginInbox && o.Ref != "" && !s.isWorkMachine(o.MachineID) && (at[o.Ref].IsZero() || o.At.After(at[o.Ref])) {
 			out[o.Ref], at[o.Ref] = SessionRef{MachineID: o.MachineID, SessionID: sid}, o.At
 		}
 	}
@@ -238,6 +238,15 @@ func (s *Service) deliverNotes(ctx context.Context, it *InboxItem) {
 	machine, sid, wake, told := a.MachineID, a.SessionID, a.Wake, a.told
 	notes := append([]inboxNote(nil), a.Pending...)
 	b.mu.Unlock()
+	if s.isWorkMachine(machine) {
+		b.mu.Lock()
+		if it.Agent == a && a.SessionID == sid {
+			b.failHandling(it, i18n.T(s.lang(ctx), "assistant-start.work_machine"), time.Now())
+		}
+		b.mu.Unlock()
+		s.saveInbox(ctx, []*InboxItem{it})
+		return
+	}
 	texts := make([]string, len(notes))
 	for i, n := range notes {
 		texts[i] = renderNote(n, owner)

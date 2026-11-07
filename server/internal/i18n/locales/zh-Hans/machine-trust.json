@@ -1,0 +1,4 @@
+{
+  "invalid_trust": "电脑 {machine} 的 trust 必须是 personal 或 work。",
+  "assistant_machine": "工作电脑 {machine} 不能运行助手。请选择个人电脑。"
+}

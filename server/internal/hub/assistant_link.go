@@ -124,6 +124,11 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	}
 	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Standby: h.isMember()}
 	out.Assistant.Machines = h.machineIDs()
+	for _, id := range out.Assistant.Machines {
+		if h.machineIsWork(id) {
+			out.Assistant.WorkMachines = append(out.Assistant.WorkMachines, id)
+		}
+	}
 	out.PersonaView, out.HTMLViews = h.assistantCards()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
 	// The finished push's timings: the manager's to apply (fleet_push.go there).
@@ -433,18 +438,20 @@ func (h *Hub) placedFor(hello assistantwire.Hello, id string) assistantwire.Hell
 		}
 	}
 	hello.Assistant.Machines = own
-	if !slices.Contains(own, hello.Assistant.MachineID) {
+	hello.Assistant.WorkMachines = slices.DeleteFunc(slices.Clone(hello.Assistant.WorkMachines), func(mid string) bool { return !slices.Contains(own, mid) })
+	eligible := slices.DeleteFunc(slices.Clone(own), func(mid string) bool { return h.machineIsWork(mid) })
+	if !slices.Contains(eligible, hello.Assistant.MachineID) {
 		hello.Assistant.MachineID = ""
 		for _, m := range h.machinesNow() {
-			if slices.Contains(own, m.cfg.ID) && (hello.Assistant.MachineID == "" || m.cfg.Kind == "local") {
+			if slices.Contains(eligible, m.cfg.ID) && (hello.Assistant.MachineID == "" || m.cfg.Kind == "local") {
 				hello.Assistant.MachineID = m.cfg.ID
 				if m.cfg.Kind == "local" {
 					break
 				}
 			}
 		}
-		if hello.Assistant.MachineID == "" && len(own) > 0 {
-			hello.Assistant.MachineID = own[0]
+		if hello.Assistant.MachineID == "" && len(eligible) > 0 {
+			hello.Assistant.MachineID = eligible[0]
 		}
 	}
 	if hello.Models.Launchers != nil {

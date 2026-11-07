@@ -335,7 +335,7 @@ const projectOutcomesMost = 5
 // its projects' one line and latest todo outcomes (todo/project); empty when the directory is no project's or the
 // knowledge base is not open (the agent starts without it).
 func (s *Service) projectContext(ctx context.Context, machine, dir string) string {
-	if strings.TrimSpace(dir) == "" {
+	if strings.TrimSpace(dir) == "" || s.isWorkMachine(machine) {
 		return ""
 	}
 	e, err := s.kbGet(ctx)

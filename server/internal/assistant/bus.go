@@ -66,8 +66,8 @@ type BusHub struct {
 	legacyMu   sync.Mutex
 	legacy     json.RawMessage
 	legacySaid bool
-	svc    *Service
-	ctx    context.Context // Serve's
+	svc        *Service
+	ctx        context.Context // Serve's
 
 	// helloed is closed once the first hello's answer is kept (setHello): the hub's calls and events can come in on
 	// their own goroutines before that answer is, and what they need of it (the hub's kb settings, its machines)
@@ -166,6 +166,14 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	if err := json.Unmarshal(res, &h); err != nil {
 		return err
 	}
+	if own, err := readOwnConfig(b.opts.ConfigFile); err == nil {
+		if err := own.validatePlacement(h); err != nil {
+			// Existing node connections survive a failed hub handshake. Keep its new
+			// restrictions before rejecting placement, so they cannot serve stale access.
+			b.setHello(h)
+			return err
+		}
+	}
 	h = b.setHello(h)
 	b.mu.Lock()
 	svc, ctx := b.svc, b.ctx
@@ -253,6 +261,9 @@ func (b *BusHub) setHello(h Hello) Hello {
 	}
 	b.legacyMu.Unlock()
 	own, err := readOwnConfig(b.opts.ConfigFile)
+	if err == nil {
+		err = own.validatePlacement(h)
+	}
 	b.mu.Lock()
 	if err != nil {
 		own = b.own

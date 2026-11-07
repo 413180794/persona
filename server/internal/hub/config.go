@@ -20,6 +20,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/managerconf"
 
@@ -31,6 +32,8 @@ import (
 type MachineConfig struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Trust limits access to personal data: empty/personal preserves existing access; work isolates this machine.
+	Trust string `json:"trust,omitempty"`
 	// Kind: local | service (the hub dials the computer's connector, service.go) | link (the computer's persona-link
 	// dials the hub, link.go) | ssh | tailcat (tailcat only, no ssh). ssh and tailcat are kept for hub.json files that
 	// have them (docs/plan-hub-center.md 4).
@@ -223,6 +226,13 @@ func LoadConfig() (*Config, error) {
 					return nil, err
 				}
 			}
+		}
+	}
+	for _, machine := range cfg.Machines {
+		switch machine.Trust {
+		case "", "personal", "work":
+		default:
+			return nil, i18n.Err("machine-trust.invalid_trust", i18n.Args{"machine": machine.ID})
 		}
 	}
 	cfg.applyEnv()

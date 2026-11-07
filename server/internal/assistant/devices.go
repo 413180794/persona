@@ -79,6 +79,9 @@ func (s *Service) NodeAnswer(ctx context.Context, machine, method string, params
 	switch method {
 	case "assistant.model":
 		_ = json.Unmarshal(params, &p)
+		if !s.assistantCaller(ctx, machine, p.SessionID) {
+			return map[string]any{}, true, nil
+		}
 		out, err := s.SendParams(ctx, SendParams{MachineID: machine, SessionID: p.SessionID, Params: map[string]any{}})
 		return out, true, err
 	case "assistant.context":
@@ -87,6 +90,9 @@ func (s *Service) NodeAnswer(ctx context.Context, machine, method string, params
 		// user's state (guest.go).
 		if s.isGuest(ctx, machine, p.SessionID) {
 			return map[string]any{}, true, nil
+		}
+		if !s.assistantCaller(ctx, machine, p.SessionID) {
+			return ContextResult{}, true, nil
 		}
 		return s.Context(ctx, ContextParams{SessionID: p.SessionID, MachineID: machine, Ack: p.Ack}), true, nil
 	}

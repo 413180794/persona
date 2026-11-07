@@ -1,6 +1,8 @@
 package assistant
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -131,5 +133,74 @@ func TestSetHelloUsesTheHubsSectionsItCouldNotTake(t *testing.T) {
 	}
 	if c, err := readOwnConfig(filepath.Join(dir, "gone", "manager.json")); err != nil || c.KB == nil {
 		t.Fatalf("manager.json %+v %v", c, err)
+	}
+}
+
+func TestOwnConfigRejectsWorkAssistantMachine(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "manager.json")
+	write := func(machine string) {
+		t.Helper()
+		if err := os.WriteFile(file, []byte(`{"assistant":{"machine":"`+machine+`"}}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := Hello{Assistant: assistantwire.Placement{MachineID: "personal", Machines: []string{"personal", "work"}, WorkMachines: []string{"work"}}}
+	write("personal")
+	b := NewBusHub(BusOptions{ConfigFile: file, Logf: t.Logf})
+	if got := b.setHello(h); got.Assistant.MachineID != "personal" {
+		t.Fatalf("personal placement: %+v", got.Assistant)
+	}
+	write("work")
+	c, err := readOwnConfig(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.validatePlacement(h); err == nil {
+		t.Fatal("accepted a work assistant machine")
+	}
+	if got := c.over(h); got.Assistant.MachineID != "personal" {
+		t.Fatalf("work override: %+v", got.Assistant)
+	}
+	if got := b.setHello(h); got.Assistant.MachineID != "personal" {
+		t.Fatalf("invalid live edit changed placement: %+v", got.Assistant)
+	}
+	// A fresh manager reports the bad configuration before its handshake can expose any data.
+	fresh := NewBusHub(BusOptions{ConfigFile: file, Logf: t.Logf})
+	raw, _ := json.Marshal(h)
+	if err := fresh.onHello(raw); err == nil {
+		t.Fatal("handshake accepted work assistant.machine")
+	}
+	// A previously valid setting cannot restore a machine whose trust has changed.
+	write("personal")
+	h.Assistant.WorkMachines = append(h.Assistant.WorkMachines, "personal")
+	if got := b.setHello(h); got.Assistant.MachineID != "" {
+		t.Fatalf("stale configuration restored work placement: %+v", got.Assistant)
+	}
+}
+
+func TestRejectedPlacementStillRestrictsConnectedWorkMachine(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "manager.json")
+	if err := os.WriteFile(file, []byte(`{"assistant":{"machine":"computer"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	b := NewBusHub(BusOptions{ConfigFile: file, Logf: t.Logf})
+	h := Hello{Assistant: assistantwire.Placement{MachineID: "computer", Machines: []string{"computer"}}}
+	b.setHello(h)
+	d := newFleetDevs()
+	d.add("computer", "Computer") // the existing node still has the old, personal configuration
+	s := New(Options{Hub: b, Devices: d, Logf: t.Logf})
+	if s.isWorkMachine("computer") {
+		t.Fatal("initial personal configuration is restricted")
+	}
+	h.Assistant.WorkMachines = []string{"computer"}
+	raw, _ := json.Marshal(h)
+	if err := b.onHello(raw); err == nil {
+		t.Fatal("invalid placement accepted")
+	}
+	if !s.isWorkMachine("computer") {
+		t.Fatal("rejected handshake retained stale personal access")
+	}
+	if got := s.mcpCall(context.Background(), "computer", "session", "phone_contacts", nil, false); !got.IsError {
+		t.Fatal("existing node retained phone access")
 	}
 }

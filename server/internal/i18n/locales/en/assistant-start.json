@@ -2,5 +2,6 @@
   "rename_main": "The main chat has no title to change",
   "main_changed": "The main chat has already changed. Refresh and try again.",
   "main_busy": "The main chat is answering or compacting. Start a new one once it stops.",
-  "guest_node_too_old": "The personad on this computer is too old for guest conversations; update it and try again."
+  "guest_node_too_old": "The personad on this computer is too old for guest conversations; update it and try again.",
+  "work_machine": "Assistant conversations cannot run on a work computer. Choose a personal computer."
 }

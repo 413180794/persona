@@ -73,6 +73,8 @@ type Placement struct {
 	Launcher string `json:"launcher,omitempty"`
 	// Machines are the machines the hub has: a machine the assistant saved that is none of them is not used.
 	Machines []string `json:"machines,omitempty"`
+	// WorkMachines are configured work computers, including aliases; none may host the assistant.
+	WorkMachines []string `json:"work_machines,omitempty"`
 	// Standby: this hub is a member of a mesh group, whose center runs the scheduled tasks (docs/mesh.md).
 	Standby bool `json:"standby,omitempty"`
 }

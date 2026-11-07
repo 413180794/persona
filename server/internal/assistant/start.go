@@ -38,6 +38,8 @@ const mainTitle = "Persona"
 
 var errRenameMain = i18n.Err("assistant-start.rename_main")
 
+var errWorkAssistant = i18n.Err("assistant-start.work_machine")
+
 // claudeMD is the assistant directory's CLAUDE.md (prompts/assistant/claude_md.md) for its machine here. Its machine
 // list is written from where the assistant actually runs: the ssh_host names are the hub machine's ssh aliases, which
 // work only for an assistant on the hub's own machine, and a link (or tailcat) machine has no ssh at all; from anywhere
@@ -73,6 +75,9 @@ func (s *Service) prepare(ctx context.Context, machine string) (string, error) {
 // prepareSpace is prepare for one of the assistant's spaces: "health" is the health space's directory with its own
 // CLAUDE.md (docs/health.md); the connectors and plugin skills go there as to the assistant's own.
 func (s *Service) prepareSpace(ctx context.Context, machine, space string) (string, error) {
+	if s.isWorkMachine(machine) {
+		return "", errWorkAssistant
+	}
 	var conns struct {
 		Connectors []string          `json:"connectors"`
 		CLIs       map[string]string `json:"clis"`
@@ -174,6 +179,13 @@ func (s *Service) start(ctx context.Context, p StartParams) (proto.Session, erro
 	if machine == "" {
 		machine = s.settings(ctx).MachineID
 	}
+	if s.isWorkMachine(machine) {
+		return proto.Session{}, errWorkAssistant
+	}
+	// MCP discovery can arrive before assistant.send returns its session ID. Keep the
+	// manager's authorization until the resulting conversation's origin is recorded.
+	finishStart := s.beginAssistantStart(machine)
+	defer finishStart()
 	sess, err := s.startOn(ctx, machine, p)
 	if errors.Is(err, ErrNoDevice) && p.MachineID == "" {
 		return proto.Session{}, errNoAssistantMachine

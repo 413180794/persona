@@ -1,0 +1,4 @@
+{
+  "invalid_trust": "コンピュータ {machine} の trust には personal または work を指定してください。",
+  "assistant_machine": "仕事用コンピュータ {machine} ではアシスタントを実行できません。個人用コンピュータを選択してください。"
+}

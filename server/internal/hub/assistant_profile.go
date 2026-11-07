@@ -96,7 +96,7 @@ func (h *Hub) isMainOn(machine, session string) bool { return h.mainOf(machine, 
 // defaultAssistantMachine is where the hub would run the assistant: the hub's own machine, else the first one; never a
 // computer waiting to be confirmed (machine_trust.go). The manager's manager.json assistant.machine goes over it.
 func (h *Hub) defaultAssistantMachine() string {
-	machines := slices.DeleteFunc(h.machinesNow(), func(m *Machine) bool { return h.machineUntrusted(m.cfg.ID) })
+	machines := slices.DeleteFunc(h.machinesNow(), func(m *Machine) bool { return h.machineUntrusted(m.cfg.ID) || h.machineIsWork(m.cfg.ID) })
 	for _, m := range machines {
 		if m.cfg.Kind == "local" {
 			return m.cfg.ID

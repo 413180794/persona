@@ -3,6 +3,19 @@
 Persona in the "Persona" tab is Claude Code running **headlessly** in `~/.persona/assistant` on the hub machine (`claude -p` + stream-json; see
 `docs/claude-integration.md` ("Headless assistant")). A Codex launcher uses `codex app-server` instead ("Codex" below); a launcher for an assistant-capable Agent runtime (DSH) runs in that runtime ("Agent runtime (DSH)" below). This doc covers what it can do, how it works, and the trade-offs behind the 2026-10-26 capability upgrade.
 
+## Work computers and personal context
+
+Set `machines[].trust` to `"work"` in `hub.json` to keep personal assistant data off that computer (see [config.md](config.md)).
+Ordinary Agents can still run there and receive tasks from personal computers and the assistant. Their task prompts do not receive the automatic knowledge-base project background or previous project outcomes. The task text the user or assistant explicitly supplies is still sent.
+
+Assistant conversations, including guest conversations and the Inbox AI twin, cannot start on a work computer. The manager refuses before preparing the assistant directory or sending instructions, memory locations, connector skills, or the first message. An Inbox twin already associated with a computer later marked `work` receives no further notes and is marked failed; its conversation is not adopted after a restart. Select a personal computer for the twin to start new handling conversations.
+
+Omitting `trust`, or setting it to `"personal"`, preserves the existing task-context and Inbox placement behavior.
+
+The manager verifies the calling machine for `mcp.tools`, `mcp.call`, `assistant.context`, and `assistant.model`. The node's `assistant` flag only requests the assistant tool set. The configured assistant computer and Inbox twin computer can bootstrap sessions before runtime session IDs are available; a known ordinary Agent or host pane does not acquire assistant privileges. A conversation explicitly started by the manager on another personal computer is authorized during startup and then by its recorded machine and session. Runtime tool discovery without a session ID can rediscover the tool schemas on that computer after startup; execution still requires its recorded session. Guest conversations retain their restricted tool whitelist and receive no live context. `assistant.lark` remains restricted to the configured assistant computer.
+
+Changing trust does not erase context already delivered to a computer or terminate an existing process. New personal-data tool calls and Inbox deliveries are refused; ordinary Agent supervision and question / approval cards remain available.
+
 ## Why it was weak before 2026-10-26 (from real chat records)
 
 - **Broken confirmation**: CLAUDE.md told it to confirm through AskUserQuestion, but in `-p` that tool immediately reports

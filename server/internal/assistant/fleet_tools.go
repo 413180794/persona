@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -46,6 +47,7 @@ func (s *Service) mcpTools(ctx context.Context, assistant bool) []proto.Tool {
 // sessionMCPTools are machine's conversation session's tools: a guest conversation's only its own (guest.go; the
 // node saying it is one, the hub not knowing it or not able to tell: none), any other's mcpTools.
 func (s *Service) sessionMCPTools(ctx context.Context, machine, session string, assistant, guestHint bool) []proto.Tool {
+	assistant = assistant && s.assistantDiscovery(ctx, machine, session)
 	allowed, guest, err := s.guestOf(ctx, machine, session)
 	if err != nil {
 		s.logf("mcp tools: %v", err)
@@ -55,7 +57,13 @@ func (s *Service) sessionMCPTools(ctx context.Context, machine, session string, 
 		if guestHint {
 			return []proto.Tool{}
 		}
+		if s.isWorkMachine(machine) {
+			return s.AgentTools()
+		}
 		return s.mcpTools(ctx, assistant)
+	}
+	if s.isWorkMachine(machine) {
+		return []proto.Tool{}
 	}
 	return guestTools(s.mcpTools(ctx, assistant), allowed)
 }
@@ -79,6 +87,15 @@ func (s *Service) guestRefuses(ctx context.Context, machine, session, name strin
 // mcpCall runs one: a connector's, Cua's or ego's at the hub (it says whether it is one of them), else the
 // assistant's own (for its conversations), else the phone's.
 func (s *Service) mcpCall(ctx context.Context, machine, session, name string, args json.RawMessage, assistant bool) proto.ToolResult {
+	if s.isWorkMachine(machine) {
+		if isAgentTool(name) {
+			return s.agentTool(ctx, machine, session, name, args)
+		}
+		return proto.TextResult(i18n.T(s.lang(ctx), "assistant-privacy.tool_denied"), true)
+	}
+	if assistant && !s.assistantCaller(ctx, machine, session) {
+		return proto.TextResult(i18n.T(s.lang(ctx), "assistant-privacy.assistant_denied"), true)
+	}
 	if s.ext != nil { // the connectors', Cua's, ego's: ctx is the node's call (its caller going away withdraws a card)
 		if res, ok := s.ext.CallTool(ctx, machine, session, name, args, assistant); ok {
 			return res
@@ -117,7 +134,7 @@ func (s *Service) isOwnTool(ctx context.Context, name string) bool {
 // settings and rules, and the plugins' command gates (the hub's, app.call hub). Another machine gets nothing: the
 // credentials go to the assistant's machine only (its process runs them).
 func (s *Service) assistantLark(ctx context.Context, machine string) (proto.AssistantLark, error) {
-	if machine != s.settings(ctx).MachineID {
+	if s.isWorkMachine(machine) || !s.sameMachine(machine, s.settings(ctx).MachineID) {
 		return proto.AssistantLark{}, nil
 	}
 	if s.ext == nil {

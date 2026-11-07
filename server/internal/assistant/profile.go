@@ -155,6 +155,12 @@ func (s *Service) effective(ctx context.Context, v Settings) Settings {
 	if v.MachineID == "" || !slices.Contains(def.Machines, v.MachineID) {
 		v.MachineID = def.MachineID
 	}
+	if s.isWorkMachine(v.MachineID) {
+		v.MachineID = def.MachineID
+		if s.isWorkMachine(v.MachineID) {
+			v.MachineID = ""
+		}
+	}
 	if v.Launcher == "" {
 		v.Launcher = def.Launcher
 	}
@@ -430,6 +436,10 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		machine = in.MachineID
+	}
+	if s.isWorkMachine(machine) {
+		apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-start.work_machine"))
+		return
 	}
 	if in.Launcher != "" {
 		if err := s.checkLauncher(ctx, machine, in.Launcher); err != nil {

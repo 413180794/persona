@@ -1,0 +1,4 @@
+{
+  "invalid_trust": "Machine {machine}: trust must be personal or work.",
+  "assistant_machine": "Work computer {machine} cannot host the assistant. Choose a personal computer."
+}

@@ -598,6 +598,7 @@ func (d *Devices) List() []Summary {
 		s := Summary{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: m.info.Home,
 			DataDir: m.info.DataDir, Online: m.online}
 		m.mu.Unlock()
+		s.Trust = d.machineTrust(m)
 		s.Reachable = m.reachable()
 		out = append(out, s)
 	}
@@ -619,6 +620,7 @@ func (d *Devices) Views() []View {
 		v := View{Summary: Summary{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: m.info.Home,
 			DataDir: m.info.DataDir, Online: m.online}, Info: m.info, Sessions: slices.Clone(m.sessions)}
 		m.mu.Unlock()
+		v.Trust = d.machineTrust(m)
 		v.Reachable = m.reachable()
 		out = append(out, v)
 	}
@@ -645,8 +647,8 @@ func (d *Devices) Relist(ctx context.Context, id string) error {
 
 // Summary is one machine for the assistant (assistantwire.Device).
 type Summary struct {
-	ID, Name, Kind, SSHHost, Home, DataDir string
-	Online, Reachable                      bool
+	ID, Name, Kind, SSHHost, Home, DataDir, Trust string
+	Online, Reachable                             bool
 }
 
 // Has reports whether id is one of the machines (an entry another one absorbed included).

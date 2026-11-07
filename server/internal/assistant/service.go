@@ -72,6 +72,8 @@ type Service struct {
 	pubMu sync.Mutex
 	seq   uint64
 
+	startingAssistants assistantStarts // machine_privacy.go
+
 	titles     titleBook         // titles.go
 	prefs      settingsBook      // profile.go
 	main       mainBook          // start.go

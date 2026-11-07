@@ -137,7 +137,9 @@ func TestGuestConversationRefusals(t *testing.T) {
 // A guest conversation is listed and may call only its own tools; an ordinary conversation keeps every tool, and a
 // conversation the node says is a guest the hub does not know gets none.
 func TestGuestConversationTools(t *testing.T) {
-	s := newFleetTest(t).s // the nodes' requests are the fleet's
+	ft := newFleetTest(t) // the nodes' requests are the fleet's
+	ft.f.hello.Assistant.MachineID = "mac"
+	s := ft.s
 	ext := &guestExt{}
 	s.SetExtensions(ext)
 	ctx := context.Background()

@@ -30,9 +30,9 @@ type fleetDevs struct {
 }
 
 type fleetNode struct {
-	name, home string
-	sessions   []proto.Session
-	connected  time.Time
+	name, home, trust string
+	sessions          []proto.Session
+	connected         time.Time
 	// call answers the node's methods (nil: {}); calls are the ones it got.
 	call  func(method string, params json.RawMessage) (any, error)
 	calls []fleetCall
@@ -117,7 +117,7 @@ func (d *fleetDevs) List() []devices.Summary {
 	var out []devices.Summary
 	for _, id := range d.order {
 		n := d.machines[id]
-		out = append(out, devices.Summary{ID: id, Name: n.name, Home: n.home, Online: true, Reachable: true})
+		out = append(out, devices.Summary{ID: id, Name: n.name, Home: n.home, Trust: n.trust, Online: true, Reachable: true})
 	}
 	return out
 }

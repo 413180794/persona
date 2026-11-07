@@ -30,6 +30,8 @@ var errOffline = apierr.ErrOffline
 type MachineConfig struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Trust limits access to personal data: empty/personal preserves existing access; work isolates this machine.
+	Trust string `json:"trust,omitempty"`
 	// Kind: local | service (the manager dials the computer's connector, service.go) | link (the computer's
 	// Persona Link dials the hub, which relays it here, link.go) | ssh | tailcat (tailcat only, no ssh).
 	Kind    string `json:"kind"`

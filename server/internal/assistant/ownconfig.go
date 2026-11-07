@@ -9,6 +9,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/aiwire"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/managerconf"
 )
 
@@ -31,7 +32,7 @@ type ownConfig struct {
 		AI             *aiwire.Config `json:"ai"`
 		ExtraDirs      []string       `json:"extra_dirs"`
 	} `json:"kb"`
-	AI    *aiwire.Config `json:"ai"`
+	AI *aiwire.Config `json:"ai"`
 	// Inbox: of it the hello carried the models and the AI twin's machine, each replaced only when it is there (the
 	// rest of inbox is the extensions', extmgr.Config).
 	Inbox *struct {
@@ -62,6 +63,14 @@ func readOwnConfig(file string) (ownConfig, error) {
 	return c, err
 }
 
+// validatePlacement rejects a configured assistant machine that the hub classifies as work.
+func (c ownConfig) validatePlacement(h Hello) error {
+	if a := c.Assistant; a != nil && a.Machine != nil && slices.Contains(h.Assistant.WorkMachines, *a.Machine) {
+		return i18n.Err("machine-trust.assistant_machine", i18n.Args{"machine": *a.Machine})
+	}
+	return nil
+}
+
 // over is h with c's sections in place of the hello's.
 func (c ownConfig) over(h Hello) Hello {
 	if a := c.Assistant; a != nil {
@@ -71,7 +80,7 @@ func (c ownConfig) over(h Hello) Hello {
 		if a.Notes != nil {
 			h.OwnerNotes = strings.TrimSpace(*a.Notes)
 		}
-		if a.Machine != nil && slices.Contains(h.Assistant.Machines, *a.Machine) {
+		if a.Machine != nil && slices.Contains(h.Assistant.Machines, *a.Machine) && !slices.Contains(h.Assistant.WorkMachines, *a.Machine) {
 			h.Assistant.MachineID = *a.Machine
 		}
 		if a.Launcher != nil {
@@ -109,6 +118,9 @@ func (c ownConfig) over(h Hello) Hello {
 			minutes = 30
 		}
 		h.Notify.HookTimeoutMS = (time.Duration(minutes) * time.Minute).Milliseconds()
+	}
+	if slices.Contains(h.Assistant.WorkMachines, h.Assistant.MachineID) {
+		h.Assistant.MachineID = ""
 	}
 	if h.KB == nil { // no kb section anywhere: the knowledge base with its defaults (the hub always said so)
 		h.KB = &assistantwire.KBSettings{}

@@ -277,6 +277,9 @@ func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it 
 	if _, ok := s.device(ctx, machine); !ok || machine == "" {
 		return "", "", errNoInboxMachine
 	}
+	if s.isWorkMachine(machine) {
+		return "", "", errWorkAssistant
+	}
 	sess, err := s.Start(ctx, StartParams{Text: prompt, Purpose: purposeAgent, MachineID: machine, Untitled: true, Origin: OriginInbox,
 		OriginRef: it.ID})
 	if err != nil {
@@ -292,7 +295,7 @@ func (s *Service) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, it 
 // launcher missing, or a node that must be updated first. Anything else (a timeout, a dropped RPC, an offline or
 // waking machine, an unknown error) leaves the result unknown and is retried.
 func definiteStartError(err error) bool {
-	if errors.Is(err, errNoInboxMachine) || errors.Is(err, ErrNoDevice) {
+	if errors.Is(err, errNoInboxMachine) || errors.Is(err, ErrNoDevice) || errors.Is(err, errWorkAssistant) {
 		return true
 	}
 	var re *rpc.Error
@@ -359,6 +362,8 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 		b.mu.Unlock()
 		reason := ""
 		switch {
+		case s.isWorkMachine(a.MachineID):
+			reason = i18n.T(s.lang(ctx), "assistant-start.work_machine")
 		case state == HandlingAgent:
 			if a.StartedAt != nil && now.Sub(*a.StartedAt) > 4*agentTimeout(cfg) {
 				reason = i18n.T(s.lang(ctx), "assistant-inbox_agent.timeout")
