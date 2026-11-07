@@ -7521,11 +7521,19 @@ def fold_work(items):
             out += run
         else:
             tasks, images = fold_task_snapshots(run), viewed_images(run, items)
+            latest = next((x for x in reversed(run) if x["kind"] == "thinking" and (x.get("text") or "").strip()), None)
+            narration = {}
+            if latest:
+                preview = {k: latest[k] for k in ("id", "seq", "ts", "role", "kind", "text", "full_size") if k in latest}
+                if len(preview["text"]) > 512:
+                    preview["full_size"] = max(latest.get("full_size", 0), len(preview["text"].encode()))
+                    preview["text"] = preview["text"][:511] + "…"
+                narration["latest_thinking"] = preview
             out.append({"id": "fold:" + run[0]["id"], "seq": run[0]["seq"], "ts": run[0]["ts"], "role": "assistant", "kind": "fold",
                         "fold": {"items": len(run), "tools": sum(x["kind"] == "tool_use" for x in run),
                                  "thoughts": sum(x["kind"] == "thinking" and bool((x.get("text") or "").strip()) for x in run),
                                  "until": run[-1]["ts"], "through_seq": run[-1]["seq"], "through_id": run[-1]["id"],
-                                 **({"tasks": tasks} if tasks else {}), **({"images": images} if images else {})}})
+                                 **({"tasks": tasks} if tasks else {}), **({"images": images} if images else {}), **narration}})
         i = j
     return out
 

@@ -13,8 +13,9 @@ var subagentTools = map[string]bool{"Task": true, "Agent": true}
 // A run of work shorter than this (and lighter than foldMinBytes) stays on the page: opening it would cost a round
 // trip for a few hundred bytes.
 const (
-	foldMinItems = 3
-	foldMinBytes = 4 * 1024
+	foldMinItems             = 3
+	foldMinBytes             = 4 * 1024
+	foldThinkingPreviewChars = 512
 )
 
 // FoldWork replaces each run of the agent's work in a page — tool calls with their results and images, thoughts —
@@ -77,18 +78,33 @@ func FoldWork(items []proto.Item) []proto.Item {
 func fold(run []proto.Item) proto.Item {
 	first, last := run[0], run[len(run)-1]
 	fo := &proto.Fold{Items: len(run), Until: last.TS, ThroughSeq: last.Seq, ThroughID: last.ID}
-	for _, it := range run {
+	latestThought := -1
+	for i, it := range run {
 		switch {
 		case it.Kind == proto.KindToolUse:
 			fo.Tools++
 		case it.Kind == proto.KindThinking && strings.TrimSpace(it.Text) != "":
 			fo.Thoughts++
+			latestThought = i
 		}
 		if it.TS.After(fo.Until) {
 			fo.Until = it.TS
 		}
 	}
+	if latestThought >= 0 {
+		fo.LatestThinking = thinkingPreview(run[latestThought])
+	}
 	return proto.Item{ID: "fold:" + first.ID, Seq: first.Seq, TS: first.TS, Role: "assistant", Kind: proto.KindFold, Fold: fo}
+}
+
+func thinkingPreview(it proto.Item) *proto.Item {
+	preview := &proto.Item{ID: it.ID, Seq: it.Seq, TS: it.TS, Role: it.Role, Kind: it.Kind, Text: it.Text, FullSize: it.FullSize}
+	text := []rune(it.Text)
+	if len(text) > foldThinkingPreviewChars {
+		preview.Text = string(text[:foldThinkingPreviewChars-1]) + "…"
+		preview.FullSize = max(preview.FullSize, len(it.Text))
+	}
+	return preview
 }
 
 // Range returns the items of lines fromSeq through throughSeq, at most about limit of them (whole lines); more says

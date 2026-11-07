@@ -360,8 +360,24 @@ export function explorationSummary(g: WorkGroupNode): string {
   return [read ? t("lib-work-groups.read_files", { count: read }) : "", search ? t("lib-work-groups.searches", { count: search }) : "", list ? t("lib-work-groups.listings", { count: list }) : ""].filter(Boolean).join(" · ");
 }
 
-/** A live group's newest steps that peek out: tool calls and thoughts with words, a file read again showing once. */
+/** Newest steps, with the latest narration kept at the end even when more tool calls arrive. */
 export function previewSteps(g: WorkGroupNode, limit = LIVE_PREVIEW): Step[] {
+  if (limit <= 0) return [];
+  let narration: Step | undefined;
+  for (let i = g.children.length - 1; i >= 0; i--) {
+    const c = g.children[i];
+    if (c.kind === "step") {
+      if (c.step.kind === "thinking" && c.step.item.text?.trim()) {
+        narration = c.step;
+        break;
+      }
+      if (c.step.kind === "fold" && c.step.item.fold?.latest_thinking?.text?.trim()) {
+        const item = c.step.item.fold.latest_thinking;
+        narration = { kind: "thinking", id: item.id, item };
+        break;
+      }
+    }
+  }
   const out: Step[] = [];
   const seen = new Set<string>();
   for (let i = g.children.length - 1; i >= 0 && out.length < limit; i--) {
@@ -381,7 +397,11 @@ export function previewSteps(g: WorkGroupNode, limit = LIVE_PREVIEW): Step[] {
     }
     out.push(s);
   }
-  return out.reverse();
+  if (narration && !out.includes(narration)) {
+    if (out.length === limit) out.pop();
+    out.push(narration);
+  }
+  return [...out.reverse().filter((s) => s !== narration), ...(narration ? [narration] : [])];
 }
 
 /** The groups holding the tool call `call` (its tool_use_id), outer first, down to the one it sits in: what opens to

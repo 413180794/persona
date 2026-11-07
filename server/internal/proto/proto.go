@@ -1116,6 +1116,8 @@ type Fold struct {
 	// Images: the images the run's calls looked at, in order (FoldImage): a chat shows its turn's under the answer
 	// without opening the run.
 	Images []FoldImage `json:"images,omitempty"`
+	// LatestThinking is a bounded preview of the run's newest thought with words. The original item stays in the fold.
+	LatestThinking *Item `json:"latest_thinking,omitempty"`
 }
 
 // FoldImage is an image a tool call of a folded run looked at (docs/protocol.md "Images looked at this turn"): one its result

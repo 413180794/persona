@@ -22,6 +22,7 @@ import { reset, upsertSession } from "../../lib/store";
 import { segments } from "../../lib/turns";
 import type { Item, Session } from "../../lib/types";
 import { SegmentView } from "./SegmentView";
+import { forgetExpanded } from "./expanded";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,6 +47,7 @@ const items: Item[] = [
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  forgetExpanded();
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(T0 + 10_000);
   upsertSession({ machine_id: "m", session_id: "s", status: "working", state: "working", title: "checks" } as Session);
@@ -74,5 +76,33 @@ describe("status-line pushes", () => {
     act(() => receiveLive({ machine_id: "m", session_id: "s", live: { verb: "Frosting", thinking: false, elapsed_s: 6 } }));
     expect(titles.n).toBe(0);
     expect(host.textContent).not.toContain("Thinking");
+  });
+
+  it("keeps narration through new tool calls, replaces it on new words, and folds it when the turn ends", () => {
+    let transcript: Item[] = [it_({ role: "user", kind: "text", text: "Check the change" }, 0),
+      it_({ role: "assistant", kind: "thinking", text: "The fix is ready; checking it now" }, 1)];
+    const draw = (live = true) => act(() => root.render(<SegmentView seg={segments(transcript)[0]} live={live} mid="m" sid="s" expandFold={async () => {}} />));
+    const preview = () => host.querySelector("[data-live-preview]")!;
+    draw();
+    for (let n = 1; n <= 7; n++) {
+      transcript = [...transcript, ...toolRun(n, n * 2)];
+      draw();
+      expect(preview().textContent).toContain("The fix is ready; checking it now");
+      expect(preview().querySelectorAll("[data-thinking-line]")).toHaveLength(1);
+    }
+    transcript = [...transcript, it_({ role: "assistant", kind: "thinking", text: "Reviewing the final result" }, 17),
+      it_({ role: "assistant", kind: "thinking", text: "  " }, 18)];
+    draw();
+    expect(preview().textContent).toContain("Reviewing the final result");
+    expect(preview().lastElementChild?.textContent).toBe("Reviewing the final result");
+
+    act(() => (host.querySelector('[data-work-group="live"] > button') as HTMLButtonElement).click());
+    expect(host.querySelector("[data-work-detail]")?.querySelectorAll('[data-thinking="words"]')).toHaveLength(2);
+    act(() => (host.querySelector('[data-work-group="live"] > button') as HTMLButtonElement).click());
+    transcript = [...transcript, it_({ role: "assistant", kind: "text", text: "The change is verified." }, 19)];
+    draw(false);
+    expect(host.querySelector("[data-live-preview]")).toBeNull();
+    expect(host.textContent).toContain("The change is verified.");
+    expect(host.textContent).not.toContain("Reviewing the final result");
   });
 });

@@ -1639,6 +1639,10 @@ with one item of `kind: fold` (`transcript.FoldWork`):
   For example: `"tasks":[{"replace":"todo","entries":[{"id":"todo:0","subject":"Check the form","status":"in_progress"}],"source_item_id":"entry_tool#0","source_tool_use_id":"call_example","source_seq":3}]`.
 - `fold.images` is an optional array: the images this run of work looked at (`transcript.ViewedImages`); rules are in "Images viewed this turn" below. Omitted when there are none.
   Old clients ignore this field.
+- `fold.latest_thinking` optionally carries the run's newest nonempty thinking item so a live work row can preview the agent's narration on first load.
+  It contains only the original `id`, `seq`, `ts`, `role`, `kind`, `text` and optional `full_size`. Text is limited to 512 Unicode characters, including an ellipsis when clipped;
+  `full_size` preserves the original byte count (including any earlier clipping). It carries no tool, image or other payload, and is omitted when there is no thought with words.
+  The original item remains inside the fold: counts, range and expansion are unchanged. Clients that do not use this preview ignore it.
 - Not folded: user messages, replies (text), notifications, recaps; a tool_use whose result is not on this page (still running) and a tool_result whose tool_use is not on this page
   (the App has to pair them with the other half that comes later / came earlier); short runs under 3 items and under 4 KB (expanding costs another round trip; not worth it).
 - When the App expands a work row it fetches the run with `from_seq=<fold.seq>&through_seq=<fold.through_seq>` (about 1000 items per page; on `more`, continue from the last item's seq + 1),

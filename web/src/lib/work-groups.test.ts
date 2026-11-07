@@ -164,6 +164,41 @@ describe("while the agent works", () => {
     const g = groups(blocks([user("u1", 0), think("e", 500, ""), ...tool("r1", "Read", 1000, undefined, { file_path: "/a.ts" }), ...tool("r2", "Read", 2000, undefined, { file_path: "/a.ts" })], true))[0];
     expect(previewSteps(g).map((s) => s.id.replace(/#0$/, ""))).toEqual(["r2"]);
   });
+
+  it("keeps the latest narration after the tool preview, even after many more calls", () => {
+    const items = [user("u1", 0), think("old", 500, "Reading the code"), think("latest", 1000, "The fix is ready; checking it now"),
+      ...[1, 2, 3, 4, 5, 6, 7].flatMap((n) => tool(`t${n}`, "Bash", 2000 + n * 1000)), think("empty", 10_000, "  ")];
+    const g = groups(blocks(items, true))[0];
+    expect(previewSteps(g).map((s) => s.id.replace(/#0$/, ""))).toEqual(["t4", "t5", "t6", "t7", "latest"]);
+    expect(groupOpens(g)).toBe(true);
+    expect(folded([g], "old")).toBe(true);
+    expect(folded([g], "latest")).toBe(true);
+
+    const next = groups(blocks([...items, think("new", 11_000, "All checks passed; reviewing the result")], true))[0];
+    expect(previewSteps(next).at(-1)?.id).toBe("new#0");
+    expect(previewSteps(next).filter((s) => s.id === "new#0")).toHaveLength(1);
+  });
+
+  it("counts a narration pinned from outside the tool window when deciding whether the group opens", () => {
+    const g = groups(blocks([user("u1", 0), think("note", 500), ...[1, 2, 3, 4, 5].flatMap((n) => tool(`t${n}`, "Bash", n * 1000))], true))[0];
+    expect(previewSteps(g)).toHaveLength(5);
+    expect(groupOpens(g)).toBe(true);
+    expect(previewSteps(g, 1).map((s) => s.id)).toEqual(["note#0"]);
+  });
+
+  it("previews narration from folded history without changing the fold or duplicating it after expansion", () => {
+    const thought = think("note", 500, "Checking the deployment result");
+    const tools = [1, 2, 3, 4, 5, 6].flatMap((n) => tool(`t${n}`, "Bash", n * 1000));
+    const fold = mk("assistant", "fold", 500, { id: "fold:note", fold: { items: 13, tools: 6, thoughts: 1, through_seq: tools.at(-1)!.seq, latest_thinking: thought } });
+    const g = groups(blocks([user("u1", 0), fold], true))[0];
+    expect(previewSteps(g).map((s) => s.id)).toEqual(["note#0"]);
+    expect(g.children).toHaveLength(1);
+    expect(groupOpens(g)).toBe(true);
+    const opened = groups(blocks([user("u2", 0), thought, ...tools], true))[0];
+    expect(previewSteps(opened).filter((s) => s.id === "note#0")).toHaveLength(1);
+    const newer = think("new", 8000, "The deployment is healthy");
+    expect(previewSteps(groups(blocks([user("u3", 0), fold, newer], true))[0]).at(-1)?.id).toBe("new#0");
+  });
 });
 
 describe("subagents", () => {

@@ -177,7 +177,15 @@
             "thoughts": 1,
             "until": "2026-01-02T03:04:05Z",
             "through_seq": 4,
-            "through_id": "entry_result#0"
+            "through_id": "entry_result#0",
+            "latest_thinking": {
+              "id": "entry_thinking#0",
+              "seq": 2,
+              "ts": "2026-01-02T03:04:05Z",
+              "role": "assistant",
+              "kind": "thinking",
+              "text": "先读取示例文件。"
+            }
           }
         },
         {
@@ -252,7 +260,15 @@
                 "source_tool_use_id": "call_example",
                 "source_seq": 3
               }
-            ]
+            ],
+            "latest_thinking": {
+              "id": "entry_thinking#0",
+              "seq": 2,
+              "ts": "2026-01-02T03:04:05Z",
+              "role": "assistant",
+              "kind": "thinking",
+              "text": "先读取示例文件。"
+            }
           }
         },
         {
