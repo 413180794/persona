@@ -89,6 +89,7 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	moveFiles(home, logger.Printf)
 	o := builtinFiles(home)
 	o.ID, o.Hub, o.Token, o.Deploy, o.Errors = assistantwire.AssistantID, hub, token, deploy, errs
+	o.RotateSecretKey = true
 	o.Logf, o.ExtConfig = logger.Printf, ext
 	// Its own database, its data moved there once (owndb.go); the hub's while that cannot be yet.
 	if o.DatabaseURL, o.OnHubDatabase, err = builtinDatabase(ctx, home, cfg.DatabaseURL, provisionOwn, logger.Printf); err != nil {
@@ -182,6 +183,9 @@ type runOptions struct {
 	// OnHubDatabase: DatabaseURL is the database the built-in manager shares with the hub (its data not moved into
 	// its own yet, owndb.go): it holds the move's lock share there while it runs, so another process's move waits.
 	OnHubDatabase bool
+	// RotateSecretKey: the built-in manager's, whose secret.key started as a copy of the hub's, rotates it to a key
+	// of its own once it runs on its own database (keyrotate.go). A manager made in the app made its own.
+	RotateSecretKey bool
 	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
 	StopWhenRevoked bool
 	Logf            func(format string, args ...any)
@@ -243,6 +247,29 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer database.Close()
+	// Its own secret.key (keyrotate.go), before anything of it reads a secret; the old key's watcher, if any, stops
+	// before the database closes.
+	keyDone := make(chan struct{})
+	if o.RotateSecretKey && !o.OnHubDatabase {
+		pending, err := rotateSecretKey(ctx, database, home, o.SecretKey, logf)
+		if err != nil {
+			return err
+		}
+		if pending {
+			go func() {
+				defer close(keyDone)
+				keepDroppingOldKey(ctx, database, home, o.SecretKey, logf)
+			}()
+		} else {
+			close(keyDone)
+		}
+	} else {
+		close(keyDone)
+	}
+	defer func() {
+		stop()
+		<-keyDone
+	}()
 	// The user's computers are the manager's: it connects them itself (internal/devices, docs/machines.md "Who connects the computers").
 	var bh *BusHub
 	var svc *Service

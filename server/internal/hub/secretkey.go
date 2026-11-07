@@ -10,7 +10,8 @@ import (
 // secret.key in the hub's data directory seals the hub's own secrets in Postgres (the peers' tokens, the computers'
 // connector credentials): internal/secretkey. The manager seals what is its own (the model providers' keys,
 // internal/assistant; the extensions' secrets, the connectors' credentials and the bots' app secrets, internal/extmgr)
-// with its own copy (docs/managers.md "The built-in manager's own files"): the hub never opens those.
+// with its own key, a copy of this one at first and rotated to its own once its data is in its own database
+// (docs/managers.md "Its own secret.key"): the hub never opens those, and this key is never rotated with it.
 
 type secretState struct {
 	once sync.Once

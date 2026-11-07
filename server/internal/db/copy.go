@@ -56,7 +56,9 @@ func CopyTables(ctx context.Context, from, to *DB, logf func(string, ...any)) (C
 	mine := ManagerTables()
 	var tables []string
 	for _, t := range order {
-		if slices.Contains(mine, t) && t != "manager_moved" {
+		// Each database's own records: of the copy, and of the key its secrets are sealed with (sealed.go; the
+		// copied ones are sealed with the hub's, which the key rotation re-seals after the move).
+		if slices.Contains(mine, t) && t != "manager_moved" && t != "sealing_key" {
 			tables = append(tables, t)
 		}
 	}

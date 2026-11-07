@@ -167,7 +167,7 @@ func New(opts Options) *Manager {
 	}
 	h := &Manager{opts: opts, cfg: cfg, version: opts.Build.Version, build: opts.Build, store: opts.Store,
 		logger: log.New(logWriter(opts.Logf), "", 0)}
-	h.secret = secretkey.New(h.secretKeyPath())
+	h.secret = secretkey.NewWithFallback(h.secretKeyPath()) // and the old keys while a rotation keeps them
 	h.byID = map[string]*Machine{}
 	h.started = make(chan struct{})
 	return h

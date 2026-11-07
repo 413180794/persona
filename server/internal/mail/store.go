@@ -2,20 +2,16 @@ package mail
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/secretkey"
 )
 
 // Records is where accounts are persisted: Postgres (internal/db) in production, memory in tests.
@@ -25,10 +21,11 @@ type Records interface {
 	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
 }
 
-// store keeps accounts in Records with their secrets encrypted.
+// store keeps accounts in Records with their secrets encrypted: with the manager's secret.key, and while a rotation
+// keeps them, its old keys for reading (secretkey.NewWithFallback).
 type store struct {
 	recs Records
-	key  []byte // 32-byte AES-256 key
+	box  *secretkey.Box
 	mu   sync.Mutex
 }
 
@@ -66,11 +63,11 @@ func openStore(dataDir, keyPath string, recs Records) (*store, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("mail: create data dir: %w", err)
 	}
-	key, err := loadOrCreateKey(keyPath)
-	if err != nil {
-		return nil, err
+	box := secretkey.NewWithFallback(keyPath)
+	if _, err := box.Key(); err != nil { // read or made now: a key that does not read stops the service at its start
+		return nil, fmt.Errorf("mail: secret key: %w", err)
 	}
-	st := &store{recs: recs, key: key}
+	st := &store{recs: recs, box: box}
 	if err := st.importLegacy(filepath.Join(dataDir, "mail_accounts.json")); err != nil {
 		return nil, err
 	}
@@ -122,80 +119,17 @@ func (r accountRecord) row() (db.MailAccountRow, error) {
 	return db.MailAccountRow{ID: r.ID, Email: r.Email, Data: data, PasswordEnc: pw, OAuthEnc: oauth}, nil
 }
 
-func loadOrCreateKey(path string) ([]byte, error) {
-	b, err := os.ReadFile(path)
-	if err == nil {
-		if len(b) != 32 {
-			return nil, fmt.Errorf("mail: %s must contain exactly 32 bytes, got %d", path, len(b))
-		}
-		return b, nil
-	}
-	if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("mail: read secret key: %w", err)
-	}
-	key := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return nil, fmt.Errorf("mail: generate secret key: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, fmt.Errorf("mail: create key dir: %w", err)
-	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		// Another process won the race; read what it wrote.
-		if os.IsExist(err) {
-			return loadOrCreateKey(path)
-		}
-		return nil, fmt.Errorf("mail: create secret key: %w", err)
-	}
-	if _, err := f.Write(key); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("mail: write secret key: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		return nil, fmt.Errorf("mail: close secret key: %w", err)
-	}
-	return key, nil
-}
-
-func (s *store) encrypt(plain []byte) (string, error) {
-	block, err := aes.NewCipher(s.key)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
-	}
-	sealed := gcm.Seal(nonce, nonce, plain, nil)
-	return base64.StdEncoding.EncodeToString(sealed), nil
-}
+func (s *store) encrypt(plain []byte) (string, error) { return s.box.Seal(string(plain)) }
 
 func (s *store) decrypt(enc string) ([]byte, error) {
 	if enc == "" {
 		return nil, nil
 	}
-	raw, err := base64.StdEncoding.DecodeString(enc)
+	plain, err := s.box.Open(enc)
 	if err != nil {
-		return nil, fmt.Errorf("mail: decode secret: %w", err)
+		return nil, fmt.Errorf("mail: open secret: %w", err)
 	}
-	block, err := aes.NewCipher(s.key)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) < gcm.NonceSize() {
-		return nil, errors.New("mail: encrypted secret is truncated")
-	}
-	nonce, ciphertext := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
-	return gcm.Open(nil, nonce, ciphertext, nil)
+	return []byte(plain), nil
 }
 
 // load reads every account. A missing file is not an error.

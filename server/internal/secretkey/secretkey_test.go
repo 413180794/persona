@@ -40,3 +40,112 @@ func TestKeyInANewDirectory(t *testing.T) {
 		t.Fatalf("directory %v %v", fi, err)
 	}
 }
+
+// A Box with the fallback opens what the kept old keys sealed while their file is there, never seals with them, and
+// stops opening it the moment the file goes; a Box without it never reads the file.
+func TestFallbackToTheKeptKeys(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret.key")
+	cur, old1, old2 := mustFresh(t), mustFresh(t), mustFresh(t)
+	if err := WriteKeys(path, cur); err != nil {
+		t.Fatal(err)
+	}
+	sealedOld, err := SealWith(old2, "sk-old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := NewWithFallback(path)
+	if _, err := b.Open(sealedOld); err == nil {
+		t.Fatal("opened without the old key")
+	}
+	if err := WriteKeys(PrevPath(path), old1, old2); err != nil {
+		t.Fatal(err)
+	}
+	if plain, err := b.Open(sealedOld); err != nil || plain != "sk-old" {
+		t.Fatalf("fallback: %q %v", plain, err)
+	}
+	if _, err := New(path).Open(sealedOld); err == nil {
+		t.Fatal("a Box without the fallback opened it")
+	}
+	sealedNew, err := b.Seal("sk-new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := OpenWith(cur, sealedNew); err != nil || p != "sk-new" {
+		t.Fatalf("sealed with another key: %q %v", p, err)
+	}
+	if err := os.Remove(PrevPath(path)); err != nil {
+		t.Fatal(err)
+	}
+	// this process keeps what it read; one started after the file went never has them
+	if plain, err := b.Open(sealedOld); err != nil || plain != "sk-old" {
+		t.Fatalf("this process forgot the old keys: %q %v", plain, err)
+	}
+	if _, err := NewWithFallback(path).Open(sealedOld); err == nil {
+		t.Fatal("a new process opened it after the old keys went")
+	}
+	// a broken old-keys file is no fallback, and the key's own error is the one returned
+	if err := os.WriteFile(PrevPath(path), []byte("short"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewWithFallback(path).Open(sealedOld); err == nil {
+		t.Fatal("opened with a broken old-keys file")
+	}
+	// the old keys are read with the key, before any open needs them
+	if err := WriteKeys(PrevPath(path), old2); err != nil {
+		t.Fatal(err)
+	}
+	early := NewWithFallback(path)
+	if _, err := early.Key(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(PrevPath(path)); err != nil {
+		t.Fatal(err)
+	}
+	if plain, err := early.Open(sealedOld); err != nil || plain != "sk-old" {
+		t.Fatalf("not read with the key: %q %v", plain, err)
+	}
+}
+
+func TestKeyFiles(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret.key.prev")
+	a, b := mustFresh(t), mustFresh(t)
+	if err := WriteKeys(path, a, b); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 || fi.Size() != 2*Size {
+		t.Fatalf("file %v %v", fi, err)
+	}
+	keys, err := ReadKeys(path)
+	if err != nil || len(keys) != 2 || !Has(keys, a) || !Has(keys, b) || Has(keys, mustFresh(t)) {
+		t.Fatalf("keys %d %v", len(keys), err)
+	}
+	if _, err := ReadKey(path); err == nil {
+		t.Fatal("ReadKey took two keys")
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "*.tmp-*")); len(left) != 0 {
+		t.Fatalf("temporary files left: %v", left)
+	}
+	if err := WriteKeys(path, []byte("short")); err == nil {
+		t.Fatal("wrote a short key")
+	}
+	if err := WriteKeys(path); err == nil {
+		t.Fatal("wrote no key")
+	}
+	if keys, err := ReadKeys(path); err != nil || len(keys) != 2 {
+		t.Fatalf("a failed write changed the file: %d %v", len(keys), err)
+	}
+	if Fingerprint(a) == Fingerprint(b) || Fingerprint(a) != Fingerprint(append([]byte{}, a...)) || len(Fingerprint(a)) != 32 {
+		t.Fatal("fingerprints")
+	}
+}
+
+func mustFresh(t *testing.T) []byte {
+	t.Helper()
+	k, err := Fresh()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return k
+}

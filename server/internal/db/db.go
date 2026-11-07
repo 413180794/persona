@@ -62,6 +62,42 @@ type DB struct {
 	olderMu   sync.Mutex // one syncOlderHub at a time
 	closeOnce sync.Once
 	closeDone chan struct{}
+	// pids are the server processes of this pool's connections (OtherManagers tells them from another process's).
+	pids *pidSet
+}
+
+// pidSet is the backend process ids of a pool's open connections.
+type pidSet struct {
+	mu sync.Mutex
+	m  map[uint32]bool
+}
+
+func (p *pidSet) add(pid uint32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.m == nil {
+		p.m = map[uint32]bool{}
+	}
+	p.m[pid] = true
+}
+
+func (p *pidSet) remove(pid uint32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.m, pid)
+}
+
+func (p *pidSet) list() []int32 {
+	if p == nil {
+		return []int32{} // not NULL: pid = ANY(NULL) would match nothing and hide every connection
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]int32, 0, len(p.m))
+	for pid := range p.m {
+		out = append(out, int32(pid))
+	}
+	return out
 }
 
 // Open connects and applies the pending migrations of sets. It retries for a while so the hub can start alongside
@@ -70,11 +106,12 @@ func Open(ctx context.Context, url string, sets Sets) (*DB, error) {
 	if sets == 0 || sets&^AllSets != 0 {
 		return nil, fmt.Errorf("db.Open: bad migration sets %d", sets)
 	}
-	pool, err := connect(ctx, url, appName(sets))
+	pids := &pidSet{}
+	pool, err := connectTracked(ctx, url, appName(sets), pids)
 	if err != nil {
 		return nil, err
 	}
-	d := &DB{pool: pool, sets: sets}
+	d := &DB{pool: pool, sets: sets, pids: pids}
 	if err := d.migrate(ctx); err != nil {
 		pool.Close()
 		return nil, err
@@ -91,11 +128,12 @@ func Open(ctx context.Context, url string, sets Sets) (*DB, error) {
 // Attach connects the way Open does for sets, migrating nothing and taking up nothing (a tool that looks at a database
 // another build owns: assistant drop-shared-tables).
 func Attach(ctx context.Context, url string, sets Sets) (*DB, error) {
-	pool, err := connect(ctx, url, appName(sets))
+	pids := &pidSet{}
+	pool, err := connectTracked(ctx, url, appName(sets), pids)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{pool: pool, sets: sets}, nil
+	return &DB{pool: pool, sets: sets, pids: pids}, nil
 }
 
 // Check connects the way Open does and lets go again, migrating nothing: a new hub binary waiting to take over
@@ -128,6 +166,11 @@ const (
 )
 
 func connect(ctx context.Context, url, app string) (*pgxpool.Pool, error) {
+	return connectTracked(ctx, url, app, nil)
+}
+
+// connectTracked is connect, keeping the server process id of each connection in pids while it is open (nil: none).
+func connectTracked(ctx context.Context, url, app string, pids *pidSet) (*pgxpool.Pool, error) {
 	if url == "" {
 		return nil, errors.New("hub 的数据库还没装好。运行 personad hub setup，它会帮你建好。")
 	}
@@ -141,7 +184,13 @@ func connect(ctx context.Context, url, app string) (*pgxpool.Pool, error) {
 	cfg.MaxConns = 8
 	cfg.AfterConnect = func(_ context.Context, c *pgx.Conn) error {
 		utcTimes(c.TypeMap())
+		if pids != nil {
+			pids.add(c.PgConn().PID())
+		}
 		return nil
+	}
+	if pids != nil {
+		cfg.BeforeClose = func(c *pgx.Conn) { pids.remove(c.PgConn().PID()) }
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

@@ -133,7 +133,8 @@ func New(o Options) *Service {
 	if s.logf == nil {
 		s.logf = func(string, ...any) {}
 	}
-	s.models.secret = secretkey.New(o.SecretKey)
+	// The kept old keys too while a rotation keeps them (keyrotate.go).
+	s.models.secret = secretkey.NewWithFallback(o.SecretKey)
 	s.archiveRoutes()
 	s.alwaysRoutes()
 	s.reporterRoutes()
