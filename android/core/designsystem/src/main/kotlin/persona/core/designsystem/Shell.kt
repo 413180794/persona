@@ -124,7 +124,11 @@ fun MessageItem(
                 content = body,
             )
         }
-        prominent && style == AppStyle.Glass -> JCard(modifier.padding(bottom = if (position.last) 0.dp else 12.dp), onClick = onClick, onLongClick = onLongClick, padding = 16.dp, content = body)
+        // JCard clips only inside this modifier: the clip here keeps the selection plate within the card's corners.
+        prominent && style == AppStyle.Glass -> JCard(
+            modifier.padding(bottom = if (position.last) 0.dp else 12.dp).clip(PersonaTheme.shapes.cardShape).selectedRow(selected).onSecondaryClick(onLongClick),
+            onClick = onClick, onLongClick = onLongClick, padding = 16.dp, content = body,
+        )
         else -> JGroupItem(position, modifier) {
             Column(click.padding(horizontal = if (style == AppStyle.Brief) 0.dp else 14.dp, vertical = 14.dp), content = body)
         }
