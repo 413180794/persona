@@ -66,10 +66,12 @@ class MessageCardTest {
         assertNull(draftPlaceholder("确实是 bug，修好了告诉你"))
     }
 
-    private class Api(val gate: CompletableDeferred<Unit>, val items: List<FeedItem>) : TasksApi {
+    private class Api(val gate: CompletableDeferred<Unit>, var items: List<FeedItem>, val page: Int = 500) : TasksApi {
         val replies = mutableListOf<Triple<String, String, String?>>()
         override suspend fun todos() = emptyList<Todo>()
-        override suspend fun feed(conversation: String, since: String?) = FeedResponse(items)
+        // As the hub: after `since`, only items made later and cards sent later (filed_at is worked out on each read, no event).
+        override suspend fun feed(conversation: String, since: String?) =
+            FeedResponse((if (since == null) items else items.filter { (it.at ?: "") > since || (it.field("sent_at") ?: "") > since }).take(page))
         override suspend fun startPlan(id: String, remember: Boolean): TaskPlan = error("unused")
         override suspend fun dismissPlan(id: String): TaskPlan = error("unused")
         override suspend fun retryTask(todoId: String): Todo = error("unused")
@@ -118,6 +120,36 @@ class MessageCardTest {
         store.sendMessage(card(), "修好了") { errors += it } // the copy drawn before it was filed
         assertTrue(api.replies.isEmpty())
         assertTrue(errors.isEmpty())
+    }
+
+    /** Filing the item elsewhere, or moving it back, reaches a card already read: an incremental read would not carry it (#5693). */
+    @Test fun aReloadSeesTheCardFiledAndBackAgain() = runBlocking {
+        val api = Api(CompletableDeferred(Unit), listOf(card()))
+        val store = TasksStore(api, Connection(), CoroutineScope(Dispatchers.Unconfined))
+        store.load("c1")
+        assertTrue(store.feeds.value["c1"]!!.single().canSend)
+        api.items = listOf(card(extra = mapOf("filed_at" to "2026-11-04T10:30:00Z")))
+        store.load("c1")
+        assertFalse(store.feeds.value["c1"]!!.single().canSend)
+        api.items = listOf(card())
+        store.load("c1")
+        assertTrue(store.feeds.value["c1"]!!.single().canSend)
+    }
+
+    /** The hub pages its feed oldest first, so the reread starts at the unsent card, not at the start: later items still arrive. */
+    @Test fun aReloadPastAPageSeesTheCardAndLaterItems() = runBlocking {
+        val old = FeedItem("t0", "c1", "2026-11-04T09:00:00Z", "task", "example:0")
+        val api = Api(CompletableDeferred(Unit), listOf(old, card()), page = 2)
+        val store = TasksStore(api, Connection(), CoroutineScope(Dispatchers.Unconfined))
+        store.load("c1")
+        val later = FeedItem("t1", "c1", "2026-11-04T11:00:00Z", "task", "example:2")
+        api.items = listOf(old, card(extra = mapOf("filed_at" to "2026-11-04T10:30:00Z")), later)
+        store.load("c1")
+        assertEquals(listOf("t0", "m1", "t1"), store.feeds.value["c1"]!!.map { it.id })
+        assertFalse(store.feeds.value["c1"]!!.single { it.id == "m1" }.canSend)
+        api.items = listOf(old, card(), later)
+        store.load("c1")
+        assertTrue(store.feeds.value["c1"]!!.single { it.id == "m1" }.canSend)
     }
 
     @Test fun aDraftWithABlankIsNotSent() {

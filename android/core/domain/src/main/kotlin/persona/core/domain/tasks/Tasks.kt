@@ -462,12 +462,19 @@ class TasksStore(
     }
 
     /**
-     * Pulls [conversation]'s feed: the items after the last one held (all of them with [whole] or before its first read), and every time the
-     * full set of its cards, answers and registered blocks.
+     * Pulls [conversation]'s feed: the items after the last one held (all of them with [whole] or before its first read; from the
+     * oldest unsent message card on while it holds one, whose `filed_at` the hub works out on each read and sends no event for,
+     * #5693 — not from the start, as the hub pages oldest first), and every time the full set of its cards, answers and registered blocks.
      */
     fun load(conversation: String, whole: Boolean = false) {
         scope.launch {
-            val since = if (whole || conversation !in loaded.value) null else _feeds.value[conversation]?.lastOrNull()?.at
+            val held = _feeds.value[conversation].orEmpty()
+            val unsent = held.indexOfFirst { it.kind == "message" && it.sent == null }
+            val since = when {
+                whole || conversation !in loaded.value -> null
+                unsent >= 0 -> held.take(unsent).lastOrNull { it.at != held[unsent].at }?.at // reads are after `since`: skip ties
+                else -> held.lastOrNull()?.at
+            }
             runCatching { api.feed(conversation, since) }.onSuccess { res ->
                 if (res.plans.isNotEmpty()) _plans.update { it + res.plans }
                 cards.snapshot(conversation, res.views, res.viewActions, res.viewBlocks)
