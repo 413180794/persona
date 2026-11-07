@@ -10,7 +10,7 @@ Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten a
 systemd user timer on a dedicated Linux build machine. It fetches `master` into an
 exclusive checkout (never a developer checkout), runs server vet/tests and race checks, script suites, web
 checks and the binary privacy scan, then publishes the tested commit. It reports
-`hub-release/devbox` commit statuses. These are independent CI results, not GitHub
+`hub-release/worker` commit statuses. These are independent CI results, not GitHub
 Actions run results. This provides an execution path when hosted runner labels
 have no available capacity or the operator cannot administer those runners.
 

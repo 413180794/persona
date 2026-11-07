@@ -84,7 +84,7 @@ def main():
 
         def status(value, description):
             run(['gh', 'api', f'repos/{cfg["repository"]}/statuses/{sha}',
-                 '-f', f'state={value}', '-f', 'context=hub-release/devbox',
+                 '-f', f'state={value}', '-f', 'context=hub-release/worker',
                  '-f', f'description={description}'], checkout, stdout=subprocess.DEVNULL)
 
         try:

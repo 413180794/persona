@@ -37,3 +37,7 @@ The same export identifier can have an XMP copy and a nested EXIF `UserComment` 
 Anonymizing author and committer headers does not remove those identities from historical documentation. A scan limited to configured runtime secrets can miss a personal author-signature line. Derive individual email identifiers from the original commit history and check current files, every historical blob, and decoded metadata separately. A public email-provider domain is not proof that an individual address is a public project contact.
 
 When removing an author signature, remove the whole identifying line, not just the mailbox, so the linked display name is not left behind. Keep necessary public-license attribution separate from private identities, and retain only project-role contacts whose public purpose has been established. Verify the rewritten trees and compose every history-phase map; a correction that affects only historical blobs must leave the current source tree unchanged.
+
+## Use generic worker roles in runtime status labels
+
+A release status context is runtime infrastructure metadata, not merely prose. A familiar low-entropy workstation word can still disclose a local platform or machine class. Use a generic worker role in default status contexts and documentation, and keep site-specific labels in explicit configuration. Check commit messages and intermediate historical blobs as well as the latest tree; zero known-secret matches do not establish that infrastructure labels are public.
