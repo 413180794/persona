@@ -344,7 +344,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   Element swipes start at whole-frame center and can fail next to the keyboard on small screens; coordinate-drag within the visible row segment (`AgentsListTests.dragListUp`).
 - Simulators and Mac share loopback: an app listening on simulator `127.0.0.1:<port>` conflicts with Mac processes on that port (port forwarding falls back to a random port, testing that path).
 - **Scripts executed by tests really run on the development machine** (2026-11-01). `TestDeployScriptInstallsTheBinary` runs hub deployment, whose final
-  `pkill -f '[j]arvisd node --attach'` killed the actual persistent node on the test machine. Every hub-test run on a Mac with persistent node disconnected it
+  `pkill -f '[p]ersonad node --attach'` killed the actual persistent node on the test machine. Every hub-test run on a Mac with persistent node disconnected it
   (launchd restart ≈10 seconds, hub reconnect through a tunnel takes tens of seconds, DSH plugin reconnect afterward: ≈1.5 minutes total, with transcript not found meanwhile).
   Previously nobody ran these tests on machines with persistent nodes. Replace every process/service-affecting script command (`pkill`, `launchctl`, `systemctl`, etc.) in tests
   with PATH-prepended fakes that record and assert arguments (`fakePkill` in `devices/deploy_test.go`). Record real process pid before validation and verify unchanged afterward.

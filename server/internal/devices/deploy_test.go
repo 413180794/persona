@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/pprof"
 	"strings"
 	"testing"
@@ -57,8 +58,26 @@ func testDeployScript(t *testing.T, shell, bin string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if got, _ := os.ReadFile(pkilled); string(got) != "-f [j]arvisd node --attach\n" {
-		t.Errorf("the resident node is not restarted: pkill got %q", got)
+	got, _ := os.ReadFile(pkilled)
+	pattern, ok := strings.CutPrefix(strings.TrimSuffix(string(got), "\n"), "-f ")
+	if !ok {
+		t.Fatalf("the resident node is not restarted: pkill got %q", got)
+	}
+	// The pattern finds the resident node persona-link's service runs (cmd/persona-link nodesvc.go), and the one of a
+	// computer not cut over to the Persona names yet; it leaves the other Persona processes and the remote command that
+	// carries it alone.
+	re := regexp.MustCompile(pattern)
+	personad := filepath.Join(home, ".persona", "bin", "personad")
+	for _, node := range []string{personad + " node --attach", filepath.Join(home, ".jarvis", "bin", "jarvisd") + " node --attach"} {
+		if !re.MatchString(node) {
+			t.Errorf("pkill -f %q does not find the resident node %q", pattern, node)
+		}
+	}
+	for _, other := range []string{personad + " node --stdio", personad + " hub run", personad + " hook", personad + "-wechat run",
+		personad + " manager run --dir /x", deployScript(bin)} {
+		if re.MatchString(other) {
+			t.Errorf("pkill -f %q matches %q", pattern, other)
+		}
 	}
 	path := filepath.Join(home, strings.TrimPrefix(bin, "~/"))
 	got, err := os.ReadFile(path)
@@ -93,7 +112,7 @@ func TestNodeBinaryMissing(t *testing.T) {
 }
 
 // fakePkill puts a pkill first on PATH that only records its arguments (the returned file) and kills nothing. The
-// deploy script ends with `pkill -f '[j]arvisd node --attach'`; run for real on a developer's machine it stops the
+// deploy script ends with `pkill -f '[p]ersonad node --attach'`; run for real on a developer's machine it stops the
 // resident node serving that machine (it did, every time the hub tests ran on a Mac with one: the machine went offline
 // for a minute and a half).
 func fakePkill(t *testing.T) string {

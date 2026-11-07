@@ -91,8 +91,14 @@ func deployScript(bin string) string {
 		target = `"$HOME"/` + shellQuote(rest)
 	}
 	return posixCommand("set -e; b=" + target + `; mkdir -p "$(dirname "$b")"; gzip -dc > "$b.new"; chmod 755 "$b.new"; mv "$b.new" "$b"; ` +
-		`pkill -f '[j]arvisd node --attach' || true`)
+		`pkill -f '` + residentNodePattern + `' || true`)
 }
+
+// residentNodePattern is what the deploy script's pkill -f looks for (an extended regular expression): a resident node's
+// command line, as persona-link's service runs it (`<data dir>/bin/personad node --attach`), or as the service of a
+// computer not cut over to the Persona names yet still does (`.../jarvisd node --attach`). The brackets keep it from
+// matching the remote command itself, whose text contains the pattern.
+const residentNodePattern = "([j]arvisd|[p]ersonad) node --attach"
 
 // shellQuote quotes s for a POSIX shell only (the script inside posixCommand); a remote command goes through
 // anyShellQuote.
