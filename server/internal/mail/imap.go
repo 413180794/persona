@@ -636,19 +636,27 @@ func textFromRaw(raw []byte) string {
 	if e == nil {
 		return ""
 	}
+	return textFromEntity(e, 0)
+}
+
+const textFromEntityMaxDepth = 20 // real mail is shallow; a cap stops a crafted nest from blowing the stack
+
+// textFromEntity returns the first non-empty text/* part, depth-first; multipart parts (e.g. alternative inside mixed)
+// are descended into.
+func textFromEntity(e *gomessage.Entity, depth int) string {
+	if depth > textFromEntityMaxDepth {
+		return ""
+	}
 	if mr := e.MultipartReader(); mr != nil {
 		for {
 			p, err := mr.NextPart()
 			if err != nil || p == nil {
-				break
+				return "" // end of this multipart (or a truncated tail)
 			}
-			mt, _, _ := p.Header.ContentType()
-			if !strings.HasPrefix(mt, "text/") {
-				continue
+			if text := textFromEntity(p, depth+1); text != "" {
+				return text
 			}
-			return renderText(mt, readAllTolerant(p.Body, 8<<10))
 		}
-		return ""
 	}
 	mt, _, _ := e.Header.ContentType()
 	if !strings.HasPrefix(mt, "text/") {

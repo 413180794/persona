@@ -777,3 +777,48 @@ func subjectsOf(msgs []MailSummary) []string {
 	}
 	return out
 }
+
+// The common mixed(alternative(plain, html), attachment) shape: the preview must come from the nested text/plain part.
+func TestTextFromRawNestedMultipart(t *testing.T) {
+	raw := []byte("MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/mixed; boundary=\"BOUND\"\r\n" +
+		"\r\n" +
+		"--BOUND\r\n" +
+		"Content-Type: multipart/alternative; boundary=\"ALT\"\r\n" +
+		"\r\n" +
+		"--ALT\r\n" +
+		"Content-Type: text/plain; charset=utf-8\r\n" +
+		"\r\n" +
+		"plain body\r\n" +
+		"--ALT\r\n" +
+		"Content-Type: text/html; charset=utf-8\r\n" +
+		"\r\n" +
+		"<p>html</p>\r\n" +
+		"--ALT--\r\n" +
+		"--BOUND\r\n" +
+		"Content-Type: application/pdf\r\n" +
+		"\r\n" +
+		"JVBERi0=\r\n" +
+		"--BOUND--\r\n")
+	if got := textFromRaw(raw); got != "plain body" {
+		t.Fatalf("textFromRaw = %q, want %q", got, "plain body")
+	}
+	// An empty first text part falls through to a later one.
+	emptyFirst := []byte("MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/mixed; boundary=\"B\"\r\n\r\n" +
+		"--B\r\nContent-Type: text/plain\r\n\r\n\r\n" +
+		"--B\r\nContent-Type: text/plain\r\n\r\nlater\r\n" +
+		"--B--\r\n")
+	if got := textFromRaw(emptyFirst); got != "later" {
+		t.Fatalf("empty first part: %q, want %q", got, "later")
+	}
+	// Some senders put html before plain in alternative; the walker takes the first text/* part in order.
+	htmlFirst := []byte("MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/alternative; boundary=\"A\"\r\n\r\n" +
+		"--A\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>html first</p>\r\n" +
+		"--A\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nplain second\r\n" +
+		"--A--\r\n")
+	if got := strings.TrimSpace(textFromRaw(htmlFirst)); got != "html first" {
+		t.Fatalf("html-first alternative: %q, want %q", got, "html first")
+	}
+}
