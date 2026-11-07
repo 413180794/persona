@@ -2,7 +2,8 @@
 """End-to-end check of the Git panel's writes (#6121): a file's checkbox stages it, Commit commits what is staged,
 Push asks first (a new branch: it says so and sets the upstream), the branch picker switches or creates (asking first
 when there are uncommitted changes), a refusal says what happened and lists its files, stashes push / pop / drop
-(drop asks first).
+(drop asks first). The branch's pull request (#6121 step 3): opening one asks first, its checks and open review threads
+show, a thread goes to the message box as a comment, merging and merging when ready each ask first; gh missing is said.
 
 Needs the fake hub with MOCK_GIT_WRITE=1, a running web page against it, and Playwright for Python:
 
@@ -134,6 +135,91 @@ def flow(browser, base, hubu, token, shots):
     ctx.close()
 
 
+def pr_flow(browser, base, hubu, token, shots):
+    hub(hubu, "/mock/git-write?reset=1")
+    ctx, page = fresh(browser, token, {"width": 1440, "height": 900})
+    panel = open_git(page, base)
+    expect(panel.get_by_text("先推送分支，再创建拉取请求")).to_be_visible()
+    expect(panel.get_by_role("button", name="创建拉取请求")).to_be_disabled()
+    panel.get_by_role("button", name="推送", exact=True).click()
+    page.get_by_role("dialog").get_by_role("button", name="推送", exact=True).click()
+    expect(panel.get_by_text("这个分支还没有拉取请求")).to_be_visible()
+    ok("a branch with unpushed commits cannot open a pull request; once pushed it can")
+
+    panel.get_by_role("button", name="创建拉取请求").click()
+    view = page.locator("aside[aria-label=Git]")
+    expect(view.get_by_role("textbox", name="标题")).not_to_have_value("")
+    view.get_by_role("textbox", name="标题").fill("小组件：逐小时预报")
+    view.get_by_role("textbox", name="描述（可不填）").fill("逐小时的降雨条和温度曲线。")
+    shot(page, shots, "pr-create-wide-light.png")
+    view.get_by_role("button", name="创建拉取请求").click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_contain_text("能看到这个仓库的人都看得到")
+    shot(page, shots, "pr-create-confirm-wide-light.png")
+    dialog.get_by_role("button", name="创建拉取请求").click()
+    expect(page.get_by_text("已创建拉取请求")).to_be_visible()
+    expect(view.locator("header").get_by_text("#128")).to_be_visible()
+    expect(view.get_by_text("build (macos-15)")).to_be_visible()
+    ok("opening a pull request asks first, then shows it with its checks")
+
+    hub(hubu, "/mock/git-write?pr=review")
+    view.get_by_role("button", name="重新读取拉取请求").click()
+    expect(view.get_by_text("未解决的评审意见 · 2")).to_be_visible()
+    expect(view.get_by_text("unit tests")).to_be_visible()
+    shot(page, shots, "pr-review-wide-light.png")
+    view.get_by_role("button", name="交给 Agent", exact=True).first.click()
+    expect(page.get_by_text("已放进消息").first).to_be_visible()
+    composer = page.locator("main")
+    expect(composer.get_by_text("拉取请求 #128 在 WeatherWidget/Provider.swift:42 的评审意见").first).to_be_visible()
+    shot(page, shots, "pr-handed-wide-light.png")
+    ok("a review thread goes to the message box as a comment that names the pull request and the line")
+
+    view.get_by_role("button", name="通过后自动合并").click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_contain_text("不再询问")
+    expect(dialog).to_contain_text("分支会保留")
+    shot(page, shots, "pr-auto-confirm-wide-light.png")
+    dialog.get_by_role("button", name="通过后自动合并").click()
+    expect(view.get_by_role("button", name="取消自动合并")).to_be_visible()
+    ok("merge when ready asks first, then can be taken back")
+
+    hub(hubu, "/mock/git-write?pr=ready")
+    view.get_by_role("button", name="重新读取拉取请求").click()
+    view.get_by_role("button", name="合并", exact=True).click()
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_contain_text("合进 main")
+    shot(page, shots, "pr-merge-confirm-wide-light.png")
+    dialog.get_by_role("button", name="合并", exact=True).click()
+    expect(page.get_by_text("已合并 #128")).to_be_visible()
+    expect(view.get_by_text("已合并", exact=True).locator("visible=true").first).to_be_visible()
+    ok("merge asks first and the page then says it is merged")
+
+    page.locator("aside[aria-label=Git] header").get_by_role("button", name="返回").click()
+    hub(hubu, "/mock/git-write?pr_fail=no_gh")
+    panel.locator("header").get_by_role("button", name="刷新").click()
+    expect(panel.get_by_text("这台电脑没装 gh")).to_be_visible()
+    hub(hubu, "/mock/git-write?pr_fail=")
+    ok("no gh on the computer is said in the card")
+    ctx.close()
+
+
+def pr_shots(browser, base, hubu, token, shots):
+    for scheme in ("dark", "light"):
+        for name, viewport, phone in (("wide", {"width": 1440, "height": 900}, False), ("phone", {"width": 390, "height": 844}, True)):
+            if scheme == "light" and name == "wide":
+                continue
+            hub(hubu, "/mock/git-write?reset=1&pr=review")
+            ctx, page = fresh(browser, token, viewport, scheme)
+            panel = open_git(page, base, phone)
+            expect(panel.get_by_text("#128")).to_be_visible()
+            shot(page, shots, f"pr-card-{name}-{scheme}.png")
+            panel.get_by_text("#128").click()
+            expect(page.locator("aside[aria-label=Git]").get_by_text("未解决的评审意见 · 2")).to_be_visible()
+            shot(page, shots, f"pr-review-{name}-{scheme}.png")
+            ctx.close()
+    ok("pull request: dark and phone-width screenshots")
+
+
 def other_shots(browser, base, hubu, token, shots):
     for scheme in ("dark", "light"):
         for name, viewport, phone in (("wide", {"width": 1440, "height": 900}, False), ("phone", {"width": 390, "height": 844}, True)):
@@ -163,8 +249,10 @@ def main():
         browser = p.chromium.launch(executable_path=os.environ.get("PERSONA_E2E_CHROMIUM") or None)
         try:
             flow(browser, a.base, a.hub, a.token, a.shots)
+            pr_flow(browser, a.base, a.hub, a.token, a.shots)
             if a.shots:
                 other_shots(browser, a.base, a.hub, a.token, a.shots)
+                pr_shots(browser, a.base, a.hub, a.token, a.shots)
         finally:
             browser.close()
     print("PASS")

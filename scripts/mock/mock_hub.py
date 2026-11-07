@@ -8650,7 +8650,8 @@ def mock_size(v):
 GIT_PULL_STATE = {"behind": 28, "mode": "success", "pulls": 0}
 # MOCK_GIT_WRITE=1 (#6121): the Git panel's writes on a made-up repository that changes as they are made. GET
 # /mock/git-write?fail=<code>[&files=a,b] makes the next write refuse with that code (git_conflict lists the files);
-# ?reset=1 starts over.
+# ?reset=1 starts over. The branch's pull request: ?pr=none|review|ready|auto sets it, ?pr_fail=no_gh|not_signed_in makes
+# reading it refuse; POST git/pr opens one, git/pr/merge merges it or sets it to merge when ready.
 def git_write_fresh():
     return {"branch": "widget-hourly", "upstream": "", "ahead": 2, "fail": None, "files": [
         {"path": "WeatherWidget/Provider.swift", "index": ".", "worktree": "M", "added": 12, "deleted": 3, "binary": False},
@@ -8658,8 +8659,59 @@ def git_write_fresh():
         {"path": "Sources/App/main.swift", "index": "M", "worktree": "M", "added": 2, "deleted": 1, "binary": False},
         {"path": "docs/hourly.md", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": False}],
         "stashes": [{"index": 0, "message": "On main: 试过的另一种配色", "date": ago(days=2)}],
-        "branches": [("widget-hourly", False), ("main", False), ("origin/main", True), ("origin/release-2.4", True)]}
+        "branches": [("widget-hourly", False), ("main", False), ("origin/main", True), ("origin/release-2.4", True)],
+        "pr": None, "pr_fail": None}
 GIT_W = git_write_fresh()
+
+
+def git_pr_make(kind, branch, title="小组件：逐小时预报", draft=False):
+    """A made-up pull request for the branch: being reviewed (a failed check, two open threads), ready, or set to merge."""
+    pr = {"number": 128, "url": "https://github.com/example/weather/pull/128", "title": title, "state": "OPEN", "draft": draft,
+          "base": "main", "head": branch, "mergeable": "MERGEABLE", "merge_state": "CLEAN", "review": "APPROVED", "checks": [], "threads": []}
+    if kind == "new":
+        pr.update(merge_state="BLOCKED", review="REVIEW_REQUIRED", checks=[
+            {"name": "build (macos-15)", "state": "pending", "url": "https://github.com/example/weather/actions/runs/1"},
+            {"name": "lint", "state": "pending", "url": "https://github.com/example/weather/actions/runs/2"}], checks_state="pending")
+    elif kind in ("review", "auto"):
+        pr.update(merge_state="BLOCKED", review="CHANGES_REQUESTED", auto_merge=kind == "auto", checks_state="failing", checks=[
+            {"name": "build (macos-15)", "state": "pass", "url": "https://github.com/example/weather/actions/runs/1"},
+            {"name": "unit tests", "state": "fail", "url": "https://github.com/example/weather/actions/runs/2"},
+            {"name": "lint", "state": "pass", "url": "https://github.com/example/weather/actions/runs/3"},
+            {"name": "preview deploy", "state": "skipped"}], threads=[
+            {"path": "WeatherWidget/Provider.swift", "line": 42, "comments": [
+                {"author": "reviewer-a", "body": "这里每次刷新都重新请求整天的预报，换成只取接下来 12 小时吧？", "url": "https://github.com/example/weather/pull/128#discussion_r1", "at": ago(hours=5)},
+                {"author": "me", "body": "好，我改一下。", "url": "https://github.com/example/weather/pull/128#discussion_r2", "at": ago(hours=4)}]},
+            {"path": "WeatherWidget/WidgetView.swift", "line": 17, "outdated": True, "comments": [
+                {"author": "reviewer-b", "body": "降雨条的颜色在深色模式下对比度不够，用 `Theme.Hue.rain` 之类的 token，别写死 `#4A90E2`。", "url": "https://github.com/example/weather/pull/128#discussion_r3", "at": ago(hours=2)}]}])
+    else:
+        pr.update(checks_state="passing", checks=[
+            {"name": "build (macos-15)", "state": "pass", "url": "https://github.com/example/weather/actions/runs/1"},
+            {"name": "unit tests", "state": "pass", "url": "https://github.com/example/weather/actions/runs/2"},
+            {"name": "lint", "state": "pass", "url": "https://github.com/example/weather/actions/runs/3"}])
+    return pr
+
+
+def git_pr(h, op, body):
+    """POST git/pr (open one) and git/pr/merge on the made-up repository (MOCK_GIT_WRITE)."""
+    w = GIT_W
+    time.sleep(0.4)
+    if w["fail"]:
+        code, _ = w["fail"]
+        w["fail"] = None
+        return h.send_json({"error": "gh pr %s: %s" % ("create" if op == "pr" else "merge", code), "code": code}, 409)
+    if op == "pr":
+        if not w["upstream"] or w["ahead"]:
+            return h.send_json({"error": "%s has commits that are not pushed" % w["branch"], "code": "git_not_pushed"}, 409)
+        w["pr"] = git_pr_make("new", w["branch"], body.get("title") or w["branch"], bool(body.get("draft")))
+    else:
+        pr = w["pr"]
+        if not pr: return h.send_json({"error": "no pull requests found for branch \"%s\"" % w["branch"], "code": "git_no_pr"}, 409)
+        if body.get("auto_off"): pr["auto_merge"] = False
+        elif body.get("auto"): pr["auto_merge"] = True
+        elif pr["merge_state"] not in ("CLEAN", "UNSTABLE", "HAS_HOOKS"):
+            return h.send_json({"error": "gh pr merge: X Pull request example/weather#128 is not mergeable: the base branch policy prohibits the merge.", "code": "git_failed"}, 409)
+        else: pr["state"] = "MERGED"
+    return h.send_json({"branch": w["branch"], "pr": w["pr"]})
 
 
 def git_write_status(root):
@@ -8762,7 +8814,7 @@ def mock_files(p, q):
     parts = p.split("/")
     if not (p.startswith("/api/v1/machines/") and len(parts) >= 6): return None
     mid, what = parts[4], "/".join(parts[5:])
-    if what not in ("file", "fs", "fs/find", "git/status", "git/diff", "git/show", "git/log", "git/branches"): return None
+    if what not in ("file", "fs", "fs/find", "git/status", "git/diff", "git/show", "git/log", "git/branches", "git/pr"): return None
     if not machine_online(mid): return {"error": "%s: machine is offline" % mid}, 503
     arg = lambda k: (q.get(k) or [""])[0]
     if what == "fs/find":  # #2438: every file under cwd, shallow first (the node's walk / git ls-files)
@@ -8803,6 +8855,12 @@ def mock_files(p, q):
             return git_write_status(root), 200
     if what == "git/branches":
         return (git_branches(), 200) if os.environ.get("MOCK_GIT_WRITE") else ({"error": "not found"}, 404)
+    if what == "git/pr":
+        if not os.environ.get("MOCK_GIT_WRITE"): return {"error": "not found"}, 404
+        time.sleep(0.3)
+        if GIT_W["pr_fail"]:
+            return {"error": {"no_gh": "gh is not installed on this machine", "not_signed_in": "gh is not signed in on this machine: run gh auth login"}.get(GIT_W["pr_fail"], GIT_W["pr_fail"]), "code": GIT_W["pr_fail"]}, 409
+        return {"branch": GIT_W["branch"], "pr": GIT_W["pr"] if GIT_W["pr"] and GIT_W["pr"]["head"] == GIT_W["branch"] else None}, 200
         if os.environ.get("MOCK_GIT_PULL"):
             commits = MOCK_COMMITS[:30]
             if GIT_PULL_STATE["behind"] == 0:
@@ -11748,6 +11806,11 @@ class H(BaseHTTPRequestHandler):
             global GIT_W
             if q.get("reset"): GIT_W = git_write_fresh()
             if q.get("fail"): GIT_W["fail"] = (q["fail"][0], [f for f in (q.get("files") or [""])[0].split(",") if f])
+            if q.get("pr"):
+                kind = q["pr"][0]
+                if kind != "none": GIT_W.update(upstream="origin/" + GIT_W["branch"], ahead=0)
+                GIT_W["pr"] = None if kind == "none" else git_pr_make(kind, GIT_W["branch"])
+            if "pr_fail" in q: GIT_W["pr_fail"] = q["pr_fail"][0] or None
             return self.send_json({"branch": GIT_W["branch"], "ahead": GIT_W["ahead"], "files": len(GIT_W["files"])})
         if p == "/mock/git-pull" and os.environ.get("MOCK_GIT_PULL"):
             if "mode" in q:
@@ -12646,6 +12709,8 @@ class H(BaseHTTPRequestHandler):
         if self.bad_network(): return
         if os.environ.get("MOCK_GIT_WRITE") and p.startswith("/api/v1/machines/") and re.search(r"/git/(stage|commit|push|switch|stash)$", p) and self.command == "POST":
             return git_write(self, p, json.loads(self.last_body or b"{}"))
+        if os.environ.get("MOCK_GIT_WRITE") and p.startswith("/api/v1/machines/") and re.search(r"/git/pr(/merge)?$", p) and self.command == "POST":
+            return git_pr(self, p.rsplit("/", 1)[-1], json.loads(self.last_body or b"{}"))
         if os.environ.get("MOCK_GIT_PULL") and p.endswith("/git/pull") and self.command == "POST":
             body = json.loads(self.last_body or b"{}")
             status, code = mock_files(p[:-4] + "status", {"cwd": [body.get("cwd", "")]})

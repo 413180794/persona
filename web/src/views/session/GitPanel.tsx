@@ -31,6 +31,7 @@ import { DiffLines } from "./files/DiffLines";
 import { BackHeader, Empty, GitBadge, Segmented } from "./files/parts";
 import { formatDate, t } from "../../i18n";
 import { BranchesView, CommitBox, PushButton, StageAll, StageBox, StashesView, useGitWrite, type GitWriter } from "./GitWrite";
+import { PRCard, PRCreateView, PRView, useGitPR } from "./GitPR";
 
 // `at`: a line to show and mark when the view opens (a comment card's click, lib/comments.ts openSpot)
 type View =
@@ -38,7 +39,9 @@ type View =
   | { kind: "commit"; commit: GitCommit; at?: GitSpot }
   | { kind: "commitFile"; commit: GitCommit; file: GitFile; diff: string; truncated: boolean; at?: GitSpot }
   | { kind: "branches" }
-  | { kind: "stashes" };
+  | { kind: "stashes" }
+  | { kind: "pr" }
+  | { kind: "prCreate" };
 
 const PAGE = 50;
 
@@ -73,6 +76,8 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
     head.current = s.head?.hash;
     setStatus(s);
   });
+  // The branch's pull request (#6121), read through gh on that computer.
+  const pr = useGitPR(base, cwd, status, writable);
 
   useEffect(() => {
     if (!cwd) return;
@@ -136,7 +141,10 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
   const push = (v: View) => setViews((vs) => [...vs, v]);
   const back = () => setViews((vs) => vs.slice(0, -1));
   const top = views[views.length - 1];
-  const reload = () => setReloads((n) => n + 1);
+  const reload = () => {
+    setReloads((n) => n + 1);
+    pr.reload();
+  };
 
   return (
     <>
@@ -165,6 +173,7 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
           {status?.is_repo ? (
             <div className="px-3 pt-3 pb-6 sm:px-4" style={{ animation: "fade-in 160ms ease-out both" }}>
               <Summary s={status} writer={writable ? writer : undefined} onBranches={() => push({ kind: "branches" })} onStashes={() => push({ kind: "stashes" })} />
+              {writable && <PRCard s={status} pr={pr} onOpen={() => push({ kind: "pr" })} onCreate={() => push({ kind: "prCreate" })} />}
               <Changes s={status} writer={writable ? writer : undefined} onOpen={(f) => push({ kind: "diff", file: f, staged: isStaged(f) && !hasUnstaged(f) })} />
               {writable && status.files.length > 0 && <CommitBox s={status} writer={writer} />}
               <Section title={t("session-gitpanel.commits")}>
@@ -195,7 +204,10 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
       )}
       {top?.kind === "branches" && status && <BranchesView base={base} cwd={cwd} s={status} writer={writer} onBack={back} onClose={onClose} />}
       {top?.kind === "stashes" && status && <StashesView s={status} writer={writer} onBack={back} onClose={onClose} />}
+      {top?.kind === "pr" && status && <PRView s={status} pr={pr} mid={mid} sid={sid} onBack={back} onClose={onClose} />}
+      {top?.kind === "prCreate" && status && <PRCreateView s={status} pr={pr} onBack={back} onClose={onClose} onDone={() => setViews((vs) => [...vs.slice(0, -1), { kind: "pr" }])} />}
       {!top && writer.dialog}
+      {pr.dialog}
       {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} at={top.at} onOpen={push} onBack={back} onClose={onClose} />}
       {top?.kind === "commitFile" && (
         <>

@@ -36,7 +36,7 @@ export function useGitWrite(base: string, cwd: string, onStatus: (s: GitStatus) 
 
 export type GitWriter = ReturnType<typeof useGitWrite>;
 
-function RefusalDialog({ refusal, onClose }: { refusal: GitRefusal | null; onClose: () => void }) {
+export function RefusalDialog({ refusal, onClose }: { refusal: GitRefusal | null; onClose: () => void }) {
   return (
     <Dialog open={refusal !== null} onClose={onClose} title={refusal?.title}>
       {refusal && (

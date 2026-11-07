@@ -6,6 +6,7 @@ vi.mock("../assistant/TaskPanel", () => ({ AgentPanel: () => null, TaskPanel: ()
 vi.mock("../chat/SubagentPanel", () => ({ SubagentPanel: () => null }));
 vi.mock("../../lib/use-fs-live", () => ({ useFsLive: () => {} }));
 import type { GitStatus } from "../../lib/files";
+import { getQuotes, setQuotes } from "../../lib/drafts";
 import { getState } from "../../lib/store";
 import { t } from "../../i18n";
 import { GitPanel } from "./GitPanel";
@@ -128,5 +129,39 @@ describe("GitPanel writes", () => {
     expect(dialog.textContent).toContain(t("session-gitwrite.refused_git_conflict"));
     expect(dialog.textContent).toContain("src/new.ts");
     expect(dialog.textContent).toContain("index.lock");
+  });
+
+  it("hands a review thread to the agent and asks before merging", async () => {
+    setQuotes("computer/session", []);
+    mount(true);
+    await act(async () => last().answer(status()));
+    const read = pending.find((p) => p.path.includes("/git/pr?"))!;
+    const pr = {
+      number: 12,
+      url: "https://github.com/example/repo/pull/12",
+      title: "Handle the empty password",
+      state: "OPEN",
+      base: "main",
+      head: "fix/login",
+      merge_state: "CLEAN",
+      checks: [{ name: "test", state: "pass" }],
+      threads: [{ path: "src/login.ts", line: 42, comments: [{ author: "reviewer", body: "Check for an empty string.", at: "2026-11-07T00:00:00Z" }] }],
+    };
+    await act(async () => read.answer({ branch: "fix/login", pr }));
+    act(() => [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("#12"))!.click());
+    act(() => button(t("session-gitpr.hand"))!.click());
+    const list = getQuotes("computer/session").list;
+    expect(list).toHaveLength(1);
+    expect(list[0]!.text).toBe("@reviewer: Check for an empty string.");
+    expect(list[0]!.comment?.body).toContain("src/login.ts:42");
+    const asked = pending.length;
+    act(() => button(t("session-gitpr.merge"))!.click());
+    expect(pending.length).toBe(asked);
+    expect(document.querySelector("[role=dialog]")!.textContent).toContain(t("session-gitpr.keeps_branch", { branch: "fix/login" }));
+    const confirm = [...document.querySelectorAll("[role=dialog] button")].find((b) => b.textContent?.trim() === t("session-gitpr.merge")) as HTMLButtonElement;
+    act(() => confirm.click());
+    expect(last().path).toContain("/git/pr/merge");
+    expect(last().body).toEqual({ cwd: "/projects/demo", number: 12, method: "squash" });
+    setQuotes("computer/session", []);
   });
 });

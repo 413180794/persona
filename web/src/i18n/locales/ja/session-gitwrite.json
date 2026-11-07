@@ -66,5 +66,8 @@
   "refused_git_no_branch": "そのブランチはないか、その名前は使えません",
   "refused_git_no_stash": "スタッシュする変更がないか、そのスタッシュはありません",
   "refused_no_gh": "そのコンピュータに GitHub CLI（gh）がありません",
-  "refused_not_signed_in": "そのコンピュータの GitHub CLI（gh）がサインインしていません。gh auth login を実行してください"
+  "refused_not_signed_in": "そのコンピュータの GitHub CLI（gh）がサインインしていません。gh auth login を実行してください",
+  "refused_git_not_pushed": "先にブランチをプッシュしてください。プルリクエストにはすべてのコミットが GitHub に必要です",
+  "refused_git_no_pr": "このブランチにはプルリクエストがありません",
+  "refused_git_not_github": "このリポジトリには GitHub のリモートがありません"
 }

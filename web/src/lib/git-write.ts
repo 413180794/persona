@@ -59,6 +59,9 @@ const KNOWN = new Set([
   "git_busy",
   "git_no_branch",
   "git_no_stash",
+  "git_not_pushed",
+  "git_no_pr",
+  "git_not_github",
   "no_gh",
   "not_signed_in",
 ]);

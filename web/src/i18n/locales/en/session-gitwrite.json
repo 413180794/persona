@@ -66,5 +66,8 @@
   "refused_git_no_branch": "No such branch, or that name can't be used",
   "refused_git_no_stash": "Nothing to stash, or that stash is gone",
   "refused_no_gh": "GitHub CLI (gh) is not installed on that computer",
-  "refused_not_signed_in": "GitHub CLI (gh) is not signed in on that computer: run gh auth login there"
+  "refused_not_signed_in": "GitHub CLI (gh) is not signed in on that computer: run gh auth login there",
+  "refused_git_not_pushed": "Push the branch first: a pull request needs every commit on GitHub",
+  "refused_git_no_pr": "This branch has no pull request",
+  "refused_git_not_github": "This repository has no GitHub remote"
 }
