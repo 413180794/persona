@@ -419,6 +419,15 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			return nil
 		}
 		notification := a.CommandMode == "task-notification"
+		// A subagent handing its report back while the session works (Claude Code 2.1.319): a queued command with a
+		// peer origin that says handback, written by Claude Code itself. Like the hidden user line of one that came
+		// while idle, it is no message: its report goes to the subagent's notification, which follows (reportFor).
+		if a.Origin != nil && a.Origin.Kind == "peer" {
+			if agent, report, ok := handbackOf(attachmentOrigin(line)); ok {
+				meta.handedBack(agent, report)
+				return nil
+			}
+		}
 		if a.Origin != nil && a.Origin.Kind == "peer" { // another Claude session's message, absorbed mid-turn
 			var prompt string
 			_ = json.Unmarshal(a.Prompt, &prompt)
@@ -1019,6 +1028,20 @@ func peerMessage(mk func(int, string, string) proto.Item, origin, content json.R
 		text = strings.Join(parts, "\n")
 	}
 	return peerItem(mk, text, o.Name, o.Body)
+}
+
+// attachmentOrigin is an attachment line's origin as Claude Code wrote it (only queued commands with a peer origin
+// read it, so not every line is decoded twice).
+func attachmentOrigin(line []byte) json.RawMessage {
+	var l struct {
+		Attachment struct {
+			Origin json.RawMessage `json:"origin"`
+		} `json:"attachment"`
+	}
+	if json.Unmarshal(line, &l) != nil {
+		return nil
+	}
+	return l.Attachment.Origin
 }
 
 // FromSession is who a message another Claude session sent is from when it does not say (the apps and the hub put it

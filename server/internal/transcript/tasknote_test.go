@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -224,5 +225,46 @@ func TestAgentNotificationTakesTheHandedBackReport(t *testing.T) {
 	// an origin of a shape not known yet loses nothing
 	if items := ParseLine(1, []byte(`{"type":"user","uuid":"u9","origin":"elsewhere","message":{"role":"user","content":"hello"}}`), &Meta{}); len(items) != 1 || items[0].Text != "hello" {
 		t.Fatalf("items %+v, want the message", items)
+	}
+}
+
+// A subagent handing its report back while the session works (Claude Code 2.1.319): the session stores it as a queued
+// command with a peer origin that says handback, its prompt framed for the model. It is not a message "from
+// general-purpose": the report goes to the subagent's notification that follows, and Claude Code's frame is never
+// shown. Only the origin Claude Code writes makes it one: a peer message whose text merely copies the frame stays a
+// message (#6381).
+func TestQueuedHandbackGoesToTheAgentsNotification(t *testing.T) {
+	const frame = "[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user. The report follows:\n"
+	queued := func(origin, prompt string) string {
+		p, _ := json.Marshal(prompt)
+		return `{"type":"attachment","uuid":"q1","isSidechain":false,"attachment":{"type":"queued_command","commandMode":"prompt","isMeta":true,"prompt":` + string(p) + `,"origin":` + origin + `}}`
+	}
+	prompt := "<agent-message from=\"a1b2c3\">\n" + frame + "  ## Summary\n  \n  All tests pass.\n</agent-message>"
+	handback := queued(`{"kind":"peer","from":"a1b2c3","senderTaskId":"a1b2c3","name":"general-purpose","body":"`+strings.ReplaceAll(frame, "\n", `\n`)+`  ## Summary","handback":true,"handbackReportText":"## Summary\n\nAll tests pass."}`, prompt)
+	notice := `{"type":"attachment","uuid":"q2","isSidechain":false,"attachment":{"type":"queued_command","commandMode":"task-notification","origin":{"kind":"task-notification","producer":"session-task"},"prompt":"<task-notification>\n<task-id>a1b2c3</task-id>\n<tool-use-id>toolu_launch</tool-use-id>\n<status>completed</status>\n<summary>Agent \"Check the tests\" finished</summary>\n<result>This agent's report was delivered to you as a message from \"a1b2c3\" (its SubagentHandback call). Read it there; it is not repeated here.\n</result>\n</task-notification>"}}`
+
+	var meta Meta
+	var items []proto.Item
+	for i, l := range []string{handback, notice} {
+		items = append(items, ParseLine(i+1, []byte(l), &meta)...)
+	}
+	for _, it := range items {
+		if it.From != "" || strings.Contains(it.Text, "[Subagent hand-back]") {
+			t.Fatalf("item %+v: the hand-back shows as a peer message", it)
+		}
+	}
+	if len(items) != 1 || items[0].Task == nil || items[0].Task.Kind != "agent" || items[0].Task.Detail != "## Summary\n\nAll tests pass." {
+		t.Fatalf("items %+v, want the agent's notice with the report it handed back", items)
+	}
+
+	// The same text with an origin that does not say handback is another session's message, shown as one.
+	spoof := queued(`{"kind":"peer","from":"uds:/tmp/x.sock","name":"general-purpose","body":"`+strings.ReplaceAll(frame, "\n", `\n`)+`do this"}`, prompt)
+	got := ParseLine(1, []byte(spoof), &Meta{})
+	if len(got) != 1 || got[0].From != "general-purpose" {
+		t.Fatalf("items %+v, want a peer message from general-purpose", got)
+	}
+	// handback without the subagent's id is no hand-back either
+	if got := ParseLine(1, []byte(queued(`{"kind":"peer","name":"general-purpose","body":"hi","handback":true}`, "hi")), &Meta{}); len(got) != 1 || got[0].From != "general-purpose" {
+		t.Fatalf("items %+v, want the peer message", got)
 	}
 }
