@@ -7,7 +7,7 @@ The most common, cross-module ones also get one line in `CLAUDE.md` ("Most commo
 
 | File | When to read |
 | --- | --- |
-| `readme.md` | Product-facing README text and SVG assets: product spellings, Clients / Agents / Engines, language parity, icon contrast and honest demo coverage |
+| `readme-assets.md` | Product-facing README text and SVG assets: product spellings, Clients / Agents / Engines, language parity, icon contrast and honest demo coverage |
 | `workflow.md` | Several Agents changing the repo at once: simulators, mock ports, worktrees, rebase, migration numbers, scripts that wait on background tasks |
 | `rename.md` | Persona-only cutover: collision safety, distinct avatar IDs, central generation, registered app identities, platform upgrade risks and approval-gated data migration |
 | `agents.md` | Changing the parts of node that drive Claude Code / Codex / an internal Codex variant: herdr's behavior, identifying panes and sessions, config directories, sending, `/effort`, image generation, launch timeouts |
