@@ -1,0 +1,9 @@
+[Unit]
+Description=Test, build, sign and publish Android master updates
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/lib/persona-android-release/android_release_worker.py --config %h/.config/persona/android-release.json
+TimeoutStartSec=90min
+UMask=0077

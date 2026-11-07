@@ -32,6 +32,7 @@ internal object AppInstaller {
     suspend fun install(context: Context, updates: AppUpdates, update: AppUpdate) = withContext(Dispatchers.IO) {
         val checksum = requireNotNull(update.sha256) { "Missing SHA-256" }
         require(checksum.matches(Regex("[a-fA-F0-9]{64}"))) { "Invalid SHA-256" }
+        requireNewerVersion(context, update)
         check(context.packageManager.canRequestPackageInstalls()) { "Install permission required" }
         val apk = File.createTempFile("persona-update-", ".apk", context.cacheDir)
         try {
@@ -39,6 +40,8 @@ internal object AppInstaller {
             check(apk.inputStream().use { verifySha256(it, checksum) }) { "SHA-256 mismatch" }
             val archive = context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
             check(archive?.packageName == context.packageName && archive.longVersionCode == update.versionCode) { "Package identity mismatch" }
+            // Another installation may have completed while this APK was downloading.
+            requireNewerVersion(context, update)
             val installer = context.packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                 setAppPackageName(context.packageName)
@@ -64,6 +67,11 @@ internal object AppInstaller {
                 throw error
             }
         } finally { apk.delete() }
+    }
+
+    private fun requireNewerVersion(context: Context, update: AppUpdate) {
+        val installed = context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+        check(update.versionCode > installed) { "Update version must be newer than installed version" }
     }
 }
 

@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Run the Android release pipeline for new commits on the configured main branch."""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+STATUS_CONTEXT = "release/android"
+VERSION_BASE = 100000
+
+
+def run(args, cwd=None, capture=False, env=None):
+    return subprocess.run(args, cwd=cwd, env=env, check=True, text=True,
+                          stdout=subprocess.PIPE if capture else None).stdout
+
+
+def atomic_json(path, value):
+    temporary = path.with_suffix(".tmp")
+    with temporary.open("w") as stream:
+        json.dump(value, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
+
+
+def digest(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def version_code(checkout, sha):
+    # First-parent history orders master merges independently of wall clocks,
+    # queue timing and retries. A rewritten history is rejected before building.
+    count = int(run(["git", "rev-list", "--first-parent", "--count", sha], checkout, True))
+    version = VERSION_BASE + count
+    if not VERSION_BASE < version <= 2100000000:
+        raise ValueError("Android version range exhausted")
+    return version
+
+
+def status(config, sha, state, description):
+    gh = config.get("gh", "gh")
+    run([gh, "api", f"repos/{config['repository']}/statuses/{sha}",
+         "-f", "state=" + state, "-f", "context=" + STATUS_CONTEXT,
+         "-f", "description=" + description[:140]])
+
+
+def prepare(config):
+    checkout = Path(config["checkout"]).expanduser().resolve()
+    if not checkout.exists():
+        checkout.parent.mkdir(parents=True, exist_ok=True)
+        run(["git", "clone", "--no-checkout", config["git_url"], str(checkout)])
+    if not (checkout / ".git").exists():
+        raise ValueError("pipeline checkout is not a Git repository")
+    actual = run(["git", "remote", "get-url", "origin"], checkout, True).strip()
+    if actual != config["git_url"]:
+        raise ValueError("pipeline origin differs from configured repository")
+    branch = config.get("branch", "master")
+    run(["git", "check-ref-format", "refs/heads/" + branch], checkout)
+    run(["git", "fetch", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}"], checkout)
+    sha = run(["git", "rev-parse", f"refs/remotes/origin/{branch}"], checkout, True).strip()
+    return checkout, sha
+
+
+def check_history(checkout, previous, sha):
+    if previous:
+        run(["git", "merge-base", "--is-ancestor", previous, sha], checkout)
+
+
+def build(config, checkout, sha, directory):
+    run(["git", "checkout", "--detach", "--force", sha], checkout)
+    # The dedicated clone never contains user work. Do not remove its build caches.
+    env = dict(os.environ, **config.get("build_environment", {}))
+    code = version_code(checkout, sha)
+    name = f"0.1.{code}-{sha[:12]}"
+    unsigned = directory / "unsigned.apk"
+    receipt = directory / "build.json"
+    if receipt.exists() and unsigned.exists():
+        built = json.loads(receipt.read_text())
+        if built.get("source_sha") == sha and built.get("unsigned_sha256") == digest(unsigned):
+            return built
+    tests = ["python3", "-m", "unittest", "discover", "-s", "scripts/release", "-p", "test_*android*.py"]
+    run(tests, checkout, env=env)
+    run(["python3", "scripts/privacy_check.py"], checkout, env=env)
+    run(["./gradlew", "--no-daemon", "--console=plain",
+         "-PpersonaApplicationId=" + config["application_id"],
+         f"-PpersonaVersionCode={code}", "-PpersonaVersionName=" + name,
+         ":core:hub:test", ":feature:settings:testDebugUnitTest",
+         ":feature:agents:testDebugUnitTest", ":platform:notify:testDebugUnitTest",
+         ":app:assembleRelease"], checkout / "android", env=env)
+    shutil.copyfile(checkout / "android/app/build/outputs/apk/release/app-release-unsigned.apk", unsigned)
+    result = dict(source_sha=sha, unsigned_sha256=digest(unsigned),
+                  package=config["application_id"], version_code=code, version_name=name)
+    atomic_json(receipt, result)
+    return result
+
+
+def signing(config, request, directory):
+    queue = Path(config["signing_queue"]).expanduser().resolve()
+    queue.mkdir(parents=True, exist_ok=True, mode=0o700)
+    signed = queue / "signed.apk"
+    receipt = queue / "receipt.json"
+    # Publish the request last so the remote signer never sees a partial input.
+    existing = json.loads((queue / "request.json").read_text()) if (queue / "request.json").exists() else None
+    if existing != request:
+        (queue / "request.json").unlink(missing_ok=True)
+        shutil.copyfile(directory / "unsigned.apk", queue / "unsigned.tmp")
+        (queue / "unsigned.tmp").replace(queue / "unsigned.apk")
+        receipt.unlink(missing_ok=True)
+        atomic_json(queue / "request.json", request)
+    deadline = time.monotonic() + config.get("signing_timeout_seconds", 1200)
+    print("Waiting for the configured signing host", flush=True)
+    while time.monotonic() < deadline:
+        if receipt.exists() and signed.exists():
+            result = json.loads(receipt.read_text())
+            if result.get("source_sha") == request["source_sha"]:
+                for key in ("unsigned_sha256", "package", "version_code"):
+                    if result.get(key) != request[key]:
+                        raise ValueError("signing receipt identity mismatch")
+                if result.get("certificate_sha256") != config["certificate_sha256"]:
+                    raise ValueError("signing receipt certificate mismatch")
+                if result.get("signed_sha256") != digest(signed):
+                    raise ValueError("signing receipt digest mismatch")
+                shutil.copyfile(signed, directory / "signed.apk")
+                atomic_json(directory / "signature.json", result)
+                return
+        time.sleep(5)
+    raise TimeoutError("signing host did not return a verified APK before the deadline")
+
+
+def publish(config, checkout, request, directory):
+    env = dict(os.environ, **config.get("build_environment", {}))
+    command = ["python3", "scripts/release/publish_android_apk.py", str(directory / "signed.apk"),
+               "--source-sha", request["source_sha"], "--version-code", str(request["version_code"]),
+               "--version-name", request["version_name"], "--expected-package", config["application_id"],
+               "--expected-cert-sha256", config["certificate_sha256"],
+               "--hub-ssh", config["hub_ssh"], "--remote-dir", config["remote_directory"]]
+    if config.get("ssh_command"):
+        command += ["--ssh-command", json.dumps(config["ssh_command"])]
+    run(command, checkout, env=env)
+    # This private adapter must GET latest and the complete APK over verified TLS,
+    # check authentication rejection, then verify hash and certificate independently.
+    run(config["verify_command"] + [str(directory / "signature.json")], checkout, env=env)
+
+
+def cycle(config):
+    state = Path(config["state_directory"]).expanduser().resolve()
+    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (state / "worker.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Another Android release is already running")
+            return
+        checkout, sha = prepare(config)
+        complete = state / "published.json"
+        previous = json.loads(complete.read_text()) if complete.exists() else {}
+        if previous.get("source_sha") == sha:
+            print("Already published " + sha)
+            return
+        check_history(checkout, previous.get("source_sha"), sha)
+        directory = state / "runs" / sha
+        directory.mkdir(parents=True, exist_ok=True)
+        status(config, sha, "pending", "Android tests, release build, signing and Hub publication")
+        try:
+            with (directory / "release.log").open("a", buffering=1) as log:
+                # Child commands and Python diagnostics share a durable per-source log.
+                stdout, stderr = os.dup(1), os.dup(2)
+                try:
+                    sys.stdout.flush(); sys.stderr.flush()
+                    os.dup2(log.fileno(), 1); os.dup2(log.fileno(), 2)
+                    print("SOURCE_SHA=" + sha, flush=True)
+                    request = build(config, checkout, sha, directory)
+                    signing(config, request, directory)
+                    publish(config, checkout, request, directory)
+                    print("ANDROID_RELEASE_SUCCESS " + sha, flush=True)
+                finally:
+                    sys.stdout.flush(); sys.stderr.flush()
+                    os.dup2(stdout, 1); os.dup2(stderr, 2)
+                    os.close(stdout); os.close(stderr)
+            status(config, sha, "success", "Tests, signed Release APK and authenticated TLS Hub download verified")
+            atomic_json(complete, request)
+            print("Published " + sha)
+        except Exception as error:
+            atomic_json(directory / "failure.json", {"source_sha": sha, "error": str(error)})
+            status(config, sha, "failure", "Android release failed; previous Hub APK retained; inspect worker log")
+            raise
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, required=True)
+    args = parser.parse_args()
+    os.umask(0o077)
+    config = json.loads(args.config.read_text())
+    if not re.fullmatch(r"[0-9a-f]{64}", config["certificate_sha256"]):
+        parser.error("certificate_sha256 must be the existing signing certificate digest")
+    cycle(config)
+
+
+if __name__ == "__main__":
+    main()

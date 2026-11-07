@@ -55,8 +55,10 @@ android {
     }
     defaultConfig {
         applicationId = appId
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = providers.gradleProperty("personaVersionCode").orElse("1").get().toInt().also {
+            require(it in 1..2100000000) { "Invalid Android version code" }
+        }
+        versionName = providers.gradleProperty("personaVersionName").orElse("0.1").get()
         manifestPlaceholders["appLabel"] = appLabel
         manifestPlaceholders["googleOAuthScheme"] = googleOAuthScheme
     }
