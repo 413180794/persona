@@ -30,14 +30,16 @@ import persona.core.domain.lines.WorkItem
 /** The assistant's feed among the chat's lines (docs/unified-entry.md), as iOS ChatLines.mergeFeed and web displayLines. */
 class AssistantLinesTest {
     private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
-    private fun ago(min: Long) = now.minus(min, ChronoUnit.MINUTES).toString()
-    private fun user(id: String, min: Long) = ChatLine.Row(ChatRow("user", LineItem(Item(id, role = "user", kind = "text", ts = ago(min)))))
-    private fun reply(id: String, min: Long) = ChatLine.Row(ChatRow("reply", LineItem(Item(id, role = "assistant", kind = "text", ts = ago(min)))))
-    private fun feed(id: String, min: Long) = FeedItem(id, "c1", ago(min), "task", "t")
+    private fun ago(min: Long, from: Instant = now) = from.minus(min, ChronoUnit.MINUTES).toString()
+    private fun user(id: String, min: Long, from: Instant = now) = ChatLine.Row(ChatRow("user", LineItem(Item(id, role = "user", kind = "text", ts = ago(min, from)))))
+    private fun reply(id: String, min: Long, from: Instant = now) = ChatLine.Row(ChatRow("reply", LineItem(Item(id, role = "assistant", kind = "text", ts = ago(min, from)))))
+    private fun feed(id: String, min: Long, from: Instant = now) = FeedItem(id, "c1", ago(min, from), "task", "t")
 
     @Test fun anItemGoesAtTheEndOfItsExchangeWithADayLinePerDay() {
-        val lines = listOf(user("u1", 60 * 26), reply("a1", 60 * 26 - 1), user("u2", 30), reply("a2", 29))
-        val out = AssistantLines.lines(lines, listOf(feed("early", 60 * 26 - 1), feed("mid", 20)), ZoneOffset.UTC).map { it.id }
+        // A fixed noon: counted back from the real clock, "30 and 20 minutes ago" straddle midnight between 00:00 and 00:30 UTC.
+        val noon = Instant.parse("2026-11-06T12:00:00Z")
+        val lines = listOf(user("u1", 60 * 26, noon), reply("a1", 60 * 26 - 1, noon), user("u2", 30, noon), reply("a2", 29, noon))
+        val out = AssistantLines.lines(lines, listOf(feed("early", 60 * 26 - 1, noon), feed("mid", 20, noon)), ZoneOffset.UTC).map { it.id }
         assertEquals(2, out.count { it.startsWith("day-") })
         assertEquals(listOf("u1", "a1", "feed-early", "u2", "a2", "feed-mid"), (out.filterNot { it.startsWith("day-") }).zhAny())
     }
