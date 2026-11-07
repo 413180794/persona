@@ -11,7 +11,11 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import persona.core.contracts.FleetItem
 import persona.core.contracts.FleetState
+import persona.core.contracts.Interaction
 import persona.core.contracts.SessionKey
+import persona.core.navigation.AppTab
+import persona.core.navigation.NotificationRoute
+import persona.core.navigation.RequestRef
 
 /** A tap on a widget row or the tile lands on the request it shows, as a needs-you notification does (#4149). */
 @RunWith(AndroidJUnit4::class)
@@ -55,5 +59,14 @@ class SurfaceLinksTest {
         val key = SessionKey("mac", "s1")
         assertEquals("q1", request(SurfaceLinks.conversation(context, key, false, "q1")))
         assertNull(request(SurfaceLinks.conversation(context, key, false)))
+    }
+
+    @Test fun approveFirstOpensACardOutsideAnySessionInAgents() {
+        // `personad ask` in a plain terminal (#5719): no conversation to open, so Agents with that card, as a notification does.
+        val intent = SurfaceLinks.request(context, Interaction("q1", "mac", "", kind = "question")) { null }
+        assertEquals(NotificationRoute(AppTab.Agents, card = RequestRef("mac", "q1")), intent.data?.let(NotificationRoute::parse))
+        val inSession = SurfaceLinks.request(context, Interaction("q1", "mac", "s1", kind = "question")) { false }
+        assertEquals("s1", inSession.data?.getQueryParameter("session"))
+        assertEquals("q1", request(inSession))
     }
 }

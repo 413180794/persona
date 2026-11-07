@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import persona.core.contracts.FleetItem
 import persona.core.contracts.FleetState
+import persona.core.contracts.Interaction
 import persona.core.contracts.SessionKey
 import persona.core.domain.fleet.FleetSummary
 import persona.core.navigation.AppTab
@@ -30,6 +31,14 @@ internal object SurfaceLinks {
      */
     fun conversation(context: Context, key: SessionKey, assistant: Boolean?, request: String? = null): Intent =
         view(context, NotificationRoute.conversation(key.machineId, key.sessionId, assistant, request).uri())
+
+    /**
+     * The request "Approve pending" could not settle, in its conversation. A card outside any session (empty session id,
+     * #4515) has none: it opens Agents with that card, as its notification does (#4808).
+     */
+    fun request(context: Context, request: Interaction, assistant: (SessionKey) -> Boolean?): Intent =
+        if (request.sessionId.isBlank()) view(context, NotificationRoute.card(request.machineId, request.id).uri())
+        else conversation(context, request.sessionKey, assistant(request.sessionKey), request.id)
 
     /** The fleet row's conversation, at its request when the row waits on the user. */
     fun row(context: Context, item: FleetItem, assistant: (SessionKey) -> Boolean?): Intent? =
