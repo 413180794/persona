@@ -117,6 +117,7 @@ func TestAnExtensionsTokenActsOnlyAsItsManager(t *testing.T) {
 		{"names A: an inbox reply", "POST", "/api/v1/inbox/item-1/reply", `{"text":"x"}`, namesA},
 		{"names A: the knowledge base", "GET", "/api/v1/kb/people", "", namesA},
 		{"names A: another extension's HTTP", "GET", "/api/v1/extensions/lark/things", "", namesA},
+		{"A's card choice", "POST", "/api/v1/interactions/ix_a/choose", `{"option":0,"rev":"old"}`, nil},
 		{"A's conversation's feed", "GET", "/api/v1/assistant/conversations/conv-a/feed", "", nil},
 		{"A's conversation's stop", "POST", "/api/v1/assistant/conversations/conv-a/stop", "", nil},
 		{"an agent on A's machine (body)", "POST", "/api/v1/sessions", `{"machine_id":"ma","cwd":"/tmp","prompt":"B's prompt"}`, nil},
@@ -199,6 +200,7 @@ func TestEveryExtensionRouteIsBounded(t *testing.T) {
 		"POST /api/v1/sessions/{mid}/{sid}/queue":          "path",
 		"POST /api/v1/sessions/{mid}/{sid}/queue/send-now": "path",
 		"POST /api/v1/sessions/{mid}/{sid}/seen":           "path",
+		"POST /api/v1/interactions/{id}/choose":            "path",
 		"POST /api/v1/interactions/{id}/resolve":           "path",
 		"POST /api/v1/interactions/{id}/reanswer":          "path", // pending: its card; no longer pending: its manager
 		"POST /api/v1/agents/sessions/{id}/messages":       "manager",

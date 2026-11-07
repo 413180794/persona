@@ -545,9 +545,19 @@ const apnsMaxAlert = 4096
 // until it fits; the full text is in the app. payload's "aps" is replaced in place by a shortened copy.
 func fitAlert(payload map[string]any, most int) ([]byte, error) {
 	b, _ := json.Marshal(payload)
+	full := payload["aps"]
 	for limit := 1000; len(b) > most; limit /= 2 {
 		if limit < 20 {
-			return nil, fmt.Errorf("payload of %d bytes does not fit", len(b))
+			if _, ok := payload["ask"]; !ok {
+				return nil, fmt.Errorf("payload of %d bytes does not fit", len(b))
+			}
+			// Option labels must remain complete. Without ask, the client opens the app;
+			// retry from the full alert so dropping options does not leave a tiny preview.
+			delete(payload, "ask")
+			payload["aps"] = full
+			b, _ = json.Marshal(payload)
+			limit = 2000 // The loop halves this before retrying the alert at 1000 characters.
+			continue
 		}
 		payload["aps"] = shortenAlert(payload["aps"], limit)
 		b, _ = json.Marshal(payload)
@@ -871,7 +881,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 		category = "INTERACTION_INPUT"
 		body += i18n.T(l, "push.fill_in_suffix")
 	}
-	return map[string]any{
+	out := map[string]any{
 		"aps": map[string]any{
 			"alert":              map[string]any{"title": title, "subtitle": joinPlace(subtitle, machine), "body": body},
 			"sound":              "default",
@@ -881,6 +891,39 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 		},
 		"interaction_id": ix.ID, "machine_id": ix.MachineID, "session_id": ix.SessionID,
 	}
+	if q, ok := askQuestion(ix); ok {
+		labels := make([]string, len(q.Options))
+		for i, o := range q.Options {
+			labels[i] = o.Label
+		}
+		out["ask"] = map[string]any{"question": q.Question, "options": labels, "multi_select": q.MultiSelect, "rev": askRev(q)}
+	}
+	return out
+}
+
+// askQuestion selects cards a notification can answer without opening the app.
+func askQuestion(ix proto.Interaction) (proto.Question, bool) {
+	if ix.Kind != proto.IxQuestion || len(ix.Questions) != 1 || len(ix.Fields) > 0 ||
+		len(ix.Questions[0].Options) == 0 || inHealth(ix.Cwd) {
+		return proto.Question{}, false
+	}
+	return ix.Questions[0], true
+}
+
+// askRev binds an index to the question, selection mode and ordered full labels.
+// JSON preserves label boundaries even when a label contains a delimiter such as NUL.
+func askRev(q proto.Question) string {
+	labels := make([]string, len(q.Options))
+	for i, o := range q.Options {
+		labels[i] = o.Label
+	}
+	b, _ := json.Marshal(struct {
+		Question    string   `json:"question"`
+		Options     []string `json:"options"`
+		MultiSelect bool     `json:"multi_select"`
+	}{q.Question, labels, q.MultiSelect})
+	hash := sha256.Sum256(b)
+	return hex.EncodeToString(hash[:])[:12]
 }
 
 // screenAlertMost is how many characters of a screen card's dialog its push shows.

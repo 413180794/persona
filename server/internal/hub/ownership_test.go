@@ -169,12 +169,28 @@ func TestOwnershipRoutesByManager(t *testing.T) {
 
 	// An interaction is the manager's that reported it: its resolve goes there.
 	if err := b.bus.peer.Notify(assistantwire.EventFleetInteraction, assistantwire.FleetInteraction{Interaction: proto.Interaction{
-		ID: "ix-b", MachineID: "mb", SessionID: "s1", Kind: "question", CreatedAt: time.Now()}}); err != nil {
+		ID: "ix-b", MachineID: "mb", SessionID: "s1", Kind: "question", CreatedAt: time.Now(),
+		Questions: []proto.Question{{Question: "Which option?", Options: []proto.QuestionOption{{Label: "First"}}}}}}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, 5*time.Second, "the interaction", func() bool { return h.interactionOwner("ix-b") == "m-0a0b0c" })
 	if code, out := ownershipGet(t, h, srv, http.MethodPost, "/api/v1/interactions/ix-b/resolve", nil); code != http.StatusOK || out["who"] != "m-0a0b0c" {
 		t.Fatalf("resolve: %d %v", code, out)
+	}
+	// Choosing also follows the card's manager, even if the request names another.
+	rev := askRev(proto.Question{Question: "Which option?", Options: []proto.QuestionOption{{Label: "First"}}})
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/interactions/ix-b/choose", strings.NewReader(`{"option":0,"rev":"`+rev+`"}`))
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	req.Header.Set(ManagerHeader, assistantwire.AssistantID)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var chosen map[string]any
+	decodeErr := json.NewDecoder(resp.Body).Decode(&chosen)
+	_ = resp.Body.Close()
+	if decodeErr != nil || resp.StatusCode != http.StatusOK || chosen["who"] != "m-0a0b0c" {
+		t.Fatalf("choose: %d %v %v", resp.StatusCode, chosen, decodeErr)
 	}
 	// The assistant's own list replacing its interactions leaves the other manager's.
 	h.takeFleetInteractions(nil)

@@ -320,6 +320,7 @@ inbox.write          POST /api/v1/inbox/{id}/done
 inbox.write          POST /api/v1/inbox/{id}/draft
 inbox.write          POST /api/v1/inbox/{id}/reply
 inbox.write          POST /api/v1/inbox/{id}/suggestion
+agents.control       POST /api/v1/interactions/{id}/choose
 agents.control       POST /api/v1/interactions/{id}/reanswer
 agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/later/{id}/handled

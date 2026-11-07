@@ -1,0 +1,9 @@
+{
+  "bad_request": "请提供版本号，并发送一个选项下标或非空的选项下标列表。",
+  "not_pending": "这张卡已不再等待回答或不存在，请打开 App 查看状态。",
+  "not_choosable": "这张卡无法从通知中作答，请打开 App 回答。",
+  "ask_changed": "问题或选项已更改，请打开 App 查看当前卡片。",
+  "single_select": "这张卡只能选择一个选项。",
+  "invalid_choice": "选项下标缺失、重复或超出范围。",
+  "too_large": "选择请求过大。"
+}

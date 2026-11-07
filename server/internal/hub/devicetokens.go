@@ -233,7 +233,7 @@ var (
 	answerReads = regexp.MustCompile(`^/api/v1/(machines|sessions|interactions|inbox|workspace-board|workspaces|sessions/[^/]+/[^/]+/items|` +
 		`extensions/-/(widgets|shortcuts))$`)
 	// The watch draws extensions' widgets on its faces and runs their shortcuts (docs/extensions/extensions.md "System-level places").
-	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/resolve|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
+	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/(resolve|choose)|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
 		`inbox/[^/]+/(done|reply|draft|suggestion)|extensions/[^/]+/-/(widget|shortcut)/[^/]+)$`)
 	answerPuts = regexp.MustCompile(`^/api/v1/devices/[^/]+/widgets$`)
 	// answerKey is a key the watch can press on a screen card it could not read: a menu's number, Esc, Return.

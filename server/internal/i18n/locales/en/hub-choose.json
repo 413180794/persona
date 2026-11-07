@@ -1,0 +1,9 @@
+{
+  "bad_request": "Send a revision and either one option index or a nonempty list of option indexes.",
+  "not_pending": "This card is no longer pending or does not exist. Open the app to check its status.",
+  "not_choosable": "This card cannot be answered from a notification. Open the app to answer it.",
+  "ask_changed": "The question or its options have changed. Open the app to review the current card.",
+  "single_select": "This card accepts only one option.",
+  "invalid_choice": "An option index is missing, repeated or out of range.",
+  "too_large": "The choice request is too large."
+}

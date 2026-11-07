@@ -125,14 +125,18 @@ type clientOpForgetter interface {
 // clientOpRetry: an inbox reply the manager never got (assistant_offline) or that was cut off on the way to it
 // (assistant_in_doubt) keeps no receipt: the same reply asked again goes to the manager, whose send id has the hub
 // send it once (inbox.go sendInboxOnce), instead of the stored refusal coming back for good.
+// A notification choice only releases a definitely offline receipt; uncertain delivery stays recorded.
 func clientOpRetry(kind string, body []byte) bool {
-	if kind != "inbox_reply" {
+	if kind != "inbox_reply" && kind != "choose" {
 		return false
 	}
 	var res struct {
 		Code string `json:"code"`
 	}
 	_ = json.Unmarshal(body, &res)
+	if kind == "choose" { // No request reached the manager; the same tap can safely retry.
+		return res.Code == assistantwire.CodeAssistantOffline
+	}
 	return res.Code == assistantwire.CodeAssistantOffline || res.Code == assistantwire.CodeAssistantInDoubt
 }
 

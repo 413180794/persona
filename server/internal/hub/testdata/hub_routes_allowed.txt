@@ -106,6 +106,7 @@ POST /api/v1/devices/{id}/lock-tests
 POST /api/v1/devices/{id}/lock-tests/{test_id}/receipt
 POST /api/v1/hub/update
 POST /api/v1/hub/update/check
+POST /api/v1/interactions/{id}/choose
 POST /api/v1/interactions/{id}/reanswer
 POST /api/v1/interactions/{id}/resolve
 POST /api/v1/machines/{id}/confirm

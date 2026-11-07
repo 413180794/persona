@@ -222,9 +222,10 @@ Once the server declares `client_ops`, clients may send `X-Persona-Op-Id: <UUID>
 | `message` | `POST /api/v1/sessions/{mid}/{sid}/messages` |
 | `start` | `POST /api/v1/sessions` |
 | `resolve` | `POST /api/v1/interactions/{id}/resolve` |
+| `choose` | `POST /api/v1/interactions/{id}/choose` (also accepts a body `client_id`; see "Answering a question from its notification") |
 | `interrupt` / `close` / `rename` / `modes` | `POST /api/v1/sessions/{mid}/{sid}/interrupt`, `/close`, `/rename`, `/modes` |
 
-The UUID is case-insensitive. The hub builds a digest from the operation kind, path, normalized query parameters and JSON parameters, then claims the ID atomically. A repeated request reuses the receipt only for the same device, target and parameters; a conflict returns `409 {"code":"op_id_reused"}`. Message requests set `client_msg_id` to the operation UUID, overriding any value of that name in the body. Without the header the old behavior stays, including old iOS's non-UUID `client_msg_id` and `sent_messages` dedup.
+The UUID is case-insensitive. The hub builds a digest from the operation kind, path, normalized query parameters and JSON parameters, then claims the ID atomically. A repeated request reuses the receipt only for the same device, target and parameters; a conflict returns `409 {"code":"op_id_reused"}`. Message requests set `client_msg_id` to the operation UUID, overriding any value of that name in the body. Without the header or a route-specific body receipt ID, the old behavior stays, including old iOS's non-UUID `client_msg_id` and `sent_messages` dedup.
 
 `GET /api/v1/ops/{id}` returns the record `{id,device_id,kind,target,digest,state,result,created_at,updated_at}`. `target` contains `path` / `query`. Once recorded, `result` is `{status,body,content_type?}`, where `body` is the base64 of the original HTTP response bytes. It returns 404 when the record doesn't exist or doesn't belong to the current device credential. The master token has no device ID, so its queries are not filtered by device ownership.
 
@@ -564,6 +565,63 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
 {"cancel":true}                                                             // question with can_cancel:true: discard without an answer
 {"answers":{"…":"…"},"answered_by":"assistant"}                               // answered by the assistant (#1602): question only; App replies don't carry answered_by
 ```
+
+### Answering a question from its notification
+
+A question notification may carry an optional top-level `ask` alongside `interaction_id`, `machine_id`, `session_id` and `hub_id`. This is an additive server protocol; clients that do not implement notification choices continue opening the card in the App.
+
+```json
+{
+  "interaction_id": "ix_example",
+  "machine_id": "computer_example",
+  "session_id": "session_example",
+  "hub_id": "hub_example",
+  "ask": {
+    "question": "Which library?",
+    "options": ["pgx", "sqlc"],
+    "multi_select": false,
+    "rev": "<opaque rev from the hub>"
+  }
+}
+```
+
+The usual `aps` alert is omitted from this example. `ask` is present only for a `question` card with exactly one question, at least one option, no fields to fill in, and a non-health conversation. The question and ordered option labels are complete; the shortened display text in `aps.alert.body` is never an answer source. `rev` is an opaque 12-character hexadecimal SHA-256 prefix covering the question, option labels and their order, and `multi_select`. Clients echo the received value; they do not calculate it.
+
+The hub first shortens the alert text to fit the push limit. If it still cannot fit, it drops the entire `ask`, restores the original alert text and fits that text again. It never truncates `ask.question`, truncates an option label, or removes individual options. Relay pushes seal `ask` with the rest of the payload; the relay receives no plaintext question or labels. The smaller encrypted-payload budget can omit `ask` even when the corresponding direct push would retain it.
+
+Send the selected zero-based index back to the hub identified by the notification, using the same authentication as resolve:
+
+```http
+POST /api/v1/interactions/ix_example/choose
+Authorization: Bearer <device token>
+Content-Type: application/json
+Accept-Language: en
+
+{"option":1,"rev":"<rev from ask>","client_id":"<unique id for this tap>"}
+```
+
+For a card with `multi_select:true`, send `{"options":[1,0],"rev":"<rev from ask>","client_id":"<unique id for this submission>"}`. Send exactly one of `option` or `options`; `options` must be non-empty and have no repeated indexes. A single-select card accepts only one index. The hub validates the current card and revision, maps indexes to the complete labels in the card's order, and forwards a normal Resolution to the card's owning manager. For the example, index 1 becomes `{"answers":{"Which library?":"sqlc"}}`; multi-select indexes `[1,0]` become `{"answers":{"Which library?":"pgx, sqlc"}}`. Supplying a manager header does not override the card's owner.
+
+On success the response is `200 {"ok":true}`. Keep the same `client_id`, target, revision and indexes when retrying a submission after a lost response. The body ID uses the existing `withClientOp` receipt mechanism; without `client_id`, an explicit `X-Persona-Op-Id` UUID is also supported. When both are present, `client_id` determines the receipt ID. A stored successful receipt replays success even after the card has disappeared. Reusing an ID with different parameters or another device returns `409 op_id_reused`. Without an operation ID there is no durable receipt. Full and answer-only device credentials may choose. Extension credentials require `agents.control` and remain limited to their own manager's cards.
+
+Errors have `{code,error}`, with human-readable `error` localized in English, Simplified Chinese or Japanese. Branch on `code`:
+
+| HTTP | Code | Meaning and client action |
+| --- | --- | --- |
+| 400 | `bad_request` | Malformed JSON, a missing revision or missing / conflicting selection fields. Open the card in the App. |
+| 400 | `invalid_choice` | An index is negative, beyond the options, or repeated, or an `options` entry is null. Open the card in the App. |
+| 400 | `single_select` | More than one option was supplied for a single-select card. Ask for one selection. |
+| 400 | `not_choosable` | The current card cannot be answered by notification choices (multiple questions, no options, fields, health conversation or another card kind). Open it in the App. |
+| 409 | `ask_changed` | The revision no longer matches. Open and refresh the card; never apply the old index to new options. |
+| 409 | `not_pending` | The card is absent from the hub's pending cards, or the manager reports it already ended. This includes unknown, answered, withdrawn and expired cards; do not submit another choice. Open the App to inspect the current state. |
+| 409 | `op_id_reused` | The submission ID already names a different operation. Keep the original request when checking its result. |
+| 413 | `too_large` | The request body exceeds 4 KiB. |
+| 502 | `assistant_in_doubt` | The connection dropped or timed out after sending; the choice may already have been applied. Open the App to check the card. The receipt stays unknown and the same ID will not execute again. |
+| 503 | `assistant_offline` | The owning manager did not receive the choice. Retry the unchanged submission when it reconnects. |
+
+The shared authentication, scope, size-limit and operation-receipt errors still apply. A `202` receipt state of `pending` or `unknown` is not successful delivery: repeat the unchanged request to inspect its receipt, or open the App, retaining the original submission ID. An uncertain upstream outcome must not be resubmitted under a new ID. An `assistant_offline` refusal keeps no receipt when the store can release it, so the same ID can be tried again; an uncertain result stays recorded.
+
+When `ask` is absent, cannot be decrypted, or cannot be rendered completely by the client, open the App. A hub that lacks this endpoint returns 404 / 405; open the App and use its existing card flow. Do not reconstruct answers from the clipped alert text. Native notification buttons and their UI are outside this server change.
 
 ### Closing a question without an answer
 
@@ -976,6 +1034,7 @@ Clients report their errors and crashes only while `features` has `error_reports
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}` (pending) |
 | POST | `/api/v1/interactions/{id}/reanswer` | `{answers: {question text: answer}}` (#3029): replace the assistant's answer to a question with the user's. The Agent has already moved on with the assistant's answer, so the new answer is sent to it as a message (`prompts/agents/reanswer.md`, including what the assistant answered), and the same answer is sent only once; returns `{"ok":true}`. The hub forwards to the manager (503 `assistant_offline` when absent); devices that can only answer cards 403; not answered by the assistant 409, no answers 400, couldn't send 502 |
 | POST | `/api/v1/interactions/{id}/resolve` | Body is a Resolution; returns `{"ok":true}`. Already finished (#1673): answered (or handed back to the computer and back again) is idempotent with 200 `{"ok":true,"already":true,"status","resolution"}`, where `resolution` is the answer that took effect (redacted per the history record), possibly different from the one sent now, and the App uses it to show the card as answered; expired, withdrawn, or handed back to the computer returns 410 `{"error","code":"gone","status"}`, and when the outcome can't be found, 410 without `status` |
+| POST | `/api/v1/interactions/{id}/choose` | `{option,rev,client_id?}` or `{options:[…],rev,client_id?}`: answer a notification's single question by zero-based indexes, mapped to full labels and forwarded as resolve to the owning manager → `{"ok":true}`. Same authentication and operation receipts as resolve; answer-only devices allowed. Validation, error codes and fallback: "Answering a question from its notification" above |
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"relay_error"?,"features"?,"locale"?}` → `{ok,push}`; `features` lists what the app understands beyond the first version's pushes, the hub keeps only names it knows: `withdraw` gets a silent push naming the cards that are over (`{"aps":{"content-available":1},"resolved_interaction_ids":[…]}`, `background`, priority 5) when a card pushed to it is answered elsewhere, withdrawn or expires, so the app removes those notifications (#4349; within 5 s in one push, at most one a minute per device, only the devices the card went to, sealed through the relay like any other); `relay_error` is why the phone got no grant from its relay, in its words, and `push` this device's way (`route` direct / relay / none, `reason`, `detail`, `docs/operations/push-relay.md` "Which way a device is pushed"); `locale` is the device's UI language (`zh-Hans` / `en` / `ja`), and notifications to it use that language, falling back to the user's language if absent; `push_key`, `relay_url`, `relay_grant` are for the push relay (the phone's public key, the relay URL, the credential the relay issued, `docs/operations/push-relay.md`), used to push when the hub has no APNs key. In a linked-hub group only the primary hub pushes: when connected to a member, this is also forwarded to the primary; push payloads (direct and relay-sealed) carry the primary's `hub_id` at the top level ([mesh.md](../server/mesh.md) "Credentials and push"). `mac` is the Mac App (same bundle id, same topic): it gets no silent wakeups, and while connected to the hub it doesn't get "Needs You" or "Agent finished" (the App posts local notifications itself). The hub records which device credential registered it, and revoking that credential deletes the device too, so it no longer gets pushes |
 | GET | `/api/v1/devices/push` | `{direct,devices:[{device_id,name,kind,updated_at,push}]}`: whether the hub has its own APNs key, and every device it pushes to with its way (`personad hub doctor`; not for a watch) |
 | POST | `/api/v1/devices/{id}/live-activity` | Live Activity tokens: `{"push_to_start_token"}`, `{"activity_id","push_token"}` (rotates; sent repeatedly), `{"activity_id","ended":true}` (`docs/apple/live-activity.md`) |
@@ -1970,7 +2029,7 @@ Editing the roster, creating codes and deleting require a full-permission device
 **Per-manager routing (ownership, `docs/assistant/managers.md` ("Ownership"))**
 
 - **Which manager receives the request**: header `X-Persona-Manager: <id>`, or query `?manager=<id>` (for WebSockets and links opened in a browser; the header wins when both are supplied). Omitted means the default manager (`default` in `GET /api/v1/managers`), except for an extension's token, which acts as the manager whose extension it is (the one that recognized the token) and only as it: routes that name no object, merged lists (its manager's only) and an extension API prefix several managers serve go to it, and naming another manager, or another manager's computer, session, pending card or conversation (in the path, the query or the body), gets `403 other_manager`; `GET /api/v1/machines`, `/interactions` and `/sessions` list its manager's only (`docs/assistant/managers.md`, "Ownership"). An id absent from the roster returns `404 no_manager`; one present but disconnected returns `503 assistant_offline`, as when the assistant was offline before.
-- **For requests tied to an object, the hub resolves ownership itself; specifying a manager does not override it**: `/machines/{mid}/…` belongs to the computer's manager, `/sessions/{mid}/{sid}/…` to the session's (a manager's own chat belongs to the one reporting it, other chats to the computer's), and `POST /interactions/{id}/resolve` to whoever reported that card. Everything else (assistant page, chats, schedules, Inbox, to-dos, knowledge base, model config, extensions and sources, usage…) uses the header / parameter above. When a list item (an Inbox item, an extension) carries `manager`, include it in requests for that item.
+- **For requests tied to an object, the hub resolves ownership itself; specifying a manager does not override it**: `/machines/{mid}/…` belongs to the computer's manager, `/sessions/{mid}/{sid}/…` to the session's (a manager's own chat belongs to the one reporting it, other chats to the computer's), and `POST /interactions/{id}/resolve` or `/choose` to whoever reported that card. Everything else (assistant page, chats, schedules, Inbox, to-dos, knowledge base, model config, extensions and sources, usage…) uses the header / parameter above. When a list item (an Inbox item, an extension) carries `manager`, include it in requests for that item.
 - **The `manager` field**: computers (`GET /api/v1/machines`, `machines` pushes), sessions (`GET /api/v1/sessions`, `sessions` / `sessions_delta` pushes) and pending cards (`GET /api/v1/interactions`, `interaction` pushes) each carry top-level `manager` (the manager id). With one manager, responses are unchanged except for this extra field. A manager's own live updates (`ws.broadcast`, "Messages to the App" below) carry it only when they are another manager's than the assistant the hub starts.
 - **Merged lists**: without a manager specified, `GET /api/v1/inbox` (`items`), `/api/v1/todos` (`todos`), `/api/v1/extensions` (`extensions`), `/api/v1/plugins` (`plugins`) and `/api/v1/connectors` (`connectors`) query the default and other connected managers in turn, concatenate their lists (default first) and add `manager` to every item; other fields (`as_of`, `triage`, `can_install`…) come from the default manager. With a manager specified, only its list is returned. Managers that do not answer are omitted; if none answers, the default manager's response is returned unchanged (for example `503 assistant_offline`).
 - **Offline managers**: data the hub already retains stays retained with `manager`: their computers (`online: false`, `error` says the assistant is offline) and sessions (`unknown` state), plus GETs whose last response is retained, such as extension lists (`extwire.KeptRoutes`). Items get no additional fields; "Last synced…" uses that manager's `online: false` and `last_seen` from `GET /api/v1/managers`. Operations through it return `503 assistant_offline`.
