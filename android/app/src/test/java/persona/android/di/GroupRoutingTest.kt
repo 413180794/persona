@@ -320,6 +320,17 @@ class GroupRoutingTest {
         assertEquals(listOf("a", "b"), merged.items.map { it.id })
     }
 
+    @Test fun anotherGroupsRequestComesBeforeThisGroupsWorkingAgents() {
+        // The ongoing notification and the widget draw only the first few items.
+        val home = FleetState(phase = "working", working = 3, items = listOf(FleetItem("mini/a", kind = "working"),
+            FleetItem("mini/b", kind = "working"), FleetItem("mini/c", kind = "working")))
+        val work = FleetState(phase = "needsYou", needsYou = 1, working = 1, items = listOf(FleetItem("macbook~g0a1b2c3d/s2", kind = "working"),
+            FleetItem("macbook~g0a1b2c3d/s1", kind = "question")))
+        val merged = mergeFleets(listOf(home, work), home)
+        assertEquals("macbook~g0a1b2c3d/s1", merged.items.first().id)
+        assertEquals(listOf("macbook~g0a1b2c3d/s1", "mini/a", "mini/b", "mini/c", "macbook~g0a1b2c3d/s2"), merged.items.map { it.id })
+    }
+
     @Test fun anotherGroupsFleetItemsCarryTheSuffixInTheirSessionAndInteraction() {
         val fleet = FleetState(phase = "needsYou", needsYou = 1,
             items = listOf(FleetItem("macbook/s1", kind = "permission", interaction = "i1")))
@@ -340,8 +351,8 @@ class GroupRoutingTest {
         assertEquals("needsYou", merged.phase)
         assertEquals(1, merged.needsYou)
         assertEquals(2, merged.working)
-        assertEquals(listOf("mini/a", "macbook~g0a1b2c3d/s1"), merged.items.map { it.id })
-        assertEquals("i1~g0a1b2c3d", merged.items.last().interaction)
+        assertEquals(listOf("macbook~g0a1b2c3d/s1", "mini/a"), merged.items.map { it.id })
+        assertEquals("i1~g0a1b2c3d", merged.items.first().interaction)
         // A group that went away drops out of the merge.
         assertEquals(listOf("macbook~g0a1b2c3d/s1"), fleets.putFleet("work", other, FleetState(needsYou = 1,
             items = listOf(FleetItem("macbook/s1"))), listOf("work"), "work").items.map { it.id })

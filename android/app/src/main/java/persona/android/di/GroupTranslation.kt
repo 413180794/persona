@@ -2,6 +2,7 @@ package persona.android.di
 
 import persona.core.contracts.*
 import persona.core.contracts.api.*
+import persona.core.domain.fleet.FleetSummary
 import persona.feature.agents.AgentsDraftSource
 import persona.feature.agents.AgentsOperationsBindings
 import persona.feature.agents.AgentsWiringState
@@ -398,7 +399,8 @@ internal fun MutableMap<String, FleetState>.putFleet(group: String, names: Group
 
 /**
  * The fleet the ongoing notification shows, over every group: counts add up, the most urgent phase wins, items
- * follow one another. One group's fleet is passed through as it is.
+ * follow one another with every group's requests first (iOS FleetMerge), since only the first few are drawn. One
+ * group's fleet is passed through as it is.
  */
 internal fun mergeFleets(fleets: List<FleetState>, selected: FleetState?): FleetState {
     if (fleets.size == 1) return fleets.single()
@@ -412,6 +414,7 @@ internal fun mergeFleets(fleets: List<FleetState>, selected: FleetState?): Fleet
         fleets.any { it.phase == "done" } -> "done"
         else -> base.phase
     }
+    val (requests, others) = fleets.flatMap { it.items }.partition(FleetSummary::needsYou)
     return base.copy(phase = phase, needsYou = needsYou, working = working, unread = unread,
-        items = fleets.flatMap { it.items }, workingSince = fleets.mapNotNull { it.workingSince }.minOrNull())
+        items = requests + others, workingSince = fleets.mapNotNull { it.workingSince }.minOrNull())
 }
