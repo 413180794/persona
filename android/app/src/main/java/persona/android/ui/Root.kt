@@ -627,7 +627,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                         // Agents may close its list beside an open conversation; Inbox and Settings keep theirs (as the old app did).
                         val listDetail = rememberShellListDetail(tab, directive, maxWidth, paneHinges, detailOpen = detail != null,
                             store = paneStore, collapsible = tab == AppTab.Agents)
-                        CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides back, LocalDetailKey provides detail) {
+                        CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides back, LocalDetailKey provides detail,
+                            persona.feature.settings.LocalExtensionPageVisible provides shown) {
                             NavDisplay(backStack = stacks.getValue(tab), modifier = Modifier.fillMaxSize().then(if (shown) Modifier else Modifier.unplaced()),
                                 onBack = navigator::back, entryDecorators = decorators.getValue(tab) + chrome,
                                 sceneStrategies = listOf(listDetail),

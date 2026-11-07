@@ -31,8 +31,8 @@ class HubRestartTest {
     @Test fun theSocketUrlCarriesTheResumePoint() {
         Fixture().use { fixture ->
             val base = "https://hub.example:8443/".toHttpUrl()
-            assertEquals("https://hub.example:8443/api/v1/ws?features=sessions_list", (fixture.connection.socketUrl(base, null).toString()).zhAny())
-            assertEquals("https://hub.example:8443/api/v1/ws?features=sessions_list&event_stream=s%201&event_seq=42",
+            assertEquals("https://hub.example:8443/api/v1/ws?features=sessions_list%2Cextension_ui_stream_v1", (fixture.connection.socketUrl(base, null).toString()).zhAny())
+            assertEquals("https://hub.example:8443/api/v1/ws?features=sessions_list%2Cextension_ui_stream_v1&event_stream=s%201&event_seq=42",
                 (fixture.connection.socketUrl(base, "s 1" to 42L).toString()).zhAny())
         }
     }
@@ -41,7 +41,7 @@ class HubRestartTest {
         Fixture().use { fixture ->
             fixture.hello = { """{"type":"hello","hub_id":"test-hub","event_stream":"s1","event_seq":5,"resumed":false}""" }
             val first = fixture.start()
-            assertEquals("sessions_list", first.request.url.queryParameter("features"))
+            assertEquals("sessions_list,extension_ui_stream_v1", first.request.url.queryParameter("features"))
             assertNull(first.request.url.queryParameter("event_stream"))
             assertFalse(fixture.connection.resumed)
             assertEquals("s1" to 5L, (fixture.connection.resumePoint).zhAny())
@@ -273,16 +273,42 @@ class HubRestartTest {
         }
     }
 
+    @Test fun equalFeatureReconnectRetriesFailedManagerBindingWithoutChangingCapabilityState() = runBlocking {
+        Fixture().use { fixture ->
+            fixture.hello = { """{"type":"hello","hub_id":"test-hub","client_id":"first","features":["extension_ui_stream_v1"]}""" }
+            val first = fixture.start()
+            fixture.rosterFailure = true
+            val bindings = java.util.Collections.synchronizedList(mutableListOf<persona.core.contracts.api.ExtensionStreamBinding?>())
+            val watcher = CoroutineScope(StandardTestDispatcher(fixture.scheduler)).launch {
+                HttpExtensionManagement(fixture.connection, kotlinx.coroutines.flow.flowOf(true)).nativeStream.collect { bindings += it }
+            }
+            withTimeout(5000) { while (bindings.isEmpty()) fixture.pump(50) }
+            assertNull(bindings.single())
+            val features = fixture.connection.serverFeatures.value
+            fixture.rosterFailure = false
+            first.fail(); fixture.advance(1000)
+            fixture.hello = { """{"type":"hello","hub_id":"test-hub","client_id":"second","features":["extension_ui_stream_v1"]}""" }
+            fixture.awaitSocket(2)
+            withTimeout(5000) { while (bindings.none { it != null }) fixture.pump(50) }
+            assertEquals(features, fixture.connection.serverFeatures.value)
+            assertEquals("manager-a", bindings.last()!!.manager)
+            watcher.cancel()
+        }
+    }
+
     private class Fixture : AutoCloseable {
         val scheduler = TestCoroutineScheduler()
         val sockets = mutableListOf<FakeSocket>()
         @Volatile var hello: () -> String = { """{"type":"hello","hub_id":"test-hub","features":[]}""" }
         /** False: each socket fails as soon as it is opened (a hub not yet answering). */
         @Volatile var reachable = true
+        @Volatile var rosterFailure = false
         private val server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest) = MockResponse()
-                    .setBody("""{"ok":true,"hub_id":"test-hub"}""")
+                override fun dispatch(request: RecordedRequest) = if (request.path == "/api/v1/managers") {
+                    if (rosterFailure) MockResponse().setResponseCode(503).setBody("""{"error":"Temporary failure"}""")
+                    else MockResponse().setBody("""{"managers":[],"default":"manager-a"}""")
+                } else MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
             }
             start(InetAddress.getLoopbackAddress(), 0)
         }

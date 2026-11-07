@@ -18,6 +18,8 @@ import kotlinx.serialization.json.JsonDecoder
  * View of a few fixed kinds of item that each app draws with its own design system, and its buttons come back to it.
  */
 interface ExtensionUi {
+    /** Selected authenticated connection scope. A page pins it for its entire navigation lifetime. */
+    val nativeStream: kotlinx.coroutines.flow.Flow<ExtensionStreamBinding?> get() = kotlinx.coroutines.flow.flowOf(null)
     /**
      * `GET /api/v1/extensions/-/ui?placement=…`: what the enabled, running extensions draw at [placement]
      * (`extension_page`, `launcher_section`, `inbox_item`); a launcher's section names the launcher (and the machine it is
@@ -407,6 +409,9 @@ data class ExtensionViewAction(
     val confirm: String? = null,
     val submit: Boolean = false,
     val push: ExtensionViewPush? = null,
+    /** Native stream saved-action navigation; legacy HTTP rendering keeps its existing behavior. */
+    val open: String? = null,
+    val pop: Boolean = false,
     /** UI version 4: values it carries, sent with the fields' and the component's (these win on a name they share). */
     val values: Map<String, String>? = null,
 )

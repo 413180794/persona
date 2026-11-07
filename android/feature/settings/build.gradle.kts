@@ -16,6 +16,7 @@ android {
 dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.lifecycle.compose)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation(libs.androidx.core)
     implementation(libs.zxing)
     implementation(libs.okhttp)

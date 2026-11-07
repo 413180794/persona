@@ -115,7 +115,7 @@ internal fun CodeBreadcrumb(item: ExtensionViewItem, state: ExtensionViewState, 
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val crumbs = item.crumbs.orEmpty()
-    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = rowPadding, vertical = Tokens.Space.xs),
+    Row(modifier.fillMaxWidth().horizontalScroll(handle.nativeLocal?.scroll(item.key.orEmpty(), "breadcrumb-horizontal") ?: rememberScrollState()).padding(horizontal = rowPadding, vertical = Tokens.Space.xs),
         verticalAlignment = Alignment.CenterVertically) {
         crumbs.forEachIndexed { i, c ->
             if (i > 0) Text(" / ", style = type.callout, color = palette.ink3)
@@ -135,11 +135,14 @@ internal fun CodeFileTree(item: ExtensionViewItem, state: ExtensionViewState, ha
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val entries = item.entries.orEmpty()
-    var query by rememberSaveable(item.key) { mutableStateOf("") }
+    val queryState: androidx.compose.runtime.MutableState<String> = handle.nativeLocal?.slot(item.key.orEmpty(), "file-query") { "" } ?: rememberSaveable(item.key) { mutableStateOf("") }
+    var query by queryState
     val shown = remember(entries, query) { if (query.isBlank()) entries else entries.filter { it.kind != "dir" && it.path.contains(query.trim(), ignoreCase = true) } }
     val tree = remember(shown) { ExtensionCodeText.tree(shown) }
-    var closed by remember(item.key) { mutableStateOf(emptySet<String>()) }
-    var asked by remember(item.key) { mutableStateOf("") }
+    val closedState: androidx.compose.runtime.MutableState<Set<String>> = handle.nativeLocal?.slot(item.key.orEmpty(), "file-closed") { emptySet<String>() } ?: remember(item.key) { mutableStateOf(emptySet<String>()) }
+    var closed by closedState
+    val askedState: androidx.compose.runtime.MutableState<String> = handle.nativeLocal?.slot(item.key.orEmpty(), "file-asked") { "" } ?: remember(item.key) { mutableStateOf("") }
+    var asked by askedState
     val lines = ExtensionCodeText.lines(tree, if (query.isBlank()) closed else emptySet())
     JGroupItem(GroupPosition.Single, modifier) {
         Column(Modifier.fillMaxWidth().padding(vertical = Tokens.Space.xs)) {
@@ -233,7 +236,7 @@ internal fun CodeFile(item: ExtensionViewItem, state: ExtensionViewState, handle
                         style = type.codeSmall, color = palette.ink3, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
                 }
             }
-            Box(Modifier.weight(1f).horizontalScroll(rememberScrollState())) { Column(Modifier.width(IntrinsicSize.Max)) {
+            Box(Modifier.weight(1f).horizontalScroll(handle.nativeLocal?.scroll(item.key.orEmpty(), "code-horizontal") ?: rememberScrollState())) { Column(Modifier.width(IntrinsicSize.Max)) {
                 for (i in 0 until shown) {
                     val n = start + i
                     val on = hl != null && n in hl.start..hl.end
@@ -291,13 +294,16 @@ internal fun CommentLine(c: ExtensionViewComment) {
 
 /** A text box and one button (a reply, a comment at a line), with "Cancel" when it can close. */
 @Composable
-internal fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, onCancel: (() -> Unit)?, send: (String) -> Unit) {
-    var body by rememberSaveable { mutableStateOf("") }
+internal fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, onCancel: (() -> Unit)?,
+                          local: NativeExtensionLocal? = null, nodeKey: String = "", slot: String = "reply",
+                          send: (String) -> Unit) {
+    val bodyState: androidx.compose.runtime.MutableState<String> = local?.slot(nodeKey, slot) { "" } ?: rememberSaveable { mutableStateOf("") }
+    var body by bodyState
     Column(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        JTextField(body, { body = it }, Modifier.fillMaxWidth(), placeholder = placeholder, singleLine = false, enabled = enabled)
+        JTextField(body, { body = it }, Modifier.fillMaxWidth().nativeInputFocus(local, nodeKey, slot), placeholder = placeholder, singleLine = false, enabled = enabled)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
             onCancel?.let { JButton(stringResource(R.string.settings_ext_code_cancel), it, kind = JButtonKind.Secondary, size = JButtonSize.Small) }
-            JButton(stringResource(R.string.settings_ext_code_comment), { send(body.trim()); body = "" }, kind = JButtonKind.Primary, size = JButtonSize.Small,
+            JButton(stringResource(R.string.settings_ext_code_comment), { send(body.trim()); if (local == null) body = "" }, kind = JButtonKind.Primary, size = JButtonSize.Small,
                 loading = busy, enabled = enabled && body.isNotBlank())
         }
     }
@@ -305,9 +311,12 @@ internal fun MiniComposer(placeholder: String, busy: Boolean, enabled: Boolean, 
 
 @Composable
 internal fun ReplyBox(action: ExtensionViewAction, values: Map<String, String>, state: ExtensionViewState, handle: ExtensionViewHandle) {
-    var open by rememberSaveable { mutableStateOf(false) }
+    val slot = "reply-${values["thread"].orEmpty()}"
+    val openState: androidx.compose.runtime.MutableState<Boolean> = handle.nativeLocal?.slot(handle.nodeKey, "$slot-open") { false } ?: rememberSaveable { mutableStateOf(false) }
+    var open by openState
     val palette = PersonaTheme.palette
-    if (open) MiniComposer(stringResource(R.string.settings_ext_code_reply), busy = state.acting == action.id, enabled = !state.busy, onCancel = { open = false }) { body ->
+    if (open) MiniComposer(stringResource(R.string.settings_ext_code_reply), busy = state.acting == action.id, enabled = !state.busy, onCancel = { open = false },
+        local = handle.nativeLocal, nodeKey = handle.nodeKey, slot = slot) { body ->
         handle.act(action, values + ("body" to body)); open = false
     } else Text(stringResource(R.string.settings_ext_code_reply), Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s)
         .clip(RoundedCornerShape(Tokens.Radius.control)).background(palette.sunken).clickable { open = true }.padding(Tokens.Space.m),
@@ -337,9 +346,9 @@ internal fun CodeComposer(item: ExtensionViewItem, state: ExtensionViewState, ha
     val name = item.name.orEmpty()
     val value = state.values[name].orEmpty()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        JTextField(value, { handle.edit(name, it) }, Modifier.fillMaxWidth(), placeholder = item.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_code_leave_comment),
+        JTextField(value, { handle.edit(name, it) }, Modifier.fillMaxWidth().nativeInputFocus(handle.nativeLocal, handle.nodeKey), placeholder = item.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_code_leave_comment),
             singleLine = false, enabled = !state.busy)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(handle.nativeLocal?.scroll(item.key.orEmpty(), "composer-buttons-horizontal") ?: rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
             item.buttons.orEmpty().filter { it.action.id.isNotEmpty() }.forEachIndexed { i, b ->
                 JButton(b.title, { handle.act(b.action, mapOf(name to value)) }, size = JButtonSize.Small,
                     kind = if (i == 0) JButtonKind.Primary else JButtonKind.Secondary,

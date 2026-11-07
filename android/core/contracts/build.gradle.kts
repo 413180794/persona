@@ -39,3 +39,13 @@ val generateLanguages by tasks.registering(GenerateLanguages::class) {
 }
 kotlin.sourceSets.named("main") { kotlin.srcDir(languageSource) }
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach { dependsOn(generateLanguages) }
+
+// Package the canonical schemas at build time, never a second handwritten client contract.
+val streamSchemas by tasks.registering(Sync::class) {
+    from(rootProject.file("../schema/extension")) {
+        include("stream.schema.json", "view.schema.json", "protocol.schema.json")
+    }
+    into(layout.buildDirectory.dir("generated/stream-schemas/extension-schema"))
+}
+sourceSets.named("main") { resources.srcDir(layout.buildDirectory.dir("generated/stream-schemas")) }
+tasks.named("processResources") { dependsOn(streamSchemas) }

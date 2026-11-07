@@ -62,16 +62,29 @@ import persona.core.designsystem.icons.PhIcons
  * What a page of diffs shares: viewed marks (the extension's, changed at once and sent with mark_viewed; or kept on
  * this device by path and revision), whitespace (kept on the device), the lines of files that came, quiet actions.
  */
+internal class CodeReviewMemory(val whitespace: androidx.compose.runtime.MutableState<Boolean> = mutableStateOf(false)) {
+    val over = mutableStateMapOf<String, Boolean>()
+    val viewedAttempts = mutableMapOf<String, Any>()
+    val here = mutableStateOf(emptySet<String>())
+    val caches = HashMap<String, LineCache>()
+}
+
 @Stable
 internal class CodeReviewState(
     private val prefs: SharedPreferences?,
+    private val memory: CodeReviewMemory? = null,
+    private val onlyKey: String? = null,
+    private val nodeMemory: ((String) -> CodeReviewMemory)? = null,
     private val send: (ExtensionViewAction, Map<String, String>, (ExtensionUiResult?) -> Unit) -> Unit,
 ) {
-    private val over = mutableStateMapOf<String, Boolean>()
-    private var here by mutableStateOf(prefs?.getStringSet(ViewedKey, emptySet())?.toSet().orEmpty())
-    var whitespace by mutableStateOf(prefs?.getBoolean(WhitespaceKey, false) ?: false)
+    private val over = memory?.over ?: mutableStateMapOf<String, Boolean>()
+    private val viewedAttempts = memory?.viewedAttempts ?: mutableMapOf<String, Any>()
+    private val hereState: androidx.compose.runtime.MutableState<Set<String>> = memory?.here ?: mutableStateOf(prefs?.getStringSet(ViewedKey, emptySet())?.toSet().orEmpty())
+    private var here by hereState
+    private val whitespaceState: androidx.compose.runtime.MutableState<Boolean> = memory?.whitespace ?: mutableStateOf(prefs?.getBoolean(WhitespaceKey, false) ?: false)
+    var whitespace by whitespaceState
         private set
-    private val caches = HashMap<String, LineCache>()
+    private val caches = memory?.caches ?: HashMap<String, LineCache>()
     /** Bumped when lines come: what draws them reads it. */
     var linesCame by mutableIntStateOf(0)
         private set
@@ -82,7 +95,7 @@ internal class CodeReviewState(
     private fun index(view: ExtensionView?) {
         if (view === indexed) return
         indexed = view
-        val items = view?.sections.orEmpty().flatMap { it.items }
+        val items = view?.sections.orEmpty().flatMap { it.items }.filter { onlyKey == null || it.key == onlyKey }
         diffs = items.filter { it.type == "diff" && !it.path.isNullOrEmpty() }.associateBy { it.path!! }
         entries = items.filter { it.type == "file_tree" }.flatMap { it.entries.orEmpty() }.filter { it.kind != "dir" }.associate { it.path to (it.viewed == true) }
     }
@@ -90,9 +103,14 @@ internal class CodeReviewState(
     private fun localId(d: ExtensionViewItem) = ExtensionCodeReview.changeId(d.path.orEmpty(), d.revision, d.hunks)
 
     fun viewed(path: String, view: ExtensionView?): Boolean {
-        over[path]?.let { return it }
+        if (memory == null) over[path]?.let { return it }
         index(view)
         val d = diffs[path]
+        val native = d?.key?.let { nodeMemory?.invoke(it) } ?: memory
+        if (d != null && native != null) {
+            native.over[localId(d)]?.let { return it }
+            if (d.markViewed == null) return localId(d) in native.here.value
+        }
         return when {
             d != null && d.markViewed == null -> localId(d) in here
             d != null -> d.viewed == true
@@ -101,12 +119,24 @@ internal class CodeReviewState(
     }
 
     fun setViewed(path: String, view: ExtensionView?, viewed: Boolean) {
-        over[path] = viewed
         index(view)
-        val d = diffs[path] ?: return
+        val d = diffs[path] ?: run { if (memory == null) over[path] = viewed; return }
+        val overlayKey = if (memory == null) path else localId(d)
+        val previous = over[overlayKey]
+        val attempt = Any()
+        viewedAttempts[overlayKey] = attempt
+        over[overlayKey] = viewed
         val mark = d.markViewed?.takeIf { it.id.isNotEmpty() }
-        if (mark != null) send(mark, mapOf("path" to path, "viewed" to "$viewed")) {}
+        if (mark != null) send(mark, mapOf("path" to path, "viewed" to "$viewed")) { result ->
+            if (viewedAttempts[overlayKey] === attempt) {
+                viewedAttempts.remove(overlayKey)
+                if (result == null) {
+                    if (previous == null) over.remove(overlayKey) else over[overlayKey] = previous
+                }
+            }
+        }
         else {
+            viewedAttempts.remove(overlayKey)
             val id = localId(d)
             here = (if (viewed) here + id else here - id).let { if (it.size > ViewedMost) it.drop(it.size - ViewedMost).toSet() else it }
             prefs?.edit()?.putStringSet(ViewedKey, here)?.apply()
@@ -160,7 +190,7 @@ internal fun ReviewToolbar(view: ExtensionView, state: ExtensionViewState, handl
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val diffs = view.sections.flatMap { it.items }.filter { it.type == "diff" }
-    val seen = diffs.count { review.viewed(it.path.orEmpty(), view) }
+    val seen = diffs.count { (handle.forNode?.invoke(it.key.orEmpty())?.review ?: review).viewed(it.path.orEmpty(), view) }
     val open = diffs.sumOf { d -> d.threads.orEmpty().count { !it.resolved && !it.pending } }
     Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Tokens.Space.xs), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
         verticalAlignment = Alignment.CenterVertically) {
@@ -191,19 +221,20 @@ internal fun ReviewBar(view: ExtensionView, state: ExtensionViewState, handle: E
 private fun ReviewSubmit(view: ExtensionView, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val r = view.review ?: return
     var open by remember { mutableStateOf(false) }
-    var body by rememberSaveable { mutableStateOf("") }
+    val summaryState: androidx.compose.runtime.MutableState<String> = handle.nativeLocal?.slot(handle.nodeKey, "review-body") { "" } ?: rememberSaveable { mutableStateOf("") }
+    var body by summaryState
     JButton(if (r.count > 0) pluralStringResource(R.plurals.settings_ext_review_submit_drafts, r.count, r.count) else stringResource(R.string.settings_ext_review_review),
         { open = true }, size = JButtonSize.Small, kind = if (r.count > 0) JButtonKind.Primary else JButtonKind.Secondary)
     if (open) JSheet({ open = false }, title = if (r.count > 0) pluralStringResource(R.plurals.settings_ext_review_drafts, r.count, r.count) else stringResource(R.string.settings_ext_review_review)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-            JTextField(body, { body = it }, Modifier.fillMaxWidth(), placeholder = r.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_review_summary),
+            JTextField(body, { body = it }, Modifier.fillMaxWidth().nativeInputFocus(handle.nativeLocal, handle.nodeKey, "summary"), placeholder = r.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_review_summary),
                 singleLine = false, enabled = !state.busy)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
                 r.discard?.takeIf { it.id.isNotEmpty() }?.let { d ->
                     JButton(stringResource(R.string.settings_ext_review_discard), { open = false; handle.act(d, emptyMap()) }, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !state.busy)
                 }
                 r.buttons.filter { it.action.id.isNotEmpty() }.forEachIndexed { i, b ->
-                    JButton(b.title, { open = false; handle.act(b.action, mapOf(r.name to body)); body = "" }, size = JButtonSize.Small,
+                    JButton(b.title, { open = false; handle.act(b.action, mapOf(r.name to body)); if (handle.nativeLocal == null) body = "" }, size = JButtonSize.Small,
                         kind = if (i == 0) JButtonKind.Primary else JButtonKind.Secondary,
                         loading = state.acting == b.action.id, enabled = !state.busy)
                 }
@@ -296,11 +327,12 @@ private fun LineComposer(pick: LinePick, body: String, setBody: (String) -> Unit
             pick.startLine?.let { put("start_line", "$it") }
             put("body", body.trim())
         })
-        setBody(""); onCancel()
+        if (handle.nativeLocal == null) setBody("")
+        onCancel()
     }
     val range = pick.startLine?.let { "$it–${pick.line}" } ?: "${pick.line}"
     Column(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        JTextField(body, setBody, Modifier.fillMaxWidth(), placeholder = stringResource(R.string.settings_ext_review_comment_on_lines, range), singleLine = false, enabled = !state.busy)
+        JTextField(body, setBody, Modifier.fillMaxWidth().nativeInputFocus(handle.nativeLocal, handle.nodeKey, "diff-body"), placeholder = stringResource(R.string.settings_ext_review_comment_on_lines, range), singleLine = false, enabled = !state.busy)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
             if (item.suggestions == true && pick.side == "new" && original.isNotEmpty())
                 JButton(stringResource(R.string.settings_ext_review_suggest), { setBody((if (body.isBlank()) "" else body.trimEnd('\n') + "\n\n") + ExtensionCodeReview.suggestionBlock(original)) },
@@ -368,10 +400,13 @@ internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle
     val hunks = item.hunks.orEmpty()
     val viewed = review?.viewed(path, state.view) ?: (item.viewed == true)
     val reason = remember(key) { ExtensionCodeReview.foldedAtFirst(item, viewed) }
-    var open by rememberSaveable(key) { mutableStateOf(reason == null) }
-    var had by remember(key) { mutableStateOf(hunks.isNotEmpty()) }
+    val openState: androidx.compose.runtime.MutableState<Boolean> = handle.nativeLocal?.slot(key, "diff-open") { reason == null } ?: rememberSaveable(key) { mutableStateOf(reason == null) }
+    var open by openState
+    val hadState: androidx.compose.runtime.MutableState<Boolean> = handle.nativeLocal?.slot(key, "diff-had") { hunks.isNotEmpty() } ?: remember(key) { mutableStateOf(hunks.isNotEmpty()) }
+    var had by hadState
     LaunchedEffect(hunks.isNotEmpty()) { if (hunks.isNotEmpty() && !had) { had = true; open = true } }
-    var all by rememberSaveable(key) { mutableStateOf(false) }
+    val allState: androidx.compose.runtime.MutableState<Boolean> = handle.nativeLocal?.slot(key, "diff-all") { false } ?: rememberSaveable(key) { mutableStateOf(false) }
+    var all by allState
     val ws = review?.whitespace == true
     val rowsOf = remember(hunks, ws) { hunks.map { h -> ExtensionCodeText.rows(h).let { if (ws) ExtensionCodeReview.ignoreWhitespace(it) else it } } }
     val spansOf = remember(rowsOf) { rowsOf.map(ExtensionCodeReview::wordSpans) }
@@ -411,8 +446,15 @@ internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle
     }
     // the lines picked for a comment: tap one, then another on the same side for a range
     val canComment = item.comment?.id?.isNotEmpty() == true || item.draft?.id?.isNotEmpty() == true
-    var box by remember(key) { mutableStateOf<LinePick?>(null) }
-    var body by rememberSaveable(key) { mutableStateOf("") }
+    var box by (handle.nativeLocal?.slot<LinePick?>(key, "diff-pick") { null } ?: remember(key) { mutableStateOf<LinePick?>(null) })
+    handle.nativeLocal?.let { local ->
+        // Retain the text, but an old line/range is not authorization to comment on different code.
+        val anchor = Triple(path, item.revision, hunks)
+        val selectedRevision = local.slot(key, "diff-pick-revision") { anchor }
+        if (selectedRevision.value != anchor) { box = null; selectedRevision.value = anchor }
+    }
+    val bodyState: androidx.compose.runtime.MutableState<String> = handle.nativeLocal?.slot(key, "diff-body") { "" } ?: rememberSaveable(key) { mutableStateOf("") }
+    var body by bodyState
     fun tap(side: String, n: Int) {
         val b = box
         box = when {
@@ -512,7 +554,7 @@ internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle
                     rows(bottom, { k, _ -> lines.second.getOrNull(k) }, emptyMap())
                 }
                 val expand = item.expand?.takeIf { it.id.isNotEmpty() }
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).background(palette.sunken)) {
+                Box(Modifier.fillMaxWidth().horizontalScroll(handle.nativeLocal?.scroll(key, "diff-horizontal") ?: rememberScrollState()).background(palette.sunken)) {
                     // as wide as the widest line (the screen at least): a line's colour runs the whole row
                     Column(Modifier.width(IntrinsicSize.Max).widthIn(min = screenWidth())) {
                         hunks.forEachIndexed { hi, h ->

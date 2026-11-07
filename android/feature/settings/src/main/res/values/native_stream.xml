@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_ext_native_actions">Actions</string>
+    <string name="settings_ext_native_decrease">Decrease %1$s</string>
+    <string name="settings_ext_native_increase">Increase %1$s</string>
+    <string name="settings_ext_native_unsupported">This page needs a newer native renderer. Showing the compatible page instead.</string>
+    <string name="settings_ext_native_rejected">This action could not be confirmed. Review the current page before trying again.</string>
+    <string name="settings_ext_native_host_permission">Hub approval required</string>
+    <string name="settings_ext_native_allow">Approve</string>
+    <string name="settings_ext_native_deny">Deny</string>
+</resources>

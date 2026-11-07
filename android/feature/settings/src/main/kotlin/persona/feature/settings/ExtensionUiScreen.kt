@@ -27,17 +27,46 @@ import kotlinx.coroutines.launch
 // extension's page in Settings › Extensions; nav_page, from the "Extensions" section of the settings home) and a section on a launcher's
 // page (launcher_section). The UI slots of the settings home and a machine's page are in ExtensionSlots.kt.
 
+val LocalExtensionPageVisible = compositionLocalOf { true }
+
 /**
  * Settings › Extensions › one › a page it draws, or a nav page opened from the settings home; or (UI version 3) a page the
  * extension pushed on another, first drawn with [initialState]. A push opens the next page through [onPush]; a pop goes
  * back, and the page underneath is drawn again when it shows.
  */
+internal fun nativePageBinding(owner: persona.core.contracts.api.ExtensionStreamBinding?, manager: String?): persona.core.contracts.api.ExtensionStreamBinding? =
+    owner?.let { binding -> manager?.takeIf { it.isNotBlank() }?.let { binding.copy(manager = it) } ?: binding }
+
 @Composable
 fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId: String, title: String, onBack: () -> Unit,
-                    initialState: String? = null, depth: Int = 0, onPush: (ExtensionUiRoute) -> Unit = {}, manager: String? = null) {
+                    initialState: String? = null, depth: Int = 0, shown: Boolean = true, availableAdapter: NativeExtensionStreamAdapter? = null,
+                    onPush: (ExtensionUiRoute) -> Unit = {}, manager: String? = null) {
     PinnedExtension(extensionId, manager)
+    val defaultBinding = extensions?.nativeStream?.collectAsState(initial = null)?.value
+    val binding = remember(defaultBinding, manager) { nativePageBinding(defaultBinding, manager) }
+    val owned = if (availableAdapter == null && binding != null) androidx.lifecycle.viewmodel.compose.viewModel(
+        key = "native-extension:${binding.group}:${binding.owner}:${binding.manager}:${System.identityHashCode(binding.connection)}:$extensionId:$uiId:$depth",
+        initializer = { ExtensionUIStreamController(binding, extensionId, uiId, initialState.orEmpty()) }) else null
+    val adapter = availableAdapter ?: owned?.adapter
+    if (owned != null) SideEffect { owned.adapter.shown = shown }
+    val nativeState = adapter?.session?.state?.collectAsState()?.value
+    val nativeNotice = nativeState?.unsupported?.isNotEmpty() == true
+    val nativeUnsupported = nativeState?.let { it.unsupported.isNotEmpty() || it.phase == persona.core.contracts.stream.NativeStreamPhase.Closed } == true
+    if (adapter != null && nativeUnsupported) LaunchedEffect(adapter) {
+        // Compatibility fallback owns cleanup after the native renderer's scope has been removed.
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            kotlinx.coroutines.withTimeoutOrNull(5000) { adapter.close() }
+        }
+    }
+    if (adapter != null && !nativeUnsupported) {
+        require(adapter.session.identity.extension == extensionId && adapter.session.identity.contribution == uiId)
+        NativeExtensionStreamPage(adapter, title, onBack, onPush = { push ->
+            ExtensionViewText.pushed(extensionId, uiId, title, depth, push, binding?.manager ?: manager)?.let(onPush)
+        }, presentations = owned?.presentations)
+        return
+    }
     if (extensions == null) {
-        JListPage(title = title, onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
+        JListPage(title = title, onBack = onBack) { item { JNotice(stringResource(if (nativeUnsupported) R.string.settings_ext_native_unsupported else R.string.settings_ext_demo_none)) } }
         return
     }
     val model = remember(extensions, extensionId, uiId, initialState) {
@@ -55,6 +84,7 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
     val view = state.view
     JListPage(title = view?.title?.takeIf { it.isNotBlank() } ?: title, onBack = onBack, largeTitle = false,
         refreshing = state.loading && view != null, onRefresh = { scope.launch { model.load() } }) {
+        if (nativeNotice) item("native-unsupported") { JNotice(stringResource(R.string.settings_ext_native_unsupported)) }
         viewStatus("page", state, onRetry = { scope.launch { model.load() } })
         if (view != null && view.sections.none { it.items.any(ExtensionViewText::drawable) }) item("page-empty") {
             JEmptyState(stringResource(R.string.settings_ext_page_empty_title), stringResource(R.string.settings_ext_page_empty_text), icon = PhIcons.PuzzlePiece)

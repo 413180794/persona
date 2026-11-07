@@ -645,7 +645,7 @@ data class Interaction(
     val reason: String? = null,
     /** Filled in before approving (adding a mail account's password); the hub refuses allow without the required ones. */
     val fields: List<InteractionField>? = null,
-    /** The manager that reported it (docs/managers.md「Ownership」); null from an older hub: the default manager. */
+    /** Owning manager, including page permissions; older hubs omit it for the default manager. */
     @SerialName("manager") val manager: String? = null,
 ) {
     val sessionKey: SessionKey get() = SessionKey(machineId, sessionId)

@@ -152,6 +152,8 @@ class OkHttpHubConnection(
     private var heldSince: Long? = null
     private val pingIds = AtomicLong()
     private val policy = config.reconnectPolicy
+    @Volatile override var lastHello: Hello? = null
+        private set
     @Volatile override var resumed = false
         private set
     /**
@@ -648,6 +650,7 @@ class OkHttpHubConnection(
                             if (owner.hubId != null && event.hubId != owner.hubId) {
                                 throw HubFailure(HubError.HubMismatch, retryable = false)
                             }
+                            lastHello = event
                             event.mesh?.hubs?.firstOrNull { it.center == true }?.hubId?.let { learnedCenter ->
                                 centerHubId = learnedCenter
                             }
@@ -763,7 +766,7 @@ class OkHttpHubConnection(
     /** The socket's URL; with the stream and last broadcast seen, so the hub replays what was missed (#1574). */
     internal fun socketUrl(base: HttpUrl, resumeFrom: Pair<String, Long>?): HttpUrl =
         base.hubUrl("/api/v1/ws").newBuilder().apply {
-            addQueryParameter("features", "sessions_list")
+            addQueryParameter("features", "sessions_list,extension_ui_stream_v1")
             resumeFrom?.let { (stream, seq) ->
                 addQueryParameter("event_stream", stream)
                 addQueryParameter("event_seq", seq.toString())

@@ -2,6 +2,8 @@
 
 package persona.core.contracts
 
+import persona.core.contracts.stream.NativeStreamSchema
+import persona.core.contracts.generated.ExtensionUIStreamServerEnvelope
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonNames
@@ -26,6 +28,11 @@ sealed interface ServerEvent {
             JsonCodec.decodeFromJsonElement<ServerEvent>(element).takeUnless { it === UnknownEvent }
         }.getOrNull()
     }
+}
+
+/** Private native frames retain raw presence; generated envelopes are their typed dispatch projection. */
+data class ExtensionUiStreamEvent(val raw: JsonObject) : ServerEvent {
+    val envelope: ExtensionUIStreamServerEnvelope = JsonCodec.decodeFromJsonElement(ExtensionUIStreamServerEnvelope.serializer(), raw)
 }
 
 @KeepGeneratedSerializer
@@ -228,6 +235,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "extension_ui", "plugin_ui" -> input.json.decodeFromJsonElement<ExtensionUiEvent>(obj).also {
                 require(it.invalidate || !it.id.isNullOrEmpty()) { "A badge names its UI" }
             }
+            "extension_ui_stream" -> ExtensionUiStreamEvent(NativeStreamSchema.parse(obj.toString(), "UIStreamServerEnvelope"))
             "hub_update" -> input.json.decodeFromJsonElement<HubUpdateEvent>(obj)
             "managers" -> ManagersEvent
             "extension_operation" -> input.json.decodeFromJsonElement<ExtensionOperationEvent>(obj).also {
@@ -283,6 +291,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is ClientHelloAck -> "client_hello_ack" to output.json.encodeToJsonElement(value)
             is Pong -> "pong" to output.json.encodeToJsonElement(value)
             is NotifyEvent -> "notify" to output.json.encodeToJsonElement(value)
+            is ExtensionUiStreamEvent -> "extension_ui_stream" to value.raw
             is ExtensionUiEvent -> "extension_ui" to output.json.encodeToJsonElement(value)
             is HubUpdateEvent -> "hub_update" to output.json.encodeToJsonElement(value)
             ManagersEvent -> "managers" to JsonObject(emptyMap())

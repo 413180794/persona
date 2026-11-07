@@ -27,6 +27,7 @@ import persona.core.hub.HttpProviderSetup
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import persona.core.hub.OkHttpHubConnection
+import persona.core.hub.extensionStreamBindings
 import android.app.Application
 import persona.android.PersonaApp
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.transform
 import kotlinx.serialization.json.JsonObject
@@ -151,6 +153,13 @@ object MachineManagementModule {
         override val available: Flow<Boolean> = features.map { "extension_manager" in it || "plugin_manager" in it }.distinctUntilChanged()
         // Extensions' UI slots (docs/extensions.md "UI slots") and the badge events of the selected hub.
         override val slotsAvailable: Flow<Boolean> = features.map { "extension_ui_slots" in it || "plugin_ui_slots" in it }.distinctUntilChanged()
+        override val nativeStream = runtime.selected.flatMapLatest { group ->
+            val connection = group?.connectionOrNull
+            if (group == null || connection == null || group.data == null) flowOf(null) else extensionStreamBindings(connection) {
+                val data = checkNotNull(group.data)
+                "${group.id}:${data.scope.hubId}:${data.scope.pairingGeneration}" to (group.namespace ?: "primary")
+            }
+        }
         override val uiEvents: Flow<ExtensionUiEvent> = (application as PersonaApp).hub
             .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }.filterIsInstance<ExtensionUiEvent>()
         // A hub without the `extensions` feature (before #1844, or no hello yet) answers under /api/v1/plugins only;

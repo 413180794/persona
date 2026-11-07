@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_ext_native_actions">操作</string>
+    <string name="settings_ext_native_decrease">%1$sを下げる</string>
+    <string name="settings_ext_native_increase">%1$sを上げる</string>
+    <string name="settings_ext_native_unsupported">このページには新しいネイティブレンダラーが必要です。互換ページを表示します。</string>
+    <string name="settings_ext_native_rejected">操作の結果を確認できませんでした。現在のページを確認してから、もう一度お試しください。</string>
+    <string name="settings_ext_native_host_permission">ハブでの承認が必要です</string>
+    <string name="settings_ext_native_allow">承認</string>
+    <string name="settings_ext_native_deny">拒否</string>
+</resources>

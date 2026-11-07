@@ -48,8 +48,9 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     }
     entry<ExtensionUiRoute> { route ->
         ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back,
-            initialState = route.state, depth = route.depth, onPush = { navigator.navigate(it.copy(manager = it.manager ?: route.manager)) },
-            manager = route.manager)
+            initialState = route.state, depth = route.depth,
+            shown = LocalExtensionPageVisible.current && (persona.core.navigation.LocalDetailKey.current == null || persona.core.navigation.LocalDetailKey.current == route),
+            onPush = { navigator.navigate(it.copy(manager = it.manager ?: route.manager)) }, manager = route.manager)
     }
     entry<ExtensionMarketRoute> {
         ExtensionMarketPage(services.extensions.takeUnless { demo }, onBack = navigator::back,

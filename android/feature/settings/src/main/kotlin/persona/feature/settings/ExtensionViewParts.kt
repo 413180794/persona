@@ -144,14 +144,14 @@ internal fun ExtensionMarkdown(text: String, modifier: Modifier = Modifier) {
  * Chinese is taller than one of digits), cells centred in their row, `end` columns flush right.
  */
 @Composable
-internal fun ExtensionTable(item: ExtensionViewItem, modifier: Modifier = Modifier) {
+internal fun ExtensionTable(item: ExtensionViewItem, modifier: Modifier = Modifier, local: NativeExtensionLocal? = null) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val columns = item.columns.orEmpty().take(8)
     val rows = remember(item) { ExtensionViewText.tableRows(item) }
     val ends = columns.map { it.align == "end" }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-        TableGrid(columns.size, ends, Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        TableGrid(columns.size, ends, Modifier.fillMaxWidth().horizontalScroll(local?.scroll(item.key.orEmpty(), "table-horizontal") ?: rememberScrollState())) {
             columns.forEach { Text(it.title, style = type.caption, color = palette.ink2, maxLines = 1, softWrap = false) }
             rows.forEach { row -> row.forEach { Text(it, style = type.callout, color = palette.ink, maxLines = 1, softWrap = false) } }
         }
@@ -200,7 +200,9 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
                                 submit: SearchSubmit? = null) {
     val search = view.search
     val filter = view.filter?.takeIf { it.choices.size >= 2 && it.name.isNotEmpty() }
-    var query by remember { mutableStateOf(state.query ?: search?.value.orEmpty()) }
+    val queryState: MutableState<String> = handle.nativeLocal?.slot(handle.nodeKey, "search-query") { state.query ?: search?.value.orEmpty() }
+        ?: remember { mutableStateOf(state.query ?: search?.value.orEmpty()) }
+    var query by queryState
     var typed by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf(false) }
     if (search != null && typed) LaunchedEffect(query) {
@@ -209,7 +211,7 @@ internal fun ExtensionSearchBar(view: ExtensionView, state: ExtensionViewState, 
     }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         if (search != null) {
-            JSearchField(query, { query = it; typed = true }, search.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_search), Modifier.weight(1f))
+            JSearchField(query, { query = it; typed = true; handle.nativeLocal?.query = it }, search.placeholder?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_search), Modifier.weight(1f).nativeInputFocus(handle.nativeLocal, handle.nodeKey, "search"))
             submit?.let { JButton(it.label, { it.send(query) }, kind = JButtonKind.Secondary, size = JButtonSize.Small,
                 enabled = query.isNotBlank() && !state.busy, loading = it.sending) }
         }
@@ -241,7 +243,13 @@ internal class SearchSubmit(val label: String, val sending: Boolean, val send: (
 @Composable
 internal fun ExtensionMore(index: Int, section: ExtensionViewSection, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val more = section.more ?: return
-    LaunchedEffect(section) { handle.more(index, section) }
+    if (handle.nativeLocal == null) LaunchedEffect(section) { handle.more(index, section) }
+    else {
+        // Content progress, not an unrelated replacement or remount, permits another automatic page.
+        val marker = more to section.items.map { it.key }
+        val seen = handle.nativeLocal.slot<Pair<persona.core.contracts.api.ExtensionViewMore, List<String?>>?>(handle.nodeKey, "more-seen") { null }
+        LaunchedEffect(marker) { if (seen.value != marker) { seen.value = marker; handle.more(index, section) } }
+    }
     JRow(more.title?.takeIf { it.isNotBlank() } ?: stringResource(R.string.settings_ext_load_more),
 
         trailing = if (state.loadingMore == index) ({ JSpinner() }) else null, chevron = false,
@@ -257,7 +265,7 @@ internal fun ExtensionTabs(tabs: persona.core.contracts.api.ExtensionViewTabs, v
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(handle.nativeLocal?.scroll(handle.nodeKey, "tabs-horizontal") ?: rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             tabs.items.filter { it.value.isNotEmpty() }.forEach { tab ->
                 val on = tab.value == value
                 Column(Modifier.clickable(enabled = !state.busy || on, role = androidx.compose.ui.semantics.Role.Tab) { handle.tab(tab.value) }
@@ -291,9 +299,13 @@ internal fun SidePane(sections: List<persona.core.contracts.api.ExtensionViewSec
                 trailing = { JIcon(if (open) PhIcons.CaretUp else PhIcons.CaretDown, null, size = Tokens.Space.l, tint = palette.ink3) },
                 onClick = { open = !open })
         }
-        if (open) sections.flatMap { it.items }.filter(ExtensionViewText::drawable).forEach { item ->
-            if (item.type == "file_tree") CodeFileTree(item, state, handle, Modifier.padding(top = Tokens.Space.s), onPicked = { open = false })
-            else StandaloneItem(item, state, handle, first = false)
+        if (open) sections.flatMap { it.items }.filter { handle.nativeItem != null || ExtensionViewText.drawable(it) }.forEach { item ->
+            val itemHandle = handle.forNode?.invoke(item.key.orEmpty()) ?: handle
+            val content: @Composable () -> Unit = {
+                if (item.type == "file_tree") CodeFileTree(item, state, itemHandle, Modifier.padding(top = Tokens.Space.s), onPicked = { open = false })
+                else StandaloneItem(item, state, itemHandle, first = false)
+            }
+            if (handle.forNode != null) key(item.key) { content() } else content()
         }
     }
 }

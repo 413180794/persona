@@ -59,6 +59,12 @@ internal class ExtensionViewHandle(
     val reveal: (String) -> Unit = {},
     /** UI version 5: a page of diffs' viewed marks, whitespace, lines and quiet actions; none where nothing acts. */
     val review: CodeReviewState? = null,
+    /** Stream-only callback locality; legacy rendering has no node-scoped adapter. */
+    val forNode: ((String) -> ExtensionViewHandle)? = null,
+    /** Opt-in fixed native stream parts only; absent keeps every legacy pixel/callback unchanged. */
+    val nativeItem: (@Composable (ExtensionViewItem, ExtensionViewState, Modifier) -> Boolean)? = null,
+    val nativeLocal: NativeExtensionLocal? = null,
+    val nodeKey: String = "",
 )
 
 /**
@@ -137,7 +143,8 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
  * The view's sections and items, into a page's list: [key] keeps two views on one page apart. Rows, links, switches
  * and choices that follow each other form one group; the rest stand on their own.
  */
-internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewState, handle: ExtensionViewHandle, showTitles: Boolean = true) {
+internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewState, handle: ExtensionViewHandle, showTitles: Boolean = true,
+                                             streamSectionKeys: List<String>? = null) {
     val view = state.view ?: return
     view.tabs?.takeIf { it.items.size >= 2 && it.name.isNotEmpty() }?.let { tabs ->
         item("$key-tabs") { ExtensionTabs(tabs, state.values[tabs.name] ?: tabs.value, state, handle, Modifier.padding(bottom = Tokens.Space.s)) }
@@ -154,34 +161,39 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
     if (side.isNotEmpty()) item("$key-side") { SidePane(side, state, handle) }
     view.sections.forEachIndexed { s, section ->
         if (section in side) return@forEachIndexed
+        val sectionKey = streamSectionKeys?.get(s)?.let { "$key-section-$it" } ?: "$key-s$s"
         val title = section.title?.takeIf { it.isNotBlank() }
-        if (title != null && showTitles) item("$key-s$s-title") { JSectionHeader(title) }
-        else if (s > 0) item("$key-s$s-gap") { Spacer(Modifier.padding(top = Tokens.Space.l)) }
-        val items = section.items.filter(ExtensionViewText::drawable)
+        if (title != null && showTitles) item("$sectionKey-title") { JSectionHeader(title) }
+        else if (s > 0) item("$sectionKey-gap") { Spacer(Modifier.padding(top = Tokens.Space.l)) }
+        val items = if (streamSectionKeys != null) section.items else section.items.filter(ExtensionViewText::drawable)
         // The extension's keys keep a list's place when it is drawn again (a page's "Load more", a search).
-        val keys = ExtensionViewText.itemKeys(items)
+        val keys = if (streamSectionKeys != null) items.map { it.key!! } else ExtensionViewText.itemKeys(items)
         var i = 0
         while (i < items.size) {
             val start = i
             if (ExtensionViewText.grouped(items[i])) while (i < items.size && ExtensionViewText.grouped(items[i])) i++ else i++
             val run = items.subList(start, i)
             run.forEachIndexed { index, item ->
-                item(keys[start + index]?.let { "$key-s$s-k-$it" } ?: "$key-s$s-i${start + index}") {
+                val itemKey = keys[start + index]?.let { if (streamSectionKeys != null) "$key-node-$it" else "$key-s$s-k-$it" }
+                    ?: "$key-s$s-i${start + index}"
+                item(itemKey) {
+                    val itemHandle = handle.forNode?.invoke(item.key.orEmpty()) ?: handle
                     // drawn again, a block whose key is new fades in and one that went fades out (#2811)
                     val moving = Modifier.itemMotion(this, PersonaTheme.reduceMotion, PersonaTheme.motion.standard)
                     if (ExtensionViewText.grouped(item)) {
                         JGroupItem(GroupPosition.of(index, run.size), moving.then(if (index == 0 && start > 0) Modifier.padding(top = Tokens.Space.s) else Modifier)) {
-                            GroupedItem(item, state, handle)
+                            GroupedItem(item, state, itemHandle)
                         }
-                    } else Box(moving) { StandaloneItem(item, state, handle, first = start == 0) }
+                    } else Box(moving) { StandaloneItem(item, state, itemHandle, first = start == 0) }
                 }
             }
         }
-        if (section.more?.action?.id?.isNotEmpty() == true) item("$key-s$s-more") {
-            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) { ExtensionMore(s, section, state, handle) }
+        if (section.more?.action?.id?.isNotEmpty() == true) item("$sectionKey-more") {
+            val moreHandle = handle.forNode?.invoke(streamSectionKeys?.get(s).orEmpty()) ?: handle
+            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) { ExtensionMore(s, section, state, moreHandle) }
         }
         section.footer?.takeIf { it.isNotBlank() }?.let { footer ->
-            item("$key-s$s-footer") { SettingsCaption(footer, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
+            item("$sectionKey-footer") { SettingsCaption(footer, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
         }
     }
     if (reviewing(view) && view.review != null && handle.review != null) item("$key-review-bar") { ReviewBar(view, state, handle, Modifier.padding(top = Tokens.Space.l)) }
@@ -199,6 +211,7 @@ private fun Modifier.itemMotion(scope: LazyItemScope, reduce: Boolean, duration:
 /** A row, a link, a switch or a choice: one line of a group. */
 @Composable
 internal fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle) {
+    if (handle.nativeItem?.invoke(item, state, Modifier) == true) return
     val enabled = !state.busy
     when (item.type) {
         "row" -> {
@@ -235,6 +248,7 @@ internal fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, 
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val top = if (first) Modifier else Modifier.padding(top = Tokens.Space.s)
+    if (handle.nativeItem?.invoke(item, state, top) == true) return
     when (item.type) {
         "text" -> {
             val text = item.text.orEmpty()
@@ -282,7 +296,7 @@ internal fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, 
         }
         "segmented" -> SegmentedItem(item, state, handle, top)
         "markdown" -> ExtensionMarkdown(item.text.orEmpty(), top.padding(horizontal = rowPadding))
-        "table" -> JGroupItem(GroupPosition.Single, top) { ExtensionTable(item, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m)) }
+        "table" -> JGroupItem(GroupPosition.Single, top) { ExtensionTable(item, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m), local = handle.nativeLocal) }
         "empty" -> JEmptyState(item.title.orEmpty(), item.detail.orEmpty(), top, icon = item.icon?.takeIf { it.isNotBlank() }?.let(ExtensionIcons::of),
             action = item.button?.takeIf { it.title.isNotBlank() && it.action.id.isNotEmpty() }?.let { b ->
                 { JButton(b.title, { handle.press(item, b.action) }, kind = JButtonKind.Secondary, loading = state.acting == b.action.id,

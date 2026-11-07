@@ -28,6 +28,7 @@ import persona.core.contracts.api.ExtensionTriageTemplate
 import kotlinx.serialization.KSerializer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
@@ -59,10 +60,14 @@ class HttpExtensionManagement internal constructor(
     private val device: () -> ExtensionUiContext = { deviceContext() },
     /** The hub answers only under `/api/v1/plugins` (before #1844). */
     private val legacy: Boolean = false,
+    private val streamConnection: OkHttpHubConnection? = null,
 ) : ExtensionManagement {
+    override val nativeStream = streamConnection?.let { connection ->
+        extensionStreamBindings(connection) { "paired" to "primary" }
+    } ?: flowOf(null)
     constructor(connection: OkHttpHubConnection, available: Flow<Boolean>, legacy: Boolean = false) : this({ path, method, body ->
         connection.request(path, method, body)
-    }, available, legacy = legacy)
+    }, available, legacy = legacy, streamConnection = connection)
 
     private val base = if (legacy) "api/v1/plugins" else "api/v1/extensions"
 

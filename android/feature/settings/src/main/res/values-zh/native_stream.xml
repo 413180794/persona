@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_ext_native_actions">操作</string>
+    <string name="settings_ext_native_decrease">减小%1$s</string>
+    <string name="settings_ext_native_increase">增大%1$s</string>
+    <string name="settings_ext_native_unsupported">此页面需要更新的原生渲染器。将显示兼容页面。</string>
+    <string name="settings_ext_native_rejected">未能确认操作结果。请查看当前页面后再重试。</string>
+    <string name="settings_ext_native_host_permission">需要中枢批准</string>
+    <string name="settings_ext_native_allow">批准</string>
+    <string name="settings_ext_native_deny">拒绝</string>
+</resources>
