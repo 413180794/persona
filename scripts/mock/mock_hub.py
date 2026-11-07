@@ -29,7 +29,7 @@ def features():
     # Match proto.Features, retaining the existing terminal fixture switches.
     return ["error_codes", "client_hello", "heartbeat", "app_ping", "client_msg_id", "send_refusals",
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
-            "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob", "task_push"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
+            "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob", "task_push"] + (["git_write"] if os.environ.get("MOCK_GIT_WRITE") else []) + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click", "terminal_mouse"] if TERMINAL_CONTROL else []) + (
                 ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] + ([] if os.environ.get("MOCK_TERMINAL_FULL_NOFOCUS") else ["herdr_focus"]) if TERMINAL_FULL else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else []) + (
@@ -8545,6 +8545,99 @@ def mock_size(v):
 
 
 GIT_PULL_STATE = {"behind": 28, "mode": "success", "pulls": 0}
+# MOCK_GIT_WRITE=1 (#6121): the Git panel's writes on a made-up repository that changes as they are made. GET
+# /mock/git-write?fail=<code>[&files=a,b] makes the next write refuse with that code (git_conflict lists the files);
+# ?reset=1 starts over.
+def git_write_fresh():
+    return {"branch": "widget-hourly", "upstream": "", "ahead": 2, "fail": None, "files": [
+        {"path": "WeatherWidget/Provider.swift", "index": ".", "worktree": "M", "added": 12, "deleted": 3, "binary": False},
+        {"path": "WeatherWidget/WidgetView.swift", "index": "A", "worktree": ".", "added": 18, "deleted": 0, "binary": False},
+        {"path": "Sources/App/main.swift", "index": "M", "worktree": "M", "added": 2, "deleted": 1, "binary": False},
+        {"path": "docs/hourly.md", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": False}],
+        "stashes": [{"index": 0, "message": "On main: 试过的另一种配色", "date": ago(days=2)}],
+        "branches": [("widget-hourly", False), ("main", False), ("origin/main", True), ("origin/release-2.4", True)]}
+GIT_W = git_write_fresh()
+
+
+def git_write_status(root):
+    w = GIT_W
+    head = MOCK_COMMITS[0] if w["ahead"] <= 2 else dict(MOCK_COMMITS[0], hash="e" * 40, short="eeeeeee", subject=w.get("last", MOCK_COMMITS[0]["subject"]))
+    return {"is_repo": True, "root": root, "branch": w["branch"], "head": head, "upstream": w["upstream"], "ahead": w["ahead"],
+            "behind": 0, "stashes": len(w["stashes"]), "commits": ([head] if head is not MOCK_COMMITS[0] else []) + MOCK_COMMITS[:29],
+            "files": [dict(f) for f in w["files"]]}
+
+
+def git_branches():
+    return {"branches": [{"name": n, "remote": r, "current": n == GIT_W["branch"], "hash": "a1b2c3d",
+                          "subject": MOCK_COMMITS[i % len(MOCK_COMMITS)]["subject"], "date": ago(hours=3 * i + 1)}
+                         for i, (n, r) in enumerate(GIT_W["branches"])
+                         if not (r and (n.split("/", 1)[1], False) in GIT_W["branches"])]}  # as the node: a remote one with a local one of its name is left out
+
+
+def git_write(h, p, body):
+    """POST git/{stage,commit,push,switch,stash} on the made-up repository (MOCK_GIT_WRITE)."""
+    w, op = GIT_W, p.rsplit("/", 1)[-1]
+    home, _ = mock_abs(p.split("/")[4], body.get("cwd", ""), "")
+    root = home + "/" + MOCK_REPO
+    time.sleep(0.4)
+    if w["fail"]:
+        code, files = w["fail"]
+        w["fail"] = None
+        words = {"git_conflict": "error: Your local changes to the following files would be overwritten by checkout:\n\t" + "\n\t".join(files) +
+                                 "\nPlease commit your changes or stash them before you switch branches.\nAborting",
+                 "git_push_rejected": " ! [rejected]        widget-hourly -> widget-hourly (fetch first)\nerror: failed to push some refs",
+                 "git_hook_failed": "swiftlint: 2 violations in WeatherWidget/Provider.swift\n  12:5 Line Length Violation\n  30:1 Trailing Whitespace"}.get(code, code)
+        return h.send_json({"error": "git %s: %s" % (op, words), "code": code, **({"files": files} if files else {})}, 409)
+    out = {}
+    if op == "stage":
+        for f in w["files"]:
+            if f["path"] not in body.get("paths", []): continue
+            if body.get("unstage"):
+                if f["index"] == "A": f.update(index="?", worktree="?")
+                elif f["index"] not in (".", "?"): f.update(index=".", worktree="M")
+            else:
+                f.update(index="A" if f["index"] == "?" else "M", worktree=".")
+    elif op == "commit":
+        if not any(f["index"] not in (".", "?") for f in w["files"]):
+            return h.send_json({"error": "nothing is staged", "code": "git_nothing_staged"}, 409)
+        w["files"] = [dict(f, index=".") if f["worktree"] not in (".", "?") else f for f in w["files"] if f["worktree"] != "." or f["index"] in (".", "?")]
+        w["ahead"] += 1
+        w["last"] = body.get("message", "").split("\n")[0]
+        out["commit"] = {"hash": "e" * 40, "short": "eeeeeee", "subject": w["last"], "author": "Me"}
+    elif op == "push":
+        if not w["upstream"]:
+            if not body.get("set_upstream"): return h.send_json({"error": "no upstream", "code": "git_no_upstream"}, 409)
+            w["upstream"] = "origin/" + w["branch"]
+            w["branches"].append(("origin/" + w["branch"], True))
+        w["ahead"] = 0
+        out["output"] = "To github.com:example/weather.git\n*\trefs/heads/%s:refs/heads/%s\t[new branch]" % (w["branch"], w["branch"])
+    elif op == "switch":
+        name = body.get("branch", "")
+        if body.get("create"):
+            w["branches"].insert(0, (name, False))
+            w["upstream"], w["ahead"] = "", 0
+        elif ("origin/" + name, True) in w["branches"] and (name, False) not in w["branches"]:
+            w["branches"].insert(0, (name, False))
+            w["upstream"], w["ahead"] = "origin/" + name, 0
+        else:
+            w["upstream"], w["ahead"] = ("origin/" + name if ("origin/" + name, True) in w["branches"] else ""), 0
+        w["branch"] = name
+    elif op == "stash":
+        o = body.get("op")
+        if o == "push":
+            if not w["files"]: return h.send_json({"error": "no local changes to save", "code": "git_no_stash"}, 409)
+            msg = body.get("message") or ("WIP on %s" % w["branch"])
+            w["stashes"] = [{"index": 0, "message": "On %s: %s" % (w["branch"], msg), "date": ago(minutes=0)}] + [dict(s, index=s["index"] + 1) for s in w["stashes"]]
+            w["files"] = [] if body.get("untracked") else [f for f in w["files"] if f["index"] == "?"]
+        elif o in ("pop", "drop", "apply"):
+            i = body.get("index", 0)
+            if i >= len(w["stashes"]): return h.send_json({"error": "no stash", "code": "git_no_stash"}, 409)
+            if o == "apply" or o == "pop":
+                w["files"].append({"path": "Sources/App/Theme.swift", "index": ".", "worktree": "M", "added": 6, "deleted": 2, "binary": False})
+            if o != "apply":
+                w["stashes"] = [dict(s, index=k) for k, s in enumerate(x for j, x in enumerate(w["stashes"]) if j != i)]
+        out["stashes"] = w["stashes"]
+    return h.send_json({"status": git_write_status(root), **out})
 
 
 def fs_changed(mid, dirs, git):
@@ -8566,7 +8659,7 @@ def mock_files(p, q):
     parts = p.split("/")
     if not (p.startswith("/api/v1/machines/") and len(parts) >= 6): return None
     mid, what = parts[4], "/".join(parts[5:])
-    if what not in ("file", "fs", "fs/find", "git/status", "git/diff", "git/show", "git/log"): return None
+    if what not in ("file", "fs", "fs/find", "git/status", "git/diff", "git/show", "git/log", "git/branches"): return None
     if not machine_online(mid): return {"error": "%s: machine is offline" % mid}, 503
     arg = lambda k: (q.get(k) or [""])[0]
     if what == "fs/find":  # #2438: every file under cwd, shallow first (the node's walk / git ls-files)
@@ -8603,6 +8696,10 @@ def mock_files(p, q):
     if not (cwd == root or cwd.startswith(root + "/")):
         return ({"is_repo": False, "files": [], "commits": []}, 200) if what == "git/status" else ({"error": "not a git repository"}, 502)
     if what == "git/status":
+        if os.environ.get("MOCK_GIT_WRITE"):
+            return git_write_status(root), 200
+    if what == "git/branches":
+        return (git_branches(), 200) if os.environ.get("MOCK_GIT_WRITE") else ({"error": "not found"}, 404)
         if os.environ.get("MOCK_GIT_PULL"):
             commits = MOCK_COMMITS[:30]
             if GIT_PULL_STATE["behind"] == 0:
@@ -11544,6 +11641,11 @@ class H(BaseHTTPRequestHandler):
             git = (q.get("git") or [""])[0] == "1"
             if git: FS_STATE["dirty"] += 1
             return self.send_json({"ok": True, "sent": fs_changed(mid, [path] if add else [], git), "path": path})
+        if p == "/mock/git-write" and os.environ.get("MOCK_GIT_WRITE"):
+            global GIT_W
+            if q.get("reset"): GIT_W = git_write_fresh()
+            if q.get("fail"): GIT_W["fail"] = (q["fail"][0], [f for f in (q.get("files") or [""])[0].split(",") if f])
+            return self.send_json({"branch": GIT_W["branch"], "ahead": GIT_W["ahead"], "files": len(GIT_W["files"])})
         if p == "/mock/git-pull" and os.environ.get("MOCK_GIT_PULL"):
             if "mode" in q:
                 GIT_PULL_STATE.update(behind=28, mode=q["mode"][0], pulls=0)
@@ -12437,6 +12539,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "无法生成 TLS 证书", "code": "internal"}, 500)
             return self.send_json({"ok": True})
         if self.bad_network(): return
+        if os.environ.get("MOCK_GIT_WRITE") and p.startswith("/api/v1/machines/") and re.search(r"/git/(stage|commit|push|switch|stash)$", p) and self.command == "POST":
+            return git_write(self, p, json.loads(self.last_body or b"{}"))
         if os.environ.get("MOCK_GIT_PULL") and p.endswith("/git/pull") and self.command == "POST":
             body = json.loads(self.last_body or b"{}")
             status, code = mock_files(p[:-4] + "status", {"cwd": [body.get("cwd", "")]})

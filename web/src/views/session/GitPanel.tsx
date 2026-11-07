@@ -20,6 +20,7 @@ import {
   type GitStatus,
 } from "../../lib/files";
 import { ago, shortPath } from "../../lib/format";
+import { useStore } from "../../lib/store";
 import { openPanel, type GitSpot } from "../../lib/panel";
 import { useFsLive } from "../../lib/use-fs-live";
 import { Button, copyText, cx, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
@@ -29,12 +30,15 @@ import { CompareView, compareKind } from "./files/CompareView";
 import { DiffLines } from "./files/DiffLines";
 import { BackHeader, Empty, GitBadge, Segmented } from "./files/parts";
 import { formatDate, t } from "../../i18n";
+import { BranchesView, CommitBox, PushButton, StageAll, StageBox, StashesView, useGitWrite, type GitWriter } from "./GitWrite";
 
 // `at`: a line to show and mark when the view opens (a comment card's click, lib/comments.ts openSpot)
 type View =
   | { kind: "diff"; file: GitFile; staged: boolean; at?: GitSpot }
   | { kind: "commit"; commit: GitCommit; at?: GitSpot }
-  | { kind: "commitFile"; commit: GitCommit; file: GitFile; diff: string; truncated: boolean; at?: GitSpot };
+  | { kind: "commitFile"; commit: GitCommit; file: GitFile; diff: string; truncated: boolean; at?: GitSpot }
+  | { kind: "branches" }
+  | { kind: "stashes" };
 
 const PAGE = 50;
 
@@ -59,6 +63,16 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
   }, [status]);
 
   useFsLive(mid, cwd, [], true, (c) => c.git && setLive((n) => n + 1));
+  // The writes (#6121), on a hub that has them: each answers the status as it is after it.
+  const writable = useStore((s) => s.features.includes("git_write"));
+  const writer = useGitWrite(base, cwd, (s) => {
+    if (head.current !== s.head?.hash) {
+      setOlder([]);
+      setNoMore(false);
+    }
+    head.current = s.head?.hash;
+    setStatus(s);
+  });
 
   useEffect(() => {
     if (!cwd) return;
@@ -150,8 +164,9 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {status?.is_repo ? (
             <div className="px-3 pt-3 pb-6 sm:px-4" style={{ animation: "fade-in 160ms ease-out both" }}>
-              <Summary s={status} />
-              <Changes s={status} onOpen={(f) => push({ kind: "diff", file: f, staged: isStaged(f) && !hasUnstaged(f) })} />
+              <Summary s={status} writer={writable ? writer : undefined} onBranches={() => push({ kind: "branches" })} onStashes={() => push({ kind: "stashes" })} />
+              <Changes s={status} writer={writable ? writer : undefined} onOpen={(f) => push({ kind: "diff", file: f, staged: isStaged(f) && !hasUnstaged(f) })} />
+              {writable && status.files.length > 0 && <CommitBox s={status} writer={writer} />}
               <Section title={t("session-gitpanel.commits")}>
                 {[...status.commits, ...older].map((c) => (
                   <CommitRow key={c.hash} c={c} onOpen={() => push({ kind: "commit", commit: c })} />
@@ -178,6 +193,9 @@ export function GitPanel({ mid, sid, cwd, at, onClose }: { mid: string; sid: str
       {top?.kind === "diff" && (
         <DiffView key={`${top.file.path}:${top.at?.line ?? ""}`} mid={mid} sid={sid} root={status?.root ?? cwd} base={base} cwd={cwd} file={top.file} staged={top.staged} at={top.at} refreshed={live} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged, at: undefined }])} onBack={back} onClose={onClose} />
       )}
+      {top?.kind === "branches" && status && <BranchesView base={base} cwd={cwd} s={status} writer={writer} onBack={back} onClose={onClose} />}
+      {top?.kind === "stashes" && status && <StashesView s={status} writer={writer} onBack={back} onClose={onClose} />}
+      {!top && writer.dialog}
       {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} at={top.at} onOpen={push} onBack={back} onClose={onClose} />}
       {top?.kind === "commitFile" && (
         <>
@@ -217,37 +235,55 @@ function SyncChip({ dir, n }: { dir: "up" | "down"; n: number }) {
   );
 }
 
-function Summary({ s }: { s: GitStatus }) {
+function Summary({ s, writer, onBranches, onStashes }: { s: GitStatus; writer?: GitWriter; onBranches: () => void; onStashes: () => void }) {
   const ahead = s.ahead ?? 0,
     behind = s.behind ?? 0;
+  const branch = s.branch || t("session-gitpanel.detached_head");
   return (
     <div className="rounded-card bg-surface px-4 py-3 shadow-card">
       <div className="flex items-center gap-2">
         <Icon name="git" size={15} className="shrink-0 text-accent" />
-        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">{s.branch || t("session-gitpanel.detached_head")}</span>
+        {writer ? (
+          <button type="button" onClick={onBranches} title={t("session-gitwrite.branch_hint")} className="-mx-1 flex min-w-0 flex-1 items-center gap-1 rounded-[6px] px-1 text-left hover:bg-hover">
+            <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{branch}</span>
+            <Icon name="chevron" size={12} stroke={2.4} className="shrink-0 text-ink-3" />
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">{branch}</span>
+        )}
         {ahead > 0 && <SyncChip dir="up" n={ahead} />}
         {behind > 0 && <SyncChip dir="down" n={behind} />}
+        {writer && <PushButton s={s} writer={writer} />}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px] text-ink-3">
         <span className="truncate">{s.upstream ? s.upstream : t("session-gitpanel.no_upstream")}</span>
         {s.upstream && !ahead && !behind && <span>· {t("session-gitpanel.in_sync")}</span>}
-        {(s.stashes ?? 0) > 0 && <span title={t("session-gitpanel.stashes_hint")}>· {t("session-gitpanel.stashes", { count: s.stashes ?? 0 })}</span>}
+        {writer ? (
+          <button type="button" onClick={onStashes} className="whitespace-nowrap hover:text-ink hover:underline" title={t("session-gitpanel.stashes_hint")}>
+            · {(s.stashes ?? 0) > 0 ? t("session-gitpanel.stashes", { count: s.stashes ?? 0 }) : t("session-gitwrite.stashes")}
+          </button>
+        ) : (
+          (s.stashes ?? 0) > 0 && <span title={t("session-gitpanel.stashes_hint")}>· {t("session-gitpanel.stashes", { count: s.stashes ?? 0 })}</span>
+        )}
       </div>
       {s.root && <div className="mt-1 truncate font-mono text-[11px] text-ink-3" title={s.root}>{shortPath(s.root)}</div>}
     </div>
   );
 }
 
-function Changes({ s, onOpen }: { s: GitStatus; onOpen: (f: GitFile) => void }) {
+function Changes({ s, writer, onOpen }: { s: GitStatus; writer?: GitWriter; onOpen: (f: GitFile) => void }) {
   const totals = diffTotals(s.files);
   return (
     <Section
       title={s.files.length ? t("session-gitpanel.changes_count", { count: s.files.length }) : t("session-gitpanel.changes")}
       right={
         s.files.length > 0 && (
-          <span className="font-mono text-[11.5px] tabular-nums">
-            <span className="text-green">+{totals.added}</span> <span className="text-red">−{totals.deleted}</span>
-          </span>
+          <>
+            <span className="font-mono text-[11.5px] tabular-nums">
+              <span className="text-green">+{totals.added}</span> <span className="text-red">−{totals.deleted}</span>
+            </span>
+            {writer && <StageAll s={s} writer={writer} />}
+          </>
         )
       }
     >
@@ -257,18 +293,18 @@ function Changes({ s, onOpen }: { s: GitStatus; onOpen: (f: GitFile) => void }) 
           {t("session-gitpanel.clean")}
         </div>
       ) : (
-        s.files.map((f) => <FileRow key={f.path} f={f} stage onOpen={() => onOpen(f)} />)
+        s.files.map((f) => <FileRow key={f.path} f={f} stage check={writer && <StageBox f={f} writer={writer} />} onOpen={() => onOpen(f)} />)
       )}
     </Section>
   );
 }
 
 /** A changed file: its letter, name, where it is (and staged / partly staged), +/− lines. */
-function FileRow({ f, stage, onOpen }: { f: GitFile; stage?: boolean; onOpen: () => void }) {
+function FileRow({ f, stage, check, onOpen }: { f: GitFile; stage?: boolean; check?: React.ReactNode; onOpen: () => void }) {
   const folder = dirName(f.path);
   const staged = stage && isStaged(f);
-  return (
-    <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-hover" title={f.path}>
+  const row = (
+    <button type="button" onClick={onOpen} className={cx("flex w-full items-center gap-3 py-2 text-left transition-colors hover:bg-hover", check ? "pr-4 pl-2" : "px-4")} title={f.path}>
       <GitBadge letter={gitLetter(f)} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium text-ink">{fileName(f.path)}</span>
@@ -287,6 +323,15 @@ function FileRow({ f, stage, onOpen }: { f: GitFile; stage?: boolean; onOpen: ()
       ) : null}
       <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3" />
     </button>
+  );
+  // the stage checkbox (#6121) sits beside the row, not in its button
+  return check ? (
+    <div className="flex items-center gap-1 pl-4">
+      {check}
+      <div className="min-w-0 flex-1">{row}</div>
+    </div>
+  ) : (
+    row
   );
 }
 
