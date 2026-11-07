@@ -63,6 +63,48 @@ class KnowledgeShotsTest {
     @Config(sdk = [35], qualifiers = "en-w400dp-h1700dp-xhdpi")
     @Test fun recordingEnglish() = recordingShots("en", "Transcribing")
 
+    @Config(sdk = [35], qualifiers = "zh-w400dp-h1100dp-xhdpi")
+    @Test fun availabilityStates() {
+        var failure: String? = "kb_disabled"
+        var dark by mutableStateOf(false)
+        val repository = object : KnowledgeRepository by DemoKnowledge {
+            override suspend fun list(kind: KnowledgeKind, tag: String?): KnowledgeList {
+                when (failure) {
+                    "empty" -> return KnowledgeList(emptyList(), emptyList())
+                    "ready" -> return DemoKnowledge.list(kind, tag)
+                    "network" -> throw java.io.IOException("offline")
+                    else -> throw object : java.io.IOException(), HubCodedFailure {
+                        override val code = failure
+                        override val status = 503
+                    }
+                }
+            }
+        }
+        val connection = object : KnowledgeConnection { override val current = MutableStateFlow<KnowledgeRepository?>(repository) }
+        val model = KnowledgeViewModel(connection)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true) {
+                Box(Modifier.testTag("shot").width(400.dp).height(1060.dp).background(PersonaTheme.palette.background)) {
+                    KnowledgeScreen(model, NoNavigator)
+                }
+            }
+        }
+        for ((state, expected) in listOf("kb_disabled" to "知识库已关闭", "kb_unavailable" to "知识库正在启动，请稍后重试。",
+            "network" to "暂时连不上知识库，请稍后重试", "empty" to "还没有项目", "ready" to "Weather App")) {
+            failure = state
+            model.refresh()
+            rule.waitForIdle()
+            rule.onNodeWithText(expected).assertExists()
+            for (isDark in listOf(false, true)) {
+                dark = isDark
+                rule.waitForIdle()
+                File(out(), "knowledge-$state-${if (isDark) "dark" else "light"}.png").outputStream().use {
+                    rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+        }
+    }
+
     private fun recordingShots(language: String, transcribing: String) {
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)

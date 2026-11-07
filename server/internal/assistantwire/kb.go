@@ -95,6 +95,9 @@ type KBSettings struct {
 // has the data directory); the hub answers it like assistant_offline (503, try again).
 const CodeKBUnavailable = "kb_unavailable"
 
+// CodeKBDisabled means the manager has disabled knowledge; retrying cannot enable it.
+const CodeKBDisabled = "kb_disabled"
+
 // KBProject is a project as kb.projects names it.
 type KBProject struct {
 	Slug string `json:"slug"`

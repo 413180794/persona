@@ -229,6 +229,9 @@ func (s *Service) kbClose() {
 // kbError is what the hub gets for a call the knowledge base cannot take now: kb_unavailable while it is not open
 // (the hub answers 503, try again).
 func kbError(err error) error {
+	if errors.Is(err, errKBOff) {
+		return &rpc.Error{Code: assistantwire.CodeKBDisabled, Message: err.Error()}
+	}
 	if errors.Is(err, errKBNotOpen) {
 		return &rpc.Error{Code: assistantwire.CodeKBUnavailable, Message: err.Error()}
 	}

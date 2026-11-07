@@ -17,7 +17,7 @@ import (
 // here unchanged (assistantwire.Routes), the same shapes as when the hub answered them.
 
 var (
-	errKBRouteOff     = errors.New("the knowledge base is off")
+	errKBRouteOff     = i18n.Err("assistant-kb_routes.disabled")
 	errKBRouteNotOpen = i18n.Err("assistant-kb_routes.not_open")
 )
 
@@ -27,7 +27,7 @@ func (s *Service) kbRoutes() {
 		e, err := s.kbGet(r.Context())
 		switch {
 		case errors.Is(err, errKBOff):
-			apierr.Write(w, http.StatusServiceUnavailable, errKBRouteOff)
+			apierr.WriteCode(w, http.StatusServiceUnavailable, assistantwire.CodeKBDisabled, errKBRouteOff)
 		case err != nil:
 			apierr.WriteCode(w, http.StatusServiceUnavailable, assistantwire.CodeKBUnavailable, errKBRouteNotOpen)
 		}

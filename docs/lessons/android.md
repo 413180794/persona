@@ -136,6 +136,8 @@ Pitfalls in the new multi-module Android App (`android/`, `docs/android/android.
 
 ## Networking
 
+- Knowledge availability (#6520): `HubFailure` extends `IOException`, including HTTP business failures. Check `hubCodedFailure` and its status/code before classifying an exception as a network failure. A disabled knowledge base is not an empty result or an opening/network error; keep each state visible in regression screenshots.
+
 - For self-signed certificates (public-key pinning with our own `X509TrustManager`), OkHttp returns empty `response.handshake.peerCertificates`, so a response cannot verify which hub's fingerprint was presented. When multiple hubs in a group share one pinned client, record the actual presented fingerprint by host:port in the hostname verifier, then compare with the candidate's hub (`HubHttpClient`, `docs/android/android.md`, "Multiple hubs").
 - Two hubs have independent ID spaces: interaction and session IDs may coincide (mock fixtures are identical). Adding group suffixes only to machine IDs is not enough when merging lists. Needs you LazyColumn used `request:<interaction id>` as key; matching IDs from two groups crashed (`Key … was already used`). Interaction IDs also need suffixes, stripped when answering.
 - Closing a group's data while its chat page is open (merge / disconnect) made `SessionItemsCache.release` start a transaction on closed Room as the stream ended, throwing "Database is closed" from LaunchedEffect and crashing (seen during an emulator merge). Now remove the group from the list first, wait for the page to switch away, then close the database; `release` does nothing if already closed; facade failures for closed groups become cancellation. Single-pairing re-pairing had the same race, but rarely hit it.

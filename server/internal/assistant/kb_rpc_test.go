@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -265,5 +266,36 @@ func TestKBRPCRecentAcrossSources(t *testing.T) {
 		if _, _, err := s.kbRequest(context.Background(), assistantwire.MethodKBRecent, json.RawMessage(bad)); !errors.As(err, &re) || re.Code != bus.CodeInvalidParams {
 			t.Fatalf("%s: %v", bad, err)
 		}
+	}
+}
+
+// Disabled, starting and successfully empty are different responses on both read transports.
+func TestKBAvailabilityCodes(t *testing.T) {
+	f := newFakeHub()
+	f.hello.KB = &KBSettings{Off: true}
+	off := withSettings(t, f, New(Options{Hub: f, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}}))
+	for _, method := range []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBSearch} {
+		raw := json.RawMessage(`{"kind":"projects"}`)
+		if method == assistantwire.MethodKBGet {
+			raw = json.RawMessage(`{"kind":"projects","id":"example"}`)
+		}
+		if method == assistantwire.MethodKBSearch {
+			raw = json.RawMessage(`{"query":"example"}`)
+		}
+		_, handled, err := off.kbRequest(context.Background(), method, raw)
+		var coded *rpc.Error
+		if !handled || !errors.As(err, &coded) || coded.Code != assistantwire.CodeKBDisabled {
+			t.Fatalf("%s: handled=%v err=%v", method, handled, err)
+		}
+	}
+	var coded *rpc.Error
+	if !errors.As(kbError(errKBNotOpen), &coded) || coded.Code != assistantwire.CodeKBUnavailable {
+		t.Fatal("starting lost its code")
+	}
+	ready := newKBService(t, newFakeHub())
+	rec := httptest.NewRecorder()
+	ready.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/projects", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"items":[]`) {
+		t.Fatalf("empty: %d %s", rec.Code, rec.Body)
 	}
 }

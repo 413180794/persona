@@ -330,8 +330,8 @@ func TestKBRouteProjectAgents(t *testing.T) {
 	off := New(Options{Hub: f, Logf: testLogf(t)})
 	rec = httptest.NewRecorder()
 	off.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/projects", nil))
-	if rec.Code != 503 {
-		t.Fatalf("off: %d", rec.Code)
+	if rec.Code != 503 || !strings.Contains(rec.Body.String(), assistantwire.CodeKBDisabled) {
+		t.Fatalf("off: %d %s", rec.Code, rec.Body)
 	}
 	early := New(Options{Hub: newFakeHub(), Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}})
 	rec = httptest.NewRecorder()

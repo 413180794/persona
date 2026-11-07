@@ -1,3 +1,4 @@
 {
-  "not_open": "The knowledge base isn’t ready yet. Try again later."
+  "not_open": "The knowledge base isn’t ready yet. Try again later.",
+  "disabled": "This manager has turned off the knowledge base."
 }

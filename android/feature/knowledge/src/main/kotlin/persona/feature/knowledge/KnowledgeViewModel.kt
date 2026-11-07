@@ -219,5 +219,13 @@ internal class KnowledgeDetailViewModel(
 }
 
 @StringRes
-private fun loadMessage(error: Exception): Int = if (error is IOException) R.string.knowledge_unreachable
-    else R.string.knowledge_unreadable
+internal fun loadMessage(error: Exception): Int {
+    val failure = hubCodedFailure(error)
+    return when {
+        failure?.code == "kb_disabled" -> R.string.knowledge_disabled_text
+        failure?.code == "kb_unavailable" -> R.string.knowledge_opening
+        failure?.status != null -> R.string.knowledge_unreadable
+        error is IOException -> R.string.knowledge_unreachable
+        else -> R.string.knowledge_unreadable
+    }
+}

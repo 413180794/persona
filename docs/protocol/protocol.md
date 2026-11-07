@@ -2623,7 +2623,7 @@ When the list changes, WebSocket pushes `{"type":"inbox"}` (no content; the App 
 
 ## Knowledge base API
 
-The knowledge base belongs to a manager (the assistant). The hub forwards these endpoints to it as-is (the forwarding in "Bus" above); when it is not connected the hub returns `503 assistant_offline`. Returns 503 when the knowledge base is not enabled. `kind` supports `projects`, `chats`, `people`, `docs`, `meetings`, `events`, `recordings` (recordings are read-only here; writes go through "Recording sync" below).
+The knowledge base belongs to a manager (the assistant). The hub forwards these endpoints to it as-is (the forwarding in "Bus" above); when it is not connected the hub returns `503 assistant_offline`. Returns `503 kb_disabled` when the manager has disabled the knowledge base, and `503 kb_unavailable` while it is enabled but not ready. A successful list with no entries is `200 {"items":[],"tags":[]}`. Clients distinguish these states from transport failures. `kind` supports `projects`, `chats`, `people`, `docs`, `meetings`, `events`, `recordings` (recordings are read-only here; writes go through "Recording sync" below).
 
 | Method | Path | Description |
 | --- | --- | --- |

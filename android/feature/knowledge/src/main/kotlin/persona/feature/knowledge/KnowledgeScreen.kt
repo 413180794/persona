@@ -121,7 +121,7 @@ private fun KindChips(kind: KnowledgeKind, count: Int?, onPick: (KnowledgeKind) 
 private fun LazyListScope.listContent(page: KnowledgePage, showIgnored: Boolean, toggleIgnored: () -> Unit, navigator: Navigator, retry: () -> Unit) {
     val kind = page.filter.kind
     when {
-        page.entries.isEmpty() && page.message != null -> item("error") { RetryState(stringResource(R.string.knowledge_error_title), stringResource(requireNotNull(page.message)), retry) }
+        page.entries.isEmpty() && page.message != null -> item("error") { KnowledgeFailure(R.string.knowledge_error_title, requireNotNull(page.message), retry) }
         page.entries.isEmpty() && !page.loaded -> item("loading") { JLoading() }
         page.entries.isEmpty() -> item("empty") {
             JEmptyState(page.filter.tag?.let { stringResource(kind.words.emptyTag, it) } ?: stringResource(kind.words.empty),
@@ -147,7 +147,7 @@ private fun LazyListScope.listContent(page: KnowledgePage, showIgnored: Boolean,
 private fun LazyListScope.searchResults(page: KnowledgePage, navigator: Navigator) {
     val query = page.filter.query.trim()
     when {
-        page.groups.isEmpty() && page.message != null -> item("error") { RetryState(stringResource(R.string.knowledge_search_error), stringResource(requireNotNull(page.message)), null) }
+        page.groups.isEmpty() && page.message != null -> item("error") { KnowledgeFailure(R.string.knowledge_search_error, requireNotNull(page.message), null) }
         page.groups.isEmpty() && !page.loaded -> item("searching") { JLoading() }
         page.groups.isEmpty() -> item("nothing") {
             JEmptyState(stringResource(R.string.knowledge_nothing_found), stringResource(R.string.knowledge_nothing_found_text, query), icon = PhIcons.MagnifyingGlass)
@@ -312,7 +312,7 @@ internal fun KnowledgeDetailScreen(
                     JEmptyState(stringResource(R.string.knowledge_unpaired_title), stringResource(R.string.knowledge_unpaired_detail))
                 }
                 detail == null && page.message != null -> item("error") {
-                    RetryState(stringResource(R.string.knowledge_entry_error), stringResource(requireNotNull(page.message)), model::refresh)
+                    KnowledgeFailure(R.string.knowledge_entry_error, requireNotNull(page.message), model::refresh)
                 }
                 detail == null || entry == null -> item("loading") { JLoading() }
                 else -> {
@@ -620,6 +620,13 @@ private fun KnowledgeMarkdown(text: String) {
 
 private fun Navigator.open(entry: KnowledgeEntry) {
     KnowledgeKind.fromWire(entry.kind)?.let { navigate(KnowledgeDetailRoute(it, entry.id)) }
+}
+
+@Composable
+private fun KnowledgeFailure(title: Int, message: Int, retry: (() -> Unit)?) {
+    val disabled = message == R.string.knowledge_disabled_text
+    RetryState(stringResource(if (disabled) R.string.knowledge_disabled_title else title),
+        stringResource(message), retry.takeUnless { disabled })
 }
 
 @Composable private fun RetryState(title: String, message: String, retry: (() -> Unit)?) {

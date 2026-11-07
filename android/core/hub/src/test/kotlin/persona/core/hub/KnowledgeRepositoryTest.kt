@@ -12,6 +12,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KnowledgeRepositoryTest {
+    @Test fun preservesAvailabilityCodesAndSuccessfulEmptyLists() = runBlocking {
+        MockWebServer().use { server ->
+            val repository = HttpKnowledgeRepository(HubScope("demo", "generation"), server.url("/").toString(),
+                "fixture-token", OkHttpClient(), { true })
+            for (code in listOf("kb_disabled", "kb_unavailable")) {
+                server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"unavailable","code":"$code"}"""))
+                val error = runCatching { repository.list(KnowledgeKind.Projects) }.exceptionOrNull() as HubFailure
+                assertEquals(code, error.code)
+                assertEquals(503, error.status)
+            }
+            server.enqueue(MockResponse().setBody("""{"items":[],"tags":[]}"""))
+            assertTrue(repository.list(KnowledgeKind.Projects).items.isEmpty())
+        }
+    }
+
     @Test fun readsExistingWireFormatEncodesParametersAndRejectsRetiredPairingsAndRedirects() = runBlocking {
         MockWebServer().use { server ->
             var current = true

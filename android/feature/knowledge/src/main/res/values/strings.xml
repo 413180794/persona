@@ -133,4 +133,7 @@
         <item quantity="one">All %1$d</item>
         <item quantity="other">All %1$d</item>
     </plurals>
+    <string name="knowledge_disabled_title">Knowledge base is turned off</string>
+    <string name="knowledge_disabled_text">This manager has turned off the knowledge base. Enable it in the manager configuration to read it.</string>
+    <string name="knowledge_opening">The knowledge base is starting. Please try again shortly.</string>
 </resources>
