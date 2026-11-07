@@ -38,7 +38,10 @@ func (n *Node) dialogKeys(ctx context.Context, id, rev, option string) (keys, pr
 	if err != nil {
 		return nil, nil, err
 	}
-	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+	text, err := n.dialogScreen(ctx, pane)
+	if errors.Is(err, errDialogCut) {
+		return nil, nil, refusal(notDelivered, dialogCutMessage, nil)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -636,7 +639,7 @@ func (n *Node) declineGuide(ctx context.Context, pane string) error {
 	n.forgetDialog(pane)
 	for end := time.Now().Add(noticeSettle); ; {
 		time.Sleep(noticeSettle / 10)
-		s, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+		s, err := n.dialogScreen(ctx, pane)
 		if err != nil {
 			return err
 		}

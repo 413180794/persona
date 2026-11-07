@@ -58,7 +58,7 @@ func (n *Node) dialogOn(id, pane string) string {
 
 func (n *Node) readDialog(pane string, p *paneDialog) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+	text, err := n.dialogScreen(ctx, pane)
 	cancel()
 	head := ""
 	if err == nil {

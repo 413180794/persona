@@ -288,6 +288,59 @@ func TestDialogKeysCheckRevision(t *testing.T) {
 	}
 }
 
+// #6318: a pane full of CJK text whose 40 plain rows herdr cannot send whole (8 KB). The card and its answer both read
+// the most bottom rows that fit, so they see the same dialog, agree on its revision, and the answer goes in; a screen
+// that moved on is still refused.
+func TestDialogCardAndAnswerOnACutPane(t *testing.T) {
+	questions := screenFixture(t, "claude-2.1.318-questions-wrapped-100.txt")
+	cjk := strings.Repeat("一行很长的中文输出，说明这次发布要注意的事\n", 40)
+	f := &fakePane{screens: []string{cjk + questions}, plainCutOver: 30}
+	n := &Node{hosts: herdrHosts(f.serve(t)), agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}}
+	ctx := context.Background()
+	text, _, err := n.screen(ctx, "s1", screen.DialogLines, "", false) // what session.screen gives the hub for its card
+	if err != nil {
+		t.Fatalf("the card's read: %v (reads %v)", err, f.readLines)
+	}
+	rev := dialogRev(text, screen.DialogLines, "", "")
+	if d := screen.ParseDialog(text); rev == "" || d == nil || len(d.Options) != 4 || !strings.Contains(d.Question, "你希望先切流量") {
+		t.Fatalf("the card's dialog from the bottom rows: rev %q, %+v", rev, d)
+	}
+	if keys, _, err := n.dialogKeys(ctx, "s1", rev, "2"); err != nil || strings.Join(keys, ",") != "2" {
+		t.Fatalf("the answer: %v %v (reads %v)", keys, err, f.readLines)
+	}
+	// Fewer rows fit when the answer comes (a row grew by a few bytes): the dialog is still shown whole, so it is the
+	// same dialog with the same revision.
+	f.plainCutOver = 24
+	if keys, _, err := n.dialogKeys(ctx, "s1", rev, "1"); err != nil || strings.Join(keys, ",") != "1" {
+		t.Fatalf("the answer with fewer rows: %v %v (reads %v)", keys, err, f.readLines)
+	}
+	f.screens[0] = cjk + screenFixture(t, "claude-2.1.312-empty-162.txt")
+	if _, _, err := n.dialogKeys(ctx, "s1", rev, "2"); err == nil {
+		t.Fatal("answered into a screen that moved on")
+	} else if code, _ := refusalOf(t, err); code != screen.PromptChanged {
+		t.Fatal(code)
+	}
+	// A dialog taller than every window that fits (a permission whose title and command are above its last 12 rows):
+	// no card is made from part of it, and an answer presses nothing, since another command could end the same way.
+	danger := screenFixture(t, "claude-2.1.316-danger-rm-120.txt")
+	g := &fakePane{screens: []string{cjk + danger}, plainCutOver: 12}
+	m := &Node{hosts: herdrHosts(g.serve(t)), agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}}
+	if text, _, err := m.screen(ctx, "s1", screen.DialogLines, "", false); err == nil {
+		t.Fatalf("a card's read of a cut permission: %q", text)
+	}
+	keys, _, err := m.dialogKeys(ctx, "s1", dialogRev(danger, screen.DialogLines, "", ""), "1")
+	if code, _ := refusalOf(t, err); code != notDelivered || len(keys) > 0 || len(g.keys) > 0 || !strings.Contains(err.Error(), "在电脑上回答") {
+		t.Fatalf("answered a cut permission: %v %v, keys pressed %v", keys, err, g.keys)
+	}
+	// A review page too long to read after the last answer: not submitted unseen, and the answer says so.
+	review := strings.Replace(screenFixture(t, "claude-2.1.316-multiselect-review-100.txt"), "\nReady to submit",
+		strings.Repeat("\n ● 另一道题\n   → 一个回答", 4)+"\n\nReady to submit", 1) // taller than the 12 rows that fit
+	r := &fakePane{screens: []string{cjk + review}, plainCutOver: 12}
+	if err := (&Node{hosts: herdrHosts(r.serve(t))}).submitReview(ctx, "w1:p1"); err == nil || !strings.Contains(err.Error(), "Submit answers") || len(r.keys) > 0 {
+		t.Fatalf("a cut review page: %v, keys %v", err, r.keys)
+	}
+}
+
 // #5538: the card is made from the screen at one width and answered after the pane was resized (a phone or the web
 // viewing it): the same dialog, so the answer goes in. A dialog that really changed is still refused, with both
 // revisions in the refusal. An older hub's card carries the old formula, which the node still takes.

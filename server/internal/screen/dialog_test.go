@@ -421,3 +421,27 @@ func TestRevisionIgnoresWrapAndColor(t *testing.T) {
 		}
 	}
 }
+
+// #6318: a read of only the screen's bottom rows is taken for a dialog only when it shows the dialog from its opening
+// rule; one cut by the read (a permission's command above it) is not whole.
+func TestDialogWhole(t *testing.T) {
+	bottom := func(s string, n int) string {
+		rows := strings.Split(strings.TrimRight(s, "\n"), "\n")
+		return strings.Join(rows[max(0, len(rows)-n):], "\n")
+	}
+	for _, name := range []string{"claude-2.1.316-danger-rm-120.txt", "claude-2.1.318-questions-wrapped-100.txt", "claude-2.1.312-trust-162.txt"} {
+		s := fixture(t, name)
+		if !DialogWhole(s) {
+			t.Errorf("%s: the whole screen is not whole", name)
+		}
+	}
+	if DialogWhole(bottom(fixture(t, "claude-2.1.316-danger-rm-120.txt"), 12)) {
+		t.Error("the permission without its title and command is whole")
+	}
+	if DialogWhole(bottom(fixture(t, "claude-2.1.318-questions-wrapped-100.txt"), 9)) {
+		t.Error("the question without its top is whole")
+	}
+	if DialogWhole(fixture(t, "claude-2.1.312-empty-162.txt")) {
+		t.Error("no dialog is whole")
+	}
+}

@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -103,8 +104,10 @@ func (n *Node) dialogMulti(ctx context.Context, id, rev string, want []string, t
 	if err != nil {
 		return err
 	}
+	var cut bool // the last read saw a dialog it could not read all of (errDialogCut)
 	read := func() *screen.Dialog {
-		s, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+		s, err := n.dialogScreen(ctx, pane)
+		cut = errors.Is(err, errDialogCut)
 		if err != nil {
 			n.logf("session %s: reading pane %s for its dialog: %v", id, pane, err) // else it looks like no dialog
 			return nil
@@ -113,6 +116,9 @@ func (n *Node) dialogMulti(ctx context.Context, id, rev string, want []string, t
 	}
 	text = strings.Join(strings.Fields(text), " ") // one line: a newline would be enter
 	d := read()
+	if cut {
+		return refusal(notDelivered, dialogCutMessage, nil)
+	}
 	if !sameDialog(d, rev) || !d.Multi {
 		return n.promptChanged(id, pane, rev, d)
 	}
@@ -169,7 +175,10 @@ func (n *Node) dialogMulti(ctx context.Context, id, rev string, want []string, t
 // One with a question left unanswered stays for its own card (it says which).
 func (n *Node) submitReview(ctx context.Context, pane string) error {
 	time.Sleep(dialogStep)
-	s, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+	s, err := n.dialogScreen(ctx, pane)
+	if errors.Is(err, errDialogCut) { // a review page too long to read: not submitted unseen
+		return errors.New("答案都选好了，但终端上的确认页太长，读不全，没有替你提交：在电脑上按「Submit answers」")
+	}
 	if err != nil {
 		return nil
 	}
@@ -185,7 +194,7 @@ func (n *Node) submitReview(ctx context.Context, pane string) error {
 		return err
 	}
 	time.Sleep(dialogStep)
-	if s, err = n.readPane(ctx, pane, "visible", screen.DialogLines); err == nil {
+	if s, err = n.dialogScreen(ctx, pane); err == nil {
 		if d := screen.ParseDialog(s); d != nil && d.Review {
 			return fmt.Errorf("按了「Submit answers」，确认页还在：在电脑上看看")
 		}

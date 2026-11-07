@@ -842,6 +842,10 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string, 
 		text, err := n.readPaneANSI(ctx, a.PaneID, source, lines)
 		return text, a.AgentStatus, err
 	}
+	if lines == screen.DialogLines && source == "visible" { // a screen card's read: what the answer will read too (#6318)
+		text, err := n.dialogScreen(ctx, a.PaneID)
+		return text, a.AgentStatus, err
+	}
 	text, err := n.readPane(ctx, a.PaneID, source, lines)
 	return text, a.AgentStatus, err
 }

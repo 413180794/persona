@@ -140,6 +140,35 @@ func (n *Node) bottomRead(ctx context.Context, pane string) (s string, colored, 
 	return "", false, false
 }
 
+// dialogScreen is the plain screen a dialog is read from, screen.DialogLines rows: the same read for its card
+// (session.screen) and for its answer (dialogKeys, dialogMulti), so both see the same rows and agree on its revision.
+// When herdr cannot send that many rows whole (#6318: a wide pane full of CJK text is past 8 KB in 30 plain rows), it
+// is the most bottom rows that fit (30, 24, 16, 12), but only with any dialog in them shown whole, from the rule that
+// opens it (screen.DialogWhole): then it is the dialog a whole screen shows, its revision the same whatever rows fit.
+// A dialog cut by those rows is unreadable (herdr.ErrTruncated) as before: its card would show part of it, a
+// permission's command cut, and its revision would cover only what is shown.
+func (n *Node) dialogScreen(ctx context.Context, pane string) (string, error) {
+	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
+	for _, lines := range []int{30, 24, 16, 12} {
+		if !errors.Is(err, herdr.ErrTruncated) {
+			break
+		}
+		if text, err = n.readPane(ctx, pane, "visible", lines); err == nil {
+			if (screen.Choosing(text) || screen.ParseDialog(text) != nil) && !screen.DialogWhole(text) {
+				return "", errDialogCut
+			}
+		}
+	}
+	return text, err
+}
+
+// errDialogCut: dialogScreen sees a dialog at the bottom of the screen but cannot read all of it (#6318). It is
+// herdr.ErrTruncated to callers that only ask whether the screen could be read; the answers say what to do.
+var errDialogCut = fmt.Errorf("the dialog is taller than the rows herdr can send: %w", herdr.ErrTruncated)
+
+// dialogCutMessage is the refusal for an answer to a dialog dialogScreen cannot read all of: nothing was pressed.
+const dialogCutMessage = "终端上的这个对话框太长，读不全（这台电脑的终端一次只能读回 8 KB），这次什么都没按：在电脑上回答。"
+
 // screenRows are a read's rows (\r\n or \n ends a row).
 func screenRows(s string) []string {
 	return strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")

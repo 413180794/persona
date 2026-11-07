@@ -63,6 +63,41 @@ func ParseDialog(plain string) *Dialog {
 	return unnumbered(lines)
 }
 
+// DialogWhole says whether the dialog at the bottom of plain is shown from the rule that opens it: what a read of only
+// the screen's bottom rows needs before it is taken for that dialog (#6318). A dialog taller than the read starts at
+// the read's top (describe finds no rule), so its card would show part of it, a permission's command cut, and its
+// revision would cover only those rows: another command with the same last rows would pass for it. The row it is read
+// from is its question's first, else its first option's.
+func DialogWhole(plain string) bool {
+	d := ParseDialog(plain)
+	if d == nil {
+		return false
+	}
+	anchor := d.Question
+	if anchor == "" && len(d.Options) > 0 {
+		anchor = d.Options[0].Label
+	}
+	if r := []rune(strings.TrimSpace(anchor)); len(r) > 12 {
+		anchor = string(r[:12])
+	}
+	if strings.TrimSpace(anchor) == "" {
+		return false
+	}
+	lines := strings.Split(Plain(plain), "\n")
+	for q := len(lines) - 1; q >= 0; q-- {
+		if !strings.Contains(strings.ReplaceAll(lines[q], "\u00a0", " "), strings.TrimSpace(anchor)) {
+			continue
+		}
+		for i := q - 1; i >= 0; i-- {
+			if isRule(lines[i]) {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
 // rewindList reads Claude Code's /rewind list as a dialog: one option per prompt row, the row under it ("notes.txt
 // +1 -1", "No code changes") its detail (#4306). unnumbered took that row for an option of its own, so the card had
 // an extra button and every button below it moved the cursor one prompt too far. Enter on a prompt only opens the
