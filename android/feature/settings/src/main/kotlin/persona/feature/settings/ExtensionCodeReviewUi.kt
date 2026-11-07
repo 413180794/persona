@@ -410,6 +410,7 @@ internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle
     val ws = review?.whitespace == true
     val rowsOf = remember(hunks, ws) { hunks.map { h -> ExtensionCodeText.rows(h).let { if (ws) ExtensionCodeReview.ignoreWhitespace(it) else it } } }
     val spansOf = remember(rowsOf) { rowsOf.map(ExtensionCodeReview::wordSpans) }
+    val allWhitespace = remember(hunks, ws) { ws && ExtensionCodeReview.onlyWhitespace(hunks) }
     val language = ExtensionCodeText.language(item.language, path)
     val lit = remember(hunks, language) {
         hunks.map { h -> ExtensionCodeText.sides(h).let { (o, n) -> ExtensionCodeText.highlight(o, language) to ExtensionCodeText.highlight(n, language) } }
@@ -514,7 +515,7 @@ internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle
                     else -> R.string.settings_ext_review_folded_viewed }) + " · " + stringResource(R.string.settings_ext_review_show_diff),
                     Modifier.fillMaxWidth().clickable { open = true }.padding(Tokens.Space.m), style = type.caption, color = palette.ink3, maxLines = 1, textAlign = TextAlign.Center)
             }
-            open && ws && ExtensionCodeReview.onlyWhitespace(hunks) -> { JDivider(); Text(stringResource(R.string.settings_ext_review_whitespace_only),
+            open && allWhitespace -> { JDivider(); Text(stringResource(R.string.settings_ext_review_whitespace_only),
                 Modifier.fillMaxWidth().padding(Tokens.Space.l), style = type.caption, color = palette.ink3) }
             open -> {
                 JDivider()

@@ -64,6 +64,7 @@ internal object ExtensionCodeReview {
     private val Word = Regex("[\\p{L}\\p{N}_]+|\\s+|[^\\s\\p{L}\\p{N}_]")
     private const val WordsMost = 500
     private const val CharsMost = 1000
+    private const val PairsMost = 1_000_000
     private const val AlikeLeast = 0.4
 
     /** A line as words: runs of letters, digits and _, runs of whitespace, and each other character on its own. */
@@ -173,8 +174,7 @@ internal object ExtensionCodeReview {
             while (i < rows.size && rows[i].kind == DiffKind.Add) adds += rows[i++]
             val x = dels.map { squeeze(it.text) }
             val y = adds.map { squeeze(it.text) }
-            val lcs = Array(x.size + 1) { IntArray(y.size + 1) }
-            for (a in x.size - 1 downTo 0) for (b in y.size - 1 downTo 0) lcs[a][b] = if (x[a] == y[b]) lcs[a + 1][b + 1] + 1 else maxOf(lcs[a + 1][b], lcs[a][b + 1])
+            val delFirst = deletionFirst(x, y)
             var a = 0
             var b = 0
             val pendD = mutableListOf<DiffRow>()
@@ -183,13 +183,37 @@ internal object ExtensionCodeReview {
             while (a < x.size || b < y.size) {
                 when {
                     a < x.size && b < y.size && x[a] == y[b] -> { flush(); out += DiffRow(DiffKind.Context, dels[a].old, adds[b].new, adds[b].text); a++; b++ }
-                    b >= y.size || (a < x.size && lcs[a + 1][b] >= lcs[a][b + 1]) -> pendD += dels[a++]
+                    b >= y.size || (a < x.size && delFirst(a, b)) -> pendD += dels[a++]
                     else -> pendA += adds[b++]
                 }
             }
             flush()
         }
         return out
+    }
+
+    /**
+     * Walking deleted lines [x] and added lines [y] forward, whether deletion a goes before addition b where they differ:
+     * by the longest common sequence, or for a run with too many pairs for its table (a diff may have 20,000 lines) by
+     * which of the two comes again sooner on the other side.
+     */
+    private fun deletionFirst(x: List<String>, y: List<String>): (Int, Int) -> Boolean {
+        if (x.size.toLong() * y.size <= PairsMost) {
+            val lcs = Array(x.size + 1) { IntArray(y.size + 1) }
+            for (a in x.size - 1 downTo 0) for (b in y.size - 1 downTo 0) lcs[a][b] = if (x[a] == y[b]) lcs[a + 1][b + 1] + 1 else maxOf(lcs[a + 1][b], lcs[a][b + 1])
+            return { a, b -> lcs[a + 1][b] >= lcs[a][b + 1] }
+        }
+        val inX = HashMap<String, ArrayDeque<Int>>()
+        val inY = HashMap<String, ArrayDeque<Int>>()
+        x.forEachIndexed { i, s -> inX.getOrPut(s) { ArrayDeque() }.addLast(i) }
+        y.forEachIndexed { j, s -> inY.getOrPut(s) { ArrayDeque() }.addLast(j) }
+        // how far on from [from] a line comes next (Int.MAX_VALUE: never); the walk only goes forward, so places behind go
+        fun HashMap<String, ArrayDeque<Int>>.ahead(s: String, from: Int): Int {
+            val q = get(s) ?: return Int.MAX_VALUE
+            while (q.isNotEmpty() && q.first() < from) q.removeFirst()
+            return q.firstOrNull()?.minus(from) ?: Int.MAX_VALUE
+        }
+        return { a, b -> inX.ahead(y[b], a) <= inY.ahead(x[a], b) }
     }
 
     /** Whether a diff is all whitespace once whitespace is ignored. */

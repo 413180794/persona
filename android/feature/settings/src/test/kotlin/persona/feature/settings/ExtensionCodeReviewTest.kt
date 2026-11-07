@@ -5,6 +5,7 @@ import org.junit.Test
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.*
 import java.io.File
+import java.lang.management.ManagementFactory
 
 // UI version 5's code review (#3136): the same cases as the web's lib/code-review.test.ts, and what the app reads from
 // the component showcase page code-review-v5.
@@ -58,6 +59,30 @@ class ExtensionCodeReviewTest {
         assertEquals(12, out[2].new)
         assertTrue(r.onlyWhitespace(listOf(hunk(1, 1, "-a  b", "+a b"))))
         assertFalse(r.onlyWhitespace(listOf(hunk(1, 1, "-a", "+b"))))
+    }
+
+    // #5704: a whole file put in another layout (as many lines as a diff may have) is paired without a table of every pair
+    // (10,000 × 10,000 ints, some 400 MB: more than a phone's heap)
+    @Test(timeout = 5000) fun ignoresWhitespaceInABigRun() {
+        val n = 10_000
+        val lines = (0 until n).map { "-val v$it = f($it)" } + (0 until n).map { "+    val v$it  =  f( $it )" }
+        val changed = lines.mapIndexed { i, l -> when (i) { 5000 -> "-gone()"; n + 5000 -> "+came()"; else -> l } }
+        val rows = ExtensionCodeText.rows(hunk(1, 1, *changed.toTypedArray()))
+        val mx = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        val before = mx.currentThreadAllocatedBytes
+        assertTrue(r.onlyWhitespace(listOf(hunk(1, 1, *lines.toTypedArray()))))
+        val out = r.ignoreWhitespace(rows)
+        val mb = (mx.currentThreadAllocatedBytes - before) shr 20
+        assertTrue("allocated $mb MB", mb < 64)
+        assertEquals(n + 1, out.size)
+        assertEquals(List(5000) { DiffKind.Context } + DiffKind.Del + DiffKind.Add + List(n - 5001) { DiffKind.Context }, out.map { it.kind })
+        assertEquals(DiffRow(DiffKind.Context, 1, 1, "    val v0  =  f( 0 )"), out[0])
+        assertEquals(DiffRow(DiffKind.Del, 5001, null, "gone()") to DiffRow(DiffKind.Add, null, 5001, "came()"), out[5000] to out[5001])
+        assertEquals(DiffRow(DiffKind.Context, n, n, "    val v${n - 1}  =  f( ${n - 1} )"), out.last())
+        // a line taken out whose like comes again further on stays alone, not pairing past the lines between
+        val braces = (0 until n).map { if (it % 10 == 9) "}" else "x$it" }
+        val extra = braces.take(101).map { "-$it" } + "-}" + braces.drop(101).map { "-$it" } + braces.map { "+  $it" }
+        assertEquals(listOf(DiffRow(DiffKind.Del, 102, null, "}")), r.ignoreWhitespace(ExtensionCodeText.rows(hunk(1, 1, *extra.toTypedArray()))).filter { it.kind != DiffKind.Context })
     }
 
     @Test fun knowsGeneratedFiles() {
