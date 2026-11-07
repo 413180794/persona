@@ -2693,6 +2693,20 @@ if MOCK_TASKS:
         _feed("feed_m8c", 7.9, "receipt", "todo_task_align",
               {"title": "设置页按钮对齐", "state": "failed", "summary": "没开起来：rpc: connection closed"}),
         _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
+        # A morning routine's fixed part (kind brief, docs/protocol.md): what waits, the last 12 hours, what is to be verified,
+        # what is in progress. The Accept button posts to /api/v1/todos/{id}/accept (accept_brief below).
+        _feed("feed_brief", 1.5, "brief", "morning", {
+            "title": "早报", "at": ago(minutes=1.6), "hours": 12,
+            "waiting": [{"id": "ix_mock_1", "title": "Mock 用协议注入还是保留单例？", "from": "来自 Agent「网络层测试」", "link": "http://127.0.0.1/s/macbook/mock", "waited_s": 4800, "nudged": True},
+                        {"id": "ix_mock_2", "title": "需要你批准", "from": "来自 Persona", "waited_s": 300}],
+            "failed": [{"kind": "task", "id": "todo_task_align", "title": "设置页按钮对齐", "at": ago(hours=3), "why": "rpc: connection closed"},
+                       {"kind": "routine", "id": "patrol", "ref": "run_mock", "title": "巡检", "at": ago(hours=5), "why": "Persona 停机，错过了时间", "skipped": True}],
+            "failed_total": 2,
+            "done": [{"id": "todo_task_blog", "title": "博客迁移到 Astro", "at": ago(hours=2)}], "done_total": 1,
+            "accept": [{"id": "todo_task_release", "title": "整理发布说明", "detail": "发布说明写好了，放在 docs/release-notes.md", "from": "来自 Agent「发布」",
+                        "waited_s": 7 * 3600, "asked_at": ago(hours=7)}],
+            "progress": [{"id": "todo_task_widget", "title": "小组件横屏崩溃", "stage": "develop"}, {"id": "todo_task_tests", "title": "补齐网络层的单元测试"}],
+            "progress_total": 2}),
     ]
     # MOCK_TASKS_REPORTS=1: supervised tasks whose agents report to Persona (#5112): the widget task's latest progress
     # on its card, the tests task's question and Persona cutting in on it in the feed; reviews (#3124): the widget fix
@@ -2814,6 +2828,7 @@ if MOCK_TASKS:
 
 RETRY_TASK_STARTED = "a1f3c2d4-0000-4000-8000-0000000000a1"
 RETRY_MODE = {"mode": os.environ.get("MOCK_RETRY", "")}
+BRIEF_ACCEPTED = set()  # the tasks verified from a brief item's Accept button (reset with the mock hub)
 
 
 def retry_task(h, tid):
@@ -2921,6 +2936,15 @@ def tasks_area(h, method, p, raw):
             return True
         plan["state"] = "dismissed" if p.endswith("/dismiss") else "started"
         h.send_json({"plan": plan})
+        return True
+    if method == "POST" and p.startswith("/api/v1/todos/") and p.endswith("/accept"):
+        # The Accept button of a brief item: the first press verifies the task, a second one is a round that is over (409).
+        tid = p.split("/")[4]
+        if tid in BRIEF_ACCEPTED:
+            h.send_json({"error": "已经处理过了"}, 409)
+        else:
+            BRIEF_ACCEPTED.add(tid)
+            h.send_json({"ok": True})
         return True
     if method == "POST" and p.startswith("/api/v1/todos/") and p.endswith("/retry"):
         retry_task(h, p.split("/")[4])
@@ -5384,59 +5408,7 @@ if os.environ.get("MOCK_LARK_OLD_DISPLAY"):
 
 BRAVE_CLIMB_ALPHABET = "[removed]"
 def brave_climb(text):
-    """The Lark gateway's "Brave Climb" words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
-    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
-    while True:
-        n, d = divmod(n, 34)
-        out = BRAVE_CLIMB_ALPHABET[d] + out
-        if n == 0:
-            return "**字" + out + "**"
-
-# MOCK_LARK_BRAVE_CLIMB=1 (#882): the switch is on and the design review (f2) has "Brave Climb" words: a whole message, one split over
-# two runs of rich text, words inside a sentence, a quote of one, and the older four-character encoding; its summary in
-# the list is words too.
-if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
-    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
-    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
-    words = brave_climb("标签栏改粗一号")
-    split = _lm("211", "Lucy Wang", words, mins=39)
-    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
-    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
-    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
-    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
-    reply = _lm("214", "我", "好的", mine=True, mins=36)
-    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
-    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
-    LARK_CHATS[0]["preview"] = whole["text"]
-if os.environ.get("MOCK_LARK_TRAINER"):
-    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
-    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
-    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
-    missing.update(recalled=True, retained=False)
-    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
-    edited.update(edited=True, edit_history=[
-        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
-        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
-            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
-    ])
-    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
-    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
-    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
-    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
-    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
-    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
-    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
-
-# The weekend hiking group chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
-# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
-# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
-# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose Lark gateway
-# lost its Feishu session.
-LARK_LOGGED_OUT = "lark: 飞书网关未登录飞书 (AUTH_SESSION_EXPIRED)"
-_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
-                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
-# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+    """The Lark gateway''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}

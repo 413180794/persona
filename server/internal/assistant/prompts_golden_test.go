@@ -95,6 +95,24 @@ func TestGoldenDefaultRoutines(t *testing.T) {
 	}
 }
 
+// The facts a routine with facts is given, and the task prompt they sit in (above the routine's own prompt).
+func TestGoldenBriefFacts(t *testing.T) {
+	facts := prompts.RenderBriefFacts(prompts.BriefFacts{Card: true, Hours: 12, WaitingTotal: 2, DoneTotal: 3, FailedTotal: 3, AcceptTotal: 1,
+		Waiting: []string{"1. 先发预发还是直接上线？ · 已等 1 小时 20 分 · 来自 Agent「登录修复」", "2. 需要你批准 · 已等 5 分钟 · 来自 Persona"},
+		Done:    []string{"整理周报", "迁移旧日志", "补测试"},
+		Failed: []prompts.BriefFailed{{Title: "修登录崩溃", Why: "machine offline"}, {Title: "巡检", Why: "API Error: 503", Run: true},
+			{Title: "值守", Why: "Persona was down", Run: true, Skipped: true}},
+		Accept:        []prompts.BriefAccept{{Line: "1. 请验收：改设置页 · 已等 2 小时 · 来自某个 Agent", Changed: "设置页多了一个开关"}},
+		ProgressTotal: 2, Progress: []prompts.BriefProgress{{Title: "重构设置页", Stage: "develop"}, {Title: "整理文档"}}})
+	golden(t, "routine_facts", facts)
+	golden(t, "routine_facts.unknown", prompts.RenderBriefFacts(prompts.BriefFacts{Hours: 12, WaitingUnknown: true, AcceptTotal: 1,
+		Accept: []prompts.BriefAccept{{Line: "1. 请验收：改设置页 · 已等 2 小时 · 来自某个 Agent"}}}))
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	due := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
+	golden(t, "task_prompt.daily_facts", taskPrompt(Task{Title: "早报", Prompt: prompts.RenderMorningRoutine(), Repeat: repeatDaily, Facts: true, factsText: facts},
+		due, due, loc, false, false, false))
+}
+
 func TestGoldenTodoTitle(t *testing.T) {
 	f := newFakeHub()
 	f.todoTitleReply = "待办改用短标题"

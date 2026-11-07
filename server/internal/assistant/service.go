@@ -86,6 +86,7 @@ type Service struct {
 	noteRate   reportRate        // todo_decisions.go: todo_decision_add
 	adoptMu    sync.Mutex        // agent_control.go: one agent_supervise at a time
 	accept     acceptBook        // acceptance.go
+	brief      briefBook         // briefing.go
 	reporters  reporterBook      // reporters.go
 	sched      schedule          // schedule.go
 	tasks      tasksState        // tasks.go
@@ -144,6 +145,7 @@ func New(o Options) *Service {
 	s.taskRoutes()
 	s.viewActionRoutes()
 	s.todayRoutes()
+	s.briefRoutes()
 	s.todoRoutes()
 	s.agentRoutes()
 	s.workspaceBoardRoutes()

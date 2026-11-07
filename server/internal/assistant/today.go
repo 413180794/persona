@@ -149,11 +149,12 @@ func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedIte
 }
 
 // todayFailures is what did not go through since since (#4124), newest first: the conversation's tasks whose agent did
-// not start, and the scheduled runs that failed or were skipped. It also returns how many there were in all.
+// not start (conversation "*": any conversation's), and the scheduled runs that failed or were skipped. It also returns
+// how many there were in all.
 func (s *Service) todayFailures(ctx context.Context, conversation string, since time.Time, loc *time.Location) ([]todayFailed, int) {
 	var out []todayFailed
 	for _, t := range s.todosOf(ctx, conversation) {
-		if t.Origin != conversation || t.DoneAt == nil || t.StartError == "" || t.DoneAt.Before(since) {
+		if conversation != "*" && t.Origin != conversation || t.DoneAt == nil || t.StartError == "" || t.DoneAt.Before(since) {
 			continue
 		}
 		out = append(out, todayFailed{Kind: "task", ID: t.ID, Title: t.Title, At: t.DoneAt.In(loc),
@@ -178,6 +179,32 @@ func (s *Service) todayFailures(ctx context.Context, conversation string, since 
 		out = out[:todayFailedMax]
 	}
 	return out, total
+}
+
+// todayFinished is the tasks that were closed since since without a failed start, newest first (conversation "*": any
+// conversation's): the finished side of todayFailures, read from the tasks themselves.
+func (s *Service) todayFinished(ctx context.Context, conversation string, since time.Time, loc *time.Location) []todayDone {
+	var out []todayDone
+	for _, t := range s.todosOf(ctx, conversation) {
+		if conversation != "*" && t.Origin != conversation || t.DoneAt == nil || t.StartError != "" || t.DoneAt.Before(since) {
+			continue
+		}
+		out = append(out, todayDone{ID: t.ID, Title: t.Title, At: t.DoneAt.In(loc)})
+	}
+	slices.SortStableFunc(out, func(a, b todayDone) int {
+		if c := b.At.Compare(a.At); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return out
+}
+
+// todayDone is one task closed in the window todayFinished looks at.
+type todayDone struct {
+	ID    string
+	Title string
+	At    time.Time
 }
 
 // ---- kinds that start without asking ----

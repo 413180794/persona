@@ -2,7 +2,7 @@
 // each conversation's feed (what the hub inserted into it), where those go among the chat's lines, the day lines and
 // the quick results. A task is a todo whose `origin` is the conversation; its state is the todo's (lib/todos.ts).
 import { useSyncExternalStore } from "react";
-import { api, enc } from "./api";
+import { api, ApiError, enc } from "./api";
 import { formatDate, t } from "../i18n";
 import { parseAPIError } from "./api-errors";
 import { getState, onHubEvent, putTodo, refreshTodos } from "./store";
@@ -37,7 +37,7 @@ export interface TaskPlan {
   created_at?: string;
 }
 
-export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice";
+export type FeedKind = "plan" | "task" | "answered" | "receipt" | "routed" | "today" | "message" | "view" | "review" | "report" | "notice" | "brief";
 
 export interface FeedItem {
   id: string;
@@ -56,6 +56,71 @@ export interface TodayBody {
   meetings?: { start: string; end: string; title: string }[];
   at_me?: { name: string; unread?: number; preview?: string }[];
   unread?: number;
+}
+
+/** `brief`: the fixed part of a morning or evening run (docs/protocol.md), as the hub worked it out when the run started. */
+export interface BriefRow {
+  /** The card (waiting), the to-do (accept). */
+  id: string;
+  title: string;
+  detail?: string;
+  from?: string;
+  link?: string;
+  waited_s: number;
+  nudged?: boolean;
+  /** accept: when the round's "Please verify" card was asked; the Accept button sends it back. */
+  asked_at?: string;
+}
+
+export interface BriefFailed {
+  kind: "task" | "routine";
+  id: string;
+  title: string;
+  at: string;
+  why?: string;
+  skipped?: boolean;
+}
+
+export interface BriefBody {
+  title: string;
+  at: string;
+  hours: number;
+  waiting_unknown?: boolean;
+  waiting: BriefRow[];
+  failed: BriefFailed[];
+  failed_total: number;
+  done: { id: string; title: string; at: string }[];
+  done_total: number;
+  accept: BriefRow[];
+  progress: { id: string; title: string; stage?: string }[];
+  progress_total: number;
+}
+
+/** A `brief` item's body, every list a list (a hub that left one out, or an item that is not one, gives nothing to draw). */
+export function briefBody(it: FeedItem): BriefBody | undefined {
+  const b = it.kind === "brief" ? it.body : undefined;
+  if (!b || typeof b !== "object") return undefined;
+  const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+  const waiting = list<BriefRow>(b.waiting);
+  const accept = list<BriefRow>(b.accept);
+  const failed = list<BriefFailed>(b.failed);
+  const done = list<BriefBody["done"][number]>(b.done);
+  const progress = list<BriefBody["progress"][number]>(b.progress);
+  const num = (v: unknown, n: number) => (typeof v === "number" ? v : n);
+  return {
+    title: typeof b.title === "string" ? b.title : "",
+    at: typeof b.at === "string" ? b.at : it.at,
+    hours: num(b.hours, 12),
+    waiting_unknown: b.waiting_unknown === true,
+    waiting,
+    failed,
+    failed_total: num(b.failed_total, failed.length),
+    done,
+    done_total: num(b.done_total, done.length),
+    accept,
+    progress,
+    progress_total: num(b.progress_total, progress.length),
+  };
 }
 
 /** A string field of an item's body. */
@@ -313,6 +378,19 @@ export async function retryTask(todo: Todo) {
   } finally {
     set({ busy: { ...st.busy, [key]: false } });
   }
+}
+
+/** The Accept button of a `brief` item's task to verify: "accepted", or "handled" when the hub says that round is over
+ *  (asked again since, or already verified). Any other failure throws. */
+export async function acceptBrief(todoId: string, askedAt: string): Promise<"accepted" | "handled"> {
+  try {
+    await api(`/todos/${enc(todoId)}/accept`, { method: "POST", json: { asked_at: askedAt } });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) return "handled";
+    throw e;
+  }
+  void refreshTodos();
+  return "accepted";
 }
 
 /**

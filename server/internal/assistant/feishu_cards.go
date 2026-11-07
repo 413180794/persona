@@ -846,7 +846,13 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 		return s.answerFromCard(ctx, a, action)
 	case "accept":
 		// The hub checked the owner pressed it; marking a task verified approves nothing.
-		if s.accepted(ctx, a.Str("id"), a.Context.MessageID) {
+		ok := false
+		if at := a.Str("asked_at"); at != "" { // a button of a briefing card: it accepts the round it was asked in (briefing.go)
+			ok = s.acceptedFromBrief(ctx, a.Str("id"), at)
+		} else {
+			ok = s.accepted(ctx, a.Str("id"), a.Context.MessageID)
+		}
+		if ok {
 			return toast("success", i18n.T(l, "assistant-reports.accepted"))
 		}
 		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
@@ -1264,6 +1270,10 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	label := i18n.T(l, "assistant-feishu_cards.main_chat")
 	if !main {
 		label = i18n.T(l, "assistant-feishu_cards.scheduled_task", i18n.Args{"task": task})
+		if run := s.briefClaim(session, asked, sess.TurnError != "" || cutOff(answer)); run != nil { // a routine with facts: one card Persona lays out (briefing.go)
+			s.briefMirror(ctx, machine, session, label, run, answer, turn)
+			return
+		}
 	}
 	// The whole answer, laid out like the bot's own answers (answerCards: header, tables, link buttons, at most
 	// botAnswerCards cards, a note when cut short); where it came from and the button to open it under the last.
@@ -1293,6 +1303,7 @@ type mirrorSend struct {
 	answer string // the turn's answer: a retry goes only while it is still the conversation's last
 	turn   string // the turn's last item: with answer, what tells it from a later turn that answered alike
 	key    string // the answer's key: card i is sent with key + i, the same on every try
+	sent   func() // when set, called once the first card is out
 }
 
 // stillDue: a retry of m may go now: the switch its conversation needs is on, its notify_user did not go to Feishu
@@ -1346,6 +1357,9 @@ func (s *Service) feishuMirrorPost(ctx context.Context, m *mirrorSend, attempt i
 			continue
 		}
 		s.rememberBotThread(mid, m.target, m.label) // a reply to any of them goes to this conversation
+		if i == 0 && m.sent != nil {
+			m.sent()
+		}
 	}
 	if len(missing) > 0 {
 		s.botSay(ctx, missingPiecesNote(m.l, missing))

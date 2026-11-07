@@ -1,0 +1,22 @@
+{
+  "title": "简报",
+  "waiting_head": "等你处理（{n}）",
+  "waiting_unknown": "刚重启，还没读到等你处理的卡片；到 Agent 页看。",
+  "none": "没有。",
+  "past_head": "过去 {hours} 小时：做完 {done} · 没成 {failed}",
+  "accept_head": "待验收（{n}）",
+  "progress_head": "进行中（{n}）",
+  "waited": "已等 {wait}",
+  "nudged": "已催过",
+  "open": "打开",
+  "open_row": "打开：{title}",
+  "accept": "通过",
+  "accept_row": "验收通过：{title}",
+  "accepted": "已验收",
+  "handled": "已经处理过了",
+  "accept_failed": "验收失败：{error}",
+  "more": "还有 {n} 项，到任务页看",
+  "failed_task": "没开起来 · {time}",
+  "failed_run": "运行失败 · {time}",
+  "failed_skipped": "被跳过 · {time}"
+}

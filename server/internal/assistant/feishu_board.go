@@ -261,6 +261,8 @@ type boardRow struct {
 	from     string
 	link     string
 	nudged   bool // the bot nudged under its card in the chat (feishu_nudge.go, #6084)
+	// asked is when the "Please verify" card of a to-do waiting to be verified went out (zero: the row is not one); id is the to-do.
+	asked time.Time
 }
 
 // boardRows are the things waiting, in the order the board shows them: what holds up an Agent first, the longest
@@ -281,7 +283,7 @@ func (s *Service) boardRows(ctx context.Context, l i18n.Lang, web string, now ti
 	for _, a := range s.awaitingAcceptance(ctx) {
 		rows = append(rows, boardRow{waited: boardWaited(now, a.since), id: a.todo,
 			summary: i18n.T(l, "assistant-feishu_cards.board_verify", i18n.Args{"title": clip(oneLine(a.title), 40)}),
-			from:    s.boardFrom(l, a.machine, a.session, ""), link: todoLink(web, a.todo)})
+			from:    s.boardFrom(l, a.machine, a.session, ""), link: todoLink(web, a.todo), asked: a.since})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].blocking != rows[j].blocking {

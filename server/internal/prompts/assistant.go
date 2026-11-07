@@ -288,9 +288,40 @@ type TaskRun struct {
 	Continued bool
 	// PushAsked: the task pushes only what the run sends with notify_user (its push "asked", #2396).
 	PushAsked bool
+	// Facts: the run's facts Persona worked out (RenderBriefFacts), above the task's prompt; "" for a task without them.
+	Facts string
 }
 
 func RenderTaskRun(t TaskRun) string { return render("assistant/task_run", t) }
+
+// BriefFacts are the facts of a morning or evening routine's run, as the model is given them (assistant/routine_facts):
+// the lines are ready to read; the totals count more than the lines when the lists were cut.
+type BriefFacts struct {
+	Hours                                                            int // how far back "done" and "not through" look
+	WaitingTotal, DoneTotal, FailedTotal, AcceptTotal, ProgressTotal int
+	WaitingUnknown                                                   bool // the cards waiting were not read yet: say nothing of whether any waits
+	Card                                                             bool // a Lark card lists them for the user: the model need not
+	Waiting                                                          []string
+	Done                                                             []string
+	Failed                                                           []BriefFailed
+	Accept                                                           []BriefAccept
+	Progress                                                         []BriefProgress
+}
+
+// BriefFailed is one thing that did not go through: a task whose agent did not start, a scheduled run that failed
+// (Run) or was skipped (Skipped).
+type BriefFailed struct {
+	Title, Why   string
+	Run, Skipped bool
+}
+
+// BriefAccept is a task waiting to be verified, with what it changed in the words of its "Please verify" card.
+type BriefAccept struct{ Line, Changed string }
+
+// BriefProgress is a task being worked on and its stage ("plan", "develop", "review", "merge", "deploy", "verify"; "" not known).
+type BriefProgress struct{ Title, Stage string }
+
+func RenderBriefFacts(b BriefFacts) string { return render("assistant/routine_facts", b) }
 
 // RenderMorningRoutine and RenderEveningRoutine are the default daily tasks' prompts.
 func RenderMorningRoutine() string { return render("assistant/routine_morning", nil) }
@@ -300,10 +331,10 @@ func RenderEveningRoutine() string { return render("assistant/routine_evening", 
 // saved one unchanged gets the current default (assistant: upgradeDefaultRoutines). Never edited: each is what a hub
 // may hold byte for byte.
 func FormerMorningRoutines() []string {
-	return []string{render("assistant/routine_morning_former1", nil), render("assistant/routine_morning_former2", nil)}
+	return []string{render("assistant/routine_morning_former1", nil), render("assistant/routine_morning_former2", nil), render("assistant/routine_morning_former3", nil)}
 }
 func FormerEveningRoutines() []string {
-	return []string{render("assistant/routine_evening_former1", nil)}
+	return []string{render("assistant/routine_evening_former1", nil), render("assistant/routine_evening_former2", nil)}
 }
 
 // RenderLostTasks tells an assistant conversation that a restart stopped its background tasks (assistant/lost_tasks).

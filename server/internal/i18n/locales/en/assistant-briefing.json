@@ -1,0 +1,20 @@
+{
+  "head_waiting": "Waiting for you ({n})",
+  "waiting_unknown": "Cards waiting for you were not read yet (Persona has just started); open the app to see them.",
+  "head_past": "Last {hours} hours: {done} done · {failed} not through",
+  "head_accept": "To verify ({n})",
+  "head_progress": "In progress ({n})",
+  "none": "Nothing.",
+  "done_line": "✅ {title} · {time}",
+  "failed_task": "⚠️ {title} · did not start · {time}",
+  "failed_run": "⚠️ {title} · run failed · {time}",
+  "failed_skipped": "⏭ {title} · skipped · {time}",
+  "answer_clipped": "Only the beginning of the summary; the rest is in the app.",
+  "note": "Worked out at {time}",
+  "count_waiting": "waiting for you {n}",
+  "count_failed": "not through {n}",
+  "count_done": "done {n}",
+  "count_accept": "to verify {n}",
+  "count_none": "nothing needs you",
+  "count_sep": " · "
+}

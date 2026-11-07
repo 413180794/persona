@@ -242,6 +242,9 @@ func (s *Service) acceptAskLocked(id string) *acceptAsk {
 	b := &s.accept
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if !s.loadAcceptLocked(context.Background()) { // after a restart nothing may have read them yet (a button of an old briefing)
+		return nil
+	}
 	return b.asks[id]
 }
 
@@ -377,7 +380,7 @@ func (s *Service) remindAcceptance(now time.Time) {
 	loc := s.location(ctx)
 	local := now.In(loc)
 	hh, mm := s.briefingClock(ctx)
-	if local.Hour()*60+local.Minute() < hh*60+mm {
+	if local.Hour()*60+local.Minute() < hh*60+mm+s.briefingGrace(ctx, local, hh*60+mm) {
 		return
 	}
 	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)

@@ -292,6 +292,13 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	}
 	place := s.pushPlace(machine, sess)
 	head, text := doneAlert(s.lang(context.Background()), sess)
+	// A routine with facts says the counts it worked out (briefing.go) when it ended normally and asks nothing: a question
+	// is what the owner acts on, and a health conversation says only that there is news.
+	if !strings.HasPrefix(head, "⚠️") && !strings.HasPrefix(head, "⏳") && !sess.AwaitsReply && spaceOf(sess) != SpaceHealth {
+		if counts := s.briefPush(id, s.lang(context.Background()), report); counts != "" {
+			text = counts
+		}
+	}
 	s.deliver(Notification{Kind: assistantwire.NotifyDone, DeviceID: machine, Subtitle: place, SessionID: id, Title: head,
 		Body: text, TookMS: took.Milliseconds(), LongMS: long.Milliseconds()})
 	// The same finished turn's one Feishu card (#4674); the sender re-checks the pushes switch and the conversations

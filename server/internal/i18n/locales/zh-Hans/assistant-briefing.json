@@ -1,0 +1,20 @@
+{
+  "head_waiting": "等你处理（{n}）",
+  "waiting_unknown": "刚重启，还没读到等你处理的卡片；到 App 里看。",
+  "head_past": "过去 {hours} 小时：做完 {done} · 没成 {failed}",
+  "head_accept": "待验收（{n}）",
+  "head_progress": "进行中（{n}）",
+  "none": "没有。",
+  "done_line": "✅ {title} · {time}",
+  "failed_task": "⚠️ {title} · 没开起来 · {time}",
+  "failed_run": "⚠️ {title} · 运行失败 · {time}",
+  "failed_skipped": "⏭ {title} · 被跳过 · {time}",
+  "answer_clipped": "总述只显示了开头，其余在 App 里。",
+  "note": "{time} 算出",
+  "count_waiting": "等你 {n}",
+  "count_failed": "没成 {n}",
+  "count_done": "做完 {n}",
+  "count_accept": "待验收 {n}",
+  "count_none": "没有要你处理的事",
+  "count_sep": " · "
+}

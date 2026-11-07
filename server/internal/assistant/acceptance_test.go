@@ -171,6 +171,7 @@ func TestUnacceptedInTheMorningBriefing(t *testing.T) {
 	for i := range sc.tasks {
 		if sc.tasks[i].ID == "morning" {
 			sc.tasks[i].Time, sc.tasks[i].Enabled = "08:30", true
+			sc.tasks[i].Facts = false // a briefing with facts waits an hour more for itself (briefing_card_test.go)
 		}
 	}
 	sc.mu.Unlock()

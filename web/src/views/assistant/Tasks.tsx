@@ -47,6 +47,7 @@ import { StatusMark } from "../../ui/StatusMark";
 import { useClamped } from "../../ui/use-clamped";
 import { Icon, type IconName } from "../../ui/icons";
 import { ReportLine, ReviewBadge, ReviewLine } from "./Supervision";
+import { BriefCard } from "./Brief";
 import { progressLine } from "../../lib/supervision";
 import { planLabel, planLine, planShown } from "../../lib/plan";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
@@ -584,6 +585,8 @@ export const FeedLineView = memo(function FeedLineView({ item }: { item: FeedIte
       );
     case "today":
       return <TodayCard body={item.body as unknown as TodayBody} conversation={item.conversation} />;
+    case "brief":
+      return <BriefCard item={item} />;
     case "message":
       return item.ref && !isLater ? <MessageCard item={item} /> : null;
     case "notice": {

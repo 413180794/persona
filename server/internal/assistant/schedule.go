@@ -52,6 +52,13 @@ type Task struct {
 	// pushes itself (notify_user). Set where the request has it; a client that leaves it out keeps it (PUT, the old
 	// app's routines PUT, the tools without push).
 	Push string `json:"push,omitempty"`
+	// Facts: the run's fixed part is worked out by Persona (briefing.go): what waits for the owner, what happened in the last
+	// 12 hours and what is to be verified, listed in one Lark card and pushed as counts, while the model writes only a
+	// sentence or two on top. On for the default morning and evening routines (a hub set up before gets it with their
+	// current prompt, upgradeDefaultRoutines); an app that leaves it out of a change keeps it.
+	Facts bool `json:"facts,omitempty"`
+	// factsText is the run's facts as the model is given them (briefing.go); set on the copy a run is made from, never stored.
+	factsText string
 	// The conversation it came from (on MachineID), runs go into it; empty = the task's own conversation.
 	MachineID string `json:"machine_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
@@ -161,6 +168,7 @@ type Routine struct {
 	LastSessionID string    `json:"last_session_id,omitempty"`
 	LastStatus    string    `json:"last_status,omitempty"`
 	LastError     string    `json:"last_error,omitempty"`
+	Facts         bool      `json:"facts,omitempty"`
 }
 
 type Followup struct {
@@ -233,8 +241,8 @@ type schedule struct {
 func defaultRoutines(l i18n.Lang) []Routine {
 	weekdays := []int{1, 2, 3, 4, 5}
 	return []Routine{
-		{ID: "morning", Title: i18n.T(l, "assistant-schedule.morning"), Time: "09:00", Weekdays: weekdays, Enabled: true, Prompt: prompts.RenderMorningRoutine()},
-		{ID: "evening", Title: i18n.T(l, "assistant-schedule.evening"), Time: "21:30", Weekdays: weekdays, Enabled: false, Prompt: prompts.RenderEveningRoutine()},
+		{ID: "morning", Title: i18n.T(l, "assistant-schedule.morning"), Time: "09:00", Weekdays: weekdays, Enabled: true, Prompt: prompts.RenderMorningRoutine(), Facts: true},
+		{ID: "evening", Title: i18n.T(l, "assistant-schedule.evening"), Time: "21:30", Weekdays: weekdays, Enabled: false, Prompt: prompts.RenderEveningRoutine(), Facts: true},
 	}
 }
 
@@ -244,7 +252,7 @@ func tasksFrom(routines []Routine, followups []Followup) []Task {
 	for _, r := range routines {
 		out = append(out, Task{ID: r.ID, Title: r.Title, Prompt: r.Prompt, Repeat: repeatDaily, Time: r.Time, Weekdays: r.Weekdays,
 			Enabled: r.Enabled, CreatedBy: r.CreatedBy, LastRun: r.LastRun, LastSessionID: r.LastSessionID, LastStatus: r.LastStatus,
-			LastError: r.LastError})
+			LastError: r.LastError, Facts: r.Facts})
 	}
 	for _, f := range followups {
 		out = append(out, Task{ID: f.ID, Title: f.Title, Prompt: stripScheduleHeader(f.Prompt), Repeat: repeatOnce, At: f.At, Enabled: true,
@@ -321,8 +329,9 @@ func (s *Service) loadSchedule(ctx context.Context) *schedule {
 }
 
 // upgradeDefaultRoutines gives the default daily tasks (morning, evening) the current default prompt when what they
-// hold is byte for byte an earlier default: a hub set up before kept the old one for good. A prompt the user (or the
-// assistant) changed in any way is left alone.
+// hold is byte for byte an earlier default: a hub set up before kept the old one for good, and with it the task's facts
+// (the current default prompt writes only a summary on top of them). A prompt the user (or the assistant) changed in any
+// way is left alone, and so is the task's facts setting.
 func upgradeDefaultRoutines(tasks []Task) bool {
 	changed := false
 	for i := range tasks {
@@ -338,7 +347,7 @@ func upgradeDefaultRoutines(tasks []Task) bool {
 			continue
 		}
 		if t.Prompt != cur && slices.Contains(former, t.Prompt) {
-			t.Prompt, changed = cur, true
+			t.Prompt, t.Facts, changed = cur, true, true
 		}
 	}
 	return changed
@@ -1191,6 +1200,9 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 			return proto.Session{}, s.skipRun(run, err)
 		}
 	}
+	if t.Facts {
+		t.factsText = s.briefStart(ctx, t, time.Now()) // the run's facts, worked out once (briefing.go)
+	}
 	if t.SessionID != "" {
 		if m, ok := s.device(ctx, t.MachineID); ok {
 			// A follow-up the assistant scheduled for itself is a turn of that conversation: it keeps the
@@ -1394,6 +1406,9 @@ func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
 	s.sched.mu.Lock()
 	delete(s.sched.waitTold, t.ID) // it runs again: a later wait on the user is news again
 	s.sched.mu.Unlock()
+	if t.Facts {
+		s.briefSent(t.ID, run.SessionID, run.Retried)
+	}
 	if !t.pushesOnlyAsked() {
 		s.noteReportTurn(run.SessionID) // its answer is pushed however quick it was (#3438)
 	}
@@ -1745,7 +1760,7 @@ func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool
 // runs are above instead. The task's prompt is always there: it may have been edited, or compacted away.
 func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb, continued bool) string {
 	r := prompts.TaskRun{Label: t.label(), Once: t.Repeat == repeatOnce, Interval: t.Repeat == repeatInterval, Due: due.In(loc),
-		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, Continued: continued, PushAsked: t.pushesOnlyAsked()}
+		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, Continued: continued, PushAsked: t.pushesOnlyAsked(), Facts: t.factsText}
 	if r.Interval {
 		r.Every = everyText(t.EveryMinutes)
 	}
@@ -1937,6 +1952,13 @@ func (s *Service) scheduleRoutes() {
 		}
 		if has { // an app that does not know the field leaves it out: the task keeps its push
 			t.Push = push
+		}
+		if v, ok := raw["facts"]; ok { // and its facts: set only when the body has them
+			if err := json.Unmarshal(v, &t.Facts); err != nil {
+				sc.mu.Unlock()
+				apierr.Write(w, http.StatusBadRequest, err)
+				return
+			}
 		}
 		if err := checkTask(&t, now); err != nil {
 			sc.mu.Unlock()
