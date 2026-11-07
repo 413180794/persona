@@ -37,5 +37,13 @@
   "answered": "回答済み：{answer}",
   "permission_detail": "{tool}：{what}",
   "tasks": "進行中のタスク",
-  "tasks_all": "すべて表示 ›"
+  "tasks_all": "すべて表示 ›",
+  "continue": "続ける",
+  "continue_placeholder": "次に何をしてもらいますか？",
+  "continue_send": "送信",
+  "continue_sent": "送信しました。作業を始めると「作業中」に移ります。",
+  "continue_failed": "送信できませんでした：{why}",
+  "continue_label": "（「{title}」）",
+  "continue_placeholder_to": "次に {agent} に何をしてもらいますか？",
+  "continue_failed_plain": "送信できませんでした。チャットを開いて理由を確認してください。"
 }

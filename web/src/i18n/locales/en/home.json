@@ -40,5 +40,13 @@
   "answered": "Answered: {answer}",
   "permission_detail": "{tool}: {what}",
   "tasks": "Tasks in progress",
-  "tasks_all": "See all ›"
+  "tasks_all": "See all ›",
+  "continue": "Continue",
+  "continue_placeholder": "What should it do next?",
+  "continue_send": "Send",
+  "continue_sent": "Sent. It moves to Working once it starts.",
+  "continue_failed": "Not sent: {why}",
+  "continue_label": "(“{title}”)",
+  "continue_placeholder_to": "What should {agent} do next?",
+  "continue_failed_plain": "Not sent. Open the chat to see why."
 }

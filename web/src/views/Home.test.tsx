@@ -205,7 +205,8 @@ describe("compact rows", () => {
     const title = "Migrate the shared storage client to the new region config";
     const html = render([agent(1, 0, "unread", { title, slot_name: title.slice(0, 30) + "…", last_text: "Pushed the branch." })]);
     expect(tags(html)).toEqual([["Mac", "app"]]);
-    expect(html.split(title).length - 1).toBe(2); // the title text and the row's tooltip
+    // (Continue's screen-reader label names the row too: not something on screen)
+    expect(html.replace(/<span class="sr-only">[^<]*<\/span>/g, "").split(title).length - 1).toBe(2); // the title text and the row's tooltip
   });
 
   it("says a session's source once, as a tag, not again before its latest words", () => {

@@ -128,10 +128,20 @@ async function deliver(mid: string, sid: string, e: OutboxEntry, clearDraft?: st
 
 /** Shows the message in that conversation and sends it; false when it didn't go (the bubble says why). */
 export function sendToSession(mid: string, sid: string, out: { text: string; images?: OutboxImage[] }, opts: { launcher?: string; model?: string } = {}): Promise<boolean> {
+  return queueToSession(mid, sid, out, opts).sent;
+}
+
+/** sendToSession, also naming the entry it made: for a place that offers its own retry of it (the overview's Continue). */
+export function queueToSession(mid: string, sid: string, out: { text: string; images?: OutboxImage[] }, opts: { launcher?: string; model?: string } = {}): { id: string; sent: Promise<boolean> } {
   const key = outboxKey(mid, sid);
   const e: OutboxEntry = { id: uuid(), text: out.text, images: out.images ?? [], at: Date.now(), state: "sending", launcher: opts.launcher, model: opts.model };
   setOutbox(key, [...list(key), e]);
-  return deliver(mid, sid, e);
+  return { id: e.id, sent: deliver(mid, sid, e) };
+}
+
+/** One entry of a conversation's outbox, as it stands. */
+export function outboxEntry(mid: string, sid: string, id: string): OutboxEntry | undefined {
+  return list(outboxKey(mid, sid)).find((e) => e.id === id);
 }
 
 /** A message that already went in another way (the prompt that started a conversation): its bubble until the transcript has it. */
@@ -141,13 +151,18 @@ export function noteSent(mid: string, sid: string, out: { text: string; images?:
 }
 
 export function retryOutbox(mid: string, sid: string, id: string, clearDraft?: string): Promise<boolean> {
+  return retryOutboxEntry(mid, sid, id, clearDraft).sent;
+}
+
+/** retryOutbox, also naming the entry the retry is (a new id when the hub answered the last try). */
+export function retryOutboxEntry(mid: string, sid: string, id: string, clearDraft?: string): { id: string; sent: Promise<boolean> } {
   const key = outboxKey(mid, sid);
   const e = list(key).find((x) => x.id === id);
-  if (!e || e.state === "sending") return Promise.resolve(false);
+  if (!e || e.state === "sending") return { id, sent: Promise.resolve(false) };
   // the hub said it may have gone in: the user looked and wants it sent again, as a new message
   const next: OutboxEntry = { ...e, id: e.newId ? uuid() : e.id, newId: false, state: "sending", error: undefined, at: Date.now() };
   setOutbox(key, list(key).map((x) => (x.id === id ? next : x)));
-  return deliver(mid, sid, next, clearDraft);
+  return { id: next.id, sent: deliver(mid, sid, next, clearDraft) };
 }
 
 export function discardOutbox(mid: string, sid: string, id: string) {

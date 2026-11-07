@@ -1,5 +1,5 @@
 // Overview: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ago, sessionCan, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { cardState } from "../lib/card-focus";
 import { interactionAsk } from "../lib/inbox";
@@ -18,6 +18,7 @@ import { href, navigate, onLinkClick, type Route } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { getSession, useStore } from "../lib/store";
+import { discardOutbox, outboxEntry, queueToSession, retryOutboxEntry } from "../lib/outbox";
 import { homeTasks, type HomeTask } from "../lib/home-tasks";
 import { heldDelivery, TODO_STATUS_INFO, TODO_TONE_CLASS, todoStatusLabel } from "../lib/todos";
 import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
@@ -190,7 +191,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
               grid
             >
               {groups.unread.map((g, i) => (
-                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<When>{ago(g.lead.updated_at) || stateName("done")}</When>} />
+                <GroupTask key={g.key} g={g} i={i} machine={name(g.lead.machine_id)} pill={<When>{ago(g.lead.updated_at) || stateName("done")}</When>} footer={sessionCan(g.lead, "send") ? <ContinueAction s={g.lead} title={sessionTitle(g.launcher ?? g.sessions[0]!)} several={g.sessions.length > 1} /> : undefined} />
               ))}
             </Group>
           )}
@@ -320,16 +321,16 @@ export function rowTags(title: string, parts: (string | false | null | undefined
   return [...new Set(kept)].filter((x) => !repeats(x));
 }
 
-function SessionTask({ s, i, machine, pill }: { s: Session; i: number; machine: string; pill: React.ReactNode }) {
+function SessionTask({ s, i, machine, pill, footer }: { s: Session; i: number; machine: string; pill: React.ReactNode; footer?: React.ReactNode }) {
   const title = sessionTitle(s);
   // the source is a tag once, not again in front of the latest words
-  return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={title} tags={rowTags(title, [sourceSubtitle(s), machine, s.space_name, tabLabel(s)])} detail={sessionPreview(s)} pill={pill} />;
+  return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={title} tags={rowTags(title, [sourceSubtitle(s), machine, s.space_name, tabLabel(s)])} detail={sessionPreview(s)} pill={pill} footer={footer} />;
 }
 
 // One tab's agents as one row (#2320): the "Lead"'s title (the first pane's when the panes are peers), the most urgent
 // one's latest words and state, and how many there are; it opens the tab on that most urgent pane.
-function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: string; pill: React.ReactNode }) {
-  if (g.sessions.length === 1) return <SessionTask s={g.lead} i={i} machine={machine} pill={pill} />;
+function GroupTask({ g, i, machine, pill, footer }: { g: TabGroup; i: number; machine: string; pill: React.ReactNode; footer?: React.ReactNode }) {
+  if (g.sessions.length === 1) return <SessionTask s={g.lead} i={i} machine={machine} pill={pill} footer={footer} />;
   const head = g.launcher ?? g.sessions[0]!;
   const s = g.lead;
   const preview = sessionPreview(s);
@@ -352,7 +353,91 @@ function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: s
           {pill}
         </>
       }
+      footer={footer}
     />
+  );
+}
+
+// A finished agent handed its next piece of work from its row (#6449, the web side of the Lark bot's "reply to the done
+// card to go on", #5438): one line, sent the way the chat page sends and kept in its outbox, so the chat shows the same
+// message (and, when it did not go, the same reason and Retry). Sent, the agent starts working and its row moves to
+// Working with the hub's next push. The agent is the one the row named when the line was opened: in a tab of several,
+// the row's lead can change while the user types.
+function ContinueAction({ s, title, several }: { s: Session; title: string; several: boolean }) {
+  const [to, setTo] = useState<Session | null>(null);
+  const [text, setText] = useState("");
+  const [phase, setPhase] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const [failed, setFailed] = useState<{ id: string; why: string } | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!to && refocus.current) {
+      refocus.current = false;
+      wrap.current?.querySelector("button")?.focus(); // back where the keyboard was, not the page's top
+    }
+  }, [to]);
+  const close = () => {
+    refocus.current = true;
+    setTo(null);
+  };
+  const send = async () => {
+    const words = text.trim();
+    if (!to || !words || phase === "sending") return;
+    const { machine_id: mid, session_id: sid } = to;
+    setPhase("sending");
+    // the line again after a failure is the outbox's Retry of that message (same id while the hub never answered, so
+    // it goes in once); changed, the old one is dropped and this one goes as new
+    const prev = failed && outboxEntry(mid, sid, failed.id);
+    if (prev && prev.text !== words) discardOutbox(mid, sid, prev.id);
+    const r = prev?.state === "failed" && prev.text === words ? retryOutboxEntry(mid, sid, prev.id) : queueToSession(mid, sid, { text: words });
+    if (await r.sent) {
+      setFailed(null);
+      setText("");
+      setPhase("sent");
+      close();
+    } else {
+      setFailed({ id: r.id, why: outboxEntry(mid, sid, r.id)?.error ?? "" });
+      setPhase("failed");
+    }
+  };
+  const who = to && several ? agentLabel(to) || sessionTitle(to) : "";
+  return (
+    <div ref={wrap} className="flex flex-col gap-1 px-3 pb-2 pl-10.5" data-continue>
+      {to ? (
+        <form className="flex items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+          <input
+            autoFocus
+            value={text}
+            readOnly={phase === "sending"}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // the Enter that picks an input-method candidate is the input method's, not a send (#2733, Safari #4667)
+              if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                if (e.key === "Enter") e.preventDefault();
+                return;
+              }
+              if (e.key === "Escape") close();
+            }}
+            aria-label={who ? t("home.continue_placeholder_to", { agent: who }) : t("home.continue_placeholder")}
+            placeholder={who ? t("home.continue_placeholder_to", { agent: who }) : t("home.continue_placeholder")}
+            className="min-w-0 flex-1 rounded-control bg-field px-2.5 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-3"
+          />
+          <Button tone="primary" type="submit" busy={phase === "sending"} disabled={!text.trim() || phase === "sending"}>{t("home.continue_send")}</Button>
+        </form>
+      ) : (
+        <div className="flex">
+          <Button tone="secondary" icon="send" onClick={() => { setTo(s); setPhase("idle"); }}>
+            {t("home.continue")}
+            {/* every row has one: the row's title tells them apart to a screen reader */}
+            <span className="sr-only">{t("home.continue_label", { title })}</span>
+          </Button>
+        </div>
+      )}
+      {/* always there, so screen readers read what it comes to say */}
+      <span role="status" className={cx("truncate text-[12px]", phase === "failed" ? "text-red" : "text-ink-3")}>
+        {phase === "sent" ? t("home.continue_sent") : phase === "failed" && to ? (failed?.why ? t("home.continue_failed", { why: failed.why }) : t("home.continue_failed_plain")) : ""}
+      </span>
+    </div>
   );
 }
 
@@ -393,15 +478,16 @@ function AnsweredLine({ ix, body }: { ix: Interaction; body: Resolution }) {
 // One Task Rows capsule, compact: status badge, the title alone on its line (it is what tells rows apart), then
 // where it runs as small tags and the latest words; when on the right. With `actions` (a card's one-tap answers) they
 // sit under it in the same capsule, outside the link, and its words take up to three lines: read before answering.
-function TaskRow({ i, state, done, to, title, tags, detail, pill, entry, actions }: { i: number; state: AgentState; done?: boolean; to: Route; title: string; tags: string[]; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown>; actions?: React.ReactNode }) {
+function TaskRow({ i, state, done, to, title, tags, detail, pill, entry, actions, footer }: { i: number; state: AgentState; done?: boolean; to: Route; title: string; tags: string[]; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown>; actions?: React.ReactNode; /** Under the row, the row itself drawn as without it (Continue, #6449). */ footer?: React.ReactNode }) {
+  const below = actions ?? footer;
   const enter = { animation: `fade-up 420ms ${EASE} ${Math.min(i, 8) * 50}ms both` };
   const link = (
     <a
       href={href(to)}
       onClick={(e) => onLinkClick(e, to, entry)}
       title={[title, ...tags].join(" · ")}
-      className={cx("group flex min-w-0 items-center gap-2.5 rounded-card px-3 py-2 transition-[background-color,transform] duration-150", !actions && "bg-surface shadow-card hover:bg-inset active:scale-[0.995]")}
-      style={actions ? undefined : enter}
+      className={cx("group flex min-w-0 items-center gap-2.5 rounded-card px-3 py-2 transition-[background-color,transform] duration-150", !below && "bg-surface shadow-card hover:bg-inset active:scale-[0.995]")}
+      style={below ? undefined : enter}
     >
       {done ? (
         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-green" aria-label={t("chat-interactions.answered")}>
@@ -429,12 +515,12 @@ function TaskRow({ i, state, done, to, title, tags, detail, pill, entry, actions
       <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-150 group-hover:translate-x-0.5" />
     </a>
   );
-  if (!actions) return link;
+  if (!below) return link;
   return (
     // the capsule shades while the link part is hovered, not while a button is
     <div className="rounded-card bg-surface shadow-card transition-colors duration-150 has-[>a:hover]:bg-inset" style={enter}>
       {link}
-      {actions}
+      {below}
     </div>
   );
 }
