@@ -12,7 +12,11 @@ func (h *Hub) machineIsWork(id string) bool {
 	if m == nil {
 		return false
 	}
-	if !m.derived && m.cfg.Trust == "work" {
+	// derived changes when the manager reports its machines (applyDeviceStatesFrom), under m.mu.
+	m.mu.Lock()
+	derived := m.derived
+	m.mu.Unlock()
+	if !derived && m.cfg.Trust == "work" {
 		return true
 	}
 	view := h.meshView()
