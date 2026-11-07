@@ -274,7 +274,6 @@ func (d *Devices) linkEndpoints(machine string) link.Message {
 	return msg
 }
 
-// currentLink is the machine's live link; nil while there is none, or while the one there is going away.
 // linkRTT is devices.link_rtt: the hub measured a link's round trip.
 func (d *Devices) linkRTT(p devicewire.LinkRTT) {
 	d.links.mu.Lock()
@@ -286,6 +285,7 @@ func (d *Devices) linkRTT(p devicewire.LinkRTT) {
 	}
 }
 
+// currentLink is the machine's live link; nil while there is none, or while the one there is going away.
 func (m *Machine) currentLink() *mgrLink {
 	m.mu.Lock()
 	defer m.mu.Unlock()

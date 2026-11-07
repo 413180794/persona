@@ -32,7 +32,7 @@ data class TranslationPrefs(
     companion object {
         const val DEFAULT_TARGET = "zh-Hans"
 
-        /** The targets the hub knows (translate.go `languageNames`), in the order the other apps list them. */
+        /** The targets in `server/internal/assistantwire/inbox.go` (`TranslateLanguages`), in the order the other apps list them. */
         val languages: List<TranslateLanguage> = listOf(
             TranslateLanguage("zh-Hans", "简体中文"), TranslateLanguage("zh-Hant", "繁體中文"), TranslateLanguage("en", "English"), // i18n-ignore: language autonyms
             TranslateLanguage("ja", "日本語"), TranslateLanguage("ko", "한국어"), TranslateLanguage("fr", "Français"), // i18n-ignore: language autonyms
@@ -66,7 +66,7 @@ data class MailTranslation(val subject: String, val text: String, val clipped: B
 /** The hub's translation of a mail item, done as it came in (`translations[target]` on the inbox item). */
 data class ItemTranslation(val subject: String, val preview: String)
 
-/** The hub's translations (`server/internal/hub/translate.go`), by its translation model. */
+/** The manager's translations (`server/internal/assistant/inbox_translate.go`), relayed by the hub. */
 interface TranslationTransport {
     /** `POST /api/v1/translate {texts, target}`: short texts in order, "" where the model gave nothing. */
     suspend fun translate(texts: List<String>, target: String): List<String>

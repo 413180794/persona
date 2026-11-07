@@ -9,7 +9,7 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.MailTranslation
 import persona.core.contracts.api.TranslationTransport
 
-/** Settings › Translation's calls on the paired hub (`server/internal/hub/translate.go`). */
+/** Settings › Translation's calls to the manager (`server/internal/assistant/inbox_translate.go`), relayed by the paired hub. */
 class HttpTranslationTransport internal constructor(
     private val request: suspend (String, String, RequestBody?) -> Response,
 ) : TranslationTransport {

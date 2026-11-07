@@ -622,13 +622,6 @@ func (c *conversation) toldBefore(card string) bool {
 	return card != "" && c.askingCardLocked() == card && c.askGen != c.gen
 }
 
-// askingCard is the card the model asks now ("" none): what it hands over is that card's answer.
-func (c *conversation) askingCard() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.askingCardLocked()
-}
-
 func (c *conversation) askingCardLocked() string {
 	if c.askTold {
 		return c.askCur

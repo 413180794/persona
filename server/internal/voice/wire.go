@@ -22,8 +22,6 @@ type wire interface {
 	// reply answers a delegation: final is the result the model speaks about (its only commentary), otherwise quiet
 	// context.
 	reply(delegation, s string, final bool, id string) []any
-	// toolResult answers a function call (live dialect with tools).
-	toolResult(delegation, callID, output, id string) []any
 	// acks: the service says when it took in a commentary sent with event id id (say, a final reply, a tool result)
 	// and names that id when it refuses one (evAck, evError). Without, an id is not sent.
 	acks() bool
@@ -126,10 +124,6 @@ func (liveWire) reply(delegation, s string, final bool, id string) []any {
 			"content": clipRunes(s, commentaryRunes)}, id)}
 	}
 	return []any{map[string]any{"type": "session.thinking.append", "delegation_id": delegation, "content": clipTokens(s, appendTokens)}}
-}
-
-func (w liveWire) toolResult(delegation, _, output, id string) []any {
-	return w.reply(delegation, output, true, id)
 }
 
 // The service echoes a client frame's event_id as client_event_id on its session.commentary.appended and on an error
@@ -312,10 +306,6 @@ func (codexWire) reply(delegation, s string, final bool, _ string) []any {
 		})
 	}
 	return out
-}
-
-func (w codexWire) toolResult(delegation, _, output, _ string) []any {
-	return w.reply(delegation, output, true, "")
 }
 
 // Codex's realtime protocol has no ack of an append that we know of: what is sent counts as taken in at once.

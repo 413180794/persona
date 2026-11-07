@@ -13,9 +13,9 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// ---- plugins (docs/extensions/extensions.md) ----
+// ---- extensions (docs/extensions/extensions.md) ----
 
-// Plugins are the registry's rows.
+// Extensions are the registry's rows.
 func (d *DB) Extensions(ctx context.Context) ([]extension.Record, error) {
 	rows, err := d.pool.Query(ctx, `SELECT id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
 		config, remote, disabled_contributions, installed_at, updated_at FROM plugins ORDER BY id`)
@@ -48,7 +48,7 @@ func (d *DB) Extensions(ctx context.Context) ([]extension.Record, error) {
 	return out, rows.Err()
 }
 
-// PutPlugin writes a plugin's row.
+// PutExtension writes an extension's row.
 func (d *DB) PutExtension(ctx context.Context, r extension.Record) error {
 	return putExtension(ctx, d.pool, r)
 }
@@ -120,13 +120,13 @@ func putExtension(ctx context.Context, executor extensionExecutor, r extension.R
 	return err
 }
 
-// DeletePlugin deletes a plugin's row and (cascading) its secrets.
+// DeleteExtension deletes an extension's row and (cascading) its secrets.
 func (d *DB) DeleteExtension(ctx context.Context, id string) error {
 	_, err := d.pool.Exec(ctx, `DELETE FROM plugins WHERE id = $1`, id)
 	return err
 }
 
-// PluginSecrets are a plugin's sealed secrets by name.
+// ExtensionSecrets are an extension's sealed secrets by name.
 func (d *DB) ExtensionSecrets(ctx context.Context, id string) (map[string]string, error) {
 	rows, err := d.pool.Query(ctx, `SELECT name, sealed FROM plugin_secrets WHERE plugin = $1`, id)
 	if err != nil {
@@ -155,7 +155,7 @@ func (d *DB) DeleteExtensionSecret(ctx context.Context, id, name string) error {
 	return err
 }
 
-// AddPluginAudit records a change to a plugin.
+// AddExtensionAudit records a change to an extension.
 func (d *DB) AddExtensionAudit(ctx context.Context, id, action, actor string, detail json.RawMessage) error {
 	if len(detail) == 0 {
 		detail = json.RawMessage(`{}`)
@@ -209,9 +209,9 @@ func (d *DB) ExtensionAudits(ctx context.Context, plugin string, limit int) ([]E
 var _ extension.Store = (*DB)(nil)
 var _ extension.PlanStore = (*DB)(nil)
 
-// ---- plugin markets (docs/extensions/extensions.md "Extension market") ----
+// ---- extension markets (docs/extensions/extensions.md "Extension market") ----
 
-// PluginMarkets are the registered markets, oldest first.
+// ExtensionMarkets are the registered markets, oldest first.
 func (d *DB) ExtensionMarkets(ctx context.Context) ([]extension.MarketRecord, error) {
 	rows, err := d.pool.Query(ctx, `SELECT id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at,
 		signing_key, signature FROM plugin_markets ORDER BY added_at, id`)
@@ -243,7 +243,7 @@ func (d *DB) ExtensionMarkets(ctx context.Context) ([]extension.MarketRecord, er
 	return out, rows.Err()
 }
 
-// PutPluginMarket writes a market's row.
+// PutExtensionMarket writes a market's row.
 func (d *DB) PutExtensionMarket(ctx context.Context, r extension.MarketRecord) error {
 	warnings, err := json.Marshal(append([]string{}, r.Warnings...))
 	if err != nil {
@@ -266,7 +266,7 @@ func (d *DB) PutExtensionMarket(ctx context.Context, r extension.MarketRecord) e
 	return err
 }
 
-// DeletePluginMarket forgets a market (the plugins installed from it stay).
+// DeleteExtensionMarket forgets a market (the extensions installed from it stay).
 func (d *DB) DeleteExtensionMarket(ctx context.Context, id string) error {
 	_, err := d.pool.Exec(ctx, `DELETE FROM plugin_markets WHERE id = $1`, id)
 	return err

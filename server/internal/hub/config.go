@@ -160,16 +160,16 @@ func dataDir() string {
 	return identity.DataDir(home)
 }
 
-// defaultConfig is what a first run writes to ~/.persona/hub.json: this machine only, reachable by its host name.
-// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/operations/config.md). With
-// PERSONA_LOCAL_NODE=0 (the Docker image, docs/operations/docker.md) there is no machine at all: the hub's own has no herdr or
-// claude to drive, every computer is added to hub.json.
 func defaultLocalMachine() MachineConfig {
 	host, _ := os.Hostname()
 	short := strings.Split(host, ".")[0]
 	return MachineConfig{ID: short, Name: short, Kind: "local", Icon: "server"}
 }
 
+// defaultConfig is what a first run writes to ~/.persona/hub.json: this machine only, reachable by its host name.
+// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/operations/config.md). With
+// PERSONA_LOCAL_NODE=0 (the Docker image, docs/operations/docker.md) there is no machine at all: the hub's own has no herdr or
+// claude to drive, every computer is added to hub.json.
 func defaultConfig() *Config {
 	host, _ := os.Hostname()
 	machines := []MachineConfig{defaultLocalMachine()}

@@ -23,7 +23,7 @@ export interface TranslatePrefs {
   chats: TranslateChat[];
 }
 
-/** The targets the hub knows (translate.go `languageNames`), as the app lists them. */
+/** The targets in `server/internal/assistantwire/inbox.go` (`TranslateLanguages`), as the app lists them. */
 export const LANGUAGES: { code: string; name: string }[] = [
   { code: "zh-Hans", name: "简体中文" }, // i18n-ignore: each language by its own name
   { code: "zh-Hant", name: "繁體中文" }, // i18n-ignore: each language by its own name

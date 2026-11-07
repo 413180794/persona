@@ -40,10 +40,6 @@ func (fakeWire) reply(delegation, s string, final bool, _ string) []any {
 	return []any{map[string]any{"type": "fake.reply", "delegation_id": delegation, "text": s, "final": final}}
 }
 
-func (w fakeWire) toolResult(delegation, _, output, _ string) []any {
-	return w.reply(delegation, output, true, "")
-}
-
 func (fakeWire) decode(raw []byte) []event {
 	var f struct {
 		Type string `json:"type"`

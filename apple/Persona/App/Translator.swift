@@ -20,7 +20,7 @@ nonisolated enum TranslationPrefs {
         var id: String { code }
     }
 
-    /// The targets the hub knows (translate.go `languageNames`).
+    /// The targets in `server/internal/assistantwire/inbox.go` (`TranslateLanguages`).
     static let languages: [Language] = [
         .init(code: "zh-Hans", name: "简体中文"), .init(code: "zh-Hant", name: "繁體中文"), .init(code: "en", name: "English"), // i18n-ignore: endonyms
         .init(code: "ja", name: "日本語"), .init(code: "ko", name: "한국어"), .init(code: "fr", name: "Français"), // i18n-ignore: endonyms

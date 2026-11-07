@@ -222,6 +222,11 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - Background builds/tests require pinned source snapshots; do not merge branches or edit their worktree while running. On 2026-11-05, targeted Go regression enumerated old files before a merge introduced a new caller, producing undefined-method compilation errors. Mixed snapshots cannot judge commits or count as passes. Freeze a commit in a separate detached worktree and rerun.
 - A Go test wrapper embedding a narrow `Store` interface does not gain methods by assigning real Postgres to it. Once card handlers checked optional persistence interfaces first, admin-page tests returned 503; old handlers rejected bad JSON first and hid the fixture gap. Real bus regressions explicitly pass the full DB to the assistant, while hub admin login keeps its wrapper. Retain status assertions, not longer waits or 503 as a pass.
 
+## Dead-code reports depend on the selected build (2026-11-07, #5856)
+
+- `deadcode -test ./...` only analyzes the selected platform and build tags. A default Linux run reports `sysmon.ptr`, the Windows tray notification helpers and `DevelopmentLimits.valid` as unreachable, but macOS, Windows and the `persona_dev_resources` build respectively call them.
+- Before deleting a reported function, use repository-wide `git grep` to check callers, tests, scripts, docs and string-based references, including files excluded from the current build. Keep candidates whose reachability is uncertain; a clean build on one platform cannot establish that they are unused everywhere.
+
 ## When Go on the hub is older than the repository (2026-11-03, #984)
 
 - `test-server.sh` only says "server test environment preparation failed; tests were not started". `server_test_env.py` first runs `go env`;

@@ -67,9 +67,9 @@ type Remote struct {
 type Store interface {
 	Extensions(ctx context.Context) ([]Record, error)
 	PutExtension(ctx context.Context, r Record) error
-	// DeletePlugin deletes the row and its secrets.
+	// DeleteExtension deletes the row and its secrets.
 	DeleteExtension(ctx context.Context, id string) error
-	// PluginSecrets are the sealed secrets by name.
+	// ExtensionSecrets are the sealed secrets by name.
 	ExtensionSecrets(ctx context.Context, id string) (map[string]string, error)
 	PutExtensionSecret(ctx context.Context, id, name, sealed string) error
 	DeleteExtensionSecret(ctx context.Context, id, name string) error

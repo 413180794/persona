@@ -27,7 +27,7 @@ import (
 
 const lookKey = "look" // the setting: the chosen look
 
-// builtinLooks are the looks the apps draw (extension.BuiltinLooks): their names on the picker's cards.
+// builtinLookNames are the names of the looks the apps draw (extension.BuiltinLooks), shown on the picker's cards.
 var builtinLookNames = map[string]struct {
 	name  string
 	names map[string]string
@@ -239,7 +239,7 @@ func (h *Hub) lookChoice(ctx context.Context) *lookChoice {
 	return &c
 }
 
-// lookCurrent is what the apps are told is chosen and shown, given the looks there are.
+// lookCurrentOf is what the apps are told is chosen and shown, given the looks there are.
 func lookCurrentOf(c *lookChoice, looks []lookView) lookCurrent {
 	cur := lookCurrent{Effective: extension.DefaultLook}
 	if c == nil {
