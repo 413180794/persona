@@ -13,9 +13,9 @@ struct FeishuDocsTests {
     @Test func decodesDriveAndDiscoverItems() throws {
         let page: FeishuDocsPage = try decode("""
         {"items":[
-          {"id":"f1","token":"f1","kind":"folder","title":"文件夹","url":"https://open.feishu.cn/docx/ExampleDocument
+          {"id":"f1","token":"f1","kind":"folder","title":"文件夹","url":"https://open.feishu.cn/drive/folder/ExampleFolder","type":0,"owner":"A",
            "updatedAt":"2026-10-21T07:38:48.000Z","supported":true,"sharedFolder":true},
-          {"id":"d1","title":"Rust","url":"https://open.feishu.cn/docx/ExampleDocument
+          {"id":"d1","title":"Rust","url":"https://open.feishu.cn/docx/ExampleDocument","type":22,"owner":"B","updatedAt":"","supported":true,
            "summary":"s","reason":"trending","views":12,"likes":3,"comments":1,
            "icon":{"type":"emoji","value":"📖"}},
           {"id":"p1","title":"Page","url":"https://x.larkoffice.com/page/p1","type":113,"updatedAt":"2026-10-25T11:33:38.000Z"}
@@ -88,7 +88,7 @@ struct FeishuDocsTests {
         let md = """
         # 智能纪要
 
-        [Source](<https://open.feishu.cn/docx/ExampleDocument
+        [Source](<https://open.feishu.cn/docx/ExampleDocument>)
 
         > 会议主题
 

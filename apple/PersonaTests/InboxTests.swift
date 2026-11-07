@@ -71,9 +71,9 @@ struct InboxTests {
     }
 
     @Test func feishuLinksOpenNatively() throws {
-        let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
+        let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument"))
         let post = try #require(URL(string: "https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001"))
-        let minutes = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
+        let minutes = try #require(URL(string: "https://open.feishu.cn/minutes/ExampleRecording"))
         #expect(FeishuLinks.route(doc, lark: .all) == .doc(url: doc.absoluteString, title: nil))
         #expect(FeishuLinks.route(post, lark: .all) == .momentsPost(id: "7000000000000000001"))
         #expect(FeishuLinks.route(minutes, lark: .all) == nil) // a web page in the link sheet
@@ -82,7 +82,7 @@ struct InboxTests {
     /// Without the Lark extension (no `lark` in the hub's features) the native readers have nothing to read:
     /// Feishu documents and company-feed posts are ordinary web pages in the link sheet (#1530).
     @Test func feishuLinksWithoutTheExtensionAreWebPages() throws {
-        let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
+        let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument"))
         let post = try #require(URL(string: "https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001"))
         #expect(FeishuLinks.route(doc, lark: .none) == nil)
         #expect(FeishuLinks.route(post, lark: .none) == nil)
@@ -100,12 +100,12 @@ struct InboxTests {
     @Test func feishuLinkTargets() throws {
         func target(_ s: String) throws -> FeishuLinks.Target { FeishuLinks.target(try #require(URL(string: s)), lark: .all) }
         // Feishu docs and Moments posts: the native views.
-        #expect(try target("https://open.feishu.cn/docx/ExampleDocument == .route(.doc(url: "https://open.feishu.cn/docx/ExampleDocument title: nil)))
+        #expect(try target("https://open.feishu.cn/wiki/ExampleWiki") == .route(.doc(url: "https://open.feishu.cn/wiki/ExampleWiki", title: nil)))
         #expect(try target("https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001") == .route(.momentsPost(id: "7000000000000000001")))
         // Any other web page, Feishu's own included: the in-app link sheet.
         #expect(try target("https://example.com/a?b=1") == .sheet)
         #expect(try target("HTTP://Example.com") == .sheet)
-        #expect(try target("https://open.feishu.cn/docx/ExampleDocument == .sheet)
+        #expect(try target("https://open.feishu.cn/minutes/ExampleRecording") == .sheet)
         // Not a web page: the system.
         #expect(try target("mailto:me@example.com") == .system)
         #expect(try target("tel:10086") == .system)
