@@ -107,6 +107,7 @@ internal object NotificationPolicy {
     /** The tags of a session's result notifications (done, assistant): put away once it is seen. Its cards stay. */
     fun resultTags(session: SessionKey): List<String> = listOf("done", "assistant", "reply").map { "$it:${session.path}" }
 
-    fun tag(event: NotifyEvent): String = if (event.kind == "alert") "alert:${UUID.randomUUID()}"
+    /** An alert with an id keeps one tag per id (another group's id carries its suffix); one without is its own. */
+    fun tag(event: NotifyEvent): String = if (event.kind == "alert") event.id?.takeIf { it.isNotEmpty() }?.let { "alert:id:$it" } ?: "alert:${UUID.randomUUID()}"
         else "${event.kind}:${SessionKey(event.machineId, event.sessionId).path}"
 }

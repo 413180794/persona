@@ -110,6 +110,16 @@ class NotificationPolicyTest {
         assertEquals("assistant:machine/session", NotificationPolicy.tag(alert.copy(kind = "assistant")))
     }
 
+    /** An alert sent again with the same id replaces the earlier one, as apns-collapse-id does on an iPhone (#5614). */
+    @Test fun alertsWithTheSameIdReplaceEachOther() {
+        val alert = NotifyEvent("alert", "", "", title = "进度 50%", id = "progress-1")
+        assertEquals(NotificationPolicy.tag(alert), NotificationPolicy.tag(alert.copy(title = "进度 80%")))
+        assertNotEquals(NotificationPolicy.tag(alert), NotificationPolicy.tag(alert.copy(id = "progress-2")))
+        val plain = alert.copy(id = null)
+        assertNotEquals(NotificationPolicy.tag(plain), NotificationPolicy.tag(plain))
+        assertNotEquals(NotificationPolicy.tag(plain), NotificationPolicy.tag(alert))
+    }
+
     /** A card with fields to fill in has no Allow button (#4987): the hub refuses allow without their values. */
     @Test fun permissionWithRequiredFieldsHasNoAllow() {
         val card = persona.core.contracts.JsonCodec.decodeFromString<Interaction>(

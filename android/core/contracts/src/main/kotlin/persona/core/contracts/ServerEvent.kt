@@ -158,6 +158,8 @@ data class NotifyEvent(
     @SerialName("session_id") val sessionId: String,
     val title: String = "", val subtitle: String = "", val body: String = "",
     @SerialName("interaction_id") val interactionId: String? = null,
+    /** alert: the caller's id; the same one again replaces the earlier alert (#5614). */
+    val id: String? = null,
 ) : ServerEvent
 
 /**

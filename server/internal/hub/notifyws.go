@@ -124,6 +124,9 @@ func notifyMessage(kind string, payload map[string]any) map[string]any {
 	if id, ok := payload["interaction_id"]; ok {
 		msg["interaction_id"] = id
 	}
+	if id, ok := payload["id"]; ok { // alert: the caller's id (POST /api/v1/notify)
+		msg["id"] = id
+	}
 	if en, ok := payload["extension_notification"]; ok {
 		msg["extension_notification"] = en
 	}

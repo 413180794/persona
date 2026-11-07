@@ -235,6 +235,19 @@ func TestNotifyAPI(t *testing.T) {
 	if m := next(); m == nil || m["machine_id"] != "" || m["session_id"] != "" {
 		t.Fatalf("ws notify without a session: %v", m)
 	}
+	// The caller's id rides along, so Android replaces the earlier alert as APNs does (#5614); none without one.
+	if code, _ := post(h.cfg.Token, `{"title":"进度 50%","id":"progress-1"}`); code != 200 {
+		t.Fatalf("send: %d", code)
+	}
+	if m := next(); m == nil || m["id"] != "progress-1" {
+		t.Fatalf("ws notify id: %v", m)
+	}
+	if code, _ := post(h.cfg.Token, `{"title":"t"}`); code != 200 {
+		t.Fatalf("send: %d", code)
+	}
+	if m := next(); m == nil || m["id"] != nil {
+		t.Fatalf("ws notify id without one: %v", m)
+	}
 	// Too big for APNs once encoded (escapes count): refused instead of reported as sent.
 	if code, _ := post(h.cfg.Token, `{"title":"t","body":"`+strings.Repeat(`\u0001`, notifyBodyMost)+`"}`); code != http.StatusBadRequest {
 		t.Fatalf("oversized: %d", code)

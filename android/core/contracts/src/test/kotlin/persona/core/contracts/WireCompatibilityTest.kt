@@ -16,6 +16,11 @@ class WireCompatibilityTest {
             assertEquals("任务提醒", (event.title).zhAny())
             assertEquals(event, ServerEvent.decode(JsonCodec.encodeToString<ServerEvent>(event)))
         }
+        // The caller's id (POST /api/v1/notify "id", #5614); absent on the hub's own events.
+        val withId = ServerEvent.decode("""{"type":"notify","kind":"alert","machine_id":"","session_id":"","title":"进度","id":"progress-1"}""") as NotifyEvent
+        assertEquals("progress-1", withId.id)
+        assertEquals(withId, ServerEvent.decode(JsonCodec.encodeToString<ServerEvent>(withId)))
+        assertNull((ServerEvent.decode("""{"type":"notify","kind":"alert","machine_id":"","session_id":""}""") as NotifyEvent).id)
     }
 
     @Test fun connectionEventsAndOptionalFieldsFollowD5() {

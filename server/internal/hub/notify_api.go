@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -216,7 +217,14 @@ func (h *Hub) deliverNotify(in notifyRequest, machine, extID, manager string) (m
 	wants := pushWants{Kind: "input"}.fn()
 	build := func(i18n.Lang) map[string]any { return payload }
 	h.push.sendFrom(manager, build, collapse, wants, quietNone, nil)
-	h.notifyWSFrom(manager, kindAlert, build, wants, quietNone)
+	ws := build
+	if in.ID != "" {
+		// The WebSocket event carries the id itself (not the push), so an Android phone replaces the earlier alert too.
+		withID := maps.Clone(payload)
+		withID["id"] = in.ID
+		ws = func(i18n.Lang) map[string]any { return withID }
+	}
+	h.notifyWSFrom(manager, kindAlert, ws, wants, quietNone)
 	return map[string]any{"sent": true}, nil
 }
 
