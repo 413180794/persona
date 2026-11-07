@@ -66,14 +66,26 @@ describe("session capability contract", () => {
 });
 
 describe("delete a conversation", () => {
-  it("offers it only for offline sessions that are not the assistant's or still starting", () => {
+  it("offers it for what the hub keeps out of the lists, not the assistant's or one still starting", () => {
     const offline: Session = { ...legacy, status: "offline" };
     expect(sessionDeletable(offline)).toBe(true);
     expect(sessionDeletable({ ...offline, start_error: "claude did not become ready" })).toBe(true);
-    expect(sessionDeletable(legacy)).toBe(false);
-    expect(sessionDeletable({ ...offline, status: "idle" })).toBe(false);
     expect(sessionDeletable({ ...offline, assistant: true })).toBe(false);
     expect(sessionDeletable({ ...offline, starting: true })).toBe(false);
+  });
+
+  it("takes finished, unknown and interrupted sessions as the hub, iOS and Android do (#801, #1461, #5974)", () => {
+    for (const status of ["done", "unknown", "interrupted"]) {
+      expect(sessionDeletable({ ...legacy, status })).toBe(true);
+      expect(sessionDeletable({ ...live, status })).toBe(true); // a Codex App thread: no terminal to close it from
+      expect(sessionDeletable({ ...history, status })).toBe(true);
+      expect(sessionDeletable({ ...legacy, status, assistant: true })).toBe(false);
+    }
+  });
+
+  it("leaves out running ones (the hub answers 409) and idle ones (the hub lists them again)", () => {
+    for (const status of ["working", "blocked", "idle"]) expect(sessionDeletable({ ...legacy, status })).toBe(false);
+    expect(sessionDeletable({ ...live, status: "idle" })).toBe(false);
   });
 });
 

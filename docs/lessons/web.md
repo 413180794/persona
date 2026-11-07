@@ -21,6 +21,10 @@
 - Bound initial hello negotiation when authenticated HTTP works but WebSocket upgrades fail, and keep the selected HTTP page after a late hello to avoid allocating another source session. Only a correlated `expired` lifecycle error permits reopening with a new open ID; transient `inactive` and unclassified failures retain the page for a read-only retry. A lost initial snapshot must instead reuse the original open ID and complete body, with deduplication owned by the manager.
 - A mixed native/HTTP stack needs one history owner. Delegate fallback pushes/pops to it, mount a gap fallback only in that owner, and replace the top at the existing eight-page limit. `bare` suppresses headings, not full-page chart axes or split layouts. Ambiguous/rejected receipts settle native controls as false for optimistic rollback, without fresh callbacks; bounded receipt history evicts entries instead of terminating a healthy page.
 
+## Delete chat follows what the hub keeps hidden (2026-11-07, #6433)
+
+- "Delete chat" is the agent sessions' archive (out of every list, back when used again), and its client rule drifted from the hub's: the hub widened what stays hidden (`done` / `unknown` in #1461, `interrupted` in #5974) while the web kept `status === "offline"`. Codex App threads report `done` / `idle` / `unknown` for 72 hours and have no terminal to close them from, so their rows had no way out of the sidebar. Gate on the statuses `stillDeleted` keeps out, not on what the hub merely accepts: it accepts `idle` too but lists it again, so offering that would look like a delete that did nothing.
+
 ## Neutralizing status colors without losing selection or code meaning (2026-11-07, #6183)
 
 - Pending permissions, plans and needs-you counters are routine work. Use the semantic attention role through marks, pills, rows, task docks, automatic groups and the phone shell; changing only the approval card leaves the sidebar and header red.
