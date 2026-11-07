@@ -89,25 +89,26 @@ def text_width(s, size):
 # language. English keeps the plain file names (banner-light.svg), Chinese adds ".zh-CN" (banner-light.zh-CN.svg).
 LANGS = {"en": "", "zh-CN": ".zh-CN"}
 
-CHIPS = {  # the site's hero (site/public/index.html): demo data, not counts from anyone's hub
+CHIPS = {  # Illustrative tasks, not activity from a real hub.
     "en": [
-        ("#e2553a", "Needs you", "photo-sync · review plan", True),
-        ("#e0a33a", "Working", "weather · 5 tools", False),
-        (None, "Persona", "3 things need you today", False),
-        ("#3f9b62", "Inbox", "AI twin drafted 2 replies", False),
+        (None, "Superagent", "One conversation", False),
+        ("#e0a33a", "Delegate", "Ship the fix", False),
+        ("#3f9b62", "Connect", "Calendar · Inbox", False),
+        ("#e2553a", "Your call", "Approve a plan", True),
     ],
     "zh-CN": [
-        ("#e2553a", "需要你", "photo-sync · 计划等你审批", True),
-        ("#e0a33a", "工作中", "天气 › widget · 工具 5", False),
-        (None, "Persona", "今天有 3 件事需要你", False),
-        ("#3f9b62", "收件箱", "AI 分身起草了 2 条回复", False),
+        (None, "Superagent", "一个入口", False),
+        ("#e0a33a", "交给 AI", "把问题解决", False),
+        ("#3f9b62", "连接", "日历 · 收件箱", False),
+        ("#e2553a", "你来拍板", "批准执行计划", True),
     ],
 }
 
-TAGLINE = {  # (text, font family, size, letter spacing): English is longer, so smaller and without spacing
-    "en": ("Every computer you own, in your pocket.", SERIF, 25, 0),
-    "zh-CN": ("你的每台电脑，都在口袋里。", SERIF_CJK, 32, 2),
+TAGLINE = {  # (text, font family, size, letter spacing)
+    "en": ("One place. Every task.", SERIF, 32, 0),
+    "zh-CN": ("一个入口，解决所有问题。", SERIF_CJK, 32, 1),
 }
+SUPERAGENT = {"en": "YOUR SUPERAGENT", "zh-CN": "你的 SUPERAGENT"}
 
 
 def banner(theme, lang="en"):
@@ -164,7 +165,8 @@ def banner(theme, lang="en"):
   <rect x="{x0}" y="{y0}" width="{S}" height="{S}" rx="{r:.1f}" fill="{t["bg1"]}" filter="url(#lift)"/>
   <g transform="translate({x0} {y0})" clip-path="url(#iconMask)"><use href="#icon"/></g>
   <rect x="{x0 + .5}" y="{y0 + .5}" width="{S - 1}" height="{S - 1}" rx="{r - .5:.1f}" fill="none" stroke="{t["stroke"]}"/>
-  <text x="330" y="176" font-family="{SERIF}" font-size="104" font-weight="700" letter-spacing="-1" fill="{t["fg"]}">Persona</text>
+  <text x="334" y="92" font-family="{SANS}" font-size="18" font-weight="600" letter-spacing="2" fill="{t["muted"]}">{SUPERAGENT[lang]}</text>
+  <text x="330" y="184" font-family="{SERIF}" font-size="104" font-weight="700" letter-spacing="-1" fill="{t["fg"]}">Persona</text>
   <text x="334" y="232" font-family="{tag_font}" font-size="{tag_size}" letter-spacing="{tag_spacing}" fill="{t["muted"]}">{tagline}</text>
   {"".join(chips)}
   <rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="24" fill="none" stroke="{t["stroke"]}"/>
@@ -184,6 +186,15 @@ GLYPHS = {
              '<path d="M16 35h9l3 5h8l3-5h9"/>',
     "island": '<rect x="21" y="12" width="22" height="40" rx="6"/><rect x="26" y="16" width="12" height="5" rx="2.5" '
               'fill="#fff" stroke="none"/><path d="M27 31h10M27 37h6"/>',
+    "handoff": '<rect x="12" y="16" width="29" height="23" rx="4"/><path d="M20 45h13M26 39v6"/>'
+               '<rect x="38" y="26" width="14" height="26" rx="4"/><path d="M43 31h4M43 47h4"/>',
+    "extensions": '<path d="M18 17h10v-3a5 5 0 0 1 10 0v3h10v11h-3a5 5 0 0 0 0 10h3v10H37v-3a5 5 0 0 0-10 0v3H18V37h-3a5 5 0 0 1 0-10h3z"/>',
+    "phone-data": '<rect x="18" y="12" width="28" height="40" rx="6"/><path d="M27 17h10"/>'
+                  '<path d="M24 30h5l3-6 4 13 3-7h3M29 46h6"/>',
+    "connectors": '<circle cx="32" cy="32" r="7"/><circle cx="16" cy="16" r="4"/>'
+                  '<circle cx="48" cy="16" r="4"/><circle cx="16" cy="48" r="4"/><circle cx="48" cy="48" r="4"/>'
+                  '<path d="M19 19l8 8M37 27l8-8M19 45l8-8M37 37l8 8"/>',
+    "clients": '<rect x="12" y="14" width="40" height="28" rx="4"/><path d="M24 50h16M32 42v8"/>',
     "hub": '<path d="M32 13l15 5.5v11c0 9.5-6.4 16.8-15 20.5-8.6-3.7-15-11-15-20.5v-11z"/><path d="M25 31.5l5 5 9-10"/>',
 }
 
@@ -221,11 +232,14 @@ def versions():
     mac = grab("apple/project.yml", r'^\s+macOS:\s*"?([\d.]+)')
     sdk = int(grab("android/gradle/libs.versions.toml", r'^minSdk\s*=\s*"(\d+)"'))
     go = grab("server/go.mod", r"^go\s+([\d.]+)")
-    android = {31: "12", 32: "12L", 33: "13", 34: "14", 35: "15", 36: "16"}.get(sdk, f"API {sdk}")
+    android = {30: "11", 31: "12", 32: "12L", 33: "13", 34: "14", 35: "15", 36: "16"}.get(sdk, f"API {sdk}")
     short = lambda v: v[:-2] if v.endswith(".0") else v  # noqa: E731
     return [("iOS", short(ios) + "+"), ("watchOS", short(watch) + "+"), ("macOS", short(mac) + "+"),
-            ("Android", android + "+"), ("hub", "Go " + ".".join(go.split(".")[:2])),
-            ("agents", "Claude Code · Codex")]
+            ("Android", android + "+"), ("hub", "Go " + ".".join(go.split(".")[:2]))]
+
+
+RUNTIME_BADGES = ("Claude Code", "Codex", "herdr", "Orca")
+CLIENTS_BADGE = "iPhone · Watch · Mac · Vision Pro · Android · Web"
 
 
 VERDANA = {  # advance widths at 11px, shields.io's metric for Verdana
@@ -240,16 +254,19 @@ def vw(s):
     return sum(VERDANA.get(ch, 7.0) for ch in s)
 
 
-def badge(label, value):
-    lw, rw = vw(label) + 16, vw(value) + 16
+def badge(label, value=""):
+    lw, rw = vw(label) + 16, vw(value) + 16 if value else 0
     w, h = lw + rw, 22
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h}" viewBox="0 0 {w:.0f} {h}" role="img" aria-label="{label}: {value}">
-<title>{label}: {value}</title>
+    accessible = f"{label}: {value}" if value else label
+    value_text = (f'<text x="{lw + rw / 2:.1f}" y="15" textLength="{vw(value):.0f}" font-weight="bold">{value}</text>'
+                  if value else "")
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h}" viewBox="0 0 {w:.0f} {h}" role="img" aria-label="{accessible}">
+<title>{accessible}</title>
 <clipPath id="r"><rect width="{w:.0f}" height="{h}" rx="5"/></clipPath>
 <g clip-path="url(#r)"><rect width="{lw:.0f}" height="{h}" fill="#3a322d"/><rect x="{lw:.0f}" width="{rw:.0f}" height="{h}" fill="#d4683f"/></g>
 <g fill="#fff" font-family="Verdana, 'DejaVu Sans', Geneva, sans-serif" font-size="11" text-anchor="middle">
 <text x="{lw / 2:.1f}" y="15" textLength="{vw(label):.0f}">{label}</text>
-<text x="{lw + rw / 2:.1f}" y="15" textLength="{vw(value):.0f}" font-weight="bold">{value}</text>
+{value_text}
 </g>
 </svg>
 '''
@@ -414,6 +431,9 @@ def cmd_svg():
         write(f"icon-{name}.svg", icon(name))
     for label, value in versions():
         write(f"badge-{label.lower()}.svg", badge(label, value))
+    for label in RUNTIME_BADGES:
+        write(f"badge-{label.lower().replace(' ', '-')}.svg", badge(label))
+    write("badge-clients.svg", badge("clients", CLIENTS_BADGE))
 
 
 # ---------------------------------------------------------------- shoot (simulator, demo mode)
