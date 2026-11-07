@@ -67,6 +67,39 @@ describe("readable hub errors", () => {
   });
 });
 
+// What the hub answers when the computer did not (server/internal/apierr Body and Call): the summary may already be in the
+// page's language, the raw text in detail; the code is what the page goes by (#5031).
+describe("a computer that did not answer", () => {
+  const offline = new ApiError(503, "这台电脑未连接，请连接后重试。", { code: "node_unreachable", retryable: true, delivered: "none", detail: "MacBook: machine is offline" });
+  const dropped = new ApiError(502, "rpc: connection closed", { code: "node_unreachable" });
+  const timedOut = new ApiError(502, "send: context deadline exceeded", { code: "timeout" });
+
+  it.each([
+    ["offline", offline, "lib-api.computer_offline"],
+    ["cut off mid-call", dropped, "lib-api.computer_dropped"],
+    ["too slow", timedOut, "lib-api.computer_timeout"],
+  ] as const)("says what became of a computer that is %s and what to do next", (_, error, key) => {
+    const text = errorText(error);
+    expect(text).toBe(t(key));
+    expect(text).not.toContain(error.message);
+    expect(text).not.toContain("HTTP 50");
+    // the hub itself answered: not folded into "can't reach the hub" while the page's own connection is down
+    expect(isOfflineError(text)).toBe(false);
+  });
+
+  it("calls it offline only when nothing went out", () => {
+    for (const delivered of [undefined, "unknown", "yes"]) {
+      expect(errorText(new ApiError(503, "machine is offline", { code: "node_unreachable", delivered }))).toBe(t("lib-api.computer_dropped"));
+    }
+  });
+
+  it("leaves other gateway failures as they were", () => {
+    for (const body of [{}, { code: "internal" }, { code: "assistant_offline" }]) {
+      expect(errorText(new ApiError(503, "upstream unavailable", body))).toBe(t("lib-api.hub_unavailable", { detail: "HTTP 503: upstream unavailable" }));
+    }
+  });
+});
+
 describe("error language", { timeout: 30_000 }, () => {
   afterEach(() => initI18n("zh-Hans"), 30_000);
 
@@ -81,5 +114,16 @@ describe("error language", { timeout: 30_000 }, () => {
       expect(text).toContain(explanation);
       expect(text).toContain(`HTTP ${status}: original error`);
     }
+  });
+
+  it.each([
+    ["zh-Hans", "不在线", "连接断了", "请求超时"],
+    ["en", "is offline", "connection to this computer dropped", "timed out"],
+    ["ja", "オフライン", "接続が切れました", "タイムアウト"],
+  ] as const)("says what became of the computer in %s", async (lang, offline, dropped, timedOut) => {
+    await initI18n(lang);
+    expect(errorText(new ApiError(503, "MacBook: machine is offline", { code: "node_unreachable", delivered: "none" }))).toContain(offline);
+    expect(errorText(new ApiError(502, "rpc: connection closed", { code: "node_unreachable" }))).toContain(dropped);
+    expect(errorText(new ApiError(502, "send: context deadline exceeded", { code: "timeout" }))).toContain(timedOut);
   });
 });

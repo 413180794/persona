@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -184,6 +185,16 @@ func TestRPCFailureLocalePreservesOutcomeAndDiagnostics(t *testing.T) {
 	rec = httptest.NewRecorder()
 	if body := call(t, langWriter{rec, i18n.Ja}, rec, typed); body["error"] != i18n.T(i18n.Ja, "inbox-errors.no_item") {
 		t.Fatal("typed summary overwritten")
+	}
+}
+
+// The apps still tell a timeout by these words in the hub's summary (iOS APIError.isTimeoutText keeps it quiet, Android's
+// herdr notice explains it), so the sentence that now says what to do next keeps them (#5031).
+func TestTimeoutSummaryKeepsTheWordsTheAppsMatch(t *testing.T) {
+	for lang, words := range map[i18n.Lang]string{i18n.En: "timed out", i18n.ZhHans: "超时"} {
+		if s := i18n.T(lang, "rpc-errors.timeout"); !strings.Contains(strings.ToLower(s), words) {
+			t.Errorf("%s: %q no longer says %q", lang, s, words)
+		}
 	}
 }
 

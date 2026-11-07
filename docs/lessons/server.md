@@ -855,6 +855,8 @@ Error-valued message arguments and structured field errors also need the request
 
 A timeout or disconnected stream may happen after input reached the node. Translate the error summary, but preserve every existing code, delivered and retryable field; never infer delivered=none just because the transport failed. Keep raw diagnostics in detail, preserve node-provided details/drafts, and leave unknown custom error codes as external data. HTTP replies, uncertain inbox replies and backlog/terminal errors must use the same locale-aware boundary rules.
 
+Some apps still recognize a timeout by the summary's words, not its code: iOS `APIError.isTimeoutText` keeps it quiet and Android's herdr notice explains it when the text says "timed out" or "超时". Rewording these summaries (#5031 added what to do next) must keep those words (`TestTimeoutSummaryKeepsTheWordsTheAppsMatch`). The Japanese summary never had them, so those checks miss a Japanese timeout until they branch on `code`.
+
 ## A command that only waits on the node socket must not trap Ctrl-C (2026-11-06, #4548)
 
 - `main` turns SIGINT / SIGTERM into a cancelled context for every subcommand. A subcommand that never reads that context while it blocks (here `personad launch` reading the node's answer) can then be stopped by neither Ctrl-C nor `kill`, only `kill -9`.

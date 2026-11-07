@@ -183,8 +183,19 @@ export function isAbort(e: unknown) {
   return e instanceof DOMException && e.name === "AbortError";
 }
 
+/** The hub answered for a computer that did not (docs/protocol/protocol.md "Error body"): what became of the computer and
+ *  what to do next, by code, not "the hub can't respond". `delivered: none` marks the plainly offline one, where nothing
+ *  went out. The hub's own words stay on the ApiError (`message`, `body.detail`). */
+function computerFailureText(e: ApiError): string | undefined {
+  if (e.code === "node_unreachable") return t(e.body.delivered === "none" ? "lib-api.computer_offline" : "lib-api.computer_dropped");
+  if (e.code === "timeout") return t("lib-api.computer_timeout");
+  return undefined;
+}
+
 export function errorText(e: unknown): string {
   if (e instanceof ApiError) {
+    const computer = computerFailureText(e);
+    if (computer) return computer;
     // Keep both the status and the original reason for diagnostics and existing error-specific explanations.
     const status = `HTTP ${e.status}`;
     const detail = e.message && e.message !== status ? `${status}: ${e.message}` : status;

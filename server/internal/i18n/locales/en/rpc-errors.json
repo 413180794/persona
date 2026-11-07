@@ -1,6 +1,6 @@
 {
-  "timeout": "The request timed out. Check the result before retrying.",
-  "unreachable": "The connection to the computer was lost. Check its connection and the result before retrying.",
+  "timeout": "The request timed out. The computer may be busy or the network unstable. Check whether it went through, then try again later.",
+  "unreachable": "The connection to this computer dropped. Reconnect it, check whether your last action went through, then try again.",
   "failed": "The request could not be completed. Open details for the diagnostic.",
   "input_draft": "There is a draft in the terminal. Resolve it before sending.",
   "dialog_open": "The terminal is waiting for a choice. Resolve it there first.",
@@ -8,7 +8,7 @@
   "attach_busy": "This session is busy in another client. Wait until it is available.",
   "node_outdated": "The computer’s Persona service is too old for this operation. Update it first.",
   "in_doubt": "Delivery cannot be confirmed. Check the result before sending again.",
-  "offline": "This computer is offline. Reconnect it before retrying.",
+  "offline": "This computer is offline. Make sure it’s on and connected to the internet and that Persona Link is running, then try again.",
   "nothing_queued": "Nothing is queued for the agent any more.",
   "send_now_unsupported": "This agent can’t send queued messages now. Update Claude Code, or wait for the queue.",
   "not_a_repository": "This folder isn’t in a Git repository.",
