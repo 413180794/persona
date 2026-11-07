@@ -521,7 +521,8 @@ private fun JsonObject.str(name: String): String? = (this[name] as? JsonPrimitiv
 @Composable
 private fun TodayCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
     val body = item.body as? JsonObject ?: return
-    data class TodayRow(val icon: PhIcon, val status: Status?, val title: String, val detail: String?, val action: String?, val run: (() -> Unit)?)
+    data class TodayRow(val icon: PhIcon, val status: Status?, val title: String, val detail: String?, val action: String?,
+        val detailLines: Int = 2, val run: (() -> Unit)?)
     val locale = currentLocale
     val separator = stringResource(R.string.chat_tasks_list_separator)
     val rows = buildList {
@@ -530,14 +531,28 @@ private fun TodayCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>
             if (done.size == 1) stringResource(R.string.chat_today_done_one, done[0].str("title").orEmpty())
             else pluralStringResource(R.plurals.chat_today_done_many, done.size, done.size),
             done.takeIf { it.size > 1 }?.joinToString(separator) { it.str("title").orEmpty() }, stringResource(R.string.chat_tasks_look),
-            todos.firstOrNull { it.id == done[0].str("id") }?.let { t -> { openTask(host, t) } }))
+            run = todos.firstOrNull { it.id == done[0].str("id") }?.let { t -> { openTask(host, t) } }))
         val waiting = body.list("waiting")
-        if (waiting.isNotEmpty()) add(TodayRow(PhIcons.Hand, Status.NeedsYou,
-            if (waiting.size == 1) stringResource(R.string.chat_today_waiting_one, waiting[0].str("title").orEmpty())
-            else pluralStringResource(R.plurals.chat_today_waiting_many, waiting.size, waiting.size), null, stringResource(R.string.chat_today_go),
-            todos.firstOrNull { it.id == waiting[0].str("id") }?.let { t -> { openTask(host, t) } }))
+        if (waiting.isNotEmpty()) {
+            // what each waits on, under the title (#4752, as the web's #4478): one line per task, the count of the rest after them
+            val asks = todayWaiting(waiting.map { it.str("id").orEmpty() to it.str("title").orEmpty() }, todos, { host.tasks.lead(it, host.sessions) }, host.cards)
+            val labelValue = stringResource(R.string.chat_label_value)
+            val lines = asks.lines.map { line ->
+                val ask = line.ask
+                when {
+                    waiting.size == 1 -> ask?.text().orEmpty()
+                    ask != null -> labelValue.format(line.title, ask.text())
+                    else -> line.title
+                }
+            } + listOfNotNull(asks.more.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.chat_today_more_waiting, it, it) })
+            add(TodayRow(PhIcons.Hand, Status.NeedsYou,
+                if (waiting.size == 1) stringResource(R.string.chat_today_waiting_one, waiting[0].str("title").orEmpty())
+                else pluralStringResource(R.plurals.chat_today_waiting_many, waiting.size, waiting.size),
+                lines.takeIf { it.isNotEmpty() }?.joinToString("\n"), stringResource(R.string.chat_today_go),
+                detailLines = lines.size.coerceAtLeast(2), run = todos.firstOrNull { it.id == waiting[0].str("id") }?.let { t -> { openTask(host, t) } }))
+        }
         item.number("working")?.takeIf { it > 0 }?.let {
-            add(TodayRow(PhIcons.GearSix, Status.Working, pluralStringResource(R.plurals.chat_today_working, it.toInt(), it.toInt()), null, null, null))
+            add(TodayRow(PhIcons.GearSix, Status.Working, pluralStringResource(R.plurals.chat_today_working, it.toInt(), it.toInt()), null, null, run = null))
         }
         body.list("meetings").take(3).forEach { m ->
             val t = AssistantLines.time(m.str("start"))?.let { LocalizedFormats.format(it, LocalizedFormats.TIME, locale) }.orEmpty()
@@ -567,7 +582,7 @@ private fun TodayCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>
                 JIcon(r.icon, decorative = true, tint = r.status?.let { PersonaTheme.palette.status(it).text } ?: PersonaTheme.palette.accent)
                 Column(Modifier.weight(1f)) {
                     Text(r.title, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    r.detail?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                    r.detail?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = r.detailLines, overflow = TextOverflow.Ellipsis) }
                 }
                 if (r.action != null && r.run != null) JButton(r.action, r.run, kind = JButtonKind.Secondary, size = JButtonSize.Small)
             }

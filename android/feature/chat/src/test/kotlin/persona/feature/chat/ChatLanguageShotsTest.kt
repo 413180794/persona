@@ -52,6 +52,7 @@ import persona.core.contracts.FeedItem
 import persona.core.contracts.FeedResponse
 import persona.core.contracts.Item
 import persona.core.contracts.LoopInfo
+import persona.core.contracts.Interaction
 import persona.core.contracts.Machine
 import persona.core.contracts.PlanTask
 import persona.core.contracts.ServerEvent
@@ -324,7 +325,9 @@ class ChatLanguageShotsTest {
                 when (scene) {
                     "work" -> Column(Modifier.testTag("shot").width(400.dp).background(PersonaTheme.palette.background).padding(Tokens.Space.l),
                         verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                        val host = AssistantTaskHost(store, "main", listOf(lead), { "Work laptop" }, {}, {}, {})
+                        // the lead's card: the task card and the "Today" card's "Needs you" row say what it asks (#3964, #4752)
+                        val host = AssistantTaskHost(store, "main", listOf(lead), { "Work laptop" }, {}, {}, {},
+                            pending = listOf(Interaction("c1", machineId = "mac", sessionId = "lead", kind = "permission", toolName = "Bash", summary = "./gradlew test")))
                         for (line in listOf(live, finished)) ChatLineContent(line, SessionKey("mac", "s1"), loader,
                             recordedDuration = 83, onToggle = {}, onFold = {}, folding = emptySet(), foldErrors = emptyMap(), onFullText = {})
                         ChatLineContent(ChatLine.Step("w-open", todoPlan, true), SessionKey("mac", "s1"), loader, recordedDuration = null,

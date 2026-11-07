@@ -331,6 +331,10 @@
         <item quantity="one">%1$d needs you</item>
         <item quantity="other">%1$d need you</item>
     </plurals>
+    <plurals name="chat_today_more_waiting">
+        <item quantity="one">%1$d more</item>
+        <item quantity="other">%1$d more</item>
+    </plurals>
     <string name="chat_today_go">Open</string>
     <plurals name="chat_today_working">
         <item quantity="one">%1$d task in progress</item>

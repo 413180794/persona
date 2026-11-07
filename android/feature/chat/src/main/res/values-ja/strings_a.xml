@@ -313,6 +313,9 @@
     <plurals name="chat_today_waiting_many">
         <item quantity="other">要対応%1$d件</item>
     </plurals>
+    <plurals name="chat_today_more_waiting">
+        <item quantity="other">ほか%1$d件</item>
+    </plurals>
     <string name="chat_today_go">開く</string>
     <plurals name="chat_today_working">
         <item quantity="other">%1$d件のタスクが作業中</item>

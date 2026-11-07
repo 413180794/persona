@@ -313,6 +313,9 @@
     <plurals name="chat_today_waiting_many">
         <item quantity="other">%1$d 件等你</item>
     </plurals>
+    <plurals name="chat_today_more_waiting">
+        <item quantity="other">还有 %1$d 件</item>
+    </plurals>
     <string name="chat_today_go">去看</string>
     <plurals name="chat_today_working">
         <item quantity="other">%1$d 个任务在做</item>
