@@ -1031,6 +1031,29 @@
       },
       "extractionState": "manual"
     },
+    "%@ didn't connect; showing the last synced list.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ didn't connect; showing the last synced list."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@に接続できなかったため、前回同期した結果を表示しています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 没连上，显示的是上次同步的结果"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "%@ Has a Question": {
       "localizations": {
         "en": {
@@ -9009,6 +9032,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "@我"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "A computer that didn't connect or answer in time shows its last synced list, marked “Not updated”.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A computer that didn't connect or answer in time shows its last synced list, marked “Not updated”."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続できなかった、または時間内に応答しなかったコンピューターは、前回同期したリストを「未更新」の印付きで表示します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没连上或没及时回答的电脑，列表里是它上次同步的结果，标着「未更新」。"
           }
         }
       },
@@ -18093,6 +18139,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "内置"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Built-in claude command": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in claude command"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "組み込みのclaudeコマンド"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置的 claude 命令"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Built-in claude · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in claude · %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "組み込みのclaude · %1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置 claude · %1$@"
           }
         }
       },
@@ -39737,6 +39829,75 @@
       },
       "extractionState": "manual"
     },
+    "From PATH": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From PATH"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PATHから"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自 PATH"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Function in %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Function in %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@の関数"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 里的函数"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Functions and aliases in each computer's login shell config (~/.zshrc, ~/.bashrc) that call claude or codex. They sync each time you open this page, and new ones show up automatically.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Functions and aliases in each computer's login shell config (~/.zshrc, ~/.bashrc) that call claude or codex. They sync each time you open this page, and new ones show up automatically."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各コンピューターのログインシェルの設定ファイル（~/.zshrc、~/.bashrc）にある、claude / codexを呼び出す関数とエイリアスです。このページを開くたびに同期され、追加したものは自動で表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各台电脑登录 shell 的配置文件（~/.zshrc、~/.bashrc）里调用 claude / codex 的函数和别名，每次打开这页时同步；新加的会自动出现。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "FYI": {
       "localizations": {
         "en": {
@@ -41969,6 +42130,75 @@
           }
         }
       }
+    },
+    "Not updated": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not updated"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未更新"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未更新"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Offline · showing the last sync (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline · showing the last sync (%1$@)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン · 前回の同期結果を表示中（%1$@）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "离线 · 显示上次同步的结果（%1$@）"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Offline, never synced": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline, never synced"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン、まだ同期していません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "离线，还没同步过"
+          }
+        }
+      },
+      "extractionState": "manual"
     },
     "Script on PATH": {
       "localizations": {
@@ -73599,6 +73829,144 @@
       },
       "extractionState": "manual"
     },
+    "Synced": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同期済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已同步"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Synced · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced · %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同期済み · %1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已同步 · %1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The plain claude command on each computer: “Claude Code default” in Model Configuration.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The plain claude command on each computer: “Claude Code default” in Model Configuration."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各コンピューターにある素のclaudeコマンドで、「モデル設定」の「Claude Codeのデフォルト」です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各台电脑上原生的 claude 命令，就是「模型配置」里的「Claude Code 默认」。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "They're only hidden in Persona; nothing on the computer is changed. Open one to unhide it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "They're only hidden in Persona; nothing on the computer is changed. Open one to unhide it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaで非表示にしているだけで、コンピューター上のファイルは変更されていません。開くと再表示できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只是在 Persona 里不显示，电脑上的文件没有改。点进去可以恢复。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Timed out · showing the last sync (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timed out · showing the last sync (%1$@)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイムアウト · 前回の同期結果を表示中（%1$@）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "超时 · 显示上次同步的结果（%1$@）"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Timed out, no list yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timed out, no list yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイムアウト、リストを取得できませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "超时，没有拿到列表"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Unknown [State Names]": {
       "extractionState": "manual",
       "localizations": {
@@ -73621,6 +73989,29 @@
           }
         }
       }
+    },
+    "Unknown reason": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown reason"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明な理由"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知原因"
+          }
+        }
+      },
+      "extractionState": "manual"
     },
     "Unread [State Names]": {
       "extractionState": "manual",
@@ -114205,6 +114596,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "长行按窗口宽度换行"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Wrapper scripts on your computers' PATH that start claude, and the runtimes' own launchers. They sync each time you open this page.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wrapper scripts on your computers' PATH that start claude, and the runtimes' own launchers. They sync each time you open this page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各コンピューターのPATH上にあるclaudeを起動するラッパースクリプトと、ランタイム自身のランチャーです。このページを開くたびに同期されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各台电脑 PATH 上启动 claude 的包装脚本，以及运行时自带的启动器，每次打开这页时同步。"
           }
         }
       },

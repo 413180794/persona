@@ -44,5 +44,6 @@
   "err_proxy_credentials": "プロキシにユーザー名やパスワードは含められません",
   "err_tier_model_long": "ティアモデルの名前が長すぎます",
   "role_default": "既定のメインモデル",
-  "role_optional": "選択可能なモデル"
+  "role_optional": "選択可能なモデル",
+  "err_builtin_hide": "組み込みの claude は各マシンの既定のランチャーなので非表示にできません"
 }

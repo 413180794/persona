@@ -44,5 +44,6 @@
   "err_proxy_credentials": "代理地址里不能带用户名和密码",
   "err_tier_model_long": "档位模型的名字太长",
   "role_default": "默认主模型",
-  "role_optional": "可选模型"
+  "role_optional": "可选模型",
+  "err_builtin_hide": "内置的 claude 是各台电脑默认的启动器，不能隐藏"
 }

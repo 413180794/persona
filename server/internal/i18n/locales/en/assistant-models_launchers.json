@@ -44,5 +44,6 @@
   "err_proxy_credentials": "Proxy can't carry a username or password",
   "err_tier_model_long": "A tier model name is too long",
   "role_default": "Default model",
-  "role_optional": "Optional model"
+  "role_optional": "Optional model",
+  "err_builtin_hide": "The built-in claude is every machine's default launcher and cannot be hidden"
 }

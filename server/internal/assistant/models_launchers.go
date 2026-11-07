@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -34,7 +35,36 @@ const (
 	launchersManagedKey = "launchers.managed" // []storedLauncher
 	launchersHiddenKey  = "launchers.hidden"  // []string: ~/.zshrc launcher names hidden in Persona
 	launchersZshrcKey   = "launchers.zshrc"   // map machine id → []proto.Launcher, the last list seen
+	// launchersMetaKey: map machine id → launcherMeta (its shell, rc file, when its list last came in).
+	launchersMetaKey = "launchers.zshrc.meta"
 )
+
+// launcherSyncTimeout is how long the list waits for one machine (its node caches a minute and keeps listing past
+// it, so a slow rc file is there the next time); the page shows that machine as timed out with its last list.
+var launcherSyncTimeout = 10 * time.Second
+
+// launcherMeta is what is kept of a machine's last good launcher list besides the list.
+type launcherMeta struct {
+	Shell    string    `json:"shell,omitempty"`
+	RCFile   string    `json:"rc_file,omitempty"`
+	SyncedAt time.Time `json:"synced_at"`
+}
+
+// LauncherSync is how one machine's launchers came in this time, for Settings › Model providers (docs/launchers.md, “Sync state”):
+// ok, offline (not connected: its last list shows, marked), timeout (no answer in launcherSyncTimeout) or error
+// (Error says why).
+type LauncherSync struct {
+	Machine  string     `json:"machine"`
+	Name     string     `json:"name"`
+	State    string     `json:"state"`
+	Error    string     `json:"error,omitempty"`
+	Shell    string     `json:"shell,omitempty"`
+	RCFile   string     `json:"rc_file,omitempty"`
+	SyncedAt *time.Time `json:"synced_at,omitempty"` // the last good list, also for one that did not answer now
+}
+
+// defaultRCFile is where a node from before the rc_file field found its launchers: it only ran zsh scripts there.
+const defaultRCFile = "~/.zshrc"
 
 // storedLauncher is a provider added in Persona as kept in settings: the key sealed.
 type storedLauncher struct {
@@ -57,7 +87,7 @@ type LauncherView struct {
 	API                    string   `json:"api,omitempty"`
 	Name                   string   `json:"name"`
 	DisplayName            string   `json:"display_name,omitempty"` // managed: the name shown, "" shows Name
-	Source                 string   `json:"source"`                 // zshrc | persona | agy
+	Source                 string   `json:"source"`                 // zshrc (an rc file's) | persona | agy | builtin (plain claude)
 	BaseURL                string   `json:"base_url,omitempty"`
 	Model                  string   `json:"model,omitempty"`
 	SmallModel             string   `json:"small_model,omitempty"`
@@ -68,8 +98,15 @@ type LauncherView struct {
 	Args                   []string `json:"args,omitempty"`
 	HasKey                 bool     `json:"has_key,omitempty"`
 	Auth                   string   `json:"auth,omitempty"`     // managed: api_key (x-api-key) or bearer
-	Machines               []string `json:"machines,omitempty"` // zshrc: the machines whose ~/.zshrc defines it
+	Machines               []string `json:"machines,omitempty"` // zshrc: the machines whose rc file defines it; builtin: that have claude
 	Hidden                 bool     `json:"hidden,omitempty"`
+	// RCFiles (source zshrc only): the files it was found in (~/.zshrc, ~/.bashrc: each machine's login shell's), for the group title.
+	RCFiles []string `json:"rc_files,omitempty"`
+	// Stale (zshrc, builtin): the machines of Machines that did not answer this time (offline, timed out, failed):
+	// what they had the last time.
+	Stale []string `json:"stale,omitempty"`
+	// Versions (builtin): Claude Code's version on each machine that said.
+	Versions map[string]string `json:"versions,omitempty"`
 	// Managed only (#2455, proto.ManagedLauncher's fields): never the headers themselves, only has_headers.
 	Models        []proto.ProviderModel `json:"models,omitempty"`
 	OpusModel     string                `json:"opus_model,omitempty"`
@@ -193,64 +230,109 @@ func (s *Service) pushManaged(ctx context.Context, machine string) {
 	}
 }
 
-// zshrcLaunchers is one machine's ~/.zshrc launchers.
+// zshrcLaunchers is one machine's rc-file launchers, and how they came in (Sync.State "" before any ask).
 type zshrcLaunchers struct {
 	MachineID string
 	Launchers []proto.Launcher
+	Sync      LauncherSync
+	// ClaudeVersion: Claude Code's version there, as the hub knows it ("" when it has none or never said).
+	ClaudeVersion string
 }
 
-// zshrcLaunchers is every machine's ~/.zshrc launchers in the machines' order: as last seen (an offline one's from
-// the last time, kept in settings launchers.zshrc), or asked of the online nodes again first (refresh, or nothing
-// seen since the assistant started; the node caches a minute).
+// zshrcLaunchers is every machine's rc-file launchers (~/.zshrc, ~/.bashrc) in the machines' order: as last seen (an
+// offline one's from the last time, kept in settings launchers.zshrc), or asked of the online nodes again first
+// (refresh, or nothing seen since the assistant started; the node caches a minute). Each machine gets
+// launcherSyncTimeout, and its Sync says whether its list came in now.
 func (s *Service) zshrcLaunchers(ctx context.Context, refresh bool) []zshrcLaunchers {
 	st := &s.models
 	st.zshrcMu.Lock()
-	seen := st.zshrc
+	seen, states := st.zshrc, st.zshrcSync
 	st.zshrcMu.Unlock()
 	devices := s.devices(ctx)
 	if seen == nil || refresh {
 		seen = map[string][]proto.Launcher{}
+		meta := map[string]launcherMeta{}
 		if store := s.store(); store != nil {
 			_, _ = store.Setting(ctx, launchersZshrcKey, &seen)
+			_, _ = store.Setting(ctx, launchersMetaKey, &meta)
 		}
+		states = map[string]LauncherSync{}
 		var mu sync.Mutex
 		var wg sync.WaitGroup
 		changed := false
 		for _, d := range devices {
-			if !d.Online {
-				continue
-			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				cctx, cancel := context.WithTimeout(ctx, 25*time.Second)
-				defer cancel()
-				var res struct {
-					Launchers []proto.Launcher `json:"launchers"`
-				}
-				if err := s.call(cctx, d.ID, DeviceLaunchersList, map[string]any{}, &res); err != nil {
-					return
-				}
+				res, err := s.listLaunchers(ctx, d)
 				mu.Lock()
-				if !slices.Equal(seen[d.ID], res.Launchers) {
-					seen[d.ID], changed = res.Launchers, true
+				defer mu.Unlock()
+				state := LauncherSync{Machine: d.ID, Name: d.Name, State: "ok"}
+				if err != nil {
+					state.State, state.Error = launcherSyncState(ctx, err)
+				} else {
+					if !slices.Equal(seen[d.ID], res.Launchers) {
+						seen[d.ID] = res.Launchers
+					}
+					meta[d.ID], changed = launcherMeta{Shell: res.Shell, RCFile: res.RCFile, SyncedAt: time.Now()}, true
 				}
-				mu.Unlock()
+				if m, ok := meta[d.ID]; ok {
+					state.Shell, state.RCFile = m.Shell, cmp.Or(m.RCFile, defaultRCFile)
+					if at := m.SyncedAt; !at.IsZero() {
+						state.SyncedAt = &at
+					}
+				}
+				states[d.ID] = state
 			}()
 		}
 		wg.Wait()
 		if store := s.store(); changed && store != nil {
 			_ = store.PutSetting(ctx, launchersZshrcKey, seen)
+			_ = store.PutSetting(ctx, launchersMetaKey, meta)
 		}
 		st.zshrcMu.Lock()
-		st.zshrc = seen
+		st.zshrc, st.zshrcSync = seen, states
 		st.zshrcMu.Unlock()
 	}
 	out := make([]zshrcLaunchers, 0, len(devices))
 	for _, d := range devices {
-		out = append(out, zshrcLaunchers{MachineID: d.ID, Launchers: seen[d.ID]})
+		out = append(out, zshrcLaunchers{MachineID: d.ID, Launchers: seen[d.ID], Sync: states[d.ID], ClaudeVersion: d.ClaudeVersion})
 	}
 	return out
+}
+
+// launcherListing is a node's launchers.list: the launchers, and the shell and rc file they came from ("" from an
+// older node).
+type launcherListing struct {
+	Launchers []proto.Launcher `json:"launchers"`
+	Shell     string           `json:"shell"`
+	RCFile    string           `json:"rc_file"`
+}
+
+// listLaunchers asks one machine for its list, giving it launcherSyncTimeout; an offline machine is not asked.
+func (s *Service) listLaunchers(ctx context.Context, d Device) (launcherListing, error) {
+	var res launcherListing
+	if !d.Online {
+		return res, apierr.ErrOffline
+	}
+	cctx, cancel := context.WithTimeout(ctx, launcherSyncTimeout)
+	defer cancel()
+	err := s.call(cctx, d.ID, DeviceLaunchersList, map[string]any{}, &res)
+	if err != nil && cctx.Err() != nil && ctx.Err() == nil {
+		err = context.DeadlineExceeded
+	}
+	return res, err
+}
+
+// launcherSyncState names why a machine's list did not come: offline, timeout, or error with the reason.
+func launcherSyncState(ctx context.Context, err error) (state, reason string) {
+	switch {
+	case errors.Is(err, apierr.ErrOffline):
+		return "offline", ""
+	case errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil:
+		return "timeout", ""
+	}
+	return "error", textfmt.Clip(strings.TrimSpace(err.Error()), 300)
 }
 
 // configuredLauncher is machine's hub.json launcher name (machines[].launchers, in the hello): a wrapper the node may
@@ -313,11 +395,52 @@ func (s *Service) launcherViewsOf(ctx context.Context, zshrc []zshrcLaunchers) [
 				names = append(names, l.Name)
 			}
 			v.Machines = append(v.Machines, m.MachineID)
+			if rc := cmp.Or(m.Sync.RCFile, defaultRCFile); v.Source == "zshrc" && !slices.Contains(v.RCFiles, rc) {
+				v.RCFiles = append(v.RCFiles, rc)
+			}
+			if m.Sync.State != "" && m.Sync.State != "ok" {
+				v.Stale = append(v.Stale, m.MachineID) // the machine's last list: it is offline or did not answer now
+			}
 		}
 	}
 	sort.Strings(names)
 	for _, n := range names {
 		out = append(out, *byName[n])
+	}
+	return out
+}
+
+// builtinClaude is the plain `claude` of every machine that has Claude Code (the default launcher, “Claude Code
+// default” in Model Configuration; assistant.launcher "claude"): one view, its machines and their versions. ok false
+// when no machine is known to have it, or a provider added in Persona took the name.
+func (s *Service) builtinClaude(ctx context.Context, zshrc []zshrcLaunchers) (LauncherView, bool) {
+	if slices.ContainsFunc(s.storedLaunchers(ctx), func(l storedLauncher) bool { return l.Name == "claude" }) {
+		return LauncherView{}, false
+	}
+	v := LauncherView{Name: "claude", Source: "builtin", Versions: map[string]string{}}
+	for _, m := range zshrc {
+		listed := slices.ContainsFunc(m.Launchers, func(l proto.Launcher) bool { return l.Name == "claude" })
+		if m.ClaudeVersion == "" && !listed {
+			continue
+		}
+		v.Machines = append(v.Machines, m.MachineID)
+		if m.ClaudeVersion != "" {
+			v.Versions[m.MachineID] = m.ClaudeVersion
+		}
+		if m.Sync.State != "" && m.Sync.State != "ok" {
+			v.Stale = append(v.Stale, m.MachineID)
+		}
+	}
+	return v, len(v.Machines) > 0
+}
+
+// launcherSyncList is every machine's sync state, in the machines' order (the ones asked).
+func launcherSyncList(zshrc []zshrcLaunchers) []LauncherSync {
+	out := []LauncherSync{}
+	for _, m := range zshrc {
+		if m.Sync.State != "" {
+			out = append(out, m.Sync)
+		}
 	}
 	return out
 }
@@ -691,15 +814,25 @@ func (in launcherInput) check() error {
 
 func (s *Service) launcherRoutes() {
 	s.handle("GET /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		// Each machine gets launcherSyncTimeout: one that is slow or gone never holds the page (sync says which).
+		ctx, cancel := context.WithTimeout(r.Context(), launcherSyncTimeout+5*time.Second)
 		defer cancel()
-		// A launcher just added to a ~/.zshrc shows up (the node caches a minute).
-		apierr.WriteJSON(w, map[string]any{"launchers": s.launcherViewsOf(ctx, s.zshrcLaunchers(ctx, true))})
+		// A launcher just added to an rc file shows up (the node caches a minute).
+		zshrc := s.zshrcLaunchers(ctx, true)
+		views := s.launcherViewsOf(ctx, zshrc)
+		if b, ok := s.builtinClaude(ctx, zshrc); ok {
+			views = append(views, b)
+		}
+		apierr.WriteJSON(w, map[string]any{"launchers": views, "sync": launcherSyncList(zshrc)})
 	})
 	s.handle("GET /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 		name := r.PathValue("name")
+		if b, ok := s.builtinClaude(ctx, s.zshrcLaunchers(ctx, false)); ok && name == b.Name {
+			apierr.WriteJSON(w, map[string]any{"launcher": b})
+			return
+		}
 		for _, v := range s.launcherViews(ctx) {
 			if v.Name != name {
 				continue
@@ -869,7 +1002,11 @@ func (s *Service) launcherRoutes() {
 			apierr.WriteJSON(w, map[string]any{"ok": true, "deleted": true})
 			return
 		}
-		hidden := s.hiddenLaunchers(ctx) // a ~/.zshrc launcher: hidden in Persona, the file is not touched
+		if name == "claude" { // plain claude is every machine's default launcher: there is nothing to hide
+			apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models_launchers.err_builtin_hide"))
+			return
+		}
+		hidden := s.hiddenLaunchers(ctx) // an rc-file launcher: hidden in Persona, the file is not touched
 		if !slices.Contains(hidden, name) {
 			hidden = append(hidden, name)
 		}

@@ -6082,7 +6082,7 @@ MODEL_CATEGORY_FOR = {pid: {"主对话": "assistant", "Agents": "agent.new", "�
 
 def model_configuration(include_uses=False):
     providers = [dict(id="launcher." + l["name"], name=l["name"], kind=l.get("kind", "launcher"),
-                      model=l.get("model"), hidden=l.get("hidden", False)) for l in LAUNCHERS]
+                      model=l.get("model"), hidden=l.get("hidden", False)) for l in LAUNCHERS if l["source"] != "builtin"]
     providers += [{"id": "launcher.claude", "name": "claude", "kind": "launcher", "model": "model-chat"},
                   {"id": "legacy.ai", "name": "轻量 API", "kind": "api", "api": "messages", "model": "model-fast"}]
     definitions = list(MODEL_DEFINITIONS if include_uses else MODEL_DEFINITIONS[:4])
@@ -6145,6 +6145,21 @@ LAUNCHERS = [
     {"name": "cc_glm", "source": "zshrc", "base_url": "https://open.bigmodel.example.com/api/anthropic", "model": "glm-5.3", "machines": ["macbook"]},
     {"name": "cc_old", "source": "zshrc", "base_url": "https://relay.example.com", "model": "claude-opus-4-7", "machines": ["macbook"], "hidden": True},
     {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
+    # The server's login shell is bash: its launchers come from ~/.bashrc; Mac Studio did not answer this time, so
+    # its codex is from its last list (stale).
+    {"name": "codex", "source": "zshrc", "model": "默认", "machines": ["server", "studio"], "rc_files": ["~/.bashrc", "~/.zshrc"], "stale": ["studio"]},
+    {"name": "cc_bash", "source": "zshrc", "base_url": "https://relay.example.net", "model": "example-pro", "machines": ["server"], "rc_files": ["~/.bashrc"]},
+    # Plain claude on every machine that has it (GET /api/v1/launchers, server/internal/assistant/models_launchers.go builtinClaude).
+    {"name": "claude", "source": "builtin", "machines": ["server", "macbook", "studio"], "stale": ["studio"],
+     "versions": {"server": "2.1.200", "macbook": "2.1.206", "studio": "2.1.190"}},
+]
+for _l in LAUNCHERS:
+    if _l["source"] == "zshrc": _l.setdefault("rc_files", ["~/.zshrc"])
+# How each machine's launchers came in this time.
+LAUNCHER_SYNC = [
+    {"machine": "server", "name": "服务器", "state": "ok", "shell": "bash", "rc_file": "~/.bashrc", "synced_at": ago()},
+    {"machine": "macbook", "name": "MacBook", "state": "ok", "shell": "zsh", "rc_file": "~/.zshrc", "synced_at": ago()},
+    {"machine": "studio", "name": "Mac Studio", "state": "timeout", "shell": "zsh", "rc_file": "~/.zshrc", "synced_at": ago(hours=3)},
 ]
 if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Persona (LauncherSwipeTests swipes it to "Delete")
     LAUNCHERS.insert(0, {"name": "jv_strong", "source": "persona", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True, "auth": "bearer"})
@@ -12038,7 +12053,7 @@ class H(BaseHTTPRequestHandler):
             if problem:
                 return self.send_json({"code": "internal", "error": problem}, 502)
             return self.send_json(listing)
-        if p == "/api/v1/launchers": return self.send_json({"launchers": [dict(l) for l in LAUNCHERS]})
+        if p == "/api/v1/launchers": return self.send_json({"launchers": [dict(l) for l in LAUNCHERS], "sync": LAUNCHER_SYNC})
         if p == "/api/v1/launchers/presets": return self.send_json({"presets": LAUNCHER_PRESETS})
         if p.startswith("/api/v1/launchers/") and p.endswith("/quota"):
             n = p.split("/")[4]

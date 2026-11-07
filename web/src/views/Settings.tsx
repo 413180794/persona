@@ -1,5 +1,5 @@
-// Settings (docs/web.md): appearance, where the assistant runs, "Models" (every launcher: ~/.zshrc ones synced, Persona ones
-// kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's Settings.
+// Settings (docs/web.md): appearance, where the assistant runs, "Models" (every launcher: rc-file and PATH ones synced, the
+// built-in claude, Persona ones kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's Settings.
 import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
@@ -46,6 +46,7 @@ import { hubHasExt } from "../lib/extension-api";
 import { hostOf, type ProviderView } from "../lib/providers";
 import { ProviderWizard } from "./settings/ProviderWizard";
 import { ProviderImport } from "./settings/ProviderImport";
+import { builtinRows, loadLaunchers, rcFilesOf, rcGroups, syncStateText, type LauncherSync } from "../lib/launcher-list";
 import { TerminalModeRow } from "./settings/TerminalModeSetting";
 import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_INFO, TABS, type Tab } from "./settings/nav";
 import { SHEET_QUERY, useMedia } from "../ui/overlay";
@@ -69,11 +70,17 @@ interface LauncherDetail {
 
 /** GET /api/v1/launchers' entry: a managed provider's fields (lib/providers.ts) plus the ~/.zshrc ones'. */
 interface LauncherView extends ProviderView {
-  /** zshrc: a ~/.zshrc function or alias; path: a wrapper script on the computer's PATH (#5954). */
-  source: "zshrc" | "path" | "persona" | "agy" | string;
+  /** zshrc: an rc file's (~/.zshrc, ~/.bashrc); path: a wrapper script on the computer's PATH (#5954); builtin: plain claude (no edit, can't be hidden). */
+  source: "zshrc" | "path" | "persona" | "agy" | "builtin" | string;
   agent?: "claude" | "codex" | "agy" | string;
   machines?: string[];
   hidden?: boolean;
+  /** zshrc: the rc files it was found in; absent from older hubs (all ~/.zshrc). */
+  rc_files?: string[];
+  /** Machines of `machines` that did not answer this time: their entry is from their last list. */
+  stale?: string[];
+  /** builtin: Claude Code's version per machine. */
+  versions?: Record<string, string>;
   definitions?: Record<string, string>;
   details?: Record<string, LauncherDetail>;
 }
@@ -428,6 +435,7 @@ function dropLinkParams() {
 function Models() {
   const machines = useStore((s) => s.machines);
   const [list, setList] = useState<LauncherView[] | null>(null);
+  const [sync, setSync] = useState<LauncherSync[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -438,22 +446,29 @@ function Models() {
 
   const load = () => {
     setLoading(true);
-    return api<{ launchers: LauncherView[] }>("/launchers")
-      .then((r) => (setList(r.launchers ?? []), setError("")))
+    setError("");
+    return loadLaunchers<LauncherView>()
+      .then((r) => (setList(r.launchers), setSync(r.sync ?? [])))
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
   };
   useEffect(() => void load(), []);
 
-  const name = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
+  const name = (id: string) => sync.find((s) => s.machine === id)?.name || machines.find((m) => m.id === id)?.name || id;
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!list || !q) return list ?? [];
     return list.filter((l) => [l.name, l.model, l.small_model, l.base_url, ...(l.machines ?? []).map(name)].some((v) => v?.toLowerCase().includes(q)));
-  }, [list, query, machines]);
+  }, [list, query, machines, sync]);
   const managed = shown.filter((l) => l.source === "persona");
-  const zshrc = shown.filter((l) => l.source !== "persona" && !l.hidden);
-  const hidden = shown.filter((l) => l.source !== "persona" && l.hidden);
+  const builtin = builtinRows(shown);
+  const rc = rcGroups(shown);
+  // a wrapper script on PATH or a runtime's launcher (agy, omp): a computer's, but not from an rc file
+  const onPath = shown.filter((l) => l.source !== "persona" && l.source !== "builtin" && l.source !== "zshrc" && !l.hidden);
+  const hidden = shown.filter((l) => l.source !== "persona" && l.source !== "builtin" && l.hidden);
+  // the machines that did not answer this time, named on the entries they gave before
+  const staleMark = (ids?: string[]) =>
+    ids?.length ? <Pill tone="orange">{t("settings.stale", { machines: formatList(ids.map(name), { type: "conjunction", style: "narrow" }) })}</Pill> : null;
 
   const row = (l: LauncherView) => (
     <button key={l.name} type="button" onClick={() => setOpen(l.name)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
@@ -463,6 +478,7 @@ function Models() {
           {l.source === "persona" && <Pill tone="accent">Persona</Pill>}
           {l.source === "agy" && <Pill>Antigravity Runtime</Pill>}
           {l.kind === "api" && <Pill>{t("settings.direct_api")}</Pill>}
+          {staleMark(l.stale)}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11.5px] text-ink-3">
           {l.display_name && <span className="shrink-0 font-mono">{l.name}</span>}
@@ -490,7 +506,7 @@ function Models() {
       </div>
       {!list && !error && <Loading />}
       {error && <div className="mb-4 flex items-center gap-3">
-        <p role="alert" className="min-w-0 flex-1 text-[13px] break-words text-red">{error}</p>
+        <p role="alert" className="min-w-0 flex-1 text-[13px] break-words text-red">{t("settings.launchers_failed", { error })}</p>
         <Button icon="retry" onClick={() => void load()} busy={loading}>{t("settings.retry")}</Button>
       </div>}
       {list && query && shown.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">{t("settings.no_matching_providers", { query })}</p>}
@@ -499,9 +515,29 @@ function Models() {
           {managed.length ? managed.map(row) : <p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings.managed_empty")}</p>}
         </Group>
       )}
-      {zshrc.length > 0 && (
-        <Group title={t("settings.zshrc_title", { count: zshrc.length })} footer={t("settings.zshrc_footer")}>
-          {zshrc.map(row)}
+      {builtin.length > 0 && (
+        <Group title={t("settings.builtin_title", { count: builtin.length })} footer={t("settings.builtin_footer")}>
+          {builtin.map((b) => (
+            <div key={`${b.name}/${b.machine}`} className="flex items-center gap-3 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[13px] font-medium text-ink">{t("settings.builtin_row", { name: b.name, machine: name(b.machine) })}</span>
+                  {b.stale && <Pill tone="orange">{t("settings.stale_mark")}</Pill>}
+                </div>
+                <div className="mt-0.5 truncate font-mono text-[11.5px] text-ink-3">{b.version ? `Claude Code ${b.version}` : "Claude Code"}</div>
+              </div>
+            </div>
+          ))}
+        </Group>
+      )}
+      {rc.map((g, i) => (
+        <Group key={g.files} title={t("settings.zshrc_title", { file: g.files, count: g.launchers.length })} footer={i === rc.length - 1 ? t("settings.zshrc_footer") : undefined}>
+          {g.launchers.map(row)}
+        </Group>
+      ))}
+      {onPath.length > 0 && (
+        <Group title={t("settings.path_title", { count: onPath.length })} footer={t("settings.path_footer")}>
+          {onPath.map(row)}
         </Group>
       )}
       {hidden.length > 0 && (
@@ -517,6 +553,22 @@ function Models() {
               {t("settings-providerimport.import")}
             </Button>
           </Row>
+        </Group>
+      )}
+      {list && !query && sync.length > 0 && (
+        <Group title={t("settings.sync_title", { count: sync.length })} footer={t("settings.sync_footer")}>
+          {sync.map((s) => {
+            const st = syncStateText(s);
+            return (
+              <div key={s.machine} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] text-ink">{name(s.machine)}</div>
+                  {st.detail && <div className={cx("mt-0.5 truncate text-[11.5px]", s.state === "error" ? "text-red" : "text-ink-3", s.state === "ok" && "font-mono")} title={st.detail}>{st.detail}</div>}
+                </div>
+                <Pill tone={st.tone}>{st.label}</Pill>
+              </div>
+            );
+          })}
         </Group>
       )}
       <LauncherDetailDialog
@@ -664,9 +716,9 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "persona" ? "accent" : undefined}>{l.source === "persona" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function")}</Pill>
+            <Pill tone={l.source === "persona" ? "accent" : undefined}>{l.source === "persona" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function", { file: rcFilesOf(l).join(" / ") })}</Pill>
             {(l.machines ?? []).map((id) => (
-              <Pill key={id}>{mname(id)}</Pill>
+              <Pill key={id} tone={l.stale?.includes(id) ? "orange" : undefined}>{l.stale?.includes(id) ? `${mname(id)} · ${t("settings.stale_mark")}` : mname(id)}</Pill>
             ))}
             {l.hidden && <Pill>{t("settings.hidden")}</Pill>}
           </div>

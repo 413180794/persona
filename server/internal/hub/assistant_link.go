@@ -155,7 +155,7 @@ func (l assistantLink) deviceCallFrom(ctx context.Context, from string, p assist
 				m.mu.Unlock()
 				list = append(list, assistantwire.Device{ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, SSHHost: m.cfg.SSHHost, Home: info.Home,
 					DataDir: info.DataDir, Online: online, Reachable: m.reachable(), Version: info.Version,
-					ModelConfiguration: info.ModelConfiguration})
+					ModelConfiguration: info.ModelConfiguration, ClaudeVersion: info.ClaudeVersion})
 			}
 			d := &h.devices
 			d.mu.Lock()

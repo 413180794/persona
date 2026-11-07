@@ -573,8 +573,9 @@ func TestLaunchersListHideRestoreDelete(t *testing.T) {
 	for _, v := range list.Launchers {
 		names = append(names, v.Name+":"+v.Source+":"+strings.Join(v.Machines, "+"))
 	}
-	// A wrapper script on the laptop's PATH (#5954) is one of its own launchers too, its source kept.
-	if strings.Join(names, " ") != "mine:persona: alpha:zshrc:laptop claude-demo:path:laptop work:zshrc:server+laptop" {
+	// A wrapper script on the laptop's PATH (#5954) is one of its own launchers too, its source kept. Plain claude (the
+	// server lists it) comes last as the built-in launcher (#2854).
+	if strings.Join(names, " ") != "mine:persona: alpha:zshrc:laptop claude-demo:path:laptop work:zshrc:server+laptop claude:builtin:server" {
 		t.Fatalf("%v %s", names, rec.Body.String())
 	}
 	if rec := request(s, "DELETE", "/api/v1/launchers/alpha", ""); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"hidden":true`) {

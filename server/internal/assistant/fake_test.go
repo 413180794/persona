@@ -35,6 +35,8 @@ type fakeHub struct {
 	settings      *Settings
 	launcherList  []proto.Launcher                   // the nodes' launchers.list (nil: the list fails, so it can't be told)
 	zshrc         map[string][]proto.Launcher        // a machine\'s own launchers.list (over launcherList)
+	rcFiles       map[string]string                  // a machine's launchers.list rc_file (its shell follows: bash or zsh)
+	slowLaunchers map[string]bool                    // a machine whose launchers.list answers only when the call gives up
 	agentModels   map[string][]proto.AgentModel      // the nodes' launchers.models, by launcher
 	managed       map[string][]proto.ManagedLauncher // what each node was given (launchers.managed)
 	presets       []assistantwire.LauncherPreset
@@ -225,7 +227,17 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 		name, _ := a["name"].(string)
 		return json.Marshal(map[string]any{"agent": launcherAgent(name)})
 	case DeviceLaunchersList:
+		if f.slowLaunchers[p.Device] {
+			f.mu.Unlock()
+			<-ctx.Done()
+			f.mu.Lock()
+			return nil, ctx.Err()
+		}
 		if l, ok := f.zshrc[p.Device]; ok {
+			if rc := f.rcFiles[p.Device]; rc != "" {
+				shell := map[bool]string{true: "bash", false: "zsh"}[strings.HasSuffix(rc, "bashrc")]
+				return json.Marshal(map[string]any{"launchers": l, "shell": shell, "rc_file": rc})
+			}
 			return json.Marshal(map[string]any{"launchers": l})
 		}
 		if f.launcherList == nil {

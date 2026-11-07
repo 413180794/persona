@@ -187,7 +187,9 @@ type modelsState struct {
 	have    map[string]map[string]bool // machine \x00 launcher → its models (ids and what aliases resolve to)
 
 	zshrcMu sync.Mutex
-	zshrc   map[string][]proto.Launcher // machine → its ~/.zshrc launchers (nil: not asked since the start)
+	zshrc   map[string][]proto.Launcher // machine → its rc-file launchers (nil: not asked since the start)
+	// zshrcSync: how each machine's list came in the last time they were asked (设置 › 模型供应商's 各台电脑).
+	zshrcSync map[string]LauncherSync
 }
 
 func (s *Service) modelRecord(ctx context.Context, id string) (modelRecord, error) {
@@ -342,7 +344,11 @@ func (s *Service) modelProviders(ctx context.Context) []ModelProvider {
 		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: cmp.Or(v.DisplayName, v.Name), Kind: kind, Agent: agent, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
 	}
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
-		out = append(out, ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher", Agent: "claude"})
+		p := ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher", Agent: "claude"}
+		if b, ok := s.builtinClaude(ctx, s.zshrcLaunchers(ctx, false)); ok {
+			p.Machines = b.Machines // where plain claude is: Settings › Model Providers lists it by machine
+		}
+		out = append(out, p)
 	}
 	for _, p := range s.voicePlugins(ctx) {
 		out = append(out, ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: p.Default, Models: p.Models, Status: p.Error})

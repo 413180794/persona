@@ -701,7 +701,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// launcher is not (the shell's runs: runtimeStart).
 			ls, err = append(append([]proto.Launcher(nil), ls...), n.runtimes.besideShell(bl, ls)...), nil
 		}
-		return map[string]any{"launchers": typedLaunchers(ls)}, err
+		shell, rcFile := launcherShell()
+		return map[string]any{"launchers": typedLaunchers(ls), "shell": shell, "rc_file": rcFile}, err
 	case "launchers.managed":
 		var c struct {
 			Launchers []proto.ManagedLauncher `json:"launchers"`

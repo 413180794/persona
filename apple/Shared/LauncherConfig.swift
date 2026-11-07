@@ -1,9 +1,10 @@
 import Foundation
 
-/// Settings › Model (docs/launchers.md): every launcher, from each machine's ~/.zshrc or added in Persona.
+/// Settings › Model (docs/launchers.md): every launcher, from each machine's rc file (~/.zshrc, ~/.bashrc), added in
+/// Persona, or the built-in plain claude.
 nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var name: String
-    var source: String // zshrc | persona
+    var source: String // zshrc (an rc file's) | path | persona | agy | builtin
     var baseURL: String?
     var model: String?
     var smallModel: String?
@@ -45,15 +46,27 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var origin: String?
     /// The name shown (any language, 「智谱 GLM」); `name` stays the id it is launched by. Older hubs leave it out.
     var displayName: String?
+    /// An rc-file launcher's files (each machine's login shell's); nil from an older hub: ~/.zshrc.
+    var rcFiles: [String]?
+    /// The machines of `machines` that did not answer this time: what they had the last time.
+    var stale: [String]?
+    /// The built-in claude: Claude Code's version on each machine that said.
+    var versions: [String: String]?
     var id: String { name }
     /// What a person reads: the display name, else the name.
     var title: String { displayName.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? name }
     var managed: Bool { source == "persona" }
     /// A wrapper script on a computer's PATH (#5954) rather than a ~/.zshrc function.
     var pathScript: Bool { source == "path" }
+    /// Plain `claude`, every machine's default launcher (Claude Code Default in model configuration): listed, never hidden.
+    var builtin: Bool { source == "builtin" }
+    /// The rc files it comes from, for the group title.
+    var rcFileTitle: String { (rcFiles?.isEmpty == false ? rcFiles! : ["~/.zshrc"]).joined(separator: " / ") }
 
     enum CodingKeys: String, CodingKey {
         case name, source, model, args, machines, hidden, definitions, details, kind, api, auth, models, proxy, effort, origin
+        case stale, versions
+        case rcFiles = "rc_files"
         case baseURL = "base_url", smallModel = "small_model", hasKey = "has_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
@@ -89,6 +102,37 @@ nonisolated struct ProviderModel: Codable, Hashable, Sendable, Identifiable {
     }
 
     var title: String { name?.isEmpty == false ? name! : id }
+}
+
+/// How one machine's launchers came in when 设置 › 模型供应商 asked (docs/launchers.md「同步状态」).
+nonisolated struct LauncherSync: Codable, Identifiable, Hashable, Sendable {
+    var machine: String
+    var name: String?
+    /// ok | offline | timeout | error
+    var state: String
+    var error: String?
+    var shell: String?
+    var rcFile: String?
+    /// The last good list (also for a machine that did not answer now).
+    var syncedAt: Date?
+    var id: String { machine }
+    var ok: Bool { state == "ok" }
+
+    enum CodingKeys: String, CodingKey {
+        case machine, name, state, error, shell
+        case rcFile = "rc_file", syncedAt = "synced_at"
+    }
+
+    /// The state in a few words: Synced · ~/.bashrc, Offline · showing the last sync (3 min ago), Timed out…, Failed: …
+    func summary(now: Date = Date()) -> String {
+        let last = syncedAt.map { Fmt.relative($0, now: now) }
+        switch state {
+        case "ok": return rcFile.map { String(localized: "Synced · \($0)") } ?? String(localized: "Synced")
+        case "offline": return last.map { String(localized: "Offline · showing the last sync (\($0))") } ?? String(localized: "Offline, never synced")
+        case "timeout": return last.map { String(localized: "Timed out · showing the last sync (\($0))") } ?? String(localized: "Timed out, no list yet")
+        default: return String(localized: "Failed: \(error ?? String(localized: "Unknown reason"))")
+        }
+    }
 }
 
 /// One model a launcher offers in its /model menu (the chat's model picker, node/launcher_models.go).
@@ -368,10 +412,13 @@ nonisolated struct LauncherPreset: Decodable, Hashable, Sendable, Identifiable {
 }
 
 extension APIClient {
-    func allLaunchers() async throws -> [LauncherView] {
-        struct R: Decodable { var launchers: [LauncherView] }
-        let r: R = try await get("/api/v1/launchers")
-        return r.launchers
+    func allLaunchers() async throws -> [LauncherView] { try await launcherList().launchers }
+    /// The launchers and how each machine's came in (nil from an older hub). The hub gives each machine 10 s, so this
+    /// never needs long; a hub that does not answer in time is an error the page shows, not a spinner.
+    func launcherList() async throws -> (launchers: [LauncherView], sync: [LauncherSync]?) {
+        struct R: Decodable { var launchers: [LauncherView]; var sync: [LauncherSync]? }
+        let r = try JSON.decoder.decode(R.self, from: await request("GET", "/api/v1/launchers", timeout: 25))
+        return (r.launchers, r.sync)
     }
     func launcher(_ name: String) async throws -> LauncherView {
         struct R: Decodable { var launcher: LauncherView }

@@ -2197,11 +2197,11 @@ var launcherCache struct {
 }
 
 // launcherScript lists the login shell's launchers in one go (sourcing ~/.zshrc takes a while): what the
-// `_claude_launchers` helper prints when ~/.zshrc has one, a GS byte, then every alias as its name and its words
-// as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here; then, each
-// after a GS byte, where codex, traex and omp are on the PATH, the names of the shell's functions and aliases (one a
-// line: they come before a file on PATH of the same name), and its PATH (for the wrapper scripts on it,
-// pathlaunchers.go).
+// `_claude_launchers` helper prints when the rc file has one, a GS byte, then every alias as its name and its words
+// as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here (bash prints
+// `alias -p` after bashAliasMark instead, launchers_shell.go); then, each after a GS byte, where codex, traex and omp
+// are on the PATH, the names of the shell's functions and aliases (one a line: they come before a file on PATH of the
+// same name), and its PATH (for the wrapper scripts on it, pathlaunchers.go).
 const launcherScript = `__jl_path=$PATH
 _claude_launchers 2>/dev/null || true
 printf '\035'
@@ -2211,6 +2211,9 @@ if [ -n "$ZSH_VERSION" ]; then
     for __w in "${(@Q)${(z)__v}}"; do print -rn -- "$__w"$'\''\x1f'\''; done
     print -rn -- $'\''\x1e'\''
   done'
+elif [ -n "$BASH_VERSION" ]; then
+  printf '\002'
+  alias -p
 fi
 printf '\035'
 PATH="$PATH:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin"
@@ -2237,7 +2240,9 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 		return list, nil
 	}
 	launcherCache.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	// Not cut short when the caller gives up (the hub waits a few seconds per machine): a slow rc file still finishes
+	// and the next ask within the minute gets the list from the cache.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
 	defer cancel()
 	out, err := loginShell(ctx, launcherScript).Output()
 	if err != nil && len(out) == 0 {
@@ -2260,6 +2265,9 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings, scripts map[string]string) {
 	helper, rest, _ := strings.Cut(out, "\x1d")
 	aliases, rest, _ := strings.Cut(rest, "\x1d")
+	if a, ok := strings.CutPrefix(aliases, bashAliasMark); ok {
+		aliases = bashAliases(a)
+	}
 	codexPath, rest, _ := strings.Cut(rest, "\x1d")
 	traexPath, rest, _ := strings.Cut(rest, "\x1d")
 	ompPath, rest, _ := strings.Cut(rest, "\x1d")

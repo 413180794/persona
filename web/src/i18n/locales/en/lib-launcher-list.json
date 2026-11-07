@@ -1,0 +1,9 @@
+{
+  "timeout": "The hub didn't answer within {seconds} seconds",
+  "ok": "Synced",
+  "offline": "Offline",
+  "timed_out": "Timed out",
+  "failed": "Failed",
+  "showing_last": "Showing the last synced list ({when})",
+  "never_synced": "Never synced"
+}

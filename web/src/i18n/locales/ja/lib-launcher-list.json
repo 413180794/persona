@@ -1,0 +1,9 @@
+{
+  "timeout": "ハブが {seconds} 秒以内に応答しませんでした",
+  "ok": "同期済み",
+  "offline": "オフライン",
+  "timed_out": "タイムアウト",
+  "failed": "失敗",
+  "showing_last": "前回同期した結果を表示（{when}）",
+  "never_synced": "未同期"
+}

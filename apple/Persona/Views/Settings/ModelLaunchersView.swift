@@ -6,10 +6,13 @@ struct ModelLaunchersRoute: Hashable {}
 struct ModelLauncherRoute: Hashable { var name: String }
 
 /// Settings › Model (docs/launchers.md): every launcher the machines can start — added here (Persona keeps the gateway, model
-/// and key) or found in a machine's ~/.zshrc (synced each time this opens) — and the hidden ones.
+/// and key), found in a machine's rc file (~/.zshrc, ~/.bashrc) or on its PATH (synced each time this opens), or the built-in
+/// claude of each machine — the hidden ones, and how each machine's list came in (offline, timed out, failed).
 struct ModelLaunchersView: View {
     @Environment(AppModel.self) private var model
     @State private var launchers: [LauncherView]?
+    /// How each machine's list came in; nil from an older hub.
+    @State private var sync: [LauncherSync]?
     @State private var error: String?
     /// The provider sheet, at its first step (Add) or at Import from ~/.zshrc; nil: closed.
     @State private var adding: ProviderWizardStep?
@@ -32,8 +35,13 @@ struct ModelLaunchersView: View {
             if let all = launchers {
                 let launchers = all.filter(matches)
                 let managed = launchers.filter(\.managed)
-                let zshrc = launchers.filter { !$0.managed && $0.hidden != true }
-                let hidden = launchers.filter { !$0.managed && $0.hidden == true }
+                let builtin = launchers.filter(\.builtin)
+                let zshrc = launchers.filter { $0.source == "zshrc" && $0.hidden != true }
+                // a wrapper script on PATH or a runtime's launcher (agy, omp): a computer's, but not from an rc file
+                let onPath = launchers.filter { !$0.managed && !$0.builtin && $0.source != "zshrc" && $0.hidden != true }
+                let hidden = launchers.filter { !$0.managed && !$0.builtin && $0.hidden == true }
+                let byFile = Dictionary(grouping: zshrc, by: \.rcFileTitle)
+                let files = byFile.keys.sorted()
                 if !query.isEmpty, launchers.isEmpty {
                     ContentUnavailableView.search(text: query).listRowBackground(Color.clear)
                 }
@@ -60,11 +68,28 @@ struct ModelLaunchersView: View {
                 } header: { header(String(localized: "Managed by Persona"), managed.count) } footer: {
                     if !managed.isEmpty { Text("Keys are stored encrypted on the hub and only handed to the computer at launch. They're never written to a file.") }
                 } }
-                if !zshrc.isEmpty {
+                ForEach(files, id: \.self) { file in
+                    let group = byFile[file] ?? []
                     Section {
-                        ForEach(zshrc) { row($0) }
-                    } header: { header(String(localized: "From ~/.zshrc and PATH"), zshrc.count) } footer: {
-                        Text("Functions in ~/.zshrc and wrapper scripts on PATH that start claude, on your computers. They sync each time you open this page, and new ones show up automatically.")
+                        ForEach(group) { row($0) }
+                    } header: { header(String(localized: "From \(file)"), group.count) } footer: {
+                        if file == files.last {
+                            Text("Functions and aliases in each computer's login shell config (~/.zshrc, ~/.bashrc) that call claude or codex. They sync each time you open this page, and new ones show up automatically.")
+                        }
+                    }
+                }
+                if !onPath.isEmpty {
+                    Section {
+                        ForEach(onPath) { row($0) }
+                    } header: { header(String(localized: "From PATH"), onPath.count) } footer: {
+                        Text("Wrapper scripts on your computers' PATH that start claude, and the runtimes' own launchers. They sync each time you open this page.")
+                    }
+                }
+                ForEach(builtin) { l in
+                    Section {
+                        ForEach(l.machines ?? [], id: \.self) { builtinRow(l, machine: $0) }
+                    } header: { header(String(localized: "Built-in"), l.machines?.count ?? 0) } footer: {
+                        Text("The plain claude command on each computer: “Claude Code default” in Model Configuration.")
                     }
                 }
                 if !hidden.isEmpty {
@@ -89,7 +114,16 @@ struct ModelLaunchersView: View {
                         .accessibilityLabel(open ? String(localized: "\(hidden.count) hidden providers, expanded") : String(localized: "\(hidden.count) hidden providers, collapsed"))
                         .accessibilityAddTraits(.isButton)
                     } footer: {
-                        if open { Text("They're only hidden in Persona; ~/.zshrc isn't changed. Open one to unhide it.") }
+                        if open { Text("They're only hidden in Persona; nothing on the computer is changed. Open one to unhide it.") }
+                    }
+                }
+                if let sync, !sync.isEmpty, query.isEmpty {
+                    Section {
+                        ForEach(sync) { syncRow($0) }
+                    } header: { header(String(localized: "Computers"), sync.count) } footer: {
+                        if sync.contains(where: { !$0.ok }) {
+                            Text("A computer that didn't connect or answer in time shows its last synced list, marked “Not updated”.")
+                        }
                     }
                 }
             } else if let error {
@@ -157,9 +191,44 @@ struct ModelLaunchersView: View {
         }
     }
 
+    private func name(_ machine: String) -> String {
+        model.machine(model.hubRef(machine))?.name ?? sync?.first { $0.machine == machine }?.name ?? machine
+    }
+
+    /// Built-in claude · <machine>: the version there; marked when that machine did not answer now.
+    private func builtinRow(_ l: LauncherView, machine: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            HStack(spacing: Theme.Space.sm) {
+                Text("Built-in claude · \(name(machine))").font(Theme.Font.heading).lineLimit(1)
+                if l.stale?.contains(machine) == true { Chip(text: String(localized: "Not updated"), look: .tint(Theme.caution)) }
+            }
+            HStack(spacing: Theme.Space.sm) {
+                Chip(text: String(localized: "Default Model"))
+                if let v = l.versions?[machine] {
+                    Text(verbatim: "Claude Code \(v)").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+        .padding(.vertical, Theme.Space.xxs)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// One machine: whether its list came in now, and from which file.
+    private func syncRow(_ s: LauncherSync) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+            Image(systemName: s.ok ? Theme.Icon.successFilled : s.state == "offline" ? Theme.Icon.offline : Theme.Icon.errorFilled)
+                .foregroundStyle(s.ok ? Theme.positive : s.state == "error" ? Theme.danger : Theme.caution)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(s.name ?? name(s.machine)).font(Theme.Font.body).lineLimit(1)
+                Text(s.summary()).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private func row(_ l: LauncherView) -> some View {
         NavigationLink(value: ModelLauncherRoute(name: l.name)) {
-            LauncherRow(launcher: l, machines: machineNames(l))
+            LauncherRow(launcher: l, machines: machineNames(l), stale: (l.stale ?? []).map(name))
         }
         // Swipe left to hide a ~/.zshrc launcher or bring a hidden one back (2026-11-01 user request). No
         // confirmation: it only changes what Persona lists and is undone the same way. A Persona one is deleted, key
@@ -227,7 +296,7 @@ struct ModelLaunchersView: View {
     private func load() async {
         guard let api = model.api else { return }
         do {
-            launchers = try await api.allLaunchers()
+            (launchers, sync) = try await api.launcherList()
             error = nil
         } catch {
             self.error = error.shown
@@ -239,6 +308,8 @@ struct ModelLaunchersView: View {
 struct LauncherRow: View {
     var launcher: LauncherView
     var machines: String?
+    /// The machines it is listed for from their last list (offline or not answering now).
+    var stale: [String] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -250,6 +321,7 @@ struct LauncherRow: View {
                     Text(launcher.name).font(Theme.Font.heading.monospaced()).lineLimit(1)
                 }
                 if launcher.managed { Chip(text: "Persona", look: .tint(Theme.accent)) }
+                if !stale.isEmpty { Chip(text: String(localized: "Not updated"), look: .tint(Theme.caution)) }
             }
             HStack(spacing: Theme.Space.sm) {
                 if let m = Fmt.model(launcher.model) ?? launcher.model, !m.isEmpty { Chip(text: m) }
@@ -259,6 +331,10 @@ struct LauncherRow: View {
             }
             if let machines {
                 Label(machines, systemImage: Theme.Icon.machines).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if !stale.isEmpty {
+                Text("\(stale.joined(separator: String(localized: "、", comment: "Separator between computer names in a list"))) didn't connect; showing the last synced list.")
+                    .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
             }
         }
         .padding(.vertical, Theme.Space.xxs)
@@ -305,8 +381,8 @@ struct ModelLauncherDetailView: View {
         SettingsForm {
             if let l = launcher {
                 Section {
-                    LabeledContent("Source", value: l.managed ? String(localized: "Managed by Persona")
-                                   : l.pathScript ? String(localized: "Script on PATH") : String(localized: "Function in ~/.zshrc"))
+                    LabeledContent("Source", value: l.managed ? String(localized: "Managed by Persona") : l.builtin ? String(localized: "Built-in claude command")
+                                   : l.pathScript ? String(localized: "Script on PATH") : String(localized: "Function in \(l.rcFileTitle)"))
                     if l.kind == "api" { LabeledContent("Connection Type", value: String(localized: "Direct API · \(l.api == "responses" ? "Responses" : "Messages")")) }
                     // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
                     if l.managed || (l.details ?? [:]).isEmpty {
