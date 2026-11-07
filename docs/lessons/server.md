@@ -826,6 +826,10 @@ A successful `git ls-files` can return no files when the requested directory con
 
 A verified download or unpacked binary is still temporary until its final rename succeeds. Register removal of the staging path immediately after creating it, so copy, verification and promotion failures share cleanup. Remove only that temporary file; keep the existing destination and valid input archive intact.
 
+## Spreadsheet text coercion requires finite values (#6352)
+
+`strconv.ParseFloat` accepts `NaN` and infinity without an error. Reject them when coercing formula text so existing `#VALUE!` and `IFERROR` behavior works instead of caching non-finite numbers. Verify generated workbook values, with numeric text, range references and lazy branches as controls.
+
 ## Database passwords need URI userinfo encoding (#6160)
 
 Query escaping turns spaces into plus signs, but URI userinfo decoding keeps a plus literal. Build credentials with `url.UserPassword`, and check the generated database URL with the actual driver's parser. Comparing a provisioning result against the same URL helper cannot detect this password change.

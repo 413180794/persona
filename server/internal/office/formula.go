@@ -228,7 +228,7 @@ func toNum(v value) (float64, bool) {
 		return 0, true
 	case 's':
 		f, err := strconv.ParseFloat(strings.TrimSpace(v.str), 64)
-		return f, err == nil
+		return f, err == nil && !math.IsNaN(f) && !math.IsInf(f, 0)
 	}
 	return 0, false
 }
