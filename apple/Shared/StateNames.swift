@@ -2,7 +2,7 @@ import Foundation
 
 /// The one set of names for an agent's and a task's state on iOS, Mac, the watch and the widgets (#3960; docs/protocol/i18n.md
 /// "Agent states", docs/protocol/agent-states.md), as the web has in `web/src/lib/state-labels.ts` (#3415): every screen takes
-/// its state words from here, so a state is never 需要你 on one screen and 等你 on the next. The words are the catalog's
+/// its state words from here, so a state is never 「需要你」 on one screen and 「等你」 on the next. The words are the catalog's
 /// `… [State Names]` keys; `StateNamesTests` keeps other entries and other files from defining them again.
 /// `interfaceText`, so the Live Activity follows the app's language at once.
 nonisolated enum StateName: String, CaseIterable, Sendable {

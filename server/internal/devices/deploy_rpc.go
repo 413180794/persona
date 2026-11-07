@@ -375,6 +375,11 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 		}
 		return
 	}
+	// A Hub-only update must not resume an old queued transfer. Confirmation of
+	// already installed candidates remains allowed.
+	if !m.d.config().AutoUpdateNodes && info.Version != record.Target {
+		return
+	}
 	installed := record.Phase == "restarting" || record.Phase == "confirming"
 	if installed && info.Version == record.Target {
 		// Running what it was sent: confirmed, whatever the target is now (a newer one, or one not known while the

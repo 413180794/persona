@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, normalize } from 'node:path'
 
 export function envValue(name, env = process.env) {
   name = name.startsWith('PERSONA_') ? name : `PERSONA_${name}`
-  return (env[name] || env[legacyEnvName(name)]) ?? env[name]
+  return Object.hasOwn(env, name) ? env[name] : env[legacyEnvName(name)]
 }
 
 export function stateDir(home = homedir(), env = process.env) {

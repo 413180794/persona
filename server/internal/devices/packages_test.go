@@ -756,6 +756,7 @@ func TestOnlyTheHubsVersionDeploysByItself(t *testing.T) {
 			}
 			d, _, _ := packageDevices(t, "1.2.3", site.srv.URL)
 			d.opts.Store = newMemStore()
+			d.cfg.AutoUpdateNodes = true
 			m := newMachine(d, MachineConfig{ID: "box", Name: "box", Kind: "ssh", SSHHost: "box.invalid"})
 			d.addEntry(m)
 			m.mu.Lock()

@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Run a serialized, master-only Hub validation/build/publication cycle."""
+import argparse
+import datetime as dt
+import fcntl
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+import shutil
+import sys
+
+
+def run(args, cwd, **kwargs):
+    return subprocess.run(args, cwd=cwd, check=True, **kwargs)
+
+
+def output(args, cwd):
+    return subprocess.check_output(args, cwd=cwd, text=True).strip()
+
+
+def atomic_json(path, value):
+    temp = path.with_suffix('.tmp')
+    temp.write_text(json.dumps(value, indent=2) + '\n')
+    os.replace(temp, path)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--config', type=Path, required=True)
+    parser.add_argument('--retry', action='store_true')
+    args = parser.parse_args()
+    cfg = json.loads(args.config.read_text())
+    checkout, state = Path(cfg['checkout']), Path(cfg['state_dir'])
+    state.mkdir(parents=True, exist_ok=True)
+    with (state / 'lock').open('w') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print('Another Hub release owns the publication window.')
+            return
+        run(['git', 'fetch', 'origin', 'master'], checkout)
+        sha = output(['git', 'rev-parse', 'origin/master'], checkout)
+        record = state / 'last.json'
+        previous = json.loads(record.read_text()) if record.exists() else {}
+        same = previous.get('sha') == sha
+        if same and not args.retry:
+            if previous['result'] == 'success' or time.time() < previous.get('retry_after', 0):
+                print(f'{sha}: {previous["result"]}; no new attempt needed')
+                return
+        if output(['git', 'status', '--porcelain', '--untracked-files=no'], checkout):
+            raise RuntimeError('Release checkout has tracked changes')
+        run(['git', 'checkout', '--detach', sha], checkout)
+        now = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
+        if same:
+            build = previous['build']
+        else:
+            last = dt.datetime.strptime(previous.get('build', '200001010000'), '%Y%m%d%H%M').replace(tzinfo=dt.timezone.utc)
+            build = max(now, last + dt.timedelta(minutes=1)).strftime('%Y%m%d%H%M')
+        attempt = state / f'{build}-{sha[:12]}'
+        attempt.mkdir(exist_ok=True)
+        result = {'sha': sha, 'build': build, 'result': 'pending', 'evidence': str(attempt)}
+        atomic_json(record, result)
+
+        def status(value, description):
+            run(['gh', 'api', f'repos/{cfg["repository"]}/statuses/{sha}',
+                 '-f', f'state={value}', '-f', 'context=hub-release/devbox',
+                 '-f', f'description={description}'], checkout, stdout=subprocess.DEVNULL)
+
+        try:
+            status('pending', 'Validating and publishing Hub-only release')
+            with (attempt / 'validation.log').open('a') as log:
+                if not (attempt / 'latest.json').exists():
+                    run([sys.executable, 'scripts/release/build_hub_release.py', '--out', str(attempt),
+                     '--build', build, '--update-url', cfg['update_url']], checkout,
+                    stdout=log, stderr=subprocess.STDOUT)
+            # A force-push or branch replacement must never publish an orphan.
+            run(['git', 'fetch', 'origin', 'master'], checkout)
+            run(['git', 'merge-base', '--is-ancestor', sha, 'origin/master'], checkout)
+            with (attempt / 'publication.log').open('a') as log:
+                run([*cfg['publish_command'], '--artifact-dir', str(attempt)], checkout,
+                    stdout=log, stderr=subprocess.STDOUT)
+            result['result'] = 'success'
+            status('success', 'Validated Hub release installed and health confirmed')
+        except (subprocess.CalledProcessError, OSError, RuntimeError):
+            result['result'] = 'failure'
+            result['retry_after'] = time.time() + 900
+            status('failure', 'Hub release failed; see publisher validation logs')
+            raise
+        finally:
+            atomic_json(record, result)
+        # Retain recent attempts for diagnosis; installed/rollback binaries live on the Hub.
+        attempts = sorted((p for p in state.iterdir() if p.is_dir() and (p / 'validation.log').exists()), key=lambda p: p.name)
+        for old in attempts[:-5]:
+            shutil.rmtree(old)
+
+
+if __name__ == '__main__':
+    main()

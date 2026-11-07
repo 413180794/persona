@@ -25,6 +25,11 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install script validation dependencies
+        run: python3 -m pip install Pillow==12.0.0 PyYAML==6.0.3
       - name: Run every suite
         run: |
           failed=""

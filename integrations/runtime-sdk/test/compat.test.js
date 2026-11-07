@@ -23,7 +23,7 @@ function temp(t) {
 test('compat environment and existing root do not create an empty store', (t) => {
   assert.equal(envValue('PERSONA_HOME', { JARVIS_HOME: 'old' }), 'old')
   assert.equal(envValue('PERSONA_HOME', { PERSONA_HOME: 'new', JARVIS_HOME: 'old' }), 'new')
-  assert.equal(envValue('PERSONA_HOME', { PERSONA_HOME: '', JARVIS_HOME: 'old' }), 'old')
+  assert.equal(envValue('PERSONA_HOME', { PERSONA_HOME: '', JARVIS_HOME: 'old' }), '')
   const home = temp(t), legacy = join(home, '.jarvis')
   mkdirSync(legacy)
   assert.equal(stateDir(home, {}), legacy)
@@ -33,7 +33,8 @@ test('compat environment and existing root do not create an empty store', (t) =>
   mkdirSync(store, { recursive: true })
   assert.equal(runtimeStorePath(legacy, 'persona-pi-runtime'), store)
   mkdirSync(join(home, '.persona'))
-  assert.equal(stateDir(home, {}), join(home, '.persona'))
+  assert.throws(() => stateDir(home, {}), /independent state directories/)
+  assert.equal(stateDir(home, { PERSONA_HOME: legacy }), legacy)
 })
 
 test('compat websocket selects only a protocol actually offered and still checks token', () => {

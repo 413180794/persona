@@ -50,7 +50,9 @@ class PersonaIdentifiersTest(unittest.TestCase):
             caller = (ROOT / relative).read_text()
             self.assertIn('mainActivityIntent(', caller)
             self.assertNotIn('MainActivity::class.java', caller)
-        self.assertEqual({('persona', 'pair'), ('persona', 'open')}, {
+        self.assertEqual({('persona', 'pair'), ('persona', 'open'),
+                          ('@string/compatibility_legacy_scheme', 'pair'),
+                          ('@string/compatibility_legacy_scheme', 'open')}, {
             (data.get('{http://schemas.android.com/apk/res/android}scheme'),
              data.get('{http://schemas.android.com/apk/res/android}host'))
             for data in app.findall('activity/intent-filter/data')
@@ -72,7 +74,7 @@ class PersonaIdentifiersTest(unittest.TestCase):
         adapter = (ROOT / 'android/app/src/debug/java/persona/android/debug/DebugLaunchAdapter.kt').read_text()
         self.assertIn('class DebugLaunchAdapter : LaunchAdapter', adapter)
 
-    def test_pairing_wrappers_parse_only_canonical_links_before_permission_and_networking(self):
+    def test_pairing_wrappers_share_compatible_links_before_permission_and_networking(self):
         helper = (ROOT / 'android/app/src/main/java/persona/android/platform/PairingLinks.kt').read_text()
         self.assertIn('if (PairingInput.isLink(url)) PairingInput.parse(url) else null', helper)
         pairing_input = (ROOT / 'android/feature/settings/src/main/kotlin/persona/feature/settings/PairingInput.kt').read_text()
@@ -80,7 +82,16 @@ class PersonaIdentifiersTest(unittest.TestCase):
         self.assertIn('if (isLink(address)) parse(address)', pairing_input)
         pairing = (ROOT / 'android/core/domain/src/main/kotlin/persona/core/domain/Pairing.kt').read_text()
         self.assertIn('const val scheme = "persona"', pairing)
-        self.assertIn('startsWith("$scheme://")', pairing)
+        self.assertIn('fun isLink(text: String): Boolean = ProtocolCompatibility.isAppLink(text)', pairing)
+        compatibility = (ROOT / 'android/core/contracts/src/main/kotlin/persona/core/contracts/ProtocolCompatibility.kt').read_text()
+        schemes = re.search(r'val appSchemes = setOf\(([^)]+)\)', compatibility)
+        self.assertIsNotNone(schemes)
+        self.assertEqual(re.findall(r'"([^"]+)"', schemes.group(1)), ['persona', 'jar' + 'vis'])
+        self.assertIn('appSchemes.any { text.trim().startsWith("$it://") }', compatibility)
+        resources = ET.parse(ROOT / 'android/app/src/main/res/values/compatibility.xml').getroot()
+        legacy = resources.find("string[@name='compatibility_legacy_scheme']")
+        self.assertEqual(legacy.text, 'jar' + 'vis')
+        self.assertEqual(legacy.get('translatable'), 'false')
         self.assertNotIn(('jar' + 'vis') + '://', pairing)
         self.assertNotIn('val schemes =', pairing)
         self.assertIn('PairingInput.parse(url)', helper)

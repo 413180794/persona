@@ -69,6 +69,8 @@ func remoteTarget(cfg MachineConfig, info proto.NodeInfo, bin string) string {
 // version than the hub's), which only an explicit Redeploy sends.
 var errFallbackOnRedeploy = errors.New("a fallback build is sent only on Redeploy")
 
+var errAutoNodeUpdatesDisabled = errors.New("automatic node upgrades are disabled")
+
 // startDeploy checks a deploy can start and runs it in the background; the machine list shows its progress. It is the
 // explicit Redeploy: any build the node's platform resolves to goes, a fallback too.
 func (m *Machine) startDeploy() error { return m.startDeployOf(false) }
@@ -79,6 +81,9 @@ func (m *Machine) startDeploy() error { return m.startDeployOf(false) }
 func (m *Machine) startAutoDeploy() error { return m.startDeployOf(true) }
 
 func (m *Machine) startDeployOf(auto bool) error {
+	if auto && !m.d.config().AutoUpdateNodes {
+		return errAutoNodeUpdatesDisabled
+	}
 	m.mu.Lock()
 	if m.deploying {
 		m.mu.Unlock()
@@ -294,6 +299,9 @@ func (m *Machine) waitDeployed(ctx context.Context, target string) error {
 // update of an offline one reached over its link or connector (devices.update_nodes: the hub updated itself and put
 // the release's node binaries where "Redeploy" takes them).
 func (d *Devices) updateNodes(ctx context.Context) {
+	if !d.config().AutoUpdateNodes {
+		return
+	}
 	for _, m := range d.machinesNow() {
 		m.mu.Lock()
 		local, online, info := m.cfg.Kind == "local", m.online, m.info
@@ -349,6 +357,9 @@ func (d *Devices) updateNodes(ctx context.Context) {
 // a failed start) is not sent again on every reconnect. Redeploy still tries. When that record cannot be read it
 // does not deploy either: it could not record the outcome, so a flapping machine would get a transfer per reconnect.
 func (m *Machine) updateOnConnect(ctx context.Context) {
+	if !m.d.config().AutoUpdateNodes {
+		return
+	}
 	m.mu.Lock()
 	online, deploying, info := m.online, m.deploying, m.info
 	m.mu.Unlock()

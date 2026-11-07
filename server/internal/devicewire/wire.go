@@ -100,6 +100,8 @@ type Accept struct {
 // Config is what the hub hands the manager: the defaults of what the manager carries, as the hub's hello has them
 // (manager.hello's answer, field devices) and devices.config again whenever they change.
 type Config struct {
+	// AutoUpdateNodes is an explicit opt-in; older hubs omit it and leave nodes unchanged.
+	AutoUpdateNodes bool `json:"auto_update_nodes,omitempty"`
 	// Machines are hub.json's machines (and those the admin page added since), each the JSON hub.json has.
 	Machines []json.RawMessage `json:"machines"`
 	// HubID, HubName, HubVersion: the hub's; a node of another build than HubVersion is flagged (and redeployed).

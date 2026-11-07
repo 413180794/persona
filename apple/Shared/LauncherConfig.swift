@@ -104,7 +104,7 @@ nonisolated struct ProviderModel: Codable, Hashable, Sendable, Identifiable {
     var title: String { name?.isEmpty == false ? name! : id }
 }
 
-/// How one machine's launchers came in when 设置 › 模型供应商 asked (docs/integrations/launchers.md「同步状态」).
+/// How one machine's launchers came in when 「设置」 › 「模型供应商」 asked (docs/integrations/launchers.md「同步状态」).
 nonisolated struct LauncherSync: Codable, Identifiable, Hashable, Sendable {
     var machine: String
     var name: String?

@@ -9859,7 +9859,7 @@ def truth():
 
 def push_machine(mid):
     if not kept(mid): return
-    ss = [s for s in all_sessions() if s["machine_id"] == mid]
+    ss = out_by_machine([s for s in all_sessions() if s["machine_id"] == mid])
     for send, _ in list(LIVE):
         try: send({"type": "sessions", "machine_id": mid, "sessions": ss})
         except Exception: pass
@@ -9879,7 +9879,7 @@ def set_session_state(query):
     session.update(state=state, status=STATUS_OF_STATE[state], updated_at=now, state_since=now,
                    rev=(session.get("rev") or 0) + 1)
     push_machine(mid)
-    return {"session": decorated_session(session)}, 200
+    return {"session": stamp_row(decorated_session(session))}, 200
 
 
 def bump(what, session=None):

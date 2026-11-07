@@ -555,6 +555,7 @@ func TestBusUpTellsTheHubEverything(t *testing.T) {
 func TestUpdateNodesSkipsTheHubsOwn(t *testing.T) {
 	d := newTestDevices(t)
 	d.cfg.HubVersion = "v2"
+	d.cfg.AutoUpdateNodes = true
 	local := newMachine(d, MachineConfig{ID: "hub", Name: "Hub", Kind: "local"})
 	local.online, local.info.Version = true, "v1"
 	d.addEntry(local)

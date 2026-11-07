@@ -500,6 +500,7 @@ func TestUpdateNodesBinariesInPlace(t *testing.T) {
 	os.WriteFile(filepath.Join(nodes, "personad-darwin-arm64.version"), []byte("v1-202611010000\n"), 0o644)
 	h := newTestHub(t)
 	h.version = "v2"
+	h.cfg.AutoUpdateNodes = true
 	local := newMachine(h, MachineConfig{ID: "hub", Name: "Hub", Kind: "local"})
 	local.online, local.info.Version = true, "v1" // the hub's own: runs the hub's binary, never deployed to
 	h.machines, h.byID["hub"] = []*Machine{local}, local
@@ -540,6 +541,7 @@ func TestUpdateDownloadsEveryNodePlatformInTheRelease(t *testing.T) {
 	asked := map[string]int{} // path -> how many times it was fetched
 	p.asked = func(path string) { mu.Lock(); asked[path]++; mu.Unlock() }
 	h, m, _, execs := updatingHub(t, p, "release")
+	h.cfg.AutoUpdateNodes = true
 	m.mu.Lock()
 	m.info.OS, m.info.Arch = "plan9", "386" // a machine that has connected: the hub knows its platform
 	m.mu.Unlock()

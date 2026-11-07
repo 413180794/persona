@@ -84,7 +84,7 @@ final class AgentsListTests: XCTestCase {
 
     private func filter(_ id: String) -> XCUIElement { app.buttons["agents.filter." + id] }
 
-    /// The cards that need you. Not by their section's title: 需要你 is the 需要你 filter chip's word too.
+    /// The cards that need you. Not by their section's title: 「需要你」 is the 「需要你」 filter chip's word too.
     private func needsYouCards() -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: "agents.interaction").firstMatch
     }

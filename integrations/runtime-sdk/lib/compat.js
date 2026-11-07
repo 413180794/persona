@@ -1,4 +1,4 @@
-import { lstatSync } from 'node:fs'
+import { lstatSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const LEGACY_SUBPROTOCOL = 'jarvis-runtime.v1'
@@ -20,8 +20,15 @@ export function addPackageAliases(packages) {
 }
 export function defaultStateRoot(home) {
   const canonical = join(home, '.persona'), legacy = join(home, LEGACY_ROOT)
-  const present = (p) => { try { lstatSync(p); return true } catch { return false } }
-  return !present(canonical) && present(legacy) ? legacy : canonical
+  const present = (p) => {
+    try { lstatSync(p); return true } catch (err) { if (err.code === 'ENOENT') return false; throw err }
+  }
+  const hasCanonical = present(canonical), hasLegacy = present(legacy)
+  if (hasCanonical && hasLegacy) {
+    const a = statSync(canonical), b = statSync(legacy)
+    if (a.dev !== b.dev || a.ino !== b.ino) throw new Error('independent state directories exist; set PERSONA_HOME explicitly')
+  }
+  return !hasCanonical && hasLegacy ? legacy : canonical
 }
 export function assistantRootName(name) { return name === '.persona' || name === LEGACY_ROOT }
 export function runtimeStorePath(root, name) {

@@ -1,7 +1,7 @@
 import XCTest
 @testable import Persona
 
-/// 设置 › 模型供应商 (#2854): the hub's per-machine sync state, the built-in claude and the rc file a launcher is from.
+/// 「设置」 › 「模型供应商」 (#2854): the hub's per-machine sync state, the built-in claude and the rc file a launcher is from.
 final class LauncherSyncTests: XCTestCase {
     func testDecodesTheListWithSyncAndBuiltin() throws {
         let json = """

@@ -267,15 +267,28 @@ class RepositoryTests(unittest.TestCase):
 
     def test_ios_explicit_status_colors_and_opacity_match(self):
         swift = (gen.ROOT / "apple/Shared/StatusPalette.swift").read_text()
-        pattern = r'static let (needsYou|working|unread) = StatusTone\(dot: Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\), text: Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)\)'
+        palette = (gen.ROOT / "apple/Shared/Design/Palette.swift").read_text()
+        pair = r'Color\(light: 0x([A-F0-9]+), dark: 0x([A-F0-9]+)\)'
+        pattern = rf'static let (needsYou|working|unread) = StatusTone\(dot: ({pair}|Palette\.\w+), text: {pair}\)'
         matches = re.findall(pattern, swift)
+        self.assertEqual({match[0] for match in matches}, {"needsYou", "working", "unread"})
         self.assertEqual(len(matches), 3)
-        alpha = float(re.search(r'tint \?\? dot.opacity\(([0-9.]+)\)', swift)[1])
-        for state, dot_light, dot_dark, text_light, text_dark in matches:
+        default_tint = re.search(r'tint \?\? Color.secondary.opacity\(([0-9.]+)\)', swift)
+        self.assertIsNotNone(default_tint, "StatusTone default tint not found")
+        alpha = float(default_tint[1])
+        for state, dot_expr, dot_light, dot_dark, text_light, text_dark in matches:
+            if dot_expr.startswith("Palette."):
+                name = dot_expr.removeprefix("Palette.")
+                resolved = re.search(rf'static let {name} = {pair}', palette)
+                self.assertIsNotNone(resolved, f"{dot_expr} not found in Palette.swift")
+                dot_light, dot_dark = resolved.groups()
             for mode, dot, text in (("light", dot_light, text_light), ("dark", dot_dark, text_dark)):
                 self.assertEqual(self.catalog.values[f"status.{mode}.{state}.dot"], color(dot))
                 self.assertEqual(self.catalog.values[f"status.{mode}.{state}.text"], color(text))
-                self.assertEqual(self.catalog.values[f"status.{mode}.{state}.tint"], color(dot, alpha))
+        for mode in gen.MODES:
+            base = self.catalog.values[f"system.{mode}.secondary"]
+            for state in ("needsYou", "working", "unread", "waiting"):
+                self.assertEqual(self.catalog.values[f"status.{mode}.{state}.tint"], {**base, "alpha": base["alpha"] * alpha})
         for state in ("idle", "offline"):
             dot_alpha, tint_alpha = map(float, re.search(rf'static let {state} = StatusTone\(dot: Color.secondary.opacity\(([0-9.]+)\), text: .secondary, tint: Color.secondary.opacity\(([0-9.]+)\)', swift).groups())
             for mode in gen.MODES:

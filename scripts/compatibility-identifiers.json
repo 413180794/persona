@@ -1,12 +1,6 @@
 {
   "version": 1,
   "files": {
-    "apple/PersonaTests/CompatibilityLookFixtures.swift": {
-      "reason": "Test-only negative fixture preserving exact retired look-selection inputs.",
-      "tokens": ["jarvis-circuit", "jarvis-visor"],
-      "path_tokens": [],
-      "external_refs": []
-    },
     "Dockerfile": {
       "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
       "tokens": [
@@ -152,6 +146,86 @@
       "path_tokens": [],
       "external_refs": []
     },
+    "apple/Mac/Resources/Info.plist": {
+      "reason": "Exact OS URL scheme retained for installed clients and existing pairing links.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "apple/Persona/Resources/Info.plist": {
+      "reason": "Exact OS URL scheme retained for installed clients and existing pairing links.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "apple/PersonaLink/Info.plist": {
+      "reason": "Exact OS URL scheme retained for installed clients and existing pairing links.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "apple/PersonaTests/test_persona_only.py": {
+      "reason": "Regression assertions for the exact dual URL scheme contract.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "apple/Shared/NativeStateMigration.swift": {
+      "reason": "Single native compatibility adapter retaining persisted storage, activity, intent and protocol identities.",
+      "tokens": [
+        "AskJarvisIntent",
+        "Jarvis",
+        "JarvisActivityAttributes",
+        "JarvisAppGroup",
+        "JarvisGettingStartedURL",
+        "JarvisPushKeychainGroup",
+        "JarvisPushRelay",
+        "JarvisStatusIntent",
+        "OpenJarvisAgentsIntent",
+        "OpenJarvisAssistantIntent",
+        "jarvis",
+        "jarvis-blob",
+        "jarvis-circuit",
+        "jarvis-facet",
+        "jarvis-pixel",
+        "jarvis-runtime.v1",
+        "jarvis-visor",
+        "jarvis.agents.prefs",
+        "jarvis.control.agents",
+        "jarvis.control.ask",
+        "jarvis.push",
+        "jarvisRecording",
+        "jarvisRecordingReceipt",
+        "jarvis_group",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "apple/Vision/Resources/Info.plist": {
+      "reason": "Exact OS URL scheme retained for installed clients and existing pairing links.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "apple/project.yml": {
+      "reason": "Exact OS URL scheme retained for installed clients and existing pairing links.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
     "deploy/docker/compose.yaml": {
       "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
       "tokens": [
@@ -204,10 +278,12 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/operations/docker.md": {
+    "docs/assistant/managers.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "jarvis",
+        "jarvis-pgdata",
+        "jarvis-postgres",
         "jarvis_manager"
       ],
       "path_tokens": [],
@@ -230,12 +306,10 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/assistant/managers.md": {
+    "docs/operations/docker.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "jarvis",
-        "jarvis-pgdata",
-        "jarvis-postgres",
         "jarvis_manager"
       ],
       "path_tokens": [],
@@ -757,19 +831,25 @@
     },
     "server/internal/hub/testdata/prompts/mcp_tools.assistant.golden": {
       "reason": "Generated tool-list golden for the exact builtin settings alias, with unchanged schema and approval gate.",
-      "tokens": ["jarvis_settings"],
+      "tokens": [
+        "jarvis_settings"
+      ],
       "path_tokens": [],
       "external_refs": []
     },
     "server/internal/hub/testdata/prompts/mcp_tools.assistant_with_github.golden": {
       "reason": "Generated tool-list golden for the exact builtin settings alias, with unchanged schema and approval gate.",
-      "tokens": ["jarvis_settings"],
+      "tokens": [
+        "jarvis_settings"
+      ],
       "path_tokens": [],
       "external_refs": []
     },
     "server/internal/hub/testdata/prompts/mcp_tools.assistant_with_imessage.golden": {
       "reason": "Generated tool-list golden for the exact builtin settings alias, with unchanged schema and approval gate.",
-      "tokens": ["jarvis_settings"],
+      "tokens": [
+        "jarvis_settings"
+      ],
       "path_tokens": [],
       "external_refs": []
     },
@@ -786,6 +866,14 @@
       "tokens": [
         "connector.jarvis.invalid",
         "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/node/herdrstart_test.go": {
+      "reason": "Regression assertion that the retained data-directory environment alias reaches terminal hosts.",
+      "tokens": [
+        "JARVIS_HOME"
       ],
       "path_tokens": [],
       "external_refs": []

@@ -202,6 +202,8 @@ class DeploymentRollingCompatibilityTests(unittest.TestCase):
                 env = {'PATH': os.environ['PATH'], 'HOME': directory,
                        PREFIX + 'IMAGE': 'example.invalid/fixture-old:1', PREFIX + 'DB_PASSWORD': 'old123',
                        PREFIX + 'PUBLIC_URL': 'https://old.example.test', PREFIX + 'PORT': '19060'}
+                if os.environ.get('PERSONA_TEST_DOCKER_CONFIG'):
+                    env['DOCKER_CONFIG'] = os.environ['PERSONA_TEST_DOCKER_CONFIG']
                 if canonical:
                     env.update(PERSONA_IMAGE='example.invalid/fixture-new:2', PERSONA_DB_PASSWORD='new456',
                                PERSONA_PUBLIC_URL='https://new.example.test', PERSONA_PORT='19061')

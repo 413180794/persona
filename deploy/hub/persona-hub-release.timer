@@ -1,0 +1,10 @@
+[Unit]
+Description=Check master for verified Hub releases
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+Unit=persona-hub-release.service
+
+[Install]
+WantedBy=timers.target

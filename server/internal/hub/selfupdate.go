@@ -133,7 +133,11 @@ type updater struct {
 }
 
 func newUpdater(h *Hub) *updater {
-	u := &updater{h: h, dir: update.Dir(), client: &http.Client{Timeout: 10 * time.Minute},
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Private publishers may atomically deliver verified releases over SSH.
+	// A file source uses the same manifest, checksum and ancestry checks as HTTPS.
+	transport.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+	u := &updater{h: h, dir: update.Dir(), client: &http.Client{Timeout: 10 * time.Minute, Transport: transport},
 		exec: func(path string) error {
 			// The sockets systemd passed go on to the new binary (listen.go): it could not listen otherwise.
 			return syscall.Exec(path, append([]string{path}, os.Args[1:]...), append(os.Environ(), execListenEnv()...))
@@ -383,6 +387,9 @@ func (u *updater) rollback(p update.Pending, reason string) {
 // updateNodes puts the release's node binaries where "Redeploy" takes them (the manager's, internal/devices deploy.go)
 // and has the manager redeploy each connected machine whose node is not this build, one at a time.
 func (u *updater) updateNodes(ctx context.Context, staged string) {
+	if !u.nodesEnabled() {
+		return
+	}
 	if staged != "" {
 		files, _ := filepath.Glob(filepath.Join(staged, "personad-*"))
 		legacy, _ := filepath.Glob(filepath.Join(staged, compat.DaemonBinary+"-*"))
@@ -630,30 +637,10 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		fail(err)
 		return
 	}
-	nodes := filepath.Join(staged, "nodes")
-	own := runtime.GOOS + "-" + runtime.GOARCH
-	for _, plat := range nodePlatforms(m) {
-		u.set("downloading", plat, "")
-		if plat == own {
-			// This platform's node binary is the hub's own binary: the same file, so copy the one already here
-			// rather than fetching it twice (a machine on the hub's platform added later needs it too).
-			err := os.MkdirAll(nodes, 0o755)
-			if err == nil {
-				err = copyInto(bin, filepath.Join(nodes, "personad-"+plat))
-				if err == nil {
-					err = copyInto(bin, filepath.Join(nodes, compat.DaemonBinary+"-"+plat))
-				}
-			}
-			if err != nil {
-				fail(fmt.Errorf("the node binary for the hub's own platform: %w", err))
-				return
-			}
-			continue
-		}
-		if _, err := update.Download(ctx, u.client, u.h.build.UpdateURL, m.Files[plat], nodes); err != nil {
-			fail(err)
-			return
-		}
+	nodes, err := u.stageNodes(ctx, m, staged, bin)
+	if err != nil {
+		fail(err)
+		return
 	}
 	if err := update.CheckBinary(ctx, bin, m); err != nil {
 		fail(err)
@@ -804,7 +791,16 @@ func (h *Hub) updateBusy() []busyItem {
 		if m.snapshot().Deploying {
 			out = append(out, busyItem{MachineID: m.cfg.ID, Machine: m.cfg.Name, Title: su(h.userLang(), "busy_redeploying")})
 		}
+		m.mu.Lock()
+		resident := m.info.NodeUpdate // advertised only by a resident supervisor
+		m.mu.Unlock()
 		for _, s := range h.decorated(m) {
+			// Terminal-host sessions outlive the node transport. Unknown hosts and
+			// direct assistant processes still wait: an ephemeral SSH node may own them.
+			if h.slot != nil && !h.upd.nodesEnabled() && m.cfg.Kind != "local" &&
+				(resident || s.Host == proto.EngineHerdr || s.Host == proto.EngineHerdrCore) {
+				continue
+			}
 			// On a turn, not working on in the background (#2228): a server an agent left running would hold the
 			// update back for as long as it runs, and the restart does not stop it.
 			if s.Status == proto.StatusWorking || s.State == proto.StateNeedsYou {
@@ -971,6 +967,11 @@ func (u *updater) routes(api *http.ServeMux) {
 		if _, err := u.check(r.Context()); err != nil && !errors.Is(err, errNotRelease) {
 			writeErr(w, http.StatusBadGateway, err)
 			return
+		}
+		if u.wantsAuto() {
+			go u.install(context.WithoutCancel(r.Context()), true)
+		} else {
+			u.noteHeld(r.Context())
 		}
 		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})

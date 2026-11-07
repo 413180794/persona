@@ -74,7 +74,7 @@ final class MultiHubTests: XCTestCase {
     @MainActor func testMergedListAndAnswersGoToTheirOwnHub() throws {
         let h = try hubs()
         let app = launch(h, ["-tab", "dev"])
-        // The cards that need you; not by their section's title, 需要你, which the filter chip says too.
+        // The cards that need you; not by their section's title, 「需要你」, which the filter chip says too.
         let needs = app.descendants(matching: .any).matching(identifier: "agents.interaction").firstMatch
         XCTAssertTrue(needs.waitForExistence(timeout: 20), "no cards that need you")
         let home = text(app, containing: "MacBook · 家里")

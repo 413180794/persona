@@ -126,6 +126,7 @@ func linkedDeployFixture(t *testing.T, kind string) (*Devices, *Machine, *updati
 	t.Helper()
 	h := newTestDevices(t)
 	h.cfg.HubVersion = "new-build"
+	h.cfg.AutoUpdateNodes = true
 	m := newMachine(h, MachineConfig{ID: "example-node", Name: "Example node", Kind: kind})
 	m.deployRetry = 10 * time.Millisecond // a busy node is asked again at once, not after production's 2s
 	m.online = true
@@ -174,6 +175,7 @@ func TestStaleDeployErrorClearsWhenTheNodeMatches(t *testing.T) {
 }
 
 func TestLinkedDeployCapabilities(t *testing.T) {
+	hubNodeBinary(t, "linux", "amd64")
 	for _, kind := range []string{kindLink, kindService} {
 		t.Run(kind, func(t *testing.T) {
 			_, m, _, _ := linkedDeployFixture(t, kind)

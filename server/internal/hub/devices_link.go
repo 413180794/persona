@@ -259,6 +259,7 @@ func (h *Hub) devicesConfigFor(id string) devicewire.Config {
 		}
 	}
 	if h.cfg != nil {
+		out.AutoUpdateNodes = h.cfg.AutoUpdateNodes
 		out.TailcatDERPMapURL = h.cfg.Tailcat.DERPMapURL
 	}
 	out.NodePackagesURL, out.NodePackagesProxy = h.nodePackages()

@@ -56,12 +56,13 @@ class AppleRenameTests(unittest.TestCase):
             'PersonaWidgets': 'PersonaWidgets', 'PersonaNotify': 'PersonaNotify', 'PersonaMacNotify': 'PersonaNotify',
             'PersonaShare': 'PersonaShare', 'PersonaVisionShare': 'PersonaShare',
         }
-        self.assertEqual(set(targets), {*expected, 'PersonaTests', 'PersonaMacTests', 'PersonaUITests'})
+        self.assertEqual(set(targets), {*expected, 'PersonaTests', 'PersonaMacTests', 'PersonaUITests', 'PersonaMacUITests'})
         for target, module in expected.items():
             with self.subTest(target=target):
                 self.assertIn('PRODUCT_MODULE_NAME: ' + module + '\n', targets[target])
                 self.assertIn('PRODUCT_NAME: Persona', targets[target])
         self.assertIn('TEST_TARGET_NAME: Persona\n', targets['PersonaUITests'])
+        self.assertIn('TEST_TARGET_NAME: PersonaMac\n', targets['PersonaMacUITests'])
         self.assertIn('Persona.app/Persona"', targets['PersonaTests'])
         self.assertIn('Persona.app/Contents/MacOS/Persona"', targets['PersonaMacTests'])
 
@@ -75,9 +76,11 @@ class AppleRenameTests(unittest.TestCase):
 
     def test_only_canonical_schemes_build_existing_targets(self):
         schemes = blocks(SCHEMES)
-        self.assertEqual(set(schemes), {'Persona', 'PersonaMac', 'PersonaWatch', 'PersonaVision'})
+        self.assertEqual(set(schemes), {'Persona', 'PersonaMac', 'PersonaWatch', 'PersonaVision', 'PersonaMacExtensionUI'})
         for name, scheme in schemes.items():
-            self.assertIn(name + ': all\n', scheme)
+            target = 'PersonaMac' if name == 'PersonaMacExtensionUI' else name
+            self.assertIn(target + ': all\n', scheme)
+        self.assertIn('PersonaMacUITests: [test]', schemes['PersonaMacExtensionUI'])
         self.assertFalse((APPLE / (FORMER_NAME + '.xcodeproj')).is_symlink())
 
     def test_intent_control_activity_and_info_keys_use_canonical_identity(self):
@@ -105,7 +108,7 @@ class AppleRenameTests(unittest.TestCase):
             self.assertNotIn(FORMER_NAME + key + ':', PROJECT)
         for relative in ('Persona/Resources/Info.plist', 'Mac/Resources/Info.plist'):
             info = plistlib.loads((APPLE / relative).read_bytes())
-            self.assertEqual(info['CFBundleURLTypes'][0]['CFBundleURLSchemes'], ['persona'])
+            self.assertEqual(info['CFBundleURLTypes'][0]['CFBundleURLSchemes'], ['persona', FORMER_NAME.lower()])
 
     def test_avatar_names_do_not_collide_with_persona_model(self):
         source = (APPLE / 'Persona/Views/Assistant/AssistantAvatar.swift').read_text()

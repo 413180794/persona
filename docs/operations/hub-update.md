@@ -4,6 +4,81 @@ User, 2026-11-02: "Can the phone manage the hub's version? Does the hub check fo
 Issue #284. The plan is decided (see "Decisions" at the end): skills move out of the binary, there is only one binary, every hub updates automatically to the version the publisher releases manually, with no staged rollout and no automatic releases.
 Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten as the current state, keeping the trade-offs.
 
+## Automatic private Hub releases
+
+`scripts/release/hub_release.py --config <private-config.json>` can run from a
+systemd user timer on a dedicated Linux build machine. It fetches `master` into an
+exclusive checkout (never a developer checkout), runs server vet/tests and race checks, script suites, web
+checks and the binary privacy scan, then publishes the tested commit. It reports
+`hub-release/devbox` commit statuses. These are independent CI results, not GitHub
+Actions run results. This provides an execution path when hosted runner labels
+have no available capacity or the operator cannot administer those runners.
+
+The private config supplies `repository`, `checkout`, `state_dir`, `update_url`
+and `publish_command` (an argv array). Templates are in `deploy/hub/`;
+`hub-release.env` supplies `PERSONA_HUB_RELEASE_CHECKOUT`, the build-tool `PATH`,
+and `PERSONA_CONFIG`. Use a private launcher when credentials need to be loaded
+from a vault at runtime rather than stored in the environment file.
+Enable the timer only after the bootstrap and publication checks below pass. The publisher is
+`scripts/release/publish_hub_release.py --config <ssh-config.json>`; its config
+supplies `remote_root` and `credentials_command`, which returns SSH credentials
+as JSON (`host`, `port`, `username`, `password`, or a fields array keyed by id).
+SSH host keys must already be trusted. Credentials are never written to release
+artifacts. The publisher needs Python and Paramiko; the remote needs Python.
+The build environment needs Node 24, Go matching `server/go.mod`, and a Python
+3.11 environment with Pillow 12.0.0 and PyYAML 6.0.3 for the committed image and project checks. Keep these
+in the release user's tool directories. For an isolated Docker Compose CLI plugin,
+set `PERSONA_TEST_DOCKER_CONFIG` to a credential-free directory containing
+`cli-plugins/docker-compose`; deployment tests only render configuration offline.
+The worker passes its Python interpreter through to every script suite.
+The SSH publisher uses Paramiko 4.0.0 in the same private environment.
+
+Build with `update_url=file://<remote_root>/releases/hub` for a private source.
+SSH uploads only the Hub platform and atomically promotes its manifest. The
+existing updater reads that local source with the same checksums, binary version,
+ancestry, idle checks, edge handover, confirmation and rollback as HTTPS sources.
+An authenticated update check also evaluates the existing automatic-update policy;
+it never overrides a disabled setting or retries a marked bad build.
+
+The worker holds a local lock for the whole cycle, and publication holds a remote
+lock through confirmation. Build numbers must increase and new source must contain
+the previous source. Files have immutable checksum names. Interrupted attempts
+reuse the same build and artifact, with a 15-minute failure backoff; they cannot
+turn a rolled-back build into a new version just by retrying. Recent local attempts
+and remote artifacts have bounded retention. Failure leaves the updater in charge
+of rollback; the publisher never restarts the host or the Hub service.
+
+Bootstrap once with a verified binary containing the private update source, set
+`auto_update_nodes: false` in `hub.json`, and enable Hub automatic updates using
+`PUT /api/v1/hub/update/settings` with `{"auto":true}`. Use `hub switch` for the
+bootstrap, preserving the previous binary. The worker then publishes and requests
+an update check; confirmation requires the expected version/build, healthy Hub,
+unchanged remote node versions and a matching installed binary checksum.
+
+### Node upgrade policy
+
+`hub.json`'s `auto_update_nodes` defaults to **false**. This applies to reconnect
+upgrades, automatic fleet deployment, resuming queued transfers, downloading node
+platforms and installing node packages after Hub confirmation. Explicit **Redeploy**
+continues to work; an interrupted queued transfer requires another explicit
+Redeploy while the policy is off. Already installed candidates still receive their
+confirmation, so disabling upgrades cannot strand them.
+
+The manager receives this policy in `devices.config`. An old external manager that
+does not understand it must be updated separately before relying on that gate;
+the built-in manager changes together with the Hub. Existing package containment
+must remain intact during a Hub-only rollout. This publisher refuses to recreate
+or operate on `bin/nodes` and never writes Android artifacts.
+
+A Hub-only edge switch may proceed while sessions on proven resident nodes or remote herdr/herdr-core hosts run:
+their processes belong to the terminal host and survive the transport reconnect.
+Local and unknown/direct assistant sessions still wait for idle. Fleet upgrades
+retain the conservative wait for every working session.
+
+This private automatic publication mode supersedes the manual-only publishing
+restriction below for configured private installations. Public `publish.sh`
+releases retain their separate publishing workflow.
+
 ## Implementation progress
 
 - **Step 1 (one binary and a version manifest) done** (the "Current state" below this section describes things before work started):
@@ -49,7 +124,7 @@ Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten a
 
 1. **Only one binary**: skills are not in the binary; every hub (ours included) runs the same release build and can update automatically.
 2. The user's skills live in their own space, and updates never touch them.
-3. The publisher releases manually (`publish.sh`); each hub (ours included) updates itself when idle, then updates its own nodes. When a master change is urgently needed, it can be deployed directly and will not be downgraded by an older public release.
+3. The publisher releases manually (`publish.sh`); each hub (ours included) updates itself when idle, then updates its own nodes only when `auto_update_nodes` is explicitly enabled. When a master change is urgently needed, it can be deployed directly and will not be downgraded by an older public release.
 4. Check sha256 before installing and have the new binary self-test; if any step fails, the current binary is left alone.
 5. Do not restart while a chat is running or waiting for an answer.
 6. If the new version does not start or machines cannot connect, automatically go back to the previous version; a version that was rolled back is not retried automatically.
@@ -272,7 +347,7 @@ Download → Verify → Prepare → Wait for idle → Replace → Restart → Co
      - Under systemd (with `INVOCATION_ID`) or launchd: restore `.prev`, kill the main process, and let the service manager start the old binary;
      - Without a service manager: after restoring it, start the old hub in the background with the original arguments.
    - After rollback, record this build number in the **bad-version** list: automatic updates no longer try it and wait for a newer version. The user can still install it manually; the App says, "This version failed to start last time and was rolled back."
-9. **Update nodes along with it**:
+9. **Update nodes along with it (only with `auto_update_nodes: true`)**:
    - After the hub confirms success, run `deploy.go` for each online machine with a different version (push binary, restart the persistent node, wait for it to reconnect), one at a time;
    - Keep the failure reason for machines that fail; it does not affect the hub. If an old node does not support the update protocol, ask for one local upgrade first;
    - SSH / tailcat keep their original deploy path; Persona Link active / passive connections and nodes forwarded by member hubs update through existing RPC, with local rollback and reconnect confirmation. Offline Link machines store their target in Postgres and resume on their next connection; old targets stop when the hub version changes. See [node-update.md](node-update.md).

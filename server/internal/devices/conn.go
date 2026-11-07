@@ -347,7 +347,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 	if len(refused) > 0 {
 		m.d.logf("[%s] the new connection refused session.watch for %d session(s); asking again", m.cfg.ID, len(refused))
-		go m.rewatchRefused(sctx, c.peer, refused)
+		go m.rewatchRefused(sctx, c.peer, refused, rewatchWait, rewatchTries)
 	}
 	go m.watchPaths(sctx, ctx, c)
 	if info.ClaudeVersion == "" {
@@ -386,8 +386,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 // came (a node just started may not find a transcript yet). One left refused would keep an app's open chat without
 // its items until the app subscribed again, while the hub takes the session as watched (#6372). A session neither the
 // hub nor a Follow wants any more is let go; after rewatchTries the node is taken at its word, logged once.
-func (m *Machine) rewatchRefused(ctx context.Context, peer *rpc.Peer, ids []string) {
-	wait := rewatchWait
+func (m *Machine) rewatchRefused(ctx context.Context, peer *rpc.Peer, ids []string, wait time.Duration, tries int) {
 	for try := 0; len(ids) > 0; try++ {
 		select {
 		case <-ctx.Done():
@@ -406,7 +405,7 @@ func (m *Machine) rewatchRefused(ctx context.Context, peer *rpc.Peer, ids []stri
 				if ctx.Err() != nil {
 					return
 				}
-				if try+1 >= rewatchTries {
+				if try+1 >= tries {
 					m.d.logf("[%s] session.watch %s on the new connection: %v (gave up)", m.cfg.ID, id, err)
 					continue
 				}

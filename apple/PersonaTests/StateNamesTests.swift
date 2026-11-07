@@ -4,19 +4,19 @@ import Testing
 
 /// One set of state names on iOS, Mac, the watch and the widgets (#3960), as on the web (#3415, `state-labels.test.ts`):
 /// the words are `StateName`'s, and no other catalog entry or source file defines a state name again or brings back
-/// one of the old variants (等你 / 在做 / 待查看 / 做完了 / 停着 / 全部标为已读…). Reads the catalog and sources next to this
+/// one of the old variants (「等你」 / 「在做」 / 「待查看」 / 「做完了」 / 「停着」 / 「全部标为已读」…). Reads the catalog and sources next to this
 /// file, like `HoldSourceTests`. The scheme runs in zh-Hans.
 struct StateNamesTests {
     private static let apple = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     private static let suffix = " [State Names]"
 
-    /// The names only an agent's or a task's state has. 已完成, 未知… also name other things (a tool run, a project, a
+    /// The names only an agent's or a task's state has. 「已完成」, 「未知」… also name other things (a tool run, a project, a
     /// step), so they are not checked.
     private static let names = ["需要你", "工作中", "完成未看", "已看", "未运行", "待唤醒", "待你回复", "待跟进", "全部标为已看"]
     /// Names a screen used before #3960 for one of those states.
     private static let old = ["等你", "在做", "待查看", "做完", "做完了", "做完了，还没看", "做完未看", "停着", "等你处理", "需要你处理",
                               "正在工作", "待回答", "没在运行", "全部标为已读"]
-    /// A count of them: "3 个需要你", old or new.
+    /// A count of them: 「3 个需要你」, old or new.
     private static let count = try! NSRegularExpression(pattern:
         #"^%(1\$)?lld ?[个件]?(需要你|在等你|等你|工作中|在做|在工作|完成未看|做完未看|未看|做完了)$"#)
 

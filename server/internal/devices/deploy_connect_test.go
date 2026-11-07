@@ -92,7 +92,6 @@ func hubNodeBinary(t *testing.T, goos, arch string) {
 		t.Fatal(err)
 	}
 	t.Setenv("PERSONA_NODE_BINARIES", dir)
-	t.Setenv("PERSONA_NODE_BINARIES", dir)
 }
 
 // fakeSSH puts an ssh first on PATH that records its arguments and fails: a machine the hub cannot reach that way.
@@ -125,6 +124,7 @@ func TestMachineBackOnAnotherBuildGetsTheHubsNode(t *testing.T) {
 	hubNodeBinary(t, "linux", "amd64")
 	d := newTestDevices(t)
 	d.cfg.HubVersion = "hub-build"
+	d.cfg.AutoUpdateNodes = true
 	n := &buildNode{info: proto.NodeInfo{Hostname: "laptop", OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true}}
 	m := connectMachine(t, d, MachineConfig{ID: "laptop", Name: "laptop", Kind: "ssh", SSHHost: "laptop.invalid"}, n)
 	if s := m.snapshot(); !s.NodeMismatch {
@@ -154,6 +154,7 @@ func TestLinkedMachineBackOnAnotherBuildGetsTheHubsNode(t *testing.T) {
 	hubNodeBinary(t, "linux", "amd64")
 	d := newTestDevices(t)
 	d.cfg.HubVersion = "hub-build"
+	d.cfg.AutoUpdateNodes = true
 	n := &buildNode{
 		info: proto.NodeInfo{Hostname: "box", OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true},
 	}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Validate and publish master Hub releases
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/persona/hub-release.env
+ExecStart=/usr/bin/python3 ${PERSONA_HUB_RELEASE_CHECKOUT}/scripts/release/hub_release.py --config %h/.config/persona/hub-release.json
+TimeoutStartSec=60min

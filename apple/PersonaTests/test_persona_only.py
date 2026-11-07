@@ -93,7 +93,7 @@ class PersonaOnlyTests(unittest.TestCase):
     def test_project_uses_only_persona_targets_and_schemes(self):
         project = yaml.safe_load(source("project.yml"))
         self.assertEqual(project["name"], "Persona")
-        self.assertEqual(set(project["schemes"]), {"Persona", "PersonaMac", "PersonaWatch", "PersonaVision"})
+        self.assertEqual(set(project["schemes"]), {"Persona", "PersonaMac", "PersonaWatch", "PersonaVision", "PersonaMacExtensionUI"})
         targets = project["targets"]
         for name, target in targets.items():
             with self.subTest(target=name):

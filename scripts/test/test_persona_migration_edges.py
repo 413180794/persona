@@ -11,6 +11,8 @@ import tempfile
 import time
 import unittest
 
+from persona_migration_fixtures import GO_MAIN, NODE_INSTALL, NODE_QUERY
+
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / 'scripts/persona_config.py'
 INSTALL = ROOT / 'scripts/deploy/install.sh'
@@ -19,87 +21,6 @@ RUNTIME = ROOT / 'integrations/runtime-sdk/lib/runtime.js'
 PACKAGE = ROOT / 'integrations/runtime-sdk/lib/package.js'
 FORMER_NAME = 'jar' + 'vis'
 FORMER_PREFIX = FORMER_NAME.upper() + '_'
-
-GO_MAIN = r'''
-package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "os"
-    "path/filepath"
-    "time"
-)
-
-func main() {
-    home := os.Getenv("HOME")
-    mode := os.Getenv("EDGE_MODE")
-    cached := DataDir(home)
-    gate := os.Getenv("EDGE_GATE")
-    if gate != "" {
-        if err := os.WriteFile(os.Getenv("EDGE_READY"), []byte("ready"), 0600); err != nil { panic(err) }
-        deadline := time.Now().Add(10 * time.Second)
-        for {
-            if _, err := os.Stat(gate); err == nil { break }
-            if time.Now().After(deadline) { panic("gate timeout") }
-            time.Sleep(time.Millisecond)
-        }
-    }
-    root := cached
-    var err error
-    if mode != "query" { root, err = PrepareHome(home) }
-    out := map[string]string{"cached": cached, "root": root, "query": DataDir(home)}
-    if err != nil {
-        out["error"] = err.Error()
-    } else if mode == "write" {
-        if err := os.WriteFile(filepath.Join(root, "go-state.fixture"), []byte("go-payload"), 0600); err != nil {
-            out["error"] = err.Error()
-        }
-    }
-    data, _ := json.Marshal(out)
-    fmt.Println(string(data))
-}
-'''
-
-NODE_INSTALL = r'''
-import { writeFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { setTimeout } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
-const { prepareSocketDirectory, stateDir } = await import(pathToFileURL(process.env.EDGE_IDENTITY));
-const { defaultSocketPath } = await import(pathToFileURL(process.env.EDGE_RUNTIME));
-const { installCurrent, packageHash } = await import(pathToFileURL(process.env.EDGE_PACKAGE));
-const socket = defaultSocketPath();
-const files = [{ path: 'pi/index.js', data: Buffer.from('export const fixture = true;\n') }];
-const hash = packageHash(files);
-writeFileSync(process.env.EDGE_READY, 'ready');
-const deadline = Date.now() + 10000;
-while (!existsSync(process.env.EDGE_GATE)) {
-  if (Date.now() >= deadline) throw new Error('gate timeout');
-  await setTimeout(1);
-}
-try {
-  const root = prepareSocketDirectory(socket);
-  const store = join(root, 'runtime-packages', 'persona-pi-runtime');
-  const installed = installCurrent(store, hash, files);
-  console.log(JSON.stringify({ cached: dirname(socket), root, query: stateDir(), installed, hash }));
-} catch (err) {
-  console.log(JSON.stringify({ cached: dirname(socket), query: stateDir(), error: String(err) }));
-}
-'''
-
-NODE_QUERY = r'''
-import { pathToFileURL } from 'node:url';
-const { stateDir } = await import(pathToFileURL(process.env.EDGE_IDENTITY));
-const { defaultSocketPath, createRuntime } = await import(pathToFileURL(process.env.EDGE_RUNTIME));
-const root = stateDir();
-const socket = defaultSocketPath();
-if (process.env.EDGE_DAEMON) {
-  createRuntime({ listSessions: async () => [], items: async () => ({ items: [] }) },
-                { runtime: 'migration-edge-fixture', listen: true, token: 'fixture-only' });
-}
-console.log(JSON.stringify({ root, socket }));
-'''
 
 
 class PersonaMigrationEdgesTests(unittest.TestCase):
@@ -142,9 +63,9 @@ class PersonaMigrationEdgesTests(unittest.TestCase):
         env.update(extra)
         return env
 
-    def run_command(self, argv, env=None, timeout=20):
+    def run_command(self, argv, env=None, timeout=20, cwd=None):
         return subprocess.run(argv, env=env or self.clean_env(), capture_output=True,
-                              text=True, timeout=timeout)
+                              text=True, timeout=timeout, cwd=cwd)
 
     def install(self, home=None, **extra):
         env = self.clean_env(home, PERSONA_DL=self.downloads.as_uri(),
@@ -175,18 +96,23 @@ class PersonaMigrationEdgesTests(unittest.TestCase):
         if cls.go_helper is not None:
             return cls.go_helper
         source = self.base / 'go-helper-source'
-        source.mkdir()
+        source.mkdir(exist_ok=True)
+        (source / "go.mod").write_text("module github.com/nwverse/persona/server\n\ngo 1.23\n")
+        for package in ("compat", "nodeproto", "proto", "dialogwire"):
+            shutil.copytree(ROOT / "server/internal" / package, source / "internal" / package,
+                            ignore=shutil.ignore_patterns("*_test.go"), dirs_exist_ok=True)
         for name in ('paths.go', 'env.go'):
             text = (ROOT / 'server/internal/identity' / name).read_text()
             self.assertTrue(text.startswith('package identity\n'), name)
             (source / name).write_text(text.replace('package identity', 'package main', 1))
         (source / 'main.go').write_text(GO_MAIN)
-        cls.go_helper = self.base / 'go-helper'
-        result = self.run_command([self.go, 'build', '-o', str(cls.go_helper),
-                                   str(source / 'main.go'), str(source / 'paths.go'), str(source / 'env.go')],
-                                  timeout=120)
+        helper = self.base / 'go-helper'
+        result = self.run_command([self.go, 'build', '-o', str(helper), '.'],
+                                  self.clean_env(GO111MODULE='on', GOWORK='off'),
+                                  timeout=120, cwd=source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        return cls.go_helper
+        cls.go_helper = helper
+        return helper
 
     def go_query(self, home=None, **extra):
         helper = self.ensure_go_helper()
@@ -219,18 +145,18 @@ printf '%s|%s\n' "$PERSONA_HUB_URL" "$PERSONA_BUNDLE_ID"
         self.assertEqual(result.stdout.strip(),
                          'https://b.example.test|com.example.b')
 
-    def test_current_config_export_does_not_create_former_override(self):
+    def test_current_config_export_refreshes_former_alias(self):
         a, b = self.write_profile('a'), self.write_profile('b')
         code = r'''
 set -eu
 export PERSONA_CONFIG="$EDGE_A"
 eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
 [ "${PERSONA_CONFIG}" = "$EDGE_A" ]
-! env | grep -q "^${EDGE_FORMER_PREFIX}CONFIG="
+[ "$(printenv "${EDGE_FORMER_PREFIX}CONFIG")" = "$PERSONA_CONFIG" ]
 export PERSONA_CONFIG="$EDGE_B"
 eval "$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)"
 [ "${PERSONA_CONFIG}" = "$EDGE_B" ]
-! env | grep -q "^${EDGE_FORMER_PREFIX}CONFIG="
+[ "$(printenv "${EDGE_FORMER_PREFIX}CONFIG")" = "$PERSONA_CONFIG" ]
 printf '%s|%s\n' "$PERSONA_HUB_URL" "$PERSONA_BUNDLE_ID"
 '''
         result = self.run_command(['sh', '-c', code], self.clean_env(
@@ -239,21 +165,23 @@ printf '%s|%s\n' "$PERSONA_HUB_URL" "$PERSONA_BUNDLE_ID"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), 'https://b.example.test|com.example.b')
 
-    def test_environment_export_preserves_explicit_canonical_values_without_bridging(self):
+    def test_environment_export_bridges_aliases_with_canonical_precedence(self):
         config = self.write_profile('a')
         code = r'''
 set -eu
 exports=$("$EDGE_PYTHON" -I -B "$EDGE_CONFIG" env)
-! printf '%s' "$exports" | grep -q "$EDGE_FORMER_PREFIX"
+! printf '%s' "$exports" | grep -q "private-fixture-value"
 eval "$exports"
 printf '%s|%s\n' "${PERSONA_RUNTIME_SOCKET}" "${PERSONA_ASSISTANT}"
-[ "${PERSONA_FORMER_ONLY+x}" != x ]
+[ "$PERSONA_FORMER_ONLY" = "private-fixture-value" ]
+[ "$(printenv "${EDGE_FORMER_PREFIX}RUNTIME_SOCKET")" = "" ]
+[ "$(printenv "${EDGE_FORMER_PREFIX}ASSISTANT")" = "1" ]
 '''
         result = self.run_command(['sh', '-c', code], self.clean_env(
             PERSONA_CONFIG=str(config), PERSONA_RUNTIME_SOCKET='', PERSONA_ASSISTANT='1',
             EDGE_PYTHON=sys.executable, EDGE_CONFIG=str(CONFIG), EDGE_FORMER_PREFIX=FORMER_PREFIX,
             **{FORMER_PREFIX + 'RUNTIME_SOCKET': 'ignored.sock', FORMER_PREFIX + 'ASSISTANT': '0',
-               FORMER_PREFIX + 'FORMER_ONLY': 'ignored'}))
+               FORMER_PREFIX + 'FORMER_ONLY': 'private-fixture-value'}))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), '|1')
 
@@ -269,14 +197,14 @@ printf '%s|%s\n' "${PERSONA_RUNTIME_SOCKET}" "${PERSONA_ASSISTANT}"
         self.assertEqual(result.returncode, 0, result.stderr)
         expected = self.home / 'profile'
         self.assertTrue((expected / 'bin/personad').is_file())
-        self.assertFalse(os.path.lexists(expected / 'bin' / (FORMER_NAME + 'd')))
+        self.assert_same_directory(expected / 'bin/personad', expected / 'bin' / (FORMER_NAME + 'd'))
         self.assertFalse((self.home / 'storage/profile').exists())
         self.assertEqual(payload.read_text(), '{"fixture":"unchanged"}')
         self.assertEqual(self.go_query(PERSONA_HOME=override)['root'], str(expected))
         self.assertEqual(self.node_query(PERSONA_HOME=override)['root'], str(expected))
         self.assert_same_directory(self.home / '.persona', state)
 
-    def test_default_root_spelling_creates_no_former_alias(self):
+    def test_default_root_spelling_creates_shared_compatibility_alias(self):
         for spelling in ('absolute-slash', 'absolute-dot', 'tilde-slash', 'relative-dot', 'dotdot'):
             with self.subTest(spelling=spelling), tempfile.TemporaryDirectory(dir=self.base) as directory:
                 home = Path(directory)
@@ -291,7 +219,7 @@ printf '%s|%s\n' "${PERSONA_RUNTIME_SOCKET}" "${PERSONA_ASSISTANT}"
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue((home / '.persona').is_dir())
                 self.assertFalse((home / '.persona').is_symlink())
-                self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
+                self.assert_same_directory(home / '.persona', home / ('.' + FORMER_NAME))
                 self.assertTrue((home / '.persona/bin/personad').is_file())
                 self.assertEqual(Path(self.go_query(home, PERSONA_HOME=override)['root']), home / '.persona')
                 self.assert_same_directory(self.node_query(home, PERSONA_HOME=override)['root'], home / '.persona')
@@ -317,7 +245,7 @@ printf '%s|%s\n' "${PERSONA_RUNTIME_SOCKET}" "${PERSONA_ASSISTANT}"
         result = self.install(**env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(old.exists())
-        self.assertFalse(os.path.lexists(self.home / ('.' + FORMER_NAME)))
+        self.assert_same_directory(self.home / '.persona', self.home / ('.' + FORMER_NAME))
         self.assertEqual(self.go_query(**env)['root'], str(self.home / '.persona'))
         self.assert_same_directory(self.go_query(**env)['root'], self.node_query(**env)['root'])
 
@@ -413,14 +341,12 @@ except OSError as error:
                     installed = Path(sdk_result['installed'])
                     self.assertEqual((installed / 'pi/index.js').read_bytes(), b'export const fixture = true;\n')
                     self.assert_same_directory(installed, installed.parent / 'current')
-                    self.assertFalse((home / '.persona').is_symlink())
+                    self.assertEqual((home / '.persona').is_symlink(), initial == 'former')
                     if seed is not None:
                         self.assertEqual((seed / 'existing.fixture').read_text(), 'existing-payload')
-                    if initial == 'former':
-                        self.assertEqual(list(seed.iterdir()), [seed / 'existing.fixture'])
-                        self.assertFalse((home / '.persona/existing.fixture').exists())
-                    else:
-                        self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
+                    self.assert_same_directory(home / '.persona', home / ('.' + FORMER_NAME))
+                    if initial != 'fresh':
+                        self.assertEqual((home / '.persona/existing.fixture').read_text(), 'existing-payload')
 
     def test_actual_go_sdk_and_script_initializers_share_one_store(self):
         for initial in ('fresh', 'current', 'former'):
@@ -433,7 +359,7 @@ except OSError as error:
                         (seed / 'existing.fixture').write_text('existing-payload')
                     results = self.concurrent_install(home, include_python=True)
                     self.assertEqual(len(results), 3)
-                    self.assertFalse((home / '.persona').is_symlink())
+                    self.assertEqual((home / '.persona').is_symlink(), initial == 'former')
                     for result in results:
                         self.assertNotIn('error', result)
                         for key in ('cached', 'root', 'query'):
@@ -441,11 +367,9 @@ except OSError as error:
                     self.assertEqual((home / '.persona/python-state.fixture').read_text(), 'python-payload')
                     if initial != 'fresh':
                         self.assertEqual((seed / 'existing.fixture').read_text(), 'existing-payload')
-                    if initial == 'former':
-                        self.assertEqual(list(seed.iterdir()), [seed / 'existing.fixture'])
-                        self.assertFalse((home / '.persona/existing.fixture').exists())
-                    else:
-                        self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
+                    self.assert_same_directory(home / '.persona', home / ('.' + FORMER_NAME))
+                    if initial != 'fresh':
+                        self.assertEqual((home / '.persona/existing.fixture').read_text(), 'existing-payload')
 
     def test_dot_prefixed_dangling_canonical_root_is_not_restored(self):
         self.require_node()
@@ -510,15 +434,20 @@ try { prepareStateDir(); process.exitCode = 2; } catch (err) {
         for name in ('.persona', '.' + FORMER_NAME):
             (self.home / name).mkdir()
             (self.home / name / 'existing.fixture').write_text(name)
-        go_result, sdk_result = self.concurrent_install(self.home)
+        helper = self.ensure_go_helper()
+        result = self.run_command([str(helper)], self.clean_env())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('independent state directories', json.loads(result.stdout)['error'])
+        self.require_node()
+        result = self.run_command([self.node, '--input-type=module', '-e', NODE_QUERY], self.node_env())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('independent state directories', result.stderr)
         for name in ('.persona', '.' + FORMER_NAME):
-            self.assertEqual((self.home / name / 'existing.fixture').read_text(), name)
-        for result in (go_result, sdk_result):
-            self.assertNotIn('error', result)
-            self.assert_same_directory(result['root'], self.home / '.persona')
-        former = self.home / ('.' + FORMER_NAME)
-        self.assertFalse(os.path.samefile(self.home / '.persona', former))
-        self.assertEqual(list(former.iterdir()), [former / 'existing.fixture'])
+            root = self.home / name
+            self.assertEqual((root / 'existing.fixture').read_text(), name)
+            self.assertEqual(list(root.iterdir()), [root / 'existing.fixture'])
+        self.assertFalse(os.path.samefile(self.home / '.persona', self.home / ('.' + FORMER_NAME)))
+
 
 
 if __name__ == '__main__':
