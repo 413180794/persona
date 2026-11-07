@@ -1,0 +1,7 @@
+{
+  "forbidden": "This device cannot archive or restore agents",
+  "unsupported": "Only Codex and Claude agents can be archived here",
+  "running": "This agent is running or waiting for an answer. Finish or stop it before archiving",
+  "storage": "Could not save or load agent archives. Please try again",
+  "upgrade": "Update the manager to use agent archives"
+}

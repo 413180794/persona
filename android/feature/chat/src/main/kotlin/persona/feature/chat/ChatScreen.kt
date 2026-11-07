@@ -74,6 +74,8 @@ fun ChatScreen(
     showTopBar: Boolean = true,
     historyReadOnly: Boolean = false,
     historyFooter: (@Composable () -> Unit)? = null,
+    /** Display metadata for a history entry that is absent from the live session list. */
+    historySession: Session? = null,
 ) {
     PersonaTheme(darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f) {
         val storage = repository as? ChatLocalStorage
@@ -86,7 +88,7 @@ fun ChatScreen(
             ChatPage(sessionKey, repository, pageSender, interactions, sessions, onBack, onTerminal, chrome, scopedReadingKey, anchorStore ?: local?.anchors,
                 renderStyle, textUpdates,
                 composerService, composerState ?: rememberChatComposerState(), onDraftChanged, onContextCleared, statusBindings,
-                embedded, showTopBar, historyReadOnly, historyFooter)
+                embedded, showTopBar, historyReadOnly, historyFooter, historySession)
         }
     }
 }
@@ -104,6 +106,7 @@ private fun ChatPage(
     statusBindings: ChatStatusBindings,
     embedded: Boolean, showTopBar: Boolean,
     historyReadOnly: Boolean, historyFooter: (@Composable () -> Unit)?,
+    historySession: Session?,
 ) {
     val scope = rememberCoroutineScope()
     val haptics = persona.core.designsystem.rememberHaptics()
@@ -153,7 +156,7 @@ private fun ChatPage(
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Keep held detail; the info sheet still offers an explicit retry. */ }
     }
-    val session = row?.let { sessionWithDetail(it, lastSession, detailInfo) } ?: child?.let {
+    val liveSession = row?.let { sessionWithDetail(it, lastSession, detailInfo) } ?: child?.let {
         parent?.copy(sessionId = it.sessionId, title = it.description?.takeIf(String::isNotBlank) ?: it.type,
             status = if (it.running) "working" else "done", state = if (it.running) "working" else "unread", subagents = emptyList(),
             queued = null, loop = null, background = null, pendingInteractions = 0)
@@ -164,7 +167,8 @@ private fun ChatPage(
             queued = null, loop = null, background = null, workflows = null, pendingInteractions = 0,
             model = it.model?.takeIf(String::isNotBlank) ?: workflowParent.model)
     } ?: lastSession
-    SideEffect { if (session != null) lastSession = session }
+    SideEffect { if (liveSession != null) lastSession = liveSession }
+    val session = liveSession ?: readOnlySessionMetadata(key, historyReadOnly, historySession)
     // What the session's source lets the phone do (docs/protocol/protocol.md "Codex sources and capabilities"). Older sessions, and one whose
     // metadata has not arrived, can do everything: the hub and the node refuse what is not allowed anyway.
     val canSend = session?.canSend ?: true

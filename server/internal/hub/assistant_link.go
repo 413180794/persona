@@ -65,6 +65,10 @@ var taskSettleDelay = func(c NotifyConfig) time.Duration { return c.doneDelay() 
 // caller's role goes with them); while it is not connected they are answered 503 assistant_offline.
 func (h *Hub) assistantRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range assistantwire.Routes {
+		if pattern == "GET /api/v1/sessions/archived" || pattern == "POST /api/v1/sessions/{mid}/{sid}/archive" || pattern == "POST /api/v1/sessions/{mid}/{sid}/unarchive" {
+			api.HandleFunc(pattern, h.forwardAgentArchives)
+			continue
+		}
 		if key, ok := mergedLists[pattern]; ok { // the todos: every manager's
 			api.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) { h.mergeList(w, r, key, h.forwardHTTP) })
 			continue

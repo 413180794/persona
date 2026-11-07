@@ -18,10 +18,7 @@ import (
 // message) it is listed again. A start that failed (start_error) goes the same way, right away instead of when the
 // node forgets it. Running sessions and the assistant's conversations (they archive) cannot be deleted.
 
-const (
-	deletedSessionsKey = "sessions.deleted"
-	deletedKeepFor     = 30 * 24 * time.Hour // a note older than this is dropped: the node no longer lists the session
-)
+const deletedSessionsKey = "sessions.deleted"
 
 type deletedBook struct {
 	mu     sync.Mutex
@@ -78,15 +75,21 @@ func stillDeleted(s proto.Session, at time.Time) bool {
 	return finished && !s.Starting && !s.Assistant && !s.UpdatedAt.After(at)
 }
 
+// sessionHiddenByDeletion applies the same precedence to normal and archived lists.
+func sessionHiddenByDeletion(s proto.Session, deleted map[string]time.Time) bool {
+	at, ok := deleted[s.SessionID]
+	return ok && !s.ArchiveChangedAt.After(at) && stillDeleted(s, at)
+}
+
 // shown is list (a machine's decorated sessions) without the ones the user deleted: what the apps get.
 func (h *Hub) shown(machine string, list []proto.Session) []proto.Session {
 	del := h.deletedAt(machine)
-	if len(del) == 0 {
-		return list
-	}
 	out := make([]proto.Session, 0, len(list))
 	for _, s := range list {
-		if at, ok := del[s.SessionID]; ok && stillDeleted(s, at) {
+		if s.Archived && !s.Assistant {
+			continue
+		}
+		if sessionHiddenByDeletion(s, del) {
 			continue
 		}
 		out = append(out, s)
@@ -134,7 +137,9 @@ func (h *Hub) deleteSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	writeJSON(w, map[string]any{"ok": true})
 }
 
-// noteDeleted saves that machine's session id was deleted at, dropping notes too old to matter.
+// noteDeleted keeps deletion timestamps without expiry. A manager may retain
+// an archived/restored snapshot indefinitely, including across its downtime;
+// expiring a tombstone would unexpectedly revive that old conversation.
 func (h *Hub) noteDeleted(ctx context.Context, machine, id string, at time.Time) error {
 	if h.store == nil {
 		return errors.New("no database")
@@ -147,9 +152,7 @@ func (h *Hub) noteDeleted(ctx context.Context, machine, id string, at time.Time)
 	}
 	next := make(map[string]time.Time, len(b.m)+1)
 	for k, t := range b.m {
-		if at.Sub(t) < deletedKeepFor {
-			next[k] = t
-		}
+		next[k] = t
 	}
 	next[machine+"/"+id] = at
 	if err := h.store.PutSetting(ctx, deletedSessionsKey, next); err != nil {

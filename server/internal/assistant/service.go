@@ -108,8 +108,9 @@ type Service struct {
 	board      boardBook         // workspace_board.go: the workspace board
 	viewEvents viewNotifications // views.go: only coalesced notifications; contents are stored first
 
-	devs  Devices   // the computers (devices.go); nil: no fleet
-	fleet fleetBook // what comes from the nodes (fleet.go)
+	devs          Devices // the computers (devices.go); nil: no fleet
+	agentArchives agentArchiveBook
+	fleet         fleetBook // what comes from the nodes (fleet.go)
 	// delegateHook stands in for Delegate in tests (fleet_delegate.go).
 	delegateHook func(context.Context, DelegateParams) (DelegateResult, error)
 	// fleetEnded, when set, sees every card's end the channels are told (tests).
@@ -139,6 +140,7 @@ func New(o Options) *Service {
 	// The kept old keys too while a rotation keeps them (keyrotate.go).
 	s.models.secret = secretkey.NewWithFallback(o.SecretKey)
 	s.archiveRoutes()
+	s.agentArchiveRoutes()
 	s.alwaysRoutes()
 	s.reporterRoutes()
 	s.originRoutes()

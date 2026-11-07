@@ -230,7 +230,7 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 // GET is not harmless for being a GET (one reads any file of a computer, one runs a launcher), so none gets through for
 // its method. Something new the watch needs goes here.
 var (
-	answerReads = regexp.MustCompile(`^/api/v1/(machines|sessions|interactions|inbox|workspace-board|workspaces|sessions/[^/]+/[^/]+/items|` +
+	answerReads = regexp.MustCompile(`^/api/v1/(machines|sessions|sessions/archived|interactions|inbox|workspace-board|workspaces|sessions/[^/]+/[^/]+/items|` +
 		`extensions/-/(widgets|shortcuts))$`)
 	// The watch draws extensions' widgets on its faces and runs their shortcuts (docs/extensions/extensions.md "System-level places").
 	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/(resolve|choose)|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +

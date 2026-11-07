@@ -182,6 +182,7 @@ func TestEveryExtensionRouteIsBounded(t *testing.T) {
 		"PUT /api/v1/inbox/{id}/parent": "manager", "GET /api/v1/inbox/tree/{kind}/{id...}": "manager",
 		"POST /api/v1/inbox/mutes": "manager", "DELETE /api/v1/inbox/mutes/{id}": "manager", "POST /api/v1/inbox/policies": "manager",
 		"PATCH /api/v1/inbox/policies/{id}": "manager", "DELETE /api/v1/inbox/policies/{id}": "manager", "POST /api/v1/inbox/refresh": "manager",
+		"GET /api/v1/sessions/archived":                      "own+body",
 		"GET /api/v1/sessions":                               "own+body", // its machines; ?machine_id= another's: 403
 		"GET /api/v1/sessions/{mid}/{sid}/info":              "path",
 		"GET /api/v1/sessions/{mid}/{sid}/items":             "path",

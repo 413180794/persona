@@ -1,0 +1,7 @@
+{
+  "forbidden": "此设备无权归档或恢复 Agent",
+  "unsupported": "这里只支持归档 Codex 和 Claude Agent 会话",
+  "running": "此 Agent 正在运行或等待回答，请先结束或停止再归档",
+  "storage": "无法保存或读取 Agent 归档，请重试",
+  "upgrade": "请更新管理器以使用 Agent 归档"
+}

@@ -558,7 +558,7 @@ func (n *Node) transcriptPath(id string) string {
 		return rolloutPath(src.home, src.thread)
 	}
 	if strings.HasPrefix(id, "c0de-") {
-		return ""
+		return n.oldCodexTranscript(id)
 	}
 	n.mu.Lock()
 	p := n.paths[id]

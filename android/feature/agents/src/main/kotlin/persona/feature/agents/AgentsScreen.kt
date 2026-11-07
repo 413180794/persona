@@ -78,6 +78,11 @@ internal fun AgentsScreen(
     val botmuxShow = stringResource(R.string.agents_botmux_show)
     val herdrFailures by (model.herdr?.failures ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, HerdrFailure>())).collectAsStateWithLifecycle()
     val operations by model.operationState.collectAsStateWithLifecycle()
+    val archives = model.archives
+    val archiveState by (archives?.state ?: remember { kotlinx.coroutines.flow.MutableStateFlow(AgentArchiveSnapshot()) }).collectAsStateWithLifecycle()
+    var showArchives by rememberSaveable { mutableStateOf(false) }
+    var archivePreview by remember { mutableStateOf<Session?>(null) }
+    var archiveTarget by remember { mutableStateOf<Session?>(null) }
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
     // "Mark all as read" asks first and names how many it marks (iOS confirmReadAll).
@@ -132,6 +137,12 @@ internal fun AgentsScreen(
             model.clearFailure()
         }
     }
+    LaunchedEffect(archiveState.error, showArchives) {
+        if (!showArchives) archiveState.error?.let {
+            if (feedback?.failure(it) != true) snackbar.showSnackbar(persona.core.designsystem.operationFeedback(it).text.resolve(failureResources))
+            archives?.clearError()
+        }
+    }
     val noticeResources = agentResources()
     LaunchedEffect(notice) {
         notice?.let { val text = it.resolve(noticeResources); if (feedback?.notice(text) != true) snackbar.showSnackbar(text); model.clearNotice() }
@@ -168,7 +179,10 @@ internal fun AgentsScreen(
     // The list rows and the space page share one session menu and one space menu.
     val resources = agentResources()
     val rowMenu: @Composable (AgentSession) -> List<JAction> = { row ->
-        if (!row.session.isLive) listOfNotNull(JAction(stringResource(R.string.agents_action_open_read_only), onClick = { openRow(row) }),
+        val archiveAction = if (archives?.api?.supports(row.session.key) == true && row.session.canArchiveAgent &&
+            everyRequest.none { it.sessionKey == row.session.key }) JAction(stringResource(R.string.agents_action_archive),
+                icon = PhIcons.Archive, enabled = archiveState.busy == null && !archiveState.loading && !operations.busy) { archiveTarget = row.session } else null
+        if (!row.session.isLive) listOfNotNull(JAction(stringResource(R.string.agents_action_open_read_only), onClick = { openRow(row) }), archiveAction,
             JAction(stringResource(R.string.agents_action_delete_chat), destructive = true, enabled = !operations.busy) { operationDialog = AgentOperationDialog.Delete(row.session) }
                 .takeIf { row.session.canDelete })
         else AgentSessionMenuItems(row, row.id in page.preferences.pins.sessions, page.preferences.mutes.mutes(row), operations.busy,
@@ -184,7 +198,7 @@ internal fun AgentsScreen(
             onAttach = if (row.session.canAttach) ({ model.attach(row.session) }) else null,
             onLinkTodo = { pickingTodoForSession = row.session },
             onUnlinkTodo = row.session.todo?.let { todo -> { model.unlinkTodo(todo.id, row.session) } },
-            onDelete = { operationDialog = AgentOperationDialog.Delete(row.session) })
+            onDelete = { operationDialog = AgentOperationDialog.Delete(row.session) }) + listOfNotNull(archiveAction)
     }
     // In the list the space menu also opens the space page; the space page itself puts it in its bar.
     val spaceMenu: @Composable (AgentSpace, Boolean) -> Unit = { space, inList ->
@@ -455,6 +469,8 @@ internal fun AgentsScreen(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
     if (menu) JActionSheet(buildList {
+        if (archives?.api?.supported == true) add(JAction(stringResource(R.string.agents_archives_title), PhIcons.Archive,
+            onClick = { showArchives = true }))
         AgentRange.entries.forEach { range -> add(JAction(stringResource(R.string.agents_menu_range, range.label), checked = page.preferences.range == range, onClick = { model.range(range) })) }
         AgentGrouping.selectable.forEach { grouping -> add(JAction(grouping.label, checked = page.preferences.grouping == grouping, onClick = { model.grouping(grouping) })) }
         AgentSort.entries.forEachIndexed { index, sort -> add(JAction(stringResource(R.string.agents_menu_sort, sort.label), icon = sort.icon,
@@ -469,6 +485,22 @@ internal fun AgentsScreen(
         if (terminalPanes) add(JAction(stringResource(R.string.agents_menu_terminals), icon = PhIcons.TerminalWindow,
             onClick = { navigator.navigate(persona.core.navigation.TerminalPanesRoute) }))
     }, { menu = false }, title = stringResource(R.string.agents_action_list_settings), note = stringResource(R.string.agents_menu_note))
+    archiveTarget?.let { target ->
+        JDialog(onDismiss = { archiveTarget = null }, title = stringResource(R.string.agents_action_archive),
+            text = stringResource(R.string.agents_archive_confirm, target.displayTitle),
+            confirm = stringResource(R.string.agents_action_archive) to {
+                val current = page.sessions.firstOrNull { it.key == target.key }
+                if (current?.canArchiveAgent == true && everyRequest.none { it.sessionKey == target.key }) archives?.archive(current)
+                archiveTarget = null
+            })
+    }
+    if (showArchives && archives != null) JFullScreen({ showArchives = false }) {
+        AgentArchivesScreen(archives, names, onBack = { showArchives = false }, onOpen = { archivePreview = it })
+        archivePreview?.let { session -> JFullScreen({ archivePreview = null }) {
+            persona.feature.chat.ChatDestination(ChatRoute(session.machineId, session.sessionId), navigator,
+                historyReadOnly = true, historySession = session, onHistoryBack = { archivePreview = null })
+        } }
+    }
     if (historyMachine != null && historySession != null) {
         val target = page.sessions.firstOrNull { it.machineId == historyMachine && it.sessionId == historySession }
         JFullScreen({ historyMachine = null; historySession = null }) {

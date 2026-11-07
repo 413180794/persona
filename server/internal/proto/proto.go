@@ -831,9 +831,12 @@ type Session struct {
 	// Space is the assistant's space it runs in: "health" for the health space's (docs/assistant/health.md), "" for the
 	// assistant's own. Set by the hub on the assistant's conversations.
 	Space string `json:"space,omitempty"`
-	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under "Archived";
-	// internal/assistant/conversations.go).
+	// Archived: a retained conversation moved out of the normal list. Assistant
+	// conversations and Claude/Codex Agents are managed by their owning manager.
 	Archived bool `json:"archived,omitempty"`
+	// ArchiveChangedAt is the manager's last explicit archive/restore visibility change.
+	// The hub uses it only to order its legacy delete tombstones against that report.
+	ArchiveChangedAt time.Time `json:"archive_changed_at,omitzero"`
 	// Origin is who opened an assistant conversation and OriginRef what of (docs/protocol/protocol.md"Assistant conversation origins"):
 	// user, channel, inbox, task, spawned, lark_agent, extension; "" is the user's. Set by the manager's fleet from
 	// the assistant's snapshot (internal/assistant/fleet.go).

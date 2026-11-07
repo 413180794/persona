@@ -254,13 +254,12 @@ func (h *Hub) stampSessions(m *Machine, list []proto.Session) {
 
 // decoratedSession is one of m's sessions as the apps get it.
 func (h *Hub) decoratedSession(m *Machine, sid string) (proto.Session, bool) {
-	s, ok := m.session(sid)
-	if ok {
-		one := []proto.Session{s}
-		h.stampSessions(m, one)
-		s = one[0]
+	for _, s := range h.decorated(m) {
+		if s.SessionID == sid {
+			return s, true
+		}
 	}
-	return s, ok
+	return proto.Session{}, false
 }
 
 // listedWaitMax is how long awaitListed waits at most (Hub.listedWait shortens it in tests: their fake nodes start

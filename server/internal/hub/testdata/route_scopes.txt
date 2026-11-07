@@ -208,6 +208,7 @@ machines.read        GET /api/v1/machines/{mid}/stat
 -                    GET /api/v1/pins
 -                    GET /api/v1/recordings
 agents.read          GET /api/v1/sessions
+agents.read          GET /api/v1/sessions/archived
 agents.read          GET /api/v1/sessions/{mid}/{sid}/info
 agents.read          GET /api/v1/sessions/{mid}/{sid}/items
 agents.read          GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full
@@ -371,6 +372,7 @@ agents.control       POST /api/v1/interactions/{id}/resolve
 notify               POST /api/v1/notify
 -                    POST /api/v1/phone/runtime-cli
 agents.control       POST /api/v1/sessions
+-                    POST /api/v1/sessions/{mid}/{sid}/archive
 -                    POST /api/v1/sessions/{mid}/{sid}/attach
 -                    POST /api/v1/sessions/{mid}/{sid}/close
 -                    POST /api/v1/sessions/{mid}/{sid}/fork
@@ -384,6 +386,7 @@ agents.control       POST /api/v1/sessions/{mid}/{sid}/queue/send-now
 -                    POST /api/v1/sessions/{mid}/{sid}/rewind
 -                    POST /api/v1/sessions/{mid}/{sid}/screen/before
 agents.control       POST /api/v1/sessions/{mid}/{sid}/seen
+-                    POST /api/v1/sessions/{mid}/{sid}/unarchive
 -                    POST /api/v1/tabs/autoname
 -                    POST /api/v1/task-plans/{id}/dismiss
 -                    POST /api/v1/task-plans/{id}/start

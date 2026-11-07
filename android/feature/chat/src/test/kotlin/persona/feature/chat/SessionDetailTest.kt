@@ -5,6 +5,20 @@ import org.junit.Test
 import persona.core.contracts.*
 
 class SessionDetailTest {
+    @Test fun archivedMetadataIsAvailableOnlyForItsReadOnlyConversation() {
+        for (agent in listOf("claude", "codex")) {
+            val archived = Session("computer", "history", agent = agent, title = "Archived $agent",
+                cwd = "/projects/app", archived = true)
+            val shown = readOnlySessionMetadata(archived.key, historyReadOnly = true, archived)
+            assertEquals(archived, shown)
+            assertEquals("Archived $agent", shown?.displayTitle)
+            assertNull(readOnlySessionMetadata(archived.key, historyReadOnly = false, archived))
+            assertNull(readOnlySessionMetadata(SessionKey("other", "history"), historyReadOnly = true, archived))
+            assertNull(readOnlySessionMetadata(SessionKey("computer", "other"), historyReadOnly = true, archived))
+            assertNull(readOnlySessionMetadata(archived.key, historyReadOnly = true, null))
+        }
+    }
+
     @Test fun summaryDoesNotEraseOpenChatDetail() {
         val held = Session("demo", "task", launcher = "example", permissionMode = "plan", effort = "high",
             model = "example-model", queued = listOf("next"), efforts = listOf("low", "high"))

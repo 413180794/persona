@@ -123,18 +123,18 @@ func TestDeleteSessions(t *testing.T) {
 	}
 }
 
-// Old notes are dropped when a new one is saved: the node stopped listing those sessions long ago.
-func TestDeletedNotesExpire(t *testing.T) {
+// Old notes remain: manager snapshots can outlive the node inventory indefinitely.
+func TestDeletedNotesDoNotExpire(t *testing.T) {
 	h, _ := conversationsHub(t)
 	now := time.Now().UTC()
-	if err := h.noteDeleted(t.Context(), "server", "a", now.Add(-deletedKeepFor-time.Hour)); err != nil {
+	if err := h.noteDeleted(t.Context(), "server", "a", now.Add(-365*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.noteDeleted(t.Context(), "server", "b", now); err != nil {
 		t.Fatal(err)
 	}
 	got := h.deletedAt("server")
-	if _, ok := got["a"]; ok || len(got) != 1 {
-		t.Fatalf("old note kept: %v", got)
+	if _, ok := got["a"]; !ok || len(got) != 2 {
+		t.Fatalf("old deletion lost: %v", got)
 	}
 }

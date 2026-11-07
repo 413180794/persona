@@ -26,6 +26,24 @@ The web client may send `"replaces":"<this browser's previous device id>"`: once
 - Requests may send `Accept-Language: zh-Hans|en|ja` (the full list a browser sends is also accepted; the first entry is taken and falls back per [i18n.md](i18n.md)): human-readable text in that response (`error`, status descriptions) uses that language. `code` does not change; clients still branch on `code`. Without it, the user's language is used (see `client_hello.locale` in "Client capabilities and heartbeat").
 - Every response carries `X-Request-Id`. A request may send `X-Client-Request-Id` (4–32 hex characters / `-`), and the hub then uses it (`docs/server/server.md`, "Operations").
 
+### Agent session archives
+
+Hubs advertising `agent_session_archives` in hello / health relay recoverable archives for Codex and Claude Agents to their owning manager. Persona's own conversations use their existing assistant API. Archiving does not move or delete the source transcript.
+
+| Request | Response | Permission |
+|---|---|---|
+| `GET /api/v1/sessions/archived?machine_id=` | `{ "sessions": [Session] }`, newest activity first within each manager; clients sort merged results; machine filter optional | full, answer; extensions with agents.read see only their manager's machines |
+| `POST /api/v1/sessions/{mid}/{sid}/archive` | `{ "ok": true }` | full |
+| `POST /api/v1/sessions/{mid}/{sid}/unarchive` | `{ "ok": true }` | full |
+
+Archived rows carry `Session.archived=true` and are excluded from normal whole lists, WebSocket lists/deltas and paginated indexes. Successful writes refresh normal lists; clients refresh the archive list separately and retain errors. Clients hide archive controls when the feature is absent. A manager announces `agent_session_archives` in its bus hello; the Hub advertises the fleet-wide feature only when every relevant owner is connected and supports it. Mixed manager versions conservatively hide controls. Direct requests to an old manager return 501 `agent_archives_unsupported`; an offline owner returns 503 `assistant_offline`. The combined archive list fails explicitly when an owner is unavailable rather than pretending a partial list is complete. Unknown sessions return 404, assistant conversations and other Agent types return 400, and starting/running/waiting-for-answer sessions cannot be archived (409). Read-only credentials cannot mutate archives (403). Storage failures return 500 without reporting success. Repeating either operation preserves the requested visibility.
+
+The owning manager persists records keyed by machine and session IDs without expiry. Clients must use the session's Hub, which routes mutations by machine ownership and merges manager archive lists. Mesh requests follow the existing center routing. The manager retains a minimal offline, read-only snapshot when a source inventory ages out, including after restoration and restart. Live inventory takes precedence. Reading still requires the original transcript to exist on a reachable computer; restoring does not recreate files. The manager reports `archive_changed_at` so the Hub can apply the same legacy deletion projection to normal and archived lists. A later explicit archive/restore supersedes an earlier deletion. Existing Hub deletion timestamps no longer expire: this preserves deletion across manager restarts and long-lived fallback snapshots. This deliberately trades bounded tombstone storage for preventing old conversations from unexpectedly reappearing; no new Hub business store is introduced.
+
+New source activity (an advancing update timestamp, running or waiting for input) permanently restores the session; becoming idle again does not re-hide it. Failed automatic restores are retried without committing the failed write in memory. Archive storage and lock waits have a three-second deadline, bounded further by the request context. Opening an unchanged archive list does not rebuild or broadcast normal inventories.
+
+This API does not enumerate, move or restore Codex Desktop's native `archived_sessions`; existing source-discovery rules still apply. Claude and Codex use the same manager-owned archive semantics.
+
 ### Health check and feature flags
 
 `GET /api/v1/health` needs no authentication. Public sources get only:

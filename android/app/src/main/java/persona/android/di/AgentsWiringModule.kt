@@ -8,6 +8,7 @@ import dagger.hilt.components.SingletonComponent
 import persona.android.PersonaApp
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.*
+import persona.core.hub.HttpAgentArchives
 import persona.core.hub.HttpAgentOperations
 import persona.core.hub.HttpAgentCreationService
 import persona.core.hub.HubError
@@ -94,11 +95,23 @@ private fun groupAgentsState(stack: GroupStack, assistant: AssistantConversation
     val drafts = AgentsDraftSource { key ->
         data.drafts.observe(DraftKey.Chat(key)).map { AgentDraft(it.text, it.attachments.isNotEmpty()) }
     }
+    val archives = object : AgentArchives {
+        override val supported get() = AgentArchives.FEATURE in connection.serverFeatures.value
+        private fun archiveApi(): AgentArchives {
+            if (!current()) throw CancellationException("Pairing changed")
+            val route = connection.route.value ?: throw persona.core.hub.HubFailure(HubError.NoNetwork)
+            return HttpAgentArchives(route.endpoint.url, connection.token, connection.http.client,
+                available = { supported }, isCurrent = { current() && connection.route.value == route })
+        }
+        override suspend fun list() = archiveApi().list()
+        override suspend fun archive(key: SessionKey) = archiveApi().archive(key)
+        override suspend fun restore(key: SessionKey) = archiveApi().restore(key)
+    }
     fun build(route: persona.core.hub.HubRoute?) = AgentsWiringState(data.scope.path, bindings,
         creation = route?.let {
             HttpAgentCreationService(data.scope.path, it.endpoint.url, connection.token,
                 connection.http.client, isCurrent = { current() && connection.route.value == route })
-        }, drafts = drafts, mainSender = data.messages, creationPreferences = data.listPreferences)
+        }, drafts = drafts, mainSender = data.messages, creationPreferences = data.listPreferences, archives = archives)
         .inGroup(names, data.coroutineScope)
-    return connection.route.map(::build).stateIn(data.coroutineScope, SharingStarted.Eagerly, build(connection.route.value))
+    return combine(connection.route, connection.serverFeatures) { route, _ -> build(route) }.stateIn(data.coroutineScope, SharingStarted.Eagerly, build(connection.route.value))
 }

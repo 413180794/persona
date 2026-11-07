@@ -877,7 +877,7 @@ func (s *Service) publishList(machine string) []proto.Session {
 
 // decorated returns a machine's sessions as the apps get them: the unified states, the pending interaction counts,
 // what the assistant says of its conversations, the work and todos.
-func (s *Service) decorated(machine string) []proto.Session {
+func (s *Service) decoratedUnarchived(machine string) []proto.Session {
 	list := slices.Clone(s.nodeSessions(machine))
 	m, _ := s.fleetMachine(machine)
 	s.fleet.mu.Lock()

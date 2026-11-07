@@ -11,6 +11,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.SessionKey
+import persona.core.contracts.Session
 import persona.core.contracts.HubScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
@@ -145,6 +146,7 @@ fun ChatDestination(
     renderStyle: ChatRenderStyle? = null, embedded: Boolean = false, showTopBar: Boolean = true,
     historyReadOnly: Boolean = false, onHistoryBack: (() -> Unit)? = null,
     historyFooter: (@Composable () -> Unit)? = null,
+    historySession: Session? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val services = remember(context) { EntryPointAccessors.fromApplication(context, ChatServices::class.java) }
@@ -170,7 +172,7 @@ fun ChatDestination(
             tasks = wiring?.tasks?.takeIf { style == ChatRenderStyle.Assistant && !historyReadOnly }),
         renderStyle = style,
         embedded = embedded, showTopBar = showTopBar,
-        historyReadOnly = historyReadOnly, historyFooter = historyFooter,
+        historyReadOnly = historyReadOnly, historyFooter = historyFooter, historySession = historySession,
         composerState = composer, onDraftChanged = editor?.let { it::changed },
         composerService = wiring?.composer.takeUnless { historyReadOnly },
         statusBindings = ChatStatusBindings(recovery = wiring?.recovery.takeUnless { historyReadOnly }, draftSaveError = error?.let { stringResource(it) }),

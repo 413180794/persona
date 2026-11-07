@@ -338,6 +338,7 @@ internal fun AgentsWiringState.inGroup(names: GroupNames, scope: CoroutineScope)
             }
         },
         creation = creation?.inGroup(names),
+        archives = archives?.inGroup(names),
         drafts = drafts?.let { source -> AgentsDraftSource { key -> source.observe(names.raw(key)) } },
         mainSender = mainSender?.inGroup(names, scope),
     )

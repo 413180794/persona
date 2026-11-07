@@ -566,6 +566,8 @@ const (
 	// notes, Agents, the knowledge base, the models, a card's wait): the hello does not carry them any more, and a
 	// manager without it runs on its built-in defaults (docs/assistant/managers.md "Configuration").
 	CapabilityConfigOwn = "config.own"
+	// CapabilityAgentSessionArchives: the manager owns recoverable Codex/Claude archives.
+	CapabilityAgentSessionArchives = "agent_session_archives"
 )
 
 // The methods and events, by direction. The assistant's handshake is manager.hello {id, host, os, arch, deploy,
@@ -633,6 +635,9 @@ type HTTPResponse struct {
 // Routes are the routes the assistant answers (net/http patterns): the hub relays the apps' requests on them as
 // http.request. The assistant registers exactly these (assistant.TestRoutesAreTheWireOnes).
 var Routes = []string{
+	"GET /api/v1/sessions/archived",
+	"POST /api/v1/sessions/{mid}/{sid}/archive",
+	"POST /api/v1/sessions/{mid}/{sid}/unarchive",
 	"POST /api/v1/assistant/conversations/{id}/archive",
 	"GET /api/v1/assistant/conversations/{id}/always",
 	"DELETE /api/v1/assistant/conversations/{id}/always/{hash}",

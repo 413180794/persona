@@ -360,5 +360,6 @@ internal fun mergedAgentsState(list: List<GroupNames>, states: List<AgentsWiring
         drafts = AgentsDraftSource { key -> stateFor(key.machineId)?.drafts?.observe(key) ?: emptyFlow() },
         mainSender = states[chosen].mainSender,
         creationPreferences = states.firstNotNullOfOrNull { it.creationPreferences },
+        archives = mergedAgentArchives(list, states.map { it.archives }),
     )
 }

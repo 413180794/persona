@@ -2,6 +2,11 @@ package persona.feature.chat
 
 import persona.core.contracts.Session
 import persona.core.contracts.SessionInfo
+import persona.core.contracts.SessionKey
+
+/** A history seed is display-only and must never cross a conversation or enter the live metadata cache. */
+internal fun readOnlySessionMetadata(key: SessionKey, historyReadOnly: Boolean, seed: Session?): Session? =
+    seed?.takeIf { historyReadOnly && it.key == key }
 
 /** A row summary updates live state, never erases detail already loaded by an open chat. */
 internal fun sessionWithDetail(row: Session, previous: Session?, info: SessionInfo?): Session {

@@ -119,7 +119,7 @@ func runtimeSummary(s proto.Session) runtimeRowSummary {
 		SpaceKind: s.SpaceKind, SpaceID: s.SpaceID, SpaceName: s.SpaceName, SpaceIndex: s.SpaceIndex,
 		ParentSpaceID: s.ParentSpaceID, SlotID: s.SlotID, SlotName: s.SlotName, SlotIndex: s.SlotIndex, PaneIndex: s.PaneIndex,
 		WorkspaceID: s.WorkspaceID, TabID: s.TabID, PaneID: s.PaneID,
-		Assistant: s.Assistant, Archived: s.Archived, Space: s.Space,
+		Assistant: s.Assistant, Archived: s.Archived, ArchiveChangedAt: s.ArchiveChangedAt, Space: s.Space,
 		Starting: s.Starting, StartError: rowText(s.StartError, 180), StartedByPersona: s.StartedByPersona,
 		ReadOnlyReason: rowText(s.ReadOnlyReason, 180), Origin: s.Origin, OriginRef: s.OriginRef,
 		TurnError: rowText(s.TurnError, 180), TurnErrorKind: s.TurnErrorKind, TurnErrorCode: s.TurnErrorCode,

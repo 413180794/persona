@@ -65,7 +65,20 @@ internal class AgentsViewModel(
      * every session on each push stays off the main thread. Empty (the caller's thread) keeps tests synchronous.
      */
     listContext: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
+    archiveService: AgentArchives? = null,
 ) : ViewModel() {
+    val archives = archiveService?.let { api -> AgentArchivesState(api, viewModelScope) { key, archived ->
+        if (archived) bindings?.onSessionClosed?.invoke(key)
+        else {
+            // Restored offline history must be discoverable even when the list was showing only running agents.
+            previous = null
+            groupFilter.value = null
+            settings.update { it.copy(quick = AgentQuickFilter.All, query = "", machineFilter = "", kept = emptySet(), folded = emptySet()) }
+            preferences.range(pairingScope, AgentRange.All)
+        }
+        _notice.value = AgentText(if (archived) R.string.agents_notice_archived else R.string.agents_notice_restored)
+        repository.refresh()
+    } }
     private val operations = bindings?.operations?.let { AgentOperationsState(it, preferences.hubCache) }
     val operationState = operations?.state ?: MutableStateFlow(AgentOperationsSnapshot())
     private val sending = mutableSetOf<String>()

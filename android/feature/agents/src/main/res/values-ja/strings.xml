@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="agents_action_archive">エージェントをアーカイブ</string>
+    <string name="agents_archives_title">アーカイブ済みエージェント</string>
+    <string name="agents_archives_search">アーカイブ済みエージェントを検索</string>
+    <string name="agents_archives_restore">復元</string>
+    <string name="agents_archives_refresh">更新</string>
+    <string name="agents_archives_empty">アーカイブはありません</string>
+    <string name="agents_archives_no_matches">一致するエージェントはありません</string>
+    <string name="agents_archives_empty_hint">アーカイブした Claude と Codex のセッションがここに表示されます。</string>
+    <string name="agents_archives_description">アーカイブしてもコンピューター上の会話は残ります。復元すると Agents に戻ります。新しい活動がある場合も自動で戻ります。</string>
+    <string name="agents_archive_confirm">「%1$s」をアーカイブしますか？コンピューター上の記録は残り、アーカイブ一覧から復元できます。</string>
+    <string name="agents_notice_archived">アーカイブしました</string>
+    <string name="agents_notice_restored">復元しました</string>
     <string name="agents_child_tasks">サブタスク（%1$d）</string>
     <string name="agents_child_tasks_kind">サブタスク</string>
     <plurals name="agents_summary_requests">
