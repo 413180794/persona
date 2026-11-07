@@ -50,7 +50,7 @@ async function render(tab: string, path: string) {
 describe("settings read retries", () => {
   it.each([
     { tab: "devices", path: "/auth/tokens", keepsError: true, result: { tokens: [{ id: "browser", name: "Example browser", kind: "web", role: "full" }], current: "browser" }, content: "Example browser" },
-    { tab: "models", path: "/launchers", keepsError: true, result: { launchers: [{ name: "example", display_name: "Example provider", source: "persona" }] }, content: "Example provider" },
+    { tab: "models", path: "/launchers", keepsError: false, result: { launchers: [{ name: "example", display_name: "Example provider", source: "persona" }] }, content: "Example provider" },
     { tab: "hub", path: "/hub/update", keepsError: false, result: { version: "1.2.3", build: 123, channel: "release", can_update: true, state: "idle", busy: [], auto: false, auto_notice: false, confirmed: true }, content: "1.2.3" },
     { tab: "assistant", path: "/assistant", keepsError: false, result: { machine_id: "example-computer", notes_effective: "Example notes" }, content: "example-computer" },
   ])("retries $tab without changing categories and can recover after another failure", async ({ tab, path, keepsError, result, content }) => {
