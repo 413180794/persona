@@ -30,6 +30,7 @@ import persona.core.domain.answer.askingLine
 import persona.core.domain.answer.firstBySession
 import persona.core.domain.plainMarkdown
 import persona.core.domain.tasks.TasksStore
+import persona.core.navigation.NewTodoRequests
 import java.time.Instant
 
 data class TodoMostUrgent(
@@ -76,14 +77,18 @@ fun TodosScreen(
     onOpenTodo: (String) -> Unit,
     now: Instant = Instant.now(),
     onError: (String) -> Unit = {},
-    /** Opens with "New to-do" up (the launcher's shortcut). */
-    startCreating: Boolean = false,
     /** The cards waiting for an answer: a waiting agent's line says what its card asks (#3964). */
     pending: List<Interaction> = emptyList(),
+    /** The launcher's "New to-do": each request brings the sheet up, also on a list kept from an earlier use (#5718). */
+    newTodoRequests: NewTodoRequests? = null,
 ) {
     val cards = remember(pending) { pending.firstBySession() }
     var query by rememberSaveable { mutableStateOf("") }
-    var creating by rememberSaveable { mutableStateOf(startCreating) }
+    var creating by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(newTodoRequests) {
+        val requests = newTodoRequests ?: return@LaunchedEffect
+        requests.requests.collect { at -> if (at != null && requests.take(at)) creating = true }
+    }
     var completedFolded by rememberSaveable { mutableStateOf(true) }
     var newTitle by remember { mutableStateOf("") }
     var newNotes by remember { mutableStateOf("") }

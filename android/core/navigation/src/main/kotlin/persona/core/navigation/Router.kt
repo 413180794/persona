@@ -148,8 +148,8 @@ fun tabRoot(tab: AppTab): NavKey = when (tab) {
     AppTab.Settings -> SettingsRoute
 }
 
-/** Select the returned tab after applying this to the app-owned stacks. */
-fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>): AppTab {
+/** Select the returned tab after applying this to the app-owned stacks; "New to-do" also asks [newTodo] for its sheet. */
+fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>, newTodo: NewTodoRequests = NewTodoOpen): AppTab {
     val stack = stacks.getValue(tab)
     if (stack.isEmpty()) stack.add(tabRoot(tab))
     // The card is listed on the tab's root and the composer to focus sits there: pages left open on top are closed first.
@@ -170,6 +170,8 @@ fun ResolvedRoute.restore(stacks: Map<AppTab, MutableList<NavKey>>): AppTab {
             stack[existing] = key
         }
     }
+    // The list kept from an earlier use keeps its state too: its sheet opens on this request, each time.
+    if (key == NewTodoRoute) newTodo.request()
     return tab
 }
 
