@@ -145,11 +145,11 @@ func ownSend(it *InboxItem, last string) bool {
 
 // escalate hands the manager its work, under b.mu: a newly triaged Needs you event (recent) gets a processing
 // conversation (queued); new content of an event that has one — being handled, or triaged Needs you again — is sent into
-// that conversation. It returns the items it moved.
-func (b *inboxBook) escalate(since, now time.Time) []*InboxItem {
+// that conversation. It returns the items it moved, settled (inbox_rollback.go).
+func (b *inboxBook) escalate(since, now time.Time) []*inboxWrite {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	var changed []*InboxItem
+	var changed []*inboxWrite
 	for _, it := range b.items {
 		a := it.Agent
 		if !it.open() || it.Context == "" || a != nil && a.Of == it.Last {
@@ -160,6 +160,7 @@ func (b *inboxBook) escalate(since, now time.Time) []*InboxItem {
 		if !handled && (twin == TwinNever || it.Tier != TierAction && twin != TwinFirst || it.TriagedAt != it.Last) {
 			continue
 		}
+		w := beginWrite(it)
 		if a == nil {
 			if !it.UpdatedAt.After(since) {
 				continue
@@ -171,7 +172,8 @@ func (b *inboxBook) escalate(since, now time.Time) []*InboxItem {
 		// (a first message has the item's content: startInboxAgents leaves this one out of it)
 		b.tell(it, inboxNote{Name: prompts.NoteNewMessages, Context: it.Context}, true, now)
 		b.setHandling(it, HandlingLooking, "", now)
-		changed = append(changed, it)
+		b.settle(w)
+		changed = append(changed, w)
 	}
 	return changed
 }
@@ -392,6 +394,7 @@ func (s *Service) suggest(ctx context.Context, sessionID string, in suggestIn) (
 		}
 	}
 	now := time.Now().UTC()
+	w := beginWrite(it)
 	if r := strings.TrimSpace(in.Recap); r != "" {
 		it.Recap = clip(r, recapMax)
 	}
@@ -448,8 +451,14 @@ func (s *Service) suggest(ctx context.Context, sessionID string, in suggestIn) (
 		}
 	}
 	id := it.ID
+	b.settle(w)
 	b.mu.Unlock()
-	s.saveInbox(ctx, []*InboxItem{it})
+	// An undone suggestion gets no card, and the conversation hears it failed: the inbox must not promise what a
+	// restart would lose. Undone, the event is back where the turn found it, so handing it in again works. One that
+	// something else moved meanwhile stays (that move's save writes the row) and goes on as kept.
+	if s.saveWrites(ctx, []*inboxWrite{w}, "its suggestion"); w.undone {
+		return id, nil, errInboxNotPersisted
+	}
 	if card != nil {
 		s.messageCard(ctx, id, *card)
 	}
@@ -457,12 +466,12 @@ func (s *Service) suggest(ctx context.Context, sessionID string, in suggestIn) (
 }
 
 // inboxDraft keeps the reply drafted in conversation sessionID (inbox_draft, the older name): suggest with kind reply.
-func (s *Service) inboxDraft(ctx context.Context, sessionID, text, note string, proposed []DocChange) (string, *DocChange) {
+func (s *Service) inboxDraft(ctx context.Context, sessionID, text, note string, proposed []DocChange) (string, *DocChange, error) {
 	id, refused, err := s.suggest(ctx, sessionID, suggestIn{Kind: SuggestReply, Text: text, Note: note, Changes: proposed})
-	if err != nil {
-		return "", nil
+	if err != nil && !errors.Is(err, errInboxNotPersisted) {
+		return "", nil, nil
 	}
-	return id, refused
+	return id, refused, err
 }
 
 func (s *Service) toolInboxSuggest(ctx context.Context, self string, args json.RawMessage) (string, error) {
@@ -762,6 +771,12 @@ func (s *Service) confirmAgent(ctx context.Context, it *InboxItem, g *InboxSugge
 // Since phase 1 every Needs you event goes to the manager whatever the judge says of handling it; a model that fails
 // leaves the event unlinked.
 func (s *Service) linkTask(ctx context.Context, it *InboxItem, tasks []prompts.InboxTask) bool {
+	return s.linkTaskFor(ctx, it, tasks, nil)
+}
+
+// linkTaskFor is linkTask on an item whose write w is not saved yet: the link joins that write while the item still
+// holds it (a concurrent move keeps the write from being undone over it).
+func (s *Service) linkTaskFor(ctx context.Context, it *InboxItem, tasks []prompts.InboxTask, w *inboxWrite) bool {
 	b := &s.inbox
 	b.mu.Lock()
 	input := prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: it.Summary, Item: b.promptItem(it), Tasks: tasks})
@@ -783,7 +798,11 @@ func (s *Service) linkTask(ctx context.Context, it *InboxItem, tasks []prompts.I
 	defer b.mu.Unlock()
 	for _, t := range tasks { // only a task it was shown
 		if it.Agent != nil && t.ID == strings.TrimSpace(out.TaskID) {
+			held := w != nil && b.holds(w)
 			it.Agent.TodoID = t.ID
+			if held {
+				b.settle(w)
+			}
 			return true
 		}
 	}

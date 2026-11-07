@@ -335,7 +335,10 @@ func (s *Service) toolInboxDraft(ctx context.Context, self string, args json.Raw
 	if p := draftPlaceholder(a.Text); p != "" {
 		return "", fmt.Errorf("the draft leaves %s to fill in, and it goes out as it is: leave out what you could not find (say so in note) and submit again", p)
 	}
-	itemID, refused := s.inboxDraft(ctx, self, strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), a.Changes)
+	itemID, refused, err := s.inboxDraft(ctx, self, strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), a.Changes)
+	if err != nil { // not kept: the event is back where the turn found it, so the draft can be handed in again
+		return "", err
+	}
 	if itemID == "" {
 		return "", errors.New("this conversation was not started for an inbox item")
 	}

@@ -52,8 +52,9 @@ func (s *Service) triageInbox(ctx context.Context) {
 			go func(it *InboxItem) {
 				defer wg.Done()
 				defer func() { <-sem }()
-				if s.triageOne(ctx, it) {
-					s.saveInbox(ctx, []*InboxItem{it})
+				if w := s.triage(ctx, it); w != nil {
+					// Undone, the item is untriaged again: the next pass asks the model again.
+					s.saveWrites(ctx, []*inboxWrite{w}, "its triage")
 				}
 			}(it)
 		}
@@ -64,18 +65,24 @@ func (s *Service) triageInbox(ctx context.Context) {
 
 // triageOne asks the model about an item in the list whose content changed; when the model fails the item gets its
 // fallback tier (and no summary). When its connection is held the item stays untriaged. An item without a fallback
-// (a connector's thing its rules leave to the model) keeps what it shows until a pass gets an answer.
-func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
+// (a connector's thing its rules leave to the model) keeps what it shows until a pass gets an answer. True when it
+// changed the item.
+func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool { return s.triage(ctx, it) != nil }
+
+// triage is triageOne returning the change, settled (inbox_rollback.go); nil when the item was left as it was.
+func (s *Service) triage(ctx context.Context, it *InboxItem) *inboxWrite {
 	last, v := s.askTriage(ctx, it, 90*time.Second)
 	if ctx.Err() != nil {
-		return false
+		return nil
 	}
 	b := &s.inbox
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if it.Last != last { // new messages arrived meanwhile: the next pass sees them
-		return false
+		return nil
 	}
+	w := beginWrite(it)
+	settled := func() *inboxWrite { b.settle(w); return w }
 	fallback := b.ruleTier(it)
 	switch {
 	case v.state == triagePaused:
@@ -84,14 +91,14 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 		if it.Tier == "" && fallback != "" {
 			it.Tier, it.Reason = fallback, b.byRules()
 			b.applyPolicyTier(it)
-			return true
+			return settled()
 		}
-		return false
+		return nil
 	case v.state == "":
 		it.Tier, it.Summary, it.Reason = v.tier, v.summary, v.reason
 		it.Urgent = v.urgent && v.tier == TierAction
 	case fallback == "":
-		return false
+		return nil
 	default:
 		if v.err != nil {
 			s.logf("inbox: triage %s: %v", it.ID, v.err)
@@ -105,7 +112,7 @@ func (s *Service) triageOne(ctx context.Context, it *InboxItem) bool {
 	if it.Read && it.Tier != TierAction && it.open() {
 		b.file(it, time.Now(), "read")
 	}
-	return true
+	return settled()
 }
 
 // Why the model gave no tier (a triage verdict's state, GET /api/v1/inbox triage.state), the most telling first.

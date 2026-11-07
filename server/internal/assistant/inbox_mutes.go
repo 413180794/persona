@@ -88,23 +88,34 @@ func mutedBy(mutes []InboxMute, it *InboxItem) *InboxMute {
 	return nil
 }
 
-// applyMutes files the open items the mutes cover as done (read), saying which mute; under b.mu.
-func (b *inboxBook) applyMutes(now time.Time) []*InboxItem {
+// applyMutes files the open items the mutes cover as done (read), saying which mute; under b.mu. The writes are
+// settled (inbox_rollback.go): a filing whose row fails reopens the item, and the next round files it again.
+func (b *inboxBook) applyMutes(now time.Time) []*inboxWrite {
 	if len(b.mutes) == 0 {
 		return nil
 	}
-	var changed []*InboxItem
+	var changed []*inboxWrite
 	for _, it := range b.items {
 		if !it.open() {
 			continue
 		}
 		if m := mutedBy(b.mutes, it); m != nil {
+			w := beginWrite(it)
 			b.file(it, now, "read")
 			it.Reason = b.mutedReason(m.Name)
-			changed = append(changed, it)
+			b.settle(w)
+			changed = append(changed, w)
 		}
 	}
 	return changed
+}
+
+func itemsOf(ws []*inboxWrite) []*InboxItem {
+	out := make([]*InboxItem, len(ws))
+	for i, w := range ws {
+		out[i] = w.it
+	}
+	return out
 }
 
 // loadInboxMutes reads the mutes kept, joining any added before; false when the database could not be read.
@@ -172,7 +183,11 @@ func (s *Service) addMute(ctx context.Context, m InboxMute) (InboxMute, int, err
 	}
 	changed := b.applyMutes(time.Now())
 	b.mu.Unlock()
-	s.saveInbox(ctx, changed)
+	// The mute stays kept; only the items whose rows failed reopen, so the answer is an error and a retry (the same
+	// mute, idempotent) files them again.
+	if failed := s.saveWrites(ctx, changed, "its filing by a mute"); len(failed) > 0 {
+		return m, 0, errInboxNotPersisted
+	}
 	return m, len(changed), nil
 }
 

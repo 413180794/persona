@@ -141,16 +141,17 @@ func (s *Service) handInbox(ctx context.Context) {
 		s.sweepInboxAgents(ctx, cfg, now)
 		escalated := b.escalate(now.Add(-agentMaxAge(cfg)), now)
 		if tasks := s.activeTasks(ctx); len(tasks) > 0 { // which of the user's tasks a new one is about
-			for _, it := range escalated {
+			for _, w := range escalated {
 				b.mu.Lock()
-				fresh := it.Agent != nil && it.Agent.SessionID == "" && it.Agent.TodoID == ""
+				fresh := w.it.Agent != nil && w.it.Agent.SessionID == "" && w.it.Agent.TodoID == ""
 				b.mu.Unlock()
 				if fresh {
-					s.linkTask(ctx, it, tasks)
+					s.linkTaskFor(ctx, w.it, tasks, w)
 				}
 			}
 		}
-		s.saveInbox(ctx, escalated)
+		// A failed row gives the event back its old state: the next pass escalates it again.
+		s.saveWrites(ctx, escalated, "its escalation")
 		s.deliverPending(ctx)
 		s.startInboxAgents(ctx, cfg)
 	}()
@@ -191,13 +192,15 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		carried int // the agent's told count when the first message was made: it carries the notes queued up to it
 	}
 	var jobs []job
-	var adopted []*InboxItem
+	var adopted []*inboxWrite
 	larkDefault := max(b.larkAccount, 1)
 	for _, it := range queued {
 		if ref, ok := byEvent[it.ID]; ok && !it.Agent.lost(ref.SessionID) { // the event's conversation is there: go on in it
+			w := beginWrite(it)
 			it.Agent.MachineID, it.Agent.SessionID, it.Agent.Wake = ref.MachineID, ref.SessionID, true
 			b.setHandling(it, HandlingLooking, "", now)
-			adopted = append(adopted, it)
+			b.settle(w)
+			adopted = append(adopted, w)
 			continue
 		}
 		if len(jobs) >= max(agentConcurrency(cfg)-running, 0) {
@@ -209,9 +212,10 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			it.Agent.told})
 	}
 	b.mu.Unlock()
-	s.saveInbox(ctx, adopted)
-	for _, it := range adopted {
-		s.deliverNotes(ctx, it)
+	// An adoption whose row failed is undone (no conversation again): its notes wait, and the next pass adopts it.
+	s.saveWrites(ctx, adopted, "the adoption of its conversation")
+	for _, w := range adopted {
+		s.deliverNotes(ctx, w.it) // nothing goes for an undone one (no conversation)
 	}
 	for _, j := range jobs {
 		var kbc *prompts.KBContext
@@ -246,7 +250,12 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			}
 		}
 		b.mu.Unlock()
-		s.saveInbox(ctx, []*InboxItem{j.it})
+		// No rollback here: the start had its effect on a machine (a live conversation, or a refused start counted in
+		// the attempts). Undone, the next pass would start a second conversation with a fresh attempt budget, and the
+		// live one's suggestion would find no event. The row catches up at the item's next save.
+		if failed := s.saveInbox(ctx, []*InboxItem{j.it}); failed[j.it.ID] {
+			s.logf("inbox: agent for %s: its start could not be saved; the live state stays until the next save", j.it.ID)
+		}
 		if tellNow {
 			s.deliverNotes(ctx, j.it)
 		}
@@ -337,7 +346,8 @@ func (s *Service) requeueAgentStart(ctx context.Context, a *InboxAgent, err erro
 func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, now time.Time) {
 	b := &s.inbox
 	b.mu.Lock()
-	var running, orphans []*InboxItem
+	var running []*InboxItem
+	var changed []*inboxWrite
 	for _, it := range b.items {
 		a, h := it.Agent, it.Handling
 		switch {
@@ -346,12 +356,13 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 			running = append(running, it)
 		case a.State != AgentRunning || a.SessionID != "":
 		case a.StartedAt == nil || now.Sub(*a.StartedAt) > inboxAgentStartWait+time.Minute:
+			w := beginWrite(it)
 			a.State, a.StartedAt = AgentQueued, nil
-			orphans = append(orphans, it)
+			b.settle(w)
+			changed = append(changed, w)
 		}
 	}
 	b.mu.Unlock()
-	changed := orphans
 	for _, it := range running {
 		b.mu.Lock()
 		a := *it.Agent
@@ -381,16 +392,19 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 		}
 		b.mu.Lock()
 		if it.Agent != nil && it.Agent.SessionID == a.SessionID && (it.Handling == nil || it.Handling.State == state) {
+			w := beginWrite(it)
 			if it.Suggestion != nil { // new messages left its suggestion standing: it still holds
 				b.setHandling(it, HandlingDone, "", now)
 			} else {
 				b.failHandling(it, reason, now)
 			}
-			changed = append(changed, it)
+			b.settle(w)
+			changed = append(changed, w)
 		}
 		b.mu.Unlock()
 	}
-	s.saveInbox(ctx, changed)
+	// Undone, a settled conversation is still running in memory: the next sweep settles it again.
+	s.saveWrites(ctx, changed, "its settled conversation")
 }
 
 // inboxAgentPrompt is the AI twin's first message for an item (prompts/inbox/agent.md).

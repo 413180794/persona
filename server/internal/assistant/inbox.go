@@ -555,11 +555,15 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 		}
 	}
 	now := time.Now()
-	changed = append(changed, b.applyMutes(now)...)
+	muted := b.applyMutes(now)
+	changed = append(changed, itemsOf(muted)...)
 	changed, todo := b.sortBatch(batch, changed, now)
 	b.applyRuledPolicies(changed)
+	for _, w := range muted { // what the round did to them after the filing is part of it
+		b.settle(w)
+	}
 	b.mu.Unlock()
-	s.saveInbox(ctx, changed)
+	s.saveInboxUndo(ctx, changed, s.undoWrites(muted, "its filing by a mute"))
 	if readsChanged && len(changed) == 0 {
 		s.inboxChanged(ctx, nil) // nothing came in, but which sources could be read did (saveInbox tells otherwise)
 	}
