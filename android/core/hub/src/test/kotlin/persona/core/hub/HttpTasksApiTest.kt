@@ -15,12 +15,34 @@ import org.junit.Test
 
 /** "Retry" and "Remove" on a task (#1396): the hub's routes, the todo it answers, and its refusal kept for the user. */
 class HttpTasksApiTest {
-    private fun api(server: MockWebServer): HttpTasksApi {
+    private fun api(server: MockWebServer, lookup: Boolean = false): HttpTasksApi {
         val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
         return HttpTasksApi({ path, method, body ->
             val rb = body?.toString()?.toRequestBody("application/json".toMediaType())
             http.newCall(Request.Builder().url(server.url(path)).method(method, rb).build()).execute()
-        })
+        }, kotlinx.coroutines.flow.MutableStateFlow(if (lookup) setOf("sessions_lookup") else emptySet()))
+    }
+
+    @Test fun boundAgentLookupEscapesExactIdentityAndRejectsAnUnrelatedRow() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"sessions":[{"machine_id":"box","session_id":"original/1","state":"working"}]}"""))
+            val api = api(server, lookup = true)
+            val key = persona.core.contracts.SessionKey("box", "original/1")
+            assertEquals(key, api.taskAgent(key)?.key)
+            val request = server.takeRequest()
+            assertEquals("original/1", request.requestUrl?.queryParameter("session_id"))
+            assertEquals("box", request.requestUrl?.queryParameter("machine_id"))
+            assertEquals("0", request.requestUrl?.queryParameter("summary"))
+            server.enqueue(MockResponse().setBody("""{"sessions":[{"machine_id":"box","session_id":"other"}]}"""))
+            assertNull(api.taskAgent(key))
+        }
+    }
+
+    @Test fun anOlderHubUsesTheDurableBindingWithoutAnUnboundedListRequest() = runBlocking {
+        MockWebServer().use { server ->
+            assertNull(api(server).taskAgent(persona.core.contracts.SessionKey("box", "original")))
+            assertEquals(0, server.requestCount)
+        }
     }
 
     @Test fun retryPostsAndAnswersTheReopenedTodo() = runBlocking {

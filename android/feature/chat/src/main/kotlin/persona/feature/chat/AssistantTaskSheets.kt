@@ -89,6 +89,7 @@ internal fun AssistantTaskSheets(host: AssistantTaskHost) {
 private fun TaskDetailSheet(todoId: String, host: AssistantTaskHost, onDismiss: () -> Unit) {
     val todos by host.tasks.todos.collectAsStateWithLifecycle()
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(todoId) { host.tasks.reloadTodos() }
     val todo = todos.firstOrNull { it.id == todoId }
     var picked by remember(todoId) { mutableStateOf<SessionKey?>(null) }
     var menu by remember(todoId) { mutableStateOf(false) }

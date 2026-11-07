@@ -7,6 +7,8 @@ import persona.core.contracts.Todo
 
 /** Tasks dispatched from an assistant conversation (docs/assistant/unified-entry.md; docs/protocol/protocol.md "Tasks and conversation activity"). */
 interface TasksApi {
+    /** Exact metadata for a bound agent, independent of the Agents list filter and page. */
+    suspend fun taskAgent(key: persona.core.contracts.SessionKey): persona.core.contracts.Session? = null
     suspend fun todos(): List<Todo>
     suspend fun createTodo(title: String, notes: String = ""): Todo = error("createTodo not implemented")
     suspend fun patchTodo(id: String, title: String? = null, notes: String? = null, done: Boolean? = null): Todo = error("patchTodo not implemented")

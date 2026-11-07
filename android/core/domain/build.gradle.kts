@@ -4,4 +4,5 @@ plugins {
 
 dependencies {
     api(project(":core:contracts"))
+    testImplementation(libs.coroutines.test)
 }

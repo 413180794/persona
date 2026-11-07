@@ -51,6 +51,14 @@ class HttpTasksApi internal constructor(
         return built.encodedPath + (built.encodedQuery?.let { "?$it" } ?: "")
     }
 
+    override suspend fun taskAgent(key: persona.core.contracts.SessionKey): persona.core.contracts.Session? {
+        if (features?.value?.contains("sessions_lookup") != true) return null
+        val response = call(path("sessions", query = mapOf("summary" to "0", "limit" to "1",
+            "machine_id" to key.machineId, "session_id" to key.sessionId)))
+        return JsonCodec.decodeFromJsonElement<persona.core.contracts.SessionsResponse>(response)
+            .sessions.firstOrNull { it.key == key }
+    }
+
     override suspend fun todos(): List<Todo> =
         JsonCodec.decodeFromJsonElement<TodosResponse>(call(path("todos"))).todos
 
