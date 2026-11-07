@@ -179,11 +179,33 @@ struct FeishuBotView: View {
             feature(\.sync, Theme.Icon.inProgress, "Sync Main Chat", "Replies in the main chat, from the app or scheduled tasks, are also sent to Lark")
             feature(\.reports, Theme.Icon.inProgress, "Send Task Progress to Lark", "When tasks from the main chat finish, wait for you or get interrupted, they're combined into one card sent to Lark, with stages and links")
             feature(\.agents, Theme.Icon.agents, "Drive Agents", "/agents picks Claude Code / Codex on any of your computers to chat with in Lark; /start opens a new one")
+            // A hub from before these leaves them out of its answer: nothing to show, since it would ignore a change.
+            if model.hubKnowsBoard {
+                feature(\.board, Theme.Icon.pinned, "Waiting-for-You Board in Lark", "/tasks sends one card listing everything waiting for you, then keeps it up to date in place instead of sending a new one")
+            }
+            if model.hubKnowsNudge { nudgePicker }
         } header: {
             Text("What It Can Do")
         } footer: {
             Text("The main chat can use all your data (Lark, email, your phone's calendar and location…), and the bot's messages stay in Lark. Anything done on your behalf still asks you first.")
         }
+    }
+
+    private var nudgePicker: some View {
+        Picker(selection: Binding(get: { model.nudgeAfter }, set: { m in Task { await model.setNudgeAfter(m) } })) {
+            ForEach(model.nudgeChoices, id: \.self) { Text(FeishuBotModel.nudgeLabel($0)).tag($0) }
+        } label: {
+            Label {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text("Nudge About Unanswered Cards")
+                    Text("A card still unanswered after this long gets one reply under it in Lark (in a group topic it mentions you), outside your quiet hours")
+                        .font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: Theme.Icon.replyReminder).foregroundStyle(Theme.accent)
+            }
+        }
+        .disabled(model.saving)
     }
 
     private var setupSection: some View {

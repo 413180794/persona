@@ -5552,6 +5552,29 @@
         }
       }
     },
+    "%lld h": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld h"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld時間"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 小时"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "%lld h %lld min left": {
       "localizations": {
         "zh-Hans": {
@@ -6235,6 +6258,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld 条消息连上后自动发送"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%lld min": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld min"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld分"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 分钟"
           }
         }
       },
@@ -8793,6 +8839,29 @@
       },
       "extractionState": "manual"
     },
+    "/tasks sends one card listing everything waiting for you, then keeps it up to date in place instead of sending a new one": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/tasks sends one card listing everything waiting for you, then keeps it up to date in place instead of sending a new one"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/tasks があなた待ちの項目をまとめた1枚のカードを送り、その後は新しく送らずにその場で更新します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/tasks 发出一张列着所有等你的事的卡片，之后原地更新这一张，不再发新的"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "1 Hour": {
       "localizations": {
         "en": {
@@ -9274,6 +9343,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "来电或别的 App 占用了音频，对话已停"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "A card still unanswered after this long gets one reply under it in Lark (in a group topic it mentions you), outside your quiet hours": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A card still unanswered after this long gets one reply under it in Lark (in a group topic it mentions you), outside your quiet hours"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カードがこの時間たっても未回答なら、その下に一度だけ返信でお知らせします（グループのトピックではあなたにメンションします）。おやすみ時間中は終了後に送ります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片等这么久还没回答，就在它下面回复提醒一次（话题群里会 @ 你），免打扰时段内顺延到结束后"
           }
         }
       },
@@ -42557,6 +42649,52 @@
         }
       }
     },
+    "Nudge About Unanswered Cards": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nudge About Unanswered Cards"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未回答のカードをリマインド"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提醒未回答的卡片"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Off [Feishu Bot Model 3f9d21]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Script on PATH": {
       "localizations": {
         "en": {
@@ -74455,6 +74593,29 @@
           }
         }
       }
+    },
+    "Waiting-for-You Board in Lark": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting-for-You Board in Lark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkの「あなた待ち」ボード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "飞书里的「等你处理」总卡"
+          }
+        }
+      },
+      "extractionState": "manual"
     },
     "push.unavailable": {
       "comment": "Background push status",

@@ -17,6 +17,13 @@ nonisolated struct FeishuBotStatus: Codable, Hashable, Sendable {
     var pairing: Pairing?
     var target: String?
     var agents: [BoundAgent]?
+    /// Minutes an unanswered card waits before the one nudge under it, 0 off (#6084); a hub from before leaves it out.
+    var nudgeAfter: Int?
+
+    /// What a hub from before the setting does: nudge after an hour.
+    static let defaultNudgeAfter = 60
+    /// The delays the picker offers; the one in force is added when it is not one of them (set through the API).
+    static let nudgeChoices = [0, 15, 30, 60, 120, 240, 480]
 
     nonisolated struct Features: Codable, Hashable, Sendable {
         var main: Bool
@@ -27,14 +34,21 @@ nonisolated struct FeishuBotStatus: Codable, Hashable, Sendable {
         var agents: Bool
         /// The main conversation's tasks are told in the chat (#2768); a hub from before leaves it out: on.
         var reports: Bool = true
+        /// /tasks keeps one standing "waiting for you" card (#6052). Off unless the hub says so.
+        var board: Bool = false
+        /// Whether the hub sent `board` at all: a hub from before doesn't know the switch, so the page hides it and the
+        /// edit doesn't carry it.
+        var hubKnowsBoard: Bool = false
 
         enum CodingKeys: String, CodingKey {
-            case main, cards, pushes, sync, agents, reports
+            case main, cards, pushes, sync, agents, reports, board
             case allCards = "all_cards"
         }
 
-        init(main: Bool, cards: Bool, allCards: Bool, pushes: Bool, sync: Bool, agents: Bool, reports: Bool = true) {
+        init(main: Bool, cards: Bool, allCards: Bool, pushes: Bool, sync: Bool, agents: Bool, reports: Bool = true, board: Bool? = nil) {
             (self.main, self.cards, self.allCards, self.pushes, self.sync, self.agents, self.reports) = (main, cards, allCards, pushes, sync, agents, reports)
+            self.board = board ?? false
+            hubKnowsBoard = board != nil
         }
 
         init(from decoder: Decoder) throws {
@@ -46,6 +60,21 @@ nonisolated struct FeishuBotStatus: Codable, Hashable, Sendable {
             sync = try c.decode(Bool.self, forKey: .sync)
             agents = try c.decode(Bool.self, forKey: .agents)
             reports = try c.decodeIfPresent(Bool.self, forKey: .reports) ?? true
+            let board = try c.decodeIfPresent(Bool.self, forKey: .board)
+            self.board = board ?? false
+            hubKnowsBoard = board != nil
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(main, forKey: .main)
+            try c.encode(cards, forKey: .cards)
+            try c.encode(allCards, forKey: .allCards)
+            try c.encode(pushes, forKey: .pushes)
+            try c.encode(sync, forKey: .sync)
+            try c.encode(agents, forKey: .agents)
+            try c.encode(reports, forKey: .reports)
+            if hubKnowsBoard { try c.encode(board, forKey: .board) } // the hub merges what it is sent over what it has
         }
     }
 
@@ -70,6 +99,7 @@ nonisolated struct FeishuBotStatus: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case enabled, domain, features, connected, error, owner, pairing, target, agents
+        case nudgeAfter = "nudge_after"
         case appID = "app_id", hasSecret = "has_secret", fromConfig = "from_config", lastEventAt = "last_event_at", botName = "bot_name"
     }
 }
@@ -81,9 +111,11 @@ nonisolated struct FeishuBotUpdate: Encodable, Sendable {
     var appSecret: String?
     var domain: String?
     var features: FeishuBotStatus.Features?
+    var nudgeAfter: Int?
 
     enum CodingKeys: String, CodingKey {
         case enabled, domain, features
+        case nudgeAfter = "nudge_after"
         case appID = "app_id", appSecret = "app_secret"
     }
 }
@@ -127,6 +159,27 @@ extension APIClient {
 
     var features: FeishuBotStatus.Features {
         status?.features ?? .init(main: true, cards: true, allCards: false, pushes: false, sync: false, agents: false)
+    }
+
+    /// The nudge delay in force: an hour for a hub that doesn't say.
+    var nudgeAfter: Int { status?.nudgeAfter ?? FeishuBotStatus.defaultNudgeAfter }
+
+    /// Whether the hub has the "nudge" setting (a hub from before the setting leaves it out of its status).
+    var hubKnowsNudge: Bool { status?.nudgeAfter != nil }
+
+    /// Whether the hub has the "board" switch.
+    var hubKnowsBoard: Bool { status?.features.hubKnowsBoard == true }
+
+    /// The delays to pick from, with the one in force among them.
+    var nudgeChoices: [Int] {
+        let usual = FeishuBotStatus.nudgeChoices
+        return usual.contains(nudgeAfter) ? usual : (usual + [nudgeAfter]).sorted()
+    }
+
+    /// "Off", "30 min", "2 h".
+    static func nudgeLabel(_ minutes: Int) -> String {
+        if minutes <= 0 { return String(localized: "Off [Feishu Bot Model 3f9d21]") }
+        return minutes % 60 == 0 ? String(localized: "\(minutes / 60) h") : String(localized: "\(minutes) min")
     }
 
     /// The domain picker's choice for what the hub resolved.
@@ -198,6 +251,10 @@ extension APIClient {
         if key == \.cards && !on { f.allCards = false }
         if key == \.allCards && on { f.cards = true }
         await run(String(localized: "Couldn't save")) { try await $0.updateFeishuBot(.init(features: f)) }
+    }
+
+    func setNudgeAfter(_ minutes: Int) async {
+        await run(String(localized: "Couldn't save")) { try await $0.updateFeishuBot(.init(nudgeAfter: minutes)) }
     }
 
     func pair() async { await run(String(localized: "Couldn't get a pairing code")) { try await $0.pairFeishuBot() } }

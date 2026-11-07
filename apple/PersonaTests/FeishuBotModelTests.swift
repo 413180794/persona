@@ -41,7 +41,7 @@ import Testing
         #expect(FeishuBotModel.domainChoice("https://larksuite.com") == "lark")
     }
 
-    /// A switch sends every feature (the hub replaces them as a whole); "all cards" brings "cards" along, and turning
+    /// A switch sends every feature (the hub merges them over the current ones); "all cards" brings "cards" along, and turning
     /// "cards" off takes "all cards" with it.
     @Test func featuresGoAsAWhole() async throws {
         let hub = FakeHub()
@@ -60,6 +60,97 @@ import Testing
         f = try #require(bodies.last?["features"] as? [String: Bool])
         #expect(f["cards"] == true && f["all_cards"] == true)
         #expect(bodies.allSatisfy { $0["app_secret"] == nil })
+    }
+
+    /// The status of a hub that has the waiting-for-you board (#6052) and the nudge setting (#6084).
+    private static let newerStatus = status
+        .replacingOccurrences(of: "\"agents\":false}", with: "\"agents\":false,\"reports\":true,\"board\":false}")
+        .replacingOccurrences(of: "\"connected\":true", with: "\"nudge_after\":30,\"connected\":true")
+
+    /// A hub from before leaves both out: nothing to show for them, and nothing of them sent back.
+    @Test func anOlderHubHasNeitherTheBoardNorTheNudge() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/bots/feishu", json: Self.status)
+        var bodies: [[String: Any]] = []
+        hub.on("PUT", "/api/v1/bots/feishu") { req in
+            bodies.append(try JSONSerialization.jsonObject(with: req.body ?? Data()) as? [String: Any] ?? [:])
+            return Data(Self.status.utf8)
+        }
+        let m = model(hub)
+        await m.load()
+        #expect(!m.hubKnowsBoard && !m.hubKnowsNudge)
+        #expect(m.nudgeAfter == 60 && !m.features.board)
+        await m.set(\.pushes, true)
+        let f = try #require(bodies.last?["features"] as? [String: Bool])
+        #expect(f["pushes"] == true && f["board"] == nil)
+        #expect(bodies.last?["nudge_after"] == nil)
+    }
+
+    /// A hub with the board but not the nudge setting: the board switch shows, the picker does not.
+    @Test func aHubWithTheBoardButNotTheNudgeShowsOnlyTheBoard() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/bots/feishu", json: Self.newerStatus.replacingOccurrences(of: "\"nudge_after\":30,", with: ""))
+        let m = model(hub)
+        await m.load()
+        #expect(m.hubKnowsBoard && !m.hubKnowsNudge)
+        #expect(m.nudgeAfter == 60)
+    }
+
+    @Test func theBoardSwitchGoesWithTheOtherFeatures() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/bots/feishu", json: Self.newerStatus)
+        var bodies: [[String: Any]] = []
+        hub.on("PUT", "/api/v1/bots/feishu") { req in
+            bodies.append(try JSONSerialization.jsonObject(with: req.body ?? Data()) as? [String: Any] ?? [:])
+            return Data(Self.newerStatus.replacingOccurrences(of: "\"board\":false", with: "\"board\":true").utf8)
+        }
+        let m = model(hub)
+        await m.load()
+        #expect(m.hubKnowsBoard && m.hubKnowsNudge && !m.features.board)
+        await m.set(\.board, true)
+        let f = try #require(bodies.last?["features"] as? [String: Bool])
+        #expect(f["board"] == true && f["cards"] == true && f["reports"] == true)
+        #expect(bodies.last?["nudge_after"] == nil)
+        #expect(m.features.board)
+        await m.set(\.cards, false) // the board stays as the hub has it
+        #expect(try #require(bodies.last?["features"] as? [String: Bool])["board"] == true)
+    }
+
+    /// The nudge delay goes alone, 0 included (0 is off, not absent); the picker lists the usual delays and the one in force.
+    @Test func theNudgeDelayGoesAlone() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/bots/feishu", json: Self.newerStatus)
+        var bodies: [[String: Any]] = []
+        hub.on("PUT", "/api/v1/bots/feishu") { req in
+            bodies.append(try JSONSerialization.jsonObject(with: req.body ?? Data()) as? [String: Any] ?? [:])
+            return Data(Self.newerStatus.replacingOccurrences(of: "\"nudge_after\":30", with: "\"nudge_after\":0").utf8)
+        }
+        let m = model(hub)
+        await m.load()
+        #expect(m.nudgeAfter == 30 && m.nudgeChoices == [0, 15, 30, 60, 120, 240, 480])
+        await m.setNudgeAfter(0)
+        #expect(bodies.count == 1 && bodies[0]["nudge_after"] as? Int == 0 && bodies[0].count == 1)
+        #expect(m.nudgeAfter == 0 && m.error == nil)
+    }
+
+    @Test func aDelayFromTheAPIIsListedAndLabelled() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/bots/feishu", json: Self.newerStatus.replacingOccurrences(of: "\"nudge_after\":30", with: "\"nudge_after\":90"))
+        let m = model(hub)
+        await m.load()
+        #expect(m.nudgeChoices == [0, 15, 30, 60, 90, 120, 240, 480])
+        #expect([0, 15, 60, 90, 120].map(FeishuBotModel.nudgeLabel) == ["关闭", "15 分钟", "1 小时", "90 分钟", "2 小时"])
+    }
+
+    /// A refused delay (out of range) leaves the page as it was and shows the hub's words.
+    @Test func aRefusedNudgeDelayLeavesThePage() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/bots/feishu", json: Self.newerStatus)
+        hub.on("PUT", "/api/v1/bots/feishu") { _ in throw APIError(status: 400, message: "最多 8640 分钟") }
+        let m = model(hub)
+        await m.load()
+        await m.setNudgeAfter(9999)
+        #expect(m.nudgeAfter == 30 && m.error?.contains("最多 8640 分钟") == true)
     }
 
     /// Saving credentials sends the secret once; what is typed is kept while a load arrives, and the hub's error shows.
