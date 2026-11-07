@@ -49,7 +49,10 @@ describe("Intl formatter cache", { timeout: 30_000 }, () => {
   });
 
   it("resolves the locale once while the system language and interface language stay the same", () => {
-    vi.spyOn(navigator, "languages", "get").mockReturnValue(["zh-CN"]);
+    // Node's navigator reports the machine's locale, which earlier tests may have cached: start from another one.
+    const languages = vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-US"]);
+    formatLocale();
+    languages.mockReturnValue(["zh-CN"]);
     const canonical = vi.spyOn(Intl, "getCanonicalLocales");
     for (let i = 0; i < 10; i++) formatLocale();
     expect(canonical).toHaveBeenCalledTimes(1);
