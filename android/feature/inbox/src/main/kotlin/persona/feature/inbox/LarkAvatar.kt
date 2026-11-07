@@ -94,7 +94,7 @@ internal fun rememberOnlineSince(connection: ConnectionState): Long? = remember(
  * once it is, the rows on screen ask again.
  */
 @Composable
-internal fun rememberLarkAvatar(image: AuthenticatedLarkImage?, onlineSince: Long? = null): Painter? {
+internal fun rememberLarkAvatar(image: AuthenticatedLarkImage?, onlineSince: Long?): Painter? {
     val context = LocalContext.current.applicationContext
     val key = image?.cacheKey
     val picture = remember(key) {
@@ -112,6 +112,6 @@ internal fun rememberLarkAvatar(image: AuthenticatedLarkImage?, onlineSince: Lon
 
 /** A Feishu person or chat: their picture once it has loaded, the initial of [name] until then and without one. */
 @Composable
-internal fun LarkAvatar(name: String, image: AuthenticatedLarkImage?, onlineSince: Long? = null, modifier: Modifier = Modifier) {
+internal fun LarkAvatar(name: String, image: AuthenticatedLarkImage?, onlineSince: Long?, modifier: Modifier = Modifier) {
     JAvatar(name, modifier, image = rememberLarkAvatar(image, onlineSince))
 }

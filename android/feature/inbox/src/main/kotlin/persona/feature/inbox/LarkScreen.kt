@@ -249,6 +249,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
             finally { retrying.remove(clientId) }
         }
     }
+    val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
     // Pictures in a thread or a forwarded bundle open in the same viewer (alone when they are not the conversation's).
     val openImage: (LarkPart.Image) -> Unit = remember { { image -> viewer = larkGallery(larkImages(messages), image) } }
     thread?.let { root -> CompositionLocalProvider(LocalLarkImageOpener provides openImage) {
@@ -275,7 +277,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         )
     }
     forwardedDetail?.let { fwd ->
-        CompositionLocalProvider(LocalLarkImageOpener provides openImage) { LarkForwardedSheet(part = fwd, onDismiss = { forwardedDetail = null }) }
+        CompositionLocalProvider(LocalLarkImageOpener provides openImage) { LarkForwardedSheet(part = fwd, onlineSince = onlineSince, onDismiss = { forwardedDetail = null }) }
     }
     videoPlayerUrl?.let { url ->
         LarkVideoPlayerDialog(url = url, onDismiss = { videoPlayerUrl = null })
@@ -292,8 +294,6 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         composers.get(ReplyTarget.Inbox(record.item.id), record.agent?.takeIf { it.state == "drafted" }?.draft.orEmpty()),
         navigator, onDismiss = { drafting = false })
     if (handingOff && record != null) InboxHandOffSheet(repository, record, navigator, onDismiss = { handingOff = false })
-    val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
-    val onlineSince = rememberOnlineSince(connection)
     fun refreshConversation() {
         if (refreshing) return
         refreshing = true

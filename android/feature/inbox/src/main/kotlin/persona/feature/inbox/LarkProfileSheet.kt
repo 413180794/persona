@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -161,6 +162,8 @@ private fun LarkProfileCardContent(
     var loading by remember(person) { mutableStateOf(true) }
     var error by remember(person) { mutableStateOf<String?>(null) }
     val res = LocalResources.current
+    val connection by repository.connectionState.collectAsStateWithLifecycle(persona.core.contracts.api.ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
 
     LaunchedEffect(person) {
         loading = true
@@ -216,7 +219,7 @@ private fun LarkProfileCardContent(
                     .background(palette.surface)
                     .padding(ContentTokens.profileAvatarInset)
             ) {
-                LarkAvatar(profile.displayName, person.avatar)
+                LarkAvatar(profile.displayName, person.avatar, onlineSince)
             }
         }
 

@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -105,6 +106,8 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
     val res = LocalResources.current
     val feedback = LocalAppFeedback.current
     val display = LocalLarkMessageDisplay.current
+    val connection by repository.connectionState.collectAsStateWithLifecycle(persona.core.contracts.api.ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
     var page by remember { mutableStateOf<LarkChatPinsPage?>(null) }
     var loading by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -180,7 +183,7 @@ internal fun LarkPinsSheet(repository: InboxRepository, feedId: String, onOpen: 
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                             if (m != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                                LarkAvatar(m.senderName.ifBlank { stringResource(R.string.inbox_lark_avatar_fallback) }, m.avatar, null)
+                                LarkAvatar(m.senderName.ifBlank { stringResource(R.string.inbox_lark_avatar_fallback) }, m.avatar, onlineSince)
                                 Text(m.senderName, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Text(larkPinSummary(pin, policy), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)

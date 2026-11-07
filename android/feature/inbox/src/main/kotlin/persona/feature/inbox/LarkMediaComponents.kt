@@ -90,6 +90,8 @@ fun LarkMergeForwardCard(
 @Composable
 fun LarkForwardedSheet(
     part: LarkPart.MergeForward,
+    /** When the hub connection came up ([rememberOnlineSince]); the senders' pictures load only while it is. */
+    onlineSince: Long?,
     onDismiss: () -> Unit,
 ) {
     val palette = PersonaTheme.palette
@@ -109,7 +111,7 @@ fun LarkForwardedSheet(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)
                 ) {
-                    LarkAvatar(msg.senderName.ifBlank { stringResource(R.string.inbox_lark_avatar_fallback) }, msg.senderAvatar)
+                    LarkAvatar(msg.senderName.ifBlank { stringResource(R.string.inbox_lark_avatar_fallback) }, msg.senderAvatar, onlineSince)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                         Row(
                             Modifier.fillMaxWidth(),
