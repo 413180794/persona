@@ -263,9 +263,11 @@ function Shell() {
 
   useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "persona" ? route.sid : route.name === "agents" ? route.id : ""]);
   // a session's files / Git belong to that conversation: moving to another page closes them (a link and a task stay),
-  // and coming back to it opens them again where they were (#5150, lib/panel-memory.ts)
-  const at = pane ? `${pane.mid}/${pane.sid}` : route.name;
-  useSessionPanels(at, pane);
+  // and coming back to it opens them again where they were (#5150, lib/panel-memory.ts); a Persona chat's panel too
+  // (#6199)
+  const chat = route.name === "persona" ? (route.sid ?? "") : undefined;
+  const at = pane ? `${pane.mid}/${pane.sid}` : chat !== undefined ? `persona/${chat}` : route.name;
+  useSessionPanels(at, pane, chat);
 
   const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =

@@ -129,3 +129,68 @@ describe("moving between sessions", () => {
     expect(getPanel()).toEqual(gitA);
   });
 });
+
+// Persona chats (#6199): a task's / agent's chat opened next to one goes and comes back with that chat.
+describe("moving between Persona chats", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  const Page = ({ chat }: { chat?: string }) => {
+    useSessionPanels(chat !== undefined ? `persona/${chat}` : "home", null, chat);
+    return null;
+  };
+  const show = (chat?: string) => act(() => root.render(createElement(Page, { chat })));
+  const agent: Panel = { kind: "agent", mid: "m1", sid: "s1" };
+  const task: Panel = { kind: "task", todo: "t1" };
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+  afterEach(() => {
+    act(() => closePanel());
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("closes chat A's agent on switching to B, and brings it back on A", () => {
+    show("A");
+    act(() => openPanel(agent));
+    show("B");
+    expect(getPanel()).toBeNull();
+    show("A");
+    expect(getPanel()).toEqual(agent);
+  });
+
+  it("shows each chat its own panel", () => {
+    show("A");
+    act(() => openPanel(agent));
+    show("B");
+    act(() => openPanel(task));
+    show("A");
+    expect(getPanel()).toEqual(agent);
+    show("B");
+    expect(getPanel()).toEqual(task);
+  });
+
+  it("keeps the panel while the chat stays, and leaves a link alone", () => {
+    show("A");
+    act(() => openPanel(task));
+    show("A");
+    expect(getPanel()).toEqual(task);
+    const link: Panel = { kind: "link", url: "https://example.com" };
+    act(() => openPanel(link));
+    show("B");
+    expect(getPanel()).toEqual(link);
+  });
+
+  it("brings it back through a page that is not a chat", () => {
+    show("A");
+    act(() => openPanel(task));
+    show(); // settings, the inbox…
+    expect(getPanel()).toBeNull();
+    show("A");
+    expect(getPanel()).toEqual(task);
+  });
+});
