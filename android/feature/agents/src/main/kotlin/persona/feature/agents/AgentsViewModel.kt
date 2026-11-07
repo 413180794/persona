@@ -102,14 +102,18 @@ internal class AgentsViewModel(
     private val _hubUpdate = MutableStateFlow<HubUpdateStatus?>(null)
     private val _hubHello = MutableStateFlow<Hello?>(null)
     private val _hubNoticeDismissed = MutableStateFlow<Set<String>>(emptySet())
+    /** The group the hub-level pages show: this page stays across a switch in Settings › Hub, its notice must not (#5725). */
+    private val selectedGroup = hubGroups.groups.map { groups -> groups.firstOrNull { it.selected }?.id }.distinctUntilChanged()
     val hubNotice: StateFlow<HubNotice?> = combine(
         _hubUpdate,
         _hubHello,
         connection.state,
-        _hubNoticeDismissed
-    ) { update, hello, connState, dismissed ->
+        _hubNoticeDismissed,
+        selectedGroup,
+    ) { update, hello, connState, dismissed, _ ->
         // The selected hub's hello as its connection kept it: the events carry every paired hub's, the last one is not
         // necessarily the hub this page shows (#2157). Before any hello there is nothing to say (HubCompat.of).
+        // A plain getter: switching between two online groups changes no state, so the selection is read again here.
         val compat = HubCompat.of(connection.lastHello ?: hello, appBuild, connected = connState == ConnectionState.Online)
         HubNotice.of(update, compat, dismissed)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -306,14 +310,18 @@ internal class AgentsViewModel(
     init {
         if (hubUpdates != null) {
             viewModelScope.launch {
-                try {
-                    _hubUpdate.value = hubUpdates.status()
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: HubUpdatesUnsupported) {
-                    // Legacy hub without update API
-                } catch (_: Exception) {
-                    // Ignored on initial poll
+                // Read again for each selected group: the other group's status must not stay up meanwhile.
+                selectedGroup.collectLatest {
+                    _hubUpdate.value = null
+                    try {
+                        _hubUpdate.value = hubUpdates.status()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: HubUpdatesUnsupported) {
+                        // Legacy hub without update API
+                    } catch (_: Exception) {
+                        // Ignored on initial poll
+                    }
                 }
             }
             viewModelScope.launch {

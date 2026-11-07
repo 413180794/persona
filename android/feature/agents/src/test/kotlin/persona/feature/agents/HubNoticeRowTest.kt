@@ -57,12 +57,28 @@ class HubNoticeRowTest {
         override suspend fun history() = emptyList<HubUpdateRecord>()
     }
 
-    private class FakeConnection : HubConnection {
+    private class FakeConnection(private val hello: () -> Hello? = { null }) : HubConnection {
         override val state = MutableStateFlow(ConnectionState.Online)
         val eventFlow = MutableSharedFlow<ServerEvent>()
         override val events = eventFlow
+        override val lastHello: Hello? get() = hello()
         override fun reconnect() = Unit
         override fun send(message: JsonObject) = true
+    }
+
+    /** Two online hub groups; [select] moves the selection as Settings › Hub does, and each hub says its own (#5725). */
+    private class TwoGroups(private val statuses: Map<String, HubUpdateStatus>, private val hellos: Map<String, Hello> = emptyMap()) :
+        HubGroups by HubGroups.None {
+        override val groups = MutableStateFlow(listOf(
+            HubGroupInfo("g11111111", "home", null, true, ConnectionState.Online, emptyList()),
+            HubGroupInfo("g0a1b2c3d", "work", "g0a1b2c3d", false, ConnectionState.Online, emptyList())))
+        override suspend fun select(groupId: String) { groups.value = groups.value.map { it.copy(selected = it.id == groupId) } }
+        private val selected get() = groups.value.first { it.selected }.id
+        /** The selected group's hub, as the app's HubUpdates and ConnectionRuntime.lastHello read it. */
+        val updates: HubUpdates = object : HubUpdates by FakeHubUpdates() {
+            override suspend fun status() = statuses[selected] ?: throw HubUpdatesUnsupported()
+        }
+        val hello: Hello? get() = hellos[selected]
     }
 
     private class FakeInteractionCenter : InteractionCenter {
@@ -98,24 +114,27 @@ class HubNoticeRowTest {
         return AgentsPreferences(store, hub)
     }
 
+    /** [groups] stand in for [status] and the kept hello with the selected group's own. */
     private suspend fun TestScope.withModel(
-        status: HubUpdateStatus,
+        status: HubUpdateStatus = HubUpdateStatus(),
         appBuild: Long = 1L,
         deliverHello: Boolean = true,
+        groups: TwoGroups? = null,
         block: suspend TestScope.(AgentsViewModel, FakeHubUpdates, FakeConnection) -> Unit,
     ) {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {
             val updates = FakeHubUpdates(status)
-            val connection = FakeConnection()
+            val connection = FakeConnection { groups?.hello }
             val model = AgentsViewModel(
                 repository = FakeSessionsRepository(),
                 interactions = FakeInteractionCenter(),
                 connection = connection,
                 sender = FakeMessageSender(),
                 preferences = preferences(),
-                hubUpdates = updates,
+                hubUpdates = groups?.updates ?: updates,
                 appBuild = appBuild,
+                hubGroups = groups ?: HubGroups.None,
             )
             val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 model.hubNotice.collect {}
@@ -216,6 +235,36 @@ class HubNoticeRowTest {
             connection.eventFlow.emit(Hello(serverVersion = "1.0.0", protocol = 1))
             runCurrent()
             assertEquals(HubNotice.Updating(persona.core.contracts.CoreText.of(persona.core.contracts.CoreText.Key.HubDownloading)), model.hubNotice.value)
+        }
+    }
+
+    @Test
+    fun switchingToAnotherOnlineGroupShowsThatHubsUpdate() = runTest {
+        val groups = TwoGroups(mapOf(
+            "g11111111" to HubUpdateStatus(version = "1.0.0", build = 100, canUpdate = true, latest = newer),
+            "g0a1b2c3d" to HubUpdateStatus(version = "1.1.0", build = 110, canUpdate = true)))
+        withModel(groups = groups) { model, _, _ ->
+            assertEquals(HubNotice.Available("1.1.0", 110), model.hubNotice.value)
+            groups.select("g0a1b2c3d")
+            runCurrent()
+            assertNull("the work group's hub is up to date", model.hubNotice.value)
+            groups.select("g11111111")
+            runCurrent()
+            assertEquals(HubNotice.Available("1.1.0", 110), model.hubNotice.value)
+        }
+    }
+
+    @Test
+    fun switchingToAnotherOnlineGroupChecksThatHubsHello() = runTest {
+        val groups = TwoGroups(
+            mapOf("g11111111" to HubUpdateStatus(), "g0a1b2c3d" to HubUpdateStatus()),
+            mapOf("g11111111" to Hello(serverVersion = "1.0.0", protocol = 1),
+                "g0a1b2c3d" to Hello(serverVersion = "1.2.0", minAppBuild = 20, protocol = 1)))
+        withModel(appBuild = 10L, groups = groups) { model, _, _ ->
+            assertNull(model.hubNotice.value)
+            groups.select("g0a1b2c3d")
+            runCurrent()
+            assertEquals(HubNotice.AppTooOld, model.hubNotice.value)
         }
     }
 
