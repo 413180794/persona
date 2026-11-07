@@ -3,7 +3,7 @@ import { applyDraft, onDraftEvent, parseQuote, replaceNeedsConfirm, sendDraft, s
 import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote, workspaceContext, workspaceMatches, workspaceTitle } from "./mentions";
 import { contextXML } from "./links";
 import type { Workspace } from "./workspace-board";
-import { keepAllBut, sameMessage } from "./queue";
+import { keepAllBut, moved, sameMessage } from "./queue";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen } from "./image-edit";
 import type { Item, Session } from "./types";
 
@@ -184,6 +184,13 @@ describe("queue", () => {
   it("re-queues every other message in order", () => {
     expect(keepAllBut(3, 1)).toEqual([0, 2]);
     expect(keepAllBut(1, 0)).toEqual([]);
+  });
+
+  it("moves one message up or down, the others in their order (#6088)", () => {
+    expect(moved(3, 1, -1)).toEqual([1, 0, 2]);
+    expect(moved(3, 1, 1)).toEqual([0, 2, 1]);
+    expect(moved(3, 0, -1)).toBeNull();
+    expect(moved(3, 2, 1)).toBeNull();
   });
 
   it("matches a sent message to its queued copy, short ones only exactly", () => {

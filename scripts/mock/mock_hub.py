@@ -13789,6 +13789,13 @@ class H(BaseHTTPRequestHandler):
                     s["capabilities"] = dict(caps, approve=True)  # joining lets the phone answer its approvals
                     return self.send_json({"ok": True})
             return self.send_json({"error": "session not found"}, 404)
+        if p.startswith("/api/v1/sessions/") and p.endswith("/queue/send-now"):  # node session.queue.send_now (#6088)
+            s = next((x for x in SESSIONS if x["session_id"] == p.split("/")[5]), None)
+            if not (s or {}).get("queued"):
+                return self.send_json({"code": "nothing_queued", "error": "Nothing is queued for the agent any more."}, 409)
+            s["queued"] = []
+            push_machine(s["machine_id"])
+            return self.send_json({"sent": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/queue"):  # node editQueue: pull every queued message back, re-queue `keep`
             body = json.loads(self.last_body or b"{}")
             QUEUE_EDITS.append(body)

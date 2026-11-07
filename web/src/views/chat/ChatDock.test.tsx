@@ -282,6 +282,16 @@ describe("QueueStrip", () => {
     expect(html).toMatch(/max-h-\[120px\][^"]*overflow-y-auto/);
     expect(html).toContain("跑一遍 UI 测试");
   });
+
+  it("gives a Claude's queue Send now and its next-step wording; other agents neither (#6088)", () => {
+    const claude = renderToStaticMarkup(<QueueStrip session={{ ...queued, agent: "claude" }} draftKey="t" canEdit />);
+    expect(claude).toContain("data-send-now");
+    expect(claude).toContain("下一步就会依次接收");
+    const codex = renderToStaticMarkup(<QueueStrip session={{ ...queued, agent: "codex" }} draftKey="t" canEdit />);
+    expect(codex).not.toContain("data-send-now");
+    expect(codex).toContain("忙完会依次处理");
+    expect(renderToStaticMarkup(<QueueStrip session={{ ...queued, agent: "claude" }} draftKey="t" canEdit={false} />)).not.toContain("data-send-now");
+  });
 });
 
 describe("Header in a task's panel (#3333)", () => {
