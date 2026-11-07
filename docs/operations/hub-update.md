@@ -1,7 +1,7 @@
 # hub versions, update checks and automatic updates
 
 User, 2026-11-02: "Can the phone manage the hub's version? Does the hub check for updates, can it update itself? …When the App opens, offer a one-tap hub update, or have the hub update itself."
-Issue #284. The plan is decided (see "Decisions" at the end): skills move out of the binary, there is only one binary, every hub updates automatically to the version the publisher releases manually, with no staged rollout and no automatic releases.
+Issue #284 introduced automatic installation of manually published public releases. Private Hub installations can also publish validated master builds automatically, as described below. Both paths use the same updater and rollback mechanism.
 Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten as the current state, keeping the trade-offs.
 
 ## Automatic private Hub releases
@@ -216,9 +216,9 @@ The binary gets three more `-X` variables (`cmd/personad`):
 - There is no minimum node build: a node reports a version string, and the hub redeploys any node whose version differs from its own. That redeploy runs after the new hub has confirmed
   (section 8, step 9 "Update nodes along with it"), not before the new hub starts; a machine that fails to update keeps the reason.
 
-## 5. Publishing (manual, publish.sh; user, 2026-11-02)
+## 5. Public publishing (manual, publish.sh; user, 2026-11-02)
 
-No automatic releases: the publisher still runs `publish.sh` manually on their own dev machine, and the site's Worker is under the publisher's Cloudflare account.
+Public releases use `publish.sh` manually on the publisher's dev machine, and the site's Worker is under the publisher's Cloudflare account. Private master releases use the serialized worker described in "Automatic private Hub releases".
 - The push relay (`docs/operations/push-relay.md`, `/relay/*`) is in the same Worker as the downloads, so every time `publish.sh` redeploys the site it deploys the relay too
   (a Worker deploy is an atomic switch, never half old and half new; relay code changes also go live with this release).
 - Tests must still pass before publishing, plus `publish.sh`'s own checks (if any fails, nothing is published):
@@ -452,14 +452,16 @@ Download → Verify → Prepare → Wait for idle → Replace → Restart → Co
 3. **App**: hub row in Settings, first-time notice, banner, progress, what it is waiting for, update history, incompatibility notices, Skills list.
 4. **Docker checks and notices**.
 
-## Decisions (2026-11-02)
+## Public-release decisions (2026-11-02)
+
+The private publication and Hub-only session policies are described in "Automatic private Hub releases" above.
 
 1. Move skills out of the binary into the user's own space (`~/.persona/skills/`), never overwritten by updates; merge full and public builds into one, and every hub updates automatically,
    ours included (user: "Skills definitely need to be highly customizable"). Keep ssh deployment only for emergencies.
 2. Automatic updates are **on by default**; clearly tell the user the first time and offer a way to turn them off; record every update; do not automatically retry rolled-back versions.
 3. No time-of-day restriction: install when the assistant and Agents are all idle. Do not restart while a chat is running or waiting for an answer.
 4. Use release time (UTC `YYYYMMDDHHMM`) as the build number.
-5. **No automatic releases**: the publisher still runs publish.sh manually (the Worker is under their account); add the manifest, build-number and commit-ancestry checks to publish.sh.
+5. **Manual public publication**: the publisher runs publish.sh (the Worker is under their account); enforce manifest, build-number and commit-ancestry checks.
    Our hub also updates automatically to their releases; direct deploys remain for urgent master changes and will not be downgraded.
 6. No staged rollout; all hubs update at once after release, each handles its own rollback.
 9. **No signing** (user: "Skip signing for the Linux service, it's too complicated"): the manifest has only sha256, fetched over HTTPS; install automatically when it matches. This only protects against corrupt transfers, not an impersonated or compromised publish site (see "Security").
