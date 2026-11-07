@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""The README's pictures in docs/assets/readme/: banner, feature icons, badges, and the moving hero.
+"""The README's pictures in docs/assets/readme/: banner, badges, and the moving hero.
 
-  python3 scripts/assets/make_readme_assets.py svg                  # banner, architecture, icons, badges
+  python3 scripts/assets/make_readme_assets.py svg                  # banners (both languages) and badges
   python3 scripts/assets/make_readme_assets.py shoot <dir>          # screenshots + demo recordings from the simulator
-  python3 scripts/assets/make_readme_assets.py hero <dir>           # hero-light.webp / hero-dark.webp from <dir>
+  python3 scripts/assets/make_readme_assets.py hero <dir> [zh-CN]   # hero-light.webp / hero-dark.webp from <dir>
 
-`svg` reads the version floors from apple/project.yml, android/gradle/libs.versions.toml and server/go.mod, so the
-badges follow the code, and puts the app icon's own picture (AppIcon.appiconset) in the banner; it needs Pillow. `shoot` drives a DEBUG build in demo mode (made-up data, no hub) that is already installed on
-the simulator given by PERSONACTL_UDID, over the Runtime CLI (docs/runtime-cli.md): it relaunches the app with
-`-demo.on YES`, takes every scene in light and dark, and records the demo once per appearance. `hero` needs ffmpeg
-and Pillow; it puts the demo in the middle phone and four still screens beside it.
+`svg` puts the app icon's own picture (AppIcon.appiconset) in the banner; it needs Pillow. `shoot` drives a DEBUG
+build in demo mode (made-up data, no hub) that is already installed on the simulator given by PERSONACTL_UDID, over
+the Runtime CLI (docs/runtime-cli.md): it relaunches the app with `-demo.on YES`, takes every scene in light and
+dark, and records the demo once per appearance (the demo's taps match the Chinese demo data's labels).
+`hero` needs ffmpeg and Pillow; it puts the demo in the middle phone and four still screens beside it, and writes
+hero-<theme>.webp for English shots or hero-<theme>.zh-CN.webp when given `zh-CN`.
 """
 import base64
 import io
-import math
 import os
-import re
 import signal
 import subprocess
 import sys
@@ -26,19 +25,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT = os.path.join(ROOT, "docs/assets/readme")
 APP_ICON = os.path.join(ROOT, "apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset")
 
-# The app icon's colors (scripts/assets/make_icon.py) and the site's (site/public/home.css).
-CORAL, PEACH, EMBER = "#ee7c54", "#ffc4a0", "#b03e22"
+# Quiet, near-neutral grounds with a faint warm glow from the app icon (scripts/assets/make_icon.py).
 THEMES = {
-    "light": dict(bg1="#fbf7f1", bg2="#f1e7da", glow="#f6b48f", glow_op=0.55, fg="#1c1814", muted="#6f665c",
-                  card="#fffdf9", card_op=0.92, stroke="#e6d9c8", dot_op=0.07, dots="#b03e22",
-                  spark=("#f6a57e", "#d4683f", "#a83e1f"), icon="icon.png", lift="#3c1e0a", lift_op=0.16),
-    "dark": dict(bg1="#2a1913", bg2="#0c0b0a", glow="#ee7c54", glow_op=0.30, fg="#f3ede4", muted="#a89c8f",
-                 card="#1d1915", card_op=0.88, stroke="#3b312a", dot_op=0.06, dots=PEACH,
-                 spark=(PEACH, CORAL, EMBER), icon="icon-dark.png", lift="#000000", lift_op=0.5),
+    "light": dict(bg1="#fcfaf7", bg2="#f3eee7", glow="#f6c4a5", glow_op=0.32, fg="#1c1814", muted="#6f665c",
+                  stroke="#e8e0d5", icon="icon.png", lift="#3c1e0a", lift_op=0.14),
+    "dark": dict(bg1="#1c1715", bg2="#111010", glow="#ee7c54", glow_op=0.14, fg="#f3ede4", muted="#a89c8f",
+                 stroke="#2f2925", icon="icon-dark.png", lift="#000000", lift_op=0.5),
 }
 SERIF = "Georgia, 'Times New Roman', serif"
 SERIF_CJK = "'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', STSong, SimSun, serif"
-SANS = "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
 
 
 def write(name, text):
@@ -46,17 +41,6 @@ def write(name, text):
     with open(os.path.join(OUT, name), "w", encoding="utf-8") as f:
         f.write(text)
     print(os.path.relpath(os.path.join(OUT, name), ROOT))
-
-
-def spark_path(cx, cy, r, n=96):
-    """The icon's four-point spark: |x|^p + |y|^p = r^p with p < 1, as an SVG path."""
-    exp = 2 / 0.62
-    pts = []
-    for i in range(n):
-        a = 2 * math.pi * i / n
-        c, s = math.cos(a), math.sin(a)
-        pts.append((cx + math.copysign(abs(c) ** exp, c) * r, cy + math.copysign(abs(s) ** exp, s) * r))
-    return "M" + " L".join(f"{x:.1f} {y:.1f}" for x, y in pts) + " Z"
 
 
 def app_icon(theme, px=320):
@@ -68,181 +52,61 @@ def app_icon(theme, px=320):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def text_width(s, size):
-    """Rough advance width: CJK and full-width marks one em, the rest a little over half."""
-    w = 0.0
-    for ch in s:
-        if ord(ch) > 0x2E80:
-            w += 1.0
-        elif ch in " ·.,:":
-            w += 0.32
-        elif ch.isupper():
-            w += 0.66
-        else:
-            w += 0.52
-    return w * size
-
-
 # ---------------------------------------------------------------- banner
 
-# README.md is English and README.zh-CN.md Chinese: the banner and the architecture picture are drawn once per
-# language. English keeps the plain file names (banner-light.svg), Chinese adds ".zh-CN" (banner-light.zh-CN.svg).
+# README.md is English and README.zh-CN.md Chinese: the banner and the hero are drawn once per language.
+# English keeps the plain file names (banner-light.svg), Chinese adds ".zh-CN" (banner-light.zh-CN.svg).
 LANGS = {"en": "", "zh-CN": ".zh-CN"}
 
-CHIPS = {  # Illustrative tasks, not activity from a real hub.
-    "en": [
-        (None, "SuperAgent", "One conversation", False),
-        ("#e0a33a", "Delegate", "Ship the fix", False),
-        ("#3f9b62", "Connect", "Calendar · Inbox", False),
-        ("#e2553a", "Your call", "Approve a plan", True),
-    ],
-    "zh-CN": [
-        (None, "SuperAgent", "一个入口", False),
-        ("#e0a33a", "交给 AI", "把问题解决", False),
-        ("#3f9b62", "连接", "日历 · 收件箱", False),
-        ("#e2553a", "你来拍板", "批准执行计划", True),
-    ],
-}
-
 TAGLINE = {  # (text, font family, size, letter spacing)
-    "en": ("One place. Every task.", SERIF, 32, 0),
-    "zh-CN": ("一个入口，解决所有问题。", SERIF_CJK, 32, 1),
+    "en": ("Your superagent. One place for every task.", SERIF, 30, 0),
+    "zh-CN": ("你的 superagent，一个入口解决所有问题。", SERIF_CJK, 32, 1),
 }
-SUPERAGENT = {"en": "Your SuperAgent", "zh-CN": "你的 SuperAgent"}
 
 
 def banner(theme, lang="en"):
+    """A quiet strip: the app icon and the wordmark side by side, the tagline under them, centered as one group."""
     t = THEMES[theme]
     tagline, tag_font, tag_size, tag_spacing = TAGLINE[lang]
-    W, H = 1280, 320
-    cx, cy, S = 176, 160, 200  # the app icon, a side S, corners as on the home screen
-    x0, y0, r = cx - S // 2, cy - S // 2, S * 0.2237
-    chips, y = [], 40
-    for i, (dot, title, rest, pulse) in enumerate(CHIPS[lang]):
-        x = 812 + (30, 64, 0, 44)[i]
-        tw, rw = text_width(title, 20), text_width(rest, 19)
-        w = 22 + 16 + 12 + tw + 14 + rw + 24
-        h = 50
-        if dot:
-            mark = f'<circle cx="{x + 30}" cy="{y + h / 2}" r="7" fill="{dot}"/>'
-            if pulse:
-                mark += (f'<circle class="pulse" cx="{x + 30}" cy="{y + h / 2}" r="7" fill="none" stroke="{dot}" '
-                         f'stroke-width="2"/>')
-        else:
-            mark = (f'<g transform="translate({x + 16} {y + 11}) scale({28 / S})" clip-path="url(#iconMask)">'
-                    f'<use href="#icon"/></g>')
-        chips.append(
-            f'<g class="chip c{i}"><rect x="{x}" y="{y}" width="{w:.0f}" height="{h}" rx="{h / 2}" fill="{t["card"]}" '
-            f'fill-opacity="{t["card_op"]}" stroke="{t["stroke"]}"/>{mark}'
-            f'<text x="{x + 50}" y="{y + 32}" font-family="{SANS}" font-size="20" font-weight="600" fill="{t["fg"]}">{title}</text>'
-            f'<text x="{x + 50 + tw + 14:.0f}" y="{y + 32}" font-family="{SANS}" font-size="19" fill="{t["muted"]}">{rest}</text></g>')
-        y += 64
+    W, H, S = 1280, 300, 132
+    r = S * 0.2237  # the icon's corner, as on the home screen
+    word_w = 330  # "Persona" at 96 px in Georgia bold, measured
+    gap = 34
+    x0 = (W - (S + gap + word_w)) / 2
+    y0 = 52
+    tx = W / 2
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" lang="{lang}">
-<title>Persona</title>
-<style>
-  .pulse {{ transform-box: fill-box; transform-origin: center; animation: pulse 2.4s ease-out infinite; }}
-  .chip {{ animation: float 7s ease-in-out infinite; }}
-  .c1 {{ animation-delay: -1.8s; }} .c2 {{ animation-delay: -3.5s; }} .c3 {{ animation-delay: -5.2s; }}
-  .halo {{ transform-origin: {cx}px {cy}px; animation: breathe 6s ease-in-out infinite; }}
-  @keyframes pulse {{ from {{ transform: scale(1); opacity: .9; }} to {{ transform: scale(2.6); opacity: 0; }} }}
-  @keyframes float {{ 0%, 100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-4px); }} }}
-  @keyframes breathe {{ 0%, 100% {{ opacity: .75; }} 50% {{ opacity: 1; }} }}
-  @media (prefers-reduced-motion: reduce) {{ .pulse, .chip, .halo {{ animation: none; }} }}
-</style>
+<title>Persona — {tagline}</title>
 <defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{t["bg1"]}"/><stop offset="1" stop-color="{t["bg2"]}"/></linearGradient>
-  <radialGradient id="glow" cx="{cx}" cy="{cy}" r="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{t["glow"]}" stop-opacity="{t["glow_op"]}"/><stop offset="1" stop-color="{t["glow"]}" stop-opacity="0"/></radialGradient>
-  <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="{t["dots"]}" fill-opacity="{t["dot_op"]}"/></pattern>
-  <filter id="lift" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="{t["lift"]}" flood-opacity="{t["lift_op"]}"/></filter>
-  <image id="icon" width="{S}" height="{S}" href="{app_icon(theme)}"/>
-  <clipPath id="iconMask"><rect width="{S}" height="{S}" rx="{r:.1f}"/></clipPath>
-  <clipPath id="frame"><rect width="{W}" height="{H}" rx="24"/></clipPath>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{t["bg1"]}"/><stop offset="1" stop-color="{t["bg2"]}"/></linearGradient>
+  <radialGradient id="glow" cx="{W / 2}" cy="{y0 + S / 2}" r="420" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{t["glow"]}" stop-opacity="{t["glow_op"]}"/><stop offset="1" stop-color="{t["glow"]}" stop-opacity="0"/></radialGradient>
+  <filter id="lift" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="{t["lift"]}" flood-opacity="{t["lift_op"]}"/></filter>
+  <clipPath id="iconMask"><rect x="{x0:.1f}" y="{y0}" width="{S}" height="{S}" rx="{r:.1f}"/></clipPath>
+  <clipPath id="frame"><rect width="{W}" height="{H}" rx="20"/></clipPath>
 </defs>
 <g clip-path="url(#frame)">
   <rect width="{W}" height="{H}" fill="url(#bg)"/>
-  <rect width="{W}" height="{H}" fill="url(#dots)"/>
-  <rect class="halo" width="{W}" height="{H}" fill="url(#glow)"/>
-  <rect x="{x0}" y="{y0}" width="{S}" height="{S}" rx="{r:.1f}" fill="{t["bg1"]}" filter="url(#lift)"/>
-  <g transform="translate({x0} {y0})" clip-path="url(#iconMask)"><use href="#icon"/></g>
-  <rect x="{x0 + .5}" y="{y0 + .5}" width="{S - 1}" height="{S - 1}" rx="{r - .5:.1f}" fill="none" stroke="{t["stroke"]}"/>
-  <text x="334" y="92" font-family="{SANS}" font-size="18" font-weight="600" letter-spacing="2" fill="{t["muted"]}">{SUPERAGENT[lang]}</text>
-  <text x="330" y="184" font-family="{SERIF}" font-size="104" font-weight="700" letter-spacing="-1" fill="{t["fg"]}">Persona</text>
-  <text x="334" y="232" font-family="{tag_font}" font-size="{tag_size}" letter-spacing="{tag_spacing}" fill="{t["muted"]}">{tagline}</text>
-  {"".join(chips)}
-  <rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="24" fill="none" stroke="{t["stroke"]}"/>
+  <rect width="{W}" height="{H}" fill="url(#glow)"/>
+  <rect x="{x0:.1f}" y="{y0}" width="{S}" height="{S}" rx="{r:.1f}" fill="{t["bg1"]}" filter="url(#lift)"/>
+  <image x="{x0:.1f}" y="{y0}" width="{S}" height="{S}" href="{app_icon(theme)}" clip-path="url(#iconMask)"/>
+  <rect x="{x0 + .5:.1f}" y="{y0 + .5}" width="{S - 1}" height="{S - 1}" rx="{r - .5:.1f}" fill="none" stroke="{t["stroke"]}"/>
+  <text x="{x0 + S + gap:.1f}" y="{y0 + S / 2 + 33:.0f}" font-family="{SERIF}" font-size="96" font-weight="700" letter-spacing="-1" fill="{t["fg"]}">Persona</text>
+  <text x="{tx:.0f}" y="{y0 + S + 66}" font-family="{tag_font}" font-size="{tag_size}" letter-spacing="{tag_spacing}" fill="{t["muted"]}" text-anchor="middle">{tagline}</text>
+  <rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="20" fill="none" stroke="{t["stroke"]}"/>
 </g>
-</svg>
-'''
-
-
-# ---------------------------------------------------------------- feature icons
-
-GLYPHS = {
-    "agents": '<rect x="15" y="18" width="34" height="28" rx="5"/><path d="M22 28l5 4-5 4"/><path d="M31 37h10"/>',
-    "approve": '<path d="M17 22a6 6 0 0 1 6-6h18a6 6 0 0 1 6 6v13a6 6 0 0 1-6 6H29l-8 6v-6h0a4 4 0 0 1-4-4z"/>'
-               '<path d="M25 29l4.5 4.5L39 24"/>',
-    "assistant": None,  # the spark, filled
-    "inbox": '<path d="M16 35l5.5-15a3 3 0 0 1 2.8-2h15.4a3 3 0 0 1 2.8 2L48 35v9a3 3 0 0 1-3 3H19a3 3 0 0 1-3-3z"/>'
-             '<path d="M16 35h9l3 5h8l3-5h9"/>',
-    "island": '<rect x="21" y="12" width="22" height="40" rx="6"/><rect x="26" y="16" width="12" height="5" rx="2.5" '
-              'fill="#fff" stroke="none"/><path d="M27 31h10M27 37h6"/>',
-    "handoff": '<rect x="12" y="16" width="29" height="23" rx="4"/><path d="M20 45h13M26 39v6"/>'
-               '<rect x="38" y="26" width="14" height="26" rx="4"/><path d="M43 31h4M43 47h4"/>',
-    "extensions": '<path d="M18 17h10v-3a5 5 0 0 1 10 0v3h10v11h-3a5 5 0 0 0 0 10h3v10H37v-3a5 5 0 0 0-10 0v3H18V37h-3a5 5 0 0 1 0-10h3z"/>',
-    "phone-data": '<rect x="18" y="12" width="28" height="40" rx="6"/><path d="M27 17h10"/>'
-                  '<path d="M24 30h5l3-6 4 13 3-7h3M29 46h6"/>',
-    "connectors": '<circle cx="32" cy="32" r="7"/><circle cx="16" cy="16" r="4"/>'
-                  '<circle cx="48" cy="16" r="4"/><circle cx="16" cy="48" r="4"/><circle cx="48" cy="48" r="4"/>'
-                  '<path d="M19 19l8 8M37 27l8-8M19 45l8-8M37 37l8 8"/>',
-    "clients": '<rect x="12" y="14" width="40" height="28" rx="4"/><path d="M24 50h16M32 42v8"/>',
-    "hub": '<path d="M32 13l15 5.5v11c0 9.5-6.4 16.8-15 20.5-8.6-3.7-15-11-15-20.5v-11z"/><path d="M25 31.5l5 5 9-10"/>',
-}
-
-
-def icon(name):
-    glyph = GLYPHS[name]
-    if glyph is None:
-        glyph = (f'<path d="{spark_path(31, 33, 15, 64)}" fill="{EMBER}" stroke="none"/>'
-                 f'<path d="{spark_path(43.5, 20.5, 3.6, 32)}" fill="{EMBER}" stroke="none"/>')
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-<rect x=".75" y=".75" width="62.5" height="62.5" rx="15.25" fill="{PEACH}" stroke="{CORAL}" stroke-opacity=".45" stroke-width="1.5"/>
-<g fill="none" stroke="{EMBER}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">{glyph}</g>
 </svg>
 '''
 
 
 # ---------------------------------------------------------------- badges
 
-def versions():
-    """The floors the code builds for: {label: value}."""
-    def grab(path, pattern):
-        with open(os.path.join(ROOT, path), encoding="utf-8") as f:
-            m = re.search(pattern, f.read(), re.M)
-        if not m:
-            raise SystemExit(f"{path}: {pattern} not found")
-        return m.group(1)
-
-    ios = grab("apple/project.yml", r'^\s+iOS:\s*"?([\d.]+)')
-    watch = grab("apple/project.yml", r'^\s+watchOS:\s*"?([\d.]+)')
-    mac = grab("apple/project.yml", r'^\s+macOS:\s*"?([\d.]+)')
-    sdk = int(grab("android/gradle/libs.versions.toml", r'^minSdk\s*=\s*"(\d+)"'))
-    go = grab("server/go.mod", r"^go\s+([\d.]+)")
-    android = {30: "11", 31: "12", 32: "12L", 33: "13", 34: "14", 35: "15", 36: "16"}.get(sdk, f"API {sdk}")
-    short = lambda v: v[:-2] if v.endswith(".0") else v  # noqa: E731
-    return [("iOS", short(ios) + "+"), ("watchOS", short(watch) + "+"), ("macOS", short(mac) + "+"),
-            ("Android", android + "+"), ("hub", "Go " + ".".join(go.split(".")[:2]))]
-
-
-AGENT_BADGES = ("Claude Code", "Codex", "DSH", "pi", "opencode")
-ENGINE_BADGES = ("herdr", "Herdr App", "Orca", "Paseo")
-RUNTIME_BADGES = AGENT_BADGES + ENGINE_BADGES
-CLIENTS_BADGE = "iPhone · Apple Watch · Mac · Vision Pro · Android · Web"
-SUPPORT_BADGES = {
-    "Clients": CLIENTS_BADGE,
-    "Agents": " · ".join(AGENT_BADGES),
-    "Engines": " · ".join(ENGINE_BADGES),
-}
-
+# What Persona drives, in the order the README lists them: (file name, kind, product).
+BADGES = [
+    ("claude-code", "agent", "Claude Code"),
+    ("codex", "agent", "Codex"),
+    ("herdr", "engine", "herdr"),
+    ("orca", "engine", "Orca"),
+]
 
 VERDANA = {  # advance widths at 11px, shields.io's metric for Verdana
     " ": 3.9, ".": 3.9, "+": 9.2, "·": 3.9, "0": 7.0, "1": 7.0, "2": 7.0, "3": 7.0, "4": 7.0, "5": 7.0, "6": 7.0,
@@ -252,142 +116,21 @@ VERDANA = {  # advance widths at 11px, shields.io's metric for Verdana
 }
 
 
-def vw(s):
-    return sum(VERDANA.get(ch, 7.0) for ch in s)
+def vw(s, bold=False):
+    return sum(VERDANA.get(ch, 7.0) for ch in s) * (1.1 if bold else 1)
 
 
-def badge(label, value=""):
-    lw, rw = vw(label) + 16, vw(value) + 16 if value else 0
-    w, h = lw + rw, 22
-    accessible = f"{label}: {value}" if value else label
-    value_text = (f'<text x="{lw + rw / 2:.1f}" y="15" textLength="{vw(value):.0f}" font-weight="bold">{value}</text>'
-                  if value else "")
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h}" viewBox="0 0 {w:.0f} {h}" role="img" aria-label="{accessible}">
-<title>{accessible}</title>
-<clipPath id="r"><rect width="{w:.0f}" height="{h}" rx="5"/></clipPath>
-<g clip-path="url(#r)"><rect width="{lw:.0f}" height="{h}" fill="#3a322d"/><rect x="{lw:.0f}" width="{rw:.0f}" height="{h}" fill="#d4683f"/></g>
-<g fill="#fff" font-family="Verdana, 'DejaVu Sans', Geneva, sans-serif" font-size="11" text-anchor="middle">
-<text x="{lw / 2:.1f}" y="15" textLength="{vw(label):.0f}">{label}</text>
-{value_text}
+def badge(kind, product):
+    """One dark pill for both GitHub themes: the kind in a muted tone, the product in white; no colored segment."""
+    kw, pw = vw(kind), vw(product, bold=True)
+    w, h = 12 + kw + 8 + pw + 12, 24
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h}" viewBox="0 0 {w:.0f} {h}" role="img" aria-label="{kind}: {product}">
+<title>{kind}: {product}</title>
+<rect x=".5" y=".5" width="{w - 1:.0f}" height="{h - 1}" rx="6" fill="#26211e" stroke="#4a413a"/>
+<g font-family="Verdana, 'DejaVu Sans', Geneva, sans-serif" font-size="11">
+<text x="12" y="16" fill="#b3a79b" textLength="{kw:.0f}">{kind}</text>
+<text x="{12 + kw + 8:.0f}" y="16" fill="#ffffff" font-weight="bold" textLength="{pw:.0f}">{product}</text>
 </g>
-</svg>
-'''
-
-
-def support_badge(label):
-    """Three equally sized support rows, with the category labels aligned."""
-    value = SUPPORT_BADGES[label]
-    advance = vw(value) * 12 / 11
-    left = 76
-    width = math.ceil(max(vw(s) * 12 / 11 for s in SUPPORT_BADGES.values()) + left + 24)
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="26" viewBox="0 0 {width} 26" role="img" aria-label="{label}: {value}">
-<title>{label}: {value}</title>
-<clipPath id="r"><rect x=".5" y=".5" width="{width - 1}" height="25" rx="5"/></clipPath>
-<g clip-path="url(#r)"><rect width="{width}" height="26" fill="#fffdf9"/><rect width="{left}" height="26" fill="{PEACH}"/></g>
-<rect x=".5" y=".5" width="{width - 1}" height="25" rx="5" fill="none" stroke="#e6d9c8"/>
-<g font-family="Verdana, 'DejaVu Sans', Geneva, sans-serif" font-size="12">
-  <text x="{left / 2}" y="17" text-anchor="middle" font-weight="bold" fill="{EMBER}">{label}</text>
-  <text x="{left + 12}" y="17" textLength="{advance:.1f}" fill="#49362a">{value}</text>
-</g>
-</svg>
-'''
-
-
-# ---------------------------------------------------------------- architecture
-
-TILE_GLYPHS = {  # drawn around (0, 0), about 26 wide, stroked in the accent
-    "phone": '<rect x="-8" y="-13" width="16" height="26" rx="4"/><path d="M-3 -9.5h6"/>',
-    "desktop": '<rect x="-12" y="-10" width="24" height="16" rx="2.5"/><path d="M-4 11h8M0 6v5"/>',
-    "android": '<path d="M-11 7a11 11 0 0 1 22 0z"/><path d="M-6.5 -5.5l-3 -4.5M6.5 -5.5l3 -4.5"/>'
-               '<circle cx="-4" cy="1.5" r="1.1" fill="currentColor"/><circle cx="4" cy="1.5" r="1.1" fill="currentColor"/>',
-    "laptop": '<rect x="-10" y="-9" width="20" height="13" rx="2"/><path d="M-13.5 8h27"/>',
-    "server": '<rect x="-11" y="-11" width="22" height="9" rx="2"/><rect x="-11" y="2" width="22" height="9" rx="2"/>'
-              '<circle cx="-6" cy="-6.5" r="1.1" fill="currentColor"/><circle cx="-6" cy="6.5" r="1.1" fill="currentColor"/>',
-}
-
-
-ARCH = {
-    "en": dict(
-        title="Your devices, context and Agents come together in Persona",
-        devices=(("iPhone · Apple Watch", "Ask, answer and keep up"), ("Mac · Web", "Pick up where you left off"),
-                 ("Android · Vision Pro", "The same work, another screen")),
-        machine="Your context. Your decisions.", parts=("Assistant", "Inbox", "Knowledge", "Tasks"),
-        duties=("Bring the context together", "Decide what happens next", "Follow the work through"),
-        connectors="Your context", sources=("Messages", "Mail", "Calendar", "Photos"),
-        computers="Your computers", agents="Where your Agents work", ask="Ask · decide", work="Delegate"),
-    "zh-CN": dict(
-        title="设备、上下文和 Agent，在 Persona 汇合",
-        devices=(("iPhone · Apple Watch", "提问、回答，随时掌握进度"), ("Mac · Web", "回到桌前，接着同一件事"),
-                 ("Android · Vision Pro", "换一块屏幕，工作继续")),
-        machine="你的上下文，你来决定", parts=("助手", "收件箱", "知识库", "任务"),
-        duties=("串起相关信息", "决定下一步怎么做", "跟进每件事的进展"),
-        connectors="与你有关的信息", sources=("消息", "邮件", "日历", "照片"),
-        computers="你的电脑", agents="Agent 在这里动手", ask="提问 · 决策", work="安排任务"),
-}
-
-
-def architecture(theme, lang="en"):
-    """A product overview, not a deployment diagram; deliberately quiet in either appearance."""
-    a = ARCH[lang]
-    W, H = 1280, 540
-    ink, muted, line = "#1e293b", "#64748b", "#94a3b8"
-    out = []
-
-    def text(x, y, s, size=16, weight=400, color=ink, anchor="start"):
-        return (f'<text x="{x}" y="{y}" font-family="{SANS}" font-size="{size}" font-weight="{weight}" '
-                f'fill="{color}" text-anchor="{anchor}">{s}</text>')
-
-    def card(x, y, w, h, fill="#f8fafc", stroke="#cbd5e1", dashed=False):
-        dash = ' stroke-dasharray="6 3"' if dashed else ""
-        return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="16" fill="{fill}" stroke="{stroke}"{dash}/>'
-
-    def tile(x, y, glyph, color):
-        return (f'<g transform="translate({x} {y})" fill="none" stroke="{color}" stroke-width="2.2" '
-                f'stroke-linecap="round" stroke-linejoin="round" color="{color}">{TILE_GLYPHS[glyph]}</g>')
-
-    def chips(x, y, items, color=muted, size=14):
-        rendered = []
-        for s in items:
-            w = text_width(s, size) + 20
-            rendered.append(card(x, y, round(w), 30, "#fff", "#dbe4e8"))
-            rendered.append(text(round(x + w / 2), y + 20, s, size, 500, color, "middle"))
-            x += w + 8
-        return "".join(rendered)
-
-    # Context and decisions enter Persona; work continues with the user's Agents.
-    for d in ("M330 112 C400 112 400 168 470 168", "M330 224 L470 224",
-              "M330 336 C400 336 400 280 470 280", "M810 224 L960 224", "M640 438 L640 380"):
-        out.append(f'<path d="{d}" fill="none" stroke="{line}" stroke-width="2" marker-end="url(#arrow)"/>')
-
-    for (y, glyph), (title, subtitle) in zip(((68, "phone"), (180, "desktop"), (292, "android")), a["devices"]):
-        out += [card(30, y, 300, 88, "#eff6ff", "#bfdbfe", True), tile(72, y + 43, glyph, "#3b82f6"),
-                text(110, y + 38, title, weight=600), text(110, y + 63, subtitle, 14, color=muted)]
-
-    out += [card(470, 68, 340, 312, "#fff4eb", PEACH),
-            f'<path d="{spark_path(512, 120, 18, 64)}" fill="{CORAL}"/>',
-            text(546, 130, "Persona", 32, 700), text(490, 158, a["machine"], 14, color=muted)]
-    for i, s in enumerate(a["parts"]):
-        x, y = 490 + (i % 2) * 154, 182 + (i // 2) * 58
-        out += [card(x, y, 146, 46, "#fff", PEACH), text(x + 73, y + 29, s, 16, 600, EMBER, "middle")]
-    out += [text(640, 314 + 23 * i, s, 14, color=muted, anchor="middle") for i, s in enumerate(a["duties"])]
-
-    out += [card(960, 86, 290, 276, "#ecfdf5", "#a7f3d0", True), tile(995, 124, "laptop", "#059669"),
-            text(1025, 130, a["computers"], weight=600), text(980, 164, a["agents"], 14, color=muted),
-            chips(980, 192, ("Claude Code", "Codex"), "#065f46"),
-            chips(980, 240, ("DSH", "pi", "opencode"), "#065f46")]
-    out += [card(470, 438, 340, 72), text(490, 465, a["connectors"], weight=600),
-            chips(490, 476, a["sources"], size=13)]
-
-    for x, label in ((400, a["ask"]), (885, a["work"])):
-        w = text_width(label, 13) + 20
-        out += [card(round(x - w / 2), 211, round(w), 26, "#fff", "#cbd5e1"),
-                text(x, 229, label, 13, 500, muted, "middle")]
-
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" lang="{lang}">
-<title>{a["title"]}</title>
-<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="none" stroke="{line}" stroke-width="1.5"/></marker></defs>
-<rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="20" fill="#fff" stroke="#e2e8f0"/>
-{"".join(out)}
 </svg>
 '''
 
@@ -396,16 +139,8 @@ def cmd_svg():
     for theme in THEMES:
         for lang, suffix in LANGS.items():
             write(f"banner-{theme}{suffix}.svg", banner(theme, lang))
-            write(f"architecture-{theme}{suffix}.svg", architecture(theme, lang))
-    for name in GLYPHS:
-        write(f"icon-{name}.svg", icon(name))
-    for label, value in versions():
-        write(f"badge-{label.lower()}.svg", badge(label, value))
-    for label in RUNTIME_BADGES:
-        write(f"badge-{label.lower().replace(' ', '-')}.svg", badge(label))
-    for label in SUPPORT_BADGES:
-        write(f"badge-{label.lower()}.svg", support_badge(label))
-
+    for name, kind, product in BADGES:
+        write(f"badge-{name}.svg", badge(kind, product))
 
 # ---------------------------------------------------------------- shoot (simulator, demo mode)
 
@@ -486,7 +221,7 @@ BEZEL = 12
 SCREEN_RADIUS = 55 * 3 / 1206  # the display's corner (55 pt on a 402 pt wide phone), per pixel of screen width
 
 
-def hero(shots, theme, frames_dir):
+def hero(shots, theme, frames_dir, suffix=""):
     from PIL import Image, ImageDraw, ImageFilter
 
     t = THEMES[theme]
@@ -563,16 +298,18 @@ def hero(shots, theme, frames_dir):
         out = Image.new("RGBA", f.size, (0, 0, 0, 0))
         out.paste(f, (0, 0), corner)
         frames.append(out)
-    path = os.path.join(OUT, f"hero-{theme}.webp")
+    path = os.path.join(OUT, f"hero-{theme}{suffix}.webp")
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=round(1000 / FPS), loop=0,
                    quality=72, method=6, minimize_size=True)
     print(f"{os.path.relpath(path, ROOT)}: {len(frames)} frames, {os.path.getsize(path) / 1e6:.2f} MB")
 
 
-def cmd_hero(shots):
+def cmd_hero(shots, lang="en"):
+    if lang not in LANGS:
+        raise SystemExit(f"hero: language must be one of {', '.join(LANGS)}")
     with tempfile.TemporaryDirectory() as tmp:
         for theme in THEMES:
-            hero(shots, theme, tmp)
+            hero(shots, theme, tmp, LANGS[lang])
 
 
 def main():
@@ -586,7 +323,7 @@ def main():
     elif cmd == "shoot":
         cmd_shoot(sys.argv[2])
     else:
-        cmd_hero(sys.argv[2])
+        cmd_hero(sys.argv[2], *sys.argv[3:4])
 
 
 if __name__ == "__main__":

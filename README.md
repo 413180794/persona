@@ -2,83 +2,54 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-dark.svg">
-  <img src="docs/assets/readme/banner-light.svg" alt="Persona — your SuperAgent. One place. Every task." width="100%">
+  <img src="docs/assets/readme/banner-light.svg" alt="Persona: your superagent. One place for every task." width="100%">
 </picture>
 
 English · [简体中文](README.zh-CN.md)
 
-**Your SuperAgent. One place for every task.**
+### One superagent for everything you do.<br>It knows your world, runs your Agents, and goes wherever you go.
 
-Turn a request into work you can follow through. Persona connects your Agents, devices and personal context in one conversation—from the first question to the next decision and the finished task.
+[![agent: Claude Code](docs/assets/readme/badge-claude-code.svg)](docs/claude-integration.md) [![agent: Codex](docs/assets/readme/badge-codex.svg)](docs/codex.md) [![engine: herdr](docs/assets/readme/badge-herdr.svg)](docs/engines.md) [![engine: Orca](docs/assets/readme/badge-orca.svg)](docs/engines.md)
 
-[![Clients: iPhone · Apple Watch · Mac · Vision Pro · Android · Web](docs/assets/readme/badge-clients.svg)](#docs)
+iPhone · Apple Watch · Mac · Vision Pro · Android · Web
 
-[![Agents: Claude Code · Codex · DSH · pi · opencode](docs/assets/readme/badge-agents.svg)](docs/runtimes.md)
-
-[![Engines: herdr · Herdr App · Orca · Paseo](docs/assets/readme/badge-engines.svg)](docs/engines.md)
-
-[Try it](#try-it) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Docs](#docs)
+[Try the demo](#get-started) · [Features](#features) · [How it works](#how-it-works) · [Docs](#docs)
 
 </div>
 
-## What it does
-
-<table>
-  <tr>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-assistant.svg" width="32" alt=""><br><b>One SuperAgent</b><br>
-      Talk or type in one chat. Your assistant draws on your context, breaks down the work and delegates to Agents.<br><a href="docs/assistant.md">Assistant</a> · <a href="docs/voice.md">Voice</a></td>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-handoff.svg" width="32" alt=""><br><b>Phone ↔ computer</b><br>
-      Watch progress, answer questions and approve plans on your phone. At your desk, pick up the very same session—not a copy.<br><a href="docs/engines.md">Engines →</a></td>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-extensions.svg" width="32" alt=""><br><b>Built to extend</b><br>
-      Add tools, Agents, data sources and in-app experiences through extensions, with SDKs and a marketplace for building your own.<br><a href="docs/extensions.md">Extensions →</a></td>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-island.svg" width="32" alt=""><br><b>Beyond the app</b><br>
-      Track work on Dynamic Island, start tasks with Siri or Shortcuts, and answer from Apple Watch.<br><a href="docs/live-activity.md">Live Activities</a> · <a href="docs/siri.md">Siri</a> · <a href="docs/intents.md">Shortcuts</a></td>
-  </tr>
-  <tr>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-inbox.svg" width="32" alt=""><br><b>Knowledge &amp; Inbox</b><br>
-      Give Agents shared context, not repeated explanations. AI sorts incoming messages and mail into an Inbox you can act on.<br><a href="docs/knowledge.md">Knowledge</a> · <a href="docs/inbox.md">Inbox</a></td>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-phone-data.svg" width="32" alt=""><br><b>Your phone, useful to AI</b><br>
-      Bring calendar, reminders, health, location and photos into the work. You choose access; calendar and reminder writes ask first.<br><a href="docs/phone-tools.md">Phone tools →</a></td>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-connectors.svg" width="32" alt=""><br><b>Connect your world</b><br>
-      Connect Lark, mail, GitHub, iMessage and Telegram. Reach Persona from messaging channels such as Lark and WeChat, too.<br><a href="docs/connectors.md">Connectors</a> · <a href="docs/channels.md">Channels</a></td>
-    <td width="25%" valign="top"><img src="docs/assets/readme/icon-clients.svg" width="32" alt=""><br><b>Every screen</b><br>
-      iPhone, Apple Watch, Mac, Vision Pro, Android and Web. Keep the same conversations and work connected across your devices.<br><a href="docs/ios.md">Apple</a> · <a href="docs/mac.md">Mac</a> · <a href="docs/vision.md">Vision</a> · <a href="docs/android.md">Android</a> · <a href="docs/web.md">Web</a></td>
-  </tr>
-</table>
+<br>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/hero-dark.webp">
-  <img src="docs/assets/readme/hero-light.webp" alt="Persona on iPhone: the assistant, live Agent progress, questions, plan approvals, Inbox and computers" width="100%">
+  <img src="docs/assets/readme/hero-light.webp" alt="Persona on iPhone: the assistant hands off to Agents, a Claude asks a question, and one tap answers it; beside it are the Inbox, a plan waiting for approval, live progress and machines" width="100%">
 </picture>
-<p align="center"><sub>Demo data, shown in Chinese. An Agent asks, you answer, it keeps going.</sub></p>
 
-## Try it
+<p align="center"><sub>Demo mode with made-up data. This recording still shows the Chinese UI.</sub></p>
 
-**[Join the TestFlight beta](https://testflight.apple.com/join/vsjfy3hE)** · On the pairing screen, tap **No hub? Try a demo**—no server or account needed.
+## Features
 
-Start with a sample task in **Persona**, answer an Agent's question or approve a plan, then explore **Agents**, **Inbox**, **Tasks** and **Knowledge**. The demo also includes sample computers, usage windows, model settings and appearance controls—not just a static chat screenshot.
-
-The demo stays on sample data: replies are simulated, no real programs run, and no messages or mail are sent. Live AI, voice, phone-data actions and cross-device features require your own connected setup.
-
-Ready to use your own data? **[Getting started](docs/getting-started.md)** walks you through installing a hub, pairing your phone and connecting your computers.
+- **A superagent, one entry for everything.** Ask in one chat. Persona pulls in your context, breaks the work down and hands it to Agents. [Assistant](docs/assistant.md)
+- **Phone and computer, one session.** Claude Code and Codex keep running on your computers. Watch them live, answer and approve from your phone, then carry on at your desk. [Engines](docs/engines.md)
+- **Extensions for everything.** Tools, Agent runtimes, data sources, channels and voice plug in, with an SDK and a market. [Extensions](docs/extensions.md)
+- **Dynamic Island, Siri and Shortcuts.** Every Agent at a glance on the Lock Screen; ask, approve or start work by voice, a shortcut or your watch. [Live Activities](docs/live-activity.md) · [Siri](docs/siri.md)
+- **Knowledge base and Inbox.** Your chats, people and projects become shared memory; Lark, mail and GitHub land in one AI-sorted Inbox. [Knowledge](docs/knowledge.md) · [Inbox](docs/inbox.md)
+- **Your phone's data, in reach.** Contacts, calendar, reminders, photos, health and location become tools, and writes are confirmed on your phone. [Phone tools](docs/phone-tools.md)
+- **Connectors and channels.** Bring in Lark, mail, GitHub, iMessage, Telegram and WeChat; talk to Persona from the app, Lark, WeChat or by voice. [Connectors](docs/connectors.md) · [Channels](docs/channels.md)
+- **Every screen.** iPhone, Apple Watch, Mac, Vision Pro, Android and the web, in English, Chinese and Japanese. [Clients](docs/ios.md)
 
 ## How it works
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.svg">
-  <img src="docs/assets/readme/architecture-light.svg" alt="Your devices, personal context and Agents come together in Persona: assistant, Inbox, knowledge and tracked tasks" width="100%">
-</picture>
+You run a small hub on an always-on machine; your devices talk only to it, and it reaches each of your computers, where Agents run in herdr or Orca. Your data stays on your own hardware.
+[Architecture](docs/architecture.md) · [Network and security](docs/network.md)
 
-**You decide. Persona connects the context and coordinates the work. Your Agents carry it out.** The hub keeps the pieces connected; Agents run on your computers, and authorized phone actions run on your phone. Technical details live in **[Architecture](docs/architecture.md)** and **[Network and security](docs/network.md)**.
+## Get started
+
+- **Just looking?** Install the [TestFlight beta](https://testflight.apple.com/join/vsjfy3hE) and tap **No Hub? Try the Demo**: no server or account needed.
+- **Your own setup:** one command installs the hub, then scan a QR code. See [Getting started](docs/getting-started.md).
+- **From source:** [config](docs/config.md) · [deploy](docs/server.md) · [contributing](CLAUDE.md)
 
 ## Docs
 
-| Start here | Go deeper |
-| --- | --- |
-| **Use Persona** | [Getting started](docs/getting-started.md) · [Configuration](docs/config.md) · [Docker](docs/docker.md) |
-| **Connect computers** | [Persona Link](docs/link.md) · [Windows](docs/windows.md) · [Engines](docs/engines.md) · [Workspace board](docs/workspace-board.md) |
-| **Build on Persona** | [Extensions](docs/extensions.md) · [Connectors](docs/connectors.md) · [Runtime SDK](docs/runtimes.md) · [API](docs/protocol.md) |
-| **Develop with an Agent** | [Conventions and full docs index](CLAUDE.md) · [Issue → claim → PR](docs/collaboration.md) · [Testing](docs/testing.md) |
-| **Operate or upgrade** | [Server](docs/server.md) · [Network](docs/network.md) · [Migration](docs/rename.md) |
+[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Protocol](docs/protocol.md) · [Docker](docs/docker.md) · [iOS](docs/ios.md) · [Mac](docs/mac.md) · [Android](docs/android.md) · [Web](docs/web.md) · [All docs](CLAUDE.md#docs-index)
 
-<sub>Client and runtime support depends on the platform and installed integrations; see the guides above. [Third-party notices](THIRD_PARTY_NOTICES.md).</sub>
+<sub>Third-party licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>
