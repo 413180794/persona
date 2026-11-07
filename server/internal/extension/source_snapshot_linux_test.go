@@ -52,10 +52,14 @@ func TestSealedSourceSnapshotPinsMountedBytes(t *testing.T) {
 	if err != nil || string(got) != string(b) {
 		t.Fatal(string(got), err)
 	}
-	bwrap, err := exec.LookPath("bwrap")
-	if err != nil {
-		t.Skip("namespace mount test unavailable")
+	// bwrap on PATH is not enough: a container may refuse the /proc mount the
+	// namespace needs. Probe tries those mounts; when they work, a failure
+	// below is a real one.
+	sup := sandbox.Probe()
+	if sup.Bwrap == "" {
+		t.Skip("namespace mount test unavailable: " + sup.Why)
 	}
+	bwrap := sup.Bwrap
 	self, _ := os.Executable()
 	ns, err := sandbox.ValidationNamespace(self, "snapshot-test-read", nil, nil)
 	if err != nil {
