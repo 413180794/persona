@@ -29,3 +29,9 @@ Transcript anonymization must preserve byte lengths when parser snapshots includ
 A zero regex count does not establish the provenance of an opaque XMP creator or export identifier. Inspect author/source fields as well as decoding their packets. When unnecessary PNG text metadata has no established public provenance, remove it rather than infer that an asset identifier cannot link to a private account.
 
 Strip `tEXt`, `zTXt`, and `iTXt` chunks without re-encoding the image. Validate chunk checksums and compare every retained chunk byte-for-byte, including `IDAT`, color profiles, gamma and pixel density; also compare decoded RGBA pixels. This keeps the icon's appearance unchanged. Update current assets through the source PR and remove the same metadata from all matching historical blobs before claiming synchronized clean-history publication.
+
+## Compare source identities with file contents
+
+Anonymizing author and committer headers does not remove those identities from historical documentation. A scan limited to configured runtime secrets can miss a personal author-signature line. Derive individual email identifiers from the original commit history and check current files, every historical blob, and decoded metadata separately. A public email-provider domain is not proof that an individual address is a public project contact.
+
+When removing an author signature, remove the whole identifying line, not just the mailbox, so the linked display name is not left behind. Keep necessary public-license attribution separate from private identities, and retain only project-role contacts whose public purpose has been established. Verify the rewritten trees and compose every history-phase map; a correction that affects only historical blobs must leave the current source tree unchanged.
