@@ -112,7 +112,7 @@ fun appDarkTheme(): Boolean = AppAppearance.scheme.dark ?: androidx.compose.foun
 object ThemeColors {
     private val hex = Regex("#[0-9a-fA-F]{6}")
     /** The floor an accent holds as a link on every style's page (docs/persona.md "Contrast floor"). */
-    private const val AccentFloor = 3.0
+    private const val AccentFloor = 4.5
     /** Words on the user's own bubble. */
     private const val TextFloor = 4.5
     private const val SoftLight = 0.12f
@@ -182,7 +182,11 @@ object ThemeColors {
 
     /** [color] moved toward black (light) or white (dark) in steps until it meets the accent floor on [base]'s surfaces. */
     internal fun meeting(color: Color, base: PersonaPalette): Color {
-        val surfaces = listOf(base.background, base.surface.compositeOn(base.background), base.surfaceOpaque)
+        val backgrounds = listOf(base.background) + if (base.surface.alpha < 1f) listOf(base.needsYou, base.working, base.done, base.danger).map {
+            it.dot.copy(alpha = if (base.dark) 0.12f else 0.06f).compositeOn(base.background)
+        } else emptyList()
+        val surfaces = backgrounds.flatMap { background -> listOf(background, base.surface.compositeOn(background), base.surfaceOpaque,
+            base.surfaceStrong.compositeOn(background), base.statusSurface, base.sunken.compositeOn(background)) }
         val toward = if (base.dark) Color.White else Color.Black
         var c = color
         repeat(20) {

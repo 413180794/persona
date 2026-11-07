@@ -331,7 +331,7 @@ private fun Tags(tags: List<String>) {
 
 /**
  * What the package may do, checked by the hub, before it is installed: an upgrade that asks for more says so first
- * and lists the new lines alone, and its button turns red. Nothing is installed without the yes.
+ * and lists the new lines alone, with a caution, not an error. Nothing is installed without the yes.
  */
 @Composable
 internal fun PreviewSheet(
@@ -348,7 +348,7 @@ internal fun PreviewSheet(
             Text(if (preview.upgrade) stringResource(R.string.settings_ext_version_change, preview.from.orEmpty(), version)
                 else stringResource(R.string.settings_ext_version, version), style = type.callout, color = palette.ink2)
             if (more) {
-                JInlineStatus(stringResource(R.string.settings_ext_more_permissions), tone = InlineTone.Failed)
+                JInlineStatus(stringResource(R.string.settings_ext_more_permissions), tone = InlineTone.Caution)
                 PermissionList(stringResource(R.string.settings_ext_added), preview.addedPermissions.orEmpty())
             }
             BundlePreview(preview)
@@ -357,7 +357,7 @@ internal fun PreviewSheet(
             SettingsCaption(stringResource(R.string.settings_ext_preview_note) +
                 (preview.expiresAt?.let(CatalogText::time)?.let { stringResource(R.string.settings_ext_preview_expires, it) } ?: ""))
             JButton(CatalogText.confirmLabel(LocalResources.current, preview), onConfirm, Modifier.fillMaxWidth(),
-                kind = if (more) JButtonKind.Destructive else JButtonKind.Primary, loading = busy, enabled = !busy && preview.canConfirm)
+                kind = JButtonKind.Primary, loading = busy, enabled = !busy && preview.canConfirm)
             JButton(stringResource(R.string.settings_ext_preview_cancel), onDismiss, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !busy)
         }
     }

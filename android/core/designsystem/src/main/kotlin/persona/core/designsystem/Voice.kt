@@ -210,7 +210,7 @@ enum class VoiceControlKind { Plain, Filled, Danger }
 
 /**
  * A round control of the voice page with its label underneath ("Mute", "Interrupt", "Hang up"): a glass circle, a wash disc, or a
- * bordered square; [VoiceControlKind.Filled] fills it with the action colour, [VoiceControlKind.Danger] with red.
+ * bordered square; [VoiceControlKind.Filled] uses the action color, [VoiceControlKind.Danger] red words/icon on a neutral disc.
  * The label is one line; the whole thing is one button for touch and TalkBack.
  */
 @Composable
@@ -228,7 +228,7 @@ fun VoiceControl(
     val (fill, ink) = when (kind) {
         VoiceControlKind.Plain -> (if (style == AppStyle.Board) palette.surface else palette.surfaceStrong) to palette.ink
         VoiceControlKind.Filled -> palette.action to palette.onAction
-        VoiceControlKind.Danger -> palette.danger.dot to palette.danger.onDot
+        VoiceControlKind.Danger -> palette.statusSurface to palette.danger.text
     }
     val surface = when {
         kind == VoiceControlKind.Plain && style == AppStyle.Glass -> Modifier.floatingSurface(CircleShape)
@@ -249,7 +249,11 @@ fun VoiceControl(
         ) { JIcon(icon, null, size = 26.dp, tint = ink, selected = kind != VoiceControlKind.Plain) }
         Spacer(Modifier.height(8.dp))
         Text(
-            label, style = PersonaTheme.type.caption, color = if (kind == VoiceControlKind.Plain) palette.ink2 else palette.ink,
+            label, style = PersonaTheme.type.caption, color = when (kind) {
+                VoiceControlKind.Plain -> palette.ink2
+                VoiceControlKind.Danger -> palette.danger.text
+                VoiceControlKind.Filled -> palette.ink
+            },
             maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
         )
     }

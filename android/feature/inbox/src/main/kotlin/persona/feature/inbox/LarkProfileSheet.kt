@@ -20,14 +20,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -191,24 +189,20 @@ private fun LarkProfileCardContent(
             .padding(bottom = Tokens.Space.xl)
     ) {
         // Banner and Avatar
-        Box(Modifier.fillMaxWidth().height(160.dp)) {
+        Box(Modifier.fillMaxWidth().height(ContentTokens.profileHeaderHeight)) {
             // Cover
             if (!profile.coverUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = profile.coverUrl,
                     contentDescription = stringResource(R.string.inbox_lark_cover),
-                    modifier = Modifier.fillMaxWidth().height(120.dp)
+                    modifier = Modifier.fillMaxWidth().height(ContentTokens.profileCoverHeight)
                 )
             } else {
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(120.dp)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(palette.accent.copy(alpha = 0.5f), palette.accent.copy(alpha = 0.2f))
-                            )
-                        )
+                        .height(ContentTokens.profileCoverHeight)
+                        .background(palette.statusSurface)
                 )
             }
 
@@ -217,10 +211,10 @@ private fun LarkProfileCardContent(
                 Modifier
                     .padding(start = Tokens.Space.l)
                     .align(Alignment.BottomStart)
-                    .size(72.dp)
+                    .size(ContentTokens.profileAvatar)
                     .clip(CircleShape)
                     .background(palette.surface)
-                    .padding(3.dp)
+                    .padding(ContentTokens.profileAvatarInset)
             ) {
                 LarkAvatar(profile.displayName, person.avatar)
             }
@@ -272,7 +266,7 @@ private fun LarkProfileCardContent(
                         Modifier
                             .clip(RoundedCornerShape(Tokens.Radius.badge))
                             .background(palette.accent.copy(alpha = 0.12f))
-                            .padding(horizontal = Tokens.Space.s, vertical = 2.dp)
+                            .padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.xxs)
                     ) {
                         Text(
                             profile.statusText,
@@ -333,7 +327,7 @@ private fun LarkProfileCardContent(
                                     field.label,
                                     style = PersonaTheme.type.callout,
                                     color = palette.ink3,
-                                    modifier = Modifier.width(80.dp)
+                                    modifier = Modifier.width(ContentTokens.profileLabelWidth)
                                 )
                                 Text(
                                     field.value,
@@ -344,7 +338,7 @@ private fun LarkProfileCardContent(
                                     modifier = Modifier.weight(1f)
                                 )
                                 if (field.leaderId != null) {
-                                    JIcon(PhIcons.CaretRight, modifier = Modifier.size(16.dp), tint = palette.accent)
+                                    JIcon(PhIcons.CaretRight, modifier = Modifier.size(Tokens.Space.l), tint = palette.accent)
                                 }
                             }
                         }

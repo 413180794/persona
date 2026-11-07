@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import persona.core.contracts.api.MailAccount
@@ -178,7 +177,7 @@ fun ComposeMailPage(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 280.dp)
+                        .heightIn(min = ContentTokens.mailBodyMinHeight)
                         .padding(Tokens.Space.m),
                 ) {
                     if (body.isEmpty()) {
@@ -190,7 +189,7 @@ fun ComposeMailPage(
                         textStyle = PersonaTheme.type.body.copy(color = PersonaTheme.palette.ink),
                         cursorBrush = SolidColor(PersonaTheme.palette.accent),
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 280.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = ContentTokens.mailBodyMinHeight),
                     )
                 }
             }
@@ -216,7 +215,7 @@ fun ComposeMailPage(
 private fun FieldLabel(text: String) {
     Text(
         text,
-        modifier = Modifier.width(56.dp),
+        modifier = Modifier.width(ContentTokens.mailLabelWidth),
         style = PersonaTheme.type.callout,
         color = PersonaTheme.palette.ink3,
         maxLines = 1,
@@ -233,7 +232,7 @@ private fun FromRow(accounts: List<MailAccount>, selected: String, onSelect: (St
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 44.dp)
+                .heightIn(min = ContentTokens.fieldHeight)
                 .clickable(enabled = accounts.size > 1) { menuOpen = true }
                 .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s),
             verticalAlignment = Alignment.CenterVertically,
@@ -249,7 +248,7 @@ private fun FromRow(accounts: List<MailAccount>, selected: String, onSelect: (St
                 overflow = TextOverflow.Ellipsis,
             )
             if (accounts.size > 1) {
-                JIcon(PhIcons.CaretDown, stringResource(R.string.inbox_mail_switch_account), size = 16.dp, tint = PersonaTheme.palette.ink3)
+                JIcon(PhIcons.CaretDown, stringResource(R.string.inbox_mail_switch_account), size = Tokens.Space.l, tint = PersonaTheme.palette.ink3)
             }
         }
         if (accounts.size > 1) {
@@ -281,7 +280,7 @@ private fun FieldRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .heightIn(min = ContentTokens.fieldHeight)
             .padding(start = Tokens.Space.m, end = Tokens.Space.s, top = Tokens.Space.s, bottom = Tokens.Space.s),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m),

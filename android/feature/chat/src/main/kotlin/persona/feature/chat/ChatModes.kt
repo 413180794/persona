@@ -131,7 +131,7 @@ internal fun ChatModeBar(
     val editable = session != null && state.available && online && (session.canChangeModes || effortOnly)
     val bypass = session?.permissionMode == SessionModes.BYPASS
     JIconButton(PhIcons.SlidersHorizontal, stringResource(if (bypass) R.string.chat_modes_button_bypass else R.string.chat_modes_button), { open = true },
-        tint = if (bypass) PersonaTheme.palette.danger.dot else null)
+        tint = if (bypass) PersonaTheme.palette.cautionText else null)
     if (open) JSheet(onDismiss = { open = false }, title = stringResource(R.string.chat_modes_title), scrollable = true) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             if (!editable) Text(stringResource(if (session?.canChangeModes == false && !effortOnly) R.string.chat_modes_locked else R.string.chat_modes_offline),

@@ -42,6 +42,13 @@ import persona.core.designsystem.Tokens
 class ReviewShotsTest {
     @get:Rule val rule = createComposeRule()
 
+    @Test fun aReviewWaitingForTheUserIsNotAnError() {
+        org.junit.Assert.assertEquals(persona.core.designsystem.Tone.Caution, persona.core.domain.tasks.ReviewStage.NeedsUser.tone)
+        persona.core.domain.tasks.ReviewStage.entries.forEach {
+            org.junit.Assert.assertNotEquals("Routine review stage $it", persona.core.designsystem.Tone.Danger, it.tone)
+        }
+    }
+
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/review-shots").also { it.mkdirs() }
 
     private val rework = JsonCodec.decodeFromString(Todo.serializer(), """{"id":"todo_1","title":"iOS 侧边栏显示扩展页面",

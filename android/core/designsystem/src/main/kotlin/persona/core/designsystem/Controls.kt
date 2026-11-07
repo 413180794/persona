@@ -117,7 +117,7 @@ fun JButton(
         JButtonKind.Primary -> palette.action to palette.onAction
         JButtonKind.Secondary -> (if (style == AppStyle.Board) palette.surface else palette.surfaceStrong) to palette.ink
         JButtonKind.Quiet -> Color.Transparent to (if (style == AppStyle.Board) palette.accent else palette.ink2)
-        JButtonKind.Destructive -> palette.danger.dot to palette.danger.onDot
+        JButtonKind.Destructive -> palette.statusSurface to palette.danger.text
     }
     val frame = when {
         kind == JButtonKind.Secondary && style == AppStyle.Glass ->
@@ -428,7 +428,7 @@ fun JChip(
     val (fill, ink, border) = when (style) {
         AppStyle.Glass -> Triple(if (selected) palette.action else palette.surfaceStrong, if (selected) palette.onAction else palette.ink, if (selected) Color.Transparent else palette.strokeBottom)
         AppStyle.Brief -> Triple(if (selected) palette.action else palette.surface, if (selected) palette.onAction else palette.ink, Color.Transparent)
-        AppStyle.Board -> Triple(if (selected) palette.accentSoft else palette.surface, palette.ink, if (selected) palette.accent else palette.line)
+        AppStyle.Board -> Triple(if (selected) palette.statusSurface else palette.surface, palette.ink, if (selected) palette.accent else palette.line)
     }
     Row(
         modifier.heightIn(min = if (onClick != null) 36.dp else 28.dp).clip(shape).background(fill).border(1.dp, border, shape)
@@ -483,7 +483,7 @@ internal fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?, 
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 6.dp)
     val style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.SemiBold)
     var ink = tone?.text ?: palette.ink2
-    var fill = tone?.tint ?: palette.surfaceStrong
+    var fill = palette.statusSurface
     if (animated) {
         val spec: AnimationSpec<Color> = if (PersonaTheme.reduceMotion) snap() else tween(PersonaTheme.motion.standard)
         ink = animateColorAsState(ink, spec, label = "tag ink").value

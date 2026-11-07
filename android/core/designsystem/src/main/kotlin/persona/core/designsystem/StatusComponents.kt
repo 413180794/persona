@@ -41,9 +41,10 @@ fun JStatusDot(status: Status, modifier: Modifier = Modifier, size: Dp = 8.dp) {
         AppStyle.Glass -> Canvas(modifier.size(size).clearAndSetSemantics {}) {
             drawCircle(Brush.radialGradient(listOf(tone.dot.copy(alpha = 0.55f), Color.Transparent), radius = this.size.minDimension), radius = this.size.minDimension)
             drawCircle(tone.dot)
+            drawCircle(tone.text, style = Stroke(1.dp.toPx()))
         }
-        AppStyle.Brief -> Box(modifier.size(size).clip(CircleShape).background(tone.dot).clearAndSetSemantics {})
-        AppStyle.Board -> Box(modifier.size(size).clip(RoundedCornerShape(2.dp)).background(tone.dot).clearAndSetSemantics {})
+        AppStyle.Brief -> Box(modifier.size(size).clip(CircleShape).background(tone.dot).border(1.dp, tone.text, CircleShape).clearAndSetSemantics {})
+        AppStyle.Board -> Box(modifier.size(size).clip(RoundedCornerShape(2.dp)).background(tone.dot).border(1.dp, tone.text, RoundedCornerShape(2.dp)).clearAndSetSemantics {})
     }
 }
 
@@ -68,6 +69,7 @@ fun JStatusMark(status: Status, modifier: Modifier = Modifier, animated: Boolean
             Canvas(Modifier.size(26.dp).alpha(pulse).clearAndSetSemantics {}) {
                 drawCircle(Brush.radialGradient(listOf(tone.dot.copy(alpha = 0.5f), Color.Transparent)))
                 drawCircle(tone.dot, radius = 4.5.dp.toPx())
+                drawCircle(tone.text, radius = 4.5.dp.toPx(), style = Stroke(1.dp.toPx()))
             }
         }
         AppStyle.Brief -> Box(modifier.size(36.dp).clip(CircleShape).background(palette.surface), contentAlignment = Alignment.Center) {
@@ -81,11 +83,11 @@ fun JStatusMark(status: Status, modifier: Modifier = Modifier, animated: Boolean
         }
         AppStyle.Board -> Box(modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(tone.dot), contentAlignment = Alignment.Center) {
             when (status) {
-                Status.Working, Status.Waiting -> if (moving) JSpinner(Modifier.size(13.dp), color = Color.White, stroke = 1.8.dp)
-                    else JIcon(PhIcons.Play, null, size = 12.dp, tint = Color.White, selected = true)
+                Status.Working, Status.Waiting -> if (moving) JSpinner(Modifier.size(13.dp), color = tone.onDot, stroke = 1.8.dp)
+                    else JIcon(PhIcons.Play, null, size = 12.dp, tint = tone.onDot, selected = true)
                 Status.NeedsYou -> JIcon(PhIcons.Hand, null, size = 13.dp, tint = palette.needsYou.onDot, selected = true)
-                Status.Unread -> JIcon(PhIcons.Check, null, size = 13.dp, tint = Color.White)
-                else -> JIcon(PhIcons.Checks, null, size = 13.dp, tint = Color.White)
+                Status.Unread -> JIcon(PhIcons.Check, null, size = 13.dp, tint = tone.onDot)
+                else -> JIcon(PhIcons.Checks, null, size = 13.dp, tint = tone.onDot)
             }
         }
     }
@@ -139,7 +141,7 @@ fun PendingBadge(status: PendingStatus, modifier: Modifier = Modifier, reason: S
         else status.localizedLabel
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 8.dp)
     Row(
-        modifier.semantics(mergeDescendants = true) {}.clip(shape).background(if (caution) palette.needsYou.tint else palette.surfaceStrong)
+        modifier.semantics(mergeDescendants = true) {}.clip(shape).background(palette.statusSurface)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -231,7 +233,7 @@ fun StatusLine(
     val click = if (onClick != null && (line == null || line.actionable)) Modifier.clickable(role = Role.Button) { onClick(line?.kind ?: StatusLineKind.Waiting) } else Modifier
     val shape = RoundedCornerShape(if (style == AppStyle.Board) 8.dp else 50.dp)
     val frame = when (style) {
-        AppStyle.Glass -> Modifier.clip(shape).background(tone.tint).border(1.dp, palette.strokeBottom, shape)
+        AppStyle.Glass -> Modifier.clip(shape).background(palette.statusSurface).border(1.dp, palette.strokeBottom, shape)
         AppStyle.Brief -> Modifier.clip(shape)
         AppStyle.Board -> Modifier.clip(shape).background(palette.surface).border(1.dp, palette.line, shape)
     }

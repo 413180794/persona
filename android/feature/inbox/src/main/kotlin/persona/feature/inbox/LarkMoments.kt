@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.imageLoader
@@ -78,12 +77,12 @@ internal fun LarkMomentsCard(
     val card = preview?.card
     JCard(modifier.fillMaxWidth().clickable(onClick = onClick), padding = Tokens.Space.m) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            Icon(PhIcons.ChatsCircle.regular, contentDescription = stringResource(R.string.inbox_moments), tint = PersonaTheme.palette.accent, modifier = Modifier.size(20.dp))
+            Icon(PhIcons.ChatsCircle.regular, contentDescription = stringResource(R.string.inbox_moments), tint = PersonaTheme.palette.accent, modifier = Modifier.size(Tokens.Space.xl))
             Text(preview?.title ?: stringResource(R.string.inbox_moments_post), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
         }
         card?.author?.let { author ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                JAvatar(author, size = 28.dp)
+                JAvatar(author, size = ContentTokens.smallAvatar)
                 Column {
                     Text(author, style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
                     card.subtitle?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
@@ -368,7 +367,7 @@ private fun MomentsPostCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
         ) {
-            JAvatar(post.userName.orEmpty(), size = 40.dp)
+            JAvatar(post.userName.orEmpty(), size = ContentTokens.mediumAvatar)
             Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
                 Text(post.userName.orEmpty(), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
                 post.createTime?.let {
@@ -414,7 +413,7 @@ private fun MomentsCommentRow(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
         ) {
-            JAvatar(comment.userName.orEmpty(), size = 32.dp)
+            JAvatar(comment.userName.orEmpty(), size = Tokens.Space.xxxl)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(comment.userName.orEmpty(), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
@@ -462,7 +461,7 @@ private fun MomentsImagesLayout(
 
     if (images.size == 1) {
         val img = images.first()
-        val shape = RoundedCornerShape(8.dp)
+        val shape = RoundedCornerShape(Tokens.Space.s)
         AsyncImage(
             model = img.url,
             contentDescription = stringResource(R.string.inbox_image),
@@ -478,7 +477,7 @@ private fun MomentsImagesLayout(
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                     row.forEachIndexed { colIndex, img ->
                         val index = rowIndex * 3 + colIndex
-                        val shape = RoundedCornerShape(6.dp)
+                        val shape = RoundedCornerShape(ContentTokens.tightGap)
                         AsyncImage(
                             model = img.url,
                             contentDescription = stringResource(R.string.inbox_image),

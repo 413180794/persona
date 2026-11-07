@@ -203,9 +203,8 @@ private fun ReviewSubmit(view: ExtensionView, state: ExtensionViewState, handle:
                     JButton(stringResource(R.string.settings_ext_review_discard), { open = false; handle.act(d, emptyMap()) }, size = JButtonSize.Small, kind = JButtonKind.Secondary, enabled = !state.busy)
                 }
                 r.buttons.filter { it.action.id.isNotEmpty() }.forEachIndexed { i, b ->
-                    val tone = ExtensionViewText.tone(b.tone)
                     JButton(b.title, { open = false; handle.act(b.action, mapOf(r.name to body)); body = "" }, size = JButtonSize.Small,
-                        kind = when { tone == Tone.Danger -> JButtonKind.Destructive; i == 0 || tone == Tone.Positive -> JButtonKind.Primary; else -> JButtonKind.Secondary },
+                        kind = if (i == 0) JButtonKind.Primary else JButtonKind.Secondary,
                         loading = state.acting == b.action.id, enabled = !state.busy)
                 }
             }
@@ -227,8 +226,8 @@ private fun Suggestion(from: List<String>, to: List<String>) {
             Text(stringResource(R.string.settings_ext_review_suggested_change), style = type.micro, color = palette.ink3, maxLines = 1)
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) { Column(Modifier.width(IntrinsicSize.Max)) {
-            from.forEach { Text("− $it", Modifier.fillMaxWidth().background(palette.tone(Tone.Danger).tint).padding(horizontal = Tokens.Space.s), style = type.codeSmall, color = palette.ink, maxLines = 1, softWrap = false) }
-            to.forEach { Text("+ $it", Modifier.fillMaxWidth().background(palette.tone(Tone.Positive).tint).padding(horizontal = Tokens.Space.s), style = type.codeSmall, color = palette.ink, maxLines = 1, softWrap = false) }
+            from.forEach { Text("− $it", Modifier.fillMaxWidth().background(palette.sunken).padding(horizontal = Tokens.Space.s), style = type.codeSmall, color = palette.ink, maxLines = 1, softWrap = false) }
+            to.forEach { Text("+ $it", Modifier.fillMaxWidth().background(palette.sunken).padding(horizontal = Tokens.Space.s), style = type.codeSmall, color = palette.ink, maxLines = 1, softWrap = false) }
             if (to.isEmpty()) Text(stringResource(R.string.settings_ext_review_suggest_delete), Modifier.padding(horizontal = Tokens.Space.s), style = type.micro, color = palette.ink3)
         } }
     }
@@ -324,7 +323,7 @@ private fun LineComposer(pick: LinePick, body: String, setBody: (String) -> Unit
 private fun GapBar(hidden: Int, first: Boolean, last: Boolean, header: String?, loading: Boolean, onShow: (String) -> Unit) {
     val palette = PersonaTheme.palette
     val few = hidden <= ExtensionCodeReview.Step
-    Row(Modifier.width(screenWidth()).background(palette.accentSoft).padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.xxs),
+    Row(Modifier.width(screenWidth()).background(palette.statusSurface).padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.xxs),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         if (!few && !first) JIconButton(PhIcons.ArrowDown, stringResource(R.string.settings_ext_code_expand_down), { onShow("down") }, enabled = !loading, raised = false, tint = palette.accent)
         if (!few && !last) JIconButton(PhIcons.ArrowUp, stringResource(R.string.settings_ext_review_expand_up), { onShow("up") }, enabled = !loading, raised = false, tint = palette.accent)
@@ -344,9 +343,8 @@ private fun DiffLine(r: DiffRow, tokens: List<CodeToken>?, spans: List<CharSpan>
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val bg = when {
-        picked -> palette.accentSoft
-        r.kind == DiffKind.Add -> palette.tone(Tone.Positive).tint
-        r.kind == DiffKind.Del -> palette.tone(Tone.Danger).tint
+        picked -> palette.statusSurface
+        r.kind == DiffKind.Add || r.kind == DiffKind.Del -> palette.sunken
         else -> null
     }
     Row(Modifier.fillMaxWidth().then(if (bg != null) Modifier.background(bg) else Modifier).then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)) {
@@ -557,7 +555,7 @@ internal fun CodeDiff(item: ExtensionViewItem, state: ExtensionViewState, handle
 @Composable
 private fun GapLine(title: String, enabled: Boolean, down: Boolean = false, onClick: () -> Unit) {
     val palette = PersonaTheme.palette
-    Row(Modifier.width(screenWidth()).background(palette.accentSoft).clickable(enabled = enabled, onClick = onClick)
+    Row(Modifier.width(screenWidth()).background(palette.statusSurface).clickable(enabled = enabled, onClick = onClick)
         .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
         JIcon(if (down) PhIcons.ArrowDown else PhIcons.ArrowUp, null, size = Tokens.Space.m, tint = palette.accent)
         Spacer(Modifier.width(Tokens.Space.s))

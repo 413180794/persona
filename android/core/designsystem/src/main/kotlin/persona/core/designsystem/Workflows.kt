@@ -1,10 +1,5 @@
 package persona.core.designsystem
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -39,8 +34,8 @@ data class WorkflowAgentLine(
 )
 
 /**
- * A run: [title] and the [status] chip ([statusText]; running breathes in the AI colour, done is positive, failed and
- * stopped are danger, gone quiet caution) with how long it ran ([elapsed]); its [phases] in a row, the [current] one
+ * A run: [title] and the [status] chip ([statusText]; running is AI-colored text, done positive, failed danger,
+ * stopped neutral and gone quiet caution) with how long it ran ([elapsed]); its [phases] in a row, the [current] one
  * (1-based) lit and the ones before it done; [progress] ("169/185 agents done · 16 running"); [error] on one line;
  * then "Show agents", which lists [agents] while [expanded].
  */
@@ -95,18 +90,15 @@ fun JWorkflowCard(
     }
 }
 
-/** The status chip: the AI colour breathing while it runs (still when motion is reduced), a role colour once it stopped. */
+/** A readable state label on a neutral surface; only failure is danger. */
 @Composable
 private fun WorkflowStatusTag(text: String, status: WorkflowStatus) {
     val palette = PersonaTheme.palette
     when (status) {
-        WorkflowStatus.Running -> {
-            val alpha = if (PersonaTheme.reduceMotion) 1f else rememberInfiniteTransition(label = "workflow")
-                .animateFloat(0.55f, 1f, infiniteRepeatable(tween(PersonaTheme.motion.breathe), RepeatMode.Reverse), label = "breathe").value
-            JTagColored(text, Modifier.stableAlpha(alpha), StatusColors(dot = palette.ai, text = palette.ai, tint = palette.ai.copy(alpha = AiTint)))
-        }
+        WorkflowStatus.Running -> JTagColored(text, Modifier, StatusColors(dot = palette.ai, text = palette.ai, tint = palette.statusSurface))
         WorkflowStatus.Completed -> JTag(text, Tone.Positive)
-        WorkflowStatus.Failed, WorkflowStatus.Killed -> JTag(text, Tone.Danger)
+        WorkflowStatus.Failed -> JTag(text, Tone.Danger)
+        WorkflowStatus.Killed -> JTag(text, Tone.Neutral)
         WorkflowStatus.Stalled -> JTag(text, Tone.Caution)
     }
 }
@@ -124,7 +116,7 @@ private fun PhaseStrip(phases: List<String>, current: Int?) {
             if (index > 0) JIcon(PhIcons.CaretRight, null, size = Tokens.Space.m, tint = palette.ink3,
                 modifier = Modifier.padding(horizontal = Tokens.Space.xxs))
             Row(
-                Modifier.clip(PersonaTheme.shapes.chipShape).background(if (now) palette.ai.copy(alpha = AiTint) else palette.surfaceStrong)
+                Modifier.clip(PersonaTheme.shapes.chipShape).background(palette.statusSurface)
                     .padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.xxs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -167,6 +159,3 @@ private fun WorkflowAgentRow(agent: WorkflowAgentLine) {
         if (agent.onClick != null) JIcon(PhIcons.CaretRight, null, size = Tokens.Space.l, tint = palette.ink3)
     }
 }
-
-/** How strongly the AI colour tints the running chip and the lit phase. */
-private const val AiTint = 0.14f

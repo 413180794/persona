@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import persona.core.contracts.Machine
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -63,12 +62,12 @@ fun TodoHandOffSheet(
             Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = Tokens.Space.l, vertical = Tokens.Space.s),
+            verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)
         ) {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
             ) {
                 HandOffMode.entries.forEach { m ->
                     JChip(
@@ -82,7 +81,7 @@ fun TodoHandOffSheet(
 
             if (mode == HandOffMode.New) {
                 JSectionHeader(stringResource(R.string.agents_handoff_new_session))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                     Box {
                         JGroupItem(GroupPosition.of(0, 4)) {
                             JRow(
@@ -161,7 +160,7 @@ fun TodoHandOffSheet(
                 if (runningAgents.isEmpty()) {
                     JEmptyState(stringResource(R.string.agents_handoff_no_agents), stringResource(R.string.agents_handoff_no_agents_hint))
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                         runningAgents.forEachIndexed { index, session ->
                             val selected = selectedTarget == session.key
                             val machineName = machines.firstOrNull { it.id == session.machineId }?.displayName ?: session.machineId
@@ -202,14 +201,14 @@ fun TodoHandOffSheet(
                 ) {
                     Box(
                         Modifier
-                            .width(4.dp)
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(2.dp))
+                            .width(Tokens.Space.xs)
+                            .height(ContentTokens.taskQuoteMarkHeight)
+                            .clip(RoundedCornerShape(Tokens.Space.xxs))
                             .background(PersonaTheme.palette.accent)
                     )
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            JIcon(PhIcons.ListChecks, null, size = 16.dp, tint = PersonaTheme.palette.accent)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ContentTokens.tightGap)) {
+                            JIcon(PhIcons.ListChecks, null, size = Tokens.Space.l, tint = PersonaTheme.palette.accent)
                             Text(
                                 stringResource(R.string.agents_row_todo, todo.title),
                                 style = PersonaTheme.type.headline,
@@ -231,7 +230,7 @@ fun TodoHandOffSheet(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Tokens.Space.s))
 
             error?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.danger.text) }
 

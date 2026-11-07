@@ -22,7 +22,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import persona.core.contracts.*
 import persona.core.designsystem.*
@@ -123,8 +122,8 @@ fun TodosScreen(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = Tokens.Space.l, vertical = Tokens.Space.s),
+                verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)
             ) {
                 JTextField(
                     newTitle,
@@ -141,7 +140,7 @@ fun TodosScreen(
                     minLines = 3,
                     maxLines = 6
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Tokens.Space.s))
                 JButton(
                     text = stringResource(R.string.agents_todo_create),
                     onClick = {
@@ -177,12 +176,12 @@ fun TodosScreen(
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 8.dp,
-                bottom = padding.calculateBottomPadding() + 16.dp,
-                start = 16.dp,
-                end = 16.dp
+                top = padding.calculateTopPadding() + Tokens.Space.s,
+                bottom = padding.calculateBottomPadding() + Tokens.Space.l,
+                start = Tokens.Space.l,
+                end = Tokens.Space.l
             ),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(ContentTokens.rowGap)
         ) {
             item(key = "search") {
                 JSearchField(query, { query = it }, placeholder = stringResource(R.string.agents_todos_search))
@@ -249,7 +248,7 @@ fun TodosScreen(
                                     ) {
                                         Box(
                                             Modifier
-                                                .size(24.dp)
+                                                .size(Tokens.Space.xxl)
                                                 .clip(CircleShape)
                                                 .clickable {
                                                     scope.launch {
@@ -264,8 +263,8 @@ fun TodosScreen(
                                         ) {
                                             Box(
                                                 Modifier
-                                                    .size(18.dp)
-                                                    .border(1.5.dp, PersonaTheme.palette.ink3, CircleShape)
+                                                    .size(ContentTokens.statusIcon)
+                                                    .border(ContentTokens.optionOutline, PersonaTheme.palette.ink3, CircleShape)
                                             )
                                         }
                                         Text(
@@ -290,9 +289,9 @@ fun TodosScreen(
 
                                     // Relative time and linked agent count at the bottom
                                     Row(
-                                        Modifier.fillMaxWidth().padding(start = 32.dp, top = 2.dp),
+                                        Modifier.fillMaxWidth().padding(start = Tokens.Space.xxxl, top = Tokens.Space.xxs),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
                                     ) {
                                         val timeStr = relativeTime(res, todo.updated ?: todo.created, now)
                                         if (timeStr.isNotBlank()) {
@@ -313,7 +312,7 @@ fun TodosScreen(
                 if (completed.isNotEmpty()) {
                     item(key = "completed-header") {
                         Row(
-                            Modifier.fillMaxWidth().clickable { completedFolded = !completedFolded }.padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().clickable { completedFolded = !completedFolded }.padding(vertical = Tokens.Space.xs),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             JSectionHeader(
@@ -321,7 +320,7 @@ fun TodosScreen(
                                 count = completed.size,
                                 modifier = Modifier.weight(1f)
                             )
-                            JIcon(if (completedFolded) PhIcons.CaretDown else PhIcons.CaretUp, null, size = 16.dp, tint = PersonaTheme.palette.ink3)
+                            JIcon(if (completedFolded) PhIcons.CaretDown else PhIcons.CaretUp, null, size = Tokens.Space.l, tint = PersonaTheme.palette.ink3)
                         }
                     }
 
@@ -360,12 +359,12 @@ fun TodosScreen(
                                         ) {
                                             Box(
                                                 Modifier
-                                                    .size(24.dp)
+                                                    .size(Tokens.Space.xxl)
                                                     .clip(CircleShape)
                                                     .clickable(onClick = reopen),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                JIcon(PhIcons.CheckCircle, null, size = 18.dp, selected = true, tint = PersonaTheme.palette.done.dot)
+                                                JIcon(PhIcons.CheckCircle, null, size = ContentTokens.statusIcon, selected = true, tint = PersonaTheme.palette.done.dot)
                                             }
                                             Text(
                                                 todo.title,
@@ -484,7 +483,7 @@ private fun TodoActivityLine(todo: Todo, urgent: TodoMostUrgent?, card: Interact
         Text(
             text,
             style = PersonaTheme.type.caption,
-            color = if (waiting) palette.danger.text else palette.ink2,
+            color = if (waiting) palette.needsYou.text else palette.ink2,
             maxLines = if (notes != null && text == notes) 1 else 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)

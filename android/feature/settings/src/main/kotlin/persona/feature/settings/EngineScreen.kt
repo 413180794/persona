@@ -117,7 +117,7 @@ private fun EngineOption(found: DetectedEngine, machine: Machine, selected: Bool
             Text(found.name.ifBlank { found.id }, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Engines.detail(found.id)?.let { Text(it.text(), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             Text(Engines.detection(found.id, machine).text(), style = PersonaTheme.type.caption,
-                color = if (found.available && machine.online) PersonaTheme.palette.positive else PersonaTheme.palette.ink3, maxLines = 1)
+                color = if (found.available && machine.online) PersonaTheme.palette.tone(Tone.Positive).text else PersonaTheme.palette.ink3, maxLines = 1)
             found.note?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }

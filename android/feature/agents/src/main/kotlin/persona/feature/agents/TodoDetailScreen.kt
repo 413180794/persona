@@ -18,7 +18,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import persona.core.contracts.AgentState
 import persona.core.contracts.CoreText
@@ -140,8 +139,8 @@ fun TodoDetailScreen(
         bottomBar = {
             JBottomBar {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Modifier.fillMaxWidth().padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.xxs),
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
                 ) {
                     JButton(
                         text = stringResource(if (todo.isDone) R.string.agents_todo_reopen else R.string.agents_todo_complete),
@@ -171,12 +170,12 @@ fun TodoDetailScreen(
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 8.dp,
-                bottom = padding.calculateBottomPadding() + 16.dp,
-                start = 16.dp,
-                end = 16.dp
+                top = padding.calculateTopPadding() + Tokens.Space.s,
+                bottom = padding.calculateBottomPadding() + Tokens.Space.l,
+                start = Tokens.Space.l,
+                end = Tokens.Space.l
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)
         ) {
             // To-do title and notes card
             item(key = "title-notes") {
@@ -193,7 +192,7 @@ fun TodoDetailScreen(
                                 else -> Status.Idle
                             }
                             JStatusDot(status)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(Tokens.Space.s))
                             if (todo.isDone) {
                                 if (todo.doneBy == "auto") {
                                     JTag(stringResource(R.string.agents_todo_auto_done))
@@ -257,7 +256,7 @@ fun TodoDetailScreen(
                                     editingTitle = false
                                     editingNotes = false
                                 })
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(Tokens.Space.s))
                                 JButton(stringResource(R.string.agents_todo_save), onClick = {
                                     editingTitle = false
                                     editingNotes = false
@@ -384,7 +383,7 @@ fun TodoDetailScreen(
                             )
                             if (!agent.startError.isNullOrBlank()) {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                    Modifier.fillMaxWidth().padding(horizontal = Tokens.Space.l, vertical = ContentTokens.tightGap),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
@@ -413,7 +412,7 @@ fun TodoDetailScreen(
             if (todo.releasedAgents.isNotEmpty()) {
                 item(key = "past-header") {
                     Row(
-                        Modifier.fillMaxWidth().clickable { pastFolded = !pastFolded }.padding(vertical = 4.dp),
+                        Modifier.fillMaxWidth().clickable { pastFolded = !pastFolded }.padding(vertical = Tokens.Space.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         JSectionHeader(
@@ -421,7 +420,7 @@ fun TodoDetailScreen(
                             count = todo.releasedAgents.size,
                             modifier = Modifier.weight(1f)
                         )
-                        JIcon(if (pastFolded) PhIcons.CaretDown else PhIcons.CaretRight, null, size = 16.dp, tint = PersonaTheme.palette.ink3)
+                        JIcon(if (pastFolded) PhIcons.CaretDown else PhIcons.CaretRight, null, size = Tokens.Space.l, tint = PersonaTheme.palette.ink3)
                     }
                 }
 

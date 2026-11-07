@@ -374,7 +374,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
         section("状态色") {
             Status.entries.forEach { status ->
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(palette.status(status).tint).padding(12.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(palette.statusSurface).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) { JStatusMark(status, animated = false); StatusLabel(status) }
             }

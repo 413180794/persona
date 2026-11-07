@@ -174,7 +174,7 @@ private fun LazyListScope.newAgentItems(
     newAgentModelItems(state, editable, onModels, model::reloadModels)
     if (state.agentType == "claude") item("claude-options") {
         ChoiceMenu(stringResource(R.string.agents_new_permission_mode), state.selection.mode, permissionModes, editable) { model.selection(state.selection.copy(mode = it)) }
-        if (state.selection.mode == "bypassPermissions") Text(stringResource(R.string.agents_new_bypass_warning), color = PersonaTheme.palette.danger.text, style = PersonaTheme.type.caption)
+        if (state.selection.mode == "bypassPermissions") Text(stringResource(R.string.agents_new_bypass_warning), color = PersonaTheme.palette.cautionText, style = PersonaTheme.type.caption)
         // Only the levels the model that will run takes; none: it has no effort setting.
         val efforts = state.modelEfforts
         if (efforts?.isEmpty() == true) JRow(stringResource(R.string.agents_new_effort), subtitle = stringResource(R.string.agents_new_no_effort), enabled = false)

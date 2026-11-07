@@ -203,11 +203,11 @@ fun AmbientLight(ambience: Ambience, modifier: Modifier = Modifier, inWindow: Bo
     val animate = !PersonaTheme.reduceMotion
     fun target(vararg pairs: Pair<Ambience, Float>, default: Float) = pairs.firstOrNull { it.first == ambience }?.second ?: default
     val spec = if (animate) tween<Float>(900) else snap()
-    val amber by animateFloatAsState(target(Ambience.NeedsYou to 1f, Ambience.Alert to 0.5f, default = 0f), spec, label = "amber")
-    val blue by animateFloatAsState(target(Ambience.Working to 1f, Ambience.NeedsYou to 0.75f, Ambience.Calm to 0.7f, Ambience.Connected to 0.45f, default = 0.3f), spec, label = "blue")
-    val mint by animateFloatAsState(target(Ambience.Connected to 1f, Ambience.Calm to 0.55f, Ambience.Working to 0.45f, Ambience.NeedsYou to 0.5f, default = 0f), spec, label = "mint")
+    val amber by animateFloatAsState(target(Ambience.NeedsYou to 1f, default = 0f), spec, label = "amber")
+    val blue by animateFloatAsState(target(Ambience.Working to 1f, Ambience.Calm to 0.7f, default = 0f), spec, label = "blue")
+    val mint by animateFloatAsState(target(Ambience.Connected to 1f, default = 0f), spec, label = "mint")
     val red by animateFloatAsState(target(Ambience.Alert to 0.9f, default = 0f), spec, label = "red")
-    val glow = if (palette.dark) 0.42f else 0.30f
+    val glow = if (palette.dark) 0.08f else 0.04f
     val window = LocalWindowInfo.current.containerSize
     val moving = animate && !powerSaving()
     val time = lightTime(moving)
@@ -238,7 +238,7 @@ fun AmbientLight(ambience: Ambience, modifier: Modifier = Modifier, inWindow: Bo
                 )
             }
         }
-        pool(palette.needsYou.dot, palette.danger.dot, amber, Pool(0.05f, 0.10f, 0.95f, seed = 0))
+        pool(palette.needsYou.dot, palette.needsYou.dot, amber, Pool(0.05f, 0.10f, 0.95f, seed = 0))
         pool(palette.danger.dot, palette.needsYou.dot, red, Pool(0.9f, 0.08f, 0.85f, seed = 1))
         pool(palette.working.dot, palette.done.dot, blue, Pool(1.0f, 0.52f, 0.9f, seed = 2))
         val connected = ambience == Ambience.Connected

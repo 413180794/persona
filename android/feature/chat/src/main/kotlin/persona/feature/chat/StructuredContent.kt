@@ -240,11 +240,7 @@ internal fun DiffView(diff: ToolDiff, id: String) {
                 val codeWidth = maxOf(maxWidth - 84.dp, with(density) { measured.toDp() } + Tokens.Space.s)
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp), state = list) {
                     items(lines) { line ->
-                        Row(Modifier.fillMaxWidth().background(when (line.sign) {
-                            '+' -> palette.diffAdd.copy(alpha = 0.12f)
-                            '-' -> palette.diffDel.copy(alpha = 0.12f)
-                            else -> palette.sunken
-                        }), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().background(palette.sunken), verticalAlignment = Alignment.CenterVertically) {
                             Text("${line.old ?: ""}  ${line.new ?: ""}", Modifier.width(64.dp),
                                 style = style, color = PersonaTheme.palette.ink2, maxLines = 1)
                             // A hunk header or a note of a unified diff ('@') reads quietly, with no sign.

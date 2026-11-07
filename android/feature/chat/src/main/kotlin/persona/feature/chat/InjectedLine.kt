@@ -51,7 +51,7 @@ private fun injectedIcon(n: Injected): Pair<PhIcon, Color> {
     val palette = PersonaTheme.palette
     return when (n.kind) {
         "task_notice" -> when (n.state) {
-            "needs" -> PhIcons.Hand to palette.accent
+            "needs" -> PhIcons.Hand to palette.needsYou.text
             "interrupted", "failed" -> PhIcons.WarningCircle to palette.danger.dot
             else -> PhIcons.CheckCircle to palette.positive
         }

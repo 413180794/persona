@@ -91,7 +91,7 @@ fun MachineChip(
     val style = PersonaTheme.style
     val shape = RoundedCornerShape(PersonaTheme.shapes.chip)
     val fill = when {
-        selected && style == AppStyle.Board -> palette.accentSoft
+        selected && style == AppStyle.Board -> palette.statusSurface
         selected -> palette.action
         style == AppStyle.Glass -> palette.surfaceStrong
         else -> palette.surface
@@ -383,7 +383,7 @@ fun AgentRow(
         val shape = RoundedCornerShape(PersonaTheme.shapes.card)
         Row(
             modifier.fillMaxWidth().then(guide).padding(start = start, bottom = if (position.last) None else Tokens.Space.s - Tokens.Space.xxs).clip(shape)
-                .background(palette.surface).drawBehind { drawRect(tone.dot, size = size.copy(width = Holder.toPx())) }
+                .background(palette.surface).drawBehind { drawRect(tone.dot, size = size.copy(width = Tokens.Space.xxs.toPx())) }
                 .border(Hairline, palette.line, shape).then(click).stableAlpha(if (muted) 0.75f else 1f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -494,7 +494,7 @@ private fun LabeledTitle(label: String?, modifier: Modifier, title: @Composable 
 /** The glyph in a board strip's holder, in the status's ink. */
 @Composable
 private fun HolderGlyph(status: Status) {
-    val ink = PersonaTheme.palette.status(status).onDot
+    val ink = PersonaTheme.palette.status(status).text
     when (status) {
         Status.Working, Status.Waiting -> if (PersonaTheme.reduceMotion) JIcon(PhIcons.Play, null, size = Caret, tint = ink, selected = true)
             else JSpinner(Modifier.size(Caret), color = ink, stroke = Tokens.Space.xxs)
@@ -516,7 +516,7 @@ private fun SourceTag(source: RowSource) {
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) Tokens.Space.xs else Tokens.Space.s - Tokens.Space.xxs)
     val tap = source.onClick?.let { Modifier.clickable(role = Role.Button, onClickLabel = source.clickLabel, onClick = it) } ?: Modifier
     Text(source.label, style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.Medium), color = colors.text, maxLines = 1,
-        modifier = Modifier.clip(shape).then(tap).background(colors.tint).padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.xxs / 2))
+        modifier = Modifier.clip(shape).then(tap).background(PersonaTheme.palette.statusSurface).padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.xxs / 2))
 }
 
 // ------------------------------------------------------------------ quick filters

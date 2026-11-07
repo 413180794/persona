@@ -52,8 +52,8 @@ enum class DecisionKind(@StringRes val labelRes: Int, val icon: PhIcon) {
 }
 
 /**
- * Something that needs the user, in a list (the Agents page). Glass shows a frosted card with an amber glow;
- * brief a wash card where Persona's advice is highlighted; the board a strip in an amber holder that expands in
+ * Something that needs the user, in a list (the Agents page). Glass shows a frosted card with a thin amber edge;
+ * brief an ink-on-neutral card; the board a neutral strip with a thin amber edge that expands in
  * place — collapsed it shows [summary] and [quickActions], tapping it opens the [body] and [actions].
  * [onOpen] opens the conversation (glass and brief: tapping the card; board: the "Open" action).
  */
@@ -111,11 +111,11 @@ fun DecisionCard(
             var open by rememberSaveable(title, label) { mutableStateOf(expandedByDefault) }
             val shape = RoundedCornerShape(10.dp)
             Row(
-                modifier.fillMaxWidth().clip(shape).background(palette.surface).holder(palette.needsYou.dot, 36.dp).border(1.dp, palette.line, shape)
+                modifier.fillMaxWidth().clip(shape).background(palette.surface).holder(palette.needsYou.dot, Tokens.Space.xxs).border(1.dp, palette.line, shape)
                     .clickable(role = Role.Button) { open = !open }.animateContentSize(PersonaTheme.motion.size()),
             ) {
                 Box(Modifier.width(36.dp).padding(top = 14.dp), contentAlignment = Alignment.TopCenter) {
-                    JIcon(PhIcons.Hand, null, size = 18.dp, tint = palette.needsYou.onDot, selected = true)
+                    JIcon(PhIcons.Hand, null, size = 18.dp, tint = palette.needsYou.text, selected = true)
                 }
                 Column(Modifier.weight(1f).padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
@@ -262,7 +262,7 @@ fun DecisionDock(
     }
 }
 
-/** Persona's suggestion: highlighted in brief, a tinted line in glass and on the board. */
+/** Persona's suggestion: ink on paper in Brief, a neutral well in Glass and Board. */
 @Composable
 fun DecisionAdvice(text: String, modifier: Modifier = Modifier) {
     val palette = PersonaTheme.palette
@@ -271,10 +271,10 @@ fun DecisionAdvice(text: String, modifier: Modifier = Modifier) {
         AppStyle.Brief -> Row(modifier, verticalAlignment = Alignment.Top) {
             JIcon(PhIcons.Sparkle, null, size = 16.dp, tint = palette.ink, selected = true, modifier = Modifier.padding(top = 3.dp))
             Spacer(Modifier.width(4.dp))
-            MarkerText(stringResource(R.string.designsystem_decision_advice, text), type.callout.copy(fontWeight = FontWeight.SemiBold))
+            Text(stringResource(R.string.designsystem_decision_advice, text), style = type.callout.copy(fontWeight = FontWeight.SemiBold), color = palette.ink)
         }
         else -> Row(
-            modifier.fillMaxWidth().clip(RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 6.dp else 16.dp)).background(palette.accentSoft)
+            modifier.fillMaxWidth().clip(RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 6.dp else 16.dp)).background(palette.statusSurface)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top,
         ) {
@@ -309,8 +309,8 @@ fun MarkerText(text: String, style: TextStyle, modifier: Modifier = Modifier) {
 }
 
 /**
- * One answer to choose. The [recommended] one stands out: the primary fill in glass, the highlighter in brief,
- * an accent outline on the board. A [multiSelect] option is read as a checkbox (ticked or not), otherwise as a
+ * One answer to choose. The [recommended] one stands out by its label, icon and outline,
+ * not a second solid action or a colored backing. A [multiSelect] option is read as a checkbox (ticked or not), otherwise as a
  * radio button; [position] ("current" of "total") is read after the label so a screen reader hears how many there are.
  */
 @Composable
@@ -336,9 +336,9 @@ fun DecisionOption(
             stringResource(R.string.designsystem_decision_option_position, current, total)).joinToString(separator)
     }
     val (fill, ink, border) = when (style) {
-        AppStyle.Glass -> Triple(if (recommended) palette.action else palette.surfaceStrong, if (recommended) palette.onAction else palette.ink, if (selected) palette.accent else palette.strokeBottom)
-        AppStyle.Brief -> Triple(if (recommended) palette.marker else palette.background, if (recommended) palette.onMarker else palette.ink, if (selected) palette.ink else Color.Transparent)
-        AppStyle.Board -> Triple(if (recommended) palette.accentSoft else palette.surface, palette.ink, if (recommended || selected) palette.accent else palette.line)
+        AppStyle.Glass -> Triple(palette.statusSurface, palette.ink, if (selected || recommended) palette.accent else palette.strokeBottom)
+        AppStyle.Brief -> Triple(palette.background, palette.ink, if (selected || recommended) palette.ink else Color.Transparent)
+        AppStyle.Board -> Triple(palette.surface, palette.ink, if (recommended || selected) palette.accent else palette.line)
     }
     Row(
         modifier.fillMaxWidth().heightIn(min = 52.dp).clip(shape).background(fill).border(if (selected) 2.dp else 1.dp, border, shape)
@@ -352,9 +352,9 @@ fun DecisionOption(
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = type.label, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = ink.copy(alpha = 0.72f), maxLines = 3, overflow = TextOverflow.Ellipsis) }
+            detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 3, overflow = TextOverflow.Ellipsis) }
         }
-        if (selected) { Spacer(Modifier.width(8.dp)); JIcon(PhIcons.CheckCircle, null, size = 20.dp, tint = if (style == AppStyle.Glass && recommended) palette.onAction else palette.accent, selected = true) }
+        if (selected) { Spacer(Modifier.width(8.dp)); JIcon(PhIcons.CheckCircle, null, size = 20.dp, tint = palette.accent, selected = true) }
         else if (recommended) {
             Spacer(Modifier.width(8.dp))
             JIcon(PhIcons.Sparkle, null, size = 14.dp, tint = if (style == AppStyle.Board) palette.accent else ink, selected = true)

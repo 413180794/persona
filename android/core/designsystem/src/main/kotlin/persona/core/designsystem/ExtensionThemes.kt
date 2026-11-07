@@ -17,7 +17,7 @@ object ExtensionThemeColors {
     private val roles = setOf("accent", "positive", "caution", "danger", "ai")
     private val hex = Regex("#[0-9a-fA-F]{6}")
     private const val TextFloor = 4.5
-    private const val AccentFloor = 3.0
+    private const val AccentFloor = 4.5
     private const val SoftAlpha = 0.12f
 
     private fun parse(value: String): Color? = if (value.matches(hex)) Color(0xFF000000L or value.drop(1).toLong(16)) else null

@@ -301,7 +301,7 @@ private fun CompareRow(line: CompareLine) {
             }
         }, palette.caution)
     }
-    Row(Modifier.fillMaxWidth().background(tone?.copy(alpha = .12f) ?: palette.background.copy(alpha = 0f))
+    Row(Modifier.fillMaxWidth().background(palette.sunken)
         .padding(horizontal = Tokens.Space.l, vertical = Tokens.Space.xxs), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         Text(mark, Modifier.width(Tokens.Space.m), style = PersonaTheme.type.code, color = tone ?: palette.ink3, maxLines = 1)
         Text(text, Modifier.weight(1f), style = PersonaTheme.type.body, color = if (line is CompareLine.Same) palette.ink2 else palette.ink)

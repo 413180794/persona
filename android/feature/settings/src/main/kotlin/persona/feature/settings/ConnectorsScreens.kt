@@ -23,7 +23,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.CancellationException
@@ -103,7 +102,7 @@ internal fun MailAccountsPage(
                             onClick = { actionAccount = a },
                             trailing = {
                                 if (testingId == a.id) {
-                                    JSpinner(stroke = 2.dp)
+                                    JSpinner(stroke = Tokens.Space.xxs)
                                 } else {
                                     JIconButton(PhIcons.DotsThreeVertical, stringResource(R.string.settings_src_more), onClick = { actionAccount = a })
                                 }
@@ -504,7 +503,7 @@ internal fun FeishuConnectorPage(
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
                             JStatusDot(statusDot)
-                            if (loading) JSpinner(stroke = 2.dp)
+                            if (loading) JSpinner(stroke = Tokens.Space.xxs)
                         }
                     },
                 )
@@ -669,7 +668,7 @@ internal fun HubConnectorPage(
                         trailing = {
                             Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
                                 JStatusDot(statusDot)
-                                if (loading) JSpinner(stroke = 2.dp)
+                                if (loading) JSpinner(stroke = Tokens.Space.xxs)
                             }
                         },
                     )

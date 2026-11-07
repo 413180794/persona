@@ -241,6 +241,11 @@ Overlay size comes from both WindowManager.LayoutParams and Compose content. Shr
 - **Unit tests read repository-root files** (`persona.repo.root`): `spec/fixtures`, `apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl`.
   Copying only `android/` causes several extra `FileNotFoundException`s that look like broken tests.
 
+## Software-emulator and color evidence (#6184)
+
+- A software renderer is not CPU virtualization. Without `/dev/kvm`, Emulator 37.2.13 with an API 35 x86_64 image, `-accel off` and SwiftShader reached adb but did not complete boot within a bounded six-minute attempt. Preserve its timeout as an environment result, not an app failure or successful emulator validation. Native Robolectric captures remain useful for synthetic Compose components/pages; they do not verify system bars, navigation, WebViews, glass refraction or device performance.
+- Neutral state wells use an opaque backing so nested tags/error details do not accumulate glass tint. Contrast checks include the conservative pulse/split bound of the Glass backdrop, not only its resting page color; success/code text uses role `text`, not the brighter dot color. Changing `onDot` cannot fix a glyph that still uses hard-coded white, and testing an old bubble tint cannot prove readability after the bubble starts using a neutral surface. Probe neutral backing pixels and inspect all three styles × light/dark; keep explicit differences between state words, state marks and destructive actions.
+
 ## Answering ended requests: 200 already, 410 status, and snapshot resurrection (2026-11-05, #2906)
 
 - `POST /api/v1/interactions/{id}/resolve` does not return one uniform error for ended cards. Answered cards return 200 `{already: true, resolution}` (the effective answer, possibly different from the newly submitted one); expired, recalled, or returned-to-computer cards return 410 with `status`. Checking only HTTP status makes the former look newly answered and labels all the latter "Handled on computer."

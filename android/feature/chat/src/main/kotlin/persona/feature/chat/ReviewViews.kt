@@ -51,9 +51,9 @@ private fun ReviewStage.label(round: Int): String = when (this) {
     ReviewStage.Cancelled -> stringResource(R.string.chat_review_cancelled)
 }
 
-private val ReviewStage.tone: Tone get() = when (this) {
+internal val ReviewStage.tone: Tone get() = when (this) {
     ReviewStage.Pending, ReviewStage.Rework -> Tone.Caution
-    ReviewStage.NeedsUser -> Tone.Danger
+    ReviewStage.NeedsUser -> Tone.Caution
     ReviewStage.Accepted -> Tone.Positive
     ReviewStage.Ongoing, ReviewStage.Cancelled -> Tone.Neutral
 }

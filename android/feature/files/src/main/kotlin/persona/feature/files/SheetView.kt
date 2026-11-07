@@ -173,7 +173,7 @@ private fun SheetRow(numberWidth: Dp, height: Dp, horizontal: ScrollState, label
     cells: @Composable RowScope.() -> Unit) {
     val palette = PersonaTheme.palette
     Row(Modifier.fillMaxWidth().background(if (header) palette.sunken else palette.background)) {
-        Box(Modifier.size(numberWidth, height).background(if (highlighted) palette.accentSoft else palette.sunken).gridLines(palette.line)
+        Box(Modifier.size(numberWidth, height).background(if (highlighted) palette.statusSurface else palette.sunken).gridLines(palette.line)
             .padding(horizontal = Tokens.Space.xs), contentAlignment = Alignment.CenterEnd) {
             Text(label, style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 1)
         }

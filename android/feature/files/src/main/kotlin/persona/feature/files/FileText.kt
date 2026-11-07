@@ -127,16 +127,15 @@ internal fun FileText(text: String, diff: Boolean = false, modifier: Modifier = 
             LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = contentPadding) {
                 header()
                 itemsIndexed(data.lines, key = { index, _ -> index }, contentType = { _, _ -> "line" }) { index, line ->
-                    val tone = when (line.kind) { FileLineKind.Add -> colors.diffAdd; FileLineKind.Delete -> colors.diffDel; else -> colors.sunken.copy(alpha = 0f) }
-                    // The line asked for: the accent's wash, as iOS `Theme.lineFocus`.
-                    val band = if (index == focus) colors.accent.copy(alpha = .18f)
-                        else tone.copy(alpha = if (line.kind != FileLineKind.Add && line.kind != FileLineKind.Delete) 0f else .12f)
+                    val tone = when (line.kind) { FileLineKind.Add -> colors.diffAdd; FileLineKind.Delete -> colors.diffDel; else -> muted }
+                    // The requested line is a stronger neutral well; diff signs carry additions and deletions.
+                    val band = if (index == focus) colors.statusSurface else colors.sunken
                     Row(Modifier.fillMaxWidth().background(band)) {
                         val marker = when (line.kind) { FileLineKind.Add -> "+"; FileLineKind.Delete -> "−"; else -> " " }
                         val number = if (diff) "${line.old?.toString().orEmpty().padStart(4)} ${line.new?.toString().orEmpty().padStart(4)} $marker"
                             else line.new?.toString().orEmpty()
                         Text(number, Modifier.width(gutter).padding(end = 8.dp), style = style,
-                            color = muted, textAlign = TextAlign.End, maxLines = 1, softWrap = false)
+                            color = if (diff) tone else muted, textAlign = TextAlign.End, maxLines = 1, softWrap = false)
                         Box(Modifier.weight(1f).horizontalScroll(horizontal)) {
                             Text(data.spans[index], Modifier.width(width).padding(end = 16.dp), style = style,
                                 color = if (line.kind == FileLineKind.Info) muted else normal, maxLines = 1, softWrap = false)

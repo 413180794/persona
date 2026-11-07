@@ -68,9 +68,9 @@ internal object QuotaText {
     /** Something wrong with a pool (cooling down, used up, unreadable); "no quota interface" is just how it is. */
     fun trouble(p: QuotaPool): Boolean = p.state != null && p.state !in setOf("available", "ok", "unsupported")
 
-    /** ≥ 70 % caution, ≥ 90 % or used up danger. */
+    /** Approaching the limit is caution; only an exhausted pool is a failure. */
     fun tone(ratio: Double, exhausted: Boolean): Tone = when {
-        exhausted || ratio >= 0.9 -> Tone.Danger
+        exhausted -> Tone.Danger
         ratio >= 0.7 -> Tone.Caution
         else -> Tone.Neutral
     }

@@ -11,7 +11,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
 import persona.core.contracts.Todo
@@ -43,8 +42,8 @@ fun TodoPickerSheet(
             Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = Tokens.Space.l, vertical = Tokens.Space.s),
+            verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)
         ) {
             if (uncompleted.isEmpty()) {
                 JEmptyState(stringResource(R.string.agents_picker_empty), stringResource(R.string.agents_picker_empty_hint))

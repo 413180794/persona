@@ -60,7 +60,8 @@ class LauncherQuotaTest {
     @Test fun tonesTitlesAndTrouble() {
         assertEquals(Tone.Neutral, QuotaText.tone(0.69, false))
         assertEquals(Tone.Caution, QuotaText.tone(0.7, false))
-        assertEquals(Tone.Danger, QuotaText.tone(0.9, false))
+        assertEquals(Tone.Caution, QuotaText.tone(0.9, false))
+        assertEquals(Tone.Caution, QuotaText.tone(1.0, false))
         assertEquals(Tone.Danger, QuotaText.tone(0.1, true))
         assertEquals(0, QuotaText.percent(-0.2))
         assertEquals(100, QuotaText.percent(1.4))

@@ -229,7 +229,7 @@ private fun ConnectorMessageRow(
         message.media.forEach { MediaPlaceholder(it) }
         message.text?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.body, color = palette.ink) }
     }
-    val highlight = if (lit) Modifier.background(palette.accentSoft) else Modifier
+    val highlight = if (lit) Modifier.background(palette.statusSurface) else Modifier
     Box(highlight.padding(horizontal = Tokens.Space.l)) {
         if (message.mine) UserBubbleFrame(footer = footer) { body() }
         else IncomingBubbleFrame(

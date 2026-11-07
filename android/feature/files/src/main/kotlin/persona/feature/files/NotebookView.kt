@@ -38,7 +38,7 @@ private sealed interface NotebookLoad {
 /**
  * A Jupyter notebook as its cells (docs/android.md "File viewer", iOS `NotebookFileView`): Markdown cells rendered,
  * code cells with their run count and colored source, then each output: text and streams in the mono face (stderr in
- * the danger color), pictures, HTML as its text, errors with the traceback. ⋯ shows the JSON source instead.
+ * neutral secondary ink), pictures, HTML as its text, errors with the traceback. ⋯ shows the JSON source instead.
  */
 @Composable
 internal fun NotebookFile(text: String, base: String, contentPadding: PaddingValues, header: LazyListScope.() -> Unit,
@@ -101,8 +101,8 @@ private fun NotebookCell(cell: Notebooks.Cell, language: String, base: String, o
 private fun NotebookOutput(output: Notebooks.Output, base: String, onOpenPath: (String) -> Unit, loadImage: suspend (String) -> ByteArray?) {
     val palette = PersonaTheme.palette
     when (output) {
-        is Notebooks.Output.Stream -> OutputText(AnnotatedString(output.text.removeSuffix("\n")), if (output.stderr) palette.danger.text else palette.ink,
-            if (output.stderr) palette.danger.tint else null)
+        is Notebooks.Output.Stream -> OutputText(AnnotatedString(output.text.removeSuffix("\n")), if (output.stderr) palette.ink2 else palette.ink,
+            palette.statusSurface)
         is Notebooks.Output.Text -> OutputText(AnnotatedString(output.text), palette.ink)
         is Notebooks.Output.Html -> OutputText(AnnotatedString(output.text), palette.ink)
         is Notebooks.Output.Markdown -> MarkdownText(output.text, base, onOpenPath, loadImage)
@@ -115,7 +115,7 @@ private fun NotebookOutput(output: Notebooks.Output, base: String, onOpenPath: (
                     if (output.traceback.isNotBlank()) append("\n" + output.traceback)
                 }
             }
-            OutputText(text, palette.ink, palette.danger.tint)
+            OutputText(text, palette.ink, palette.statusSurface)
         }
     }
 }

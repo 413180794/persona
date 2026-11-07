@@ -102,7 +102,7 @@ internal fun HubUpdateContent(
         }
     }
     if (confirmNow) JDialog(
-        onDismiss = { confirmNow = false }, title = stringResource(R.string.settings_hub_update_now_title), text = stringResource(R.string.settings_hub_update_now_warning), destructive = true,
+        onDismiss = { confirmNow = false }, title = stringResource(R.string.settings_hub_update_now_title), text = stringResource(R.string.settings_hub_update_now_warning),
         confirm = stringResource(R.string.settings_hub_update_now) to { confirmNow = false; model?.let { m -> scope.launch { m.update(now = true) } }; Unit },
     )
 }
@@ -154,7 +154,7 @@ private fun LazyListScope.update(s: HubUpdateStatus, state: HubUpdateState, reso
                     JRow {
                         JIcon(PhIcons.CheckCircle, null, tint = PersonaTheme.palette.positive, decorative = true)
                         Spacer(Modifier.width(Tokens.Space.m))
-                        Text(stringResource(R.string.settings_hub_update_state_current), style = PersonaTheme.type.body, color = PersonaTheme.palette.positive, maxLines = 1)
+                        Text(stringResource(R.string.settings_hub_update_state_current), style = PersonaTheme.type.body, color = PersonaTheme.palette.tone(Tone.Positive).text, maxLines = 1)
                     }
                 }
             }
@@ -188,7 +188,7 @@ private fun Progress(s: HubUpdateStatus, onNow: () -> Unit) {
     Column {
         rows.forEachIndexed { index, row -> JGroupItem(GroupPosition.of(index, rows.size)) { row() } }
     }
-    if (waiting) JButton(stringResource(R.string.settings_hub_update_now_more), onNow, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive)
+    if (waiting) JButton(stringResource(R.string.settings_hub_update_now_more), onNow, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
 }
 
 /** A Docker hub updates by a new image: what to run where, each command with a copy button. */
@@ -241,7 +241,7 @@ private fun LazyListScope.history(records: List<HubUpdateRecord>) {
 private fun RecordRow(r: HubUpdateRecord) {
     val palette = PersonaTheme.palette
     val resources = LocalResources.current
-    val tone: Color = when (r.result) { "updated" -> palette.positive; "rolled_back", "held" -> palette.cautionText; else -> palette.danger.text }
+    val tone: Color = when (r.result) { "updated" -> palette.tone(Tone.Positive).text; "rolled_back", "held" -> palette.cautionText; else -> palette.danger.text }
     JRow {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {

@@ -65,7 +65,7 @@ fun Modifier.selectedRow(selected: Boolean): Modifier = if (!selected) this else
     val palette = PersonaTheme.palette
     val brief = PersonaTheme.style == AppStyle.Brief
     val edge = if (brief) palette.ink else palette.accent
-    val plate = edge.copy(alpha = if (palette.dark) 0.16f else 0.09f)
+    val plate = palette.statusSurface
     val outset = if (brief) 12.dp else 0.dp
     semantics { this.selected = true }.drawWithContent {
         drawContent()

@@ -106,7 +106,7 @@ private fun PullButton(behind: Int, state: FilesState, controller: FilesControll
 @Composable
 private fun PullResult(message: String, failed: Boolean) {
     val palette = PersonaTheme.palette
-    val tint = if (failed) palette.danger.text else palette.positive
+    val tint = if (failed) palette.danger.text else palette.tone(Tone.Positive).text
     Row(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.s).semantics { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         JIcon(if (failed) PhIcons.WarningCircle else PhIcons.CheckCircle, null, size = Tokens.Space.l, tint = tint)

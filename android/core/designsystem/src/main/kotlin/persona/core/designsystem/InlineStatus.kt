@@ -17,7 +17,7 @@ enum class InlineTone { Busy, Caution, Failed, Done }
 
 /**
  * A short status set inside a card or above the composer, up to three lines: a spinner while [tone] is busy, a mark
- * otherwise, on a soft tint (the chat's "Starting", a machine's "Redeploy" line). [action] sits at the end, for one small
+ * otherwise, on a neutral surface (the chat's "Starting", a machine's "Redeploy" line). [action] sits at the end, for one small
  * button that acts on it.
  */
 @Composable
@@ -29,10 +29,10 @@ fun JInlineStatus(
 ) {
     val palette = PersonaTheme.palette
     val (fill, ink) = when (tone) {
-        InlineTone.Busy -> palette.surfaceStrong to palette.ink2
-        InlineTone.Caution -> palette.needsYou.tint to palette.cautionText
-        InlineTone.Failed -> palette.danger.tint to palette.danger.text
-        InlineTone.Done -> palette.done.tint to palette.done.text
+        InlineTone.Busy -> palette.statusSurface to palette.ink2
+        InlineTone.Caution -> palette.statusSurface to palette.cautionText
+        InlineTone.Failed -> palette.statusSurface to palette.danger.text
+        InlineTone.Done -> palette.statusSurface to palette.done.text
     }
     Row(
         modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.clip(PersonaTheme.shapes.controlShape).background(fill)

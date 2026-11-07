@@ -421,7 +421,7 @@ private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
     val stopped = !failed && todo != null && todo.doneAt == null
     val tone = if (failed) PersonaTheme.palette.danger else if (stopped) PersonaTheme.palette.idle else PersonaTheme.palette.done
     val summary = todo?.startError?.takeIf { failed && it.isNotBlank() }?.let { stringResource(R.string.chat_tasks_now_failed, it.trim()) } ?: item.field("summary")
-    Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(tone.tint).padding(Tokens.Space.l),
+    Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(PersonaTheme.palette.statusSurface).padding(Tokens.Space.l),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         JIcon(if (failed) PhIcons.WarningCircle else if (stopped) PhIcons.Clock else PhIcons.CheckCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
@@ -479,7 +479,7 @@ private fun InterruptedReceipt(item: FeedItem, host: AssistantTaskHost, todos: L
     val cut = todo?.let { Interruption.of(host.tasks.lead(it, host.sessions)) }
     val reason = cut?.reason ?: ApiErrorInfo.parse(item.field("error") ?: item.field("summary"))?.reason
     val tone = PersonaTheme.palette.danger
-    Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(tone.tint).padding(Tokens.Space.l),
+    Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(PersonaTheme.palette.statusSurface).padding(Tokens.Space.l),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         JIcon(PhIcons.WarningCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
@@ -607,7 +607,7 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
             }
             // A filed card is no longer a draft to send (#5095): plain well, a read-only text and a title saying so.
             Column(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
-                .background(when { done -> PersonaTheme.palette.done.tint; filed -> PersonaTheme.palette.sunken; else -> PersonaTheme.palette.accentSoft })
+                .background(if (filed) PersonaTheme.palette.sunken else PersonaTheme.palette.statusSurface)
                 .padding(Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
                 Text(stringResource(when { done -> R.string.chat_tasks_message_replied; filed -> R.string.chat_tasks_message_filed_title
                     else -> R.string.chat_tasks_message_drafted }), style = PersonaTheme.type.caption,

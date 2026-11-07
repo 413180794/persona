@@ -11,6 +11,7 @@ Current docs, code comments and lessons cite them to explain "why it is done thi
 
 | File | Contents |
 | --- | --- |
+| `android-visual-noise-6184/` | Synthetic native-rendered Android before/after decision and outcome screenshots, all three styles × light/dark; no completed emulator boot or device/refraction verification (#6184) |
 | `web-visual-noise-6183.md` | 2026-11-07 web approval/status color inventory, neutral semantic surfaces, before/after browser screenshot method, local verification and no-deployment boundary (#6183) |
 | `persona-only-277-acceptance.md` | Persona-only source naming, versioned local verification, row-lock comparison, preserved application identities and approval-gated cutover limits (#277) |
 | `persona-native-6152-acceptance.md` | 2026-11-07 Apple 原生改名验收：全平台编译、单测数量、离线签名、递增构建号升级、phone/watch 配对与未迁移的偏好和 Shortcut（#6152） |

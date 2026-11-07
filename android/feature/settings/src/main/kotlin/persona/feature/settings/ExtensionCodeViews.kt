@@ -63,7 +63,7 @@ internal fun tokenColor(kind: TokenKind): Color {
     val palette = PersonaTheme.palette
     return when (kind) {
         TokenKind.Keyword -> palette.accent
-        TokenKind.Text -> palette.positive
+        TokenKind.Text -> palette.tone(Tone.Positive).text
         TokenKind.Comment -> palette.ink3
         TokenKind.Number, TokenKind.Type -> palette.cautionText
         TokenKind.Plain -> palette.ink
@@ -163,7 +163,7 @@ internal fun CodeFileTree(item: ExtensionViewItem, state: ExtensionViewState, ha
                     val e = n.entry!!
                     val on = n.path == item.selected
                     val mark = ExtensionCodeText.status(e.status)
-                    Row(Modifier.fillMaxWidth().then(if (on) Modifier.background(palette.accentSoft) else Modifier).clickable(enabled = !state.busy) {
+                    Row(Modifier.fillMaxWidth().then(if (on) Modifier.background(palette.statusSurface) else Modifier).clickable(enabled = !state.busy) {
                         item.action?.takeIf { it.id.isNotEmpty() }?.let { handle.act(it, mapOf("path" to n.path)) } ?: handle.reveal(n.path)
                         onPicked()
                     }.padding(start = indent + Tokens.Space.m + Tokens.Space.s, end = rowPadding, top = Tokens.Space.s, bottom = Tokens.Space.s),
@@ -229,7 +229,7 @@ internal fun CodeFile(item: ExtensionViewItem, state: ExtensionViewState, handle
                 for (i in 0 until shown) {
                     val n = start + i
                     val on = hl != null && n in hl.start..hl.end
-                    Text("$n", Modifier.then(if (on) Modifier.background(palette.accentSoft) else Modifier).widthIn(min = Tokens.Space.xxxl + Tokens.Space.s).padding(horizontal = Tokens.Space.s),
+                    Text("$n", Modifier.then(if (on) Modifier.background(palette.statusSurface) else Modifier).widthIn(min = Tokens.Space.xxxl + Tokens.Space.s).padding(horizontal = Tokens.Space.s),
                         style = type.codeSmall, color = palette.ink3, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
                 }
             }
@@ -237,7 +237,7 @@ internal fun CodeFile(item: ExtensionViewItem, state: ExtensionViewState, handle
                 for (i in 0 until shown) {
                     val n = start + i
                     val on = hl != null && n in hl.start..hl.end
-                    Text(highlighted(tokens.getOrNull(i), lines[i]), Modifier.fillMaxWidth().then(if (on) Modifier.background(palette.accentSoft) else Modifier).padding(end = Tokens.Space.l),
+                    Text(highlighted(tokens.getOrNull(i), lines[i]), Modifier.fillMaxWidth().then(if (on) Modifier.background(palette.statusSurface) else Modifier).padding(end = Tokens.Space.l),
                         style = type.codeSmall, maxLines = 1, softWrap = false)
                 }
             } }
@@ -341,9 +341,8 @@ internal fun CodeComposer(item: ExtensionViewItem, state: ExtensionViewState, ha
             singleLine = false, enabled = !state.busy)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s, Alignment.End)) {
             item.buttons.orEmpty().filter { it.action.id.isNotEmpty() }.forEachIndexed { i, b ->
-                val tone = ExtensionViewText.tone(b.tone)
                 JButton(b.title, { handle.act(b.action, mapOf(name to value)) }, size = JButtonSize.Small,
-                    kind = when { tone == Tone.Danger -> JButtonKind.Destructive; i == 0 || tone == Tone.Positive -> JButtonKind.Primary; else -> JButtonKind.Secondary },
+                    kind = if (i == 0) JButtonKind.Primary else JButtonKind.Secondary,
                     loading = state.acting == b.action.id, enabled = !state.busy)
             }
         }

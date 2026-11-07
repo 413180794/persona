@@ -119,7 +119,7 @@ fun MessageItem(
             val shape = RoundedCornerShape(10.dp)
             Column(
                 modifier.fillMaxWidth().padding(bottom = if (position.last) 0.dp else 8.dp).clip(shape)
-                    .background(palette.surface).holder(status?.let { palette.status(it).dot } ?: palette.idle.dot, 6.dp)
+                    .background(palette.surface).holder(status?.let { palette.status(it).dot } ?: palette.idle.dot, Tokens.Space.xxs)
                     .border(1.dp, palette.line, shape).then(click).padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
                 content = body,
             )
@@ -151,7 +151,7 @@ fun DraftPreview(text: String, modifier: Modifier = Modifier, label: String = st
                     Text(text, style = type.callout, color = palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
             }
-            else -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 6.dp else 18.dp)).background(palette.accentSoft).padding(12.dp)) {
+            else -> Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 6.dp else 18.dp)).background(palette.statusSurface).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     JIcon(PhIcons.Sparkle, null, size = 14.dp, tint = palette.accent, selected = true)
                     Spacer(Modifier.width(6.dp))

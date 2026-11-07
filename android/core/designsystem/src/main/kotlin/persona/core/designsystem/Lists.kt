@@ -135,7 +135,7 @@ fun JGroupItem(
             )
             AppStyle.Board -> if (separate) Column(
                 Modifier.fillMaxWidth().clip(shape).background(palette.surface)
-                    .then(if (holder != null) Modifier.holder(palette.status(holder).dot, 6.dp).padding(start = 6.dp) else Modifier)
+                    .then(if (holder != null) Modifier.holder(palette.status(holder).dot, Tokens.Space.xxs).padding(start = 6.dp) else Modifier)
                     .border(1.dp, palette.line, shape),
                 content = content,
             ) else Column(
@@ -315,7 +315,7 @@ fun JCard(
         AppStyle.Brief -> Column(modifier.fillMaxWidth().clip(shape).background(palette.surface).then(click).padding(padding), content = content)
         AppStyle.Board -> Column(
             modifier.fillMaxWidth().clip(shape).background(palette.surface)
-                .then(if (status != null) Modifier.holder(palette.status(status).dot, 6.dp) else Modifier)
+                .then(if (status != null) Modifier.holder(palette.status(status).dot, Tokens.Space.xxs) else Modifier)
                 .border(1.dp, palette.line, shape).then(click)
                 .padding(start = if (status != null) 6.dp + padding else padding, end = padding, top = padding, bottom = padding),
             content = content,
@@ -472,7 +472,7 @@ fun JSwipeActions(
                 }
                 Box(Modifier.fillMaxSize(), contentAlignment = if (fromEnd) Alignment.CenterEnd else Alignment.CenterStart) {
                     Box(
-                        Modifier.fillMaxHeight().width(gap).clip(PersonaTheme.shapes.cardShape).background(tone.dot),
+                        Modifier.fillMaxHeight().width(gap).clip(PersonaTheme.shapes.cardShape).background(palette.statusSurface),
                         contentAlignment = if (fromEnd) Alignment.CenterEnd else Alignment.CenterStart,
                     ) {
                         // The words keep their size and show as the gap opens.
@@ -481,9 +481,9 @@ fun JSwipeActions(
                                 .padding(horizontal = 24.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            JIcon(action.icon, null, size = 22.dp, tint = tone.onDot, selected = true)
+                            JIcon(action.icon, null, size = 22.dp, tint = tone.text, selected = true)
                             Spacer(Modifier.width(8.dp))
-                            Text(action.label, style = PersonaTheme.type.label, color = tone.onDot, maxLines = 1)
+                            Text(action.label, style = PersonaTheme.type.label, color = tone.text, maxLines = 1)
                         }
                     }
                 }

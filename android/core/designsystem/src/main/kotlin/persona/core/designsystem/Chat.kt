@@ -106,12 +106,8 @@ fun ChatTopBar(
     }
 }
 
-private const val BubbleSecondary = 0.82f
-private const val BubbleTertiary = 0.66f
-private const val BubbleLine = 0.24f
-
-/** The user's message: a glass bubble, a wash bubble, or a bordered box. Right-aligned, at most 86% wide. [own]: typed by
- *  the user, filled with [PersonaPalette.userBubble]; otherwise (another session's, Feishu's) the style's own tint. */
+/** The user's message: a neutral glass bubble, wash bubble or bordered box. Right-aligned, at most 86% wide.
+ *  [own] uses a stronger neutral surface; forwarded messages keep the ordinary surface. */
 @Composable
 fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Unit)? = null, own: Boolean = true,
     content: @Composable ColumnScope.() -> Unit) {
@@ -126,21 +122,14 @@ fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Un
         Column(
             Modifier.fillMaxWidth(0.86f).wrapContentWidth(Alignment.End).clip(shape)
                 .then(when (style) {
-                    AppStyle.Glass -> Modifier.background(if (own) palette.userBubble else palette.working.dot.copy(alpha = if (palette.dark) 0.28f else 0.16f))
+                    AppStyle.Glass -> Modifier.background(if (own) palette.statusSurface else palette.surface)
                         .border(1.dp, Brush.verticalGradient(listOf(palette.strokeTop.copy(alpha = 0.6f), Color.Transparent)), shape)
-                    AppStyle.Brief -> Modifier.background(if (own) palette.userBubble else palette.surface)
-                    AppStyle.Board -> Modifier.background(if (own) palette.userBubble else palette.surface).border(1.dp, palette.line, shape)
+                    AppStyle.Brief -> Modifier.background(if (own) palette.statusSurface else palette.surface)
+                    AppStyle.Board -> Modifier.background(if (own) palette.statusSurface else palette.surface).border(1.dp, palette.line, shape)
                 })
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            // A deep bubble of its own (Coral orange…): everything written in it, links too, takes the bubble's words.
-            val words = palette.userBubbleText?.takeIf { own }
-            if (words == null) content()
-            else CompositionLocalProvider(
-                LocalPalette provides palette.copy(ink = words, ink2 = words.copy(alpha = BubbleSecondary), ink3 = words.copy(alpha = BubbleTertiary),
-                    accent = words, line = words.copy(alpha = BubbleLine)),
-                LocalContentColor provides words,
-            ) { content() }
+            content()
         }
         footer?.let { Spacer(Modifier.height(4.dp)); it() }
     }

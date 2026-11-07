@@ -19,7 +19,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -49,7 +48,7 @@ fun LarkMergeForwardCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)
         ) {
-            JIcon(PhIcons.ChatsCircle, modifier = Modifier.size(20.dp), tint = palette.accent)
+            JIcon(PhIcons.ChatsCircle, modifier = Modifier.size(Tokens.Space.xl), tint = palette.accent)
             Text(
                 part.title.ifBlank { stringResource(R.string.inbox_lark_forward) },
                 style = PersonaTheme.type.callout,
@@ -191,22 +190,22 @@ fun LarkVoiceView(
         // Play / Pause button
         Box(
             Modifier
-                .size(32.dp)
+                .size(Tokens.Space.xxxl)
                 .clip(CircleShape)
                 .background(palette.accent),
             contentAlignment = Alignment.Center
         ) {
             JIcon(
                 if (isPlaying) PhIcons.Pause else PhIcons.Play,
-                modifier = Modifier.size(16.dp),
-                tint = Color.White
+                modifier = Modifier.size(Tokens.Space.l),
+                tint = palette.onAccent
             )
         }
 
         // Waveform bars
         Row(
-            Modifier.width(100.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            Modifier.width(ContentTokens.mediaWaveWidth),
+            horizontalArrangement = Arrangement.spacedBy(ContentTokens.mediaWaveGap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val barHeights = listOf(8, 14, 18, 12, 22, 16, 20, 10, 16, 22, 14, 8)
@@ -215,7 +214,7 @@ fun LarkVoiceView(
                 val active = isPlaying && playbackProgress >= progressFrac
                 Box(
                     Modifier
-                        .width(3.dp)
+                        .width(ContentTokens.mediaWaveBarWidth)
                         .height(height.dp)
                         .clip(RoundedCornerShape(Tokens.Radius.badge))
                         .background(if (active) palette.accent else palette.ink3.copy(alpha = 0.5f))
@@ -250,21 +249,21 @@ fun LarkVideoView(
     Box(
         modifier
             .fillMaxWidth()
-            .heightIn(min = 160.dp, max = 240.dp)
+            .heightIn(min = ContentTokens.mediaPreviewMinHeight, max = ContentTokens.mediaPreviewMaxHeight)
             .clip(shape)
-            .background(Color.Black.copy(alpha = 0.85f))
+            .background(palette.mediaScrim)
             .clickable(onClick = onPlay),
         contentAlignment = Alignment.Center
     ) {
         // Play icon in center
         Box(
             Modifier
-                .size(48.dp)
+                .size(Tokens.MinTouch.android)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.6f)),
+                .background(palette.mediaControlFill),
             contentAlignment = Alignment.Center
         ) {
-            JIcon(PhIcons.Play, modifier = Modifier.size(24.dp), tint = Color.White)
+            JIcon(PhIcons.Play, modifier = Modifier.size(Tokens.Space.xxl), tint = palette.onMediaBackdrop)
         }
 
         // Duration badge
@@ -274,10 +273,10 @@ fun LarkVideoView(
                     .align(Alignment.BottomEnd)
                     .padding(Tokens.Space.s)
                     .clip(RoundedCornerShape(Tokens.Radius.badge))
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(horizontal = Tokens.Space.xs, vertical = 2.dp)
+                    .background(palette.mediaLabelFill)
+                    .padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.xxs)
             ) {
-                Text(durationText, style = PersonaTheme.type.micro, color = Color.White)
+                Text(durationText, style = PersonaTheme.type.micro, color = palette.onMediaBackdrop)
             }
         }
     }
@@ -289,11 +288,12 @@ fun LarkVideoPlayerDialog(
     url: String,
     onDismiss: () -> Unit,
 ) {
+    val palette = PersonaTheme.palette
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize().background(palette.mediaBackdrop)) {
             AndroidView(
                 factory = { ctx ->
                     VideoView(ctx).apply {
@@ -332,7 +332,7 @@ fun LarkStickerView(
         model = part.model,
         contentDescription = part.description.ifBlank { stringResource(R.string.inbox_lark_sticker) },
         modifier = modifier
-            .sizeIn(maxWidth = 160.dp, maxHeight = 160.dp)
+            .sizeIn(maxWidth = ContentTokens.stickerMaxSize, maxHeight = ContentTokens.stickerMaxSize)
             .aspectRatio(ratio)
             .clip(shape)
     )

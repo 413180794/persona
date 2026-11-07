@@ -240,7 +240,7 @@ internal fun ProviderDetailPage(providers: ProviderSetup?, name: String, machine
                         if (l.hidden) JButton(stringResource(R.string.settings_providers_restore), { scope.launch { model.restore() } }, Modifier.fillMaxWidth(),
                             kind = JButtonKind.Secondary, enabled = !state.busy, loading = state.busy)
                         else JButton(stringResource(if (l.managed) R.string.settings_providers_delete else R.string.settings_providers_hide_long), { confirm = true },
-                            Modifier.fillMaxWidth(), kind = JButtonKind.Destructive, enabled = !state.busy, loading = state.busy)
+                            Modifier.fillMaxWidth(), kind = if (l.managed) JButtonKind.Destructive else JButtonKind.Secondary, enabled = !state.busy, loading = state.busy)
                     }
                 }
             }
@@ -249,7 +249,7 @@ internal fun ProviderDetailPage(providers: ProviderSetup?, name: String, machine
     val l = state.launcher
     if (confirm && l != null) JDialog(onDismiss = { confirm = false },
         title = stringResource(if (l.managed) R.string.settings_providers_delete_title else R.string.settings_providers_hide_title, l.name),
-        text = stringResource(if (l.managed) R.string.settings_providers_delete_text else R.string.settings_providers_hidden_note), destructive = true,
+        text = stringResource(if (l.managed) R.string.settings_providers_delete_text else R.string.settings_providers_hidden_note), destructive = l.managed,
         confirm = stringResource(if (l.managed) R.string.settings_providers_delete else R.string.settings_providers_hide) to { confirm = false; scope.launch { model.remove() }; Unit })
 }
 

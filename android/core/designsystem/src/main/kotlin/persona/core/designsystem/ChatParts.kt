@@ -141,8 +141,8 @@ data class ErrorTag(val text: String, val tone: ErrorTagTone = ErrorTagTone.Plai
 
 /**
  * A model API error in a conversation (iOS `APIErrorCard`): a warning mark and [reason], [tags] under it, a tap on the
- * header shows or hides [details] (ids, time, the raw text), [action] ("Retry") at the end. A red-tinted panel in glass and
- * brief, a strip with a red holder on the board.
+ * header shows or hides [details] (ids, time, the raw text), [action] ("Retry") at the end. A neutral panel with an error icon/edge in Glass and
+ * Brief, a neutral strip with a thin red edge on Board.
  */
 @Composable
 fun ErrorCard(
@@ -158,9 +158,9 @@ fun ErrorCard(
     val style = PersonaTheme.style
     val shape = PersonaTheme.shapes.cardShape
     val frame = when (style) {
-        AppStyle.Glass -> Modifier.clip(shape).background(palette.danger.tint).border(1.dp, palette.danger.dot.copy(alpha = 0.35f), shape)
-        AppStyle.Brief -> Modifier.clip(shape).background(palette.danger.tint)
-        AppStyle.Board -> Modifier.clip(shape).background(palette.surface).holder(palette.danger.dot, 6.dp).border(1.dp, palette.line, shape)
+        AppStyle.Glass -> Modifier.clip(shape).background(palette.statusSurface).border(1.dp, palette.danger.dot.copy(alpha = 0.35f), shape)
+        AppStyle.Brief -> Modifier.clip(shape).background(palette.statusSurface)
+        AppStyle.Board -> Modifier.clip(shape).background(palette.surface).holder(palette.danger.dot, Tokens.Space.xxs).border(1.dp, palette.line, shape)
     }
     val inner = if (style == AppStyle.Board) PaddingValues(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
         else PaddingValues(horizontal = 16.dp, vertical = 14.dp)
@@ -190,8 +190,8 @@ private fun ErrorTagLabel(tag: ErrorTag) {
     val palette = PersonaTheme.palette
     val (ink, fill) = when (tag.tone) {
         ErrorTagTone.Plain -> palette.ink2 to palette.surfaceStrong
-        ErrorTagTone.Danger -> palette.danger.text to palette.danger.tint
-        ErrorTagTone.Caution -> palette.cautionText to palette.needsYou.tint
+        ErrorTagTone.Danger -> palette.danger.text to palette.statusSurface
+        ErrorTagTone.Caution -> palette.cautionText to palette.statusSurface
     }
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 6.dp)
     Text(
@@ -276,7 +276,7 @@ fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(PersonaTheme.shapes.chip)
     Row(
         modifier.heightIn(min = 32.dp).clip(shape)
-            .background(if (style == AppStyle.Board) palette.surface else palette.accentSoft)
+            .background(if (style == AppStyle.Board) palette.surface else palette.statusSurface)
             .then(if (style == AppStyle.Board) Modifier.border(1.dp, palette.line, shape) else Modifier)
             .clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -291,7 +291,7 @@ fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier
 /**
  * A one-line bar under a conversation's header for something the agent keeps working on (its goal, docs/agent-goal.md;
  * iOS `GoalBar`): an icon and [text] in [colors]' role colour, [trailing] (a status) at the end, a tap opens the detail.
- * Glass and Brief fill it with the colour's tint; Board draws its surface and a line, as its chips.
+ * Every style uses a neutral backing; the icon and trailing words carry its role color.
  */
 @Composable
 fun JActivityBar(
@@ -308,7 +308,7 @@ fun JActivityBar(
     val shape = PersonaTheme.shapes.chipShape
     Row(
         modifier.fillMaxWidth().heightIn(min = 36.dp).clip(shape)
-            .background(if (board) palette.surface else colors.tint)
+            .background(if (board) palette.surface else palette.statusSurface)
             .then(if (board) Modifier.border(1.dp, palette.line, shape) else Modifier)
             .clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
             .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s),

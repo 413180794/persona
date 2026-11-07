@@ -22,15 +22,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -63,8 +60,8 @@ fun LarkReactionChip(
     val label = LarkEmojiHelper.label(LocalResources.current, reaction.key)
     val shape = RoundedCornerShape(Tokens.Radius.badge)
 
-    val bg = if (isMine) palette.accent.copy(alpha = 0.15f) else palette.ink.copy(alpha = 0.05f)
-    val borderModifier = if (isMine) Modifier.border(1.dp, palette.accent.copy(alpha = 0.4f), shape) else Modifier
+    val bg = if (isMine) palette.statusSurface else palette.ink.copy(alpha = 0.05f)
+    val borderModifier = if (isMine) Modifier.border(ContentTokens.hairline, palette.accent.copy(alpha = 0.4f), shape) else Modifier
 
     Row(
         modifier
@@ -79,7 +76,7 @@ fun LarkReactionChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
     ) {
-        Text(symbol, fontSize = 14.sp)
+        Text(symbol, fontSize = ContentTokens.reactionEmoji)
         val text = when {
             reaction.users != null && reaction.users!!.isNotEmpty() && reaction.users!!.size <= 3 ->
                 reaction.users!!.joinToString(stringResource(R.string.inbox_lark_name_separator))
@@ -125,14 +122,14 @@ fun LarkReactionRow(
         // Button to open reaction picker
         Box(
             Modifier
-                .size(24.dp)
+                .size(Tokens.Space.xxl)
                 .clip(CircleShape)
                 .background(palette.ink.copy(alpha = 0.05f))
                 .clickable(onClick = onOpenPicker)
                 .semantics { contentDescription = reactLabel },
             contentAlignment = Alignment.Center
         ) {
-            JIcon(PhIcons.Plus, modifier = Modifier.size(12.dp), tint = palette.ink3)
+            JIcon(PhIcons.Plus, modifier = Modifier.size(Tokens.Space.m), tint = palette.ink3)
         }
     }
 }
@@ -155,12 +152,12 @@ fun LarkMessageActionMenu(
     val res = LocalResources.current
     val moreLabel = stringResource(R.string.inbox_lark_more_emoji)
     // The menu rows' icons, one size.
-    val menuIcon = Modifier.size(16.dp)
+    val menuIcon = Modifier.size(Tokens.Space.l)
 
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.background(palette.surfaceStrong).border(1.dp, palette.ink.copy(alpha = 0.08f), RoundedCornerShape(Tokens.Radius.card))
+        modifier = Modifier.background(palette.surfaceStrong).border(ContentTokens.hairline, palette.ink.copy(alpha = 0.08f), RoundedCornerShape(Tokens.Radius.card))
     ) {
         // Quick reaction bar
         if (onReact != null && onOpenPicker != null) Row(
@@ -171,7 +168,7 @@ fun LarkMessageActionMenu(
             for (key in DEFAULT_QUICK_REACTIONS) {
                 Box(
                     Modifier
-                        .size(32.dp)
+                        .size(Tokens.Space.xxxl)
                         .clip(CircleShape)
                         .clickable {
                             onDismiss()
@@ -180,12 +177,12 @@ fun LarkMessageActionMenu(
                         .semantics { contentDescription = LarkEmojiHelper.label(res, key) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(LarkEmojiHelper.symbol(key), fontSize = 18.sp)
+                    Text(LarkEmojiHelper.symbol(key), fontSize = ContentTokens.quickReactionEmoji)
                 }
             }
             Box(
                 Modifier
-                    .size(32.dp)
+                    .size(Tokens.Space.xxxl)
                     .clip(CircleShape)
                     .clickable {
                         onDismiss()
@@ -194,7 +191,7 @@ fun LarkMessageActionMenu(
                     .semantics { contentDescription = moreLabel },
                 contentAlignment = Alignment.Center
             ) {
-                JIcon(PhIcons.Plus, modifier = Modifier.size(16.dp), tint = palette.accent)
+                JIcon(PhIcons.Plus, modifier = Modifier.size(Tokens.Space.l), tint = palette.accent)
             }
         }
 
@@ -271,7 +268,7 @@ fun LarkReactionPicker(
     ) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = ContentTokens.reactionPickerMaxHeight),
             contentPadding = PaddingValues(Tokens.Space.m),
             verticalArrangement = Arrangement.spacedBy(Tokens.Space.s),
             horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
@@ -282,14 +279,14 @@ fun LarkReactionPicker(
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .height(ContentTokens.fieldHeight)
                         .clip(RoundedCornerShape(Tokens.Radius.control))
-                        .background(if (selected) palette.accent.copy(alpha = 0.15f) else Color.Transparent)
+                        .background(if (selected) palette.statusSurface else palette.surface.copy(alpha = 0f))
                         .clickable { onPick(key); onDismiss() }
                         .semantics { contentDescription = LarkEmojiHelper.label(res, key) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(LarkEmojiHelper.symbol(key), fontSize = 22.sp)
+                    Text(LarkEmojiHelper.symbol(key), fontSize = ContentTokens.pickerReactionEmoji)
                 }
             }
 
@@ -307,14 +304,14 @@ fun LarkReactionPicker(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .height(ContentTokens.fieldHeight)
                             .clip(RoundedCornerShape(Tokens.Radius.control))
-                            .background(if (selected) palette.accent.copy(alpha = 0.15f) else Color.Transparent)
+                            .background(if (selected) palette.statusSurface else palette.surface.copy(alpha = 0f))
                             .clickable { onPick(key); onDismiss() }
                             .semantics { contentDescription = LarkEmojiHelper.label(res, key) },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(LarkEmojiHelper.symbol(key), fontSize = 22.sp)
+                        Text(LarkEmojiHelper.symbol(key), fontSize = ContentTokens.pickerReactionEmoji)
                     }
                 }
             }
