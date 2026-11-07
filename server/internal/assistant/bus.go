@@ -43,8 +43,9 @@ type BusOptions struct {
 	Devices Devices
 	// Extensions is the manager's extensions, connectors and bots (extensions.go); nil: none here (tests).
 	Extensions Extensions
-	// StopWhenRevoked: Run returns bus.ErrRevoked once the hub refuses the token (bus.Client.StopWhenRevoked).
-	StopWhenRevoked bool
+	// StopWhenRevoked: Run returns bus.ErrRevoked once the hub refuses the token (bus.Client.StopWhenRevoked);
+	// StopWhenRejected: any refusal counts (bus.Client.StopWhenRejected).
+	StopWhenRevoked, StopWhenRejected bool
 	// Outbox keeps the pushes and the apps' live updates made while the hub is away, for when it is back
 	// (outbox.go); nil: they are lost then (tests).
 	Outbox OutboxStore
@@ -112,8 +113,8 @@ func NewBusHub(o BusOptions) *BusHub {
 		// The manager's extensions stop waiting for a card when their caller does (extmgr's interactions.wait).
 		Cancels: map[string]bool{assistantwire.MethodApp: true},
 		Hub:     o.Hub, Token: o.Token, HTTPClient: o.HTTPClient, Logf: o.Logf, Backoff: o.Backoff,
-		StopWhenRevoked: o.StopWhenRevoked,
-		HelloMethod:     assistantwire.MethodHello,
+		StopWhenRevoked: o.StopWhenRevoked, StopWhenRejected: o.StopWhenRejected,
+		HelloMethod: assistantwire.MethodHello,
 		HelloParams: func() any {
 			return map[string]any{"id": id, "host": host, "os": runtime.GOOS, "arch": runtime.GOARCH,
 				"deploy": o.Deploy, "version": o.Version, "capabilities": []string{assistantwire.CapabilityConfigOwn, assistantwire.CapabilityAgentSessionArchives,

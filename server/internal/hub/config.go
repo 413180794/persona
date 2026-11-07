@@ -102,12 +102,35 @@ type AssistantProfile struct {
 	// External: the assistant's process (personad assistant) runs elsewhere and connects with a token of its own
 	// (personad hub assistant-token); the hub does not start one (assistant_process.go).
 	External bool `json:"external,omitempty"`
+	// Mode is how the built-in manager runs on this machine: "child" (or "", the default) the hub starts it beside
+	// itself; "service" it is a service of its own (persona-manager assistant), bound to this hub once with a
+	// one-time code (`persona-hub manager-code`, `persona-manager join --builtin`): the hub neither starts it nor gives
+	// it a new token (docs/assistant/managers.md "The built-in manager as its own service").
+	Mode string `json:"mode,omitempty"`
 	// PersonaView: the assistant is taught ```persona-view (a View of the extensions' components, #1850) instead of
 	// ```persona-card. Off until every app the user has draws it (UI version 3); a persona-card draws on all of them.
 	PersonaView bool `json:"persona_view,omitempty"`
 	// HTMLViews: cards' html components may run (sandboxed, where a client passed its security checks) and call the
 	// persona.reply / persona.open bridge. Only with PersonaView; nil (absent) is on, false turns them into fallback.
 	HTMLViews *bool `json:"html_views,omitempty"`
+}
+
+// Built-in manager modes (AssistantProfile.Mode).
+const (
+	AssistantModeChild   = "child"
+	AssistantModeService = "service"
+)
+
+// StartsBuiltin: the hub starts the built-in manager itself (and hands it a new token at every start), neither
+// external nor a service of its own. A mode it does not know (one a later version added) starts none: never two.
+func (p AssistantProfile) StartsBuiltin() bool {
+	return !p.External && (p.Mode == "" || p.Mode == AssistantModeChild)
+}
+
+// ServiceBound: the built-in manager is a service of its own bound with a one-time code (assistant.mode service,
+// not external): the only mode its code is made and traded in.
+func (p AssistantProfile) ServiceBound() bool {
+	return !p.External && p.Mode == AssistantModeService
 }
 
 // HTMLViewsOn is assistant.html_views with its default (on); it means nothing while PersonaView is off.

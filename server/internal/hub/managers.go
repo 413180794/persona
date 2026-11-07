@@ -150,6 +150,9 @@ func (h *Hub) managerList(ctx context.Context) ([]managerInfo, error) {
 		return nil, err
 	}
 	for _, c := range pending {
+		if c.ManagerID == assistantwire.AssistantID { // the built-in manager's binding code: it is in the roster already
+			continue
+		}
 		until := c.ExpiresAt
 		out = append(out, managerInfo{ID: c.ManagerID, Name: c.Name, Installing: &until})
 	}
@@ -229,6 +232,45 @@ func (h *Hub) redeemInstallCode(ctx context.Context, code string) (id, name, tok
 }
 
 var errInstallCode = errors.New("this install code is unknown, expired or used already")
+
+var (
+	errBuiltinNotService = errors.New("the built-in manager is not a service of its own on this hub: set assistant.mode " +
+		"to service (persona-hub manager-mode service) and switch the hub over (persona-hub switch) first")
+	errBuiltinRemote   = errors.New("the built-in manager's code is traded only from this hub's machine or its local network")
+	errBuiltinKind     = errors.New("this is the built-in manager's code: trade it with persona-manager join --builtin")
+	errNotBuiltinKind  = errors.New("this is not the built-in manager's code (persona-hub manager-code prints one)")
+	errJoinUnavailable = errors.New("the hub cannot trade install codes right now: try again")
+)
+
+// builtinJoinRefused says why code may not be traded by r's join now, without spending it (status 0: no reason
+// here, the redemption judges). A code is traded only by the join of its kind (builtin: persona-manager join
+// --builtin, 409 either way); the built-in manager's only while it is a service of its own here (409), and only from
+// this hub's machine or its local network (403). A code the store cannot look up is refused (503): the checks must
+// not be skipped.
+func (h *Hub) builtinJoinRefused(r *http.Request, code string, builtin bool) (status int, errCode string, err error) {
+	s := h.managerStore()
+	if s == nil || !installCodeShape.MatchString(code) {
+		return 0, "", nil
+	}
+	c, err := s.ManagerInstallCodeByHash(r.Context(), hashToken(code))
+	if err != nil {
+		return http.StatusServiceUnavailable, "", err
+	}
+	isBuiltin := c != nil && c.ManagerID == assistantwire.AssistantID
+	switch {
+	case c == nil: // unknown, expired or used: the redemption says so (and counts it)
+		return 0, "", nil
+	case isBuiltin && !builtin:
+		return http.StatusConflict, "builtin_code", errBuiltinKind
+	case !isBuiltin && builtin:
+		return http.StatusConflict, "not_builtin_code", errNotBuiltinKind
+	case isBuiltin && !h.cfg.Assistant.ServiceBound():
+		return http.StatusConflict, "builtin_not_service", errBuiltinNotService
+	case isBuiltin && h.sourceOf(r) == sourcePublic:
+		return http.StatusForbidden, "builtin_local_only", errBuiltinRemote
+	}
+	return 0, "", nil
+}
 
 // refusePlaintext answers a request from the internet over plaintext that carries install code code (the join,
 // /i/<code>): 403 tls_required, and the code voided (voidPlaintextCode). A source past its limit gets 429
@@ -612,9 +654,24 @@ func (h *Hub) managerJoinRoutes(mux *http.ServeMux) {
 		}
 		var req struct {
 			Code string `json:"code"`
+			// Builtin: the joiner binds the built-in manager's own service (persona-manager join --builtin). A code
+			// is traded only by the join of its kind: the built-in manager's by that one, every other by the others.
+			Builtin bool `json:"builtin,omitempty"`
 		}
 		if err := decodeJSONBody(w, r, &req, 1<<10); err != nil {
 			writeBodyErr(w, err, err)
+			return
+		}
+		// The built-in manager's code (`persona-hub manager-code`) binds a service on this hub's machine: traded only
+		// from a loopback or private address, and only while the hub no longer starts the built-in manager itself (its
+		// child would go on next to the service). Refused before the code is spent.
+		if status, code, err := h.builtinJoinRefused(r, strings.TrimSpace(req.Code), req.Builtin); status != 0 {
+			if code == "" { // the store did not answer: said in the log, not to a caller without a credential
+				h.logf("managers: could not look an install code up: %v", err)
+				writeErr(w, status, errJoinUnavailable)
+			} else {
+				writeErrCode(w, status, code, err)
+			}
 			return
 		}
 		id, name, tok, err := h.redeemInstallCode(r.Context(), strings.TrimSpace(req.Code))
@@ -623,8 +680,9 @@ func (h *Hub) managerJoinRoutes(mux *http.ServeMux) {
 			writeErrCode(w, http.StatusUnauthorized, "bad_install_code", err)
 			return
 		}
-		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+		if err != nil { // the store's error (it may name the database, its user, its address): the log's, not the caller's
+			h.logf("managers: could not trade an install code: %v", err)
+			writeErr(w, http.StatusServiceUnavailable, errJoinUnavailable)
 			return
 		}
 		writeJSON(w, map[string]any{"id": id, "name": name, "token": tok, "hub_id": h.hubID()})

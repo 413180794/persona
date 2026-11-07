@@ -46,6 +46,9 @@ const usage = `usage:
   persona-hub peer add|list|remove|center …    linked hubs (docs/server/mesh.md)
   persona-hub doctor        check the hub's configuration, network and certificates (read only)
   persona-hub admin …       the admin UI on this machine (docs/operations/admin.md)
+  persona-hub manager-mode [child|service]
+                           the built-in manager: started by the hub (child) or a service of its own (service)
+  persona-hub manager-code  a one-time code that binds the built-in manager's own service (service mode)
   persona-hub assistant-token
                            print a new bus token for an assistant run elsewhere (hub.json assistant.external)
   persona-hub version [-v]  the version; -v adds the channel and build number`

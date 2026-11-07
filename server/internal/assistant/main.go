@@ -38,7 +38,8 @@ import (
 
 // Main is `personad assistant`: the assistant as its own process, on the hub's bus. The hub starts one beside itself
 // (hub/assistant_process.go) and hands it its token on stdin; one run elsewhere (hub.json assistant.external) gets it
-// from PERSONA_ASSISTANT_TOKEN (`personad hub assistant-token` makes one). It keeps its state in the hub's Postgres,
+// from PERSONA_ASSISTANT_TOKEN (`personad hub assistant-token` makes one); one that is a service of its own on the
+// hub's machine (DeployService, hub.json assistant.mode service) has it in its manager.json (managerconf.Binding). It keeps its state in the hub's Postgres,
 // found as the hub finds it: hub.json's database_url, PERSONA_DATABASE_URL over it.
 func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	errs := newErrorTee(build) // its log's error lines become error reports (docs/extensions/extensions.md "Error reports")
@@ -50,36 +51,56 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	if cfg.DatabaseURL == "" {
 		return errors.New("no database_url in hub.json (or PERSONA_DATABASE_URL)")
 	}
-	token := strings.TrimSpace(identity.Getenv("PERSONA_ASSISTANT_TOKEN"))
-	if token == "" && stdin != nil {
-		r := bufio.NewReader(stdin)
-		line, _ := r.ReadString('\n')
-		token = strings.TrimSpace(line)
-		// Handed the token on stdin (by the hub that started it): it stops when stdin closes, the hub gone.
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithCancel(ctx)
-		defer cancel()
-		go func() {
-			_, _ = io.Copy(io.Discard, r)
-			logger.Printf("stdin closed (the hub that started it is gone): stopping")
-			cancel()
-		}()
-	}
-	if token == "" {
-		return errors.New("no bus token: set PERSONA_ASSISTANT_TOKEN (personad hub assistant-token prints one)")
-	}
-	hub := strings.TrimSpace(identity.Getenv("PERSONA_ASSISTANT_HUB"))
-	if hub == "" {
-		hub = localHubURL(cfg.Listen)
-	}
 	deploy := identity.Getenv("PERSONA_ASSISTANT_DEPLOY")
 	if deploy == "" {
 		deploy = "external"
 	}
+	var token, hub, fingerprint string
+	if deploy == DeployService {
+		// A service of its own on the hub's machine (hub.json assistant.mode service): bound once with a one-time
+		// code (`persona-manager join --builtin`), its hub, token and fingerprint in its manager.json; no stdin.
+		b, err := managerconf.ReadBinding(identity.HomeDir())
+		if err != nil {
+			return err
+		}
+		token, hub, fingerprint = b.Token, b.Hub, b.Fingerprint
+		// The hub takes the token before anything else of it happens (its configuration and files moved, its own
+		// database made or its data moved, its computers and extensions run): any refusal is a revoke.
+		var client *http.Client
+		if fingerprint != "" {
+			client = pinnedHTTPClient(fingerprint)
+		}
+		if err := tokenTaken(ctx, hub, token, client, logger.Printf); err != nil {
+			return err
+		}
+	} else {
+		token = strings.TrimSpace(identity.Getenv("PERSONA_ASSISTANT_TOKEN"))
+		if token == "" && stdin != nil {
+			r := bufio.NewReader(stdin)
+			line, _ := r.ReadString('\n')
+			token = strings.TrimSpace(line)
+			// Handed the token on stdin (by the hub that started it): it stops when stdin closes, the hub gone.
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithCancel(ctx)
+			defer cancel()
+			go func() {
+				_, _ = io.Copy(io.Discard, r)
+				logger.Printf("stdin closed (the hub that started it is gone): stopping")
+				cancel()
+			}()
+		}
+		if token == "" {
+			return errors.New("no bus token: set PERSONA_ASSISTANT_TOKEN (personad hub assistant-token prints one)")
+		}
+		hub = strings.TrimSpace(identity.Getenv("PERSONA_ASSISTANT_HUB"))
+		if hub == "" {
+			hub = localHubURL(cfg.Listen)
+		}
+	}
 	home := identity.HomeDir()
 	file := managerconf.DefaultFile(home)
 	var drop []string
-	if deploy != "child" { // not the hub's child: the hello's sections are the hub's hub.json's (legacy_config)
+	if deploy != "child" && deploy != DeployService { // elsewhere: the hello's sections are the hub's hub.json's (legacy_config)
 		drop = managerconf.HubOnly
 	}
 	ext, err := moveConfig(home, file, drop, logger.Printf)
@@ -89,6 +110,9 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	moveFiles(home, logger.Printf)
 	o := builtinFiles(home)
 	o.ID, o.Hub, o.Token, o.Deploy, o.Errors = assistantwire.AssistantID, hub, token, deploy, errs
+	// Its own service stops once the hub refuses its token (bound again, or a hub that starts the built-in manager
+	// itself again): nothing of it runs next to the one that has the token (manager.RunBuiltin waits for a new one).
+	o.Fingerprint, o.StopWhenRevoked, o.TokenFirst = fingerprint, deploy == DeployService, deploy == DeployService
 	o.RotateSecretKey = true
 	o.Logf, o.ExtConfig = logger.Printf, ext
 	// Its own database, its data moved there once (owndb.go); the hub's while that cannot be yet.
@@ -97,6 +121,29 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	}
 	return run(ctx, build, o)
 }
+
+// tokenTaken dials the hub's bus once with token and hangs up (no handshake: no connection of the manager's is taken
+// over): bus.ErrRevoked when the hub refuses the token in any way, nil when it took it, and nil too when it did not
+// answer (the hub away: the manager runs as usual, and its bus stops it on a refusal later).
+func tokenTaken(ctx context.Context, hub, token string, client *http.Client, logf func(string, ...any)) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	ws, err := bus.Dial(ctx, hub, token, client)
+	switch {
+	case err == nil:
+		_ = ws.Close(websocket.StatusNormalClosure, "token check")
+		return nil
+	case errors.Is(err, bus.ErrRevoked), errors.Is(err, bus.ErrRejected):
+		return fmt.Errorf("%w (%v)", bus.ErrRevoked, err)
+	}
+	logf("the hub did not answer (%v): starting; the bus connects when it can", err)
+	return nil
+}
+
+// DeployService is PERSONA_ASSISTANT_DEPLOY for the built-in manager as a service of its own on the hub's machine
+// (its unit sets it): the binding in its manager.json, no token on stdin, hub.json's sections its own to take over
+// (the same machine, as for the hub's child).
+const DeployService = "service"
 
 // builtinFiles are where the built-in manager's things are in the data directory home: its manager.json and its keys
 // in its own directory (managers/assistant, managerconf.OwnFile), its knowledge base where manager.json says (by
@@ -188,7 +235,11 @@ type runOptions struct {
 	RotateSecretKey bool
 	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
 	StopWhenRevoked bool
-	Logf            func(format string, args ...any)
+	// TokenFirst (the built-in manager's own service, whose Main checked the token before anything else): any refusal
+	// of it on a reconnect, a plain 401 too, stops it (bus.ErrRevoked): a hub that refuses it starts a built-in manager
+	// of its own (a version from before this mode), or bound another service.
+	TokenFirst bool
+	Logf       func(format string, args ...any)
 	// Errors is the process's log writer that reports its error lines (newErrorTee); nil: run makes one.
 	Errors *errorTee
 }
@@ -338,7 +389,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
 		ConfigFile: o.ConfigFile, Outbox: database,
-		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
+		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked, StopWhenRejected: o.TokenFirst})
 	// The knowledge base in its directory, kept as its manager.json's kb section says (over the hub's hello). The model
 	// providers' keys are sealed with its own secret.key.
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,

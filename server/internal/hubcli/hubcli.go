@@ -35,6 +35,11 @@ const Usage = `  personad hub [run]        run the hub (config ~/.persona/hub.js
   personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
   personad hub doctor       只读检查 hub 配置、网络和证书
   personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/operations/admin.md)
+  personad hub manager-mode [child|service]
+                           the built-in manager: started by the hub (child, the default) or a service of its own;
+                           show it, or set it in hub.json (taken at the hub's next start: personad hub switch)
+  personad hub manager-code a one-time code that binds the built-in manager's own service to this hub
+                           (service mode; persona-manager join --builtin, docs/assistant/managers.md)
   personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)`
 
 // Word is how the hub's commands are typed after the program's name in what they print: "hub " for personad
@@ -82,6 +87,13 @@ func Hub(ctx context.Context, build update.Build, args []string) error {
 		return hub.AdminCommand(ctx, rest, os.Stdin, os.Stdout, os.Stderr)
 	case "peer":
 		return hub.PeerCommand(rest, os.Stdin, os.Stdout)
+	case "manager-mode": // the built-in manager: started by the hub (child) or a service of its own (service)
+		return hub.ManagerMode(rest, os.Stdout)
+	case "manager-code": // a one-time code that binds the built-in manager's own service (persona-manager join --builtin)
+		if len(rest) != 0 {
+			return fmt.Errorf("%smanager-code takes no arguments", Word)
+		}
+		return hub.ManagerCode(ctx, os.Stdout)
 	case "assistant-token": // a token for an assistant run elsewhere (hub.json assistant.external, docs/assistant/assistant.md)
 		if len(rest) != 0 {
 			return fmt.Errorf("%sassistant-token 不接受额外参数", Word)

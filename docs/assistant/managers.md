@@ -199,6 +199,27 @@ On an upgraded install the manager's `secret.key` began as the same bytes as the
 - **During a hub switch,** an older manager process still running cannot open what the rotation sealed again (model providers' keys, connectors' secrets): it is about to stop.
 - **A legacy `mail_accounts.json` that fails to import** keeps the old key: each start says so, and it is deleted once the file is imported.
 
+## The built-in manager as its own service
+
+By default the hub starts the built-in manager as its child (`personad assistant`) and gives it a new bus token at every start. With `assistant.mode` set to `service` in `hub.json`, the built-in manager is a service of its own instead: the hub neither starts it nor gives it a token. It is bound to the hub once with a one-time code, and hub restarts (blue-green switches, updates) no longer restart it. It runs on the hub's machine (or in a container beside the hub): it shares the hub's data directory, `hub.json` included, as the child does. Setup installing it as a service comes next; for now it is set up by hand.
+
+- **Binding.**
+  1. `persona-hub manager-mode service` sets the mode in `hub.json`; the running hub takes it at its next start: `persona-hub switch` (or restart its service). The hub then stops starting its child. The built-in manager is offline until step 4.
+  2. `persona-hub manager-code` prints a one-time code (10 minutes). It refuses unless the built-in manager is a service here (`assistant.mode` `service`, not `assistant.external`).
+  3. `persona-manager join --builtin <hub address> <code>` trades the code for the built-in manager's token (`POST /api/v1/bus/join` with `builtin: true`) and keeps the hub's address, the token, the hub's id and any `--fingerprint` in its `manager.json` (`hub`, `token`, `hub_id`, `fingerprint`; its other keys as they were, 0600). It reads that file before it trades the code: one that does not read stops it with the code unspent. The hub never writes that file.
+  4. `persona-manager assistant` with `PERSONA_ASSISTANT_DEPLOY=service` runs it on that binding (its service will set the variable). It reads no token from stdin, and takes `hub.json`'s manager sections over into its `manager.json` as the hub's child does.
+- **What the hub accepts.** A code is traded only by the join of its kind: the built-in manager's only by `join --builtin`, and every other only by a manager's join (`409`). The built-in manager's code is also refused when the built-in manager is not a bound service here (`409`), and from an address the hub does not count as local (`403`; local is its LAN class, [network.md](../operations/network.md): loopback, private ranges, link-local, on-link global IPv6, `security.trusted_cidrs`, the address range of its VPN). A code the hub cannot look up is refused too (`503`). None of these refusals spends the code. A trade gives the built-in manager a new token and hangs up a connection that came with the old one. `persona-hub assistant-token` is refused in service mode: its token would replace the bound one.
+- **Not bound** (no token in its `manager.json`, or a `manager.json` that does not read): it does not start and exits 2. Restarting can't fix that, and the service will not restart it.
+- **One at a time.** A second `persona-manager assistant` in service mode on the same data directory does not start (exit 2): it holds a lock on `managers/assistant/.service.lock` while it runs. This is Linux and macOS only, as the service is.
+- **When the hub refuses its token:**
+  - **When it happens:** the code was traded again, `assistant.mode` went back to `child`, or the hub was switched back to a version from before this mode. A hub in child mode, or one from before, starts its own child with a new token.
+  - **At start:** it dials the hub once right after reading its binding, before anything else (its configuration, its database, its computers, extensions and connectors). On any refusal, a plain `401` from an older hub included, none of that starts.
+  - **While running:** any refusal on a reconnect stops all of it, the hub closing a connection that said no hello in time (4003) too: a hub stalled that long costs the built-in manager up to 10 minutes, until its next try.
+  - **Waiting:** it then checks its `manager.json` for a new token every 10 seconds, and tries the old one again every 10 minutes. Once it has a token the hub takes, it starts again in place. A hub that does not answer at start doesn't stop it: it runs as usual, and its bus stops it on a refusal later.
+  - **Overlap:** short overlaps remain while a refused service shuts down and a child starts.
+- **Going back to child mode:** `persona-hub manager-mode child`, then `persona-hub switch`. The hub starts its child again with a new token, and the service, refused, waits as above. Stop it, or leave it waiting. To go forward again, set service mode, switch, and bind with a new code: the old token was replaced by the child's.
+- `personad hub manager-mode`, `personad hub manager-code` and `personad manager join --builtin` are the same commands.
+
 ## What the hub keeps of each manager
 
 Nothing one manager reports replaces another's (`server/internal/hub/manager_state.go`). The assistant the hub starts (`assistant`) keeps its state where it always did; every other manager gets its own when it first reports, dropped when it is removed (`DELETE /api/v1/managers/{id}`).

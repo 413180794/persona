@@ -41,6 +41,9 @@ const Usage = `usage:
                        用 App 里「新建管理者」给的安装码换这个管理者的 token，写进目录里的 manager.json
                        （默认 ~/.persona/managers/<id>）；数据库是它自己的 Postgres：install 时在 Docker 里建
                        （容器 persona-mgr-<id>-pg），或者 --database-url 给一个
+  personad manager join --builtin <hub address> <code> [--fingerprint <fingerprint>]
+                       bind the built-in manager's own service to the hub with a code from personad hub manager-code
+                       (the binding goes into ~/.persona/managers/assistant/manager.json)
   personad manager run [--dir 目录] [--join <hub 地址> <安装码>]
                        运行这个管理者（--join：目录里还没有 manager.json 时先换码，容器用）
   personad manager install [--dir 目录]     建好它自己的 Postgres（Docker），装成常驻服务（Linux：systemd 用户服务；Mac：launchd）
@@ -97,6 +100,9 @@ type JoinOptions struct {
 	AllowPlaintext bool
 	// PublicHost says whether a hub address's host is on the public internet; nil: publicHost (tests stand in).
 	PublicHost func(ctx context.Context, host string) bool
+	// builtin: the join is the built-in manager's (JoinBuiltin): the hub trades its code only for this join, and
+	// only this join's code.
+	builtin bool
 }
 
 // joinReply is POST /api/v1/bus/join's answer (hub/managers.go).
@@ -111,22 +117,9 @@ type joinReply struct {
 // can check before the code is spent (that there will be a database: Docker to make it, or --database-url) it checks
 // first: a code works once.
 func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig, error) {
-	hub := strings.TrimRight(strings.TrimSpace(o.Hub), "/")
-	if !strings.HasPrefix(hub, "http://") && !strings.HasPrefix(hub, "https://") {
-		return "", nil, fmt.Errorf("hub 地址 %q 要写成 http(s)://主机:端口", o.Hub)
-	}
-	code := strings.TrimSpace(o.Code)
-	if code == "" {
-		return "", nil, errors.New("没有安装码：在 App 的「设置 › 管理者 › 新建」里拿一个")
-	}
-	if u, err := url.Parse(hub); err == nil && u.Scheme == "http" && !o.AllowPlaintext {
-		public := o.PublicHost
-		if public == nil {
-			public = publicHost
-		}
-		if public(ctx, u.Hostname()) {
-			return "", nil, ConfigError{fmt.Errorf("hub 地址 %s 是公网上的明文 http：换来的 token 会明文经过公网。用 hub 的 https 地址（TLS 端口），确实要明文就加 --allow-plaintext", hub)}
-		}
+	hub, code, err := joinAddress(ctx, o)
+	if err != nil {
+		return "", nil, err
 	}
 	if o.DatabaseURL != "" {
 		if _, err := db.WithDatabase(o.DatabaseURL, "x"); err != nil {
@@ -149,57 +142,9 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 			return "", nil, ConfigError{err}
 		}
 	}
-	client := o.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-		if o.Fingerprint != "" {
-			client = link.Pinned(o.Fingerprint)
-			client.Timeout = 30 * time.Second
-		}
-	}
-	body, _ := json.Marshal(map[string]string{"code": code})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hub+bus.JoinPath, bytes.NewReader(body))
+	j, err := redeem(ctx, o, hub, code)
 	if err != nil {
 		return "", nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", nil, fmt.Errorf("连不上 hub %s：%w", hub, err)
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	switch resp.StatusCode {
-	case http.StatusOK:
-	case http.StatusUnauthorized:
-		// Trying again with the same code cannot help: a configuration error (manager join exits 2; manager run
-		// --join waits for manager.json instead, as a container would be restarted on any exit).
-		return "", nil, ConfigError{errors.New("hub 不认这个安装码：它不对、过期了（10 分钟）或者已经用过；在 App 里给这个管理者重新拿一个")}
-	case http.StatusForbidden:
-		var e struct {
-			Code  string `json:"code"`
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(raw, &e) == nil && e.Code == "tls_required" {
-			// The hub refused a plaintext join from the public internet, and voided the code that crossed it: the
-			// same command can never work.
-			return "", nil, ConfigError{fmt.Errorf("hub 不接受经公网明文换码，这个安装码也作废了：在 App 里重新拿一个，用 hub 的 https 地址（TLS 端口）")}
-		}
-		// Some other refusal (a proxy's, say): nothing says the same command can't work later.
-		if e.Error != "" {
-			return "", nil, fmt.Errorf("hub 拒绝了换码（HTTP 403）：%s", firstLine(e.Error))
-		}
-		return "", nil, fmt.Errorf("hub 拒绝了换码（HTTP 403）：%s", firstLine(string(raw)))
-	case http.StatusTooManyRequests:
-		return "", nil, errors.New("试错太多次，hub 暂时不接受这台电脑换码：过几分钟再试")
-	case http.StatusNotFound, http.StatusMethodNotAllowed:
-		return "", nil, fmt.Errorf("hub %s 还不支持管理者（HTTP %d）：先升级 hub", hub, resp.StatusCode)
-	default:
-		return "", nil, fmt.Errorf("hub 没换成（HTTP %d）：%s", resp.StatusCode, firstLine(string(raw)))
-	}
-	var j joinReply
-	if err := json.Unmarshal(raw, &j); err != nil || j.ID == "" || j.Token == "" {
-		return "", nil, errors.New("hub 的回答不对：没有 id 或 token")
 	}
 	c := assistant.ManagerConfig{ID: j.ID, Name: j.Name, Hub: hub, HubID: j.HubID, Token: j.Token,
 		Fingerprint: o.Fingerprint, DatabaseURL: o.DatabaseURL}
@@ -232,6 +177,136 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 	return dir, &c, nil
 }
 
+// joinAddress checks a join's hub address and code before anything is asked of the hub: an http(s) address, a code,
+// and no plaintext http over the public internet unless allowed (the token would cross it in the clear).
+func joinAddress(ctx context.Context, o JoinOptions) (hub, code string, err error) {
+	hub = strings.TrimRight(strings.TrimSpace(o.Hub), "/")
+	if !strings.HasPrefix(hub, "http://") && !strings.HasPrefix(hub, "https://") {
+		return "", "", fmt.Errorf("hub 地址 %q 要写成 http(s)://主机:端口", o.Hub)
+	}
+	code = strings.TrimSpace(o.Code)
+	if code == "" {
+		return "", "", errors.New("没有安装码：在 App 的「设置 › 管理者 › 新建」里拿一个")
+	}
+	if u, err := url.Parse(hub); err == nil && u.Scheme == "http" && !o.AllowPlaintext {
+		public := o.PublicHost
+		if public == nil {
+			public = publicHost
+		}
+		if public(ctx, u.Hostname()) {
+			return "", "", ConfigError{fmt.Errorf("hub 地址 %s 是公网上的明文 http：换来的 token 会明文经过公网。用 hub 的 https 地址（TLS 端口），确实要明文就加 --allow-plaintext", hub)}
+		}
+	}
+	return hub, code, nil
+}
+
+// redeem trades code at hub (POST /api/v1/bus/join) for its manager's id and token, once.
+func redeem(ctx context.Context, o JoinOptions, hub, code string) (joinReply, error) {
+	var j joinReply
+	client := o.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+		if o.Fingerprint != "" {
+			client = link.Pinned(o.Fingerprint)
+			client.Timeout = 30 * time.Second
+		}
+	}
+	fields := map[string]any{"code": code}
+	if o.builtin { // only then: a hub that does not know the field may refuse it
+		fields["builtin"] = true
+	}
+	body, _ := json.Marshal(fields)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hub+bus.JoinPath, bytes.NewReader(body))
+	if err != nil {
+		return j, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return j, fmt.Errorf("连不上 hub %s：%w", hub, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		// Trying again with the same code cannot help: a configuration error (manager join exits 2; manager run
+		// --join waits for manager.json instead, as a container would be restarted on any exit).
+		return j, ConfigError{errors.New("hub 不认这个安装码：它不对、过期了（10 分钟）或者已经用过；在 App 里给这个管理者重新拿一个")}
+	case http.StatusForbidden:
+		var e struct {
+			Code  string `json:"code"`
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(raw, &e) == nil && e.Code == "builtin_local_only" {
+			return j, ConfigError{errors.New("the built-in manager's code is traded only from the hub's machine or its local network")}
+		}
+		if e.Code == "tls_required" {
+			// The hub refused a plaintext join from the public internet, and voided the code that crossed it: the
+			// same command can never work.
+			return j, ConfigError{fmt.Errorf("hub 不接受经公网明文换码，这个安装码也作废了：在 App 里重新拿一个，用 hub 的 https 地址（TLS 端口）")}
+		}
+		// Some other refusal (a proxy's, say): nothing says the same command can't work later.
+		if e.Error != "" {
+			return j, fmt.Errorf("hub 拒绝了换码（HTTP 403）：%s", firstLine(e.Error))
+		}
+		return j, fmt.Errorf("hub 拒绝了换码（HTTP 403）：%s", firstLine(string(raw)))
+	case http.StatusConflict: // a code of the other kind of join, or the built-in manager not a service here: not spent
+		var e struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(raw, &e)
+		return j, ConfigError{fmt.Errorf("the hub did not trade the code, which is still good (HTTP 409): %s", firstLine(e.Error))}
+	case http.StatusTooManyRequests:
+		return j, errors.New("试错太多次，hub 暂时不接受这台电脑换码：过几分钟再试")
+	case http.StatusNotFound, http.StatusMethodNotAllowed:
+		return j, fmt.Errorf("hub %s 还不支持管理者（HTTP %d）：先升级 hub", hub, resp.StatusCode)
+	default:
+		return j, fmt.Errorf("hub 没换成（HTTP %d）：%s", resp.StatusCode, firstLine(string(raw)))
+	}
+	if err := json.Unmarshal(raw, &j); err != nil || j.ID == "" || j.Token == "" {
+		return j, errors.New("hub 的回答不对：没有 id 或 token")
+	}
+	return j, nil
+}
+
+// JoinBuiltin trades the built-in manager's one-time code (`persona-hub manager-code` on the hub's machine) for its
+// token, and keeps the binding (the hub's address, the token, the fingerprint) in its manager.json in the data
+// directory home, its other keys as they were (docs/assistant/managers.md "The built-in manager as its own service").
+// The join says it is the built-in manager's: the hub refuses another manager's code for it, unspent.
+func JoinBuiltin(ctx context.Context, o JoinOptions, home string) (managerconf.Binding, error) {
+	var b managerconf.Binding
+	hub, code, err := joinAddress(ctx, o)
+	if err != nil {
+		return b, err
+	}
+	file := managerconf.DefaultFile(home)
+	// What would fail the write after the code is spent fails first: a link to nothing, a file that does not read.
+	raw, err := managerconf.ReadFile(file)
+	if err != nil {
+		return b, ConfigError{err}
+	}
+	if raw != nil {
+		if _, err := managerconf.ParseObject(raw); err != nil {
+			return b, ConfigError{fmt.Errorf("%s: %w", file, err)}
+		}
+	}
+	o.builtin = true // the hub trades only the built-in manager's code for this join
+	j, err := redeem(ctx, o, hub, code)
+	if err != nil {
+		return b, err
+	}
+	if j.ID != assistantwire.AssistantID { // a hub that did not tell the kinds apart (an older one)
+		return b, ConfigError{fmt.Errorf("that code was manager %s's (it is spent now: get it a new one), not the built-in "+
+			"manager's: persona-hub manager-code on the hub's machine prints one", j.ID)}
+	}
+	b = managerconf.Binding{Hub: hub, HubID: j.HubID, Token: j.Token, Fingerprint: o.Fingerprint}
+	if err := managerconf.WriteBinding(home, b); err != nil {
+		return b, fmt.Errorf("could not write %s: %w (the token was traded: get a new code with persona-hub manager-code)", file, err)
+	}
+	return b, nil
+}
+
 // hasDatabase: dir has a manager.json that names its database.
 func hasDatabase(dir string) bool {
 	if dir == "" {
@@ -249,6 +324,7 @@ const databaseEnv = "PERSONA_MANAGER_DATABASE_URL"
 func cmdJoin(ctx context.Context, e *env, args []string) error {
 	fs := flag.NewFlagSet("manager join", flag.ContinueOnError)
 	fs.SetOutput(e.stdout)
+	builtin := fs.Bool("builtin", false, "the built-in manager's code (persona-hub manager-code): bind its own service to the hub")
 	dir := fs.String("dir", "", "管理者的目录（默认 ~/.persona/managers/<id>）")
 	dbURL := fs.String("database-url", "", "它的 Postgres 库（默认 install 时在 Docker 里给它建一个）")
 	fp := fs.String("fingerprint", "", "hub 的 TLS 指纹（https 地址用 hub 自己的证书时）")
@@ -260,6 +336,19 @@ func cmdJoin(ctx context.Context, e *env, args []string) error {
 	}
 	if len(pos) != 2 {
 		return errUsage
+	}
+	if *builtin {
+		if *dir != "" || *dbURL != "" || *install {
+			return ConfigError{errors.New("--builtin takes the hub's address, the code, and --fingerprint or --allow-plaintext only")}
+		}
+		b, err := JoinBuiltin(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Fingerprint: *fp, AllowPlaintext: *plain}, dataDir())
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(e.stdout, "Bound the built-in manager to the hub at %s (in %s).\n"+
+			"Next: run it as a service of its own (%s assistant, with PERSONA_ASSISTANT_DEPLOY=service).\n",
+			b.Hub, managerconf.DefaultFile(dataDir()), e.self())
+		return nil
 	}
 	d, c, err := Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: *dir, DatabaseURL: *dbURL, Fingerprint: *fp,
 		CheckDocker: e.dockerProblem, Warn: e.stdout, AllowPlaintext: *plain})
@@ -454,18 +543,97 @@ func (e *env) runManager(ctx context.Context, build update.Build, dir string) er
 	}
 }
 
+// RunBuiltin is the built-in manager as a service of its own (`persona-manager assistant` with
+// PERSONA_ASSISTANT_DEPLOY=service, docs/assistant/managers.md "The built-in manager as its own service"), on the
+// binding in its manager.json. Not bound is a configuration error (exit 2: its unit does not restart it). Once the hub
+// refuses its token (bound again, or a hub that starts the built-in manager itself again: assistant.mode child, a
+// version from before the split) nothing of it runs until manager.json has another token or the hub takes this one
+// again (awaitRestart), so it never runs next to the one that has the token; then it starts again in place.
+func RunBuiltin(ctx context.Context, build update.Build, out io.Writer) error {
+	env := os.Environ()
+	home := dataDir()
+	// One at a time: a second one on the same binding would take turns on the bus with the first, both running the
+	// computers and the extensions.
+	if err := os.MkdirAll(managerconf.DefaultDir(home), 0o700); err != nil {
+		return err
+	}
+	if err := lockFile(filepath.Join(managerconf.DefaultDir(home), builtinLock)); err != nil {
+		if errors.Is(err, errLocked) {
+			return ConfigError{errors.New("another persona-manager assistant runs on this data directory as a service already")}
+		}
+		return err
+	}
+	for {
+		before, err := managerconf.ReadBinding(home)
+		if err != nil { // not bound, or a manager.json that does not read: restarting cannot fix it (exit 2)
+			return ConfigError{err}
+		}
+		err = assistant.Main(ctx, build, nil)
+		if errors.Is(err, managerconf.ErrNotBound) {
+			return ConfigError{err}
+		}
+		if !errors.Is(err, bus.ErrRevoked) {
+			return err
+		}
+		fmt.Fprintf(out, "assistant: the hub no longer takes the built-in manager's token (bound again, or the hub "+
+			"starts it itself again): not connecting, trying the same token every %s. To bind it again: persona-hub "+
+			"manager-code on the hub's machine, then persona-manager join --builtin <hub address> <code>\n", revokedRetry)
+		c := &assistant.ManagerConfig{ID: assistantwire.AssistantID, Hub: before.Hub, Token: before.Token, Fingerprint: before.Fingerprint}
+		if err := awaitRestartWith(ctx, c, builtinToken(home), out); err != nil {
+			return err
+		}
+		if restart != nil {
+			if err := restart(env); err != nil {
+				fmt.Fprintf(out, "assistant: could not start again in place (%v): running it again here\n", err)
+			}
+		}
+	}
+}
+
+// builtinLock is the file in the built-in manager's directory its own service holds a lock on while it runs.
+const builtinLock = ".service.lock"
+
+// errLocked: another process holds the lock (lockFile).
+var errLocked = errors.New("locked by another process")
+
+// held keeps the locked files open for the life of the process.
+var held []*os.File
+
+// builtinToken reads the token in the built-in manager's binding ("" when it does not read).
+func builtinToken(home string) func() string {
+	return func() string {
+		b, err := managerconf.ReadBinding(home)
+		if err != nil {
+			return ""
+		}
+		return b.Token
+	}
+}
+
 // awaitRestart waits, after the hub refused the token of the manager in dir (before is its manager.json then), until
 // it should start again: a new token in manager.json, or the hub no longer refusing the token. Nothing of the manager
 // runs meanwhile (no bots, connectors, extensions, inbox): the sources it had may be another manager's now. Every
 // revokedRetry the token alone is tried with a bare dial (probeToken), never the whole manager.
 func awaitRestart(ctx context.Context, dir string, before *assistant.ManagerConfig, out io.Writer) error {
+	return awaitRestartWith(ctx, before, func() string {
+		c, err := assistant.ReadManagerConfig(dir)
+		if err != nil {
+			return ""
+		}
+		return c.Token
+	}, out)
+}
+
+// awaitRestartWith is awaitRestart with token reading the manager's token where it keeps it ("" when it does not
+// read).
+func awaitRestartWith(ctx context.Context, before *assistant.ManagerConfig, token func() string, out io.Writer) error {
 	id := ""
 	if before != nil {
 		id = before.ID
 	}
 	wait := revokedRetry
 	for {
-		renewed, err := waitNewToken(ctx, dir, before, wait)
+		renewed, err := waitToken(ctx, token, before, wait)
 		if err != nil {
 			return err
 		}
@@ -481,7 +649,7 @@ func awaitRestart(ctx context.Context, dir string, before *assistant.ManagerConf
 		case err == nil:
 			fmt.Fprintf(out, "manager: [%s] hub 又认这个 token 了：重新连 hub\n", id)
 			return nil
-		case errors.Is(err, bus.ErrRevoked):
+		case errors.Is(err, bus.ErrRevoked), errors.Is(err, bus.ErrRejected): // refused (a plain 401 from an older hub)
 			wait = revokedRetry
 		default:
 			wait = min(revokedRetry, probeAgain)
@@ -516,6 +684,17 @@ var probeToken = func(ctx context.Context, c *assistant.ManagerConfig) error {
 // waitNewToken returns once manager.json in dir has a token other than before's (renewed), after most (not renewed:
 // try the same token again), or with ctx's error.
 func waitNewToken(ctx context.Context, dir string, before *assistant.ManagerConfig, most time.Duration) (renewed bool, err error) {
+	return waitToken(ctx, func() string {
+		c, err := assistant.ReadManagerConfig(dir)
+		if err != nil {
+			return ""
+		}
+		return c.Token
+	}, before, most)
+}
+
+// waitToken is waitNewToken with token reading the token ("" when it does not read: not renewed).
+func waitToken(ctx context.Context, token func() string, before *assistant.ManagerConfig, most time.Duration) (renewed bool, err error) {
 	t := time.NewTicker(revokedPoll)
 	defer t.Stop()
 	deadline := time.NewTimer(most)
@@ -528,8 +707,7 @@ func waitNewToken(ctx context.Context, dir string, before *assistant.ManagerConf
 			return false, nil
 		case <-t.C:
 		}
-		c, err := assistant.ReadManagerConfig(dir)
-		if err == nil && (before == nil || c.Token != before.Token) {
+		if tok := token(); tok != "" && (before == nil || tok != before.Token) {
 			return true, nil
 		}
 	}

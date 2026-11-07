@@ -39,6 +39,14 @@ func (h *Hub) superviseAssistant(ctx context.Context) {
 		h.logf("assistant: hub.json says it runs elsewhere (assistant.external): not starting one")
 		return
 	}
+	if !h.cfg.Assistant.StartsBuiltin() {
+		if h.cfg.Assistant.ServiceBound() {
+			h.logf("assistant: hub.json says it is a service of its own (assistant.mode service): not starting one")
+		} else { // a mode this version does not know: none rather than one next to whatever that mode runs
+			h.logf("assistant: hub.json's assistant.mode %q is not one this version knows (child, service): not starting one", h.cfg.Assistant.Mode)
+		}
+		return
+	}
 	token, err := h.createBusToken(ctx, assistantwire.AssistantID, "助手")
 	if err != nil {
 		h.logf("assistant: no bus token, not starting it: %v", err)
@@ -95,6 +103,10 @@ func AssistantToken(ctx context.Context, out io.Writer) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
+	}
+	if cfg.Assistant.ServiceBound() { // the token would replace the bound service's
+		return errors.New("the built-in manager is a service of its own here (assistant.mode service): bind it with " +
+			"manager-code and persona-manager join --builtin; assistant-token is for assistant.external")
 	}
 	if cfg.DatabaseURL == "" {
 		return errors.New("hub.json has no database_url")

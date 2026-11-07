@@ -288,4 +288,10 @@ func TestClientStopsWhenRevoked(t *testing.T) {
 	if err := c3.Run(short); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("plain 401 stopped the client: %v", err)
 	}
+	// With StopWhenRejected (the built-in manager's own service) a plain 401 stops it too, as revoked.
+	c4 := &Client{Hub: srv.URL, Token: "t", HelloMethod: "manager.hello", StopWhenRevoked: true, StopWhenRejected: true,
+		Backoff: 10 * time.Millisecond}
+	if err := c4.Run(ctx); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("plain 401 with StopWhenRejected: %v", err)
+	}
 }

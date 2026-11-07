@@ -1,0 +1,119 @@
+package hub
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/identity"
+)
+
+// The built-in manager as a service of its own (docs/assistant/managers.md "The built-in manager as its own
+// service"): hub.json's assistant.mode says the hub no longer starts it (ManagerMode), and a one-time code
+// (ManagerCode) binds the service to this hub: `persona-manager join --builtin` trades it for the built-in manager's
+// token (POST /api/v1/bus/join, builtinJoinRefused) and keeps it in its own manager.json. The hub never writes that
+// file, and in service mode never makes the built-in manager a new token itself.
+
+// ManagerMode is `persona-hub manager-mode [child|service]`: hub.json's assistant.mode, shown, or set (the other keys
+// as they were). A running hub reads it when it starts: the change takes effect with `persona-hub switch` (or a
+// restart of its service).
+func ManagerMode(args []string, out io.Writer) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir, err := identity.PrepareHome(home)
+	if err != nil {
+		return err
+	}
+	return managerMode(dir, args, out)
+}
+
+func managerMode(dir string, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return errors.New("manager-mode takes child, service or nothing")
+	}
+	if len(args) == 0 {
+		cfg, err := readHubJSON(dir)
+		if err != nil {
+			return err
+		}
+		mode := AssistantModeChild
+		if a, err := cfg.object("assistant"); err == nil && a != nil {
+			if raw, ok := a.get("mode"); ok {
+				var m string
+				if json.Unmarshal(raw, &m) == nil && m != "" {
+					mode = m
+				}
+			}
+			var external bool
+			if raw, ok := a.get("external"); ok && json.Unmarshal(raw, &external) == nil && external {
+				mode += " (assistant.external: it runs elsewhere)"
+			}
+		}
+		_, err = fmt.Fprintln(out, mode)
+		return err
+	}
+	mode := args[0]
+	if mode != AssistantModeChild && mode != AssistantModeService {
+		return fmt.Errorf("manager-mode %q: child or service", mode)
+	}
+	err := editHubJSON(dir, func(o *jsonObject) error {
+		a, err := o.object("assistant")
+		if err != nil {
+			return err
+		}
+		if a == nil {
+			a = &jsonObject{}
+		}
+		if mode == AssistantModeChild {
+			a.del("mode") // the default
+		} else if err := a.set("mode", mode); err != nil {
+			return err
+		}
+		o.setObject("assistant", a)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "assistant.mode is %s in %s/hub.json. The running hub takes it at its next start: "+
+		"persona-hub switch (or restart its service).\n", mode, dir)
+	return err
+}
+
+// ManagerCode is `persona-hub manager-code`: a one-time code (10 minutes) that binds the built-in manager's own
+// service to this hub. Only in service mode: while the hub starts the built-in manager itself, a second one would run
+// next to it (the hub refuses to trade such a code then, too).
+func ManagerCode(ctx context.Context, out io.Writer) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	if !cfg.Assistant.ServiceBound() {
+		return errors.New("the built-in manager is not a service of its own here (assistant.mode service, not " +
+			"assistant.external): first persona-hub manager-mode service, then persona-hub switch (or restart its service)")
+	}
+	if cfg.DatabaseURL == "" {
+		return errors.New("hub.json has no database_url")
+	}
+	database, err := db.Open(ctx, cfg.DatabaseURL, db.HubSet)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	h := &Hub{cfg: cfg, store: database, logger: log.New(io.Discard, "", 0)}
+	code, until, err := h.newInstallCode(ctx, assistantwire.AssistantID, "助手") // i18n-ignore: its identity's name, as assistant-token gives it
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "%s\n\nGood until %s, once. On this machine (where the built-in manager's service runs):\n"+
+		"  persona-manager join --builtin %s %s\n", code, until.Local().Format("15:04"), hubLocalURL(cfg.Listen), code)
+	return err
+}

@@ -26,6 +26,20 @@ func Assistant(ctx context.Context, build update.Build, args []string, stdin io.
 	if len(args) > 0 && args[0] == "drop-shared-tables" {
 		return assistant.DropSharedCommand(ctx, args[1:], os.Stdout, os.Stderr)
 	}
+	if len(args) > 0 {
+		return clitext.UsageError("usage: " + clitext.CommandName() + " assistant [drop-shared-tables [--yes]]")
+	}
+	if identity.Getenv("PERSONA_ASSISTANT_DEPLOY") == assistant.DeployService {
+		// A service of its own (its unit says so): on its binding, waiting when the hub refuses it. Not bound is a
+		// configuration mistake: exit 2, which its unit does not restart.
+		err := manager.RunBuiltin(ctx, build, os.Stdout)
+		var ce manager.ConfigError
+		if errors.As(err, &ce) {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		return err
+	}
 	return assistant.Main(ctx, build, stdin)
 }
 

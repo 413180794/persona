@@ -48,6 +48,10 @@ type Client struct {
 	// StopWhenRevoked: Run returns ErrRevoked once the hub refuses the token itself, instead of trying it again every
 	// MaxBackoff (a manager whose token only a new install code replaces).
 	StopWhenRevoked bool
+	// StopWhenRejected: with StopWhenRevoked, any refusal of the token (ErrRejected too: a hub from before revoked
+	// tokens were told apart answers a plain 401) is taken for a revoke (the built-in manager's own service, which
+	// must not run next to the child such a hub starts).
+	StopWhenRejected bool
 
 	mu   sync.Mutex
 	peer *rpc.Peer     // the connection that said its handshake; nil between connections
@@ -86,6 +90,10 @@ func (c *Client) Run(ctx context.Context) error {
 		if c.StopWhenRevoked && errors.Is(err, ErrRevoked) {
 			c.logf("bus: the hub refused this token: %v; not trying again", err)
 			return err
+		}
+		if c.StopWhenRevoked && c.StopWhenRejected && errors.Is(err, ErrRejected) {
+			c.logf("bus: the hub refused this token: %v; not trying again", err)
+			return fmt.Errorf("%w (%v)", ErrRevoked, err)
 		}
 		wait := delay
 		if errors.Is(err, ErrRejected) {

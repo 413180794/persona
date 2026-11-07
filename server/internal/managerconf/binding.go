@@ -1,0 +1,66 @@
+package managerconf
+
+import (
+	"encoding/json"
+	"errors"
+)
+
+// Binding is the built-in manager's binding to its hub when it is a service of its own (docs/assistant/managers.md
+// "The built-in manager as its own service"), in its manager.json under the keys a manager made in the app keeps
+// them under: where the hub is, the token the hub gave it for a one-time code (`persona-manager join --builtin`), and
+// the hub's TLS fingerprint on an https address with the hub's own certificate.
+type Binding struct {
+	Hub         string `json:"hub,omitempty"`
+	HubID       string `json:"hub_id,omitempty"`
+	Token       string `json:"token,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// bindingKeys are Binding's keys in manager.json.
+var bindingKeys = []string{"hub", "hub_id", "token", "fingerprint"}
+
+// ErrNotBound: the built-in manager's manager.json has no token (it was never bound, or the binding was dropped).
+var ErrNotBound = errors.New("the built-in manager is not bound to a hub: persona-hub manager-code on the hub's " +
+	"machine prints a code, persona-manager join --builtin <hub address> <code> binds it")
+
+// ReadBinding is the binding in the built-in manager's manager.json in the data directory home; ErrNotBound without a
+// token.
+func ReadBinding(home string) (Binding, error) {
+	var b Binding
+	raw, err := ReadFile(DefaultFile(home))
+	if err != nil {
+		return b, err
+	}
+	if raw == nil {
+		return b, ErrNotBound
+	}
+	o, err := ParseObject(raw)
+	if err != nil {
+		return b, err
+	}
+	if err := json.Unmarshal(o.Marshal(), &b); err != nil {
+		return b, err
+	}
+	if b.Token == "" || b.Hub == "" {
+		return b, ErrNotBound
+	}
+	return b, nil
+}
+
+// WriteBinding puts b into the built-in manager's manager.json in home (its other keys as they were; 0600, Edit), in
+// place of any binding it had.
+func WriteBinding(home string, b Binding) error {
+	return Edit(DefaultFile(home), func(o *Object) error {
+		for _, k := range bindingKeys {
+			o.Del(k)
+		}
+		for k, v := range map[string]string{"hub": b.Hub, "hub_id": b.HubID, "token": b.Token, "fingerprint": b.Fingerprint} {
+			if v != "" {
+				if err := o.Set(k, v); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
