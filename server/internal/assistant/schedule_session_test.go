@@ -693,3 +693,26 @@ func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
 	}
 	t.Fatal("the failure before the first working poll was not recorded")
 }
+
+// A daily run's knowledge-base hint names the hub's knowledge directory, wherever it is (PERSONA_HOME, kb_dir), not the
+// default ~/.persona/data: the model reads that directory with kb_list and the hint is where it is told.
+func TestDailyRunHintNamesTheKnowledgeDir(t *testing.T) {
+	n := newFakeHub().withMachine()
+	n.hello.KB = &KBSettings{}
+	h := newKBService(t, n)
+	dir := h.kb.dir
+	if dir == "" || strings.Contains(dir, ".persona") {
+		t.Fatalf("the test needs a custom knowledge directory: %q", dir)
+	}
+	setTasks(h, Task{ID: "r", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatDaily, Time: "09:00", Enabled: true})
+	if _, err := runNow(t, h, "r"); err != nil {
+		t.Fatal(err)
+	}
+	text := n.lastSend(t)["text"].(string)
+	if !strings.Contains(text, "（知识库") {
+		t.Fatalf("the first run has the hint: %q", text)
+	}
+	if strings.Contains(text, "~/.persona/data") || !strings.Contains(text, "（知识库 "+dir+"：") {
+		t.Fatalf("the hint should name %s: %q", dir, text)
+	}
+}

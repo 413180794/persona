@@ -59,6 +59,8 @@ type Task struct {
 	Facts bool `json:"facts,omitempty"`
 	// factsText is the run's facts as the model is given them (briefing.go); set on the copy a run is made from, never stored.
 	factsText string
+	// kbDir is the knowledge directory the run's hint names (a daily run with the knowledge base on); set on the copy, never stored.
+	kbDir string
 	// The conversation it came from (on MachineID), runs go into it; empty = the task's own conversation.
 	MachineID string `json:"machine_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
@@ -1200,6 +1202,9 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 			return proto.Session{}, s.skipRun(run, err)
 		}
 	}
+	if kb {
+		t.kbDir = s.kb.dir // the hint names where the knowledge base is, not the default
+	}
 	if t.Facts {
 		t.factsText = s.briefStart(ctx, t, time.Now()) // the run's facts, worked out once (briefing.go)
 	}
@@ -1760,7 +1765,7 @@ func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool
 // runs are above instead. The task's prompt is always there: it may have been edited, or compacted away.
 func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb, continued bool) string {
 	r := prompts.TaskRun{Label: t.label(), Once: t.Repeat == repeatOnce, Interval: t.Repeat == repeatInterval, Due: due.In(loc),
-		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, Continued: continued, PushAsked: t.pushesOnlyAsked(), Facts: t.factsText}
+		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, KnowledgeDir: t.kbDir, Continued: continued, PushAsked: t.pushesOnlyAsked(), Facts: t.factsText}
 	if r.Interval {
 		r.Every = everyText(t.EveryMinutes)
 	}

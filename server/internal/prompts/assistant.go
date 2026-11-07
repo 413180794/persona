@@ -284,6 +284,8 @@ type TaskRun struct {
 	Due            time.Time
 	Prompt         string
 	KBHint         bool // daily runs with the knowledge base on
+	// KnowledgeDir: the knowledge base directory the hint names; "" is the default ~/.persona/data.
+	KnowledgeDir string
 	// Continued: it goes into the task's own conversation, which got the background on the first run.
 	Continued bool
 	// PushAsked: the task pushes only what the run sends with notify_user (its push "asked", #2396).

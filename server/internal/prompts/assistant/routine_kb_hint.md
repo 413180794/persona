@@ -1,2 +1,2 @@
-（知识库 ~/.persona/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；
+（知识库 {{or .KnowledgeDir "~/.persona/data"}}：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；
 相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）
