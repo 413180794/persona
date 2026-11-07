@@ -17,7 +17,7 @@ struct MacDockMenuTests {
         let s = MacMenuBar.Sections(needsYou: [session("n", .needsYou)], working: [session("w", .working)],
                                     unread: [session("u", .unread)])
         let menu = MacDockMenu.shared.menu(s, machineName: { _ in "MacBook" }, paired: true)
-        #expect(menu.items.map(\.title) == ["需要你", "t-n · MacBook", "做完了", "t-u · MacBook", "", "新建 Agent 对话…"])
+        #expect(menu.items.map(\.title) == ["需要你", "t-n · MacBook", "完成未看", "t-u · MacBook", "", "新建 Agent 对话…"])
         #expect((menu.items.dropFirst().first?.representedObject as? SessionKey)?.sessionID == "n")
         #expect(menu.items.last?.isEnabled == true)
     }
@@ -42,7 +42,7 @@ struct MacDockMenuTests {
                                            muted: { _ in false })
         let titles = MacDockMenu.shared.menu(sections, machineName: { _ in "MacBook" }, paired: true)
             .items.map(\.title)
-        #expect(titles == ["需要你", "t-n · MacBook", "做完了", "t-u · MacBook", "", "新建 Agent 对话…"])
+        #expect(titles == ["需要你", "t-n · MacBook", "完成未看", "t-u · MacBook", "", "新建 Agent 对话…"])
         #expect(titles.allSatisfy { !$0.contains("t-qn") && !$0.contains("t-qu") })
     }
 }

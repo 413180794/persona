@@ -105,7 +105,7 @@ struct RepoMenuItems: View, Equatable {
 
     var body: some View {
         if !unread.isEmpty {
-            Button { model.markSeen(unread) } label: { Label("Mark All as Read (\(unread.count))", systemImage: Theme.Icon.success) }
+            Button { model.markSeen(unread) } label: { Label(StateName.markAllSeen(unread.count), systemImage: Theme.Icon.success) }
         }
     }
 }

@@ -1291,9 +1291,9 @@ struct AssistantSidebar: View {
     }
 
     private func stateWords(needsYou: Int, working: Bool, unread: Int) -> String? {
-        if needsYou > 0 { return String(localized: "\(needsYou) need you [Shell Components 79a4aa]") }
+        if needsYou > 0 { return StateName.count(.needsYou, needsYou) }
         if working { return String(localized: "Some working") }
-        if unread > 0 { return String(localized: "\(unread) unread [Assistant Sidebar b212c1]") }
+        if unread > 0 { return StateName.count(.unread, unread) }
         return nil
     }
 

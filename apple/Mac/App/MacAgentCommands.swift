@@ -141,7 +141,7 @@ struct MacAgentMenu: Commands {
             Button("Delete Chat…") { ask(.delete) }
                 .disabled(agent?.canDelete != true)
             Divider()
-            Button("Mark as Read") { if let key { model.markSeen(key) } }
+            Button("Mark as Seen") { if let key { model.markSeen(key) } }
                 .disabled(key == nil || model.session(key!)?.state != .unread)
             Button(key.map { model.isPinned($0) } == true ? String(localized: "Unpin [Personal Agent List View c92179]") : String(localized: "Pin [Personal Agent List View 173f88]")) { if let key { model.togglePin(key) } }
                 .disabled(key == nil)

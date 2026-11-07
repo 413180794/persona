@@ -490,8 +490,8 @@ struct AgentCounts: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            item(tally.needsYou, String(localized: "Needs You [Chats View e60ec4]"), tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
-            item(tally.working, String(localized: "Working [Assistant Profile View f42082]"), tone: StatusPalette.working, ink: StatusPalette.working.text)
+            item(tally.needsYou, StateName.needsYou.text, tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
+            item(tally.working, StateName.working.text, tone: StatusPalette.working, ink: StatusPalette.working.text)
             item(tally.idle, String(localized: "Idle"), tone: StatusPalette.idle, ink: Color.primary)
         }
         .padding(.horizontal, Theme.Space.m)

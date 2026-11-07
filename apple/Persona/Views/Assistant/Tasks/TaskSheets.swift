@@ -195,10 +195,10 @@ struct TaskBoardSheet: View {
                     EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "No tasks yet"), message: String(localized: "Tell Persona what needs doing in a chat, and it'll turn it into a task."))
                         .listRowBackground(Color.clear)
                 }
-                section(String(localized: "Needs You [Task Sheets f98bd9]"), rows.filter { $0.state == .needsYou }, agents: agents.filter(\.isWaiting))
-                section(String(localized: "Working [Task Sheets 595753]"), rows.filter { $0.state == .working || $0.state == .notStarted }, agents: agents.filter { !$0.isWaiting })
-                section(String(localized: "Done [Task Sheets 825cf0]"), rows.filter { $0.state == .unread })
-                section(String(localized: "Stopped [Task Sheets 2cb954]"), rows.filter { $0.state == .followup })
+                section(StateName.needsYou.text, rows.filter { $0.state == .needsYou }, agents: agents.filter(\.isWaiting))
+                section(StateName.working.text, rows.filter { $0.state == .working || $0.state == .notStarted }, agents: agents.filter { !$0.isWaiting })
+                section(StateName.unread.text, rows.filter { $0.state == .unread })
+                section(StateName.followUp.text, rows.filter { $0.state == .followup })
                 section(String(localized: "Done [Task Sheets f28461]"), rows.filter { $0.state == .done })
                 section(String(localized: "Didn't Start"), rows.filter { $0.state == .failed })
             }

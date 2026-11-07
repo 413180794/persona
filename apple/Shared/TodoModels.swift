@@ -69,11 +69,11 @@ nonisolated extension TodoItem {
 nonisolated extension TaskState {
     var todoLabel: String {
         switch self {
-        case .done: String(localized: "Done [Task Sheets f28461]")
-        case .needsYou: String(localized: "Needs You [Task Sheets f98bd9]")
-        case .unread: String(localized: "Unread [Todo Models 0b2e58]")
-        case .working: String(localized: "Active")
-        case .followup: String(localized: "Follow up")
+        case .done: StateName.done.text
+        case .needsYou: StateName.needsYou.text
+        case .unread: StateName.unread.text
+        case .working: StateName.working.text
+        case .followup: StateName.followUp.text
         case .notStarted: String(localized: "Not started")
         case .failed: String(localized: "Didn't Start")
         }

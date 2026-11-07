@@ -302,9 +302,9 @@ final class LiveUpdateTests: XCTestCase {
         }
     }
 
-    /// The Agents badge's number: the shell's (「N 个在等你」) or the Agents tab's value; 0 when there is none.
+    /// The Agents badge's number: the shell's (「N 个需要你」, the whole label: a space's header ends the same way) or the Agents tab's value; 0 when there is none.
     private func agentsBadge() -> Int {
-        let shell = app.descendants(matching: .any).matching(NSPredicate(format: "label ENDSWITH %@", "个在等你")).firstMatch
+        let shell = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES %@", "[0-9]+ 个需要你")).firstMatch
         let text = shell.exists ? shell.label : (app.tabBars.buttons["Agents"].firstMatch.value as? String ?? "")
         return Int(text.prefix(while: \.isNumber)) ?? 0
     }

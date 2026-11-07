@@ -151,7 +151,7 @@ List order (the same for all three groupings): Needs you → Unread → Awaiting
 
 - Seen in herdr = the tab was focused on the computer (reads via the CLI don't count). Persona **does not** focus the tab to mark it seen (that would steal focus on the computer), so after you look on the phone,
   the green dot in herdr's sidebar on the computer is still there.
-- Seen in the App: opening the chat page, watching it finish on the chat page, swiping left in the list to **Mark as Seen**, **Mark All as Read**, opening the session on the watch. The App sends WS `{"type":"seen"}`
+- Seen in the App: opening the chat page, watching it finish on the chat page, swiping left in the list to **Mark as Seen**, **Mark All as Seen**, opening the session on the watch. The App sends WS `{"type":"seen"}`
   (when the connection is stuck, or the hub hasn't recorded it 5 seconds after the WS send, it sends `POST /api/v1/sessions/{mid}/{sid}/seen` instead), and the hub stores it in Postgres `session_views`.
   WS messages have no acknowledgment and are silently dropped on a half-open connection (#1588), so the App keeps reads the hub hasn't recorded yet in `SeenOutbox`: it counts as recorded only when a list from the hub has this session's
   `seen_at` later than the mark. Meanwhile it still shows as Seen and is resent on reconnect; it stops waiting if the session does another turn, starts working or needs you, disappears from the list,

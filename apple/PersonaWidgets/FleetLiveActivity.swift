@@ -195,9 +195,9 @@ struct FleetCounts: View {
     var short = false
     var body: some View {
         HStack(spacing: short ? 8 : 10) {
-            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", interfaceText("\(state.needsYou) need you [Mac Attention d01e4f]"), FleetPalette.needsYou) }
-            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", interfaceText("\(state.working) working [Fleet Live Activity 2e2586]"), FleetPalette.working) }
-            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", interfaceText("\(state.unread) unread [Fleet Live Activity 9d55cb]"), FleetPalette.unread) }
+            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", StateName.count(.needsYou, state.needsYou), FleetPalette.needsYou) }
+            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", StateName.count(.working, state.working), FleetPalette.working) }
+            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", StateName.count(.unread, state.unread), FleetPalette.unread) }
         }
         .layoutPriority(1)
     }
@@ -334,9 +334,9 @@ struct FleetLockScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(FleetText.headline(state)).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
                 if state.phase == .needsYou, state.working > 0 {
-                    Text("\(state.working) working [Fleet State 2224bf]").font(.caption).foregroundStyle(.secondary)
+                    Text(StateName.count(.working, state.working)).font(.caption).foregroundStyle(.secondary)
                 } else if state.phase != .done, state.unread > 0 {
-                    Text("\(state.unread) unread [Fleet Live Activity 5c77e7]").font(.caption).foregroundStyle(.secondary)
+                    Text(StateName.count(.unread, state.unread)).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)

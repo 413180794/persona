@@ -79,7 +79,7 @@ nonisolated enum SessionModes {
         switch s?.state {
         case .working?: String(localized: "Working. Switch models after it stops.")
         case .needsYou?: String(localized: "Waiting for your answer. Switch models after you reply.")
-        case .offline?: String(localized: "Not running [Session Modes 06dd52]")
+        case .offline?: StateName.notRunning.text
         default: s?.starting == true ? String(localized: "Starting [Session Modes 087739]") : nil
         }
     }

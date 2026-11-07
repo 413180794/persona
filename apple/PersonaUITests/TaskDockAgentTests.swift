@@ -50,7 +50,7 @@ final class TaskDockAgentTests: XCTestCase {
         let lastTask = tasks.element(boundBy: tasks.count - 1)
         XCTAssertLessThan(lastTask.frame.minX, agents.element(boundBy: 0).frame.minX, "an agent before a task")
         // The one waiting for the user (the photo sync) says so, first among the agents.
-        XCTAssertTrue(agents.element(boundBy: 0).label.contains("等你"), agents.element(boundBy: 0).label)
+        XCTAssertTrue(agents.element(boundBy: 0).label.contains("需要你"), agents.element(boundBy: 0).label)
         XCTAssertEqual(board.frame.height, lastTask.frame.height, accuracy: 1, "全部 and the pills differ in height")
 
         // The board lists them under Needs You / Working.

@@ -3142,13 +3142,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "トップバーでの%1$@の5つの状態：待機中、思考中、作業中、対応待ち、オフライン"
+            "value": "トップバーでの%1$@の5つの状態：待機中、思考中、作業中、要対応、オフライン"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@在顶栏的五种状态：空闲、思考中、工作中、等你处理、离线"
+            "value": "%1$@在顶栏的五种状态：空闲、思考中、工作中、需要你、离线"
           }
         }
       },
@@ -5308,29 +5308,6 @@
       },
       "extractionState": "manual"
     },
-    "%lld done": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld done"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件が完了"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个做完了"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "%lld extensions": {
       "localizations": {
         "en": {
@@ -6508,112 +6485,8 @@
       },
       "extractionState": "manual"
     },
-    "%lld need you [Fleet State ea2671]": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld needs you"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld need you"
-                }
-              }
-            }
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件要対応"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个需要你"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "%lld need you [Mac Attention d01e4f]": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld needs you"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld need you"
-                }
-              }
-            }
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件要対応"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 需要你"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "%lld need you [Shell Components 79a4aa]": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld needs you"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld need you"
-                }
-              }
-            }
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件が要対応"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个在等你"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "%lld need you [Today Card 2ac654]": {
+    "%lld need you [State Names]": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "variations": {
@@ -6642,11 +6515,10 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld 件等你"
+            "value": "%1$lld 个需要你"
           }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "%lld new messages": {
       "localizations": {
@@ -7281,7 +7153,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "做完了 %1$lld 个任务"
+            "value": "已完成 %1$lld 个任务"
           }
         }
       },
@@ -7316,7 +7188,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld 个任务在做"
+            "value": "%1$lld 个任务工作中"
           }
         }
       },
@@ -7543,98 +7415,6 @@
       },
       "extractionState": "manual"
     },
-    "%lld unread [Chats View 3ef9c7]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未確認%1$lld件"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个完成未看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "%lld unread [Fleet Island Views a597f0]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件未確認"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个做完未看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "%lld unread [Fleet Live Activity 5c77e7]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件未確認"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个未看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "%lld unread [Fleet Live Activity 9d55cb]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件未確認"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 未看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "%lld unread [Lark Pinned Shelf be6134]": {
       "localizations": {
         "en": {
@@ -7680,6 +7460,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "%lld unread [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld unread"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未確認%1$lld件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个完成未看"
+          }
+        }
+      }
     },
     "%lld unread in %lld sessions: %@": {
       "localizations": {
@@ -7774,7 +7577,8 @@
       },
       "extractionState": "manual"
     },
-    "%lld working [Fleet Live Activity 2e2586]": {
+    "%lld working [State Names]": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -7785,47 +7589,23 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld件作業中"
+            "value": "作業中%1$lld件"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld 在工作"
+            "value": "%1$lld 个工作中"
           }
         }
-      },
-      "extractionState": "manual"
-    },
-    "%lld working [Fleet State 2224bf]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld working"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld件作業中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个在工作"
-          }
-        }
-      },
-      "extractionState": "manual"
+      }
     },
     "%lld working, %lld waiting for you": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld 个在工作，%2$lld 个等你处理"
+            "value": "%1$lld 个工作中，%2$lld 个需要你"
           }
         },
         "en": {
@@ -16510,7 +16290,8 @@
       },
       "extractionState": "manual"
     },
-    "Awaiting Reply": {
+    "Awaiting Reply [State Names]": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -36226,7 +36007,8 @@
       },
       "extractionState": "manual"
     },
-    "Done [Task Sheets 825cf0]": {
+    "Done [State Names]": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -36243,11 +36025,10 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "做完了"
+            "value": "已完成"
           }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "Done [Task Sheets f28461]": {
       "localizations": {
@@ -36404,7 +36185,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "做完了：%1$@"
+            "value": "已完成：%1$@"
           }
         }
       },
@@ -41452,18 +41233,19 @@
       },
       "extractionState": "manual"
     },
-    "Follow up": {
+    "Follow-Up [State Names]": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Follow up"
+            "value": "Follow-up"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "フォローアップ待ち"
+            "value": "フォローアップ"
           }
         },
         "zh-Hans": {
@@ -41472,8 +41254,7 @@
             "value": "待跟进"
           }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "Follow-up · new chat": {
       "localizations": {
@@ -42188,6 +41969,98 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Mark All as Seen (%lld) [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark All as Seen (%1$lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて確認済みにする（%1$lld）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部标为已看（%1$lld）"
+          }
+        }
+      }
+    },
+    "Mark All as Seen [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark All as Seen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて確認済みにする"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部标为已看"
+          }
+        }
+      }
+    },
+    "Needs You [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs You"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要対応"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要你"
+          }
+        }
+      }
+    },
+    "Not Running [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not running"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未运行"
+          }
+        }
+      }
     },
     "Script on PATH": {
       "localizations": {
@@ -49142,6 +49015,29 @@
         }
       }
     },
+    "Seen [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已看"
+          }
+        }
+      }
+    },
     "Separately configured": {
       "extractionState": "manual",
       "localizations": {
@@ -53587,52 +53483,6 @@
       },
       "extractionState": "manual"
     },
-    "Mark All as Read": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark All as Read"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "すべて既読にする"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全部标为已读"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Mark All as Read (%lld)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark All as Read (%1$lld)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "すべて既読にする（%1$lld）"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全部标为已读（%1$lld）"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Mark Up and Add to Message": {
       "localizations": {
         "en": {
@@ -53651,29 +53501,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "标注后加到输入框"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Mark as Read": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mark as Read"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "既読にする"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "标为已读"
           }
         }
       },
@@ -56107,7 +55934,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "左边最急的数量，右边下一类：需要你、在工作、做完未看"
+            "value": "左边最急的数量，右边下一类：需要你、工作中、完成未看"
           }
         }
       },
@@ -57321,75 +57148,6 @@
       },
       "extractionState": "manual"
     },
-    "Needs You [Chats View e60ec4]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Needs You"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要対応"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要你"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Needs You [Chats View f50a99]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Needs You"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要対応"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要你处理"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Needs You [Task Sheets f98bd9]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Needs You"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要対応"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等你"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Needs Your Permission": {
       "localizations": {
         "en": {
@@ -57522,7 +57280,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "等你：%1$@"
+            "value": "需要你：%1$@"
           }
         }
       },
@@ -63993,52 +63751,6 @@
       },
       "extractionState": "manual"
     },
-    "Not running [Rewind 62cdc8]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not running"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未运行"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Not running [Session Modes 06dd52]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not running"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没在运行"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Not running; starts when needed": {
       "localizations": {
         "en": {
@@ -66673,7 +66385,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "一个实时活动汇总需要你、在工作、做完了的 Agent"
+            "value": "一个实时活动汇总需要你、工作中、完成未看的 Agent"
           }
         }
       },
@@ -74070,6 +73782,98 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Unknown [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        }
+      }
+    },
+    "Unread [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unread"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未確認"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成未看"
+          }
+        }
+      }
+    },
+    "Waiting [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待機中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待唤醒"
+          }
+        }
+      }
+    },
+    "Working [State Names]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作中"
+          }
+        }
+      }
     },
     "push.unavailable": {
       "comment": "Background push status",
@@ -83073,29 +82877,6 @@
       },
       "extractionState": "manual"
     },
-    "Seen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seen"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "確認済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Sees the screen, clicks and types through LCU. Confirmations happen on your phone and the web": {
       "localizations": {
         "en": {
@@ -90887,29 +90668,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已停止"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Stopped [Task Sheets 2cb954]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stopped"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停着"
           }
         }
       },
@@ -107566,52 +107324,6 @@
       },
       "extractionState": "manual"
     },
-    "Unread [Chats View f9bf93]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未確認"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "完成未看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Unread [Mac Menu Bar e7cdbc]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未確認"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "做完了，还没看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Unread [Personal Agent Intents 4d0680]": {
       "localizations": {
         "en": {
@@ -107630,29 +107342,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "未读"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Unread [Todo Models 0b2e58]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unread"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未確認"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "待查看"
           }
         }
       },
@@ -111494,29 +111183,6 @@
       },
       "extractionState": "manual"
     },
-    "Waiting [Chats View 66441e]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "待機中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "待唤醒"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Waiting [File Attach 26c8cf]": {
       "localizations": {
         "en": {
@@ -111874,29 +111540,6 @@
       },
       "extractionState": "manual"
     },
-    "Waiting for you [Persona Face 66ea80]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting for you"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "対応待ち"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等你处理"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Waiting for you to authorize on %@…": {
       "localizations": {
         "en": {
@@ -111984,29 +111627,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "等你把它发给机器人…"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Waiting for your answer [Rewind 916bc7]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting for your answer"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "回答待ち"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "待回答"
           }
         }
       },
@@ -114544,29 +114164,6 @@
       },
       "extractionState": "manual"
     },
-    "Working [Assistant Profile View f42082]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Working"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "作業中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工作中"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Working [Car Play Voice Screen 694b71]": {
       "localizations": {
         "en": {
@@ -114585,52 +114182,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "处理中"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Working [Mac Menu Bar e556fe]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Working"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "作業中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在工作"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Working [Task Sheets 595753]": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Working"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "作業中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在做"
           }
         }
       },

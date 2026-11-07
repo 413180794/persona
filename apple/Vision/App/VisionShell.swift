@@ -34,7 +34,7 @@ private struct NeedsYouOrnament: View {
             Image(systemName: Theme.Icon.needsYou)
                 .foregroundStyle(Theme.needsYou)
                 .accessibilityHidden(true)
-            Text("Needs You [Chats View e60ec4]")
+            Text(StateName.needsYou.text)
                 .font(Theme.Font.bodyStrong)
                 .lineLimit(1)
             CountBadge(count: waiting, look: .solid(Theme.needsYou))
@@ -49,7 +49,7 @@ private struct NeedsYouOrnament: View {
         .fixedSize()
         .visionOrnamentPanel()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(waiting) need you [Shell Components 79a4aa]")
+        .accessibilityLabel(StateName.count(.needsYou, waiting))
     }
 
     /// The waiting ones as the badges count them, longest waiting first; the one after the conversation on screen.

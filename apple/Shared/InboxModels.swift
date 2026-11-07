@@ -261,7 +261,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         case action, working, fyi, noise
         var title: String {
             switch self {
-            case .action: String(localized: "Needs You [Chats View e60ec4]")
+            case .action: StateName.needsYou.text
             case .working: String(localized: "Active")
             case .fyi: String(localized: "FYI")
             case .noise: String(localized: "Collapsed [Readiness Card ee6046]")

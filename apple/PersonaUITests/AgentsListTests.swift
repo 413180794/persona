@@ -84,6 +84,11 @@ final class AgentsListTests: XCTestCase {
 
     private func filter(_ id: String) -> XCUIElement { app.buttons["agents.filter." + id] }
 
+    /// The cards that need you. Not by their section's title: 需要你 is the 需要你 filter chip's word too.
+    private func needsYouCards() -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "agents.interaction").firstMatch
+    }
+
     /// A space's header (the button that folds it): 「platform，已展开，…」.
     private func header(_ space: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", space + "，")).firstMatch
@@ -135,9 +140,9 @@ final class AgentsListTests: XCTestCase {
     @MainActor func testQuickFilters() throws {
         launch()
         XCTAssertEqual(filter("needsYou").label, "需要你 6")
-        XCTAssertEqual(filter("unread").label, "未读 48")
+        XCTAssertEqual(filter("unread").label, "完成未看 48")
         XCTAssertEqual(filter("working").label, "工作中 19")
-        see(text("需要你处理"), "the cards that need you, under 全部")
+        see(needsYouCards(), "the cards that need you, under 全部")
         // The cards that need you take most of the screen: the rows are below them.
         reach(text("给天气 App 加主屏幕小组件"), "a working agent under 全部")
         shot("agents-all")
@@ -145,9 +150,9 @@ final class AgentsListTests: XCTestCase {
 
         filter("unread").tap()
         XCTAssertTrue(filter("unread").isSelected)
-        gone(text("给天气 App 加主屏幕小组件"), "working agents leave under 未读")
-        XCTAssertFalse(text("需要你处理").exists, "no cards that need you under 未读")
-        see(button("全部标为已读"), "mark every one read, under 未读")
+        gone(text("给天气 App 加主屏幕小组件"), "working agents leave under 完成未看")
+        XCTAssertFalse(needsYouCards().exists, "no cards that need you under 完成未看")
+        see(button("全部标为已看"), "mark every one read, under 完成未看")
         shot("agents-unread")
         // platform is on Mac Studio, the hub's last machine: under 「服务器」's and MacBook's unread (#2108).
         reach(text("platform 任务 4"), "a finished-unread agent")
@@ -159,7 +164,7 @@ final class AgentsListTests: XCTestCase {
         toTop()
 
         filter("needsYou").tap()
-        see(text("需要你处理"), "the cards that need you, under 需要你")
+        see(needsYouCards(), "the cards that need you, under 需要你")
         reach(text("补齐网络层的单元测试"), "an agent that needs you")
         gone(text("给天气 App 加主屏幕小组件"), "working agents leave under 需要你")
         toTop()
@@ -168,7 +173,7 @@ final class AgentsListTests: XCTestCase {
         listMenu().tap()
         see(app.buttons["MacBook"], "MacBook in the menu").tap()
         let unread = filter("unread")
-        wait("未读 counts MacBook's only (\(unread.label))") { unread.label == "未读 6" }
+        wait("完成未看 counts MacBook's only (\(unread.label))") { unread.label == "完成未看 6" }
         XCTAssertEqual(filter("needsYou").label, "需要你 1")
         filter("unread").tap()
         see(text("mobile 任务 1"), "MacBook's unread agent")
@@ -176,7 +181,7 @@ final class AgentsListTests: XCTestCase {
         shot("example-machine")
         listMenu().tap()
         see(app.buttons["全部机器"], "全部机器").tap()
-        wait("未读 counts every machine again") { filter("unread").label == "未读 48" }
+        wait("完成未看 counts every machine again") { filter("unread").label == "完成未看 48" }
         filter("all").tap()
         reach(text("给天气 App 加主屏幕小组件"), "everything again under 全部")
     }
@@ -198,7 +203,7 @@ final class AgentsListTests: XCTestCase {
         see(app.buttons["MacBook"], "MacBook in the menu").tap()
         see(chip, "the chosen machine on the page")
         XCTAssertEqual(chip.label, "只看 MacBook")
-        wait("未读 counts MacBook's only (\(filter("unread").label))") { filter("unread").label == "未读 6" }
+        wait("完成未看 counts MacBook's only (\(filter("unread").label))") { filter("unread").label == "完成未看 6" }
         shot("agents-shell-machine-filter")
 
         chip.tap()
@@ -292,13 +297,13 @@ final class AgentsListTests: XCTestCase {
         launch()
         reach(header("platform"), "platform's header")
         button("platform 的更多操作").tap()
-        see(app.buttons["全部标为已读（35）"], "全部标为已读 with the count").tap()
+        see(app.buttons["全部标为已看（35）"], "全部标为已看 with the count").tap()
         wait("the hub hears of 35 seen (\(seen().count))") { seen().count == 35 }
         let h = header("platform")
         wait("no finished-unread left on the header (\(h.label))") { !h.label.contains("完成未看") }
         // The filters are the first list row now; return to them after inspecting a lower space.
         for _ in 0..<4 where !filter("unread").exists { app.collectionViews.firstMatch.swipeDown(velocity: .fast) }
-        XCTAssertEqual(filter("unread").label, "未读 13")
+        XCTAssertEqual(filter("unread").label, "完成未看 13")
         shot("agents-space-read")
     }
 
@@ -313,9 +318,9 @@ final class AgentsListTests: XCTestCase {
         let back = see(app.buttons["返回"].firstMatch, "the chat")
         sleep(1) // the push has to finish first
         back.tap()
-        see(text(title), "the opened agent stays in place under 未读")
+        see(text(title), "the opened agent stays in place under 完成未看")
         wait("the hub hears it was seen") { seen().count == 1 }
-        XCTAssertEqual(filter("unread").label, "未读 47")
+        XCTAssertEqual(filter("unread").label, "完成未看 47")
         let next = row(1)
         XCTAssertNotEqual(next.staticTexts.firstMatch.label, title, "the next one is below it")
         shot("agents-unread-walk")
@@ -324,10 +329,10 @@ final class AgentsListTests: XCTestCase {
         filter("unread").tap()
         gone(text(title), "a seen agent leaves once the filter is chosen again")
 
-        button("全部标为已读").tap()
+        button("全部标为已看").tap()
         wait("the hub hears of every one (\(seen().count))") { seen().count == 48 }
         see(text("没有完成未看的会话"), "the empty filter")
-        XCTAssertEqual(filter("unread").label, "未读 0")
+        XCTAssertEqual(filter("unread").label, "完成未看 0")
         shot("agents-unread-empty")
     }
 

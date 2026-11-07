@@ -610,12 +610,12 @@ nonisolated enum Theme {
 extension AgentState {
     var label: String {
         switch self {
-        case .needsYou: String(localized: "Needs You [Chats View e60ec4]")
-        case .working: String(localized: "Working [Assistant Profile View f42082]")
-        case .unread: String(localized: "Unread [Chats View f9bf93]")
-        case .idle: String(localized: "Seen")
-        case .offline: String(localized: "Not running [Rewind 62cdc8]")
-        case .unknown: String(localized: "Unknown [Session Modes 4d8c1c]")
+        case .needsYou: StateName.needsYou.text
+        case .working: StateName.working.text
+        case .unread: StateName.unread.text
+        case .idle: StateName.seen.text
+        case .offline: StateName.notRunning.text
+        case .unknown: StateName.unknown.text
         }
     }
 
@@ -636,12 +636,12 @@ extension AgentState {
 extension SessionStatus {
     var label: String {
         switch self {
-        case .working: String(localized: "Working [Assistant Profile View f42082]")
-        case .blocked: String(localized: "Waiting for you [Persona Face 66ea80]")
+        case .working: StateName.working.text
+        case .blocked: StateName.needsYou.text
         case .idle: String(localized: "Idle")
-        case .done: String(localized: "Done [Task Sheets f28461]")
-        case .unknown: String(localized: "Unknown [Session Modes 4d8c1c]")
-        case .offline: String(localized: "Not running [Rewind 62cdc8]")
+        case .done: StateName.done.text
+        case .unknown: StateName.unknown.text
+        case .offline: StateName.notRunning.text
         }
     }
 }

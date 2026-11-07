@@ -11,8 +11,8 @@ nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .idle: String(localized: "Idle")
         case .thinking: String(localized: "Thinking [Persona Face 43ce45]")
-        case .working: String(localized: "Working [Assistant Profile View f42082]")
-        case .needsYou: String(localized: "Waiting for you [Persona Face 66ea80]")
+        case .working: StateName.working.text
+        case .needsYou: StateName.needsYou.text
         case .offline: String(localized: "Offline [Machine Entity be1b4f]")
         }
     }

@@ -252,9 +252,9 @@ struct IslandPreview: View {
 
     static func describe(_ cell: IslandCell) -> String {
         switch cell {
-        case let .needsYou(n): interfaceText("\(n) need you [Fleet State ea2671]")
-        case let .working(n): interfaceText("\(n) working [Fleet State 2224bf]")
-        case let .unread(n): interfaceText("\(n) unread [Fleet Island Views a597f0]")
+        case let .needsYou(n): StateName.count(.needsYou, n)
+        case let .working(n): StateName.count(.working, n)
+        case let .unread(n): StateName.count(.unread, n)
         case .timer: interfaceText(LocalizedStringResource("Timer", comment: "VoiceOver: the island side shows a timer"))
         case .empty: interfaceText(LocalizedStringResource("Empty", comment: "VoiceOver: the island side is empty"))
         default: FleetText.stat(cell) ?? ""

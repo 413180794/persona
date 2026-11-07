@@ -319,7 +319,7 @@ struct WatchRootView: View {
                         }
                     }
                     if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
-                        Section("Needs You [Chats View e60ec4]") {
+                        Section(StateName.needsYou.text) {
                             ForEach(Self.inboxFirst ? [] : model.interactions, id: \.uid) { ix in
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
                                     VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {

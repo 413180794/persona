@@ -33,7 +33,7 @@ struct MachineSpacesView: View {
                 Section {
                     ForEach(active) { g in row(g, busy: true) }
                 } header: {
-                    SectionHeader(title: String(localized: "Active"), count: active.count, tone: StatusPalette.working)
+                    SectionHeader(title: StateName.working.text, count: active.count, tone: StatusPalette.working)
                 }
             }
             if !quiet.isEmpty {

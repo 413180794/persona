@@ -247,7 +247,7 @@ struct ShellNeedsYou: View {
 
     /// BeautifulUI's list card: a heading with how many wait, then one row per thing (its mark, who, what, a chevron).
     private func beautiful(_ all: [Line], shown: Int) -> some View {
-        BUIListSection(String(localized: "Needs You [Chats View e60ec4]"), count: all.count) {
+        BUIListSection(StateName.needsYou.text, count: all.count) {
             ForEach(all.prefix(shown)) { line in beautifulRow(line) }
             if all.count > shown {
                 let rest = more(all.dropFirst(shown))

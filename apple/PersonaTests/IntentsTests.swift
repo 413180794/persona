@@ -59,9 +59,9 @@ struct IntentsTests {
     }
 
     @Test func statusCountsAndFirstQuestion() {
-        #expect(IntentText.status(working: 2, waiting: 0, first: nil) == "2 个在工作，0 个等你处理")
+        #expect(IntentText.status(working: 2, waiting: 0, first: nil) == "2 个工作中，0 个需要你")
         let text = IntentText.status(working: 0, waiting: 1, first: "要我用 opus 还是 sonnet？")
-        #expect(text.hasPrefix("0 个在工作，1 个等你处理："))
+        #expect(text.hasPrefix("0 个工作中，1 个需要你："))
         #expect(text.contains("要我用 opus 还是 sonnet？"))
     }
 

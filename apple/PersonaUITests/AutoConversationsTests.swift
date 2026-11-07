@@ -66,7 +66,7 @@ final class AutoConversationsTests: XCTestCase {
         XCTAssertFalse(conversation("1105 | 收件箱").exists, "an inbox conversation is still in 最近")
         // Ten with an origin, and the mock's scheduled tasks' own conversations (known the #2838 way).
         XCTAssertTrue(group.label.hasPrefix("自动对话 1"), group.label)
-        XCTAssertTrue(group.label.contains("1 个在等你"), group.label)
+        XCTAssertTrue(group.label.contains("1 个需要你"), group.label)
         XCTAssertFalse(app.buttons["sidebar-auto-inbox"].exists, "open before it was tapped")
         sleep(1)
         shot("closed")
@@ -75,7 +75,7 @@ final class AutoConversationsTests: XCTestCase {
         group.tap()
         let inbox = app.buttons["sidebar-auto-inbox"].firstMatch
         XCTAssertTrue(inbox.waitForExistence(timeout: 3), "no 收件箱 row")
-        XCTAssertTrue(inbox.label.hasPrefix("收件箱 6 个，1 个在等你"), inbox.label)
+        XCTAssertTrue(inbox.label.hasPrefix("收件箱 6 个，1 个需要你"), inbox.label)
         for id in ["task", "lark_agent", "spawned", "all"] {
             XCTAssertTrue(app.buttons["sidebar-auto-" + id].exists, "no \(id) row")
         }

@@ -201,12 +201,12 @@ private struct WaitingBadge: View {
             BUIPill(waiting > 99 ? "99+" : "\(waiting)", tone: .custom(ink: .white, fill: Theme.needsYou))
                 .offset(offset)
                 .allowsHitTesting(false)
-                .accessibilityLabel("\(waiting) need you [Shell Components 79a4aa]")
+                .accessibilityLabel(StateName.count(.needsYou, waiting))
         } else if waiting > 0 {
             CountBadge(count: waiting, look: .solid(Theme.needsYou))
                 .offset(offset)
                 .allowsHitTesting(false)
-                .accessibilityLabel("\(waiting) need you [Shell Components 79a4aa]")
+                .accessibilityLabel(StateName.count(.needsYou, waiting))
         }
     }
 }

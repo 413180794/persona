@@ -196,7 +196,7 @@ final class MachinePagesTests: XCTestCase {
         launch(["-tab", "dev", "-openMachinePage", "studio"])
         see(app.navigationBars["Mac Studio"], "Mac Studio's projects", timeout: 15)
         see(text("个项目"), "summary")
-        see(text("进行中"), "busy projects")
+        see(text("工作中"), "busy projects")
         shot("machine-projects")
         let project = see(button("infra"), "a project")
         project.tap()

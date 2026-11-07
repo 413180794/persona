@@ -74,8 +74,9 @@ final class MultiHubTests: XCTestCase {
     @MainActor func testMergedListAndAnswersGoToTheirOwnHub() throws {
         let h = try hubs()
         let app = launch(h, ["-tab", "dev"])
-        let needs = app.staticTexts["需要你处理"]
-        XCTAssertTrue(needs.waitForExistence(timeout: 20))
+        // The cards that need you; not by their section's title, 需要你, which the filter chip says too.
+        let needs = app.descendants(matching: .any).matching(identifier: "agents.interaction").firstMatch
+        XCTAssertTrue(needs.waitForExistence(timeout: 20), "no cards that need you")
         let home = text(app, containing: "MacBook · 家里")
         XCTAssertTrue(home.waitForExistence(timeout: 10), "the first group's MacBook does not say its group:\n\(app.debugDescription)")
         shot("merged")

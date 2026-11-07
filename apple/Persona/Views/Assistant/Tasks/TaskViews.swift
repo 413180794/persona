@@ -19,7 +19,7 @@ struct TaskMark: View {
             Image(systemName: Theme.Icon.successFilled)
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(state == .done ? Color.secondary : Theme.positive)
-                .accessibilityLabel(state == .done ? String(localized: "Done [Extension System Presentation c0b3fb]") : String(localized: "Done [Task Sheets 825cf0]"))
+                .accessibilityLabel(state == .done ? StateName.done.text : StateName.unread.text)
         } else {
             StatusDot(state: state.agentState, size: size)
         }
@@ -29,12 +29,12 @@ struct TaskMark: View {
 extension TaskState {
     var label: String {
         switch self {
-        case .needsYou: String(localized: "Needs You [Task Sheets f98bd9]")
-        case .working: String(localized: "Working [Task Sheets 595753]")
-        case .unread: String(localized: "Done [Task Sheets 825cf0]")
-        case .followup: String(localized: "Stopped [Task Sheets 2cb954]")
+        case .needsYou: StateName.needsYou.text
+        case .working: StateName.working.text
+        case .unread: StateName.unread.text
+        case .followup: StateName.followUp.text
         case .notStarted: String(localized: "Starting [Task Views d14c3a]")
-        case .done: String(localized: "Done [Extension System Presentation c0b3fb]")
+        case .done: StateName.done.text
         case .failed: String(localized: "Didn't Start")
         }
     }
@@ -903,7 +903,7 @@ struct TaskDock: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Agent \(agent.title), \(agent.isWaiting ? String(localized: "Needs You [Task Sheets f98bd9]") : String(localized: "Working [Task Sheets 595753]"))")
+        .accessibilityLabel("Agent \(agent.title), \(agent.isWaiting ? StateName.needsYou.text : StateName.working.text)")
         .accessibilityIdentifier("task-dock.agent")
         .transition(.scale.combined(with: .opacity))
     }
@@ -922,7 +922,7 @@ struct DockPillLabel<Marks: View>: View {
         HStack(spacing: Theme.Space.sm) {
             marks
             Text(title).lineLimit(1)
-            if waiting { Text("Needs You [Task Sheets f98bd9]").lineLimit(1).fixedSize() } // the title gives way, the ask does not
+            if waiting { Text(StateName.needsYou.text).lineLimit(1).fixedSize() } // the title gives way, the ask does not
         }
         .font(Theme.Font.captionStrong)
         .foregroundStyle(waiting ? state.tone.text : .primary)

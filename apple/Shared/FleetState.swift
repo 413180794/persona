@@ -198,9 +198,9 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
 nonisolated enum FleetText {
     static func headline(_ s: FleetState) -> String {
         switch s.phase {
-        case .needsYou: interfaceText("\(s.needsYou) need you [Fleet State ea2671]")
-        case .working: interfaceText("\(s.working) working [Fleet State 2224bf]")
-        case .done: interfaceText("\(s.unread) done")
+        case .needsYou: StateName.count(.needsYou, s.needsYou)
+        case .working: StateName.count(.working, s.working)
+        case .done: StateName.count(.unread, s.unread)
         case .none: interfaceText("All Caught Up")
         }
     }
@@ -212,8 +212,8 @@ nonisolated enum FleetText {
         case .plan: item.detail.isEmpty ? interfaceText("Plan needs approval") : interfaceText("Plan: \(item.detail)")
         case .question: item.detail.isEmpty ? interfaceText("Has a question") : item.detail
         case .screen: item.detail.isEmpty ? interfaceText("Terminal Needs You") : item.detail
-        case .working: interfaceText("Working [Assistant Profile View f42082]")
-        case .unread: item.detail.isEmpty ? interfaceText("Done [Task Sheets 825cf0]") : item.detail
+        case .working: StateName.working.text
+        case .unread: item.detail.isEmpty ? StateName.unread.text : item.detail
         }
     }
 
@@ -224,8 +224,8 @@ nonisolated enum FleetText {
         case .plan: interfaceText("A plan needs your approval")
         case .question: interfaceText("A question needs your answer")
         case .screen: interfaceText("A terminal needs you")
-        case .working: interfaceText("Working [Assistant Profile View f42082]")
-        case .unread: interfaceText("Done [Task Sheets 825cf0]")
+        case .working: StateName.working.text
+        case .unread: StateName.unread.text
         }
     }
 

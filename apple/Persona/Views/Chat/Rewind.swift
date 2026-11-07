@@ -91,9 +91,9 @@ nonisolated enum Rewind {
     static func block(_ session: Session?) -> String? {
         guard let s = session, !s.assistant, s.sourceKind == nil, !s.sessionID.contains("@") else { return nil }
         if let agent = s.agent, agent != "claude" { return String(localized: "Claude only") }
-        if s.state == .offline || s.starting == true { return String(localized: "Not running [Rewind 62cdc8]") }
-        if s.state == .needsYou || s.pendingInteractions > 0 { return String(localized: "Waiting for your answer [Rewind 916bc7]") }
-        if s.state == .working { return String(localized: "Working [Assistant Profile View f42082]") }
+        if s.state == .offline || s.starting == true { return StateName.notRunning.text }
+        if s.state == .needsYou || s.pendingInteractions > 0 { return StateName.needsYou.text }
+        if s.state == .working { return StateName.working.text }
         return ""
     }
 

@@ -196,7 +196,7 @@ struct AssistantProfileView: View {
             HStack(spacing: Theme.Space.s) {
                 let online = model.machine(model.hubRef(machineID))?.online ?? false
                 Chip(text: online ? String(localized: "Online") : String(localized: "Offline [Machine Entity be1b4f]"), symbol: online ? Theme.Icon.successFilled : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
-                if working { Chip(text: String(localized: "Working [Assistant Profile View f42082]"), symbol: Theme.Icon.more, look: .tint(Theme.accent)) }
+                if working { Chip(text: StateName.working.text, symbol: Theme.Icon.more, look: .tint(Theme.accent)) }
                 if let next = upcoming.first {
                     Chip(text: String(localized: "Next \(AssistantScheduleText.moment(next.at)) [Assistant Profile View 6f07f2]"), symbol: Theme.Icon.schedule)
                 }

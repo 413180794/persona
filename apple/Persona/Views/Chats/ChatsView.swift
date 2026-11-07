@@ -141,9 +141,9 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .all: String(localized: "All")
-        case .needsYou: String(localized: "Needs You [Chats View e60ec4]")
-        case .unread: String(localized: "Unread [Personal Agent Intents 4d0680]")
-        case .working: String(localized: "Working [Assistant Profile View f42082]")
+        case .needsYou: StateName.needsYou.text
+        case .unread: StateName.unread.text
+        case .working: StateName.working.text
         case .feishu: SessionSource.feishu.label
         case .terminal: SessionSource.terminal.label
         }
@@ -897,7 +897,7 @@ private struct AgentsList: View {
                         }
                     }
                 } header: {
-                    SectionHeader(title: String(localized: "Needs You [Chats View f50a99]"), count: interactions.count, tone: StatusPalette.needsYou)
+                    SectionHeader(title: StateName.needsYou.text, count: interactions.count, tone: StatusPalette.needsYou)
                         .searchTraceMark("needs")
                 }
             }
@@ -911,22 +911,22 @@ private struct AgentsList: View {
                         if compact {
                             HStack(spacing: CompactList.gap) {
                                 Image(systemName: Theme.Icon.success).font(CompactList.metaStrong).scaledFrame(width: CompactList.mark)
-                                Text("Mark All as Read").font(CompactList.title).lineLimit(1)
+                                Text(StateName.markAllSeen()).font(CompactList.title).lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) unread [Chats View 3ef9c7]").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
+                                Text(StateName.count(.unread, unreadShown.count)).font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
                             }
                         } else if capsules {
                             HStack {
-                                Label("Mark All as Read", systemImage: Theme.Icon.success).lineLimit(1)
+                                Label(StateName.markAllSeen(), systemImage: Theme.Icon.success).lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) unread [Chats View 3ef9c7]").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(StateName.count(.unread, unreadShown.count)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .card(padding: Theme.Space.m)
                         } else {
                             HStack {
-                                Label("Mark All as Read", systemImage: Theme.Icon.success).lineLimit(1)
+                                Label(StateName.markAllSeen(), systemImage: Theme.Icon.success).lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) unread [Chats View 3ef9c7]").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(StateName.count(.unread, unreadShown.count)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }
@@ -1696,11 +1696,11 @@ private struct AgentsList: View {
     private func ordered(_ list: [Session]) -> [Session] { order.ordered(list) }
 
     private static let stateTitles: [(key: String, title: String, tint: StatusTone)] = [
-        ("needs", String(localized: "Needs You [Chats View e60ec4]"), StatusPalette.needsYou), ("unread", String(localized: "Unread [Chats View f9bf93]"), StatusPalette.unread),
-        ("awaiting", String(localized: "Awaiting Reply"), StatusPalette.awaitingReply),
-        ("working", String(localized: "Working [Assistant Profile View f42082]"), StatusPalette.working),
-        ("waiting", String(localized: "Waiting [Chats View 66441e]"), StatusTone(dot: Theme.loop, text: Theme.loop)),
-        ("muted", String(localized: "Muted [Chats View b66705]"), StatusPalette.idle), ("idle", String(localized: "Seen"), StatusPalette.idle),
+        ("needs", StateName.needsYou.text, StatusPalette.needsYou), ("unread", StateName.unread.text, StatusPalette.unread),
+        ("awaiting", StateName.awaitsReply.text, StatusPalette.awaitingReply),
+        ("working", StateName.working.text, StatusPalette.working),
+        ("waiting", StateName.waiting.text, StatusTone(dot: Theme.loop, text: Theme.loop)),
+        ("muted", String(localized: "Muted [Chats View b66705]"), StatusPalette.idle), ("idle", StateName.seen.text, StatusPalette.idle),
     ]
 
     /// The fold ids of the sections By Status / By Machine shows now (Collapse All).
@@ -3296,7 +3296,7 @@ struct SpaceMenuItems: View {
         }
         let unread = group.sessions.filter { $0.state == .unread }.map(\.key)
         if !unread.isEmpty {
-            Button { model.markSeen(unread) } label: { Label("Mark All as Read (\(unread.count))", systemImage: Theme.Icon.success) }
+            Button { model.markSeen(unread) } label: { Label(StateName.markAllSeen(unread.count), systemImage: Theme.Icon.success) }
         }
         if let rename, group.spaceID != "-" {
             Button(action: rename) { Label("Rename Space", systemImage: Theme.Icon.edit) }

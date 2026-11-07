@@ -46,7 +46,7 @@ struct TodayCard: View {
         }
         if let waiting = today.waiting, !waiting.isEmpty {
             out.append(.init(symbol: Theme.Icon.askFirst, tint: AgentState.needsYou.tone.text,
-                             title: waiting.count == 1 ? String(localized: "Needs you: \(waiting[0].title)") : String(localized: "\(waiting.count) need you [Today Card 2ac654]"),
+                             title: waiting.count == 1 ? String(localized: "Needs you: \(waiting[0].title)") : StateName.count(.needsYou, waiting.count),
                              detail: waiting.count > 1 ? waiting.map(\.title).joined(separator: String(localized: "、", comment: "Separator between list items")) : nil,
                              action: String(localized: "View [Today Card 88f472]"), run: .open(waiting[0].id)))
         }

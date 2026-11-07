@@ -150,17 +150,17 @@ struct MacMenuBarMenu: View {
             Text("Nothing needs you")
         }
         if !s.needsYou.isEmpty {
-            Section("Needs You [Chats View e60ec4]") {
+            Section(StateName.needsYou.text) {
                 ForEach(s.needsYou) { item in needsYouItem(item) }
             }
         }
         if !s.working.isEmpty {
-            Section("Working [Mac Menu Bar e556fe]") {
+            Section(StateName.working.text) {
                 ForEach(s.working) { item in Button(item.label) { open(item.key) } }
             }
         }
         if !s.unread.isEmpty {
-            Section("Unread [Mac Menu Bar e7cdbc]") {
+            Section(StateName.unread.text) {
                 ForEach(s.unread) { item in Button(item.label) { open(item.key) } }
             }
         }

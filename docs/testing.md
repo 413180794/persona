@@ -483,8 +483,8 @@ Fixture tab order 41 / 52 / 1 minutes ago must expand as 1 / 41 / 52; cards, com
 `TEST_RUNNER_PERSONA_UI_STYLE=glass|beautiful` plus actual light/dark covers ordinary cards/capsules; `TEST_RUNNER_PERSONA_SHOTS=<directory>`, `TEST_RUNNER_PERSONA_STYLE` filename-only.
 
 Quick filters (All / Needs you / Unread / Working, counts follow machine filter), compact list (≥2.5× card rows, persisted across restart), space-title collapse (state counts remain,
-persisted; collapse/expand all; collapsed-space ⋯ Open Space), space ⋯ Mark All as Read (N), browsing Unread keeps seen entries until reselecting filter,
-confirmed Mark All as Read empties filter, phone filter bar scrolls as first row (`testFilterBarHugsTheTop`: search collapsed initially, pull opens, no fixed duplicate after scrolling;
+persisted; collapse/expand all; collapsed-space ⋯ Open Space), space ⋯ Mark All as Seen (N), browsing Unread keeps seen entries until reselecting filter,
+confirmed Mark All as Seen empties filter, phone filter bar scrolls as first row (`testFilterBarHugsTheTop`: search collapsed initially, pull opens, no fixed duplicate after scrolling;
 no blurred gap at bottom/pull-refresh/chat-return/background-return/tab switch/search-return-to-top; `testFilterBarHugsTheTopBehindARestoredChat`: cold restored chat→back→pull search→scroll).
 At rest, frames check filter bar touches navigation/search, **and screenshot pixels verify actual drawing**: UIKit can move contents without changing XCUITest frame,
 so frame-only checks missed TestFlight 35 / 38 gaps. Search tests first pull open drawer, not mistake collapsed search for absent list.

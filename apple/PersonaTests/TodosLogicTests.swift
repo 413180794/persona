@@ -239,7 +239,7 @@ struct TodosLogicTests {
 
     @Test func todoPresentationPreservesLabelsOrderAndColors() {
         let states: [TaskState] = [.needsYou, .unread, .working, .followup, .notStarted, .done, .failed]
-        #expect(states.map(\.todoLabel) == ["等你", "待查看", "进行中", "待跟进", "未开始", "已完成", "没开起来"])
+        #expect(states.map(\.todoLabel) == ["需要你", "完成未看", "工作中", "待跟进", "未开始", "已完成", "没开起来"])
         #expect(states.map(\.todoRank) == [0, 1, 2, 3, 4, 5, 6])
         #expect(TaskState.allCases.sorted { $0.todoRank < $1.todoRank } == states)
         let tones = [StatusPalette.needsYou, StatusPalette.unread, StatusPalette.working,
