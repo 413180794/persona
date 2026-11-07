@@ -2,6 +2,10 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Database-move diagnostic timestamps (#6212)
+
+- A persisted move time is an absolute instant. Formatting it with `.Local()` and a minute-only layout makes operational errors depend on the hub machine's zone and loses the offset. Use explicit UTC RFC 3339 for these database-move diagnostics; normal user-facing calendars and schedules still use the configured user zone. Test equivalent UTC, positive-offset and negative-offset inputs, and keep the time-zone guard unchanged.
+
 ## Native stream capability reporting (#6186)
 
 - Implementing a manager's stream RPC and accepting a client's opt-in does not advertise server support. Both real client adapters fell back because the authenticated hello lacked `extension_ui_stream_v1`. Report the manager-owned transport capability through the existing extension report and hub feature aggregation, independently of installed pages. This is not a renderer, source-runtime availability, permission or resource-enforcement claim: client opt-in, native context/vocabulary checks and all activation/authorization gates still apply.

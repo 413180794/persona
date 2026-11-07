@@ -89,7 +89,7 @@ func dropShared(ctx context.Context, home, shared string, yes bool, out io.Write
 		fmt.Fprintln(out, "The hub's database has none of the manager's tables left.")
 		return nil
 	}
-	fmt.Fprintf(out, "The hub's database keeps the built-in manager's tables as they were when its data moved (%s):\n", own.Moved.Local().Format("2006-01-02 15:04"))
+	fmt.Fprintf(out, "The hub's database keeps the built-in manager's tables as they were when its data moved (%s):\n", databaseMovedAt(own.Moved))
 	for _, t := range drop {
 		fmt.Fprintln(out, "  "+t)
 	}

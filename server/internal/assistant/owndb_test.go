@@ -18,6 +18,24 @@ import (
 	"github.com/nwverse/persona/server/internal/managerconf"
 )
 
+func TestDatabaseMovedAt(t *testing.T) {
+	for _, input := range []string{
+		"2025-01-02T03:04:05Z",
+		"2025-01-02T17:04:05+14:00",
+		"2025-01-01T15:04:05-12:00",
+	} {
+		t.Run(input, func(t *testing.T) {
+			moved, err := time.Parse(time.RFC3339, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := databaseMovedAt(moved); got != "2025-01-02T03:04:05Z" {
+				t.Fatalf("databaseMovedAt(%q) = %q; want an explicit UTC instant", input, got)
+			}
+		})
+	}
+}
+
 // newDatabase is a database of its own next to the test's, dropped at the end.
 func newDatabase(t *testing.T) string {
 	t.Helper()

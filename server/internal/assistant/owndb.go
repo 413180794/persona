@@ -51,6 +51,11 @@ func ownDatabaseName(shared string) string {
 	return name
 }
 
+func databaseMovedAt(moved time.Time) string {
+	// Operational diagnostics identify an absolute instant, regardless of the hub's local zone.
+	return moved.UTC().Format(time.RFC3339)
+}
+
 // moveWait is how long the move waits for other processes to leave the manager's tables in the shared database.
 var moveWait = time.Minute
 
@@ -74,7 +79,7 @@ func builtinDatabase(ctx context.Context, home, shared string, provision provisi
 		}
 		if err != nil {
 			// Its data went there: the hub's database's copy is stale, and running on it would split the two.
-			return "", false, fmt.Errorf("its own database (where its data moved %s) is not up: %w", kept.Moved.Local().Format("2006-01-02 15:04"), err)
+			return "", false, fmt.Errorf("its own database (where its data moved %s) is not up: %w", databaseMovedAt(kept.Moved), err)
 		}
 		if changed(kept, own) {
 			own.Moved = kept.Moved
