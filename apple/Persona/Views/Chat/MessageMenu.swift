@@ -20,8 +20,9 @@ final class MessageMenu {
     @ObservationIgnored var source: () -> String = { "" }
     /// Who answers in this chat ("Claude" / "Codex" / "TRAEX"), for share cards.
     @ObservationIgnored var agent: () -> String = { "Claude" }
-    /// Quote: the message's text, its id, and whether it is the user's own.
-    @ObservationIgnored var quote: ((String, String, Bool) -> Void)?
+    /// Quote: the text, the message's id, whether it is the user's own, and the part quoted (nil: the whole message;
+    /// `ContextRef.selectionPart`: words picked in Select Text).
+    @ObservationIgnored var quote: ((String, String, Bool, String?) -> Void)?
     /// A message dragged to the left is quoted (Telegram's reply, #1058): Agents chats. The assistant's pages sit in
     /// the shell's pager, whose own sideways swipe this would take. Observed: the chat turns it on as it appears, after
     /// its first rows may have been drawn without it (they never got the drag, now and then).
@@ -92,7 +93,17 @@ struct SelectableText: Identifiable {
     var text: String
     /// Your own message: shown as written, without Markdown (its bubble shows it plain).
     var plain = false
+    /// The message's id, for quoting part of it.
+    var msg = ""
     var id: String { text }
+}
+
+extension MessageMenu {
+    /// Select Text › Quote (#4549): quotes the picked words of the page's message; nil when the chat does not quote.
+    func selectionQuote(of page: SelectableText) -> ((String) -> Void)? {
+        guard let quote else { return nil }
+        return { picked in quote(picked, page.msg, page.plain, ContextRef.selectionPart) }
+    }
 }
 
 #if os(iOS)
@@ -318,7 +329,7 @@ private struct MessageActionBarHost: ViewModifier {
                     }
                 }
                 .gesture(LeftDrag(moved: moved, ended: ended))
-                .accessibilityAction(named: "Quote") { menu.quote?(text, id, isUser) }
+                .accessibilityAction(named: "Quote") { menu.quote?(text, id, isUser, nil) }
         } else {
             content
         }
@@ -338,7 +349,7 @@ private struct MessageActionBarHost: ViewModifier {
     }
 
     private func ended(_ x: CGFloat) {
-        if armed { menu?.quote?(text, id, isUser) }
+        if armed { menu?.quote?(text, id, isUser, nil) }
         armed = false
         withAnimation(Theme.Motion.springBack) { drag = 0 }
     }
@@ -381,8 +392,8 @@ struct MessageActionBar: View {
                 Haptics.success()
             }
             // "Select Text", not "Select": next to Copy a bare Select reads as picking messages (WeChat's multi-select).
-            action(String(localized: "Select Text [Message Menu 4d8efc]"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser) }
-            action(String(localized: "Quote"), "quote.opening") { menu.quote?(text, id, isUser) }
+            action(String(localized: "Select Text [Message Menu 4d8efc]"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser, msg: id) }
+            action(String(localized: "Quote"), "quote.opening") { menu.quote?(text, id, isUser, nil) }
             action(String(localized: "Share"), "square.and.arrow.up") {
                 menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
             }
@@ -425,15 +436,17 @@ struct MessageActionBar: View {
 
 /// The message in a text view where any part of it can be selected and copied (「选择文本」). On iOS a reply reads as in
 /// the chat, without the Markdown marks (`SelectableMarkdown`); your own message stays as you wrote it, as its bubble
-/// shows it (`plain`). Copy All copies the message as Copy does.
+/// shows it (`plain`). Copy All copies the message as Copy does; Quote, first in the selection's menu, quotes the
+/// picked words in the composer (`quote`, #4549).
 struct SelectableTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     var text: String
     var plain = false
+    var quote: ((String) -> Void)? = nil
 
     var body: some View {
         NavigationStack {
-            SelectableTextView(text: text, plain: plain)
+            SelectableTextView(text: text, plain: plain, quote: quote.map { quote in { picked in dismiss(); quote(picked) } })
                 .navigationTitle("Select Text [Message Menu 4d8efc]")
                 .navigationBarTitleDisplayMode(.inline)
                 .pageToolbar {
@@ -457,6 +470,8 @@ struct SelectableTextSheet: View {
 struct SelectableTextView: UIViewRepresentable {
     var text: String
     var plain = false
+    /// Quote for the selection, first in its menu (none when nil).
+    var quote: ((String) -> Void)? = nil
 
     func makeUIView(context: Context) -> SelectableUITextView {
         let v = SelectableUITextView()
@@ -465,10 +480,31 @@ struct SelectableTextView: UIViewRepresentable {
         v.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 24, right: 12)
         v.backgroundColor = .clear
         v.accessibilityIdentifier = "selectable-text"
+        v.delegate = context.coordinator
         return v
     }
 
-    func updateUIView(_ v: SelectableUITextView, context: Context) { v.show(text, plain: plain) }
+    func updateUIView(_ v: SelectableUITextView, context: Context) {
+        context.coordinator.quote = quote
+        v.show(text, plain: plain)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var quote: ((String) -> Void)?
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            let selected = (textView.text as NSString).substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !selected.isEmpty, quote != nil else { return UIMenu(children: suggestedActions) }
+            let ours = UIMenu(options: .displayInline, children: [
+                UIAction(title: String(localized: "Quote"), image: UIImage(systemName: Theme.Icon.quote)) { [weak self] _ in
+                    self?.quote?(selected)
+                },
+            ])
+            return UIMenu(children: [ours] + suggestedActions)
+        }
+    }
 }
 
 /// Draws its text again when the text size changes: the fonts are made for one size (an attributed string's fonts

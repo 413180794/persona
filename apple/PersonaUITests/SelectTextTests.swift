@@ -3,7 +3,7 @@ import XCTest
 /// Long-press a message › Select Text: the message opens in a page where any part of it can be selected and copied, not
 /// only the whole of it (Copy). A reply reads as in the chat, without the Markdown marks; your own message stays as
 /// written (its bubble shows it plain: `__init__.py`, `2*3*4`, `# …`, `- …` are kept).
-///   PORT=18950 MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1 python3 scripts/mock/mock_hub.py &
+///   PORT=18950 MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1 MOCK_ECHO_SENT=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18950 xcodebuild test … -only-testing:PersonaUITests/SelectTextTests
 /// Both styles (TEST_RUNNER_PERSONA_UI_STYLE=beautiful), iPhone and iPad; `TEST_RUNNER_PERSONA_SHOTS=<dir>` saves the
 /// page, named by the simulator's appearance (`simctl ui <udid> appearance light|dark`).
@@ -94,6 +94,37 @@ final class SelectTextTests: XCTestCase {
         XCTAssertTrue(app.buttons["全部拷贝"].exists)
         app.buttons["完成"].tap()
         XCTAssertTrue(page.waitForNonExistence(timeout: 3), "完成 did not close the page")
+    }
+
+    /// Select Text › Quote (#4549): Quote leads the selection's menu and puts only the picked words over the box, as
+    /// part of the reply; sent, the bubble opens with them.
+    @MainActor func testQuoteThePickedWords() throws {
+        launch(selectChat)
+        let page = openSelection("Yes", shot: "quote")
+        page.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 30, dy: 28)).doubleTap()
+        let pick = app.descendants(matching: .any).matching(NSPredicate(format: "(elementType == %d OR elementType == %d) AND label == %@",
+            XCUIElement.ElementType.menuItem.rawValue, XCUIElement.ElementType.button.rawValue, "引用")).firstMatch
+        XCTAssertTrue(pick.waitForExistence(timeout: 3), "no 引用 in the selection's menu:\n\(app.debugDescription)")
+        sleep(1) // the menu fades in
+        shot("quote-menu")
+        pick.tap()
+        XCTAssertTrue(page.waitForNonExistence(timeout: 3), "引用 did not close the page")
+
+        let quotes = app.descendants(matching: .any).matching(identifier: "composer.quotes").firstMatch
+        XCTAssertTrue(quotes.waitForExistence(timeout: 3), "no quote over the box")
+        let heading = quotes.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "引用选中的文字")).firstMatch
+        XCTAssertTrue(heading.exists, "the quote does not say it is a part:\n\(quotes.debugDescription)")
+        XCTAssertTrue(quotes.staticTexts["Yes"].exists, "the quote is not just the picked word:\n\(quotes.debugDescription)")
+        sleep(1)
+        shot("quote-bar")
+
+        let send = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "shell-composer-send", "发送")).firstMatch
+        XCTAssertTrue(send.waitForExistence(timeout: 3))
+        send.tap()
+        XCTAssertTrue(quotes.waitForNonExistence(timeout: 5), "the quote stayed over the box after sending")
+        let block = app.buttons.matching(identifier: "bubble.quote").firstMatch
+        XCTAssertTrue(block.waitForExistence(timeout: 5), "the sent bubble has no quote")
+        XCTAssertTrue(block.label.hasPrefix("引用选中的文字") && block.label.hasSuffix("Yes"), block.label)
     }
 
     /// Your own message: exactly as written, no Markdown applied.

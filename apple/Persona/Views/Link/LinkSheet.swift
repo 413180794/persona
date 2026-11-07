@@ -22,6 +22,9 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
     var text: String
     /// A quoted message's id in its chat (`kind` "quote"), so its block in the sent bubble leads back to it.
     var msg = ""
+    /// Which part of the message is quoted (`part="selection"`: words picked in Select Text, #4549); nil for all of it.
+    /// Readers that do not know it read the block as a quote of the message.
+    var part: String? = nil
 
     var host: String { URL(string: url)?.host ?? url }
 
@@ -31,7 +34,8 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
                 .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         }
         let msgAttr = msg.isEmpty ? "" : " msg=\"\(esc(msg))\""
-        return "<persona-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)>\n\(ContextText.inBlock(text))\n</persona-context>"
+        let partAttr = part.map { " part=\"\(esc($0))\"" } ?? ""
+        return "<persona-context kind=\"\(kind)\" title=\"\(esc(title))\" url=\"\(esc(url))\"\(msgAttr)\(partAttr)>\n\(ContextText.inBlock(text))\n</persona-context>"
     }
 
     /// One `<persona-context>` block, its attributes in any order and any of them missing (a Lark /agent request's context has no url).
@@ -58,7 +62,7 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
                 a[attrs.substring(with: am.range(at: 1))] = unescape(attrs.substring(with: am.range(at: 2)))
             }
             refs.append(ContextRef(kind: a["kind"] ?? "context", title: a["title"] ?? "", url: a["url"] ?? "",
-                                   text: ns.substring(with: m.range(at: 2)), msg: a["msg"] ?? ""))
+                                   text: ns.substring(with: m.range(at: 2)), msg: a["msg"] ?? "", part: a["part"]))
         }
         let rest = tagRe.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
         return (refs, rest.trimmingCharacters(in: .whitespacesAndNewlines))

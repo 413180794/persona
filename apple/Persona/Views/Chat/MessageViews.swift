@@ -529,7 +529,7 @@ private struct AnswerHoverActions: ViewModifier {
             content.macHoverFooter {
                 MacHoverButton(title: String(localized: "Copy [Readiness Views d37380]"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
                 if let quote = menu?.quote {
-                    MacHoverButton(title: String(localized: "Quote"), symbol: Theme.Icon.quote) { quote(text, id, false) }
+                    MacHoverButton(title: String(localized: "Quote"), symbol: Theme.Icon.quote) { quote(text, id, false, nil) }
                 }
             }
         } else {

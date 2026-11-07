@@ -8,9 +8,22 @@ import SwiftUI
 // context of a Feishu /agent request (instructions, documents) is not a quote and stays folded (`ContextGroup`).
 
 nonisolated extension ContextRef {
-    /// Quote on a message of this chat: who wrote it (「我」 for the user's own, as the agent reads it) and its id.
-    static func quote(_ text: String, from: String, msg: String) -> ContextRef {
-        ContextRef(kind: "quote", title: from, url: "", text: text, msg: msg)
+    /// Quote on a message of this chat: who wrote it (「我」 for the user's own, as the agent reads it), its id, and the
+    /// part quoted (`selectionPart`, or nil for the whole message).
+    static func quote(_ text: String, from: String, msg: String, part: String? = nil) -> ContextRef {
+        ContextRef(kind: "quote", title: from, url: "", text: text, msg: msg, part: part)
+    }
+
+    /// `part` of a quote of words picked in a message (Select Text › Quote, #4549).
+    static let selectionPart = "selection"
+
+    /// `refs` with `ref` added, or nil when it is there already: a message goes over the box once as a whole and once
+    /// per picked part (a message without an id every time).
+    static func adding(_ ref: ContextRef, to refs: [ContextRef]) -> [ContextRef]? {
+        let there = ref.kind == "quote" && !ref.msg.isEmpty && refs.contains {
+            $0.kind == "quote" && $0.msg == ref.msg && $0.part == ref.part && (ref.part == nil || $0.text == ref.text)
+        }
+        return there ? nil : refs + [ref]
     }
 
     /// What the user picked to go with a message (a message, a page's text, a session, a recording…), shown as a quote.
@@ -40,9 +53,10 @@ nonisolated extension ContextRef {
     var quoteHeading: String {
         switch kind {
         case "quote":
+            let who = title.isEmpty ? String(localized: "Messages [Quote Views 4da199]") : title
+            if part == Self.selectionPart { return String(localized: "Quoting selected text · \(who)") }
             let mine = title == "我" // i18n-ignore: the sender name Lark gives the user's own messages
             if mine { return String(localized: "Quoting your message") }
-            let who = title.isEmpty ? String(localized: "Messages [Quote Views 4da199]") : title
             return String(localized: "Quoting \(who)")
         case "edit": return String(localized: "Text to change · \(label)")
         default:

@@ -107,12 +107,32 @@ struct SelectableTextView: NSViewRepresentable {
     var text: String
     /// Your own message; the Mac shows every message as written.
     var plain = false
+    /// Quote for the selection, first in its right-click menu (none when nil).
+    var quote: ((String) -> Void)? = nil
 
-    func makeNSView(context: Context) -> NSScrollView { MenuTextView.scrollable() }
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = MenuTextView.scrollable()
+        let coordinator = context.coordinator
+        (scroll.documentView as? MenuTextView)?.selectionItems = { selected in
+            guard coordinator.quote != nil else { return [] }
+            return [UIAction(title: String(localized: "Quote"), image: UIImage(systemName: Theme.Icon.quote)) { _ in
+                coordinator.quote?(selected)
+            }.nsMenuItem()]
+        }
+        return scroll
+    }
 
     func updateNSView(_ v: NSScrollView, context: Context) {
+        context.coordinator.quote = quote
         guard let t = v.documentView as? NSTextView else { return }
         if t.string != text { t.string = text }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    @MainActor
+    final class Coordinator {
+        var quote: ((String) -> Void)?
     }
 }
 

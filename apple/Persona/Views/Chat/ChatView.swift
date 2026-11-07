@@ -2210,7 +2210,7 @@ struct ChatView: View {
             }
         }
         #endif
-        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text, plain: t.plain) }
+        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text, plain: t.plain, quote: menu.selectionQuote(of: t)) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
         .confirmationDialog("This Reply", isPresented: Binding(get: { menu.more != nil }, set: { if !$0 { menu.more = nil } })) {
             if let id = menu.more {
@@ -3283,11 +3283,10 @@ struct ChatView: View {
     /// Quote puts the message over the box as a quote that goes with the next message (#986); Edit replaces the draft
     /// with your old message.
     private func bindMenu() {
-        menu.quote = { [model, key] text, id, isUser in
+        menu.quote = { [model, key] text, id, isUser, part in
             let from = isUser ? String(localized: "Me") : (model.session(key)?.agentLabel ?? "Claude")
-            var quotes = model.composerContexts[key] ?? []
-            guard !quotes.contains(where: { $0.kind == "quote" && $0.msg == id && !id.isEmpty }) else { return }
-            quotes.append(.quote(text, from: from, msg: id))
+            let quote = ContextRef.quote(text, from: from, msg: id, part: part)
+            guard let quotes = ContextRef.adding(quote, to: model.composerContexts[key] ?? []) else { return }
             withAnimation(Theme.Motion.state) { model.composerContexts[key] = quotes }
             model.composerFocus = key // ready to type the reply, as in Telegram
         }
