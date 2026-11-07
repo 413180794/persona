@@ -174,6 +174,12 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
     (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
       -o "../$OUT/bin/personad-$p-${t%/*}-${t#*/}" "./cmd/personad-$p")
   done
+  # The hub's and the manager's own programs (docs/server/server.md "Programs"): the same code as personad's hub and
+  # manager commands, each without the other's.
+  for p in persona-hub persona-manager; do
+    (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
+      -o "../$OUT/bin/$p-${t%/*}-${t#*/}" "./cmd/$p")
+  done
 done
 cleanup
 python3 scripts/persona_identity.py --render-installer scripts/deploy/install.sh "$OUT/install.sh" "$PERSONA_PUBLISH_URL/dl"
@@ -184,6 +190,7 @@ python3 scripts/persona_identity.py --render-installer scripts/deploy/install.sh
 # on purpose.
 python3 scripts/release/check_bundle_privacy.py --whole-short "$OUT/bin"
 python3 scripts/release/check_bundle_skills.py "$OUT/bin/personad-linux-amd64"
+python3 scripts/release/check_bundle_skills.py "$OUT/bin/persona-manager-linux-amd64" # it embeds the same skills
 host_bin="$OUT/bin/personad-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built personad does not report $VERSION" >&2; exit 1; }
 host_link="$OUT/bin/persona-link-${host_bin##*/personad-}"
@@ -191,9 +198,9 @@ host_link="$OUT/bin/persona-link-${host_bin##*/personad-}"
 host_node="$OUT/bin/persona-node-${host_bin##*/personad-}"
 [ "$("$host_node" version -v)" = "$("$host_bin" version -v)" ] || { echo "persona-node is not the same build as personad" >&2; exit 1; }
 "$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built personad is not release build $BUILD" >&2; exit 1; }
-for p in wechat; do
-  host_p="$OUT/bin/personad-$p-${host_bin##*/personad-}"
-  [ "$("$host_p" version -v)" = "$("$host_bin" version -v)" ] || { echo "personad-$p is not the same build as personad" >&2; exit 1; }
+for p in personad-wechat persona-hub persona-manager; do
+  host_p="$OUT/bin/$p-${host_bin##*/personad-}"
+  [ "$("$host_p" version -v)" = "$("$host_bin" version -v)" ] || { echo "$p is not the same build as personad" >&2; exit 1; }
 done
 
 # Releases only move forward: a larger build number than the one served, and the served commit an ancestor of this one.
@@ -201,7 +208,7 @@ curl -fsSL "$PERSONA_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/nu
 "$host_bin" release check-next "$OUT/served.json" --build "$BUILD" --commit "$COMMIT" || exit 1
 
 # The privacy scan checked the raw binaries; only the gzipped ones are published (to the bucket, see above).
-for bin in "$OUT/bin"/personad-* "$OUT/bin"/persona-link-* "$OUT/bin"/persona-node-*; do
+for bin in "$OUT/bin"/personad-* "$OUT/bin"/persona-link-* "$OUT/bin"/persona-node-* "$OUT/bin"/persona-hub-* "$OUT/bin"/persona-manager-*; do
   gzip -n -9 -c "$bin" > "$bin.gz"
 done
 python3 scripts/persona_identity.py --artifact-aliases "$OUT/bin"

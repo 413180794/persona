@@ -23,9 +23,10 @@ import (
 // to a minute, from 1 s again once it ran a minute. So a hub's systemd unit, its Docker image and deploy.sh stay as they are. An assistant run
 // elsewhere gets its token from `personad hub assistant-token` (docs/assistant/assistant.md "Process").
 
-// assistantCommand is the assistant's command line (tests run another).
+// assistantCommand is the assistant's command line (tests run another): `personad assistant`, also when the hub runs
+// as persona-hub (ServerBinary).
 var assistantCommand = func(ctx context.Context) (*exec.Cmd, error) {
-	exe, err := os.Executable()
+	exe, err := ServerBinary()
 	if err != nil {
 		return nil, err
 	}

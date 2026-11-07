@@ -203,7 +203,7 @@ The binary gets three more `-X` variables (`cmd/personad`):
 ```
 
 - `ancestors`: all commits reachable from this commit (`git rev-list <commit>`), the first 6 bytes of each, sorted, then base64 ("no regression").
-- `programs`: programs published together with personad that the hub runs alongside (`update.ProgramNames`: `personad-wechat`, `docs/extensions/wechat.md`;
+- `programs`: programs published together with personad that the hub runs alongside (`update.ProgramNames`: `personad-wechat`, `docs/extensions/wechat.md`; `persona-hub` and `persona-manager`, [../server/server.md](../server/server.md) ("Programs");
   Telegram's `personad-telegram` was also here up to #1704; after that it is an extension and goes through the extension market):
   `{"personad-wechat": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`. Old hubs ignore this field and still only swap personad.
 
@@ -272,6 +272,8 @@ Comparing only build numbers can go backwards: a directly deployed hub runs comm
 - When automatic updates are off it would not install by itself anyway, so nothing is recorded.
 
 ### Programs swapped together with personad (2026-11-03, #533)
+
+The programs (`update.ProgramNames`): `personad-wechat` (the WeChat bot), and `persona-hub` and `persona-manager`, the hub's and the manager's own programs ([../server/server.md](../server/server.md) ("Programs")).
 
 - When the manifest has `programs` for this hub's platform, they are downloaded and verified (same sha256, and `version -v` must be this version), then swapped in together with personad: placed next to personad,
   existing ones kept as `.prev`, and ones that did not exist before recorded as newly installed. If any one fails to download or verify, the whole update is skipped.

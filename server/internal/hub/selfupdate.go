@@ -140,9 +140,10 @@ func newUpdater(h *Hub) *updater {
 	u := &updater{h: h, dir: update.Dir(), client: &http.Client{Timeout: 10 * time.Minute, Transport: transport},
 		exec: func(path string) error {
 			// The sockets systemd passed go on to the new binary (listen.go): it could not listen otherwise.
-			return syscall.Exec(path, append([]string{path}, os.Args[1:]...), append(os.Environ(), execListenEnv()...))
+			// The hub's arguments; `hub …` when it runs as persona-hub and path is personad (update.TargetArgs).
+			return syscall.Exec(path, append([]string{path}, update.TargetArgs(os.Args, path)...), append(os.Environ(), execListenEnv()...))
 		},
-		startWatch: startWatchdog, target: runningBinary, confirmIn: updateConfirmIn, idleEvery: updateIdleEvery,
+		startWatch: startWatchdog, target: ServerBinary, confirmIn: updateConfirmIn, idleEvery: updateIdleEvery,
 		manualIdle: updateManualIdle, state: "idle", confirmed: true,
 		notify: func(title, body string) {
 			h.push.send(map[string]any{"aps": map[string]any{
@@ -176,6 +177,32 @@ func runningBinary() (string, error) {
 		return "", err
 	}
 	return filepath.EvalSymlinks(p)
+}
+
+// ServerBinary is the program that is the whole server: this one, unless it is persona-hub, which runs the hub
+// alone: then the personad beside it. What runs or replaces the server goes by it until the hub/manager split is done
+// (docs/server/server.md "Programs"): the built-in manager the hub starts (`personad assistant`), the update's target
+// (personad is the release's main download; persona-hub is swapped as a program), setup's service binary and the
+// edge's default switch.
+func ServerBinary() (string, error) {
+	p, err := runningBinary()
+	if err != nil {
+		return "", err
+	}
+	return serverBinaryOf(p)
+}
+
+// serverBinaryOf is ServerBinary for the running binary p.
+func serverBinaryOf(p string) (string, error) {
+	ext := filepath.Ext(p)
+	if strings.TrimSuffix(filepath.Base(p), ext) != "persona-hub" {
+		return p, nil
+	}
+	sibling := filepath.Join(filepath.Dir(p), "personad"+ext)
+	if _, err := os.Stat(sibling); err != nil {
+		return "", fmt.Errorf("persona-hub runs the hub alone and needs the personad beside it (%s): %w", sibling, err)
+	}
+	return sibling, nil
 }
 
 // startWatchdog runs `<old binary> update-watch <pending>` in its own session, its output in update/watch.log.

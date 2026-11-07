@@ -1,0 +1,129 @@
+// Package hubcli is the hub's command line: `persona-hub <command>` (cmd/persona-hub) and `personad hub <command>`
+// (cmd/personad, the compatibility entry) run the same code. It links only the hub's side (docs/server/server.md
+// "Programs"): the manager's commands are internal/managercli's.
+package hubcli
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+
+	"github.com/nwverse/persona/server/internal/clitext"
+	"github.com/nwverse/persona/server/internal/hub"
+	"github.com/nwverse/persona/server/internal/update"
+)
+
+// Usage is the hub's commands, as `personad hub …` (clitext.Named puts the program's name in).
+const Usage = `  personad hub [run]        run the hub (config ~/.persona/hub.json); behind its edge on Linux and macOS, which
+                           holds the ports and switches to a new binary with no restart (docs/operations/hub-restart.md「蓝绿切换」)
+  personad hub switch [--binary <path>] [--prev <path>] [--status]
+                           have the running edge start <path> (default: the hub's binary) and switch to it once it is up;
+                           exit 0 switched, 1 it did not (the hub serves on), 3 no edge here (restart the service instead)
+  personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]
+                                           set this machine up as the hub: hub.json, database, service, pairing (docs/assistant/onboarding.md)
+  personad hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
+  personad hub pair --machine <id> [--add [--name <name>]]
+                                           print a pairing link for that link machine's persona-link (docs/operations/link.md);
+                                           --add adds it to hub.json first when it is not there
+  personad hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/server/mesh.md)
+  personad hub peer add <code>|-   pair this hub with the hub whose code it is
+  personad hub peer list           the paired hubs and the ones found on the LAN
+  personad hub peer remove <hub_id>
+                           unpair a hub (its credential is revoked on both sides)
+  personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
+  personad hub doctor       只读检查 hub 配置、网络和证书
+  personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/operations/admin.md)
+  personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)`
+
+// Word is how the hub's commands are typed after the program's name in what they print: "hub " for personad
+// (`personad hub run`), "" for persona-hub (`persona-hub run`), which sets it.
+var Word = "hub "
+
+// Hub runs `hub <args…>`: args[0] is the command (run when there is none). Setup that stopped exits 1 (the step that
+// stopped said why).
+func Hub(ctx context.Context, build update.Build, args []string) error {
+	sub := "run"
+	if len(args) > 0 {
+		sub = args[0]
+	}
+	rest := []string{}
+	if len(args) > 1 {
+		rest = args[1:]
+	}
+	switch sub {
+	case "run":
+		if len(rest) > 0 { // a flag such as --listen would otherwise be dropped and a hub started on hub.json's port
+			return clitext.UsageError("usage: " + clitext.CommandName() + " " + Word + "[run]")
+		}
+		return hub.Serve(ctx, build)
+	case "slot": // the hub as its edge runs it (hub_edge.go): not for people
+		if len(rest) > 0 {
+			return clitext.UsageError(clitext.CommandName() + " " + Word + "slot takes no arguments")
+		}
+		return hub.RunSlot(ctx, build)
+	case "switch":
+		return runHubSwitch(rest)
+	case "doctor":
+		if len(rest) != 0 {
+			return fmt.Errorf("%sdoctor 不接受额外参数", Word)
+		}
+		return hub.Doctor(ctx, os.Stdout)
+	case "pair":
+		return pair(rest)
+	case "setup": // docs/assistant/onboarding.md 4.1
+		err := hub.SetupCommand(ctx, rest, os.Stdout, os.Stderr)
+		if errors.Is(err, hub.ErrSetupStopped) {
+			os.Exit(1) // the step that stopped said why
+		}
+		return err
+	case "admin":
+		return hub.AdminCommand(ctx, rest, os.Stdin, os.Stdout, os.Stderr)
+	case "peer":
+		return hub.PeerCommand(rest, os.Stdin, os.Stdout)
+	case "assistant-token": // a token for an assistant run elsewhere (hub.json assistant.external, docs/assistant/assistant.md)
+		if len(rest) != 0 {
+			return fmt.Errorf("%sassistant-token 不接受额外参数", Word)
+		}
+		return hub.AssistantToken(ctx, os.Stdout)
+	}
+	return fmt.Errorf("unknown %scommand %q", Word, sub)
+}
+
+// UpdateWatch is `update-watch <pending.json>`: the old binary's watchdog over the hub's own update.
+func UpdateWatch(ctx context.Context, args []string) error { return runUpdateWatch(ctx, args) }
+
+func pair(args []string) error {
+	flags := flag.NewFlagSet(Word+"pair", flag.ContinueOnError)
+	legacy := flags.Bool("legacy", false, "使用主 token 打印旧格式二维码")
+	android := flags.Bool("android", false, "同时打印 Android 安装包的临时下载链接")
+	machine := flags.String("machine", "", "给 hub.json 里这台 kind 为 link 的电脑的 persona-link 配对")
+	add := flags.Bool("add", false, "和 --machine 一起用：hub.json 里没有这台时先添加（电脑来连，直接是已确认的）")
+	name := flags.String("name", "", "和 --add 一起用：新电脑的名字（可以是中文，默认同 id）")
+	peer := flags.Bool("peer", false, "生成和另一台 hub 互联的互联码（docs/server/mesh.md）")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	switch {
+	case flags.NArg() != 0:
+		return fmt.Errorf("%spair 不接受位置参数", Word)
+	case *peer && (*machine != "" || *legacy || *android):
+		return fmt.Errorf("--peer 不能和 --machine、--legacy、--android 一起用")
+	case *peer:
+		return hub.PairPeer()
+	case *machine != "" && (*legacy || *android):
+		return fmt.Errorf("--machine 不能和 --legacy、--android 一起用")
+	case (*add || *name != "") && *machine == "":
+		return fmt.Errorf("--add、--name 要和 --machine 一起用")
+	case *name != "" && !*add:
+		return fmt.Errorf("--name 要和 --add 一起用")
+	case *machine != "":
+		return hub.PairMachine(*machine, *add, *name)
+	}
+	return hub.Pair(*legacy, *android)
+}
+
+func usageError(s string) error { return clitext.UsageError(s) }
+
+func commandName() string { return clitext.CommandName() }

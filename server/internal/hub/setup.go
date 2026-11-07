@@ -144,7 +144,7 @@ func newSetupEnv(out io.Writer, o setupOptions) (*setupEnv, error) {
 		ask:         askTerminal,
 		lanIPv4:     defaultLANIPv4,
 		portFree:    tcpPortFree,
-		exe:         os.Executable,
+		exe:         ServerBinary, // persona-hub setup installs the personad beside it (the service runs personad)
 		pingDB:      pingPostgres,
 		doctor:      setupDoctor,
 		getenv:      identity.Getenv,

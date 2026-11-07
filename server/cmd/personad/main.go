@@ -14,17 +14,14 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extmgr"
 	"github.com/nwverse/persona/server/internal/identity"
-	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/nodecmd"
 	"github.com/nwverse/persona/server/internal/nodeproto"
 
-	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
 	"github.com/nwverse/persona/server/internal/extension/sourcevalidate"
-	"github.com/nwverse/persona/server/internal/hub"
-	"github.com/nwverse/persona/server/internal/manager"
+	"github.com/nwverse/persona/server/internal/hubcli"
+	"github.com/nwverse/persona/server/internal/managercli"
 	"github.com/nwverse/persona/server/internal/relay"
-	"github.com/nwverse/persona/server/internal/tunnel"
 	"github.com/nwverse/persona/server/internal/update"
 	"github.com/nwverse/persona/server/internal/voice"
 )
@@ -50,27 +47,8 @@ func buildInfo() update.Build {
 
 const usage = `usage:
 ` + nodecmd.LaunchUsage + `
-  personad hub [run]        run the hub (config ~/.persona/hub.json); behind its edge on Linux and macOS, which
-                           holds the ports and switches to a new binary with no restart (docs/operations/hub-restart.md「蓝绿切换」)
-  personad hub switch [--binary <path>] [--prev <path>] [--status]
-                           have the running edge start <path> (default: the hub's binary) and switch to it once it is up;
-                           exit 0 switched, 1 it did not (the hub serves on), 3 no edge here (restart the service instead)
-  personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-service] [--json]
-                                           set this machine up as the hub: hub.json, database, service, pairing (docs/assistant/onboarding.md)
-  personad hub pair [--legacy] [--android] print a pairing QR code and optional Android download link
-  personad hub pair --machine <id> [--add [--name <name>]]
-                                           print a pairing link for that link machine's persona-link (docs/operations/link.md);
-                                           --add adds it to hub.json first when it is not there
-  personad hub pair --peer  print a code another hub pairs with this one by (hub mesh, docs/server/mesh.md)
-  personad hub peer add <code>|-   pair this hub with the hub whose code it is
-  personad hub peer list           the paired hubs and the ones found on the LAN
-  personad hub peer remove <hub_id>
-                           unpair a hub (its credential is revoked on both sides)
-  personad hub peer center [<hub_id>] [--confirm]   make that hub (this one by default) the group's center
-  personad hub doctor       只读检查 hub 配置、网络和证书
-  personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/operations/admin.md)
+` + hubcli.Usage + `
   personad hub tailcat-key  print the built-in manager's tailcat key (created the first time), for "node tailcat init --hub"
-  personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)
   personad assistant        the assistant (the Persona tab's) as its own process on the hub's bus; the hub starts it
                            unless hub.json says assistant.external (token: stdin or PERSONA_ASSISTANT_TOKEN)
   personad assistant drop-shared-tables [--yes]  drop the built-in manager's old tables from the hub's database, once
@@ -125,107 +103,17 @@ func main() {
 	case "release":
 		err = runRelease(os.Args[2:])
 	case "update-watch": // the old binary watching an update come up (hub/selfupdate.go)
-		err = runUpdateWatch(ctx, os.Args[2:])
+		err = hubcli.UpdateWatch(ctx, os.Args[2:])
 	case "hub":
-		sub := "run"
-		if len(os.Args) > 2 {
-			sub = os.Args[2]
-		}
-		switch sub {
-		case "run":
-			if len(os.Args) > 3 { // a flag such as --listen would otherwise be dropped and a hub started on hub.json's port
-				err = usageError("usage: " + commandName() + " hub [run]")
-			} else {
-				err = hub.Serve(ctx, buildInfo())
-			}
-		case "slot": // the hub as its edge runs it (hub_edge.go): not for people
-			if len(os.Args) > 3 {
-				err = usageError(commandName() + " hub slot takes no arguments")
-			} else {
-				err = hub.RunSlot(ctx, buildInfo())
-			}
-		case "switch":
-			err = runHubSwitch(os.Args[3:])
-		case "doctor":
-			if len(os.Args) != 3 {
-				err = fmt.Errorf("hub doctor 不接受额外参数")
-			} else {
-				err = hub.Doctor(ctx, os.Stdout)
-			}
-		case "pair":
-			flags := flag.NewFlagSet("hub pair", flag.ContinueOnError)
-			legacy := flags.Bool("legacy", false, "使用主 token 打印旧格式二维码")
-			android := flags.Bool("android", false, "同时打印 Android 安装包的临时下载链接")
-			machine := flags.String("machine", "", "给 hub.json 里这台 kind 为 link 的电脑的 persona-link 配对")
-			add := flags.Bool("add", false, "和 --machine 一起用：hub.json 里没有这台时先添加（电脑来连，直接是已确认的）")
-			name := flags.String("name", "", "和 --add 一起用：新电脑的名字（可以是中文，默认同 id）")
-			peer := flags.Bool("peer", false, "生成和另一台 hub 互联的互联码（docs/server/mesh.md）")
-			if err = flags.Parse(os.Args[3:]); err == nil {
-				switch {
-				case flags.NArg() != 0:
-					err = fmt.Errorf("hub pair 不接受位置参数")
-				case *peer && (*machine != "" || *legacy || *android):
-					err = fmt.Errorf("--peer 不能和 --machine、--legacy、--android 一起用")
-				case *peer:
-					err = hub.PairPeer()
-				case *machine != "" && (*legacy || *android):
-					err = fmt.Errorf("--machine 不能和 --legacy、--android 一起用")
-				case (*add || *name != "") && *machine == "":
-					err = fmt.Errorf("--add、--name 要和 --machine 一起用")
-				case *name != "" && !*add:
-					err = fmt.Errorf("--name 要和 --add 一起用")
-				case *machine != "":
-					err = hub.PairMachine(*machine, *add, *name)
-				default:
-					err = hub.Pair(*legacy, *android)
-				}
-			}
-		case "setup": // docs/assistant/onboarding.md 4.1
-			if err = hub.SetupCommand(ctx, os.Args[3:], os.Stdout, os.Stderr); errors.Is(err, hub.ErrSetupStopped) {
-				os.Exit(1) // the step that stopped said why
-			}
-		case "admin":
-			err = hub.AdminCommand(ctx, os.Args[3:], os.Stdin, os.Stdout, os.Stderr)
-		case "peer":
-			err = hub.PeerCommand(os.Args[3:], os.Stdin, os.Stdout)
-		case "assistant-token": // a token for an assistant run elsewhere (hub.json assistant.external, docs/assistant/assistant.md)
-			if len(os.Args) != 3 {
-				err = fmt.Errorf("hub assistant-token 不接受额外参数")
-			} else {
-				err = hub.AssistantToken(ctx, os.Stdout)
-			}
-		case "tailcat-key":
-			if len(os.Args) > 3 {
-				err = usageError(commandName() + " hub tailcat-key takes no arguments")
-				break
-			}
-			// The key is the built-in manager's: it dials the computers (managerconf.OwnFile, docs/assistant/managers.md).
-			var k *tunnel.HubKey
-			if k, err = tunnel.LoadOrCreateHubKey(managerconf.OwnFile(identity.HomeDir(), managerconf.TailcatKey)); err == nil {
-				fmt.Println(k.Public())
-			}
-		default:
-			err = fmt.Errorf("unknown hub command %q", sub)
-		}
-	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant/assistant.md)
-		if len(os.Args) > 2 && os.Args[2] == "drop-shared-tables" { // docs/server/server.md "The default manager's own database"
-			err = assistant.DropSharedCommand(ctx, os.Args[3:], os.Stdout, os.Stderr)
+		if len(os.Args) > 2 && os.Args[2] == "tailcat-key" { // the built-in manager's key, as before (managercli)
+			err = managercli.TailcatKey("hub tailcat-key", os.Args[3:])
 			break
 		}
-		err = assistant.Main(ctx, buildInfo(), os.Stdin)
+		err = hubcli.Hub(ctx, buildInfo(), os.Args[2:])
+	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant/assistant.md)
+		err = managercli.Assistant(ctx, buildInfo(), os.Args[2:], os.Stdin)
 	case "manager": // a manager made in the app: join, run, install as a service (docs/assistant/managers.md)
-		err = manager.Main(ctx, buildInfo(), os.Args[2:], os.Stdout)
-		var ce manager.ConfigError
-		switch {
-		case errors.Is(err, manager.ErrUsage):
-			fmt.Fprint(os.Stderr, named(manager.Usage))
-			os.Exit(2)
-		case errors.Is(err, manager.ErrHelp):
-			os.Exit(0)
-		case errors.As(err, &ce): // restarting cannot fix it: its service does not (RestartPreventExitStatus=2)
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
+		err = managercli.Manager(ctx, buildInfo(), os.Args[2:])
 	case "relay":
 		if len(os.Args) > 3 { // only the config path: anything after it would be ignored
 			err = usageError("usage: " + commandName() + " relay [config]")

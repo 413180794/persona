@@ -1,4 +1,4 @@
-package main
+package hubcli
 
 import (
 	"os"

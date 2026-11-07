@@ -27,6 +27,9 @@ func TestBuildManifestPrograms(t *testing.T) {
 	writeGz(t, filepath.Join(dir, "personad-linux-amd64.gz"), []byte("personad"))
 	writeGz(t, filepath.Join(dir, "personad-wechat-linux-amd64.gz"), []byte("personad-wechat"))
 	writeGz(t, filepath.Join(dir, "personad-wechat-darwin-arm64.gz"), []byte("personad-wechat for a Mac"))
+	writeGz(t, filepath.Join(dir, "persona-hub-linux-amd64.gz"), []byte("persona-hub"))
+	writeGz(t, filepath.Join(dir, "persona-manager-linux-amd64.gz"), []byte("persona-manager"))
+	writeGz(t, filepath.Join(dir, "persona-node-linux-amd64.gz"), []byte("not released with the hub"))
 	m, err := BuildManifest(dir, Manifest{Version: "v1", Build: 202611030000})
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +40,15 @@ func TestBuildManifestPrograms(t *testing.T) {
 	tg := m.Programs["personad-wechat"]
 	if len(tg) != 2 || tg["linux-amd64"].Name != "personad-wechat-linux-amd64.gz" || tg["darwin-arm64"].BinarySHA256 == "" {
 		t.Fatalf("programs %+v", m.Programs)
+	}
+	// the hub's and the manager's programs: listed under their names; persona-node is not released with the hub
+	for _, prog := range []string{"persona-hub", "persona-manager"} {
+		if f := m.Programs[prog]["linux-amd64"]; f.Name != prog+"-linux-amd64.gz" || f.BinarySHA256 == "" {
+			t.Fatalf("%s: %+v", prog, m.Programs)
+		}
+	}
+	if _, ok := m.Programs["persona-node"]; ok {
+		t.Fatalf("persona-node taken for a program: %+v", m.Programs)
 	}
 	// Only programs, no personad: not a release.
 	only := t.TempDir()

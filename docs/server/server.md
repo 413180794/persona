@@ -4,11 +4,22 @@
 
 Go, single binary, `server/cmd/personad`. Modes: `docs/server/architecture.md`; protocol: docs/protocol/protocol.md.
 
-Programs (`server/cmd/`):
+## Programs
 
-- `personad` (alias `personad`): everything, and the compatibility entry. Its device commands (`node …`, `hook`, `mcp`, `ask`, `notify`, `tool`, `launch`, `codex-start`, `tab-start`, `office`, `sysmon`, `node-update-check`, `node-update-watch`) are `internal/nodecmd`'s.
+The server's code ships as these programs (`server/cmd/`), all of one build (`version -v` matches):
+
+- `personad` (alias `jarvisd`): everything, and the compatibility entry. Every command it ever had keeps working (`personad hub …`, `personad assistant`, `personad manager …`), and the services installed so far run it. Its device commands (`node …`, `hook`, `mcp`, `ask`, `notify`, `tool`, `launch`, `codex-start`, `tab-start`, `office`, `sysmon`, `node-update-check`, `node-update-watch`) are `internal/nodecmd`'s, its hub commands `internal/hubcli`'s, its managers' commands `internal/managercli`'s.
+- `persona-hub`: the hub alone, `internal/hubcli`: `persona-hub [run]`, `switch`, `setup`, `pair`, `peer`, `doctor`, `admin`, `assistant-token`, `update-watch`; `persona-hub hub <command>` works too (what the edge and older scripts run).
+- `persona-manager`: the managers alone, `internal/managercli`: `assistant` (the built-in one), `join`, `run`, `install`, `uninstall`, `status` (one made in the app; `persona-manager manager <command>` works too), `extension …`, `voice`, `tailcat-key`, and `node …` for this computer's node, which it starts.
 - `persona-node`: the device's program, `internal/nodecmd` alone. It takes the same commands and arguments and gives the same output and exit codes as `personad`, and links neither the hub, the manager nor the database (`cmd/persona-node/main_test.go` guards that on every platform it ships for). The node writes `<its own binary> hook` / `mcp` into the settings it manages, so either program serves what it wrote.
 - `persona-link` (directory alias `cmd/persona-link`): the connector, `docs/operations/link.md`.
+- `personad-wechat`: the WeChat bot, a built-in extension's program (`docs/extensions/wechat.md`).
+
+The hub and the managers apart:
+
+- **Each without the other's code.** `TestPersonaHubDoesNotLinkTheManager` (`cmd/persona-hub`) lets the hub's program link only the hub's own packages and the shared ones (`internal/depguard`: `HubOwn`, `Shared`); `TestPersonaManagerDoesNotLinkTheHub` (`cmd/persona-manager`) keeps the hub's own packages out of the manager's. Both check the four release platforms and Windows. The two talk over the bus only. The hub's one exception for now (`HubExceptions`, which may only shrink): `internal/extension` and what it pulls in, for the looks it serves, until extensions are a part of their own.
+- **Released together.** The release, a direct deploy (`scripts/deploy/deploy.sh`) and the Docker image put `persona-hub` and `persona-manager` beside `personad`, and the hub's self-update swaps them with it (`update.ProgramNames`, [hub-update.md](../operations/hub-update.md) ("Programs swapped together with personad")): two more downloads and `.prev` copies per update. `install.sh` installs `personad` alone; the next update brings the two.
+- **The hub runs as personad for now.** Nothing runs the two programs yet: the hub's service runs `personad hub run`, which starts `personad assistant` as its child. A hub run as `persona-hub` goes by the `personad` beside it for what runs or replaces the server (`hub.ServerBinary`): the built-in manager it starts, the update's target, setup's service binary, the edge's default switch. The built-in manager's own service, and setup installing both, come next (the hub/manager split).
 
 ## Code
 

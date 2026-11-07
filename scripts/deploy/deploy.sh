@@ -250,21 +250,22 @@ $command")
   fi
 }
 
-# install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (wechat: the WeChat bot, docs/extensions/wechat.md;
-# Telegram's connector is an extension now, #1704) next to the hub's personad (only the hub runs it), the
-# same build as personad: the hub starts it only when `version -v` matches.
+# install_program <hub machine id> <os-arch> <program>: a program released with personad (update.ProgramNames) next to
+# the hub's personad, the same build as personad: personad-wechat (the WeChat bot, docs/extensions/wechat.md; the hub
+# starts it only when `version -v` matches; Telegram's connector is an extension now, #1704), and persona-hub and
+# persona-manager, the hub's and the manager's own programs (docs/server/server.md "Programs").
 install_program() {
   local id=$1 plat=$2 name=$3 bin
-  bin="bin/personad-$name-$plat"
-  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" "./cmd/personad-$name" || return 1
+  bin="bin/$name-$plat"
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" "./cmd/$name" || return 1
   if is_here "$id"; then
     local root
     root=$(state_root)
     mkdir -p "$root/bin"
-    cp "$bin" "$root/bin/personad-$name.new" && mv "$root/bin/personad-$name.new" "$root/bin/personad-$name"
+    cp "$bin" "$root/bin/$name.new" && mv "$root/bin/$name.new" "$root/bin/$name"
     python3 ../scripts/persona_identity.py --alias-binaries "$root/bin"
   else
-    remote_state "$PERSONA_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/personad-$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/personad-$name.new\" && mv \"\$PERSONA_HOME/bin/personad-$name.new\" \"\$PERSONA_HOME/bin/personad-$name\" && persona_alias_binaries \"\$PERSONA_HOME/bin\"" < "$bin"
+    remote_state "$PERSONA_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/$name.new\" && mv \"\$PERSONA_HOME/bin/$name.new\" \"\$PERSONA_HOME/bin/$name\" && persona_alias_binaries \"\$PERSONA_HOME/bin\"" < "$bin"
   fi
 }
 
@@ -327,7 +328,7 @@ for t in "${TARGETS[@]}"; do
       remote_state "$PERSONA_HUB_SSH" 'persona_alias_binaries "$PERSONA_HOME/bin/nodes"'
       hub_plat=$(machine_platform "$t") || exit 2
       install_bin "$t" "bin/personad-$hub_plat"
-      install_program "$t" "$hub_plat" wechat
+      for p in personad-wechat persona-hub persona-manager; do install_program "$t" "$hub_plat" "$p"; done
       ensure_herdr "$t"
       hub_admin_access
       python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$PERSONA_HUB_SSH" 'bash -s'

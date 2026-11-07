@@ -1,4 +1,4 @@
-package main
+package hubcli
 
 import (
 	"context"
@@ -47,11 +47,7 @@ func restartHub(p update.Pending) error {
 	if err != nil {
 		log = nil
 	}
-	args := []string{"hub"}
-	if len(p.Args) > 1 {
-		args = p.Args[1:]
-	}
-	cmd := exec.Command(p.Target, args...)
+	cmd := exec.Command(p.Target, update.TargetArgs(p.Args, p.Target)...) // `hub …` for a hub that ran as persona-hub
 	if log != nil {
 		cmd.Stdout, cmd.Stderr = log, log
 	}

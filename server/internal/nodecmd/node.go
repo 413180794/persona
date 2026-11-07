@@ -8,12 +8,12 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/clitext"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/node"
 	"github.com/nwverse/persona/server/internal/nodeupdate"
@@ -51,28 +51,17 @@ func checkNodeStdioArgs(args []string) error {
 	return fmt.Errorf("不认识的 node 子命令 %q：可用的有 --stdio、--attach、tailcat、doctor、reset-uid（%s node -h 看用法）", strings.Join(args, " "), CommandName())
 }
 
-// UsageError is a usage mistake: main prints it as it is (no log timestamp) and exits 2.
-type UsageError string
+// UsageError is a usage mistake: main prints it as it is (no log timestamp) and exits 2 (clitext).
+type UsageError = clitext.UsageError
 
-func (e UsageError) Error() string { return string(e) }
+// CommandName is the program's name in what it prints (clitext.CommandName).
+func CommandName() string { return clitext.CommandName() }
 
-// CommandName is the program's name in what it prints: personad or persona-node when run under that name (personad is
-// the compatibility alias, docs/operations/rename.md), otherwise personad.
-func CommandName() string {
-	switch n := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe"); n {
-	case "personad", "persona-node":
-		return n
-	}
-	return "personad"
-}
-
-// Named is a usage text (written with personad) with the program's name as it was run.
-func Named(text string) string {
-	return strings.ReplaceAll(text, "personad ", CommandName()+" ")
-}
+// Named is a usage text (written with personad) with the program's name as it was run (clitext.Named).
+func Named(text string) string { return clitext.Named(text) }
 
 // IsHelpArg: -h or --help.
-func IsHelpArg(a string) bool { return a == "-h" || a == "--help" }
+func IsHelpArg(a string) bool { return clitext.IsHelpArg(a) }
 
 // noExtraArgs refuses arguments after a node subcommand that takes none: reset-uid cannot be undone, so a mistyped
 // flag after it must not go ahead as if it were not there.

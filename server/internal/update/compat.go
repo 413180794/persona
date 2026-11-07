@@ -26,6 +26,11 @@ func artifactNames(name string) []string {
 
 func artifactIdentity(name string) (program, platform string) {
 	base := strings.TrimSuffix(filepath.Base(name), ".gz")
+	for _, prog := range splitPrograms {
+		if platform, ok := strings.CutPrefix(base, prog+"-"); ok {
+			return prog, platform
+		}
+	}
 	for _, pair := range [][2]string{{"personad-wechat", legacyWechat}, {"personad", legacyDaemon}} {
 		for _, prefix := range pair {
 			if platform, ok := strings.CutPrefix(base, prefix+"-"); ok {
@@ -69,7 +74,7 @@ func compatiblePrograms(m *Manifest) {
 func manifestArtifacts(dir string) ([]string, error) {
 	var files []string
 	// Legacy first, canonical second: canonical wins a platform collision.
-	for _, name := range []string{legacyDaemon, "personad"} {
+	for _, name := range append([]string{legacyDaemon, "personad"}, splitPrograms...) {
 		matches, err := filepath.Glob(filepath.Join(dir, name+"-*-*.gz"))
 		if err != nil {
 			return nil, err

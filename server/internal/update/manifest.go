@@ -47,8 +47,12 @@ type Manifest struct {
 // NodePrograms are the programs in Manifest.Nodes, each built from server/cmd/<name>.
 var NodePrograms = []string{"persona-node"}
 
-// ProgramNames are the programs released with personad, each built from server/cmd/<name>.
-var ProgramNames = []string{"personad-wechat"}
+// ProgramNames are the programs released with personad, each built from server/cmd/<name>: the WeChat bot, and the
+// hub's and the manager's own programs (personad runs the same code: docs/server/server.md "Programs").
+var ProgramNames = []string{"personad-wechat", "persona-hub", "persona-manager"}
+
+// splitPrograms are the ProgramNames named persona-* (no legacy name): their artifacts are <name>-<os>-<arch>.gz.
+var splitPrograms = []string{"persona-hub", "persona-manager"}
 
 // program names the program a download belongs to ("personad-wechat-linux-amd64.gz" -> "personad-wechat"), "" for
 // personad's own.

@@ -1,4 +1,4 @@
-package main
+package hubcli
 
 import (
 	"errors"
@@ -43,12 +43,9 @@ func runHubSwitch(args []string) error {
 		fmt.Printf("hub switch: the edge speaks protocol %d, this binary %d: restart the hub's service instead\n", st.Proto, hubedge.Proto)
 		os.Exit(exitNoEdge)
 	}
-	if *binary == "" {
-		p, err := os.Executable()
+	if *binary == "" { // this binary; personad beside it for persona-hub (the hub's service runs personad)
+		p, err := hub.ServerBinary()
 		if err != nil {
-			return err
-		}
-		if p, err = filepath.EvalSymlinks(p); err != nil {
 			return err
 		}
 		*binary = p

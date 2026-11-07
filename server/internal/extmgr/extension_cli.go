@@ -20,6 +20,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/clitext"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
@@ -68,13 +69,13 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
 // PluginCommand runs `personad extension <args>`.
 func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New(extensionUsage + extensionBuildUsage)
+		return errors.New(clitext.Named(extensionUsage + extensionBuildUsage))
 	}
 	switch args[0] {
 	case "new", "test", "pack":
 		return extensionBuildCommand(ctx, args, stdout, stderr)
 	case "help", "-h", "--help":
-		fmt.Fprintln(stdout, extensionUsage+extensionBuildUsage)
+		fmt.Fprintln(stdout, clitext.Named(extensionUsage+extensionBuildUsage))
 		return nil
 	}
 	cfg, err := localHubConfig()
@@ -98,7 +99,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 	}
 	need := func(n int) error {
 		if len(positional) < n {
-			return errors.New(extensionUsage)
+			return errors.New(clitext.Named(extensionUsage))
 		}
 		return nil
 	}
@@ -300,7 +301,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			fmt.Fprintf(stdout, "%s：%s，%d 个扩展\n", m.ID, m.Name, m.Extensions)
 			return nil
 		}
-		return errors.New(extensionUsage)
+		return errors.New(clitext.Named(extensionUsage))
 	case "search":
 		var out struct {
 			Extensions []CatalogItem `json:"extensions"`
@@ -331,7 +332,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		if positional[0] != "on" && positional[0] != "off" {
-			return errors.New(extensionUsage)
+			return errors.New(clitext.Named(extensionUsage))
 		}
 		on := positional[0] == "on"
 		if len(positional) > 1 {

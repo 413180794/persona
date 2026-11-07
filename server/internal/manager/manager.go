@@ -26,6 +26,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/clitext"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/link"
@@ -72,7 +73,7 @@ func Main(ctx context.Context, build update.Build, args []string, stdout io.Writ
 	case "status":
 		return cmdStatus(ctx, e, args[1:])
 	case "-h", "--help", "help":
-		fmt.Fprint(stdout, Usage)
+		fmt.Fprint(stdout, clitext.Named(Usage)) // as the program was run (persona-manager, personad)
 		return nil
 	}
 	return errUsage
