@@ -8,5 +8,6 @@ Persona 算好的事实（这次开跑时的快照，数字以此为准，别改
   - {{.}}{{end}}
 - 等用户验收的 {{.AcceptTotal}} 件{{range .Accept}}
   - {{.Line}}{{if .Changed}}（改了：{{.Changed}}）{{end}}{{end}}
-- 正在做的 {{.ProgressTotal}} 件{{range .Progress}}
+{{if .LaterTotal}}- 可以晚点答的问题 {{.LaterTotal}} 件：Agent 留下的、不急的问题，列在早晚报的「可以晚点答」一节里。只说有几件，不要逐条再列，也不要替用户回答。
+{{end}}- 正在做的 {{.ProgressTotal}} 件{{range .Progress}}
   - {{.Title}}{{if .Stage}}（阶段：{{.Stage}}）{{end}}{{end}}

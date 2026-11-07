@@ -44,6 +44,10 @@ type briefFacts struct {
 	// to-dos waiting to be verified (the same rows, in the same order, as boardRows gives them).
 	Waiting []boardRow
 	Accept  []boardRow
+	// Later are the questions an Agent left to wait for a briefing (later.go), the oldest first, at most briefRowsMax; LaterTotal
+	// counts all of them. They are not on the board: nothing is held up by them.
+	Later      []boardRow
+	LaterTotal int
 	// WaitingUnknown: the pending cards were not read yet (the hub had just started), so Waiting is empty for want of
 	// knowing and the briefing does not say that nothing waits.
 	WaitingUnknown bool
@@ -87,6 +91,7 @@ func (s *Service) briefFactsAt(ctx context.Context, now time.Time, self string) 
 			}
 		}
 	}
+	f.Later, f.LaterTotal = s.laterRows(ctx, l, web, now, briefRowsMax)
 	since := now.Add(-briefWindow)
 	for _, d := range s.todayFinished(ctx, "*", since, loc) {
 		if !waiting[d.ID] {
@@ -325,7 +330,7 @@ func (s *Service) briefingGrace(ctx context.Context, local time.Time, start int)
 // modelText is the facts as the model is given them (prompts assistant/routine_facts): the same rows the card lists.
 func (f *briefFacts) modelText() string {
 	b := prompts.BriefFacts{Hours: int(briefWindow / time.Hour), WaitingTotal: len(f.Waiting), DoneTotal: f.DoneTotal,
-		FailedTotal: f.FailedTotal, AcceptTotal: len(f.Accept), WaitingUnknown: f.WaitingUnknown, Card: f.Card}
+		FailedTotal: f.FailedTotal, AcceptTotal: len(f.Accept), LaterTotal: f.LaterTotal, WaitingUnknown: f.WaitingUnknown, Card: f.Card}
 	for _, r := range f.Waiting {
 		if len(b.Waiting) < briefModelRows {
 			b.Waiting = append(b.Waiting, boardRowPlain(f.l, len(b.Waiting)+1, r))

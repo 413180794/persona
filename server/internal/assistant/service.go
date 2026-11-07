@@ -86,6 +86,7 @@ type Service struct {
 	noteRate   reportRate        // todo_decisions.go: todo_decision_add
 	adoptMu    sync.Mutex        // agent_control.go: one agent_supervise at a time
 	accept     acceptBook        // acceptance.go
+	later      laterBook         // later.go: questions that can wait for a briefing
 	brief      briefBook         // briefing.go
 	reporters  reporterBook      // reporters.go
 	sched      schedule          // schedule.go

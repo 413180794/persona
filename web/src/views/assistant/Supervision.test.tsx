@@ -54,6 +54,18 @@ describe("a supervised task", () => {
     expect(html).toContain("pull/902");
   });
 
+  it("marks a question that can wait, and draws it quietly", () => {
+    const say = (body: Record<string, unknown>): string =>
+      renderToStaticMarkup(<FeedLineView item={{ id: "f4", conversation: "main", at: "2026-11-05T09:00:00Z", kind: "report", ref: "todo_1", body }} />);
+    const later = say({ kind: "question", text: "图标要不要换？", later: true });
+    expect(later).toContain('data-testid="report-later"');
+    expect(later).toContain("不急，等下次早晚报");
+    expect(later).not.toContain("text-orange");
+    const urgent = say({ kind: "question", text: "图标要不要换？" });
+    expect(urgent).not.toContain("report-later");
+    expect(urgent).toContain("text-orange");
+  });
+
   it("marks a line to a task that cut its turn short", () => {
     const say = (body: Record<string, unknown>): string =>
       renderToStaticMarkup(<FeedLineView item={{ id: "f3", conversation: "main", at: "2026-11-05T09:00:00Z", kind: "routed", ref: "todo_1", body }} />);

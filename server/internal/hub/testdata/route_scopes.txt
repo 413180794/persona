@@ -321,6 +321,7 @@ inbox.write          POST /api/v1/inbox/{id}/reply
 inbox.write          POST /api/v1/inbox/{id}/suggestion
 agents.control       POST /api/v1/interactions/{id}/reanswer
 agents.control       POST /api/v1/interactions/{id}/resolve
+-                    POST /api/v1/later/{id}/handled
 -                    POST /api/v1/launchers
 -                    POST /api/v1/launchers/discover
 -                    POST /api/v1/launchers/health/check

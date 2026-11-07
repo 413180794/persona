@@ -857,6 +857,11 @@ func (s *Service) botCardAction(ctx context.Context, a *feishubot.CardAction, ac
 			return toast("success", i18n.T(l, "assistant-reports.accepted"))
 		}
 		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
+	case "later_done": // the Handled button of a question that can wait, on a briefing card (later.go)
+		if s.laterHandled(ctx, a.Str("id"), time.Now()) {
+			return toast("success", i18n.T(l, "assistant-briefing.later_handled"))
+		}
+		return toast("info", i18n.T(l, "assistant-feishu_cards.already_handled"))
 	case "switch":
 		f, _ := s.feishuFeatures(ctx)
 		kind, m, sess, title := a.Str("k"), a.Str("m"), a.Str("s"), a.Str("t")

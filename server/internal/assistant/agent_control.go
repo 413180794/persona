@@ -228,6 +228,8 @@ type reportBody struct {
 	Evidence []string `json:"evidence,omitempty"`
 	Step     int      `json:"step,omitempty"`
 	Steps    int      `json:"steps,omitempty"`
+	// Later: a question that waits in the queue for the next briefing (later.go), not one the supervisor is woken for.
+	Later bool `json:"later,omitempty"`
 }
 
 // ---- report_to_supervisor ----
@@ -331,7 +333,8 @@ func (s *Service) agentTool(ctx context.Context, machine, session, name string, 
 }
 
 // reportToSupervisor turns agent machine/session's report into a signal for the supervisor of the task it works
-// for: in the next Supervision message (a question, a block or a finish soon: they are urgent).
+// for: in the next Supervision message (a question, a block or a finish soon: they are urgent). A question with urgent
+// false is no signal: it goes into the queue of questions that can wait (later.go) when a briefing will list it.
 func (s *Service) reportToSupervisor(ctx context.Context, machine, session string, args json.RawMessage, now time.Time) (string, error) {
 	var a struct {
 		Kind     string   `json:"kind"`
@@ -339,6 +342,7 @@ func (s *Service) reportToSupervisor(ctx context.Context, machine, session strin
 		Evidence []string `json:"evidence"`
 		Step     int      `json:"step"`
 		Steps    int      `json:"steps"`
+		Urgent   *bool    `json:"urgent"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", fmt.Errorf("arguments: %v", err)
@@ -376,19 +380,62 @@ func (s *Service) reportToSupervisor(ctx context.Context, machine, session strin
 	if steps > 0 {
 		step = min(step, steps)
 	}
+	notUrgent := a.Urgent != nil && !*a.Urgent
+	if notUrgent && a.Kind == upReportQuestion {
+		answer, queued := s.reportLater(ctx, t, machine, session, text, evidence, now)
+		if queued {
+			return answer, nil
+		}
+		prefix := answer // it goes as an urgent one: the answer says so first
+		res, err := s.reportNow(ctx, t, machine, session, a.Kind, text, evidence, step, steps, now)
+		return prefix + res, err
+	}
+	res, err := s.reportNow(ctx, t, machine, session, a.Kind, text, evidence, step, steps, now)
+	if notUrgent {
+		res = "urgent only applies to a question (kind question); this was sent as usual. " + res
+	}
+	return res, err
+}
+
+// reportLater keeps a question the agent said can wait in the queue (later.go) and shows it in the supervisor's
+// conversation, marked as one that can wait: no signal, so no turn of the main conversation. queued false: it could not
+// be kept (no morning or evening briefing would list it, or the queue is full), and the answer says why; the report then
+// goes as an urgent one.
+func (s *Service) reportLater(ctx context.Context, t Todo, machine, session, text string, evidence []string, now time.Time) (answer string, queued bool) {
+	if !s.laterBriefed(ctx) {
+		return "urgent:false was ignored: no morning or evening briefing is switched on to list it, so it is sent as an urgent question. ", false
+	}
+	_, ok, again := s.laterQueue(ctx, t.ID, machine, session, text, now)
+	if !ok {
+		return "urgent:false was ignored: the queue of questions that can wait could not take it, so it is sent as an urgent question. ", false
+	}
+	if again {
+		return "Already queued: the owner sees this question in the next morning or evening briefing. Go on with other work.", true
+	}
+	body := reportBody{Kind: upReportQuestion, Text: text, Evidence: evidence, Later: true}
+	if _, err := s.appendFeed(ctx, t.Supervision.Supervisor, feedReport, t.ID, body); err != nil {
+		s.logf("task %s: report feed: %v", t.ID, err)
+	}
+	s.logf("task %s: %s reports a question that can wait", t.ID, short(session))
+	return "Queued: the owner sees it in the next morning or evening briefing, under \"Can wait\", and answers it in your chat when they get to it. " +
+		"Nobody is woken and nobody answers right away: go on with other work. If you cannot go on without the answer, ask it again without urgent:false.", true
+}
+
+// reportNow sends a report to the supervisor of task t as a signal, and shows it in its conversation.
+func (s *Service) reportNow(ctx context.Context, t Todo, machine, session, kind, text string, evidence []string, step, steps int, now time.Time) (string, error) {
 	s.signal(superviseSignal{Todo: t.ID, Kind: sigReport, Key: now.UTC().Format(time.RFC3339Nano), At: now, Machine: machine,
-		Session: session, Report: a.Kind, Detail: text, Evidence: evidence, Step: step, Steps: steps})
-	s.noteProgress(ctx, t.ID, TaskProgress{Kind: a.Kind, Step: step, Steps: steps, Text: clip(oneLine(text), 200), At: now.UTC()})
+		Session: session, Report: kind, Detail: text, Evidence: evidence, Step: step, Steps: steps})
+	s.noteProgress(ctx, t.ID, TaskProgress{Kind: kind, Step: step, Steps: steps, Text: clip(oneLine(text), 200), At: now.UTC()})
 	// What it asks, what blocks it and its finish show in the supervisor's conversation too, so the user can follow
 	// the handoff; progress reports only update the card (the stream stays quiet).
-	if a.Kind != upReportProgress {
-		body := reportBody{Kind: a.Kind, Text: text, Evidence: evidence, Step: step, Steps: steps}
+	if kind != upReportProgress {
+		body := reportBody{Kind: kind, Text: text, Evidence: evidence, Step: step, Steps: steps}
 		if _, err := s.appendFeed(ctx, t.Supervision.Supervisor, feedReport, t.ID, body); err != nil {
 			s.logf("task %s: report feed: %v", t.ID, err)
 		}
 	}
-	s.logf("task %s: %s reports %s", t.ID, short(session), a.Kind)
-	if a.Kind == upReportProgress {
+	s.logf("task %s: %s reports %s", t.ID, short(session), kind)
+	if kind == upReportProgress {
 		return "Noted for your supervisor: it reads it with its next supervision message. Go on with the work.", nil
 	}
 	return "Sent to your supervisor: it reads it within minutes and answers you by message. Don't wait idle for it if there is " +

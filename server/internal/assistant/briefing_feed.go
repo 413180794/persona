@@ -31,6 +31,10 @@ type briefBody struct {
 	Failed         []todayFailed   `json:"failed"`
 	FailedTotal    int             `json:"failed_total"`
 	Accept         []briefBodyRow  `json:"accept"`
+	// Later are the questions Agents left to wait for a briefing, the oldest first (at most 10), later_total how many there were; both
+	// are left out when there are none (a client that does not draw them skips them).
+	Later      []briefBodyRow `json:"later,omitempty"`
+	LaterTotal int            `json:"later_total,omitempty"`
 	// Progress are the tasks being worked on, the longest running first (at most 8); stage is plan / develop / review / merge / deploy / verify, "" when not known.
 	Progress      []briefBodyProgress `json:"progress"`
 	ProgressTotal int                 `json:"progress_total"`
@@ -38,7 +42,7 @@ type briefBody struct {
 
 // briefBodyRow is a row of what waits: a card (waiting) with its line, or a task to verify (accept) with its title.
 type briefBodyRow struct {
-	ID      string    `json:"id"`                // the card (waiting), the task (accept)
+	ID      string    `json:"id"`                // the card (waiting), the task (accept), the question (later); POST /api/v1/later/{id}/handled takes the last
 	Title   string    `json:"title"`             // waiting: what the card asks, in a line; accept: the task's title
 	Detail  string    `json:"detail,omitempty"`  // accept: what changed, in the words of its "Please verify" card
 	From    string    `json:"from,omitempty"`    // who asked
@@ -83,6 +87,10 @@ func (f *briefFacts) body(s *Service, title string) briefBody {
 		}
 		b.Accept = append(b.Accept, x)
 	}
+	for _, r := range f.Later {
+		b.Later = append(b.Later, row(r))
+	}
+	b.LaterTotal = f.LaterTotal
 	for _, d := range f.Done {
 		b.Done = append(b.Done, briefBodyDone{ID: d.ID, Title: d.Title, At: d.At})
 	}
@@ -102,6 +110,20 @@ func (s *Service) briefFeed(session, task, title string, f *briefFacts) {
 }
 
 func (s *Service) briefRoutes() {
+	// POST /api/v1/later/{id}/handled: the Handled button of a question in a `brief` item's later list. It leaves the queue; a
+	// question already handled, dropped (its to-do ended, or 7 days) or unknown is 409.
+	s.handle("POST /api/v1/later/{id}/handled", func(w http.ResponseWriter, r *http.Request) {
+		if !fullRole(r) {
+			apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot change the queue"))
+			return
+		}
+		if !s.laterHandled(r.Context(), r.PathValue("id"), time.Now()) {
+			apierr.Write(w, http.StatusConflict, i18n.Err("assistant-feishu_cards.already_handled"))
+			return
+		}
+		apierr.WriteJSON(w, map[string]any{"ok": true})
+	})
+
 	// POST /api/v1/todos/{id}/accept {"asked_at"}: the Accept button of a `brief` item. It verifies the task when asked_at is
 	// the round that waits now; a button of an earlier round, or a task already verified, is 409.
 	s.handle("POST /api/v1/todos/{id}/accept", func(w http.ResponseWriter, r *http.Request) {

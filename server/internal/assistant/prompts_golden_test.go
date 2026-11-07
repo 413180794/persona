@@ -107,6 +107,8 @@ func TestGoldenBriefFacts(t *testing.T) {
 	golden(t, "routine_facts", facts)
 	golden(t, "routine_facts.unknown", prompts.RenderBriefFacts(prompts.BriefFacts{Hours: 12, WaitingUnknown: true, AcceptTotal: 1,
 		Accept: []prompts.BriefAccept{{Line: "1. 请验收：改设置页 · 已等 2 小时 · 来自某个 Agent"}}}))
+	// Questions that can wait: only how many, whether or not a card lists the rest (never the rows).
+	golden(t, "routine_facts.later", prompts.RenderBriefFacts(prompts.BriefFacts{Hours: 12, LaterTotal: 2}))
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	due := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
 	golden(t, "task_prompt.daily_facts", taskPrompt(Task{Title: "早报", Prompt: prompts.RenderMorningRoutine(), Repeat: repeatDaily, Facts: true, factsText: facts},

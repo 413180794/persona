@@ -3,6 +3,7 @@
   "waiting_unknown": "Cards waiting for you were not read yet (Persona has just started); open the app to see them.",
   "head_past": "Last {hours} hours: {done} done · {failed} not through",
   "head_accept": "To verify ({n})",
+  "head_later": "Can wait ({n})",
   "head_progress": "In progress ({n})",
   "none": "Nothing.",
   "done_line": "✅ {title} · {time}",
@@ -15,6 +16,9 @@
   "count_failed": "not through {n}",
   "count_done": "done {n}",
   "count_accept": "to verify {n}",
+  "count_later": "can wait {n}",
   "count_none": "nothing needs you",
-  "count_sep": " · "
+  "count_sep": " · ",
+  "later_done": "Handled",
+  "later_handled": "Marked as handled."
 }

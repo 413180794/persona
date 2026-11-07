@@ -79,8 +79,9 @@ export function ReviewChecklist({ todo }: { todo: Todo }) {
 
 /** A supervised task's agent reported to Persona (feed kind "report": a question, a block, a finish): who, and what. */
 export function ReportLine({ item, title, onOpenTask }: { item: FeedItem; title: string; onOpenTask?: () => void }) {
-  const body = (item.body ?? {}) as { kind?: string; text?: string; step?: number; steps?: number; evidence?: string[] };
-  const tone = body.kind === "blocked" || body.kind === "question" ? "text-orange" : "text-ink-2";
+  const body = (item.body ?? {}) as { kind?: string; text?: string; step?: number; steps?: number; evidence?: string[]; later?: boolean };
+  // A question that can wait is no call on the owner now: it is drawn quietly, with its mark.
+  const tone = !body.later && (body.kind === "blocked" || body.kind === "question") ? "text-orange" : "text-ink-2";
   return (
     <div data-testid="report-line" className="flex max-w-full min-w-0 flex-col gap-1 self-start pr-10">
       <span className={cx("inline-flex min-w-0 items-center gap-1 text-[12px] font-medium", tone)}>
@@ -92,6 +93,7 @@ export function ReportLine({ item, title, onOpenTask }: { item: FeedItem; title:
         ) : (
           <span className="min-w-0 truncate">{t("assistant-tasks.report_from", { title })}</span>
         )}
+        {body.later && <span className="shrink-0 font-normal" data-testid="report-later">· {t("assistant-tasks.report_later")}</span>}
       </span>
       <div className="rounded-[18px] bg-field px-3.5 py-2 text-[14.5px] whitespace-pre-wrap">{reportLine(body.kind ?? "", body.text ?? "", body.step, body.steps)}</div>
       {body.evidence && body.evidence.length > 0 && (

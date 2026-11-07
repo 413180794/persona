@@ -3,6 +3,7 @@
   "waiting_unknown": "刚重启，还没读到等你处理的卡片；到 App 里看。",
   "head_past": "过去 {hours} 小时：做完 {done} · 没成 {failed}",
   "head_accept": "待验收（{n}）",
+  "head_later": "可以晚点答（{n}）",
   "head_progress": "进行中（{n}）",
   "none": "没有。",
   "done_line": "✅ {title} · {time}",
@@ -15,6 +16,9 @@
   "count_failed": "没成 {n}",
   "count_done": "做完 {n}",
   "count_accept": "待验收 {n}",
+  "count_later": "可晚点答 {n}",
   "count_none": "没有要你处理的事",
-  "count_sep": " · "
+  "count_sep": " · ",
+  "later_done": "已处理",
+  "later_handled": "已标记为处理过。"
 }

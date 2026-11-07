@@ -94,6 +94,9 @@ export interface BriefBody {
   done: { id: string; title: string; at: string }[];
   done_total: number;
   accept: BriefRow[];
+  /** Questions Agents left to wait for a briefing, the oldest first (`id` is the one the Handled button sends). A hub that does not know them leaves the list out. */
+  later: BriefRow[];
+  later_total: number;
   progress: { id: string; title: string; stage?: string }[];
   progress_total: number;
 }
@@ -105,6 +108,7 @@ export function briefBody(it: FeedItem): BriefBody | undefined {
   const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
   const waiting = list<BriefRow>(b.waiting);
   const accept = list<BriefRow>(b.accept);
+  const later = list<BriefRow>(b.later);
   const failed = list<BriefFailed>(b.failed);
   const done = list<BriefBody["done"][number]>(b.done);
   const progress = list<BriefBody["progress"][number]>(b.progress);
@@ -120,6 +124,8 @@ export function briefBody(it: FeedItem): BriefBody | undefined {
     done,
     done_total: num(b.done_total, done.length),
     accept,
+    later,
+    later_total: num(b.later_total, later.length),
     progress,
     progress_total: num(b.progress_total, progress.length),
   };
@@ -393,6 +399,18 @@ export async function acceptBrief(todoId: string, askedAt: string): Promise<"acc
   }
   void refreshTodos();
   return "accepted";
+}
+
+/** The Handled button of a question in a `brief` item's `later` list: "marked", or "handled" when the hub says it is not in
+ *  the queue any more (marked before, its to-do ended, or 7 days). Any other failure throws. */
+export async function handledLater(id: string): Promise<"marked" | "handled"> {
+  try {
+    await api(`/later/${enc(id)}/handled`, { method: "POST" });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) return "handled";
+    throw e;
+  }
+  return "marked";
 }
 
 /**

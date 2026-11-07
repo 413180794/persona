@@ -3,6 +3,7 @@
   "waiting_unknown": "再起動直後のため、あなた待ちのカードをまだ読み込めていません。アプリで確認してください。",
   "head_past": "過去{hours}時間：完了 {done} 件・未達 {failed} 件",
   "head_accept": "確認待ち（{n}）",
+  "head_later": "後で答えてよいもの（{n}）",
   "head_progress": "進行中（{n}）",
   "none": "ありません。",
   "done_line": "✅ {title}・{time}",
@@ -15,6 +16,9 @@
   "count_failed": "未達 {n}",
   "count_done": "完了 {n}",
   "count_accept": "確認待ち {n}",
+  "count_later": "後でよい {n}",
   "count_none": "対応が必要な項目はありません",
-  "count_sep": "・"
+  "count_sep": "・",
+  "later_done": "処理済み",
+  "later_handled": "処理済みにしました。"
 }

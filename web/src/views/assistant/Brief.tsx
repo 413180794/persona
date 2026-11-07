@@ -1,8 +1,9 @@
 // The `brief` item of a morning or evening routine's conversation: the fixed part of the run (what waits for the user,
 // what happened in the last hours, what is to be verified), as the hub worked it out when the run started; the same
-// rows as the Lark card, with an Accept button for each task to verify (docs/bots.md "Morning and evening briefings").
+// rows as the Lark card, with an Accept button for each task to verify and a Handled button for each question that can wait
+// (docs/bots.md "Morning and evening briefings").
 import { useState } from "react";
-import { acceptBrief, briefBody, type BriefBody, type BriefFailed, type BriefRow, type FeedItem } from "../../lib/feed";
+import { acceptBrief, briefBody, handledLater, type BriefBody, type BriefFailed, type BriefRow, type FeedItem } from "../../lib/feed";
 import { shortDuration } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
 import { formatDate, t } from "../../i18n";
@@ -25,8 +26,8 @@ function Section({ icon, tint, title, children }: { icon: IconName; tint: string
   );
 }
 
-function More({ n }: { n: number }) {
-  return n > 0 ? <div className="py-1 text-[12px] text-ink-2">{t("assistant-brief.more", { n })}</div> : null;
+function More({ n, text = "assistant-brief.more" }: { n: number; text?: string }) {
+  return n > 0 ? <div className="py-1 text-[12px] text-ink-2">{t(text, { n })}</div> : null;
 }
 
 /** A link the hub gave, if it is a web address: anything else is not drawn as one. */
@@ -96,6 +97,46 @@ function AcceptRow({ row }: { row: BriefRow }) {
   );
 }
 
+/** What the Handled button of a question that can wait says: idle, the hub took it, or it was not in the queue any more. */
+type Marking = "idle" | "busy" | "marked" | "handled";
+
+function LaterRow({ row }: { row: BriefRow }) {
+  const [state, setState] = useState<Marking>("idle");
+  const mark = () => {
+    if (state !== "idle") return;
+    setState("busy");
+    handledLater(row.id).then(
+      (res) => setState(res),
+      (e) => {
+        setState("idle");
+        toast(t("assistant-brief.later_failed", { error: String(e instanceof Error ? e.message : e) }), "error");
+      },
+    );
+  };
+  return (
+    <div className="flex items-center gap-3 py-1.5" data-brief-row="later">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] font-medium [overflow-wrap:anywhere]">{row.title}</div>
+        <div className="text-[12px] text-ink-2">{meta(row)}</div>
+      </div>
+      {webLink(row.link) && (
+        <Button href={webLink(row.link)} title={t("assistant-brief.open_row", { title: row.title })}>
+          {t("assistant-brief.open")}
+        </Button>
+      )}
+      {state === "marked" || state === "handled" ? (
+        <span className="shrink-0 text-[12.5px] text-ink-2" data-brief-marked={state}>
+          {t(state === "marked" ? "assistant-brief.later_marked" : "assistant-brief.handled")}
+        </span>
+      ) : (
+        <Button busy={state === "busy"} title={t("assistant-brief.later_done_row", { title: row.title })} onClick={mark}>
+          {t("assistant-brief.later_done")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function failedKey(x: BriefFailed): string {
   if (x.kind === "routine") return x.skipped ? "assistant-brief.failed_skipped" : "assistant-brief.failed_run";
   return "assistant-brief.failed_task";
@@ -157,6 +198,14 @@ export function BriefCard({ item }: { item: FeedItem }) {
           <AcceptRow key={r.id + (r.asked_at ?? "")} row={r} />
         ))}
       </Section>
+      {body.later.length > 0 && (
+        <Section icon="chat" tint="bg-field text-ink-2" title={t("assistant-brief.later_head", { n: body.later_total })}>
+          {body.later.map((r) => (
+            <LaterRow key={r.id} row={r} />
+          ))}
+          <More n={body.later_total - body.later.length} text="assistant-brief.later_more" />
+        </Section>
+      )}
       {body.progress_total > 0 && (
         <Section icon="gear" tint="bg-orange-tint text-orange" title={t("assistant-brief.progress_head", { n: body.progress_total })}>
           {body.progress.map((p) => (

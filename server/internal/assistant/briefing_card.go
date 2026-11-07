@@ -15,8 +15,9 @@ const (
 	briefAnswerRunes = 1500
 	// briefTailBytes is kept free for the "and N more" lines and the note under the sections.
 	briefTailBytes = 1500
-	// briefSpareEls is the elements kept free for the same.
-	briefSpareEls = 6
+	// briefSpareEls is the elements kept free for the same: an "and N more" line for each of the five sections, the note under
+	// them and the button that opens the conversation.
+	briefSpareEls = 7
 )
 
 // briefBlock is one row of a section: its Markdown, and the button under it (nil: none).
@@ -45,7 +46,7 @@ func (s *Service) briefCard(f *briefFacts, label, answer string) (card *feishubo
 			c.Note(i18n.T(l, "assistant-briefing.answer_clipped"))
 		}
 	}
-	room := briefBudget{bytes: reportCardMaxBytes - briefTailBytes - len(c.JSON()), els: reportCardMaxElements - briefSpareEls}
+	room := briefBudget{bytes: reportCardMaxBytes - briefTailBytes - len(c.JSON()), els: reportCardMaxElements - briefSpareEls - len(c.Body.Elements)}
 
 	// Waiting for you: the board's rows that hold an Agent up.
 	var waiting []briefBlock
@@ -86,6 +87,16 @@ func (s *Service) briefCard(f *briefFacts, label, answer string) (card *feishubo
 		accept = append(accept, briefBlock{md: md, plain: boardRowPlain(l, i+1, r), btn: btn, todo: r.id})
 	}
 	shown = room.section(c, &plain, l, i18n.T(l, "assistant-briefing.head_accept", i18n.Args{"n": len(f.Accept)}), accept, len(f.Accept))
+
+	// Can wait: the questions Agents left for a briefing, each with a "Handled" button (left out when there are none).
+	if f.LaterTotal > 0 {
+		var later []briefBlock
+		for i, r := range f.Later {
+			btn := feishubot.Btn(i18n.T(l, "assistant-briefing.later_done"), feishubot.Default, map[string]any{"a": "later_done", "id": r.id})
+			later = append(later, briefBlock{md: boardRowMarkdown(l, i+1, r), plain: boardRowPlain(l, i+1, r), btn: btn})
+		}
+		room.section(c, &plain, l, i18n.T(l, "assistant-briefing.head_later", i18n.Args{"n": f.LaterTotal}), later, f.LaterTotal)
+	}
 
 	// In progress: the tasks being worked on with their stage bar (left out when there are none).
 	if f.ProgressTotal > 0 {
@@ -229,6 +240,7 @@ func (f *briefFacts) countsIn(l i18n.Lang) string {
 	add("count_failed", f.FailedTotal)
 	add("count_done", f.DoneTotal)
 	add("count_accept", len(f.Accept))
+	add("count_later", f.LaterTotal)
 	if len(parts) == 0 {
 		return i18n.T(l, "assistant-briefing.count_none")
 	}

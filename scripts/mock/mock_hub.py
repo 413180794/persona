@@ -2723,6 +2723,11 @@ if MOCK_TASKS:
             "done": [{"id": "todo_task_blog", "title": "博客迁移到 Astro", "at": ago(hours=2)}], "done_total": 1,
             "accept": [{"id": "todo_task_release", "title": "整理发布说明", "detail": "发布说明写好了，放在 docs/release-notes.md", "from": "来自 Agent「发布」",
                         "waited_s": 7 * 3600, "asked_at": ago(hours=7)}],
+            # Questions an Agent left to wait for a briefing (later.go): the Handled button posts to /api/v1/later/{id}/handled.
+            "later": [{"id": "lt_mock_1", "title": "统一用 snake_case 还是 camelCase 命名新接口？", "from": "来自 Agent「网络层测试」",
+                       "link": "http://127.0.0.1/s/macbook/mock", "waited_s": 26 * 3600},
+                      {"id": "lt_mock_2", "title": "发布说明里要不要写内部编号？", "from": "来自 Agent「发布」", "waited_s": 3 * 3600}],
+            "later_total": 2,
             "progress": [{"id": "todo_task_widget", "title": "小组件横屏崩溃", "stage": "develop"}, {"id": "todo_task_tests", "title": "补齐网络层的单元测试"}],
             "progress_total": 2}),
     ]
@@ -2760,6 +2765,7 @@ if MOCK_TASKS:
             _feed("feed_v2", 15, "review", "todo_task_widget", {"title": "修小组件横屏崩溃", "verdict": "rework", "round": 1, "note": "补横屏截图再交"}),
             _feed("feed_r1", 4, "report", "todo_task_tests", {"kind": "question", "text": "Mock 用协议注入还是保留单例？\n协议注入要改 6 个文件。",
                                                              "evidence": ["https://github.com/example/weather/pull/42"]}),
+            _feed("feed_r3", 3.5, "report", "todo_task_tests", {"kind": "question", "text": "统一用 snake_case 还是 camelCase 命名新接口？", "later": True}),
             _feed("feed_r2", 3, "routed", "todo_task_tests", {"text": "用协议注入，先改网络层那 6 个文件", "interrupted": True}),
         ]
     # MOCK_TASKS_PENDING_REVIEW=1: the Today card lists the stopped release-notes task waiting for review (#4889).
@@ -2868,6 +2874,7 @@ if MOCK_TASKS:
 RETRY_TASK_STARTED = "a1f3c2d4-0000-4000-8000-0000000000a1"
 RETRY_MODE = {"mode": os.environ.get("MOCK_RETRY", "")}
 BRIEF_ACCEPTED = set()  # the tasks verified from a brief item's Accept button (reset with the mock hub)
+BRIEF_HANDLED = set()  # the questions that can wait marked handled from a brief item (reset with the mock hub)
 
 
 def retry_task(h, tid):
@@ -2983,6 +2990,15 @@ def tasks_area(h, method, p, raw):
             h.send_json({"error": "已经处理过了"}, 409)
         else:
             BRIEF_ACCEPTED.add(tid)
+            h.send_json({"ok": True})
+        return True
+    if method == "POST" and p.startswith("/api/v1/later/") and p.endswith("/handled"):
+        # The Handled button of a question that can wait: the first press takes it out of the queue, a second one is 409.
+        qid = p.split("/")[4]
+        if qid in BRIEF_HANDLED:
+            h.send_json({"error": "已经处理过了"}, 409)
+        else:
+            BRIEF_HANDLED.add(qid)
             h.send_json({"ok": True})
         return True
     if method == "POST" and p.startswith("/api/v1/todos/") and p.endswith("/retry"):

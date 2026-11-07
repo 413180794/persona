@@ -40,6 +40,10 @@ const body = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
   accept: [{ id: "todo_v1", title: "改设置页", detail: "设置页多了一个开关", from: "来自某个 Agent", waited_s: 7200, asked_at: ASKED }],
   ...over,
 });
+const askedLater = (n = 1): Record<string, unknown>[] => [
+  { id: `lt_${n}`, title: "新接口用 snake_case 还是 camelCase？", from: "来自 Agent「网络层」", link: "https://hub.example/s/box/ag7", waited_s: 93600 },
+  { id: `lt_${n + 1}`, title: "图标要不要换？", waited_s: 3600 },
+];
 const item = (b: Record<string, unknown> = body()): FeedItem => ({ id: "f1", conversation: "c1", at: "2026-11-07T01:00:05Z", kind: "brief", ref: "morning", body: b });
 
 function draw(it: FeedItem) {
@@ -86,6 +90,51 @@ describe("a brief item", () => {
     draw(item(body({ waiting: [], waiting_unknown: true })));
     expect(host.textContent).toContain("还没读到等你处理的卡片");
     expect(host.textContent).not.toContain("等你处理（0）");
+  });
+
+  it("draws the questions that can wait after what is to be verified and before what is in progress, with how many more", () => {
+    draw(item(body({ later: askedLater(), later_total: 3, progress: [{ id: "todo_w1", title: "重构设置页" }], progress_total: 1 })));
+    const text = host.textContent ?? "";
+    for (const want of ["可以晚点答（3）", "新接口用 snake_case 还是 camelCase？", "已等 26 小时", "来自 Agent「网络层」", "图标要不要换？", "还有 1 项"]) {
+      expect(text, want).toContain(want);
+    }
+    expect(text.indexOf("待验收（1）")).toBeLessThan(text.indexOf("可以晚点答（3）"));
+    expect(text.indexOf("可以晚点答（3）")).toBeLessThan(text.indexOf("进行中（1）"));
+    expect(text).not.toContain("还有 1 项，到任务页看"); // the queue's rest is not on the Tasks page
+    expect(rows("later")).toHaveLength(2);
+    expect(host.querySelector<HTMLAnchorElement>("a[href='https://hub.example/s/box/ag7']")).not.toBeNull(); // the Agent's chat
+  });
+
+  it("has no such section without questions, as for a hub that does not know them", () => {
+    draw(item());
+    expect(host.textContent).not.toContain("晚点答");
+    expect(rows("later")).toHaveLength(0);
+    draw(item(body({ later: "x", later_total: 5 }))); // not a list: nothing to draw
+    expect(rows("later")).toHaveLength(0);
+    expect(host.textContent).not.toContain("晚点答");
+  });
+
+  it("Handled posts the question's id, then says it is marked", async () => {
+    draw(item(body({ later: askedLater(), later_total: 2 })));
+    const btn = [...host.querySelectorAll("button")].filter((b) => b.textContent === "已处理")[0];
+    await act(async () => btn.click());
+    expect(api).toHaveBeenCalledWith("/later/lt_1/handled", { method: "POST" });
+    expect(host.querySelectorAll("[data-brief-marked=marked]")).toHaveLength(1);
+    expect(host.querySelector("[data-brief-marked=marked]")?.textContent).toBe("已标记为处理过");
+    expect([...host.querySelectorAll("button")].filter((b) => b.textContent === "已处理")).toHaveLength(1); // the other one is still there
+  });
+
+  it("a question that is gone (409) says it was handled; another failure keeps the button for a retry", async () => {
+    draw(item(body({ later: askedLater(), later_total: 2 })));
+    api.mockRejectedValueOnce(new ApiError(409, "已经处理过了", {}));
+    await act(async () => [...host.querySelectorAll("button")].filter((b) => b.textContent === "已处理")[0].click());
+    expect(host.querySelector("[data-brief-marked=handled]")?.textContent).toBe("已经处理过了");
+
+    draw(item(body({ later: askedLater(3), later_total: 2 }))); // other ids: a new row, not the one that was marked
+    api.mockRejectedValueOnce(new ApiError(500, "boom", {}));
+    await act(async () => [...host.querySelectorAll("button")].filter((b) => b.textContent === "已处理")[0].click());
+    expect(host.querySelector("[data-brief-marked]")).toBeNull();
+    expect([...host.querySelectorAll("button")].filter((b) => b.textContent === "已处理" && !b.disabled)).toHaveLength(2);
   });
 
   it("draws nothing for a body that is not one", () => {

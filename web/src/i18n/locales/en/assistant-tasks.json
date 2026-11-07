@@ -142,5 +142,6 @@
   "report_step_of": "Step {step}/{steps} · {text}",
   "report_step": "Step {step} · {text}",
   "report_from": "\"{title}\" to Persona",
+  "report_later": "Can wait for the next briefing",
   "said_to_interrupting": "Stopped \"{title}\" and told it"
 }

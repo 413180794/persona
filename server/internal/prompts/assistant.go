@@ -301,6 +301,7 @@ type BriefFacts struct {
 	WaitingTotal, DoneTotal, FailedTotal, AcceptTotal, ProgressTotal int
 	WaitingUnknown                                                   bool // the cards waiting were not read yet: say nothing of whether any waits
 	Card                                                             bool // a Lark card lists them for the user: the model need not
+	LaterTotal                                                       int  // questions Agents left for a briefing: the model says how many, never lists them
 	Waiting                                                          []string
 	Done                                                             []string
 	Failed                                                           []BriefFailed
