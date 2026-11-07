@@ -29,10 +29,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.text.LinkAnnotation
@@ -197,6 +199,14 @@ class KeyboardDismissTest {
         rule.waitForIdle()
         assertEquals(1, longPresses)
         assertTrue(focused)
+    }
+
+    // #5724: a screen reader or switch access cannot long press; they reach it as the node's long-click action.
+    @Test fun longPressIsAnAccessibilityAction() {
+        setPage()
+        rule.onNodeWithTag("message").performSemanticsAction(SemanticsActions.OnLongClick)
+        rule.waitForIdle()
+        assertEquals(1, longPresses)
     }
 
     @Test fun scrollKeepsFocus() {

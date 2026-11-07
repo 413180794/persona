@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 
 /**
  * A tap on blank space inside this area puts the keyboard away. It only watches: the tap reaches what is under the
@@ -41,8 +43,11 @@ fun Modifier.keepsKeyboardOnTap(onTap: () -> Unit = {}): Modifier = pointerInput
  * A long press runs [action] and keeps the rest of its press to itself; a shorter tap is left unconsumed, so a tap on
  * something that only has a long press (a message, all the row's width) still reaches [dismissKeyboardOnBlankTap].
  * `detectTapGestures(onLongPress = …)` consumes every tap, which kept the keyboard up over a whole conversation.
+ * Accessibility services (a screen reader, switch access) cannot long press: they get it as the node's long-click
+ * action, named [label].
  */
-fun Modifier.onLongPress(key: Any?, action: () -> Unit): Modifier = pointerInput(key) {
+fun Modifier.onLongPress(key: Any?, label: String? = null, action: () -> Unit): Modifier =
+    semantics { onLongClick(label) { action(); true } }.pointerInput(key) {
     awaitEachGesture {
         // A link or a button inside took the press: theirs.
         awaitFirstDown()

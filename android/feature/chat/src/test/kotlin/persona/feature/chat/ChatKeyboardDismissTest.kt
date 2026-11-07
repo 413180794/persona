@@ -14,14 +14,19 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.dp
@@ -113,6 +118,16 @@ class ChatKeyboardDismissTest {
         assertNotNull(menu.target)
         assertEquals("short", menu.target?.id)
         assertTrue(focused)
+    }
+
+    // #5724: without it, a screen reader reaches nothing in the menu but "Quote" (and only where quoting is offered).
+    @Test fun accessibilityLongClickOpensTheMenu() {
+        setConversation()
+        rule.onNode(hasAnyDescendant(hasText("好的")) and SemanticsMatcher("long click labelled 更多操作") {
+            it.config.getOrNull(SemanticsActions.OnLongClick)?.label == "更多操作"
+        }).performSemanticsAction(SemanticsActions.OnLongClick)
+        rule.waitForIdle()
+        assertEquals("short", menu.target?.id)
     }
 
     @Test fun linkInAReplyOpensAndKeepsFocus() {

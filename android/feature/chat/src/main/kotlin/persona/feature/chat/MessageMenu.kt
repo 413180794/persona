@@ -60,8 +60,9 @@ internal class MessageMenuState {
 }
 
 /**
- * The pressable part of a message: a long press (or a right click, docs/android/android-design.md 3.1) opens the menu, and
- * the message dims while it is open. Taps on links and buttons inside go to them, not here.
+ * The pressable part of a message: a long press (or a right click, docs/android/android-design.md 3.1, or the
+ * "More actions" long-click action accessibility services get) opens the menu, and the message dims while it is
+ * open. Taps on links and buttons inside go to them, not here.
  */
 @Composable
 internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
@@ -78,7 +79,7 @@ internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
     val label = stringResource(R.string.chat_menu_quote)
     return this.stableAlpha(if (menu.target?.id == target.id) 0.6f else 1f)
         .onSecondaryClick(open)
-        .onLongPress(open, open)
+        .onLongPress(open, stringResource(R.string.chat_chrome_more), open)
         // Drag it left to quote it (iOS #1058); accessibility services get "Quote" as an action of the message.
         .then(if (quote != null) Modifier.swipeToReply(label) { menu.close(); quote(target) } else Modifier)
 }
