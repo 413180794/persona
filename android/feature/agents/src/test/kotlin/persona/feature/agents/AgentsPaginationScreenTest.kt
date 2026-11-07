@@ -90,7 +90,7 @@ class AgentsPaginationScreenTest {
         rule.runOnIdle { model.query("deploy"); model.machine("demo"); model.filter(AgentQuickFilter.Working) }
         rule.waitForIdle()
         println("Forwarded filters=${repository.filters}; failure=${model.failure.value}")
-        rule.waitUntil(5_000) { repository.filters.lastOrNull() == SessionListFilter(state = "working", machineId = "demo", query = "deploy") }
+        rule.waitUntil(5_000) { repository.filters.lastOrNull() == SessionListFilter(state = "working", machineId = "demo", query = "deploy", requiresCompleteMembership = true) }
         println("8000 synthetic sessions: first page=50, after end scroll=100; LazyColumn offscreen Task 49 not composed")
     }
 

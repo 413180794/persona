@@ -13,6 +13,8 @@ data class SessionListFilter(
     val source: String? = null,
     val provider: String? = null,
     val query: String = "",
+    /** Local policy: the caller derives membership the paged API cannot express (#6108). Never sent as a query. */
+    val requiresCompleteMembership: Boolean = false,
 )
 
 @Serializable

@@ -1,6 +1,6 @@
 # Android bounded Agents lists
 
-The runtime Agents page uses the opt-in API introduced in server PR #5963. This does not combine runtime sessions with extension personal-agent conversations: Android's existing Agents page consumes `/api/v1/sessions`; `/api/v1/agents/sessions` remains a separate collection.
+The repository supports the opt-in API introduced in server PR #5963. The runtime Agents page requests complete membership until the server can express its full visibility contract (#6108); its counts and rows use the same local projection (#6521). This does not combine runtime sessions with extension personal-agent conversations: Android's existing Agents page consumes `/api/v1/sessions`; `/api/v1/agents/sessions` remains a separate collection.
 
 ## Loading and memory
 
@@ -20,15 +20,19 @@ A partial window must never be published as a complete per-machine verified list
 
 ## Compatibility and server limitations
 
-Only an unsupported endpoint or a legacy response lacking the bounded envelope selects the old full-list path. Authentication, network and arbitrary server errors do not trigger full-list fallback.
+An unsupported endpoint, a legacy response lacking the bounded envelope, or a caller explicitly requiring complete membership selects the full-list path. Authentication, network and arbitrary server errors do not trigger full-list fallback.
 
-The server has exact single-state filters and machine-local project/group dimensions. It does not expose client-specific pin/mute ordering, assistant-row exclusion, the combined Running/All/History preference, botmux-versus-terminal origin predicates, custom to-do sections, computed repository trees, or crossed per-group-by-state count maps. Those existing display recipes remain local over the retained window. Exact machine/project/space headings fetch server membership and state counts on demand; unsupported custom/worktree/rank headings describe loaded members. Top-level state/machine totals come from server aggregates. Full parity for these additional preference-defined filters/counts requires an extended server contract; this Android-only change does not invent incompatible query parameters or download the whole collection to approximate them.
+The server has exact single-state filters and machine-local project/group dimensions. It does not expose client-specific pin/mute ordering, assistant-row exclusion, the combined Running/All/History preference, botmux-versus-terminal origin predicates, custom to-do sections, computed repository trees, or crossed per-group-by-state count maps. The Agents view therefore sets the local `requiresCompleteMembership` policy. The repository reads the complete legacy collection and the existing local projection derives range, machine, source and preference membership and counts together. This policy is not an HTTP parameter and is preserved across hub namespaces. Leaving a complete-membership view allows pagination to be probed again.
+
+This restores correctness at the cost of full-list transfer and memory for Agents. Paging remains available for callers whose membership is expressible. The follow-up contract in #6108 must provide matching membership for pages, counts and deltas before Agents can safely use it. A paged WebSocket still emits list invalidations during the full-list fallback: those notices refresh the complete HTTP collection, including archive/restore changes; they must not be ignored merely because the HTTP view is in legacy mode. Network and authentication errors propagate without replacing retained sessions.
 
 The single-session `info` contract does not include full background/subagent/workflow/port arrays. Existing hydrated arrays are retained, and list activity uses scalar summaries. Reconstructing complete fresh detail arrays needs a dedicated server detail contract, not a full-list request.
 
 ## Verification
 
 `PagedSessionsRepositoryTest` covers 8,000 invented rows, bounded first-page/window loading, cursor continuation/backloading, multi-page revision updates, field-only changes, deletions, unloaded-row exclusion, newer rows joining page one and a burst reloading it, frozen-page catch-up, filter changes, expiry, reconnect and legacy fallback. `HttpSessionListsTest` covers the wire URLs/envelopes and errors. `AgentsPaginationScreenTest` drives the real `AgentsScreen` through scrolling, checks that an offscreen row is not composed, checks server filter forwarding and saves all three styles in light and dark using Robolectric native rendering.
+
+`CompleteSessionsRepositoryTest` covers complete reads of 8,000 rows, archive/restore invalidations, failure retention and returning to pagination. `AgentsVisibilityTest` runs the actual repository, ViewModel and Compose page with an offline Codex history row: Running counts zero, All/History count and retain one, and notices refresh the list. It saves light/dark screenshots.
 
 Native JVM screenshots are layout evidence, not emulator/physical-device launch or frame-time measurements. No deployment is part of this change.
 

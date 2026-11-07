@@ -301,3 +301,8 @@ Android rejects the desktop JVM's inline `(?U)` flag. A file-level regex initial
 Changing a Keystore alias changes the key used to unwrap an existing Tink keyset; it does not rename the OS key. An installed app can therefore retain every ciphertext file and still lose access after a presentation rename. Read existing keysets with both known aliases, without generating replacement keys or rewriting the wrapped keyset. Retaining the same data key also preserves associated-data paths and rollback to older clients.
 
 An AtomicFile can retain only its recovery `.bak` after an interrupted write. Treat that as an existing keyset and read through AtomicFile before deciding to initialize a new store. Real Tink round trips cover both wrapping keys, unavailable/wrong keys and unchanged ciphertext on the JVM; Android Keystore and AtomicFile recovery still require the separate library instrumentation package or a device upgrade check.
+
+
+## Counts must share the list's membership (#6521)
+
+A real offline Codex history row produced a machine count of one but an empty Running list. Legacy, paged and count endpoints agreed on that row; Android hid it locally and then replaced the local count with the server's broader total. Never treat a paged total as a client-filtered total unless the protocol expresses all membership predicates. Use the complete-membership policy while #6108 is pending. Test the actual repository and ViewModel together, including paged-socket invalidations during the complete HTTP fallback: otherwise archive/restore can leave a stale list even after initial counts are corrected.

@@ -13,7 +13,7 @@ internal data class VerifiedSessionLists(
     val sessions: Map<String, List<Session>> = emptyMap(),
 )
 
-/** List events invalidate a bounded HTTP window; listing never subscribes to chat item streams. */
+/** List events refresh the selected HTTP view; listing never subscribes to chat item streams. */
 class HubSessionsRepository(
     private val transport: ChatTransport,
     private val connection: HubConnection,
@@ -176,6 +176,10 @@ class HubSessionsRepository(
     override suspend fun refresh() = request { epoch, filter -> firstPage(epoch, filter) }
 
     private suspend fun firstPage(epoch: Long, filter: SessionListFilter) {
+        if (filter.requiresCompleteMembership) {
+            fallbackLegacy(epoch)
+            return
+        }
         if (lock.withLock { mode == Mode.Legacy }) {
             legacyRefresh(epoch)
             return
@@ -231,6 +235,8 @@ class HubSessionsRepository(
     override suspend fun setListFilter(filter: SessionListFilter) {
         val changed = lock.withLock {
             if (mutableListStatus.value.filter == filter) return
+            // A view policy is not a server capability failure. Reprobe pagination when leaving that view.
+            if (mutableListStatus.value.filter.requiresCompleteMembership != filter.requiresCompleteMembership) mode = Mode.Unknown
             generation++
             activeRequest?.cancel()
             resetPages()
@@ -294,7 +300,8 @@ class HubSessionsRepository(
     private suspend fun recoverDelta() = request { epoch, filter ->
         val since = lock.withLock { if (mode == Mode.Paged) checkpoint else null }
         if (since == null) {
-            if (lock.withLock { mode != Mode.Legacy }) firstPage(epoch, filter)
+            // A paged WebSocket emits invalidations even when this view uses the complete HTTP fallback.
+            if (filter.requiresCompleteMembership || lock.withLock { mode != Mode.Legacy }) firstPage(epoch, filter)
             return@request
         }
         try {

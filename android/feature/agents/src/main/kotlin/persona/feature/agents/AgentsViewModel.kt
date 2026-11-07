@@ -252,7 +252,9 @@ internal class AgentsViewModel(
     /** Network filters reset the frozen cursor; the repository discards responses from an older selection. */
     private val remoteFilter = settings.combine(groupFilter) { settings, group ->
         SessionListFilter(state = settings.quick.state?.wire, machineId = settings.machineFilter.takeIf { it.isNotEmpty() },
-            query = settings.query.take(256)) to group
+            // Range, assistant exclusion, host and preference membership are local until #6108 is implemented.
+            // A generic server total is not the number of rows this page admits.
+            query = settings.query.take(256), requiresCompleteMembership = true) to group
     }.distinctUntilChanged()
 
     fun countMachine(machine: AgentMachineGroup) = requestGroupCounts("machine:${machine.machine.id}",
