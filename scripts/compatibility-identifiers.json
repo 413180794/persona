@@ -46,6 +46,7 @@
         "jarvis-panes",
         "jarvis-pixel",
         "jarvis-update-",
+        "jarvis.hub-data.master",
         "jarvis.phone.confirm",
         "jarvis_settings",
         "split.jarvis",
@@ -393,7 +394,8 @@
         "jarvis",
         "jarvis-pgdata",
         "jarvis-postgres",
-        "jarvis_test"
+        "jarvis_test",
+        "jarvisd"
       ],
       "path_tokens": [],
       "external_refs": []
