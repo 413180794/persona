@@ -129,6 +129,15 @@ To remove it: `docker rm -f persona-mgr-<id> persona-mgr-<id>-pg && docker netwo
 
 When the hub deletes it (or it was installed again somewhere else), the connection is closed with 4002 and the next dial gets 401 with code `token_revoked`. Only that explicit word counts: a hub that can't look tokens up (its database restarting) answers 503 `store_unavailable`, and a plain 401 is a refusal to retry later; the manager keeps dialing as usual on both. On the explicit word it says once that the hub no longer accepts its token and **stops dialing**; the process stays up, checks `manager.json` every 10 seconds, and every 10 minutes tries the token alone with a bare dial, nothing else of the manager running meanwhile (no bots, connectors, extensions or inbox: those sources may be another manager's now). It starts again only when that dial goes through (a hub restored from a backup may know the token again); a dial that gets no verdict (the hub unreachable, a proxy's answer) is tried again after a minute, never taken for yes. While the hub can't look tokens up it answers 503 for a couple of seconds without asking its database again, and counts none of it against the source. Once you get a new code in the app and `personad manager join … --dir <the same directory>` writes a new token, it restarts itself in place (exec), with nothing to change in the service. The assistant the hub starts is not affected (it doesn't take this path and keeps retrying every minute).
 
+## The built-in manager's database
+
+The built-in manager keeps its data in a database of its own, **inside the hub's Postgres server**: next to the hub's database (`persona`, or whatever its `database_url` names) is a second one named after it with `_manager` (`persona_manager`; `jarvis_manager` on an install whose database is still `jarvis`). Upgrading moves the data there once, by itself ([server.md](server.md) ("The default manager's own database")).
+
+- **One server, two databases.** Removing the hub's Postgres server (its container `persona-postgres` and the volume `persona-pgdata`, `jarvis-postgres` and `jarvis-pgdata` on an install from before the rename, or the system's Postgres) removes the built-in manager's data too: the conversations' state, todos, the inbox, the knowledge base's index, the model providers' and extensions' settings.
+- **Back up both.** A backup of the hub must have both databases, `persona` and `persona_manager`: one `pg_dump` of each, or `pg_dumpall` of the whole server. A dump of `persona` alone no longer has the manager's data. Restore both together.
+- **Moving the hub.** Move both databases. Its `manager.json` keeps only the second database's name, so it is found again on the new server through the hub's `database_url`.
+- **Managers made in the app** are not affected: each has a Postgres of its own (above).
+
 ## The built-in manager's own files
 
 The built-in manager (the assistant the hub starts) has its own directory, `~/.persona/managers/assistant/`, beside the ones of managers made in the app. Its `manager.json` is there (docs/config.md ("manager.json")), and so are its keys (`server/internal/managerconf/files.go`):

@@ -72,6 +72,8 @@ const usage = `usage:
   personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)
   personad assistant        the assistant (the Persona tab's) as its own process on the hub's bus; the hub starts it
                            unless hub.json says assistant.external (token: stdin or PERSONA_ASSISTANT_TOKEN)
+  personad assistant drop-shared-tables [--yes]  drop the built-in manager's old tables from the hub's database, once
+                           its data moved into its own (without --yes: list them)
   personad manager join|run|install|uninstall|status
                            another manager made in the app: trade its install code, run it, install it as a service
                            (docs/managers.md; personad manager for the details)
@@ -205,6 +207,10 @@ func main() {
 			err = fmt.Errorf("unknown hub command %q", sub)
 		}
 	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant.md)
+		if len(os.Args) > 2 && os.Args[2] == "drop-shared-tables" { // docs/server.md "The default manager's own database"
+			err = assistant.DropSharedCommand(ctx, os.Args[3:], os.Stdout, os.Stderr)
+			break
+		}
 		err = assistant.Main(ctx, buildInfo(), os.Stdin)
 	case "manager": // a manager made in the app: join, run, install as a service (docs/managers.md)
 		err = manager.Main(ctx, buildInfo(), os.Args[2:], os.Stdout)

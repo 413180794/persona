@@ -101,7 +101,7 @@ Other notes:
   changing `.env` afterwards (or deleting `data/docker/db-password`) makes the database unreachable. To change it, also run `ALTER USER persona PASSWORD '…'` in the database.
 - The hub container has `init: true`: when an ssh started by personad is killed, its ProxyCommand / ProxyJump children are reaped by init, so no zombie processes are left.
 - Directories: `data/` is the hub's `~/.persona` (`hub.json`, the built-in manager's `managers/assistant/manager.json`, secrets, tailcat key, the knowledge base `data/data`, the generated database password `data/docker/`), `postgres/` is the database. Both sit next to compose,
-  visible in the NAS's file manager; back up these two directories. `hub.json` and the secret files are 0600.
+  visible in the NAS's file manager; back up these two directories. `postgres/` holds both the hub's database and the built-in manager's (`persona_manager`; `jarvis_manager` on an install still on `jarvis`, [managers.md](managers.md) ("The built-in manager's database")): removing it removes the manager's data too. `hub.json` and the secret files are 0600.
 - An existing deployment (`.env` has `PERSONA_DB_PASSWORD` and `PUID` / `PGID`, `data/` has `hub.json`) behaves the same after switching to the new `compose.yaml`: it uses the password from `.env`, generates nothing, and doesn't change `hub.json`. The only additions are an empty `data/docker/` directory and the 18662 port mapping (nothing listens on it when `hub.json` hasn't enabled TLS).
 
 You can also connect a computer without the App, via tailcat (when the computer is on another internal network that the NAS can't reach):
@@ -238,10 +238,10 @@ When LAN clients need access, you can bind `PERSONA_PORT` to an explicit LAN add
 ## Migrating from the native method
 
 1. On the old machine, stop the hub (`systemctl --user stop personad`) and export the database:
-   `docker exec persona-postgres pg_dump -U persona -Fc persona > persona.dump`.
+   `docker exec persona-postgres pg_dump -U persona -Fc persona > persona.dump`, and the built-in manager's database in the same server: `docker exec persona-postgres pg_dump -U persona -Fc persona_manager > persona_manager.dump`. Both together are the hub's data ([managers.md](managers.md) ("The built-in manager's database")); one without the other loses the manager's data or the hub's.
 2. Copy the actual runtime directory (the new default is `~/.persona`; existing deployments may still use the compatibility directory `~/.persona`) to `data/` on the NAS (`bin/` can be left out). In `hub.json`, remove the `kind: local` machine (if that machine should keep running Agents,
    change it to `ssh` or `tailcat`). Leave `database_url` alone (the environment variable overrides it).
-3. `docker compose up -d postgres`, then import: `docker compose exec -T postgres pg_restore -U persona -d persona --clean --if-exists < persona.dump`,
+3. `docker compose up -d postgres`, then import: `docker compose exec -T postgres pg_restore -U persona -d persona --clean --if-exists < persona.dump` (and the manager's: `docker compose exec -T postgres createdb -U persona persona_manager`, then the same `pg_restore -d persona_manager < persona_manager.dump`),
    then `docker compose up -d`. The token is unchanged; paired phones only need the address changed to the new one (or scan again).
 
 ## Verification

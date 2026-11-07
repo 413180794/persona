@@ -70,7 +70,7 @@ func Open(ctx context.Context, url string, sets Sets) (*DB, error) {
 	if sets == 0 || sets&^AllSets != 0 {
 		return nil, fmt.Errorf("db.Open: bad migration sets %d", sets)
 	}
-	pool, err := connect(ctx, url)
+	pool, err := connect(ctx, url, appName(sets))
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +88,20 @@ func Open(ctx context.Context, url string, sets Sets) (*DB, error) {
 	return d, nil
 }
 
+// Attach connects the way Open does for sets, migrating nothing and taking up nothing (a tool that looks at a database
+// another build owns: assistant drop-shared-tables).
+func Attach(ctx context.Context, url string, sets Sets) (*DB, error) {
+	pool, err := connect(ctx, url, appName(sets))
+	if err != nil {
+		return nil, err
+	}
+	return &DB{pool: pool, sets: sets}, nil
+}
+
 // Check connects the way Open does and lets go again, migrating nothing: a new hub binary waiting to take over
 // (hubedge, a standby slot) checks it can reach the database while the one serving still owns the schema.
 func Check(ctx context.Context, url string) error {
-	pool, err := connect(ctx, url)
+	pool, err := connect(ctx, url, appName(HubSet))
 	if err != nil {
 		return err
 	}
@@ -99,13 +109,34 @@ func Check(ctx context.Context, url string) error {
 	return nil
 }
 
-func connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
+// appName is the application_name a part's connections give Postgres, so a part can tell the other's connections
+// (and ones of a build from before, which give none) on a database they share (managerdb.go).
+func appName(sets Sets) string {
+	switch sets {
+	case HubSet:
+		return AppHub
+	case ManagerSet:
+		return AppManager
+	}
+	return "persona"
+}
+
+// AppHub and AppManager are the application_name of the hub's connections and a manager's.
+const (
+	AppHub     = "persona-hub"
+	AppManager = "persona-manager"
+)
+
+func connect(ctx context.Context, url, app string) (*pgxpool.Pool, error) {
 	if url == "" {
 		return nil, errors.New("hub 的数据库还没装好。运行 personad hub setup，它会帮你建好。")
 	}
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("parse database_url: %w", err)
+	}
+	if _, set := cfg.ConnConfig.RuntimeParams["application_name"]; !set && app != "" {
+		cfg.ConnConfig.RuntimeParams["application_name"] = app
 	}
 	cfg.MaxConns = 8
 	cfg.AfterConnect = func(_ context.Context, c *pgx.Conn) error {

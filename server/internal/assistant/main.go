@@ -88,7 +88,11 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	moveFiles(home, logger.Printf)
 	o := builtinFiles(home)
 	o.ID, o.Hub, o.Token, o.Deploy, o.Errors = assistantwire.AssistantID, hub, token, deploy, errs
-	o.DatabaseURL, o.Logf, o.ExtConfig = cfg.DatabaseURL, logger.Printf, ext
+	o.Logf, o.ExtConfig = logger.Printf, ext
+	// Its own database, its data moved there once (owndb.go); the hub's while that cannot be yet.
+	if o.DatabaseURL, o.OnHubDatabase, err = builtinDatabase(ctx, home, cfg.DatabaseURL, provisionOwn, logger.Printf); err != nil {
+		return err
+	}
 	return run(ctx, build, o)
 }
 
@@ -174,6 +178,9 @@ type runOptions struct {
 	// ExtConfig is the configuration of its extensions, connectors and bots as moveConfig read it (nil: read there).
 	ExtConfig   *extmgr.Config
 	DatabaseURL string
+	// OnHubDatabase: DatabaseURL is the database the built-in manager shares with the hub (its data not moved into
+	// its own yet, owndb.go): it holds the move's lock share there while it runs, so another process's move waits.
+	OnHubDatabase bool
 	// StopWhenRevoked: once the hub refuses the token, stop (bus.ErrRevoked) rather than try it every minute.
 	StopWhenRevoked bool
 	Logf            func(format string, args ...any)
@@ -206,6 +213,30 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
+	if o.OnHubDatabase {
+		// Still on the hub's database: the share of the move's lock while it runs, on a connection of its own let go
+		// last (after the database closes), so another process's move waits for it (owndb.go).
+		share, err := db.HoldManagerShare(ctx, o.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("database: %w", err)
+		}
+		if movedOut(ctx, o.DatabaseURL) { // another start moved its data while this one waited for the share
+			share.Release()
+			return errors.New("database: its data moved into its own database meanwhile (or the hub's database cannot tell): the next start runs there")
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		watched := make(chan struct{})
+		go func() {
+			defer close(watched)
+			holdShare(ctx, share, o.DatabaseURL, cancel, logf)
+		}()
+		defer func() { // after the database closed (deferred later): the watcher stopped, then the share goes
+			cancel()
+			<-watched
+			share.Release()
+		}()
+	}
 	database, err := db.Open(ctx, o.DatabaseURL, db.ManagerSet)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
