@@ -89,6 +89,8 @@ def build(config, checkout, sha, directory):
             return built
     tests = ["python3", "-m", "unittest", "discover", "-s", "scripts/release", "-p", "test_*android*.py"]
     run(tests, checkout, env=env)
+    run(["python3", "-m", "unittest", "discover", "-s", "scripts/test",
+         "-p", "test_persona_script_identity.py"], checkout, env=env)
     run(["python3", "scripts/privacy_check.py"], checkout, env=env)
     run(["./gradlew", "--no-daemon", "--console=plain",
          "-PpersonaApplicationId=" + config["application_id"],

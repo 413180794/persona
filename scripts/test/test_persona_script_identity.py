@@ -441,10 +441,41 @@ sys.exit(2)
         self.assertEqual((self.state / 'web/index.html').read_text(), 'Persona fixture web')
 
     def test_android_apk_publish_uses_the_remote_profile_and_config_entrypoint(self):
+        # This integration fixture tests identity resolution and binary transport;
+        # provide SDK output for its synthetic APK while retaining production checks.
+        executable(self.commands / 'aapt2', '#!' + sys.executable + '\n' + r'''
+import argparse
+from pathlib import Path
+parser = argparse.ArgumentParser()
+parser.add_argument('command', choices=['dump'])
+parser.add_argument('format', choices=['badging'])
+parser.add_argument('apk', type=Path)
+args = parser.parse_args()
+assert args.apk.read_bytes() == b'anonymous-signed-apk-fixture'
+print("package: name='com.example.persona' versionCode='1' versionName='1.0'")
+print("minSdkVersion:'26'")
+''')
+        executable(self.commands / 'apksigner', '#!' + sys.executable + '\n' + r'''
+import argparse
+from pathlib import Path
+parser = argparse.ArgumentParser()
+parser.add_argument('command', choices=['verify'])
+parser.add_argument('--verbose', action='store_true', required=True)
+parser.add_argument('--print-certs', action='store_true', required=True)
+parser.add_argument('apk', type=Path)
+args = parser.parse_args()
+assert args.apk.read_bytes() == b'anonymous-signed-apk-fixture'
+print('Number of signers: 1')
+print('V3.0 Signer: certificate SHA-256 digest: ' + 'a' * 64)
+''')
         apk = self.base / 'fixture.apk'; apk.write_bytes(b'anonymous-signed-apk-fixture')
-        self.run_script('scripts/release/publish_android_apk.sh', str(apk), '--version-code', '1', '--version-name', '1.0', '--min-sdk', '26')
+        self.run_script('scripts/release/publish_android_apk.sh', str(apk), '--version-code', '1',
+                        '--version-name', '1.0', '--min-sdk', '26',
+                        '--expected-package', 'com.example.persona', '--expected-cert-sha256', 'a' * 64)
         manifest = json.loads((self.state / 'apps/android/latest.json').read_text())
         self.assertEqual(manifest['version_code'], 1)
+        self.assertEqual(manifest['package_name'], 'com.example.persona')
+        self.assertEqual(manifest['certificate_sha256'], 'a' * 64)
         self.assertEqual((self.state / 'apps/android' / (manifest['sha256'] + '.apk')).read_bytes(), apk.read_bytes())
 
 
