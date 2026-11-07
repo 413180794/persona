@@ -106,6 +106,12 @@ type fakeOpenAPI struct {
 func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 	f := &fakeOpenAPI{read: map[string]any{}, readCode: map[string]int{}, readFail: map[string]int{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/open-apis/") && !strings.HasPrefix(r.URL.Path, "/callback/") {
+			// Not the open platform's: a Persona node on the machine running these tests probes this server's port
+			// (GET /, node/ports.go). Only the bot's calls are recorded.
+			http.NotFound(w, r)
+			return
+		}
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		f.calls = append(f.calls, r.Method+" "+r.URL.Path+" "+string(body))
@@ -229,6 +235,22 @@ func (f *fakeOpenAPI) total() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.calls)
+}
+
+// A Persona node on the machine running these tests probes the fake's port (GET /, node/ports.go): only the bot's
+// calls to the open platform are recorded, so a probe never shows up as one of them.
+func TestFakeOpenAPIRecordsOnlyTheBotsCalls(t *testing.T) {
+	f := newFakeOpenAPI(t)
+	req, _ := http.NewRequest("GET", f.srv.URL+"/", nil)
+	req.Header.Set("User-Agent", "jarvis-ports")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound || f.total() != 0 {
+		t.Fatalf("a port probe: %d, calls %q", res.StatusCode, f.since(0))
+	}
 }
 
 // since lists the calls after the first n.
