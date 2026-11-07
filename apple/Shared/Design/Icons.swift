@@ -441,6 +441,8 @@ extension Theme {
         #endif
         /// AI Draft Reply: a reply drafted in the user's voice.
         static let draftReply = "pencil.and.scribble"
+        /// A drafted reply that will not go out: its message was handled elsewhere first (a message card, #4797).
+        static let handledElsewhere = "checkmark.bubble"
         /// Hand to AI: an inbox item handed to Persona or an agent.
         static let handToAI = "paperplane"
         /// Mentions of the user (@Me).

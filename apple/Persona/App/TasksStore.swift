@@ -25,9 +25,11 @@ final class TasksStore {
     /// A task or an agent picked on the board, opened when the board has gone down.
     var openAfterBoard: String?
     var openAgentAfterBoard: SessionKey?
-    /// Message cards (inbox item ids) put off with Later, and the ones sent from their card.
+    /// Message cards (inbox item ids) put off with Later, the ones sent from their card, and the ones whose Send the hub
+    /// refused as handled elsewhere (409 inbox_item_done).
     private(set) var laterMessages: Set<String> = []
     private(set) var sentMessages: Set<String> = []
+    private(set) var filedMessages: Set<String> = []
     /// Quick results (QuickResult.callID) the user took back with Undo.
     private(set) var undone: Set<String> = []
     /// Plans being started or dismissed (their card shows it and takes no second tap).
@@ -232,18 +234,24 @@ final class TasksStore {
 
     // MARK: Actions
 
-    /// Send on a message card: the draft (as edited) goes out through the inbox, which files the item as done.
-    func sendMessage(_ itemID: String, text: String) async {
+    /// Send on a message card: the draft (as edited) goes out through the inbox, which files the item as done. The
+    /// card's id goes along, so the hub sends once per card and nothing for an item handled since (#4797).
+    func sendMessage(_ card: FeedItem, itemID: String, text: String) async {
+        guard messageState(card, itemID: itemID) == .open else { return }
         let inbox = InboxStore.shared
         if let item = inbox.items.first(where: { $0.id == itemID }) {
-            if await inbox.send(item, text: text) { sentMessages.insert(itemID) }
+            // A refusal comes back as the hub's words; the reload brings the item as the hub has it (handled elsewhere).
+            if await inbox.send(item, text: text, card: card.id) { sentMessages.insert(itemID) } else { inbox.reload() }
             return
         }
         guard let api = AppModel.shared.api else { return }
         do {
-            try await api.inboxReply(itemID, text: text)
+            try await api.inboxReply(itemID, text: text, card: card.id)
             sentMessages.insert(itemID)
             Haptics.success()
+            inbox.reload()
+        } catch let e as APIError where e.code == "inbox_item_done" {
+            filedMessages.insert(itemID) // handled elsewhere before this card heard of it: nothing went out
             inbox.reload()
         } catch {
             AppModel.shared.toast = Toast(String(localized: "Reply not sent: \(error.localizedDescription)"), style: .error)
@@ -252,9 +260,21 @@ final class TasksStore {
 
     func later(_ itemID: String) { laterMessages.insert(itemID) }
 
-    /// Whether the card's message was answered: sent from the card, or replied / filed in the inbox.
-    func messageSettled(_ itemID: String) -> Bool {
-        sentMessages.contains(itemID) || InboxStore.shared.items.first { $0.id == itemID }?.isDone == true
+    enum MessageState { case open, sent, filed }
+
+    func messageState(_ card: FeedItem, itemID: String) -> MessageState {
+        Self.messageState(card, inbox: InboxStore.shared.items.first { $0.id == itemID },
+                          sentHere: sentMessages.contains(itemID), refused: filedMessages.contains(itemID))
+    }
+
+    /// Where a message card's reply stands: sent (from the card here, the hub's `sent_at`, or replied in the inbox), filed
+    /// (the hub's `filed_at`, a refused Send, or the inbox has it done some other way: Done, Ignore, read elsewhere), or
+    /// still open. The inbox list only keeps items done in the last 3 days, so the card's own fields cover older ones;
+    /// an item the inbox lists as open was moved back since, and sends again (#4797).
+    nonisolated static func messageState(_ card: FeedItem, inbox item: InboxItem?, sentHere: Bool, refused: Bool) -> MessageState {
+        if sentHere || card.sentAt != nil { return .sent }
+        if let item { return item.isDone ? (item.doneBy == "replied" ? .sent : .filed) : .open }
+        return card.filedAt != nil || refused ? .filed : .open
     }
 
     /// Undo on a quick result: the reminder or event comes off the phone.

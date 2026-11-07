@@ -13686,6 +13686,29 @@
       },
       "extractionState": "manual"
     },
+    "Already dealt with, so this reply wasn't sent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already dealt with, so this reply wasn't sent."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この件は対応済みのため、返信は送信していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这件事已经处理过了，回复没有发出去"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Already up to date": {
       "localizations": {
         "en": {
@@ -45325,6 +45348,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "管理者处理了"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Handled elsewhere, draft not sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handled elsewhere, draft not sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対応済み・送信しなかった下書き"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已处理，未发送的草稿"
           }
         }
       },

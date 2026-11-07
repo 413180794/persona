@@ -2962,6 +2962,15 @@ if MOCK_TASKS:
     # (#4253, kind notice, drawn by the clients since #4305), last in the conversation.
     if os.environ.get("MOCK_TASKS_NOTICE") == "1":
         TASK_FEED[ASK1].append(_feed("feed_notice", 0.5, "notice", None, {"text": "电脑和模型接好了，定时任务恢复运行，这次是「早报」"}))
+    # MOCK_TASKS_MESSAGE=filed / sent: the message card's inbox item was handled elsewhere (filed_at, #4797), or its reply
+    # went out from the card (sent_at): the apps draw it handled / sent, with no Send.
+    _msg = os.environ.get("MOCK_TASKS_MESSAGE", "")
+    if _msg in ("filed", "sent"):
+        _card = next(i for i in TASK_FEED[ASK1] if i["id"] == "feed_m7b")
+        if _msg == "filed":
+            _card["body"]["filed_at"] = ago(minutes=5)
+        else:
+            _card["body"].update(sent_at=ago(minutes=5), sent="在修了，测试已经过了，十点前提 PR，下午发版来得及。")
     ITEMS[ASK1] = (
         [it("user", "text", 60 * 26, text="博客迁移到 Astro，在 Mac Studio 上做")]
         + tool("mcp__persona__task_plan", {"tasks": []}, "Plan plan_mock_0 is on the user's screen as a card.", 60 * 26 - 0.3)

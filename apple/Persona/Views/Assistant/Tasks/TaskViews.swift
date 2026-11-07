@@ -656,7 +656,8 @@ struct AnsweredLine: View {
 }
 
 /// A message about one of the conversation's tasks, with the reply the AI twin drafted from the task's progress
-/// (docs/assistant/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, Send / Edit / Later.
+/// (docs/assistant/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, Send / Edit / Later. Once
+/// the message was handled elsewhere (#4797) the draft stays as plain text with no buttons: the hub would refuse it.
 struct MessageCard: View {
     var item: FeedItem
     var itemID: String
@@ -666,7 +667,7 @@ struct MessageCard: View {
     private var store: TasksStore { .shared }
 
     var body: some View {
-        let settled = store.messageSettled(itemID)
+        let state = store.messageState(item, itemID: itemID)
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: item.source == "mail" ? Theme.Icon.mail : Theme.Icon.groupChat)
@@ -699,32 +700,43 @@ struct MessageCard: View {
                 .buttonStyle(.plain)
             }
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Label(settled ? String(localized: "Replied as you") : String(localized: "Reply drafted from the task's progress"), systemImage: settled ? Theme.Icon.done : Theme.Icon.draftReply)
+                Label(heading(state), systemImage: icon(state))
                     .font(Theme.Font.captionStrong)
-                    .foregroundStyle(settled ? Theme.positive : Theme.accent)
+                    .foregroundStyle(tint(state))
                     .lineLimit(1)
-                if editing {
+                if editing && state == .open {
                     TextField(String(localized: "Reply"), text: $text, axis: .vertical)
                         .font(Theme.Font.body)
                         .lineLimit(2...8)
                 } else {
-                    Text(text.isEmpty ? (item.draft ?? "") : text).font(Theme.Font.body)
+                    let draft = text.isEmpty ? (item.draft ?? "") : text
+                    // Sent: what the hub says went out, which may have been edited on another device.
+                    Text(state == .sent ? item.sent ?? draft : draft)
+                        .font(Theme.Font.body)
+                        .foregroundStyle(state == .filed ? .secondary : .primary)
                 }
             }
             .padding(Theme.Space.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background((settled ? Theme.positive : Theme.accent).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-            if !settled {
+            .background(state == .filed ? Theme.Fill.well : tint(state).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            .accessibilityIdentifier("messageCard.reply")
+            if state == .filed {
+                Text("Already dealt with, so this reply wasn't sent.")
+                    .font(Theme.Font.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("messageCard.filed")
+            }
+            if state == .open {
                 HStack(spacing: Theme.Space.s) {
                     Button {
                         sending = true
                         Task {
-                            await store.sendMessage(itemID, text: text.isEmpty ? (item.draft ?? "") : text)
+                            await store.sendMessage(item, itemID: itemID, text: text.isEmpty ? (item.draft ?? "") : text)
                             sending = false
                             editing = false
                         }
                     } label: { Text("Send").lineLimit(1).frame(maxWidth: .infinity) }
                         .themedButton(prominent: true)
+                        .accessibilityIdentifier("messageCard.send")
                     Button {
                         if text.isEmpty { text = item.draft ?? "" }
                         withAnimation(Theme.Motion.state) { editing.toggle() }
@@ -737,7 +749,31 @@ struct MessageCard: View {
             }
         }
         .card(padding: Theme.Space.l)
-        .animation(Theme.Motion.state, value: settled)
+        .animation(Theme.Motion.state, value: state)
+    }
+
+    private func heading(_ state: TasksStore.MessageState) -> String {
+        switch state {
+        case .open: String(localized: "Reply drafted from the task's progress")
+        case .sent: String(localized: "Replied as you")
+        case .filed: String(localized: "Handled elsewhere, draft not sent")
+        }
+    }
+
+    private func icon(_ state: TasksStore.MessageState) -> String {
+        switch state {
+        case .open: Theme.Icon.draftReply
+        case .sent: Theme.Icon.done
+        case .filed: Theme.Icon.handledElsewhere
+        }
+    }
+
+    private func tint(_ state: TasksStore.MessageState) -> Color {
+        switch state {
+        case .open: Theme.accent
+        case .sent: Theme.positive
+        case .filed: .secondary
+        }
     }
 }
 

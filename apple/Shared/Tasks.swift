@@ -123,6 +123,11 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     var chat: String? { string("chat") }
     var sender: String? { string("sender") }
     var draft: String? { string("draft") }
+    /// `message`: the hub says the reply went out from a card (`sent_at`, what it said in `sent`), or that the item was
+    /// handled elsewhere first (`filed_at`, #4797): either way Send is refused, and a sent card is never filed.
+    var sentAt: Date? { string("sent_at").flatMap(JSON.parseDate) }
+    var sent: String? { string("sent") }
+    var filedAt: Date? { sentAt == nil ? string("filed_at").flatMap(JSON.parseDate) : nil }
 
     /// `review`: the supervisor's verdict (accepted / rework / needs_user / cancelled), the rework round, its note.
     var verdict: String? { string("verdict") }

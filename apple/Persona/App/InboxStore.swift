@@ -219,9 +219,9 @@ final class InboxStore {
 
     /// Send on the AI Twin's draft: the hub replies in the chat / by mail / in the document (moving the rows' status
     /// in `changes` first) and files the item as done. Filed at once (the reply takes Feishu / the mail server a few
-    /// seconds); a failure puts the item back and keeps the text for the reply sheet.
+    /// seconds); a failure puts the item back and keeps the text for the reply sheet. `card`: sent from that message card.
     @discardableResult
-    func send(_ item: InboxItem, text: String, changes: [InboxItem.DocChange] = []) async -> Bool {
+    func send(_ item: InboxItem, text: String, changes: [InboxItem.DocChange] = [], card: String? = nil) async -> Bool {
         guard let api = AppModel.shared.api, !sending.contains(item.id) else { return false }
         sending.insert(item.id)
         defer { sending.remove(item.id) }
@@ -233,7 +233,7 @@ final class InboxStore {
         unsentReplies[item.id] = nil
         Haptics.tap()
         do {
-            try await api.inboxReply(item.id, text: text, changes: changes)
+            try await api.inboxReply(item.id, text: text, changes: changes, card: card)
             Haptics.success()
             AppModel.shared.toast = Toast(String(localized: "Sent and marked as done"), style: .success)
             return true

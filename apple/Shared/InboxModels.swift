@@ -457,7 +457,7 @@ extension APIClient {
     func unmuteInbox(_ id: String) async throws { try await delete("/api/v1/inbox/mutes/" + id) }
 
     private struct InboxText: Codable { var text: String }
-    private struct InboxReplyBody: Encodable { var text: String; var changes: [InboxItem.DocChange]? }
+    private struct InboxReplyBody: Encodable { var text: String; var changes: [InboxItem.DocChange]?; var card: String? }
     private struct InboxDraftBody: Encodable { var instruction: String }
 
     /// A reply drafted by the hub's model; `instruction` steers it ("Agree, but later next week").
@@ -466,9 +466,11 @@ extension APIClient {
     }
 
     /// Sends the user's reply (in the Feishu chat, as a mail reply, or as a comment in the document, moving the rows'
-    /// status in `changes` first) and files the item as done.
-    func inboxReply(_ id: String, text: String, changes: [InboxItem.DocChange] = []) async throws {
-        try await post("/api/v1/inbox/" + id + "/reply", body: InboxReplyBody(text: text, changes: changes.isEmpty ? nil : changes), timeout: 60)
+    /// status in `changes` first) and files the item as done. `card`: Send on that message card, which the hub sends once
+    /// and refuses for an item handled since (409 `inbox_item_done`, #4797).
+    func inboxReply(_ id: String, text: String, changes: [InboxItem.DocChange] = [], card: String? = nil) async throws {
+        try await post("/api/v1/inbox/" + id + "/reply", body: InboxReplyBody(text: text, changes: changes.isEmpty ? nil : changes, card: card),
+                       timeout: 60)
     }
 
     /// Moves one row's status in the document; the item comes back read again.
