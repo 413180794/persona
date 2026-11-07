@@ -15,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Looks (docs/extensions/extensions.md "Looks", docs/apple/persona.md): one list of every look a user can choose — the ones the apps
@@ -228,15 +229,17 @@ func (h *Hub) looks() []lookView {
 }
 
 // lookChoice is the chosen look as stored (nil: never chosen, or no store).
-func (h *Hub) lookChoice(ctx context.Context) *lookChoice {
+func (h *Hub) lookChoice(ctx context.Context) (*lookChoice, error) {
 	if h.store == nil {
-		return nil
+		return nil, nil
 	}
 	var c lookChoice
-	if ok, err := h.store.Setting(ctx, lookKey, &c); err != nil || !ok || c.ID == "" {
-		return nil
+	if ok, err := h.store.Setting(ctx, lookKey, &c); err != nil {
+		return nil, err
+	} else if !ok || c.ID == "" {
+		return nil, nil
 	}
-	return &c
+	return &c, nil
 }
 
 // lookCurrentOf is what the apps are told is chosen and shown, given the looks there are.
@@ -286,7 +289,11 @@ func (h *Hub) looksGone(ctx context.Context, ids []string) {
 	if h.store == nil {
 		return
 	}
-	chosen := h.lookChoice(ctx)
+	chosen, err := h.lookChoice(ctx)
+	if err != nil {
+		h.logf("look: read choice after removal: %v", err)
+		return
+	}
 	if chosen == nil || !slices.Contains(ids, chosen.ID) {
 		return
 	}
@@ -301,8 +308,14 @@ func (h *Hub) looksGone(ctx context.Context, ids []string) {
 
 func (h *Hub) lookRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/looks", func(w http.ResponseWriter, r *http.Request) {
+		chosen, err := h.lookChoice(r.Context())
+		if err != nil {
+			h.logf("look: read choice: %v", err)
+			writeErr(w, http.StatusInternalServerError, i18n.Err("http-status.internal"))
+			return
+		}
 		looks := h.looks()
-		writeJSON(w, map[string]any{"looks": looks, "current": lookCurrentOf(h.lookChoice(r.Context()), looks)})
+		writeJSON(w, map[string]any{"looks": looks, "current": lookCurrentOf(chosen, looks)})
 	})
 	api.HandleFunc("PUT /api/v1/looks/current", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -319,7 +332,13 @@ func (h *Hub) lookRoutes(api *http.ServeMux) {
 		}
 		looks := h.looks()
 		if body.IfUnset {
-			if c := h.lookChoice(r.Context()); c != nil {
+			c, err := h.lookChoice(r.Context())
+			if err != nil {
+				h.logf("look: read choice before migration: %v", err)
+				writeErr(w, http.StatusInternalServerError, i18n.Err("http-status.internal"))
+				return
+			}
+			if c != nil {
 				writeJSON(w, lookCurrentOf(c, looks))
 				return
 			}

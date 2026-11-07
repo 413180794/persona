@@ -265,40 +265,58 @@ func (u *updater) start(ctx context.Context) {
 	go u.loop(ctx)
 }
 
-func (u *updater) load(ctx context.Context) {
+func (u *updater) load(ctx context.Context) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	if u.loaded {
-		return
-	}
-	u.loaded = true
-	if u.h.store != nil {
-		if _, err := u.h.store.Setting(ctx, updateSettingsKey, &u.settings); err != nil {
-			u.h.logf("update: settings: %v", err)
-		}
-	}
+	return u.loadLocked(ctx)
 }
 
-// save writes the settings (called with u.mu held).
-func (u *updater) saveLocked(ctx context.Context) {
+// loadLocked publishes settings only after a complete read, so a failed read can be retried.
+func (u *updater) loadLocked(ctx context.Context) error {
+	if u.loaded {
+		return nil
+	}
+	if u.h.store != nil {
+		var settings updateSettings
+		if _, err := u.h.store.Setting(ctx, updateSettingsKey, &settings); err != nil {
+			u.h.logf("update: settings: %v", err)
+			return err
+		}
+		u.settings = settings
+	}
+	u.loaded = true
+	return nil
+}
+
+// saveLocked writes the settings (called with u.mu held after a successful load).
+func (u *updater) saveLocked(ctx context.Context) error {
+	if err := u.loadLocked(ctx); err != nil {
+		return err
+	}
 	if len(u.settings.History) > updateHistoryKeep {
 		u.settings.History = u.settings.History[len(u.settings.History)-updateHistoryKeep:]
 	}
 	if u.h.store != nil {
 		if err := u.h.store.PutSetting(ctx, updateSettingsKey, u.settings); err != nil {
 			u.h.logf("update: save settings: %v", err)
+			u.loaded = false // The next attempt must start from the persisted settings.
+			return err
 		}
 	}
+	return nil
 }
 
-func (u *updater) record(ctx context.Context, r updateRecord) {
+func (u *updater) record(ctx context.Context, r updateRecord) error {
 	u.mu.Lock()
+	defer u.mu.Unlock()
+	if err := u.loadLocked(ctx); err != nil {
+		return err
+	}
 	u.settings.History = append(u.settings.History, r)
 	if r.Result == "rolled_back" && !slices.Contains(u.settings.Bad, r.ToBuild) {
 		u.settings.Bad = append(u.settings.Bad, r.ToBuild)
 	}
-	u.saveLocked(ctx)
-	u.mu.Unlock()
+	return u.saveLocked(ctx)
 }
 
 func (u *updater) markRolledBack(p update.Pending, reason string) {
@@ -320,8 +338,10 @@ func (u *updater) recordRolledBack(ctx context.Context) {
 	if ok, err := update.Load(update.RolledBackPath(u.dir), &rb); err != nil || !ok {
 		return
 	}
-	u.record(ctx, updateRecord{FromVersion: rb.FromVersion, ToVersion: rb.ToVersion, ToBuild: rb.ToBuild, Started: rb.Started,
-		Ended: rb.At, Result: "rolled_back", Reason: rb.Reason, Auto: rb.Auto})
+	if err := u.record(ctx, updateRecord{FromVersion: rb.FromVersion, ToVersion: rb.ToVersion, ToBuild: rb.ToBuild, Started: rb.Started,
+		Ended: rb.At, Result: "rolled_back", Reason: rb.Reason, Auto: rb.Auto}); err != nil {
+		return // Keep the marker until the history and bad-build list have been saved.
+	}
 	l := u.h.userLang()
 	why := su(l, "rolled_back", i18n.Args{"to": rb.ToVersion, "from": u.h.version, "reason": rb.Reason})
 	u.set("rolled_back", "", why)
@@ -480,7 +500,7 @@ func (u *updater) wantsAuto() bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	r := u.release
-	return u.settings.auto() && !u.running && r != nil && u.h.build.Newer(r.Manifest.Build) &&
+	return (u.loaded || u.h.store == nil) && u.settings.auto() && !u.running && r != nil && u.h.build.Newer(r.Manifest.Build) &&
 		!slices.Contains(u.settings.Bad, r.Manifest.Build) && u.h.build.Hold(r.Manifest) == ""
 }
 
@@ -488,6 +508,9 @@ func (u *updater) wantsAuto() bool {
 // code may not contain this hub's (Build.Hold): the app shows it as available, with the reason, and the user can
 // still install it.
 func (u *updater) noteHeld(ctx context.Context) {
+	if err := u.load(ctx); err != nil {
+		return
+	}
 	u.mu.Lock()
 	r := u.release
 	if !u.settings.auto() || u.running || r == nil || !u.h.build.Newer(r.Manifest.Build) || slices.Contains(u.settings.Bad, r.Manifest.Build) {
@@ -512,6 +535,10 @@ func (u *updater) noteHeld(ctx context.Context) {
 
 // check reads the release now (a Docker hub: its image's tags).
 func (u *updater) check(ctx context.Context) (*update.Published, error) {
+	if err := u.load(ctx); err != nil {
+		return nil, err
+	}
+	u.recordRolledBack(ctx)
 	if u.h.build.Channel == update.Docker {
 		return nil, u.checkImage(ctx)
 	}
@@ -986,11 +1013,17 @@ func (u *updater) checkImage(ctx context.Context) error {
 
 func (u *updater) routes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/hub/update", func(w http.ResponseWriter, r *http.Request) {
-		u.load(r.Context())
+		if err := u.load(r.Context()); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("POST /api/v1/hub/update/check", func(w http.ResponseWriter, r *http.Request) {
-		u.load(r.Context())
+		if err := u.load(r.Context()); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		if _, err := u.check(r.Context()); err != nil && !errors.Is(err, errNotRelease) {
 			writeErr(w, http.StatusBadGateway, err)
 			return
@@ -1003,7 +1036,10 @@ func (u *updater) routes(api *http.ServeMux) {
 		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("POST /api/v1/hub/update", func(w http.ResponseWriter, r *http.Request) {
-		u.load(r.Context())
+		if err := u.load(r.Context()); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		var body struct {
 			Now bool `json:"now"`
 		}
@@ -1020,7 +1056,10 @@ func (u *updater) routes(api *http.ServeMux) {
 		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("PUT /api/v1/hub/update/settings", func(w http.ResponseWriter, r *http.Request) {
-		u.load(r.Context())
+		if err := u.load(r.Context()); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		var body struct {
 			Auto           *bool `json:"auto"`
 			AutoNoticeSeen *bool `json:"auto_notice_seen"`
@@ -1030,6 +1069,11 @@ func (u *updater) routes(api *http.ServeMux) {
 			return
 		}
 		u.mu.Lock()
+		if err := u.loadLocked(r.Context()); err != nil {
+			u.mu.Unlock()
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		if body.Auto != nil {
 			a := *body.Auto
 			u.settings.Auto = &a
@@ -1038,12 +1082,19 @@ func (u *updater) routes(api *http.ServeMux) {
 		if body.AutoNoticeSeen != nil {
 			u.settings.AutoNoticeSeen = *body.AutoNoticeSeen
 		}
-		u.saveLocked(r.Context())
+		err := u.saveLocked(r.Context())
 		u.mu.Unlock()
+		if err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("GET /api/v1/hub/update/history", func(w http.ResponseWriter, r *http.Request) {
-		u.load(r.Context())
+		if err := u.load(r.Context()); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		u.mu.Lock()
 		out := slices.Clone(u.settings.History)
 		u.mu.Unlock()

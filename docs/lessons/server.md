@@ -15,6 +15,18 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 
 Revocation ended pairing codes with `expires_at = now()` (Postgres's clock) while the hub judged them by its own `time.Now()`: with Postgres in a VM whose clock runs ahead (a macOS hub with Docker Desktop or colima), a revoked code kept working for the difference. When a time is written on one side and compared on the other, make it past by both (`LEAST(expires_at, now(), $hub_now)`, `endedNow`). A time the hub hands out has the same problem even when every check is in SQL: a voided manager install code still showed a future expiry in the roster (#6553). Tests that compare a database-written time with `time.Now()` fail on such a machine, while Linux CI, with Postgres on the same kernel clock, never shows it.
 
+## Failed settings loads must remain retryable (#5827)
+
+- A loaded flag means a complete successful read, including an absent row. Decode into temporary state and publish it only after success; a canceled or failed read must not leave partial settings cached. Require a successful load before changing and saving settings, so a transient database failure cannot erase update history or bad builds. Keep rollback markers until their history and bad-build entries are persisted, and gate automatic update decisions on loaded settings.
+
+## A settings read error is not an absent choice (#5827)
+
+- Return read errors separately from a missing setting before applying defaults or migrating a client's choice. A failed conditional write must neither overwrite the saved choice nor broadcast a replacement. Test a failed read followed by a successful retry, including zero writes and broadcasts during the failure.
+
+## Registration success requires persistence (#5827)
+
+- Return device and Live Activity save errors to HTTP callers so they can retry. Keep logging in shared persistence helpers because token renewal and background cleanup still need to continue with their in-memory state when storage is unavailable. Bound request writes by both the request context and the existing 5-second device-store timeout; test cancellation and the inherited deadline with a waiting store stub. Use typed `i18n.Err` values for localized HTTP summaries: wrapping translated text in a plain error lets the shared API error mapping replace it with a generic diagnostic message.
+
 ## Rolling-upgrade identity contracts (#6223)
 
 - Treat a rename as an ABI change wherever a byte reaches another process, persisted state, a cryptographic domain or an operating-system registration. Use an explicit authenticated feature, an old-safe default and exact aliases; display names and build strings do not prove compatibility. Push-to-start needs a persisted registration capability, independent of the socket's XML capability.

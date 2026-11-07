@@ -193,14 +193,15 @@ type liveActivities struct {
 	shownAt    time.Time
 	repair     bool // a device's activity shows something unknown: flush without waiting for a change
 	// wake: when the run loop's timer goes off next (zero: not set), for a merge or a device's turn after fleetMinGap.
-	wake   time.Time
-	now    func() time.Time
-	minGap time.Duration // fleetMinGap (0 in the replay of how it was before, pushreplay_test.go)
+	wake         time.Time
+	now          func() time.Time
+	minGap       time.Duration // fleetMinGap (0 in the replay of how it was before, pushreplay_test.go)
+	storeTimeout time.Duration // bounds each token write; tests shorten it
 }
 
 func newLiveActivities(h *Hub) *liveActivities {
 	return &liveActivities{h: h, signal: make(chan struct{}, 1), rows: map[string]db.LiveActivity{}, started: map[string]int{},
-		sent: map[string][]byte{}, sentAt: map[string]time.Time{}, now: time.Now, minGap: fleetMinGap}
+		sent: map[string][]byte{}, sentAt: map[string]time.Time{}, now: time.Now, minGap: fleetMinGap, storeTimeout: deviceStoreTimeout}
 }
 
 func (la *liveActivities) load(ctx context.Context) {
@@ -676,20 +677,29 @@ func (la *liveActivities) sendStart(d Device, r db.LiveActivity, payload map[str
 	})
 }
 
-// update changes one device's row and saves it.
+// update keeps background token cleanup running even if persistence fails; updateContext logs the error.
 func (la *liveActivities) update(device string, fn func(*db.LiveActivity)) {
+	_ = la.updateContext(context.Background(), device, fn)
+}
+
+// updateContext changes one device's row and bounds persistence by the caller's context and the store timeout.
+func (la *liveActivities) updateContext(ctx context.Context, device string, fn func(*db.LiveActivity)) error {
 	la.mu.Lock()
 	v := la.rows[device]
 	v.DeviceID = device
 	fn(&v)
 	la.rows[device] = v
 	la.mu.Unlock()
+	defer la.changed() // a new token gets the current state even if persistence needs a retry
 	if la.h.store != nil {
-		if err := la.h.store.SaveLiveActivity(context.Background(), v); err != nil {
+		ctx, cancel := context.WithTimeout(ctx, la.storeTimeout)
+		defer cancel()
+		if err := la.h.store.SaveLiveActivity(ctx, v); err != nil {
 			la.h.logf("save live activity: %v", err)
+			return err
 		}
 	}
-	la.changed() // a new token gets the current state right away
+	return nil
 }
 
 func (la *liveActivities) routes(api *http.ServeMux) {
@@ -705,7 +715,7 @@ func (la *liveActivities) routes(api *http.ServeMux) {
 			writeBodyErr(w, err, err)
 			return
 		}
-		la.update(r.PathValue("id"), func(v *db.LiveActivity) {
+		err := la.updateContext(r.Context(), r.PathValue("id"), func(v *db.LiveActivity) {
 			if body.PushToStartToken != "" {
 				v.PushToStartToken = body.PushToStartToken
 			}
@@ -721,6 +731,10 @@ func (la *liveActivities) routes(api *http.ServeMux) {
 				v.ActivityID, v.PushToken = body.ActivityID, body.PushToken
 			}
 		})
+		if err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	// The current state, for the app to start or refresh its activity while it is open.

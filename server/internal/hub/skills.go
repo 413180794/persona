@@ -54,7 +54,7 @@ func (h *Hub) serveSkills(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.machineSkills(r.Context(), m, id)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err)
+		callErr(w, err)
 		return
 	}
 	if list == nil {

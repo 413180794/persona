@@ -133,7 +133,7 @@ func validRelayURL(s string) bool {
 	return false
 }
 
-func (p *Pusher) register(d Device) {
+func (p *Pusher) register(d Device) error {
 	d.UpdatedAt = time.Now().UTC()
 	d.RelayURL = strings.TrimRight(d.RelayURL, "/")
 	if d.RelayURL != "" && !validRelayURL(d.RelayURL) {
@@ -156,13 +156,13 @@ func (p *Pusher) register(d Device) {
 	}
 	p.devices[d.DeviceID] = d
 	p.mu.Unlock()
-	p.save(d.DeviceID)
+	return p.save(d.DeviceID)
 }
 
 // save writes a device's current row (whatever the latest register / renewal left), one write at a time.
-func (p *Pusher) save(id string) {
+func (p *Pusher) save(id string) error {
 	if p.store == nil {
-		return
+		return nil
 	}
 	p.saveMu.Lock()
 	defer p.saveMu.Unlock()
@@ -170,13 +170,15 @@ func (p *Pusher) save(id string) {
 	d, ok := p.devices[id]
 	p.mu.Unlock()
 	if !ok {
-		return
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), p.storeTimeout)
 	defer cancel()
 	if err := p.store.UpsertDevice(ctx, d); err != nil {
 		p.logf("save device: %v", err)
+		return err
 	}
+	return nil
 }
 
 // relayed: this device can be pushed through its relay (the hub has no key of its own).

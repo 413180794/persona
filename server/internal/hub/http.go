@@ -190,7 +190,10 @@ func (h *Hub) routes() http.Handler {
 		d.Locale = string(i18n.Resolve(d.Locale)) // its pushes' language; "" (an older app) is the user's
 		d.CredentialID = principalOf(r.Context()).ID
 		d.Credential = d.CredentialID
-		h.push.register(d)
+		if err := h.push.register(d); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, i18n.Err("http-status.unavailable"))
+			return
+		}
 		resp := map[string]any{"ok": true}
 		if route, ok := h.push.routeOfID(d.DeviceID); ok {
 			resp["push"] = route // the app's Settings › Notifications says which way, or why none (#5998)
