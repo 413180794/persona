@@ -39,9 +39,12 @@ See `docs/android/android.md` ("App shell and direct page navigation," the Setti
 | `phone_calendar_events {start?, end?, query?, limit?}` | Calendar (full access) | No | Defaults to midnight today through 7 days later; returns id, title, start/end, all-day flag, calendar name, location, first 300 characters of notes, and attendees |
 | `phone_calendar_create_event {title, start, end, location?, notes?, all_day?, calendar?}` | Calendar | **Yes** | Creates an event, selects a calendar by name, falls back to the default calendar |
 | `phone_reminders_list {list?, include_completed?, limit?}` | Reminders | No | Defaults to incomplete only; returns id, title, due date, completion, priority, list, and first 300 characters of notes |
-| `phone_reminders_create {title, due?, notes?, list?, priority?}` | Reminders | **Yes** | Creates a reminder; priority 0/1–4/5/6–9 |
+| `phone_reminders_create {title, due?, notes?, list?, priority?, location?}` | Reminders | **Yes** | Creates a reminder; priority 0/1–4/5/6–9. `location {title, latitude, longitude, radius_meters?, trigger: arrive\|leave}` makes it go off on arriving at or leaving a place (#6564, "Reminders by place" below) |
+| `phone_reminders_update {id, title?, due?, notes?, location?}` | Reminders | **Yes** | Changes only the fields given; `due: null` removes the due date, `location: null` stops it going off at a place |
 | `phone_reminders_complete {id}` | Reminders | **Yes** | Marks complete (using the id returned by `phone_reminders_list`) |
+| `phone_reminders_delete {id}` | Reminders | **Yes** | Deletes a reminder the user no longer needs |
 | `phone_location_current {}` | Location (while in use) | No | One-shot location, waits up to 15 seconds; returns latitude/longitude, accuracy, altitude, time, time zone, and reverse-geocoded address |
+| `phone_location_search {query, limit?}` | Location | No | Finds a place by name or address (MapKit): name, address, latitude, longitude, up to 10 |
 | `phone_health_summary {metrics?, days?}` | Health (read) | No | Defaults to steps over the last 7 days; metrics steps / distance / active_energy / heart_rate / resting_heart_rate / sleep / weight |
 | `phone_health_write_sample {metric, value?, start, end?}` | Health (write) | **Yes** | Writes one sample: steps (integer) / distance (meters) / active_energy (kilocalories) / weight (kilograms, one instant) / sleep (an asleep interval, no value); intervals at most 24 hours, not in the future; one sample at a time, no bulk import or deletion |
 | `phone_photos_recent {limit?, days?, screenshots_only?}` | Photos (read) | No | Recent photo/video metadata: local id, time, type, dimensions, screenshot/favorite flags, duration, latitude/longitude |
@@ -51,6 +54,16 @@ See `docs/android/android.md` ("App shell and direct page navigation," the Setti
 | `phone_clipboard_set {text}` | None | No | Replaces clipboard text |
 | `phone_notify {title, body, delay_seconds?}` | Notifications | No | Local notification, optionally delayed up to 24 hours |
 | `phone_notifications_list {limit?}` | None | No | **Android only**: Persona's own currently displayed notifications (id, title, body, time), newest first, default 50, maximum 100; excludes confirmation-card notifications and cannot see other apps' notifications |
+
+### Reminders by place (#6564)
+
+"Remind me to buy milk on the way home": the assistant writes a reminder with a location alarm (`EKAlarm.structuredLocation` and `proximity`), and iOS watches the circle itself, like a reminder made in the Reminders app. Persona needs no background location and no "Always" permission; the alarm goes off on the phone and the watch even when Persona is closed. A location alarm goes off once.
+
+- **When it goes off is the assistant's call** (`server/internal/prompts/assistant/claude_md.md`): something to do on the way is leaving where the user set out from; something to do once there is arriving. It says which it chose, and `phone_reminders_update` changes it.
+- **Places** (home, office) live in the assistant's memory as names and coordinates, from `phone_location_current` while the user is there or `phone_location_search` from an address.
+- **No duplicates**: the assistant lists reminders first and changes the matching one. "Done" completes it and "not needed" deletes it.
+- The radius defaults to 150 m (100–2000): fixes indoors are often 50–100 m off, so a smaller circle misses.
+- Not yet: going off near any shop of a kind ("when I pass a supermarket"), and Android, which has no reminder tools.
 
 Tools by platform:
 

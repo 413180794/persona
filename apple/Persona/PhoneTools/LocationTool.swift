@@ -1,7 +1,9 @@
 import CoreLocation
 import Foundation
+import MapKit
 
-/// `phone_location_current`: one-shot fix plus a reverse-geocoded address.
+/// `phone_location_current`: one-shot fix plus a reverse-geocoded address; `phone_location_search`: a place's
+/// coordinates from its name or address (for a reminder that goes off there).
 enum LocationTool {
     static var tools: [PhoneTool] {
         [
@@ -19,7 +21,24 @@ enum LocationTool {
                 ),
                 source: .location,
                 run: { _ in try await current() }
-            )
+            ),
+            PhoneTool(
+                spec: ToolSpec(
+                    name: "phone_location_search",
+                    description: """
+                    Find a place by name or address (an office building, a street address, a shop) and \
+                    return candidates with name, address, latitude and longitude, nearest to the phone \
+                    first when its location is known. Use it to get the coordinates of a place the user \
+                    names, then confirm the right one with the user.
+                    """,
+                    inputSchema: Schema.object([
+                        "query": Schema.string("Name or address to look for."),
+                        "limit": Schema.integer("Maximum number of places, default 5, max 10.", min: 1, max: 10),
+                    ], required: ["query"])
+                ),
+                source: .location,
+                run: { args in try await search(args) }
+            ),
         ]
     }
 
@@ -44,6 +63,31 @@ enum LocationTool {
         ]
         if let address { pairs.append(("address", address)) }
         return Output.json(Output.object(pairs))
+    }
+
+    static func search(_ args: JSONValue) async throws -> [ToolContent] {
+        guard let query = ToolArgs.string(args, "query") else {
+            throw ToolFailure(.invalidArgument, "query is required")
+        }
+        let limit = ToolArgs.int(args, "limit", fallback: 5, min: 1, max: 10)
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        let items: [MKMapItem]
+        do {
+            items = try await MKLocalSearch(request: request).start().mapItems
+        } catch {
+            throw ToolFailure(.invalidArgument, "no place found for \"\(query)\": \(error.localizedDescription)")
+        }
+        let places = items.prefix(limit).map { item -> JSONValue in
+            let place = item.placemark
+            return Output.object([
+                ("name", Output.opt(item.name)),
+                ("address", Output.opt(formatted(place))),
+                ("latitude", .number(place.coordinate.latitude)),
+                ("longitude", .number(place.coordinate.longitude)),
+            ])
+        }
+        return Output.json(Output.object([("count", .number(Double(places.count))), ("places", .array(Array(places)))]))
     }
 
     private static func reverseGeocode(_ location: CLLocation) async -> JSONValue? {

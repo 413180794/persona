@@ -69,7 +69,10 @@ struct PhoneToolsTests {
             "phone_reminders_list",
             "phone_reminders_create",
             "phone_reminders_complete",
+            "phone_reminders_update",
+            "phone_reminders_delete",
             "phone_location_current",
+            "phone_location_search",
             "phone_health_summary",
             "phone_health_write_sample",
             "phone_photos_recent",
@@ -233,6 +236,8 @@ struct PhoneToolsTests {
             "phone_calendar_create_event",
             "phone_reminders_create",
             "phone_reminders_complete",
+            "phone_reminders_update",
+            "phone_reminders_delete",
             "phone_health_write_sample",
         ])
         for tool in PhoneToolRegistry.all where tool.confirmation != nil {

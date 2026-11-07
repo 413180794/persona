@@ -439,6 +439,8 @@ var phoneConfirmedTools = map[string]bool{
 	"phone_calendar_create_event": true,
 	"phone_reminders_create":      true,
 	"phone_reminders_complete":    true,
+	"phone_reminders_update":      true,
+	"phone_reminders_delete":      true,
 	"phone_health_write_sample":   true,
 }
 
