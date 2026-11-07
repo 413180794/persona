@@ -2551,13 +2551,14 @@ struct QuickFilterBar: View, Equatable {
         #if os(macOS)
         if !AppStyle.current.usesBeautifulUI {
             // The Mac's segmented control (#2113), every filter always there with its count: segments that came and
-            // went with the counts moved under the pointer.
-            Picker("Filter", selection: Binding(get: { selection }, set: { if $0 != selection { choose($0) } })) {
-                ForEach(AgentFilter.allCases) { f in
-                    Text(f == .all || countsUnknown ? f.title : "\(f.title) \(counts[f] ?? 0)").tag(f)
-                }
+            // went with the counts moved under the pointer. Where the list column is too narrow for it (the six filters
+            // since #2698 need more than `sidebarMax` with their counts), a menu with the chosen one: wider than its
+            // column, the control cut the list off at both edges, and at a split's first layout the window looped on
+            // Update Constraints until AppKit threw (#4769).
+            ViewThatFits(in: .horizontal) {
+                macPicker.pickerStyle(.segmented)
+                macPicker.pickerStyle(.menu).fixedSize()
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Theme.Space.page)
@@ -2570,6 +2571,16 @@ struct QuickFilterBar: View, Equatable {
         chipsBar
         #endif
     }
+
+    #if os(macOS)
+    private var macPicker: some View {
+        Picker("Filter", selection: Binding(get: { selection }, set: { if $0 != selection { choose($0) } })) {
+            ForEach(AgentFilter.allCases) { f in
+                Text(f == .all || countsUnknown ? f.title : "\(f.title) \(counts[f] ?? 0)").tag(f)
+            }
+        }
+    }
+    #endif
 
     private var chipsBar: some View {
         ViewThatFits(in: .horizontal) {
