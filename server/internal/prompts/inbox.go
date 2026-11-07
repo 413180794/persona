@@ -121,6 +121,8 @@ type InboxAgent struct {
 	// Connector: an item of a connector's (GitHub…).
 	Connector *InboxAgentConnector
 	KB        *KBContext // what the knowledge base knows about the item's chat
+	// KnowledgeDir: the knowledge base directory the KB part names; "" is the default ~/.persona/data.
+	KnowledgeDir string
 }
 
 // InboxAgentLark is the item's Feishu chat; Account is the gateway account it is in when that is not lark.account.

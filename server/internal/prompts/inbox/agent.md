@@ -38,7 +38,7 @@
 {{.}}
 {{end}}{{end}}{{with .KB}}
 
-## 知识库里的背景（~/.persona/data）
+## 知识库里的背景（{{or $.KnowledgeDir "~/.persona/data"}}）
 
 {{template "shared/kb_blocks" .}}
 会话 id：{{.ChatID}}。更多用 kb_get / kb_search 查。处理完如果得出了新结论（项目进展、谁负责什么、截止时间），用 kb_update 写回对应项目的 log（这是允许的写操作）。
