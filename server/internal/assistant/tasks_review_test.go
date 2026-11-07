@@ -130,6 +130,7 @@ type receiptReadHookHub struct {
 	*fakeHub
 	reads      int
 	beforeRead func(int)
+	afterRead  func(int)
 	receipt    func(FeedItem)
 }
 
@@ -140,7 +141,11 @@ func (h *receiptReadHookHub) DeviceCall(ctx context.Context, p DeviceCall) (json
 			h.beforeRead(h.reads)
 		}
 	}
-	return h.fakeHub.DeviceCall(ctx, p)
+	result, err := h.fakeHub.DeviceCall(ctx, p)
+	if p.Method == DeviceSessionItems && h.afterRead != nil {
+		h.afterRead(h.reads)
+	}
+	return result, err
 }
 
 func (h *receiptReadHookHub) Broadcast(ctx context.Context, b Broadcast) {

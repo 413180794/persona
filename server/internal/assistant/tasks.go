@@ -104,6 +104,8 @@ func (s *Service) settleDelay(ctx context.Context) time.Duration {
 
 type tasksState struct {
 	mu sync.Mutex
+	// completionMu serializes a resumed turn with committing an earlier judgment.
+	completionMu sync.Mutex
 	// Without a store (unit tests) plans and the feed live here.
 	plans map[string]*TaskPlan
 	feed  map[string][]FeedItem
@@ -111,6 +113,8 @@ type tasksState struct {
 	// receipt is due when the task settles after working since the last one.
 	working   map[string]time.Time
 	receipted map[string]time.Time
+	// awaitingAnswer remembers a stopped status whose transcript still ends in a tool.
+	awaitingAnswer map[SessionRef]bool
 	// retrying: the tasks whose agent is starting again after a failed start (one start at a time, #1396).
 	retrying map[string]bool
 	// outcomes: the completions whose outcome was recorded (todo_outcome.go, outcomeKey).
@@ -1089,6 +1093,8 @@ func (s *Service) taskWaits(ctx context.Context, t Todo) bool {
 // again first, as a change asked for on its "Please verify" card reopens it (#3457), so this turn is followed
 // (interrupted or done receipt, judgment) and the task shows in progress, not done (#5892).
 func (s *Service) taskWorking(ctx context.Context, mid, sid string) {
+	s.tasks.completionMu.Lock()
+	defer s.tasks.completionMu.Unlock()
 	t, ok := s.taskOf(ctx, mid, sid)
 	if !ok {
 		closed, found := s.closedTaskOf(ctx, mid, sid)
@@ -1149,7 +1155,10 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 	if !ok {
 		return
 	}
-	agents := s.taskAgents(ctx, t)
+	agents, reached := s.taskAgentsReached(ctx, t)
+	if !reached || !taskAgentsSettled(t, agents) {
+		return
+	}
 	var last, cut proto.Session
 	for _, c := range agents {
 		if c.State == proto.StateWorking || c.State == proto.StateNeedsYou || c.PendingInteractions > 0 {
@@ -1190,6 +1199,9 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 	if m, ok := s.device(cctx, machine); ok {
 		name = m.Name
 	}
+	if !s.taskWorkCurrent(t.ID, since) || !s.taskRuntimeSettled(cctx, t) {
+		return
+	}
 	if cut.SessionID != "" {
 		// A turn cut off by the model service is no end of the work: an interrupted receipt (with "Continue" on the card),
 		// and nothing to judge or close (#1516).
@@ -1205,6 +1217,29 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		return
 	}
 	items, read := s.lastTurnItems(cctx, last.MachineID, last.SessionID)
+	if !s.taskWorkCurrent(t.ID, since) || !s.taskRuntimeSettled(cctx, t) {
+		return
+	}
+	if read && taskTurnAwaitingAnswer(items) && !silentTurn(items) {
+		// Do not consume this stretch's receipt while the runtime is between tools and its answer.
+		s.tasks.mu.Lock()
+		if !s.tasks.working[t.ID].After(since) {
+			delete(s.tasks.receipted, t.ID)
+			if s.tasks.awaitingAnswer == nil {
+				s.tasks.awaitingAnswer = make(map[SessionRef]bool)
+			}
+			s.tasks.awaitingAnswer[SessionRef{MachineID: machine, SessionID: sid}] = true
+		}
+		s.tasks.mu.Unlock()
+		// The answer's update may have arrived during the transcript read, before
+		// the retry was registered. Reconcile that update instead of waiting for another tick.
+		if latest, ok := s.session(cctx, last.MachineID, last.SessionID); ok &&
+			(latest.Status != last.Status || latest.Rev != last.Rev || latest.LastText != last.LastText || !latest.UpdatedAt.Equal(last.UpdatedAt)) &&
+			s.takeTaskAnswerRetry(machine, sid) {
+			go s.taskTurnEnded(context.WithoutCancel(ctx), machine, sid)
+		}
+		return
+	}
 	if read && silentTurn(items) {
 		// No reply and no tool call, yet no error either (the model service answered 200 with nothing in it): no end
 		// of the work. Interrupted, as a cut-off turn is, with nothing to judge or close (#2349).

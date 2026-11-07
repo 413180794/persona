@@ -312,8 +312,9 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		var list struct {
 			Sessions []proto.Session `json:"sessions"`
 		}
+		revision := m.sessionsRevision()
 		if err := c.peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
-			m.setSessions(list.Sessions)
+			m.setInitialSessions(c.peer, revision, list.Sessions)
 			m.d.forward(m.cfg.ID, "sessions.changed", map[string]any{"sessions": m.sessionList()})
 			updates = true
 		}

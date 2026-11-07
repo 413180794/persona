@@ -9,6 +9,7 @@ Place necessary historical text under its module directory and list it below.
 
 | File | Contents |
 | --- | --- |
+| `assistant/task-completion-6525.md` | Completion race reproductions, reconnect ordering, and historical evidence limits (#6525) |
 | `apple/apple-rolling-compatibility-6192-acceptance.md` | Actual pre-rename hub interoperability, final Apple full-suite counts, inspected GUI evidence, preserved baseline failures and native-system limits (#6192 / #6277) |
 | `apple/apple-extension-stream-6176.md` | Apple native extension streams: isolated-hub acceptance, atomic reduction, consent/fences and remaining GUI/unit gates (#6176) |
 | `android/android-p0-acceptance.md` | Android P0 round 4 joint acceptance checklist |

@@ -276,7 +276,7 @@ func newFleetTest(t *testing.T) *fleetTest {
 	d := newFleetDevs()
 	d.add("mac", "Mac")
 	st := newFleetMem()
-	s := New(Options{Hub: f, Store: func() Store { return st }, Logf: t.Logf, Devices: d})
+	s := New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t), Devices: d})
 	return &fleetTest{t: t, s: s, d: d, f: f, st: st}
 }
 
@@ -286,7 +286,7 @@ func newFleetTestNoStore(t *testing.T) *fleetTest {
 	f := newFakeHub()
 	d := newFleetDevs()
 	d.add("mac", "Mac")
-	s := New(Options{Hub: f, Logf: t.Logf, Devices: d})
+	s := New(Options{Hub: f, Logf: testLogf(t), Devices: d})
 	return &fleetTest{t: t, s: s, d: d, f: f}
 }
 

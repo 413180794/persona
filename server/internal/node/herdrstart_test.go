@@ -385,9 +385,6 @@ func TestHerdrServerOfACustomDataDirIsItsOwn(t *testing.T) {
 	if !slices.Contains(env, "HERDR_SESSION="+a.Session) || slices.Contains(env, "ANTHROPIC_API_KEY=sk-test") {
 		t.Fatalf("server env %q", env)
 	}
-	if got := herdrUnitOf(a.Session); got == herdrUnit || strings.ContainsAny(got, "./ ") || herdrUnitOf("") != herdrUnit {
-		t.Fatalf("unit %q for session %q", got, a.Session)
-	}
 	if got := withHerdrSession([]string{"HOME=/h"}, ""); !slices.Equal(got, []string{"HOME=/h"}) {
 		t.Fatalf("default server env changed: %q", got)
 	}

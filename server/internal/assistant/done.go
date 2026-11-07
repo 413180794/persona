@@ -101,7 +101,11 @@ func (s *Service) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneRep
 		if !ok {
 			continue
 		}
-		ask, text := s.lastTurn(ctx, m.ID, a.SessionID)
+		items, read := s.lastTurnItems(ctx, m.ID, a.SessionID)
+		if read && taskTurnAwaitingAnswer(items) {
+			return nil // one unfinished agent invalidates the whole task's completion evidence
+		}
+		ask, text := turnExchange(items)
 		if text == "" {
 			if c, ok := s.session(ctx, m.ID, a.SessionID); ok {
 				text = strings.TrimSpace(c.LastText)
@@ -267,11 +271,26 @@ func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), taskDoneTimeout)
 	defer cancel()
+	if !worked {
+		work = t.CreatedAt
+	}
+	if !s.taskCompletionCurrent(ctx, t, work) {
+		return
+	}
 	c, err := s.judgeTaskDone(ctx, t)
+	if !s.taskCompletionCurrent(ctx, t, work) {
+		s.logf("task %s: work changed while judged: left open", t.ID)
+		return
+	}
 	if err == nil && c.Delivery != nil && c.Verdict != verdictNotDone {
 		s.setTaskDelivery(ctx, t.ID, *c.Delivery) // where it is held, on its card (delivery.go)
 	}
 	if t.Supervision != nil {
+		s.tasks.completionMu.Lock()
+		defer s.tasks.completionMu.Unlock()
+		if !s.taskWorkCurrent(t.ID, work) {
+			return
+		}
 		if !worked {
 			work = t.CreatedAt
 		}
@@ -295,7 +314,7 @@ func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 	if !worked {
 		work = t.CreatedAt
 	}
-	ok, err := s.autoDoneTodo(ctx, t.ID, reason, work)
+	ok, err := s.finishCurrentTask(ctx, t.ID, reason, work)
 	switch {
 	case err != nil:
 		s.logf("task %s: auto done: %v", t.ID, err)

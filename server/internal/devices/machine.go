@@ -79,12 +79,13 @@ type Machine struct {
 	warmed    chan struct{}
 	err       string
 	// dialErrAt: when err last said why connecting failed (markOffline, noPath), not why a connection ended.
-	dialErrAt time.Time
-	lastSeen  time.Time
-	sessions  []proto.Session
-	watched   map[string]bool // sessions the hub watches (session.watch): watched again on a new connection
-	followed  map[string]bool // sessions the manager itself follows (Follow: a channel's turn): watched as well
-	lastSeq   map[string]int  // session id -> highest item seq seen
+	dialErrAt       time.Time
+	lastSeen        time.Time
+	sessions        []proto.Session
+	sessionRevision uint64          // local ordering of session snapshots, independent of node transcript revisions
+	watched         map[string]bool // sessions the hub watches (session.watch): watched again on a new connection
+	followed        map[string]bool // sessions the manager itself follows (Follow: a channel's turn): watched as well
+	lastSeq         map[string]int  // session id -> highest item seq seen
 	// unsettled: sessions whose last Follow the node did not take (the next Follow asks it again; a new connection
 	// settles them).
 	unsettled map[string]bool
@@ -509,6 +510,7 @@ func (m *Machine) setSessions(list []proto.Session) {
 	}
 	m.mu.Lock()
 	m.sessions = list
+	m.sessionRevision++
 	m.lastSeen = time.Now().UTC()
 	m.mu.Unlock()
 }

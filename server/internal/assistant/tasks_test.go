@@ -370,6 +370,7 @@ func TestAutoFinishLeavesAReopenedTask(t *testing.T) {
 	reopened := time.Now().Add(-time.Minute)
 	putTodo(s, Todo{ID: "todo_r", Title: "修", Origin: "conv1", ReopenedAt: &reopened, CreatedAt: reopened.Add(-time.Hour),
 		Agents: []TodoAgent{{MachineID: "box", SessionID: "s9"}}})
+	f.setSessions("box", proto.Session{MachineID: "box", SessionID: "s9", Status: proto.StatusDone})
 	f.setItems(proto.Item{Kind: proto.KindText, Role: "assistant", Text: "全部做完了，PR 已合并"})
 	putTodo(s, Todo{ID: "todo_h", Title: "自己记的事", CreatedAt: reopened})
 	s.autoFinishTask(todoNow(s, "todo_r"), reopened.Add(-time.Second), true)

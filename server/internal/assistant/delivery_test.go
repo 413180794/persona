@@ -77,6 +77,7 @@ func TestAutoFinishHoldsUndeliveredWork(t *testing.T) {
 	now := time.Now()
 	putTodo(s, Todo{ID: "todo_d", Title: "修登录", Origin: "conv1", CreatedAt: now.Add(-time.Hour),
 		Agents: []TodoAgent{{MachineID: "box", SessionID: "s9"}}})
+	f.setSessions("box", proto.Session{MachineID: "box", SessionID: "s9", Status: proto.StatusDone})
 	f.setItems(proto.Item{Kind: proto.KindText, Role: "assistant",
 		Text: "修好了，https://github.com/o/r/pull/7\n交付：停在 PR；卡点：等用户批准合并；谁来解：用户"})
 	f.judge = `{"verdict":"done","reason":"开了 PR","delivery":"pr","gate":"等用户批准合并","unblock":"user"}`
@@ -111,6 +112,7 @@ func TestAutoFinishHoldsUndeliveredWork(t *testing.T) {
 	s2, f2 := newTaskService(t)
 	putTodo(s2, Todo{ID: "todo_o", Title: "修", Origin: "conv1", CreatedAt: now.Add(-time.Hour),
 		Agents: []TodoAgent{{MachineID: "box", SessionID: "s9"}}})
+	f2.setSessions("box", proto.Session{MachineID: "box", SessionID: "s9", Status: proto.StatusDone})
 	f2.setItems(proto.Item{Kind: proto.KindText, Role: "assistant", Text: "PR https://github.com/o/r/pull/7 已合并"})
 	f2.judge = `{"verdict":"done","reason":"已合并"}`
 	s2.autoFinishTask(todoNow(s2, "todo_o"), now, true)

@@ -1,5 +1,14 @@
 # Lessons: hub / node and networking
 
+## Completion reads must belong to the current turn (#6525)
+
+A model judgment can return after a resumed turn has already stopped again. Checking only the current
+idle status misses that race: compare the work generation before and after slow reads, and serialize
+the final commit with observing new work. A tool-result tail is not final-answer evidence; retry a held
+receipt when the answer arrives without another working tick. Likewise, an initial reconnect RPC must
+not replace a live session notification received while that RPC was in flight. A connection identity
+and a local session revision protect that boundary without changing the node protocol.
+
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
 ## An expiry written by one clock and checked by another (2026-11-07, #6543, #6553)

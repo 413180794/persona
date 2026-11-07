@@ -775,6 +775,7 @@ func (s *Service) setSessions(machine string, list []proto.Session) {
 		}
 		switch {
 		case sess.Status == proto.StatusWorking && prev != proto.StatusWorking:
+			s.takeTaskAnswerRetry(machine, sess.SessionID)
 			s.turnsBook().working(key, now)
 			s.replyWorked(machine, sess.SessionID) // answered: a question it asks next is a new one (agents_reply.go)
 			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
@@ -785,6 +786,11 @@ func (s *Service) setSessions(machine string, list []proto.Session) {
 			// items of the turn (a channel's answer is read from them).
 			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
 			s.inOrder(func() { go s.TurnEnded(context.Background(), ref) })
+		case (sess.Status == proto.StatusDone || sess.Status == proto.StatusIdle) &&
+			(sess.Status != prev || sess.Rev != was.Rev || sess.LastText != was.LastText || !sess.UpdatedAt.Equal(was.UpdatedAt)) &&
+			s.takeTaskAnswerRetry(machine, sess.SessionID):
+			ref := SessionRef{MachineID: machine, SessionID: sess.SessionID}
+			s.inOrder(func() { go s.taskTurnEnded(context.Background(), ref.MachineID, ref.SessionID) })
 		}
 		if sess.Status == proto.StatusWorking && backgroundRunning(sess) {
 			s.turnsBook().sawBackground(key, now)
