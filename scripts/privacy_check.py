@@ -13,7 +13,9 @@ address, any email outside example.* domains, and the names in BANNED_NAMES (ven
 only extensions may name). Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
 
 Not private: loopback addresses (127.0.0.0/8, ::1, also with a port or as a URL's host) even when the config or
-CLAUDE.local.md holds one, the documentation and IETF protocol ranges (192.0.0.0/24), an `xcode` in /Applications,
+CLAUDE.local.md holds one, hosts under the example domains (RFC 2606, RFC 6761: example and example.com/.net/.org,
+and the .test, .invalid and .localhost TLDs) held there as placeholders, the documentation and IETF protocol ranges
+(192.0.0.0/24), an `xcode` in /Applications,
 values config.example.json ships as defaults, the repo's own Go module path (it names the
 GitHub owner),
 CLAUDE.local.md spans that only name repo files, commands or config keys, a listed word of one case run where the text
@@ -158,10 +160,37 @@ def loopback(value):
         return False
 
 
+# Example domains (RFC 2606, RFC 6761): every host under example.com, .net or .org, and under the example, test,
+# invalid and localhost TLDs.
+RESERVED_DOMAINS = ("example.com", "example.net", "example.org")
+RESERVED_TLDS = {"example", "test", "invalid", "localhost"}
+
+
+def reserved(value):
+    """A host under an example domain names nobody: a config that holds one as a placeholder must not make every
+    me@example.com private. Bare, as host:port or as a URL's host (https://relay.example.com:443/x), not with a user."""
+    value = value.strip()
+    try:
+        parts = urlsplit(value if "://" in value else "//" + value)
+        parts.port  # raises ValueError on a port that is not a number in range
+    except ValueError:
+        return False
+    host = parts.hostname or ""
+    if parts.username is not None or not host:
+        return False
+    labels = host.split(".")
+    if labels[-1] in RESERVED_TLDS and len(labels) >= 3 and labels[0] in REAL_TLDS:
+        # A reverse-DNS id (a bundle id, com.<owner>.persona.test) is not a host: it names the domain it reverses.
+        labels.reverse()
+        host = ".".join(labels)
+    return labels[-1] in RESERVED_TLDS or any(host == d or host.endswith("." + d) for d in RESERVED_DOMAINS)
+
+
 def terms():
     """Words to look for, longest first, and those of them allowed in PUBLIC_DIRS."""
     config, public = config_values()
-    vals = {v for v in config | word_list() if len(v) >= 4 and v.lower() not in IGNORE and not loopback(v)}
+    vals = {v for v in config | word_list()
+            if len(v) >= 4 and v.lower() not in IGNORE and not loopback(v) and not reserved(v)}
     user = os.path.basename(HOME)
     if len(user) >= 3:
         vals.add("/Users/" + user)

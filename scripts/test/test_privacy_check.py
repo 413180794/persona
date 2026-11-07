@@ -237,6 +237,46 @@ class LoopbackTests(unittest.TestCase):
             self.assertEqual(pc.problems(text, []), [], text)
 
 
+class ReservedDomainTests(unittest.TestCase):
+    """Example domains (RFC 2606, RFC 6761) name nobody: a config that holds one as a placeholder must not make every
+    me@example.com in the repository private (#6217)."""
+
+    def test_reserved_values(self):
+        for value in ["example.com", "https://example.com", "relay.example.com", "https://relay.example.com:443/x",
+                      "EXAMPLE.ORG", "hub.Example.Net:18660", "example", "a.example", "foo.test", "bar.invalid",
+                      "x.localhost", "example.com/privacy", " https://example.com/ ", "app.example.com",
+                      "com.example.persona.test", "registry.example.invalid"]:
+            with self.subTest(value=value):
+                self.assertTrue(pc.reserved(value))
+        # Lookalikes, a user, a bad port, and bundle ids that end in a reserved TLD (they still name their owner).
+        for value in ["notexample.com", "example.com.cn", "example.co", "examples.com", "https://example.com.cn/x",
+                      "foo.testing", "hub-host", "", PRIVATE_IP, "ssh://user@relay.example.com",
+                      "me@example.com", "relay.example.com:port", "com.someone.persona.test", "com.someone.example"]:
+            with self.subTest(value=value):
+                self.assertFalse(pc.reserved(value))
+
+    def test_config_reserved_domains_are_not_words(self):
+        values = {"publish": {"site_url": "https://example.com"},
+                  "app": {"push_relay": "relay.example.com", "bundle_id": "com.someone.persona.test"},
+                  "android": {"application_id": "com.example.persona.test"},
+                  "endpoint": "https://relay.example.com:443/x",
+                  "hosts": ["foo.test", "bar.invalid", "notexample.com", "example.com.cn"]}
+        with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
+            home = Path(temp)
+            config = home / ".config/persona/config.json"
+            config.parent.mkdir(parents=True)
+            config.write_text(json.dumps(values))
+            with patch.object(pc, "HOME", str(home)), patch.object(pc, "ROOT", str(home)):
+                words, _ = pc.terms()
+        for value in ["example.com", "relay.example.com", "https://relay.example.com:443/x", "foo.test", "bar.invalid",
+                      "com.example.persona.test"]:
+            self.assertNotIn(value, words)
+        for value in ["notexample.com", "example.com.cn", "com.someone.persona.test"]:
+            self.assertIn(value, words)
+        self.assertEqual(pc.problems("write to me@example.com, see https://relay.example.com/x", words), [])
+        self.assertEqual(pc.problems("the hub is notexample.com", words), ["notexample.com"])
+
+
 class NpmLockTests(unittest.TestCase):
     def test_public_lockfiles(self):
         for version in [1, 2, 3]:
@@ -412,6 +452,24 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         self.assertIn("hosts.md:1:", output)
         self.assertNotIn("db.sh", output)
         self.assertNotIn(PRIVATE_IP, output)
+
+    def test_config_example_domains_are_not_flagged_but_other_hosts_are(self):
+        config = self.home / ".config/persona/config.json"
+        config.parent.mkdir(parents=True)
+        config.write_text(json.dumps({"publish": {"site_url": "https://example.com"},
+                                      "app": {"push_relay": "relay.example.com"}, "lan_host": "hub.notexample.com"}))
+        (self.repo / "notes.md").write_text("Write to me@example.com; see https://example.com and relay.example.com.\n")
+        self.git("add", "notes.md")
+        result = self.scan()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        (self.repo / "hosts.md").write_text("The hub is hub.notexample.com.\n")
+        self.git("add", "hosts.md")
+        result = self.scan()
+        self.assertNotEqual(result.returncode, 0)
+        output = result.stdout + result.stderr
+        self.assertIn("hosts.md:1: private value", output)
+        self.assertNotIn("notes.md", output)
+        self.assertNotIn("notexample", output)
 
     def test_staged_unsafe_worktree_safe(self):
         self.write_lock(UNAPPROVED_URL)
