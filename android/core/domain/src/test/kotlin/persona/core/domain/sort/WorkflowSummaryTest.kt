@@ -6,7 +6,6 @@ import org.junit.Test
 import persona.core.contracts.BackgroundTask
 import persona.core.contracts.Session
 import persona.core.contracts.Workflow
-import persona.core.contracts.WorkflowAgent
 import persona.core.domain.zh
 import java.time.Instant
 
@@ -20,13 +19,13 @@ class WorkflowSummaryTest {
 
     @Test fun theLineNamesTheNewestRunItsPhaseProgressAndTime() {
         val s = base.copy(workflows = listOf(audit))
-        assertEquals("后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分", WorkflowSummary.line(s, now)?.zh())
+        assertEquals("后台 workflow「parity-audit」 · Verify 2/2 · 169/185+ · 14 分", WorkflowSummary.line(s, now)?.zh())
     }
 
     @Test fun moreRunsAddHowMany() {
         val s = base.copy(workflows = listOf(audit, audit.copy(taskId = "t2", name = null, summary = "second"), audit.copy(taskId = "t3"),
             audit.copy(taskId = "t4", status = "completed", running = false)))
-        assertEquals("后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分 · 等 2 个", WorkflowSummary.line(s, now)?.zh())
+        assertEquals("后台 workflow「parity-audit」 · Verify 2/2 · 169/185+ · 14 分 · 等 2 个", WorkflowSummary.line(s, now)?.zh())
     }
 
     @Test fun nothingRunningOrAnOlderHub() {
@@ -53,14 +52,9 @@ class WorkflowSummaryTest {
         assertNull(WorkflowSummary.elapsed(audit.copy(startedAt = null), now))
     }
 
-    @Test fun statusProgressAndAgents() {
+    @Test fun statusAndWhatTheCountsSay() {
         assertEquals(listOf("在跑", "完成", "失败", "已停止", "没动静了", "完成"),
             listOf("running", "completed", "failed", "killed", "stalled", "unknown").map { WorkflowSummary.status(audit.copy(status = it)).zh() })
-        assertEquals("169/185 个 agent 完成 · 16 个在跑", WorkflowSummary.progress(audit)?.zh())
-        assertEquals("185/185 个 agent 完成", WorkflowSummary.progress(audit.copy(agentsDone = 185, agentsRunning = 0))?.zh())
-        assertNull(WorkflowSummary.progress(audit.copy(agentsStarted = 0)))
-        val agents = listOf(WorkflowAgent("a1", running = false), WorkflowAgent("a2", running = true), WorkflowAgent("a3", running = false),
-            WorkflowAgent("a4", running = true))
-        assertEquals(listOf("a4", "a2", "a3", "a1"), WorkflowSummary.agents(audit.copy(agents = agents)).map { it.id })
+        assertEquals("169/185 个 agent 完成", WorkflowSummary.agentsDone(audit).zh())
     }
 }

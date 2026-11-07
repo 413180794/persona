@@ -4,7 +4,6 @@ import persona.core.contracts.CoreText
 import persona.core.contracts.CoreText.Key
 import persona.core.contracts.Session
 import persona.core.contracts.Workflow
-import persona.core.contracts.WorkflowAgent
 import persona.core.contracts.WorkflowStatus
 import persona.core.contracts.parseTime
 import java.time.Duration
@@ -12,8 +11,8 @@ import java.time.Instant
 
 /**
  * The words for an agent's background Workflow runs (docs/protocol/agent-states.md "Background workflow, Monitor", #2935): the one line
- * the Agents list and the task cards add under an agent, and the parts of a run's card in the chat's details. The same
- * as iOS and the web: "Background workflow 'parity-audit' · Verify 2/2 · 169/185 · 14 min".
+ * the Agents list and the task cards add under an agent, and the status chip and time of a run's card ([WorkflowTimeline]
+ * draws the rest). The same as iOS and the web: "Background workflow 'parity-audit' · Verify 2/2 · 169/185+ · 14 min".
  */
 object WorkflowSummary {
     private const val SEPARATOR = " · "
@@ -30,11 +29,11 @@ object WorkflowSummary {
         return CoreText.joined(SEPARATOR, parts)
     }
 
-    /** One run on one line: its name, phase, done / started agents and how long it has run. */
+    /** One run on one line: its name, phase, done / started agents ("169/185+" while it runs, #3435) and how long it has run. */
     fun of(workflow: Workflow, now: Instant): CoreText = CoreText.joined(SEPARATOR, listOfNotNull(
         workflow.title?.let { CoreText.of(Key.WorkflowLine, it) } ?: CoreText.of(Key.WorkflowLineUntitled),
         phase(workflow),
-        workflow.agentsStarted.takeIf { it > 0 }?.let { CoreText.of(Key.WorkflowProgress, workflow.agentsDone, it) },
+        workflow.agentsStarted.takeIf { it > 0 }?.let { CoreText.plain(WorkflowTimeline.counts(workflow)) },
         elapsed(workflow, now),
     ))
 
@@ -72,15 +71,6 @@ object WorkflowSummary {
         WorkflowStatus.Stalled -> Key.WorkflowStalled
     })
 
-    /** "169/185 agents done · 16 running"; the running part only while some are. Null before it started any. */
-    fun progress(workflow: Workflow): CoreText? {
-        if (workflow.agentsStarted <= 0) return null
-        return CoreText.joined(SEPARATOR, listOfNotNull(
-            CoreText.of(Key.WorkflowAgentsDone, workflow.agentsDone, workflow.agentsStarted),
-            workflow.agentsRunning.takeIf { it > 0 }?.let { CoreText.of(Key.WorkflowAgentsRunning, it) },
-        ))
-    }
-
-    /** Its agents to list: the running ones first, each part newest first (the hub sends them in the order they started). */
-    fun agents(workflow: Workflow): List<WorkflowAgent> = workflow.agents.orEmpty().asReversed().sortedBy { !it.running }
+    /** "169/185 agents done": what the card's counts and progress bar say to a screen reader. */
+    fun agentsDone(workflow: Workflow): CoreText = CoreText.of(Key.WorkflowAgentsDone, workflow.agentsDone, workflow.agentsStarted)
 }

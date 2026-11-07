@@ -450,7 +450,6 @@
     <string name="chat_content_output">Output</string>
     <string name="chat_content_plan_failed">Update failed</string>
     <string name="chat_status_workflows">Background workflows</string>
-    <string name="chat_status_workflow_untitled">Workflow</string>
     <!-- The agent's goal over the conversation (docs/integrations/agent-goal.md). -->
     <string name="chat_goal_title">Goal</string>
     <string name="chat_goal_status_active">In progress</string>

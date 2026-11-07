@@ -4,6 +4,7 @@ import persona.core.designsystem.resolve
 import android.content.res.Resources
 import androidx.annotation.StringRes
 import persona.core.contracts.Item
+import persona.core.contracts.Workflow
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.MessageContext
 import persona.core.domain.decodeXmlEntities
@@ -282,11 +283,12 @@ internal fun latestPlanLine(lines: List<ChatLine>, plans: Map<String, LinePlan?>
 internal data class WorkPeek(val plan: LinePlan?, val steps: List<WorkItem>)
 
 /**
- * The newest [limit] tool calls and thoughts of a running line, oldest first; the agent's words, notices, folds and
- * subagent calls (Task / Agent) are not steps here. Reading the same file again within one run of reads shows once. The plan is not one of the steps: the
- * latest TodoWrite of two or more items is pinned above them.
+ * The newest [limit] tool calls and thoughts of a running line, oldest first; the agent's words, notices, folds,
+ * subagent calls (Task / Agent) and the Workflow calls in [cards] (drawn as their runs' cards, #3435) are not steps here.
+ * Reading the same file again within one run of reads shows once. The plan is not one of the steps: the latest TodoWrite
+ * of two or more items is pinned above them.
  */
-internal fun workPeek(steps: List<WorkItem>, limit: Int = 5): WorkPeek {
+internal fun workPeek(steps: List<WorkItem>, limit: Int = 5, cards: Set<String> = emptySet()): WorkPeek {
     val plan = latestPlan(steps)
     val out = mutableListOf<WorkItem>()
     val seen = mutableSetOf<String>()
@@ -297,6 +299,7 @@ internal fun workPeek(steps: List<WorkItem>, limit: Int = 5): WorkPeek {
             is WorkItem.Tool -> {
                 val item = step.call.use.item
                 if (item.toolName == "TodoWrite" || item.toolName == "Task" || item.toolName == "Agent") continue
+                if (item.toolName == "Workflow" && item.toolUseId in cards) continue
                 val read = if (item.toolName == "Read") toolPath(item) else null
                 if (item.toolName != "Read") seen.clear()
                 else if (read != null && !seen.add(read)) continue
@@ -306,6 +309,15 @@ internal fun workPeek(steps: List<WorkItem>, limit: Int = 5): WorkPeek {
         }
     }
     return WorkPeek(plan, out.asReversed())
+}
+
+/**
+ * The runs a work line's Workflow calls launched, in the order of the calls, among [runs] (the session's runs by the
+ * call that launched them, #3435): those calls draw their runs' cards. A call whose run the hub does not list (an older
+ * hub, a run over a day old, one not read yet) is not here: it stays a row.
+ */
+internal fun workflowCalls(steps: List<WorkItem>, runs: Map<String, Workflow>): List<Workflow> = steps.mapNotNull { step ->
+    (step as? WorkItem.Tool)?.call?.use?.item?.takeIf { it.toolName == "Workflow" }?.toolUseId?.let(runs::get)
 }
 
 /** A thought as one line in a running line's peek (web ThinkingLine): its words with the line breaks folded; [empty] when it has none. */

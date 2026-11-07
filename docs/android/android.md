@@ -1304,10 +1304,37 @@ Hub marks Agents working while Workflow continues after main turn; no state chan
 unknown Workflow status treated complete (`Workflow.state`). Running workflows also in background kind workflow, avoid double count: backgroundCount
 = nonworkflow entries + running workflows (legacy counts background). Copy `WorkflowSummary` core/domain.
 
-- Agents `SlotRow`: note under preview `AgentRow(note = RowNote)`, ai `WorkflowIcon`, "Background workflow “parity-audit” · Verify 2/2 · 169/185 · 14 min", plus N more; legacy workflow-only background says Running in background.
-- `ChatStatusSheet`: Background workflows above background tasks, one design `JWorkflowCard` per run: name/default summary, state (running ai breathing, completed/failed/stopped/stale), elapsed refreshed minutely, stages, "169/185 agents complete ·16 running", error, Expand agents (running first, session_id opens read-only sub-Agent chat).
+- Agents `SlotRow`: note under preview `AgentRow(note = RowNote)`, ai `WorkflowIcon`, "Background workflow “parity-audit” · Verify 2/2 · 169/185+ · 14 min" (`+` while it runs, #3435), plus N more; legacy workflow-only background says Running in background. The note's numbers count to new ones when only they change (`JChangingText`).
 - Main task card below sub-Agent row same summary.
-- Shots `:feature:agents:testDebugUnitTest --tests '*AgentWorkflowRowShotsTest*'` (`build/workflow-row-shots/`), `:feature:chat:testDebugUnitTest --tests '*WorkflowShotsTest*'` (`build/workflow-shots/`), styles  × light / dark; `WorkflowContractTest`, `WorkflowSummaryTest`.
+- Shots `:feature:agents:testDebugUnitTest --tests '*AgentWorkflowRowShotsTest*'` (`build/workflow-row-shots/`); `WorkflowContractTest`, `WorkflowSummaryTest`.
+
+### Timeline card (#3435)
+
+The same card and rules as the web's (#3434, `web/src/lib/workflows.ts`): the rules are the pure `WorkflowTimeline` in core/domain, the card is
+`JWorkflowCallCard` / `JWorkflowCard` in `core/designsystem/Workflows.kt`, written once for the three styles.
+
+- **In the chat**: a Workflow call whose run the session lists (`Workflow.tool_use_id`, `ChatWorkflows` / `LocalChatWorkflows` from `ChatScreen`) draws
+  `JWorkflowCallCard` in place of its row. A folded work line keeps the card under its summary, a running line under its peek (the call is not a peek step),
+  an open line among its steps. Open while the run runs, folded to its head and summary once it ended; what the reader opened or folded (the run, a phase,
+  "n more") lasts while the chat is open (`WorkflowFolds`). No listed run (an older hub, a run over a day old, not read yet): the row it always was.
+- **In the status sheet**: `JWorkflowCard` per run, always open, the same parts.
+- **Parts**: head (mark, name, status chip as before, `169/185+`, time); "Now <phase>: <agent>" while it runs, else the summary and a failed run's error;
+  a progress bar in parts (done, running, failed, stopped) with its counts; one block per phase with `done/started` (`+` while more may start in it),
+  open while lit or with agents running, folded once behind the run with all back (a red ✕ when some failed). Agents in start order, at most 12 rows,
+  the quiet tail folded into "n more" (anchored to the end once the hub's 60-agent cap cut into the block, the earlier ones said above the rows).
+  On a phone a row is its dot, label and time; a wide window (`WindowLayout.expanded`) adds the model and latest tool. A workflow agent's own page
+  takes its model.
+- **Motion**: only when a value changes, never on the first draw, nothing with reduced motion (`PersonaTheme.reduceMotion`): counts and times count
+  (`JChangingText`), the status chip and the lit phase go over in color (`animateColorAsState`), phases and the card open and fold with
+  `AnimatedVisibility` + `PersonaTheme.motion.size()`, the bar's parts move with `animateFloatAsState(motion.count)`, a new agent only fades in,
+  a new phase mark fades in. No persistent animation.
+- Tests: `WorkflowTimelineTest` (the web's cases: counts and `+`, blocks from `phase_stats` and from agents for older hubs, fold rules, the 12-row
+  window and the cap anchor, the bar's parts), `WorkflowCardMotionTest` (core:designsystem: first draw, a count counting, reduced motion, a phase
+  folding; before / mid / after frames in `build/workflow-motion-shots/`), `WorkflowShotsTest` (feature:chat: running, completed, failed and long cards,
+  the status sheet's card and the task line, three styles × light / dark in `build/workflow-shots/`; folding and opening; the card in place of the call
+  and the row without a run).
+- Known gap: with a hub that pages the Agents list (`sessions_list`), list rows are summaries without `workflows` and Android does not fetch the open
+  chat's full row with `sessions_lookup` yet, so the chat's cards (like the status sheet's runs and "View sub-agent") only show from full session rows.
 
 ## Translation (Settings › Translation, #1744)
 

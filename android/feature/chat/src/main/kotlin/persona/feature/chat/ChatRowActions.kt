@@ -4,8 +4,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import persona.core.contracts.Item
 import persona.core.contracts.SessionKey
+import persona.core.contracts.Workflow
+import persona.core.contracts.WorkflowAgent
 import persona.core.contracts.api.ChatRepository
 import persona.core.designsystem.ViewerImage
+import persona.core.designsystem.WorkflowFolds
 import java.util.Base64
 
 /**
@@ -57,6 +60,20 @@ internal val LocalChatRowActions = compositionLocalOf<ChatRowActions?> { null }
 internal data class ChatSubagents(val keys: Map<String, SessionKey>, val open: (SessionKey) -> Unit)
 
 internal val LocalChatSubagents = compositionLocalOf<ChatSubagents?> { null }
+
+/**
+ * The session's Workflow runs by the call that launched them ([runs], #3435): such a call draws its run's card in the
+ * chat. [folds] keeps what the reader opened or folded in those cards while the chat is open; [open] opens one of a
+ * run's agents, null where they cannot be opened (as [ChatSubagents]).
+ */
+@androidx.compose.runtime.Immutable
+internal data class ChatWorkflows(
+    val runs: Map<String, Workflow>,
+    val folds: WorkflowFolds,
+    val open: ((WorkflowAgent) -> Unit)?,
+)
+
+internal val LocalChatWorkflows = compositionLocalOf<ChatWorkflows?> { null }
 
 /**
  * A picture of the conversation for the viewer: its bytes come inline with the page when the hub sent them, else

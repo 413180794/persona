@@ -262,8 +262,46 @@
     <plurals name="designsystem_connection_minutes_ago">
         <item quantity="other">%1$d 分钟前</item>
     </plurals>
-    <string name="designsystem_workflow_show_agents">展开 agent</string>
-    <string name="designsystem_workflow_hide_agents">收起 agent</string>
+    <string name="designsystem_workflow_untitled">workflow</string>
+    <string name="designsystem_workflow_kind">Workflow</string>
+    <string name="designsystem_workflow_expand">展开「%1$s」</string>
+    <string name="designsystem_workflow_collapse">收起「%1$s」</string>
+    <string name="designsystem_workflow_now_phase_agent">当前 %1$s：%2$s</string>
+    <string name="designsystem_workflow_now_phase">当前 %1$s</string>
+    <string name="designsystem_workflow_now_agent">正在跑 %1$s</string>
+    <string name="designsystem_workflow_agent">agent</string>
+    <plurals name="designsystem_workflow_tally_done">
+        <item quantity="other">%1$d 完成</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_running">
+        <item quantity="other">%1$d 在跑</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_failed">
+        <item quantity="other">%1$d 失败</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_stopped">
+        <item quantity="other">%1$d 已停止</item>
+    </plurals>
+    <plurals name="designsystem_workflow_calls">
+        <item quantity="other">%1$d 次工具调用</item>
+    </plurals>
+    <string name="designsystem_workflow_phase_untitled">未分阶段</string>
+    <plurals name="designsystem_workflow_phase_failed">
+        <item quantity="other">%1$d 个失败</item>
+    </plurals>
+    <plurals name="designsystem_workflow_more_agents">
+        <item quantity="other">还有 %1$d 个</item>
+    </plurals>
+    <plurals name="designsystem_workflow_unlisted_agents">
+        <item quantity="other">更早的 %1$d 个没有列出</item>
+    </plurals>
+    <string name="designsystem_workflow_fewer_agents">收起</string>
+    <string name="designsystem_workflow_phase_done">已完成的阶段</string>
+    <string name="designsystem_workflow_phase_done_failed">完成，有失败</string>
+    <string name="designsystem_workflow_phase_current">当前阶段</string>
+    <string name="designsystem_workflow_phase_next">还没开始的阶段</string>
+    <string name="designsystem_workflow_phase_stopped">没跑完的阶段</string>
+    <string name="designsystem_workflow_open_agent">看 %1$s 的对话</string>
     <string name="designsystem_scheme_system">跟随系统</string>
     <string name="designsystem_scheme_light">浅色</string>
     <string name="designsystem_scheme_dark">深色</string>

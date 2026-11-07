@@ -275,12 +275,20 @@ internal fun ChatLineContent(
         is ChatLine.UserImages -> if (!imagesInUserBubble) UserBubbleFrame {
             line.images.forEach { ChatPicture(session, it.item, loader, alignEnd = true) }
         }
-        is ChatLine.Work -> {
+        is ChatLine.Work -> Column(Modifier.fillMaxWidth()) {
             // While it runs, the plan and the newest steps show under "Working…" and a ticking clock (web #1990); done,
             // it folds to its summary. Persona's own chat keeps one sentence that counts its time up every second (R1).
             val trace = line.live && !style.compactToolSummary
             val now by rememberNow(1_000, enabled = line.live && !trace)
-            val peek = remember(line.steps, trace) { if (trace) workPeek(line.steps) else null }
+            // The Workflow calls whose runs the session lists keep their cards out of the fold (#3435): under the line
+            // while it is folded, in their own place among its steps once open. Only a line with such a call reads the
+            // runs, so a run's progress redraws no other line.
+            val launches = remember(line.steps) { line.steps.any { (it as? WorkItem.Tool)?.call?.name == "Workflow" } }
+            val workflows = if (launches) LocalChatWorkflows.current else null
+            val cards = remember(line.steps, workflows?.runs) { workflows?.let { workflowCalls(line.steps, it.runs) }.orEmpty() }
+            val peek = remember(line.steps, trace, cards) {
+                if (trace) workPeek(line.steps, cards = cards.mapNotNullTo(mutableSetOf()) { it.toolUseId }) else null
+            }
             WorkGroup(workSummary(res, line, recordedDuration, now.takeIf { line.live }, peek = trace), line.open,
                 { onToggle(line.id) }, running = line.live,
                 trailing = if (trace) ({ WorkClock(line) }) else null,
@@ -298,6 +306,9 @@ internal fun ChatLineContent(
                         }
                     }
                 } }) {}
+            if (!line.open && workflows != null) cards.forEach { run ->
+                key(run.runId ?: run.taskId) { JWorkflowCallCard(run, folds = workflows.folds, onOpenAgent = workflows.open) }
+            }
         }
         is ChatLine.Step -> WorkStep(line.step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates, workRunning, lastWorkStep, plan)
         is ChatLine.End -> TimelineMark(pluralStringResource(R.plurals.chat_content_collapse_steps, line.count, line.count),
@@ -324,6 +335,13 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
         }
         is WorkItem.Tool -> {
             val call = step.call
+            // A Workflow call whose run the session lists draws the run's card (#3435); otherwise the row it always was.
+            if (call.name == "Workflow") LocalChatWorkflows.current?.let { workflows ->
+                call.use.item.toolUseId?.let(workflows.runs::get)?.let { run ->
+                    JWorkflowCallCard(run, folds = workflows.folds, onOpenAgent = workflows.open)
+                    return
+                }
+            }
             var open by remember(call.id) { mutableStateOf(false) }
             val diff = remember(call.use.item) { toolDiff(call.use.item) }
             val todos = remember(call.use.item) { todoEntries(call.use.item) }

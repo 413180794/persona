@@ -80,7 +80,7 @@ class AgentWorkflowRowShotsTest {
         }
         for (nextStyle in AppStyle.entries) for (nextDark in listOf(false, true)) {
             rule.runOnIdle { style = nextStyle; dark = nextDark }
-            rule.onNodeWithText("后台 workflow「parity-audit」 · Verify 2/2 · 169/185 · 14 分 · 等 1 个").assertIsDisplayed()
+            rule.onNodeWithText("后台 workflow「parity-audit」 · Verify 2/2 · 169/185+ · 14 分 · 等 1 个").assertIsDisplayed()
             rule.onNodeWithText("后台运行中").assertIsDisplayed()
             rule.onAllNodesWithText("后台 3", substring = true).fetchSemanticsNodes().let { assertEquals(1, it.size) }
             val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()

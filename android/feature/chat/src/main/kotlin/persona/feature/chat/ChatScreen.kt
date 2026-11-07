@@ -158,9 +158,11 @@ private fun ChatPage(
             status = if (it.running) "working" else "done", state = if (it.running) "working" else "unread", subagents = emptyList(),
             queued = null, loop = null, background = null, pendingInteractions = 0)
     } ?: workflowAgent?.let {
+        // Its own model (#3435: a phone's workflow card leaves it out of the agent's row), else the parent's.
         workflowParent?.copy(sessionId = it.sessionId, title = it.label?.takeIf(String::isNotBlank) ?: it.id,
             status = if (it.running) "working" else "done", state = if (it.running) "working" else "unread", subagents = emptyList(),
-            queued = null, loop = null, background = null, workflows = null, pendingInteractions = 0)
+            queued = null, loop = null, background = null, workflows = null, pendingInteractions = 0,
+            model = it.model?.takeIf(String::isNotBlank) ?: workflowParent.model)
     } ?: lastSession
     SideEffect { if (session != null) lastSession = session }
     // What the session's source lets the phone do (docs/protocol/protocol.md "Codex sources and capabilities"). Older sessions, and one whose
@@ -486,6 +488,15 @@ private fun ChatPage(
             .associate { it.toolUseId!! to SessionKey(key.machineId, it.sessionId) }
             .takeIf { it.isNotEmpty() }?.let { ChatSubagents(it, open) }
     }
+    // A Workflow call draws its run's card (#3435): the session's runs by the call that launched them, their agents
+    // opening as "View sub-agent" does. What the reader opens or folds in them lasts while this chat is open.
+    val workflowFolds = remember(key) { persona.core.designsystem.WorkflowFolds() }
+    val workflowCards = remember(session?.workflows, chrome.onOpenSession, readOnly, key.machineId, workflowFolds) {
+        val open = chrome.onOpenSession?.takeIf { !readOnly }
+        session?.workflows.orEmpty().filter { !it.toolUseId.isNullOrBlank() }.associateBy { it.toolUseId!! }
+            .takeIf { it.isNotEmpty() }
+            ?.let { runs -> ChatWorkflows(runs, workflowFolds, open?.let { o -> { agent -> o(SessionKey(key.machineId, agent.sessionId)) } }) }
+    }
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
     val photos = remember(chrome.files, key, session?.cwd) { chrome.files?.let { AttachedPhotos(it, key.machineId, session?.cwd.orEmpty()) } }
     // A "Continue" already on its way counts as working: the card offers no second one.
@@ -612,7 +623,7 @@ private fun ChatPage(
     val callJumps = remember(key) { ChatCallJumps() }
     CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache, LocalChatRowActions provides rowActions,
         LocalContentColor provides PersonaTheme.palette.ink, LocalChatPorts provides chatPorts,
-        persona.core.designsystem.LocalAssistantCards provides cardsHost, LocalChatSubagents provides subagentLinks,
+        persona.core.designsystem.LocalAssistantCards provides cardsHost, LocalChatSubagents provides subagentLinks, LocalChatWorkflows provides workflowCards,
         LocalChatTaskIndex provides projection.tasks, LocalChatJumpToCall provides callJumps::jump) {
         ChatLinkHost(Modifier.fillMaxSize().background(PersonaTheme.palette.background)
             .then(if (embedded) Modifier else Modifier.imePadding()), preloadUrls, list.isScrollInProgress,

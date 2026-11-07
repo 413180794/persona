@@ -294,8 +294,54 @@
         <item quantity="one">%1$d minute ago</item>
         <item quantity="other">%1$d minutes ago</item>
     </plurals>
-    <string name="designsystem_workflow_show_agents">Show agents</string>
-    <string name="designsystem_workflow_hide_agents">Hide agents</string>
+    <string name="designsystem_workflow_untitled">Workflow</string>
+    <string name="designsystem_workflow_kind">Workflow</string>
+    <string name="designsystem_workflow_expand">Expand “%1$s”</string>
+    <string name="designsystem_workflow_collapse">Collapse “%1$s”</string>
+    <string name="designsystem_workflow_now_phase_agent">Now %1$s: %2$s</string>
+    <string name="designsystem_workflow_now_phase">Now %1$s</string>
+    <string name="designsystem_workflow_now_agent">Running %1$s</string>
+    <string name="designsystem_workflow_agent">agent</string>
+    <plurals name="designsystem_workflow_tally_done">
+        <item quantity="one">%1$d done</item>
+        <item quantity="other">%1$d done</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_running">
+        <item quantity="one">%1$d running</item>
+        <item quantity="other">%1$d running</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_failed">
+        <item quantity="one">%1$d failed</item>
+        <item quantity="other">%1$d failed</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_stopped">
+        <item quantity="one">%1$d stopped</item>
+        <item quantity="other">%1$d stopped</item>
+    </plurals>
+    <plurals name="designsystem_workflow_calls">
+        <item quantity="one">%1$d tool call</item>
+        <item quantity="other">%1$d tool calls</item>
+    </plurals>
+    <string name="designsystem_workflow_phase_untitled">No phase</string>
+    <plurals name="designsystem_workflow_phase_failed">
+        <item quantity="one">%1$d failed</item>
+        <item quantity="other">%1$d failed</item>
+    </plurals>
+    <plurals name="designsystem_workflow_more_agents">
+        <item quantity="one">%1$d more</item>
+        <item quantity="other">%1$d more</item>
+    </plurals>
+    <plurals name="designsystem_workflow_unlisted_agents">
+        <item quantity="one">%1$d earlier one not listed</item>
+        <item quantity="other">%1$d earlier ones not listed</item>
+    </plurals>
+    <string name="designsystem_workflow_fewer_agents">Show fewer</string>
+    <string name="designsystem_workflow_phase_done">Finished phase</string>
+    <string name="designsystem_workflow_phase_done_failed">Finished with failures</string>
+    <string name="designsystem_workflow_phase_current">Current phase</string>
+    <string name="designsystem_workflow_phase_next">Phase not started</string>
+    <string name="designsystem_workflow_phase_stopped">Phase that did not finish</string>
+    <string name="designsystem_workflow_open_agent">Open %1$s’s conversation</string>
     <string name="designsystem_scheme_system">Match system</string>
     <string name="designsystem_scheme_light">Light</string>
     <string name="designsystem_scheme_dark">Dark</string>

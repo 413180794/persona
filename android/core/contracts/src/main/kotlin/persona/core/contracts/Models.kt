@@ -730,6 +730,8 @@ object SessionCapabilitiesSerializer : WireSerializer<SessionCapabilities>(Sessi
 object SessionTodoSerializer : WireSerializer<SessionTodo>(SessionTodo.generatedSerializer())
 object WorkflowSerializer : WireSerializer<Workflow>(Workflow.generatedSerializer())
 object WorkflowAgentSerializer : WireSerializer<WorkflowAgent>(WorkflowAgent.generatedSerializer())
+object WorkflowPhaseStatsSerializer : WireSerializer<WorkflowPhaseStats>(WorkflowPhaseStats.generatedSerializer())
+object WorkflowToolSerializer : WireSerializer<WorkflowTool>(WorkflowTool.generatedSerializer())
 object SessionSerializer : WireSerializer<Session>(Session.generatedSerializer())
 object WorkStateSerializer : WireSerializer<WorkState>(WorkState.generatedSerializer())
 object WorkAgentSerializer : WireSerializer<WorkAgent>(WorkAgent.generatedSerializer())

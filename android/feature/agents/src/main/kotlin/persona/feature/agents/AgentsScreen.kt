@@ -656,7 +656,7 @@ internal fun SlotRow(
             if (muted) add(RowFlag(stringResource(R.string.agents_row_muted), PhIcons.Prohibit))
         },
         launcher = launcher, branch = branch, source = origin,
-        // Its running Workflows (#2935): "Background workflow "parity-audit" · Verify 2/2 · 169/185 · 14 min".
+        // Its running Workflows (#2935): "Background workflow "parity-audit" · Verify 2/2 · 169/185+ · 14 min", counting as it changes (#3435).
         note = WorkflowSummary.line(session, now)?.let { RowNote(it.text(), WorkflowIcon) },
     )
     }

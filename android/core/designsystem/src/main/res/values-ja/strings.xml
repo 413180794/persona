@@ -262,8 +262,46 @@
     <plurals name="designsystem_connection_minutes_ago">
         <item quantity="other">%1$d 分前</item>
     </plurals>
-    <string name="designsystem_workflow_show_agents">agent を表示</string>
-    <string name="designsystem_workflow_hide_agents">agent を隠す</string>
+    <string name="designsystem_workflow_untitled">workflow</string>
+    <string name="designsystem_workflow_kind">Workflow</string>
+    <string name="designsystem_workflow_expand">「%1$s」を開く</string>
+    <string name="designsystem_workflow_collapse">「%1$s」を閉じる</string>
+    <string name="designsystem_workflow_now_phase_agent">現在 %1$s：%2$s</string>
+    <string name="designsystem_workflow_now_phase">現在 %1$s</string>
+    <string name="designsystem_workflow_now_agent">実行中 %1$s</string>
+    <string name="designsystem_workflow_agent">agent</string>
+    <plurals name="designsystem_workflow_tally_done">
+        <item quantity="other">%1$d 完了</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_running">
+        <item quantity="other">%1$d 実行中</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_failed">
+        <item quantity="other">%1$d 失敗</item>
+    </plurals>
+    <plurals name="designsystem_workflow_tally_stopped">
+        <item quantity="other">%1$d 停止</item>
+    </plurals>
+    <plurals name="designsystem_workflow_calls">
+        <item quantity="other">ツール呼び出し %1$d 回</item>
+    </plurals>
+    <string name="designsystem_workflow_phase_untitled">フェーズなし</string>
+    <plurals name="designsystem_workflow_phase_failed">
+        <item quantity="other">%1$d 個失敗</item>
+    </plurals>
+    <plurals name="designsystem_workflow_more_agents">
+        <item quantity="other">ほか %1$d 個</item>
+    </plurals>
+    <plurals name="designsystem_workflow_unlisted_agents">
+        <item quantity="other">それ以前の %1$d 個は一覧にありません</item>
+    </plurals>
+    <string name="designsystem_workflow_fewer_agents">折りたたむ</string>
+    <string name="designsystem_workflow_phase_done">完了したフェーズ</string>
+    <string name="designsystem_workflow_phase_done_failed">完了（失敗あり）</string>
+    <string name="designsystem_workflow_phase_current">現在のフェーズ</string>
+    <string name="designsystem_workflow_phase_next">未開始のフェーズ</string>
+    <string name="designsystem_workflow_phase_stopped">終わらなかったフェーズ</string>
+    <string name="designsystem_workflow_open_agent">%1$s の会話を開く</string>
     <string name="designsystem_scheme_system">システムに合わせる</string>
     <string name="designsystem_scheme_light">ライト</string>
     <string name="designsystem_scheme_dark">ダーク</string>

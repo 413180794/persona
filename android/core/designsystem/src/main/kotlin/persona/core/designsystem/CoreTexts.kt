@@ -407,7 +407,6 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.WorkflowLine -> R.string.designsystem_core_workflow_line
     CoreText.Key.WorkflowLineUntitled -> R.string.designsystem_core_workflow_line_untitled
     CoreText.Key.WorkflowPhase -> R.string.designsystem_core_workflow_phase
-    CoreText.Key.WorkflowProgress -> R.string.designsystem_core_workflow_progress
     CoreText.Key.WorkflowMore -> -R.plurals.designsystem_core_workflow_more
     CoreText.Key.WorkflowBackgroundRunning -> R.string.designsystem_core_workflow_background_running
     CoreText.Key.WorkflowRunning -> R.string.designsystem_core_workflow_running
@@ -416,6 +415,5 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.WorkflowKilled -> R.string.designsystem_core_workflow_killed
     CoreText.Key.WorkflowStalled -> R.string.designsystem_core_workflow_stalled
     CoreText.Key.WorkflowAgentsDone -> R.string.designsystem_core_workflow_agents_done
-    CoreText.Key.WorkflowAgentsRunning -> -R.plurals.designsystem_core_workflow_agents_running
     CoreText.Key.Verbatim, CoreText.Key.Joined -> error("no resource")
 }

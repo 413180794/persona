@@ -408,14 +408,14 @@ fun AgentRow(
     }
 }
 
+/** The note under a row; its numbers count to new ones when only they change ("169/185+" → "170/186+", #3435). */
 @Composable
 private fun RowNoteLine(note: RowNote) {
     val palette = PersonaTheme.palette
     Row(Modifier.padding(top = Tokens.Space.xxs), verticalAlignment = Alignment.CenterVertically) {
         JIcon(note.icon, null, size = Caret, tint = palette.ai)
         Spacer(Modifier.width(Tokens.Space.xs))
-        Text(note.text, style = PersonaTheme.type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        JChangingText(note.text, style = PersonaTheme.type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2)
     }
 }
 

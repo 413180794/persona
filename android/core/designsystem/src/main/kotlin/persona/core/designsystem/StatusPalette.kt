@@ -67,6 +67,12 @@ data class PersonaPalette(
     /** Neutral backing for state, advice and outcome content. Color belongs to its mark or words, not its area. */
     val statusSurface: Color get() = surfaceOpaque
 
+    /**
+     * A soft wash of [ai] for where the AI is now (a workflow's current phase, #3435), as soft as a theme color's
+     * [accentSoft]: shows on a card in every style, where [statusSurface] is the card's own color in some.
+     */
+    val aiSoft: Color get() = ai.copy(alpha = if (dark) 0.16f else 0.12f)
+
     /** Media overlays stay readable over a photograph/video, independent of the page's appearance. */
     val mediaBackdrop: Color get() = Color.Black
     val onMediaBackdrop: Color get() = Color.White

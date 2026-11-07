@@ -423,7 +423,6 @@
     <string name="chat_content_output">出力</string>
     <string name="chat_content_plan_failed">更新に失敗</string>
     <string name="chat_status_workflows">バックグラウンド workflow</string>
-    <string name="chat_status_workflow_untitled">workflow</string>
     <!-- The agent's goal over the conversation (docs/integrations/agent-goal.md). -->
     <string name="chat_goal_title">目標</string>
     <string name="chat_goal_status_active">進行中</string>

@@ -420,9 +420,23 @@ data class Workflow(
     val phase: String? = null,
     /** 1-based place of [phase] in [phases]; 0 or absent: not known. */
     @SerialName("phase_index") val phaseIndex: Int? = null,
+    @SerialName("phase_count") val phaseCount: Int? = null,
+    /** The Workflow call that launched it: the chat draws the run's card in that call's place (#3435). */
+    @SerialName("tool_use_id") val toolUseId: String? = null,
+    /**
+     * Per-phase counts over all its agents, not only the listed ones, in [phases] order then undeclared phases ("" =
+     * not known). Older hubs send none.
+     */
+    @SerialName("phase_stats") val phaseStats: List<WorkflowPhaseStats>? = null,
     @SerialName("agents_started") val agentsStarted: Int = 0,
     @SerialName("agents_done") val agentsDone: Int = 0,
+    /** Agents the journal says failed, apart from [agentsDone] (older hubs counted them as done). */
+    @SerialName("agents_failed") val agentsFailed: Int = 0,
     @SerialName("agents_running") val agentsRunning: Int = 0,
+    /** All its agents' latest usage summed, not cumulative consumption. */
+    val tokens: Long? = null,
+    /** All its agents' tool calls. */
+    val calls: Int? = null,
     @WireTime @SerialName("started_at") val startedAt: String? = null,
     @WireTime @SerialName("ended_at") val endedAt: String? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
@@ -445,6 +459,18 @@ data class Workflow(
     val currentPhase: Int? get() = phaseIndex?.takeIf { it in 1..phases.orEmpty().size }
 }
 
+/** One phase of a [Workflow] counted over all its agents; [title] "" holds the agents whose phase is not known. */
+@KeepGeneratedSerializer
+@Serializable(with = WorkflowPhaseStatsSerializer::class)
+data class WorkflowPhaseStats(
+    val title: String = "",
+    val started: Int = 0,
+    val done: Int = 0,
+    /** Absent from hubs before #5511, which counted failed agents as done. */
+    val failed: Int = 0,
+    val running: Int = 0,
+)
+
 /** One agent of a [Workflow]; its transcript reads like a subagent's, as the session [sessionId] (`<parent>@<id>`). */
 @KeepGeneratedSerializer
 @Serializable(with = WorkflowAgentSerializer::class)
@@ -454,7 +480,29 @@ data class WorkflowAgent(
     val label: String? = null,
     val phase: String? = null,
     val running: Boolean = false,
+    /**
+     * "running", "done", "failed" (the journal says it failed) or "stopped" (it had not come back when its run ended);
+     * absent from older hubs.
+     */
+    @WireEnum("running", "done", "failed", "stopped", "unknown") val status: String? = null,
     @WireTime @SerialName("started_at") val startedAt: String? = null,
+    /** Absent while it runs: its last exchange, or its run's end when it was stopped. */
+    @WireTime @SerialName("ended_at") val endedAt: String? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
+    val model: String? = null,
+    /** Its most recent tool call, kept after its final reply. */
+    @SerialName("latest_tool") val latestTool: WorkflowTool? = null,
+    /** Its latest usage, not a cumulative total. */
+    val tokens: Long? = null,
+    val calls: Int? = null,
+)
+
+/** A [WorkflowAgent]'s latest tool call: its [name] and what it does ([summary], in the reader's language). */
+@KeepGeneratedSerializer
+@Serializable(with = WorkflowToolSerializer::class)
+data class WorkflowTool(
+    val id: String? = null,
+    val name: String = "",
+    val summary: String? = null,
 )

@@ -47,6 +47,43 @@ class WorkflowContractTest {
         assertFalse(session("").legacyWorkflowRunning)
     }
 
+    /** #3731 / #5511: the timeline card's fields (phase counts, the launching call, failed agents, each agent's details). */
+    @Test fun theCardsFieldsDecodeAndOlderHubsLeaveThemOut() {
+        val s = session(""","workflows":[{"task_id":"t1","status":"failed","running":false,"phase_count":2,"tool_use_id":"toolu_1",
+            "phase_stats":[{"title":"Snapshot","started":6,"done":4,"failed":2,"running":0},{"title":"Compare","started":0,"done":0,"running":0}],
+            "agents_started":6,"agents_done":4,"agents_failed":2,"agents_running":0,"tokens":81000,"calls":27,
+            "agents":[{"id":"f4","session_id":"s1@f4","label":"snapshot:dark-large","phase":"Snapshot","running":false,"status":"failed",
+                "started_at":"2026-11-05T10:00:00Z","ended_at":"2026-11-05T10:07:00Z","model":"claude-example",
+                "latest_tool":{"id":"toolu_9","name":"Bash","summary":"Running the snapshots"},"tokens":12000,"calls":3},
+                {"id":"f5","session_id":"s1@f5","running":false,"status":"paused"}]}]""")
+        val w = s.workflows!!.single()
+        assertEquals("toolu_1", w.toolUseId)
+        assertEquals(2, w.phaseCount)
+        assertEquals(listOf(WorkflowPhaseStats("Snapshot", 6, 4, 2, 0), WorkflowPhaseStats("Compare")), w.phaseStats)
+        assertEquals(2, w.agentsFailed)
+        assertEquals(81000L, w.tokens)
+        assertEquals(27, w.calls)
+        val (failed, unknown) = w.agents!!
+        assertEquals("failed", failed.status)
+        assertEquals("2026-11-05T10:07:00Z", failed.endedAt)
+        assertEquals("claude-example", failed.model)
+        assertEquals(WorkflowTool("toolu_9", "Bash", "Running the snapshots"), failed.latestTool)
+        assertEquals(12000L, failed.tokens)
+        assertEquals(3, failed.calls)
+        assertEquals("unknown", unknown.status) // a status this app does not know
+        // an older hub: none of them, nothing else lost
+        val old = JsonCodec.decodeFromString<Workflow>(running)
+        assertNull(old.toolUseId)
+        assertNull(old.phaseStats)
+        assertEquals(0, old.agentsFailed)
+        assertNull(old.agents!!.first().status)
+        assertNull(old.agents.first().latestTool)
+        // a malformed phase_stats drops that field only
+        val bad = JsonCodec.decodeFromString<Workflow>("""{"task_id":"t2","status":"running","running":true,"phase_stats":"bad","agents_started":3}""")
+        assertNull(bad.phaseStats)
+        assertEquals(3, bad.agentsStarted)
+    }
+
     @Test fun anUnknownStatusReadsAsCompletedAndBadFieldsAreDropped() {
         val s = session(""","workflows":[{"task_id":"t2","status":"paused","running":false,"phase_index":5,"phases":["A"],"agents":"bad"},
             {"task_id":"t3","status":"killed","error":"Error: Workflow aborted","summary":"Check the parity","ended_at":"2026-11-05T11:00:00Z"}]""")
