@@ -88,7 +88,7 @@ func (h *Hub) startPublic(ctx context.Context) error {
 		}
 		ln, activated, err = h.listen(h.cfg.Public.TLSListen)
 		if err != nil && (tlsAddressGone(h.cfg.Public.TLSListen, err) || errors.Is(err, hubedge.ErrNoSocket)) {
-			// A new install binds TLS to the LAN address only (docs/onboarding.md 4.1), and DHCP may have moved it:
+			// A new install binds TLS to the LAN address only (docs/assistant/onboarding.md 4.1), and DHCP may have moved it:
 			// start without TLS rather than not at all; the plaintext port still works on the LAN. Behind the edge
 			// the edge found it gone (hub_edge.go Serve) and has no socket for that port.
 			h.logf("hub TLS: %s is not an address of this machine now (has the LAN address changed?): TLS is off; "+

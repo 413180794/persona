@@ -24,7 +24,7 @@ internal data class AgentSpacePreset(val machineId: String, val workspaceId: Str
  */
 internal data class NewAgentPrefill(val machineId: String? = null, val cwd: String? = null, val prompt: String? = null)
 
-/** The hub's "New Agent" model use (docs/model-config.md), read once per form. */
+/** The hub's "New Agent" model use (docs/assistant/model-config.md), read once per form. */
 internal sealed interface NewAgentModelConfig {
     /** Still reading. */
     data object Unknown : NewAgentModelConfig
@@ -327,7 +327,7 @@ internal class NewAgentViewModel(
         }
     }
     /**
-     * Claude starts in the background (docs/protocol.md "New session"): the hub answers with a starting session, which
+     * Claude starts in the background (docs/protocol/protocol.md "New session"): the hub answers with a starting session, which
      * opens at once, and the first message goes as an ordinary message (on screen at once, sent once Claude is ready),
      * its id kept with the operation so it is sent once whatever happens to this process. Codex takes its first message
      * with the start, and so does any start without a sender.
@@ -399,7 +399,7 @@ internal class NewAgentViewModel(
 
 /**
  * The launcher a machine starts with: none (follow the "New Agent" configuration) when the hub has one, so a remembered
- * launcher never overrides it (docs/model-config.md); nothing when that configuration could not be read; otherwise the
+ * launcher never overrides it (docs/assistant/model-config.md); nothing when that configuration could not be read; otherwise the
  * machine's remembered launcher or its first.
  */
 internal fun defaultLauncher(config: NewAgentModelConfig, defaults: AgentDefaults, launchers: List<AgentLauncher>): String = when (config) {

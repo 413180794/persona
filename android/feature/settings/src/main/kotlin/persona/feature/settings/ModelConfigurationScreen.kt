@@ -19,7 +19,7 @@ import persona.core.navigation.ModelPurposeRoute
 import kotlinx.coroutines.launch
 
 /**
- * Settings › Model configuration (docs/model-config.md): each AI use of the hub with what is in effect for it. The hub owns the
+ * Settings › Model configuration (docs/assistant/model-config.md): each AI use of the hub with what is in effect for it. The hub owns the
  * catalog; a row opens that use's page.
  */
 @Composable

@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// How the extensions run, for the admin UI (docs/admin.md "Extensions" "How they run", extension_metrics.go): the
+// How the extensions run, for the admin UI (docs/operations/admin.md "Extensions" "How they run", extension_metrics.go): the
 // counts over a window, the last lines of an extension's log and a stream of the new ones. Only a signed-in admin
 // session gets here (adminRoutes): the log is the extensions' own, and may say more than the apps should see.
 

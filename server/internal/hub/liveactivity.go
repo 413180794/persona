@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The "Fleet" Live Activity (docs/live-activity.md): one activity per phone, on the lock screen and in the Dynamic
+// The "Fleet" Live Activity (docs/apple/live-activity.md): one activity per phone, on the lock screen and in the Dynamic
 // Island, summing up every agent that needs you, is working, or finished unseen. The hub computes the state
 // (FleetState, the activity's ContentState) from what it already knows and pushes it over APNs (push type
 // liveactivity) to each device's activity token; push-to-start opens one when the app is not running.
@@ -24,7 +24,7 @@ import (
 // on the phone. So what needs the user (a request arriving, or answered) goes out at once; anything else is merged
 // for fleetCoalesce and reaches a device at most every fleetMinGap; the timer (working since…) runs on the phone; a
 // phone whose app is open draws the activity itself from the fleet events and gets no push; and nothing is sent
-// while nothing changes except a refresh before the content goes stale (docs/live-activity.md "Push cadence").
+// while nothing changes except a refresh before the content goes stale (docs/apple/live-activity.md "Push cadence").
 
 const (
 	fleetCoalesce = 2500 * time.Millisecond

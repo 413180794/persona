@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// AdminSession is a browser signed in to the hub admin UI (docs/admin.md). IDHash is the SHA-256 of the cookie value.
+// AdminSession is a browser signed in to the hub admin UI (docs/operations/admin.md). IDHash is the SHA-256 of the cookie value.
 type AdminSession struct {
 	IDHash    string
 	CSRF      string

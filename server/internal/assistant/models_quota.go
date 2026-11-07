@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// A launcher's quota at its gateway (docs/launchers.md "Quota"): GET /api/v1/launchers/{name}/quota. Which gateway and
+// A launcher's quota at its gateway (docs/integrations/launchers.md "Quota"): GET /api/v1/launchers/{name}/quota. Which gateway and
 // which machine is the launchers' business (here); reading it is the quota plugins' (the hub's, plugins.quota), and
 // what they send goes back here with the key (models.launcher_http). Answers are kept a minute: the page opens often,
 // the gateways count every read.

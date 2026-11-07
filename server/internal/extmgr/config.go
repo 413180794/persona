@@ -17,12 +17,12 @@ import (
 
 // Config is the manager's configuration for the extensions, connectors, bots and the inbox: Listen, Token and
 // PublicURL are hub.json's (the hub's own file, read as it is), the rest the manager's own manager.json's
-// (managerconf.Moved, docs/config.md "manager.json").
+// (managerconf.Moved, docs/operations/config.md "manager.json").
 type Config struct {
 	Listen    string `json:"listen"`
 	Token     string `json:"token"`
 	PublicURL string `json:"public_url"`
-	// Lark: the lark-cli path and the Feishu account (docs/feishu.md).
+	// Lark: the lark-cli path and the Feishu account (docs/extensions/feishu.md).
 	Lark lark.Config `json:"lark"`
 	// LarkGate and ConnectorGate: the rules for the assistant's Feishu writes and the connectors' writes
 	// (internal/connector/gate.go).
@@ -30,7 +30,7 @@ type Config struct {
 	ConnectorGate []connector.Rule `json:"connector_gate,omitempty"`
 	GitHub        *github.Config   `json:"github,omitempty"`
 	IMessage      *imessage.Config `json:"imessage,omitempty"`
-	// Google and Microsoft: mail's sign-ins (docs/mail.md).
+	// Google and Microsoft: mail's sign-ins (docs/extensions/mail.md).
 	Google                  GoogleConfig      `json:"google"`
 	Microsoft               MicrosoftConfig   `json:"microsoft,omitempty"`
 	Inbox                   InboxConfig       `json:"inbox"`
@@ -55,14 +55,14 @@ type Config struct {
 	fileErr error
 }
 
-// GoogleConfig is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
+// GoogleConfig is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/extensions/mail.md).
 type GoogleConfig struct {
 	ClientID string `json:"client_id"`
 	// Proxy is an http:// proxy for Gmail IMAP / SMTP and Google's OAuth / Gmail API.
 	Proxy string `json:"proxy,omitempty"`
 }
 
-// MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/mail.md "Connecting Outlook").
+// MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/extensions/mail.md "Connecting Outlook").
 type MicrosoftConfig struct {
 	ClientID    string `json:"client_id,omitempty"`
 	RedirectURI string `json:"redirect_uri,omitempty"`
@@ -120,7 +120,7 @@ func loadConfig(dir, file string) (*Config, error) {
 	}
 	if cfg.Lark.LegacyGatewayConfigured() {
 		cfg.warnings = append(cfg.warnings, "lark.container / token / base_url are not read any more: Feishu through a Lark "+
-			"gateway is an extension's now; set them in its settings (docs/feishu.md)")
+			"gateway is an extension's now; set them in its settings (docs/extensions/feishu.md)")
 	}
 	return cfg, nil
 }

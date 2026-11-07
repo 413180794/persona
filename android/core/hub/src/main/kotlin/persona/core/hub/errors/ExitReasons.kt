@@ -19,7 +19,7 @@ data class ExitRecord(
 }
 
 /**
- * Which earlier exits become reports (docs/android.md "Error reports"). Each exit is reported once: [lastSeen] is the
+ * Which earlier exits become reports (docs/android/android.md "Error reports"). Each exit is reported once: [lastSeen] is the
  * newest timestamp handled before, null on the very first run, which only remembers where it is (exits from before the
  * reporter existed are not sent). A Java crash the uncaught-exception handler already wrote is not reported again:
  * the handler's crash time is within [JavaCrashWindowMillis] before the exit's.

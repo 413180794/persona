@@ -6,7 +6,7 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.generated.ExtensionErrorReport
 
 /**
- * Reports kept on disk until a hub with `error_reports` takes them (docs/protocol.md "Error reports": at most
+ * Reports kept on disk until a hub with `error_reports` takes them (docs/protocol/protocol.md "Error reports": at most
  * [MaxReports], at most [MaxAgeMillis] old). One file a report, `<time millis>-<id>.json`, so the oldest sort first and
  * a report's age is known without parsing it.
  */
@@ -47,7 +47,7 @@ class ErrorReportQueue(
 
     fun delete(entries: Collection<Entry>) { entries.forEach { it.file.delete() } }
 
-    /** The hub has no `error_reports`: nothing kept is ever sent (docs/protocol.md). */
+    /** The hub has no `error_reports`: nothing kept is ever sent (docs/protocol/protocol.md). */
     fun clear() { directory.listFiles()?.forEach { it.delete() } }
 
     fun prune() {

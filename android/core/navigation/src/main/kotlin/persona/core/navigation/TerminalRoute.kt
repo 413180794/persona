@@ -5,7 +5,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * A terminal: a session's, or a pane's by its address ([sessionId] `pane:<pane id>`, docs/terminal.md "Standalone terminal").
+ * A terminal: a session's, or a pane's by its address ([sessionId] `pane:<pane id>`, docs/integrations/terminal.md "Standalone terminal").
  * [title] is what the page calls a pane with no session (its place: space › tab › title); a session's is its own.
  */
 @Serializable @SerialName("persona.core.navigation.TerminalRoute")

@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
-// Persona Link in active mode (internal/link, docs/link.md): a computer the manager cannot reach — a laptop on
+// Persona Link in active mode (internal/link, docs/operations/link.md): a computer the manager cannot reach — a laptop on
 // whatever network it is on — dials the hub, whose address it has; the hub checks its credential and relays the
 // connection here as it is (devicewire.AcceptLink: the relay's messages are Persona Link's, its close code goes back
 // to it). The manager speaks the protocol: the hello says which machine, the manager tells it the hub's addresses,
@@ -260,7 +260,7 @@ func (l *mgrLink) info() *proto.MachineLink {
 }
 
 // linkEndpoints is what machine's Persona Link is told: where the hub can be found, and what it is called and how
-// many hubs its mesh has (the Mac menu bar shows both, docs/link.md); the heartbeat, when hub.json sets one: Persona
+// many hubs its mesh has (the Mac menu bar shows both, docs/operations/link.md); the heartbeat, when hub.json sets one: Persona
 // Link pings as the hub does; and whether the computer still waits for the user to confirm it.
 func (d *Devices) linkEndpoints(machine string) link.Message {
 	cfg := d.config()

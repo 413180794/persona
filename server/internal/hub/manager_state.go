@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What the hub keeps of each manager (docs/managers.md "What the hub keeps of each manager"): its snapshot (its
+// What the hub keeps of each manager (docs/assistant/managers.md "What the hub keeps of each manager"): its snapshot (its
 // conversations, tasks, profile, todo links), its tools, its extensions' report and its Live Activity content. The
 // assistant the hub starts keeps its state where it always did (h.assistant, h.ext.report, h.reported.live); every
 // other manager has one of its own here, made when it first reports and dropped when it is removed. Nothing a manager
@@ -93,7 +93,7 @@ func (h *Hub) forgetManagerState(id string) {
 }
 
 // conversation is the manager whose own conversation sid is, and how its snapshot lists it; "" for none. A session
-// is its machine's manager's (docs/managers.md "Ownership"): a snapshot counts only on a machine of its own manager's,
+// is its machine's manager's (docs/assistant/managers.md "Ownership"): a snapshot counts only on a machine of its own manager's,
 // so listing another manager's session takes nothing, and a view naming no machine (an older row) counts for none.
 func (h *Hub) conversation(sid string) (string, assistantwire.SessionView) {
 	if sid == "" {

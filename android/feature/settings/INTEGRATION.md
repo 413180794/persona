@@ -26,7 +26,7 @@ App 已通过 `PairingModule` 提供完整的 `SettingsServices`。旧 Hilt 入�
 
 运行时读取默认网络的真实 transport，按 Wi-Fi、蜂窝、其他网络及前后台选择 `HeartbeatPolicy`。切网重建同一条连接并重新发送协商，进出前台也会重新协商；页面只显示 hub ACK 的生效配置。
 
-默认值沿用 `docs/redesign/android.md` 5.9 和 `docs/redesign/hub-changes.md` 1.6：前台请求 20 秒，后台各网络从 240 秒起，pong 超时沿用 15 秒。这些都是设计配置，未实测。`docs/network.md` 没有补充各网络的实测间隔，因此 Wi-Fi 和蜂窝的默认值相同，没有编造差异。
+默认值沿用 `docs/archive/redesign/android.md` 5.9 和 `docs/archive/redesign/hub-changes.md` 1.6：前台请求 20 秒，后台各网络从 240 秒起，pong 超时沿用 15 秒。这些都是设计配置，未实测。`docs/operations/network.md` 没有补充各网络的实测间隔，因此 Wi-Fi 和蜂窝的默认值相同，没有编造差异。
 
 宿主可在 `connection-heartbeat` SharedPreferences 中配置以下键，重启运行时后生效；当前没有设置页入口：
 

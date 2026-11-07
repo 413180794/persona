@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
-// A manager as a service of its own (docs/managers.md, "Commands"): on Linux the systemd user unit
+// A manager as a service of its own (docs/assistant/managers.md, "Commands"): on Linux the systemd user unit
 // persona-manager-<id>.service, on a Mac the launchd agent com.persona.manager.<id>; each runs
 // `<binary> manager run --dir <its directory>` and is started again when it exits. In a container the container is
 // the service (docker run --restart unless-stopped). Named like the hub's personad and com.persona.hub.
@@ -102,7 +102,7 @@ func systemdEnvQuote(s string) string {
 // serviceUnit is a manager's systemd user unit. Exit status 2 is a usage or configuration mistake (no manager.json,
 // a bad one): restarting cannot fix it.
 func serviceUnit(id, bin, dir string) string {
-	return `# Written by personad manager install; personad manager uninstall removes it (docs/managers.md).
+	return `# Written by personad manager install; personad manager uninstall removes it (docs/assistant/managers.md).
 [Unit]
 Description=Persona manager ` + id + `
 After=network-online.target

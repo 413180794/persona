@@ -16,7 +16,7 @@ import (
 )
 
 // Filing many items (or bringing them back) in one request: Clean up all over what the list shows, Mark all as seen / Clear all on
-// a section, and their Undo (docs/inbox.md"Clean up all"). Done stays in Persona, as for one item: Feishu, the mail
+// a section, and their Undo (docs/assistant/inbox.md"Clean up all"). Done stays in Persona, as for one item: Feishu, the mail
 // servers and the connectors are not told.
 
 // inboxBulkMax caps one request (the list holds a few hundred items at most).

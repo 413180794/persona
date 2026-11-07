@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Declarative UI (docs/extensions.md "Declarative UI"): a plugin never runs code in the apps. It answers ui.render with a View
+// Declarative UI (docs/extensions/extensions.md "Declarative UI"): a plugin never runs code in the apps. It answers ui.render with a View
 // — a few fixed kinds of items — and the apps draw it with their own components (each style's, in light and dark);
 // a button's action goes back to the plugin (ui.action). The same View is drawn by iOS, Android and the web.
 
@@ -48,7 +48,7 @@ func (u UIItem) Refresh() time.Duration {
 	return time.Duration(cmp.Or(u.RefreshMinutes, WidgetRefreshDefault)) * time.Minute
 }
 
-// UISlot is a place in the apps plugins may draw (docs/extensions.md "UI slots").
+// UISlot is a place in the apps plugins may draw (docs/extensions/extensions.md "UI slots").
 type UISlot struct {
 	Name string
 	// Size is what the plugin is asked to draw there: compact (a card) or full (a page, a section).
@@ -77,13 +77,13 @@ var UISlots = []UISlot{
 	// inbox_item draws the body of an inbox item from the plugin's connector (its own header stays the app's): the
 	// same items a plugin's connector brought in, with the hub's triage on them. Drawn with UI version 2's items.
 	{Name: "inbox_item", Size: SizeFull, Context: "item", Shown: permissionText(i18n.Default, "slot_inbox_item"), Since: 2},
-	// widget is drawn outside the app (docs/extensions.md "System-level places"): a home screen widget, a Lock Screen or watch
+	// widget is drawn outside the app (docs/extensions/extensions.md "System-level places"): a home screen widget, a Lock Screen or watch
 	// face complication. The size it is asked for is the family (FitWidget holds the view to it); the apps list
 	// widgets on their own (GET /api/v1/extensions/-/widgets), not with the slots drawn in the app.
 	{Name: "widget", Size: WidgetFamilySmall, Shown: permissionText(i18n.Default, "slot_widget"), Since: 3},
 }
 
-// Widgets: the families a widget is drawn at and how often it is drawn again (docs/extensions.md "System-level places").
+// Widgets: the families a widget is drawn at and how often it is drawn again (docs/extensions/extensions.md "System-level places").
 const (
 	WidgetFamilySmall    = wire.WidgetFamilySmall
 	WidgetRefreshDefault = 30 // minutes
@@ -210,7 +210,7 @@ func CheckBadge(text, tone string) error {
 }
 
 // EventsItem is a contribution to events: the hub's events a plugin is told about. It is only told; it changes
-// nothing (docs/extensions.md "Events").
+// nothing (docs/extensions/extensions.md "Events").
 type EventsItem struct {
 	ID        string   `json:"id"`
 	Subscribe []string `json:"subscribe"`
@@ -830,7 +830,7 @@ const (
 // widgetKinds are the components a widget draws; the rest are left out, or drawn as text (markdown, empty, loading).
 var widgetKinds = []string{"metric", "stat_grid", "progress", "chart", "text", "row"}
 
-// FitWidget makes a View an extension drew for a widget into one the family draws (docs/extensions.md "System-level places"):
+// FitWidget makes a View an extension drew for a widget into one the family draws (docs/extensions/extensions.md "System-level places"):
 // first as any view (Fit), then held to a widget's subset — a metric, a stat_grid, a progress, a chart, a few lines of
 // text, a few rows, nothing to tap (a tap opens the widget's page), no search, filter or more — cutting what is too
 // long rather than refusing it. A complication (accessory_*) draws one metric, progress or line of text, the first.

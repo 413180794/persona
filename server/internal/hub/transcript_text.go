@@ -12,7 +12,7 @@ import (
 // The node writes a transcript's notices, task lines and activities in Chinese (internal/transcript): it does not know
 // the user's language, and the node↔hub RPC stays as it is. On their way to the apps the hub rewrites the ones it can
 // tell apart, from the item's structured fields (a task note's kind and status) or from the node's exact Chinese
-// wording, into the reader's language (docs/i18n.md). zh-Hans, and anything the hub does not recognize (an older or
+// wording, into the reader's language (docs/protocol/i18n.md). zh-Hans, and anything the hub does not recognize (an older or
 // newer node's wording), go out as the node wrote them. The items the assistant and the channels read are not touched:
 // they match some of these lines (assistant/done.go's interrupted marker).
 //

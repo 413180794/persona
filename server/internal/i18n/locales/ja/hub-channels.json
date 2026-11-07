@@ -32,7 +32,7 @@
   "not_running_open": "{name}は実行されていません。先にオンにしてください",
   "no_binding_step": "{name}には連携の手順がありません",
   "domain_label": "ドメイン（feishu / lark、またはプライベートデプロイのアドレス。空欄ならfeishu）",
-  "credentials_hint": "Feishu / Lark開発者コンソールでカスタムアプリを作成してボット機能を有効にし、イベントの受信方法に「長時間接続」を選んでください（docs/bots.md「在开放平台上要做的」）",
+  "credentials_hint": "Feishu / Lark開発者コンソールでカスタムアプリを作成してボット機能を有効にし、イベントの受信方法に「長時間接続」を選んでください（docs/extensions/bots.md「在开放平台上要做的」）",
   "pair_hint": "Larkでボットに個別チャットで、この6桁の数字を送ってください（10分間有効）",
   "not_bound": "{name}は連携されていません",
   "not_running": "{name}は実行されていません"

@@ -1,7 +1,7 @@
 // Package host is what the node needs from a terminal host — where the terminals run (herdr, later Orca): its panes,
 // reading their screens, typing into them, opening and closing them. What runs inside a pane (Claude Code, Codex,
 // a compatible CLI) is the agent; telling agents apart, finding their sessions and judging their state stay in the node, on top
-// of any host (docs/plan-orca-support.md).
+// of any host (docs/plans/plan-orca-support.md).
 //
 // A host implements Host; everything else is an optional capability the node finds with a type assertion.
 package host
@@ -167,7 +167,7 @@ type Controller interface {
 }
 
 // FullClienter runs the host's own interactive client in a terminal of the node's, for the web's full herdr view: the
-// host's sidebar, tabs and splits instead of one pane (docs/terminal.md "Full herdr UI").
+// host's sidebar, tabs and splits instead of one pane (docs/integrations/terminal.md "Full herdr UI").
 type FullClienter interface {
 	// CanFullClient reports whether this host can, on this machine (herdr on Unix, with sessions to attach to).
 	CanFullClient() bool
@@ -201,7 +201,7 @@ type FocusState struct {
 }
 
 // Focuser moves and reports the focus a host shares among its clients (herdr: pane.focus, and the focus events with
-// the snapshot's focused_* ids). The web's full herdr view follows it and moves it (docs/terminal.md "Focus sync").
+// the snapshot's focused_* ids). The web's full herdr view follows it and moves it (docs/integrations/terminal.md "Focus sync").
 type Focuser interface {
 	// Focused is what the host shows now; Pane is empty when the host does not say.
 	Focused(ctx context.Context) (FocusState, error)
@@ -212,7 +212,7 @@ type Focuser interface {
 	FocusPane(ctx context.Context, pane PaneRef) error
 }
 
-// MetadataReporter reports and clears pane metadata tokens (docs/todos.md, #762).
+// MetadataReporter reports and clears pane metadata tokens (docs/assistant/todos.md, #762).
 type MetadataReporter interface {
 	ReportMetadata(ctx context.Context, pane PaneRef, source string, tokens map[string]*string) error
 }
@@ -240,7 +240,7 @@ type MouseEvent struct {
 	Modifiers int
 }
 
-// Mouser is a Control that takes mouse events beyond Click (herdr: terminal.mouse; docs/terminal.md "Mouse").
+// Mouser is a Control that takes mouse events beyond Click (herdr: terminal.mouse; docs/integrations/terminal.md "Mouse").
 type Mouser interface {
 	Mouse(MouseEvent) error
 }
@@ -409,7 +409,7 @@ type Layout struct {
 	// Panes is every pane, agent or not (Agent ""): where agents the host does not detect (a compatible CLI) are found.
 	Panes []Agent
 	// PaneIndex is each pane's 0-based place in its slot by layout, top left first (herdr: its split tree), keyed by
-	// PaneID; nil when the host does not say where its panes sit (docs/agent-states.md "Several panes in one tab").
+	// PaneID; nil when the host does not say where its panes sit (docs/protocol/agent-states.md "Several panes in one tab").
 	PaneIndex map[string]int
 }
 

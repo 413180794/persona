@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Policies (docs/inbox.md "Policies", #5747): the user says, for a chat, a sender or a repository, how its items are
+// Policies (docs/assistant/inbox.md "Policies", #5747): the user says, for a chat, a sender or a repository, how its items are
 // handled: the tier they get (always Needs you, FYI, noise) and what the AI twin does with them (takes them first, never
 // touches them). A policy matches what a mute matches (mutesOf: the same tags, read off the item, the same for every
 // source) and is decided here, in code, not by a model: the tier is set after triage (the model's or the rules'), so

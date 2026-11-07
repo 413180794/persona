@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The unified entry's wire shapes (docs/protocol.md "Tasks and conversation activity") decode, and its events enter the stream. */
+/** The unified entry's wire shapes (docs/protocol/protocol.md "Tasks and conversation activity") decode, and its events enter the stream. */
 class TasksContractTest {
     @Test fun eventsDecode() {
         assertTrue(ServerEvent.decode("""{"type":"todos"}""") is TodosEvent)
@@ -17,7 +17,7 @@ class TasksContractTest {
         assertEquals("app", ((plan as TaskPlanEvent).plan.tasks.single().project).zhAny())
     }
 
-    // The cards' snapshot (docs/assistant-views.md): every live card, answer and registered block, each read on its own.
+    // The cards' snapshot (docs/assistant/assistant-views.md): every live card, answer and registered block, each read on its own.
     @Test fun theCardsSnapshotDecodes() {
         val res = JsonCodec.decodeFromString<FeedResponse>("""{"items":[{"id":"f","conversation":"c","kind":"view","ref":"view_1"}],
             "views":{"view_1":{"id":"view_1","version":2,"view":{"fallback":"f","sections":[]}},"view_2":"not a card"},

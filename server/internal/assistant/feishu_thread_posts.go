@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Posting into a todo's chat thread (#5279, docs/todos.md "Chat thread", docs/bots.md): a todo bound to a Lark topic
+// Posting into a todo's chat thread (#5279, docs/assistant/todos.md "Chat thread", docs/extensions/bots.md): a todo bound to a Lark topic
 // tells the topic, in one short line with a link back to the todo, when
 //
 //   - a decision is noted (any source but the thread's own: postable),

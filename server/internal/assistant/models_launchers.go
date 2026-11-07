@@ -26,9 +26,9 @@ import (
 	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
-// Settings › Model providers (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its
+// Settings › Model providers (docs/integrations/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its
 // node and remembered by the hub (it hands them over: launchers.zshrc); those added in the app are the assistant's —
-// base URL, model, and the API key AES-GCM sealed with the manager's own secret.key (docs/managers.md "The built-in
+// base URL, model, and the API key AES-GCM sealed with the manager's own secret.key (docs/assistant/managers.md "The built-in
 // manager's own files") — and given to every node, which runs them as `personad launch <name>`. Deleting a
 // ~/.zshrc launcher only hides it in Persona.
 
@@ -51,7 +51,7 @@ type launcherMeta struct {
 	SyncedAt time.Time `json:"synced_at"`
 }
 
-// LauncherSync is how one machine's launchers came in this time, for Settings › Model providers (docs/launchers.md, “Sync state”):
+// LauncherSync is how one machine's launchers came in this time, for Settings › Model providers (docs/integrations/launchers.md, “Sync state”):
 // ok, offline (not connected: its last list shows, marked), timeout (no answer in launcherSyncTimeout) or error
 // (Error says why).
 type LauncherSync struct {
@@ -149,7 +149,7 @@ var reservedLauncherNames = []string{"claude", "presets", "test", "discover", "i
 // ---- the key ----
 
 // The providers' keys are sealed with the manager's own secret.key (internal/secretkey; the built-in manager's is a
-// copy of the data directory's, which sealed them before they were the assistant's, docs/managers.md "The built-in
+// copy of the data directory's, which sealed them before they were the assistant's, docs/assistant/managers.md "The built-in
 // manager's own files").
 
 func (s *Service) sealKey(plain string) (string, error) { return s.models.secret.Seal(plain) }
@@ -214,7 +214,7 @@ func (s *Service) managedForNodes(ctx context.Context) []proto.ManagedLauncher {
 
 // pushManaged gives the online nodes (one machine when machine is not "") the launchers added in Persona; they keep
 // them in memory. After a change; a node's new connection gets them right after it is configured (main.go's
-// devices NodeCalls). Only this manager's own machines: the hub's devices.list has no other (docs/managers.md), and a
+// devices NodeCalls). Only this manager's own machines: the hub's devices.list has no other (docs/assistant/managers.md), and a
 // new connection the hub says is another manager's gets no NodeCalls (internal/devices hubConnected). A computer
 // waiting to be confirmed gets none (machine_trust.go; the hub does not list it either).
 func (s *Service) pushManaged(ctx context.Context, machine string) {
@@ -569,7 +569,7 @@ type launcherInput struct {
 	// DisplayName is the name shown, any language; nil on an update keeps it; empty on a provider the hub names from a preset is the preset's name.
 	DisplayName *string `json:"display_name"`
 	// Assign (POST only): the categories (assistant, agent.new) to put on the new provider, each only while it is
-	// still at its default (docs/onboarding.md 5.4).
+	// still at its default (docs/assistant/onboarding.md 5.4).
 	Assign []string `json:"assign,omitempty"`
 
 	// #2455's fields (proto.ManagedLauncher). Each is a pointer: left out (an app from before them) keeps what is
@@ -1273,7 +1273,7 @@ func (s *Service) pickMachine(ctx context.Context, has []string, want string) (s
 }
 
 // providerModels is GET /api/v1/model-config/providers/{id}/models: a launcher provider's /model list for Model configuration
-// (docs/model-config.md "Picking a model in Model configuration"). Model configuration is not one machine's, so the list comes from a machine that has the
+// (docs/assistant/model-config.md "Picking a model in Model configuration"). Model configuration is not one machine's, so the list comes from a machine that has the
 // launcher (pickMachine), and the answer says which. Other providers have no list to ask for: a plugin's comes with
 // it, an API connection has none.
 func (s *Service) providerModels(w http.ResponseWriter, r *http.Request) {

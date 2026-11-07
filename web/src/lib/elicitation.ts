@@ -1,4 +1,4 @@
-// MCP elicitation (docs/protocol.md "MCP elicitation"): a form an MCP server asks the user to fill in, or a link it asks
+// MCP elicitation (docs/protocol/protocol.md "MCP elicitation"): a form an MCP server asks the user to fill in, or a link it asks
 // them to open. Same rules as Android's ElicitationForm / ElicitationUrl / AnswerBuilder: a deliberately bounded JSON
 // Schema subset, where anything unknown blocks acceptance (the card says to handle it in the terminal), and a link is
 // accepted only after this page opened that exact HTTP(S) target.

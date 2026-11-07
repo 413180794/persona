@@ -20,7 +20,7 @@ import (
 const ConfigMost = 64 << 10
 
 // Schema is a plugin's configuration: the subset of JSON Schema every client can draw as a form
-// (docs/plan-extensions.md "configuration"), its properties in the order the manifest has them.
+// (docs/plans/plan-extensions.md "configuration"), its properties in the order the manifest has them.
 type Schema struct {
 	Fields []Field `json:"fields"`
 }

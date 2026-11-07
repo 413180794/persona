@@ -1,4 +1,4 @@
-// Machines › Add a computer (docs/onboarding.md 4.2 "Your computer ↔ hub", docs/protocol.md "Computer pairing codes"): a signed-in device adds a
+// Machines › Add a computer (docs/assistant/onboarding.md 4.2 "Your computer ↔ hub", docs/protocol/protocol.md "Computer pairing codes"): a signed-in device adds a
 // computer with POST /api/v1/auth/pair-codes {"add"}, hands its Persona Link the pairing link the hub returns, waits for
 // it to come online and then says whether it is the user's (POST /api/v1/machines/{id}/confirm | reject).
 import { t } from "../i18n";
@@ -8,7 +8,7 @@ import type { Machine } from "./types";
 
 export const MACHINES_ADD_FEATURE = "machines_add";
 
-/** Machines carry `trust` and take POST /machines/{id}/confirm | reject (docs/protocol.md "Computer trust"). */
+/** Machines carry `trust` and take POST /machines/{id}/confirm | reject (docs/protocol/protocol.md "Computer trust"). */
 export const MACHINE_TRUST_FEATURE = "machine_trust";
 
 /** The systems the dialog has instructions for; the hub takes the same words (`add.os`). */
@@ -16,11 +16,11 @@ export type ComputerOS = "mac" | "linux" | "windows";
 
 export const COMPUTER_OSES: readonly ComputerOS[] = ["mac", "linux", "windows"];
 
-/** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md decision 1). */
-export const PERSONA_LINK_INSTALL_DOC = "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md";
+/** How to build and install Persona Link on a Mac until there is a download (docs/assistant/onboarding.md decision 1). */
+export const PERSONA_LINK_INSTALL_DOC = "https://github.com/nwverse/persona/blob/master/docs/operations/persona-link-install.md";
 
-/** How to install persona-link on a headless Linux when the hub has no install script (docs/link.md "Linux (headless)"). */
-export const LINK_LINUX_DOC = "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless";
+/** How to install persona-link on a headless Linux when the hub has no install script (docs/operations/link.md "Linux (headless)"). */
+export const LINK_LINUX_DOC = "https://github.com/nwverse/persona/blob/master/docs/operations/link.md#linuxheadless";
 
 // The hub does not keep the system a computer was added as (only its node reports one, once it connects), so the
 // dialog remembers it per machine id: a new code for a computer that never connected then shows the same instructions.
@@ -93,7 +93,7 @@ export function linuxCommand(reply: Pick<ComputerCodeReply, "pair_url" | "comman
   return line ? { line, installs: true } : { line: pairCommand(reply), installs: false };
 }
 
-/** What Windows runs in PowerShell, in the folder with persona-link.exe and personad.exe (docs/windows.md). */
+/** What Windows runs in PowerShell, in the folder with persona-link.exe and personad.exe (docs/operations/windows.md). */
 export function windowsCommand(pairURL: string): string {
   return `.\\persona-link.exe install --personad .\\personad.exe --pair ${quoted(pairURL)}`;
 }
@@ -142,7 +142,7 @@ export function pendingToConfirm(machines: Machine[], preferred?: string): Machi
   return waiting.find((m) => preferred && m.id === preferred) ?? waiting.find((m) => m.online) ?? waiting[0];
 }
 
-/** A machine's error_code (docs/onboarding.md 5.3) in words; "" for a code this page does not know. */
+/** A machine's error_code (docs/assistant/onboarding.md 5.3) in words; "" for a code this page does not know. */
 export function machineErrorText(code: string | undefined): string {
   switch (code) {
     case "node_service_down":

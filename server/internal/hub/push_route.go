@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 )
 
-// The way this hub's pushes reach a device (docs/push-relay.md "Which way a device is pushed", #5998): a phone whose
+// The way this hub's pushes reach a device (docs/operations/push-relay.md "Which way a device is pushed", #5998): a phone whose
 // relay registration failed used to send empty relay fields, and with no apns.json its background pushes went nowhere
 // without a word anywhere.
 const (

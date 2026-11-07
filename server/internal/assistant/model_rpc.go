@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Model calls by extensions (#6102, docs/extensions.md "Model calls"). The manager checks the models scope and hands
+// Model calls by extensions (#6102, docs/extensions/extensions.md "Model calls"). The manager checks the models scope and hands
 // the call here with the extension's id; it runs on the extension's purpose extension.<id>, which inherits
 // "Knowledge base"'s model until the user picks another in Settings › Models. Keys stay here. No budget and no cap
 // (the user's decision): each call's usage goes back to the extension and into one log line.

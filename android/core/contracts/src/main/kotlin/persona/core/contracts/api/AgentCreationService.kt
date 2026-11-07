@@ -17,7 +17,7 @@ interface AgentCreationService {
     suspend fun operation(operationId: String, machineId: String): AgentStartResult = operation(operationId)
 
     /**
-     * The hub's "New Agent" model use (`agent.new`, docs/model-config.md): when it has one, a new agent follows it unless
+     * The hub's "New Agent" model use (`agent.new`, docs/assistant/model-config.md): when it has one, a new agent follows it unless
      * a launcher is picked for this start (the request then carries an empty launcher). Null from hubs without
      * unified model configuration.
      */

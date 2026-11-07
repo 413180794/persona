@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The main conversation's readiness (docs/onboarding.md 4.4, 5.1): whether it can answer now and, when not, the first
+// The main conversation's readiness (docs/assistant/onboarding.md 4.4, 5.1): whether it can answer now and, when not, the first
 // thing missing, for the clients' setup card and checklist. Four steps in a fixed order: the computer it runs on,
 // Claude Code there, the model, and a first answer. Everything comes from what the assistant already knows (the
 // machines, the launcher in effect, the main conversation's last turn, the launcher checks) plus two free questions to
@@ -50,7 +50,7 @@ var (
 	readinessQuickMax   = 30 * time.Second
 )
 
-// Readiness modes, step ids and states (docs/onboarding.md 5.1).
+// Readiness modes, step ids and states (docs/assistant/onboarding.md 5.1).
 const (
 	ReadinessFull     = "full"
 	ReadinessSetup    = "setup"
@@ -69,7 +69,7 @@ const (
 	StepSkipped  = "skipped"
 )
 
-// Step codes the readiness has beyond proto's (docs/onboarding.md 4.6).
+// Step codes the readiness has beyond proto's (docs/assistant/onboarding.md 4.6).
 const (
 	codeNodeUnreachable = "node_unreachable"
 	codeNodeOutdated    = "node_outdated"

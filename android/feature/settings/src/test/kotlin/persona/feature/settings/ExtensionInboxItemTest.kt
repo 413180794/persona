@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 
-// An inbox item's page drawn by its connector's extension (docs/extensions.md "UI slots" inbox_item, #1683): which pages the
+// An inbox item's page drawn by its connector's extension (docs/extensions/extensions.md "UI slots" inbox_item, #1683): which pages the
 // hub lists, drawing and pressing with the item in the context, and when the item's own page opens instead.
 /** Robolectric for the words: the app's strings in Simplified Chinese (robolectric.properties). */
 @RunWith(AndroidJUnit4::class)

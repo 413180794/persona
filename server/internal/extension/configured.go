@@ -1,6 +1,6 @@
 package extension
 
-// Settings the user fills in for an extension that reach outside it (#5906, docs/extensions.md "Settings the user
+// Settings the user fills in for an extension that reach outside it (#5906, docs/extensions/extensions.md "Settings the user
 // fills in"): an address in the settings the egress proxy lets it reach (permissions.network "config:<field>"), a
 // secret shown by its last four characters once set (secrets[].hint "last4"), and a check by the extension of what is
 // about to be saved (settings_check).

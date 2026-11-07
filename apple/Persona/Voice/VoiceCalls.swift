@@ -4,10 +4,10 @@ import Observation
 import UIKit
 #endif
 
-/// The app's voice call: at most one at a time, whichever page or surface started it (docs/voice.md 6.3). ChatView only
+/// The app's voice call: at most one at a time, whichever page or surface started it (docs/assistant/voice.md 6.3). ChatView only
 /// asks `isBound(to:)`; the bar and the thread's tail read `current` themselves.
 ///
-/// Rules (docs/voice.md 6.5): a new call ends the one before; the app going to the background ends a call started from
+/// Rules (docs/assistant/voice.md 6.5): a new call ends the one before; the app going to the background ends a call started from
 /// the phone, never one started from the car; leaving the page ends the phone's call bound to it. Starting a recording
 /// or dictation, a phone call, three failed reconnects or ten idle minutes end it from inside (`VoiceConversation`).
 @MainActor @Observable final class VoiceCalls {

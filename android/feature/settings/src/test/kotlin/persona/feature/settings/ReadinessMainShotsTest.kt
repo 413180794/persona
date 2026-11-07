@@ -40,7 +40,7 @@ import persona.core.navigation.SettingsPageRoute
 import java.io.File
 
 /**
- * "Checklist" with the main conversation's four steps (docs/onboarding.md 4.5): a new hub with no computer, and one whose
+ * "Checklist" with the main conversation's four steps (docs/assistant/onboarding.md 4.5): a new hub with no computer, and one whose
  * Claude Code is not signed in, in every style, light and dark. Written to `build/onboarding-shots/`.
  */
 @RunWith(AndroidJUnit4::class)

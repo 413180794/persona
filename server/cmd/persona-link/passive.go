@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// Passive mode on the command line (docs/link.md "Passive mode"): `pair --listen` makes the link the hub's admin page
+// Passive mode on the command line (docs/operations/link.md "Passive mode"): `pair --listen` makes the link the hub's admin page
 // takes, `mode` switches between the two modes.
 
 // pairListen is `persona-link pair --listen [addr] [--addr …]`: the link alone on stdout (for a pipe), the rest on stderr.

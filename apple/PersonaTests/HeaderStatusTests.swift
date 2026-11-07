@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The Agents chat header's status line (docs/plan-chat-topbar.md ③) and the tab names of its strip.
+/// The Agents chat header's status line (docs/archive/apple/plan-chat-topbar.md ③) and the tab names of its strip.
 struct HeaderStatusTests {
     private let now = Date(timeIntervalSince1970: 1_793_700_000)
 

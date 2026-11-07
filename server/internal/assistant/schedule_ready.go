@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// A scheduled run waits for the main conversation to be ready (docs/onboarding.md 4.4 "Scheduled tasks"). A new hub has the
+// A scheduled run waits for the main conversation to be ready (docs/assistant/onboarding.md 4.4 "Scheduled tasks"). A new hub has the
 // weekday morning briefing on, and with no computer yet (or one asleep, Claude Code missing or signed out, a key that is wrong)
 // every run failed and pushed "Scheduled task failed". Now a due run first looks at the readiness (no probe: nothing is spent,
 // the node's two questions are cached): when what the run needs is not there, it is skipped and recorded as such,

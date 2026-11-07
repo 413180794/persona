@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Where an agent stands in its work (docs/agent-work.md, #1686), the manager's: when a turn ends it triages it — rules
+// Where an agent stands in its work (docs/assistant/agent-work.md, #1686), the manager's: when a turn ends it triages it — rules
 // first, then a cheap model reading the last reply — into done or blocked on a named precondition, and acts on what it
 // can: "Continue" after a transient model error (with backoff and a cap), a wake when what it waits for should be over, a
 // card for what the user is to decide (the answer goes back to the agent). Everything else (pushing code, deploying,
@@ -32,7 +32,7 @@ import (
 
 // TriageSwitches turn the triage and each of its actions on, all off until the user turns them on (Settings › Session Triage,
 // settings agents.triage): the triage calls a model on every stopped turn, and a "Continue" or a wake runs a turn of the
-// agent on its own model (docs/agent-work.md "Switches").
+// agent on its own model (docs/assistant/agent-work.md "Switches").
 type TriageSwitches struct {
 	Enabled      bool `json:"enabled"`       // triage stopped turns: the lists' line, done no longer unread
 	AutoContinue bool `json:"auto_continue"` // "Continue" after a transient model error
@@ -848,7 +848,7 @@ func transientError(text string) bool {
 	return false
 }
 
-// riskyWords mark a next step the manager must not set off itself (docs/agent-work.md "Safety boundary"): it is only ever a
+// riskyWords mark a next step the manager must not set off itself (docs/assistant/agent-work.md "Safety boundary"): it is only ever a
 // card.
 var riskyWords = []string{"push", "deploy", "部署", "发布", "上线", "merge", "合并", "合入", "发消息", "回复", "评论", "testflight",
 	"release", "推送", "推到", "comment", "发版", "提审", "send"}

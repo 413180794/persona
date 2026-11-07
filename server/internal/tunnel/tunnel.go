@@ -1,9 +1,9 @@
 // Package tunnel is the hub↔node link over tailcat (github.com/tailscale/tailcat): WireGuard through Tailscale's DERP
 // relays, upgraded to a direct path when NAT traversal works, with no public IP, open port or ssh needed on either side.
-// It is the fallback when the hub cannot ssh to a machine (docs/server.md "tailcat hole punching").
+// It is the fallback when the hub cannot ssh to a machine (docs/server/server.md "tailcat hole punching").
 //
 // A node keeps a fixed identity in ~/.persona/tailcat.json and serves only the hub keys listed there; the manager that
-// dials it keeps its own (the built-in manager's in ~/.persona/managers/assistant/tailcat-hub.json, docs/managers.md "The
+// dials it keeps its own (the built-in manager's in ~/.persona/managers/assistant/tailcat-hub.json, docs/assistant/managers.md "The
 // built-in manager's own files") and dials a node's address (hub.json machines[].tailcat_addr). The address holds
 // the node's public keys, the WireGuard pre-shared key and the DERP region: it is a secret, like the hub token.
 package tunnel

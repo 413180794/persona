@@ -7,7 +7,7 @@
       "description": "hub 列表按更新时间倒序，分拣档位不影响列表排序。",
       "source": [
         "server/internal/assistant/inbox.go: Service.inboxList",
-        "docs/inbox.md: App"
+        "docs/assistant/inbox.md: App"
       ],
       "derived": true,
       "input": {
@@ -50,7 +50,7 @@
       "description": "hub 列表按更新时间倒序，分拣档位不影响列表排序。",
       "source": [
         "server/internal/assistant/inbox.go: Service.inboxList",
-        "docs/inbox.md: App"
+        "docs/assistant/inbox.md: App"
       ],
       "derived": true,
       "input": {
@@ -93,7 +93,7 @@
       "description": "hub 列表按更新时间倒序，分拣档位不影响列表排序。",
       "source": [
         "server/internal/assistant/inbox.go: Service.inboxList",
-        "docs/inbox.md: App"
+        "docs/assistant/inbox.md: App"
       ],
       "derived": true,
       "input": {

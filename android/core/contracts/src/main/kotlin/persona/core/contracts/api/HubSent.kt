@@ -10,7 +10,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlin.math.abs
 
 /**
- * Settings › Sent as you (#5278, docs/connectors.md "Sent as the user"): the ledger of what Persona wrote in the user's name
+ * Settings › Sent as you (#5278, docs/extensions/connectors.md "Sent as the user"): the ledger of what Persona wrote in the user's name
  * through the connectors, newest first, as the selected hub keeps it. Full-access devices only. Bound to the active pairing's
  * selected hub.
  */
@@ -62,7 +62,7 @@ data class SentItem(
     val at: String = "",
     val connector: String = "",
     val action: String = "",
-    /** Where it went; the fields depend on the connector (docs/connectors.md "Sent as the user"). */
+    /** Where it went; the fields depend on the connector (docs/extensions/connectors.md "Sent as the user"). */
     val target: Map<String, JsonElement> = emptyMap(),
     /** What it said, at most [SentWire.TextMost] characters. */
     val text: String = "",

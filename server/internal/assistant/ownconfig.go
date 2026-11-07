@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/managerconf"
 )
 
-// ownConfig is what the manager's manager.json says that the hub's hello used to (docs/config.md "manager.json"):
+// ownConfig is what the manager's manager.json says that the hub's hello used to (docs/operations/config.md "manager.json"):
 // whose assistant it is, where it runs by default, the Agents business's limits, the knowledge base, the models and how
 // long a card waits. A section manager.json has replaces the hello's; one it has not keeps it (an older hub still
 // sends them).

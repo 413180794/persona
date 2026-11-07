@@ -1,4 +1,4 @@
-// The hub admin UI (docs/admin.md): its own page next to the web client, same tokens and atoms.
+// The hub admin UI (docs/operations/admin.md): its own page next to the web client, same tokens and atoms.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initI18n } from "../i18n";
@@ -6,7 +6,7 @@ import "../styles.css";
 import { adminCatalog } from "./catalog";
 
 // The catalog (the client's plus the admin UI's own) loads before the pages: they call t() as their modules load
-// (docs/web.md "Internationalization").
+// (docs/web/web.md "Internationalization").
 await initI18n(undefined, adminCatalog);
 const { AdminApp } = await import("./App");
 

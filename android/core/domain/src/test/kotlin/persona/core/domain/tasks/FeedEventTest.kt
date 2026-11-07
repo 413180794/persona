@@ -62,8 +62,8 @@ class FeedEventTest {
     }
 
     /**
-     * Another manager's live updates (the hub stamps `manager` on them, docs/protocol.md) reach their conversation
-     * whichever manager the assistant page shows: its conversation may be open elsewhere (docs/managers.md).
+     * Another manager's live updates (the hub stamps `manager` on them, docs/protocol/protocol.md) reach their conversation
+     * whichever manager the assistant page shows: its conversation may be open elsewhere (docs/assistant/managers.md).
      */
     @Test fun anotherManagersLiveUpdatesReachTheirConversation() = runBlocking {
         val api = Api(emptyList())

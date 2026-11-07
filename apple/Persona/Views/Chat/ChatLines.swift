@@ -348,7 +348,7 @@ nonisolated struct ChangedFile: Hashable, Sendable {
 extension ChatLines {
     // MARK: The assistant's feed
 
-    /// The lines with what the hub added to an assistant conversation (docs/unified-entry.md) among them: an item
+    /// The lines with what the hub added to an assistant conversation (docs/assistant/unified-entry.md) among them: an item
     /// goes at the end of the exchange it happened in — before the first message sent after it — so a plan card or a
     /// receipt follows the answer of its turn instead of splitting it; what came after the last message goes last.
     static func mergeFeed(_ lines: [ChatLine], _ feed: [FeedItem]) -> [ChatLine] {

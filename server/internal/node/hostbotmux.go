@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// botmuxHost is botmux, the Feishu topic ↔ AI CLI bridge (docs/engines.md "botmux"): each topic is a session of a
+// botmuxHost is botmux, the Feishu topic ↔ AI CLI bridge (docs/integrations/engines.md "botmux"): each topic is a session of a
 // coding CLI that botmux runs (in tmux) and answers in Feishu. It is not an engine to choose: a node on a machine with
 // botmux registers it next to the engine's hosts (nodeHosts). A pane is a botmux session, its id the botmux session
 // id: for Claude Code also the Claude session id botmux starts claude with; for Codex and compatible variants the thread is found in

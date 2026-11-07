@@ -1,4 +1,4 @@
-// The web client's service worker (docs/web.md "Install as an app"): built on its own to /sw.js (vite.config.ts) and
+// The web client's service worker (docs/web/web.md "Install as an app"): built on its own to /sw.js (vite.config.ts) and
 // registered by lib/pwa.ts. It makes the installed app start fast and still open when the hub can't be reached: the
 // shell (index.html) comes from the hub when it answers in time, else from the cache; hashed assets from the cache.
 // The API is never touched (lib/sw-routes.ts).

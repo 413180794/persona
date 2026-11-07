@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The catalogs and the code agree (docs/web.md "Internationalization"): the three languages have the same namespaces, keys and
+// The catalogs and the code agree (docs/web/web.md "Internationalization"): the three languages have the same namespaces, keys and
 // placeholders; every t("literal") key exists and gets a value for each placeholder its text uses; every key is used; and no interface text is written into the code in Chinese. That last
 // one is a ratchet while the strings move into catalogs: a file may only lose hard-coded strings, never gain them
 // (hardcoded-baseline.json; a file that reaches zero leaves it). Comments and tests don't count; a line that has to

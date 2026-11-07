@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
-// The usage windows and the usage sources page are the manager's (internal/devices, docs/usage-windows.md); the hub
+// The usage windows and the usage sources page are the manager's (internal/devices, docs/server/usage-windows.md); the hub
 // only relays them: the sidebar's route from the apps' API, the page from the admin UI with a signed-in session.
 
 func TestAdminUsageSourcesNeedAnAdminSession(t *testing.T) {

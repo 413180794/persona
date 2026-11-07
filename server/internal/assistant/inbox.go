@@ -27,7 +27,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The unified inbox (docs/inbox.md) is the manager's: Feishu messages, mail and the connectors' threads in one list,
+// The unified inbox (docs/assistant/inbox.md) is the manager's: Feishu messages, mail and the connectors' threads in one list,
 // one row per "thing" — the new messages in a chat, a mail thread — not per message and not per chat. The hub reads
 // the sources when a round is due and hands what it read over (InboxCollected); the inbox keeps the items in Postgres
 // (table inbox_items, only it reads and writes it) with their AI triage (inbox_triage.go) and whether the user has
@@ -77,7 +77,7 @@ type InboxItem struct {
 	DoneAt      *time.Time `json:"done_at,omitempty"`
 	DoneBy      string     `json:"done_by,omitempty"` // user | dismissed | read | replied | superseded
 	Lark        *InboxLark `json:"lark,omitempty"`
-	// Conversation is where the item opens in a messaging source (docs/extension-messaging.md "9", #2138): listed
+	// Conversation is where the item opens in a messaging source (docs/extensions/extension-messaging.md "9", #2138): listed
 	// only, from Lark; an app with the source opens it there, an older one uses Lark.
 	Conversation *wire.MessagingConversationRef `json:"conversation,omitempty"`
 	Mail         *InboxMail                     `json:"mail,omitempty"`
@@ -1249,7 +1249,7 @@ func (s *Service) inboxRoutes() {
 			return
 		}
 		if !fullRole(r) {
-			// Posted as the user, a "/agent …" comes back as their request and starts an agent (docs/lark-agent.md).
+			// Posted as the user, a "/agent …" comes back as their request and starts an agent (docs/extensions/lark-agent.md).
 			if len(in.Changes) > 0 || assistantwire.AsksAgent(in.Text) {
 				apierr.Write(w, http.StatusForbidden, i18n.ErrEnglish("inbox-errors.reply_text_only"))
 				return

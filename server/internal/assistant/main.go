@@ -41,7 +41,7 @@ import (
 // from PERSONA_ASSISTANT_TOKEN (`personad hub assistant-token` makes one). It keeps its state in the hub's Postgres,
 // found as the hub finds it: hub.json's database_url, PERSONA_DATABASE_URL over it.
 func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
-	errs := newErrorTee(build) // its log's error lines become error reports (docs/extensions.md "Error reports")
+	errs := newErrorTee(build) // its log's error lines become error reports (docs/extensions/extensions.md "Error reports")
 	logger := log.New(errs, "assistant: ", log.LstdFlags)
 	cfg, err := readHubConfig()
 	if err != nil {
@@ -270,7 +270,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		stop()
 		<-keyDone
 	}()
-	// The user's computers are the manager's: it connects them itself (internal/devices, docs/machines.md "Who connects the computers").
+	// The user's computers are the manager's: it connects them itself (internal/devices, docs/server/machines.md "Who connects the computers").
 	var bh *BusHub
 	var svc *Service
 	var ext *extmgr.Manager

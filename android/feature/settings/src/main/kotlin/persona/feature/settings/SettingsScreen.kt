@@ -137,7 +137,7 @@ private fun SettingsContent(
         extensionSummary = try { ExtensionText.listSummary(context.resources, extensionService.extensions()) }
         catch (error: CancellationException) { throw error } catch (_: Exception) { extensionSummary }
     }
-    // Extensions' UI slots (docs/extensions.md "UI slots"): read again whenever the settings list shows.
+    // Extensions' UI slots (docs/extensions/extensions.md "UI slots"): read again whenever the settings list shows.
     val slots = services.extensionSlots.takeUnless { services.demo }
     val slotsState = slots?.state?.collectAsState()?.value ?: ExtensionSlotsState()
     val slotCards = if (page == "settings" && onNavigate != null) rememberExtensionCards(slots) { onNavigate(it) } else emptyList()
@@ -312,13 +312,13 @@ private fun SettingsContent(
                     modifier = Modifier.padding(top = Tokens.Space.m), onClick = { open(SettingsPage.Diagnostics) })
             }
             item { JSectionHeader(stringResource(R.string.settings_section_connection)) }
-            // The hub list is the one row a single hub group adds to settings (docs/android.md"Multiple hubs").
-            // Hub version (docs/hub-update.md"In the app") follows it while there is a real hub (not demo mode).
+            // The hub list is the one row a single hub group adds to settings (docs/android/android.md"Multiple hubs").
+            // Hub version (docs/operations/hub-update.md"In the app") follows it while there is a real hub (not demo mode).
             val managersRow = services.managers != null && !services.demo
             val hubRows = (if (services.hubs != null) 1 else 0) + (if (hubUpdates != null) 1 else 0) + (if (managersRow) 1 else 0)
             if (services.hubs != null) item { JGroupItem(GroupPosition.of(0, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Hubs), title = stringResource(R.string.settings_row_hubs), leadingIcon = PhIcons.HardDrives, subtitle = stringResource(R.string.settings_row_hubs_subtitle), onClick = { open(SettingsPage.Hubs) }) } }
             if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1 - (if (managersRow) 1 else 0), 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = stringResource(R.string.settings_row_hub_update), leadingIcon = PhIcons.ArrowsClockwise, subtitle = stringResource(R.string.settings_row_hub_update_subtitle), value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
-            // Managers (docs/managers.md): the hub's roster of assistants, after its version.
+            // Managers (docs/assistant/managers.md): the hub's roster of assistants, after its version.
             if (managersRow) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Managers) || detailKey is persona.core.navigation.ManagerRoute, title = stringResource(R.string.settings_managers_title), leadingIcon = PhIcons.UserCircle, subtitle = stringResource(R.string.settings_managers_hint), onClick = { open(SettingsPage.Managers) }) } }
             item { JGroupItem(GroupPosition.of(hubRows, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Pairing), title = stringResource(R.string.settings_row_pairing), leadingIcon = PhIcons.QrCode, subtitle = stringResource(R.string.settings_row_pairing_subtitle), onClick = { open(SettingsPage.Pairing) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = stringResource(R.string.settings_devices_title), leadingIcon = PhIcons.DeviceMobile, subtitle = stringResource(R.string.settings_row_devices_subtitle), onClick = { open(SettingsPage.Devices) }) } }
@@ -420,7 +420,7 @@ private fun SettingsContent(
                     Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s),
                 )
             }
-            // What Persona sent in the user's name through the connectors (#5278, docs/connectors.md "Sent as the user"), right after them.
+            // What Persona sent in the user's name through the connectors (#5278, docs/extensions/connectors.md "Sent as the user"), right after them.
             if (services.sent != null && !services.demo) item {
                 JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
                     JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Sent), title = stringResource(R.string.settings_sent_title),
@@ -504,7 +504,7 @@ fun ReadinessScreen(
     onBack: (() -> Unit)? = onDone,
     header: LazyListScope.() -> Unit = {},
     footer: @Composable () -> Unit = {},
-    /** The main conversation's steps before the phone's (docs/onboarding.md 4.5), on hubs that offer them. */
+    /** The main conversation's steps before the phone's (docs/assistant/onboarding.md 4.5), on hubs that offer them. */
     readiness: AssistantReadinessSource? = null,
     /** Opens a step's page ("Model providers", "Machines"); null during the first checklist, whose buttons then open help only. */
     onNavigate: ((androidx.navigation3.runtime.NavKey) -> Unit)? = null,

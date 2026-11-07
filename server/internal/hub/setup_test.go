@@ -45,7 +45,7 @@ func normalizeHost(s, token string) string {
 	return s
 }
 
-// Old hub.json files load exactly as before: the new-install defaults (docs/onboarding.md 4.1) are not in
+// Old hub.json files load exactly as before: the new-install defaults (docs/assistant/onboarding.md 4.1) are not in
 // defaultConfig(), so a file without "public" or "admin.first_setup" gets no TLS and no LAN setup code.
 func TestLegacyHubJSONLoadsUnchanged(t *testing.T) {
 	for _, name := range []string{"dbsh-only", "handwritten-no-public"} {
@@ -691,7 +691,7 @@ func TestSetupMacLaunchAgent(t *testing.T) {
 
 // The socket unit is hub-systemd.sh's (keep the two in step); FreeBind only with an address-bound listener.
 func TestHubUnitsMatchHubSystemd(t *testing.T) {
-	want := "[Unit]\nDescription=Persona hub's listening sockets (docs/hub-restart.md)\n\n[Socket]\nListenStream=18660\nListenStream=18662\n" +
+	want := "[Unit]\nDescription=Persona hub's listening sockets (docs/operations/hub-restart.md)\n\n[Socket]\nListenStream=18660\nListenStream=18662\n" +
 		"Backlog=4096\nNoDelay=true\nService=personad.service\n\n[Install]\nWantedBy=sockets.target\n"
 	if got := hubSocketUnit([]string{":18660", ":18662"}); got != want {
 		t.Fatalf("socket:\n%s", got)

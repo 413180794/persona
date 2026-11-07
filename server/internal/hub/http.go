@@ -80,7 +80,7 @@ func (h *Hub) routes() http.Handler {
 		return map[string]any{"cwd": r.URL.Query().Get("cwd")}
 	}))
 	api.HandleFunc("POST /api/v1/machines/{mid}/git/pull", h.proxyBody("git.pull"))
-	// One version of a file, written into the node's cache for comparing (docs/protocol.md "File preview").
+	// One version of a file, written into the node's cache for comparing (docs/protocol/protocol.md "File preview").
 	api.HandleFunc("GET /api/v1/machines/{mid}/git/blob", h.proxy("git.blob", func(r *http.Request) any {
 		q := r.URL.Query()
 		return map[string]any{"cwd": q.Get("cwd"), "path": q.Get("path"), "rev": q.Get("rev")}
@@ -150,7 +150,7 @@ func (h *Hub) routes() http.Handler {
 		q := r.URL.Query()
 		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source"), "format": q.Get("format")}
 	})))
-	// The terminal browser (docs/terminal.md "Standalone terminals"): a machine's workspaces, tabs and panes with plain shells, and
+	// The terminal browser (docs/integrations/terminal.md "Standalone terminals"): a machine's workspaces, tabs and panes with plain shells, and
 	// "New terminal". A pane is full shell access on the computer: full devices only (paneRoutesFullOnly).
 	api.HandleFunc("GET /api/v1/machines/{mid}/panes", h.proxy("panes.list", nil))
 	api.HandleFunc("POST /api/v1/machines/{mid}/panes", h.withMachine(h.newShell))
@@ -395,7 +395,7 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			// (authenticate asked the manager whose it is and whether it opens this route: authorizeExtension)
 			// An extension's token is for the hub it runs beside, on this machine (hub.url), or comes through its
 			// manager's relay with the manager's proof: a relayed manager's computer may reach the hub only across the
-			// internet (docs/managers.md "Extensions and the hub's API"; the gate still holds it to TLS there). A
+			// internet (docs/assistant/managers.md "Extensions and the hub's API"; the gate still holds it to TLS there). A
 			// token alone from there is refused, and counted against the source; a proof the manager did sign but
 			// that is out of time, sent twice or one too many just now is refused without counting.
 			if public {
@@ -1283,7 +1283,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		IsError    bool            `json:"is_error"`
 		Epoch      string          `json:"epoch"`
 		AfterSeq   int             `json:"after_seq"`
-		// terminal_subscribe, terminal_input: the grid the app drives the terminal at (docs/terminal.md)
+		// terminal_subscribe, terminal_input: the grid the app drives the terminal at (docs/integrations/terminal.md)
 		Control  *termCtl `json:"control"`
 		Takeover bool     `json:"takeover"`
 		Text     string   `json:"text"`
@@ -1305,7 +1305,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Rows  int    `json:"rows"`
 		Bytes int64  `json:"bytes"`
 		Focus bool   `json:"focus"`
-		// terminal_input: one mouse event on a terminal the app drives (feature terminal_mouse, docs/terminal.md "Mouse")
+		// terminal_input: one mouse event on a terminal the app drives (feature terminal_mouse, docs/integrations/terminal.md "Mouse")
 		Mouse *termMouse `json:"mouse"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
@@ -1398,7 +1398,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		}
 		tools, cli := splitRuntimeCLI(msg.Tools)
 		if cli && len(tools) == 0 {
-			// Only the runtime CLI: a simulator driven by a script (docs/runtime-cli.md "Reaching a real device through the hub"). Not the
+			// Only the runtime CLI: a simulator driven by a script (docs/operations/runtime-cli.md "Reaching a real device through the hub"). Not the
 			// phone: it takes no phone_* call and changes nothing about pushes.
 			h.mu.Lock()
 			c.runtimeCLI, c.sim, c.name, c.since = true, msg.Simulator, msg.DeviceName, time.Now()

@@ -126,7 +126,7 @@ async function forkAt(mid: string, sid: string, itemId: string, assistant: boole
   try {
     const r = await api<{ session_id: string }>(`${sessionPath(mid, sid)}/fork`, { method: "POST", json: { at_item_id: itemId } });
     await refresh();
-    // a health conversation's branch runs in the health space too (docs/health.md)
+    // a health conversation's branch runs in the health space too (docs/assistant/health.md)
     navigate(!assistant ? { name: "session", mid, sid: r.session_id } : space === "health" ? { name: "health", sid: r.session_id } : { name: "persona", sid: r.session_id });
     toast(t("chat-chatview.forked"), "ok");
   } catch (e) {
@@ -168,10 +168,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   /** On a narrow screen, in the header's middle in place of the title (the shell's "Assistant" | "Agents" switch). */
   topCenter?: React.ReactNode;
   /** The agent's own page (`/s/…`, `/t/…`): its terminal is a view of the middle, switched in place with the header's
-   *  "Terminal" | "Chat" and ⌘J (docs/web.md "Terminal ⇄ chat"). Elsewhere (a task's panel) the chat is all there is. */
+   *  "Terminal" | "Chat" and ⌘J (docs/web/web.md "Terminal ⇄ chat"). Elsewhere (a task's panel) the chat is all there is. */
   inPage?: boolean;
   panel?: PanelChrome;
-  /** Under the header: the assistant page's manager switcher (docs/managers.md "Clients"). */
+  /** Under the header: the assistant page's manager switcher (docs/assistant/managers.md "Clients"). */
   banner?: React.ReactNode;
   /** The conversation's manager is offline: what the box says instead, and nothing can be sent. */
   offline?: string;
@@ -201,7 +201,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // the list as pushed: its updated_at is what tells the page it fell behind (useTranscript)
   const viewed = readOnly ? (listed?.find((a) => a.session_id === sid) ?? null) : null;
   const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at, cache: mainCache });
-  // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
+  // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/assistant/onboarding.md 4.4)
   const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure; fromBox?: boolean } | null>(null);
   // the composer's own send, for the failure card's "Send again": the words are back in the box, so the box is what goes
   const resend = useRef<(() => void) | null>(null);
@@ -546,7 +546,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         });
         return true;
       } catch (e) {
-        // An ultracode change waits for the turn (docs/protocol.md "Claude Code ultracode"): the node holds messages back
+        // An ultracode change waits for the turn (docs/protocol/protocol.md "Claude Code ultracode"): the node holds messages back
         // so the next turn cannot overtake it. The bubble stays and says so, the box is free (and its stop button there),
         // and the message goes again once the change is through, with a new id (the hub keeps its answer to this one).
         if (!assistant && isUltracodeQueued(e) && attempt < ULTRACODE_SEND_TRIES) {
@@ -591,7 +591,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   }
 
   const onSend = async (out: Outgoing, fromBox?: boolean): Promise<boolean> => {
-    // Routed to a task ("Tell "xx""): straight to its agent, not to Persona (docs/unified-entry.md "Who it points at").
+    // Routed to a task ("Tell "xx""): straight to its agent, not to Persona (docs/assistant/unified-entry.md "Who it points at").
     if (assistant && out.images.length && getFeedState().routes[sid]) {
       toast(t("chat-chatview.route_no_images"), "error");
       return false;
@@ -606,7 +606,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     }
     return deliver(out, uuid(), undefined, fromBox);
   };
-  // The assistant's tasks (docs/unified-entry.md): the conversation's feed, and the main one's "Today" card.
+  // The assistant's tasks (docs/assistant/unified-entry.md): the conversation's feed, and the main one's "Today" card.
   const feed = useFeed((s) => (assistant ? (s.feeds[sid] ?? NO_FEED) : NO_FEED));
   useEffect(() => {
     if (!assistant) return;
@@ -1393,7 +1393,7 @@ export function Header({
   const others = chrome ? [] : siblings.filter((s) => s.session_id !== session?.session_id);
   // a task's panel stands for the task: its title above, and the agent's own todo line would only repeat it
   const todoLine = Boolean(session?.todo && !assistant && !chrome?.title);
-  // the session's files and Git open in the side panel (docs/web.md "Side panel"); the assistant has none. Its terminal is
+  // the session's files and Git open in the side panel (docs/web/web.md "Side panel"); the assistant has none. Its terminal is
   // the page's other view, switched in place (view / onView)
   const here = (p: typeof panel, kind: string) => Boolean(p && p.kind === kind && "sid" in p && session && p.mid === session.machine_id && p.sid === session.session_id);
   const showTerminal = Boolean(view && onView);

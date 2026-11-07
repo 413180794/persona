@@ -16,7 +16,7 @@ import persona.core.contracts.api.ProviderPreset
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-// "New model provider"'s wizard on a hub with built-in presets (docs/onboarding.md 4.3 "Three paths" B, the web's ProviderWizard):
+// "New model provider"'s wizard on a hub with built-in presets (docs/assistant/onboarding.md 4.3 "Three paths" B, the web's ProviderWizard):
 // ① the providers to pick from, ② the key, ③ what now runs on it. The state is NewProviderModel.
 
 /** ①: the hub's providers in its order (a built-in one says who it is for; an extension's its kind and host), the gateway typed in last. */

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/i18n.md). Same keys in values, values-zh and values-ja. -->
+<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/protocol/i18n.md). Same keys in values, values-zh and values-ja. -->
 <resources>
     <string name="settings_src_just_now">Just now</string>
     <plurals name="settings_src_minutes_ago">
@@ -106,7 +106,7 @@
     <string name="settings_src_lark_title">Lark</string>
     <string name="settings_src_lark_status_header">Connection</string>
     <string name="settings_src_lark_last_event">Last live message</string>
-    <string name="settings_src_lark_not_configured_caption">The hub isn\'t connected to Lark yet: run a Lark gateway on the hub machine and add it under lark in the manager\'s manager.json (docs/feishu.md).</string>
+    <string name="settings_src_lark_not_configured_caption">The hub isn\'t connected to Lark yet: run a Lark gateway on the hub machine and add it under lark in the manager\'s manager.json (docs/extensions/feishu.md).</string>
     <string name="settings_src_lark_caption">Lark accounts sign in through the Lark gateway on the hub machine. Chats and the Inbox share that account, so there\'s no second sign-in.</string>
     <string name="settings_src_lark_accounts_header">Accounts</string>
     <string name="settings_src_lark_quarantined">Can\'t open. Retry or remove it in the Lark gateway</string>
@@ -440,5 +440,5 @@
     <string name="settings_src_mail_outlook_redirect">Redirect URI (to register)</string>
     <string name="settings_src_mail_outlook_copy_redirect">Copy redirect URI</string>
     <string name="settings_src_mail_outlook_copied">Redirect URI copied</string>
-    <string name="settings_src_mail_outlook_steps">Outlook sign-in uses an app you register yourself in Microsoft Entra (free, once; this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, App registrations → New registration;\n2. Supported account types: accounts in any organizational directory and personal Microsoft accounts;\n3. Redirect URI platform: Public client/native (mobile &amp; desktop), with the address above;\n4. Under Authentication, set Allow public client flows to Yes;\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated);\n6. Enter the Application (client) ID from the Overview page here.\nSee docs/mail.md, Outlook, for the details.</string>
+    <string name="settings_src_mail_outlook_steps">Outlook sign-in uses an app you register yourself in Microsoft Entra (free, once; this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, App registrations → New registration;\n2. Supported account types: accounts in any organizational directory and personal Microsoft accounts;\n3. Redirect URI platform: Public client/native (mobile &amp; desktop), with the address above;\n4. Under Authentication, set Allow public client flows to Yes;\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated);\n6. Enter the Application (client) ID from the Overview page here.\nSee docs/extensions/mail.md, Outlook, for the details.</string>
 </resources>

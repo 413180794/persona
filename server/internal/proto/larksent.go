@@ -6,7 +6,7 @@ import (
 )
 
 // MethodLarkSent is the node's request that tells the manager of a write its gate proxy forwarded and the API accepted
-// (node/gateproxy.go), so the manager keeps it in the sent-as-user ledger (docs/connectors.md "Sent as the user").
+// (node/gateproxy.go), so the manager keeps it in the sent-as-user ledger (docs/extensions/connectors.md "Sent as the user").
 const MethodLarkSent = "lark.sent"
 
 // How the node's gate let a write through (LarkSent.LetThrough.Kind), in the ledger's terms.

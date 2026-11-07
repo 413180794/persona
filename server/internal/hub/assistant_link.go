@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The assistant (internal/assistant) is a process of its own on the bus (docs/assistant.md "Boundary with the hub"); the hub
+// The assistant (internal/assistant) is a process of its own on the bus (docs/assistant/assistant.md "Boundary with the hub"); the hub
 // starts it beside itself (assistant_process.go). This file is the hub's end: assistantLink answers the assistant's
 // calls (manager.hello, device.call, app.call, notify.request, manager.snapshot, ws.broadcast; registered on the bus
 // below) with the hub's own functions, the hub keeps the snapshot the assistant last reported (the session lists the
@@ -111,7 +111,7 @@ type assistantLink struct{ h *Hub }
 
 // Hello is what of the hub's own the manager needs: the machines and where the hub would run the assistant, the
 // cards' switches and the finished push's timings (hub.json's, the hub's), the user's language. The manager's own
-// sections (owner, notes, agents, kb, models, a card's wait) are in its manager.json, not here (docs/config.md
+// sections (owner, notes, agents, kb, models, a card's wait) are in its manager.json, not here (docs/operations/config.md
 // "manager.json").
 func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	h := l.h

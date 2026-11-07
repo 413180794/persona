@@ -1,6 +1,6 @@
 # 组件目录
 
-对应 `docs/redesign/ux.md` 3.8 和 `docs/archive/android-p0-status.md` 的 UX3.8-平台行。
+对应 `docs/archive/redesign/ux.md` 3.8 和 `docs/archive/android/android-p0-status.md` 的 UX3.8-平台行。
 
 目录入口为 `persona.core.designsystem.catalog.ComponentCatalogScreen()`，仅存在于
 `:core:designsystem` 的 debug 源集。App 车道负责从调试设置页接入一个入口，并提供返回导航和系统栏边距。

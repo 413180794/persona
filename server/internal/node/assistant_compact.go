@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The user compacting an assistant conversation (docs/assistant.md "Manual compaction"): /compact to claude, the way an idle
+// The user compacting an assistant conversation (docs/assistant/assistant.md "Manual compaction"): /compact to claude, the way an idle
 // one is compacted (compactIdle), or thread/compact/start to Codex. Where it is at goes in the session state
 // (session.compaction): the apps show it, and one that a node restart cut off is not left running.
 
@@ -167,7 +167,7 @@ type Handoff struct {
 	Recent  []HandoffTurn `json:"recent"`
 }
 
-// assistantHandoff reads what a new main conversation should know of conversation id (docs/assistant.md
+// assistantHandoff reads what a new main conversation should know of conversation id (docs/assistant/assistant.md
 // "New main chat").
 func (n *Node) assistantHandoff(id string) (Handoff, error) {
 	if id == "" || !validID(id) {

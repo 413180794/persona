@@ -15,7 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class HubClientLanguageTest {
-    /** Every request says which language the app shows, so the hub can answer in it (docs/i18n.md). */
+    /** Every request says which language the app shows, so the hub can answer in it (docs/protocol/i18n.md). */
     @Test fun requestsCarryTheShownLanguage() = runBlocking {
         val certificate = HeldCertificate.Builder().commonName("example.com").build()
         val tls = HandshakeCertificates.Builder().heldCertificate(certificate).build()

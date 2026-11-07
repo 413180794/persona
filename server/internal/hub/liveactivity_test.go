@@ -265,7 +265,7 @@ func TestLiveActivityTokenAPI(t *testing.T) {
 }
 
 // TestManualLiveActivityPush sends one real update through APNs (sandbox) with this machine's ~/.persona/apns.json, to
-// check a running activity end to end (docs/testing.md). Opt-in: PERSONA_LA_TOKEN=<activity push token>
+// check a running activity end to end (docs/operations/testing.md). Opt-in: PERSONA_LA_TOKEN=<activity push token>
 // PERSONA_LA_TOPIC=<app bundle id>.
 func TestManualLiveActivityPush(t *testing.T) {
 	token, topic := os.Getenv("PERSONA_LA_TOKEN"), os.Getenv("PERSONA_LA_TOPIC")

@@ -20,7 +20,7 @@ import persona.core.contracts.api.InboxAssistantTransport
 import persona.core.contracts.api.SessionsRepository
 
 /**
- * What is written for one manager goes to that manager (docs/managers.md step 4): each request names the manager it
+ * What is written for one manager goes to that manager (docs/assistant/managers.md step 4): each request names the manager it
  * was made for, whatever the assistant page shows by the time it goes; the main queue's lookups are the default's.
  */
 class AssistantManagerPinTest {

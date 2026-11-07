@@ -1,4 +1,4 @@
-// What the main conversation still needs, above its composer (docs/onboarding.md 4.4): the first missing step as a card
+// What the main conversation still needs, above its composer (docs/assistant/onboarding.md 4.4): the first missing step as a card
 // (a title, one line why, one button), the "chat only" note, a refused start or send as a card with the original text under
 // "Details" (4.6), and the help those buttons and the local example questions open in place. "Add computer" and "Confirm computer" open the
 // machines page's own flow (views/machines/AddComputer.tsx) in place where the hub has it (machines_add, machine_trust).

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Pasting photos / files into a terminal the app drives (docs/terminal.md section 18「iOS / Mac」), against
+/// Pasting photos / files into a terminal the app drives (docs/integrations/terminal.md section 18「iOS / Mac」), against
 /// scripts/mock/mock_hub.py with MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 (TEST_RUNNER_PERSONA_MOCK_HUB): holding the key
 /// bar's paste offers Photos / Files, and each opens its picker.
 final class TerminalFilesUITests: XCTestCase {

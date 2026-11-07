@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 
-// Inbox phase 1 (docs/inbox.md"Events, handling chains, and suggestions"): an inbox item grows into an event. Every field is optional and an
+// Inbox phase 1 (docs/assistant/inbox.md"Events, handling chains, and suggestions"): an inbox item grows into an event. Every field is optional and an
 // older hub sends none of them, so an item without them reads exactly as before.
 
 /** The processing conversation bound to an event (`handling`). */

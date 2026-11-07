@@ -1,7 +1,7 @@
 import XCTest
 
 /// The title turns into Connecting… while the hub is out of reach and back afterwards, a short drop shows nothing, and a
-/// message written meanwhile waits and goes by itself (docs/ios.md「连接状态」). Against scripts/mock/mock_hub.py, whose
+/// message written meanwhile waits and goes by itself (docs/apple/ios.md「连接状态」). Against scripts/mock/mock_hub.py, whose
 /// /mock/down?s=<seconds> takes the hub away (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>).
 final class ConnectionTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
@@ -53,7 +53,7 @@ final class ConnectionTests: XCTestCase {
         add(s)
     }
 
-    /// The hub goes away for a while: nothing for the drop's grace (8 s, docs/hub-restart.md), then Connecting… in the
+    /// The hub goes away for a while: nothing for the drop's grace (8 s, docs/operations/hub-restart.md), then Connecting… in the
     /// title, then the title comes back on its own.
     @MainActor func testOutageShowsConnectingThenRecovers() throws {
         let hub = try hub()

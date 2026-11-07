@@ -1,4 +1,4 @@
-// Settings › hub (docs/hub-update.md "In the app", the app's HubSettingsPage): the hub's version and channel, checking for
+// Settings › hub (docs/operations/hub-update.md "In the app", the app's HubSettingsPage): the hub's version and channel, checking for
 // and installing a release (waiting for the assistant and the agents to be idle, or now after a confirmation), a Docker
 // hub's commands, auto-update, the personad on each computer, and the history. Follows the hub's `hub_update` pushes.
 import { useCallback, useEffect, useRef, useState } from "react";

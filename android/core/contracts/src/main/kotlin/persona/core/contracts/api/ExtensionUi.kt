@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 
 /**
- * An extension's declarative UI (docs/extensions.md "Declarative UI"): the extension never runs code in the app; it answers with a
+ * An extension's declarative UI (docs/extensions/extensions.md "Declarative UI"): the extension never runs code in the app; it answers with a
  * View of a few fixed kinds of item that each app draws with its own design system, and its buttons come back to it.
  */
 interface ExtensionUi {
@@ -24,7 +24,7 @@ interface ExtensionUi {
      * `GET /api/v1/extensions/-/ui?placement=…`: what the enabled, running extensions draw at [placement]
      * (`extension_page`, `launcher_section`, `inbox_item`); a launcher's section names the launcher (and the machine it is
      * on). An empty [placement] lists every slot but launcher sections at once (`nav_page`, `overview_card`,
-     * `machine_section`, with their badges; docs/extensions.md "UI slots"), only on a hub that says `extension_ui_slots`. A hub
+     * `machine_section`, with their badges; docs/extensions/extensions.md "UI slots"), only on a hub that says `extension_ui_slots`. A hub
      * that does not know a placement lists nothing there.
      */
     suspend fun uiPlaces(placement: String, launcher: String? = null, machine: String? = null): List<ExtensionUiPlace>
@@ -44,7 +44,7 @@ interface ExtensionUi {
 
 /**
  * Where an extension draws something (`{extension, extension_name, id, title, placement, size, icon?, opens?, badge?, connector?}`).
- * The slots of docs/extensions.md "UI slots": a `nav_page` has an [icon] and maybe a [badge]; an `overview_card` [opens] one
+ * The slots of docs/extensions/extensions.md "UI slots": a `nav_page` has an [icon] and maybe a [badge]; an `overview_card` [opens] one
  * of the extension's pages; an `inbox_item` draws the page of its [connector]'s inbox items.
  */
 @Serializable
@@ -65,7 +65,7 @@ data class ExtensionUiPlace(
     /** An `inbox_item`'s: the connector whose inbox items it draws (`lark`), the items' `source`. */
     val connector: String? = null,
     /**
-     * Whose extension draws it, when the place says (docs/managers.md); null: the default's. `GET /api/v1/extensions/-/ui`
+     * Whose extension draws it, when the place says (docs/assistant/managers.md); null: the default's. `GET /api/v1/extensions/-/ui`
      * is the default manager's alone (not a merged list), so its places carry none today; a page they open keeps one if
      * they ever do.
      */
@@ -73,7 +73,7 @@ data class ExtensionUiPlace(
 )
 
 /**
- * Where a view is drawn and for whom (docs/extensions.md "UI slots" "Context"): a launcher's page names the launcher and its
+ * Where a view is drawn and for whom (docs/extensions/extensions.md "UI slots" "Context"): a launcher's page names the launcher and its
  * machine, a machine's section the machine, an inbox item's page the [item]; [size] is `compact` for a card. The time
  * zone, language, platform and UI version are the app's: the HTTP client fills in what is left empty.
  */
@@ -227,7 +227,7 @@ data class ExtensionViewItem(
     val stats: List<ExtensionStat>? = null,
     /** Any item (UI version 3): stays the same across drawings, so a list keeps its place and what is open. */
     val key: String? = null,
-    /** row, empty (UI version 3): one of the fixed icons (docs/extensions.md); one this app does not know is the default. */
+    /** row, empty (UI version 3): one of the fixed icons (docs/extensions/extensions.md); one this app does not know is the default. */
     val icon: String? = null,
     /** row (UI version 3): a picture (https) or one or two letters standing in for one. */
     val avatar: ExtensionViewAvatar? = null,

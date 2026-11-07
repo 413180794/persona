@@ -16,7 +16,7 @@ import (
 // (channels_extension.go issues it for the channel's typed-answer kinds) approves the plan and permission asked in
 // that same channel, answers a question there, cannot be spent through Feishu, and is single use. The unit-level
 // card/channel/kind matrix is owner_action_test.go's; this guards the issuance half of the extension-channel
-// text-approval chain (docs/channels.md"Questions and approvals"), which #5011's tightening must not break.
+// text-approval chain (docs/extensions/channels.md"Questions and approvals"), which #5011's tightening must not break.
 func TestExtensionChannelTextApprovalEndToEnd(t *testing.T) {
 	w := newChannelWorld(t)
 	// A message in the plugin channel: the action the hub hands the assistant with it.

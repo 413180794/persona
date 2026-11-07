@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// lark-cli (Feishu's official open-platform CLI, docs/plan-lark-cli.md) in the assistant's Bash passes the same gate
+// lark-cli (Feishu's official open-platform CLI, docs/plans/plan-lark-cli.md) in the assistant's Bash passes the same gate
 // as ol (larkgate.go). lark-cli tells which commands write: every command's --help prints "Risk: read", "Risk: write"
 // or "Risk: high-risk-write". Reads run at once; writes, and commands whose risk cannot be read, are confirmed on the
 // phone with the whole command on the card. Logging in and out, switching apps or profiles, and updating lark-cli are

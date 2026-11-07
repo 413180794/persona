@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
-// The hub keeps the knowledge base's sources (docs/knowledge.md "Who owns what"): the knowledge base, the assistant's,
+// The hub keeps the knowledge base's sources (docs/assistant/knowledge.md "Who owns what"): the knowledge base, the assistant's,
 // asks which connectors to read now and reads them through the hub (app.call connectors.*), data in, data out. The
 // cursors are the knowledge base's: what it did not ingest it reads again next time, so nothing waits here.
 

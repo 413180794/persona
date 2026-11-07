@@ -2,7 +2,7 @@ import AppIntents
 import Foundation
 import OSLog
 
-// The buttons on the Fleet activity (docs/live-activity.md). LiveActivityIntent runs `perform` in the app's process
+// The buttons on the Fleet activity (docs/apple/live-activity.md). LiveActivityIntent runs `perform` in the app's process
 // (launched in the background if needed), so the extension only needs the types to draw `Button(intent:)`; the bodies
 // that talk to the hub are app-only. Saying yes needs the phone unlocked, saying no does not, as on notifications.
 

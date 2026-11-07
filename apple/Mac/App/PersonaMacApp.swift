@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
-/// The macOS app (docs/mac.md): one AppModel, as on iOS, behind a Mac shell. A window with a sidebar (the iPhone's
+/// The macOS app (docs/apple/mac.md): one AppModel, as on iOS, behind a Mac shell. A window with a sidebar (the iPhone's
 /// four tabs) beside the same pages, and Settings also in its own window (⌘,).
 @main
 struct PersonaMacApp: App {
@@ -87,7 +87,7 @@ extension AppModel {
     /// A `persona://` link from outside (MacOpenURL): open a chat, pair, or hand a computer's link to Persona Link.
     func openURL(_ url: URL) {
         #if DEBUG
-        if UserDefaults.standard.bool(forKey: "macWindowLog") { // how many main windows a link leaves (docs/mac.md)
+        if UserDefaults.standard.bool(forKey: "macWindowLog") { // how many main windows a link leaves (docs/apple/mac.md)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 let mains = NSApp.windows.filter { $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible }
                 NSLog("macWindowLog: %d main window(s) after %@", mains.count, url.absoluteString)
@@ -127,7 +127,7 @@ struct MacCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
-        // File: New Agent Chat ⌘N, New Persona Chat ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
+        // File: New Agent Chat ⌘N, New Persona Chat ⇧⌘N (docs/apple/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
         CommandGroup(replacing: .newItem) {
             Button("New Agent Chat…") {
                 MacShellState.shared.showMain() // the sheet is the main window's
@@ -318,7 +318,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
                     done()
                     return
                 }
-                // The group the push came from (docs/multi-hub.md「推送」).
+                // The group the push came from (docs/protocol/multi-hub.md「推送」).
                 let key = ref?.key(AppModel.shared)
                 if let key, let reply = NotificationActions.replyText(action: action, text: text) {
                     Task {
@@ -381,7 +381,7 @@ enum MacLaunchArguments {
         default: break
         }
         // `-openMacExtensionPage <extension>/<ui>` (or the old `-openMacPluginPage`): an extension's page in the sidebar
-        // (docs/extensions.md「UI 插槽」), shown once the hub lists it.
+        // (docs/extensions/extensions.md「UI 插槽」), shown once the hub lists it.
         if let key = d.string(forKey: "openMacExtensionPage") ?? d.string(forKey: "openMacPluginPage") { MacShellState.shared.pluginPage = key }
         // `-openMacSection todos`: the window opens on that sidebar section (the To-dos page, for screenshots).
         if let raw = d.string(forKey: "openMacSection"), let section = MacSection(rawValue: raw) {
@@ -497,7 +497,7 @@ enum MacLaunchArguments {
             }
         }
         // `-perfCounts YES -macPerfLog YES`: what hub pushes cost (PerfCount: bodies, main-thread ms), logged every 2 s,
-        // for measuring against the mock hub's /mock/churn without a UI test (docs/mac.md「性能」).
+        // for measuring against the mock hub's /mock/churn without a UI test (docs/apple/mac.md「性能」).
         if PerfCount.enabled, d.bool(forKey: "macPerfLog") {
             Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
                 MainActor.assumeIsolated { NSLog("macPerf %@", PerfCount.summary) }

@@ -178,13 +178,13 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	// Replace only the random client ID, leaving all protocol fields from hello intact.
 	hello["client_id"] = "000000000001"
 	add("connection", "hello_features", "握手携带当前分支的能力列表。", "event", ws(hello),
-		map[string]any{"/type": "hello", "/features": h.features()}, "server/internal/hub/hello.go: Hub.hello", "apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol.md: 鉴权")
+		map[string]any{"/type": "hello", "/features": h.features()}, "server/internal/hub/hello.go: Hub.hello", "apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol/protocol.md: 鉴权")
 	w := httptest.NewRecorder()
 	healthReq := httptest.NewRequest("GET", "/api/v1/health", nil)
 	healthReq.RemoteAddr = "127.0.0.1:1234" // from the LAN, where version and features are shown
 	h.health(w, healthReq)
 	add("connection", "health_features", "健康检查与握手使用同一份能力列表。", "health", wireBody(t, w, 200),
-		map[string]any{"/ok": true, "/version": "fixture-version", "/features": h.features()}, "server/internal/hub/hello.go: Hub.health", "docs/protocol.md: 鉴权")
+		map[string]any{"/ok": true, "/version": "fixture-version", "/features": h.features()}, "server/internal/hub/hello.go: Hub.health", "docs/protocol/protocol.md: 鉴权")
 	add("connection", "revs_changed_sessions", "版本事件只携带发生变化的会话及其版本。", "event",
 		ws(map[string]any{"type": "revs", "machine_id": "m1", "revs": map[string]int64{"s1": 120, "s2": 7}}),
 		map[string]any{"/type": "revs", "/machine_id": "m1", "/revs": map[string]int64{"s1": 120, "s2": 7}},
@@ -262,7 +262,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	folded := transcript.FoldWork([]proto.Item{text, thought, use, result, recap})
 	add("items", "items_folded_work", "折叠条目由真实折叠函数生成计数及范围。", "items", httpJSON(map[string]any{"items": folded, "has_more": true}),
 		map[string]any{"/items/1/kind": "fold", "/items/1/fold/items": 3, "/items/1/fold/tools": 1, "/items/1/fold/thoughts": 1, "/items/1/fold/through_seq": 4, "/has_more": true},
-		"server/internal/transcript/fold.go: FoldWork", "apple/Shared/Models.swift: Fold", "docs/protocol.md: 折叠的工作")
+		"server/internal/transcript/fold.go: FoldWork", "apple/Shared/Models.swift: Fold", "docs/protocol/protocol.md: 折叠的工作")
 	todoUse := use
 	todoUse.ToolName = "TodoWrite"
 	todoUse.ToolInput = json.RawMessage(`{"todos":[{"content":"检查表单","status":"in_progress","activeForm":"检查中"}]}`)
@@ -271,7 +271,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	todoFold := transcript.FoldWork([]proto.Item{text, thought, todoUse, todoResult, recap})
 	add("items", "items_folded_tasks", "折叠的任务快照保留成功结果与原调用位置，旧 iOS 忽略新增字段。", "items", httpJSON(map[string]any{"items": todoFold, "has_more": true}),
 		map[string]any{"/items/1/kind": "fold", "/items/1/fold/items": 3, "/items/1/fold/tools": 1, "/items/1/fold/through_seq": 4},
-		"server/internal/transcript/fold.go: FoldWork", "server/internal/proto/proto.go: FoldTaskSnapshot", "apple/Shared/Models.swift: Fold", "docs/protocol.md: 折叠的工作")
+		"server/internal/transcript/fold.go: FoldWork", "server/internal/proto/proto.go: FoldTaskSnapshot", "apple/Shared/Models.swift: Fold", "docs/protocol/protocol.md: 折叠的工作")
 	add("items", "items_inline_image", "未启用懒加载时图片保留内联数据。", "items", httpJSON(map[string]any{"items": []proto.Item{img}, "has_more": false}),
 		map[string]any{"/items/0/image/mime": "image/png", "/items/0/image/data": img.Image.Data, "/items/0/image/lazy": nil},
 		"server/internal/proto/proto.go: Image", "apple/Shared/Models.swift: ImagePayload")
@@ -328,7 +328,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 			fields["/interaction/dialog/options/1/kind"] = "type_something"
 		}
 		add("interactions", "interaction_"+kind, "交互卡携带对应类型的提问、计划、权限或屏幕信息。", "event", ws(map[string]any{"type": "interaction", "interaction": ix}), fields,
-			"server/internal/proto/proto.go: Interaction", "server/internal/hub/http.go: Hub.serveWS", "apple/Shared/Models.swift: Interaction, ScreenDialog", "docs/protocol.md: 终端对话框（screen 交互）")
+			"server/internal/proto/proto.go: Interaction", "server/internal/hub/http.go: Hub.serveWS", "apple/Shared/Models.swift: Interaction, ScreenDialog", "docs/protocol/protocol.md: 终端对话框（screen 交互）")
 	}
 	secret := ixs[3]
 	for _, mode := range []string{"form", "url"} {
@@ -456,7 +456,7 @@ func wireItemEvents(t *testing.T, add wireAdder, now time.Time, items []proto.It
 	add("item_events", "items_live_lazy", "实时事件保留起点零值，并按订阅要求移除图片数据。", "event", wireReceive(t, c), map[string]any{"/type": "items", "/from_seq": 0, "/to_seq": 8, "/backlog": false, "/has_more": nil, "/more_after": false, "/items/1/image/lazy": true, "/items/1/image/data": ""}, "server/internal/hub/http.go: Hub.itemsToSubscribers", "apple/Shared/LiveConnection.swift: ServerEvent.decode")
 	from, to = 8, 10
 	h.itemsToSubscribers("m1", "s1", nil, itemSpan{History: "history_example", FromSeq: &from, ToSeq: &to})
-	add("item_events", "items_empty_advance", "没有内容块的行仍发送空数组和连续性范围。", "event", wireReceive(t, c), map[string]any{"/items": []any{}, "/from_seq": 8, "/to_seq": 10}, "server/internal/hub/http.go: Hub.itemsToSubscribers", "docs/protocol.md: items 的连续性", "apple/Shared/LiveConnection.swift: ServerEvent.decode")
+	add("item_events", "items_empty_advance", "没有内容块的行仍发送空数组和连续性范围。", "event", wireReceive(t, c), map[string]any{"/items": []any{}, "/from_seq": 8, "/to_seq": 10}, "server/internal/hub/http.go: Hub.itemsToSubscribers", "docs/protocol/protocol.md: items 的连续性", "apple/Shared/LiveConnection.swift: ServerEvent.decode")
 	for _, scenario := range []string{"latest", "catchup", "capped"} {
 		calls := 0
 		m := wireNode(t, func(p json.RawMessage) any {
@@ -504,7 +504,7 @@ func wireItemEvents(t *testing.T, add wireAdder, now time.Time, items []proto.It
 			fields["/from_seq"] = 10 + backlogPages - 1
 			fields["/to_seq"] = 10 + backlogPages
 		}
-		add("item_events", "items_backlog_"+scenario, "订阅补发按最新页、接续补发或补发上限设置分页字段。", "event", raw, fields, "server/internal/hub/http.go: Hub.sendBacklog", "apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol.md: WebSocket / items 的连续性")
+		add("item_events", "items_backlog_"+scenario, "订阅补发按最新页、接续补发或补发上限设置分页字段。", "event", raw, fields, "server/internal/hub/http.go: Hub.sendBacklog", "apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol/protocol.md: WebSocket / items 的连续性")
 	}
 	m := wireNode(t, func(json.RawMessage) any {
 		return map[string]any{"items": items, "has_more": false, "more_after": true, "history": "history_example", "from_seq": 0, "to_seq": 8}
@@ -544,19 +544,19 @@ func wireErrors(t *testing.T, add wireAdder) {
 			fields["/draft"] = "❯ 示例草稿"
 			fields["/clearable"] = "示例草稿"
 		}
-		add("errors", "conflict_"+code, "拒绝操作的错误字段与 error 平铺在同一层。", "error", wireBody(t, w, 409), fields, "server/internal/hub/http.go: callErr", "apple/Shared/APIClient.swift: APIError.fields(in:)", "docs/protocol.md: 发消息 / 终端对话框")
+		add("errors", "conflict_"+code, "拒绝操作的错误字段与 error 平铺在同一层。", "error", wireBody(t, w, 409), fields, "server/internal/hub/http.go: callErr", "apple/Shared/APIClient.swift: APIError.fields(in:)", "docs/protocol/protocol.md: 发消息 / 终端对话框")
 	}
 }
 
 func wireCompatibility(t *testing.T, files map[string][]wireSample, add wireAdder, ws, httpJSON func(any) json.RawMessage, now time.Time) {
-	add("compatibility", "unknown_event_ignored", "未知事件被当前 iOS 忽略。", "compat_event", ws(map[string]any{"type": "future_event", "extra": true}), map[string]any{}, "apple/Shared/LiveConnection.swift: ServerEvent.decode default", "docs/redesign/README.md: D5")
+	add("compatibility", "unknown_event_ignored", "未知事件被当前 iOS 忽略。", "compat_event", ws(map[string]any{"type": "future_event", "extra": true}), map[string]any{}, "apple/Shared/LiveConnection.swift: ServerEvent.decode default", "docs/archive/redesign/README.md: D5")
 	files["compatibility"][0].Expected.Accepted = false
 	add("compatibility", "hello_unknown_field", "握手中的未知键不会影响已知字段。", "compat_event", ws(map[string]any{"type": "hello", "features": []string{"future_feature"}, "future_field": map[string]any{"enabled": true}}), map[string]any{"/type": "hello", "/features": []string{"future_feature"}}, "apple/Shared/LiveConnection.swift: ServerEvent.Envelope, ServerEvent.decode")
 	add("compatibility", "hello_missing_features", "旧握手缺少能力列表时按空列表处理。", "compat_event", ws(map[string]any{"type": "hello"}), map[string]any{"/features": []any{}}, "apple/Shared/LiveConnection.swift: ServerEvent.decode")
 	add("compatibility", "items_legacy_null", "旧事件的空 items 按空数组处理，连续性字段保持缺省。", "compat_event", ws(map[string]any{"type": "items", "machine_id": "m1", "session_id": "s1", "items": nil}),
 		map[string]any{"/items": []any{}, "/history": nil, "/from_seq": nil, "/to_seq": nil, "/backlog": false, "/more_after": false},
-		"apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol.md: items 的连续性")
-	add("compatibility", "session_unknown_enums", "未知会话状态降级为 unknown。", "compat_session", httpJSON(proto.Session{SessionID: "s1", Status: "future_status", State: "future_state", UpdatedAt: now}), map[string]any{"/status": "unknown", "/state": "unknown"}, "apple/Shared/Models.swift: SessionStatus.init(from:), AgentState.init(from:)", "docs/redesign/README.md: D5")
+		"apple/Shared/LiveConnection.swift: ServerEvent.decode", "docs/protocol/protocol.md: items 的连续性")
+	add("compatibility", "session_unknown_enums", "未知会话状态降级为 unknown。", "compat_session", httpJSON(proto.Session{SessionID: "s1", Status: "future_status", State: "future_state", UpdatedAt: now}), map[string]any{"/status": "unknown", "/state": "unknown"}, "apple/Shared/Models.swift: SessionStatus.init(from:), AgentState.init(from:)", "docs/archive/redesign/README.md: D5")
 	add("compatibility", "session_missing_fields", "旧会话缺字段时使用当前 iOS 的默认值。", "compat_session", httpJSON(map[string]any{"session_id": "s1", "status": "blocked"}), map[string]any{"/machine_id": "", "/title": "", "/state": "needs_you", "/assistant": false, "/pending_interactions": 0}, "apple/Shared/Models.swift: Session.init(from:)")
 	add("compatibility", "item_unknown_kind", "未知内容块类型降级为 unknown。", "compat_event", ws(map[string]any{"type": "items", "machine_id": "m1", "session_id": "s1", "items": []proto.Item{{ID: "entry_future#0", Seq: 1, TS: now, Role: "assistant", Kind: "future_kind"}}}), map[string]any{"/items/0/kind": "unknown"}, "apple/Shared/Models.swift: ItemKind.init(from:)")
 	add("compatibility", "fleet_bad_optional_stats", "Fleet 的可选统计字段类型错误时只丢弃统计字段。", "compat_event", ws(map[string]any{"type": "fleet", "fleet": map[string]any{"phase": "working", "working": 1, "stats": "invalid"}}), map[string]any{"/fleet/phase": "working", "/fleet/working": 1, "/fleet/stats": nil}, "apple/Shared/FleetState.swift: FleetState.init(from:)")
@@ -572,11 +572,11 @@ func wireCompatibility(t *testing.T, files map[string][]wireSample, add wireAdde
 		{"session_bad_optional_field", "当前 iOS 不会单独忽略类型错误的会话增强字段。", map[string]any{"type": "sessions", "machine_id": "m1", "sessions": []any{map[string]any{"session_id": "s1", "background": "invalid"}}}},
 		{"interaction_unknown_kind", "当前 iOS 不支持未知交互类型的降级解码。", map[string]any{"type": "interaction", "interaction": proto.Interaction{ID: "ix_future", MachineID: "m1", SessionID: "s1", Kind: "future_kind", CreatedAt: now, ExpiresAt: now}}},
 	} {
-		add("compatibility", bad.name, bad.desc, "compat_event", ws(bad.body), map[string]any{}, "apple/Shared/LiveConnection.swift: ServerEvent.decode", "apple/Shared/Models.swift: InteractionKind, Session.init(from:)", "docs/redesign/README.md: D5（现状差异）")
+		add("compatibility", bad.name, bad.desc, "compat_event", ws(bad.body), map[string]any{}, "apple/Shared/LiveConnection.swift: ServerEvent.decode", "apple/Shared/Models.swift: InteractionKind, Session.init(from:)", "docs/archive/redesign/README.md: D5（现状差异）")
 		files["compatibility"][len(files["compatibility"])-1].Expected.Accepted = false
 	}
 	add("compatibility", "session_zero_time", "Go 零时间能解码，但不算有意义的日期。", "compat_session", httpJSON(proto.Session{SessionID: "s1"}), map[string]any{"/updated_at_meaningful": false, "/seen_at_meaningful": false}, "server/internal/proto/proto.go: Session", "apple/Shared/JSONValue.swift: JSON.decoder, Date.isMeaningful")
-	add("compatibility", "date_at_cutoff", "当前 iOS 将 2000 年起点本身也判为无意义日期。", "compat_session", httpJSON(map[string]any{"session_id": "s1", "updated_at": "2000-01-01T00:00:00Z"}), map[string]any{"/updated_at_meaningful": false}, "apple/Shared/JSONValue.swift: Date.isMeaningful", "docs/redesign/README.md: D5（现状差异）")
+	add("compatibility", "date_at_cutoff", "当前 iOS 将 2000 年起点本身也判为无意义日期。", "compat_session", httpJSON(map[string]any{"session_id": "s1", "updated_at": "2000-01-01T00:00:00Z"}), map[string]any{"/updated_at_meaningful": false}, "apple/Shared/JSONValue.swift: Date.isMeaningful", "docs/archive/redesign/README.md: D5（现状差异）")
 	for i := range files["errors"] {
 		if i == 0 {
 			files["errors"][i].HTTPStatus = 401
@@ -620,5 +620,5 @@ func wireFeed(t *testing.T, add func(file, name, description, decoder string, in
 			"/items/0/body/items/0/answer": "放到独立仓库（推荐）\n先只迁一个", "/items/0/body/items/1/question": "示例插件叫什么？",
 			"/items/1/body/answer": "批准了", "/items/1/body/items": nil},
 		"server/internal/assistant/answered.go: answeredBody, answeredItems", "apple/Shared/Tasks.swift: FeedItem.answeredItems",
-		"docs/protocol.md: 任务和对话动态")
+		"docs/protocol/protocol.md: 任务和对话动态")
 }

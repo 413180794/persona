@@ -19,7 +19,7 @@ import (
 )
 
 // Codex question and approval cards against a fake herdr: what is listed, and the keys and text an answer turns into
-// for each state the TUI can be in (docs/codex.md "Questions and approvals").
+// for each state the TUI can be in (docs/integrations/codex.md "Questions and approvals").
 
 const (
 	cxID   = "01a19756-bcef-7f23-91dd-a562c8d078e4"

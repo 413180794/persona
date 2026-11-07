@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Who may reach the admin UI (docs/admin.md "Access scope"). Everything here trusts connection addresses only; forwarding
+// Who may reach the admin UI (docs/operations/admin.md "Access scope"). Everything here trusts connection addresses only; forwarding
 // headers can only narrow: when a proxy put them there, every address in them must be in scope as well.
 
 // ifacePrefix is one address of this machine with its prefix (a network it is on).
@@ -89,7 +89,7 @@ func (h *Hub) adminPrefixes() []ifacePrefix {
 // onAdminLAN: a private (RFC 1918, ULA) or link-local address on one of this machine's networks, or a global IPv6
 // address on one of its /64s that is not a VPN's. In a container any private address counts (the host's LAN is not
 // among the container's networks) but the container's gateway: docker-proxy relays everything, the internet
-// included, from there (admin_gateway.go, docs/admin.md "Docker bridge network").
+// included, from there (admin_gateway.go, docs/operations/admin.md "Docker bridge network").
 func (h *Hub) onAdminLAN(ip netip.Addr) bool {
 	if h.adminContainer() {
 		if h.adminGateway(ip) {
@@ -202,7 +202,7 @@ func (h *Hub) noteGatewayRefused(ip netip.Addr) {
 	h.admin.mu.Unlock()
 	if log {
 		h.logf("admin: %s is this container's gateway (port mapping hides the real source): not let into the admin UI as LAN; "+
-			"see docs/admin.md for Docker Desktop / OrbStack", ip)
+			"see docs/operations/admin.md for Docker Desktop / OrbStack", ip)
 	}
 }
 
@@ -247,7 +247,7 @@ func (h *Hub) addrsInScope(scope adminScope, r *http.Request) bool {
 }
 
 // adminCanSetup: only a source the scope lets in by address may set the first password; under "any" someone from
-// the internet must not get there first (docs/admin.md "First-run setup").
+// the internet must not get there first (docs/operations/admin.md "First-run setup").
 func (h *Hub) adminCanSetup(r *http.Request) bool {
 	return h.addrsInScope(h.adminScope(), r)
 }

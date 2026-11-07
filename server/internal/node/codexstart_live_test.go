@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/herdr"
 )
 
-// Codex started from the phone (docs/codex.md "Starting from the phone"), the way session.start does it, against real Codex in the
+// Codex started from the phone (docs/integrations/codex.md "Starting from the phone"), the way session.start does it, against real Codex in the
 // isolated herdr: the launcher runs through codex-start with the first message in a file, the start answers with the
 // thread that message began, the pane lists as that one session, on the route its launcher implies. Env as
 // TestLiveCodexDaemon; PERSONA_CODEX_START=daemon (a 0.163 attached to the test's own app-server with --remote: the

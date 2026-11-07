@@ -1,6 +1,6 @@
 package extmgr
 
-// "Show the agent's cursor" (docs/computer-use.md "d) Small settings", #1507): the plugin cua's show_cursor, on by
+// "Show the agent's cursor" (docs/extensions/computer-use.md "d) Small settings", #1507): the plugin cua's show_cursor, on by
 // default. Off, the Macs the plugin is on for run Cua Driver's daemon without its cursor overlay (the node restarts it
 // with --no-overlay, node/cua_extras.go); every other Mac is told on, which only undoes an off this hub had said.
 

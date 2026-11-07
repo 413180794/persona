@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Where a client may change files (uploads into a folder, and later renames, moves, deletes; docs/protocol.md
+// Where a client may change files (uploads into a folder, and later renames, moves, deletes; docs/protocol/protocol.md
 // "Changing files"): inside the user's home only, once the read guard (pathguard.go) has followed every link, and never in
 // the folders that run Persona and the Mac itself. Outside the home everything stays read-only.
 

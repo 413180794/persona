@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The token usage charts' colors (docs/machines.md "Token usage", #4973): one per kind, light and dark steps of the
+/// The token usage charts' colors (docs/server/machines.md "Token usage", #4973): one per kind, light and dark steps of the
 /// charts' categorical palette, in the stacking order (input, output, cache write, cache read) validated as a set
 /// with the dataviz validator: adjacent pairs at least ΔE 24.7 (light) / 17.3 (dark) for colour-blind readers.
 /// Light teal is under 3:1 on a light card, so the legend always writes the numbers beside it.

@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Assistant conversations are titled "MMDD | kind | topic" (docs/assistant.md "Chat titles", the user's ask on 2026-11-01):
+// Assistant conversations are titled "MMDD | kind | topic" (docs/assistant/assistant.md "Chat titles", the user's ask on 2026-11-01):
 // MMDD is the day the conversation started in the user's time zone, kind one of titleKinds, topic at most 14
 // characters. A conversation the hub starts is noted (titleNew); when its first turn ends (titleAfterTurn) the
 // small-task model reads that exchange and names it, off the conversation's path: nothing waits for it and the

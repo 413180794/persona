@@ -4,7 +4,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What comes from the nodes is the manager's (docs/machines.md "Who handles the computers' events"): it creates and answers the
+// What comes from the nodes is the manager's (docs/server/machines.md "Who handles the computers' events"): it creates and answers the
 // interactions, works out each Agent's state, decides the pushes and the Live Activity's content, runs the nodes' MCP
 // tools and keeps the machines' monitoring. The hub shows and delivers what it reports: the session lists, the
 // pending interactions and the fleet (kept while the manager is away), and the pushes (APNs, the relay, the apps'
@@ -71,7 +71,7 @@ type FleetInteraction struct {
 }
 
 // FleetResolved is EventFleetResolved's params; AnsweredBy says the assistant answered it, Reason why and Answers
-// with what (docs/assistant.md "The assistant answers questions first").
+// with what (docs/assistant/assistant.md "The assistant answers questions first").
 type FleetResolved struct {
 	ID         string            `json:"id"`
 	AnsweredBy string            `json:"answered_by,omitempty"`

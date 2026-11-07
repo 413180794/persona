@@ -1,5 +1,5 @@
 #!/bin/bash
-# Records StreamingScrollTests (docs/ios-state.md "Scrolling while streaming"): builds once, then per case a fresh mock hub, a screen
+# Records StreamingScrollTests (docs/apple/ios-state.md "Scrolling while streaming"): builds once, then per case a fresh mock hub, a screen
 # recording of the simulator and the app's scroll trace, into $OUT/<case>.{mp4,trace.txt,log,marks,recstart}.
 #   SIM=<simulator udid> OUT=/tmp/stream-shots scripts/diag/stream-scroll/run-ios.sh [case…]
 # Env: SIM (required), OUT, PORT (mock hub, default 18831; never one another agent's mock is on), LAYOUT (shell|old),

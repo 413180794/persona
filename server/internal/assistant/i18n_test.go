@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant's texts for people follow the hub's user language (hello's locale, docs/i18n.md); a hub that says
+// The assistant's texts for people follow the hub's user language (hello's locale, docs/protocol/i18n.md); a hub that says
 // none keeps them Chinese, as they were.
 func TestLangFollowsHello(t *testing.T) {
 	ctx := context.Background()

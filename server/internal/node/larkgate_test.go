@@ -43,7 +43,7 @@ func TestAssistantLarkAccountEnvironment(t *testing.T) {
 }
 
 // ex is on the assistant's PATH only when the example skill is in the user's space (~/.persona/skills, linked into
-// the assistant's directory): skills are no longer inside personad (docs/hub-update.md).
+// the assistant's directory): skills are no longer inside personad (docs/operations/hub-update.md).
 func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	user, cwd := t.TempDir(), t.TempDir()
 	t.Setenv("PERSONA_SKILLS_DIR", user)

@@ -1,5 +1,5 @@
 import { storeValue } from "../lib/compatibility";
-// The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). `/` (and the old `/persona`) is the main
+// The Persona tab: the headless assistant on the hub's machine (docs/assistant/assistant.md). `/` (and the old `/persona`) is the main
 // conversation, `/persona/<id>` one of them, `/persona/new` a new one-off conversation. With no main conversation yet, the first
 // message on `/` starts it.
 import { useMemo, useState } from "react";
@@ -24,7 +24,7 @@ import { formatList, t } from "../i18n";
 import { ManagerSwitcher, useShownOffline } from "./ManagerParts";
 import { chosenManager, noteConversation, ownerHeaders, shownManager } from "../lib/manager-choice";
 
-/** The example questions of a hub without readiness (its `suggestions` replace them, docs/onboarding.md 4.7). */
+/** The example questions of a hub without readiness (its `suggestions` replace them, docs/assistant/onboarding.md 4.7). */
 const SUGGESTIONS = [t("personaassistant.suggestion_meetings"), t("personaassistant.suggestion_agents"), t("personaassistant.suggestion_lark"), t("personaassistant.suggestion_projects")];
 
 const starting = new Set<string>();
@@ -145,7 +145,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
         navigate({ name: "persona", sid: r.session.session_id });
         return true;
       } catch (e) {
-        // the assistant restarting: a few seconds, tried again without a word (docs/onboarding.md 4.6)
+        // the assistant restarting: a few seconds, tried again without a word (docs/assistant/onboarding.md 4.6)
         if (passesBySelf(e) && attempt < 3) {
           await new Promise((done) => setTimeout(done, 2000));
           // the page moved to another manager meanwhile: this one's words stay in the box, nothing goes elsewhere

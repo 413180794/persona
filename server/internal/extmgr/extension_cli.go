@@ -25,7 +25,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 )
 
-// `personad extension …` on the hub's machine (docs/extensions.md "Command line"): what installs, upgrades and removes
+// `personad extension …` on the hub's machine (docs/extensions/extensions.md "Command line"): what installs, upgrades and removes
 // extensions. It talks to the running hub over loopback with the master token in hub.json, like `hub admin`.
 // `personad ext …` is the same, and so is `personad plugin …` (its name before #1844).
 
@@ -351,7 +351,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			fmt.Fprintf(stdout, "单独关掉的：%s\n", strings.Join(v.Off, "、"))
 		}
 		return nil
-	case "audit": // docs/extensions.md, after the install steps
+	case "audit": // docs/extensions/extensions.md, after the install steps
 		return auditCommand(ctx, c, args[1:], stdout)
 	case "upgrades":
 		var v upgradesView
@@ -381,12 +381,12 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
 		return nil
-	case "auth": // docs/extensions.md "Sign-in (auth)"
+	case "auth": // docs/extensions/extensions.md "Sign-in (auth)"
 		if err := need(1); err != nil {
 			return err
 		}
 		return extensionAuthCommand(ctx, c, positional, stdin, stdout)
-	case "sandbox": // docs/extensions.md "Sandbox"
+	case "sandbox": // docs/extensions/extensions.md "Sandbox"
 		if err := need(2); err != nil {
 			return err
 		}

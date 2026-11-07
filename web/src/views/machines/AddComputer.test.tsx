@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Machines › Add computer (docs/onboarding.md 7.2 #11): the name and system go to pair-codes' add, the system's instructions show,
+// Machines › Add computer (docs/assistant/onboarding.md 7.2 #11): the name and system go to pair-codes' add, the system's instructions show,
 // the dialog waits for the computer and then asks whether it is yours on the same screen.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Managers (docs/managers.md): every bus identity of role manager is one, all equal, each a whole assistant. The
+// Managers (docs/assistant/managers.md): every bus identity of role manager is one, all equal, each a whole assistant. The
 // hub keeps the roster (bus_identities, migration 0419: name, its token's hash, where it said it runs, when it was
 // last connected), the one-time install codes a new manager trades for its token, and which manager answers what
 // belongs to none (the default, at first the assistant the hub starts). All of it is the hub's own: identities,
@@ -323,7 +323,7 @@ func managerName(s string) (string, error) {
 	return s, nil
 }
 
-// managerRoutes are the roster's endpoints for the apps (docs/protocol.md "Managers"). Reading is open to every
+// managerRoutes are the roster's endpoints for the apps (docs/protocol/protocol.md "Managers"). Reading is open to every
 // signed-in device; changing it needs a full device (allowed()).
 func (h *Hub) managerRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/managers", func(w http.ResponseWriter, r *http.Request) {

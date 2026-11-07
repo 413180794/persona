@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The hub replays the broadcasts a page missed only when it resumes the stream (hello `resumed`, docs/hub-restart.md
+// The hub replays the broadcasts a page missed only when it resumes the stream (hello `resumed`, docs/operations/hub-restart.md
 // "Event resume"). After a hello it could not resume, what these pages follow by a push is read again: "Scheduled tasks"
 // (assistant_schedule), the looks and the chosen one (personas, look), Settings › hub (hub_update), and Settings › Extensions' list and
 // an extension's sign-in (extension_auth). A resumed hello reads nothing again.

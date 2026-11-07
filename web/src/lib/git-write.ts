@@ -1,4 +1,4 @@
-// The Git panel's writes (#6121, docs/protocol.md "git/stage … git/stash"): what they answer and what a refusal means.
+// The Git panel's writes (#6121, docs/protocol/protocol.md "git/stage … git/stash"): what they answer and what a refusal means.
 // Each is a click the panel confirms first when it leaves the computer or may lose work; the node never forces.
 import { api, ApiError, enc, errorText } from "./api";
 import type { GitCommit, GitStatus } from "./files";

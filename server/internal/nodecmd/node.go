@@ -26,11 +26,11 @@ import (
 const NodeUsage = `  personad node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
                            node running on this machine, relay to it instead
   personad node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
-                           starts can use the login keychain (docs/server.md「常驻 node」); set up for tailcat,
+                           starts can use the login keychain (docs/server/server.md「常驻 node」); set up for tailcat,
                            also reachable by the hub over tailcat
   personad node tailcat init --hub <key> [--derp-map-url <url>]
                            let the hub reach this machine over tailcat when it cannot ssh here; prints the address
-                           for hub.json (docs/server.md「tailcat 打洞」)
+                           for hub.json (docs/server/server.md「tailcat 打洞」)
   personad node tailcat addr
                            print this machine's tailcat address again
   personad node doctor [--json] [--fix]
@@ -38,9 +38,9 @@ const NodeUsage = `  personad node --stdio     run the node protocol on stdin/st
                            MCP and plugin files match this binary, the programs they run exist, claude's version, the
                            Mac LaunchAgent's ProcessType, and whether what claude reads at start can be read;
                            --fix rewrites Persona's own generated files, and on a Mac writes ProcessType=Interactive
-                           into the LaunchAgent and reloads it (docs/claude-integration.md「node doctor」)
+                           into the LaunchAgent and reloads it (docs/integrations/claude-integration.md「node doctor」)
   personad node reset-uid   give this computer a new machine uid (~/.persona/machine-uid): for a virtual machine cloned
-                           with another's home directory, which hubs would take for that one (docs/mesh.md)`
+                           with another's home directory, which hubs would take for that one (docs/server/mesh.md)`
 
 // checkNodeStdioArgs accepts what runs the node protocol on stdin/stdout: no argument (as before) or --stdio. Anything
 // else is a mistyped subcommand, which would otherwise wait on stdin without a word.
@@ -57,7 +57,7 @@ type UsageError string
 func (e UsageError) Error() string { return string(e) }
 
 // CommandName is the program's name in what it prints: personad or persona-node when run under that name (personad is
-// the compatibility alias, docs/rename.md), otherwise personad.
+// the compatibility alias, docs/operations/rename.md), otherwise personad.
 func CommandName() string {
 	switch n := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe"); n {
 	case "personad", "persona-node":
@@ -244,7 +244,7 @@ func sysmonSamples(ctx context.Context, n int, every time.Duration, sample func(
 	return taken
 }
 
-// runSysmon shows what a node would report (docs/machines.md), and the CPU time it took: how the collection cost
+// runSysmon shows what a node would report (docs/server/machines.md), and the CPU time it took: how the collection cost
 // in the docs was measured.
 func runSysmon(ctx context.Context, n int) {
 	enc := json.NewEncoder(os.Stdout)

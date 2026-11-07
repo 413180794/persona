@@ -1,6 +1,6 @@
 import XCTest
 
-/// Control Computer on a Mac's page (docs/computer-use.md), against scripts/mock/mock_hub.py with `MOCK_COMPUTER=<state>`
+/// Control Computer on a Mac's page (docs/extensions/computer-use.md), against scripts/mock/mock_hub.py with `MOCK_COMPUTER=<state>`
 /// (TEST_RUNNER_PERSONA_COMPUTER_HUB=http://127.0.0.1:<port>, TEST_RUNNER_PERSONA_COMPUTER_STATE=<state>): the section
 /// says the state, and its switch turns it off and on; not installed, it installs and asks for the permissions. PERSONA_SHOTS
 /// saves the screenshots there too.

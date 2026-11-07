@@ -1,6 +1,6 @@
 // Files a previewed HTML page uses from beside it (pictures, style sheets and their fonts / imports, scripts, icons),
 // read from the machine through the hub and put into the page itself (data: URLs, inline <style> / <script>): the
-// preview frame has no address to load them from and no network (docs/web.md "HTML preview", #1413). The page is parsed
+// preview frame has no address to load them from and no network (docs/web/web.md "HTML preview", #1413). The page is parsed
 // with DOMParser, whose documents load nothing and run nothing.
 import { cssImports, isRelativeRef, resolveRelative, rewriteCssUrls } from "./html-preview";
 

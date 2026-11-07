@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The sidebar's Messages (#3162): the iPhone's Messages tab (Settings › Lark › Show Messages on Home, #392 / #530) laid out as the Mac's
-/// list pages are (docs/mac-design.md): the Feishu chats in a column of their own, the open chat beside them. Not a
+/// list pages are (docs/apple/mac-design.md): the Feishu chats in a column of their own, the open chat beside them. Not a
 /// second Feishu client: the same list model (`LarkConversationsModel`), rows (`LarkConversationRow`), account chips
 /// and pinned shelf as the iPhone's page, and the inbox's chat (`LarkChatView`) on the right. The list's width is
 /// dragged and remembered (`MacListBeside`); which chat is open is the page's own state.
@@ -15,7 +15,7 @@ struct MacLarkMessagesPage: View {
     }
 }
 
-/// With more than one Feishu account signed in, chips over the list pick whose chats it shows (docs/feishu.md「多账号」).
+/// With more than one Feishu account signed in, chips over the list pick whose chats it shows (docs/extensions/feishu.md「多账号」).
 private struct MacLarkAccountsPage: View {
     @State private var choice: LarkAccountChoice
 
@@ -174,7 +174,7 @@ private struct MacLarkMessagesContent: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        // One empty state for the page, over the list (docs/mac-design.md「空状态」); the chat column stays empty.
+        // One empty state for the page, over the list (docs/apple/mac-design.md「空状态」); the chat column stays empty.
         .overlay { if store.conversations.isEmpty { empty } }
         .accessibilityIdentifier("feishu-conversations")
         .modifier(MacBelowTitleRow()) // under Messages in the title row (#1243)
@@ -250,7 +250,7 @@ private struct MacLarkMessagesContent: View {
     }
 }
 
-/// The open chat, or a quiet line while none is (docs/mac-design.md「空状态」). Its name in the column's part of the
+/// The open chat, or a quiet line while none is (docs/apple/mac-design.md「空状态」). Its name in the column's part of the
 /// title row; people and other chats it opens push in the column's own stack (‹ in the title row), Feishu documents
 /// and web links read in the panel at the trailing edge, as in Inbox (`MacInboxItemDetail`).
 private struct MacLarkChatColumn: View {

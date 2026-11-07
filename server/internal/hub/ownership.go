@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Ownership (docs/managers.md, "Ownership"): everything belongs to one manager, and the hub sends what concerns a thing to
+// Ownership (docs/assistant/managers.md, "Ownership"): everything belongs to one manager, and the hub sends what concerns a thing to
 // the manager it belongs to. This file is the one place that says who that is, so moving a machine or a source to
 // another manager (step 3) changes ownership here and nowhere else:
 //

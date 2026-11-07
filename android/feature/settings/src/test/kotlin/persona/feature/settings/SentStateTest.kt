@@ -40,7 +40,7 @@ private fun ids(items: List<SentItem>?): List<Long> = items.orEmpty().map { it.i
 private fun refused(status: Int, code: String? = null, message: String = "refused") = HubFailure(HubError.Server, message, status, code)
 
 /**
- * Settings › Sent as you (#5278, docs/connectors.md "Sent as the user"), the cases of the web page's `sent.test.ts` and of iOS's
+ * Settings › Sent as you (#5278, docs/extensions/connectors.md "Sent as the user"), the cases of the web page's `sent.test.ts` and of iOS's
  * `SentModelTests`: where a send went, what it said, how the gate let it through, who asked, paging and refreshing the list,
  * the connector chips, the hub's refusals in plain words, and the model over a fake hub, including the reads that come back
  * late. (Reading the hub's JSON is in `SentWireTest` and `HttpHubSentTest`.) Made-up values; the words are in Simplified Chinese

@@ -1,9 +1,9 @@
 import BeautifulUI
 import SwiftUI
 
-/// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] Ask Persona… [mic] — that grows into a card
+/// The shell's composer (docs/apple/ios.md「新外壳」), ChatGPT's: one line — [+] Ask Persona… [mic] — that grows into a card
 /// while typing, the field on top and a row under it: [+] … [model · effort] [mic] [send]. With Voice Chat offered
-/// (`voice`, docs/voice.md 6.1) the line is [+] … [mic] [voice], or [+] … [voice] [stop] while the agent works (dictation
+/// (`voice`, docs/assistant/voice.md 6.1) the line is [+] … [mic] [voice], or [+] … [voice] [stop] while the agent works (dictation
 /// is then in the card's row), and the card's row has voice in send's place while nothing is typed. The assistant's
 /// conversation and an agent's (in the shell) both type here (#1091). The field is one view in both
 /// shapes (only the buttons around it come and go), so focus and the IME's marked text survive the change.
@@ -18,7 +18,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var hasAttachments = false
     /// Set while the agent works: a stop button takes send's place while nothing is typed.
     var stop: (() -> Void)?
-    /// Voice Chat (docs/voice.md 6.1): set where the conversation offers a voice call; nil, the composer is as it was.
+    /// Voice Chat (docs/assistant/voice.md 6.1): set where the conversation offers a voice call; nil, the composer is as it was.
     var voice: (() -> Void)? = nil
     /// What the model button says, ChatGPT's "6.1 Sol Medium": the model, then the effort (`SessionModes.composerTitle`);
     /// nil: no button. Its menu says what needs saying about the permission mode (Allow Everything), not the button (#1117).
@@ -371,7 +371,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
 }
 
 /// The composer's surface: the white card with its stroke and shadow, or in the BeautifulUI style its raised surface.
-/// The voice bar wears it too (it takes the composer's place in a call, docs/voice.md 6.2).
+/// The voice bar wears it too (it takes the composer's place in a call, docs/assistant/voice.md 6.2).
 struct ComposerSurface: ViewModifier {
     func body(content: Content) -> some View {
         if AppStyle.current.usesBeautifulUI {

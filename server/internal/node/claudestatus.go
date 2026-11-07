@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/screen"
 )
 
-// Claude Code's status line while it works (docs/protocol.md "Live status"): a spinner, the verb with an ellipsis and, in
+// Claude Code's status line while it works (docs/protocol/protocol.md "Live status"): a spinner, the verb with an ellipsis and, in
 // parentheses, the parts it has right now separated by "·":
 //
 //	✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)

@@ -1,4 +1,4 @@
-// The hub's connectors (docs/connectors.md, docs/protocol.md "Connector API"): GitHub, Telegram, an extension's, as
+// The hub's connectors (docs/extensions/connectors.md, docs/protocol/protocol.md "Connector API"): GitHub, Telegram, an extension's, as
 // GET /api/v1/connectors lists them, their sign-in a step at a time, their switches, and the threads their inbox items
 // open as (GET /api/v1/connectors/{id}/thread). Mail and Feishu keep their own pages (settings/Connectors.tsx).
 // iOS: ConnectorsViews.swift, ConnectorSignInViews.swift, GitHubAuthViews.swift, GitHubInboxSettings.swift,
@@ -166,7 +166,7 @@ export function isEnabled(c: HubConnector): boolean {
 }
 
 /** It brings things into the knowledge base or the inbox (Telegram), so its switch syncs and it has data to delete; a
- * chat bot (WeChat: a status and a sign-in, docs/channels.md) only talks. One not described yet (no capabilities, or a
+ * chat bot (WeChat: a status and a sign-in, docs/extensions/channels.md) only talks. One not described yet (no capabilities, or a
  * hub from before them) counts as bringing them, as before there were bots (the apps do the same). */
 export function storesData(c: HubConnector): boolean {
   const caps = c.capabilities;
@@ -531,7 +531,7 @@ export function isGitHubThread(c?: ThreadChat): boolean {
 
 export const THREAD_PAGE = 30;
 
-/** `manager`: whose connector it is (an inbox item's, docs/managers.md "Clients"; none: the default's). */
+/** `manager`: whose connector it is (an inbox item's, docs/assistant/managers.md "Clients"; none: the default's). */
 export function loadThread(id: string, thread: string, before = "", manager?: string): Promise<ThreadPage> {
   const q = new URLSearchParams({ thread, limit: String(THREAD_PAGE) });
   if (before) q.set("before", before);

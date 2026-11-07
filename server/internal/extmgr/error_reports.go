@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
-// The error reports (docs/extensions.md "Error reports"): the apps' (POST /api/v1/error-reports), the hub's
+// The error reports (docs/extensions/extensions.md "Error reports"): the apps' (POST /api/v1/error-reports), the hub's
 // (extwire.EventErrorReports) and the manager's own (its log's error lines) go through one pipeline here: checked,
 // scrubbed, fingerprinted, deduplicated and rate limited, then given in batches to the running extensions with an
 // error_reports contribution. With none, nothing is taken: the feature is off and the apps send nothing.

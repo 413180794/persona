@@ -3,7 +3,7 @@ import Foundation
 import Security
 import UserNotifications
 
-/// Pushes sealed to this phone (docs/push-relay.md): a hub without the app's APNs key seals each payload to the phone's
+/// Pushes sealed to this phone (docs/operations/push-relay.md): a hub without the app's APNs key seals each payload to the phone's
 /// public key and the relay forwards it as `e`. HPKE base mode, DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM,
 /// the same suite as the hub's `pushcrypto` package. The notification service extension (PersonaNotify) opens alerts,
 /// the app opens silent pushes; anything that does not open stays 「有新消息」, never anything in the clear.
@@ -24,7 +24,7 @@ nonisolated enum PushCrypto {
     private static let service = "persona.push"
     private static let account = "push-key"
 
-    /// Each group of hubs seals to a key of its own (docs/multi-hub.md「推送」): the default group's is the one the
+    /// Each group of hubs seals to a key of its own (docs/protocol/multi-hub.md「推送」): the default group's is the one the
     /// phone always had, another group's has the group's id after it. The key that opens a push says whose it is.
     static func account(group: String) -> String { group.isEmpty ? account : account + "." + group }
 
@@ -191,7 +191,7 @@ nonisolated enum PushCrypto {
         service(content, keys: { key().map { [("", $0)] } ?? [] }, now: now)
     }
 
-    /// Tries every group's key; the one that opens the push names its group (`persona_group`, docs/multi-hub.md).
+    /// Tries every group's key; the one that opens the push names its group (`persona_group`, docs/protocol/multi-hub.md).
     static func service(_ content: UNNotificationContent, keys: () -> [(group: String, key: P256.KeyAgreement.PrivateKey)],
                         now: Date = .now) -> (UNNotificationContent, Outcome) {
         guard isSealed(content.userInfo) else { return (content, .notSealed) }

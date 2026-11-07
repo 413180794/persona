@@ -527,7 +527,7 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
 }
 
 /**
- * An MCP server's form or link (docs/protocol.md "MCP elicitation"), as Android's ElicitationFields: a form in the
+ * An MCP server's form or link (docs/protocol/protocol.md "MCP elicitation"), as Android's ElicitationFields: a form in the
  * schema subset lib/elicitation.ts checks (anything else goes to the terminal), or a link that has to be opened from
  * here before "Opened, continue". "Submit" accepts, "Deny" declines, "Cancel" cancels; × hands it back to the computer as on every card.
  */

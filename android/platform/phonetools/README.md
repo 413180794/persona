@@ -1,6 +1,6 @@
 # Android 手机工具
 
-本模块对应 `docs/redesign/android.md` 5.12、`parity.md` 第 21 节和设置中的「手机数据」。提供通讯录搜索、日历查询与新建、当前位置、照片元数据与缩放取图、剪贴板、设备信息、本地通知、健康数据汇总（Health Connect）及 Persona 当前通知列表，共 12 个工具。
+本模块对应 `docs/archive/redesign/android.md` 5.12、`parity.md` 第 21 节和设置中的「手机数据」。提供通讯录搜索、日历查询与新建、当前位置、照片元数据与缩放取图、剪贴板、设备信息、本地通知、健康数据汇总（Health Connect）及 Persona 当前通知列表，共 12 个工具。
 
 Android 没有统一的系统提醒事项接口，故不注册 `phone_reminders_*`。健康数据通过 Health Connect 提供每天的汇总（`phone_health_summary`，安卓 14 起系统自带；写入健康数据 `phone_health_write_sample` 为 iOS 独有）。不申请通知监听权限，不读取其他 App 的通知。`phone_notifications_list` 是 Android 新增工具，只返回本应用当前显示的通知，不包含操作确认通知。
 

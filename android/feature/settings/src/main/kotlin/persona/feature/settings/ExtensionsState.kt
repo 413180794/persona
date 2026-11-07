@@ -30,7 +30,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-// Settings › Extensions (docs/extensions.md "App: Settings › Extensions"): the words, the draft of an extension's configuration, and the two
+// Settings › Extensions (docs/extensions/extensions.md "App: Settings › Extensions"): the words, the draft of an extension's configuration, and the two
 // pages' models. The pages are in ExtensionsScreen.kt.
 
 /** What an extension is called and says in the settings. */
@@ -428,7 +428,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
 
     suspend fun clearSecret(name: String): Boolean = busy { run { api.clearSecret(id, name) } }
 
-    /** A market extension's own auto-upgrade switch (docs/extensions.md "Auto-upgrade"). */
+    /** A market extension's own auto-upgrade switch (docs/extensions/extensions.md "Auto-upgrade"). */
     suspend fun setAutoUpgrade(on: Boolean): Boolean = busy {
         run(failed = if (on) R.string.settings_ext_auto_upgrade_on_failed else R.string.settings_ext_auto_upgrade_off_failed) { api.setAutoUpgrade(id, on) }
     }

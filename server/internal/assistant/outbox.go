@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The manager while the hub is away (docs/hub-restart.md "The manager while the hub is away"): it goes on with its
+// The manager while the hub is away (docs/operations/hub-restart.md "The manager while the hub is away"): it goes on with its
 // own work, and the pushes and the apps' live updates it decides on are kept in its database (manager_outbox) instead
 // of lost, and handed to the hub in order once it is back (manager.outbox), after it reported its state on the new
 // connection. What the hub shows of the manager (the snapshot, the lists, the cards) is reported whole on every
@@ -43,7 +43,7 @@ var (
 	// pushKeep: a push older than this is no news any more and is not handed over.
 	pushKeep = 24 * time.Hour
 	// broadcastKeep: an apps' live update older than this is not handed over. The apps of a hub back after longer
-	// start a new stream and load everything again (docs/hub-restart.md "Event resume": the hand-over is taken for 10
+	// start a new stream and load everything again (docs/operations/hub-restart.md "Event resume": the hand-over is taken for 10
 	// minutes), and an old update arriving after that would only take them back.
 	broadcastKeep = 10 * time.Minute
 	// outboxRetry is how long the outbox waits after a hand-over that failed with the hub connected.

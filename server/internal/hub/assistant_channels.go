@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The channels are the assistant's (internal/assistant, channels*.go and feishu*.go; docs/channels.md): which
+// The channels are the assistant's (internal/assistant, channels*.go and feishu*.go; docs/extensions/channels.md): which
 // conversation a channel talks to, following the turn and sending the answer back, what is asked there, the commands,
 // the pushes and the sync mirror. This file is the hub's end of them on the bus:
 //

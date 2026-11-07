@@ -134,12 +134,12 @@ import UIKit
 /// The sidebar stays built while closed (hidden): building it on the first frame of a drag was most of that frame.
 /// While the finger moves only `DrawerPageMotion` reads the progress (the sidebar and the tab bar are moved by UIKit,
 /// `AssistantDrawer.applyToUIKit`), and it changes nothing but transforms and opacities: the corners, shadow and edge
-/// line are fixed shapes faded in, not redrawn per frame. docs/testing.md「侧边栏拖动」has the numbers.
+/// line are fixed shapes faded in, not redrawn per frame. docs/operations/testing.md「侧边栏拖动」has the numbers.
 struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     let drawer: AssistantDrawer
     /// The page is at its root (nothing pushed): only then does a drag open the sidebar.
     var enabled: Bool
-    /// Behind the sidebar: the system's grouped gray, or the shell's near-white (docs/ios.md「新外壳」).
+    /// Behind the sidebar: the system's grouped gray, or the shell's near-white (docs/apple/ios.md「新外壳」).
     var backdrop: Color = Color(.secondarySystemBackground)
     /// The shell's Assistant | Agents strip: a drag sideways may page between them instead (`DrawerPan`).
     var pager: ShellPager? = nil
@@ -744,8 +744,8 @@ struct AssistantSidebar: View {
     var openSettings: (() -> Void)?
     /// The drawer it is in (nil as a column). The drawer's sidebar stays built while closed: closing it clears the search.
     var drawer: AssistantDrawer?
-    /// The shell's drawer (docs/ios.md「新外壳」) also lists Inbox and Machines, and ends in New Chat + Settings like ChatGPT's;
-    /// so does the iPad's column (docs/ios.md「iPad」), whose tab bar has no Inbox or Settings.
+    /// The shell's drawer (docs/apple/ios.md「新外壳」) also lists Inbox and Machines, and ends in New Chat + Settings like ChatGPT's;
+    /// so does the iPad's column (docs/apple/ios.md「iPad」), whose tab bar has no Inbox or Settings.
     var openInbox: (() -> Void)? = nil
     var openTodos: (() -> Void)? = nil
     var onMachines: (() -> Void)? = nil
@@ -753,7 +753,7 @@ struct AssistantSidebar: View {
     /// nil where they are listed elsewhere (the Mac's sections column).
     // Not `openExtension`: Swift keeps property names in the binary, and that is a DEBUG switch release.sh rejects.
     var onOpenExtension: ((ExtensionNavRoute) -> Void)? = nil
-    /// Health: the health space's page (docs/health.md); nil leaves the row out.
+    /// Health: the health space's page (docs/assistant/health.md); nil leaves the row out.
     var openHealth: (() -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
@@ -1004,7 +1004,7 @@ struct AssistantSidebar: View {
         }
     }
 
-    /// The extensions' pages on the main navigation (nav_page, docs/extensions.md「UI 插槽」): one row each, its icon,
+    /// The extensions' pages on the main navigation (nav_page, docs/extensions/extensions.md「UI 插槽」): one row each, its icon,
     /// title and badge, in the hub's order. Nothing with a hub without slots.
     @ViewBuilder private var extensionRows: some View {
         if let onOpenExtension, ExtensionSlots.shared.available {
@@ -1216,7 +1216,7 @@ struct AssistantSidebar: View {
         archivedRow(archived)
     }
 
-    /// Auto Chats (#3264, docs/protocol.md「侧边栏」): the conversations Persona opened by itself (Inbox's AI twin, scheduled
+    /// Auto Chats (#3264, docs/protocol/protocol.md「侧边栏」): the conversations Persona opened by itself (Inbox's AI twin, scheduled
     /// tasks, Lark /agent…) in one row, closed at first. Open, a row for each source with its count (and All); each
     /// opens All Chats filtered to it. Closed, it still says how many wait for the user (or that one works, or is unread),
     /// as a conversation's row does.
@@ -1379,7 +1379,7 @@ struct AssistantSidebar: View {
         .padding(.bottom, Theme.Space.xs)
     }
 
-    /// A conversation's title on one line. A 「1101 | 修复 | 主题」 title (docs/assistant.md「对话标题」) has its day and
+    /// A conversation's title on one line. A 「1101 | 修复 | 主题」 title (docs/assistant/assistant.md「对话标题」) has its day and
     /// kind in the secondary color: the topic is what the eye finds, and what a narrow drawer cuts at the end.
     @ViewBuilder private func titleText(_ title: String, named: Bool) -> some View {
         if named, let t = ConversationTitle(title) {
@@ -1566,7 +1566,7 @@ struct AssistantSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .surface(interactive: true, in: .circle)
-                // The plugins' entries are in Settings (docs/extensions.md「UI 插槽」, badges): their badges add up here, unless the
+                // The plugins' entries are in Settings (docs/extensions/extensions.md「UI 插槽」, badges): their badges add up here, unless the
                 // sidebar lists the entries itself.
                 .overlay(alignment: .topTrailing) { if onOpenExtension == nil { ExtensionSettingsBadge() } }
                 .accessibilityLabel("Settings")

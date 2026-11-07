@@ -1,4 +1,4 @@
-// The web terminal's clipboard, the pure parts (docs/terminal.md section 18). Pasting or dropping a file: which files a
+// The web terminal's clipboard, the pure parts (docs/integrations/terminal.md section 18). Pasting or dropping a file: which files a
 // clipboard / drop carries, the name they are uploaded under, whether the pane they were meant for is still the one
 // that is driven when the upload ends, and the line of escaped paths that is then typed into the pane. Copying: what
 // to say after a copy and what a program's OSC 52 write may put on the clipboard. The browser's side (the upload

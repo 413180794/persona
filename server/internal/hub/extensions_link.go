@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The extensions, the connectors and the bots are the manager's (internal/extmgr, docs/extensions.md "Who owns what"): the
+// The extensions, the connectors and the bots are the manager's (internal/extmgr, docs/extensions/extensions.md "Who owns what"): the
 // registry, the programs, their secrets and tokens, every source, mail, the Feishu and WeChat bots. The hub relays:
 //
 //   - the apps' requests on their routes (extwire.Routes, the admin UI's /api/v1/admin/extensions…, and the parts of
@@ -131,7 +131,7 @@ func machineExtrasEqual(a, b map[string]extwire.MachineExtras) bool {
 // features are the hub's features with those of the extensions serving part of the API.
 func (h *Hub) features() []string {
 	out := append(slices.Clone(proto.Features), featureSessionsList, featureSessionsLookup)
-	// The assistant's card interfaces that answer now (docs/assistant-views.md): assistant_views is declarative actions
+	// The assistant's card interfaces that answer now (docs/assistant/assistant-views.md): assistant_views is declarative actions
 	// (expected_version), live cards and transcript cards; assistant_html_bridge is …/html-actions with both switches
 	// on. Neither says a client may run HTML: that is each platform's own security sign-off, else fallback.
 	if views, bridge := h.assistantCards(); views {

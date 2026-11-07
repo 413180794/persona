@@ -10,7 +10,7 @@ What counts as private comes from this machine, never from the repo: the values 
 (hosts, hub address, machine names, Apple ids, emails), ~/.config/persona/private-words.txt (one word per line:
 internal project names, people, anything else) and CLAUDE.local.md's `code spans`. On top of that, any private IPv4
 address, any email outside example.* domains, and the names in BANNED_NAMES (vendors and internal repositories that
-only extensions may name). Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
+only extensions may name). Install as a hook: scripts/hooks/pre-commit (docs/operations/testing.md).
 
 Not private: loopback addresses (127.0.0.0/8, ::1, also with a port or as a URL's host) even when the config or
 CLAUDE.local.md holds one, hosts under the example domains (RFC 2606, RFC 6761: example and example.com/.net/.org,
@@ -22,7 +22,7 @@ CLAUDE.local.md spans that only name repo files, commands or config keys, a list
 spells it only across a camel-case join ("fooBar", only_in_camel_joins), and in site/ the contact address and domain
 the App Store and the OAuth consent screen publish anyway.
 """
-import ipaddress, json, os, re, subprocess, sys
+import io, ipaddress, json, os, re, subprocess, sys
 from urllib.parse import unquote, urlsplit
 
 ROOT = subprocess.run(["git", "-C", os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -106,7 +106,7 @@ def config_values():
 
 # A token that looks like somebody's value: a long id mixing letters and digits (key ids, team ids, hostnames like
 # n12-345), a run of six or more digits (app ids), or a host under a real TLD. Repo paths, commands and config keys
-# (`docs/config.md`, `python3 scripts/x.py`, `google.proxy`) have none.
+# (`docs/operations/config.md`, `python3 scripts/x.py`, `google.proxy`) have none.
 ID_LIKE = re.compile(r"(?=[\w-]*\d)(?=[\w-]*[A-Za-z])[\w-]{8,}|\d{6,}")
 
 
@@ -369,6 +369,42 @@ def git(*args):
     return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, check=True).stdout
 
 
+def git_file_data(files, prefix):
+    """Read the same index/commit blobs as git show, using one bounded Git process."""
+    safe = [name for name in files if "\n" not in name and "\r" not in name]
+    data = {}
+    fallback = [name for name in files if "\n" in name or "\r" in name]
+    if safe:
+        requests = b"".join((prefix + name).encode() + b"\0" for name in safe)
+        output = subprocess.run(["git", "-C", ROOT, "cat-file", "--batch", "-z"],
+                                input=requests, capture_output=True, check=True, timeout=120).stdout
+        stream = io.BytesIO(output)
+        for name in safe:
+            header = stream.readline()
+            if header.endswith(b" missing\n"):
+                continue
+            fields = header.split()
+            if len(fields) != 3:
+                raise ValueError("invalid Git batch header")
+            size = int(fields[2])
+            payload = stream.read(size)
+            if size < 0 or len(payload) != size or stream.read(1) != b"\n":
+                raise ValueError("truncated Git batch object")
+            if fields[1] == b"blob":
+                data[name] = payload
+            else:
+                # Preserve git show's rendering of gitlinks/other non-blob entries.
+                fallback.append(name)
+        if stream.read():
+            raise ValueError("unexpected Git batch output")
+    for name in fallback:
+        try:
+            data[name] = git("show", prefix + name)
+        except subprocess.CalledProcessError:
+            pass
+    return data
+
+
 def commit_range(spec):
     """<base>..<head>: the fork point of the two (what a branch adds on top of base), and head."""
     base, sep, head = spec.partition("..")
@@ -391,8 +427,16 @@ def main():
         files = git("diff", "--name-only", "--diff-filter=ACMR", "-z", span[0], span[1]).decode().split("\0")
     else:
         files = git("ls-files", "-z").decode().split("\0")
+    files = list(filter(None, files))
+    snapshots = {}
+    if staged or span:
+        try:
+            snapshots = git_file_data([name for name in files if name not in SKIP_FILES],
+                                      ":" if staged else span[1] + ":")
+        except (OSError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            sys.exit("privacy_check: cannot read Git objects; scan did not complete")
     bad = []
-    for f in filter(None, files):
+    for f in files:
         public = f.startswith(PUBLIC_DIRS)
         allowed = [w for w in words if w not in public_words] if public else words
         for w in problems(f, words):
@@ -400,10 +444,10 @@ def main():
         if f in SKIP_FILES:
             continue
         try:
-            if staged:
-                data = git("show", ":" + f)
-            elif span:
-                data = git("show", span[1] + ":" + f)
+            if staged or span:
+                data = snapshots.get(f)
+                if data is None:
+                    continue
             else:
                 data = open(os.path.join(ROOT, f), "rb").read()
         except (OSError, subprocess.CalledProcessError):

@@ -1,5 +1,5 @@
 import { APP_SCHEMES, assistantPath } from "./compatibility";
-// Where a link opens (CLAUDE.md "Links open inside the app", docs/web.md "Links"). In a browser the browser is the app:
+// Where a link opens (CLAUDE.md "Links open inside the app", docs/web/web.md "Links"). In a browser the browser is the app:
 // ordinary pages open in a new tab (most sites refuse to be framed and the page cannot tell it was refused, so a
 // framed panel would just be blank), Feishu documents and Moments posts open in the side panel's reader (the same links
 // the phone reads natively, FeishuLinks.route) when the hub reads Feishu (feature `lark`; otherwise they are ordinary
@@ -10,7 +10,7 @@ import { APP_SCHEMES, assistantPath } from "./compatibility";
 // public_url first: the address the assistant writes, which may not be the one this page was opened at).
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
-// writing in, as <persona-context> tags in the next message (docs/protocol.md "Tags in messages").
+// writing in, as <persona-context> tags in the next message (docs/protocol/protocol.md "Tags in messages").
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { uuid } from "./format";
@@ -256,7 +256,7 @@ export function prefetchLink(url: string | undefined) {
 /** A piece of a page the user picked (LinkSheet.swift ContextRef). `text` is "(whole document)" in Chinese for a whole document. */
 export interface ContextRef {
   id: string;
-  /** "workspace": a folder on a computer picked in the @ menu, carrying `machine` and `cwd` (docs/protocol.md "Tags in messages"). */
+  /** "workspace": a folder on a computer picked in the @ menu, carrying `machine` and `cwd` (docs/protocol/protocol.md "Tags in messages"). */
   kind: "context" | "edit" | "workspace";
   title: string;
   url: string;

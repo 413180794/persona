@@ -1,5 +1,5 @@
 import { legacyBuiltins } from "./compatibility";
-// Persona's look (avatar, docs/persona.md, docs/extensions.md "Avatar"): its name, its face and the animated dot, from a
+// Persona's look (avatar, docs/apple/persona.md, docs/extensions/extensions.md "Avatar"): its name, its face and the animated dot, from a
 // package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or the default dumpling (MochiFace).
 // The choice is the user's, kept on the hub (PUT /looks/current) so
 // every device shows the same one; localStorage keeps the last one for the first paint and for older hubs.
@@ -47,7 +47,7 @@ export interface PersonaManifest {
   subtitle?: string;
   /** A few words for the look's card in the picker, in place of its colors (the milk frog: where its level comes from). */
   about?: string;
-  /** Names in the other languages (an extension's look, docs/extensions.md "Avatar"). */
+  /** Names in the other languages (an extension's look, docs/extensions/extensions.md "Avatar"). */
   names?: Record<string, string>;
   subtitles?: Record<string, string>;
   /** sizes: PNGs by side; svg (an extension's look, cleaned by the hub); dark: the same for dark mode. */
@@ -95,7 +95,7 @@ export function lookPackages(looks: LookView[] | null | undefined): PersonaInfo[
   return (looks ?? []).filter((l) => l.source !== "builtin" && l.manifest && l.rev).map((l) => ({ id: l.id, rev: l.rev!, bytes: l.bytes, manifest: l.manifest! }));
 }
 
-/** A text in the interface language: its own language's, else English, else the source (docs/i18n.md). */
+/** A text in the interface language: its own language's, else English, else the source (docs/protocol/i18n.md). */
 export function localized(text: string, others: Record<string, string> | undefined, lang: string): string {
   return others?.[lang]?.trim() || (lang !== "zh-Hans" ? others?.en?.trim() : "") || text;
 }
@@ -169,7 +169,7 @@ export function usablePersonas(list: PersonaInfo[] | null | undefined): PersonaI
 }
 
 /**
- * What the face shows for a Persona conversation (AppModel.personaState, docs/persona.md "State"): "Offline" while the hub or
+ * What the face shows for a Persona conversation (AppModel.personaState, docs/apple/persona.md "State"): "Offline" while the hub or
  * Persona's computer is out of reach, "Needs you" when it waits on you, "Thinking" / "Working" while a turn runs (thinking until it
  * writes or calls a tool), else "Idle".
  */

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Persona › Scheduled Tasks: the rules in words, the times, and what runs next (docs/assistant.md).
+/// Persona › Scheduled Tasks: the rules in words, the times, and what runs next (docs/assistant/assistant.md).
 @MainActor
 struct AssistantScheduleTests {
     private func routine(_ time: String, _ days: [Int], enabled: Bool = true, next: Date? = nil) -> APIClient.ScheduledTask {

@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// paseoHello is a runtime running Claude Code and other agents through their SDKs (Paseo, docs/paseo.md).
+// paseoHello is a runtime running Claude Code and other agents through their SDKs (Paseo, docs/integrations/paseo.md).
 func paseoHello() map[string]any {
 	return map[string]any{"runtime": "paseo", "name": "Paseo", "version": "test",
 		"caps": map[string]any{"start": true, "send": true, "interrupt": true, "rename": true, "close": true}}

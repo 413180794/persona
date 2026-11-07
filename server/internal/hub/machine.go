@@ -566,7 +566,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.hub.toSubscribers(m.cfg.ID, p.SessionID, screenPush{Type: "screen", MachineID: m.cfg.ID, SessionID: p.SessionID,
 			Text: p.Text, Status: p.Status, TS: time.Now().UTC()})
-	case "session.live": // a working Claude's status line as it is now: not kept, not replayed (docs/protocol.md "Live status")
+	case "session.live": // a working Claude's status line as it is now: not kept, not replayed (docs/protocol/protocol.md "Live status")
 		var p struct {
 			SessionID string             `json:"session_id"`
 			Live      *proto.SessionLive `json:"live"`

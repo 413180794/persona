@@ -137,7 +137,7 @@ class HttpDeviceSettings(
 
     companion object {
         /**
-         * The page the browser sign-in link opens: the hub serves the web at its own address (docs/web.md), under the
+         * The page the browser sign-in link opens: the hub serves the web at its own address (docs/web/web.md), under the
          * sub-path a reverse proxy puts it at; no query, fragment or account.
          */
         fun webBase(hub: okhttp3.HttpUrl): String {

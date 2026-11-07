@@ -12,7 +12,7 @@
 | 手表 | `bypassPermissions` | 只允许 `acceptEdits`，批准要求认证 | 当前代码未声明动作级认证；统一表将拒绝设为无需额外认证 |
 | Siri／快捷入口 | `bypassPermissions` | 只允许 `acceptEdits`，批准要求认证 | 这个快捷入口只批准最早的待处理项，没有拒绝动作 |
 
-依据：`docs/redesign/README.md` 2.3、4.2，`docs/redesign/ux.md` 3.4、5.3，`docs/redesign/android.md` 5.8；当前值来自表后规则清单中的 iOS 源码和单测。
+依据：`docs/archive/redesign/README.md` 2.3、4.2，`docs/archive/redesign/ux.md` 3.4、5.3，`docs/archive/redesign/android.md` 5.8；当前值来自表后规则清单中的 iOS 源码和单测。
 
 设计总纲写“5 个入口用了 3 种模式”，当前源码实际出现的批准模式是上表两种；协议还允许 `default`，当前这些入口没有选择它的按钮。因此夹具不编造第三种现状模式。通知打回的认证要求与 UX 目标冲突，两个版本分别保留，iOS 本轮不改。
 

@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Model calls by extensions (#6102, docs/extensions.md "Model calls"): an extension the user granted the models
+// Model calls by extensions (#6102, docs/extensions/extensions.md "Model calls"): an extension the user granted the models
 // scope calls model.complete; it goes to the assistant, which holds the keys, with the extension's id (which the
 // extension cannot set), and runs on the extension's purpose extension.<id> in Settings › Models. The legacy
 // full-hub grant does not include it. No budget and no cap (the user's decision).

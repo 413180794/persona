@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 #if os(iOS) || os(visionOS)
-/// The iPhone's ChatGPT-style shell (docs/ios.md「新外壳」): no tab bar. Assistant (the Persona assistant) and Agents (the Agents
+/// The iPhone's ChatGPT-style shell (docs/apple/ios.md「新外壳」): no tab bar. Assistant (the Persona assistant) and Agents (the Agents
 /// list) are two pages under the top switch, both kept alive like tabs (switching keeps each one's place); the drawer
 /// slides both aside; Inbox / Scheduled Tasks / Knowledge / Machines push onto Assistant; Settings is a sheet.
 ///
@@ -33,7 +33,7 @@ struct ShellView: View {
                 shell.setPageCount(enabled ? 3 : 2)
             }
             // The shell takes the app's tab as it is set (`ShellState.route`): not an onChange here, which was skipped now
-            // and then (docs/shell.md).
+            // and then (docs/apple/shell.md).
             .onAppear {
                 shell.attach(to: model)
                 #if DEBUG
@@ -54,7 +54,7 @@ struct ShellView: View {
             }
             .onDisappear { shell.detach(from: model) }
             // Waiting for Network / Connecting… / Updating… and the toasts float in a window of their own above the shell's, moving nothing
-            // (docs/shell.md「连接状态和 toast」).
+            // (docs/apple/shell.md「连接状态和 toast」).
             .background { ShellWindowHooks(notices: shell.notices, pager: shell.pager) }
     }
 
@@ -117,7 +117,7 @@ struct ShellView: View {
 }
 
 #if DEBUG
-/// What the strip shows, for UI tests (`probe.shell`, docs/ios-state.md「探针」; read by `ShellPageProbe.swift`): the page
+/// What the strip shows, for UI tests (`probe.shell`, docs/apple/ios-state.md「探针」; read by `ShellPageProbe.swift`): the page
 /// the strip rests on (`assistant` / `agents` / `feishu`, `moving` while it slides), the page in front (`ShellState.page`, what the
 /// switch shows), the app's tab, the drawer and the pages' roots, the status row, and the latest `ShellTrace`. Pixels
 /// told which page was drawn before; both pages stay built, so `exists` cannot.

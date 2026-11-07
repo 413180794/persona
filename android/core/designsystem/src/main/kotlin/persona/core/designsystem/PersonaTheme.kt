@@ -112,7 +112,7 @@ fun PersonaTheme(
         LocalPalette provides palette,
         LocalType provides type,
         // Glass blurs a quarter-resolution copy of what is behind it: measured on a phone, full-resolution input
-        // doubled the frame time of a scrolling conversation (docs/android.md, interface style performance).
+        // doubled the frame time of a scrolling conversation (docs/android/android.md, interface style performance).
         LocalHazePerformanceMode provides HazePerformanceMode.Performance,
     ) {
         MaterialTheme(colorScheme = palette.materialScheme(style), typography = type.material(), shapes = shapes.material()) {

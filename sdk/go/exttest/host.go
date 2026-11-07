@@ -170,7 +170,7 @@ func (h *Host) Events() []Event {
 	return slices.Clone(h.h.events)
 }
 
-// CheckConnectors holds each connector the manifest contributes to the connector protocol (docs/connector-protocol.md),
+// CheckConnectors holds each connector the manifest contributes to the connector protocol (docs/protocol/connector-protocol.md),
 // the read-only calls the hub makes of what its capabilities declare: status, tools.list, actions.list,
 // inbox.collect, thread.page of the first thread, archive.changes, items.list, snapshot.get and options.get. Each
 // answer holds to the schema (connector.schema.json); a refusal in words is fine (a backend a test cannot reach), not
@@ -242,7 +242,7 @@ func CheckConnectors(t testing.TB, manifest []byte, run Run, config ...json.RawM
 	return h
 }
 
-// CheckChannels holds each channel the manifest contributes to the channel protocol (docs/channels.md "4.
+// CheckChannels holds each channel the manifest contributes to the channel protocol (docs/extensions/channels.md "4.
 // Contributing a channel"): channel.send of a note is sent or cannot_send, the same ref again answers the same
 // (sent once), channel.typing is taken, a send without a ref is refused, and another channel is no_contribution.
 // Every message both ways holds to the schema (channel.schema.json). It returns the host, with the messages the

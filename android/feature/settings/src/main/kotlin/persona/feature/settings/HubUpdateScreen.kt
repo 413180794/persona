@@ -32,7 +32,7 @@ import persona.core.navigation.MachineDetailRoute
 import kotlinx.coroutines.launch
 
 /**
- * Settings › Hub version (docs/hub-update.md "In the app", iOS `HubSettingsPage`, the web's `HubSettings`): the hub's version and
+ * Settings › Hub version (docs/operations/hub-update.md "In the app", iOS `HubSettingsPage`, the web's `HubSettings`): the hub's version and
  * channel, checking for and installing a release, what an update waits for (with "Update now"), a Docker hub's commands,
  * auto-update, the personad on each computer, and the history. Follows the hub's `hub_update` pushes.
  */

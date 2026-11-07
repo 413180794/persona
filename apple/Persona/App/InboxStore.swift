@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// The unified inbox as the app knows it (docs/inbox.md): the hub's items, kept on disk so the list paints at once
+/// The unified inbox as the app knows it (docs/assistant/inbox.md): the hub's items, kept on disk so the list paints at once
 /// (offline too), refreshed when the hub says `inbox` and on (re)connect. Marking done applies at once and is sent
 /// in the background; a failure puts the item back.
 @MainActor @Observable
@@ -88,7 +88,7 @@ final class InboxStore {
     }
 
     /// Mark All Seen / Clear All (a section), Mac's multi-select, and every Undo: one request for them all on the Done request
-    /// (docs/inbox.md「全部清理」). Shown at once; the hub files each as the list showed it, so one that took new
+    /// (docs/assistant/inbox.md「全部清理」). Shown at once; the hub files each as the list showed it, so one that took new
     /// messages since stays open (it goes back here too), and a failure puts them all back. Filing ends with a toast and
     /// its Undo, which brings back what was filed.
     func setDone(_ list: [InboxItem], _ done: Bool, undoable: Bool = true) {
@@ -100,7 +100,7 @@ final class InboxStore {
     }
 
     /// Clear All (the view's open items, its filters and search): filed as dismissed in the hub's bulk request
-    /// (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」); on a hub without it the Done request instead (recorded as
+    /// (`POST /api/v1/inbox/bulk`, docs/assistant/inbox.md「全部清理」); on a hub without it the Done request instead (recorded as
     /// handled there). Same as above: shown at once, put back on a failure, a toast whose Undo sends the hub's `undo`.
     func clean(_ list: [InboxItem]) {
         guard let api = AppModel.shared.api else { return }

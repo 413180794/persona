@@ -8,7 +8,7 @@
         "ios/PersonaTests/FoldedWorkTests.swift: aFoldReplacesTheStepsItCoversAndOpeningItPutsThemBack",
         "ios/Shared/ChatStore.swift: dropFolded, unfold",
         "ios/Shared/APIClient.swift: foldedWork",
-        "docs/protocol.md：折叠的工作"
+        "docs/protocol/protocol.md：折叠的工作"
       ],
       "input": {
         "initial": {

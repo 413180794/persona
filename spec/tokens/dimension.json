@@ -121,7 +121,7 @@
         "value": 44,
         "unit": "px"
       },
-      "$description": "docs/redesign/README.md D7：最小触控区要求"
+      "$description": "docs/archive/redesign/README.md D7：最小触控区要求"
     },
     "android": {
       "$type": "dimension",
@@ -129,7 +129,7 @@
         "value": 48,
         "unit": "px"
       },
-      "$description": "docs/redesign/README.md D7：最小触控区要求"
+      "$description": "docs/archive/redesign/README.md D7：最小触控区要求"
     }
   },
   "watch": {

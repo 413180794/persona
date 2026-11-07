@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// Taking back what the assistant wrote (connector.Recaller, docs/connectors.md "Sent as the user"): a comment can be
+// Taking back what the assistant wrote (connector.Recaller, docs/extensions/connectors.md "Sent as the user"): a comment can be
 // deleted, a review cannot. GitHub's REST API deletes only a review that was never submitted ("Submitted reviews
 // cannot be deleted"), and dismissing one leaves it on the page; there is nothing to call for a review that went out.
 

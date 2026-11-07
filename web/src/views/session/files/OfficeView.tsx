@@ -1,4 +1,4 @@
-// Office documents in the web's file viewer (docs/web.md "Office", #1345): docx through docx-preview, pptx through our
+// Office documents in the web's file viewer (docs/web/web.md "Office", #1345): docx through docx-preview, pptx through our
 // own reader (lib/pptx.ts), and anything else, or either when it fails, as a PDF the machine's LibreOffice writes
 // (file/convert). The rendered pages go into a frame with no scripts and no network (srcdoc, empty sandbox, CSP):
 // a document is someone else's content, and nothing in it may run as this page or call out.

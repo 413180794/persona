@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The todos are the manager's (internal/assistant, todos.go; docs/todos.md): it keeps them and answers their routes,
+// The todos are the manager's (internal/assistant, todos.go; docs/assistant/todos.md): it keeps them and answers their routes,
 // which the hub relays (assistantwire.Routes). The hub shows what the manager reports (the snapshot's TodoReport):
 // the todo on each agent's session (decorated), the task named on its agents' cards (withTask), which agents are
 // quiet (quietSession: no pushes, badges or Live Activity). An agent handed work for a todo through the hub's own

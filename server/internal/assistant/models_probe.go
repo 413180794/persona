@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// "Test connection" / "Fetch models" for a provider being added or edited (#2455, docs/launchers.md): the manager itself talks to the
+// "Test connection" / "Fetch models" for a provider being added or edited (#2455, docs/integrations/launchers.md): the manager itself talks to the
 // gateway, as cindy's provider-diagnostics / provider-model-fetch do. POST /api/v1/launchers/test sends one 1-token
 // Messages request; POST /api/v1/launchers/discover lists GET <base>/v1/models, filled in from the built-in catalog.
 // Neither ever puts the key or a header value in what it answers.

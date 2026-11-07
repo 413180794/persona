@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Installing, upgrading or removing an extension in steps (docs/protocol.md "Extension install, upgrade and uninstall progress", #3277): the hub
+ * Installing, upgrading or removing an extension in steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress", #3277): the hub
  * runs each as an operation and pushes `extension_operation` as it goes, to a client that says `extension_operations`.
  * Every field but the id has a default and unknown steps or states are kept as they are: a newer hub may add some.
  */

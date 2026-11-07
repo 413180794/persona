@@ -1,4 +1,4 @@
-// Package relayproto is what a hub and the push relay (internal/relay, docs/push-relay.md) say to each other, so the
+// Package relayproto is what a hub and the push relay (internal/relay, docs/operations/push-relay.md) say to each other, so the
 // hub does not link the relay's server.
 package relayproto
 

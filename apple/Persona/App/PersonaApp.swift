@@ -16,7 +16,7 @@ struct PersonaApp: App {
                 .environment(model)
                 .task(id: model.fleetLook) { LiveActivityController.shared.look(model.fleetLook) { model.fleetFaces } }
                 .onOpenURL { url in
-                    if MetaGlasses.shared.handle(url) { return } // the Meta AI app's callback (docs/meta-glasses.md)
+                    if MetaGlasses.shared.handle(url) { return } // the Meta AI app's callback (docs/apple/meta-glasses.md)
                     #if os(iOS)
                     if let link = FleetLink.session(url) { // tapped the Live Activity
                         // "group|machine" for another group's row (FleetMerge); a row the hub pushed names no group.
@@ -94,13 +94,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ = KeyboardState.shared // watches the keyboard from the start: a card may come while it is already up
         UNUserNotificationCenter.current().delegate = self
         Task { await ExtensionNotificationActions.preserveAndRegister { NotificationActions.categories } }
-        MetaGlasses.shared.configure() // a no-op without the Meta Wearables SDK (docs/meta-glasses.md)
+        MetaGlasses.shared.configure() // a no-op without the Meta Wearables SDK (docs/apple/meta-glasses.md)
         #if os(iOS)
         QuickAction.publish()
         #endif
         #if DEBUG
         // Simulator automation: `simctl launch … -pairURL persona://pair?...`; `-pairURL2`, `-pairURL3` pair more hubs
-        // (several groups, docs/multi-hub.md「截图」).
+        // (several groups, docs/protocol/multi-hub.md「截图」).
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
             let more = ["pairURL2", "pairURL3"].compactMap { UserDefaults.standard.string(forKey: $0).flatMap(ServerConfig.init(pairURL:)) }
             AppModel.shared.adopt([cfg] + more)
@@ -192,7 +192,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             Task { await AppDelegate.postExtensionTestNotification(sample) }
         }
         // `-showPushKey YES`: asks for notifications and writes this phone's push public key to Caches/push-key.txt, so
-        // scripts/test/relay_sim_e2e.sh can seal a push to it and send it through a local relay (docs/push-relay.md).
+        // scripts/test/relay_sim_e2e.sh can seal a push to it and send it through a local relay (docs/operations/push-relay.md).
         if d.bool(forKey: "showPushKey") {
             Task {
                 _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
@@ -241,7 +241,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// (`resolved_interaction_ids`) removes the notifications of cards that are over.
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        // Through the relay the reason is sealed (docs/push-relay.md): open it here, in the app's own process, with
+        // Through the relay the reason is sealed (docs/operations/push-relay.md): open it here, in the app's own process, with
         // each group's key (the one that opens it says whose hub needs the phone).
         guard let info = PushCrypto.notificationInfo(userInfo) else {
             completionHandler(.noData)
@@ -326,7 +326,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                     done()
                     return
                 }
-                // The group the push came from (docs/multi-hub.md「推送」): its hub settles the button, its session opens.
+                // The group the push came from (docs/protocol/multi-hub.md「推送」): its hub settles the button, its session opens.
                 let key = ref.flatMap(Self.sessionKey)
                 if let key, let reply = NotificationActions.replyText(action: action, text: text) {
                     // Reply on a finished turn: sent in the background, like a button (#3449).

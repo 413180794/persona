@@ -107,7 +107,7 @@ internal val ItemDetailPrefixes = listOf(
 
 /**
  * While an inbox item's page is open, what it reads besides the item goes to the item's manager (the merged list's
- * stamp, docs/managers.md "Clients"); the default's, or one manager, sends none.
+ * stamp, docs/assistant/managers.md "Clients"); the default's, or one manager, sends none.
  */
 @androidx.compose.runtime.Composable
 internal fun PinItemManager(source: InboxRepository, itemId: String?) {

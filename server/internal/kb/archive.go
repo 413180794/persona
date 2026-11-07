@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
-// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package kbwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type (
 	SourceChat    = kbwire.SourceChat
 	SourceMessage = kbwire.SourceMessage
@@ -30,7 +30,7 @@ type Source interface {
 	Download(ctx context.Context, media, dst string) error
 }
 
-// Engine runs the pipeline: archive, compress, evolve, tag, prune (docs/knowledge.md).
+// Engine runs the pipeline: archive, compress, evolve, tag, prune (docs/assistant/knowledge.md).
 type Engine struct {
 	// Changed is installed on Store by ObserveChanges before the pipeline starts.
 	Changed func(Change)

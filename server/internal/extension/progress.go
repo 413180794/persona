@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Installing in steps (docs/protocol.md "Extension install, upgrade and uninstall progress"): a preview says which step it is at through the
+// Installing in steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress"): a preview says which step it is at through the
 // context, so the hub can show an install's progress without the registry knowing about operations.
 
 // The steps of an install or upgrade, in order, and of an uninstall.

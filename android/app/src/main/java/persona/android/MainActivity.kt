@@ -55,11 +55,11 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    /** Text in the language of Settings › Language (docs/i18n.md). */
+    /** Text in the language of Settings › Language (docs/protocol/i18n.md). */
     override fun attachBaseContext(base: android.content.Context) = super.attachBaseContext(persona.core.designsystem.AppLanguages.wrap(base))
 
     @Inject lateinit var settingsServices: SettingsServices
-    /** The hubs' channels, for the "From WeChat" marks on messages and conversations (docs/channels.md "Source marks"). */
+    /** The hubs' channels, for the "From WeChat" marks on messages and conversations (docs/extensions/channels.md "Source marks"). */
     @Inject lateinit var channelDirectory: persona.core.contracts.api.ChannelDirectory
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var shell: AppServices
@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
                 app.hub.flatMapLatest { it?.connection?.serverFeatures ?: flowOf(emptySet()) }.distinctUntilChanged()
             }.collectAsStateWithLifecycle(emptySet())
             val lark = remember(features) { LarkFeatures.of(features) }
-            // The selected hub's managers: pages group by them when there are several (docs/managers.md step 4).
+            // The selected hub's managers: pages group by them when there are several (docs/assistant/managers.md step 4).
             val managers by managerRoster.roster.collectAsStateWithLifecycle()
             val managerGroup by managerRoster.group.collectAsStateWithLifecycle()
             AppearanceOverride(forced) { CompositionLocalProvider(

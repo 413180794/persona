@@ -1,4 +1,4 @@
-// Package conformance holds a connector to the protocol (docs/connector-protocol.md): it runs the connector on the
+// Package conformance holds a connector to the protocol (docs/protocol/connector-protocol.md): it runs the connector on the
 // program's side of the protocol (connector/serve) over a pipe, calls every capability its manifest declares both
 // through the wire and directly, and fails when the two differ — a field the wire loses, a type it changes. Built-in
 // connectors are called directly in production; this is what keeps "in the hub is one implementation of the

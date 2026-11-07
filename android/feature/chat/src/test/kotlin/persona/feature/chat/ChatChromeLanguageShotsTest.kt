@@ -53,7 +53,7 @@ import persona.core.domain.lines.LineItem
 import java.io.File
 
 /**
- * The chat's chrome in each of the app's languages (docs/i18n.md, #2453): the top bar and its menu, the composer with
+ * The chat's chrome in each of the app's languages (docs/protocol/i18n.md, #2453): the top bar and its menu, the composer with
  * attachments and the queue strip, the request dock (tool approval, plan, question), the mode sheet, an API error card
  * and the message menu, Glass light and dark. PNGs in `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  */

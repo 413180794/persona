@@ -1,4 +1,4 @@
-// Pure mapping between Paseo's shapes and Persona's (docs/paseo.md "Mapping"): an agent → a session row, its timeline →
+// Pure mapping between Paseo's shapes and Persona's (docs/integrations/paseo.md "Mapping"): an agent → a session row, its timeline →
 // items, its providers → launchers, a permission request ↔ an interaction and its answer. No I/O: the bridge
 // (bridge.js) hands in what the daemon said; the tests feed recorded shapes.
 
@@ -152,7 +152,7 @@ export function rowStatus(agent) {
 // ---- spaces ----
 
 /**
- * The Paseo project of a placement (docs/paseo.md "Which sessions show"): a repository's checkout and all its worktrees, as
+ * The Paseo project of a placement (docs/integrations/paseo.md "Which sessions show"): a repository's checkout and all its worktrees, as
  * in Paseo's sidebar. The placement's projectKey is Paseo's project record id (its buildProjectPlacementForWorkspace),
  * not the project's own key. Undefined without a placement.
  */
@@ -234,7 +234,7 @@ export function projectSpaces(placed, canon = (p) => p) {
 }
 
 /**
- * The runtime.sessions row of an agent (docs/runtimes.md "List"), undefined for one not listed.
+ * The runtime.sessions row of an agent (docs/integrations/runtimes.md "List"), undefined for one not listed.
  * @param {object} agent - an AgentSnapshotPayload
  * @param {{ project?: object, roots?: Record<string, string>, labels?: Record<string, string>, lastText?: string,
  *   spaceId?: string, spaceName?: string }} [o]
@@ -487,7 +487,7 @@ function alwaysLabel(suggestions) {
 }
 
 /**
- * The interaction a pending request becomes on the phone (docs/protocol.md Interaction): a question, a plan, or a
+ * The interaction a pending request becomes on the phone (docs/protocol/protocol.md Interaction): a question, a plan, or a
  * permission. The id is stable (interactionId), so a restart hangs the same request on the card already shown.
  */
 export function interactionOf(sessionId, request) {

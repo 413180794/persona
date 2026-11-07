@@ -10,12 +10,12 @@ import (
 	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
-// Identity hints (docs/connectors.md "2 · 6"): who a sender is in a form two sources can share — an email address,
+// Identity hints (docs/extensions/connectors.md "2 · 6"): who a sender is in a form two sources can share — an email address,
 // a phone number, a GitHub login — so the same person can later be recognised across them. Only an HMAC of each,
 // under the hub's own key (Engine.HandleKey), is kept: in the person's handles.json, never in meta.json, so no tool
 // or prompt shows them (they mean nothing to a model). Merging people is not done here.
 
-// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package kbwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type Handle = kbwire.Handle
 
 const (

@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Persona
 
-/// Operating a Mac through Cua Driver (the hub's plugin cua, docs/computer-use.md): what the machine list says of it,
+/// Operating a Mac through Cua Driver (the hub's plugin cua, docs/extensions/computer-use.md): what the machine list says of it,
 /// and how the assistant's two tools read in the chat.
 @MainActor
 struct ComputerTests {

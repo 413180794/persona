@@ -198,7 +198,7 @@
       "required": ["entry", "bundle", "sha256"]
     },
     "Resources": {
-      "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md \"Sandbox\"): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
+      "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions/extensions.md \"Sandbox\"): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -215,7 +215,7 @@
       ]
     },
     "NodeRuntime": {
-      "description": "The extension's program on computers (docs/extensions.md \"Programs running on computers\"): one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).",
+      "description": "The extension's program on computers (docs/extensions/extensions.md \"Programs running on computers\"): one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -355,7 +355,7 @@
     "LookID": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "A look's id: also a persona package's (the apps cache by it)."},
     "BuiltinLook": {"type": "string", "enum": ["persona"], "description": "The look every app draws itself: Mochi (the default)."},
     "LookTexts": {
-      "description": "A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
+      "description": "A text in the other languages, by code (docs/protocol/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub checks).",
       "type": "object",
       "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 40}
     },
@@ -381,7 +381,7 @@
       "required": ["sizes"]
     },
     "LookPalette": {
-      "description": "An appearance's colors, #RRGGBB (docs/persona.md \"Palettes\", the apps' PersonaPalette).",
+      "description": "An appearance's colors, #RRGGBB (docs/apple/persona.md \"Palettes\", the apps' PersonaPalette).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -433,7 +433,7 @@
       "required": ["states"]
     },
     "LookItem": {
-      "description": "A look (docs/extensions.md \"Looks\"): Persona's name, face, colors and dot, served as a persona package. app_icon_fallback is the built-in icon used where only the app's own icons can be shown.",
+      "description": "A look (docs/extensions/extensions.md \"Looks\"): Persona's name, face, colors and dot, served as a persona package. app_icon_fallback is the built-in icon used where only the app's own icons can be shown.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -509,7 +509,7 @@
       "required": ["id"]
     },
     "ConnectorItem": {
-      "description": "The connector protocol's manifest (docs/connector-protocol.md).",
+      "description": "The connector protocol's manifest (docs/protocol/connector-protocol.md).",
       "type": "object",
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*$"},

@@ -1,5 +1,5 @@
 // What the chat's ⋯ menu changes on a session: notifications (mutes), the run modes, the name
-// (docs/protocol.md `/mutes`, `/modes`, `/rename`; iOS Pins.togglingMute, SessionModes).
+// (docs/protocol/protocol.md `/mutes`, `/modes`, `/rename`; iOS Pins.togglingMute, SessionModes).
 import { t } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { sessionCan } from "./format";

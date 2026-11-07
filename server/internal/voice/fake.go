@@ -11,7 +11,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The fake dialect (DialectFake, hub.json only; docs/voice.md "Files"): no realtime service at all. A conversation
+// The fake dialect (DialectFake, hub.json only; docs/assistant/voice.md "Files"): no realtime service at all. A conversation
 // runs against an in-process stand-in: a line the app types is handed over as a delegation, word for word, and what the
 // model would be told to speak about (a result, a refusal) comes back as its line in the captions, as it was rendered.
 // So a voice conversation can be run against a real hub and real agents without a GPT-Live service.

@@ -19,7 +19,7 @@ import (
 // (`personad node --stdio`, what the hub starts over ssh) share the work: when a resident node is listening, the relay
 // only pipes the ssh connection to it, and the resident node serves it. Everything the node starts (the assistant's
 // claude, its key helper) then runs in the login session, where the login keychain is unlocked: an ssh session
-// can't read it, so a claude whose API key comes from the keychain fails to authenticate there (docs/server.md).
+// can't read it, so a claude whose API key comes from the keychain fails to authenticate there (docs/server/server.md).
 //
 // No resident node listening: --stdio serves the connection itself, as before. The hub doesn't know the difference.
 

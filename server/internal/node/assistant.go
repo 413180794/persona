@@ -36,7 +36,7 @@ import (
 
 const assistantIdleTimeout = 20 * time.Minute
 
-// A long conversation is compacted (docs/assistant.md "Compaction"): every restart after the prompt cache expired (an hour)
+// A long conversation is compacted (docs/assistant/assistant.md "Compaction"): every restart after the prompt cache expired (an hour)
 // writes the whole context again, half a million tokens for an assistant conversation that had never been compacted.
 // Claude Code compacts on its own once the context nears the auto-compact window, also under -p (tested on 2.1.314):
 // CLAUDE_CODE_AUTO_COMPACT_WINDOW lowers that from the model's 1M to 200K. Its own idle compaction only runs in
@@ -214,7 +214,7 @@ func (p *assistantProc) missingCommand() bool {
 }
 
 // startRefusal is err, the failed start of p, coded when what is missing is plain from what it printed
-// (docs/onboarding.md 4.6): Claude Code itself (claude_missing: the shell has no claude, or `personad launch` found
+// (docs/assistant/onboarding.md 4.6): Claude Code itself (claude_missing: the shell has no claude, or `personad launch` found
 // none), or the launcher (launcher_missing: a ~/.zshrc function or alias that is gone). The hub says it in plain words
 // and keeps err's text as the detail (apierr.Call); nothing was delivered.
 func (p *assistantProc) startRefusal(err error) error {
@@ -314,7 +314,7 @@ func (n *Node) isAssistantSession(id string) bool {
 
 // assistantResumable: conversation id can be continued, its process is running or its transcript is still on disk.
 // A scheduled task's own conversation is sent with resume_only, so one that is gone (cleaned up after 30 days, or
-// never written) starts a new conversation at the hub instead of a blank one under the old id (docs/assistant.md
+// never written) starts a new conversation at the hub instead of a blank one under the old id (docs/assistant/assistant.md
 // "Scheduled tasks").
 func (n *Node) assistantResumable(id string) bool {
 	if n.runtimeAssistant(id) { // a runtime keeps it: still its while the runtime knows it
@@ -582,7 +582,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 
 // storedCwd is where a conversation resumed without a folder runs: the folder it ran in before (the node's state, kept
 // in the hub's database), else the assistant directory. A stored folder that is gone (the data directory moved,
-// docs/persona-cutover.md) is the folder of the same name in the data directory when there is one (the assistant
+// docs/operations/persona-cutover.md) is the folder of the same name in the data directory when there is one (the assistant
 // directory, the health space, another manager's), else the assistant directory: it is never made again where it was,
 // which would start the conversation in an empty folder without its instructions and memory (#6299).
 func (n *Node) storedCwd(stored string) string {

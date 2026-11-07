@@ -1,4 +1,4 @@
-// The assistant's memory (docs/assistant.md, docs/protocol.md `/assistant/memory`): one Markdown file per memory with a
+// The assistant's memory (docs/assistant/assistant.md, docs/protocol/protocol.md `/assistant/memory`): one Markdown file per memory with a
 // frontmatter (name, description, type), plus the index MEMORY.md whose lines "- [title](file.md) — note" give friendlier
 // titles than the slugs. The iOS app's AssistantMemoryEntry / AssistantMemoryView, as pure functions.
 

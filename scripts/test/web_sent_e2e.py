@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of Settings › Sent as you (#5278, docs/web.md "Settings", docs/connectors.md "Sent as the user"): the
+"""End-to-end check of Settings › Sent as you (#5278, docs/web/web.md "Settings", docs/extensions/connectors.md "Sent as the user"): the
 tab and its place on the phone's list, the rows (where, the first two lines, how each was let through, who asked), a chat
 link, Load earlier, the connector chips and the empty state under one, the details (every field, a text of exactly 4000
 characters noted as cut, copy), and the other states (an empty ledger, no database, no full access, an older hub), at

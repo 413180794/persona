@@ -114,7 +114,7 @@ type ManagerInstallCode struct {
 }
 
 // ManagerInstallKept is how long a manager that was made and never installed stays in the roster after its last code
-// expired (as installing, its code expired: the app offers a new one); after that it is dropped (docs/managers.md,
+// expired (as installing, its code expired: the app offers a new one); after that it is dropped (docs/assistant/managers.md,
 // "Install codes").
 const ManagerInstallKept = 7 * 24 * time.Hour
 

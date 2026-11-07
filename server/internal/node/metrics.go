@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/sysmon"
 )
 
-// The machine pages (docs/machines.md): what this machine is goes out once with node.info, how busy it is as a
+// The machine pages (docs/server/machines.md): what this machine is goes out once with node.info, how busy it is as a
 // "metrics" notification every proto.MetricEvery. The hub keeps the history; the node keeps nothing.
 
 func (n *Node) system(ctx context.Context) *proto.System {
@@ -34,7 +34,7 @@ func (n *Node) sampleMetrics(ctx context.Context) {
 		start := time.Now()
 		s := c.Sample(start.Round(time.Second))
 		took += time.Since(start)
-		if i == 30 { // the cost, once per node start (docs/machines.md "Overhead")
+		if i == 30 { // the cost, once per node start (docs/server/machines.md "Overhead")
 			n.logger.Printf("metrics: a sample takes %v on average", (took / 30).Round(10*time.Microsecond))
 		}
 		if n.peer != nil {

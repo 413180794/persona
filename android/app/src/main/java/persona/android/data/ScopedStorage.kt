@@ -18,7 +18,7 @@ import java.io.File
 
 /**
  * Keep the injected facade stable while each pairing owns its actual DataStore. The merged lists' settings live with
- * the first hub group, so changing the group the hub-level pages show does not change them (docs/android.md "Multiple hubs").
+ * the first hub group, so changing the group the hub-level pages show does not change them (docs/android/android.md "Multiple hubs").
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ScopedListPreferences(private val runtime: ConnectionRuntime) : DataStore<Preferences> {

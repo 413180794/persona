@@ -3,7 +3,7 @@ import ImageIO
 import SwiftUI
 import WatchKit
 
-/// The Milk Frog's files on this watch (docs/persona.md "The Milk Frog on the watch"): fetched from the hub, by hash,
+/// The Milk Frog's files on this watch (docs/apple/persona.md "The Milk Frog on the watch"): fetched from the hub, by hash,
 /// and shown only once all of them are here. An older hub has none, and the watch simply shows no frog.
 @Observable
 final class WatchPetPack {

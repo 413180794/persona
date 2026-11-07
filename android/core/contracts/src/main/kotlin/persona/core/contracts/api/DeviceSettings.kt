@@ -47,7 +47,7 @@ interface DeviceSettings {
     suspend fun savePreferences(preferences: DeviceNotificationPreferences): DeviceNotificationPreferences
 
     /**
-     * Settings › Devices › "Connect a new device": `POST /api/v1/auth/pair-codes` with the page address of this hub (docs/protocol.md "Temporary pairing"),
+     * Settings › Devices › "Connect a new device": `POST /api/v1/auth/pair-codes` with the page address of this hub (docs/protocol/protocol.md "Temporary pairing"),
      * a one-time code for another app (its QR rows) and the browser sign-in link.
      */
     suspend fun pairCode(): AppPairCode = throw UnsupportedOperationException("pair-codes")

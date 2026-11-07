@@ -274,7 +274,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator, onOpenCard: (
                     else -> JEmptyState(stringResource(R.string.inbox_empty_filtered_title), stringResource(R.string.inbox_empty_filtered_text), icon = PhIcons.CheckCircle)
                 }
             }
-            // Several managers (docs/managers.md step 4): each one's inbox under its name, its sections inside.
+            // Several managers (docs/assistant/managers.md step 4): each one's inbox under its name, its sections inside.
             val byManager = inboxByManager(roster, groups) { row ->
                 if (row.type == InboxRowType.Interaction) interactions[row.id]?.manager else records[row.id]?.manager
             }

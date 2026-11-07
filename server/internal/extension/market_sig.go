@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// A market's signature (docs/extensions.md "Signatures", #1848): next to the index, <index>.sig is
+// A market's signature (docs/extensions/extensions.md "Signatures", #1848): next to the index, <index>.sig is
 // {"alg": "ed25519", "key_id": "<first 16 hex of sha256 of the 32-byte key>", "sig": "<base64 of the signature of the
 // index file's raw bytes>"}. The hub trusts the key it saw first (or the one its owner accepted), never the index's own
 // signing_key, which is only a hint of what a new key is.

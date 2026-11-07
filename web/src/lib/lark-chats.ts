@@ -1,8 +1,8 @@
-// "Messages" (docs/lark-migration.md "Entry point", the narrow exception of #392): every Feishu private and group chat in one
+// "Messages" (docs/extensions/lark-migration.md "Entry point", the narrow exception of #392): every Feishu private and group chat in one
 // list, shown only when this browser turned on Settings › Connectors › Lark › "Show messages on home" (off by default, kept per browser like
 // the app keeps it per device). The list reads the hub's account-bound snapshots (`account_bound=1`): conversations a
 // page at a time and the pinned conversations on top. A chat opens in the inbox's Feishu chat view (LarkThread).
-// Each Feishu account has its own list (docs/feishu.md "Multiple accounts", lark-accounts.ts); rows carry the account they are in.
+// Each Feishu account has its own list (docs/extensions/feishu.md "Multiple accounts", lark-accounts.ts); rows carry the account they are in.
 // Nothing is written to disk: the last list lives in memory for this tab only.
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
@@ -303,7 +303,7 @@ export function useLarkChats(store: LarkChatsStore = larkChats): LarkChatsState 
 }
 
 /** The signed-in Feishu user of account `ol` as the hub last said (an add-Pin write carries it); another manager's
- *  (an inbox item's, docs/managers.md "Clients") is asked of it, as the Messages page's lists are the default's. */
+ *  (an inbox item's, docs/assistant/managers.md "Clients") is asked of it, as the Messages page's lists are the default's. */
 export async function larkAccount(ol?: number, manager?: string): Promise<string> {
   const known = itemHeaders(manager) ? undefined : larkChatsFor(ol).state.account;
   if (known) return known;

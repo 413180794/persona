@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Dates, times and numbers in the language the text is in (docs/i18n.md). Formats come from skeletons (which fields
+ * Dates, times and numbers in the language the text is in (docs/protocol/i18n.md). Formats come from skeletons (which fields
  * to show) and the locale picks order and words: `MMMd` is "Nov 5" in English and month-then-day with the CJK unit characters in Chinese and Japanese. Never write a
  * pattern with words in it (Chinese month / day characters, say) in a page.
  */

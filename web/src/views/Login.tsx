@@ -11,7 +11,7 @@ import { tRich } from "../i18n/rich";
 
 const code = "whitespace-nowrap rounded-[5px] bg-field px-1 py-0.5 font-mono text-[11.5px] text-ink-2 shadow-hairline";
 
-// Sign in without a terminal (docs/onboarding.md 4.2, 4.5): first a login code from a device that is already signed
+// Sign in without a terminal (docs/assistant/onboarding.md 4.2, 4.5): first a login code from a device that is already signed
 // in (Settings › Devices › Connect a new device › Browser makes a `#token=jp_…` link: opened here it signs in by itself, App.tsx), then a
 // pasted pairing / login link. The hub's own token and the commands that print it are folded under "Advanced". `error` is
 // what went wrong with a token that came in the link.

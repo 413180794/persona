@@ -1,6 +1,6 @@
 package assistant
 
-// Golden tests for the inbox's prompts (testdata/prompts/inbox_*.golden; docs/prompts.md): UPDATE_GOLDEN=1 writes them.
+// Golden tests for the inbox's prompts (testdata/prompts/inbox_*.golden; docs/assistant/prompts.md): UPDATE_GOLDEN=1 writes them.
 
 import (
 	"context"

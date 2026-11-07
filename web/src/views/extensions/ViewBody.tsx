@@ -1,4 +1,4 @@
-// How a View's sections look (docs/extensions.md "Declarative UI" "UI slots"), with the web's design system: every kind of
+// How a View's sections look (docs/extensions/extensions.md "Declarative UI" "UI slots"), with the web's design system: every kind of
 // item — text, metric, progress, row (with an icon, a picture or a thumbnail), button, link, field, divider, chart,
 // stat_grid, segmented, UI version 3's markdown, table, empty and loading, and UI version 4's code hosting components
 // (CodeViews.tsx: header, breadcrumb, file_tree, code, diff, comment_thread, composer) and split layout — and a

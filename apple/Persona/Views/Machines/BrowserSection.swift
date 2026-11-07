@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Browser (ego lite) on a Mac's page while the hub's plugin ego is on (docs/plan-ego-browser.md): the switch that lets
+/// Browser (ego lite) on a Mac's page while the hub's plugin ego is on (docs/plans/plan-ego-browser.md): the switch that lets
 /// the assistant drive its ego lite, and how far that is: Install ego lite when it is not there; its first-run setup as
 /// steps (open it on the Mac or over its live screen, import a browser's data, finish); Ready in green, with what is left
 /// (its usage statistics) ticked or not. The node is asked again when the page opens, and every few seconds while a job

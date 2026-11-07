@@ -28,13 +28,13 @@ import (
 	"github.com/nwverse/persona/server/internal/update"
 )
 
-// The hub updating itself to the publisher's release (docs/hub-update.md"Updates"): check the manifest every hour, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old
+// The hub updating itself to the publisher's release (docs/operations/hub-update.md"Updates"): check the manifest every hour, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old
 // one), restart into the new one, and count it a success only once the machines that were connected are back;
 // otherwise go back to the old binary, by the new process itself or by the old one's watchdog. A build that went
 // back is not tried again automatically. Then the nodes follow, through deploy.go.
 
 const (
-	updateCheckEvery   = time.Hour // docs/hub-update.md "Checking for updates" (hourly since 2026-11-07)
+	updateCheckEvery   = time.Hour // docs/operations/hub-update.md "Checking for updates" (hourly since 2026-11-07)
 	updateFirstCheck   = time.Minute
 	updateConfirmIn    = 2 * time.Minute
 	updateWatchFor     = 3 * time.Minute
@@ -732,7 +732,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		return
 	}
 	if u.handover != nil {
-		// Blue-green (docs/hub-restart.md "Blue-green switch"): the edge starts the new binary next to this one and hands over
+		// Blue-green (docs/operations/hub-restart.md "Blue-green switch"): the edge starts the new binary next to this one and hands over
 		// only once it checked itself; this process goes on serving until then, and stops when the edge releases it.
 		// The edge is the watchdog too (it goes back when the new one does not confirm the update in time).
 		u.set("restarting", "", "")
@@ -927,7 +927,7 @@ func (u *updater) dockerImage() (update.Image, error) {
 	return update.ParseImage(s)
 }
 
-// checkImage asks the registry for the newest release of the image this Docker hub runs (docs/hub-update.md "Docker").
+// checkImage asks the registry for the newest release of the image this Docker hub runs (docs/operations/hub-update.md "Docker").
 // A private image needs PERSONA_REGISTRY_TOKEN (a read token) in the container's environment.
 func (u *updater) checkImage(ctx context.Context) error {
 	im, err := u.dockerImage()

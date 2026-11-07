@@ -28,7 +28,7 @@ import persona.core.hub.errors.ExitRecord
 import persona.core.hub.errors.HttpErrorReportTransport
 
 /**
- * The app's errors and crashes for the hub's `error_reports` (docs/android.md "Error reports"): an uncaught exception
+ * The app's errors and crashes for the hub's `error_reports` (docs/android/android.md "Error reports"): an uncaught exception
  * is written to the queue before the process dies, ANRs and native crashes are read from the system's exit reasons at
  * the next start, and the queue goes to the selected hub while its hello says `error_reports`.
  */
@@ -75,7 +75,7 @@ class ErrorReporting(private val context: Context) {
 
     /**
      * Reads the earlier exits once, then sends whenever the selected group's hub comes online. Only that one hub
-     * gets reports (docs/android.md "Multiple hubs"): the one the hub-level pages show, so the reports of one phone
+     * gets reports (docs/android/android.md "Multiple hubs"): the one the hub-level pages show, so the reports of one phone
      * go to one place and a member hub without the extension does not clear what the selected one would take.
      */
     @OptIn(ExperimentalCoroutinesApi::class)

@@ -1,4 +1,4 @@
-// Package extmgr is the manager's extensions, connectors and bots (docs/extensions.md "Who owns what"), moved here from
+// Package extmgr is the manager's extensions, connectors and bots (docs/extensions/extensions.md "Who owns what"), moved here from
 // the hub as they were: the extension registry and its tables (plugins, plugin_secrets, plugin_audit, the markets),
 // installing, upgrading, rolling back and removing, the markets and auto-upgrade, the programs (extension/host, their
 // sandbox and egress proxy, metrics, logs, dev taps), their settings and secrets (only this package opens them), the

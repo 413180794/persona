@@ -3,7 +3,7 @@ package proto
 import "strings"
 
 // MessageRefMost is the most of a message ref, the id of a message Persona sent as the user on the other side, that the
-// sent-as-user ledger keeps, in characters (docs/connectors.md "Sent as the user").
+// sent-as-user ledger keeps, in characters (docs/extensions/connectors.md "Sent as the user").
 const MessageRefMost = 200
 
 // CleanMessageRef is a message ref as the ledger keeps it: an id of the service's own form, so it stays as it is, only

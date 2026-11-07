@@ -54,7 +54,7 @@ class HttpAgentCreationService(
     ))
     override suspend fun start(request: AgentStartRequest, operationId: String): AgentStartResult {
         UUID.fromString(operationId)
-        // An empty launcher follows the hub's "New Agent" model configuration (docs/model-config.md).
+        // An empty launcher follows the hub's "New Agent" model configuration (docs/assistant/model-config.md).
         require(request.machineId.isNotBlank() && request.cwd.isNotBlank())
         val body = compatibleRequestBody("/api/v1/sessions", JsonCodec.encodeToString(request).toRequestBody("application/json".toMediaType()))!!
         // A lost response must be reconciled through operation(), never by posting again.

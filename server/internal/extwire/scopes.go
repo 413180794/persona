@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// An extension's token (docs/extensions.md "Permissions") opens the routes of the scopes the user granted the extension and
+// An extension's token (docs/extensions/extensions.md "Permissions") opens the routes of the scopes the user granted the extension and
 // no other; the manager made the token and checks it (extensions.authorize), with this table of the hub's routes.
 
 // RouteScopes are the routes an extension's token may call, by the pattern they are registered with, and the scope

@@ -66,7 +66,7 @@ function hash(s: string) {
 }
 
 /** `manager`: whose item the picture is of (a list row's; inside an item's view, ItemManager tells), so its URL names
- *  that manager (docs/managers.md "Clients"). */
+ *  that manager (docs/assistant/managers.md "Clients"). */
 export function Monogram({ name, size = 40, square, neutral, src, manager }: { name: string; size?: number; square?: boolean; neutral?: boolean; src?: string; manager?: string }) {
   const owner = useItemManager();
   const shape = square ? "rounded-[10px]" : "rounded-full";

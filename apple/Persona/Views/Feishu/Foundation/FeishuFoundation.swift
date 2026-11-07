@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - API
 
 /// Feishu data beyond chats comes through the hub's read-only window onto the Lark gateway's agent API:
-/// `/api/v1/lark/raw/<path>` = the Lark gateway's `/agent/v1/<path>` (see docs/protocol.md「飞书 API」). Media / API paths inside
+/// `/api/v1/lark/raw/<path>` = the Lark gateway's `/agent/v1/<path>` (see docs/protocol/protocol.md「飞书 API」). Media / API paths inside
 /// the JSON already point back at the hub, so they load with `LarkRemoteImage` / `LarkMedia`.
 extension APIClient {
     /// GET one Lark gateway agent route, decoded. `path` has no leading slash, e.g. "documents/recent".

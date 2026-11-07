@@ -1,6 +1,6 @@
 package node
 
-// A new agent in a Git worktree of its own (#6115, docs/terminal.md "A new agent in a worktree"): worktree.add makes one
+// A new agent in a Git worktree of its own (#6115, docs/integrations/terminal.md "A new agent in a worktree"): worktree.add makes one
 // of the repository a folder is in, under the directory the computer already puts this repository's checkouts in (#2431,
 // worktreesDir), on a branch of its own (persona/<the agent's name>), and opens nothing: the agent's start opens its
 // workspace. worktree.status tells whether a folder is such a worktree and what removing it would lose; worktree.remove

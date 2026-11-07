@@ -307,7 +307,7 @@ export interface EmojiCatalog {
   groups: { title: string; keys: string[] }[];
 }
 
-// by manager ("": the default's): each manager reads its own Lark (docs/managers.md "Clients")
+// by manager ("": the default's): each manager reads its own Lark (docs/assistant/managers.md "Clients")
 const catalogs = new Map<string, Promise<EmojiCatalog>>();
 const quicks = new Map<string, Promise<string[]>>();
 

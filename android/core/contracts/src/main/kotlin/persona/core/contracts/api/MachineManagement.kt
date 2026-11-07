@@ -16,7 +16,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * What the app changes on a machine (docs/protocol.md "REST"): its launchers, reconnecting and redeploying its node,
+ * What the app changes on a machine (docs/protocol/protocol.md "REST"): its launchers, reconnecting and redeploying its node,
  * its terminal engine, whether botmux's sessions are listed, and its whitelisted Claude Code and Codex settings. Bound to the active pairing; every call goes to the
  * hub that is paired when it is made.
  */
@@ -94,7 +94,7 @@ interface MachineManagement {
 
     /**
      * Move to…: `POST /api/v1/managers/{manager}/machines {"machine_id"}` gives the computer to another manager
-     * (docs/managers.md "Moving a machine or a source"); the hub's `machines` push then shows its new stamp.
+     * (docs/assistant/managers.md "Moving a machine or a source"); the hub's `machines` push then shows its new stamp.
      */
     suspend fun moveToManager(machineId: String, manager: String): MachineMove = throw UnsupportedOperationException("managers")
 }
@@ -107,7 +107,7 @@ data class MachineMove(
     val from: String = "",
 )
 
-/** One Claude Code config directory of a machine (Settings › Claude Code › "Hidden config directories", docs/claude-integration.md). */
+/** One Claude Code config directory of a machine (Settings › Claude Code › "Hidden config directories", docs/integrations/claude-integration.md). */
 @Serializable
 data class ClaudeDir(
     /** As Claude Code was given it ("~/…" or absolute). */

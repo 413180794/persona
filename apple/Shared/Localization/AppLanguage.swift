@@ -1,12 +1,12 @@
 import Foundation
 
-// The interface language (docs/i18n.md「选哪种语言」, docs/ios.md「界面语言」): zh-Hans, en or ja.
+// The interface language (docs/protocol/i18n.md「选哪种语言」, docs/apple/ios.md「界面语言」): zh-Hans, en or ja.
 //
 // Settings › Appearance › Language picks Match System (default) or one of the three. The choice is applied the way iOS's own per-app
 // language setting applies it: `AppleLanguages` in the app's defaults, read by Foundation when the process starts.
 // So a change takes effect the next time the app opens (Foundation's `String(localized:)` cannot be pointed at
 // another language in a running process); the settings page says so. Following the system resolves the system's
-// first preferred language with docs/i18n.md's rule rather than the bundle's matching (which would fall back to the
+// first preferred language with docs/protocol/i18n.md's rule rather than the bundle's matching (which would fall back to the
 // development language for French and miss Traditional Chinese).
 //
 // The extensions and the watch use the same language: the app writes the resolved code into the App Group
@@ -38,7 +38,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         self == .system ? Self.resolve(system) : rawValue
     }
 
-    /// docs/i18n.md: any Chinese → zh-Hans, any Japanese → ja, anything else (or nothing) → en. Only the language
+    /// docs/protocol/i18n.md: any Chinese → zh-Hans, any Japanese → ja, anything else (or nothing) → en. Only the language
     /// subtag counts, case-insensitive, `_` read as `-`.
     static func resolve(_ tag: String?) -> String {
         let lang = (tag ?? "").replacingOccurrences(of: "_", with: "-").split(separator: "-").first.map { $0.lowercased() }
@@ -159,7 +159,7 @@ nonisolated final class LanguageStore: @unchecked Sendable {
 }
 
 extension Locale {
-    /// The locale for formatting dates and numbers (docs/i18n.md「日期、数字、排序」): the system's when its language
+    /// The locale for formatting dates and numbers (docs/protocol/i18n.md「日期、数字、排序」): the system's when its language
     /// is the interface language (keeps regional habits, en-GB's day order), else the interface language's.
     nonisolated static var interface: Locale {
         let ui = LanguageStore.shared.launched

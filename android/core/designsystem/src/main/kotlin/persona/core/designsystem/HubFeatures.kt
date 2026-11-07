@@ -10,7 +10,7 @@ import persona.core.contracts.LarkFeatures
 val LocalLarkFeatures = compositionLocalOf { LarkFeatures.All }
 
 /**
- * The selected hub's features (its hello's `features`, docs/protocol.md): what a page offers only on hubs that can do it
+ * The selected hub's features (its hello's `features`, docs/protocol/protocol.md): what a page offers only on hubs that can do it
  * (`assistant_compact`, `assistant_main_new`). Empty until a hello says otherwise, and in the demo.
  */
 val LocalHubFeatures = compositionLocalOf { emptySet<String>() }

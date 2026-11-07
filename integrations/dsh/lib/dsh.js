@@ -1,5 +1,5 @@
 import { mcpToolNames } from '../../runtime-sdk/lib/compat.js'
-// The DSH runtime (docs/dsh.md): DSH's sessions in Persona through the runtime SDK (docs/runtimes.md). Only what is
+// The DSH runtime (docs/integrations/dsh.md): DSH's sessions in Persona through the runtime SDK (docs/integrations/runtimes.md). Only what is
 // DSH's own lives here — listing and paging through sessionController, mapping its session events (map.js), and
 // putting its approval / question waterfalls in front of the phone; the SDK does the connection, watching, batching,
 // live text, asking and the who-answers-first policy. Everything DSH-specific comes in through `deps`, so the tests
@@ -14,7 +14,7 @@ import { attachmentOf, dshSeq, eventItems, itemsOf, personaSeq, lastText, stream
 export const RUNTIME_VERSION = '0.5.0'
 
 // The DSH permission preset for each Persona permission mode of an assistant conversation (config presets overrides):
-// Codex's mapping, in DSH's presets (docs/dsh.md "Assistant"). DSH has no auto mode: as the default.
+// Codex's mapping, in DSH's presets (docs/integrations/dsh.md "Assistant"). DSH has no auto mode: as the default.
 const DEFAULT_PRESETS = { default: 'workspace-write', acceptEdits: 'workspace-write', auto: 'workspace-write',
   plan: 'read-only', bypassPermissions: 'danger-full-access' }
 
@@ -57,7 +57,7 @@ const LEARN_EVERY = 5 * 60_000 // ms: read a parent's subagent catalog again at 
 const STARTED_SUBAGENT = /^started subagent (\S+)/ // DSH's subagent tool result: the child it started
 
 /**
- * A subagent's id as Persona sees it, "<parent>@<child>" (docs/runtimes.md "Subagents"), split; undefined for another id.
+ * A subagent's id as Persona sees it, "<parent>@<child>" (docs/integrations/runtimes.md "Subagents"), split; undefined for another id.
  * @param {string} id
  */
 export function splitChild(id) {
@@ -72,11 +72,11 @@ export function splitChild(id) {
  *   retryMs?: number, assistant?: boolean, presets?: Record<string, string>, listen?: { port: number, host?: string,
  *   path?: string, token: string | (() => string) }, package?: { name: string, hash: string },
  *   onUpdate?: Function }} [options] - runtime / name / launcher:
- *   how this DSH shows in Persona (dsh / DSH / dsh). assistant: it may run the Persona assistant (docs/dsh.md "Assistant");
+ *   how this DSH shows in Persona (dsh / DSH / dsh). assistant: it may run the Persona assistant (docs/integrations/dsh.md "Assistant");
  *   presets: the DSH permission preset for each Persona permission mode of an assistant conversation. listen: be a
- *   daemon the node dials (docs/daemons.md) instead of connecting to runtime.sock: DSH running as another user, in a
+ *   daemon the node dials (docs/integrations/daemons.md) instead of connecting to runtime.sock: DSH running as another user, in a
  *   container, on another machine (the node's daemons.json names it then, and a daemon does not run the assistant).
- *   package / onUpdate: from the loader (lib/plugin.js), passed on to createRuntime (docs/runtimes.md "Auto-update").
+ *   package / onUpdate: from the loader (lib/plugin.js), passed on to createRuntime (docs/integrations/runtimes.md "Auto-update").
  */
 export function createDshRuntime(deps, options = {}) {
   const runtimeID = options.runtime ?? 'dsh'
@@ -87,7 +87,7 @@ export function createDshRuntime(deps, options = {}) {
   const known = new Map() // session id -> { lastSeq (DSH), lastText, running }
   const calls = new Map() // session id -> Map(callId -> { name, args }): recent tool calls, for approval cards
   const texts = new Map() // session id -> the assistant text being generated
-  // Subagents (DSH's child sessions: subagent tool, workflows) and background jobs (docs/dsh.md "Subagents and background jobs").
+  // Subagents (DSH's child sessions: subagent tool, workflows) and background jobs (docs/integrations/dsh.md "Subagents and background jobs").
   const parents = new Map() // child session id -> its parent session id
   const children = new Map() // child session id -> { label, callId, createdAt }
   const learned = new Map() // parent session id -> when its catalog was last read
@@ -305,7 +305,7 @@ export function createDshRuntime(deps, options = {}) {
     known.delete(params.session_id)
   }
 
-  // ---- the hub's tools for DSH's agents (phone_*, mail_*: docs/dsh.md "Phone tools") ----
+  // ---- the hub's tools for DSH's agents (phone_*, mail_*: docs/integrations/dsh.md "Phone tools") ----
 
   /** The DSH tool for one of the hub's tools: called through the node (mcp.call), its text as the result. */
   function toolDefinition(t, assistantOnly, name) {
@@ -865,7 +865,7 @@ export function createDshRuntime(deps, options = {}) {
         state(String(sessionId)).running = running === true
         rt.sessionsChanged()
       })
-      // First on DSH's answerer chains (the Web GUI registers when a browser connects): see docs/dsh.md.
+      // First on DSH's answerer chains (the Web GUI registers when a browser connects): see docs/integrations/dsh.md.
       listen('approval/request', onApproval, { global: true, prepend: true })
       listen('user-questions/request', onQuestion, { global: true, prepend: true })
       if (options.assistant) listen('tools/pre-execute', onPreExecute, { global: true, prepend: true })

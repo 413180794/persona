@@ -4,7 +4,7 @@ import AVFoundation
 import Foundation
 import os
 
-// The call's audio on an iPhone and in CarPlay (docs/voice.md 6.4). Adapted from the audio half of the earlier
+// The call's audio on an iPhone and in CarPlay (docs/assistant/voice.md 6.4). Adapted from the audio half of the earlier
 // CarPlay `DuplexVoiceSession` in PR #1931 (coordination in #1951); #1931 now calls through `VoiceConversation`
 // with this engine. Play-and-record / voice-chat with voice processing, AVAudioConverter down to the extension's
 // PCM16, an AVAudioPlayerNode at its output rate, dropping what `clear` cancels by generation, and ending on a call

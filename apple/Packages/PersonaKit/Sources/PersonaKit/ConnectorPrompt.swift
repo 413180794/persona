@@ -23,7 +23,7 @@ public nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     public var done: Bool?
     public var account: String?
     /// "device_code": show `userCode` to enter at `url`; "qr": show `qr`, the code of `url`, to scan with another app;
-    /// "pair_code": show `userCode` to send to a bot from its chat app (a channel's binding, docs/channels.md). For all
+    /// "pair_code": show `userCode` to send to a bot from its chat app (a channel's binding, docs/extensions/channels.md). For all
     /// three the same step is sent again every `interval` seconds.
     public var kind: String?
     public var url: String?

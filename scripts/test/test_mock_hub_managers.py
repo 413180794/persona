@@ -1,4 +1,4 @@
-"""The mock hub's several managers (docs/managers.md "Clients (step 4)"), served the way the real hub serves them.
+"""The mock hub's several managers (docs/assistant/managers.md "Clients (step 4)"), served the way the real hub serves them.
 
 Starts scripts/mock/mock_hub.py on a free port with a HOME of its own (MOCK_EXTENSIONS=1 MOCK_MANAGER_NAS=1) and checks:
 - a POST with a body that is not JSON (an image upload) is answered as before: only the move routes read JSON;

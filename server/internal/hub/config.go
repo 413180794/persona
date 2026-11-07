@@ -36,7 +36,7 @@ type MachineConfig struct {
 	Trust string `json:"trust,omitempty"`
 	// Kind: local | service (the hub dials the computer's connector, service.go) | link (the computer's persona-link
 	// dials the hub, link.go) | ssh | tailcat (tailcat only, no ssh). ssh and tailcat are kept for hub.json files that
-	// have them (docs/plan-hub-center.md 4).
+	// have them (docs/archive/operations/plan-hub-center.md 4).
 	Kind    string `json:"kind"`
 	SSHHost string `json:"ssh_host,omitempty"`
 	// Address is a service computer's connector, host:port (its pin and credential are in Postgres); Proxy an optional
@@ -44,7 +44,7 @@ type MachineConfig struct {
 	Address string `json:"address,omitempty"`
 	Proxy   string `json:"proxy,omitempty"`
 	// TailcatAddr is the machine's tailcat address (`personad node tailcat init` there): the way in when ssh does not
-	// work, e.g. a computer behind NAT (tailcat.go, docs/server.md "tailcat hole punching"). A secret, like the token.
+	// work, e.g. a computer behind NAT (tailcat.go, docs/server/server.md "tailcat hole punching"). A secret, like the token.
 	TailcatAddr string `json:"tailcat_addr,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 	// RemoteBin is the personad path on the remote machine (default ~/.persona/bin/personad).
@@ -57,21 +57,21 @@ type MachineConfig struct {
 	CodexServers     []proto.CodexServer `json:"codex_servers,omitempty"`
 	// Launchers adds configured wrappers or overrides the type reported by the node.
 	Launchers []assistantwire.ConfiguredLauncher `json:"launchers,omitempty"`
-	// Botmux false: the machine's node does not list botmux's sessions and never runs botmux (docs/engines.md "botmux");
+	// Botmux false: the machine's node does not list botmux's sessions and never runs botmux (docs/integrations/engines.md "botmux");
 	// unset lists them, as before.
 	Botmux *bool `json:"botmux,omitempty"`
 	// HerdrAutostart false: the machine's node never starts herdr's server itself when it is not running
-	// (docs/engines.md "When herdr is not running"); unset starts it when needed.
+	// (docs/integrations/engines.md "When herdr is not running"); unset starts it when needed.
 	HerdrAutostart *bool `json:"herdr_autostart,omitempty"`
 	// HerdrAutoinstall true: when the machine has no herdr, the node's own starts (at node start, before a start or
-	// resume) install the pinned herdr first (docs/engines.md "When herdr is not installed"); unset only the Agents list's "Start" does.
+	// resume) install the pinned herdr first (docs/integrations/engines.md "When herdr is not installed"); unset only the Agents list's "Start" does.
 	HerdrAutoinstall bool `json:"herdr_autoinstall,omitempty"`
 	// ClaudeGlobalHooks true: the machine's node puts report-only hooks into its default claude config directory's
-	// settings.json, so the sessions Persona did not start report their turns and cards too (docs/claude-integration.md
+	// settings.json, so the sessions Persona did not start report their turns and cards too (docs/integrations/claude-integration.md
 	// "Global report-only hooks"). Off unless set; false (or removing the key) takes them out again.
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
 	// UsageWindows false: the machine's node does not read the agents' subscription rate-limit windows (Codex's
-	// rollouts, a Claude Code status line drop) and the manager does not ask it (docs/usage-windows.md, #2432); unset
+	// rollouts, a Claude Code status line drop) and the manager does not ask it (docs/server/usage-windows.md, #2432); unset
 	// reads them. hub.json's usage section (the account-pool gateways) is the manager's: it reads and writes it itself.
 	UsageWindows *bool `json:"usage_windows,omitempty"`
 
@@ -116,7 +116,7 @@ type Config struct {
 	DatabaseURL string `json:"database_url"`
 	// The manager's own sections (managerconf.Moved: the connectors, extensions, bots, mail sign-ins, Lark, usage
 	// sources, ai, inbox, kb, agents, hook_timeout_minutes and assistant.owner / notes / machine / launcher) are in
-	// its manager.json now (docs/config.md "manager.json"): the hub reads none of them, and an older hub.json's copies
+	// its manager.json now (docs/operations/config.md "manager.json"): the hub reads none of them, and an older hub.json's copies
 	// stay as they were.
 	Machines []MachineConfig `json:"machines"`
 	// Assistant personalizes the chat tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
@@ -128,15 +128,15 @@ type Config struct {
 	Public PublicConfig `json:"public,omitempty"`
 
 	Security SecurityConfig `json:"security,omitempty"`
-	// Admin is who may open the admin UI (docs/admin.md).
+	// Admin is who may open the admin UI (docs/operations/admin.md).
 	Admin AdminConfig `json:"admin,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
-	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
+	// Mesh tunes the links to other hubs (docs/server/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
-	// Link tunes the heartbeat with the computers' Persona Links (config_link.go, docs/link.md "Heartbeat").
+	// Link tunes the heartbeat with the computers' Persona Links (config_link.go, docs/operations/link.md "Heartbeat").
 	Link LinkConfig `json:"link,omitzero"`
-	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
+	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/apple/persona.md).
 	Personas PersonasConfig `json:"personas,omitempty"`
 
 	dir string
@@ -148,8 +148,8 @@ func dataDir() string {
 }
 
 // defaultConfig is what a first run writes to ~/.persona/hub.json: this machine only, reachable by its host name.
-// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/config.md). With
-// PERSONA_LOCAL_NODE=0 (the Docker image, docs/docker.md) there is no machine at all: the hub's own has no herdr or
+// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/operations/config.md). With
+// PERSONA_LOCAL_NODE=0 (the Docker image, docs/operations/docker.md) there is no machine at all: the hub's own has no herdr or
 // claude to drive, every computer is added to hub.json.
 func defaultLocalMachine() MachineConfig {
 	host, _ := os.Hostname()
@@ -171,7 +171,7 @@ func defaultConfig() *Config {
 	}
 }
 
-// envOverrides are settings the environment gives over hub.json's, e.g. a compose file's (docs/docker.md): the
+// envOverrides are settings the environment gives over hub.json's, e.g. a compose file's (docs/operations/docker.md): the
 // database's address and the hub's own address and port. Never written back to the file.
 var envOverrides = []struct {
 	name string
@@ -292,7 +292,7 @@ func (c *Config) printPair(ctx context.Context, legacy bool, out io.Writer, andr
 	return nil
 }
 
-// PairMachine prints a pairing link for one link machine's persona-link (docs/link.md): the link alone on stdout,
+// PairMachine prints a pairing link for one link machine's persona-link (docs/operations/link.md): the link alone on stdout,
 // so it can be piped (`… | persona-link pair -`), what to do with it on stderr. add: hub.json gets the machine first
 // when it has none of that id (named name; confirmed: the master token over loopback added it).
 func PairMachine(machine string, add bool, name string) error {
@@ -396,7 +396,7 @@ func (c *Config) requestPairCodeWith(ctx context.Context, reqBody map[string]any
 	err = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&p)
 	if err == nil && p.Token != "" && p.URL == "" && time.Now().Before(p.ExpiresAt) {
 		// A hub that does not know its own address (a first Docker start leaves public_url empty: the container cannot
-		// see the NAS's LAN address, docs/docker.md): the code is fine, the address a phone would dial is missing.
+		// see the NAS's LAN address, docs/operations/docker.md): the code is fine, the address a phone would dial is missing.
 		return nil, errors.New(noPublicURLHint)
 	}
 	if err != nil || p.Token == "" || p.URL == "" || !time.Now().Before(p.ExpiresAt) {

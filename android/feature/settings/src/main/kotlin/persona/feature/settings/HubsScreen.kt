@@ -13,7 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Settings › hub (docs/android.md "Multiple hubs"): the phone's hub groups. A group is hubs linked by the hub mesh; the lists
+ * Settings › hub (docs/android/android.md "Multiple hubs"): the phone's hub groups. A group is hubs linked by the hub mesh; the lists
  * show every group together, the hub-level pages (Persona, inbox, hub settings) show the selected one. Adding a hub
  * puts it into the group its mesh says, else it starts a new group.
  */

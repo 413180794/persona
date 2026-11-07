@@ -22,7 +22,7 @@ import (
 // "herdr is not installed", and someone had to log in and install it. The node installs it itself now: herdr's own
 // release binary for this OS and CPU, of one pinned version (the one the other computers run, not "latest"),
 // checked against the sha256 written here, into ~/.local/bin (no sudo; the node's PATH has it), then starts it as
-// before (docs/engines.md "When herdr is not installed").
+// before (docs/integrations/engines.md "When herdr is not installed").
 //
 // Only when the user asked: the "Start" button always may; the node's own starts (at node start, before a start or
 // resume) only when hub.json machines[].herdr_autoinstall is true. A download can take minutes on a slow link: it

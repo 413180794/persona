@@ -1,4 +1,4 @@
-// The keyboard shortcuts of the web client (docs/web.md "Keyboard shortcuts"): the registry of commands (id, label, default chord,
+// The keyboard shortcuts of the web client (docs/web/web.md "Keyboard shortcuts"): the registry of commands (id, label, default chord,
 // scope), chord parsing / formatting per platform, the user's rebindings (localStorage), the reserved chords, and the
 // dispatcher that App.tsx's keydown listener and the terminal's key handler call.
 //
@@ -237,7 +237,7 @@ export interface ShortcutDef {
 }
 
 /**
- * Moshi's keymap, each mapped to the closest Persona action (docs/web.md "Keyboard shortcuts"):
+ * Moshi's keymap, each mapped to the closest Persona action (docs/web/web.md "Keyboard shortcuts"):
  *   Mod+K go to · Mod+Shift+P command palette · Mod+J terminal ⇄ chat · Mod+B right panel · Mod+Alt+B sidebar · Mod+E sidebar groups ·
  *   Mod+Shift+Enter maximize the center area · Mod+I input · Mod+Alt+Shift+↑/↓ collapse / expand · Mod+Alt+↑/↓ previous / next row · Mod+, settings ·
  *   Mod+1–9 computers · Mod+Alt+←/→ previous / next tab on this machine. Persona's own: Mod+Alt+P opens Persona.

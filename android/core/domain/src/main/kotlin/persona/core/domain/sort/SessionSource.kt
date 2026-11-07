@@ -5,7 +5,7 @@ import persona.core.contracts.CoreText
 import persona.core.contracts.Session
 
 /*
- * Where a session comes from and what the phone may do with it (docs/protocol.md "Codex sources and capabilities", the same rules
+ * Where a session comes from and what the phone may do with it (docs/protocol/protocol.md "Codex sources and capabilities", the same rules
  * as iOS `Session`). Older sources carry no source_kind and can do everything; a session with a source only gets
  * what its capabilities explicitly allow, so a missing field is a refusal. The hub and the node refuse the same
  * operations: these only keep the phone from offering what would fail.
@@ -48,7 +48,7 @@ val Session.source: SessionSourceInfo?
             "codex_history" -> CoreText.of(Key.SourceCodexHistory)
             "identity_conflict" -> CoreText.of(Key.SourceIdentityConflict)
             "claude_bg" -> CoreText.of(Key.SourceClaudeBackground)
-            // An agent runtime's session (docs/runtimes.md): its own name, "DSH".
+            // An agent runtime's session (docs/integrations/runtimes.md): its own name, "DSH".
             "runtime" -> CoreText.plain(agentLabel)
             else -> sourceKind?.takeIf(String::isNotEmpty)?.let(CoreText::plain)
         } ?: return null

@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "persona.feature.voice"
-    // The page's words are resources (docs/i18n.md): tests read them, and its pictures are drawn, under Robolectric.
+    // The page's words are resources (docs/protocol/i18n.md): tests read them, and its pictures are drawn, under Robolectric.
     testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 

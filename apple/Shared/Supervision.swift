@@ -1,10 +1,10 @@
 import Foundation
 
-// A task the main conversation supervises (#3124, docs/unified-entry.md ("Supervision")): what done means, where its review
+// A task the main conversation supervises (#3124, docs/assistant/unified-entry.md ("Supervision")): what done means, where its review
 // stands, the reviews so far and what its agent last reported (#5112). Only such todos carry `supervision`; an older hub
 // sends none. Mirrors web/src/lib/supervision.ts.
 
-/// A todo's `supervision` (docs/protocol.md, Todo). Decoded leniently: missing fields take their empty value, a review
+/// A todo's `supervision` (docs/protocol/protocol.md, Todo). Decoded leniently: missing fields take their empty value, a review
 /// or a progress that does not decode is left out; `TodoItem` drops a supervision that does not decode at all.
 nonisolated struct TaskSupervision: Codable, Hashable, Sendable {
     /// One criterion as a review judged it.

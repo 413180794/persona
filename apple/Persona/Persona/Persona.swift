@@ -1,6 +1,6 @@
 import Foundation
 
-/// A look for Persona (docs/persona.md), the one Avatar setting: its name, its face, the animated dot in the Persona
+/// A look for Persona (docs/apple/persona.md), the one Avatar setting: its name, its face, the animated dot in the Persona
 /// tab's top bar, its colors and the home screen icon (`appIcon`). Mochi is drawn locally in the app icon's colors; Milk Frog is a
 /// package on the hub that the client downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
@@ -31,7 +31,7 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
     }
-    /// The home screen icon (docs/persona.md「App 图标」): a built-in's own; a package's `app_icon_fallback`, the
+    /// The home screen icon (docs/apple/persona.md「App 图标」): a built-in's own; a package's `app_icon_fallback`, the
     /// built-in whose icon it takes, as iOS switches only to icons the app ships; else the default's.
     var appIcon: AppIconChoice {
         let look = isBuiltin ? id : manifest?.appIconFallback
@@ -54,7 +54,7 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     }
 }
 
-/// persona.json, format 1 (docs/persona.md「格式」).
+/// persona.json, format 1 (docs/apple/persona.md「格式」).
 nonisolated struct PersonaManifest: Codable, Sendable, Hashable {
     static let format = 1
 

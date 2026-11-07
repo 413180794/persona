@@ -1,4 +1,4 @@
-// Package streams carries byte streams over the hub↔node RPC connection (docs/ports.md "Forwarding"): a TCP connection
+// Package streams carries byte streams over the hub↔node RPC connection (docs/operations/ports.md "Forwarding"): a TCP connection
 // the hub forwards to a port on a node is one stream there, its bytes in stream.data events. Each direction has a
 // window of bytes sent and not yet acknowledged (stream.ack), so a slow reader on one side holds its sender back
 // instead of filling memory, and one big download cannot take the whole connection from everything else on it.

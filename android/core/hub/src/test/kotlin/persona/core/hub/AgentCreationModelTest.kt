@@ -10,7 +10,7 @@ import persona.core.hub.ProtocolCompatibilityMockServer as MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
-/** New agents follow the "New Agent" model configuration and start in the background (docs/protocol.md "New session"). */
+/** New agents follow the "New Agent" model configuration and start in the background (docs/protocol/protocol.md "New session"). */
 class AgentCreationModelTest {
     @Test fun anAsyncStartWithoutLauncherFollowsTheConfigurationAndCarriesTheNameHint() = runBlocking {
         MockWebServer().use { server ->

@@ -2,7 +2,7 @@ package persona.core.domain.tasks
 
 import persona.core.contracts.Todo
 
-// Where a task's finished work is held short of live (#3306, docs/todos.md"Delivery"): stopped at a PR, merged but not
+// Where a task's finished work is held short of live (#3306, docs/assistant/todos.md"Delivery"): stopped at a PR, merged but not
 // live, or live but off by default; with what holds it and who can unhold it. iOS `TodoHold`.
 
 enum class HoldStep { Pr, Merged, Off }

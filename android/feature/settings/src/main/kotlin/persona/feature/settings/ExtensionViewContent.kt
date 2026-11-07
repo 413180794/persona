@@ -34,7 +34,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.launch
 
-// Draws an extension's View (docs/extensions.md "Declarative UI" "UI slots") with this app's design system: each kind of item as
+// Draws an extension's View (docs/extensions/extensions.md "Declarative UI" "UI slots") with this app's design system: each kind of item as
 // a component of the style in use (charts and number grids from the design system's), tones as role colours. The
 // extension gives no colour, size or icon. A kind this app does not know is skipped.
 

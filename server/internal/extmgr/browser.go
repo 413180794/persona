@@ -1,7 +1,7 @@
 package extmgr
 
 // The assistant driving a browser on the user's Macs through ego lite: the built-in plugin ego, off until the user
-// turns it on, then Mac by Mac (docs/plan-ego-browser.md). While it is off no node is asked about ego, the assistant
+// turns it on, then Mac by Mac (docs/plans/plan-ego-browser.md). While it is off no node is asked about ego, the assistant
 // has no browser_* tools and the machines carry no Browser. Like the plugin cua (computer.go), whose settings, switch
 // and tool results it shares.
 

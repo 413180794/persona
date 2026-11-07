@@ -3,7 +3,7 @@ package persona.core.contracts
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * [CoreText.words] before the app sets it: unit tests run in Simplified Chinese (docs/android.md "Internationalization"), and the
+ * [CoreText.words] before the app sets it: unit tests run in Simplified Chinese (docs/android/android.md "Internationalization"), and the
  * build puts core/designsystem's `values-zh/strings_core.xml` on every Android module's test classpath, so their
  * expected text keeps reading as the app shows it. Without that file (the app, before it sets the words) it is
  * English.

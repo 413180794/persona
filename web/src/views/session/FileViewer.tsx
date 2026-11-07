@@ -1,4 +1,4 @@
-// The file viewer as its own panel (a path from a tool step or a message; docs/ios.md "File viewer"). Folders and
+// The file viewer as its own panel (a path from a tool step or a message; docs/apple/ios.md "File viewer"). Folders and
 // Markdown links open further paths in the same panel, with back.
 import { useState } from "react";
 import { FileView } from "./files/FileView";

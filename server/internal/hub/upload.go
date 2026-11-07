@@ -17,15 +17,15 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// uploadFile streams a file from the phone to a machine's temp directory (docs/protocol.md "Sending files"):
+// uploadFile streams a file from the phone to a machine's temp directory (docs/protocol/protocol.md "Sending files"):
 // POST /api/v1/machines/{mid}/files?name=<file name>, the raw bytes as the body. The body is read a chunk at a time
 // and each chunk is one file.upload.chunk call, so neither side holds the file and no JSON line carries all of it.
 // The app cancelling the request (or going away) aborts the upload and the node removes what it wrote.
-// dest=terminal (the web terminal's paste and drop, docs/terminal.md): the node keeps the file under its Persona
+// dest=terminal (the web terminal's paste and drop, docs/integrations/terminal.md): the node keeps the file under its Persona
 // directory for a week instead of the temp directory, and the limit is proto.MaxTerminalUploadBytes.
 // dest=health (a report for the health space): the node keeps it in the health directory's reports/: the machine's
-// manager's (the built-in's health/, another's health-<id>/, docs/managers.md "Directories on a computer").
-// dest=dir&dir=<folder>[&cwd=][&conflict=replace|keep] (the app's file browser, docs/protocol.md "Changing files"): the file
+// manager's (the built-in's health/, another's health-<id>/, docs/assistant/managers.md "Directories on a computer").
+// dest=dir&dir=<folder>[&cwd=][&conflict=replace|keep] (the app's file browser, docs/protocol/protocol.md "Changing files"): the file
 // keeps its name in that folder, which must be in the home; a taken name is 409 exists unless conflict says what
 // to do, up to proto.MaxDirUploadBytes.
 func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {

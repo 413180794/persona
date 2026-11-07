@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Who holds a field (docs/knowledge.md "Extensions organizing the knowledge base"): the user > an extension > the
+// Who holds a field (docs/assistant/knowledge.md "Extensions organizing the knowledge base"): the user > an extension > the
 // built-in pipeline. A locked field without a provenance entry is the user's; one whose entry names an extension is
 // that extension's. The pipeline writes only fields nobody holds (putEntity, putSummary). The user's writes (Apply)
 // take over every locked field they touch; an extension's (ApplyExtension) may only touch fields that are free or

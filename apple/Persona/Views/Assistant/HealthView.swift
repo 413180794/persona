@@ -1,11 +1,11 @@
 import SwiftUI
 
-// Health (docs/health.md, #2691): the health space, apart from Persona's other conversations, like ChatGPT's Health. Its
+// Health (docs/assistant/health.md, #2691): the health space, apart from Persona's other conversations, like ChatGPT's Health. Its
 // home says what it is, asks something to start, lists its past conversations and its own memory, where its data comes
 // from and what stays private. Its conversations run in a directory of their own on the assistant's machine, so the
 // assistant's other conversations never see them and its memory is its own (`?space=health`). The web's `/health`.
 
-/// Health's state and what it asks the hub (MVVM, docs/ios.md「逻辑层的选型」): the space's conversations
+/// Health's state and what it asks the hub (MVVM, docs/apple/ios.md「逻辑层的选型」): the space's conversations
 /// (`GET /api/v1/assistant?space=health`) and how many memories it keeps.
 @Observable final class HealthModel {
     private(set) var fetched: [Session] = []
@@ -55,7 +55,7 @@ struct HealthView: View {
     /// Starts a health conversation with the message (`AssistantView.start(…, space:)`).
     var send: (String, [ImagePayload]) -> Void
     @State private var page = HealthModel()
-    // Upload a Checkup Report (docs/health.md「体检报告」): the picked files go to reports/; once they are up the conversation starts.
+    // Upload a Checkup Report (docs/assistant/health.md「体检报告」): the picked files go to reports/; once they are up the conversation starts.
     @State private var showReports = false
     @State private var reports = FileUploads()
 

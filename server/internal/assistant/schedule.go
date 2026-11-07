@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What the assistant does on its own (docs/assistant.md "Scheduled tasks") is one list of tasks, each with a schedule:
+// What the assistant does on its own (docs/assistant/assistant.md "Scheduled tasks") is one list of tasks, each with a schedule:
 //   - once: a follow-up the assistant scheduled from a conversation (schedule_followup), or the user in the app;
 //   - daily: at a time on some weekdays (the morning briefing on weekdays at 09:00…), set up in the app or with schedule_routine;
 //   - interval: every N minutes (a 30-minute patrol), from schedule_followup's `every` or the app.
@@ -76,7 +76,7 @@ type Task struct {
 	ModelRevision  int64  `json:"model_revision,omitempty"`
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
-	// Space is the space of the conversation that set it up ("health", docs/health.md): a run that starts a conversation
+	// Space is the space of the conversation that set it up ("health", docs/assistant/health.md): a run that starts a conversation
 	// starts it there. "" is the assistant's own.
 	Space string `json:"space,omitempty"`
 	// CreatedBy is "assistant" for tasks Persona set up from a conversation.
@@ -712,7 +712,7 @@ func (s *Service) deleteTask(ctx context.Context, id string) (bool, error) {
 }
 
 // describeSchedule lists the tasks of space ("" the assistant's own, "health"): a conversation sees and changes only
-// its own space's (docs/health.md).
+// its own space's (docs/assistant/health.md).
 func (s *Service) describeSchedule(ctx context.Context, space string) string {
 	loc := s.location(ctx)
 	now := time.Now()
@@ -771,7 +771,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", err
 	}
-	space, _ := s.selfSpace(ctx, self) // a new routine runs in the space it was asked from (docs/health.md)
+	space, _ := s.selfSpace(ctx, self) // a new routine runs in the space it was asked from (docs/assistant/health.md)
 	var push *string
 	if a.Push != nil {
 		p, err := pushArg(*a.Push)
@@ -948,7 +948,7 @@ func (s *Service) scheduleLoop(ctx context.Context) {
 	for {
 		now := time.Now()
 		wait := scheduleIdle
-		// A mesh member's tasks wait while the center runs the group's (docs/mesh.md). Nothing here moves a past
+		// A mesh member's tasks wait while the center runs the group's (docs/server/mesh.md). Nothing here moves a past
 		// one-off or interval task on, so its time stays past: a member only checks again at the idle wake-up (or
 		// when the list changes), not every 50 ms.
 		if !s.hello(ctx).Assistant.Standby {

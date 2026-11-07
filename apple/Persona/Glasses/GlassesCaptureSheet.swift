@@ -1,7 +1,7 @@
 #if os(iOS)
 import SwiftUI
 
-/// Glasses Photo (docs/meta-glasses.md): connect the Meta glasses, preview what they see, take a photo and attach it.
+/// Glasses Photo (docs/apple/meta-glasses.md): connect the Meta glasses, preview what they see, take a photo and attach it.
 /// Works in both builds: without the SDK, `MetaGlasses` only reports that the glasses are not built in.
 struct GlassesCaptureSheet: View {
     @Environment(\.dismiss) private var dismiss

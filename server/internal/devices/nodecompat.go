@@ -14,7 +14,7 @@ const (
 	incompatibleNodeNew = "node_protocol_new" // the node needs a newer manager
 )
 
-// nodeCompat is what the manager makes of a node's handshake (docs/protocol.md "Node handshake").
+// nodeCompat is what the manager makes of a node's handshake (docs/protocol/protocol.md "Node handshake").
 type nodeCompat struct {
 	// Incompatible is a NodeIncompatible code, "" when the manager can drive the node.
 	Incompatible string

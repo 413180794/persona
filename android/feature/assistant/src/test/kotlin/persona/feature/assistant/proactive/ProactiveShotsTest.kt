@@ -37,7 +37,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * Settings › Assistant › Proactive in each of the app's languages (docs/i18n.md): the overview, a routine, a new one from a
+ * Settings › Assistant › Proactive in each of the app's languages (docs/protocol/i18n.md): the overview, a routine, a new one from a
  * template, all follow-ups and all runs, Glass light and dark (the overview in every style). The data is fake and
  * written in the language of the shot, as a person would. Written as PNGs to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`) to look at.

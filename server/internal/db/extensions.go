@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// ---- plugins (docs/extensions.md) ----
+// ---- plugins (docs/extensions/extensions.md) ----
 
 // Plugins are the registry's rows.
 func (d *DB) Extensions(ctx context.Context) ([]extension.Record, error) {
@@ -209,7 +209,7 @@ func (d *DB) ExtensionAudits(ctx context.Context, plugin string, limit int) ([]E
 var _ extension.Store = (*DB)(nil)
 var _ extension.PlanStore = (*DB)(nil)
 
-// ---- plugin markets (docs/extensions.md "Extension market") ----
+// ---- plugin markets (docs/extensions/extensions.md "Extension market") ----
 
 // PluginMarkets are the registered markets, oldest first.
 func (d *DB) ExtensionMarkets(ctx context.Context) ([]extension.MarketRecord, error) {

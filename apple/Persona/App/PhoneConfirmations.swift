@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// One phone write waiting for the user's Allow / Deny (docs/phone-tools.md "Confirmation flow").
+/// One phone write waiting for the user's Allow / Deny (docs/apple/phone-tools.md "Confirmation flow").
 struct PhoneConfirmation: Identifiable, Equatable {
     let id = UUID()
     let summary: String

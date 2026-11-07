@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * GET /api/v1/assistant without the conversations: which machine the assistant runs on, with which launcher, in
- * which directory, and what it is told about the user (docs/protocol.md, docs/assistant.md).
+ * which directory, and what it is told about the user (docs/protocol/protocol.md, docs/assistant/assistant.md).
  */
 @Serializable
 data class AssistantConfig(

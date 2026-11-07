@@ -1,6 +1,6 @@
 # 对话同步的连续性
 
-本领域记录当前 iOS 的同步行为，供纯 Kotlin 核心逐步回放。依据是 [协议](../../../docs/protocol.md)「items 的连续性」「折叠的工作」、[重设计 D1、D4](../../../docs/redesign/README.md) 和 [流程图 11](../../../docs/redesign/flows.md)。夹具共 29 个用例、70 个事件步骤，数据全部编造。
+本领域记录当前 iOS 的同步行为，供纯 Kotlin 核心逐步回放。依据是 [协议](../../../docs/protocol/protocol.md)「items 的连续性」「折叠的工作」、[重设计 D1、D4](../../../docs/archive/redesign/README.md) 和 [流程图 11](../../../docs/archive/redesign/flows.md)。夹具共 29 个用例、70 个事件步骤，数据全部编造。
 
 ## 来源与规则
 

@@ -6,7 +6,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// assign (POST /api/v1/launchers, docs/onboarding.md 5.4): a provider added in the onboarding becomes what the main chat and
+// assign (POST /api/v1/launchers, docs/assistant/onboarding.md 5.4): a provider added in the onboarding becomes what the main chat and
 // new Agents run on, but only where nobody has chosen anything yet; a choice the user made is never replaced.
 
 // assignablePurposes are the categories assign may set: the two that run Claude Code on a computer.

@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The inbox's AI twin (docs/inbox.md): model 1 triages every new item (inbox_triage.go), every "Needs you" item
+// The inbox's AI twin (docs/assistant/inbox.md): model 1 triages every new item (inbox_triage.go), every "Needs you" item
 // (and what an inbox policy hands it, inbox_policies.go) goes to an agent, model 2 links it to one of the user's
 // tasks (linkTask), and the agent (model 3, a headless Claude Code in the assistant's
 // directory, with its tools: a conversation the assistant starts itself, untitled) looks into it and drafts the reply
@@ -75,7 +75,7 @@ type InboxAgent struct {
 	Changes []DocChange `json:"changes,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Of      string      `json:"of,omitempty"` // the item's Last the work answers
-	// TodoID: the user's task the item is about (model 2's task_id, docs/unified-entry.md): the draft tells its
+	// TodoID: the user's task the item is about (model 2's task_id, docs/assistant/unified-entry.md): the draft tells its
 	// progress, and the task's conversation gets a card for it.
 	TodoID    string     `json:"todo_id,omitempty"`
 	StartedAt *time.Time `json:"started_at,omitempty"`
@@ -124,7 +124,7 @@ func (a *InboxAgent) startDue(now time.Time) bool {
 	return a.RetryAfter == nil || !a.RetryAfter.After(now)
 }
 
-// handInbox is one pass of the AI twin's work (docs/inbox.md"AI twin"): settle conversations that finished, hung or
+// handInbox is one pass of the AI twin's work (docs/assistant/inbox.md"AI twin"): settle conversations that finished, hung or
 // were lost, escalate every newly triaged Needs you item to the manager (one processing conversation per event), deliver
 // what waits for the events' conversations (new messages, the user's answers), start conversations for the queued
 // ones. One pass at a time, in the background.

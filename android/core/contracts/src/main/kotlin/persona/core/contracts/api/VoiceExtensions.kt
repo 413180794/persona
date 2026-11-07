@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * An extension of the hub (`GET /api/v1/extensions`, docs/extensions.md "Hub API"): the voice page looks for a running
+ * An extension of the hub (`GET /api/v1/extensions`, docs/extensions/extensions.md "Hub API"): the voice page looks for a running
  * `kind == "voice"` one; Settings › Extensions shows them all. Hubs from before the extension base send only the first five fields.
  */
 @Serializable
@@ -28,7 +28,7 @@ data class HubExtension(
     val warnings: List<String>? = null,
     val sandbox: ExtensionSandbox? = null,
     /**
-     * An extension from a market on a hub with auto-upgrades (docs/extensions.md "Auto-upgrade"): its own switch (null: not
+     * An extension from a market on a hub with auto-upgrades (docs/extensions/extensions.md "Auto-upgrade"): its own switch (null: not
      * from a market, or an older hub), its newer version and what happened last with an upgrade.
      */
     @SerialName("auto_upgrade") val autoUpgrade: Boolean? = null,
@@ -38,7 +38,7 @@ data class HubExtension(
     val nodes: List<ExtensionNodeState>? = null,
     /** Its sign-in (manifest `auth`, #4507), as the hub last saw it; null when it does not sign in, or an older hub. */
     val auth: ExtensionAuth? = null,
-    /** The manager whose extension it is, in a hub's merged list (docs/protocol.md「Per-manager routing」); null: the default. */
+    /** The manager whose extension it is, in a hub's merged list (docs/protocol/protocol.md「Per-manager routing」); null: the default. */
     val manager: String? = null,
     /** The command-line programs this version runs with (manifest `tools`, #4507). */
     val tools: List<ExtensionToolView>? = null,
@@ -46,7 +46,7 @@ data class HubExtension(
     val isRunningVoice: Boolean get() = kind == "voice" && status == "running"
 }
 
-/** A market extension's newer version and where it stands (docs/extensions.md "Auto-upgrade"). */
+/** A market extension's newer version and where it stands (docs/extensions/extensions.md "Auto-upgrade"). */
 @Serializable
 data class ExtensionUpgrade(
     val id: String = "",
@@ -70,7 +70,7 @@ data class ExtensionUpgradeNote(
     val at: String? = null,
 )
 
-/** An extension's program on one machine (docs/extensions.md "Programs that run on computers"). */
+/** An extension's program on one machine (docs/extensions/extensions.md "Programs that run on computers"). */
 @Serializable
 data class ExtensionNodeState(
     @SerialName("machine_id") val machineId: String = "",
@@ -104,7 +104,7 @@ data class VoiceModelOption(val id: String = "", val name: String? = null) {
 data class VoiceModelOptions(val models: List<VoiceModelOption> = emptyList(), val default: String? = null)
 
 /**
- * What the hub's model configuration says for a voice extension (the purpose `plugin.<id>`, docs/model-config.md): the
+ * What the hub's model configuration says for a voice extension (the purpose `plugin.<id>`, docs/assistant/model-config.md): the
  * effective model, if one is set, and the purpose's status when it is not usable as it stands (the hub's "unverified" status is usable).
  */
 data class VoiceModelChoice(val model: String? = null, val status: String? = null)
@@ -136,7 +136,7 @@ interface VoiceExtensions {
     fun connect(extensionId: String, listener: VoiceSocketListener): VoiceSocket
 }
 
-/** One open voice conversation's socket: JSON text frames and PCM16 binary frames (docs/extensions.md "Voice"). */
+/** One open voice conversation's socket: JSON text frames and PCM16 binary frames (docs/extensions/extensions.md "Voice"). */
 interface VoiceSocket {
     fun send(text: String): Boolean
     fun send(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size): Boolean

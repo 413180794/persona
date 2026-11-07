@@ -1,4 +1,4 @@
-// The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks): the plan card,
+// The unified entry in the assistant's conversation (docs/assistant/unified-entry.md; iOS Views/Assistant/Tasks): the plan card,
 // task cards that follow their agents, the hub's lines (answered, receipt, routed), the "Today" card, message cards about
 // a task, quick results, the dock above the composer, the tasks' questions, the route chip, and a task's detail in the
 // side panel.
@@ -229,7 +229,7 @@ export function openTask(id: string) {
   openPanel({ kind: "task", todo: id });
 }
 
-// Dev only: `?task=<todo id>` opens that task's panel (screenshots, docs/testing.md).
+// Dev only: `?task=<todo id>` opens that task's panel (screenshots, docs/operations/testing.md).
 if (import.meta.env.DEV && typeof location !== "undefined") {
   const id = new URLSearchParams(location.search).get("task");
   if (id) setTimeout(() => openTask(id), 0);

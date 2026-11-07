@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// The voice plugin's prompts and tools, byte for byte (docs/prompts.md). After changing one on purpose:
+// The voice plugin's prompts and tools, byte for byte (docs/assistant/prompts.md). After changing one on purpose:
 //
 //	UPDATE_GOLDEN=1 go test ./internal/voice -run Golden
 func golden(t *testing.T, name, got string) {
@@ -171,7 +171,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			rep.Lang = lang
 			got := prompts.RenderVoiceReport(rep)
 			golden(t, "report."+name+"."+lang, got)
-			// Every spoken report says whether the work is done or still going (docs/voice.md "Prompts").
+			// Every spoken report says whether the work is done or still going (docs/assistant/voice.md "Prompts").
 			if !slices.ContainsFunc(reportMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
 				t.Errorf("report.%s.%s says neither done nor still working: %s", name, lang, got)
 			}
@@ -185,7 +185,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			"unprompted_agent": {Code: "unprompted", Task: x.task, Agent: true},
 			"empty":            {Code: "empty"},
 			"unknown":          {Code: "unknown", Task: x.task},
-			"failed":           {Code: "failed", Task: x.task, Reason: i18n.T(l, "apierr-apierr.no_machine")}, // the hub's no_machine (docs/onboarding.md 5.2)
+			"failed":           {Code: "failed", Task: x.task, Reason: i18n.T(l, "apierr-apierr.no_machine")}, // the hub's no_machine (docs/assistant/onboarding.md 5.2)
 			"failed_bare":      {Code: "failed", Task: x.task},
 			"unreachable":      {Code: "unreachable", Task: x.task},
 			"on_screen":        {Code: "on_screen", Task: "批准", To: "Claude Code"},
@@ -295,7 +295,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			pr.Lang = lang
 			got := prompts.RenderVoiceProgress(pr)
 			golden(t, "progress."+name+"."+lang, got)
-			// It still works, and says so: never a result (docs/voice.md "Prompts").
+			// It still works, and says so: never a result (docs/assistant/voice.md "Prompts").
 			if !slices.ContainsFunc(progressMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
 				t.Errorf("progress.%s.%s does not say it is still working: %s", name, lang, got)
 			}

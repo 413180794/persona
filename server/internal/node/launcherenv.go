@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A provider's environment for claude (#2455, docs/launchers.md): one pure function both ways of running the main
+// A provider's environment for claude (#2455, docs/integrations/launchers.md): one pure function both ways of running the main
 // conversation and every Agent use, the CLI (its --settings env, `personad launch`'s env) and the Agent SDK bridge (the
 // child's env and settings.env). Cindy's env-builder, the Anthropic part.
 

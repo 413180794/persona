@@ -5,7 +5,7 @@ extension EnvironmentValues {
     @Entry var openPort: ((PortLink) -> Void)? = nil
 }
 
-/// Badges for a message's links to ports of its machine (`PortLinks`, docs/ports.md): `:5173` and the page's
+/// Badges for a message's links to ports of its machine (`PortLinks`, docs/operations/ports.md): `:5173` and the page's
 /// title, the look of the file badges (`LinkBadge`); gray once nothing listens there. A tap opens the page through
 /// the hub in the in-app sheet.
 struct PortChips: View {

@@ -1,8 +1,8 @@
 import SwiftUI
 
-// What a voice call puts into the conversation's page beside the bar (docs/voice.md 6.2): its captions as the thread's
+// What a voice call puts into the conversation's page beside the bar (docs/assistant/voice.md 6.2): its captions as the thread's
 // last rows, the mark on the card the voice is asking about, and what steps aside while it is on. Each reads the call
-// itself, so the page (ChatView, the hot path: docs/ios-state.md) only asks `VoiceCalls.isBound` and is not drawn again
+// itself, so the page (ChatView, the hot path: docs/apple/ios-state.md) only asks `VoiceCalls.isBound` and is not drawn again
 // as words come in.
 
 extension VoiceCalls {
@@ -20,7 +20,7 @@ extension VoiceCalls {
 }
 
 /// The call's captions at the end of the thread (`VoiceThreadTail`): temporary rows, on this device only, not saved
-/// (docs/voice.md 1.2 C). What the user says and what the voice says, the last few, in the order they were said (a late
+/// (docs/assistant/voice.md 1.2 C). What the user says and what the voice says, the last few, in the order they were said (a late
 /// caption of the user's is put before the answer it came in: `VoiceConversation.caption`, #5673); ⋯ › All Captions
 /// has them all. While the chat holds back what arrives (the user reads further up, `ChatView.frozen`), it stays as it
 /// was then, as the streamed words do.
@@ -91,7 +91,7 @@ struct VoiceTailFollow: ViewModifier {
     }
 }
 
-/// What steps aside while a call is on (docs/voice.md 6.2「通话期间」): the main conversation's task dock and route chip.
+/// What steps aside while a call is on (docs/assistant/voice.md 6.2「通话期间」): the main conversation's task dock and route chip.
 struct VoiceCallHides<Content: View>: View {
     let key: SessionKey
     @ViewBuilder var content: Content
@@ -102,7 +102,7 @@ struct VoiceCallHides<Content: View>: View {
 }
 
 /// On the card the voice is asking about (the `ask` frame): Asking by Voice, so a tap and an answer said aloud are not
-/// taken for two questions (docs/voice.md 1.2 H).
+/// taken for two questions (docs/assistant/voice.md 1.2 H).
 struct VoiceAskMark: View {
     let interaction: Interaction
 

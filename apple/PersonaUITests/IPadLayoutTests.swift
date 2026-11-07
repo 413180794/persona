@@ -1,6 +1,6 @@
 import XCTest
 
-/// iPad (docs/ios.md「iPad」): the app runs natively (not the phone-sized window), the lists sit in a sidebar wide
+/// iPad (docs/apple/ios.md「iPad」): the app runs natively (not the phone-sized window), the lists sit in a sidebar wide
 /// enough for their cards, in portrait and landscape. Against scripts/mock/mock_hub.py (PERSONA_MOCK_HUB), on an iPad
 /// simulator; skipped on iPhone. TEST_RUNNER_PERSONA_SHOTS=<dir> keeps a screenshot of each.
 final class IPadLayoutTests: XCTestCase {
@@ -57,7 +57,7 @@ final class IPadLayoutTests: XCTestCase {
     /// The list column reaches the top of the screen (the strip under the status bar has its color), and when the
     /// column is closed the strip is the detail's again (2026-10-31: the list looked cut off at the top).
     /// Machines from the Agents menu opens in the detail column, its cards side by side; a card opens the machine there too,
-    /// the list column staying (docs/machines.md「App」).
+    /// the list column staying (docs/server/machines.md「App」).
     @MainActor func testMachinesInTheDetailColumn() {
         XCUIDevice.shared.orientation = .landscapeLeft
         app.launchPinned()

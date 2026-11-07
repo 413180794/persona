@@ -18,7 +18,7 @@ import (
 // Two settings keys: machine_engine_hosts (machine id → {hosts, default}) is the choice; machine_engines (machine id →
 // a single engine) is written beside it with the single engine closest to the set, read for machines chosen before
 // sets and by an older hub after a rollback. A machine in neither is herdr. The hub tells the node with engine.use
-// when it connects (before the first session list) and when the user changes it (docs/protocol.md "Engine").
+// when it connects (before the first session list) and when the user changes it (docs/protocol/protocol.md "Engine").
 
 // enginesKey is the settings key holding map[machineID]engine (the single engine, before sets and for rollbacks).
 const enginesKey = "machine_engines"

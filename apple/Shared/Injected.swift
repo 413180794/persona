@@ -1,6 +1,6 @@
 import Foundation
 
-/// A message Persona typed into a conversation for the model, as if the user had (docs/protocol.md「Persona 注入的消息」):
+/// A message Persona typed into a conversation for the model, as if the user had (docs/protocol/protocol.md「Persona 注入的消息」):
 /// a quiet task's notice, a scheduled run, a wake-up, the background tasks a node restart stopped. The model reads its
 /// words; the apps show `line` in their place, centered, never a user bubble and never the instructions inside. The hub
 /// marks such items (`Item.injected`); an older hub does not, and `Injected.parse` reads the text the way the hub does

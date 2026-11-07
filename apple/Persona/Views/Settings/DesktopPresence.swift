@@ -1,7 +1,7 @@
 import SwiftUI
 
 #if os(iOS) || os(visionOS)
-/// 「Mac 上的 Persona 已登录」 over the Agents list, like WeChat's line over its chats (docs/ios.md「Mac 已登录」): one
+/// 「Mac 上的 Persona 已登录」 over the Agents list, like WeChat's line over its chats (docs/apple/ios.md「Mac 已登录」): one
 /// quiet row while a desktop app is connected, Phone Muted beside it when on. A tap opens `DesktopPresenceSheet`.
 struct DesktopPresenceRow: View {
     @Environment(AppModel.self) private var model

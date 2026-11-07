@@ -8,7 +8,7 @@ import (
 )
 
 // The MCP tools the hub offers, as they go over the wire (json.Marshal compacts the schemas; the golden is indented
-// for reading, which is a function of the same bytes). docs/prompts.md: regenerate with UPDATE_GOLDEN=1. The
+// for reading, which is a function of the same bytes). docs/assistant/prompts.md: regenerate with UPDATE_GOLDEN=1. The
 // connectors', Cua's and ego's are the manager's (extmgr's connector_tools goldens, its answer to
 // extensions.hub_call connector_tools); the hub lists them with its own and the assistant's, in the same order.
 func TestGoldenMCPTools(t *testing.T) {

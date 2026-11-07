@@ -20,7 +20,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * The wire of the onboarding pieces (docs/onboarding.md 5.3 / 5.4): a provider from a preset with assign, the key test and
+ * The wire of the onboarding pieces (docs/assistant/onboarding.md 5.3 / 5.4): a provider from a preset with assign, the key test and
  * the model list, a code for another device, and a computer's code, confirm and reject.
  */
 class OnboardingWireTest {

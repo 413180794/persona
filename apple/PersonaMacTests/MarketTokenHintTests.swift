@@ -23,7 +23,7 @@ struct MarketTokenHintTests {
         #expect(try !market(spec: "git:git@example.com:team/market.git", token: false).wantsGitHubToken)
     }
 
-    /// The catalog asks no token of the official market (docs/onboarding.md 4.5), so it must know which one that is.
+    /// The catalog asks no token of the official market (docs/assistant/onboarding.md 4.5), so it must know which one that is.
     @Test func officialDecodes() throws {
         let json = #"{"id":"o","spec":"github:example/official","name":"官方","has_token":false,"official":true}"#
         #expect(try JSON.decoder.decode(ExtensionMarket.self, from: Data(json.utf8)).official == true)

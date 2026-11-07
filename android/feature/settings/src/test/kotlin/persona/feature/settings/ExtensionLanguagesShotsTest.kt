@@ -34,7 +34,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * Settings › Extensions in each of the app's languages (docs/i18n.md): the list, an extension's page (switch, form, secrets,
+ * Settings › Extensions in each of the app's languages (docs/protocol/i18n.md): the list, an extension's page (switch, form, secrets,
  * contributions, sandbox, permissions, about), the market, one of its extensions, the markets, and the settings home's
  * "Extensions" section with a card that failed. Every style light and dark, written as PNGs to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`). The extensions' own words (names, form labels) are data and stay as the hub sends them.

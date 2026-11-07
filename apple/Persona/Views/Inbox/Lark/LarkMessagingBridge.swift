@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// The messaging extension point under the Feishu screens (#2138, docs/extension-messaging.md): while the hub has a
+/// The messaging extension point under the Feishu screens (#2138, docs/extensions/extension-messaging.md): while the hub has a
 /// messaging source, the `lark…` requests of APIClient go to `/api/v1/messaging/<source>/…` and what comes back is
 /// history by the display settings, cards) is the extension's now; this only reshapes. Stage 3a of the migration:
 /// the screens move onto the generic models next, and this goes with the old API.
@@ -179,7 +179,7 @@ nonisolated enum MessagingShape {
         o["can_unpin"] = m["can_unpin"] ?? true
         if let r = m["reply_to"] as? Object {
             // `recalled` marks a recalled message's kept words: shown with 「已撤回」 after them; a recall the source
-            // does not show comes as its own summary (「消息已撤回」) without the mark (docs/extension-messaging.md「五」).
+            // does not show comes as its own summary (「消息已撤回」) without the mark (docs/extensions/extension-messaging.md「五」).
             o["reply_to"] = ["id": r["id"] ?? "", "sender_name": r["sender_name"] ?? "", "text": r["summary"] ?? "",
                              "recalled": r["recalled"] ?? false, "retained": r["recalled"] ?? false]
         }

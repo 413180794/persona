@@ -13,7 +13,7 @@
 | 新建会话 | 底部面板：机器、目录、启动器、权限模式、首条消息；失败后按新出现的会话核对 | 用 r2-ag-new 的新建页（多思考强度、按机器记住选择、启动前落盘操作 ID、只查回执不重发）。本车道的「在此空间开新标签」并入：`NewAgentViewModel.startIn(AgentSpacePreset)` 固定机器和目录，请求带 `workspace_id`；启动请求的读超时也照本车道放宽到 130 秒（hub 给 `session.start` 留了 100 秒） |
 | 置顶与屏蔽 | 经 `InboxAssistantTransport` 读写 hub，按配对缓存 | 用 r2-ag-ops 的 `AgentOperations`（写前重读、乐观更新、失败回滚）。本车道的按配对缓存并入：`AgentOperationsState` 先画 `AgentsPreferences.hubCache` 里上次的结果，再以 hub 为准 |
 | 空间菜单 | 全部标为已读、置顶 / 屏蔽 / 重命名空间 | 用 r2-ag-ops 的 `AgentSpaceMenu`，补上「全部标为已读」 |
-| 定时任务 | Agents 菜单进入的列表和编辑 | 删除。按 `docs/redesign/ux.md` 第 2 节，定时任务在 Persona tab 的资料页（r2-as-home 已做，还有跟进、运行记录、备注和记忆）；保存前重读整表的做法并入了那边 |
+| 定时任务 | Agents 菜单进入的列表和编辑 | 删除。按 `docs/archive/redesign/ux.md` 第 2 节，定时任务在 Persona tab 的资料页（r2-as-home 已做，还有跟进、运行记录、备注和记忆）；保存前重读整表的做法并入了那边 |
 | 分组和空间的纯逻辑 | 抽出 `AgentSpace`、`agentSpaces`、置顶 / 屏蔽切换 | **保留**在 `core:domain/sort`，r2-ag-ops 的切换改为调用它。屏蔽切换按 iOS 的规则改过：空间已屏蔽时再次屏蔽某个 Agent 记为它自己的屏蔽，取消空间屏蔽后仍然屏蔽 |
 
 本车道为复用已接线的配对连接，给 `InboxAssistantTransport` 加的 `AgentManagementTransport` 一并删除：操作、新建、助手管理各有独立的接口（`AgentOperations`、`AgentCreationService`、`AssistantManagement`），当前已在 App 组合根按同一个配对作用域构造（`OPERATIONS.md`、`CREATION.md`、`feature/assistant/INTEGRATION.md`）。没接线时，相应入口提示尚未接入，不会退回本机置顶或屏蔽。

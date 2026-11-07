@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Pairing two hubs (docs/plan-hub-mesh.md 2.2, docs/mesh.md "Pairing"): hub B makes a one-time code good for 10 minutes
+// Pairing two hubs (docs/archive/operations/plan-hub-mesh.md 2.2, docs/server/mesh.md "Pairing"): hub B makes a one-time code good for 10 minutes
 // (admin page, `personad hub pair --peer`), a link carrying B's addresses, hub_id and key pin. Hub A, given the code,
 // connects to B pinned to that key, hands over a credential it issued for B and its own pin and addresses, and gets
 // B's credential for A in return. Both sides then pin each other, hold each other's credential and dial each other.

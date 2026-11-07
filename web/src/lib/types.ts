@@ -1,9 +1,9 @@
 import type { UsageCard } from "./tokens";
-// The hub's wire types (docs/protocol.md). Only the fields the web client reads.
+// The hub's wire types (docs/protocol/protocol.md). Only the fields the web client reads.
 
 export type AgentState = "needs_you" | "working" | "unread" | "idle" | "offline" | "unknown";
 
-/** An engine as the machine's node found it (docs/engines.md): `note` says why one that is there cannot be used. */
+/** An engine as the machine's node found it (docs/integrations/engines.md): `note` says why one that is there cannot be used. */
 export interface DetectedEngine {
   id: string;
   name: string;
@@ -14,7 +14,7 @@ export interface DetectedEngine {
 
 export interface Machine {
   id: string;
-  /** The manager it belongs to (docs/protocol.md "Per-manager routing"); none: the default one. */
+  /** The manager it belongs to (docs/protocol/protocol.md "Per-manager routing"); none: the default one. */
   manager?: string;
   name: string;
   online: boolean;
@@ -34,7 +34,7 @@ export interface Machine {
   /** The terminal engine its sessions come from (herdr when absent); `engines`: what its node found, empty while offline. */
   engine?: string;
   engines?: DetectedEngine[];
-  /** The hosts enabled side by side and the default one (#2576, docs/engines.md "Host sets"); absent from older hubs. */
+  /** The hosts enabled side by side and the default one (#2576, docs/integrations/engines.md "Host sets"); absent from older hubs. */
   engine_hosts?: string[];
   engine_default?: string;
   /** What to preselect when the machine is paired: what its node found available, else herdr (only while online). */
@@ -45,25 +45,25 @@ export interface Machine {
   arch?: string;
   home?: string;
   last_seen?: string;
-  /** Interconnected hubs (docs/plan-hub-mesh.md 2.6): the hub that owns this computer, and the way there. */
+  /** Interconnected hubs (docs/archive/operations/plan-hub-mesh.md 2.6): the hub that owns this computer, and the way there. */
   hub_id?: string;
   hub_name?: string;
   machine_uid?: string;
   route?: { via: string; hops: number; rtt_ms?: number };
-  /** Operating it through Cua Driver (the hub's extension cua, docs/computer-use.md): only while the extension is on and it is a Mac. */
+  /** Operating it through Cua Driver (the hub's extension cua, docs/extensions/computer-use.md): only while the extension is on and it is a Mac. */
   computer?: {
     enabled: boolean; installed?: boolean; daemon?: boolean; ready?: boolean; accessibility?: string; screen_recording?: string;
     desktop?: string; screen_sharing?: boolean; note?: string;
   };
-  /** ego lite (the hub's extension ego, docs/plan-ego-browser.md): only while the extension is on and it is a Mac. */
+  /** ego lite (the hub's extension ego, docs/plans/plan-ego-browser.md): only while the extension is on and it is a Mac. */
   browser?: import("./browser").MachineBrowser;
-  /** feature machine_trust (docs/protocol.md "Computer trust"): "pending" while the user has not said it is theirs; omitted = confirmed. */
+  /** feature machine_trust (docs/protocol/protocol.md "Computer trust"): "pending" while the user has not said it is theirs; omitted = confirmed. */
   trust?: "pending";
   /** What `error` is about, for words of our own: node_service_down / link_offline / never_connected / node_outdated. */
   error_code?: string;
 }
 
-/** The hubs of this hub's interconnected group, from the signed-in hello (docs/plan-hub-mesh.md 2.6). */
+/** The hubs of this hub's interconnected group, from the signed-in hello (docs/archive/operations/plan-hub-mesh.md 2.6). */
 export interface MeshHub {
   hub_id: string;
   name: string;
@@ -112,7 +112,7 @@ export interface SessionCapabilities {
   attach?: boolean;
 }
 
-/** A session's work state (docs/agent-work.md): working, blocked on a named precondition, or done. */
+/** A session's work state (docs/assistant/agent-work.md): working, blocked on a named precondition, or done. */
 export interface WorkState {
   phase: "working" | "blocked" | "done";
   /** What a blocked one waits on: user (a decision), agent, external (a deploy, CI, a time), transient (a model error). */
@@ -154,7 +154,7 @@ export interface Session {
   repo_root?: string;
   machine_id: string;
   session_id: string;
-  /** The manager it belongs to (docs/protocol.md "Per-manager routing"); none: the default one. */
+  /** The manager it belongs to (docs/protocol/protocol.md "Per-manager routing"); none: the default one. */
   manager?: string;
   title: string;
   cwd: string;
@@ -174,7 +174,7 @@ export interface Session {
   attached?: boolean;
   /** "Branch to new chat" works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
   can_fork?: boolean;
-  /** What to call an agent the app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
+  /** What to call an agent the app does not know (a runtime's own name, "DSH"; docs/integrations/runtimes.md). */
   agent_label?: string;
   launcher?: string;
   model?: string;
@@ -183,9 +183,9 @@ export interface Session {
   /** What the model saw in the latest reply and the model's window, in tokens (#2430); omitted while the node cannot tell. */
   context_tokens?: number;
   context_window?: number;
-  /** The levels `effort` may be set to when they are not Claude Code's: a Codex thread driven through its app-server (only its effort changes; docs/protocol.md). */
+  /** The levels `effort` may be set to when they are not Claude Code's: a Codex thread driven through its app-server (only its effort changes; docs/protocol/protocol.md). */
   efforts?: string[];
-  /** Claude Code's session-only ultracode switch as the node last saw it (docs/protocol.md "Claude Code ultracode"):
+  /** Claude Code's session-only ultracode switch as the node last saw it (docs/protocol/protocol.md "Claude Code ultracode"):
    *  absent is unknown, not off. */
   ultracode?: boolean;
   /** Why the switch can't be used, was refused or could not be confirmed (the node's words, in Chinese). */
@@ -195,7 +195,7 @@ export interface Session {
   /** It was on before the agent resumed, and the resumed process has it off: the chat offers to turn it back on. */
   ultracode_lost_at?: string;
   assistant?: boolean;
-  /** The assistant's space it runs in: "health" for the health space's (docs/health.md). */
+  /** The assistant's space it runs in: "health" for the health space's (docs/assistant/health.md). */
   space?: string;
   started_by_persona?: boolean;
   space_id?: string;
@@ -230,18 +230,18 @@ export interface Session {
   turn_error?: string;
   /** What the agent's record says of turn_error: "transient" (worth a "Continue") or "user" (the user must act). */
   turn_error_kind?: string;
-  /** What is wrong, when the hub can tell from turn_error (docs/onboarding.md 5.2): not_logged_in / auth_failed /
+  /** What is wrong, when the hub can tell from turn_error (docs/assistant/onboarding.md 5.2): not_logged_in / auth_failed /
    *  model_route / rate_limited. */
   turn_error_code?: string;
-  /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
+  /** Where it stands in its work (docs/assistant/agent-work.md): set by the hub once it triaged a stopped turn. */
   work?: WorkState;
   pending_interactions?: number;
   queued?: string[];
   subagents?: Subagent[];
   loop?: LoopInfo;
-  /** The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md). */
+  /** The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/integrations/agent-goal.md). */
   goal?: GoalInfo;
-  /** Its own task list (Claude Code's TodoWrite / TaskCreate): how far along it is (docs/agent-goal.md "Plan"). */
+  /** Its own task list (Claude Code's TodoWrite / TaskCreate): how far along it is (docs/integrations/agent-goal.md "Plan"). */
   plan?: PlanInfo;
   background?: BackgroundTask[];
   /** Bounded list summaries omit task arrays; these scalars are authoritative when present. */
@@ -262,19 +262,19 @@ export interface Session {
   background_waiting?: boolean;
   rev?: number;
   suggestion?: string;
-  /** An assistant conversation moved out of the list (docs/assistant.md "Managing its own conversations"). */
+  /** An assistant conversation moved out of the list (docs/assistant/assistant.md "Managing its own conversations"). */
   archived?: boolean;
-  /** Who opened an assistant conversation (docs/protocol.md "Assistant conversation origins"): user, channel, inbox, task, spawned,
+  /** Who opened an assistant conversation (docs/protocol/protocol.md "Assistant conversation origins"): user, channel, inbox, task, spawned,
    *  lark_agent, extension, or one this page doesn't know; none is the user's (older hubs never say). */
   origin?: string;
   /** What it was opened for: the inbox item, the task, the conversation, the channel, the extension. */
   origin_ref?: string;
-  /** The channels messages came into it from, newest first (docs/channels.md "Origin marks"). */
+  /** The channels messages came into it from, newest first (docs/extensions/channels.md "Origin marks"). */
   channels?: string[];
   todo?: { id: string; title: string };
   /** Works (or worked) for a quiet task (#1731): not in the global badge; the main conversation tells about it. */
   quiet?: boolean;
-  /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you (docs/engines.md "botmux"). */
+  /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you (docs/integrations/engines.md "botmux"). */
   attention_reason?: string;
   /** The host stopped its turn on an error it will not retry by itself (a botmux notice), until a message goes to it:
    *  shown over the composer with "Retry" (iOS FailureNote). */
@@ -305,7 +305,7 @@ export interface CompactInfo {
   notes?: string[];
 }
 
-/** A goal the agent keeps working toward until it holds (proto.GoalInfo, docs/agent-goal.md). */
+/** A goal the agent keeps working toward until it holds (proto.GoalInfo, docs/integrations/agent-goal.md). */
 export interface GoalInfo {
   objective: string;
   /** active / paused / blocked / usage_limited / budget_limited / complete (Claude Code's are only active or complete). */
@@ -352,7 +352,7 @@ export interface BackgroundTask {
   run_id?: string;
 }
 
-/** A Claude Code workflow run (the Workflow tool, proto.Workflow; docs/protocol.md "workflows"). */
+/** A Claude Code workflow run (the Workflow tool, proto.Workflow; docs/protocol/protocol.md "workflows"). */
 export interface Workflow {
   task_id: string;
   run_id?: string;
@@ -470,7 +470,7 @@ export interface Item {
   injected?: Injected;
 }
 
-/** What a message Persona wrote for the model is (docs/protocol.md "Messages Persona injects"). */
+/** What a message Persona wrote for the model is (docs/protocol/protocol.md "Messages Persona injects"). */
 export interface Injected {
   kind: "task_notice" | "followup" | "system" | (string & {});
   /** task_notice: done | needs | interrupted | failed; followup: once | daily | interval | wake; system: lost_tasks */
@@ -538,7 +538,7 @@ export interface Elicitation {
 
 export interface Interaction {
   id: string;
-  /** The manager it belongs to (docs/protocol.md "Per-manager routing"); none: the default one. */
+  /** The manager it belongs to (docs/protocol/protocol.md "Per-manager routing"); none: the default one. */
   manager?: string;
   machine_id: string;
   session_id: string;
@@ -554,7 +554,7 @@ export interface Interaction {
   screen?: string;
   secret?: boolean;
   dialog?: ScreenDialog;
-  /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/runtimes.md). */
+  /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/integrations/runtimes.md). */
   agent?: string;
   /** What "always allow" allows here; another agent's card offers it only with this. */
   always_label?: string;
@@ -562,7 +562,7 @@ export interface Interaction {
   always_keys?: string[];
   /** Why another agent asks for the permission, in its own words (a Codex and compatible variants approval read off the terminal). */
   reason?: string;
-  /** An MCP form or link (kind elicitation, docs/protocol.md "MCP elicitation"): the server, where it is configured, and
+  /** An MCP form or link (kind elicitation, docs/protocol/protocol.md "MCP elicitation"): the server, where it is configured, and
    *  the subagent that asks, when the hook says. */
   mcp_server_name?: string;
   mcp_config_source?: string;
@@ -606,11 +606,11 @@ export interface MachineMetrics {
   system?: Machine["system"];
   latest?: { t: number; cpu?: number; load?: number; mem_used?: number; mem_total?: number; net_rx?: number; net_tx?: number; disk_used?: number; disk_total?: number };
   points: MetricPoint[];
-  /** Its tokens (docs/machines.md "Token usage"): absent from an older hub, or when its node never reported usage. */
+  /** Its tokens (docs/server/machines.md "Token usage"): absent from an older hub, or when its node never reported usage. */
   usage?: UsageCard;
 }
 
-/** What a working Claude's status line says right now (hub `live` push, feature `session_live`; docs/protocol.md
+/** What a working Claude's status line says right now (hub `live` push, feature `session_live`; docs/protocol/protocol.md
  *  "Live status"): read off its pane about once a second while someone watches. Absent fields: the line did not say. */
 export interface SessionLive {
   /** The spinner's verb without the ellipsis ("Frosting"). */

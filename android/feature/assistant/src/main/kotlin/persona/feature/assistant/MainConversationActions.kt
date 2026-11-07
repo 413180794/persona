@@ -6,7 +6,7 @@ import persona.core.contracts.SessionCompaction
 import persona.core.designsystem.LocalizedFormats
 import java.util.Locale
 
-/** Hub features behind the main conversation's "Compact context" and "New main chat" (docs/assistant.md, #1727). */
+/** Hub features behind the main conversation's "Compact context" and "New main chat" (docs/assistant/assistant.md, #1727). */
 internal const val CompactFeature = "assistant_compact"
 internal const val NewMainFeature = "assistant_main_new"
 

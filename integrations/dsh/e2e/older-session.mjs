@@ -1,5 +1,5 @@
 // End-to-end: a DSH session that dropped out of the runtime's list (DSH lists its latest sessions only, here 1)
-// can still be sent to from the phone, and its reply comes back (docs/dsh.md "Verification"). It used to go to herdr as a
+// can still be sent to from the phone, and its reply comes back (docs/integrations/dsh.md "Verification"). It used to go to herdr as a
 // Claude session to resume. Same setup as run.mjs: a real `dsh web` (isolated DSH_HOME, DSH's llm-mock-server as the
 // model) and a real `personad node --stdio` played as the hub by the runtime SDK's harness.
 //

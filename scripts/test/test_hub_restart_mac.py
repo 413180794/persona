@@ -1,5 +1,5 @@
 """hub-systemd.sh on a Mac hub: no systemd. It first asks the new binary to switch the running hub's edge over
-(blue-green, docs/hub-restart.md "Blue-green switching"); with no edge to switch on, it restarts the launchd agent that already runs
+(blue-green, docs/operations/hub-restart.md "Blue-green switching"); with no edge to switch on, it restarts the launchd agent that already runs
 <root>/bin/personad hub."""
 import os
 from pathlib import Path

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds the peer app (apple/IslandPeer: another app's Live Activity, "a ride in 8 minutes") and installs it on the
 # given simulators, so Persona' Fleet activity can be photographed sharing the Dynamic Island
-# (docs/live-activity.md "Sharing the Dynamic Island with other apps"). Simulator only, unsigned; never shipped.
+# (docs/apple/live-activity.md "Sharing the Dynamic Island with other apps"). Simulator only, unsigned; never shipped.
 #
 #   scripts/app/island_peer.sh <simulator udid>...
 #   TEST_RUNNER_PERSONA_ISLAND_PEER=dev.example.islandpeer … -only-testing:PersonaUITests/LiveActivityShots

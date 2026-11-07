@@ -15,7 +15,7 @@ final class AppModel {
         return AppModel()
     }()
 
-    /// Every hub paired and the groups they form (HubStore, docs/multi-hub.md). Changed only through the group
+    /// Every hub paired and the groups they form (HubStore, docs/protocol/multi-hub.md). Changed only through the group
     /// functions (HubLinks.swift), which save it (`saveRegistry`).
     var registry: HubRegistry
     /// The keychain could not be read at launch (before the first unlock after boot): `registry` is empty because it is
@@ -32,11 +32,11 @@ final class AppModel {
     var hubGroup: String
     /// The hub-level group's hub (what Persona, Inbox and the hub's settings talk to); nil when not paired.
     var config: ServerConfig? { hub?.config }
-    /// Persona's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
+    /// Persona's looks (docs/apple/persona.md): the chosen one, what the hub offers, the packages on the phone.
     let personas = PersonaStore()
     /// Which paths conversations mention are there on their machines (only those are linked).
     let filePresence = FilePresence()
-    /// Which machine ports links point at are listening (docs/ports.md).
+    /// Which machine ports links point at are listening (docs/operations/ports.md).
     let portPresence = PortPresence()
     /// The hub-level group's socket (its state for the pages about the hub); every group has its own (`links`).
     var live: LiveConnection { hub?.live ?? idleLive }
@@ -146,7 +146,7 @@ final class AppModel {
         return r.dismissed != true
     }
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
-    /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「连接状态和 toast」).
+    /// iPhone's shell in a window of its own, `ToastWindow`, docs/apple/shell.md「连接状态和 toast」).
     var toast: Toast?
     /// The extension page opened from a notification, widget or shortcut; not written to UserDefaults.
     var extensionOpen: ExtensionSystemOpen?
@@ -180,7 +180,7 @@ final class AppModel {
             #if DEBUG
             ShellTrace.shared.note("tab \(oldValue)->\(selectedTab)")
             #endif
-            // The shell routes it now, not when a view is next drawn (docs/shell.md).
+            // The shell routes it now, not when a view is next drawn (docs/apple/shell.md).
             if selectedTab != oldValue { tabRouter?.route(selectedTab, in: self) }
             #if PERF_SIGNPOST
             PerfTrace.event("Tab selection", selectedTab.rawValue)
@@ -317,7 +317,7 @@ final class AppModel {
             return all
         }
 
-        // Settings › Appearance › Language (docs/ios.md「界面语言」): written for the next launch, the extensions and the watch.
+        // Settings › Appearance › Language (docs/apple/ios.md「界面语言」): written for the next launch, the extensions and the watch.
         let language = LanguageStore.shared.apply()
         WatchSync.shared.onActivated = { [weak self] in
             WatchSync.shared.push(language: language)
@@ -441,7 +441,7 @@ final class AppModel {
         }
         r.groupNames = registry.groupNames
         // `-seedSSHTunnel <base64 of the SSHRoute JSON>`: the first hub's SSH tunnel (end-to-end runs, screenshots;
-        // docs/network.md). Base64: a launch argument that looks like a dictionary is read as a property list.
+        // docs/operations/network.md). Base64: a launch argument that looks like a dictionary is read as a property list.
         if let s = UserDefaults.standard.string(forKey: "seedSSHTunnel"), !r.hubs.isEmpty, let json = Data(base64Encoded: s),
            let route = try? JSONDecoder().decode(SSHRoute.self, from: json) { r.hubs[0].ssh = route }
         registry = HubGrouping.regroup(r)
@@ -466,9 +466,9 @@ final class AppModel {
     }
 
     /// Adds a hub (scanned / pasted pairing link). Another group's hub, or a hub already paired again, joins what is
-    /// there; any other hub starts a group of its own beside the others (docs/multi-hub.md「添加 hub」). The other
+    /// there; any other hub starts a group of its own beside the others (docs/protocol/multi-hub.md「添加 hub」). The other
     /// groups keep everything.
-    /// `ssh`: the SSH tunnel set up on the pairing page (docs/network.md「经 SSH 隧道连 hub」): pairing goes through it
+    /// `ssh`: the SSH tunnel set up on the pairing page (docs/operations/network.md「经 SSH 隧道连 hub」): pairing goes through it
     /// when the address does not answer (or always, with Always Use SSH), and the hub keeps it.
     func pair(_ new: ServerConfig, ssh: SSHRoute? = nil) async throws {
         retryRegistry()
@@ -720,7 +720,7 @@ final class AppModel {
         return machinesNow
     }
     /// Macs whose live screen can be shown: the plugin cua or ego is on for them and Screen Sharing answers
-    /// (docs/computer-use.md; ego's first-run setup is done over it, #1507).
+    /// (docs/extensions/computer-use.md; ego's first-run setup is done over it, #1507).
     var screenMachines: [Machine] { machines.filter(Self.showsScreen) }
     func canShowScreen(_ ref: MachineRef) -> Bool { machine(ref).map(Self.showsScreen) ?? false }
     nonisolated static func showsScreen(_ m: Machine) -> Bool {
@@ -1020,12 +1020,12 @@ final class AppModel {
     /// (DesktopPresence.swift).
     var desktops: [DesktopDevice] { hub?.desktops ?? [] }
     /// What the hub-level group's hub said it is in its hello: build and protocol, for the compatibility notices
-    /// (docs/hub-update.md「兼容」); nil until it said anything.
+    /// (docs/operations/hub-update.md「兼容」); nil until it said anything.
     var hubHello: HubHello? {
         guard let hello = hub?.hello, hello != HubHello() else { return nil }
         return hello
     }
-    /// Moves on each `managers` push from the hub-level group's hub: its roster changed (docs/managers.md).
+    /// Moves on each `managers` push from the hub-level group's hub: its roster changed (docs/assistant/managers.md).
     var managersRevision = 0
 
     /// The hub's version and its updating itself: fetched on connect, then the `hub_update` events.
@@ -1052,7 +1052,7 @@ final class AppModel {
         hubNoticeDismissed = Array((hubNoticeDismissed.filter { $0 != key } + [key]).suffix(8))
         UserDefaults.standard.set(hubNoticeDismissed, forKey: "hubNotice.dismissed")
     }
-    /// The one line about the hub over the Agents list, if any (docs/hub-update.md「App 里」).
+    /// The one line about the hub over the Agents list, if any (docs/operations/hub-update.md「App 里」).
     var hubNotice: HubNotice? { isDemo ? nil : HubNotice.of(hubUpdate, compat: hubCompat, dismissed: hubNoticeDismissed) }
     /// Phone Muted: this device's NotifyPrefs.muteWhileDesktop, shown on that banner.
     private(set) var muteWhileDesktop = false
@@ -1117,7 +1117,7 @@ final class AppModel {
         socket(key.group)?.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
     }
 
-    /// The pointer on a terminal the app drives (docs/terminal.md section 25): action down / up / drag, button left /
+    /// The pointer on a terminal the app drives (docs/integrations/terminal.md section 25): action down / up / drag, button left /
     /// middle / right, at a cell of its screen (0-based), mods herdr's bits (shift 1, ctrl 2, alt 4).
     func terminalMouse(_ key: SessionKey, action: String, button: String, column: Int, row: Int, mods: Int) {
         guard session(key)?.canTerminal == true else { return }
@@ -1246,7 +1246,7 @@ final class AppModel {
         registerPhone(link)
         // Phone tool results answered while the socket was down: the hub matches them to their calls by call_id (#4456).
         toolResults.flush(group: group, on: link.live)
-        // The hub resumed its broadcasts (docs/hub-restart.md): what this app missed follows the hello, and the
+        // The hub resumed its broadcasts (docs/operations/hub-restart.md): what this app missed follows the hello, and the
         // connection's snapshot (machines, sessions, pending interactions) is whole: nothing to fetch again, no Updating….
         let plan = ReconnectPlan(resumed: link.live.resumed)
         if group == hub?.group {
@@ -1379,7 +1379,7 @@ final class AppModel {
     }
 
     /// How this device introduces itself to the hub. The iPhone is the phone (its phone_* tools, the wake pushes when
-    /// it is away); a Mac is a desktop, like WeChat's 「Mac 微信已登录」 (hub/desktops.go, docs/mac.md「Mac 是桌面端，不是手机」):
+    /// it is away); a Mac is a desktop, like WeChat's 「Mac 微信已登录」 (hub/desktops.go, docs/apple/mac.md「Mac 是桌面端，不是手机」):
     /// registered as the phone it took every phone_* call and kept the hub from waking the iPhone.
     /// `deviceID` is the phone's id for pushes: while it is connected the hub sends its Live Activity no pushes, the app
     /// draws it from the fleet events (hub/liveactivity.go).
@@ -1413,7 +1413,7 @@ final class AppModel {
     /// Machines' new session lists, whether they came whole (`sessions`) or as a delta (`sessions_delta`): the pages
     /// update once for the lot, and only when a list really changed; the notifications, the watch and the chats kept
     /// current in the background (`AgentSync`) follow them. The one place the lists land (msg-render's SessionStore
-    /// replaces its inside, docs/ios-state.md).
+    /// replaces its inside, docs/apple/ios-state.md).
     func applySessions(_ byMachine: [MachineRef: [Session]]) {
         let byMachine = seenOutbox.land(byMachine, at: Date())
         var lists = sessionsByMachine
@@ -1712,7 +1712,7 @@ final class AppModel {
     func canAnswer(_ ix: Interaction) -> Bool { ix.canAnswer(session: session(ix.sessionKey)) }
 
     func resolve(_ ix: Interaction, _ r: Resolution) async {
-        // To the hub of the interaction's own group (docs/multi-hub.md「操作发到哪」).
+        // To the hub of the interaction's own group (docs/protocol/multi-hub.md「操作发到哪」).
         guard canAnswer(ix), let api = api(ix.group) else { return }
         // No network: the card stays as it is (taking it away and bringing it back a moment later read as "done").
         guard connection.networkUp else { notDone(); return }
@@ -1879,7 +1879,7 @@ final class AppModel {
         }
     }
 
-    /// The user looked at this session: finished work stops being "unread" (docs/agent-states.md).
+    /// The user looked at this session: finished work stops being "unread" (docs/protocol/agent-states.md).
     func markSeen(_ key: SessionKey) {
         sendSeen(key)
         // Optimistic: flip the local copy right away.
@@ -2245,7 +2245,7 @@ final class AppModel {
     /// Agents (not the assistant) waiting on the user, not muted: the Agents tab's badge, the shell's Agents.
     var agentsWaiting: Int { badges.agents }
 
-    /// Settings › Appearance › Old Layout (2026-11-01, docs/ios.md「新外壳」): on, the iPhone keeps the four tabs exactly as before;
+    /// Settings › Appearance › Old Layout (2026-11-01, docs/apple/ios.md「新外壳」): on, the iPhone keeps the four tabs exactly as before;
     /// off (the default), it is the ChatGPT-style shell (Assistant | Agents, the drawer, Settings as a sheet). Kept for a few days
     /// of transition. iPad, iPhone Duo open and the Mac always use their own layouts.
     var oldLayout: Bool = UserDefaults.standard.bool(forKey: "ui.oldLayout") {
@@ -2395,7 +2395,7 @@ final class AppModel {
     // MARK: Badges
 
     /// The tab badges' numbers, counted here when what they count changes and published only when a number does
-    /// (docs/ios-state.md「第 3 步」): the tabs read two numbers, not every pending question and its session.
+    /// (docs/apple/ios-state.md「第 3 步」): the tabs read two numbers, not every pending question and its session.
     private(set) var badges = TabBadges()
     @ObservationIgnored private var watchingMutes = false
 
@@ -2586,7 +2586,7 @@ final class AppModel {
         }
     }
 
-    /// Every group's fleet for the Live Activity (docs/multi-hub.md「实时活动」), all at once: one hub out of reach held
+    /// Every group's fleet for the Live Activity (docs/protocol/multi-hub.md「实时活动」), all at once: one hub out of reach held
     /// the others' agents off the island by its requests' timeouts (#4705). Applied as each answers.
     func loadFleets() async {
         let byGroup = Dictionary(links.map { ($0.group, $0) }, uniquingKeysWith: { a, _ in a })
@@ -2624,7 +2624,7 @@ final class AppModel {
         if error.isOffline { notDone(); return }
         if (error as? APIError)?.code == DemoText.code { toast = Toast(DemoText.notSent); return } // Demo Mode: not an error
         // A start or a send the hub refused with a code (no computer, Claude Code missing…): a card with what to do where
-        // the conversation is, not a toast; a 409 is never quiet (docs/onboarding.md 5.2).
+        // the conversation is, not a toast; a 409 is never quiet (docs/assistant/onboarding.md 5.2).
         if let coded = CodedFailure(error) {
             readiness.failure = coded
             readinessChanged()
@@ -2653,7 +2653,7 @@ final class AppModel {
                                                    quiet: isQuiet)
         // Connectors' items too: the watch lists them read-only under their own label (#2727).
         let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action }
-        // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」). Muted agents and spaces
+        // A task's agent asking: the watch names the task (docs/assistant/unified-entry.md「手表」). Muted agents and spaces
         // stay off the wrist too (#4360), the same rule as the Agents badge and the inbox.
         let tasks = TasksStore.shared
         let interactions = asking.filter { !isQuiet($0.sessionKey) && !isMuted($0.sessionKey) }.map { ix in
@@ -2751,7 +2751,7 @@ nonisolated struct TabBadges: Equatable, Sendable {
 }
 
 /// The Persona conversations of one group, newest first: open and archived (`AppModel.assistantConversations`), and
-/// apart from them the health space's open ones (Health, docs/health.md), which the sidebar never lists.
+/// apart from them the health space's open ones (Health, docs/assistant/health.md), which the sidebar never lists.
 nonisolated struct AssistantLists: Equatable {
     let group: String
     let open: [Session]

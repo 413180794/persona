@@ -1,4 +1,4 @@
-// The palette's logic (views/Palette.tsx, docs/web.md "Keyboard shortcuts"): its state (open, what is typed), the two modes — ⌘K
+// The palette's logic (views/Palette.tsx, docs/web/web.md "Keyboard shortcuts"): its state (open, what is typed), the two modes — ⌘K
 // jumps to a conversation or a terminal pane, `>` (or ⌘⇧P) lists commands — the commands and their filter, and the hook
 // other modules add commands through (`registerContextCommands`). Pure apart from the small store.
 import { t } from "../i18n";

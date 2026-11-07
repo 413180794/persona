@@ -1,5 +1,5 @@
 // Package scriptcli is `personad ask` and `personad notify`: a script's way to the phone, through the node on this
-// machine (node/scriptcli.go; the design is docs/script-cli.md).
+// machine (node/scriptcli.go; the design is docs/integrations/script-cli.md).
 //
 //	personad ask "question" [--options a,b,c] [--timeout 10m] [--require-remote]
 //	    blocks until it is answered on the phone. With options the phone draws a question card and the chosen option is

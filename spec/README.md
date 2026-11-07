@@ -1,6 +1,6 @@
 # 共享行为规格
 
-这里保存 Android 纯 Kotlin 核心和以后 iOS 核心共用的行为规格与夹具，依据是 [重设计总纲 D1、D4](../docs/redesign/README.md)。Android 用 JUnit 读取；以后 iOS 跟进时，XCTest 读取同一批 JSON。
+这里保存 Android 纯 Kotlin 核心和以后 iOS 核心共用的行为规格与夹具，依据是 [重设计总纲 D1、D4](../docs/archive/redesign/README.md)。Android 用 JUnit 读取；以后 iOS 跟进时，XCTest 读取同一批 JSON。
 
 **行为以当前 iOS 实现及其单测为准。** 文档与实现有差异时，保留现有行为，在领域 README 中说明差异及其来源。更新行为应先更新规格和夹具，再调整各端实现。
 

@@ -1,6 +1,6 @@
 import XCTest
 
-/// The main conversation's readiness on a new user's hub (#4193, docs/onboarding.md 4.4, 5.1, 5.2): against
+/// The main conversation's readiness on a new user's hub (#4193, docs/assistant/onboarding.md 4.4, 5.1, 5.2): against
 /// scripts/mock/mock_hub.py with MOCK_READINESS=<scenario> (PERSONA_MOCK_HUB; PERSONA_READINESS names the scenario for the
 /// screenshots). A new conversation shows the card for the missing step; with something typed, send says what to do
 /// first, goes there, and the draft stays. PERSONA_SHOTS=<dir> writes the screenshots.

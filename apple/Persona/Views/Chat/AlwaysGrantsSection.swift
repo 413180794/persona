@@ -1,9 +1,9 @@
 import SwiftUI
 
 // What "Always allow" opened in an assistant conversation, one revoke per row, in Session Info (#5867,
-// docs/assistant.md「Always allow in this session」). The web's AlwaysPermissions.
+// docs/assistant/assistant.md「Always allow in this session」). The web's AlwaysPermissions.
 
-/// The conversation's grants and what it asks the hub (MVVM, docs/ios.md「逻辑层的选型」).
+/// The conversation's grants and what it asks the hub (MVVM, docs/apple/ios.md「逻辑层的选型」).
 @Observable final class AlwaysGrantsModel {
     /// Nil until the hub answers.
     private(set) var grants: [APIClient.AlwaysGrant]?

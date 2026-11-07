@@ -39,7 +39,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 扩展 with several managers (docs/managers.md step 4): each manager's extensions under its name, the default's
+ * 设置 › 扩展 with several managers (docs/assistant/managers.md step 4): each manager's extensions under its name, the default's
  * first (the unstamped ones are its), the offline one greyed with 最后同步于; with one manager the list is as before.
  * Written to `build/managers-shots/plugins-*.png`.
  */

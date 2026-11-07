@@ -1,4 +1,4 @@
-// Package conformance holds a channel program to the channel extension point's protocol (docs/channels.md "Protocol"),
+// Package conformance holds a channel program to the channel extension point's protocol (docs/extensions/channels.md "Protocol"),
 // after the plugin protocol's own checks (plugin/conformance): every channel the manifest contributes answers
 // channel.send (sent, or cannot_send while there is nowhere to send to) the same way for the same ref, takes
 // channel.typing, refuses a channel it does not have and a method it does not know; what both sides send holds to

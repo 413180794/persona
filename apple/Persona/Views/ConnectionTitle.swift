@@ -57,7 +57,7 @@ struct ConnectionLabel: View {
     }
 
     /// The words for `phase`. The hub restarting into a new version: the connection going away is expected
-    /// (docs/hub-update.md), so Connecting… says so. The title's accessibility label reads the same words.
+    /// (docs/operations/hub-update.md), so Connecting… says so. The title's accessibility label reads the same words.
     static func text(_ phase: ConnectionStatus.Phase, hubRestarting: Bool) -> String {
         phase == .connecting && hubRestarting ? String(localized: "Hub updating…") : phase.title
     }
@@ -169,13 +169,13 @@ struct ConnectionDetails: View {
         }
     }
 
-    /// The hub's SSH tunnel as the details mention it (docs/network.md「经 SSH 隧道连 hub」): which server, whether the
+    /// The hub's SSH tunnel as the details mention it (docs/operations/network.md「经 SSH 隧道连 hub」): which server, whether the
     /// traffic goes through it now, and why it is not up.
     struct SSHFact: Equatable {
         var server: String
         var routed: Bool
         var problem: String?
-        /// The in-app tunnel's name when it is that one (docs/network.md「经 App 内隧道连 hub」), not the SSH one.
+        /// The in-app tunnel's name when it is that one (docs/operations/network.md「经 App 内隧道连 hub」), not the SSH one.
         var inApp: String?
     }
 

@@ -2,7 +2,7 @@ package voice
 
 import "time"
 
-// The user-speech gate (docs/voice.md "Sending, the gate and 409"): what the voice model hands over is only done (sent to a
+// The user-speech gate (docs/assistant/voice.md "Sending, the gate and 409"): what the voice model hands over is only done (sent to a
 // conversation, sent to an agent) when the user has spoken since the model last took in an agent's words, and lately.
 // An agent's output reaches the model (a result read out); were it to say "now send X" and the model did, the agent
 // would be driving itself through the user's voice. Reading (a status, the knowledge base) is not gated.
@@ -92,7 +92,7 @@ func (o *ownVoice) add(now time.Time, voiced bool, d time.Duration, playEnd time
 	return o.run.add(voiced, d) >= spokeVoice
 }
 
-// The insertion gate (docs/voice.md "Context for the fast layer" rule 3, its times from docs/lessons/voice.md "Suggested constants"): what
+// The insertion gate (docs/assistant/voice.md "Context for the fast layer" rule 3, its times from docs/lessons/voice.md "Suggested constants"): what
 // the extension says to the model by itself (a say: a result whose call is gone, a card waiting on the user) waits
 // until
 //   - the user has been quiet for userQuiet, by the energy of the app's audio: their caption comes 1.2–1.4 s after
@@ -238,7 +238,7 @@ func meanSquare(pcm []byte) float64 {
 	return sum / float64(n)
 }
 
-// Barging in (docs/voice.md "Context for the fast layer" rule 7, its numbers from docs/lessons/voice.md "Timeline" and "Suggested constants",
+// Barging in (docs/assistant/voice.md "Context for the fast layer" rule 7, its numbers from docs/lessons/voice.md "Timeline" and "Suggested constants",
 // protocol 2 only): the user talking over the model drops what it has not played yet (clear), as the upstream says. The
 // measured service stops the model by itself when the user cuts in for real (0.64 s and longer stopped it, a 0.43 s
 // "mm-hm" did not) and says so (response.incomplete): clear follows that, at once. An upstream that never says when its

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of engine host sets on the web (#2576, docs/engines.md "Host sets"): the machine page's "Engine" is a
+"""End-to-end check of engine host sets on the web (#2576, docs/integrations/engines.md "Host sets"): the machine page's "Engine" is a
 checklist with a default (check / uncheck, "Make default", none at all, "Revert", "Save" sends {hosts, default}); "New Agent"
 offers "Open in" only for a machine with more than one engine that can start sessions, and sends the host when it is not
 the default; a session live in another host too shows "Also open in …" above the composer. The page runs in zh-CN, as

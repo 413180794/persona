@@ -247,7 +247,7 @@ func (h *hubClient) resolve(ctx context.Context, id string, r proto.Resolution) 
 	return out.Already, err
 }
 
-// channels are the hub's channels (docs/channels.md), their names in the language ctx carries (i18n.With).
+// channels are the hub's channels (docs/extensions/channels.md), their names in the language ctx carries (i18n.With).
 func (h *hubClient) channels(ctx context.Context) ([]channel.View, error) {
 	var out struct {
 		Channels []channel.View `json:"channels"`
@@ -256,7 +256,7 @@ func (h *hubClient) channels(ctx context.Context) ([]channel.View, error) {
 	return out.Channels, err
 }
 
-// triageSwitches are the hub's session triage switches (GET /api/v1/agents/triage, docs/agent-work.md "Switches"): whether
+// triageSwitches are the hub's session triage switches (GET /api/v1/agents/triage, docs/assistant/agent-work.md "Switches"): whether
 // it triages an agent's stopped turn at all, and whether it goes on ("Continue") after a transient model error.
 type triageSwitches struct {
 	Enabled      bool `json:"enabled"`
@@ -324,7 +324,7 @@ func (h *hubClient) itemFull(ctx context.Context, machine, session, id string) (
 	return it, err
 }
 
-// sendOpts are a send's options (docs/protocol.md "Sending messages"): the draft in the agent's input box to clear first (as
+// sendOpts are a send's options (docs/protocol/protocol.md "Sending messages"): the draft in the agent's input box to clear first (as
 // the refusal gave it), and closing a notice that Enter only closes.
 type sendOpts struct {
 	ClearDraft    string
@@ -332,7 +332,7 @@ type sendOpts struct {
 }
 
 // send types text into a conversation as message id (voice-…: the conversation shows it came by voice,
-// docs/channels.md "Source marks"; the hub sends an id once, and forgets one it refused: the same id goes again).
+// docs/extensions/channels.md "Source marks"; the hub sends an id once, and forgets one it refused: the same id goes again).
 func (h *hubClient) send(ctx context.Context, machine, session, text, id string, opts ...sendOpts) error {
 	body := map[string]any{"text": text, "client_msg_id": id}
 	for _, o := range opts {

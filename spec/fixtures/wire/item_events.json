@@ -60,7 +60,7 @@
     "description": "没有内容块的行仍发送空数组和连续性范围。",
     "source": [
       "server/internal/hub/http.go: Hub.itemsToSubscribers",
-      "docs/protocol.md: items 的连续性",
+      "docs/protocol/protocol.md: items 的连续性",
       "apple/Shared/LiveConnection.swift: ServerEvent.decode"
     ],
     "derived": true,
@@ -89,7 +89,7 @@
     "source": [
       "server/internal/hub/http.go: Hub.sendBacklog",
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
-      "docs/protocol.md: WebSocket / items 的连续性"
+      "docs/protocol/protocol.md: WebSocket / items 的连续性"
     ],
     "derived": true,
     "decoder": "event",
@@ -130,7 +130,7 @@
     "source": [
       "server/internal/hub/http.go: Hub.sendBacklog",
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
-      "docs/protocol.md: WebSocket / items 的连续性"
+      "docs/protocol/protocol.md: WebSocket / items 的连续性"
     ],
     "derived": true,
     "decoder": "event",
@@ -171,7 +171,7 @@
     "source": [
       "server/internal/hub/http.go: Hub.sendBacklog",
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
-      "docs/protocol.md: WebSocket / items 的连续性"
+      "docs/protocol/protocol.md: WebSocket / items 的连续性"
     ],
     "derived": true,
     "decoder": "event",

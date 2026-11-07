@@ -1,4 +1,4 @@
-{{- /* While what was handed over is still being worked on (docs/voice.md「播报」, voice/runs.go): a heartbeat after a
+{{- /* While what was handed over is still being worked on (docs/assistant/voice.md「播报」, voice/runs.go): a heartbeat after a
 long quiet in the call (working: only the sort of step it is on and how long it has worked, never what it wrote), or
 once that its turn stopped to wait on something outside (waiting, the #waiting branch: a deploy, CI, a review, a time,
 or another agent). What it waits for is the hub's triage of the agent's words: it sits inside <agent_output> after the

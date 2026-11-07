@@ -20,7 +20,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The selected hub's roster of managers for the whole app (docs/managers.md step 4): read when the hub comes online
+ * The selected hub's roster of managers for the whole app (docs/assistant/managers.md step 4): read when the hub comes online
  * and on its `managers` pushes, given to the pages as `LocalManagerRoster`. It also keeps the assistant page's
  * [AssistantManagerChoice] on this hub: another hub starts on its default, and a manager that went away (deleted, the
  * default moved) falls back to the default.

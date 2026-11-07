@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The menu bar item (docs/mac.md: Dynamic Island / Lock Screen Live Activity → menu bar): what needs you, what's working, what finished.
+/// The menu bar item (docs/apple/mac.md: Dynamic Island / Lock Screen Live Activity → menu bar): what needs you, what's working, what finished.
 @MainActor
 struct MacMenuBarTests {
     private func session(_ id: String, _ state: AgentState, assistant: Bool = false, ago: TimeInterval = 0) -> Session {

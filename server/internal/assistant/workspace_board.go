@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/workspaceboard"
 )
 
-// The workspace board (docs/workspace-board.md) is the manager's: its cards bind a computer's code directory, and
+// The workspace board (docs/web/workspace-board.md) is the manager's: its cards bind a computer's code directory, and
 // only the manager reaches the computers (devices.go). Its routes are assistantwire's boardRoutes, relayed by the hub
 // (503 assistant_offline while the manager is away); its events (workspace_board, workspace_board_settings) go to
 // the apps as they are (ws.broadcast).

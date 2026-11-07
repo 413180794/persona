@@ -1,6 +1,6 @@
 import Foundation
 
-// The terminal tab's screen model (docs/terminal.md). What arrives is not a program's raw output but herdr redrawing a
+// The terminal tab's screen model (docs/integrations/terminal.md). What arrives is not a program's raw output but herdr redrawing a
 // pane's grid it has already emulated — cursor moves, SGR, text, erases, OSC 8 links — so a small VT subset is enough;
 // anything else is skipped without harm. The same parser reads the colored scrollback pages (`/screen?format=ansi`),
 // which are just SGR and text, one row per line.
@@ -393,7 +393,7 @@ nonisolated private struct Parser {
 extension TerminalGrid {
     /// How many rows the screen moved up from `old` to `new` (0: it did not): herdr redraws a grid in place, so rows
     /// that scroll off the top are in no frame — the phone keeps them itself when it drives the terminal (no
-    /// scrollback in herdr then, docs/terminal.md). Moved by k: new's top rows are old's from row k, for at least a
+    /// scrollback in herdr then, docs/integrations/terminal.md). Moved by k: new's top rows are old's from row k, for at least a
     /// third of what is left (the bottom — Claude's spinner, its prompt box — changes as it goes), and those rows say
     /// something (rules and blank rows match anywhere). Moved further than the screen in one frame: nothing to match.
     static func scrolled(from old: [TermRow], to new: [TermRow]) -> Int {

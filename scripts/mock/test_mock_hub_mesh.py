@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The mock hub's mesh fields (scripts/mock/mock_hub.py, docs/plan-hub-mesh.md 2.6): absent by default, shaped like the
+"""The mock hub's mesh fields (scripts/mock/mock_hub.py, docs/archive/operations/plan-hub-mesh.md 2.6): absent by default, shaped like the
 contract when MOCK_HUB_NAME and the other MOCK_* mesh variables are set.
 
     python3 scripts/mock/test_mock_hub_mesh.py      # ports 18761 and 18762 (MOCK_MESH_TEST_PORTS=a,b for others)

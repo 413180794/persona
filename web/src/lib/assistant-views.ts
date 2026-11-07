@@ -1,4 +1,4 @@
-// What the web knows about the assistant's cards in a conversation (docs/assistant-views.md "Persisted submits" and "Live cards"):
+// What the web knows about the assistant's cards in a conversation (docs/assistant/assistant-views.md "Persisted submits" and "Live cards"):
 // the live cards (view_show / view_update, by version), the answers given from any card on any device (by revision),
 // and which text blocks the hub has registered (only those take an answer). It comes from the feed's snapshot (views,
 // view_actions, view_blocks) and the events assistant_view, assistant_view_action and assistant_view_block, each kept
@@ -141,12 +141,12 @@ export function applyBlock(conversation: string, key: string | undefined) {
 /** The feed's snapshot: every live card, answer and registered block of the conversation (nothing is taken away). */
 export function applySnapshot(conversation: string, res: { views?: Record<string, AssistantView> | null; view_actions?: Record<string, ViewAction> | ViewAction[] | null; view_blocks?: string[] | null }) {
   for (const v of Object.values(res.views ?? {})) applyView(conversation, v);
-  // the hub sends the answers keyed by card (docs/protocol.md); Object.values also takes a list
+  // the hub sends the answers keyed by card (docs/protocol/protocol.md); Object.values also takes a list
   for (const a of Object.values(res.view_actions ?? {})) applyAction(conversation, a);
   for (const k of res.view_blocks ?? []) applyBlock(conversation, k);
 }
 
-// The events (docs/assistant-views.md): each names its conversation.
+// The events (docs/assistant/assistant-views.md): each names its conversation.
 onHubEvent("assistant_view", (m) => applyView(String(m.conversation ?? ""), m.view as AssistantView | undefined));
 onHubEvent("assistant_view_action", (m) => applyAction(String(m.conversation ?? ""), m.action as ViewAction | undefined));
 onHubEvent("assistant_view_block", (m) => applyBlock(String(m.conversation ?? ""), typeof m.key === "string" ? m.key : undefined));

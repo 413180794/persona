@@ -1,4 +1,4 @@
-// Package runtimepkg is the code of the runtimes personad keeps up to date itself (docs/runtimes.md "Auto-update"): a
+// Package runtimepkg is the code of the runtimes personad keeps up to date itself (docs/integrations/runtimes.md "Auto-update"): a
 // runtime's plugin loaded into another program (DSH's), which that program would otherwise only reload by hand. The
 // files are copied from integrations/ at build time (go generate) and embedded, so a node carries the plugin of its
 // own build; a runtime that says it runs a package with another hash is offered this one (runtime.hello's update) and

@@ -1,4 +1,4 @@
-// The terminal's two surfaces (docs/terminal.md "The full herdr view"): "Single pane", one pane streamed from herdr (the terminal
+// The terminal's two surfaces (docs/integrations/terminal.md "The full herdr view"): "Single pane", one pane streamed from herdr (the terminal
 // as it has always been here), and "Full view", herdr's own client in a PTY on the computer with its sidebar, tabs and
 // splits. Which one a terminal opens in, how the switch between them is staged, and the small protocol pieces of the
 // full one that need no browser: the acknowledgements, the answers to a TUI's colour queries and how a view ends.

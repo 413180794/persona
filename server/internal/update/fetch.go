@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// Published is what the publisher put up, as a hub sees it. Nothing is signed (the user's call, docs/hub-update.md
+// Published is what the publisher put up, as a hub sees it. Nothing is signed (the user's call, docs/operations/hub-update.md
 // "Security"): the sha256s guard against a broken download over HTTPS, not against the site itself being replaced.
 type Published struct {
 	Manifest *Manifest

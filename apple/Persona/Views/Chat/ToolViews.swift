@@ -45,7 +45,7 @@ enum ToolPresentation {
         if n.hasPrefix("phone_") { return "iPhone" }
         if n.hasPrefix("mail_") { return String(localized: "Mail [Assistant View 3d708e]") }
         switch n {
-        // Persona managing its own conversations (docs/assistant.md「管理自己的对话」).
+        // Persona managing its own conversations (docs/assistant/assistant.md「管理自己的对话」).
         case "conversations_list": return String(localized: "List Chats")
         case "conversation_read": return String(localized: "Read Chat")
         case "conversation_rename": return String(localized: "Rename Chat")
@@ -53,7 +53,7 @@ enum ToolPresentation {
         case "conversation_unarchive": return String(localized: "Unarchive")
         case "conversation_new": return String(localized: "New Chat [Tool Views 3f0830]")
         case "conversation_send": return String(localized: "Send to Chat")
-        // Operating a Mac through Cua Driver (docs/computer-use.md).
+        // Operating a Mac through Cua Driver (docs/extensions/computer-use.md).
         case "computer_state": return String(localized: "View Computer")
         case "computer_run": return String(localized: "Control Computer")
         case "browser_run": return String(localized: "Use Browser")
@@ -110,7 +110,7 @@ enum ToolPresentation {
         case "browser_look": return mac() ?? ""
         case "browser_run": return [mac(), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
         case "computer_run": return [mac(), ComputerSteps.describe(call.name, input: i)].compactMap { $0 }.joined(separator: " · ")
-        // ask_user is the Persona assistant's own question tool (docs/assistant.md); it takes the same questions.
+        // ask_user is the Persona assistant's own question tool (docs/assistant/assistant.md); it takes the same questions.
         case "AskUserQuestion", "ask_user": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")
         case "TodoWrite": return PlanProgress.text(i["todos"]?.array ?? [])
@@ -328,7 +328,7 @@ struct ToolCallRow: View {
             || Self.debugDetails)
     }
 
-    /// Screenshots (docs/mac.md, docs/testing.md): `-showToolDetails YES` opens every tool row (diffs, Bash output,
+    /// Screenshots (docs/apple/mac.md, docs/operations/testing.md): `-showToolDetails YES` opens every tool row (diffs, Bash output,
     /// an answered ask_user) without a tap.
     #if DEBUG
     static let debugDetails = UserDefaults.standard.bool(forKey: "showToolDetails")
@@ -1103,7 +1103,7 @@ extension EnvironmentValues {
     @Entry var openFold: ((Item) async throws -> Void)? = nil
 }
 
-/// Work the page left out (`Item.fold`, docs/protocol.md「折叠的工作」). It shows only once its work line is open, and
+/// Work the page left out (`Item.fold`, docs/protocol/protocol.md「折叠的工作」). It shows only once its work line is open, and
 /// then fetches the steps, which take its place.
 struct FoldedWorkRow: View {
     @Environment(\.openFold) private var openFold

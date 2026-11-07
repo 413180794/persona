@@ -1,6 +1,6 @@
 import XCTest
 
-/// Settings › Channels (docs/channels.md): the Channels row before Connectors, the list in its three sections, WeChat's page
+/// Settings › Channels (docs/extensions/channels.md): the Channels row before Connectors, the list in its three sections, WeChat's page
 /// (bound: its account, Send Messages To, its features), binding a channel with a token a step at a time, the Feishu bot's
 /// pairing code, and 「来自 微信」 under the main conversation's first message. Against scripts/mock/mock_hub.py with
 /// MOCK_CHANNELS=1 MOCK_EXTENSIONS=1: `TEST_RUNNER_PERSONA_CHANNELS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the

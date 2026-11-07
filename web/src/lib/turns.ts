@@ -1,5 +1,5 @@
 import { CONTEXT_RE, FILE_RE, PERSONA_SERVERS, canonicalTool } from "./compatibility";
-// Items → what the chat shows (docs/ios.md "Display logic"): every user message opens a segment; the segment shows
+// Items → what the chat shows (docs/apple/ios.md "Display logic"): every user message opens a segment; the segment shows
 // the message, one work row folding the tools / thoughts / notices / intermediate replies, and the agent's last
 // words before the next message as the answer.
 
@@ -38,7 +38,7 @@ export interface UserMessage {
   injected?: Injected;
 }
 
-/** A <persona-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md "Sending video"). */
+/** A <persona-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol/protocol.md "Sending video"). */
 export interface AttachedFile {
   kind: string; // video | audio | file
   path: string; // on the session's machine
@@ -382,7 +382,7 @@ export function isPersonaTool(name?: string): boolean {
 
 /** Persona's tools with a verb of their own, by their bare name (iOS PersonaToolNames + ToolPresentation.verb). */
 const PERSONA_VERB_KEY: Record<string, string> = {
-  // Agents on the user's computers (docs/assistant.md "Agents and Lark tools")
+  // Agents on the user's computers (docs/assistant/assistant.md "Agents and Lark tools")
   agent_read: "persona_agent_read",
   agent_send: "persona_agent_send",
   send_to_agent: "persona_agent_send",
@@ -392,7 +392,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   task_plan: "persona_agent_start",
   interaction_answer: "persona_interaction_answer",
   ask_persona: "persona_ask_persona",
-  // the knowledge base (docs/knowledge.md)
+  // the knowledge base (docs/assistant/knowledge.md)
   kb_get: "persona_kb_search",
   kb_list: "persona_kb_search",
   kb_search: "persona_kb_search",
@@ -408,11 +408,11 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   delete_routine: "persona_delete_routine",
   inbox_draft: "persona_inbox_draft",
   persona_settings: "persona_settings",
-  // live cards (docs/assistant-views.md)
+  // live cards (docs/assistant/assistant-views.md)
   view_show: "persona_view_show",
   view_get: "persona_view_get",
   view_update: "persona_view_update",
-  // its own conversations (docs/assistant.md "Managing its own conversations")
+  // its own conversations (docs/assistant/assistant.md "Managing its own conversations")
   conversations_list: "persona_conversations_list",
   conversation_read: "persona_conversation_read",
   conversation_rename: "persona_conversation_rename",
@@ -420,7 +420,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
   conversation_unarchive: "persona_conversation_unarchive",
   conversation_new: "persona_conversation_new",
   conversation_send: "persona_conversation_send",
-  // a Mac through Cua Driver (docs/computer-use.md)
+  // a Mac through Cua Driver (docs/extensions/computer-use.md)
   computer_state: "persona_computer_state",
   computer_run: "persona_computer_run",
   browser_run: "persona_browser_run",

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// "Hand to AI" with several managers (docs/managers.md "Clients"): the conversation starts with the item's manager and
+// "Hand to AI" with several managers (docs/assistant/managers.md "Clients"): the conversation starts with the item's manager and
 // its next requests go there too; an item stamped with the default (a hub with one manager stamps every item so) sends
 // no header at all.
 import { act } from "react";

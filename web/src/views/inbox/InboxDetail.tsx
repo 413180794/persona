@@ -27,7 +27,7 @@ import { EventBody, type SourceAt } from "./InboxEvent";
 import { chatOfItem, LarkThread } from "./LarkThread";
 
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
-  // Whether an item's requests name its manager goes by the roster's default (docs/managers.md "Clients"): the page
+  // Whether an item's requests name its manager goes by the roster's default (docs/assistant/managers.md "Clients"): the page
   // waits for it, and is drawn anew when it moves, so nothing it asks goes by a default it was not.
   const known = useKnownDefault();
   if (item && !known) {
@@ -75,7 +75,7 @@ function ItemDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
   const canPin = Boolean(item.lark) && (!place || ownShown) && !showEvent;
   const muteRows: MenuItem[] = [
     ...(item.mutes ?? []).map((m): MenuItem => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) })),
-    // and a rule for each (docs/inbox.md "Policies"), under a divider
+    // and a rule for each (docs/assistant/inbox.md "Policies"), under a divider
     ...(item.mutes ?? []).map((m, i): MenuItem => ({ key: `policy:${m.tag}:${m.value}`, label: policyMenuTitle(m), hint: muteShortName(m), icon: "target", divider: i === 0, onSelect: () => openPolicyDialog({ item, option: m, source: item.source }) })),
   ];
   // the item's own body: the chat, the mail, the document's rows, the post, a connector's thread
@@ -88,7 +88,7 @@ function ItemDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
       )}
     </div>
   );
-  // its chat, mail or connector thread is its manager's (a merged list's stamp, docs/managers.md "Clients"): every
+  // its chat, mail or connector thread is its manager's (a merged list's stamp, docs/assistant/managers.md "Clients"): every
   // request the bodies below make names it, so one still going out after the next item opened keeps its own
   return (
     <ItemManager.Provider value={item.manager}>

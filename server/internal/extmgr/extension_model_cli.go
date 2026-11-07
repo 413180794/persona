@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// The extension model's commands (docs/extensions.md "Contribution switches"), next to extensionUsage's.
+// The extension model's commands (docs/extensions/extensions.md "Contribution switches"), next to extensionUsage's.
 const extensionModelUsage = `  contributions <id>                its contributions and their switches
   contribution <id> <point>/<cid> on|off
                                     switch one contribution (a connector's is the connector's switch)`

@@ -1,4 +1,4 @@
-// The full herdr surface's feed (docs/terminal.md "The full herdr UI"): herdr's own client, run in a PTY on the computer,
+// The full herdr surface's feed (docs/integrations/terminal.md "The full herdr UI"): herdr's own client, run in a PTY on the computer,
 // drawn by a plain xterm. Not TerminalFeed's job — that one mirrors a pane's grid frame by frame — so this is a feed of
 // its own with the same face for what the page shares (the key bar, the find bar, the right-click menu): the hub relays
 // bytes both ways over the app WebSocket (herdr_open / herdr_data / herdr_input / herdr_resize / herdr_ack / herdr_close,
@@ -529,7 +529,7 @@ export class FullFeed {
   };
 
   /**
-   * The hub link went away under an open view: the hub has already stopped the client with it (docs/terminal.md), and
+   * The hub link went away under an open view: the hub has already stopped the client with it (docs/integrations/terminal.md), and
    * keys sent now would be dropped. The view stops being live; the hub's hello opens another (onHello → begin).
    */
   private checkLink = () => {

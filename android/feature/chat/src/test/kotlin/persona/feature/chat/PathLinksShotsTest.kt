@@ -51,14 +51,14 @@ class PathLinksShotsTest {
     @get:Rule val rule = createComposeRule()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val there = mapOf("/tmp/persona-tasks/1664-lark-test.md" to "file", "web/src/lib/api.ts" to "file", "docs/web.md" to "file")
+    private val there = mapOf("/tmp/persona-tasks/1664-lark-test.md" to "file", "web/src/lib/api.ts" to "file", "docs/web/web.md" to "file")
     private val presence = PathPresence(scope, { paths -> SessionPathStats(paths.map { SessionPathStat(it, there[it] ?: "missing") }) })
     private val opened = mutableListOf<String>()
     private val actions = ChatRowActions(SessionKey("mac", "s1"), fullText = { it.text.orEmpty() }, openPath = { path, _ -> opened += path },
         photos = null, pictures = { emptyList() }, openImages = { _, _ -> }, menu = null, retryLineId = null, onRetry = {}, paths = presence)
 
     private val user = "读 /tmp/persona-tasks/1664-lark-test.md 并完整执行这个任务，别动 /tmp/other/notes.md"
-    private val reply = "改好了：`web/src/lib/api.ts:34` 加了重试，说明写在 docs/web.md 里；/tmp/other/notes.md 没动。"
+    private val reply = "改好了：`web/src/lib/api.ts:34` 加了重试，说明写在 docs/web/web.md 里；/tmp/other/notes.md 没动。"
 
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/path-link-shots").also { it.mkdirs() }
 
@@ -67,7 +67,7 @@ class PathLinksShotsTest {
     @Test fun linksThePathsThereInEveryStyle() {
         presence.ask(PathLinks.asked(user) + PathLinks.asked(reply))
         val deadline = System.currentTimeMillis() + 5_000
-        while (presence.kind("docs/web.md") == null && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        while (presence.kind("docs/web/web.md") == null && System.currentTimeMillis() < deadline) Thread.sleep(20)
         assertTrue(presence.linkable("/tmp/persona-tasks/1664-lark-test.md") && !presence.linkable("/tmp/other/notes.md"))
 
         var style by mutableStateOf(AppStyle.Glass)

@@ -107,7 +107,7 @@ struct AssistantDeps {
 }
 
 /// Memory: the assistant's memory files, newest first, and deleting one. `space` "health" is the health space's own
-/// memory (Health › Health Memory, docs/health.md); nil the assistant's.
+/// memory (Health › Health Memory, docs/assistant/health.md); nil the assistant's.
 @Observable final class AssistantMemoryModel {
     private(set) var files: [APIClient.MemoryFile] = []
     private(set) var loaded = false

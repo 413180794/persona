@@ -1,4 +1,4 @@
-// Package voice is the built-in voice plugin (`personad voice`, docs/extensions.md "Built-in voice extension"): full-duplex voice
+// Package voice is the built-in voice plugin (`personad voice`, docs/extensions/extensions.md "Built-in voice extension"): full-duplex voice
 // conversations in the app over a realtime service that speaks the GPT-Live wire. The hub starts it like any plugin
 // and relays /api/v1/plugins/<id>/… to the HTTP server it serves on PERSONA_PLUGIN_SOCKET.
 //
@@ -36,7 +36,7 @@ const (
 )
 
 // Config is the plugin's configuration: the upstreams of the hub.json entry the hub took over and of the settings
-// form, merged (Merge, docs/voice.md "Configurable GPT-Live upstream"); a hand-run plugin's is given whole (the old format).
+// form, merged (Merge, docs/assistant/voice.md "Configurable GPT-Live upstream"); a hand-run plugin's is given whole (the old format).
 type Config struct {
 	Providers []Provider `json:"providers"`
 	// Default is the model a conversation uses when the app names none ("<provider>/<model>"); empty: the first
@@ -83,7 +83,7 @@ type Form struct {
 	Notes        string   `json:"notes"`
 }
 
-// Sources are where the built-in extension's settings come from (docs/voice.md "How the extension gets its settings").
+// Sources are where the built-in extension's settings come from (docs/assistant/voice.md "How the extension gets its settings").
 type Sources struct {
 	// Form is the settings form (PERSONA_EXTENSION_CONFIG), Key its secret key (PERSONA_EXTENSION_SECRETS).
 	Form json.RawMessage
@@ -196,7 +196,7 @@ var (
 	voicePattern      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 )
 
-// LoadConfig reads the settings the hub hands the plugin (docs/voice.md "How the extension gets its settings"): the settings form in
+// LoadConfig reads the settings the hub hands the plugin (docs/assistant/voice.md "How the extension gets its settings"): the settings form in
 // PERSONA_EXTENSION_CONFIG, its key in PERSONA_EXTENSION_SECRETS, the config of the hub.json entry the hub took over
 // in PERSONA_VOICE_HUB_CONFIG. The former PERSONA_PLUGIN_* names are read too.
 func LoadConfig() (Config, error) {

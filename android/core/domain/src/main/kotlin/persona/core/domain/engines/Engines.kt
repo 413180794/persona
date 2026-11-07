@@ -6,7 +6,7 @@ import persona.core.contracts.DetectedEngine
 import persona.core.contracts.Machine
 
 /**
- * One terminal engine per machine (docs/engines.md), as on iOS `EngineSelectionModel`. The options are what the hub
+ * One terminal engine per machine (docs/integrations/engines.md), as on iOS `EngineSelectionModel`. The options are what the hub
  * reports in `engines`; [known] only names the engines this build knows: for hubs that report nothing, and to decide
  * what may be chosen without detection (an offline machine).
  */

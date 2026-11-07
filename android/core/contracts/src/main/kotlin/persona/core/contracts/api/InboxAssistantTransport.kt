@@ -53,7 +53,7 @@ interface InboxAssistantTransport {
     suspend fun createConversation(main: Boolean, launcher: String): JsonObject =
         throw UnsupportedOperationException("Picking a launcher unavailable")
     /**
-     * [assistant] of one manager (null: the default) whatever the assistant page shows meanwhile (docs/managers.md
+     * [assistant] of one manager (null: the default) whatever the assistant page shows meanwhile (docs/assistant/managers.md
      * step 4): what a message was written for is where it goes.
      */
     suspend fun assistantOf(manager: String?): JsonObject = assistant()
@@ -93,7 +93,7 @@ interface InboxAssistantTransport {
     suspend fun momentsComments(postId: String): JsonObject = throw UnsupportedOperationException("Moments comments unavailable")
     suspend fun urlPreview(messageId: String, url: String): JsonObject = throw UnsupportedOperationException("URL preview unavailable")
 
-    // Mute (docs/inbox.md "Mute"): an item's repository, chat or sender, in every source.
+    // Mute (docs/assistant/inbox.md "Mute"): an item's repository, chat or sender, in every source.
     /** `GET /api/v1/inbox/mutes`: `{mutes: [{id, source, source_name, tag, value, name, created_at}]}`. */
     suspend fun inboxMutes(): JsonObject = throw UnsupportedOperationException("Inbox mutes unavailable")
     /** `POST /api/v1/inbox/mutes` `{item_id, tag}`: `{mute, settled}`. */
@@ -122,7 +122,7 @@ interface InboxAssistantConnection {
 
 interface AssistantConversations : AssistantRepository {
     /**
-     * Manager [manager]'s main conversation, made if it has none (docs/managers.md step 4): a message written while it
+     * Manager [manager]'s main conversation, made if it has none (docs/assistant/managers.md step 4): a message written while it
      * was on the page goes there even if the page moved on since. Fails rather than answer another manager's.
      */
     suspend fun mainConversationOf(manager: String): SessionKey = throw UnsupportedOperationException("Managers unavailable")

@@ -1,6 +1,6 @@
 package extmgr
 
-// settings.check (#5906, docs/extensions.md "Settings the user fills in"): before the settings or a secret of an
+// settings.check (#5906, docs/extensions/extensions.md "Settings the user fills in"): before the settings or a secret of an
 // extension that declares settings_check are saved, its program is asked whether they work as they would be after the
 // change (a gateway's address and key: the address right, the key taken, the gateway reachable). A refusal saves
 // nothing and its words go back to the user, with every secret handed to the check taken out of them first; the check

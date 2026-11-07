@@ -46,7 +46,7 @@ const noon = (n: number, m = 0) => {
   return (Date.now() - d.getTime()) / 60_000;
 };
 
-describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", () => {
+describe("the assistant's feed among the chat's lines (docs/assistant/unified-entry.md)", () => {
   it("keeps one copy of each item, oldest first", () => {
     const a = feed("a", 5), b = feed("b", 10);
     expect(mergeInto([a], [b, a]).map((i) => i.id)).toEqual(["b", "a"]);
@@ -357,7 +357,7 @@ describe("a receipt's outcome (#1516)", () => {
   });
 });
 
-describe("loading a conversation's feed (docs/protocol.md: since, oldest first, at most 500)", () => {
+describe("loading a conversation's feed (docs/protocol/protocol.md: since, oldest first, at most 500)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("reads every page, not just the oldest 500", async () => {

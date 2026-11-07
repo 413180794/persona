@@ -1,5 +1,5 @@
 #!/bin/bash
-# End-to-end check of the push relay on a simulator (docs/push-relay.md "Verification"), without Apple:
+# End-to-end check of the push relay on a simulator (docs/operations/push-relay.md "Verification"), without Apple:
 #   app's public key → hub code seals a push → local `personad relay` → fake APNs (writes what it got) → `simctl push`
 #   → the phone's code opens it. A tampered payload must stay "New message" (the placeholder). What each hop got goes to $OUT
 #   (default /tmp/relay-e2e).

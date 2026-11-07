@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restart a hub over and over while a client watches, and check that the client could not tell (docs/hub-restart.md
+"""Restart a hub over and over while a client watches, and check that the client could not tell (docs/operations/hub-restart.md
 "How to verify").
 
 What runs at the same time:

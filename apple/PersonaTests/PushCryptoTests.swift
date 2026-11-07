@@ -4,7 +4,7 @@ import Testing
 import UserNotifications
 @testable import Persona
 
-/// Pushes through the relay (docs/push-relay.md): what the hub seals in Go opens here, and only then does the
+/// Pushes through the relay (docs/operations/push-relay.md): what the hub seals in Go opens here, and only then does the
 /// notification show more than 「有新消息」.
 struct PushCryptoTests {
     // Sealed by the hub's pushcrypto package (server/internal/pushcrypto/pushcrypto_test.go, the same vector).

@@ -1,4 +1,4 @@
-// "Computer control" on a Mac's page while the hub's extension cua is on (docs/computer-use.md, iOS ComputerSection): the switch that
+// "Computer control" on a Mac's page while the hub's extension cua is on (docs/extensions/computer-use.md, iOS ComputerSection): the switch that
 // lets the assistant operate it through Cua Driver, and whether it can now. What is missing comes with what to do:
 // "Install Cua Driver" (after a confirmation) when it is not there, "Grant access" when a permission is missing (macOS asks on the
 // Mac's own screen), the node's progress while it works, and VNC (the web's live screen, /screen/<mid>) when

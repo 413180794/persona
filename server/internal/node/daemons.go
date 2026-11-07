@@ -1,9 +1,9 @@
 package node
 
-// Daemons (docs/daemons.md): agent runtimes that are long-running services of their own — another system user, a
+// Daemons (docs/integrations/daemons.md): agent runtimes that are long-running services of their own — another system user, a
 // container, another machine — and so cannot reach runtime.sock. The node dials them instead: each one in
 // ~/.persona/daemons.json (beside runtime.sock) is a WebSocket endpoint with a bearer token, and once connected it speaks
-// the runtime protocol unchanged (docs/protocol.md "Runtime ↔ node"), one JSON object per text message. Nothing here
+// the runtime protocol unchanged (docs/protocol/protocol.md "Runtime ↔ node"), one JSON object per text message. Nothing here
 // knows any particular daemon: an integration implements the spec on its side (the runtime SDK's listen mode does it
 // for JS).
 //

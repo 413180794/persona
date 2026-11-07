@@ -171,7 +171,7 @@ func TestDecodeJSONBodyTooLarge(t *testing.T) {
 	}
 }
 
-// The app API handlers that cap their body answer an oversized one with 413 too_large (docs/protocol.md) after
+// The app API handlers that cap their body answer an oversized one with 413 too_large (docs/protocol/protocol.md) after
 // reading about the cap, not 400 with Go's "request body too large"; a small malformed body is still 400.
 func TestAppHandlersBodyLimitTooLarge(t *testing.T) {
 	h := newTestHub(t)

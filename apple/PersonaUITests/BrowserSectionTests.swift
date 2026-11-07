@@ -1,6 +1,6 @@
 import XCTest
 
-/// Browser (ego lite) on a Mac's page (docs/plan-ego-browser.md), against scripts/mock/mock_hub.py with
+/// Browser (ego lite) on a Mac's page (docs/plans/plan-ego-browser.md), against scripts/mock/mock_hub.py with
 /// MOCK_BROWSER=<state> (`TEST_RUNNER_PERSONA_BROWSER_HUB`, `TEST_RUNNER_PERSONA_BROWSER_STATE`): not installed it installs,
 /// installed its first-run setup is steps with Open ego lite, set up it is Ready in green. PERSONA_SHOTS keeps the
 /// screenshots, named by `TEST_RUNNER_PERSONA_LOOK`.

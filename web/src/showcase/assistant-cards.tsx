@@ -1,4 +1,4 @@
-// Dev only (assistant-cards.html, not built): the assistant's cards (docs/assistant-views.md) in a made-up conversation,
+// Dev only (assistant-cards.html, not built): the assistant's cards (docs/assistant/assistant-views.md) in a made-up conversation,
 // for screenshots: a decision answered from another device, a form to fill in, a live card at its second version, a
 // card that changed under a submit, an html card shown as its fallback, a card with a component the web does not draw
 // (its fallback), and the message a card sent. The hub is faked

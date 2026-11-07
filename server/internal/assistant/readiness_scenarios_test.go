@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The mock hub's readiness scenarios (scripts/mock/readiness_mock.py, docs/testing.md "Readiness scenarios") are pinned to what
+// The mock hub's readiness scenarios (scripts/mock/readiness_mock.py, docs/operations/testing.md "Readiness scenarios") are pinned to what
 // this code answers: each scenario is set up here on a fake hub, and its readiness in the three languages and its
 // coded start refusal are kept in testdata/readiness_scenarios/<name>.json (UPDATE_GOLDEN=1 writes them, checked_at
 // blanked). scripts/mock/test_readiness_mock.py checks the mock against the same files, so a change to the readiness

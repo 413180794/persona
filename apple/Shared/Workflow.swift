@@ -2,7 +2,7 @@ import Foundation
 
 /// A multi-agent workflow an agent runs in the background (Claude Code's Workflow tool): its turn ends while the
 /// workflow's agents work, and the workflow's completion wakes it again. The hub's `workflows` on a session
-/// (docs/protocol.md); older hubs send none, and an odd entry never drops the session.
+/// (docs/protocol/protocol.md); older hubs send none, and an odd entry never drops the session.
 nonisolated struct WorkflowRun: Codable, Identifiable, Hashable, Sendable {
     var taskID: String
     var runID: String?

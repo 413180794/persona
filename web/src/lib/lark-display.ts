@@ -1,4 +1,4 @@
-// Feishu message display settings (display tweaks, docs/lark-migration.md "Message display tweaks", iOS LarkMessageDisplay.swift):
+// Feishu message display settings (display tweaks, docs/extensions/lark-migration.md "Message display tweaks", iOS LarkMessageDisplay.swift):
 // the Lark gateway's per-account switches for showing a recalled message's retained content ("Keep recalled messages") and a message's earlier
 // versions ("Edit history"). They only decide what is shown: the hub sends retained content whatever they say, so anything
 // unknown (not read yet, a failed read, an account that changed) hides it. A write carries the account and the old value;
@@ -20,7 +20,7 @@ export interface LarkMessageDisplay {
 
 export type LarkDisplayKey = "anti_recall" | "show_edit_history";
 
-/** One earlier version of an edited message (`edit_history`, docs/protocol.md LarkMessage). */
+/** One earlier version of an edited message (`edit_history`, docs/protocol/protocol.md LarkMessage). */
 export type LarkEditVersion = NonNullable<LarkMessage["edit_history"]>[number];
 
 /** What is shown while the settings are unknown: nothing retained. */
@@ -185,7 +185,7 @@ const models = new Map<string, LarkDisplayModel>();
 const modelKey = (ol: number | undefined, manager: string | undefined) => `${itemHeaders(manager) ? manager : ""}|${ol ?? ""}`;
 
 /** The page's one model for a Feishu account (`ol`, lark-accounts.ts; undefined: the hub's own) of manager's Lark
- *  (an inbox item's, docs/managers.md "Clients"; undefined: the default's). */
+ *  (an inbox item's, docs/assistant/managers.md "Clients"; undefined: the default's). */
 export function larkDisplayModel(ol?: number, manager?: string): LarkDisplayModel {
   const key = modelKey(ol, manager);
   let m = models.get(key);
@@ -196,7 +196,7 @@ export function larkDisplayModel(ol?: number, manager?: string): LarkDisplayMode
   return m;
 }
 
-/** A `lark` push that says the settings changed (docs/protocol.md `settings_changed`): read that account's again,
+/** A `lark` push that says the settings changed (docs/protocol/protocol.md `settings_changed`): read that account's again,
  *  of the manager the push is from. */
 export function onLarkPush(msg: Record<string, unknown>) {
   if (msg.settings_changed !== true) return;

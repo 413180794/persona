@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Warm start (docs/hub-restart.md "Machines and sessions"): a manager that stops for a restart (the hub's restart stops it too)
+// Warm start (docs/operations/hub-restart.md "Machines and sessions"): a manager that stops for a restart (the hub's restart stops it too)
 // leaves the next one what its machines looked like (Postgres settings "hub.warm_machines", taken once; the key an
 // older hub wrote, so the first start after the move uses what that hub left). For a while after it starts, a
 // machine that was online shows as it was, its sessions included, while its node connects again: the apps see nothing

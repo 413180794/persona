@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What each manager last reported of its machines (docs/managers.md "What the hub keeps of each manager"): the hub
+// What each manager last reported of its machines (docs/assistant/managers.md "What the hub keeps of each manager"): the hub
 // keeps, in its own settings, every manager's own entries as its last devices.state had them: each entry, the
 // computer as its node last described itself, and when it was last seen. A hub that restarts shows every manager's
 // machines as last reported until their manager reports them (for the minutes after a restart the warm hand-over

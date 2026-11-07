@@ -16,7 +16,7 @@ import persona.core.contracts.ClientLanguage
 import java.util.Locale
 
 /**
- * Settings › Language (docs/i18n.md): follow the phone, or always Simplified Chinese, English or Japanese.
+ * Settings › Language (docs/protocol/i18n.md): follow the phone, or always Simplified Chinese, English or Japanese.
  *
  * On Android 13 and later the choice is the system's per-app language ([LocaleManager]), so it also shows in the
  * phone's own App language settings, which may change it; earlier the app keeps it itself. Either way every

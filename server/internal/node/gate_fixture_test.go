@@ -2,7 +2,7 @@ package node
 
 import "github.com/nwverse/persona/server/internal/proto"
 
-// exampleGate is a command gate the way a plugin's assistant.gate makes one (docs/extensions.md "Assistant"): `ex METHOD PATH
+// exampleGate is a command gate the way a plugin's assistant.gate makes one (docs/extensions/extensions.md "Assistant"): `ex METHOD PATH
 // [BODY]` against an example API at base, its token in EXAMPLE_TOKEN. user are the configured rules, first.
 func exampleGate(base string, user ...proto.LarkRule) proto.CommandGate {
 	return proto.CommandGate{Command: "ex", Script: "example/scripts/ex.sh", Title: "示例",

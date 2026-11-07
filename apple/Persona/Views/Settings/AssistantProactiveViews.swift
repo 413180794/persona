@@ -4,7 +4,7 @@ import PersonaKit
 import SwiftUI
 
 // Settings › Assistant: what the assistant does on its own (routines, follow-ups it scheduled), what it remembers, and what it
-// is told about the user (docs/assistant.md). Every page reads straight from the hub; nothing is cached on the phone.
+// is told about the user (docs/assistant/assistant.md). Every page reads straight from the hub; nothing is cached on the phone.
 
 // MARK: - Formatting
 
@@ -448,7 +448,7 @@ struct AssistantRoutineTemplate: Identifiable {
 
     static let all: [AssistantRoutineTemplate] = [
         .init(routine: .init(title: String(localized: "Meeting Prep"),
-                             prompt: "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟" + // i18n-ignore: prompt for the assistant (docs/i18n.md: prompts stay Chinese)
+                             prompt: "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟" + // i18n-ignore: prompt for the assistant (docs/protocol/i18n.md: prompts stay Chinese)
                              "安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。", // i18n-ignore
                              time: "08:45", weekdays: AssistantScheduleText.workdays), symbol: "person.2.badge.gearshape"),
         .init(routine: .init(title: String(localized: "Weekly Report"),
@@ -622,7 +622,7 @@ struct AssistantTaskEditor: View {
         #endif
     }
 
-    /// Where runs go (docs/assistant.md「定时任务」): the conversation it came from (Continue in Original Chat), else the task's own
+    /// Where runs go (docs/assistant/assistant.md「定时任务」): the conversation it came from (Continue in Original Chat), else the task's own
     /// one, which the first run starts and the next ones continue; New Chat Next Time lets the next run start over.
     private var conversationSection: some View {
         Section {
@@ -663,7 +663,7 @@ struct AssistantTaskEditor: View {
         }
     }
 
-    /// Push When Done (docs/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
+    /// Push When Done (docs/assistant/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
     private var pushSection: some View {
         Section {
             SegmentedChoice(String(localized: "Push When Done"), [(value: "", label: String(localized: "Every Run")), (value: APIClient.ScheduledTask.pushAsked, label: String(localized: "Only Its Alerts"))],
@@ -1015,7 +1015,7 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 
 struct AssistantMemoryView: View {
     @State private var page: AssistantMemoryModel
-    /// The health space's memory (Health › Health Memory, docs/health.md) instead of the assistant's.
+    /// The health space's memory (Health › Health Memory, docs/assistant/health.md) instead of the assistant's.
     private var health: Bool { page.space == Session.healthSpace }
 
     init(space: String? = nil) { _page = State(initialValue: AssistantMemoryModel(space: space)) }

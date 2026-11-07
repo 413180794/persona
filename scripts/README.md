@@ -1,6 +1,6 @@
 # Scripts
 
-Scripts are grouped by purpose and resolve their own repository root. Build/deploy configuration is read only from `PERSONA_CONFIG` or `~/.config/persona/config.json`; runtime state uses `PERSONA_HOME` or `~/.persona`. No previous-brand aliases, fallback configuration reads or dual environment exports are supported. See [configuration](../docs/config.md), [the naming contract](../docs/rename.md) and [the approval-gated cutover](../docs/persona-cutover.md).
+Scripts are grouped by purpose and resolve their own repository root. Build/deploy configuration is read only from `PERSONA_CONFIG` or `~/.config/persona/config.json`; runtime state uses `PERSONA_HOME` or `~/.persona`. No previous-brand aliases, fallback configuration reads or dual environment exports are supported. See [configuration](../docs/operations/config.md), [the naming contract](../docs/operations/rename.md) and [the approval-gated cutover](../docs/operations/persona-cutover.md).
 
 | Directory | Purpose | Common entry points |
 | --- | --- | --- |

@@ -15,7 +15,7 @@ struct RootView: View {
     private let flipped = false
     #endif
 
-    /// The ChatGPT-style shell (docs/ios.md「新外壳」): an iPhone-width screen, unless Settings › Appearance › Old Layout is on.
+    /// The ChatGPT-style shell (docs/apple/ios.md「新外壳」): an iPhone-width screen, unless Settings › Appearance › Old Layout is on.
     private var usesShell: Bool {
         #if os(visionOS)
         // Apple Vision Pro keeps the tabs, as the system's ornament (VisionShell), whatever the window's width.
@@ -56,7 +56,7 @@ struct RootView: View {
         .task(id: model.checklistPending && model.hubFeatures.contains(AssistantReadiness.feature)) {
             if model.checklistPending { await model.refreshReadiness() }
         }
-        // The plugins' main-navigation entries and cards, for Settings' badge (docs/extensions.md「UI 插槽」).
+        // The plugins' main-navigation entries and cards, for Settings' badge (docs/extensions/extensions.md「UI 插槽」).
         .task(id: ExtensionSlots.source(model)) {
             let hub = ExtensionSlots.source(model).hub
             await ExtensionSlots.shared.reload(for: hub)
@@ -143,7 +143,7 @@ struct RootView: View {
     #endif
 
     /// iPad (and iPhone Duo open) without Old Layout: Inbox and Settings are in Persona's sidebar, as in the iPhone's drawer,
-    /// not tabs (docs/ios.md「iPad」, 2026-11-05 user). Old Layout keeps the four tabs; Apple Vision Pro keeps them too.
+    /// not tabs (docs/apple/ios.md「iPad」, 2026-11-05 user). Old Layout keeps the four tabs; Apple Vision Pro keeps them too.
     private var padSidebar: Bool {
         #if os(iOS)
         !model.oldLayout
@@ -338,7 +338,7 @@ private struct TabPage<Page: View>: View, Equatable {
             }
             .equatable()
         }
-        .badge(badge) // Demo Mode is left from Settings; the plugins' entries are on it (docs/extensions.md「UI 插槽」, badges)
+        .badge(badge) // Demo Mode is left from Settings; the plugins' entries are on it (docs/extensions/extensions.md「UI 插槽」, badges)
     }
 
     /// Demo; else what the plugins' main-navigation entries' badges add up to (only words: a dot).

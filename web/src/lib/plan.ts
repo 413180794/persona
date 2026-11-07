@@ -1,4 +1,4 @@
-// The agent's own task list (docs/agent-goal.md "Plan"): Claude Code's TodoWrite, or TaskCreate / TaskUpdate, as the
+// The agent's own task list (docs/integrations/agent-goal.md "Plan"): Claude Code's TodoWrite, or TaskCreate / TaskUpdate, as the
 // node counts it (Session.plan). Task cards and agent rows show it as "3/5 · Reproducing the crash".
 import { t } from "../i18n";
 import type { Session } from "./types";

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { currentLanguage, formatList, formatLocale, LANG_MATCHES, LANG_NAMES, LANGS, initI18n, interpolate, resolveLanguage, t, type CatalogLoaders, type CatalogModule } from "./index";
 
-describe("resolveLanguage (docs/i18n.md)", () => {
+describe("resolveLanguage (docs/protocol/i18n.md)", () => {
   it("maps any Chinese to zh-Hans, any Japanese to ja, the rest to en", () => {
     for (const tag of ["zh", "zh-CN", "zh-Hans", "zh-Hant", "zh-TW", "zh_HK", "ZH-mo"]) expect(resolveLanguage(tag), tag).toBe("zh-Hans");
     for (const tag of ["ja", "ja-JP", "JA_jp"]) expect(resolveLanguage(tag), tag).toBe("ja");

@@ -29,7 +29,7 @@ sealed interface RouteSource {
 @Serializable @SerialName("persona.core.navigation.InboxItemRoute") data class InboxItemRoute(val itemId: String) : NavKey
 
 /**
- * An inbox item drawn by the extension of the connector it comes from (its `inbox_item` UI, docs/extensions.md "UI slots"):
+ * An inbox item drawn by the extension of the connector it comes from (its `inbox_item` UI, docs/extensions/extensions.md "UI slots"):
  * [extensionId]'s [uiId] for item [itemId]; [title] is the item's until the extension's view has one. When the extension cannot
  * draw it, the item's own page opens instead.
  */

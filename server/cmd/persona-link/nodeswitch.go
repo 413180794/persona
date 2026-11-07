@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// The device's program (docs/link.md "The device's program"): a computer that is a device runs persona-node as its
+// The device's program (docs/operations/link.md "The device's program"): a computer that is a device runs persona-node as its
 // resident node, at <data dir>/bin/persona-node, beside personad (the hub's and the manager's program) when it has
 // that too. A new node service runs persona-node when the computer has it (nodeBin); one that runs personad already
 // keeps running it until `persona-link node switch` moves it over, whole or not at all.

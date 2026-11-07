@@ -25,7 +25,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The ports the agents listen on (docs/ports.md): each live agent's processes — what runs under it and what else
+// The ports the agents listen on (docs/operations/ports.md): each live agent's processes — what runs under it and what else
 // runs on its terminal — and the TCP ports they listen on that answer HTTP, with the page's title. They go out with
 // the session list; the list is pushed again only when they change.
 //

@@ -130,7 +130,7 @@ function BubbleText({ text: full, ts, mid, sid, own, pending }: { text: string; 
   );
 }
 
-/** "From WeChat" under a message that came from a channel (its client_msg_id is `<channel>-…`, docs/channels.md). */
+/** "From WeChat" under a message that came from a channel (its client_msg_id is `<channel>-…`, docs/extensions/channels.md). */
 function ChannelSource({ clientMsgId }: { clientMsgId?: string }) {
   const via = channelOf(clientMsgId, useChannels());
   if (!via) return null;

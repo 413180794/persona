@@ -2,7 +2,7 @@ import XCTest
 
 /// Reads what the app's parts of the screen show (`probe.<area>`, the app's ScreenProbe, launched with `-probes YES`)
 /// and checks it against the truth: consistent (the same, field by field, but for what may lag), timely (within a
-/// bound) and converging (after any sequence of pushes and gestures, within a bound). docs/ios-state.md.
+/// bound) and converging (after any sequence of pushes and gestures, within a bound). docs/apple/ios-state.md.
 extension XCUIApplication {
     /// The probe's whole line: `{"area","seq","page","v"}`. In the shell both pages are built: `page` picks one; nil
     /// takes the first.

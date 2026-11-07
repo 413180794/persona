@@ -201,7 +201,7 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             )
         }
         item { JSectionHeader("形象") }
-        // Each built-in face in each state, as iOS's PersonaGallery shows its dot (docs/persona.md "States").
+        // Each built-in face in each state, as iOS's PersonaGallery shows its dot (docs/apple/persona.md "States").
         items(PersonaDesign.entries) { design ->
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PersonaState.entries.forEach { state ->

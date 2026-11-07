@@ -259,7 +259,7 @@ class HttpExtensionManagementTest {
         assertNull(result.view)
     }
 
-    // docs/extensions.md "UI slots": without a placement the hub lists every slot but launcher sections, with badges.
+    // docs/extensions/extensions.md "UI slots": without a placement the hub lists every slot but launcher sections, with badges.
     @Test fun listsTheSlotsAtOnce() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"ui":[
             {"plugin":"example-gateway","plugin_name":"Example 网关面板","id":"usage","title":"用量","placement":"nav_page","size":"full",

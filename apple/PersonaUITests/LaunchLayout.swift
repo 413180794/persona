@@ -4,7 +4,7 @@ extension XCUIApplication {
     /// Launches with the four tabs (`-ui.oldLayout YES`) unless the test chose a layout itself: the tests written for
     /// the tab bar keep running on it; the shell's tests (`ShellTests`) pass `-ui.oldLayout NO`.
     /// `PERSONA_LAYOUT=shell` (TEST_RUNNER_PERSONA_LAYOUT) runs them in the shell instead, the iPhone's default: the tests
-    /// that hold what the user is doing still (LiveUpdateTests, ChatFollowTests) run in both (docs/testing.md).
+    /// that hold what the user is doing still (LiveUpdateTests, ChatFollowTests) run in both (docs/operations/testing.md).
     ///
     /// `-demo.on YES` without `-pairURL` is Demo Mode from a clean start (`-openWelcome YES` first): a pairing an earlier test
     /// left in the keychain wins over Demo Mode, and the test ran on that hub's data instead (2026-11-03: the mock's

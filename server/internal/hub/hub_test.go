@@ -44,7 +44,7 @@ func TestDefaultConfig(t *testing.T) {
 		}
 		ids[m.ID] = true
 	}
-	// A fresh hub knows only itself; other machines are added to hub.json (docs/config.md).
+	// A fresh hub knows only itself; other machines are added to hub.json (docs/operations/config.md).
 	if len(cfg.Machines) != 1 {
 		t.Fatalf("default machines should be just this one, got %+v", cfg.Machines)
 	}

@@ -13,7 +13,7 @@ import { pageTokensPlugin } from "./page-tokens";
 const environment = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 const hub = environment.PERSONA_HUB_URL || "http://127.0.0.1:18660";
 
-// The hub admin UI (docs/admin.md) is its own page, admin/index.html. Its code goes under admin/assets/, which the hub
+// The hub admin UI (docs/operations/admin.md) is its own page, admin/index.html. Its code goes under admin/assets/, which the hub
 // serves only to sources inside admin.access; the client's bundle never references it.
 // The admin UI's strings (src/i18n/locales/<lang>/admin.ts and its admin-*.json) are admin code too.
 const adminStrings = /\/src\/i18n\/locales\/[^/]+\/(?:admin-[\w-]+\.json|_meta\.json\?catalog=admin)$/;
@@ -107,7 +107,7 @@ export default defineConfig({
     proxy: { "/api": { target: hub, changeOrigin: true, ws: true } },
   },
   // The bundle's files are relative to the page's <base>, which the hub points at the sub-path a reverse proxy serves
-  // it under (docs/web.md "Subpath"); at the root that is "/", as before.
+  // it under (docs/web/web.md "Subpath"); at the root that is "/", as before.
   base: "./",
   // The terminal loads xterm only when opened: pre-bundle it, or the first open in dev re-optimizes and reloads the page.
   optimizeDeps: { include: ["@xterm/xterm", "@xterm/addon-fit", "@xterm/addon-clipboard", "@xterm/addon-web-links", "@xterm/addon-search", "@xterm/addon-webgl"] },

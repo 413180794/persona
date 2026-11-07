@@ -32,7 +32,7 @@ import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// Settings › Extensions › Extension market (docs/extensions.md "Extension market"): the catalog, one extension of it, and the markets. The models are
+// Settings › Extensions › Extension market (docs/extensions/extensions.md "Extension market"): the catalog, one extension of it, and the markets. The models are
 // in ExtensionMarketState.kt.
 
 private const val SearchDelayMillis = 300L
@@ -144,7 +144,7 @@ private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>, working
     markets.forEach { market ->
         market.error?.takeIf { it.isNotBlank() }?.let { error ->
             item("market-error-${market.id}") {
-                // The official market asks no token of a newcomer here (docs/onboarding.md 4.5): the hub reads it elsewhere
+                // The official market asks no token of a newcomer here (docs/assistant/onboarding.md 4.5): the hub reads it elsewhere
                 // when GitHub rate-limits it, and whoever still wants a token gets a quiet way to "Manage markets", where it is set.
                 if (market.official) OfficialMarketError(market, error, onMarkets)
                 else MarketError(market, error, busy = working == market.id) { onToken(market) }
@@ -434,7 +434,7 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
             }
         }
         state.actionError?.let { error -> item("action-error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
-        // The switch for every market extension (docs/extensions.md "Auto-upgrade"); a hub without it shows none.
+        // The switch for every market extension (docs/extensions/extensions.md "Auto-upgrade"); a hub without it shows none.
         state.autoUpgrade?.takeIf { !markets.isNullOrEmpty() }?.let { auto ->
             item("auto-upgrade") {
                 JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {

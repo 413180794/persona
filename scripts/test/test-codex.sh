@@ -3,7 +3,7 @@
 # the one you work in):
 #   PERSONA_CODEX_BINS="codex /path/to/other/codex" PERSONA_CODEX_DAEMON_BINS="/path/to/codex-0.163" \
 #     PERSONA_CODEX_ARGS="-m <model>" ./scripts/test/test-codex.sh
-# PERSONA_CODEX_BINS: the terminal route (docs/codex.md "Questions and approvals"). PERSONA_CODEX_DAEMON_BINS: the app-server route
+# PERSONA_CODEX_BINS: the terminal route (docs/integrations/codex.md "Questions and approvals"). PERSONA_CODEX_DAEMON_BINS: the app-server route
 # ("Sessions on the daemon") — a `codex app-server` of the test's own on a private socket, a TUI attached with --remote, and the
 # first of PERSONA_CODEX_BINS beside it to check it stays on the terminal route. Every case runs PERSONA_CODEX_ROUNDS
 # times (default 2); PERSONA_CODEX_COLS=<n> adds a run of each in a window that many columns wide; PERSONA_CODEX_CASES=a,b

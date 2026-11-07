@@ -4,20 +4,20 @@ package persona.core.domain
 enum class FailureCategory { Network, Pairing, Certificate, Incompatible, LocalPermission, Other }
 enum class FailureAction {
     None, Retry, Verify, PairAgain, OpenTerminal, ReviewInput, UpdateHub, GrantPermission,
-    // What the main conversation still needs (docs/onboarding.md 4.6): the step to open, not a retry.
+    // What the main conversation still needs (docs/assistant/onboarding.md 4.6): the step to open, not a retry.
     AddComputer, ConfirmComputer, WakeComputer, InstallClaude, LoginClaude, ConnectModel, EditProvider,
 }
 enum class FailureReason {
     Demo, PairingExpired, CertificateChanged, Incompatible, LocalPermission,
     InputDraft, DialogOpen, StaleSession, Invalid, IdReused, PromptChanged, Expired,
     RateLimited, NotDelivered, Unknown, Delivered, Failed,
-    // The hub's coded refusals of the main conversation (docs/onboarding.md 4.6, 5.2).
+    // The hub's coded refusals of the main conversation (docs/assistant/onboarding.md 4.6, 5.2).
     NoMachine, MachinePending, ComputerOffline, ClaudeMissing, LauncherMissing, NotLoggedIn, AuthFailed, AssistantRestarting,
 }
 
 /**
  * The codes with which the hub refuses to start or answer in the main conversation until a step is done
- * (docs/onboarding.md 4.6): nothing was started, so the message waits for the user, not for the network.
+ * (docs/assistant/onboarding.md 4.6): nothing was started, so the message waits for the user, not for the network.
  */
 val SetupFailureCodes = setOf("no_machine", "machine_pending", "claude_missing", "launcher_missing", "not_logged_in", "auth_failed")
 data class OperationFailure(val reason: FailureReason, val action: FailureAction, val offline: Boolean = false)

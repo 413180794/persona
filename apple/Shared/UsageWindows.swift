@@ -1,6 +1,6 @@
 import Foundation
 
-// Subscription rate-limit windows (#2432, #2595, docs/usage-windows.md): GET /api/v1/usage/windows lists the accounts the
+// Subscription rate-limit windows (#2432, #2595, docs/server/usage-windows.md): GET /api/v1/usage/windows lists the accounts the
 // machines' agents are signed in to, and those an account-pool gateway keeps, with how much of each window (5h, 7d …)
 // is used. The types and the pure helpers (pace, countdown, sample age, which accounts the bars show) are here, as the
 // web's lib/usage-windows.ts has them; the views are UsageWindowsViews.swift.

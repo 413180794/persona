@@ -1,5 +1,5 @@
 {
-  "$description": "所有规则在六种风格 × 深浅色下展开。level 为 error 的是 docs/ios.md 写明的可读性底线，--check 不达标就失败（已知的例外记在 known-failures.json，只许减少）；warn 是按 WCAG AA 补的建议，只报告不阻断，iOS 现在的取值有不少达不到，改色要两端一起改。",
+  "$description": "所有规则在六种风格 × 深浅色下展开。level 为 error 的是 docs/apple/ios.md 写明的可读性底线，--check 不达标就失败（已知的例外记在 known-failures.json，只许减少）；warn 是按 WCAG AA 补的建议，只报告不阻断，iOS 现在的取值有不少达不到，改色要两端一起改。",
   "$extensions": {
     "persona": {
       "styles": [
@@ -20,7 +20,7 @@
           "foreground": "semantic.{style}.{mode}.onAccent",
           "background": "semantic.{style}.{mode}.accent",
           "minimum": 3.5,
-          "description": "docs/ios.md：实心按钮与选中胶囊",
+          "description": "docs/apple/ios.md：实心按钮与选中胶囊",
           "level": "error"
         },
         {
@@ -28,7 +28,7 @@
           "foreground": "semantic.{style}.{mode}.userBubbleText",
           "background": "semantic.{style}.{mode}.userBubble",
           "minimum": 4.5,
-          "description": "docs/ios.md：用户气泡正文",
+          "description": "docs/apple/ios.md：用户气泡正文",
           "level": "error"
         },
         {
@@ -36,7 +36,7 @@
           "foreground": "semantic.{style}.{mode}.accent",
           "background": "semantic.{style}.{mode}.pageBackground",
           "minimum": 3,
-          "description": "docs/ios.md：主色链接；正文链接须另按 4.5 检查",
+          "description": "docs/apple/ios.md：主色链接；正文链接须另按 4.5 检查",
           "level": "error"
         },
         {

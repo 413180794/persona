@@ -4,13 +4,13 @@ import SwiftUI
 /// The sections' pages, each built the first time its section is shown and kept in the window after that: a switch
 /// hides one page and shows another (#390). Built anew on every switch (a `switch` in the shell), Agents took about
 /// 240 ms on the main thread and Inbox about 190 (its list, its split, its rows' heights, its toolbar items all over
-/// again); kept, a page comes back in about one frame (docs/mac.md「切换分区」).
+/// again); kept, a page comes back in about one frame (docs/apple/mac.md「切换分区」).
 ///
 /// Each page is in a hosting view of its own (`MacPageHostingView`), not in a SwiftUI `ZStack`: a hidden view in the
 /// same hierarchy is still laid out with it. What a kept page must do behind another one is up to the page, told by
 /// `tabIsActive` (false while hidden): its toolbar items and search field go (`pageToolbar`, `pageSearchable`: two
 /// search fields in the window's toolbar are a crash), its lists hold still (the Agents list's `Hold`), its chat is no
-/// longer the one on screen. See docs/mac.md for what is kept from the shell's environment.
+/// longer the one on screen. See docs/apple/mac.md for what is kept from the shell's environment.
 struct MacPageStack: NSViewRepresentable {
     /// nil: every page behind (a plugin's page is over them, `MacShell.page`), none of them built or dropped.
     let shown: MacSection?

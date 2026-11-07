@@ -34,7 +34,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The Persona tab in each of the app's languages (docs/i18n.md): the home (the demo, with "Needs you now"), the history
+ * The Persona tab in each of the app's languages (docs/protocol/i18n.md): the home (the demo, with "Needs you now"), the history
  * drawer, its empty search and a failed compaction line, Glass light and dark plus every style's light drawer. Written
  * as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */

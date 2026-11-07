@@ -1,6 +1,6 @@
 import Foundation
 
-// Meta glasses through Meta's Wearables Device Access Toolkit (docs/meta-glasses.md). The SDK is compiled in only when
+// Meta glasses through Meta's Wearables Device Access Toolkit (docs/apple/meta-glasses.md). The SDK is compiled in only when
 // the build config enables it (PERSONA_META_WEARABLES=YES, apple/meta-wearables.yml). Otherwise `isBuiltIn` is false and
 // the calls below are no-ops or throw, so the rest of the app never needs to know which build it is.
 

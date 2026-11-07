@@ -5,23 +5,23 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * One model use of Settings › Model configuration (docs/model-config.md), by the hub's purpose id: `agent.new`, `task.<id>`,
+ * One model use of Settings › Model configuration (docs/assistant/model-config.md), by the hub's purpose id: `agent.new`, `task.<id>`,
  * `plugin.<id>` (a voice extension's model, which the voice page also opens).
  */
 @Serializable @SerialName("persona.core.navigation.ModelPurposeRoute") data class ModelPurposeRoute(val purposeId: String) : NavKey
 
 /**
- * One extension of Settings › Extensions (docs/extensions.md "App: Settings › Extensions"), by the hub's extension id; [signIn] opens it with
+ * One extension of Settings › Extensions (docs/extensions/extensions.md "App: Settings › Extensions"), by the hub's extension id; [signIn] opens it with
  * its sign-in started (just installed and not signed in, #4507).
  */
 @Serializable @SerialName("persona.core.navigation.PluginRoute") data class ExtensionRoute(
     val extensionId: String, val signIn: Boolean = false,
-    /** Whose extension it is (several managers: the same id may be under each, docs/managers.md); null: the default's. */
+    /** Whose extension it is (several managers: the same id may be under each, docs/assistant/managers.md); null: the default's. */
     val manager: String? = null,
 ) : NavKey
 
 /**
- * A page an extension draws (its `extension_page` UI, docs/extensions.md "Declarative UI"), opened from the extension's page.
+ * A page an extension draws (its `extension_page` UI, docs/extensions/extensions.md "Declarative UI"), opened from the extension's page.
  * A page the extension pushed on another (UI version 3) is first drawn with its [state], [depth] pages up.
  */
 @Serializable @SerialName("persona.core.navigation.PluginUiRoute")
@@ -31,7 +31,7 @@ data class ExtensionUiRoute(
     val manager: String? = null,
 ) : NavKey
 
-/** Settings › Extensions › Extension market: what the hub's extension markets offer (docs/extensions.md "Extension market"). */
+/** Settings › Extensions › Extension market: what the hub's extension markets offer (docs/extensions/extensions.md "Extension market"). */
 @Serializable @SerialName("persona.core.navigation.PluginMarketRoute") data object ExtensionMarketRoute : NavKey
 
 /** One extension of a market's catalog: what it may do, and installing, upgrading or removing it. */
@@ -45,10 +45,10 @@ data class ExtensionCatalogRoute(val marketId: String, val extensionId: String) 
 @Serializable @SerialName("persona.core.navigation.LauncherRoute")
 data class LauncherRoute(val machineId: String, val name: String) : NavKey
 
-/** One channel of Settings › Channels (docs/channels.md "UI"), by the hub's channel id. */
+/** One channel of Settings › Channels (docs/extensions/channels.md "UI"), by the hub's channel id. */
 @Serializable @SerialName("persona.core.navigation.ChannelRoute") data class ChannelRoute(val channelId: String) : NavKey
 
-/** One manager of Settings › Managers (docs/managers.md), by the hub's manager id. */
+/** One manager of Settings › Managers (docs/assistant/managers.md), by the hub's manager id. */
 @Serializable @SerialName("persona.core.navigation.ManagerRoute") data class ManagerRoute(val managerId: String) : NavKey
 
 /** Settings › AI › Assistant (iOS `SettingsPage.assistant`): the assistant's settings, which the Persona tab also opens in place. */

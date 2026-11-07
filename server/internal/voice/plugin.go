@@ -38,7 +38,7 @@ func New(cfg Config, hubURL, hubToken string, logger *log.Logger) *Plugin {
 
 func (pl *Plugin) logf(format string, args ...any) { pl.logger.Printf(format, args...) }
 
-// Handler is the plugin's API (docs/extensions.md "Voice"): /health, /models, /voices, /ws.
+// Handler is the plugin's API (docs/extensions/extensions.md "Voice"): /health, /models, /voices, /ws.
 func (pl *Plugin) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func (pl *Plugin) Handler() http.Handler {
 			return
 		}
 		c.SetReadLimit(1 << 20)
-		// Who is calling, as the hub found it (docs/extensions.md "The caller on forwarded requests"): the role decides the tools, the
+		// Who is calling, as the hub found it (docs/extensions/extensions.md "The caller on forwarded requests"): the role decides the tools, the
 		// language the words the model is told.
 		role, lang := r.Header.Get(extwire.HeaderRole), i18n.Resolve(r.Header.Get(extwire.HeaderLang))
 		pl.logf("conversation opened (role %q)", role)
@@ -102,7 +102,7 @@ func Run(ctx context.Context) error {
 	logger := log.New(os.Stderr, "", 0)
 	socket := extensionEnv("SOCKET")
 	if socket == "" {
-		return errors.New("PERSONA_EXTENSION_SOCKET is not set: this runs under the Persona hub as its built-in voice extension (docs/extensions.md「内置语音扩展」)")
+		return errors.New("PERSONA_EXTENSION_SOCKET is not set: this runs under the Persona hub as its built-in voice extension (docs/extensions/extensions.md「内置语音扩展」)")
 	}
 	cfg, err := LoadConfig()
 	if err != nil {

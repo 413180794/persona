@@ -6,7 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The terminal browser (docs/terminal.md "Standalone terminal"): a machine's terminal hosts with their workspaces, tabs and panes,
+ * The terminal browser (docs/integrations/terminal.md "Standalone terminal"): a machine's terminal hosts with their workspaces, tabs and panes,
  * agent or plain shell, and a new shell tab in a workspace. Hubs with the feature `terminal_panes` only; both calls
  * need a full device. Machine ids are the merged lists' (the app routes each call to the machine's hub group).
  */
@@ -91,7 +91,7 @@ data class NewPaneTab(
 )
 
 /**
- * A terminal opened by pane instead of by session (docs/protocol.md "Terminal stream"): a pane with no agent has no session id,
+ * A terminal opened by pane instead of by session (docs/protocol/protocol.md "Terminal stream"): a pane with no agent has no session id,
  * so `terminal_subscribe` / `terminal_input` / `terminal_unsubscribe` and the `/screen` read take `pane:<pane id>` in
  * the place of the session id. Such a key is a [SessionKey] whose session id is the address; nothing else of a
  * session (`/keys`, sending, closing) takes it.

@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * `GET /api/v1/launchers/{name}/quota` (docs/launchers.md "Quota"): what a launcher's key may still spend at its gateway, as
+ * `GET /api/v1/launchers/{name}/quota` (docs/integrations/launchers.md "Quota"): what a launcher's key may still spend at its gateway, as
  * a quota extension read it. [error] when there is nothing to read ([unsupported]: no extension knows the gateway) or the gateway
  * said no; [machine] is the machine that read it (a ~/.zshrc launcher's key stays there).
  */

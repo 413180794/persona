@@ -33,7 +33,7 @@ fun EntryProviderScope<NavKey>.voiceEntries(
     }
 }
 
-/** The model configuration purpose of a voice extension (docs/model-config.md): `extension.<extension id>`. */
+/** The model configuration purpose of a voice extension (docs/assistant/model-config.md): `extension.<extension id>`. */
 fun voicePurposeId(extensionId: String): String = "plugin.$extensionId"
 
 /**

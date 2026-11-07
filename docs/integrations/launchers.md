@@ -1,0 +1,324 @@
+# Launchers and “Settings › Model Providers”
+
+A launcher determines which gateway and model claude uses. Previously, all were functions or aliases invoking claude in each computer's `~/.zshrc` (see “Detecting launchers in ~/.zshrc” below;
+node types the name into the interactive shell in a herdr pane, expanding functions and aliases, prefixed with `HERDR_AGENT=claude`; see “How herdr recognizes Agents started by launchers” below). Since 2026-10-31, “Settings › Model Providers” manages them alongside entries added in the app.
+Code: `server/internal/assistant/models_launchers.go` (owned by the manager; hub only forwards these routes, `docs/assistant/model-config.md`, “Who owns models”), `server/internal/node/managed.go`; app `Views/Settings/ModelLaunchersView.swift`.
+
+## Two sources
+
+| Source | Defined in | Actions |
+| --- | --- | --- |
+| **Persona-managed** | Added in the app: name, Base URL, API Key, authentication method, model, small model, sub-Agent model, custom model option, extra arguments | Edit, delete |
+| **rc file (~/.zshrc / ~/.bashrc) and PATH** | Functions and aliases in each computer's login shell config (zsh reads `~/.zshrc`, bash reads `~/.bashrc`), grouped by file, and wrapper scripts on its PATH (`source: "path"`), synchronized when opening this page (node caches for 1 minute) | View each computer's function definition or script text (Key / Token redacted), hide / restore in Persona |
+| **Built-in** | Each computer's plain `claude` command (“Claude Code default” in Model Configuration, `source: "builtin"`), listed per computer with its version | View only; can't be hidden (the hub refuses) |
+
+- Scope is **one global set**: Persona-managed entries work on every computer; ~/.zshrc entries identify their source computers (same-name entries merge into one row). Offline computers use their last synchronized lists (settings `launchers.zshrc`).
+- Deleting a ~/.zshrc launcher **only hides it in Persona** (settings `launchers.hidden`), leaving the file unchanged; it disappears from new-chat and assistant pickers.
+- Persona-managed entries win name collisions (shadowing the ~/.zshrc entry). Names may contain only letters, digits, `_`, and `-`, and cannot be `claude`.
+
+## Sync state (#2854)
+
+`GET /api/v1/launchers` (handled by the assistant process, `assistant/models_launchers.go`; the hub gives each computer's Claude version as `claude_version` in `devices.list`) waits at most 10 seconds per computer (`launcherSyncTimeout`), so one slow or disconnected computer doesn't hold up the page. The node's list script isn't interrupted when the hub gives up: it finishes into the cache, ready for the next time the page opens.
+The answer adds `sync`: one item per computer, with `state` `ok` / `offline` / `timeout` / `error` (`error` carries the reason), plus `shell`, `rc_file` and the last successful sync time `synced_at`
+(settings `launchers.zshrc.meta`). A computer that didn't answer still shows its last list, but the entries' `stale` names that computer; every client marks them “Not updated” and explains why in the per-computer group.
+An entry's `rc_files` are the files it came from (`source: "zshrc"` only; older nodes don't report it, so it is `~/.zshrc`).
+
+## Which shell
+
+The node runs the list script and the launchers in an interactive shell (`loginShellProgram`): zsh when there is one, but bash when the user's login shell is bash (`$SHELL`, or `/etc/passwd` under systemd, where it is unset) and there is no `~/.zshrc`;
+always bash without zsh (Git Bash on Windows). Bash runs as `bash -ic` and reads `~/.bashrc`, not `~/.bash_profile` / `~/.profile`: aliases kept there aren't listed.
+Bash has no zsh `(z)` / `(Q)`, and macOS's bundled bash 3.2 has no `BASH_ALIASES`, so under bash the script prints `alias -p`, and the node splits words and strips quotes by the shell's rules itself (nothing expanded or run, `node/launchers_shell.go`) before handing them to the same parser.
+
+## Detecting launchers in ~/.zshrc (`launcherScript` in `node/sessions.go`)
+
+node gathers two things in one login-shell invocation (`zsh -ic`, loading `~/.zshrc` first), cached for 1 minute:
+
+- **Output of `_claude_launchers`**: Existing `~/.zshrc` helper functions (one fixed-width line per name, gateway, model) still work and come first.
+- **Aliases** (since 2026-11-01): zsh tokenizes and unquotes each alias (`${(@Q)${(z)…}}`); node recognizes only those **whose final program is `claude`**.
+  They may have preceding variables (`alias dmcc="ANTHROPIC_BASE_URL=… ANTHROPIC_AUTH_TOKEN=… claude --dangerously-skip-permissions"`), pass through
+  `env` (including `-u` / `-i`) / `command` / `exec` / `noglob`, use absolute paths, or run `export …;` first within the same alias. Gateway comes from `ANTHROPIC_BASE_URL`,
+  model from `ANTHROPIC_MODEL`, or `--model` if absent. Sort by name (the shell does not preserve definition order); aliases already listed under the same name by `_claude_launchers` are not duplicated.
+- **Wrapper scripts on PATH** (#5954, macOS and Linux): an executable file on the login shell's PATH (`~/.local/bin/claude-work`: a few `export`s for the gateway and key,
+  then `exec claude … "$@"`), listed with `source: "path"` after the functions and aliases. node reads each file's first 40 lines (no `#!`, binary, or over 64 KB: skipped)
+  the way the shell would run them: assignments and `export`s (`$NAME` / `${NAME}` of a variable set earlier gets its value; any other `${…}` form, `$(…)` or a
+  single-quoted `$` leaves the value unknown, shown as nothing), `unset`, then the first command that is `claude` (by name or path, through `exec` / `env` / `command`).
+  It is a wrapper only when that command **passes the script's arguments on** (`"$@"`: Persona's starts add theirs after the name) and gives claude nothing but
+  flags of its own and their values: `-p`, a prompt or a subcommand (`claude mcp add`), a word after a flag that takes none, or claude in a pipeline, is a
+  script that uses claude for something. A top-level `exit` or an `exec` of another program before it ends the script. A here-document's text is skipped,
+  and so is a line node cannot follow (functions, groups). A claude inside an `if`, a `case` or a loop, or after `&&` / `||`, counts, but its probe is
+  "not seen"; a guard closed before it (`if …; then exit 1; fi`) does not matter. `env -i` / `env -` in front drops what the script exported.
+  Only the first file of a name on PATH counts, as for the shell; a name the shell has as a function or alias (both run before a file) is not a script launcher,
+  and neither is `claude` / `codex` / `omp` itself. The scan stats only regular files and links, reads two bytes before the rest, and gets 3 seconds (a hung
+  network mount): past them the last scan's scripts stand.
+- **Codex** (since 2026-11-02): If `codex` is on PATH, add `codex`, plus aliases running only one `codex` command, after the Claude entries, with `agent: "codex"`.
+  See `docs/integrations/codex.md`, “Creating sessions from the phone,” for creating Codex sessions from the phone.
+- Not launchers: an alias named exactly `claude`, aliases running an internal Codex-fork CLI, Codex aliases doing other work (`cd x && codex`),
+  or unrelated aliases (`ll`, `gst`…). If none exist, only default `claude` appears.
+- The list contains only names, gateways, and models; keys / tokens in aliases never leave node. “View definition” displays the alias text from `whence -f`, with keys redacted as usual.
+- Function-based launchers still require `_claude_launchers` to list them: the final program in a function body cannot be determined without running it (see “Parameters on the launcher page” below).
+- **Launchers with their own `--settings`** (`alias work="claude --settings ~/.claude/settings.work.json …"`, or a function invoking claude this way; gateway, token, and model live in that file's `env`):
+  Claude Code recognizes only the **last** `--settings`, so Persona does not use `--settings` for its own hooks (those routing questions, approvals, and completion to the phone). With local Claude Code ≥ 2.1,
+  hooks are a plugin loaded only for this session (`--plugin-dir ~/.persona/claude-hooks`, `assistant-hooks` for the assistant, `node/hooksplugin.go`); the launcher's own `--settings`
+  works unchanged for aliases and functions alike. Persona passes `--settings` only to launchers it manages (see “Running Persona-managed launchers” below).
+  Older Claude Code (or an unreadable version) can load hooks only through `--settings`. At startup, node merges the alias settings and Persona settings into one file (all alias settings + both sets of hooks,
+  Persona's last), writing `~/.persona/launcher-settings/<launcher>-<claude|assistant>-settings.json` (0600, contains tokens) and passing it as the last `--settings`.
+  It rewrites the file on every start (`node/launcher_settings.go`). It recognizes `~`, `$HOME`, relative paths (from the session directory), and `--settings '{…}'`; unreadable files fall back to Persona settings alone.
+  A function-based launcher's `--settings` is not visible and still gets overridden on these claude versions.
+- Model listing (`node/launcher_models.go`) passes `--settings '{"disableAllHooks":true}'` to avoid triggering hooks (alias and managed-launcher settings are still merged). A function's own
+  `--settings` is still overridden here, so the listed models omit its effects: disabling hooks can only be specified in `--settings`, and merging requires first reading the settings supplied by the function (#1411).
+
+## How herdr recognizes Agents started by launchers (`HERDR_AGENT`, #3454)
+
+herdr identifies Agents by the name of a pane's foreground process (basename `claude` / `claude-code`, `codex`); an unrecognized name is not reported as an Agent. When a launcher wraps and execs a differently named program
+(for example, a Python script execs a version-named native binary `claude-2.1.318`), Claude's input box is already on screen, but node never receives herdr's “this is claude” report
+and fails only after 3 minutes. herdr's wrapper mechanism is `HERDR_AGENT=<agent>`: before checking names, it reads the foreground process's exec-time environment (Linux `/proc/<pid>/environ`, macOS `KERN_PROCARGS2`).
+Supported since herdr 0.7.1 (Linux) / 0.7.5 (macOS); ignored by older herdr and on Windows.
+
+- When starting Claude in a herdr pane, node types `HERDR_AGENT=claude <launcher> --session-id … --mcp-config …` (for `claude_start_dir`,
+  `HERDR_AGENT=claude CLAUDE_CONFIG_DIR=… claude …`; for Persona-managed launchers, `HERDR_AGENT=claude personad launch <name> …`). This also applies to panes chosen with “Run Agent here.”
+  `resume_argv` used after herdr restarts (`eval "… --resume <id> …"`, `node/herdrresume.go`) has the same prefix. Launchers declared by hub as Codex use `HERDR_AGENT=codex <launcher> …`;
+  see `docs/integrations/codex.md`, “Creating sessions from the phone.” The internal Codex fork and pi get no prefix (herdr has no names for them). Other engines (Orca…) and headless runs (assistant, availability tests, model listing) get none either.
+- Prefix only shells supporting `VAR=val cmd`: bash, zsh, fish (since 3.1), sh, dash, ksh, mksh. For a new tab, the shell interpreting this line is the one herdr uses to open the pane
+  (herdr uses its own `$SHELL`: node-started herdr gets the user's login shell, `userShell` in `node/herdrstart_unix.go`; it does not read `[terminal] default_shell` from herdr configuration).
+  `resume_argv` follows that shell too (herdr opens a new pane and types `eval …` on resume); “Run Agent here” uses the pane's foreground shell. tcsh / csh, pwsh, nu, elvish, xonsh,
+  or unknown shells still get unprefixed commands, preserving previous recognition behavior. On Windows, node does not type the prefix (herdr does not read it, and `codex-start` does not set it).
+- Apply it only before the Agent command: the shell passes it only to that command's process, without retaining it afterward. **Do not** `export` it into the pane shell or set it in herdr tab / workspace environments:
+  `HERDR_AGENT` in the shell's own environment is authoritative to herdr (even a later `unset` cannot remove it), making everything subsequently run in that pane look like Claude. Do not use `env HERDR_AGENT=claude <launcher>` either:
+  `env` cannot resolve functions or aliases.
+- Cases where claude receives it (tested with bash 5.2 / 5.3, zsh 5.9, fish 4.6, dash): programs on PATH, functions, aliases (including variable-prefixed `alias x='A=1 claude …'`), and `eval` of the same text.
+  `node/herdragent_shell_test.go` runs node's commands in real shells (bash; also zsh and fish when installed), asserting that claude receives `HERDR_AGENT=claude` and the arguments, but the shell and next program do not retain it.
+- Cases where it does not reach claude (still unrecognized as before, no worse): aliases expanding to another command first (`alias x='export A=1; claude'`, `alias x='cd ~/w && claude'`), where the prefix goes to `export` / `cd`.
+  With zsh `POSIX_BUILTINS` (or bash `--posix`), the variable before `export` remains in the shell as an unexported variable, harmlessly.
+- With zsh `POSIX_BUILTINS` and a function-based launcher, `HERDR_AGENT=claude` **remains exported in that pane's shell**. After claude exits, herdr treats later programs in the pane as Claude too.
+  This option is rarely enabled; if it is, write the launcher as an alias or script.
+- Wrappers that exec claude with argv[0] still `claude` were already recognized by herdr; the prefix changes nothing.
+- If recognition still fails, see `docs/lessons/agents.md`, “claude did not become ready…,” for node's error.
+
+## Running Persona-managed launchers
+
+- Stored in settings `launchers.managed`; the manager AES-GCM encrypts API keys with its own `secret.key` (the built-in manager's `~/.persona/managers/assistant/secret.key`, the same key used for email credentials, `server/internal/secretkey`). **The API never returns keys**.
+- When nodes connect and after every change, the manager pushes full settings (including keys) through hub to all nodes (`launchers.managed`). node keeps them only in memory; hub neither stores nor decrypts them.
+- At startup, node types `personad launch <name> …` into a herdr pane (or executes it for the headless assistant). This subcommand gets settings through local node.sock
+  (`launcher.env`), removes inherited `ANTHROPIC_*` and related shell variables, sets `ANTHROPIC_BASE_URL`, the key (see “Authentication method” below), and model tiers
+  (`ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_*_MODEL`; the small model goes to haiku / small fast; the sub-Agent model to `CLAUDE_CODE_SUBAGENT_MODEL`, following the primary model if empty;
+  custom model options go to `ANTHROPIC_CUSTOM_MODEL_OPTION` and its name / description), then execs claude.
+  Keys never enter the terminal or command line. You can also type `personad launch <name>` directly in a terminal.
+- **Only `personad launch` gets the settings** (#5588). Every agent's hooks and MCP servers have to reach node.sock, so being able to connect proves nothing.
+  `launcher.env` answers only a request that carries the machine's launch key, a random value the node keeps in `launch.key` beside node.sock
+  (0600, written when the node starts listening, kept across restarts). `personad launch` reads the file and sends the key, so every start works as before:
+  from the node, typed into a herdr pane, herdr's `resume_argv` after a herdr restart, and typed by hand in a terminal.
+  Any other request gets one error, whatever launcher it names, with none of the settings in it. That includes a process that cannot read the data directory
+  (an agent in a sandbox that hides it, #5357) and a `personad` older than the node, which does not send the key (run the node's own binary instead).
+  - The check is exactly as strong as the file boundary. A process of the same user outside such a sandbox can read `launch.key`, but it can also read the
+    `launcher-settings` files below, which hold the keys themselves. A sandbox for agents must keep `launch.key` hidden along with `secret.key`,
+    and must start where `personad launch` execs the agent, not around `personad launch`, which has to read the key first.
+  - Why not a one-time nonce from the node: it cannot reach a launch typed in a terminal, or herdr's stored resume command, which herdr runs on its own after it restarts.
+    Checking the peer process (uid, pid ancestry) adds nothing either. The socket is already 0600, `personad launch` runs whatever `claude` comes first in PATH, and a herdr pane's
+    start shares its ancestry with the agents' own tool processes.
+- Settings `env` overrides process environment. A different gateway in the user's global `~/.claude/settings.json` `env` would override these variables, so Persona also writes the same variables (including the key)
+  to `~/.persona/launcher-settings/<name>-env-settings.json` (0600) and passes it through `--settings` (`node/launcher_settings.go`). On older Claude Code, this is merged with
+  Persona hooks in `<name>-<claude|assistant>-settings.json`. These files are rewritten on every start; manual edits are lost.
+- **A proxy that does not answer** (#5953): a provider with no `proxy` of its own keeps the proxy the shell gives it, since a gateway may be reachable only through it.
+  But a proxy app that has quit, still named in the shell or in the Claude config directory's `settings.json` `env`, held every request until it timed out.
+  So when the gateway itself takes a direct TCP connection (its Base URL's host and port; none: `api.anthropic.com:443`), `personad launch` drops an inherited
+  `HTTP(S)_PROXY` / `ALL_PROXY` (either case) whose address takes no TCP connection within a second, twice, and says so on stderr; the settings file above sets such a
+  variable from `settings.json` empty (settings `env` cannot unset), noted in the node log; the main conversation through the Agent SDK does the same.
+  A gateway that does not answer directly either keeps every proxy: nothing would be gained, and the proxy may come back while the session runs.
+  Variables the launcher sets itself (`proxy`, `env`) are never touched (`node/deadproxy.go`).
+- **Artifacts are always disabled**: claude started by a Persona-managed launcher gets `CLAUDE_CODE_DISABLE_ARTIFACT=1` (both in `personad launch` environment and the settings `env` above).
+  The settings file also sets `"enableArtifact": false` (Claude Code honors disabling it through `--settings`). Artifacts publish to claude.ai and cannot work with a gateway + API key anyway.
+  Since 2.1.26x, Claude Code enables them by default, adding Artifacts skill instructions to system messages in interactive sessions. Some gateways reject this in capability checks
+  (`400 request is not representable on this edge: Claude Code Artifacts are enabled`), failing a new herdr Agent's first turn; `claude -p` is unaffected.
+- **Authentication method** (`auth`, 2026-11-04): which variable receives the key. `api_key` (default, used by existing launchers) sets `ANTHROPIC_API_KEY`; Claude Code sends
+  `x-api-key`, the only method accepted by the official API. `bearer` sets `ANTHROPIC_AUTH_TOKEN` and sends `Authorization: Bearer`, for compatible gateways accepting only Bearer
+  (common relay gateways accept both, requiring no change). When the manager directly calls the Messages API with a launcher (triage, translation, etc.), it follows this header choice too; Responses already uses Bearer and needs no selection.
+  Editing a launcher without `auth` in the request (an app not yet upgraded) preserves the old value.
+- **Set the other authentication variable to empty**: Claude Code merges `env` from all settings sources. Variables the launcher **does not set** still come from the user's `~/.claude/settings.json`.
+  If that contains another gateway's `ANTHROPIC_AUTH_TOKEN`, Claude sends it as `Authorization: Bearer` alongside the launcher's `x-api-key`. The gateway receives two credentials
+  and returns 401 `invalid or missing API key` unless one happens to match. So launchers with a key always set the unused variable (`ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY`)
+  to empty, both in the environment and the `--settings` above. An explicitly empty variable is not refilled from user settings (tested with Claude Code 2.1.308 on 2026-11-04). Without a key, neither is set, as before.
+- Interactive Claude Code asks “Do you want to use this API key?” the first time it sees a key in `ANTHROPIC_API_KEY`, with “No (recommended)” selected by default.
+  Enter (or selecting the default on a phone dialog card) records the key as rejected, leaving later sessions from this launcher without credentials. The user entered the key themselves in Settings › Models,
+  so before execing claude, `personad launch` records it as approved, equivalent to selecting Yes in the dialog: the key's last 20 characters (Claude Code's key identifier) are written to
+  `customApiKeyResponses.approved` in Claude's global configuration (`$CLAUDE_CONFIG_DIR` or `.claude.json` under home; old `~/.claude/.config.json` when in use),
+  and removed from `rejected` (`node/apikeyapproval.go`). Writes use Claude's own configuration lock
+  (`<config path>.lock` directory, stale after 10 seconds), avoiding concurrent writes with running claude. Already approved keys are not rewritten; no write occurs before a configuration file exists (first run,
+  when Claude handles onboarding). Write failures print one line to stderr and startup continues. Headless `-p` (assistant) does not ask in the first place.
+- Before settings arrive after a hub restart or node reconnection, `personad launch` reports “hub 还没发过来” (“hub hasn't sent them yet”).
+
+## Parameters on the launcher page (`node/launcherprobe.go`)
+
+Reading only the text of a ~/.zshrc function cannot reveal what helpers such as `_claude_proxy URL TOKEN MODEL WINDOW` or local variables ultimately set. node therefore actually runs the launcher in a
+subshell, replacing `claude` / `codex` / the internal Codex-fork CLI / `dsh` / `command` / `env` with stubs that print only the environment and arguments the Agent would receive. Comparing these with the shell's own
+environment counts only changes made by the launcher (a launcher running `dsh` is recognized as DSH; DSH is not actually started, and it is no longer launched as Claude).
+If Claude arguments include `--settings` (`alias work="claude --settings ~/.claude/settings.work.json"`, last one wins, file or inline JSON),
+that settings file's `env` overrides the detected environment (settings take priority, as in Claude Code). Gateway and key often live there; without reading it, the page misses the gateway and “Quota” assumes there is none (#1378).
+If unreadable, behavior stays as before.
+
+Probes run `( <name> )` in a login shell, so hub-requested probes, quota (`launchers.http`), `--model` checks, and model lists operate only on launchers known to this computer
+(listed from ~/.zshrc, managed, runtime, `claude` / the internal Codex-fork CLI) or declared in hub.json (hub vouches for them with `configured`). Every other name returns “unknown launcher”
+and is never executed as a command (for example `reboot`, #1185). Deploy hub before node when adding wrapper scripts in hub.json; old hubs do not send `configured`, so new nodes do not recognize them.
+
+The page groups by computer (identical results merge into one group):
+
+- Execution: Agent (Claude Code / Codex / internal Codex fork), gateway, variable holding the key (value not shown)
+- Models: primary model, Fable / Opus / Sonnet / Haiku, small model, sub-Agent, with each variable name; Codex checks `-m`
+- Context: window (`CLAUDE_CODE_MAX_CONTEXT_TOKENS`), auto-compaction window if different, thinking effort, request timeout
+- Startup arguments and other settings (`ANTHROPIC_*`, `CLAUDE_CODE_*`, proxies…; key / token-like values appear as •••)
+- Function text is collapsed; keys written directly in arguments (`_claude_proxy … sk-…`, `Bearer …`) are also redacted
+
+**Files are read, not run** (#5954): the stubs are shell functions, which a script (another process) does not see, so running one would start the real claude.
+So the probe asks the shell first what the name is (`whence -w` in zsh, `type -t` in bash): a file on PATH is reported with its path and not run, whether or not
+the list has it (a `_claude_launchers` helper still printing the name of a function since replaced by a script, a list not read yet). Its probe comes from the
+text instead (`scriptProbe`, `node/pathlaunchers.go`): claude, the script's arguments (expanded as above) with what the probe passes in place of `"$@"`, and
+what the script sets (a value it does not spell out is left out, never sent to a gateway as written), with its `--settings` env on top as above. A file that is
+no wrapper, or a claude in a branch, is "not seen". The page's text is the script's first 40 lines, keys redacted. What the page shows of a probe masks keys by
+form and by name: an inline `--settings '{…}'` is shown as `{…}`, a header value such as `x-api-key: …` and a proxy URL's user and password as •••.
+
+**Launchers that cannot be intercepted** (#1489): If a function calls another script that then `exec …/claude` by absolute path, stub functions cannot replace it, and the probe does not observe the Agent starting.
+- The page says “This launcher's gateway and model could not be detected… It still works normally,” rather than treating it as broken.
+- Sending and creation with a model (`launcherModelCheck`) use the old pre-probe path: pass the model to the launcher through `--model`, no longer returning 502.
+- Launchers that can be intercepted and hardcode another model are still rejected.
+- Note: the probe actually runs that script (the stub cannot replace it), and the script's claude is killed after 15 seconds.
+
+A run executes whatever the launcher does before claude (such as fetching a token), so each launcher runs at most once per 10 minutes, with a 15-second timeout (killing children too),
+stdin from /dev/null. Unit tests: `launcherprobe_test.go` uses `testdata/launchers.zsh` to cover helpers, small models and windows, variables before helpers,
+subshell exports, several Codex forms, and `--settings` env (`withSettingsEnv`).
+
+## Testing availability (`node/launchercheck.go`)
+
+“Test availability” on the detail page actually sends a request requiring a one-word answer on every online computer with this launcher (for Persona-managed launchers, on the hub machine, chosen by the manager)
+(`claude -p … --output-format json --max-turns 1`, `codex exec` for Codex). It runs in an empty directory, with a 90-second timeout and no hooks (`disableAllHooks` in `--settings`, still merged with managed-launcher env and the alias's own `--settings`: on some computers, Persona hooks stalled it until timeout, #3412). It displays ✓ / ✗, elapsed time, the answering model,
+and the redacted failure reason. This costs a few tokens. `POST /api/v1/launchers/{name}/check?machine=`.
+hub also uses this to check every launcher on every computer periodically, avoiding broken ones when dispatching work and automatically fixing what it can; see `docs/server/launcher-health.md`.
+
+## Deleting
+
+Tap “Delete launcher / Hide in Persona” on the detail page to show “Confirm deletion / Confirm hiding” at the button (popover, requested 2026-10-31); tap again to execute.
+
+Swipe left to “Hide” ~/.zshrc launchers in the list, or “Restore” in “Hidden” (requested 2026-11-01), without another confirmation: this changes only visibility in Persona, and can be undone by swiping back.
+Persona-managed entries swipe to “Delete,” removing the stored key too, with no restoration, so confirmation is shown first. After hiding, restoring, or deleting in details, the list updates too: all changes go through `AppModel.launchersChanged()`, and the list refetches on `launchersRevision` (#1433). `LauncherSwipeTests` against mock hub (`MOCK_MANAGED_LAUNCHER=1`) covers swipes and hiding from details.
+
+## API
+
+| API | Purpose |
+| --- | --- |
+| `GET /api/v1/launchers` | All entries (first synchronize each computer's rc file and PATH, at most 10 seconds per computer), plus the built-in `claude`; `sync` is each computer's sync state |
+| `GET /api/v1/launchers/{name}` | One entry; ~/.zshrc entries include `definitions` (redacted functions per computer) and `details` (parameters from running once) |
+| `POST /api/v1/launchers/{name}/check?machine=` | Test availability |
+| `POST /api/v1/launchers` | Add `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?, display_name?, assign?}`; `auth` is `api_key` (default) or `bearer`. With `preset`, missing values are filled from the preset, and `name` may be empty (see “Built-in presets” and “Adding from extensions” below); with `assign`, returns `{launcher, assigned, kept}` |
+| `GET /api/v1/launchers/presets` | Provider presets: built-ins (`plugin: "builtin"`) plus extensions (`docs/extensions/extensions.md`, “Model providers”), sorted by request language. Old hubs return 404; the app treats this as none |
+| `PUT /api/v1/launchers/{name}` | Edit (`api_key` unchanged if omitted); Persona-managed only. Fields under “Provider model and gateway parameters” below retain their old values if omitted |
+| `POST /api/v1/launchers/test` | Test connection (without node, see below): `{name?, base_url?, auth?, api_key?, headers?, model, preset?}` → `{ok, ms, model, error?, code?}` (`code: "region_blocked"` means Anthropic blocked the region; changing keys will not help, see `docs/protocol/protocol.md`). With `preset`, missing address and model use preset defaults |
+| `POST /api/v1/launchers/discover` | Fetch models: `{name?, base_url?, auth?, api_key?, headers?}` → `{models:[{id, name?, context_window?, efforts?, default_effort?}], error?, code?}` |
+| `DELETE /api/v1/launchers/{name}` | Delete Persona-managed entries; hide ~/.zshrc entries |
+| `POST /api/v1/launchers/{name}/restore` | Unhide |
+| `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | Quota (see below): `{machine, checked_at, quota}`, or `{error, unsupported}` if unavailable. The manager caches for one minute; `refresh=1` rereads |
+| `GET /api/v1/machines/{mid}/launchers` | Launchers this computer can start (for pickers): its ~/.zshrc entries excluding hidden ones, plus Persona-managed entries; each includes `source` |
+
+The assistant's model is selected only in “Model Settings › Main Chat” (“Settings › Assistant” no longer has a model entry, #1291); scheduled tasks' model entry opens unified “Model Settings.” Providers own connections and defaults; purposes own specific choices. See `docs/assistant/model-config.md`.
+
+## Provider model and gateway parameters (#2455)
+
+Persona-managed providers add these fields following cindy's model (`proto.ManagedLauncher`, all optional, old data still readable). See `docs/integrations/claude-integration.md` for how node turns them into env.
+
+| Field | Meaning |
+| --- | --- |
+| `models` | Gateway models `[{id, name?, context_window?, efforts?, default_effort?}]`; windows above 200K run as `<id>[1m]` |
+| `opus_model` / `sonnet_model` / `haiku_model` / `fable_model` | Models for each tier (`ANTHROPIC_DEFAULT_*_MODEL`), falling back to `model` when empty |
+| `subagent_force` | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` |
+| `headers` | Custom request headers (`ANTHROPIC_CUSTOM_HEADERS`), one “name: value” per line |
+| `proxy` / `no_proxy` | Gateway `HTTP(S)_PROXY`, set in both upper and lower case (Node's fetch reads the lower-case one first, and an empty one falls through to the other) / the hosts that go direct, in both spellings too: Claude Code's own check reads both, but the runtime under it (Bun) takes `no_proxy \|\| NO_PROXY`, so a lower-case list from the shell alone would still send the gateway through the proxy (#6238). A provider with no `proxy` follows the computer's proxy, and its hosts are added to the lists its claude would read without it, spelling by spelling: the user's `settings.json` `env` lists first (Claude Code applies them over the environment), else the shell's at launch or the node's for the main conversation, and a spelling left empty takes the other's. `launcher.env` carries the user's lists (`no_proxy_merge`) for `personad launch` to combine with the shell's, and the provider's settings file pins only the spellings the user's settings set. A provider with a `proxy` of its own brings its whole list, an empty one too: the computer's is for the computer's proxy, and its `*` or the gateway in it would turn the provider's off; one whose `env` sets `HTTP(S)_PROXY` or the list is not merged either. `*` sends everything direct, the agent's web pages and commands too; iOS's Proxy › No Proxy stores the gateway's host instead, so only the gateway goes direct, and a list that is the gateway's host alone follows a new Base URL. proxy must be an http(s) or socks5 address without a user or password |
+| `env` | The provider's own environment, one `NAME=value` per line (at most 50): `export` before it is fine, a line starting with `#` is a comment, a value in quotes is what is inside them, and an unquoted one loses a trailing ` # …`. Set after everything else, so it wins over the fields above, the shell and the user's settings `env`; `NAME=` with no value sets the variable empty. A proxy variable (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`) goes in both spellings unless both are given. To go around a proxy, put the gateway's host in `no_proxy` rather than emptying proxy variables: an empty `HTTPS_PROXY` still falls through to `HTTP_PROXY`. The main conversation ignores `CLAUDE_CODE_EFFORT_LEVEL` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` here (it decides them itself). Applied for Codex and Antigravity providers too (#5953) |
+| `timeout_ms` / `compact_window` / `max_context` | `API_TIMEOUT_MS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS`; 0 means default |
+| `effort` | Default thinking level |
+
+- **Headers and the environment are secrets, like keys**: The manager encrypts them with the same key into `headers_sealed` / `env_sealed`, decrypting only when sending to node; GET returns only `has_headers` / `has_env`.
+  PUT without `headers` (`env`) retains the value; an empty string clears it. Other new fields behave the same way: omission leaves them unchanged (old apps editing providers do not clear them).
+- **Validate on write**: Valid Base URL; thinking level only low / medium / high / xhigh / max, with each model's default level included in its supported levels; no negative numbers; no empty or duplicate model IDs; each header line must contain “:”; each environment line must be `NAME=value` with a shell variable's name. Errors never quote a line.
+- On read, `source` stays `persona` / `zshrc`; provider origin (`zshrc:<alias>@<machine>`, `preset:<id>`) lives in `origin`.
+- Names `test`, `discover`, `import`, `presets`, and `claude` are reserved for APIs and cannot be used.
+
+**Connection tests and model discovery** request the gateway directly from the manager (`assistant/models_probe.go`) (following cindy's `buildProbeRequest` / `provider-model-fetch`), also available before saving a new provider:
+
+- With `name`, use stored Base URL, key, headers, default model, and proxy; request values override stored values (`headers: ""` means no headers for this request).
+- Connection testing sends one `POST <base>/v1/messages` (`max_tokens: 1`, content `ping`); model discovery sends `GET <base>/v1/models`. Do not duplicate `/v1` if the Base URL already ends with it.
+  Both `x-api-key` and `Authorization: Bearer` are sent (strip leading `Bearer ` from the key), plus `anthropic-version: 2023-06-01` and custom headers.
+- Timeout: 30 seconds. Failures return a plain-language explanation (401 authentication failed, 403 forbidden, 404 wrong address, 429 rate limited, timeout, unreachable), followed by the gateway's own error;
+  key and header values are always replaced by `***`. Both APIs themselves always return 200; inspect `ok` / `error` for the result.
+- Model lists accept three shapes: `{data:[…]}`, `{models:[…]}`, or a bare array (objects or strings). ID comes from `id` / `slug` / `key` / `model_name` / `model_id`,
+  name from `display_name` / `name`, and window from `context_length` / `context_window` / `max_context_length` / `max_input_tokens`. Deduplicate while preserving order.
+- Fill missing gateway information from a **built-in catalog**: `server/internal/assistant/models_catalog.json`, taken from cindy's `model-registry.json` (Apache-2.0, see `THIRD_PARTY_NOTICES.md`):
+  Claude models and common gateway models such as GLM, Kimi, DeepSeek V4, Qwen3, MiniMax, Seed, and MiMo, with only id, name, context_window, efforts, default_effort.
+  Lookups are case-insensitive and strip vendor prefixes (`anthropic/…`), `[1m]`, and date suffixes. IDs absent from the catalog but ending in `[1m]` get a 1M window. Gateway-provided values take precedence.
+  To update the catalog, regenerate from the newer cindy version, taking only values explicitly stated in the registry, without guessing.
+
+## Direct-API providers
+
+Persona-managed connections add `kind` (`launcher` / `api`, omitted to retain legacy launcher behavior) and `api` (`messages` / `responses`) fields.
+For `kind: api`, the manager sends requests directly; these entries do not appear in the new-Agent launcher list. Small models, sub-Agent models, custom model options, and extra CLI arguments do not apply.
+Entries with `api` empty or `messages` are also sent to node alongside launchers (#2455), allowing the main chat to start claude with their Base URL and key; `responses` entries are not sent.
+Authentication keeps the existing encrypted-key storage, with no need to put API keys in purpose configuration. The original `/launchers` API and provider names remain compatible.
+
+## Built-in presets
+
+hub includes common vendors' Anthropic-compatible endpoints (`server/internal/assistant/presets_builtin.json`, embedded in the binary). New users with “Only an API key” can select a vendor and paste the key to connect (onboarding design #287, sections 4.3 and 5.4).
+`GET /api/v1/launchers/presets` lists built-ins first, then extensions; extension presets with the same ID override the built-in entry without changing its position.
+
+- Each entry: `id` (`builtin/<vendor>`), `plugin: "builtin"`, `name` (plain English name), `display_name` and `description` (request language, entries in `assistant-models_presets`), `kind: launcher`, `api: messages`,
+  `base_url`, `auth` (`api_key` / `bearer`, following the vendor's Claude Code instructions), `model` (default), `small_model`, `models`, `signup_url` (signup / key page). Only built-ins fill `auth`, `signup_url`, and `display_name`.
+- Order: Chinese first lists vendors directly accessible in China (DeepSeek, Kimi, Zhipu GLM, Alibaba Cloud Model Studio, MiniMax), then Anthropic and international versions. Other languages list Anthropic, DeepSeek, and international versions first. Each entry's `region` (`cn` / `global` / `both`) determines the group, with file order within groups.
+- Include only public addresses explicitly documented by vendors (pay-as-you-go endpoints, not coding subscriptions, relays, or company gateways). Addresses, authentication methods, and model names were checked against official documentation; no keys or real requests were used. Update this file when vendors change model names; `TestBuiltinPresetsAreComplete` checks complete fields for every entry.
+  Alibaba Cloud Model Studio uses `dashscope.aliyuncs.com/apps/anthropic` (pay-as-you-go `sk-` keys; Coding Plan and Token Plan keys cannot be used at this address).
+- Adding uses `POST /api/v1/launchers {preset, api_key, name: "", display_name: ""}`. Empty `name` uses the preset ID's vendor portion (`builtin/glm` → `glm`), replaces invalid characters with `-`, and appends `-2`, `-3` for duplicates. If hub generated `name` and `display_name` is also empty, use the preset display name (“Zhipu GLM”); a name with `-2` gets the same number in its display name (“Zhipu GLM 2”), keeping entries distinguishable in model configuration.
+  A manually supplied `name` without `display_name` (including older clients adding from extensions) does not get an inferred display name; it still displays `name`.
+  Without `preset`, `display_name` may also be supplied (any language, at most 64 characters), while `name` remains required. The provider stores `display_name`, shown in lists and model-configuration provider names; `name` remains the startup ID.
+- `assign: ["assistant", "agent.new"]`: After saving, try each listed purpose, switching to the new provider only while it remains default—no provider or model selected in model configuration, and the main-chat launcher still default `claude` (unchanged in Settings › Assistant or hub.json).
+  Results are `assigned: [purposes]`, `kept: [{purpose, reason}]`; `reason` is `customized` (someone selected it), `incompatible` (it cannot be used for this purpose), or `failed` (configuration read/write failed). Only these two purposes are accepted; others return 400 with nothing saved.
+
+- hub advertises `builtin_presets` in `features`; clients send empty `name` and `assign` only when present. Old hubs return 400 for empty `name` and do not recognize `assign`.
+- `POST /api/v1/launchers/discover` also accepts `preset`: use the preset address if `base_url` is omitted; an explicit address wins.
+- The new-Agent `/model` list adds preset models only for providers “added from this built-in preset” (matched by `preset`). Extension presets still also match by gateway address; built-ins do not, preventing a ~/.zshrc launcher pointing to `api.anthropic.com` from gaining an extra list of models.
+- Compatibility cost: old apps' “Add from plugin” also lists built-in presets, with “Provided by extension ‘builtin’” in the description and the plain English name as title (old clients do not read `display_name`). Adding still works (they already send `name` + key + `preset`); wording is tracked in #3621.
+
+## Adding from extensions
+
+Model providers contributed by extensions (`docs/extensions/extensions.md`, “Model providers”) add “From Extension” under “Settings › Model Providers › Add.” When hub's `GET /api/v1/launchers/presets`
+has presets, the add page starts with a “Enter manually / From Extension” switch (without presets, it remains manual-only as before). From Extension: choose a preset (name, description, connection method, address),
+enter only the name and key, and choose the default model from the preset's `models` (no selection uses the preset default). `POST /api/v1/launchers` sends only `name`, `api_key`, and `preset`, adding `model` only if another model was selected.
+The manager fills address, connection method, API, and small model from the preset (extension-owned presets are requested from hub through `app.call plugins.presets`). The preset's `key_hint` appears below the key, and `models_error` below the model. Once added, it can be edited like a manual entry.
+
+When choosing a model for a new Agent (`GET /api/v1/machines/{mid}/launchers/{name}/models`), launchers using extension gateways list not only Claude Code's own `/model` entries,
+but all preset models (`presetModels` in `assistant/models_presets.go`). Persona-managed entries use their stored preset; entries without one (manually added before extension presets existed) and ~/.zshrc entries
+match presets by gateway address (ignoring case and trailing `/`). Only `kind: launcher` presets and Claude Code launchers are eligible. Same-name entries already in `/model` are not duplicated;
+added entries use the preset name as `description`. One launcher per gateway can therefore select all its models, without a launcher per model; the picker follows updates to the extension's `dynamic_models`.
+
+- iOS: `LauncherPresetModel` (`apple/Persona/Views/Settings/LauncherPresetModel.swift`, unit tests `LauncherPresetModelTests`), `LauncherPresetViews.swift`;
+  DEBUG `-tab settings -openModelLaunchers YES -openLauncherEditor preset` opens From Extension directly (`-openLauncherEditor YES` opens the add page).
+- Web (#3693, onboarding #287 section 4.3, “Three paths,” B): the add dialog's first step directly lists every preset from `GET /api/v1/launchers/presets` (built-ins first, hub order; extensions marked “Extension”).
+  “Custom compatible gateway” comes last; address and authentication method appear only there. The client no longer hardcodes “Official Anthropic,” using built-in preset `builtin/anthropic` instead. For a preset, paste only the key: after typing pauses for 0.7 seconds (at least 8 characters),
+  it automatically tests once with `POST /api/v1/launchers/test {preset, api_key, auth}` (direct-API presets with `api: "responses"` are not tested: hub testing sends only `/v1/messages`, so a one-line explanation appears instead). Failure shows hub's plain-language error and “Retest”; `signup_url` is “Where to get a key” (opens a new tab). Name (generated by hub if empty) and default model are under “More options.”
+  Save includes `assign: ["assistant", "agent.new"]` (toggle on by default, “Use for the main chat and new Agents”); the final screen uses `assigned` / `kept` to explain which purposes switched and which stayed unchanged, with reasons.
+  Gap: the design requires the toggle to default off “when usable Claude Code already exists,” pending `assistant_readiness` (the fourth PR). Until then it always defaults on; hub's assign-if-default protects only purposes explicitly customized by users.
+  Without `builtin_presets` in hub's `features` (old hub), name is required above the key, with no `assign` or toggle. “Import from ~/.zshrc” moves to “Advanced” below the list; without a computer, the button is disabled with an explanation.
+  Logic: `web/src/lib/launcher-presets.ts` (same-name `.test.ts`); UI: `web/src/views/settings/ProviderWizard.tsx` (tests `ProviderWizard.test.tsx`).
+- Android (#3048): Settings › AI › Model providers list (groups, search, details, availability tests, hide / restore / delete, import from ~/.zshrc). See `docs/android/android.md`, “Other settings parity items.”
+- Android (#1331): “Add model provider” page (`NewProviderScreen.kt`, `NewProviderState.kt` in `feature/settings`), reached from “+” at the top right of Settings › Model configuration or “Add model provider…” in a purpose page's provider sheet (adding from a purpose page selects it after saving, but the purpose still needs Save). See `docs/android/android.md`, “Adding model providers.”
+- Screenshots: the fake hub includes two sample presets (`example-gateway/team`, `example-gateway/api`); `POST /api/v1/launchers` fills them and adds them to the list in memory.
+
+## Quota
+
+“Quota” on the launcher page reads how much allowance its key has left at the gateway. **Which gateways to read and how is the quota extension's responsibility** (`docs/extensions/extensions.md`, “Quota”): the open-source repository contains no gateway-specific readers.
+Without a quota extension, this section explains that querying is unavailable, without an error. Code: shared `server/internal/quota` (report shape, delegated requests), manager-side `assistant/models_quota.go` (routes, cache, gateway selection), hub-side `extmgr/extension_quota.go` (extension quota reading, `app.call plugins.quota`),
+and node-side `node/launcherquota.go`.
+
+- Extensions **cannot see keys**: They answer `quota.query` and pass requests through `quota.http` to the party holding the key, which replaces `${launcher_key}` in the request with the key.
+  Requests may go only to the launcher's own gateway (same origin, including redirects); key occurrences in responses are replaced with the placeholder again.
+- Who sends: For Persona-managed launchers, the manager sends with decrypted keys (hub delegates through `models.launcher_http`; quota returns `503 assistant_offline` when the manager is absent). For ~/.zshrc launchers, **the computer with that launcher** sends (node `launchers.http`: run the probe to obtain address and key, then request the gateway locally).
+  The key never leaves that computer, and the address is reachable from there. Prefer the hub computer. Old nodes without `launchers.http` report “node is too old.”
+- With multiple quota extensions: ask those declaring `hosts` matching the gateway hostname first, then those without `hosts`. Skip `unsupported`; use the first answer. If none recognizes it, querying is unavailable.
+- Cache results for one minute (`refresh=1` rereads). The report's `gateway` is the extension-contributed ID, and `gateway_name` is its human-readable name.
+- App: `LauncherQuotaSection`, above “Availability” (same on web, `web/src/views/settings/LauncherQuota.tsx`; Android places it on the launcher page reached from Machines, passing that computer as `machine=`, see `docs/android/android.md`, “Extension-rendered UI and the extension marketplace”). Title: “Quota · <gateway name>,” using the report's `gateway_name` (fallback to `gateway` for old hubs). The app hardcodes no gateway names.
+  Usage ≥ 70% is orange, ≥ 90% or exhausted is red; refresh at the top right. DEBUG `-openLauncherPage <name>` opens it directly.
+  Fake hub's `cc_main` and `cc_team` carry quota from two example gateways (`示例网关`, “Example gateway,” and `示例中转`, “Example relay”) for screenshots.
+

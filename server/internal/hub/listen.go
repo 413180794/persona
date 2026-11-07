@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// Socket activation (docs/hub-restart.md "Zero gap"): systemd's personad.socket holds the hub's listening sockets and
+// Socket activation (docs/operations/hub-restart.md "Zero gap"): systemd's personad.socket holds the hub's listening sockets and
 // hands them to each new hub process (LISTEN_FDS). While one hub stops and the next starts, connections wait in the
 // socket's backlog instead of being refused, and nothing ever sees the port closed. Without systemd (Docker, launchd,
 // a hub run by hand) there are none and the hub listens itself, as before.

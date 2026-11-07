@@ -23,10 +23,10 @@ Pitfalls, unusual behavior, and the trade-offs made at the time (originally in "
   "stuck on the message I sent"). Rule: if the list is at the newest end and no finger is down, it must follow (`landed` / `contentArrived`). Run `ChatFollowTests` when changing follow logic.
 - In sessions with many screenshots, one page of earlier messages is 1–5 MB (images embedded as base64). Decode pagination on a background thread, and prefetch the previous page as soon as the earliest dozen or so lines appear.
 - Do not implement background sync by "subscribing to every session": subscriptions make the node refresh transcripts every 250ms and read terminals every 400ms (herdr process calls). Use an IM-style push/pull combination instead:
-  the hub pushes only each session's `rev` (transcript byte count), and the App pulls increments with `after_seq` (`docs/ios.md`, background sync). The full session list is about 130 KB;
+  the hub pushes only each session's `rev` (transcript byte count), and the App pulls increments with `after_seq` (`docs/apple/ios.md`, background sync). The full session list is about 130 KB;
   do not resend it for rev changes—use a separate `revs` event. The Lark gateway has a real-time event WebSocket (`/agent/v1/events`, `message.upserted` /
   `conversation.upserted`); Lark pushes come from there.
-- Validate changes to transcript parsing or the sync protocol against a real corpus (`docs/archive/lanes/msg-render-verification.md`). `corpus_test.go` compares the old and new parsers file by file;
+- Validate changes to transcript parsing or the sync protocol against a real corpus (`docs/archive/integrations/msg-render-verification.md`). `corpus_test.go` compares the old and new parsers file by file;
   `continuity_corpus_test.go` simulates lost pushes, gap filling, and rewrites using the App's rules. Keep the corpus only in `~/persona-corpus`. Active session files grow while being read, so take a snapshot before comparing.
   To view real sessions in the simulator App, use a local test hub (fake HOME, no herdr connection, separate database), not the production hub.
 - Cold-opening a large transcript parses only a tail window (`transcript/window.go`). A line's parsed result depends on preceding lines through just three things: background task notifications already displayed
@@ -36,7 +36,7 @@ Pitfalls, unusual behavior, and the trade-offs made at the time (originally in "
   (before 2026-10-29, the parser took only text blocks, so bubbles showed no images). In App turns awakened by background tasks (`pickAnswerAcrossWakes`), keep the user's images together with their message in the original position, not in the work trace.
 - A long chat's slow first screen is not caused by the hub / node (cold read: 0.12 s), but by the page being too large: one long Codex session's last two turns contained 1412 entries and 1.08 MB, with just 6 reply entries; the rest were tools and thinking already collapsed in the UI.
   The App requests `fold_work`. Pages read backward from the end replace each work segment with one `kind: fold` entry (counts and ranges only). Expanding a work row fetches it with `from_seq` / `through_seq`
-  (`docs/protocol.md`, "Folded work"). `after_seq` catch-up and live pushes are not folded. Neither are tool_use entries still running or tool_result entries whose other half is outside the page, or they cannot be paired.
+  (`docs/protocol/protocol.md`, "Folded work"). `after_seq` catch-up and live pushes are not folded. Neither are tool_use entries still running or tool_result entries whose other half is outside the page, or they cannot be paired.
 - Claude Code writes `&gt;`, `&lt;`, and `&amp;` itself into the summary / event / result of background task notifications (`<task-notification>`); decode them during parsing. For background commands without a description,
   the summary is the whole command (a heredoc can span dozens of lines). Do not use the summary as notice text: the node parses it into `Item.task`, and the App renders a single tool-style row (`TaskNoteRow`).
   Monitor events carry only task-id; map them back to the call using the tool_result `Monitor started (task <id>` (`TaskIndex`).
@@ -57,7 +57,7 @@ The same window also lost the last words of online sessions (#1583): after the A
 `last_text` became empty, leaving task cards and main-chat snapshots showing "No activity yet" for 7 minutes. `readQuickMetaSince` now reuses the previously read text when the window contains none;
 if there is no previous value (the node has just started), it searches backward in segments (`lastWordsBefore`, up to 8 MB). For any "last X" value found only in the tail, consider that it may already be outside the window.
 - **A Claude Code transcript is a tree** (`uuid` / `parentUuid`): rewinding (`/rewind`) or editing and resending with ↑ writes the next message as a sibling of an earlier one. Rewound turns remain in the file. See
-  `transcript/branch.go` (two messages from the user under the same parent, with an assistant reply to the earlier one → the earlier message's entire subtree produces no items) and `docs/protocol.md` ("Rewind to a message");
+  `transcript/branch.go` (two messages from the user under the same parent, with an assistant reply to the earlier one → the earlier message's entire subtree produces no items) and `docs/protocol/protocol.md` ("Rewind to a message");
   **pressing Esc to cancel a message before any reply, then sending again, also writes the same pair of siblings** (#3036; observed: two identical messages under the same "[Request interrupted by user]" line, with no reply to the first).
   This is not a rewind. Older versions treated any "two siblings" as a rewind, added `.r1` to `history`, made all clients discard and refetch local content, and removed the interrupted turn from the chat too.
   To detect a rewind, check whether the earlier message received a reply. Persona's own rewind does not rely on this inference (`File.Rewound` is marked by the node).
@@ -80,7 +80,7 @@ As a chat opens, the latest page can arrive twice: once over HTTP (`loadInitial`
 A view that fetches once per id cannot recover when the store puts the same id back: the store must not undo what the view already did.
 ## A queued message is taken in at the next tool boundary, not at the end of the turn (measured Claude Code 2.1.2xx; re-check)
 
-- See also "Queued messages" in `docs/claude-integration.md` (#6088, measured on 2.1.319), which also covers "send now".
+- See also "Queued messages" in `docs/integrations/claude-integration.md` (#6088, measured on 2.1.319), which also covers "send now".
 - Extending the "absorbed mid-turn" entry above: Enter while Claude is working queues the text, and Claude takes it in as soon as the current tool call returns: the
   transcript gets it as `attachment/queued_command` (`commandMode=prompt`, `origin.kind=human`) and the queue-operation line
   records `reason: "absorbed_mid_turn"`. It is not held until the turn ends, so a message sent during a long turn can be

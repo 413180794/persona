@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Machine monitoring (docs/machines.md) is the manager's: every node sends a sample every 10 s (sysmon); the manager
+// Machine monitoring (docs/server/machines.md) is the manager's: every node sends a sample every 10 s (sysmon); the manager
 // keeps the latest in memory for the live values and every sample in Postgres for the charts: raw for the latest
 // hour, then one row a minute, nothing older than a day. What each machine is (node.info's system) is kept too, for
 // when it is offline, and goes into its devices.state. The token usage the nodes meter (node/usage.go) is summed up
@@ -302,7 +302,7 @@ func (d *Devices) metricsRoutes(mux *http.ServeMux) {
 
 // ---- token usage ----
 
-// Token usage across the machines, for the Dynamic Island (docs/live-activity.md): every node meters its
+// Token usage across the machines, for the Dynamic Island (docs/apple/live-activity.md): every node meters its
 // transcripts per minute and model (node/usage.go) and reports changed minutes; the manager keeps the last day of
 // them, in memory only (a new node connection resends its whole window), and sums them up.
 

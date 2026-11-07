@@ -13,7 +13,7 @@ import persona.core.contracts.api.HubExtension
 import persona.core.designsystem.PersonaTheme
 
 /**
- * A hub with several managers merges their extension lists, and every manager has the built-ins (docs/managers.md), so the
+ * A hub with several managers merges their extension lists, and every manager has the built-ins (docs/assistant/managers.md), so the
  * same id comes once per manager. Settings › Extensions draws each row instead of crashing on a repeated list key.
  */
 @RunWith(AndroidJUnit4::class)

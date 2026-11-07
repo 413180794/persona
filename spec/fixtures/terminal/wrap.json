@@ -7,7 +7,7 @@
       "description": "在后半行寻找词间断点，避免截断普通单词。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "alpha beta gamma delta",
@@ -38,7 +38,7 @@
       "description": "长词找不到后半行断点时按列宽截断。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "abcdefghijklmnop",
@@ -75,7 +75,7 @@
       "description": "中文逗号和句号不能因可回退的断点落到下一行开头。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "甲乙丙，丁戊己。庚辛",
@@ -118,7 +118,7 @@
       "description": "半角开括号后不折行，优先回退到前一个中文字符边界。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "甲(乙丙丁",
@@ -161,7 +161,7 @@
       "description": "全角开括号右半格未被识别为开标点，保留其后可断行的现状。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "甲乙（丙丁）戊己",
@@ -198,7 +198,7 @@
       "description": "显示边界落在宽字符右半格时将整个字符移到下一行。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "abc中文",
@@ -229,7 +229,7 @@
       "description": "中文和拉丁文字混排时只在完整字符边界折行。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "ab中cd文ef",
@@ -266,7 +266,7 @@
       "description": "项目符号后的正文决定续行缩进。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "⏺ alpha beta gamma delta",
@@ -303,7 +303,7 @@
       "description": "数字列表续行缩进到编号和空格之后。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "   2. alpha beta gamma delta",
@@ -346,7 +346,7 @@
       "description": "竖框线和前导空格计入续行缩进。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "│  alpha beta gamma delta",
@@ -389,7 +389,7 @@
       "description": "续行缩进最多占显示列宽的一半。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "        alpha beta gamma",
@@ -432,7 +432,7 @@
       "description": "列表标记后没有空格时不增加标记缩进。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "-alpha beta gamma",
@@ -469,7 +469,7 @@
       "description": "剩余部分全为分隔线时在手机边缘截断。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "────────────────────────────────────────",
@@ -494,7 +494,7 @@
       "description": "正文后的彩色空格填充不会增加折行。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "\u001b[48;2;55;55;55m❯ alpha beta                         ",
@@ -519,7 +519,7 @@
       "description": "光标落在填充区时继续折行以容纳光标。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "\u001b[44m                              ",
@@ -559,7 +559,7 @@
       "description": "光标在文字末尾之外时保留到光标列的显示范围。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "abc",
@@ -587,7 +587,7 @@
       "description": "带下划线的尾空格不按默认空白裁掉。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "ab\u001b[4m   ",
@@ -612,7 +612,7 @@
       "description": "关闭折行时每个源行只对应一条显示行。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "alpha beta gamma\n中文",
@@ -643,7 +643,7 @@
       "description": "空白源行保留一条长度为零的显示行。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "\n\n",
@@ -674,7 +674,7 @@
       "description": "断点处的默认空格不放到续行开头。",
       "source": [
         "ios/Persona/Views/Session/Terminal/TerminalWrap.swift — TerminalWrap.lines / breakPoint / hangingIndent",
-        "docs/terminal.md — 八、手机宽度换行"
+        "docs/integrations/terminal.md — 八、手机宽度换行"
       ],
       "input": {
         "ansi": "alpha   beta gamma",

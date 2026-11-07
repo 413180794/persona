@@ -16,7 +16,7 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.*
 
 // The Agents tree (computer → space → session, or computer → repository → worktree → session under "By repository") as lazy list lines. The lines are drawn by the design system's Agents components
-// (AgentTreeHeader, AgentSpaceHeader, AgentRow, AgentIdleRow, MachineChip; docs/android-design.md 2.4).
+// (AgentTreeHeader, AgentSpaceHeader, AgentRow, AgentIdleRow, MachineChip; docs/android/android-design.md 2.4).
 
 /** One line of the flattened tree, in list order. [key] is the lazy item key. */
 internal sealed interface AgentTreeEntry { val key: String }
@@ -49,7 +49,7 @@ internal data class TreeRowEntry(
 }
 
 /**
- * A herdr tab holding several agents of the space (#2320, docs/agent-states.md "Several panes in one tab"): its row
+ * A herdr tab holding several agents of the space (#2320, docs/protocol/agent-states.md "Several panes in one tab"): its row
  * speaks for the most urgent of them and says how many there are; its agents follow it in pane order unless [folded].
  * Open by default (the point is to see which agents belong together); folded by hand it stays folded ([AgentTab.foldKey]).
  */

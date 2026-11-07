@@ -1,7 +1,7 @@
 import Foundation
 
 /// Dictation and long recordings share the microphone; a failed start must not stop the other user's audio session.
-/// A voice call holds it too, but gives way (docs/voice.md 6.5): starting a recording or dictation ends the call instead
+/// A voice call holds it too, but gives way (docs/assistant/voice.md 6.5): starting a recording or dictation ends the call instead
 /// of failing while one runs.
 @MainActor final class RecordingMicrophone {
     static let shared = RecordingMicrophone()

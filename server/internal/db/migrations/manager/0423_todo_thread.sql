@@ -1,4 +1,4 @@
--- The chat thread a todo is bound to (#5279, docs/todos.md "Chat thread"): {channel, chat_id, thread_id, title}, NULL
+-- The chat thread a todo is bound to (#5279, docs/assistant/todos.md "Chat thread"): {channel, chat_id, thread_id, title}, NULL
 -- while the todo has none. One value per todo, read and written as a unit, so a jsonb column like todo_supervision's
 -- reviews rather than four more columns on every todos read. A thread belongs to at most one todo: the unique index
 -- is over the three fields that name it (the title is only a label); the check keeps a row without one of them (which

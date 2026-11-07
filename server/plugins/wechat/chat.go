@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// imagesMost is how many pictures one message brings the hub (docs/channels.md "Protocol").
+	// imagesMost is how many pictures one message brings the hub (docs/extensions/channels.md "Protocol").
 	imagesMost = 4
 	// typingEvery is how often "typing…" is shown again while the hub keeps asking for it.
 	typingEvery = 5 * time.Second

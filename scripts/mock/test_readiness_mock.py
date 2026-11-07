@@ -1,9 +1,9 @@
-"""mock_hub.py's MOCK_READINESS scenarios answer what the hub answers (docs/testing.md "Readiness scenarios").
+"""mock_hub.py's MOCK_READINESS scenarios answer what the hub answers (docs/operations/testing.md "Readiness scenarios").
 
 Each scenario's readiness (three languages) and its coded start refusal are compared with the hub's own answers, which
 server/internal/assistant/readiness_scenarios_test.go keeps in testdata/readiness_scenarios/; the built-in providers
 with presets_builtin.json; the rest (dismiss, warm, probe, adding and confirming a computer, the refusals the fake hub
-cannot make) with docs/protocol.md. Each case runs its own mock hub on a free port.
+cannot make) with docs/protocol/protocol.md. Each case runs its own mock hub on a free port.
 """
 import json
 import os

@@ -1,4 +1,4 @@
-// An agent's page switches its middle in place between its conversation and its terminal (docs/web.md "Terminal ⇄ chat"),
+// An agent's page switches its middle in place between its conversation and its terminal (docs/web/web.md "Terminal ⇄ chat"),
 // as Moshi's session page does: a "Terminal | Chat" switch in the header and ⌘J. Which one shows is the address's
 // `?view=chat|term`; an address without it shows what that agent's page showed last (kept per browser), else the
 // conversation. Pure helpers here, so they are tested without a DOM; the hook is the page's side of it.

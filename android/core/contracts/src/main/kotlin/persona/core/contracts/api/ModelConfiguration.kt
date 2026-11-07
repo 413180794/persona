@@ -16,7 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Settings › Model configuration (docs/model-config.md "API"): the hub owns the catalog of model uses ("purposes"); a purpose is a
+ * Settings › Model configuration (docs/assistant/model-config.md "API"): the hub owns the catalog of model uses ("purposes"); a purpose is a
  * real model consumer, never something the app invents. Bound to the active pairing.
  */
 interface ModelConfiguration {

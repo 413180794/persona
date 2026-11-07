@@ -1,4 +1,4 @@
-// Settings › Managers (docs/managers.md, docs/web.md"Settings"): the hub's managers (each a whole assistant) — where each runs,
+// Settings › Managers (docs/assistant/managers.md, docs/web/web.md"Settings"): the hub's managers (each a whole assistant) — where each runs,
 // online or when it last synced, the default; one's details with Rename / Set as default / Install elsewhere / Delete; New manager gives a
 // one-time install code (and the install commands when the hub has them). The list follows the hub's `managers` pushes.
 import { useCallback, useEffect, useState } from "react";
@@ -242,7 +242,7 @@ function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; o
     body = (
       <div className="flex flex-col gap-2 text-[12.5px] leading-relaxed text-ink-2">
         <p>{t(installing ? "settings-managers.cancel_install_confirm" : "settings-managers.delete_confirm", { name: shownM.name })}</p>
-        {/* what goes with it (docs/managers.md "Moving a machine or a source"): its computers come back, its sources don't */}
+        {/* what goes with it (docs/assistant/managers.md "Moving a machine or a source"): its computers come back, its sources don't */}
         {!installing && ownMachines > 0 && <p>{t("settings-managers.delete_machines", { count: ownMachines })}</p>}
         {!installing && <p className="text-orange">{t("settings-managers.delete_sources")}</p>}
       </div>

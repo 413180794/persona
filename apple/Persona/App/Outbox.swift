@@ -1,6 +1,6 @@
 import Foundation
 
-// Messages written while the hub is out of reach (docs/ios.md「连接状态」): they stay in their chat as pending bubbles
+// Messages written while the hub is out of reach (docs/apple/ios.md「连接状态」): they stay in their chat as pending bubbles
 // with a clock (Sends when connected) and go out by themselves once the app is connected and caught up, in the order they
 // were written. Kept on disk too, so quitting the app (or iOS ending it in the background) does not lose them.
 // Sent bubbles live here too: they stay until the transcript's copy arrives (`settleSend`, `showSent`).
@@ -58,7 +58,7 @@ extension AppModel {
         }
     }
 
-    /// Sends what waited for the network, group by group (docs/multi-hub.md): each group whose link is up sends its own,
+    /// Sends what waited for the network, group by group (docs/protocol/multi-hub.md): each group whose link is up sends its own,
     /// chat by chat and in order, while the others wait for theirs. A group out of reach neither keeps the others'
     /// messages back nor is asked (#4704: only the hub-level group's link was looked at, so another group's messages
     /// stayed put while that one was down, and one group's dead requests held up the rest). A chat that is not open

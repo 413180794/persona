@@ -21,7 +21,7 @@ type AssistantClaudeMD struct {
 	StateDir     string
 	KnowledgeDir string
 	OnHub        bool
-	// LarkCLI: hub.json configures lark-cli (docs/plan-lark-cli.md), on the assistant's PATH.
+	// LarkCLI: hub.json configures lark-cli (docs/plans/plan-lark-cli.md), on the assistant's PATH.
 	LarkCLI bool
 	// PersonaView: every app draws ```persona-view (hub.json assistant.persona_view); else the assistant writes
 	// ```persona-card, which they all draw.
@@ -32,7 +32,7 @@ type AssistantClaudeMD struct {
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }
 
-// AssistantHealthClaudeMD is the health space's CLAUDE.md (docs/health.md).
+// AssistantHealthClaudeMD is the health space's CLAUDE.md (docs/assistant/health.md).
 type AssistantHealthClaudeMD struct {
 	Owner    string // "" is "user"
 	Notes    string // Settings › Assistant › About me, trimmed
@@ -47,7 +47,7 @@ func RenderAssistantHealthClaudeMD(d AssistantHealthClaudeMD) string {
 	return render("assistant/health_claude_md", d)
 }
 
-// AssistantGuestClaudeMD is a guest conversation's CLAUDE.md (docs/assistant.md ("Guest conversations")).
+// AssistantGuestClaudeMD is a guest conversation's CLAUDE.md (docs/assistant/assistant.md ("Guest conversations")).
 type AssistantGuestClaudeMD struct {
 	Owner    string // An empty name uses the generic user label.
 	Language string
@@ -79,7 +79,7 @@ type SnapshotAgent struct {
 	Plan                    *SnapshotAgentPlan // its own task list (Session.Plan), nil when it keeps none
 }
 
-// SnapshotAgentPlan is an agent's own task list (TodoWrite / TaskCreate, docs/agent-goal.md "Plan"): Done of Total
+// SnapshotAgentPlan is an agent's own task list (TodoWrite / TaskCreate, docs/integrations/agent-goal.md "Plan"): Done of Total
 // items completed, and the one in progress ("" when none is).
 type SnapshotAgentPlan struct {
 	Done, Total int
@@ -137,7 +137,7 @@ type SnapshotMiss struct {
 	Skipped    bool
 }
 
-// SnapshotTask is a task opened from an assistant conversation: a todo and its agents (docs/unified-entry.md).
+// SnapshotTask is a task opened from an assistant conversation: a todo and its agents (docs/assistant/unified-entry.md).
 type SnapshotTask struct {
 	ID, Title, State string
 	Machine, Session string // its latest agent, when it has one
@@ -154,7 +154,7 @@ type SnapshotTask struct {
 	Health   string
 	DoneWhen int
 	// Delivery: how far its finished work was delivered when that is short of live ("stopped at the PR, stuck on 'CI queued'"), ""
-	// otherwise (docs/todos.md "Delivery").
+	// otherwise (docs/assistant/todos.md "Delivery").
 	Delivery string
 	// Reported: what its agent last reported to the supervisor (report_to_supervisor), nil when it has not.
 	Reported *SnapshotReport
@@ -188,9 +188,9 @@ type Snapshot struct {
 	Machines      []SnapshotMachine
 	Needs, Unread []SnapshotAgent
 	// Waiting: stopped on something the hub waits out for them (a retry, a deploy, another agent); Done: finished
-	// within a day, with the conclusion (docs/agent-work.md "Persona knows").
+	// within a day, with the conclusion (docs/assistant/agent-work.md "Persona knows").
 	Waiting, Done []SnapshotAgent
-	// Awaiting: stopped on a question to the user, who looked at it and has not answered (docs/agent-states.md
+	// Awaiting: stopped on a question to the user, who looked at it and has not answered (docs/protocol/agent-states.md
 	// "Awaiting your reply", #5096).
 	Awaiting []SnapshotAgent
 	// Muted: agents (or their spaces) the user turned notifications off for that would be in one of the above; in
@@ -215,7 +215,7 @@ type Snapshot struct {
 	Unaccepted      []SnapshotAccept
 	UnacceptedTotal int // all of them (Unaccepted is the oldest eight)
 	// Approvals: open tasks whose finished work waits for the user's nod to go live (merge, deploy, turn on, send),
-	// oldest first: told to the user as one list to approve at once (docs/todos.md "Delivery").
+	// oldest first: told to the user as one list to approve at once (docs/assistant/todos.md "Delivery").
 	Approvals []SnapshotApproval
 }
 
@@ -470,10 +470,10 @@ type TurnContext struct {
 func RenderTurnContext(c TurnContext) string { return render("assistant/turn_context", c) }
 
 // TaskDone is the system prompt deciding whether a task opened from an assistant conversation is finished, so the
-// hub can mark its todo done (assistant/task_done, docs/todos.md "Auto-complete").
+// hub can mark its todo done (assistant/task_done, docs/assistant/todos.md "Auto-complete").
 type TaskDone struct {
 	Owner string
-	// Delivery: also say how far the work was delivered (assistant.done_needs_delivery, docs/todos.md "Delivery"): only
+	// Delivery: also say how far the work was delivered (assistant.done_needs_delivery, docs/assistant/todos.md "Delivery"): only
 	// live or nothing to ship closes the task.
 	Delivery bool
 }
@@ -481,7 +481,7 @@ type TaskDone struct {
 func RenderTaskDone(d TaskDone) string { return render("assistant/task_done", d) }
 
 // RenderTaskDelivery is the delivery standard a task's agent is handed after its prompt (assistant/task_delivery,
-// docs/todos.md "Delivery"): done is live and checked, and its last line says how far it got.
+// docs/assistant/todos.md "Delivery"): done is live and checked, and its last line says how far it got.
 func RenderTaskDelivery() string { return render("assistant/task_delivery", nil) }
 
 // TaskDoneInput is the task as it was handed out and what its agents said when they stopped (assistant/task_done_input).
@@ -501,7 +501,7 @@ type TaskDoneReply struct {
 func RenderTaskDoneInput(in TaskDoneInput) string { return render("assistant/task_done_input", in) }
 
 // MainHandoff is the first message of a new main conversation: what the old one left (its last compaction summary,
-// the messages after it), behind a note, then what the user wrote (docs/assistant.md "New main chat").
+// the messages after it), behind a note, then what the user wrote (docs/assistant/assistant.md "New main chat").
 type MainHandoff struct {
 	FromID  string
 	Until   string // when the old one was archived, in the user's words
@@ -520,7 +520,7 @@ type HandoffTurn struct {
 func RenderMainHandoff(h MainHandoff) string { return render("assistant/main_handoff", h) }
 
 // Acceptance is a deployed task, for the three lines of its "Please accept" card (assistant/acceptance_input; the system
-// prompt is assistant/acceptance; docs/bots.md "Please accept").
+// prompt is assistant/acceptance; docs/extensions/bots.md "Please accept").
 type Acceptance struct {
 	Title, Prompt, Reply string
 	Links                []string // the only links it may pick

@@ -3,7 +3,7 @@ package persona.core.domain
 import java.util.Collections
 
 /**
- * A message split into what its row shows (docs/protocol.md "Tags in messages", iOS `UserRowText`): [text] without the
+ * A message split into what its row shows (docs/protocol/protocol.md "Tags in messages", iOS `UserRowText`): [text] without the
  * image notes and Claude Code's `[Image #N]` placeholders, the photo paths of its `<attached_images>` ([images],
  * thumbnails read from the session's machine), and the file-looking paths in the text ([files], chips that open them).
  */

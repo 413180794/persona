@@ -1,4 +1,4 @@
-// UI version 4's code hosting components (docs/extensions.md "UI version 4", #2951), the logic without the looks: a file
+// UI version 4's code hosting components (docs/extensions/extensions.md "UI version 4", #2951), the logic without the looks: a file
 // tree built from whole paths, a diff's hunks as numbered rows (one column, or old and new side by side), the gaps
 // between hunks, the threads at their lines, and syntax highlighting (highlight.js's common grammars through lowlight,
 // loaded the first time a code or diff is drawn; plain until then). Drawn by views/extensions/CodeViews.tsx.

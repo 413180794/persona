@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// pi (docs/pi.md). A pi in a herdr pane is a herdr session, as a Claude there is: the pane, its space and tab, the
+// pi (docs/integrations/pi.md). A pi in a herdr pane is a herdr session, as a Claude there is: the pane, its space and tab, the
 // terminal and the keys are herdr's. Its conversation and its control (send, interrupt, cards, live text) come from
 // the Persona extension in that same pi process, a runtime (runtimes.go) that lists the session with the pane it runs
 // in; the node joins the two into one row. pi run elsewhere — pi-web, a terminal outside herdr — is only the runtime's.

@@ -1,4 +1,4 @@
-// One of the two views of an agent's page (chat, terminal), stacked in the same box (docs/web.md "Terminal ⇄ chat"). The one
+// One of the two views of an agent's page (chat, terminal), stacked in the same box (docs/web/web.md "Terminal ⇄ chat"). The one
 // not shown stays mounted, at the same size, only unseen and out of reach: the terminal keeps its stream (coming back is
 // instant) and is not resized (display:none would make xterm measure 100px and resize the pane, as in TerminalPage);
 // the chat keeps its scroll position and what was typed. Switching crossfades with a short slide.

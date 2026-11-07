@@ -1,4 +1,4 @@
-// Settings › Model providers › Add / Edit (#2455, docs/onboarding.md 4.3 "Three paths" B): (1) "Choose a provider" lists what the hub offers
+// Settings › Model providers › Add / Edit (#2455, docs/assistant/onboarding.md 4.3 "Three paths" B): (1) "Choose a provider" lists what the hub offers
 // (GET /api/v1/launchers/presets: its built-in providers, then the extensions'), a compatible gateway typed by hand last.
 // A preset needs only ② the key: it is tested on its own (POST /launchers/test with the preset) and saved with
 // assign, and (3) says what now runs on it. The gateway goes (2) "Connect" (address, auth, key; "Test connection" and "Fetch models") (3) "Choose models"
@@ -60,7 +60,7 @@ import { t } from "../../i18n";
 
 type Step = "pick" | "key" | "done" | "connect" | "models";
 const CUSTOM = "custom";
-/** The hub's hello feature for built-in presets, a name it makes up and assign (docs/launchers.md "Built-in presets"). */
+/** The hub's hello feature for built-in presets, a name it makes up and assign (docs/integrations/launchers.md "Built-in presets"). */
 const BUILTIN_PRESETS_FEATURE = "builtin_presets";
 const stepTitle = (s: Step) =>
   ({

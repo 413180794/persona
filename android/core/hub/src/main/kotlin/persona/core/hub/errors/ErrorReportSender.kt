@@ -31,7 +31,7 @@ class HttpErrorReportTransport(private val connection: OkHttpHubConnection) : Er
 }
 
 /**
- * Sends the queue while the hub says `error_reports` (docs/protocol.md "Error reports"), at most [MaxBatch] reports
+ * Sends the queue while the hub says `error_reports` (docs/protocol/protocol.md "Error reports"), at most [MaxBatch] reports
  * and [MaxBatchBytes] a request. A 2xx answer takes the batch (the hub's `dropped` ones are not to be sent again
  * either); a 4xx refuses it for good, except 408 and 429, which are retried like a 5xx or no answer at all.
  */

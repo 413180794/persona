@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Recordings (docs/knowledge.md "Recordings", docs/protocol.md "Recording sync"): the phone uploads each recording's transcript,
+// Recordings (docs/assistant/knowledge.md "Recordings", docs/protocol/protocol.md "Recording sync"): the phone uploads each recording's transcript,
 // keyed by its UUID, the whole state every time (revision orders them), so replays, reordering and a transcript
 // completed later all land on one entry. Only text: the audio stays on the phone. A directory per recording:
 // meta.json, segments.json, transcript.md (what the searches read), summary.md (the model's, once it is complete).
@@ -34,7 +34,7 @@ const (
 	maxRecordingText     = 4 << 20
 )
 
-// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package kbwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type RecordingSegment = kbwire.RecordingSegment
 
 // RecordingBookmark is a mark the user set while recording: seconds from the start.

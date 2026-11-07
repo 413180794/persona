@@ -247,7 +247,7 @@ describe("小工具", () => {
     expect(withToken("/api/v1/lark/media/k?size=48", "jd_x")).toBe("/api/v1/lark/media/k?size=48&token=jd_x");
     expect(withToken("https://example.com/a.png", "jd_x")).toBe("https://example.com/a.png");
     expect(withToken(undefined, "jd_x")).toBeUndefined();
-    // under a reverse proxy's sub-path (docs/web.md "Sub-path")
+    // under a reverse proxy's sub-path (docs/web/web.md "Sub-path")
     expect(withToken("/api/v1/lark/media/k", "jd_x", "/persona")).toBe("/persona/api/v1/lark/media/k?token=jd_x");
     expect(withToken("https://example.com/a.png", "jd_x", "/persona")).toBe("https://example.com/a.png");
   });
@@ -828,7 +828,7 @@ describe("列表状态", () => {
     expect(fetcher.mock.calls[2][0]).toBe("/api/v1/lark/messages/root-msg/replies");
     expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ text: "收到", thread: false, client_id: "client-2" });
 
-    // Another Feishu account's chat names it (docs/feishu.md "Multiple accounts").
+    // Another Feishu account's chat names it (docs/extensions/feishu.md "Multiple accounts").
     fetcher.mockResolvedValueOnce(ok({ message_id: "m_other" }));
     await sendLarkMessage("feed-xyz", "你好", "client-3", 2);
     expect(fetcher.mock.calls[3][0]).toBe("/api/v1/lark/conversations/feed-xyz/messages?ol_account=2");

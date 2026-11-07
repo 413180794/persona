@@ -43,7 +43,7 @@ class InboxActionsTransportTest {
         }
     }
 
-    /** A draft or a context asked for another manager's item names it on the request (RequestManager, docs/managers.md). */
+    /** A draft or a context asked for another manager's item names it on the request (RequestManager, docs/assistant/managers.md). */
     @Test fun anItemsManagerIsNamedOnTheRequest() = runBlocking {
         MockWebServer().use { server ->
             val transport = HttpInboxActionsTransport(OkHttpClient(), { server.url("/").toString().toHttpUrl() }, "fixture-token", { true })

@@ -25,7 +25,7 @@ import (
 	"github.com/nwverse/persona/server/internal/streams"
 )
 
-// The computers are the manager's (docs/machines.md "Who connects the computers", devicewire): the manager that carries them — the
+// The computers are the manager's (docs/server/machines.md "Who connects the computers", devicewire): the manager that carries them — the
 // chief, the assistant's process, during the migration to managers — connects every one and holds what is known of it.
 // The hub hands it hub.json's machines as defaults (the hello's devices section, devices.config when they change),
 // relays the apps' calls and streams to it (busNode: devices.call, devices.notify), and keeps what it reports
@@ -1254,7 +1254,7 @@ func (h *Hub) metricsRoutesRelayed(api *http.ServeMux) {
 }
 
 // usageRoutesRelayed relays the subscription usage windows' route (devicewire.UsageRoutes) to the manager, which
-// asks the machines it connects and the account-pool gateways (docs/usage-windows.md); 503 assistant_offline while
+// asks the machines it connects and the account-pool gateways (docs/server/usage-windows.md); 503 assistant_offline while
 // it is away.
 func (h *Hub) usageRoutesRelayed(api *http.ServeMux) {
 	for _, pattern := range devicewire.UsageRoutes {

@@ -113,7 +113,7 @@ enum CalendarTool {
         return false
     }
 
-    /// Takes back an event the conversation added (its Undo, docs/unified-entry.md); false when it is gone already.
+    /// Takes back an event the conversation added (its Undo, docs/assistant/unified-entry.md); false when it is gone already.
     static func remove(id: String) throws -> Bool {
         let store = EKEventStore()
         guard let event = store.event(withIdentifier: id) else { return false }

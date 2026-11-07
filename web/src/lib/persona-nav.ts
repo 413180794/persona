@@ -28,7 +28,7 @@ export function sidebarActiveKey(route: Route, main?: string): string {
   }
 }
 
-/** An extension page's sidebar row (docs/extensions.md "UI slots" nav_page). */
+/** An extension page's sidebar row (docs/extensions/extensions.md "UI slots" nav_page). */
 export const extensionNavKey = (extension: string, ui: string) => `p:${extension}/${ui}`;
 
 /** The conversations listed under "Persona chats": the most recent ones, without the main one (it has its own row), and

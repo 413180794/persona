@@ -292,7 +292,7 @@ struct MacTodosPage: View {
                     .id(id) // another todo gets a fresh page, so its title and notes are read from the store again
             }
         } else if openList.isEmpty && doneList.isEmpty {
-            // One empty state a page (docs/mac-design.md): the list's says there is nothing, the detail stays plain.
+            // One empty state a page (docs/apple/mac-design.md): the list's says there is nothing, the detail stays plain.
             Color.clear
         } else {
             SplitPlaceholder(symbol: Theme.Icon.todo, title: String(localized: "Select a To-do"), message: String(localized: "Select a to-do in the list on the left to see its details here."))

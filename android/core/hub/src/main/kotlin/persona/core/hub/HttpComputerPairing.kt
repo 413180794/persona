@@ -20,7 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
- * Machines › "Add computer" on one hub, in its own machine ids (docs/protocol.md "Computer pairing codes" "Computer trust"): a computer's code
+ * Machines › "Add computer" on one hub, in its own machine ids (docs/protocol/protocol.md "Computer pairing codes" "Computer trust"): a computer's code
  * (`POST /api/v1/auth/pair-codes` with `add` or `machine`), the machine list, and confirm / reject.
  */
 class HttpComputerPairing internal constructor(

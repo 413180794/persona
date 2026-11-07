@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Port discovery on Windows (docs/ports.md): no ps, no lsof, no /proc. The process tree comes from a Toolhelp
+// Port discovery on Windows (docs/operations/ports.md): no ps, no lsof, no /proc. The process tree comes from a Toolhelp
 // snapshot (as listWinProcs), the listening sockets and their owners from iphlpapi's GetExtendedTcpTable; no child
 // process is started.
 

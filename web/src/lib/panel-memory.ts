@@ -1,4 +1,4 @@
-// A session's side panel comes back with the session (#5150, docs/web.md "Side panels"). Moving to another page closes
+// A session's side panel comes back with the session (#5150, docs/web/web.md "Side panels"). Moving to another page closes
 // a session's Files / Git / file panel (App); coming back to that session (the sidebar, the browser's Back) opens it
 // again where it was: the same kind, the Files panel's folder and the file open in it. What is kept is the panel open
 // when the page left the session, so one the user closed (×, Esc, ⌘B, its button) before leaving is not brought back,

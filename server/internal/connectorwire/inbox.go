@@ -67,7 +67,7 @@ type InboxThing struct {
 	// taking over one of the hub's own (MigratableConnectors) sends it, and only for it does the hub read it.
 	Extra *ThingExtra `json:"extra,omitempty"`
 	// Group makes the thing a batch of a conversation's new messages to relate to its events (a connector that
-	// declares CapGroup, docs/inbox.md "Event synthesis"): the hub never makes it an item. Thread, Context (the new messages'
+	// declares CapGroup, docs/assistant/inbox.md "Event synthesis"): the hub never makes it an item. Thread, Context (the new messages'
 	// text), Rules and Last go with it.
 	Group *ThingGroup `json:"group,omitempty"`
 	// ID and Meta are an event's (Grouper.GroupAppend's answer): the item's id, and what the connector keeps about the
@@ -152,7 +152,7 @@ type GroupNew struct {
 }
 
 // MigratableConnectors are the hub's own connectors a plugin may take over while they move out of the hub (Feishu
-// through the Lark extension, docs/plan-extensions.md "Step 3"; GitHub, #2830): a plugin's connector with the same id replaces
+// through the Lark extension, docs/plans/plan-extensions.md "Step 3"; GitHub, #2830): a plugin's connector with the same id replaces
 // the hub's while the plugin is on, and its inbox things may carry the items' own blocks (ThingExtra).
 var MigratableConnectors = []string{"lark", "github"}
 

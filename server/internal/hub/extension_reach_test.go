@@ -1,6 +1,6 @@
 package hub
 
-// An extension's token acts as its manager and only as it (docs/managers.md "Ownership"): whatever names the target
+// An extension's token acts as its manager and only as it (docs/assistant/managers.md "Ownership"): whatever names the target
 // (the path, the query, a header, the body), another manager's machines, sessions, cards and conversations, and
 // another manager itself, are out of its reach.
 

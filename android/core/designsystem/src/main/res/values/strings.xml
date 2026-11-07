@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- English is the fallback for every language the app does not have (docs/i18n.md); values-zh and values-ja hold the same keys. -->
+<!-- English is the fallback for every language the app does not have (docs/protocol/i18n.md); values-zh and values-ja hold the same keys. -->
 <resources>
-    <!-- Agent states (docs/i18n.md glossary) -->
+    <!-- Agent states (docs/protocol/i18n.md glossary) -->
     <string name="designsystem_status_needs_you">Needs you</string>
     <string name="designsystem_status_working">Working</string>
     <string name="designsystem_status_unread">Unread</string>

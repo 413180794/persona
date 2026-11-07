@@ -129,7 +129,7 @@ export function sessionQuote(s: Session): { title: string; url: string; text: st
   return { title: displayTitle(s), url: `persona://session/${s.machine_id}/${s.session_id}`, text: lines.join("\n") };
 }
 
-/** Workspaces (GET /workspaces, docs/workspace-board.md) matching the query by title, folder or computer: ones whose
+/** Workspaces (GET /workspaces, docs/web/workspace-board.md) matching the query by title, folder or computer: ones whose
  * title starts with it first, then available before unavailable, each keeping the hub's order. One per computer and
  * folder (a host space and a session folder can name the same place); folderless host spaces can't be worked in. */
 export function workspaceMatches(all: Workspace[], query: string, machineName: (id: string) => string, limit = 8): Workspace[] {
@@ -157,7 +157,7 @@ export function workspaceDetail(w: Workspace, machineName: (id: string) => strin
 }
 
 /** The context for a picked workspace: `<persona-context kind="workspace" machine="…" cwd="…">`. The hub reads the two
- * attributes and adds what it knows about the place (docs/assistant.md "Workspace mentions"); the body is for people
+ * attributes and adds what it knows about the place (docs/assistant/assistant.md "Workspace mentions"); the body is for people
  * and clients that show it as is. */
 export function workspaceContext(w: Workspace, machineName: (id: string) => string): { title: string; url: string; text: string; attrs: Record<string, string> } {
   const title = workspaceTitle(w);

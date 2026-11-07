@@ -202,7 +202,7 @@ const maxWheel = 120
 // conversation) and scrolls its own scrollback for one that does not (a shell) — what a herdr client does with the wheel.
 // It goes as one event a line: herdr hands a program one wheel event per command whatever "lines" says (Codex moves a
 // row for each), while its own scrollback moves "lines" either way. And over a cell, never herdr's default 1;1: there
-// Codex has the prompt it pins on top, which takes no wheel (docs/terminal.md, section 16).
+// Codex has the prompt it pins on top, which takes no wheel (docs/integrations/terminal.md, section 16).
 func (s *Control) Scroll(lines int, up bool, column, row int) error {
 	dir := "down"
 	if up {
@@ -233,7 +233,7 @@ func (s *Control) Click(column, row int) error {
 }
 
 // Mouse modifier bits of herdr's terminal.mouse / terminal.scroll "modifiers" (a u8): shift 1, ctrl 2, alt 4. Anything
-// above is ignored by herdr, so it is masked off here (docs/terminal.md "Mouse").
+// above is ignored by herdr, so it is masked off here (docs/integrations/terminal.md "Mouse").
 const (
 	ModShift    = 1
 	ModCtrl     = 2

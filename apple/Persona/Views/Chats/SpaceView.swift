@@ -7,7 +7,7 @@ extension EnvironmentValues {
 }
 
 /// The space's tabs (its agents) in the chat's header, one capsule each in its state's color (no dots: the pulsing ones
-/// were too busy in a row of them; kept over a neutral fill at the user's call, docs/plan-chat-topbar.md Q2), the
+/// were too busy in a row of them; kept over a neutral fill at the user's call, docs/archive/apple/plan-chat-topbar.md Q2), the
 /// current one bold with a ring. The agents of one tab sit together in the order of their
 /// panes, each named by its agent, the starter marked "Starter" (#2320). A name is one line, cut at `Theme.Size.tabName`,
 /// so one long name cannot push the current tab away. As many as the width holds show around the current one; a swipe

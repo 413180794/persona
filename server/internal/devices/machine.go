@@ -181,7 +181,7 @@ func (m *Machine) snapshot() proto.Machine {
 			suggested = &s
 		}
 	}
-	// A node without sets runs the single engine; say so when that is not the set chosen (docs/protocol.md "Engines").
+	// A node without sets runs the single engine; say so when that is not the set chosen (docs/protocol/protocol.md "Engines").
 	setsUnsupported := (m.online || warm) && m.info.EngineHosts == nil && !proto.LegacyExpresses(choice)
 	icon := m.cfg.Icon
 	if icon == "" {

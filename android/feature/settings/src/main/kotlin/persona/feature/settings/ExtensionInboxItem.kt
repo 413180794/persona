@@ -10,7 +10,7 @@ import persona.core.designsystem.*
 import persona.core.navigation.InboxItemUiRoute
 import kotlinx.coroutines.launch
 
-// The body of an inbox item's page drawn by the extension of the connector it comes from (docs/extensions.md "UI slots"
+// The body of an inbox item's page drawn by the extension of the connector it comes from (docs/extensions/extensions.md "UI slots"
 // `inbox_item`, #1683): the extension's view of the item, drawn with the same renderer as its other pages, the item's id
 // in the context. The inbox keeps its own header above it (feature:inbox's InboxItemExtensionScreen); the shell puts the
 // two together and opens the item's own page when the extension cannot draw it.

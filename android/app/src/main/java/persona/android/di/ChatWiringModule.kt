@@ -38,7 +38,7 @@ object ChatWiringModule {
     fun chatWiring(application: android.app.Application, owner: ChatDataOwner, stacks: GroupStacks): ChatWiringSource = object : ChatWiringSource {
         override val current = owner.wiring
         private val byGroup = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.flow.StateFlow<ChatAppBindings?>>()
-        /** The chat services of the session's group (docs/android.md "Multiple hubs"); with one group, [current]'s. */
+        /** The chat services of the session's group (docs/android/android.md "Multiple hubs"); with one group, [current]'s. */
         override fun bindingsFor(session: SessionKey): kotlinx.coroutines.flow.StateFlow<ChatAppBindings?> {
             val namespace = persona.core.contracts.GroupKeys.namespaceOf(session.machineId)
             return byGroup.getOrPut(namespace.orEmpty()) {

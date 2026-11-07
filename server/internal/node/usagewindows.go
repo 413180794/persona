@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Subscription rate-limit windows of the agents on this machine (#2432, docs/usage-windows.md): how much of an
+// Subscription rate-limit windows of the agents on this machine (#2432, docs/server/usage-windows.md): how much of an
 // account's 5-hour and weekly allowance is used. Only local files are read, never an account API and never a
 // credential:
 //

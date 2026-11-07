@@ -1,6 +1,6 @@
 import XCTest
 
-/// The file viewer (docs/ios.md「文件查看器」) against scripts/mock/mock_hub.py started with MOCK_FILES=1 (PERSONA_MOCK_HUB):
+/// The file viewer (docs/apple/ios.md「文件查看器」) against scripts/mock/mock_hub.py started with MOCK_FILES=1 (PERSONA_MOCK_HUB):
 /// only paths that are there on the conversation's machine become chips; code opens with line numbers, JSON as an
 /// outline, Markdown rendered.
 final class FileViewerUITests: XCTestCase {
@@ -89,7 +89,7 @@ final class FileViewerUITests: XCTestCase {
 }
 
 /// Opening times and frames while scrolling the big made-up files (`-showFilePerf YES` writes them to the app's
-/// Caches/file-perf.log; the numbers in docs/ios.md come from here). Opened from an idle conversation (a working one
+/// Caches/file-perf.log; the numbers in docs/apple/ios.md come from here). Opened from an idle conversation (a working one
 /// redraws behind the sheet). Only with PERSONA_FILE_PERF=1.
 final class FileViewerPerfTests: XCTestCase {
     @MainActor func testOpenAndScrollBigFiles() throws {

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Persona Link: the menu bar app around persona-link on a Mac (apple/PersonaLink/, docs/link.md, docs/persona-link-install.md).
-# The bundle keeps its old name "Persona Link.app" and executable PersonaLink (docs/rename.md).
+# Persona Link: the menu bar app around persona-link on a Mac (apple/PersonaLink/, docs/operations/link.md, docs/operations/persona-link-install.md).
+# The bundle keeps its old name "Persona Link.app" and executable PersonaLink (docs/operations/rename.md).
 #   ./scripts/app/mac-link.sh build            apple/PersonaLink/build/Persona Link.app, persona-link and persona-node inside, signed to run locally
 #   ./scripts/app/mac-link.sh install          build, put it in /Applications and open it
 #   ./scripts/app/mac-link.sh snapshot <dir>   draw the menu and the pairing window, light and dark, as PNGs
@@ -30,7 +30,7 @@ build() {
     (cd server && GOOS=darwin GOARCH=$goarch CGO_ENABLED=0 go build -buildvcs=false -trimpath \
       -ldflags "-s -w -X main.version=$version" -o "$OUT/persona-link-$a" ./cmd/persona-link)
     helpers+=("$OUT/persona-link-$a")
-    # The resident node the app sets up when this Mac has none (persona-link node install --node-bin, docs/link.md):
+    # The resident node the app sets up when this Mac has none (persona-link node install --node-bin, docs/operations/link.md):
     # the device's own program.
     (cd server && GOOS=darwin GOARCH=$goarch CGO_ENABLED=0 go build -buildvcs=false -trimpath \
       -ldflags "-s -w -X main.version=$version" -o "$OUT/persona-node-$a" ./cmd/persona-node)

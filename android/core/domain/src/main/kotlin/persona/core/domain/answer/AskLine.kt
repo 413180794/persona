@@ -77,7 +77,7 @@ fun Session.askingLine(card: Interaction?): CoreText? =
  * The line under an agent row's title: what its card asks while it waits for you ([askingLine]), else why its host says
  * it waits or stopped (iOS listPreview), what it asks the user once seen and still unanswered ([replyLine], #5096; an
  * unread or muted one keeps its last words, as on iOS and the web), where
- * its work stands once the hub triaged its turn (docs/agent-work.md), else its last words.
+ * its work stands once the hub triaged its turn (docs/assistant/agent-work.md), else its last words.
  */
 fun Session.rowLine(card: Interaction?, now: Instant, muted: Boolean = false): CoreText? = askingLine(card)
     ?: reasonPreview?.let(CoreText::plain)

@@ -47,7 +47,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The inbox with several managers (docs/managers.md step 4): each manager's items under its name with its own
+ * The inbox with several managers (docs/assistant/managers.md step 4): each manager's items under its name with its own
  * sections, the default's first (unstamped items are its), the offline one greyed with 最后同步于, in every style,
  * light and dark. Written to `build/managers-shots/inbox-*.png`.
  */

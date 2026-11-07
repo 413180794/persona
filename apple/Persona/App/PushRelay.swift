@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// The push relay this build registers with (docs/push-relay.md): it holds the app's APNs key and pushes for hubs that
+/// The push relay this build registers with (docs/operations/push-relay.md): it holds the app's APNs key and pushes for hubs that
 /// have none. The phone registers its device token here and hands the grant it gets, with its public key, to its own hub;
 /// the relay never sees the key, so it cannot read what the hub seals.
 nonisolated enum PushRelay {

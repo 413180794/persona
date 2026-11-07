@@ -1,5 +1,5 @@
-"""The main conversation's readiness and coded refusals, as the hub answers them (docs/onboarding.md 4.4–4.6, 5.1–5.4;
-docs/protocol.md "Main chat readiness" "Error body"), for mock_hub.py's MOCK_READINESS scenarios (docs/testing.md "Readiness scenarios").
+"""The main conversation's readiness and coded refusals, as the hub answers them (docs/assistant/onboarding.md 4.4–4.6, 5.1–5.4;
+docs/protocol/protocol.md "Main chat readiness" "Error body"), for mock_hub.py's MOCK_READINESS scenarios (docs/operations/testing.md "Readiness scenarios").
 
 Nothing here is copied from the server: the words come from the hub's own catalogs (server/internal/i18n/locales) and
 the built-in providers from server/internal/assistant/presets_builtin.json, so a change there shows up here. The
@@ -221,7 +221,7 @@ def probe_result(sc, launcher="claude"):
     return {"ok": True, "agent": "claude", "model": "claude-sonnet-5-5", "answer": "好", "millis": 1830}
 
 
-# ---------- the coded refusals (apierr.Call, docs/protocol.md "Error body") ----------
+# ---------- the coded refusals (apierr.Call, docs/protocol/protocol.md "Error body") ----------
 
 START_DETAILS = {
     "no_machine": "assistant machine is not configured",

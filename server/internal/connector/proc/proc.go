@@ -1,8 +1,8 @@
 // Package proc is a connector that runs in a program of its own (connector/serve) and answers for it in the hub. It
 // implements every capability and declares what the program said it has (a proxy's manifest): the hub uses only
-// those. The program is either a plugin's, run by the plugin host (Config.Link: the hub's way, docs/extensions.md), or
+// those. The program is either a plugin's, run by the plugin host (Config.Link: the hub's way, docs/extensions/extensions.md), or
 // started here with the connector protocol's own opening (Config.Path). The Telegram extension is one (#1704): its
-// dependencies would double personad's size (docs/archive/plan-telegram.md).
+// dependencies would double personad's size (docs/archive/extensions/plan-telegram.md).
 package proc
 
 import (
@@ -78,7 +78,7 @@ type Config struct {
 	// plugin host's business, and the hub passes the program's calls and events on (Handle, Event).
 	Link *Link
 	// GhToken, when set, answers the program's credentials.gh_token: a computer's gh login. The hub sets it only for
-	// an extension it granted gh_login (docs/extensions.md "Permissions"); nil refuses.
+	// an extension it granted gh_login (docs/extensions/extensions.md "Permissions"); nil refuses.
 	GhToken func(ctx context.Context, machine, host string) (string, error)
 }
 

@@ -6,7 +6,7 @@
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
         "ios/Persona/App/AppModel.swift：resolve(_:_:)",
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "ios_current",
@@ -38,7 +38,7 @@
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
         "ios/Persona/App/AppModel.swift：resolve(_:_:)",
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "ios_current",
@@ -70,7 +70,7 @@
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
         "ios/Persona/App/AppModel.swift：resolve(_:_:)",
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "ios_current",
@@ -104,7 +104,7 @@
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
         "ios/Persona/App/AppModel.swift：resolve(_:_:)",
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "ios_current",
@@ -138,7 +138,7 @@
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
         "ios/Persona/App/AppModel.swift：resolve(_:_:)",
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "ios_current",
@@ -172,7 +172,7 @@
       "description": "作答回传根据连接条件和 hub 结果保留或移除交互卡片。",
       "source": [
         "ios/Persona/App/AppModel.swift：resolve(_:_:)",
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "ios_current",

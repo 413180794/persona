@@ -1,7 +1,7 @@
 #!/bin/bash
 # The one entry for getting a simulator, for scripts and agents alike: reuse or create it, boot it slim with
 # simslim (https://github.com/mobai-app/simslim) using the profile for the job, check it, and print its udid.
-# Without simslim it falls back to a plain `simctl boot` and says how to install it. docs/testing.md "Simulators".
+# Without simslim it falls back to a plain `simctl boot` and says how to install it. docs/operations/testing.md "Simulators".
 #
 #   SIM=$(scripts/app/sim-boot.sh "Persona Shots <issue>")          # reuse the simulator of that name, or create it
 #   scripts/app/sim-boot.sh <udid>                                   # an existing one

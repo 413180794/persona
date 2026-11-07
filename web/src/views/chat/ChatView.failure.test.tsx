@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A refused send in a Persona conversation is a card above the composer (docs/onboarding.md 4.6); the next send that
+// A refused send in a Persona conversation is a card above the composer (docs/assistant/onboarding.md 4.6); the next send that
 // goes through takes it away, so it does not linger over a later setup step.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

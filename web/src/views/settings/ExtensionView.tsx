@@ -1,4 +1,4 @@
-// An extension's View (docs/extensions.md "Declarative UI" "UI slots" "Navigation"), loaded and carried out: an extension page in
+// An extension's View (docs/extensions/extensions.md "Declarative UI" "UI slots" "Navigation"), loaded and carried out: an extension page in
 // Settings › Extensions or from the sidebar, a section on a launcher's or a machine's page, a card on "Overview", an inbox item's body.
 // How the items look is views/extensions/ViewBody.tsx. Here: a button's confirm asks first, submit sends the fields'
 // values, a segmented acts when chosen, and what the press answers (a new view, a word, a link, a page pushed or popped)
@@ -33,7 +33,7 @@ const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 /**
- * Draws again while the view is on screen (docs/extensions.md "Refresh"): `delay` ms after it was last drawn, never while the
+ * Draws again while the view is on screen (docs/extensions/extensions.md "Refresh"): `delay` ms after it was last drawn, never while the
  * page is hidden; coming back after the delay draws at once.
  */
 function useRefresh(delay: number, drawnAt: number, draw: () => void) {
@@ -140,7 +140,7 @@ export function ExtensionUI(props: Parameters<typeof LegacyExtensionUI>[0]) {
   // mounts, retain it even if a late hello arrives: never allocate a second source page.
   if (waitingHello && !legacyNegotiation) return <Loading />;
   // System/embedded slots remain full fitted snapshots. Old hubs keep the exact existing component.
-  // Another manager's extension draws over HTTP, which names its manager on each request (docs/managers.md "Clients").
+  // Another manager's extension draws over HTTP, which names its manager on each request (docs/assistant/managers.md "Clients").
   if (legacyNegotiation || !supported || props.embedded || props.compact || otherManager(props.manager)) return <LegacyExtensionUI {...props} />;
   return <NativeExtensionUI key={JSON.stringify([owner, group, props.extension, props.ui, props.state ?? ""])} {...props} legacy={(page) => <LegacyExtensionUI {...page} />} />;
 }
@@ -148,7 +148,7 @@ export function LegacyExtensionUI({
   extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState, onWide, navigation, active = true, manager,
 }: {
   extension: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
-  /** Whose extension it is (another manager's inbox item or computer, docs/managers.md "Clients"); none: the default's. */
+  /** Whose extension it is (another manager's inbox item or computer, docs/assistant/managers.md "Clients"); none: the default's. */
   manager?: string;
   onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
   pages?: "stack" | "open"; history?: boolean; state?: string;

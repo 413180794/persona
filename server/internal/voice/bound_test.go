@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Protocol 2 (docs/voice.md "Protocol changes", 4.2–4.6, 4.10): a call bound to the conversation it was opened from.
+// Protocol 2 (docs/assistant/voice.md "Protocol changes", 4.2–4.6, 4.10): a call bound to the conversation it was opened from.
 
 // boundUpstream is a live-dialect service whose model hands every line the user types over: as a client delegation
 // (dlg1, dlg2…), or with tools as a delegate_task call on it (c1, c2…). What the extension sends (it has an event id)

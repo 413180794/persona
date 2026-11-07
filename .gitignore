@@ -17,7 +17,7 @@ __pycache__/
 /tmp/
 florak/
 /apple/Config.xcconfig
-# Generated when config.json app.carplay_voice is on: the app's entitlements plus the CarPlay voice one (docs/carplay.md).
+# Generated when config.json app.carplay_voice is on: the app's entitlements plus the CarPlay voice one (docs/apple/carplay.md).
 /apple/PersonaCarPlay.entitlements
 # Personal notes for coding agents working in this checkout (machines, accounts); see CLAUDE.md.
 /CLAUDE.local.md
@@ -32,10 +32,10 @@ florak/
 !/server/internal/hub/webdist/README.md
 /server/internal/runtimepkg/dist/*
 !/server/internal/runtimepkg/dist/README.md
-# A hub run from deploy/docker (docs/docker.md): its secrets and data stay out of the repo.
+# A hub run from deploy/docker (docs/operations/docker.md): its secrets and data stay out of the repo.
 /deploy/docker/.env
 /deploy/docker/data/
 /deploy/docker/postgres/
-# App Store Connect API keys and asc's repo-local config stay on the machine (docs/release.md "Releasing with asc").
+# App Store Connect API keys and asc's repo-local config stay on the machine (docs/operations/release.md "Releasing with asc").
 *.p8
 /.asc/

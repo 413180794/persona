@@ -22,7 +22,7 @@ class HttpMachineManagementTest {
         }
     }
 
-    /** 移到…: the computer goes to another manager (docs/managers.md "Moving a machine or a source"). */
+    /** 移到…: the computer goes to another manager (docs/assistant/managers.md "Moving a machine or a source"). */
     @Test fun movingAComputerToAnotherManager() = withHub { server, machines ->
         server.enqueue(MockResponse().setBody("""{"machine_id":"desk/name","manager":"m-3","from":"assistant"}"""))
         assertEquals(MachineMove("desk/name", "m-3", "assistant"), machines.moveToManager("desk/name", "m-3"))

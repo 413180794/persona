@@ -2,7 +2,7 @@
 
 这里的“线上”指 hub 实际发送的 JSON 结构，数据全部编造，没有连接线上 hub 或读取真实会话。样本由 [wire_samples_test.go](../../../server/internal/hub/wire_samples_test.go) 导出，供 Android 纯 Kotlin/JUnit 解码测试使用，以后 iOS/XCTest 读同一批文件。
 
-依据是 [hub-changes.md 4.13](../../../docs/redesign/hub-changes.md)、[设计总纲 D1、D4、D5](../../../docs/redesign/README.md) 和 [协议文档](../../../docs/protocol.md)。客户端期望以当前 iOS 实现和单测为准；设计中的目标行为与现状有差异时，见下文。
+依据是 [hub-changes.md 4.13](../../../docs/archive/redesign/hub-changes.md)、[设计总纲 D1、D4、D5](../../../docs/archive/redesign/README.md) 和 [协议文档](../../../docs/protocol/protocol.md)。客户端期望以当前 iOS 实现和单测为准；设计中的目标行为与现状有差异时，见下文。
 
 ## 文件与接口
 
@@ -39,10 +39,10 @@
 | 懒加载图片的 `data` 仍是空字符串，并携带尺寸和 lazy 标记，普通图片保留 base64。 | `proto.Image.Placeholder`、`WithoutImageData`；`apple/Shared/Models.swift`：`ImagePayload` | `items_all_kinds`、`items_inline_image`、`items_live_lazy`、`items_http_after` |
 | 后台任务通知仍是 notice，task 区分 shell、monitor 和 agent，退出码零值也可显式出现。 | `proto.TaskNote`；`apple/Shared/Models.swift`：`TaskNote` | `items_all_kinds`、`items_task_notifications` |
 | fold 保存被折叠条目的计数和终点，展开范围分页使用 more。 | `server/internal/transcript/fold.go`：`FoldWork`；`apple/Shared/Models.swift`：`Fold`；`APIClient.foldedWork` | `items_folded_work`、`items_fold_range` |
-| fold 的 tasks 保存折叠掉的任务快照及其原调用位置（source_item_id、source_tool_use_id、source_seq），旧 iOS 忽略这些新增字段。 | `server/internal/transcript/fold.go`：`FoldWork`；`proto.FoldTaskSnapshot`；`apple/Shared/Models.swift`：`Fold`；`docs/protocol.md`「折叠的工作」 | `items_folded_tasks` |
+| fold 的 tasks 保存折叠掉的任务快照及其原调用位置（source_item_id、source_tool_use_id、source_seq），旧 iOS 忽略这些新增字段。 | `server/internal/transcript/fold.go`：`FoldWork`；`proto.FoldTaskSnapshot`；`apple/Shared/Models.swift`：`Fold`；`docs/protocol/protocol.md`「折叠的工作」 | `items_folded_tasks` |
 | 轮次耗时是 `turn_duration` 条目，保留耗时来源和原生关联，实时下发沿用订阅 items 事件，不新增事件或顶层字段；旧客户端把它当未知 kind。 | `server/internal/transcript/transcript.go`：`ParseLine`；`proto.TurnDuration`；`Hub.itemsToSubscribers`；`apple/Shared/Models.swift`：`ItemKind.init`；`ServerEvent.decode` | `items_recorded_turn_duration`、`items_live_recorded_turn_duration` |
-| 实时事件的 from_seq 可以是零，空 items 也能推进 to_seq。 | `Hub.itemsToSubscribers`；`ServerEvent.decode`；`docs/protocol.md`「items 的连续性」 | `items_live_lazy`、`items_empty_advance` |
-| 最新页补发携带 has_more，接续补发不携带它，达到补发上限时最后一批带 more_after。 | `Hub.sendBacklog`；`ServerEvent.decode`；`docs/protocol.md`「WebSocket」 | `items_backlog_latest`、`items_backlog_catchup`、`items_backlog_capped` |
+| 实时事件的 from_seq 可以是零，空 items 也能推进 to_seq。 | `Hub.itemsToSubscribers`；`ServerEvent.decode`；`docs/protocol/protocol.md`「items 的连续性」 | `items_live_lazy`、`items_empty_advance` |
+| 最新页补发携带 has_more，接续补发不携带它，达到补发上限时最后一批带 more_after。 | `Hub.sendBacklog`；`ServerEvent.decode`；`docs/protocol/protocol.md`「WebSocket」 | `items_backlog_latest`、`items_backlog_catchup`、`items_backlog_capped` |
 | HTTP 增量页携带 history、from_seq、to_seq 和 more_after。 | `Hub.sessionItems`；`apple/Shared/APIClient.swift`：`NewerResponse` | `items_http_after` |
 | question、plan、permission、screen 分别携带相应载荷，question 支持单选和多选。 | `proto.Interaction`；`apple/Shared/Models.swift`：`Interaction`、`Question` | `interaction_question`、`interaction_plan`、`interaction_permission`、`interaction_screen`、`interactions_list` |
 | 屏幕对话框携带选项和 rev，密码提示使用 secret 且不记录密码输入。 | `server/internal/screen/dialog.go`：`ParseDialog`；`secret.go`：`SecretPrompt`；`apple/Shared/Models.swift`：`ScreenDialog`、`Interaction` | `interaction_screen`、`interaction_secret` |
@@ -51,7 +51,7 @@
 | Fleet 保留驼峰键名，时间使用 Unix 秒数字。 | `server/internal/hub/liveactivity.go`：`FleetState`、`buildFleet`；`apple/Shared/FleetState.swift` | `fleet_snapshot`、`fleet_event` |
 | 收件箱列表统一承载飞书和邮件，移除 context 等内部字段并保留草拟回复。 | `server/internal/assistant/inbox.go`：`InboxItem.listed`；`apple/Shared/InboxModels.swift`：`InboxItem` | `inbox_list` |
 | 回答记录保留一行摘要，`items` 成对保存完整问答并保留换行；旧记录没有 `items`。 | `server/internal/assistant/answered.go`：`answeredBody`、`answeredItems`；`apple/Shared/Tasks.swift`：`FeedItem` | `feed_answered_items` |
-| 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`apple/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
+| 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`apple/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
 | 未知事件忽略，未知键忽略，旧 hello 缺 features 时返回空数组。 | `apple/Shared/LiveConnection.swift`：`ServerEvent.decode`、`Envelope` | `unknown_event_ignored`、`hello_unknown_field`、`hello_missing_features` |
 | 旧 items 事件中的 null 转为空数组，缺失的连续性字段保留为空。 | `ServerEvent.decode` | `items_legacy_null` |
 | 未知会话状态和 item kind 降级为 unknown，旧会话缺字段时采用 iOS 默认值。 | `apple/Shared/Models.swift`：`SessionStatus`、`AgentState`、`ItemKind`、`Session.init(from:)` | `session_unknown_enums`、`item_unknown_kind`、`session_missing_fields` |

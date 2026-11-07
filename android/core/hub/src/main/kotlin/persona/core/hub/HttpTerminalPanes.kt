@@ -16,7 +16,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
- * The terminal browser's two calls on one hub (docs/terminal.md "Standalone terminal"), with that hub's plain machine ids.
+ * The terminal browser's two calls on one hub (docs/integrations/terminal.md "Standalone terminal"), with that hub's plain machine ids.
  * [request] is the pairing's connection: it waits for the route, adds the token and turns refusals into [HubFailure].
  */
 class HttpTerminalPanes internal constructor(

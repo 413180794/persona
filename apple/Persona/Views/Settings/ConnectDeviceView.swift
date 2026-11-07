@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Settings › Devices › Connect New Device (#3077, after the web's #2731): a one-time pairing code from the hub
-// (POST /api/v1/auth/pair-codes, docs/protocol.md「临时配对」) for another app (its QR code, the code itself and the
+// (POST /api/v1/auth/pair-codes, docs/protocol/protocol.md「临时配对」) for another app (its QR code, the code itself and the
 // pairing link, which the Mac and Android paste) or for a browser (the sign-in link and its QR code, which a phone's
 // camera opens). The code lasts ten minutes and is traded once; the sheet says which device took it.
 
@@ -25,7 +25,7 @@ enum ConnectDeviceText {
         return "\(s / 60):" + String(format: "%02d", s % 60)
     }
 
-    /// The page the browser sign-in link opens: the hub serves the web at its own address (docs/web.md), under the
+    /// The page the browser sign-in link opens: the hub serves the web at its own address (docs/web/web.md), under the
     /// sub-path a reverse proxy puts it at. Nil for anything but http(s).
     static func webBase(_ hub: URL) -> String? {
         guard let scheme = hub.scheme?.lowercased(), scheme == "http" || scheme == "https",

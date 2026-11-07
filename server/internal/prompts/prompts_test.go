@@ -106,16 +106,16 @@ func TestEveryMCPToolIsUsed(t *testing.T) {
 	}
 }
 
-// The "## MCP tools" table in docs/prompts.md has a row for every mcp/<dir>/, that row names each of the directory's
+// The "## MCP tools" table in docs/assistant/prompts.md has a row for every mcp/<dir>/, that row names each of the directory's
 // tools, and every tool it names exists.
 func TestMCPToolsTableListsEveryTool(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "prompts.md"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "assistant", "prompts.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, section, ok := strings.Cut(string(raw), "\n## MCP tools\n")
 	if !ok {
-		t.Fatal(`docs/prompts.md has no "## MCP tools" section`)
+		t.Fatal(`docs/assistant/prompts.md has no "## MCP tools" section`)
 	}
 	section, _, _ = strings.Cut(section, "\n## ")
 	rows := map[string]string{} // directory -> its Tools cell
@@ -137,7 +137,7 @@ func TestMCPToolsTableListsEveryTool(t *testing.T) {
 	for _, d := range dirs {
 		cell, ok := rows[d.Name()]
 		if !ok {
-			t.Errorf("docs/prompts.md has no row for mcp/%s/", d.Name())
+			t.Errorf("docs/assistant/prompts.md has no row for mcp/%s/", d.Name())
 			continue
 		}
 		delete(rows, d.Name())
@@ -154,7 +154,7 @@ func TestMCPToolsTableListsEveryTool(t *testing.T) {
 		}
 	}
 	for dir := range rows {
-		t.Errorf("docs/prompts.md has a row for mcp/%s/, which does not exist", dir)
+		t.Errorf("docs/assistant/prompts.md has a row for mcp/%s/, which does not exist", dir)
 	}
 }
 

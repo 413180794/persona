@@ -4,7 +4,7 @@
     "description": "未知事件被当前 iOS 忽略。",
     "source": [
       "apple/Shared/LiveConnection.swift: ServerEvent.decode default",
-      "docs/redesign/README.md: D5"
+      "docs/archive/redesign/README.md: D5"
     ],
     "derived": true,
     "decoder": "compat_event",
@@ -67,7 +67,7 @@
     "description": "旧事件的空 items 按空数组处理，连续性字段保持缺省。",
     "source": [
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
-      "docs/protocol.md: items 的连续性"
+      "docs/protocol/protocol.md: items 的连续性"
     ],
     "derived": true,
     "decoder": "compat_event",
@@ -94,7 +94,7 @@
     "description": "未知会话状态降级为 unknown。",
     "source": [
       "apple/Shared/Models.swift: SessionStatus.init(from:), AgentState.init(from:)",
-      "docs/redesign/README.md: D5"
+      "docs/archive/redesign/README.md: D5"
     ],
     "derived": true,
     "decoder": "compat_session",
@@ -232,7 +232,7 @@
     "source": [
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
       "apple/Shared/Models.swift: InteractionKind, Session.init(from:)",
-      "docs/redesign/README.md: D5（现状差异）"
+      "docs/archive/redesign/README.md: D5（现状差异）"
     ],
     "derived": true,
     "decoder": "compat_event",
@@ -254,7 +254,7 @@
     "source": [
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
       "apple/Shared/Models.swift: InteractionKind, Session.init(from:)",
-      "docs/redesign/README.md: D5（现状差异）"
+      "docs/archive/redesign/README.md: D5（现状差异）"
     ],
     "derived": true,
     "decoder": "compat_event",
@@ -279,7 +279,7 @@
     "source": [
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
       "apple/Shared/Models.swift: InteractionKind, Session.init(from:)",
-      "docs/redesign/README.md: D5（现状差异）"
+      "docs/archive/redesign/README.md: D5（现状差异）"
     ],
     "derived": true,
     "decoder": "compat_event",
@@ -336,7 +336,7 @@
     "description": "当前 iOS 将 2000 年起点本身也判为无意义日期。",
     "source": [
       "apple/Shared/JSONValue.swift: Date.isMeaningful",
-      "docs/redesign/README.md: D5（现状差异）"
+      "docs/archive/redesign/README.md: D5（现状差异）"
     ],
     "derived": true,
     "decoder": "compat_session",

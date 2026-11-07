@@ -26,7 +26,7 @@ enum ProviderWizardStep: String, Hashable, Identifiable {
 /// the bar's leading button (a Mac sheet does not push, #1170), and Import from ~/.zshrc as a step of its own. Other Connection Types
 /// (Direct API, a plugin's provider) is the form it had before (`LauncherEditor`).
 ///
-/// On a hub with built-in presets (#4197, docs/onboarding.md 4.3「三条路」) the first step lists them: a preset goes
+/// On a hub with built-in presets (#4197, docs/assistant/onboarding.md 4.3「三条路」) the first step lists them: a preset goes
 /// Paste Key → Done, the custom compatible gateway the three steps; "I already use Claude Code" and "Where to get a
 /// model" sit beside them, and the import / other connection types under Advanced.
 struct ProviderWizard: View {

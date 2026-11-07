@@ -16,12 +16,12 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Protocol 2 (docs/voice.md "Protocol changes"): a call is bound to the conversation it was opened from (start.target), fixed
+// Protocol 2 (docs/assistant/voice.md "Protocol changes"): a call is bound to the conversation it was opened from (start.target), fixed
 // at ready. It must be listed by the hub and able to take messages; its machine may be offline (a message waits for
 // it). The voice model is told who it is and a snapshot of it (voice/target): what the app sent of its last turns, or
 // what the extension reads within snapshotWait, the cards waiting in it, and, for the main conversation, the agents.
 
-// startFrame is the app's first frame (docs/extensions.md "Voice", docs/voice.md 3.2).
+// startFrame is the app's first frame (docs/extensions/extensions.md "Voice", docs/assistant/voice.md 3.2).
 type startFrame struct {
 	Type     string `json:"type"`
 	Model    string `json:"model"`
@@ -55,11 +55,11 @@ type resumeRun struct {
 	State     string          `json:"state"`
 }
 
-// The features this extension's protocol 2 has (GET /info, ready): only what is there (docs/voice.md "Version negotiation").
+// The features this extension's protocol 2 has (GET /info, ready): only what is there (docs/assistant/voice.md "Version negotiation").
 var features = []string{"target", "runs", "asks", "resume", "suspend"}
 
 const (
-	// snapshotWait is how long the snapshot's parts that may be left out are waited for (docs/voice.md 4.5): it is
+	// snapshotWait is how long the snapshot's parts that may be left out are waited for (docs/assistant/voice.md 4.5): it is
 	// taken while the upstream connects (about 0.4 s on the measured service, lessons "instructions size").
 	snapshotWait = 500 * time.Millisecond
 	// bindTimeout is how long looking the target up may take: the call cannot start without it.
@@ -92,7 +92,7 @@ func (b *boundTarget) frame() map[string]any {
 		"agent_label": b.Label, "machine_name": b.MachineName}
 }
 
-// codedError is a failure the app shows by its code (docs/voice.md "Extension → App").
+// codedError is a failure the app shows by its code (docs/assistant/voice.md "Extension → App").
 type codedError struct {
 	code, msg string
 }
@@ -274,7 +274,7 @@ func agentsOverview(sessions []proto.Session) []prompts.VoiceAgent {
 }
 
 // cardsOf are the cards of interactions waiting in t, oldest first, by their kind (what a question asks; a
-// permission's sort of tool, never its command or path: docs/voice.md "Questions and cards").
+// permission's sort of tool, never its command or path: docs/assistant/voice.md "Questions and cards").
 func cardsOf(ixs []proto.Interaction, t *boundTarget) []prompts.VoiceCard {
 	var out []prompts.VoiceCard
 	for _, ix := range ixs {
@@ -322,7 +322,7 @@ func permissionKind(tool string) string {
 var contextBlock = regexp.MustCompile(`(?s)<` + compat.ContextPattern() + `\b[^>]*>.*?</` + compat.ContextPattern() + `>`)
 
 // recentOf is the user's and the agent's words in items (the last turns), made speakable and cut; tool calls in a
-// row are one line of their names (docs/voice.md 4.5: "used Bash").
+// row are one line of their names (docs/assistant/voice.md 4.5: "used Bash").
 func recentOf(l i18n.Lang, items []proto.Item) []prompts.VoiceLine {
 	var out []prompts.VoiceLine
 	for _, it := range items {

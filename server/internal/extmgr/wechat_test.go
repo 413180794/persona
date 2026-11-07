@@ -74,7 +74,7 @@ func TestWeChatProgramIsAnExtension(t *testing.T) {
 	}
 }
 
-// personad-wechat's program as a channel (docs/channels.md "Protocol"): not bound, it has nowhere to send to yet.
+// personad-wechat's program as a channel (docs/extensions/channels.md "Protocol"): not bound, it has nowhere to send to yet.
 func TestWeChatProgramIsAChannel(t *testing.T) {
 	h := newTestManager(t)
 	m := wechatManifest(h, "/opt/persona/personad-wechat")

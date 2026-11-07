@@ -16,7 +16,7 @@ import org.junit.Test
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class AssistantTest {
-    /** The app's own words, in Chinese (Robolectric runs in zh, docs/android.md). */
+    /** The app's own words, in Chinese (Robolectric runs in zh, docs/android/android.md). */
     private val resources get() = ApplicationProvider.getApplicationContext<android.content.Context>().resources
     private val words get() = ConversationWords(resources.getString(R.string.assistant_untitled),
         resources.getString(R.string.assistant_handoff), resources.getString(R.string.assistant_handoff_named))

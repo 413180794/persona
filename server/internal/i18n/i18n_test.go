@@ -500,7 +500,7 @@ func argsLit(e ast.Expr, pkg string) (map[string]bool, bool) {
 	return out, true
 }
 
-// Every directory under locales is a language (docs/i18n.md "Adding a language"): it has a _meta.json with its own name and
+// Every directory under locales is a language (docs/protocol/i18n.md "Adding a language"): it has a _meta.json with its own name and
 // the language subtags it is picked for, no subtag is claimed twice, and the source and fallback languages exist.
 func TestLanguagesAreTheDirectories(t *testing.T) {
 	entries, err := fs.ReadDir(files, "locales")

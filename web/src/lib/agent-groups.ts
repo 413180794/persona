@@ -115,7 +115,7 @@ export function isWaiting(s: Session): boolean {
 
 const NO_MUTES: AgentMutes = { spaces: [], sessions: [] };
 
-/** Awaiting Reply (#5096, docs/agent-states.md): seen, but it stopped on a question to the user nobody has answered yet
+/** Awaiting Reply (#5096, docs/protocol/agent-states.md): seen, but it stopped on a question to the user nobody has answered yet
  *  (`awaits_reply`), and not muted. Such an agent is not quiet: it never folds into Idle Spaces. */
 export function awaitsReply(s: Session, mutes: AgentMutes = NO_MUTES): boolean {
   return stateOf(s) === "idle" && Boolean(s.awaits_reply) && !isMuted(s, mutes);

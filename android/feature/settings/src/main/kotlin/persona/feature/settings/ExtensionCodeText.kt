@@ -5,7 +5,7 @@ import persona.core.contracts.api.ExtensionDiffThread
 import persona.core.contracts.api.ExtensionTreeEntry
 import persona.core.designsystem.Tone
 
-// UI version 4's code hosting components (docs/extensions.md "UI version 4", #2951) without the looks: a file tree from whole
+// UI version 4's code hosting components (docs/extensions/extensions.md "UI version 4", #2951) without the looks: a file tree from whole
 // paths, a diff's hunks as numbered rows, the threads at their lines, and a small syntax highlighter (keywords,
 // strings, comments, numbers of the common languages; a block comment goes on across lines). Drawn by
 // ExtensionCodeViews.kt.

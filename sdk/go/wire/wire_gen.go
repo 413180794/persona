@@ -169,8 +169,8 @@ type SourceRuntime struct {
 	Sha256 string `json:"sha256"`
 }
 
-// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"): memory in
-// MB, CPU in percent of one core. Unset: 1024 MB, 100%.
+// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions/extensions.md "Sandbox"):
+// memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.
 type Resources struct {
 	MemoryMb   int `json:"memory_mb,omitempty"`
 	CpuPercent int `json:"cpu_percent,omitempty"`
@@ -179,9 +179,9 @@ type Resources struct {
 // A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
 type Command = json.RawMessage
 
-// NodeRuntime: the extension's program on computers (docs/extensions.md "Programs running on computers"): one per
-// platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format
-// machine, x-os the programs' systems).
+// NodeRuntime: the extension's program on computers (docs/extensions/extensions.md "Programs running on computers"):
+// one per platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of
+// format machine, x-os the programs' systems).
 type NodeRuntime struct {
 	Command     json.RawMessage   `json:"command"`
 	Args        []string          `json:"args,omitempty"`
@@ -370,8 +370,8 @@ const (
 // BuiltinLooks are the values of BuiltinLook, in order.
 var BuiltinLooks = []string{"persona"}
 
-// LookTexts: A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters
-// (the hub checks).
+// LookTexts: A text in the other languages, by code (docs/protocol/i18n.md): only zh-Hans, en and ja, each 1 to 40
+// characters (the hub checks).
 type LookTexts struct {
 	// Extra keys stay at this object's level on the wire; they cannot replace declared fields.
 	AdditionalProperties map[string]json.RawMessage `json:"-"`
@@ -439,7 +439,7 @@ type LookAvatar struct {
 	Dark *LookAvatarDark `json:"dark,omitempty"`
 }
 
-// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md "Palettes", the apps' PersonaPalette).
+// LookPalette: an appearance's colors, #RRGGBB (docs/apple/persona.md "Palettes", the apps' PersonaPalette).
 type LookPalette struct {
 	Primary    string `json:"primary,omitempty"`
 	Secondary  string `json:"secondary,omitempty"`
@@ -475,8 +475,8 @@ type LookDot struct {
 	States LookDotStates `json:"states"`
 }
 
-// LookItem: A look (docs/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona package.
-// app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
+// LookItem: A look (docs/extensions/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona
+// package. app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
 type LookItem struct {
 	ID              string      `json:"id"`
 	Name            string      `json:"name"`
@@ -544,7 +544,7 @@ type AgentFilterItem struct {
 	FirstMessagePrefixes []string `json:"first_message_prefixes,omitempty"`
 }
 
-// ConnectorItem: the connector protocol's manifest (docs/connector-protocol.md).
+// ConnectorItem: the connector protocol's manifest (docs/protocol/connector-protocol.md).
 type ConnectorItem struct {
 	ID               string            `json:"id"`
 	Name             string            `json:"name"`
@@ -865,7 +865,7 @@ type HubInfo struct {
 	ExtensionPoints map[string]int `json:"extension_points"`
 	Role            string         `json:"role,omitempty"`
 	Timezone        string         `json:"timezone,omitempty"`
-	// The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans.
+	// The user's language (zh-Hans, en, ja; see docs/protocol/i18n.md); empty means zh-Hans.
 	Locale       string   `json:"locale,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	// The hub's API on this machine, for the token below.
@@ -1157,9 +1157,9 @@ type ErrorBreadcrumb struct {
 	Level    string `json:"level,omitempty"`
 }
 
-// ErrorReport: an error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
-// /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
-// it.
+// ErrorReport: an error or crash of the hub or a device (docs/extensions/extensions.md "Error reports"). Clients send
+// it to POST /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an
+// extension gets it.
 type ErrorReport struct {
 	// Made by the sender; the same id again (a retry) is dropped.
 	ID     string `json:"id"`
@@ -3649,12 +3649,12 @@ type ConnectorGhTokenParams struct {
 
 // ConnectorSentRecordParams: sent.record: the program of a connector that declares sends_as_user (manifest
 // connectors[].sends_as_user) tells the hub about a message it sent in the user's name outside the hub's write gate,
-// for the sent-as-user ledger (docs/connectors.md "Sent as the user"). Only a connector of the caller's own that
-// declares it may: else permission_denied. The hub sets the row's origin (the extension; session_id and machine_id
-// are kept beside it) and how it was let through (kind auto, with setting) itself. Errors: permission_denied,
-// invalid_params, rate_limited (data {retry_after} in seconds: 60 calls at once per extension, then one a second,
-// whether or not they were allowed), and no_database on a hub without a database; a ledger that cannot be written is
-// an error with a message and no code. Recording is best effort: it never undoes the send.
+// for the sent-as-user ledger (docs/extensions/connectors.md "Sent as the user"). Only a connector of the caller's
+// own that declares it may: else permission_denied. The hub sets the row's origin (the extension; session_id and
+// machine_id are kept beside it) and how it was let through (kind auto, with setting) itself. Errors:
+// permission_denied, invalid_params, rate_limited (data {retry_after} in seconds: 60 calls at once per extension,
+// then one a second, whether or not they were allowed), and no_database on a hub without a database; a ledger that
+// cannot be written is an error with a message and no code. Recording is best effort: it never undoes the send.
 type ConnectorSentRecordParams struct {
 	Contribution string `json:"contribution"`
 	// Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
@@ -4097,7 +4097,7 @@ type KBHit struct {
 
 // KBUpdateParams: kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned,
 // lock and the remove_* lists). A field left out is kept; the other lists add to what is there. Protected fields and
-// history limits: docs/knowledge.md.
+// history limits: docs/assistant/knowledge.md.
 type KBUpdateParams struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`

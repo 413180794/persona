@@ -9,7 +9,7 @@ import (
 
 func TestSpeakable(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
-		{"改了 `server/internal/voice/runs.go` 和 docs/voice.md", "改了 文件 runs.go 和 文件 voice.md"},
+		{"改了 `server/internal/voice/runs.go` 和 docs/assistant/voice.md", "改了 文件 runs.go 和 文件 voice.md"},
 		{"见 runs.go:42 和 /etc/hosts", "见 文件 runs.go 第 42 行 和 文件 hosts"},
 		{"运行 `npm test`，**全部**通过", "运行 npm test，全部通过"},
 		{"看 https://example.com/a?b=1。然后", "看 （一个链接）。然后"},

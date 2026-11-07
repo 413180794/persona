@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// Extensions' UI slots (docs/extensions.md "UI slots") on Android: the "Extensions" section at the top of the settings home (the
+// Extensions' UI slots (docs/extensions/extensions.md "UI slots") on Android: the "Extensions" section at the top of the settings home (the
 // cards first, then a row per nav page with its icon and badge), the settings tab's badge (the nav pages' badges added
 // up), the sections extensions draw on a machine's page, and the pages they draw for their connectors' inbox items
 // (ExtensionInboxItem.kt). A hub without extension_ui_slots has none of them.

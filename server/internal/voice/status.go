@@ -11,7 +11,7 @@ import (
 )
 
 // A status asked for ("status: …") is answered from the bound conversation's live state, never sent to it, and is no
-// write: not held to the user-speech gate (docs/voice.md "Status queries"). A stop ("stop: …") is a write: behind the gate,
+// write: not held to the user-speech gate (docs/assistant/voice.md "Status queries"). A stop ("stop: …") is a write: behind the gate,
 // it interrupts the conversation's turn (the app's "Stop" button) and is told once that worked. Both answer on the
 // delegation that asked, as its one commentary.
 
@@ -99,7 +99,7 @@ func (c *conversation) stopTarget(delegation string, gen int) {
 }
 
 // activityKind is what sort of step an activity is (transcript.Activity: "reading tasks.go" is reading): never the file,
-// the command or the pattern (docs/voice.md "Status queries": only the category).
+// the command or the pattern (docs/assistant/voice.md "Status queries": only the category).
 func activityKind(activity string) string {
 	verb, _, _ := strings.Cut(strings.TrimSpace(activity), " ")
 	return verb

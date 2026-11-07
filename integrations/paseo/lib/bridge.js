@@ -1,4 +1,4 @@
-// The Paseo bridge (docs/paseo.md): the agents of the Paseo daemon on this machine as the sessions of its engine in
+// The Paseo bridge (docs/integrations/paseo.md): the agents of the Paseo daemon on this machine as the sessions of its engine in
 // Persona, through the runtime SDK. Paseo runs every agent through its SDK, with no terminal; the bridge follows its
 // directory of agents (one subscription), its pending requests (cards on the phone, withdrawn when answered in Paseo),
 // and — only while the phone watches a session — that agent's timeline (live text; items for agents that are not

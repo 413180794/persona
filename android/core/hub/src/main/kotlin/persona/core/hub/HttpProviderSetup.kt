@@ -28,7 +28,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-/** "Add model provider" over the pairing's connection (docs/launchers.md "API"). */
+/** "Add model provider" over the pairing's connection (docs/integrations/launchers.md "API"). */
 class HttpProviderSetup internal constructor(
     /** The last argument is the read timeout in seconds; null keeps the client's 15. */
     private val request: suspend (String, String, RequestBody?, Long?) -> Response,

@@ -1,4 +1,4 @@
-// Health reports (docs/health.md"Health reports", #4998): what was uploaded to the health space's reports/, on the home page. Opens
+// Health reports (docs/assistant/health.md"Health reports", #4998): what was uploaded to the health space's reports/, on the home page. Opens
 // the record the health conversation wrote and the original, and deletes both.
 import { useCallback, useEffect, useState } from "react";
 import { api, enc, errorText, fileDownloadURL } from "../../lib/api";

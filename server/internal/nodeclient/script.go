@@ -11,7 +11,7 @@ import (
 )
 
 // `personad ask` and `personad notify` (internal/scriptcli) reach the phone through the node's socket like the hook
-// does (docs/script-cli.md): an ask is a "ask" request, a notification a "notify" one (node/scriptcli.go serves both).
+// does (docs/integrations/script-cli.md): an ask is a "ask" request, a notification a "notify" one (node/scriptcli.go serves both).
 
 // Ask results (AskReply.Status).
 const (

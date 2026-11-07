@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// Settings › Managers (docs/managers.md, the web's ManagersSettings, Android's ManagersScreen): the hub's managers, each
+// Settings › Managers (docs/assistant/managers.md, the web's ManagersSettings, Android's ManagersScreen): the hub's managers, each
 // a whole assistant: where each runs, online or when it last synced, the default; renaming, making one the default,
 // installing one somewhere else, removing one; a new one gets a one-time install code (and the install commands when the
 // hub gives them). The hub pushes {"type":"managers"} when the roster changes (the socket asks for feature `managers`).

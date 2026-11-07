@@ -24,7 +24,7 @@ internal fun machineLabel(machines: List<Machine>, id: String): String =
     machines.firstOrNull { it.id == id || GroupKeys.raw(it.id) == id }?.displayName?.takeIf { it.isNotBlank() } ?: id
 
 /**
- * Settings › AI › Model providers (iOS `ModelLaunchersView`, docs/launchers.md): every provider the machines can start, kept by
+ * Settings › AI › Model providers (iOS `ModelLaunchersView`, docs/integrations/launchers.md): every provider the machines can start, kept by
  * Persona or found in a machine's ~/.zshrc (read again each time this opens), and the hidden ones, folded. A row's
  * menu (long press) hides a ~/.zshrc one or brings it back, without asking: it only changes what Persona lists; a
  * Persona one is deleted, key and all, so that one asks first. + adds a provider or imports from ~/.zshrc.

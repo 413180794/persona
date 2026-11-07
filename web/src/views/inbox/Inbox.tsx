@@ -1,4 +1,4 @@
-// Inbox (docs/inbox.md): Feishu messages, mail, Feishu documents and Moments in one list, sorted by the AI's triage,
+// Inbox (docs/assistant/inbox.md): Feishu messages, mail, Feishu documents and Moments in one list, sorted by the AI's triage,
 // with the agents waiting on you at the head of "Needs you". Wide: the list (380px) and the opened item side by side;
 // narrow: the opened item takes the list's place, with a way back.
 import { useState } from "react";

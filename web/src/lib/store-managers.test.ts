@@ -1,4 +1,4 @@
-// The assistant page before the roster is read (docs/managers.md "Clients"): what it read with no header is the
+// The assistant page before the roster is read (docs/assistant/managers.md "Clients"): what it read with no header is the
 // default's, whichever manager that turns out to be. Once the roster says (another than the hub's own), the page stays
 // as it is (not drawn empty and read again), and that answer is kept as the default's, not as the hub's own assistant's.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

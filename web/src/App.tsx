@@ -115,7 +115,7 @@ export function App() {
   useEffect(() => {
     if (!authed) return;
     connect();
-    // the managers' roster from the start (docs/managers.md "Clients"): what goes by the default waits for it
+    // the managers' roster from the start (docs/assistant/managers.md "Clients"): what goes by the default waits for it
     watchRoster();
     return () => disconnect();
   }, [authed]);
@@ -435,7 +435,7 @@ export class OverlayBoundary extends Component<{ open: boolean; onClose: () => v
   }
 
   componentDidCatch(error: unknown) {
-    // a chunk that would not load is a warning (a redeploy), anything else a render crash (docs/web.md "Error reports")
+    // a chunk that would not load is a warning (a redeploy), anything else a render crash (docs/web/web.md "Error reports")
     reportBoundary(error, "overlay_boundary", isChunkError(error));
     // left open, an open request would not change the state, and the entry points would do nothing until a reload
     this.props.onClose();

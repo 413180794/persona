@@ -85,7 +85,7 @@ func (s *Service) agentRoutes() {
 	})
 }
 
-// workStats is GET /api/v1/agents/work/stats: how the triage did over the last hours (docs/agent-work.md "Evaluation").
+// workStats is GET /api/v1/agents/work/stats: how the triage did over the last hours (docs/assistant/agent-work.md "Evaluation").
 type workStats struct {
 	Hours    int            `json:"hours"`
 	Triaged  map[string]int `json:"triaged"` // "done", "blocked/user", … "unsure", "failed"

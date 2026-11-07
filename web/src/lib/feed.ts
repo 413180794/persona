@@ -1,4 +1,4 @@
-// Tasks dispatched from an assistant conversation (docs/unified-entry.md, iOS TasksStore / Shared/Tasks.swift): the plans,
+// Tasks dispatched from an assistant conversation (docs/assistant/unified-entry.md, iOS TasksStore / Shared/Tasks.swift): the plans,
 // each conversation's feed (what the hub inserted into it), where those go among the chat's lines, the day lines and
 // the quick results. A task is a todo whose `origin` is the conversation; its state is the todo's (lib/todos.ts).
 import { useSyncExternalStore } from "react";
@@ -64,7 +64,7 @@ export interface TodayBody {
   failed_total?: number;
 }
 
-/** `brief`: the fixed part of a morning or evening run (docs/protocol.md), as the hub worked it out when the run started. */
+/** `brief`: the fixed part of a morning or evening run (docs/protocol/protocol.md), as the hub worked it out when the run started. */
 export interface BriefRow {
   /** The card (waiting), the to-do (accept). */
   id: string;
@@ -292,7 +292,7 @@ function received(items: FeedItem[], plans?: Record<string, TaskPlan>) {
 const loading = new Set<string>();
 const todayAsked = new Map<string, string>();
 
-/** The most items the hub answers at once (docs/protocol.md: oldest first, at most 500): a full page has more after it. */
+/** The most items the hub answers at once (docs/protocol/protocol.md: oldest first, at most 500): a full page has more after it. */
 const FEED_PAGE = 500;
 /** Pages read in one load at most. */
 const FEED_PAGES = 40;
@@ -513,7 +513,7 @@ export async function sendMessage(card: FeedItem, text: string) {
   set({ busy: { ...st.busy, [card.id]: true } });
   try {
     // the item is in the inbox of the card's conversation's manager (the one its page noted), else of the one manager
-    // whose list has that id (docs/managers.md "Clients"); none: the default's
+    // whose list has that id (docs/assistant/managers.md "Clients"); none: the default's
     const listed = getInbox().items.filter((it) => it.id === itemId);
     const manager = conversationManager(card.conversation) ?? (listed.length === 1 ? listed[0].manager : undefined);
     await api(`${itemPath(itemId)}/reply`, { method: "POST", json: { text, card: card.id }, headers: itemHeaders(manager) });

@@ -258,7 +258,7 @@ struct NewChatView: View {
             .pageToolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 #if os(macOS)
-                // A Mac sheet's primary button sits beside Cancel and answers ⏎ (docs/mac.md「和 iOS 的对应」).
+                // A Mac sheet's primary button sits beside Cancel and answers ⏎ (docs/apple/mac.md「和 iOS 的对应」).
                 ToolbarItem(placement: .confirmationAction) {
                     Button(starting ? startingLabel : String(localized: "Start Chat")) { Task { await start() } }
                         .lineLimit(1)

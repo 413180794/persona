@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the web's multi-manager pages (docs/managers.md "Clients") against the mock hub's three managers.
+"""Check the web's multi-manager pages (docs/assistant/managers.md "Clients") against the mock hub's three managers.
 
 Run with a dedicated fake hub and the web dev server pointing to it (the default roster: 助手 default, 工作 online,
 家里 offline; MOCK_EXTENSIONS=1 for the extensions page, MOCK_MANAGER_NAS=1 gives 家里 the NAS, offline with it, which the

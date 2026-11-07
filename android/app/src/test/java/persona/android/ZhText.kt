@@ -6,7 +6,7 @@ import org.w3c.dom.Element
 
 /**
  * The app's Simplified Chinese strings for JVM tests, which have no Android resources: AppText reads them from
- * values-zh, so tests keep asserting the words the app shows (docs/i18n.md: unit tests run in Chinese).
+ * values-zh, so tests keep asserting the words the app shows (docs/protocol/i18n.md: unit tests run in Chinese).
  */
 internal object ZhText {
     fun install() {

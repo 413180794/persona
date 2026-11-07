@@ -35,7 +35,7 @@ private const val QuietZone = 4
 private val QrSide = 220.dp
 
 /**
- * A QR code from a hub's modules ([rows] of "0" / "1", without the quiet zone, docs/connectors.md), on its own light
+ * A QR code from a hub's modules ([rows] of "0" / "1", without the quiet zone, docs/extensions/connectors.md), on its own light
  * tile with the quiet zone around it. Read out as [label].
  */
 @Composable

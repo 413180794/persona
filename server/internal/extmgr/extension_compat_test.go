@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
-// The rename to extensions (#1844, docs/extensions.md "Naming and compatibility"): the new paths answer with the new
+// The rename to extensions (#1844, docs/extensions/extensions.md "Naming and compatibility"): the new paths answer with the new
 // keys, the old paths the apps out there call answer as they always have, and each old call is counted.
 func TestExtensionPathsOldAndNew(t *testing.T) {
 	h, _ := extensionTestHub(t)

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Publish personad for anyone to install (docs/release.md "Publishing personad"): build the four binaries with the web client
+# Publish personad for anyone to install (docs/operations/release.md "Publishing personad"): build the four binaries with the web client
 # inside (no skills in them: those live in each machine's ~/.persona/skills), and the connector persona-link for the
-# same four (the node service, docs/link.md), check them for private values, write the release manifest latest.json
-# (every file's sha256, docs/hub-update.md "Publishing"), then deploy the site/ worker with dl/ and install.sh added, at the
+# same four (the node service, docs/operations/link.md), check them for private values, write the release manifest latest.json
+# (every file's sha256, docs/operations/hub-update.md "Publishing"), then deploy the site/ worker with dl/ and install.sh added, at the
 # config's publish.site_url. Every hub of the release channel updates itself to it. The worker also runs the push
 # relay (/relay/*): it is deployed with it.
 #
@@ -24,7 +24,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 _env=$(python3 scripts/persona_config.py env) || exit $?
 eval "$_env"; unset _env
-[ -n "$PERSONA_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
+[ -n "$PERSONA_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/operations/config.md)" >&2; exit 2; }
 WRANGLER="${PERSONA_WRANGLER:-}"
 DL_BUCKET="${PERSONA_DL_BUCKET:-persona-dl}" # the r2_buckets binding DL in site/wrangler.jsonc
 # wr <dir> <args…>: wrangler in <dir> (a copy of site/, for its account).
@@ -104,7 +104,7 @@ BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="${VERSION:-$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD}"
 COMMIT="$(git rev-parse HEAD)"
 # A release is the committed code: latest.json says which commit and lists every one it contains, and a hub
-# installs a release by itself only when its own commit is among them (docs/hub-update.md "No rollback"). Published with
+# installs a release by itself only when its own commit is among them (docs/operations/hub-update.md "No rollback"). Published with
 # changes not committed, every hub running it would wait for a person from then on. The binaries say which commit
 # they are (STAMP, "-dirty" only in a NO_DEPLOY build).
 STAMP="$COMMIT"
@@ -130,7 +130,7 @@ cp -R web/dist/. "$WEBDIST/"
 # Public dependency constants are classified by build-info checksums; verify the actual module cache before building.
 (cd server && go mod verify)
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$STAMP -X main.updateURL=$PERSONA_PUBLISH_URL/dl"
-# The runtime packages personad carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
+# The runtime packages personad carries (the DSH plugin's code, docs/integrations/runtimes.md "Auto-update"), from integrations/.
 (cd server && go generate ./internal/runtimepkg)
 # -tags public changes no code (no file builds differently with it, TestOneBuild): it marks the binary for
 # check_bundle_privacy.py, which then knows the dependency constants it may skip.
@@ -140,12 +140,12 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/persona-link-${t%/*}-${t#*/}" ./cmd/persona-link)
   # The device's own program (cmd/persona-node): install.sh --node puts it at ~/.persona/bin/persona-node. It is in
-  # SHA256SUMS, not in latest.json, so hubs keep updating as before (docs/hub-update.md).
+  # SHA256SUMS, not in latest.json, so hubs keep updating as before (docs/operations/hub-update.md).
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/persona-node-${t%/*}-${t#*/}" ./cmd/persona-node)
 done
 # The programs released with personad (update.ProgramNames): built the same way, on the same platforms; a hub swaps
-# them with personad. personad-wechat is the WeChat bot (docs/wechat.md), a plugin of its own. (Telegram's connector is
+# them with personad. personad-wechat is the WeChat bot (docs/extensions/wechat.md), a plugin of its own. (Telegram's connector is
 # an extension now, released from the extension market: #1704.)
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   for p in wechat; do
@@ -187,7 +187,7 @@ python3 scripts/persona_identity.py --artifact-aliases "$OUT/bin"
 (cd "$OUT/bin" && shasum -a 256 *.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
 # The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
-# call: it guards against a broken download over HTTPS, docs/hub-update.md "Security").
+# call: it guards against a broken download over HTTPS, docs/operations/hub-update.md "Security").
 "$host_bin" release manifest --dir "$OUT/bin" --version "$VERSION" --build "$BUILD" --commit "$COMMIT" --out "$OUT/bin/latest.json"
 
 # The site with dl/ and install.sh added, deployed from a copy (site/ in the tree stays as committed).

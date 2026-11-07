@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Persona
 
-/// Every style in every color (Interface Style × Theme Color, a persona's included) against the readability floors in docs/ios.md
+/// Every style in every color (Interface Style × Theme Color, a persona's included) against the readability floors in docs/apple/ios.md
 /// (「设计语言」): white words on the accent (solid buttons, selected chips) ≥ 3.5:1, the words on the user's own bubble
 /// ≥ 4.5:1, the accent as a link on the page ≥ 3:1. In light and in dark.
 struct StyleSpecTests {

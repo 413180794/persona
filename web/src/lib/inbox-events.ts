@@ -1,4 +1,4 @@
-// Inbox events (docs/inbox.md "Events, handling chain, suggestions"): what a hub of this phase adds on an inbox item — the section it
+// Inbox events (docs/assistant/inbox.md "Events, handling chain, suggestions"): what a hub of this phase adds on an inbox item — the section it
 // is in (`status`, with "In progress" between "Needs you" and "FYI"), urgent, the manager's summary, the processing conversation
 // (`handling`), at most one suggestion with its version, and the handling chain. Every field is optional: an item from an
 // older hub has none of them and the inbox draws exactly what it drew before.
@@ -212,7 +212,7 @@ export type SuggestionResult =
  */
 export async function actOnSuggestion(path: string, version: number, action: SuggestionAction, text?: string, clientID = uuid(), manager?: string): Promise<SuggestionResult> {
   try {
-    // the item's manager (another than the default: docs/managers.md "Clients") is named on its request
+    // the item's manager (another than the default: docs/assistant/managers.md "Clients") is named on its request
     const item = await api<InboxItem>(`${path}/suggestion`, { method: "POST", json: { version, action, text: text || undefined, client_id: clientID }, headers: itemHeaders(manager) });
     return { ok: true, item };
   } catch (e) {

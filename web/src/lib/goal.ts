@@ -1,4 +1,4 @@
-// The agent's goal (docs/agent-goal.md) in words: its status, its first line and what it has spent (iOS GoalInfo).
+// The agent's goal (docs/integrations/agent-goal.md) in words: its status, its first line and what it has spent (iOS GoalInfo).
 import { formatNumber, t } from "../i18n";
 import type { GoalInfo } from "./types";
 

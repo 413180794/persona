@@ -1,7 +1,7 @@
 import XCTest
 
 /// iPhone Duo open (regular width): the Agents list is the split's sidebar and stays put while the agents it opens
-/// replace each other in the detail column (docs/ios.md「iPhone Duo」). Needs an unfolded iPhone Duo simulator and
+/// replace each other in the detail column (docs/apple/ios.md「iPhone Duo」). Needs an unfolded iPhone Duo simulator and
 /// scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/DuoSplitTests
 final class DuoSplitTests: XCTestCase {

@@ -1,4 +1,4 @@
-// Claude Code's ultracode switch on the web (#3428; the server is #3427, docs/protocol.md "Claude Code ultracode"): with
+// Claude Code's ultracode switch on the web (#3428; the server is #3427, docs/protocol/protocol.md "Claude Code ultracode"): with
 // it on, Claude runs every substantive task as a multi-agent workflow. It is its own switch beside the thinking effort,
 // only for the session's current process, off by default and never remembered. Pure rules and the request here; the
 // views are in views/chat/Ultracode.tsx.
@@ -15,7 +15,7 @@ import { isWarn, liveAccounts, windowMinutes, type UsageAccount } from "./usage-
 export const ULTRACODE_FEATURE = "ultracode";
 /** The first Claude Code with the independent switch; older ones are refused (the node's version gate). */
 export const ULTRACODE_MIN_VERSION: readonly [number, number, number] = [2, 1, 284];
-/** Its name everywhere: a proper name, not translated (docs/i18n.md). */
+/** Its name everywhere: a proper name, not translated (docs/protocol/i18n.md). */
 export const ULTRACODE = "ultracode";
 
 const isClaude = (s: Pick<Session, "agent">) => !s.agent || s.agent === "claude";
@@ -191,7 +191,7 @@ export async function setUltracode(s: Session, on: boolean): Promise<{ ok: true 
 
 // ── a message while a change waits for the turn ──────────
 
-/** The node holds a message back while an ultracode change waits for the turn (docs/protocol.md "Claude Code ultracode":
+/** The node holds a message back while an ultracode change waits for the turn (docs/protocol/protocol.md "Claude Code ultracode":
  *  the next turn must not overtake it); the client keeps it and tries again once the change is through. */
 export const ULTRACODE_PENDING_CODE = "ultracode_pending";
 

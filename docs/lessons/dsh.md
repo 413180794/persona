@@ -1,6 +1,6 @@
 # Lessons: DSH and runtime integration
 
-Pitfalls hit while integrating DSH (`docs/dsh.md`) and node's runtime support (`server/internal/node/runtimes.go`, `integrations/runtime-sdk`, spec in `docs/runtimes.md`).
+Pitfalls hit while integrating DSH (`docs/integrations/dsh.md`) and node's runtime support (`server/internal/node/runtimes.go`, `integrations/runtime-sdk`, spec in `docs/integrations/runtimes.md`).
 
 - **DSH approvals / questions are a responder chain, not a broadcast** (`approval/request` and `user-questions/request` are Cordis waterfalls: they run in registration order and stop at whoever doesn't call `next()`).
   The browser link in the chain only withdraws its card when the request's own `signal` ends; the plugin can't withdraw it on the browser's behalf. So the phone and the Web GUI can't "both pop up, first answer wins". The plugin can only go to the phone first,
@@ -38,7 +38,7 @@ Pitfalls hit while integrating DSH (`docs/dsh.md`) and node's runtime support (`
   and survive a hub connection change; the SDK retries every second while the socket file exists. End-to-end: `runtime-sdk/e2e/resident.mjs` (real `--attach`, disconnect and reconnect the hub, restart the resident node).
 - **pi-web only loads extensions once a session is open** (2026-11-01, measured while integrating pi): one pi-web process runs all sessions; the extension module loads once and the factory runs once per session,
   but nothing loads before the first session opens. Relying on the extension alone, Persona sees no pi sessions at all after pi-web restarts. So pi has a separate companion process for sessions on disk
-  (`docs/pi.md`). When two runtimes list the same session, node picks the one currently running it: pi session files have no lock, and "last to connect wins" would send the phone's messages to the second process writing it.
+  (`docs/integrations/pi.md`). When two runtimes list the same session, node picks the one currently running it: pi session files have no lock, and "last to connect wins" would send the phone's messages to the second process writing it.
 - **SDK timers don't keep the process alive; a standalone runtime must do it itself** (2026-11-01, pi companion process): the SDK's reconnect and push timers are all `unref()`ed, because it usually lives inside the DSH or pi process
   and shouldn't hold up the host's exit. The pi-web companion is a standalone process that is only a runtime; as soon as it disconnects (node not up yet, restarting, too old) the event loop is empty, the process `exit 0`s and launchd keeps relaunching it.
   The standalone process keeps its own `setInterval` (`companion.mjs`).
@@ -56,7 +56,7 @@ Pitfalls hit while integrating DSH (`docs/dsh.md`) and node's runtime support (`
 - **DSH plugin management can't be called from a session driven by the phone** (2026-11-02): when enabling `persona-dsh-runtime` in plugin management, DSH's hot reload uses `AsyncLocalStorage` to mark "inside a transaction",
   and the socket the plugin creates inside the transaction carries that mark into every later callback. Every turn started by a message coming in through the plugin (sent from the phone) is treated as "still inside the transaction", so `plugin_manager`'s
   `set_bundle` always reports `HMR transactions cannot be nested`, and sending a sub-agent to call it fails the same way (it inherits the same context). Messages sent from the DSH web page are unaffected.
-  Plugins installed by link aren't in hot reload's watched directory either, so swapping files doesn't reload them. So the plugin updates itself (`docs/dsh.md` ("Auto-update")) instead of relying on plugin management.
+  Plugins installed by link aren't in hot reload's watched directory either, so swapping files doesn't reload them. So the plugin updates itself (`docs/integrations/dsh.md` ("Auto-update")) instead of relying on plugin management.
 - **Re-importing the same path in the same process gets the old code** (same day): Node's ESM cache is keyed by URL, even if the file changed. When the plugin reloads inside DSH (plugin management off and on again),
   the `lib/dsh.js` imported earlier is still the first copy, and the new version is swapped in for nothing. So the loader loads from `<store>/<hash>/`, and the bundled copy is copied there first too: when the content changes, the path changes.
   The loader's unit test found this (change the bundled file, start another loader in the same process, and it still runs the old version).

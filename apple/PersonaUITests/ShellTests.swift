@@ -1,6 +1,6 @@
 import XCTest
 
-/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」), in Demo Mode: no tab bar; Assistant | Agents; the drawer with
+/// The ChatGPT-style shell on an iPhone (docs/apple/ios.md「新外壳」), in Demo Mode: no tab bar; Assistant | Agents; the drawer with
 /// Inbox / Settings; the empty chat lists what needs the user; the composer grows while typing; Old Layout brings the tabs back.
 final class ShellTests: XCTestCase {
     private var app: XCUIApplication!
@@ -73,7 +73,7 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(button("shell-assistant").waitForExistence(timeout: 5), "back on 助手 after closing 设置")
     }
 
-    /// Machines in the drawer: the one machines page (agents and monitoring together, docs/machines.md「App」), and a card
+    /// Machines in the drawer: the one machines page (agents and monitoring together, docs/server/machines.md「App」), and a card
     /// opens the machine with its agents and charts on one page.
     @MainActor func testDrawerOpensMachines() {
         launch()

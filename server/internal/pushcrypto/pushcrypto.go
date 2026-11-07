@@ -1,4 +1,4 @@
-// Package pushcrypto seals push payloads to a phone's public key (docs/push-relay.md): HPKE base mode,
+// Package pushcrypto seals push payloads to a phone's public key (docs/operations/push-relay.md): HPKE base mode,
 // DHKEM(P-256, HKDF-SHA256) + HKDF-SHA256 + AES-256-GCM. The iOS app opens them with CryptoKit's
 // HPKE.P256_SHA256_AES_GCM_256 (apple/Shared/PushCrypto.swift); the relay in between only ever sees the result.
 package pushcrypto

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Settings › Sent as You (#5278, docs/connectors.md "Sent as the user"), the cases of the web page's `sent.test.ts`: the page as
+/// Settings › Sent as You (#5278, docs/extensions/connectors.md "Sent as the user"), the cases of the web page's `sent.test.ts`: the page as
 /// the hub sends it, where a send went, what it said, how the gate let it through, who asked, paging and refreshing the
 /// list, the connector chips, the hub's refusals in plain words, and the model over a fake hub, including the reads that come
 /// back late. Made-up values; the tests run in Simplified Chinese.

@@ -38,7 +38,7 @@ import persona.feature.settings.SettingsScreen
 import persona.feature.settings.SettingsServices
 
 /**
- * Settings › Sent as you on a hub group (docs/android.md "Multiple hubs"): the hub speaks its own machine ids, the chat a row
+ * Settings › Sent as you on a hub group (docs/android/android.md "Multiple hubs"): the hub speaks its own machine ids, the chat a row
  * opens is found by the merged lists', so the rows come back in the selected group's form and the page opens the chat by it.
  * The last step of choosing the group (`MachineManagementModule.sent`: which group is selected now) is the runtime's.
  */

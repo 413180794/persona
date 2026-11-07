@@ -127,7 +127,7 @@ export function providersFor(p: ModelPurpose, providers: ModelProvider[]): Model
 }
 
 /** A provider's name for the page: its own, or nothing for one of the hub's old built-in ones (`legacy.*`) that is not
- *  set up, whose id means nothing to a person (docs/onboarding.md 4.5). */
+ *  set up, whose id means nothing to a person (docs/assistant/onboarding.md 4.5). */
 export function providerName(id: string | undefined, providers: ModelProvider[] = []): string | undefined {
   if (!id) return undefined;
   const name = providers.find((v) => v.id === id)?.name;

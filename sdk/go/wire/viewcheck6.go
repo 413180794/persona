@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-// Limits of UI version 6 (docs/extensions.md "UI version 6").
+// Limits of UI version 6 (docs/extensions/extensions.md "UI version 6").
 const (
 	// A page has at most ImagesMost pictures (image components, rows and tiles with one).
 	ImagesMost = 50

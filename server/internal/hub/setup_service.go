@@ -17,8 +17,8 @@ import (
 	"strings"
 )
 
-// The service that keeps the hub running (docs/onboarding.md 4.1 step 3): on Linux the systemd user units of
-// scripts/deploy/hub-systemd.sh (socket activation, docs/hub-restart.md; keep the two in step), on a Mac a launchd
+// The service that keeps the hub running (docs/assistant/onboarding.md 4.1 step 3): on Linux the systemd user units of
+// scripts/deploy/hub-systemd.sh (socket activation, docs/operations/hub-restart.md; keep the two in step), on a Mac a launchd
 // agent.
 
 func (e *setupEnv) service(ctx context.Context, cfg *setupConfig) error {
@@ -152,7 +152,7 @@ func hubServiceUnit(root string, socket bool) string {
 // address-bound listener (a new install's "<LAN address>:18662") come up while that address is not there yet or any
 // more (DHCP), instead of failing the socket and with it the plaintext port.
 func hubSocketUnit(listens []string) string {
-	lines := []string{"[Unit]", "Description=Persona hub's listening sockets (docs/hub-restart.md)", "", "[Socket]"}
+	lines := []string{"[Unit]", "Description=Persona hub's listening sockets (docs/operations/hub-restart.md)", "", "[Socket]"}
 	bound := false
 	for _, a := range listens {
 		if strings.HasPrefix(a, ":") {
@@ -259,7 +259,7 @@ func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) 
 		what = "常驻服务已经装好；hub.json 补了本机，重启了 hub"
 	case binChanged:
 		// The units are as they were, but the binary is new (an upgrade): the hub running is the old one. The port
-		// stays with personad.socket, so the restart is not noticed (docs/hub-restart.md).
+		// stays with personad.socket, so the restart is not noticed (docs/operations/hub-restart.md).
 		steps = append(steps, []string{"restart", "personad"})
 		what = "常驻服务已经装好；hub 换了新版本，重启了它"
 	default:

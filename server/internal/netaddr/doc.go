@@ -15,8 +15,8 @@
 // Other systems use net.Interfaces and return FlagsKnown=false; Stable fails
 // closed there rather than treating unknown privacy/DAD state as safe.
 //
-// Rules follow docs/redesign/hub-changes.md section 1.2 and
-// docs/redesign/research/public-direct-ipv6.md section 2, plus CLAUDE.md's sysfs
+// Rules follow docs/archive/redesign/hub-changes.md section 1.2 and
+// docs/archive/redesign/research/public-direct-ipv6.md section 2, plus CLAUDE.md's sysfs
 // interface rule. Preferred lifetime precedes valid lifetime as required by the
 // netaddr lane task. Fixed SLAAC tokens cannot be identified from RTM_GETADDR;
 // user interface allowlists and publication decisions belong to the caller.

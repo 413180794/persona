@@ -25,7 +25,7 @@ import (
 	"github.com/nwverse/persona/server/internal/update"
 )
 
-// A manager made in the app (docs/managers.md, "A second manager") is the same program as the assistant the hub starts, with
+// A manager made in the app (docs/assistant/managers.md, "A second manager") is the same program as the assistant the hub starts, with
 // a directory of its own: manager.json there says who it is and where the hub is, and everything it keeps on disk (the
 // knowledge base, secret.key, its extensions) is under it, never under the hub's. Its state is in a Postgres of its own,
 // never the hub's: the container `personad manager install` makes for it (internal/manager), or the one the user gave.

@@ -81,7 +81,7 @@ class WiredDeviceSettings @Inject constructor(
                         catch (error: CancellationException) { throw error }
                         catch (_: Exception) { null }
                         // Settings › Translation goes to the hub (on connect and when it changes), so it translates new mail as it
-                        // comes in for this phone (docs/android.md "Translation").
+                        // comes in for this phone (docs/android/android.md "Translation").
                         syncTranslation(translation.prefs, hubHas, adapter::saveTranslation)
                     }
                 }

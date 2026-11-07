@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The nudge under a card nobody answered (#6084, docs/bots.md "Nudging a card nobody answered"): a card the Lark bot
+// The nudge under a card nobody answered (#6084, docs/extensions/bots.md "Nudging a card nobody answered"): a card the Lark bot
 // sent (a question, a plan, a permission) that has waited nudge_after without an answer gets one short reply under it,
 // "Still waiting for you: …", so it reaches the user where they answer. Like the reply reminder (agents_reply.go) it is
 // a sweep once a minute over what waits, rules only, costing no tokens; unlike it, it follows the card into Lark and

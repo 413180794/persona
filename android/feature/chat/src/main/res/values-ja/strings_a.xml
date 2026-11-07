@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- feature/chat (part a): assistant tasks, status / info sheets, work lines, search, image viewer (docs/i18n.md). -->
+<!-- feature/chat (part a): assistant tasks, status / info sheets, work lines, search, image viewer (docs/protocol/i18n.md). -->
 <resources>
     <string name="chat_connection_connecting">接続中…</string>
     <string name="chat_connection_updating">更新中…</string>
@@ -424,7 +424,7 @@
     <string name="chat_content_plan_failed">更新に失敗</string>
     <string name="chat_status_workflows">バックグラウンド workflow</string>
     <string name="chat_status_workflow_untitled">workflow</string>
-    <!-- The agent's goal over the conversation (docs/agent-goal.md). -->
+    <!-- The agent's goal over the conversation (docs/integrations/agent-goal.md). -->
     <string name="chat_goal_title">目標</string>
     <string name="chat_goal_status_active">進行中</string>
     <string name="chat_goal_status_complete">達成</string>

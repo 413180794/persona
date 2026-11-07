@@ -204,7 +204,7 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/docker.md": {
+    "docs/operations/docker.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "jarvis",
@@ -213,7 +213,7 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/extensions.md": {
+    "docs/extensions/extensions.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "JARVIS_HOME",
@@ -230,7 +230,7 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/managers.md": {
+    "docs/assistant/managers.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "jarvis",
@@ -241,7 +241,7 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/persona-cutover.md": {
+    "docs/operations/persona-cutover.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "jarvis_manager"
@@ -249,7 +249,7 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/rolling-upgrade-compatibility.md": {
+    "docs/protocol/rolling-upgrade-compatibility.md": {
       "reason": "User-authorized Chinese compatibility matrix naming exact historical protocol and storage contracts.",
       "tokens": [
         ".jarvis",
@@ -313,7 +313,7 @@
       "path_tokens": [],
       "external_refs": []
     },
-    "docs/server.md": {
+    "docs/server/server.md": {
       "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
       "tokens": [
         "jarvis",

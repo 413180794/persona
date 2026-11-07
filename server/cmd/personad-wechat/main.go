@@ -1,6 +1,6 @@
-// personad-wechat (also built as personad-wechat) is the WeChat plugin's program (docs/wechat.md,
+// personad-wechat (also built as personad-wechat) is the WeChat plugin's program (docs/extensions/wechat.md,
 // server/plugins/wechat): the hub starts it as a built-in plugin and talks to it over stdin / stdout, as its connector
-// and its channel (docs/channels.md). It is built, released and updated together with personad, and the hub runs it
+// and its channel (docs/extensions/channels.md). It is built, released and updated together with personad, and the hub runs it
 // only when its build is the hub's own (`version -v`).
 package main
 

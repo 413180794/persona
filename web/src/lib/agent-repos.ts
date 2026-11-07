@@ -36,7 +36,7 @@ const baseName = (path: string) => segments(path).pop() ?? "";
 /**
  * The repository and working tree a cwd belongs to. The host may name the repository (the session's repo_root, #2840:
  * Paseo keeps its worktrees under its own folder): a cwd inside it is its main checkout, any other is one of its
- * working trees. Otherwise from the path alone (docs/web.md): a tree under one of the known layouts belongs to the
+ * working trees. Otherwise from the path alone (docs/web/web.md): a tree under one of the known layouts belongs to the
  * directory above that marker; any other path is its own repository's main checkout.
  */
 export function repoOf(cwd: string, repoRoot?: string): Repo {

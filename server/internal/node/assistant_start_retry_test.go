@@ -73,7 +73,7 @@ func TestAssistantSendSaysTheCommandIsMissing(t *testing.T) {
 	if !strings.Contains(msg, "没有启动起来") || !strings.Contains(msg, "command not found") || strings.Contains(msg, "file already closed") {
 		t.Fatalf("error: %q", msg)
 	}
-	// Coded, so the app is told Claude Code is missing on that machine (docs/onboarding.md 4.6); nothing was delivered.
+	// Coded, so the app is told Claude Code is missing on that machine (docs/assistant/onboarding.md 4.6); nothing was delivered.
 	var re *rpc.Error
 	if !errors.As(err, &re) || re.Code != proto.CodeClaudeMissing || re.Message != msg || !strings.Contains(string(re.Data), `"delivered":"none"`) {
 		t.Fatalf("not coded claude_missing: %#v", err)

@@ -1,4 +1,4 @@
-// A machine's token usage on its page (docs/machines.md "Token usage charts", #4973), as in the apps: the range, model
+// A machine's token usage on its page (docs/server/machines.md "Token usage charts", #4973), as in the apps: the range, model
 // and launcher filters, the range's sums, throughput per minute (every token, or the four kinds stacked; a legend entry
 // hides its kind: cache reads are often nine tenths of it), the cache hit rate, and each model's and launcher's share.
 // Hovering either chart (or ← → on it) shows that moment in both; the legend then says that moment's values.

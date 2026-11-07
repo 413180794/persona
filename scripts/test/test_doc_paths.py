@@ -35,9 +35,7 @@ MODULE_DOC_DIRS = ("android", "integrations", "schema", "sdk", "spec")
 SERVER_RELATIVE = ("internal",)
 
 SKIP_FILES = {
-    "docs/rename.md",
-    "docs/rename-acceptance.md",
-    "docs/rename-pr-audit.md",
+    "docs/operations/rename.md",
     "docs/lessons/rename.md",
 }
 
@@ -67,14 +65,14 @@ GENERATED_SCREENSHOTS = {
 
 # Quoted on purpose though not at the repository root: paths in another project or in the mock hub's fake file tree.
 ELSEWHERE = {
-    "docs/guide.pdf",  # mock_hub.py's fake browse tree (docs/android.md)
-    "docs/icon.png",  # a file the mock hub does not have (docs/mac.md)
-    "sdk/VERSION",  # written by scripts/gen/sync-sdk.sh into the extension repository (docs/extensions.md)
+    "docs/guide.pdf",  # mock_hub.py's fake browse tree (docs/android/android.md)
+    "docs/icon.png",  # a file the mock hub does not have (docs/apple/mac.md)
+    "sdk/VERSION",  # written by scripts/gen/sync-sdk.sh into the extension repository (docs/extensions/extensions.md)
     # The Go check's overlay maps this absent path to a test source in /tmp (spec/fixtures/sort/README.md).
     "server/internal/hub/spec_sort_fixture_test.go",
-    "internal/authflow/flow.go",  # in the cli/cli source (docs/connectors.md)
-    "internal/plugin",  # the retired package name in the extension rename table (docs/extensions.md)
-    "internal/larkcli",  # the planned adapter package (docs/plan-lark-cli.md)
+    "internal/authflow/flow.go",  # in the cli/cli source (docs/extensions/connectors.md)
+    "internal/plugin",  # the retired package name in the extension rename table (docs/extensions/extensions.md)
+    "internal/larkcli",  # the planned adapter package (docs/plans/plan-lark-cli.md)
 }
 
 QUOTED = re.compile(r"`([^`\s]+)`")
@@ -86,13 +84,15 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 INLINE_CODE = re.compile(r"(`+).*?\1")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 
-# Top-level docs that stay out of CLAUDE.md's Docs index: a redirect left by a rename.
-UNINDEXED = {"docs/plugins.md"}
+def current_docs():
+    """Discover every maintained module guide, but not point-in-time archives."""
+    return sorted(p for p in (ROOT / "docs").rglob("*.md")
+                  if "archive" not in p.relative_to(ROOT / "docs").parts)
 
 
 def doc_files():
     files = [ROOT / name for name in ("CLAUDE.md", "README.md", "README.zh-CN.md", "THIRD_PARTY_NOTICES.md", "scripts/README.md")]
-    files += sorted((ROOT / "docs").glob("*.md")) + sorted((ROOT / "docs/lessons").glob("*.md"))
+    files += current_docs()
     files += module_docs()
     return [f for f in files if f.exists() and f.relative_to(ROOT).as_posix() not in SKIP_FILES]
 
@@ -250,13 +250,13 @@ class DocPathTests(unittest.TestCase):
             with patch(__name__ + ".ROOT", root):
                 (root / "spec/fixtures/wire").mkdir(parents=True)
                 (root / "spec/fixtures/wire/inbox.json").write_text("{}\n")
-                (root / "docs").mkdir()
-                (root / "docs/protocol.md").write_text("# protocol\n")
+                (root / "docs/protocol").mkdir(parents=True)
+                (root / "docs/protocol/protocol.md").write_text("# protocol\n")
                 (root / "spec/fixtures/wire/foo(1).md").write_text("# foo\n")
                 doc = root / "spec/fixtures/wire/README.md"
                 doc.write_text("\n".join([
                     "| [inbox.json](inbox.json) | [lark.json](lark.json) |",
-                    "[协议](../../../docs/protocol.md#hello) [root](/docs/protocol.md) [gone](../../../docs/gone.md \"t\")",
+                    "[协议](../../../docs/protocol/protocol.md#hello) [root](/docs/protocol/protocol.md) [gone](../../../docs/gone.md \"t\")",
                     "[web](https://example.com/x.md) [mail](mailto:me@example.com) [top](#规则与用例)",
                     "`[code](inline-missing.md)` and <a href=x>",
                     "[paren](foo(1).md) [paren gone](bar(2).md)",
@@ -268,13 +268,26 @@ class DocPathTests(unittest.TestCase):
                                   "spec/fixtures/wire/README.md:2: ../../../docs/gone.md",
                                   "spec/fixtures/wire/README.md:5: bar(2).md"], missing_links(doc))
 
-    def test_top_level_docs_are_in_the_index(self):
+    def test_module_guides_are_discovered_recursively(self):
+        with tempfile.TemporaryDirectory(prefix="doc-modules-") as directory:
+            root = Path(directory)
+            for name in ("docs/README.md", "docs/apple/ios.md", "docs/server/hub/update.md",
+                         "docs/lessons/testing.md", "docs/archive/apple/old.md"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# Guide\n")
+            with patch(__name__ + ".ROOT", root):
+                self.assertEqual(["docs/README.md", "docs/apple/ios.md", "docs/lessons/testing.md",
+                                  "docs/server/hub/update.md"],
+                                 [p.relative_to(root).as_posix() for p in current_docs()])
+
+    def test_current_docs_are_in_the_index(self):
         index = (ROOT / "CLAUDE.md").read_text().split("\n## Docs index\n", 1)[1]
         rows = "\n".join(line for line in index.splitlines() if line.startswith("|"))
-        docs = sorted(doc.relative_to(ROOT).as_posix() for doc in (ROOT / "docs").glob("*.md"))
-        missing = [doc for doc in docs if doc not in UNINDEXED and f"`{doc}`" not in rows]
+        docs = [doc.relative_to(ROOT).as_posix() for doc in current_docs()
+                if "lessons" not in doc.relative_to(ROOT / "docs").parts]
+        missing = [doc for doc in docs if f"`{doc}`" not in rows]
         self.assertEqual([], missing, "add these docs to the Docs index in CLAUDE.md")
-        self.assertEqual([], [doc for doc in UNINDEXED if doc not in docs], "UNINDEXED names docs that are gone")
 
     def test_archive_records_are_in_the_archive_table(self):
         archive = ROOT / "docs/archive"

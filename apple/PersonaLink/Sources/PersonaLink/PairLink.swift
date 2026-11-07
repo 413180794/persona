@@ -1,7 +1,7 @@
 import Foundation
 
 /// A pairing link handed to the app from outside (Notes, AirDrop, Mail, Safari): `persona://link?…`,
-/// the link a signed-in phone or the web makes for one computer (docs/onboarding.md 4.2).
+/// the link a signed-in phone or the web makes for one computer (docs/assistant/onboarding.md 4.2).
 /// Opening one only fills in the pairing window: the user sees which hub it is and pairs by tapping 「配对」 (Pair). A forwarded
 /// or forged link must never hand this computer to someone else's hub by itself.
 struct PairLink: Equatable {

@@ -27,7 +27,7 @@ var ErrNotEmpty = errors.New("its own database already has data")
 var ErrSameDatabase = errors.New("the two are one database")
 
 // CopyTables copies the manager set's tables from from into to: the move of the default manager's data out of the
-// database it shared with the hub into its own (docs/server.md "The default manager's own database"). Both are open
+// database it shared with the hub into its own (docs/server/server.md "The default manager's own database"). Both are open
 // and migrated (Open) by this build, so their tables are the same. to must be another database (ErrSameDatabase) with
 // none of the manager's data (ErrNotEmpty: a copy never goes over one, nor over one made by an earlier copy). One
 // transaction on to, which also records the copy there (manager_moved 'in', MovedIn): the data and that record go

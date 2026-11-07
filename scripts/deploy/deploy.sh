@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build personad and install it on every machine of the config (docs/config.md); (re)start the hub on its machine.
+# Build personad and install it on every machine of the config (docs/operations/config.md); (re)start the hub on its machine.
 #   ./scripts/deploy/deploy.sh                 # all machines
 #   ./scripts/deploy/deploy.sh <hub machine>   # only the hub
 #   ./scripts/deploy/deploy.sh <machine id>    # only one machine (node binary; the hub restarts its connection)
-#   ./scripts/deploy/deploy.sh web             # only the web client (web/, docs/web.md): no restart
+#   ./scripts/deploy/deploy.sh web             # only the web client (web/, docs/web/web.md): no restart
 # The checkout must contain origin/master (it fetches it first), else nothing is deployed; PERSONA_DEPLOY_ANY_COMMIT=1
 # skips the check.
-# Who may open the hub's admin UI (docs/admin.md): --admin-access <loopback|lan|cidrs|any> [--admin-cidrs a,b] (or
+# Who may open the hub's admin UI (docs/operations/admin.md): --admin-access <loopback|lan|cidrs|any> [--admin-cidrs a,b] (or
 # PERSONA_ADMIN_ACCESS / PERSONA_ADMIN_CIDRS) sets it on the hub; without them a hub that never had one chosen asks on
 # a terminal, else keeps the default (lan) and says so.
 set -euo pipefail
@@ -52,7 +52,7 @@ _env=$(python3 scripts/persona_config.py env) || exit $?
 eval "$_env"; unset _env
 cd server
 # Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
-# older release never replaces it and the next release does (docs/hub-update.md "Deploying directly").
+# older release never replaces it and the next release does (docs/operations/hub-update.md "Deploying directly").
 BUILD="$(date -u +%Y%m%d%H%M)"
 VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD"
 TARGETS=("$@")
@@ -115,13 +115,13 @@ $command"
 }
 mkdir -p bin
 # The commit it is built from, "-dirty" after it with changes in server/ not committed: a release installs itself over
-# this build only when its code contains that commit (docs/hub-update.md "No rollback").
+# this build only when its code contains that commit (docs/operations/hub-update.md "No rollback").
 COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
 [ -n "$COMMIT" ] && [ -n "$(git status --porcelain -- . 2>/dev/null)" ] && COMMIT="$COMMIT-dirty"
 LDFLAGS="-s -w -X main.version=$VERSION -X main.channel=release -X main.build=$BUILD -X main.commit=$COMMIT${PERSONA_PUBLISH_URL:+ -X main.updateURL=$PERSONA_PUBLISH_URL/dl}"
-# The runtime packages personad carries (the DSH plugin's code, docs/runtimes.md "Auto-update"), from integrations/.
+# The runtime packages personad carries (the DSH plugin's code, docs/integrations/runtimes.md "Auto-update"), from integrations/.
 go generate ./internal/runtimepkg
-# Every platform a machine can run, the same four the release and the Docker image build (docs/release.md): each
+# Every platform a machine can run, the same four the release and the Docker image build (docs/operations/release.md): each
 # machine gets the one it runs (machine_platform), and the hub keeps all four for "Redeploy" (#3103).
 PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
 # persona-node is the device's own program (cmd/persona-node): the hub keeps it beside personad, and "Redeploy" gives it
@@ -213,7 +213,7 @@ install_bin() {
     root=$(state_root "$role")
     mkdir -p "$root/bin" || return 1
     # The hub's binary before it is replaced: hub-systemd.sh switches the running edge to the new one and goes back
-    # to this one if it fails while taking over (docs/hub-restart.md "Blue-green switch").
+    # to this one if it fails while taking over (docs/operations/hub-restart.md "Blue-green switch").
     if [ "$role" = hub ]; then
       local previous
       previous=$(python3 ../scripts/persona_identity.py --service hub --shell) || return 1
@@ -250,7 +250,7 @@ $command")
   fi
 }
 
-# install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (wechat: the WeChat bot, docs/wechat.md;
+# install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (wechat: the WeChat bot, docs/extensions/wechat.md;
 # Telegram's connector is an extension now, #1704) next to the hub's personad (only the hub runs it), the
 # same build as personad: the hub starts it only when `version -v` matches.
 install_program() {
@@ -286,7 +286,7 @@ ensure_herdr() { # machine-id
 }
 
 # A resident node (scripts/deploy/node-launchd.sh, Mac or Linux) keeps the old binary until it restarts: it does so
-# once none of the assistant's conversations is busy, which go on across hub restarts (docs/hub-restart.md).
+# once none of the assistant's conversations is busy, which go on across hub restarts (docs/operations/hub-restart.md).
 restart_resident() { ../scripts/deploy/node-launchd.sh restart-idle || true; }
 
 # The admin UI's scope on the hub (its new binary is in place, the hub restarts right after): what was given, else a

@@ -2,7 +2,7 @@
 """App icon: "Paper", the hand-drawn helper waving on warm paper (#709, picked by the user in 2026-11). The art was
 generated and chosen, not drawn here: the iPhone set's icon.png (light) and icon-dark.png (dark) are it, 1024, RGB,
 no alpha. This derives the rest from them: the tinted look, the watch icon (the light one; the system masks it round),
-the Mac sizes and docs/icon-preview.png:
+the Mac sizes and a temporary icon preview:
   python3 scripts/assets/make_icon.py
   python3 scripts/assets/make_icon.py mac     # only the Mac sizes
   python3 scripts/assets/make_icon.py vision  # only Apple Vision Pro's icon
@@ -19,6 +19,7 @@ settings preview).
 import json
 import os
 import sys
+import tempfile
 
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
@@ -151,13 +152,12 @@ def main():
         "images": [{"filename": "icon.png", "idiom": "universal", "platform": "watchos", "size": "1024x1024"}],
         "info": {"author": "xcode", "version": 1},
     })
-    os.makedirs(os.path.join(ROOT, "docs"), exist_ok=True)
     preview = Image.new("RGB", (S * 3 + 80, S + 40), (245, 243, 238))
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, S, S], radius=int(S * 0.225), fill=255)
     for i, im in enumerate((light, dark, tinted)):
         preview.paste(im, (20 + i * (S + 20), 20), mask)
-    preview.resize((preview.width // 2, preview.height // 2), Image.LANCZOS).save(os.path.join(ROOT, "docs/icon-preview.png"))
+    preview.resize((preview.width // 2, preview.height // 2), Image.LANCZOS).save(os.path.join(tempfile.gettempdir(), "persona-icon-preview.png"))
     print("icons written")
 
 

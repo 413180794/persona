@@ -1,4 +1,4 @@
--- Todos and their agent links (hub/todos.go, docs/todos.md).
+-- Todos and their agent links (hub/todos.go, docs/assistant/todos.md).
 CREATE TABLE IF NOT EXISTS todos (
     id         text PRIMARY KEY,
     title      text NOT NULL,

@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// usage.gateway_accounts (#4576, docs/extensions.md"Quota", docs/usage-windows.md"Gateway account inventory"): the account
+// usage.gateway_accounts (#4576, docs/extensions/extensions.md"Quota", docs/server/usage-windows.md"Gateway account inventory"): the account
 // lists of the account-pool gateways among the hub's usage sources, for an extension granted usage_gateways (a relay's quota
 // extension lists on its sidebar page every account of the gateway, not only those one launcher's
 // key reaches). The devices in this process keep the lists from their last read of each source; nothing is asked of a

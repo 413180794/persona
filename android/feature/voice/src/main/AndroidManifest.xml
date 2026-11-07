@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Voice chat: the microphone, only while the voice page is open (docs/android.md). -->
+    <!-- Voice chat: the microphone, only while the voice page is open (docs/android/android.md). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Communication mode and the speaker or headset route for the conversation. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

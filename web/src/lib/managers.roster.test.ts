@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The roster's default (docs/managers.md "Clients"): a read that fails takes the hub's own assistant for now, so pages
+// The roster's default (docs/assistant/managers.md "Clients"): a read that fails takes the hub's own assistant for now, so pages
 // don't wait, and is read again a few seconds later, so a blip on a hub whose default is another manager is put right.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultKnown, defaultManager, resetManagerChoice } from "./manager-choice";

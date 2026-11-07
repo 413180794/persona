@@ -88,7 +88,7 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
 
 struct LinkTarget: Identifiable, Hashable {
     var url: URL
-    /// A machine's port forwarded to the phone (docs/ports.md): what to call it ("machine name :5173"); the url is the
+    /// A machine's port forwarded to the phone (docs/operations/ports.md): what to call it ("machine name :5173"); the url is the
     /// phone's loopback, which only this app serves.
     var forwarded: String? = nil
     var id: String { url.absoluteString }

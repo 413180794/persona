@@ -1,7 +1,7 @@
 #if DEBUG && (os(iOS) || os(visionOS))
 import Foundation
 
-/// The runtime CLI over the hub (docs/runtime-cli.md「经 hub 连真机」), for a DEBUG build on a real phone: launched with
+/// The runtime CLI over the hub (docs/operations/runtime-cli.md「经 hub 连真机」), for a DEBUG build on a real phone: launched with
 /// `-runtimeCLIHub YES`, the app lists `phone_runtime_cli` with its tools in `register_phone`, but only when the hub
 /// says it keeps that tool out of the agents' tools (`runtime_cli` in its features: an older hub would offer it to
 /// them). The hub's `POST /api/v1/phone/runtime-cli` then comes as a tool call `{cmd, args}`, run by the same commands
@@ -17,7 +17,7 @@ extension RuntimeCLI {
     /// What `register_phone` adds: only with the switch on and a hub that keeps it from the agents.
     static func hubToolSpecs(features: Set<String>) -> [ToolSpec] {
         guard overHub, features.contains("runtime_cli") else { return [] }
-        return [ToolSpec(name: hubTool, description: "DEBUG builds only: the runtime CLI (docs/runtime-cli.md), for the user's own scripts.",
+        return [ToolSpec(name: hubTool, description: "DEBUG builds only: the runtime CLI (docs/operations/runtime-cli.md), for the user's own scripts.",
                          inputSchema: .object(["type": .string("object"), "properties": .object([
                              "cmd": .object(["type": .string("string")]), "args": .object(["type": .string("object")]),
                          ])]))]

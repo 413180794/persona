@@ -27,7 +27,7 @@ import (
 //     sent together, or run as a command (input_draft, with the box's text). The app may ask to clear that exact
 //     draft and send (clear_draft).
 // Sends carry the app's client_msg_id: a retry of one already delivered (the response was lost) is acknowledged
-// without typing it again. See docs/protocol.md "Sending messages".
+// without typing it again. See docs/protocol/protocol.md "Sending messages".
 
 // dialogKeys checks that the session's screen still shows the dialog a card was made from (same revision) and
 // returns the keys for option, worked out from the screen as it is now (an unnumbered list moves from where the cursor

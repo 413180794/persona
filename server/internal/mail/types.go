@@ -1,7 +1,7 @@
 // Package mail implements the Persona mail module: encrypted account storage,
 // IMAP reading, SMTP sending and the /api/v1/mail HTTP API.
 //
-// The JSON shapes mirror docs/protocol.md ("Mail API"); keep them in sync.
+// The JSON shapes mirror docs/protocol/protocol.md ("Mail API"); keep them in sync.
 package mail
 
 import (
@@ -29,7 +29,7 @@ const (
 	ProviderFeishu = "feishu" // Feishu / Lark mail on a company domain: larkoffice.com or feishu.cn servers, whichever signs in first
 )
 
-// Mailbox roles. The values match the role field in docs/protocol.md.
+// Mailbox roles. The values match the role field in docs/protocol/protocol.md.
 const (
 	RoleInbox   = "inbox"
 	RoleSent    = "sent"

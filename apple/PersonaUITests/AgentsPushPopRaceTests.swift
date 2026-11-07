@@ -181,7 +181,7 @@ final class AgentsPushPopRaceTests: XCTestCase {
         DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(Int(ms)), execute: run)
     }
 
-    /// One runtime CLI command (docs/runtime-cli.md): a JSON line to the app's loopback port, a JSON line back.
+    /// One runtime CLI command (docs/operations/runtime-cli.md): a JSON line to the app's loopback port, a JSON line back.
     @discardableResult nonisolated private static func ctl(_ cmd: String, _ args: [String: Any]) -> [String: Any] {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { return [:] }

@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Defined in the contract package aiwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package aiwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type Config = aiwire.Config
 
 // errNotConfigured is shown in the app as is (e.g. under "AI Draft Reply"), so it says where to fix it there.

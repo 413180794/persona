@@ -1,4 +1,4 @@
-// A Jupyter notebook in the file viewer (docs/web.md "Jupyter", #1407; iOS / Mac: #1296): Markdown cells rendered
+// A Jupyter notebook in the file viewer (docs/web/web.md "Jupyter", #1407; iOS / Mac: #1296): Markdown cells rendered
 // (math, Mermaid, pasted pictures), code cells colored for the kernel's language with their In [n], and each output in
 // the one form lib/notebook.ts picked. HTML outputs (pandas tables, widgets' fallbacks) go into a frame with no scripts
 // and no network, like the Office previews: a notebook is someone else's content.

@@ -46,7 +46,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
- * Settings › Extensions over the pairing's connection (docs/extensions.md "Hub API"). The hub's own routes are under the
+ * Settings › Extensions over the pairing's connection (docs/extensions/extensions.md "Hub API"). The hub's own routes are under the
  * reserved `-` segment of an extension (`/api/v1/extensions/{id}/-/…`); everything else there goes to the extension. The hub-wide
  * ones (markets, the catalog, where extensions draw) are under `/api/v1/extensions/-/…`.
  *
@@ -111,10 +111,10 @@ class HttpExtensionManagement internal constructor(
     override suspend fun clearSecret(id: String, name: String) =
         detail(call(path(id, "-", "secrets", secret(name)), "DELETE"))
 
-    // ---- declarative UI (docs/extensions.md "Declarative UI")
+    // ---- declarative UI (docs/extensions/extensions.md "Declarative UI")
 
     override suspend fun uiPlaces(placement: String, launcher: String?, machine: String?): List<ExtensionUiPlace> {
-        // No placement: every slot but launcher sections (docs/extensions.md "UI slots").
+        // No placement: every slot but launcher sections (docs/extensions/extensions.md "UI slots").
         val url = hubUrl("ui").apply {
             placement.takeIf { it.isNotEmpty() }?.let { addQueryParameter("placement", it) }
             launcher?.takeIf { it.isNotEmpty() }?.let { addQueryParameter("launcher", it) }
@@ -136,7 +136,7 @@ class HttpExtensionManagement internal constructor(
     ): ExtensionUiResult = read(uiCall(extension, ui, uiBody(context, state, action, values)), ExtensionUiResult.serializer())
 
     /**
-     * Every call says where and for whom it draws (docs/extensions.md "UI slots" "Context"): the caller's launcher, machine,
+     * Every call says where and for whom it draws (docs/extensions/extensions.md "UI slots" "Context"): the caller's launcher, machine,
      * inbox item and size, and this app's time zone, language, platform and UI version ([UI_VERSION]). An older hub
      * ignores what it does not know, and takes the lower of its version and the app's.
      */
@@ -171,7 +171,7 @@ class HttpExtensionManagement internal constructor(
         throw failure
     }
 
-    // ---- extension markets (docs/extensions.md "Extension market")
+    // ---- extension markets (docs/extensions/extensions.md "Extension market")
 
     override suspend fun markets(): List<ExtensionMarket> {
         val list = (parse(call(hubPath("markets"), "GET")) as? JsonObject)?.get("markets") as? JsonArray
@@ -232,7 +232,7 @@ class HttpExtensionManagement internal constructor(
     override suspend fun authLogout(id: String): ExtensionAuth =
         read(call(path(id, "-", "auth", "logout"), "POST", JsonObject(emptyMap())), ExtensionAuth.serializer())
 
-    // ---- in steps (docs/protocol.md "Extension install, upgrade and uninstall progress"): 202 `{operation}`
+    // ---- in steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress"): 202 `{operation}`
 
     override suspend fun startFromMarket(market: String, extension: String): ExtensionOperation =
         accepted(call(hubPath("catalog", "preview"), "POST", buildJsonObject {
@@ -266,7 +266,7 @@ class HttpExtensionManagement internal constructor(
         return decode { JsonCodec.decodeFromJsonElement(ExtensionOperation.serializer(), op) }
     }
 
-    // ---- auto-upgrades (docs/extensions.md "Auto-upgrade")
+    // ---- auto-upgrades (docs/extensions/extensions.md "Auto-upgrade")
 
     override suspend fun setAutoUpgrade(id: String, auto: Boolean) =
         detail(call(path(id, "-", "auto-upgrade"), "PUT", buildJsonObject { put("auto", auto) }))

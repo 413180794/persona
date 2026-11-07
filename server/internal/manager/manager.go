@@ -1,4 +1,4 @@
-// Package manager is `personad manager …`: a manager made in the app (docs/managers.md, "A second manager") joins the hub
+// Package manager is `personad manager …`: a manager made in the app (docs/assistant/managers.md, "A second manager") joins the hub
 // with its one-time install code, runs, and is installed as a service of its own (systemd user unit, launchd agent,
 // or a container). The manager itself is the assistant's program (assistant.RunManager) with a directory of its own.
 package manager

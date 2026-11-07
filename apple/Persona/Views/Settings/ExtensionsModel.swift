@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// Settings › Extensions (docs/extensions.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
+// Settings › Extensions (docs/extensions/extensions.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
 // from its schema (`form.fields`), its secrets, write-only, and the pages it draws (`ui`, ExtensionUIModel). Installing,
 // upgrading and removing are done on the hub's machine (`personad plugin`), or from a plugin market the hub has
 // (ExtensionMarketModel: only what a market lists).
@@ -26,7 +26,7 @@ nonisolated struct HubExtension: Codable, Hashable, Sendable, Identifiable {
     var needsSetup: [String]?
     var warnings: [String]?
     /// A plugin from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
-    /// happened last with an upgrade (docs/extensions.md「自动升级」).
+    /// happened last with an upgrade (docs/extensions/extensions.md「自动升级」).
     var autoUpgrade: Bool?
     var upgrade: ExtensionUpgrade?
     var upgradeNote: ExtensionUpgradeNote?
@@ -43,7 +43,7 @@ nonisolated struct HubExtension: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」).
+/// An extension's program on one machine (docs/extensions/extensions.md「在电脑上运行的程序」).
 nonisolated struct ExtensionNodeState: Codable, Hashable, Sendable {
     var machineID: String
     var version: String?
@@ -378,7 +378,7 @@ enum ExtensionText {
         return String(localized: "Switches in \(names) take effect right away. For the rest, tap Save at the top right when you're done; the extension restarts after saving. Empty fields use the extension's defaults.")
     }
 
-    /// The Update section's line for a newer version: what happens to it (docs/extensions.md「自动升级」).
+    /// The Update section's line for a newer version: what happens to it (docs/extensions/extensions.md「自动升级」).
     static func upgradeDetail(_ u: ExtensionUpgrade) -> String {
         let why = u.detail.flatMap { $0.isEmpty ? nil : $0 }
         switch u.state {

@@ -1,7 +1,7 @@
 package persona.core.contracts
 
 /**
- * How the merged lists tell hub groups apart (docs/android.md "Multiple hubs"). A group is the set of paired hubs linked by
+ * How the merged lists tell hub groups apart (docs/android/android.md "Multiple hubs"). A group is the set of paired hubs linked by
  * the hub mesh; separate groups never see each other's machines. Every group keeps its own data and connection, and
  * speaks plain machine ids with its hubs. Above that layer the app shows all groups in one list: machines of the
  * primary group keep their ids, every other group's machine ids carry `~<group id>`. The suffix never depends on

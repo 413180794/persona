@@ -1,5 +1,5 @@
 // Settings › Connectors' hub connectors (iOS ConnectorsSection's rows, HubConnectorView, ConnectorSignInSections,
-// GitHubConnectorSections, GitHubInboxSettings; docs/connectors.md): GitHub, Telegram and any extension's connector, as
+// GitHubConnectorSections, GitHubInboxSettings; docs/extensions/connectors.md): GitHub, Telegram and any extension's connector, as
 // GET /api/v1/connectors lists them. A page shows how one is doing, as whom, where its sign-in comes from and what is
 // wrong (with the steps to fix it); one the user signs in to here (`login`) also gets its switch, the sign-in a step
 // at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), "Add to knowledge base" / "Add to Inbox", sign-out and delete. GitHub adds
@@ -80,7 +80,7 @@ export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
 
 // ── one connector's page ─────────────────────────────────
 
-/** `manager`: whose connector (another manager's, opened from its extension's page, docs/managers.md "Clients"): the
+/** `manager`: whose connector (another manager's, opened from its extension's page, docs/assistant/managers.md "Clients"): the
  *  merged list's copy of that manager, and every request of the page names it while it is open; none: the default's. */
 export function ConnectorDetail({ id, manager, onBack, onChannel }: { id: string; manager?: string; onBack: () => void; onChannel?: (id: string, manager?: string) => void }) {
   useLayoutEffect(() => pinManagerAt(id === "imessage" ? [`/connectors/${encodeURIComponent(id)}`, "/imessage"] : [`/connectors/${encodeURIComponent(id)}`], otherManager(manager)), [id, manager]);
@@ -272,7 +272,7 @@ function FeedsGroup({ c, a }: { c: HubConnector; a: Actions }) {
 /**
  * An extension's page (Settings › Extensions › …) for the connectors it contributes: each one's "Add to Inbox" switch, the hub's own
  * (the same as on the connector's page), and the way to the connector's page for the rest (persona#3178). `manager`: whose
- * extension it is (each manager has its own connectors, docs/managers.md "Clients"); none: the default's.
+ * extension it is (each manager has its own connectors, docs/assistant/managers.md "Clients"); none: the default's.
  */
 export function ExtensionConnectorInbox({ ids, manager, onOpen }: { ids: string[]; manager?: string; onOpen?: (id: string, manager?: string) => void }) {
   const [list, setList] = useState<HubConnector[]>([]);

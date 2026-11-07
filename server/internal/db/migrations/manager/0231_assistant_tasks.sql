@@ -1,4 +1,4 @@
--- Tasks dispatched from an assistant conversation (docs/unified-entry.md, #930): a task is a todo that remembers
+-- Tasks dispatched from an assistant conversation (docs/assistant/unified-entry.md, #930): a task is a todo that remembers
 -- which conversation opened it, plans waiting for the user, and the items the hub inserts into a conversation.
 ALTER TABLE todos
     ADD COLUMN IF NOT EXISTS origin text NOT NULL DEFAULT '',

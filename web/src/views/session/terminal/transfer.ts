@@ -1,4 +1,4 @@
-// Files pasted into or dropped on a terminal (docs/terminal.md "Pasting images / files", item 26): uploaded to the computer the
+// Files pasted into or dropped on a terminal (docs/integrations/terminal.md "Pasting images / files", item 26): uploaded to the computer the
 // pane is on, their escaped paths typed in as one paste (Claude Code and Codex take a path to an image as the image), and
 // a Files panel entry dropped on it typed as `@path `. Both surfaces use this: the single pane's feed (feed.ts) and the
 // full herdr surface (full.ts). What differs is only how a paste reaches the program and what the status line says.

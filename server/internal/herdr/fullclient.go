@@ -12,7 +12,7 @@ import (
 )
 
 // The full client is herdr's own interactive client (`herdr session attach <name>`) run in a PTY of ours, so the web
-// can show herdr the way a terminal on the computer does: its sidebar, tabs and splits (docs/terminal.md "Full herdr
+// can show herdr the way a terminal on the computer does: its sidebar, tabs and splits (docs/integrations/terminal.md "Full herdr
 // UI"). The single-pane streams (observe, control) cannot: they are herdr redrawing one pane's grid. This one is a
 // client like any other, so it also takes a slot in herdr's layout (the latest active client sizes it) and its copies
 // come out as OSC 52.

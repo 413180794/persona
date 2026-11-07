@@ -22,7 +22,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Settings › Channels (docs/channels.md) and the channels' marks in conversations. The settings pages are hub-level:
+ * Settings › Channels (docs/extensions/channels.md) and the channels' marks in conversations. The settings pages are hub-level:
  * the selected group's hub, in its own ids. The marks come from every open group's list.
  */
 @Module

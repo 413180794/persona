@@ -54,7 +54,7 @@ extension Theme {
         static let schedule = "alarm"
         /// The session triage: a stopped agent read to say whether it is done or what it waits for (Settings › Session Triage).
         static let triage = "text.badge.checkmark"
-        // The inbox chain (docs/inbox.md): what happened to an event, one icon per kind.
+        // The inbox chain (docs/assistant/inbox.md): what happened to an event, one icon per kind.
         /// New messages came into an event (3 new messages).
         static let received = "arrow.down.message"
         /// The triage model sorted it (triaged: needs you).
@@ -122,7 +122,7 @@ extension Theme {
         static let rewindChat = "clock.arrow.circlepath"
         static let gitUpstream = "cloud"
         static let gitNoUpstream = "icloud.slash"
-        /// Git Pull / Push / Fetch in the node menu (docs/terminal.md「节点菜单」).
+        /// Git Pull / Push / Fetch in the node menu (docs/integrations/terminal.md「节点菜单」).
         static let gitPull = "arrow.down.to.line.compact"
         static let gitPush = "arrow.up.to.line.compact"
         static let gitFetch = "icloud.and.arrow.down"
@@ -131,7 +131,7 @@ extension Theme {
         static let splitDown = "rectangle.split.1x2"
         /// Close a whole terminal tab, every pane in it.
         static let closeTab = "xmark.rectangle"
-        /// New Worktree…: another checkout of a workspace's repository (docs/terminal.md「新建 worktree…」).
+        /// New Worktree…: another checkout of a workspace's repository (docs/integrations/terminal.md「新建 worktree…」).
         static let newWorktree = "plus.rectangle.on.folder"
         static let retry = "arrow.clockwise"
         /// Put a computer's own Persona files right (Machine Details › What This Computer Can Do › Repair).
@@ -317,7 +317,7 @@ extension Theme {
         /// A computer whose kind is not known.
         static let machine = "desktopcomputer"
         static let laptop = "laptopcomputer"
-        /// A Mac's live screen (VNC, docs/computer-use.md「实时画面」).
+        /// A Mac's live screen (VNC, docs/extensions/computer-use.md「实时画面」).
         static let screen = "display"
         /// The Mac's pointer drawn over its screen in the app's VNC (#1343), when the Mac sends none of its own.
         static let pointer = "cursorarrow"
@@ -344,27 +344,27 @@ extension Theme {
         static let laptopOffline = "laptopcomputer.slash"
         static let server = "server.rack"
         /// A group of hubs that know each other (Settings › hub, the group filter and labels of the merged lists;
-        /// docs/multi-hub.md).
+        /// docs/protocol/multi-hub.md).
         static let hubGroup = "network"
-        /// The hub's managers, each a whole assistant (Settings › Managers, docs/managers.md).
+        /// The hub's managers, each a whole assistant (Settings › Managers, docs/assistant/managers.md).
         static let managers = "person.2.circle"
         /// Make a manager the default one (the one Siri, shortcuts and the assistant page go to).
         static let makeDefault = "star.circle"
-        /// What Persona sent in the user's name through the connectors (Settings › Sent as You, docs/connectors.md "Sent as the user").
+        /// What Persona sent in the user's name through the connectors (Settings › Sent as You, docs/extensions/connectors.md "Sent as the user").
         static let sentAsYou = "paperplane.circle"
-        /// A hub reached through an SSH tunnel (Settings › hub › SSH Tunnel, docs/network.md「经 SSH 隧道连 hub」).
+        /// A hub reached through an SSH tunnel (Settings › hub › SSH Tunnel, docs/operations/network.md「经 SSH 隧道连 hub」).
         static let sshTunnel = "network.badge.shield.half.filled"
-        /// A hub reached through the app's own in-app tunnel (docs/network.md「经 App 内隧道连 hub」).
+        /// A hub reached through the app's own in-app tunnel (docs/operations/network.md「经 App 内隧道连 hub」).
         static let inAppTunnel = "lock.shield"
         /// This device's own SSH key (its public half, to copy onto the server).
         static let sshKey = "key.horizontal"
         /// The SSH server's key fingerprint, confirmed and pinned.
         static let hostKeyTrusted = "touchid"
-        /// The hub has a newer version, or is updating itself (docs/hub-update.md).
+        /// The hub has a newer version, or is updating itself (docs/operations/hub-update.md).
         static let hubUpdate = "arrow.down.to.line.circle"
         /// The assistant's skills (~/.persona/skills).
         static let skills = "puzzlepiece.extension"
-        /// A plugin of the hub's (Settings › Extensions, docs/extensions.md).
+        /// A plugin of the hub's (Settings › Extensions, docs/extensions/extensions.md).
         static let plugins = "powerplug"
         /// Extension Market: the markets' catalog of plugins to install.
         static let pluginMarket = "storefront"
@@ -373,7 +373,7 @@ extension Theme {
         static let upgrade = "arrow.up.square"
         /// A page a plugin draws (its declarative UI).
         static let pluginPage = "chart.bar.doc.horizontal"
-        /// A plugin's main-navigation entry by the `icon` it asks for (docs/extensions.md「UI 插槽」): one meaning each,
+        /// A plugin's main-navigation entry by the `icon` it asks for (docs/extensions/extensions.md「UI 插槽」): one meaning each,
         /// anything else is `plugins`.
         static let pluginChart = "chart.bar"
         static let pluginGauge = "gauge.with.needle"
@@ -388,7 +388,7 @@ extension Theme {
         static let handoff = "iphone.and.arrow.forward"
         /// The default web browser (open a link outside the app).
         static let safari = "safari"
-        /// A web page a machine serves on one of its ports (an agent's dev server, docs/ports.md).
+        /// A web page a machine serves on one of its ports (an agent's dev server, docs/operations/ports.md).
         static let servedPage = "globe"
         /// Something opened in a window of its own (Mac).
         static let newWindow = "macwindow.badge.plus"
@@ -412,11 +412,11 @@ extension Theme {
         static let mailAccounts = "envelope.badge"
         /// A chat app's bot the user talks to Persona through (Settings › Connectors › Lark Bot).
         static let chatBot = "message.badge.waveform"
-        /// Settings › Channels: the ways of talking to Persona (docs/channels.md).
+        /// Settings › Channels: the ways of talking to Persona (docs/extensions/channels.md).
         static let channels = "ellipsis.bubble"
         /// A voice channel (talking to Persona out loud), and a chat's way into a voice conversation (Voice Chat).
         static let voiceChannel = "waveform.and.mic"
-        /// The voice conversation's bar (docs/voice.md「界面」). Mute: turns the call's microphone off; muted, the button
+        /// The voice conversation's bar (docs/assistant/voice.md「界面」). Mute: turns the call's microphone off; muted, the button
         /// shows `voiceUnmute` (Unmute), the same mic filled like a toggle that is on, as the iOS Phone app's Mute. The muted
         /// orb wears `voiceMute`.
         static let voiceMute = "mic.slash"
@@ -443,7 +443,7 @@ extension Theme {
         static let handToAI = "paperplane"
         /// Mentions of the user (@Me).
         static let mention = "at"
-        /// The day's Today card at the top of the assistant's conversation (docs/unified-entry.md).
+        /// The day's Today card at the top of the assistant's conversation (docs/assistant/unified-entry.md).
         static let today = "sun.max.fill"
         /// Something done on the phone from the conversation: an event added to its calendar, a reminder.
         static let addedEvent = "calendar.badge.plus"
@@ -485,7 +485,7 @@ extension Theme {
         static let search = "magnifyingglass"
         /// The knowledge base (~/.persona/data).
         static let knowledge = "books.vertical"
-        /// Health: the health space (docs/health.md), its entry and its conversations' mark.
+        /// Health: the health space (docs/assistant/health.md), its entry and its conversations' mark.
         static let health = "heart"
         static let healthFilled = "heart.fill"
         /// What stays private (Health's note on where its conversations and memory are kept).

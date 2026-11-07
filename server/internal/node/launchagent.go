@@ -24,7 +24,7 @@ import (
 // Claude Code it starts are throttled like a background job. One such node got 15.45 CPU seconds in 139 s (scheduling
 // priority 4 instead of 31), and Claude did not start in time. ProcessType=Interactive lifts the limits; it grants no
 // privacy (TCC) permission. New installs write it. An existing plist is not rewritten behind the user's back:
-// `node doctor` reports it, and `node doctor --fix` writes it and loads the agent again (#5944, docs/server.md
+// `node doctor` reports it, and `node doctor --fix` writes it and loads the agent again (#5944, docs/server/server.md
 // "Persistent node").
 
 // NodeLaunchdLabel is the resident node's launchd agent, as both installers name it (and write it on a new install).

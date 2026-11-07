@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// A computer the user has not said is theirs yet (pending, docs/onboarding.md 4.2 "Your computers ↔ hub") is connected but
+// A computer the user has not said is theirs yet (pending, docs/assistant/onboarding.md 4.2 "Your computers ↔ hub") is connected but
 // gets nothing of the assistant's: no Persona-managed keys (pushManaged, the launchers a new connection gets), no
 // answers to its requests (the live context, the MCP tools), and it is no machine the assistant runs on or hands work
 // to (the hub leaves it out of devices.list and of the hello's machines). The hub says which are pending: its

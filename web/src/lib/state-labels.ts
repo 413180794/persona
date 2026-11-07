@@ -1,5 +1,5 @@
-// The one set of names for an agent's and a task's state on the web (#3415; docs/i18n.md "Agent states",
-// docs/agent-states.md): every page takes its state words from here, so a state is never Needs you on one page and Waiting for you
+// The one set of names for an agent's and a task's state on the web (#3415; docs/protocol/i18n.md "Agent states",
+// docs/protocol/agent-states.md): every page takes its state words from here, so a state is never Needs you on one page and Waiting for you
 // on the next. The words are in lib-state-labels.json; state-labels.test.ts keeps other namespaces from defining them.
 import { t } from "../i18n";
 import type { AgentState } from "./types";

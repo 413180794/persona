@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The mail MCP tools as they go over the wire (indented for reading). docs/prompts.md: regenerate with UPDATE_GOLDEN=1.
+// The mail MCP tools as they go over the wire (indented for reading). docs/assistant/prompts.md: regenerate with UPDATE_GOLDEN=1.
 func TestGoldenMailTools(t *testing.T) {
 	b, err := json.MarshalIndent((*Service)(nil).Tools(), "", "  ")
 	if err != nil {

@@ -1,6 +1,6 @@
 // Package pgdocker is a Postgres of one's own in Docker: one container, one volume, its port published on 127.0.0.1.
 // `personad hub setup` makes the hub's with it (persona-postgres, scripts/deploy/db.sh's), and `personad manager
-// install` a manager's (docs/managers.md, "Database"). It only runs docker; what to tell the user is the caller's.
+// install` a manager's (docs/assistant/managers.md, "Database"). It only runs docker; what to tell the user is the caller's.
 package pgdocker
 
 import (

@@ -1,6 +1,6 @@
 package assistant
 
-// Golden tests for the prompts the assistant writes (docs/prompts.md), compared byte for byte with
+// Golden tests for the prompts the assistant writes (docs/assistant/prompts.md), compared byte for byte with
 // testdata/prompts/<name>.golden. After changing a prompt on purpose, regenerate with
 //
 //	UPDATE_GOLDEN=1 go test ./internal/assistant -run Golden

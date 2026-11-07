@@ -1,5 +1,5 @@
 // "Overview": the hub at a glance — its name, build, uptime, how it listens, the addresses it hands out, counts, doctor. With
-// no computer but its own yet, adding one comes first (docs/plan-hub-center.md 0).
+// no computer but its own yet, adding one comes first (docs/archive/operations/plan-hub-center.md 0).
 import { useState } from "react";
 import { t } from "../../i18n";
 import { Button, cx, IconButton, toast, useNow } from "../../ui/atoms";
@@ -87,7 +87,7 @@ export function OverviewPage() {
 }
 
 // AddFirst: nothing but the hub's own machine yet. One hub is enough: every other computer gets the node service and is
-// added here (docs/plan-hub-center.md 0).
+// added here (docs/archive/operations/plan-hub-center.md 0).
 function AddFirst() {
   return (
     <section className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-card bg-surface px-4 py-4 shadow-card" style={{ animation: "fade-in 200ms ease-out both" }}>

@@ -43,7 +43,7 @@ data class HubConnectionConfig(
     /** How long a drop keeps showing Online and how fast a restarting hub is retried (#1574). */
     val reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
     /**
-     * The other hubs of this hub's group, tried after this hub's own candidates in list order (docs/android.md "Multiple hubs").
+     * The other hubs of this hub's group, tried after this hub's own candidates in list order (docs/android/android.md "Multiple hubs").
      * Empty for a hub without a group: everything then behaves exactly as for a single paired hub.
      */
     val members: List<HubMember> = emptyList(),
@@ -282,7 +282,7 @@ class OkHttpHubConnection(
         return (all.filter { it.second } + all.filter { !it.second }).map { it.first }
     }
 
-    /** Candidates with their hub and center markings (docs/multi-hub.md "Route selection"), center first. */
+    /** Candidates with their hub and center markings (docs/protocol/multi-hub.md "Route selection"), center first. */
     fun routeCandidates(overrides: EndpointOverrides = _overrides.value): List<HubRoute.Candidate> =
         routes(overrides).map { (endpoint, owner) ->
             HubRoute.Candidate(endpoint, hub = owner.hubId, center = owner.center)
@@ -750,7 +750,7 @@ class OkHttpHubConnection(
         config.deviceId?.let { put("device_id", it) }
         config.build?.let { put("build", it) }
         config.os?.let { put("os", it) }
-        // The language the app shows (docs/i18n.md "Protocol"): this socket's notices, and the user's language.
+        // The language the app shows (docs/protocol/i18n.md "Protocol"): this socket's notices, and the user's language.
         put("locale", persona.core.contracts.ClientLanguage.tag)
         putJsonArray("features") {
             (setOf("endpoints", "ws_notify", "app_ping", "elicitation", ProtocolCompatibility.CAPABILITY) + config.clientFeatures).forEach { add(it) }

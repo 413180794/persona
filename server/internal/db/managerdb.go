@@ -11,7 +11,7 @@ import (
 )
 
 // The default manager moves its data out of the database it shared with the hub into one of its own, once
-// (docs/server.md "The default manager's own database"). Nothing may write its tables in the shared database while it
+// (docs/server/server.md "The default manager's own database"). Nothing may write its tables in the shared database while it
 // copies them: every manager running there holds the share of an advisory lock (HoldManagerShare), and the move takes
 // it alone (LockManagerMove), after the processes of a build from before (which hold none, and give no
 // application_name) are gone from the database.

@@ -1,46 +1,51 @@
 # Archive: point-in-time records
 
-This directory holds finished lane plans, real-data verifications, phase status tables and acceptance records. They capture the conclusions and evidence **at the time**.
-Current docs, code comments and lessons cite them to explain "why it is done this way", but they are no longer updated with the code:
+Only retain records with unique measurements, unresolved acceptance boundaries, or design decisions not captured by a maintained guide.
+The records below describe their stated date, not the current product. Source filenames, immutable commit references and test counts may be historical;
+local documentation links are kept current so readers can reach the maintained contract. Current module guides and lessons take precedence.
 
-- Source paths, commit hashes, commands and test counts in them refer to the base commit at the time of writing. Paths renamed or moved later are not updated;
-  to find the current code, search the repository by name.
-- Current design and rules live in the topic docs under `docs/` and in `docs/lessons/`. When a conclusion here conflicts with a current doc, the current doc wins.
-- New one-off records (lane plans, verification reports, acceptance checklists, audit snapshots) go straight here when done, not in the top level of `docs/` and not in the CLAUDE.md doc index;
-  add a row to the table below at the same time (`scripts/test/test_doc_paths.py` checks it).
+Development screenshots and recordings are not stored here. Keep new verification media outside the checkout and attach it to the associated PR.
+Place necessary historical text under its module directory and list it below.
 
 | File | Contents |
 | --- | --- |
-| `source-extension-migration-2026-11-07.md` | Server-rendered TypeScript/JSX implementation and native-client evidence, deduplicated migration checklist, source-package compatibility and outstanding production/platform gates (#5956) |
-| `rolling-upgrade-compatibility-verification.md` | 2026-11-07 bidirectional hub/manager/node binary matrix, current clients against the pinned baseline, inspected synthetic screenshots, test results and no-production boundaries (#6223) |
-| `android-visual-noise-6184/` | Synthetic native-rendered Android before/after decision and outcome screenshots, all three styles × light/dark; no completed emulator boot or device/refraction verification (#6184) |
-| `web-visual-noise-6183.md` | 2026-11-07 web approval/status color inventory, neutral semantic surfaces, before/after browser screenshot method, local verification and no-deployment boundary (#6183) |
-| `persona-only-277-acceptance.md` | Persona-only source naming, versioned local verification, row-lock comparison, preserved application identities and approval-gated cutover limits (#277) |
-| `persona-native-6152-reversible-acceptance.md` | 2026-11-07 原生端可逆升级：新旧存储保留、同身份回装、真实旧 Shortcut 执行、升级偏好截图、活动安装器限制与完整单测的既有基线失败（#6152） |
-| `persona-native-6152-acceptance.md` | 2026-11-07 Apple 原生改名验收：全平台编译、单测数量、离线签名、递增构建号升级、phone/watch 配对与未迁移的偏好和 Shortcut（#6152） |
-| `ios-perf-5730-final.md` | 2026-11-07 iOS 性能收尾：逐页 cadence/最差 hitch/最长帧、六批已合并修复、67 项主要场景测试清单、未达标与未测边界（#5730） |
-| `agents-grouping-5766.md` | 2026-11-06 iPhone Agents 首批分组入口和长列表上限：400-Agent 受控读数、测试入口、零差异说明及未完成的 8000-Agent 边界（#5766） |
-| `agents-list-5929-local-acceptance.md` | 2026-11-06 bounded Agents API: runtime/personal-agent callers, synthetic 8,000-session before/after latency, bytes, CPU and memory, local test output and the pending production-deployment boundary (#5929) |
-| `codex-project-hierarchy-verification.md` | 2026-11-06 Codex project and task hierarchy verification, including source isolation, parent metadata, grouped tasks and client acceptance (#5620) |
-| `english-documentation-acceptance-20261106.md` | 2026-11-06 English documentation acceptance: language rules, bilingual README, all docs translations, merged PRs, link checks, screenshots and disclosed test limits (#5054, #5056) |
-| `lanes/live-updates.md` | 2026-10-31 live updates interrupting user actions: three reproductions, root cause, how it was measured, and performance numbers before and after the fix |
-| `lanes/msg-render-plan.md` | 2026-10-29 diagnosis and rework plan for the message read and render pipeline (compared against Ovis) |
-| `lanes/msg-render-verification.md` | 2026-10-29 real-corpus verification of the message pipeline lane (phases 2–4) |
-| `lanes/session-verify.md` | 2026-10-31 real-data verification of session reads and message sending, with per-hop latency |
-| `android-p0-status.md` | 2026-10-31 item-by-item status of the first Android release's P0 (source paths predate the package rename to `persona`) |
-| `android-p0-acceptance.md` | Android P0 round-4 joint acceptance checklist |
-| `ios-p0-verification.md` | 2026-10-31 iOS API acceptance record for the P0 hub changes |
-| `hub-contracts-report.md` | 2026-10-31 hub contract check |
-| `node-link-update-validation.md` | 2026-11-04 acceptance of Persona Link updating the resident personad over node RPC: verification, idle check, atomic replace, rollback and version confirmation (#1158) |
-| `android-capsule-2124.md` | 2026-11-05 first version of the Android floating capsule: cross-app overlay, sending to a session, capsule content contributed by extensions, acceptance evidence and follow-ups (#2124) |
-| `android-capsule-compact-2124.md` | 2026-11-05 Android capsule shrunk to a fixed small size; expanding it leaves only three entries: Unread / main chat / Inbox (#2124) |
-| `android-capsule-completion-2124.md` | 2026-11-05 Android capsule completion hint: shown briefly (about 4 seconds) when a session finishes, tapping goes straight there, does not interrupt manual cards (#2124) |
-| `android-capsule-drafts-2124.md` | 2026-11-05 Android capsule drafts survive the completion hint and auto-collapse (#2124) |
-| `extension-model-web-1854.md` | 2026-11-05 web acceptance of the extension model: contribution toggles, dependency-chain disabling, bundle install / uninstall confirmation (#1854) |
-| `extension-model-apple-acceptance.md` | 2026-11-05 Apple acceptance of extension model settings: contributions, bundles and declaration management, iOS build and test results (#1861) |
-| `extension-notification-apple-acceptance.md` | 2026-11-06 Apple acceptance of the extension notification phase: category registration, tap and foreground / background actions, dark and light UI, and the system placements #1862 has not finished yet |
-| `assistant-rich-ui-predeployment-2026-11-06.md` | 2026-11-06 main chat rich UI: real-model pre-deployment loop on the unified production source, earlier failure records, the SDK looks that did not pass, and the production pause boundary (#2017) |
-| `apple-html-mac-normal-20261106.md` | 2026-11-06 Mac normal matrix for the latest Apple Coordinator: 13 methods / 21 expanded cases, termination protection, verbatim-extraction fingerprints, and the unfinished infinite-loop / real OS termination boundary (#2025) |
-| `apple-rich-ui-shots-20261106.md` | 2026-11-06 Apple rich UI empty states and screenshot wrap-up: 60 shots across five styles in dark and light, real Mac app body screenshots, line-height fix and failure records (#2024) |
-| `plan-telegram.md` | 2026-11-03 plan for the Telegram connector (gotd, step-by-step login, Inbox, `tg` CLI); since 2026-11-05 it is an extension (#1704; from 0.1.3 the code lives in `nwverse/persona-extensions`, #2057), not in this repository |
-| `codex-project-hierarchy-verification.md` | 2026-11-06 verification of Codex project grouping and the task hierarchy (Desktop projects by canonical path and Git common dir, parent / shared-root metadata through node, manager and APIs, Android collapse in all styles) (#5620) |
+| `android/android-p0-acceptance.md` | Android P0 round 4 joint acceptance checklist |
+| `android/android-p0-status.md` | Android v1 P0 status |
+| `apple/agents-grouping-5766.md` | iPhone Agents grouping and initial long-list limits (#5766) |
+| `apple/agents-list-5929-local-acceptance.md` | Bounded Agents list API: local acceptance (#5929) |
+| `apple/apple-html-mac-normal-20261106.md` | Apple HTML: normal Mac matrix for the latest Coordinator (2026-11-06) |
+| `apple/ios-perf-5730-final.md` | iOS 60 FPS optimization closeout and remaining performance limits (#5730) |
+| `apple/live-updates.md` | Live updates must not interrupt user actions (2026-10-31) |
+| `apple/persona-native-6152-acceptance.md` | Apple native naming migration acceptance (#6152) |
+| `apple/persona-native-6152-reversible-acceptance.md` | Apple reversible native-state compatibility acceptance (#6152) |
+| `assistant/assistant-rich-ui-predeployment-2026-11-06.md` | Main chat rich UI: pre-deployment acceptance |
+| `extensions/plan-telegram.md` | Plan: Telegram connector (the user's own account) |
+| `extensions/source-extension-migration-2026-11-07.md` | Server-rendered source extensions: migration and acceptance record |
+| `integrations/codex-project-hierarchy-verification.md` | Codex project and task hierarchy verification |
+| `integrations/msg-render-plan.md` | Message reading and rendering pipeline: diagnosis and rework plan |
+| `integrations/msg-render-verification.md` | Real-data verification of the message pipeline lane (stages 2–4) |
+| `integrations/session-verify.md` | Real-data verification of session reading and message sending (2026-10-31) |
+| `operations/node-link-update-validation.md` | Persona Link node update acceptance (#1158) |
+| `operations/persona-only-277-acceptance.md` | Persona-only naming acceptance (#277) |
+| `apple/plan-chat-topbar.md` | Superseded Apple chat-header proposal and decisions; current implementation is in the iOS guide |
+| `operations/plan-hub-center.md` | Historical primary-hub design and rollout plan; current contract is in the mesh guide |
+| `operations/plan-hub-mesh.md` | Superseded multi-hub topology proposal; current primary/member behavior is in the mesh guide |
+| `operations/rolling-upgrade-compatibility-verification.md` | Rolling-upgrade verification (#6223) |
+| `redesign/android.md` | Android plan |
+| `redesign/flows.md` | Main feature flow diagrams |
+| `redesign/hub-changes.md` | Hub change list |
+| `redesign/ios-refactor.md` | iOS refactoring steps |
+| `redesign/parity.md` | Feature parity matrix (existing iOS features + redesign additions) |
+| `redesign/research/android-cn-roms.md` | Persona Android: research on Chinese vendor ROMs and Android-version compatibility |
+| `redesign/research/android-tech.md` | Persona Android technology research notes |
+| `redesign/research/bh-architecture.md` | Architecture and engineering research on a reference app (for Persona's iOS refactor and new Android version) |
+| `redesign/research/bh-ui-qa.md` | Reference app design language, prototype review, and test acceptance (compared with Persona) |
+| `redesign/research/hub-network-current.md` | Current hub networking audit (direct public connectivity / IPv6 priority / TLS / pairing) |
+| `redesign/research/persona-features.md` | Persona iOS feature inventory (source for the Android parity matrix) |
+| `redesign/research/persona-ios-arch.md` | Current Persona iOS architecture and technical debt (redesign baseline) |
+| `redesign/research/persona-protocol.md` | Persona hub protocol research (for a new Android client) |
+| `redesign/research/public-direct-ipv6.md` | Direct public connectivity, IPv6, TLS, and persistent-connection keepalive: research notes |
+| `redesign/ux.md` | Interaction and UI specification (shared by both platforms) |
+
+The [historical redesign index](redesign/README.md) groups the retained interaction drafts and research.
+The retained [chat-header prototype](apple/prototypes/chat-topbar.html) is a text-only historical design, not a production screen.

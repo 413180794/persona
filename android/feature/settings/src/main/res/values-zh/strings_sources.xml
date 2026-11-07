@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/i18n.md). Same keys in values, values-zh and values-ja. -->
+<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/protocol/i18n.md). Same keys in values, values-zh and values-ja. -->
 <resources>
     <string name="settings_src_just_now">刚刚</string>
     <plurals name="settings_src_minutes_ago">
@@ -98,7 +98,7 @@
     <string name="settings_src_lark_title">飞书</string>
     <string name="settings_src_lark_status_header">连接状态</string>
     <string name="settings_src_lark_last_event">最近一条实时消息</string>
-    <string name="settings_src_lark_not_configured_caption">hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在管理者的 manager.json 的 lark 里填上它（docs/feishu.md）。</string>
+    <string name="settings_src_lark_not_configured_caption">hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在管理者的 manager.json 的 lark 里填上它（docs/extensions/feishu.md）。</string>
     <string name="settings_src_lark_caption">飞书账号在 hub 所在机器的飞书网关里登录，会话与收件箱共用这个账号，无需再次登录。</string>
     <string name="settings_src_lark_accounts_header">账号</string>
     <string name="settings_src_lark_quarantined">无法打开，请在飞书网关里重试或移除</string>
@@ -424,5 +424,5 @@
     <string name="settings_src_mail_outlook_redirect">回调地址（注册时填）</string>
     <string name="settings_src_mail_outlook_copy_redirect">复制回调地址</string>
     <string name="settings_src_mail_outlook_copied">已复制回调地址</string>
-    <string name="settings_src_mail_outlook_steps">Outlook 登录用你自己在 Microsoft Entra 注册的应用（免费，注册一次，这个 hub 以后都用它）：\n1. 用微软账号打开 entra.microsoft.com，「应用注册」→「新注册」；\n2. 支持的帐户类型选「任何组织目录中的帐户和个人 Microsoft 帐户」；\n3. 重定向 URI 平台选「公共客户端/本机(移动和桌面)」，填上面这个地址；\n4. 「身份验证」里把「允许公共客户端流」设为「是」；\n5. 「API 权限」添加 IMAP.AccessAsUser.All 和 SMTP.Send（委托的权限）；\n6. 把「概述」页的「应用程序(客户端) ID」填到这里。\n详细步骤见说明文档 docs/mail.md「Outlook 接入方式」。</string>
+    <string name="settings_src_mail_outlook_steps">Outlook 登录用你自己在 Microsoft Entra 注册的应用（免费，注册一次，这个 hub 以后都用它）：\n1. 用微软账号打开 entra.microsoft.com，「应用注册」→「新注册」；\n2. 支持的帐户类型选「任何组织目录中的帐户和个人 Microsoft 帐户」；\n3. 重定向 URI 平台选「公共客户端/本机(移动和桌面)」，填上面这个地址；\n4. 「身份验证」里把「允许公共客户端流」设为「是」；\n5. 「API 权限」添加 IMAP.AccessAsUser.All 和 SMTP.Send（委托的权限）；\n6. 把「概述」页的「应用程序(客户端) ID」填到这里。\n详细步骤见说明文档 docs/extensions/mail.md「Outlook 接入方式」。</string>
 </resources>

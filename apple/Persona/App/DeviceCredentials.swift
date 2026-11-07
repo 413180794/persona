@@ -4,14 +4,14 @@ import SwiftUI
 import WatchConnectivity
 #endif
 
-// One credential per device (docs/protocol.md「鉴权」): the pairing token opens everything, so right after pairing the
+// One credential per device (docs/protocol/protocol.md「鉴权」): the pairing token opens everything, so right after pairing the
 // phone trades it for a token of its own and stops keeping it, and gets the watch an answer-only one. A lost device is
 // then revoked alone in Settings › Devices instead of re-pairing everything. Against an older hub (no /auth/tokens) the
 // pairing token stays, as before; the next launch tries again.
 
 extension AppModel {
     /// This device's token id at the hub-level group's hub (Settings › Devices marks it This Device); nil while it still uses the
-    /// pairing token there. Each paired hub has its own (docs/multi-hub.md).
+    /// pairing token there. Each paired hub has its own (docs/protocol/multi-hub.md).
     var deviceID: String? {
         guard let hub else { return nil }
         let on = hub.config
@@ -65,7 +65,7 @@ extension AppModel {
     /// still on the old token goes on with it at once: whatever address or route it took (a candidate address, a mesh
     /// peer, the SSH tunnel), whichever group the hub is in by now (a hello may regroup it while the trade is out).
     /// Comparing whole configs missed those, and the socket stayed on the pairing token until the hub dropped it after
-    /// its grace (docs/protocol.md「临时配对」): 401 on every attempt, Connecting… for good (#2766).
+    /// its grace (docs/protocol/protocol.md「临时配对」): 401 on every attempt, Connecting… for good (#2766).
     func adoptDeviceToken(hub id: String, old: String, token: String, deviceID: String) {
         tradedTokens[old] = token
         // nil: paired again with another link meanwhile; that pairing trades its own.

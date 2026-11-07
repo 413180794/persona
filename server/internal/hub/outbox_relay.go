@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// What a manager made while the hub was away comes with manager.outbox once it is back (docs/hub-restart.md "The
+// What a manager made while the hub was away comes with manager.outbox once it is back (docs/operations/hub-restart.md "The
 // manager while the hub is away"): its pushes and the apps' live updates, oldest first, after it reported its state
 // (its cards first: a card's push needs the card). The hub delivers each as it would have then, only about the
 // manager's own machines, sessions and cards (deliverPushFrom, relayBroadcastFrom), and each once: a manager that did

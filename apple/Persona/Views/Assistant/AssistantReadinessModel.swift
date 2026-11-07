@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// The main conversation's readiness on this device (docs/onboarding.md 4.4, 5.1): asked when the Persona page shows,
+/// The main conversation's readiness on this device (docs/assistant/onboarding.md 4.4, 5.1): asked when the Persona page shows,
 /// after pairing, after a computer is added or confirmed, after a provider is saved, when the machines change; kept
 /// from `warm` too. On a hub without `assistant_readiness` (or one answering 404) it stays nil and every page behaves
 /// as before. Also holds the card of a start or a send the hub refused with a code (5.2).

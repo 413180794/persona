@@ -3,7 +3,7 @@ package persona.core.domain.sort
 import persona.core.contracts.AgentState
 import persona.core.contracts.Session
 
-// The agents of one herdr tab (#2320, docs/agent-states.md "Several panes in one tab"): an agent that splits its tab and
+// The agents of one herdr tab (#2320, docs/protocol/agent-states.md "Several panes in one tab"): an agent that splits its tab and
 // starts more agents in the new panes works with them on one thing, so the clients show them as a group. The order and
 // the initiator match the web (web/src/lib/herdr-tree.ts paneOrder, launcherOf).
 
@@ -32,7 +32,7 @@ fun <T> launcherOf(panes: List<T>, session: (T) -> Session): T? =
     if (panes.size > 1) panes.firstOrNull { session(it).paneIndex == 0 } else null
 
 /**
- * What a tab's row speaks for (docs/agent-states.md "Sort priority", as the web): needs you > working > unread > awaiting
+ * What a tab's row speaks for (docs/protocol/agent-states.md "Sort priority", as the web): needs you > working > unread > awaiting
  * reply (#5096, not muted) > seen.
  */
 private fun tabUrgency(row: AgentSession, mutes: AgentPreferences): Int = when {

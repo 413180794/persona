@@ -1,5 +1,5 @@
-// The opencode runtime (docs/opencode.md): the sessions of one opencode server process in Persona through the runtime
-// SDK (docs/runtimes.md). opencode loads a plugin once per location (a project directory) in the one server process
+// The opencode runtime (docs/integrations/opencode.md): the sessions of one opencode server process in Persona through the runtime
+// SDK (docs/integrations/runtimes.md). opencode loads a plugin once per location (a project directory) in the one server process
 // that every TUI attaches to, so there are as many calls of `register` as directories in use, but one runtime
 // connection per process: index.js hands each location's plugin context to the host made here, once per process.
 // The server-wide event stream is read through one of them (the primary; another takes over when it goes away).

@@ -139,7 +139,7 @@ nonisolated struct LarkStatus: Codable, Hashable, Sendable {
     }
 }
 
-/// One of GET /api/v1/connectors: a source the hub reads (GitHub…) and how it is doing (docs/protocol.md「连接器 API」).
+/// One of GET /api/v1/connectors: a source the hub reads (GitHub…) and how it is doing (docs/protocol/protocol.md「连接器 API」).
 /// Feishu and mail are in it too when asked for (`all`): `ConnectorRow` draws them as the rows they always had.
 nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
     var id: String
@@ -412,7 +412,7 @@ private struct ConnectorRowLabel: View {
 }
 
 /// Settings › Connectors › Lark: whether the hub reaches the Lark gateway, who is signed in, and what Persona does with it. The account
-/// itself is signed in on the hub's machine (docs/feishu.md), not here.
+/// itself is signed in on the hub's machine (docs/extensions/feishu.md), not here.
 struct FeishuConnectorView: View {
     @Environment(AppModel.self) private var model
     @Bindable private var larkHome = LarkHomePreference.shared
@@ -449,7 +449,7 @@ struct FeishuConnectorView: View {
                 }
             } footer: {
                 Text(status?.configured == false
-                     ? String(localized: "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/feishu.md).")
+                     ? String(localized: "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/extensions/feishu.md).")
                      : String(localized: "The Lark account is signed in through the Lark gateway on the hub machine. Chats share this account with the Inbox, so there's no need to sign in again."))
             }
 
@@ -616,7 +616,7 @@ struct HubConnectorView: View {
                 }
             } footer: {
                 if let connector, !connector.signsInHere, !connector.undescribed {
-                    Text("Sign-in is set up in the manager's configuration (manager.json, see docs/config.md); this page only shows the status.")
+                    Text("Sign-in is set up in the manager's configuration (manager.json, see docs/operations/config.md); this page only shows the status.")
                 }
             }
             // Telegram switched off lists nothing until it runs: its switch is here all the same.

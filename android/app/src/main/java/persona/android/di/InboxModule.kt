@@ -53,7 +53,7 @@ class InboxDataOwner @Inject constructor(
     private data class Repositories(val data: ScopedHubData, val inbox: persona.feature.inbox.InboxRepository,
         val assistant: AssistantConversations, val mail: StateFlow<MailTransport?>,
         val composers: ReplyComposers, val reading: LarkReadingStore, val names: GroupNames)
-    // The inbox and Persona are the selected group's (docs/android.md "Multiple hubs"): its own transports speak its plain
+    // The inbox and Persona are the selected group's (docs/android/android.md "Multiple hubs"): its own transports speak its plain
     // ids, which are moved into the merged lists' ids on the way out. Agent requests in the inbox stay merged.
     private val current = runtime.scopedData.mapLatest { data ->
         data?.coroutineScope?.async {

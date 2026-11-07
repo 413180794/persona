@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The Claude assistant gets the extensions' MCP servers (mcp_servers, docs/extensions.md "MCP servers"): a command line
+// The Claude assistant gets the extensions' MCP servers (mcp_servers, docs/extensions/extensions.md "MCP servers"): a command line
 // on this machine, found on PATH or in ~/bin (where a wrapper usually lives and a service's PATH often misses), or at
 // the path its Env variable names. Each is added as `<command> <args…>` with no environment of Persona's: the command
 // reads its own configuration and Persona never reads or passes its credentials.

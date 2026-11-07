@@ -66,7 +66,7 @@ func readyMachine(t *testing.T, main ...proto.Session) (*fakeHub, *Service, *mem
 }
 
 // With no computer the first missing step is the computer, said in plain words with what to do; what comes after it
-// cannot be told, and the suggestions are the local ones only (docs/onboarding.md 5.1).
+// cannot be told, and the suggestions are the local ones only (docs/assistant/onboarding.md 5.1).
 func TestReadinessWithoutComputer(t *testing.T) {
 	s := newStorelessService(t, newFakeHub())
 	r := getReadiness(t, s, "", "")

@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// Personas (docs/persona.md): a look for Persona — its name, face, the animated dot in the Persona tab's top bar and the
+// Personas (docs/apple/persona.md): a look for Persona — its name, face, the animated dot in the Persona tab's top bar and the
 // colors — as a package: persona.json and the files it names. A package is a directory in ~/.persona/personas/<id>/ or
 // one built into personad (personas/ beside this file: a look the project ships to every hub, nwverse); a directory of the
 // same id wins, so a look can be tried on one hub before it ships. The phone pulls the one it shows and caches it; the

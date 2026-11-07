@@ -17,7 +17,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-/** Settings › Hub version over the pairing's connection (docs/hub-update.md "In the app", `/api/v1/hub/update*`). */
+/** Settings › Hub version over the pairing's connection (docs/operations/hub-update.md "In the app", `/api/v1/hub/update*`). */
 class HttpHubUpdates internal constructor(
     private val request: suspend (path: String, method: String, body: RequestBody?) -> Response,
 ) : HubUpdates {

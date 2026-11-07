@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant's own settings (settings `assistant`, docs/assistant.md "Boundary with the hub"): the machine its
+// The assistant's own settings (settings `assistant`, docs/assistant/assistant.md "Boundary with the hub"): the machine its
 // conversations run on, its launcher, the user's time zone, "About me", the main conversation and the ones it replaced,
 // and whether tasks from the main conversation are told only there. Only the assistant reads and writes them; hub.json's
 // assistant section is their default (the hub's hello). It reports what the hub's own features need of them in every
@@ -325,7 +325,7 @@ type assistantView struct {
 }
 
 // view is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`). It lists the
-// assistant's own conversations; space "health" lists the health space's instead (docs/health.md), with that
+// assistant's own conversations; space "health" lists the health space's instead (docs/assistant/health.md), with that
 // space's directory as Cwd.
 func (s *Service) view(ctx context.Context, withArchived bool, space ...string) assistantView {
 	sp := ""
@@ -368,7 +368,7 @@ func (s *Service) profileRoutes() {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		go s.warm(in.Launcher)
-		// What the main conversation still needs, for the first screen's card (docs/onboarding.md 5.1); no probe, and
+		// What the main conversation still needs, for the first screen's card (docs/assistant/onboarding.md 5.1); no probe, and
 		// bounded so that opening the tab stays quick.
 		out := map[string]any{"ok": true}
 		if rd := s.readinessQuick(r.Context(), readinessWaitWarm); rd != nil {
@@ -511,7 +511,7 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // checkLauncher: the assistant runs Claude Code (claude -p), Codex (codex app-server) or an agent runtime that says it
-// can (its launcher has assistant: docs/runtimes.md "Assistant"); anything else would fail every message. One that can't
+// can (its launcher has assistant: docs/integrations/runtimes.md "Assistant"); anything else would fail every message. One that can't
 // be probed now goes.
 func (s *Service) checkLauncher(ctx context.Context, machine, launcher string) error {
 	if launcher == "claude" {
@@ -583,7 +583,7 @@ func (s *Service) memory(ctx context.Context, op map[string]any, out any) error 
 	if !validSpace(space) {
 		return badRequest(fmt.Errorf("space %q: health or none", space))
 	}
-	cwd := s.spaceCwd(d, space) // the health space keeps a memory of its own (docs/health.md)
+	cwd := s.spaceCwd(d, space) // the health space keeps a memory of its own (docs/assistant/health.md)
 	if cwd == "" {
 		return errors.New("assistant machine is offline")
 	}

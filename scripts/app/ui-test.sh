@@ -1,12 +1,12 @@
 #!/bin/bash
-# Run the UI tests (apple/PersonaUITests) in the simulator against the configured hub (docs/config.md).
+# Run the UI tests (apple/PersonaUITests) in the simulator against the configured hub (docs/operations/config.md).
 #   ./scripts/app/ui-test.sh [machine/session to open]   # default: the newest session of the hub's machine
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 eval "$(python3 scripts/persona_config.py env)"
 python3 scripts/persona_config.py xcconfig
 SIM="${SIM:-$PERSONA_SIM}"
-# boots it slim (SIM_PROFILE=default|watch|live-activity|stock), docs/testing.md "Simulators"
+# boots it slim (SIM_PROFILE=default|watch|live-activity|stock), docs/operations/testing.md "Simulators"
 SIM=$(scripts/app/sim-boot.sh "$SIM") || exit 1
 RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
 TOKEN=$(ssh "$PERSONA_HUB_SSH" "$RESOLVER

@@ -1,4 +1,4 @@
-// An agent's own task list as task cards and agent rows show it (#5302, docs/agent-goal.md "Plan").
+// An agent's own task list as task cards and agent rows show it (#5302, docs/integrations/agent-goal.md "Plan").
 import { describe, expect, it } from "vitest";
 import { planInRow, planLabel, planLine, planShown } from "./plan";
 

@@ -62,7 +62,7 @@
 
 ### 输入
 
-`input.items` 使用 [协议的 Item](../../../docs/protocol.md) 字段名，按 transcript 顺序排列，`id`、`seq`、`role`、`kind` 必填；未给出的可选字段视为 `null`。同一 `seq` 内按 `id` 最后一个 `#` 后的数字排序，不按字符串排序。夹具不负责解析原始 `attachment/queued_command`：它已经被服务端规范化成 `queued: true` 的用户文本及图片。
+`input.items` 使用 [协议的 Item](../../../docs/protocol/protocol.md) 字段名，按 transcript 顺序排列，`id`、`seq`、`role`、`kind` 必填；未给出的可选字段视为 `null`。同一 `seq` 内按 `id` 最后一个 `#` 后的数字排序，不按字符串排序。夹具不负责解析原始 `attachment/queued_command`：它已经被服务端规范化成 `queued: true` 的用户文本及图片。
 
 支持 `text`、`thinking`、`tool_use`、`tool_result`、`notice`、`image`、`recap`、`fold`，未知 `kind` 按现有宽容解码处理。`tool_input`、`image`、`task`、`fold` 的嵌套结构直接采用线上结构；`task` 是 notice 的字段，不是独立 kind。图片只用编造的占位数据，不测试图片解码。
 
@@ -114,10 +114,10 @@
 
 ## 与设计文档的差异
 
-- [总纲 2.3、D1、D4](../../../docs/redesign/README.md) 和 [架构调研 A4/A5](../../../docs/redesign/research/persona-ios-arch.md) 指定共享行为夹具，本目录固定的是当前 iOS 输出，没有重构生产代码。
-- [UX 3.3](../../../docs/redesign/ux.md) 要求折叠时显示失败数、缺结果记录，且耗时只取记录中的轮次时长；当前 `WorkSummary` 未显示这些计数，`WorkLine` 仍用时间戳差及当前时钟，本夹具保留现状，并另列已知失败和缺结果数供后续使用。
+- [总纲 2.3、D1、D4](../../../docs/archive/redesign/README.md) 和 [架构调研 A4/A5](../../../docs/archive/redesign/research/persona-ios-arch.md) 指定共享行为夹具，本目录固定的是当前 iOS 输出，没有重构生产代码。
+- [UX 3.3](../../../docs/archive/redesign/ux.md) 要求折叠时显示失败数、缺结果记录，且耗时只取记录中的轮次时长；当前 `WorkSummary` 未显示这些计数，`WorkLine` 仍用时间戳差及当前时钟，本夹具保留现状，并另列已知失败和缺结果数供后续使用。
 - 协议说空思考不显示，实际 `workItems` 只过滤独立 thinking，已并入 `.tools` 的空思考未经再次过滤；两个空思考用例分别固定这两条路径。
-- [UX 3.2/5.1](../../../docs/redesign/ux.md) 的统一状态行尚未进入当前 `ChatView`，本目录只覆盖工作行的 `live`，不提前定义新状态机。
+- [UX 3.2/5.1](../../../docs/archive/redesign/ux.md) 的统一状态行尚未进入当前 `ChatView`，本目录只覆盖工作行的 `live`，不提前定义新状态机。
 - 总纲第 5 节提到权限卡挂记录末尾，而当前 `mainFooter` 把所有请求面板放在输入区；本夹具采用实际位置，与 UX 3.2/3.4 的当前规则一致。
 - Swift 的 `String.count` 数扩展字素簇，Kotlin 实现取答时须注意复合表情，不能直接用 UTF-16 长度代替。
 

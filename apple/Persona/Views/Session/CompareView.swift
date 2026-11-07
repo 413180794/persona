@@ -2,7 +2,7 @@ import PersonaKit
 import SwiftUI
 
 /// A file at a version, as the node keeps it for comparing (`GET …/git/blob`, hub feature `git_blob`,
-/// docs/protocol.md): a path in the node's cache to read with `/file/download`, or that the version has no such file.
+/// docs/protocol/protocol.md): a path in the node's cache to read with `/file/download`, or that the version has no such file.
 nonisolated struct GitBlob: Decodable, Sendable {
     var path: String?
     var size: Int64?
@@ -16,7 +16,7 @@ extension APIClient {
     }
 }
 
-/// Which two versions of a changed file to compare (docs/ios.md「对比」): an unstaged change is the index against the
+/// Which two versions of a changed file to compare (docs/apple/ios.md「对比」): an unstaged change is the index against the
 /// working tree, a staged one HEAD against the index, a commit's file its parent against the commit.
 nonisolated struct CompareVersions: Hashable, Sendable {
     /// A revision for `git/blob`, or nil for the working tree's file.

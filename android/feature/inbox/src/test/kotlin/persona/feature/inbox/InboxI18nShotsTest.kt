@@ -42,7 +42,7 @@ import persona.core.navigation.Navigator
 import java.io.File
 
 /**
- * The inbox's pages in each of the app's languages (docs/i18n.md): the list with demo items, a document's item page,
+ * The inbox's pages in each of the app's languages (docs/protocol/i18n.md): the list with demo items, a document's item page,
  * a Lark chat and a Moments post, in Glass light and dark and the other styles light. Written as PNGs to
  * `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at. The demo data is neutral English, as the hub's would
  * be for an English user; only the app's own words change with the language.

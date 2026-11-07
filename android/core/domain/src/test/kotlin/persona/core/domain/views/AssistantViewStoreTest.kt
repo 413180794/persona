@@ -26,7 +26,7 @@ import persona.core.contracts.api.TasksApi
 import persona.core.contracts.generated.ExtensionViewAction
 import persona.core.domain.tasks.TasksStore
 
-// The cards' state per hub and conversation (docs/assistant-views.md "Live cards" "Persisted submissions") and how their actions go.
+// The cards' state per hub and conversation (docs/assistant/assistant-views.md "Live cards" "Persisted submissions") and how their actions go.
 class AssistantViewStoreTest {
     private fun json(text: String): JsonElement = JsonCodec.parseToJsonElement(text)
     private fun view(id: String, version: Long, title: String) =

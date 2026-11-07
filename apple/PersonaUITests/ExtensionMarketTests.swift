@@ -1,6 +1,6 @@
 import XCTest
 
-/// Settings › Extensions › Extension Market and a plugin's own page (docs/extensions.md「扩展市场」「声明式 UI」): a plugin installed from a market
+/// Settings › Extensions › Extension Market and a plugin's own page (docs/extensions/extensions.md「扩展市场」「声明式 UI」): a plugin installed from a market
 /// (preview, its permissions agreed to, installed, then removed so the next run finds it as before), a plugin page's
 /// form filled in and saved (the plugin's toast, its new view), and a launcher's page with the plugin's section — the
 /// one that says unsupported (#1339) not there at all. Against scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1:
@@ -100,7 +100,7 @@ final class ExtensionMarketTests: XCTestCase {
         XCTAssertTrue(upgrade.waitForExistence(timeout: 5))
     }
 
-    /// A market plugin's Update section (docs/extensions.md「自动升级」): its own switch, the newer version that waits for the
+    /// A market plugin's Update section (docs/extensions/extensions.md「自动升级」): its own switch, the newer version that waits for the
     /// user with what it asks for more, opening the market's upgrade; the Markets page's switch for all of them. The mock's
     /// MOCK_PLUGIN_UPGRADE picks the state (needs_permission by default; the screenshots of the others are named by it).
     @MainActor func testAutoUpgrade() throws {

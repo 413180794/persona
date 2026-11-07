@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "models.schema.json",
   "title": "Model calls",
-  "description": "Calling a model through the hub (docs/extensions.md \"Model calls\", #6102): model.complete, with the permission models in the manifest's permissions.hub, granted by the user. The call runs on the extension's own purpose extension.<id> in Settings › Model configuration, which follows \"Knowledge base\" until the user picks another model for it; the extension never sees a key or chooses the connection. There is no budget and no cap: each call's usage comes back in its result, and the hub logs it. A connection held for quota or load (model_paused) sends nothing until it lets go. Params are strict: an unknown field is invalid_params. Plugin-side: only the hub and the program speak it.",
+  "description": "Calling a model through the hub (docs/extensions/extensions.md \"Model calls\", #6102): model.complete, with the permission models in the manifest's permissions.hub, granted by the user. The call runs on the extension's own purpose extension.<id> in Settings › Model configuration, which follows \"Knowledge base\" until the user picks another model for it; the extension never sees a key or chooses the connection. There is no budget and no cap: each call's usage comes back in its result, and the hub logs it. A connection held for quota or load (model_paused) sends nothing until it lets go. Params are strict: an unknown field is invalid_params. Plugin-side: only the hub and the program speak it.",
   "x-side": "plugin",
   "x-methods": {
     "model.complete": {"from": "program", "params": "ModelCompleteParams", "result": "ModelCompleteResult"}

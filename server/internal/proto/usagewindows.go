@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Subscription rate-limit windows (#2432, docs/usage-windows.md): how much of an account's 5-hour and weekly allowance
+// Subscription rate-limit windows (#2432, docs/server/usage-windows.md): how much of an account's 5-hour and weekly allowance
 // is used. A node reads them from the agents' own local files (Codex's rollouts, a Claude Code status line drop) and
 // answers usage.windows; the hub merges the machines' answers into one list per account. Nothing here carries a
 // credential: the account has no id the agent's vendor knows, only the windows it was seen with.
@@ -39,8 +39,8 @@ type UsageAccount struct {
 	Stale bool `json:"stale,omitempty"`
 
 	// Where the numbers came from (#2595), set by the hub. Local: an agent's own files on one of the machines
-	// (docs/usage-windows.md); Sources: the names of the account-pool gateways that reported it
-	// (docs/usage-windows.md "Account pool gateways"). An account both saw lists both.
+	// (docs/server/usage-windows.md); Sources: the names of the account-pool gateways that reported it
+	// (docs/server/usage-windows.md "Account pool gateways"). An account both saw lists both.
 	Local   bool     `json:"local,omitempty"`
 	Sources []string `json:"sources,omitempty"`
 	// Problem: "error" when the gateway could not read the account's numbers just now (it kept the stored ones),

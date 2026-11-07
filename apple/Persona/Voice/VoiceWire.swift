@@ -1,7 +1,7 @@
 import Foundation
 
-// The app's side of the voice extension's socket (docs/voice.md「协议变更」: protocol 2; protocol 1 is in
-// docs/extensions.md「语音（kind = voice）」). Pure data and parsing: it builds for every platform the Persona folder is
+// The app's side of the voice extension's socket (docs/assistant/voice.md「协议变更」: protocol 2; protocol 1 is in
+// docs/extensions/extensions.md「语音（kind = voice）」). Pure data and parsing: it builds for every platform the Persona folder is
 // compiled for (iOS, Mac, visionOS) and its tests need neither audio nor a hub.
 //
 // Parsing follows the frame reader of PR #1931 (CarPlay voice conversations, by another contributor): an unknown frame
@@ -48,7 +48,7 @@ nonisolated struct VoiceLine: Equatable, Sendable, Encodable {
 }
 
 nonisolated extension VoiceLine {
-    /// How many of the conversation's turns `recent` carries, and how long each line may be (docs/voice.md 3.2).
+    /// How many of the conversation's turns `recent` carries, and how long each line may be (docs/assistant/voice.md 3.2).
     static let recentTurns = 3
     static let recentLength = 300
     /// At most this many lines of `recent`: an agent's turn can be a long run of short texts between tool calls.
@@ -86,7 +86,7 @@ nonisolated extension VoiceLine {
     }
 }
 
-/// What a `run` frame says about one instruction the call handed to the conversation (docs/voice.md 3.3).
+/// What a `run` frame says about one instruction the call handed to the conversation (docs/assistant/voice.md 3.3).
 nonisolated enum VoiceRunState: Equatable, Hashable, Sendable {
     case sending, sent, working, needsYou, blocked, held, done, failed, refused, unknown, folded
     case other(String)
@@ -173,7 +173,7 @@ nonisolated struct VoiceRun: Equatable, Identifiable, Sendable {
     /// The words left unsent in the agent's input box on the computer (409 input_draft): the whole line, shown to the user.
     var draft: String?
     /// The hub's 409 `clearable` text: present only when the node can clear that line, and not always the same as `draft`
-    /// (an IDE selection marker stays out of it). Clear and Send sends it back as `clear_draft` exactly (docs/voice.md 3.2).
+    /// (an IDE selection marker stays out of it). Clear and Send sends it back as `clear_draft` exactly (docs/assistant/voice.md 3.2).
     var clearable: String?
 }
 
@@ -219,7 +219,7 @@ nonisolated enum VoiceLink: Equatable, Sendable {
     }
 }
 
-/// The `code` of an `error` frame (docs/voice.md 3.3).
+/// The `code` of an `error` frame (docs/assistant/voice.md 3.3).
 nonisolated enum VoiceErrorCode: Equatable, Sendable {
     case noUpstream, upstreamForbidden, upstreamUnavailable, upstreamFailed
     case targetGone, targetReadOnly, targetForbidden

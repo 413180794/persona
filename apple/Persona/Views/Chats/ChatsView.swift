@@ -7,7 +7,7 @@ struct SpaceGroup: Identifiable {
     var id: String // machineID/spaceID, "group|machineID/spaceID" for another group of hubs
     var machineID: String
     var spaceID: String
-    /// The group of hubs its machine is in (docs/multi-hub.md); "" = the default group.
+    /// The group of hubs its machine is in (docs/protocol/multi-hub.md); "" = the default group.
     var group: String = ""
     var machineRef: MachineRef { MachineRef(group: group, id: machineID) }
     var name: String
@@ -21,7 +21,7 @@ struct SpaceGroup: Identifiable {
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
     /// The same from the rows' times while the Agents list follows them (`AgentsFeed.time`): the list's structure
-    /// does not change for time passing, so its agents' `updatedAt` may be older (docs/ios-state.md「第 3 步」).
+    /// does not change for time passing, so its agents' `updatedAt` may be older (docs/apple/ios-state.md「第 3 步」).
     @MainActor func updatedAt(_ feed: AgentsFeed?) -> Date {
         sessions.compactMap { feed?.time($0.id) ?? $0.updatedAt }.max() ?? .distantPast
     }
@@ -178,7 +178,7 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
 /// top (2026-10-31): nothing here reads the sessions.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
-    /// The shell (docs/ios.md「新外壳」): its ☰ and Assistant | Agents switch take the navigation bar.
+    /// The shell (docs/apple/ios.md「新外壳」): its ☰ and Assistant | Agents switch take the navigation bar.
     @Environment(\.shell) private var shell
     @State private var path = NavigationPath()
     /// Which space page sits at which depth of `path` (only this view pushes them), so a chat opened from a space
@@ -532,7 +532,7 @@ private struct AgentsList: View {
     #else
     static let emptyMessage = String(localized: "Start an agent on any of your computers, then follow it live and take over from your phone.")
     #endif
-    /// No computer yet (a hub with machines_add): as the machines page says it (docs/onboarding.md 4.5「空状态改写」).
+    /// No computer yet (a hub with machines_add): as the machines page says it (docs/assistant/onboarding.md 4.5「空状态改写」).
     static let emptyNoComputerTitle = String(localized: "No computers yet")
     static let emptyNoComputerMessage = String(localized: "Add one and Persona can work on it for you.")
     @Environment(AppModel.self) private var model
@@ -851,7 +851,7 @@ private struct AgentsList: View {
                 Section { DesktopPresenceRow() } // 「Mac 上的 Persona 已登录」, WeChat's line over its chats
             }
             if model.hubNotice != nil && query.isEmpty {
-                Section { HubNoticeRow() } // the hub's version: an update out, under way, or too old (docs/hub-update.md)
+                Section { HubNoticeRow() } // the hub's version: an update out, under way, or too old (docs/operations/hub-update.md)
             }
             #endif
             if widthClass != .regular && showsHerdrNotices {
@@ -2177,7 +2177,7 @@ private struct FoldAnchor: ViewModifier {
 /// change slid by its height, and the reader's row went off and another space took its place.
 /// - At the very top nothing is kept: what came in shows there.
 /// - Not while a finger or a glide moves the list: the change waits for it then (`AgentsFeed.hold`), except what is
-///   critical, which may move the list (docs/ios-state.md「及时性」).
+///   critical, which may move the list (docs/apple/ios-state.md「及时性」).
 @MainActor final class ReaderAnchor {
     /// The list's window band as shown (below the bars), and whether it is at its very top; nil without a list.
     var shown: () -> (band: ClosedRange<CGFloat>, atTop: Bool)? = { nil }
@@ -2262,7 +2262,7 @@ private struct AgentsListProbe: View {
     }
 }
 
-/// What the Agents list shows (`probe.agents-list`, docs/ios-state.md「真实性」): each agent's state and last line, and
+/// What the Agents list shows (`probe.agents-list`, docs/apple/ios-state.md「真实性」): each agent's state and last line, and
 /// the questions it lists, to be checked against the hub's.
 nonisolated struct AgentsListShown: Encodable, Equatable {
     var states: [String: String] = [:]
@@ -2282,7 +2282,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 }
 #endif
 
-/// What the Agents list shows of the hub (docs/ios-state.md): the agents, the questions and the machines, passed on
+/// What the Agents list shows of the hub (docs/apple/ios-state.md): the agents, the questions and the machines, passed on
 /// from the model as they change, except while the list is held (`Hold`: scrolled, or out of sight); then what came
 /// meanwhile lands at once when it lets go.
 ///
@@ -2290,7 +2290,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 /// two seconds, and any update of a `List` mid-glide (the same rows or not) has it measure its rows anew: the content
 /// jumped by their difference from its estimate. Holding by the list's own state drew it again at every scroll's start.
 ///
-/// How long anything waits is `Hold`'s (docs/ios-state.md「及时性」); what may not wait is this feed's: what needs the
+/// How long anything waits is `Hold`'s (docs/apple/ios-state.md「及时性」); what may not wait is this feed's: what needs the
 /// user, or says something is wrong, is never held: a question or approval coming or going, an agent starting or
 /// stopping to need the user, one going offline, a machine going offline or failing. It lands at once, even mid-glide,
 /// alone (`landCritical`): the list may still move under the finger (a card put in at the top, a space moving up),
@@ -2417,7 +2417,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     }
 
     /// What the list's structure reads of the agents (the groups, the order, the folds, the counts, the headers; the
-    /// last lines while searching), with what only rows show taken out (docs/ios-state.md「第 3 步」).
+    /// last lines while searching), with what only rows show taken out (docs/apple/ios-state.md「第 3 步」).
     /// - The time: only the order it puts agents in (`Shape.byTime`); a minute passing changes nothing else.
     /// - Subagents and background work: only whether any runs (a row with one stays out of the idle fold).
     nonisolated static func shape(_ list: [Session], searching: Bool, recent: Bool = false) -> Shape {
@@ -3004,7 +3004,7 @@ nonisolated struct SlotRow: View, Equatable {
 }
 
 /// When an agent last moved (`updatedAt`), followed apart from the rest of it: a working agent's moves on every step,
-/// and only its row's time shows it (docs/ios-state.md「第 2 步」).
+/// and only its row's time shows it (docs/apple/ios-state.md「第 2 步」).
 @Observable final class AgentTime: Equatable {
     var updatedAt: Date?
     init(_ updatedAt: Date?) { self.updatedAt = updatedAt }
@@ -3694,7 +3694,7 @@ private struct SearchCloseProbe: UIViewRepresentable {
 }
 #endif
 
-/// The Agents page's top bar in the shell (docs/ios.md「新外壳」): the same face and switch as Assistant's, in the same places,
+/// The Agents page's top bar in the shell (docs/apple/ios.md「新外壳」): the same face and switch as Assistant's, in the same places,
 /// over the navigation bar (kept for its search field), New Session on the right; tapping the selected Agents opens the list's
 /// options (Group By, Display, Machines…).
 struct AgentsTopBar: View, Equatable {

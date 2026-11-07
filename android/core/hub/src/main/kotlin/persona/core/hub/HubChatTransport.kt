@@ -131,7 +131,7 @@ class HubChatTransport internal constructor(
 
     /**
      * A card that is over answers 200 `already` with the answer that took effect, or 410 with how it ended
-     * (docs/protocol.md, #1673): the first is an outcome, the second an [InteractionGoneException] carrying `status`.
+     * (docs/protocol/protocol.md, #1673): the first is an outcome, the second an [InteractionGoneException] carrying `status`.
      */
     override suspend fun resolveOutcome(id: String, resolution: Resolution): ResolveOutcome {
         val path = api("interactions", id, "resolve")

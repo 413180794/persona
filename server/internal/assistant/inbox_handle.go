@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// The processing conversation (docs/inbox.md"AI twin", phase 1): with the AI twin on, every Needs you event goes to the
+// The processing conversation (docs/assistant/inbox.md"AI twin", phase 1): with the AI twin on, every Needs you event goes to the
 // manager, one conversation per event, bound to it by the event's id. What comes later — new messages, the user's
 // confirmation, rejection or words, the event being closed — is sent into that same conversation (sendToSession)
 // instead of starting over; a conversation found gone is replaced by a new one that carries the recap and the chain.
@@ -757,7 +757,7 @@ func (s *Service) confirmAgent(ctx context.Context, it *InboxItem, g *InboxSugge
 	return out, err
 }
 
-// linkTask asks the judge (model 2) which of the user's tasks going on the event is about (docs/unified-entry.md):
+// linkTask asks the judge (model 2) which of the user's tasks going on the event is about (docs/assistant/unified-entry.md):
 // the conversation is told that task's progress, and its reply suggestion puts a card in the task's conversation.
 // Since phase 1 every Needs you event goes to the manager whatever the judge says of handling it; a model that fails
 // leaves the event unlinked.

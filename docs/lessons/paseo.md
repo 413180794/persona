@@ -1,6 +1,6 @@
 # Lessons: Paseo engine (`integrations/paseo`)
 
-Read before changing the bridge (`integrations/paseo`), its node runner (`node/paseobridge.go`), or testing real Paseo. Design: docs/paseo.md.
+Read before changing the bridge (`integrations/paseo`), its node runner (`node/paseobridge.go`), or testing real Paseo. Design: docs/integrations/paseo.md.
 
 - **Connect only to the address in home's `paseo.pid`, never default-port fallback** (2026-11-04). Paseo writes PID file immediately with listen:null; fills address after listening. Earlier fallback `PASEO_LISTEN` / `127.0.0.1:6767` connected a temporary-daemon prototype to the live local Paseo and sent agent.create. Missing provider made it fail, leaving only failed `creations/` record.
   - Bridge / node detection now trust PID-file address only, like Paseo CLI.

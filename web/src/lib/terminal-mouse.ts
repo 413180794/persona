@@ -1,4 +1,4 @@
-// The pointer on a terminal the page drives (#2441, docs/terminal.md "Mouse"): which events go to herdr (and so to a
+// The pointer on a terminal the page drives (#2441, docs/integrations/terminal.md "Mouse"): which events go to herdr (and so to a
 // program that takes the mouse) and which stay with the page (xterm's selection, Persona's right-click menu), the
 // button and modifier bits herdr takes, and how motion is thinned to one event per cell. Pure, so the decisions are
 // tested without a browser; lib/terminal.ts keeps the older wheel / click geometry.
@@ -39,7 +39,7 @@ export function mouseButton(button: number): MouseButton | null {
   return button === 0 ? "left" : button === 1 ? "middle" : button === 2 ? "right" : null;
 }
 
-/** herdr's modifier bits on a mouse event: shift 1, ctrl 2, alt 4 (measured, docs/terminal.md "Mouse"). */
+/** herdr's modifier bits on a mouse event: shift 1, ctrl 2, alt 4 (measured, docs/integrations/terminal.md "Mouse"). */
 export const MOD_SHIFT = 1;
 export const MOD_CTRL = 2;
 export const MOD_ALT = 4;

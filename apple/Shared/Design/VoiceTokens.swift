@@ -1,6 +1,6 @@
 import SwiftUI
 
-// The voice conversation's tokens (docs/voice.md「设计系统」): how the orb in the voice bar moves and how large it is.
+// The voice conversation's tokens (docs/assistant/voice.md「设计系统」): how the orb in the voice bar moves and how large it is.
 // A file of their own, away from Theme.swift (the CarPlay voice PR edits it too). Shared/, so the watch compiles them;
 // it draws no voice UI.
 
@@ -36,7 +36,7 @@ nonisolated extension Theme.Size {
 }
 
 nonisolated extension Theme {
-    /// The voice conversation's cues (docs/voice.md 1.2 A / I / M, 6.6): a short sound through the voice's own player (so
+    /// The voice conversation's cues (docs/assistant/voice.md 1.2 A / I / M, 6.6): a short sound through the voice's own player (so
     /// echo cancellation takes it out of the microphone too) and a tap on the hand. Played on a change the user did not
     /// make on the screen: connected, a card that wants a tap, the connection picked up again. Quiet beside the voice, and
     /// short enough not to cover a word of it.

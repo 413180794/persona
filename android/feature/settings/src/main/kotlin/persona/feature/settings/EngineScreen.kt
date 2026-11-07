@@ -19,7 +19,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Which terminal engine a machine uses (docs/engines.md), as on iOS `EngineSelectionView`. Right after pairing
+ * Which terminal engine a machine uses (docs/integrations/engines.md), as on iOS `EngineSelectionView`. Right after pairing
  * ([pairing]) an engine must be chosen: no back, no skip, and a failed save stays on the step; from the machine page
  * it is an ordinary page that saves and goes back.
  */

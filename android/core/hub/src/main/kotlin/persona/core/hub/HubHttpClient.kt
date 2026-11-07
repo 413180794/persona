@@ -92,7 +92,7 @@ fun systemTrustManager(): X509TrustManager {
     return factory.trustManagers.filterIsInstance<X509TrustManager>().first()
 }
 
-/** Names the manager a request is for (docs/protocol.md「Per-manager routing」); omitted: the default manager. */
+/** Names the manager a request is for (docs/protocol/protocol.md「Per-manager routing」); omitted: the default manager. */
 const val ManagerHeader = "X-Persona-Manager"
 
 /** The same as a query (WebSockets, links, one request pinned to a manager); empty: the default, sent as nothing. */
@@ -110,7 +110,7 @@ internal suspend fun HttpUrl.withRequestManager(): HttpUrl {
 
 /**
  * `…/api/v1/assistant[/…]`, under whatever sub-path the hub sits at: the assistant page's requests. The health
- * space's (`?space=`, docs/health.md) are not: that page is the default manager's and has no switcher.
+ * space's (`?space=`, docs/assistant/health.md) are not: that page is the default manager's and has no switcher.
  */
 internal fun isAssistantPath(url: HttpUrl): Boolean {
     if (url.queryParameter("space") != null) return false
@@ -130,7 +130,7 @@ private fun apiSegments(url: HttpUrl): List<String>? {
 }
 
 /**
- * The `X-Persona-Manager` a request to [url] carries, if any (docs/protocol.md「Per-manager routing」): the assistant
+ * The `X-Persona-Manager` a request to [url] carries, if any (docs/protocol/protocol.md「Per-manager routing」): the assistant
  * page's pick on its routes; else a pin or a list's stamp (an inbox item, an extension's page, a conversation the page
  * listed) of [hubId]'s hub.
  */
@@ -224,13 +224,13 @@ class HubHttpClient(
                 if (request.url.username.isNotEmpty() || request.url.password.isNotEmpty()) {
                     throw HubFailure(HubError.Protocol, retryable = false)
                 }
-                // The language the app shows, so the hub answers in it (docs/i18n.md); also on WebSocket upgrades.
+                // The language the app shows, so the hub answers in it (docs/protocol/i18n.md); also on WebSocket upgrades.
                 val builder = request.newBuilder().header("Accept-Language", persona.core.contracts.ClientLanguage.tag)
                 ProtocolCompatibility.clientHeaders.forEach { builder.header(it, "android/$version") }
                 ProtocolCompatibility.operationHeaders.firstNotNullOfOrNull { request.header(it) }?.let { id ->
                     ProtocolCompatibility.operationHeaders.forEach { builder.header(it, id) }
                 }
-                // The manager the assistant page shows (docs/managers.md): its requests name it; none for the default.
+                // The manager the assistant page shows (docs/assistant/managers.md): its requests name it; none for the default.
                 // A thing a merged list showed as another manager's (an inbox item, an extension) names that one. A
                 // request pinned to one (`?manager=`) keeps it: the default's (empty) goes without either.
                 var url = request.url

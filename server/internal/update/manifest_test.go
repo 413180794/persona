@@ -8,7 +8,7 @@ import (
 
 // The manifest carries no min_node_build: nothing ever read it, publish.sh never wrote it, and the "a node older than
 // it updates first" it was meant to express is not how a hub updates (the nodes follow once the new hub confirmed,
-// docs/hub-update.md, "Update nodes along with it").
+// docs/operations/hub-update.md, "Update nodes along with it").
 func TestManifestHasNoMinNodeBuild(t *testing.T) {
 	typ := reflect.TypeOf(Manifest{})
 	for i := 0; i < typ.NumField(); i++ {

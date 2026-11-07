@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Someone @-mentioned in a message I send: Feishu notifies them. The text must hold the literal `@name`
-/// (docs/protocol.md, the send and reply routes); Everyone is `user_id` "all".
+/// (docs/protocol/protocol.md, the send and reply routes); Everyone is `user_id` "all".
 nonisolated struct LarkMention: Codable, Hashable, Sendable {
     var userID: String
     var name: String

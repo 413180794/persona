@@ -1,6 +1,6 @@
 package assistantwire
 
-// boardRoutes are the workspace board's routes (docs/workspace-board.md): the manager keeps the board and its switch
+// boardRoutes are the workspace board's routes (docs/web/workspace-board.md): the manager keeps the board and its switch
 // (workspace_board.go there) and finds the computers' workspaces; the hub relays them like Routes. The events the
 // apps get of it (workspace_board, workspace_board_settings) come as ws.broadcast.
 var boardRoutes = []string{

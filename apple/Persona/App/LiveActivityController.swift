@@ -9,13 +9,13 @@ import SwiftUI
 import UIKit
 #endif
 
-/// The app's half of the Fleet Live Activity (docs/live-activity.md). The hub decides what it shows and pushes it while
+/// The app's half of the Fleet Live Activity (docs/apple/live-activity.md). The hub decides what it shows and pushes it while
 /// the app is away; the app
 ///   - reports the push-to-start token (so the hub can open an activity when the app is not running) and each
 ///     activity's own push token (it rotates), and says when an activity ended;
 ///   - while open, applies the hub's `fleet` events itself (faster than the push, and the only way on the simulator):
 ///     starts the activity when there is something to show, updates it, ends it after a minute of nothing.
-// visionOS has no Live Activities: Vision/App/VisionStandIns.swift keeps the same API (docs/vision.md).
+// visionOS has no Live Activities: Vision/App/VisionStandIns.swift keeps the same API (docs/apple/vision.md).
 #if os(iOS)
 @MainActor
 final class LiveActivityController {
@@ -75,7 +75,7 @@ final class LiveActivityController {
             let state = content.state.tailored(island: prefs.island, details: prefs.lockDetails, look: AppModel.shared.fleetLook)
             updateRunning(ActivityContent(state: state, staleDate: content.staleDate, relevanceScore: Self.relevance(state)))
         }
-        // Every group's fleet, merged (docs/multi-hub.md「实时活动」).
+        // Every group's fleet, merged (docs/protocol/multi-hub.md「实时活动」).
         let model = AppModel.shared
         Task { await model.loadFleets() }
     }
@@ -157,7 +157,7 @@ final class LiveActivityController {
     }
 
     /// The persona and its color changed, or the app started or came back (what failed is tried again). It goes three
-    /// ways (docs/live-activity.md「形象」):
+    /// ways (docs/apple/live-activity.md「形象」):
     ///   - into the running activity's content now, which also makes the system draw it again;
     ///   - to the hub, which puts it in this device's pushes (`look` in the device's prefs);
     ///   - into the App Group container shared with the widget extension, with a package's pictures (`FleetLook.save`).
@@ -260,7 +260,7 @@ final class LiveActivityController {
         Task {
             for await token in activity.pushTokenUpdates {
                 #if DEBUG
-                // For pushing to the simulator by hand (docs/testing.md, TestManualLiveActivityPush).
+                // For pushing to the simulator by hand (docs/operations/testing.md, TestManualLiveActivityPush).
                 Logger(subsystem: "persona", category: "live-activity").notice("activity push token \(token.hex, privacy: .public)")
                 #endif
                 report(.init(activityID: id, pushToken: token.hex))
@@ -278,7 +278,7 @@ final class LiveActivityController {
         #if DEBUG
         if UserDefaults.standard.string(forKey: "pairURL") != nil { return } // simulator automation is not this phone
         #endif
-        // To the first group's hub only (docs/multi-hub.md「实时活动」): two hubs pushing the same activity would each
+        // To the first group's hub only (docs/protocol/multi-hub.md「实时活动」): two hubs pushing the same activity would each
         // overwrite it with their own agents. In the app the activity shows every group (`AppModel.mergedFleet`); in
         // the background it follows that hub's pushes, and its unqualified ids are that group's (FleetActions).
         guard let api = AppModel.shared.links.first?.api else { return }
@@ -355,7 +355,7 @@ extension LiveActivityController {
 #endif // os(iOS)
 
 extension AppModel {
-    /// What the Live Activity draws for the persona on screen (docs/live-activity.md「形象」).
+    /// What the Live Activity draws for the persona on screen (docs/apple/live-activity.md「形象」).
     var fleetLook: FleetLook { FleetLook(persona: persona, builtinAccent: builtinAccent) }
     var fleetFaces: FleetFaces? { FleetFaces(persona: persona, personas: personas) }
 }

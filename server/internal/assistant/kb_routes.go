@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The apps' knowledge-base routes (docs/protocol.md "Knowledge base API", docs/knowledge.md "App API"): the hub relays them
+// The apps' knowledge-base routes (docs/protocol/protocol.md "Knowledge base API", docs/assistant/knowledge.md "App API"): the hub relays them
 // here unchanged (assistantwire.Routes), the same shapes as when the hub answered them.
 
 var (

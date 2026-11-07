@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// ⋯ › All Captions (docs/voice.md 6.2): everything the call heard and said so far (its last 40 lines), oldest first. Only
+/// ⋯ › All Captions (docs/assistant/voice.md 6.2): everything the call heard and said so far (its last 40 lines), oldest first. Only
 /// in this call: nothing is saved, and the conversation keeps the instructions and the answers as ever.
 struct VoiceTranscriptSheet: View {
     let call: VoiceConversation

@@ -6,7 +6,7 @@
   python3 scripts/release/asc_testflight.py wait [minutes] [build]  # poll until that build (default: newest) is VALID, then attach it
   python3 scripts/release/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
   python3 scripts/release/asc_testflight.py external           # group "Friends": newest build, Beta App Review, public link
-  python3 scripts/release/asc_testflight.py next-build         # the next build number (both platforms, docs/release.md)
+  python3 scripts/release/asc_testflight.py next-build         # the next build number (both platforms, docs/operations/release.md)
   python3 scripts/release/asc_testflight.py catch-up           # newest build not submitted yet (another was in review): Friends + review
 
 Add --platform mac (anywhere) for the Mac app's builds: same App Store Connect record and groups, its own builds.
@@ -20,9 +20,9 @@ Internal testers (app_store.testers in the config) must be users of the team in 
 External testers join the group by its public link when app_store.external.public_link is true (at most
 public_link_limit people; 0 or unset means no limit), and/or get an email invitation when listed in app_store.external.testers. Without the
 public link only those emails can join. The first build of a version goes through Beta App Review, which needs the
-contact in app_store.external.review (docs/release.md).
+contact in app_store.external.review (docs/operations/release.md).
 Groups are found by name and kind, the oldest one when several share a name; only "setup" and "external" create
-a missing group, because App Store Connect sometimes lists them incompletely (#945). The App ID comes from app_store.app_id in the config (docs/config.md).
+a missing group, because App Store Connect sometimes lists them incompletely (#945). The App ID comes from app_store.app_id in the config (docs/operations/config.md).
 """
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def builds(limit: int = 5, platform: str | None = None):
 def next_build() -> int:
     """The next build number: one more than the largest on either platform, so a number never means two commits.
 
-    The Mac build of a release reuses that release's iPhone number instead (docs/release.md "Build numbers")."""
+    The Mac build of a release reuses that release's iPhone number instead (docs/operations/release.md "Build numbers")."""
     return max((int(b["attributes"]["version"]) for b in builds(50, platform="")), default=0) + 1
 
 

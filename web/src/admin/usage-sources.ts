@@ -1,4 +1,4 @@
-// Pure helpers behind the usage sources page (docs/usage-windows.md "Account-pool gateways"), apart from the page so that they
+// Pure helpers behind the usage sources page (docs/server/usage-windows.md "Account-pool gateways"), apart from the page so that they
 // can be tested without a browser.
 import { t } from "../i18n";
 import { ago } from "../lib/format";

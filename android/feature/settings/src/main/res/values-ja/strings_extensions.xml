@@ -271,7 +271,7 @@
     <string name="settings_ext_connector_open_subtitle">サインイン、状態、受信トレイのその他の設定</string>
     <string name="settings_ext_connector_inbox_on">%1$s の新しい項目が受信トレイに届きます。コネクタのページの「受信トレイに追加」と同じスイッチです。</string>
     <string name="settings_ext_connector_inbox_off">受信トレイに入れない：新しいものは届かず、既存の項目は残ります。</string>
-    <!-- Auto-upgrade (docs/extensions.md "Auto-upgrade") -->
+    <!-- Auto-upgrade (docs/extensions/extensions.md "Auto-upgrade") -->
     <string name="settings_ext_upgrade_title">アップグレード</string>
     <string name="settings_ext_upgrade_footer">マーケットに新しいバージョンが出ると、拡張機能がアイドル状態のときに自動でインストールされます。必要な権限が増える場合は先に確認します。インストール後に起動できない場合は元のバージョンに戻ります。</string>
     <string name="settings_ext_auto_upgrade">自動アップグレード</string>

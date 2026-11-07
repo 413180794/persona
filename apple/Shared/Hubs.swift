@@ -1,11 +1,11 @@
 import Foundation
 
-// Several hubs on one device (docs/multi-hub.md, docs/plan-hub-mesh.md 4). Every hub paired is kept with its own
+// Several hubs on one device (docs/protocol/multi-hub.md, docs/archive/operations/plan-hub-mesh.md 4). Every hub paired is kept with its own
 // credential; hubs that know each other (the `mesh` of their hello) form a group, reached over one connection; groups
 // that do not are shown side by side. The default group ("") is the one the old single pairing migrates into (or the
 // first one paired): while it is the only group, every key, path and screen is what it was before.
 
-/// One hub of a group as its hello lists it (`mesh.hubs`, docs/plan-hub-mesh.md 2.6).
+/// One hub of a group as its hello lists it (`mesh.hubs`, docs/archive/operations/plan-hub-mesh.md 2.6).
 nonisolated struct MeshHub: Codable, Hashable, Sendable {
     var hubID: String
     var name: String?
@@ -14,7 +14,7 @@ nonisolated struct MeshHub: Codable, Hashable, Sendable {
     var endpoints: [String]?
     var tlsPort: Int?
     var fp: String?
-    /// The group's center (docs/plan-hub-center.md 5): the hub that serves the apps; the others pass requests on to it.
+    /// The group's center (docs/archive/operations/plan-hub-center.md 5): the hub that serves the apps; the others pass requests on to it.
     /// nil from hubs before the single center.
     var center: Bool?
 
@@ -46,8 +46,8 @@ nonisolated struct MeshHub: Codable, Hashable, Sendable {
     }
 }
 
-/// Who the hub at the other end of a socket is (its hello): id, name and the group it is in (docs/multi-hub.md), and
-/// its build and protocol for the compatibility notices (docs/hub-update.md「兼容」).
+/// Who the hub at the other end of a socket is (its hello): id, name and the group it is in (docs/protocol/multi-hub.md), and
+/// its build and protocol for the compatibility notices (docs/operations/hub-update.md「兼容」).
 nonisolated struct HubHello: Hashable, Sendable {
     var features: [String] = []
     var hubID: String?
@@ -79,9 +79,9 @@ nonisolated struct PairedHub: Codable, Hashable, Sendable, Identifiable {
     /// The hubs its last hello listed in its group (itself included).
     var mesh: [MeshHub]?
     var addedAt: Date = .now
-    /// Its SSH tunnel, when the user set one up (docs/network.md「经 SSH 隧道连 hub」).
+    /// Its SSH tunnel, when the user set one up (docs/operations/network.md「经 SSH 隧道连 hub」).
     var ssh: SSHRoute?
-    /// Its in-app tunnel, when the hub has one (docs/network.md「经 App 内隧道连 hub」).
+    /// Its in-app tunnel, when the hub has one (docs/operations/network.md「经 App 内隧道连 hub」).
     var inAppTunnel: InAppTunnelRoute?
     /// SHA-256 (hex) of the pairing token `deviceID`'s token was traded for: the same pairing link handled again (scanned
     /// twice, opened from the camera too) keeps the device's token instead of going back to one the hub drops (#2766).
@@ -159,7 +159,7 @@ nonisolated struct HubRegistry: Codable, Hashable, Sendable {
 
     /// A fresh group id: the default group's for the first hub paired, else a random one (never "|" or "/": keys use
     /// them). The default group gone, the others stay as they are and no later group takes its place
-    /// (docs/plan-hub-mesh.md 4: no new primary group is promoted).
+    /// (docs/archive/operations/plan-hub-mesh.md 4: no new primary group is promoted).
     func newGroupID() -> String {
         if hubs.isEmpty { return "" }
         let used = Set(hubs.map(\.group))
@@ -170,7 +170,7 @@ nonisolated struct HubRegistry: Codable, Hashable, Sendable {
     }
 }
 
-/// Which paired hubs belong together (docs/multi-hub.md「分组」). Pure, so the tests drive it.
+/// Which paired hubs belong together (docs/protocol/multi-hub.md「分组」). Pure, so the tests drive it.
 nonisolated enum HubGrouping {
     /// Groups the hubs by what their hellos list: two paired hubs are in one group when either lists the other, and
     /// so is everything connected to them. Group ids stay what they were: a merged group keeps the id of its
@@ -235,10 +235,10 @@ nonisolated enum HubGrouping {
     }
 }
 
-/// Where a group's connection may go (docs/multi-hub.md「选路」): every paired hub of the group with its own
+/// Where a group's connection may go (docs/protocol/multi-hub.md「选路」): every paired hub of the group with its own
 /// credential, then the addresses the group's hellos list for hubs not paired here, with the group's first credential
-/// (credentials work on every hub of a group, docs/plan-hub-mesh.md 2.6). The group's center comes first
-/// (docs/plan-hub-center.md 5): a member passes everything on to it, one hop more.
+/// (credentials work on every hub of a group, docs/archive/operations/plan-hub-mesh.md 2.6). The group's center comes first
+/// (docs/archive/operations/plan-hub-center.md 5): a member passes everything on to it, one hop more.
 nonisolated enum HubRoute {
     struct Candidate: Hashable, Sendable {
         var config: ServerConfig
@@ -294,7 +294,7 @@ nonisolated enum HubRoute {
     }
 
     /// `pick`, but nil when none answers, and a single candidate is asked too: whether the group can be reached
-    /// directly at all (its SSH tunnel is the way when not, docs/network.md「经 SSH 隧道连 hub」).
+    /// directly at all (its SSH tunnel is the way when not, docs/operations/network.md「经 SSH 隧道连 hub」).
     static func answering(_ candidates: [Candidate], grace: Duration = centerGrace, probe: @escaping Probe = healthProbe) async -> Candidate? {
         guard !candidates.isEmpty else { return nil }
         enum Answer: Sendable { case reached(Candidate), missed(Candidate), graceOver }

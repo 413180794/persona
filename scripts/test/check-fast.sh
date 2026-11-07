@@ -30,7 +30,7 @@
 #                              CLAUDE.md doc index)
 #   apple/**                   scripts/test/test_apple_l10n.py (String Catalogs, Chinese Swift literals); the iOS/macOS
 #                              builds and tests are skipped with a note (they need a Mac)
-#   deploy/docker/**, docs/docker.md, Dockerfile
+#   deploy/docker/**, docs/operations/docker.md, Dockerfile
 #                              scripts/test/test_docker_entrypoint.py (it also reads the root Dockerfile)
 #                              These Linux suites run in CI's Scripts tests job; they run from scripts/test as there.
 # scripts/privacy_check.py runs on every invocation that has changes (it is a seconds-long local scan, no network).
@@ -44,7 +44,7 @@
 # A missing optional toolchain (node < 22, go, bun) skips only its checks in diff mode; in --all mode a missing
 # core tool (node >= 22, go, python3) is a failure.
 #
-# This script never runs iOS/macOS checks (use a Mac with scripts/app/sim.sh; PersonaKit: swift test, docs/testing.md),
+# This script never runs iOS/macOS checks (use a Mac with scripts/app/sim.sh; PersonaKit: swift test, docs/operations/testing.md),
 # the Android gradle build (scripts/app/android.sh), or the full server suite against real Postgres
 # (scripts/test/test-server.sh).
 set -uo pipefail
@@ -494,7 +494,7 @@ else
       docs/*|*.md) script_test_add scripts/test/test_doc_paths.py; script_test_add scripts/test/test_doc_go_paths.py ;;
     esac
     case "$f" in apple/*) script_test_add scripts/test/test_apple_l10n.py ;; esac
-    case "$f" in deploy/docker/*|docs/docker.md|Dockerfile) script_test_add scripts/test/test_docker_entrypoint.py ;; esac
+    case "$f" in deploy/docker/*|docs/operations/docker.md|Dockerfile) script_test_add scripts/test/test_docker_entrypoint.py ;; esac
   done <<< "$CHANGED"
 fi
 
@@ -592,10 +592,10 @@ if [ "$EXTSCHEMA" -eq 1 ]; then
 fi
 
 if [ "$APPLE" -eq 1 ]; then
-  INFO+=("SKIP  apple/** builds and tests: iOS/macOS checks need a Mac — scripts/app/sim.sh, PersonaKit swift test (docs/testing.md)")
+  INFO+=("SKIP  apple/** builds and tests: iOS/macOS checks need a Mac — scripts/app/sim.sh, PersonaKit swift test (docs/operations/testing.md)")
 fi
 if [ "$UNMAPPED" -eq 1 ]; then
-  INFO+=("INFO  no fast check maps to: ${UNMAPPED_FILES[*]} (privacy scan still ran; full suites in docs/testing.md)")
+  INFO+=("INFO  no fast check maps to: ${UNMAPPED_FILES[*]} (privacy scan still ran; full suites in docs/operations/testing.md)")
 fi
 
 if [ ${#JOB_NAME[@]} -eq 0 ] && [ "$CORE_FAIL" -eq 0 ]; then
@@ -646,7 +646,7 @@ fi
 if [ "$N_TIMEOUT" -gt 0 ]; then
   echo "check-fast: $N_PASS passed, $N_SKIP skipped, 0 failed, $N_TIMEOUT timed out (TIMEOUT); logs in $WORK"
   echo "check-fast: a timeout is not a pass. Rerun the timed-out job directly, or run the full suite for it"
-  echo "check-fast: (docs/testing.md: web 'npm test', server scripts/test/test-server.sh, android scripts/app/android.sh)."
+  echo "check-fast: (docs/operations/testing.md: web 'npm test', server scripts/test/test-server.sh, android scripts/app/android.sh)."
   KEEP_WORK=1
   exit 124
 fi

@@ -1,5 +1,5 @@
 // Settings › General › Appearance's "Theme color" and "Text size" (the app's Settings › Appearance › Theme color and Interface style › Text size, apple/Shared/Design/ColorSpec.swift and
-// TextSize.swift; docs/web.md "Appearance"). Both live in this browser only. The defaults add nothing to the page: no attribute,
+// TextSize.swift; docs/web/web.md "Appearance"). Both live in this browser only. The defaults add nothing to the page: no attribute,
 // no style element, so the page is what it was before these existed. An extension theme (ExtensionThemePicker) still
 // lays its colors over whichever theme color is chosen: its tokens are inline on <html>, above any stylesheet.
 import { useSyncExternalStore } from "react";
@@ -48,7 +48,7 @@ export function accentTokens(accent: Pair, bubble?: Pair): Record<Scheme, Record
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
-/** A persona package's accent (manifest.colors, docs/persona.md "Color scheme"), a scheme it leaves out taken from the other; null without one. */
+/** A persona package's accent (manifest.colors, docs/apple/persona.md "Color scheme"), a scheme it leaves out taken from the other; null without one. */
 export function personaAccent(colors: { light?: Record<string, string>; dark?: Record<string, string> } | undefined): Pair | null {
   const light = colors?.light?.accent, dark = colors?.dark?.accent;
   const l = light && HEX.test(light) ? light : undefined, d = dark && HEX.test(dark) ? dark : undefined;

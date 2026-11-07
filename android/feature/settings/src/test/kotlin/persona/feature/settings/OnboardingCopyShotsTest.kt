@@ -35,7 +35,7 @@ import java.io.File
 import java.net.SocketTimeoutException
 
 /**
- * The pairing and checklist words a beginner reads after #4444 (docs/onboarding.md 4.6): the pairing details, a pairing
+ * The pairing and checklist words a beginner reads after #4444 (docs/assistant/onboarding.md 4.6): the pairing details, a pairing
  * that timed out, and a computer whose version differs from the hub's, in every style, light and dark. Written to
  * `build/onboarding-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */

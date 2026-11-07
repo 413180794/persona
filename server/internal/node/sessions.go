@@ -1775,7 +1775,7 @@ func (n *Node) assistantProject() string {
 // isAssistantProject: base is the name of the projects directory Claude Code keeps for the assistant's directory
 // (own: this node's, assistantProject). The assistant may have run under ~/.persona or ~/.persona, through a symlinked
 // home, so the name is matched by its end as well.
-// The health space's directory (docs/health.md) sits next to it and counts as the assistant's too.
+// The health space's directory (docs/assistant/health.md) sits next to it and counts as the assistant's too.
 func isAssistantProject(base, own string) bool {
 	if base == own || base == strings.TrimSuffix(own, "-assistant")+"-health" {
 		return true

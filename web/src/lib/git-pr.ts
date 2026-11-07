@@ -1,4 +1,4 @@
-// The current branch's pull request in the Git panel (#6121, docs/protocol.md "git/pr"): what it is, its checks, its
+// The current branch's pull request in the Git panel (#6121, docs/protocol/protocol.md "git/pr"): what it is, its checks, its
 // open review threads, opening one and merging it, all through gh on that computer as it is signed in. A review thread
 // goes to the agent as a comment in the composer's quote list (lib/comments.ts), the same block a comment on picked
 // words makes, so it is sent with the next message and nothing new is invented for it.

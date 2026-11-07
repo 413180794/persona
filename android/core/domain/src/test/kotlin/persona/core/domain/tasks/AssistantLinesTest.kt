@@ -27,7 +27,7 @@ import persona.core.domain.lines.LineItem
 import persona.core.domain.lines.ToolCall
 import persona.core.domain.lines.WorkItem
 
-/** The assistant's feed among the chat's lines (docs/unified-entry.md), as iOS ChatLines.mergeFeed and web displayLines. */
+/** The assistant's feed among the chat's lines (docs/assistant/unified-entry.md), as iOS ChatLines.mergeFeed and web displayLines. */
 class AssistantLinesTest {
     private val now = Instant.now().truncatedTo(ChronoUnit.SECONDS)
     private fun ago(min: Long, from: Instant = now) = from.minus(min, ChronoUnit.MINUTES).toString()

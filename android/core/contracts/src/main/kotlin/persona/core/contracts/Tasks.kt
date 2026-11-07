@@ -13,7 +13,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
 
-// Tasks dispatched from an assistant conversation (docs/unified-entry.md; docs/protocol.md "Tasks and conversation activity"): the plans the
+// Tasks dispatched from an assistant conversation (docs/assistant/unified-entry.md; docs/protocol/protocol.md "Tasks and conversation activity"): the plans the
 // assistant hands the user, the todos that are tasks, and the items the hub inserts into a conversation (its feed).
 
 @KeepGeneratedSerializer
@@ -132,7 +132,7 @@ data class TodoAgent(
     val isCurrent: Boolean get() = releasedAt == null
 }
 
-/** A todo (docs/todos.md); a task is one whose [origin] is an assistant conversation. */
+/** A todo (docs/assistant/todos.md); a task is one whose [origin] is an assistant conversation. */
 @KeepGeneratedSerializer
 @Serializable(with = TodoSerializer::class)
 data class Todo(
@@ -168,7 +168,7 @@ data class Todo(
 }
 
 /**
- * How far a task's finished work went out (#3306, docs/todos.md"Delivery"): [state] live, pr, merged, off or none (kept as
+ * How far a task's finished work went out (#3306, docs/assistant/todos.md"Delivery"): [state] live, pr, merged, off or none (kept as
  * the hub sent it), [gate] what holds it, [unblock] who can unhold it (user, agent, other).
  */
 @KeepGeneratedSerializer
@@ -201,7 +201,7 @@ data class TaskReview(
 )
 
 /**
- * A supervised task's ledger (#3124, docs/unified-entry.md "Supervision"): its supervisor (the conversation that handed it
+ * A supervised task's ledger (#3124, docs/assistant/unified-entry.md "Supervision"): its supervisor (the conversation that handed it
  * out), what done means, how long it should take, and its review: [state] "" while it goes on, then pending_review,
  * rework ([round] counts them), needs_user, accepted or cancelled.
  */
@@ -218,7 +218,7 @@ data class Supervision(
 )
 
 /**
- * Todo states in order of rank (umbrella.final.md / docs/todos.md "State rules"):
+ * Todo states in order of rank (umbrella.final.md / docs/assistant/todos.md "State rules"):
  * Done -> Needs you -> To review -> In progress -> To follow up -> Not started
  */
 enum class TodoState(val title: CoreText, val rank: Int) {
@@ -274,12 +274,12 @@ fun List<Todo>.forSpace(machineId: String, space: String): Todo? {
 }
 
 /**
- * Formats the todo context tag as in protocol.md and docs/todos.md, as iOS `TodosLogic.formatTodoContext` does: the
+ * Formats the todo context tag as in protocol.md and docs/assistant/todos.md, as iOS `TodosLogic.formatTodoContext` does: the
  * title escaped as an attribute, the notes through [contextBody] so they cannot close the tag.
  */
 fun todoContextXml(title: String, notes: String): String {
     val t = title.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
-    return """<persona-context kind="context" title="待办 · $t" url="">${contextBody(notes)}</persona-context>""" // i18n-ignore: the tag docs/todos.md specifies for the agent
+    return """<persona-context kind="context" title="待办 · $t" url="">${contextBody(notes)}</persona-context>""" // i18n-ignore: the tag docs/assistant/todos.md specifies for the agent
 }
 
 /**
@@ -301,7 +301,7 @@ data class FeedResponse(
     val items: List<FeedItem> = emptyList(),
     val plans: Map<String, TaskPlan> = emptyMap(),
     /**
-     * The conversation's live cards by id, each a whole AssistantView (docs/assistant-views.md "Live cards"): the full set
+     * The conversation's live cards by id, each a whole AssistantView (docs/assistant/assistant-views.md "Live cards"): the full set
      * on every read, kept raw so one card this app cannot read does not drop the others ([AssistantViewWire]).
      */
     val views: Map<String, JsonElement> = emptyMap(),

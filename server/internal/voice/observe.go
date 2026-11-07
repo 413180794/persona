@@ -17,7 +17,7 @@ import (
 )
 
 // What the bound conversation does that the call did not hand over, and how a turn that is not over yet is told
-// (docs/voice.md "Following a turn", "Announcements", #3503).
+// (docs/assistant/voice.md "Following a turn", "Announcements", #3503).
 //
 // Observed runs (protocol 2): the call watches the conversation it is bound to from ready on. When it works and no run
 // of the call's is on it (none being sent, none held), the turn it works on is followed as a run of its own: the user
@@ -29,7 +29,7 @@ import (
 // ("Stop:", its state behind the stop), and a turn of a message the call sent whose send ended unknown (it got there
 // after all: followed as the call's run).
 //
-// A turn of an agent that stopped is not always over, and what says so is the hub's triage of it (docs/agent-work.md),
+// A turn of an agent that stopped is not always over, and what says so is the hub's triage of it (docs/assistant/agent-work.md),
 // when the user turned it on: about triage_settle_seconds (15 s) plus a model call after the turn stopped. A model
 // error the manager goes on from ("Continue") is not the end: a turn that stopped on a model error waits for that triage when
 // the manager would go on (auto_continue), and while it says a "Continue" is due. A turn it says waits on something outside
@@ -275,7 +275,7 @@ func opener(items []proto.Item) *proto.Item {
 }
 
 // sourceOf says whether a message of the bound conversation came from elsewhere than the app or voice
-// (docs/channels.md "Source marks"), and the channel's name when it came by one: one Persona wrote (a scheduled task, a
+// (docs/extensions/channels.md "Source marks"), and the channel's name when it came by one: one Persona wrote (a scheduled task, a
 // task reporting back, a wake-up) or another session sent is from elsewhere, not a channel. Bound to an agent nothing
 // is (what is typed at its terminal is the user's).
 func (t *tracker) sourceOf(ctx context.Context, it proto.Item) (foreign bool, from string) {
@@ -393,7 +393,7 @@ func (t *tracker) triage(ctx context.Context) triageSwitches {
 	return t.tri.sw
 }
 
-// triaged is the hub's triage of the turn s stopped on (docs/agent-work.md "Triage"): nil until it is in (about
+// triaged is the hub's triage of the turn s stopped on (docs/assistant/agent-work.md "Triage"): nil until it is in (about
 // triage_settle_seconds after the turn stopped, and only when the triage is on), and when it is of an earlier turn.
 func triaged(s *proto.Session) *proto.WorkState {
 	w := s.Work
@@ -419,7 +419,7 @@ func outside(w *proto.WorkState) bool {
 	return w != nil && w.Phase == proto.WorkBlocked && (w.On == proto.WaitExternal || w.On == proto.WaitAgent)
 }
 
-// untilTriaged: r's turn stopped, not on the user, and is not over yet (docs/voice.md "Following a turn" Look). The hub's triage
+// untilTriaged: r's turn stopped, not on the user, and is not over yet (docs/assistant/voice.md "Following a turn" Look). The hub's triage
 // of it says a "Continue" is due after a transient model error, or that it waits on something outside (told once, the run
 // blocked); or that triage is not in yet and may say either: a model error the manager would go on from
 // (auto_continue: Claude Code's say nothing of their kind, the triage tells), or a turn woken from a wait, which often

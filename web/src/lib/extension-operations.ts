@@ -1,4 +1,4 @@
-// Installing, upgrading and removing an extension in steps (docs/protocol.md "Extension install, upgrade and uninstall progress", #3277): the
+// Installing, upgrading and removing an extension in steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress", #3277): the
 // hub runs each as an operation and pushes `extension_operation` as it goes; a page that opens again lists the ones
 // in progress. Only with a hub that has `extension_operations`: an older one keeps the synchronous calls.
 import { api, enc } from "./api";
@@ -57,7 +57,7 @@ export type ExtensionOperation = {
   /** Only from GET of one that waits for consent. */
   preview?: MarketPreview;
   /** Whose operation it is when another manager's than the default (its push says so, or this page started it with
-   *  that manager's name; docs/managers.md "Clients"); none: the default's. Set here, not by the hub. */
+   *  that manager's name; docs/assistant/managers.md "Clients"); none: the default's. Set here, not by the hub. */
   manager?: string;
 };
 

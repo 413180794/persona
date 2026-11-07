@@ -1,4 +1,4 @@
-// The runtime side of Persona's runtime protocol (docs/runtimes.md, wire in docs/protocol.md "Runtime ↔ node"), shared
+// The runtime side of Persona's runtime protocol (docs/integrations/runtimes.md, wire in docs/protocol/protocol.md "Runtime ↔ node"), shared
 // by every runtime: connecting to the node's runtime.sock and reconnecting, runtime.hello, pushing the session list,
 // watching sessions with continuous seq batches, throttled live text, asking the phone (surviving a node restart) and
 // the "who answers first" policy. A runtime supplies a driver with what only it knows: its sessions, their pages, and
@@ -41,7 +41,7 @@ export function defaultSocketPath() {
  * @typedef {object} Driver What a runtime implements. Only listSessions and items are required; each optional
  *   method that is present turns on the matching capability (caps in runtime.hello).
  * @property {() => Promise<object[]>} listSessions - its sessions as Session rows (session_id, title, cwd, status,
- *   updated_at, rev, last_text, space_*…; docs/protocol.md "Data types").
+ *   updated_at, rev, last_text, space_*…; docs/protocol/protocol.md "Data types").
  * @property {(params: object) => Promise<object>} items - one session.items page (before_seq / turns / limit /
  *   after_seq / from_seq + through_seq → items, has_more, history, to_seq, from_seq, more_after, more).
  * @property {(sessionId: string) => Promise<number | {to_seq: number, history?: string}>} [cursor] - the session's
@@ -80,16 +80,16 @@ export function defaultSocketPath() {
  *   machine's engine continuing a session not running anywhere). keepAlways: the runtime keeps no "always allow" rule
  *   itself; a permission card with an always_label then gets the hub's "Always allow in this session" for that session and tool
  *   (caps.keep_always, #3974). A runtime whose always is a rule of its own (narrower than the tool) leaves it off.
- *   assistant: its launcher may run the Persona assistant (caps.assistant; docs/runtimes.md "Assistant"). requires: node
+ *   assistant: its launcher may run the Persona assistant (caps.assistant; docs/integrations/runtimes.md "Assistant"). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
  *   after every hello and whenever the node's hub comes or goes (a runtime fetching the hub's tools does it then).
- *   listen: be a daemon (docs/daemons.md) — the node dials this runtime's WebSocket endpoint instead of the runtime
+ *   listen: be a daemon (docs/integrations/daemons.md) — the node dials this runtime's WebSocket endpoint instead of the runtime
  *   dialing runtime.sock. With a port ({port, host, path, token}; port 0 picks one) start() serves the endpoint
  *   itself (host 127.0.0.1 and path /persona/runtime by default); without one ({token}, or `true` with
  *   options.token) the runtime's own HTTP server hands upgrades to rt.accept(). The token is what the node's
  *   daemons.json gives for this daemon (a function: read at every connection).
- *   package / onUpdate: the code this runtime runs, for a node that keeps it up to date (docs/runtimes.md "Auto-update";
+ *   package / onUpdate: the code this runtime runs, for a node that keeps it up to date (docs/integrations/runtimes.md "Auto-update";
  *   the loader, loader.js, passes both): hello says the package, and when the node carries another one its reply
  *   offers it — onUpdate gets the offer, rt.fetchPackage gets the files. instance: this process's identity on the node
  *   (runtime.hello's instance; default a new one per createRuntime). A runtime that replaces itself in the same process
@@ -209,7 +209,7 @@ export function createRuntime(driver, options) {
       interrupt: typeof driver.interrupt === 'function',
       rename: typeof driver.rename === 'function',
       close: typeof driver.close === 'function',
-      // It runs the Persona assistant's conversations (docs/runtimes.md "Assistant"): what that asks of it is the runtime's.
+      // It runs the Persona assistant's conversations (docs/integrations/runtimes.md "Assistant"): what that asks of it is the runtime's.
       assistant: options.assistant === true && typeof driver.start === 'function' && typeof driver.send === 'function',
     }
     // Said only when on: a runtime without them says what it always did.
@@ -797,7 +797,7 @@ export function createRuntime(driver, options) {
       return [...phoneDriven.keys()].slice(-TOUCHED).includes(id)
     },
     /**
-     * Which of a runtime's sessions to list (docs/runtimes.md "List"): those pinned (running, waiting for an answer) and
+     * Which of a runtime's sessions to list (docs/integrations/runtimes.md "List"): those pinned (running, waiting for an answer) and
      * those the phone touched always; the rest updated within `days`, newest first, until `max` in all. Rows are
      * anything; `id(row)` and `updatedAt(row)` (ms) read them (by default a runtime.sessions row). Newest first.
      * @template T

@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// Taking back what was sent as the user (docs/connectors.md "Sent as the user", #5278). A row of the ledger can be taken
+// Taking back what was sent as the user (docs/extensions/connectors.md "Sent as the user", #5278). A row of the ledger can be taken
 // back when the connector that wrote it can (connector.Recaller), it said which message it made, the message is recent
 // enough and it was not taken back before. RecallSent is what a route will call: the checks, the connector's recall,
 // and only when the other side says the message is gone, recalled_at. Who may ask, and whether the user is asked first

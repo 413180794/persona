@@ -1,4 +1,4 @@
-// The live screen of a Mac (docs/computer-use.md "Live view"): macOS's Screen Sharing on its 127.0.0.1:5900, through the
+// The live screen of a Mac (docs/extensions/computer-use.md "Live view"): macOS's Screen Sharing on its 127.0.0.1:5900, through the
 // hub's port relay, drawn by noVNC. View only until "Take control"; Screen Sharing asks for the Mac account's name and password
 // (Apple's ARD sign-in), which go to the Mac only and are not kept. The app shows this page in its web view.
 import { BASE } from "../lib/base";

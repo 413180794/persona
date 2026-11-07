@@ -1,4 +1,4 @@
-// What the main conversation still needs (docs/onboarding.md 4.4, 5.1; docs/protocol.md "Main chat readiness"): the hub works
+// What the main conversation still needs (docs/assistant/onboarding.md 4.4, 5.1; docs/protocol/protocol.md "Main chat readiness"): the hub works
 // it out (GET /api/v1/assistant/readiness) and every client draws the same thing from it: in `setup` a card above the
 // composer with the first missing step, the send button saying what to do first, and example questions that open local
 // help. A coded refusal of a start or a send (5.2) becomes a card too, not a toast. On a hub without the feature

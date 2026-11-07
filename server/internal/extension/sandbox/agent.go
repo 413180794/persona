@@ -1,6 +1,6 @@
 package sandbox
 
-// The agent sandbox (docs/agent-sandbox.md, #5357): the coding agents Persona starts on a machine whose data
+// The agent sandbox (docs/server/agent-sandbox.md, #5357): the coding agents Persona starts on a machine whose data
 // directory holds keys (the assistant's Claude, a managed launcher, a Codex started from the phone) run under
 // sandbox-exec with everything allowed but the data directory's secrets. Its shape is the opposite of Darwin()'s for an
 // extension: the network, the home directory, git, ssh and the compilers stay as they are, and only the key files,
@@ -28,7 +28,7 @@ import (
 // launch`) is in it already and must not wrap itself again (a second sandbox-exec inside fails, rc 71).
 const AgentEnv = "PERSONA_AGENT_SANDBOXED"
 
-// AgentOnFile in the data directory turns the agent sandbox on for this machine (docs/agent-sandbox.md "Turning it
+// AgentOnFile in the data directory turns the agent sandbox on for this machine (docs/server/agent-sandbox.md "Turning it
 // on"). An agent in the sandbox cannot remove it.
 const AgentOnFile = "agent-sandbox.on"
 

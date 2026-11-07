@@ -477,7 +477,7 @@ internal fun LarkBubble(
             else message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
         return
     }
-    // A recalled message Keep recalled messages kept takes no reaction, reply or card write (docs/protocol.md, `retained`), as on iOS.
+    // A recalled message Keep recalled messages kept takes no reaction, reply or card write (docs/protocol/protocol.md, `retained`), as on iOS.
     val react = onReact.takeUnless { message.recalled }
     val openReactionPicker = onOpenReactionPicker.takeUnless { message.recalled }
     var menuExpanded by remember { mutableStateOf(false) }

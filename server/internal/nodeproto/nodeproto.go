@@ -1,4 +1,4 @@
-// Package nodeproto is the node protocol's handshake contract (manager ↔ device, docs/protocol.md "Node handshake"):
+// Package nodeproto is the node protocol's handshake contract (manager ↔ device, docs/protocol/protocol.md "Node handshake"):
 // the protocol version and the capability names a node announces in node.info, and the version a manager speaks.
 // It holds only constants and name lists and imports nothing, so the manager, the node and any other implementation
 // can share it without depending on each other.
@@ -31,30 +31,30 @@ const (
 	// Sessions: sessions.list / session.watch / session.unwatch / session.start / session.send and the session events.
 	Sessions = "sessions"
 	// ModelConfiguration: assistant.send / assistant.warm / session.start / session.send take a launcher's model and
-	// model_fingerprint (docs/model-config.md). Older nodes said so with node.info's model_configuration.
+	// model_fingerprint (docs/assistant/model-config.md). Older nodes said so with node.info's model_configuration.
 	ModelConfiguration = "model_configuration"
-	// NodeUpdate: the node.update.* methods (docs/node-update.md). Whether an update can run right now is still
+	// NodeUpdate: the node.update.* methods (docs/operations/node-update.md). Whether an update can run right now is still
 	// node.info's node_update / node_update_reason.
 	NodeUpdate = "node_update"
-	// Engines: engine.use and node.info's engine / engines (docs/engines.md).
+	// Engines: engine.use and node.info's engine / engines (docs/integrations/engines.md).
 	Engines = "engines"
-	// MachineUID: node.info's machine_uid (docs/mesh.md).
+	// MachineUID: node.info's machine_uid (docs/server/mesh.md).
 	MachineUID = "machine_uid"
 	// HerdrServer: herdr.server.status / herdr.server.start and node.info's herdr_running / herdr_running_known.
 	HerdrServer = "herdr_server"
 	// PluginNodeCall: plugin.node.call for the programs in node.info's builtin_programs.
 	PluginNodeCall = "plugin_node_call"
-	// Ultracode: session.start takes ultracode and session.ultracode switches it (docs/protocol.md "Claude Code
+	// Ultracode: session.start takes ultracode and session.ultracode switches it (docs/protocol/protocol.md "Claude Code
 	// ultracode"). A node without it would start a session and drop the field without a word.
 	Ultracode = "ultracode"
 	// HealthSpaces: file.upload.begin (dest=health) and health.reports.list / health.reports.delete take health_dir,
-	// another manager's health space (health-<id>, docs/managers.md "Directories on a computer"). A node without it
+	// another manager's health space (health-<id>, docs/assistant/managers.md "Directories on a computer"). A node without it
 	// would use the built-in manager's.
 	HealthSpaces = "health_spaces"
 )
 
 // Error codes in the manager's answers to a resident node's replayed notifications (a notify with spool_id,
-// docs/protocol.md "When the manager is away"). Both mean "not now, through no fault of the notification": the node
+// docs/protocol/protocol.md "When the manager is away"). Both mean "not now, through no fault of the notification": the node
 // keeps it without counting a try, and only its age limits it.
 const (
 	// ErrSpoolBusy: the manager is still handing an earlier try of it to the hub.
@@ -67,7 +67,7 @@ const (
 var Required = []string{Sessions}
 
 // The programs a node can run as (node.info's program): personad, everything (it may run a hub or a manager too), or
-// persona-node, the device's own (docs/link.md "The device's program"). A node from before program was reported leaves
+// persona-node, the device's own (docs/operations/link.md "The device's program"). A node from before program was reported leaves
 // it out: it is personad.
 const (
 	ProgramPersonad    = "personad"

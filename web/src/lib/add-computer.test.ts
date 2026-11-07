@@ -36,7 +36,7 @@ describe("commands", () => {
     expect(pairCommand({ pair_url: "persona://link?x='y" })).toBe("persona-link pair 'persona://link?x=%27y'");
   });
 
-  it("runs persona-link install with personad beside it on Windows (docs/windows.md)", () => {
+  it("runs persona-link install with personad beside it on Windows (docs/operations/windows.md)", () => {
     expect(windowsCommand(PAIR)).toBe(`.\\persona-link.exe install --personad .\\personad.exe --pair '${PAIR}'`);
   });
 });

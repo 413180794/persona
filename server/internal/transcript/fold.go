@@ -21,7 +21,7 @@ const (
 // FoldWork replaces each run of the agent's work in a page — tool calls with their results and images, thoughts —
 // with one KindFold item that counts it (proto.Fold). The prompts, replies and notices stay as they are. A chat shows
 // that work folded into one line, yet a long Codex exchange made the phone's first page 1400 rows and a megabyte of
-// it (docs/protocol.md "Folded work").
+// it (docs/protocol/protocol.md "Folded work").
 //
 // A call whose result is not in the page (still running) and a result whose call is not (on an older page) are not
 // folded: the app pairs them with what comes later or earlier, and a fold hides them from that.

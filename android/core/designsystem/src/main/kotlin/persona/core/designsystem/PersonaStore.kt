@@ -25,7 +25,7 @@ import persona.core.contracts.api.PersonaPacksUnsupported
 import java.io.File
 
 /**
- * The hub's persona packages on this phone (docs/persona.md "On the phone"), as on iOS: what the hub offers (kept across
+ * The hub's persona packages on this phone (docs/apple/persona.md "On the phone"), as on iOS: what the hub offers (kept across
  * launches in index.json), the packages downloaded, one directory per rev under files/personas/<id>/<rev>, and a
  * thumbnail each for Settings' cards. A package is used only once all of it is there (it is downloaded beside and moved
  * in whole); the chosen one shows from disk at launch, before the hub answers or without it. The choice itself is

@@ -5,7 +5,7 @@ import XCTest
 /// the list. Needs scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/OpenChatTabBarTests
 /// The flash itself only shows on film: run it under `xcrun simctl io <udid> recordVideo` and look at the frames
-/// right after the tap (docs/testing.md).
+/// right after the tap (docs/operations/testing.md).
 final class OpenChatTabBarTests: XCTestCase {
     @MainActor func testTheTabBarLeavesWithThePushAndComesBack() throws {
         guard let hub = ProcessInfo.processInfo.environment["PERSONA_MOCK_HUB"] else { throw XCTSkip("needs scripts/mock/mock_hub.py (PERSONA_MOCK_HUB)") }

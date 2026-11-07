@@ -65,13 +65,13 @@ class DocGoPathTests(unittest.TestCase):
             (root / "server/internal/devices").mkdir(parents=True)
             (root / "server/internal/devices/deploy.go").write_text("package devices\n")
             (root / "server/internal/hub").mkdir()
-            doc = root / "docs/hub-update.md"
-            doc.parent.mkdir()
+            doc = root / "docs/operations/hub-update.md"
+            doc.parent.mkdir(parents=True)
             doc.write_text("「重新部署」（`hub/deploy.go`）\n`devices/deploy.go`\n"
                            "see `hub/deploy.go` in https://github.com/example/other\n")
             with patch(__name__ + ".ROOT", root):
                 self.assertEqual({"devices", "hub"}, packages())
-                self.assertEqual(["docs/hub-update.md:1: hub/deploy.go"], missing_package_go_paths(doc, packages()))
+                self.assertEqual(["docs/operations/hub-update.md:1: hub/deploy.go"], missing_package_go_paths(doc, packages()))
 
     def test_package_relative_go_paths_exist(self):
         names = packages()

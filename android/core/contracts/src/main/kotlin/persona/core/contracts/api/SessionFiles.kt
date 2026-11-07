@@ -51,7 +51,7 @@ interface SessionFiles {
     suspend fun convertToPdf(machineId: String, cwd: String, path: String): SessionConvertedFile =
         throw UnsupportedOperationException("convert")
     /**
-     * `POST …/git/pull`: a fast-forward pull of the working tree's branch from its upstream (docs/protocol.md); the
+     * `POST …/git/pull`: a fast-forward pull of the working tree's branch from its upstream (docs/protocol/protocol.md); the
      * hub refuses a diverged branch, local changes, no upstream or a failed sign-in, with its reason.
      */
     suspend fun pull(machineId: String, cwd: String): SessionGitPull = throw UnsupportedOperationException("pull")

@@ -1,4 +1,4 @@
-// "Assistant | Agents" in the middle of a phone's top bar (#1996), like the iOS app's new shell (docs/ios.md "New shell"): the
+// "Assistant | Agents" in the middle of a phone's top bar (#1996), like the iOS app's new shell (docs/apple/ios.md "New shell"): the
 // main conversation and the Agents page, side by side. Agents carries how many agents are waiting for you (quiet ones
 // are told about in the main conversation, not counted here). Narrow screens only; wide ones have the sidebar.
 import { href, onLinkClick, type Route } from "../lib/router";

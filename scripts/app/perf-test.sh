@@ -1,5 +1,5 @@
 #!/bin/bash
-# The iPhone app's performance UI tests (apple/PersonaUITests/Perf*Tests.swift, #5730; docs/testing.md
+# The iPhone app's performance UI tests (apple/PersonaUITests/Perf*Tests.swift, #5730; docs/operations/testing.md
 # "Performance UI tests"): an optimized build, one mock hub per suite with that suite's heavy data, XCTHitchMetric and
 # the scroll / navigation signposts per page and transition, then a JSON + Markdown report from the result bundles.
 #

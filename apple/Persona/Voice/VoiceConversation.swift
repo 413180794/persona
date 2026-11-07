@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-// One voice call bound to one conversation (docs/voice.md 6.3): the socket to the hub's voice extension, the frames,
+// One voice call bound to one conversation (docs/assistant/voice.md 6.3): the socket to the hub's voice extension, the frames,
 // the captions, the runs it handed over, and the audio. The state lives here and in `VoiceCalls`, not in AppModel or
-// ChatView: ChatView is rebuilt per key and is the hot path (docs/ios-state.md), it only asks `VoiceCalls.isBound`.
+// ChatView: ChatView is rebuilt per key and is the hot path (docs/apple/ios-state.md), it only asks `VoiceCalls.isBound`.
 
 /// Where a call was started from. The rules that end a call when the phone's app goes away (background, leaving the
 /// page, the screen lock) are the phone's only: a call started from the car goes on.
@@ -69,7 +69,7 @@ nonisolated enum VoiceEnd: Equatable, Sendable {
     case failed(code: VoiceErrorCode?, message: String)
 
     /// Ended by the user's own doing: nothing stays on the page. After any other ending 「语音已结束 · 继续」 stays until
-    /// the page goes (docs/voice.md 1.2 L).
+    /// the page goes (docs/assistant/voice.md 1.2 L).
     var byUser: Bool {
         switch self {
         case .user, .left, .replaced: true
@@ -96,7 +96,7 @@ nonisolated struct VoiceTool: Equatable, Identifiable, Sendable {
     var label: String
 }
 
-/// When a call that nothing happens in ends by itself (docs/voice.md 6.5「空闲」). The cost of waiting on a long task
+/// When a call that nothing happens in ends by itself (docs/assistant/voice.md 6.5「空闲」). The cost of waiting on a long task
 /// is the extension's to save (it pauses the upstream); this is only for a call left open.
 nonisolated enum VoiceIdle {
     static let limit: TimeInterval = 600
@@ -106,7 +106,7 @@ nonisolated enum VoiceIdle {
     }
 }
 
-/// The voice a call speaks with, remembered on this device per group and extension (docs/voice.md 5.7). Written only
+/// The voice a call speaks with, remembered on this device per group and extension (docs/assistant/voice.md 5.7). Written only
 /// when the user picks one.
 nonisolated enum VoiceTimbre {
     static func key(group: String, extensionID: String) -> String {
@@ -192,7 +192,7 @@ struct VoiceDeps {
     /// About 20 times a second: read by the orb only.
     let levels = VoiceLevels()
 
-    /// 1, 4 and 10 seconds before each of the three reconnects (docs/voice.md 1.2 M).
+    /// 1, 4 and 10 seconds before each of the three reconnects (docs/assistant/voice.md 1.2 M).
     static let retryDelays: [Duration] = [.seconds(1), .seconds(4), .seconds(10)]
     /// A connection that has not said `ready` by then is given up like a dropped one.
     static let readyTimeout: Duration = .seconds(15)
@@ -357,7 +357,7 @@ struct VoiceDeps {
 
     /// Whether Resend / Clear and Send can go for a run: refused, and reported by the connection that is up now. A reconnect
     /// rebuilds only the open runs (`resume`), so after one the extension no longer knows a refused run and the bar
-    /// offers no button for it (docs/voice.md 3.2).
+    /// offers no button for it (docs/assistant/voice.md 3.2).
     func canResend(_ runID: String) -> Bool {
         guard ready, socket != nil, let run = runs.first(where: { $0.id == runID }) else { return false }
         return run.state == .refused && runSeen[runID] == generation

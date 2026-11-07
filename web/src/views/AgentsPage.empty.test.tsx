@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Agents page with no computer (docs/onboarding.md 4.5, #4485): the machines page's "No computers yet" + "Add computer", not a
+// The Agents page with no computer (docs/assistant/onboarding.md 4.5, #4485): the machines page's "No computers yet" + "Add computer", not a
 // bare "Agents by machine" title over nothing; with a computer the list is as before.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

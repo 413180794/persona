@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the Apple Watch's Milk Frog (docs/persona.md "The Milk Frog on the watch") into the built-in nwverse package.
+"""Builds the Apple Watch's Milk Frog (docs/apple/persona.md "The Milk Frog on the watch") into the built-in nwverse package.
 
   python3 scripts/assets/make_watch_pet.py SOURCE [--out server/internal/hub/personas/nwverse/pet]
 

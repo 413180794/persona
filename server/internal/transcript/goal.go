@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The agent's goal (docs/agent-goal.md): Claude Code's /goal writes goal_status attachments and the command's own
+// The agent's goal (docs/integrations/agent-goal.md): Claude Code's /goal writes goal_status attachments and the command's own
 // output lines; a Codex rollout writes thread_goal_updated events. Meta.Goal is the latest of them; a goal met (and a
 // Codex goal that stops for another reason) also gets a notice in the chat.
 

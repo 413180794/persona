@@ -24,7 +24,7 @@ import (
 )
 
 // Codex questions and approvals answered the way a card's answer is (codexAnswer), against a real Codex TUI in an
-// isolated herdr — every state of docs/codex.md "Questions and approvals" a computer can be in. scripts/test/test-codex.sh sets it up:
+// isolated herdr — every state of docs/integrations/codex.md "Questions and approvals" a computer can be in. scripts/test/test-codex.sh sets it up:
 //
 //	HERDR_SOCKET_PATH    the isolated herdr (never the one in use)
 //	PERSONA_CODEX_BIN     the codex under test

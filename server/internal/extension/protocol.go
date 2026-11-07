@@ -1,4 +1,4 @@
-// Package extension is the extension base (docs/extensions.md, docs/plan-extensions.md): the manifest
+// Package extension is the extension base (docs/extensions/extensions.md, docs/plans/plan-extensions.md): the manifest
 // (persona-extension.json, formerly persona-plugin.json) and its rules, the configuration form's JSON Schema subset,
 // permissions, the registry of installed extensions, and the wire types of the process extension protocol. Running
 // extensions is extension/host's; a program's side is extension/serve.
@@ -19,7 +19,7 @@ const Protocol = 1
 const ManifestVersion = 1
 
 // ManifestFile is the manifest's name at the root of an extension package; LegacyManifestFile is its name before
-// #1844, still read when a package has no ManifestFile (docs/extensions.md "Naming and compatibility").
+// #1844, still read when a package has no ManifestFile (docs/extensions/extensions.md "Naming and compatibility").
 const (
 	ManifestFile       = "persona-extension.json"
 	LegacyManifestFile = "persona-plugin.json"
@@ -77,7 +77,7 @@ type InitializeParams struct {
 	Granted Permissions `json:"granted"`
 	// Active are the contributions this run is for, by extension point (a switched-off connector is not in it).
 	Active map[string][]string `json:"active,omitempty"`
-	// ContributionsToMe are the other extensions' contributions to the points it exports (docs/extensions.md "Exported extension points"),
+	// ContributionsToMe are the other extensions' contributions to the points it exports (docs/extensions/extensions.md "Exported extension points"),
 	// by point id; the event extension.contributions_changed says them again when they change.
 	ContributionsToMe map[string][]ExportedContribution `json:"contributions_to_me,omitempty"`
 }
@@ -112,23 +112,23 @@ type HubInfo struct {
 	// ExtensionPoints are the extension points the hub has and the version of each (connectors: the connector
 	// protocol's).
 	ExtensionPoints map[string]int `json:"extension_points"`
-	// Role is the hub's place in a group of hubs (docs/mesh.md): "center" (alone, or the group's center: it serves
+	// Role is the hub's place in a group of hubs (docs/server/mesh.md): "center" (alone, or the group's center: it serves
 	// the apps and drives the computers) or "member" (another hub is the center; work the center does for the group,
 	// like answering a chat service's realtime events, is not this one's). A change restarts the plugin.
 	Role string `json:"role,omitempty"`
 	// Timezone is the user's time zone by name (IANA, as their devices say it): for the times a plugin shows people
 	// ("today", a message's time). Empty while only the hub's own clock is known. Read at each start.
 	Timezone string `json:"timezone,omitempty"`
-	// Locale is the user's language (zh-Hans, en, ja; docs/i18n.md "Protocol"): what a plugin writes for people itself
+	// Locale is the user's language (zh-Hans, en, ja; docs/protocol/i18n.md "Protocol"): what a plugin writes for people itself
 	// (its status, sign-in hints, a bot's replies) reads in it. Read at each start; empty means zh-Hans.
 	Locale string `json:"locale,omitempty"`
 	// Capabilities are what this hub does that a plugin may go by ("inbox_group": it relates a connector's batches of
-	// new messages to inbox events, docs/inbox.md "Event synthesis"). Absent or without one: the hub does not do it.
+	// new messages to inbox events, docs/assistant/inbox.md "Event synthesis"). Absent or without one: the hub does not do it.
 	Capabilities []string `json:"capabilities,omitempty"`
 	// URL and Token are the hub's API on this machine and a token of the scopes it was granted (permissions.hub; also
 	// PERSONA_HUB_URL / PERSONA_HUB_TOKEN when the hub runs it): a new one each start, revoked when it stops for good.
 	// An extension granted the full token the old way (hub_api) has it in the environment only. On a manager other
-	// than the built-in, URL is that manager's relay to the hub on this machine's loopback (docs/managers.md
+	// than the built-in, URL is that manager's relay to the hub on this machine's loopback (docs/assistant/managers.md
 	// "Extensions and the hub's API").
 	URL    string   `json:"url,omitempty"`
 	Token  string   `json:"token,omitempty"`

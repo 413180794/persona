@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 
 /**
- * Extension market (docs/extensions.md "Extension market"): indexes of extensions the hub has registered; a full device browses them,
+ * Extension market (docs/extensions/extensions.md "Extension market"): indexes of extensions the hub has registered; a full device browses them,
  * installs, upgrades and removes what they offer (always after a preview of what the extension may do), and adds,
  * removes and refreshes the markets themselves. Tokens are write-only.
  */
@@ -55,7 +55,7 @@ interface ExtensionMarkets {
     suspend fun setAutoUpgrades(auto: Boolean): Boolean =
         throw UnsupportedOperationException("Auto-upgrades unsupported by this hub")
 
-    // ---- in steps (docs/protocol.md "Extension install, upgrade and uninstall progress"): only with a hub that says `extension_operations`;
+    // ---- in steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress"): only with a hub that says `extension_operations`;
     // an older one keeps the calls above.
 
     /** The selected hub runs installs as operations. */
@@ -121,7 +121,7 @@ data class ExtensionMarket(
 }
 
 /**
- * A market's signature (docs/extensions.md "Signatures"): `signed` (signed with the key the hub trusts; `verified` counts too,
+ * A market's signature (docs/extensions/extensions.md "Signatures"): `signed` (signed with the key the hub trusts; `verified` counts too,
  * #4812), `unsigned` (an older market: still usable), or anything else (the signature fails or the key changed): the hub
  * then neither refreshes nor installs from it until its owner trusts the new key on the hub's machine. [detail] says why,
  * for people.

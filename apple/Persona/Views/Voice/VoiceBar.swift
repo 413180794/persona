@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// The voice conversation's bar (docs/voice.md 6.2): the composer turned into it in place, in the composer's own shape
+/// The voice conversation's bar (docs/assistant/voice.md 6.2): the composer turned into it in place, in the composer's own shape
 /// (`ComposerSurface`, so every style's difference stays in there). Its top row: Mute, the orb (a tap while Persona
 /// speaks stops the voice: Interrupt Voice), what the voice does, Stop. Under it the line about the bound conversation
 /// (`VoiceBarLine`) with its buttons, Stop Claude among them, and ⋯: the line's buttons that do not fit, Type a Line,
@@ -359,7 +359,7 @@ private struct VoiceLineText: View {
     }
 }
 
-/// The call's cues, taps and VoiceOver words (docs/voice.md 1.2 A / I / M, 6.6): connected (a cue up and a light tap),
+/// The call's cues, taps and VoiceOver words (docs/assistant/voice.md 1.2 A / I / M, 6.6): connected (a cue up and a light tap),
 /// the voice's connection dropping (a low cue), a new card (a cue and a tap that asks); VoiceOver hears what asks for
 /// the user or stops the voice, never the captions (they would talk over the voice and leak into the microphone).
 private struct VoiceFeedback: ViewModifier {

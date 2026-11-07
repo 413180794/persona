@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// What a conversation writes, for the channels that follow its turn (docs/channels.md): the manager follows it
+// What a conversation writes, for the channels that follow its turn (docs/extensions/channels.md): the manager follows it
 // itself (the node sends it the items and the text as they are made, devices.Follow) and hands them to the channels in
 // the order the node's events came, with the turns' starts and ends among them — what the hub did when the nodes'
 // events were its (assistant_channels.go there). With hub.json's assistant.persona_view on, the assistant's

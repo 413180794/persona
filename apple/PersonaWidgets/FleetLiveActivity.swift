@@ -9,7 +9,7 @@ import WidgetKit
 /// for a face beside it; with no count, the persona alone (`IslandMinimal`). The expanded island and the lock screen
 /// lead with the persona and the counts, then the agents.
 /// Status colors are Persona' agent colors
-/// (docs/agent-states.md), fixed rather than following the app's style: the extension cannot read it.
+/// (docs/protocol/agent-states.md), fixed rather than following the app's style: the extension cannot read it.
 struct FleetLiveActivity: Widget {
     /// Agent rows that fit: the expanded island and the lock screen are both capped at about 160 pt.
     static let rows = 2
@@ -108,7 +108,7 @@ struct IslandSide: View {
                 if leading { IslandMinimal(state: state, stale: stale, limited: true, look: state.drawnLook) }
             } else {
                 if leading {
-                    // The persona, then the most urgent count (docs/live-activity.md「形象」).
+                    // The persona, then the most urgent count (docs/apple/live-activity.md「形象」).
                     IslandLeading(state: state, stale: stale, look: state.drawnLook).padding(.leading, IslandMetrics.edge)
                 } else {
                     IslandCellView(cell: IslandCell.sides(state).right).padding(.trailing, IslandMetrics.edge)

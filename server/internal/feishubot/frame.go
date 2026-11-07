@@ -1,6 +1,6 @@
 // Package feishubot talks to a Feishu / Lark open platform app (a custom app with a bot): its long connection for
 // events and card callbacks, and the REST calls a bot makes (send, reply, update a card, reactions, resources).
-// It knows nothing of the hub; the hub decides what a message means (docs/bots.md).
+// It knows nothing of the hub; the hub decides what a message means (docs/extensions/bots.md).
 package feishubot
 
 import (

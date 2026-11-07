@@ -35,7 +35,7 @@ import java.io.File
 
 /**
  * The terminal's chrome (title, subtitle, read-only chip, key bar, the notice above it, "Display" sheet) in each of the
- * app's languages, light and dark (docs/i18n.md). Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
+ * app's languages, light and dark (docs/protocol/i18n.md). Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

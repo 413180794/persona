@@ -1,4 +1,4 @@
-// Settings › Translation (docs/ios.md "Translation", the app's Translator.swift): when it is on, content not in the target language is
+// Settings › Translation (docs/apple/ios.md "Translation", the app's Translator.swift): when it is on, content not in the target language is
 // translated by the hub (its translation model): mail (on by default) and the Feishu chats picked in settings (none
 // by default: there are too many messages). The settings live in this browser; the phone's are its own.
 //
@@ -295,7 +295,7 @@ export function translateMail(account: string, uid: number, mailbox: string, tar
   const k = [manager ?? "", account, mailbox, uid, target].join("\u0000");
   let p = mails.get(k);
   if (!p) {
-    // the mail is the manager's that reads it (an inbox item's, docs/managers.md "Clients")
+    // the mail is the manager's that reads it (an inbox item's, docs/assistant/managers.md "Clients")
     p = api<MailTranslation>("/translate/mail", { method: "POST", json: { account_id: account, uid, mailbox, target }, headers: itemHeaders(manager) });
     mails.set(k, p);
     p.catch(() => mails.delete(k)); // a failure can be asked again next time

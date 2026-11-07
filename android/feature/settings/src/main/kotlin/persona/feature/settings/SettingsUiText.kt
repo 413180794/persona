@@ -7,7 +7,7 @@ import androidx.compose.ui.platform.LocalResources
 import persona.core.designsystem.UiText
 
 /**
- * Text a state holder hands to the page (docs/i18n.md): a string resource with its arguments, resolved in the page's
+ * Text a state holder hands to the page (docs/protocol/i18n.md): a string resource with its arguments, resolved in the page's
  * language when shown, or text that came as it is (a hub's own message). An argument that is a [UiText] is put into
  * words in the same language first.
  */

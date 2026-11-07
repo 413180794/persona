@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The quota extension point (docs/extensions.md "Quota"): a plugin contributing quota answers quota.query with a
+// The quota extension point (docs/extensions/extensions.md "Quota"): a plugin contributing quota answers quota.query with a
 // quota.Report, sending what it needs to the launcher's gateway through quota.http. Those requests are only taken
 // while the query runs, from the plugin it was asked of, and go out through whoever holds the key (quotaSender).
 
@@ -135,7 +135,7 @@ func (ps *extensions) quotaHTTP(ctx context.Context, id string, raw json.RawMess
 	return q.send(ctx, p.Request)
 }
 
-// Outside a launcher's page (docs/extensions.md "Quota", outside a launcher page): an extension granted launcher_keys
+// Outside a launcher's page (docs/extensions/extensions.md "Quota", outside a launcher page): an extension granted launcher_keys
 // lists the launchers that have a gateway (gateway.launchers) and opens a short session on one (gateway.open), whose
 // query id gateway.http takes as a launcher section's — for a nav_page, a card or a widget that draws a launcher's
 // quota. It reaches no more than its launcher sections would: the gateways its quota and launcher_section hosts match

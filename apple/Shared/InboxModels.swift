@@ -1,6 +1,6 @@
 import Foundation
 
-/// One "thing" in the unified inbox (docs/inbox.md): the new messages in a Feishu chat or a mail thread, with the
+/// One "thing" in the unified inbox (docs/assistant/inbox.md): the new messages in a Feishu chat or a mail thread, with the
 /// hub's AI triage and whether it has been dealt with. Mirrors hub/inbox.go `InboxItem`.
 nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var id: String
@@ -23,27 +23,27 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var doneBy: String?
     var lark: Lark?
     var mail: Mail?
-    /// A Feishu document's @me / comment: the rows about the user with their status columns (docs/inbox.md「云文档」).
+    /// A Feishu document's @me / comment: the rows about the user with their status columns (docs/assistant/inbox.md「云文档」).
     var doc: Doc?
     /// New foreign mail translated by the hub as it came in, by target language (subject and preview here; the body
     /// comes with the mail).
     var translations: [String: Translated]?
-    /// A Moments post where someone commented on, replied to or @ed the user (docs/inbox.md「公司圈」).
+    /// A Moments post where someone commented on, replied to or @ed the user (docs/assistant/inbox.md「公司圈」).
     var moment: Moment?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
-    /// The AI twin's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
+    /// The AI twin's work on it: judged, handled by an agent, a reply drafted (docs/assistant/inbox.md).
     var agent: Agent?
-    /// A thread of one of the hub's connectors (GitHub…): drawn the same for every source (docs/plan-connectors.md).
+    /// A thread of one of the hub's connectors (GitHub…): drawn the same for every source (docs/plans/plan-connectors.md).
     var connector: Connector?
     /// What it can be muted by (the row's menu: Mute This Repository / Session / From); older hubs leave it out.
     var mutes: [MuteOption]?
     /// What it holds now, as the hub listed it: a bulk Done sends it back so an item that took new messages since
     /// is left open (older hubs leave it out).
     var version: String?
-    /// What it grew out of (docs/inbox.md「thread line」, #2128): another item, a todo or an agent session; older hubs leave it out.
+    /// What it grew out of (docs/assistant/inbox.md「thread line」, #2128): another item, a todo or an agent session; older hubs leave it out.
     var parent: InboxParent?
-    /// Inbox phase 1 (docs/inbox.md): the section the hub put an open item in (action | working | fyi | noise;
+    /// Inbox phase 1 (docs/assistant/inbox.md): the section the hub put an open item in (action | working | fyi | noise;
     /// nil from an older hub: the list goes by `tier`), urgent (someone waits), the manager's recap, the processing
     /// conversation, the current suggestion, the chain and related items. Older hubs leave them all out.
     var status: String?
@@ -427,7 +427,7 @@ extension APIClient {
                        as: InboxBulkResult.self)
     }
 
-    /// Clear All (`POST /api/v1/inbox/bulk`, docs/inbox.md「全部清理」): `action` is `dismiss` (the hub takes `done` too),
+    /// Clear All (`POST /api/v1/inbox/bulk`, docs/assistant/inbox.md「全部清理」): `action` is `dismiss` (the hub takes `done` too),
     /// each item with the version it was listed at (the hub leaves one that took new messages since: `skipped`, changed).
     func bulkInbox(_ action: String, _ items: [InboxItem]) async throws -> InboxBulkReply {
         try await post("/api/v1/inbox/bulk",

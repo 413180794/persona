@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// A machine's token usage on its page (docs/machines.md "Token usage", #4973): the range, model and launcher filters,
+/// A machine's token usage on its page (docs/server/machines.md "Token usage", #4973): the range, model and launcher filters,
 /// the range's sums, throughput per minute (all tokens, or the four kinds stacked; a legend entry hides its kind:
 /// cache reads are often nine tenths of it), the cache hit rate, and each model's share. Holding a chart shows that
 /// moment in both, as the monitoring charts do.

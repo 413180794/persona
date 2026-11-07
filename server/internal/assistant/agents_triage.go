@@ -115,7 +115,7 @@ func triageWork(out triageOut, others map[string]proto.WorkAgent, now time.Time,
 			w.Agent = &a
 		}
 		if wt.Risky {
-			w.On = proto.WaitUser // never a wait the manager ends itself (docs/agent-work.md "Safety boundary")
+			w.On = proto.WaitUser // never a wait the manager ends itself (docs/assistant/agent-work.md "Safety boundary")
 		}
 	}
 	switch w.On {

@@ -19,7 +19,7 @@ import persona.core.contracts.WorkflowStatus
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
-// A Claude Code Workflow run (#2935; docs/agent-states.md "Background workflow, Monitor"): the card in an agent's details and
+// A Claude Code Workflow run (#2935; docs/protocol/agent-states.md "Background workflow, Monitor"): the card in an agent's details and
 // the icon its one line on the Agents list and the task cards starts with. Words come from the page (core:domain
 // WorkflowSummary); this draws them the same in every style.
 

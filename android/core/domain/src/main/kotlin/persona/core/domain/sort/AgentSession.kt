@@ -22,7 +22,7 @@ data class AgentSession(
     val isWaiting: Boolean get() = isQuiet && (session.waiting
         ?: (session.loop != null || !session.background.isNullOrEmpty() || hasRunningSubagent || session.work?.hubWaits == true))
     /**
-     * Awaiting Reply (#5096, docs/agent-states.md): seen, but it stopped on a question nobody answered yet. Not quiet unless
+     * Awaiting Reply (#5096, docs/protocol/agent-states.md): seen, but it stopped on a question nobody answered yet. Not quiet unless
      * muted ([awaitsReply] with the mutes): its space stays open and it stays out of the idle folds.
      */
     val asksYou: Boolean get() = state == AgentState.Idle && session.awaitsReply

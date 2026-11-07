@@ -3,7 +3,7 @@
 
     python3 scripts/mock/make_demo_data.py        # rerun after changing mock_hub.py's data; commit the JSON
 
-Demo mode (docs/ios.md) lets someone without a hub, App Review included, walk through every page: the app answers its
+Demo mode (docs/apple/ios.md) lets someone without a hub, App Review included, walk through every page: the app answers its
 own requests from this file (apple/Persona/App/DemoHub.swift) and never connects anywhere. Everything here is made up,
 like the mock hub's: no real names, hosts or messages (scripts/privacy_check.py scans the file, check_bundle_privacy.py
 the built app). Times are stored relative to when this ran ("@rel:<seconds>", "@unix:<seconds>") and the app puts
@@ -48,7 +48,7 @@ EXTRA = [
     ("server", "infra", 2, "给 API 加限流", "working", "working", 3, "按 token 做令牌桶限流，正在补压测。"),
     ("macbook", "weather", 1, "整理小组件的截图素材", "idle", "idle", 900, "六张截图都按 App Store 的尺寸导出了。"),
 ]
-# The compact list needs every density on screen (docs/ios.md "Agents list"): a space with many finished-unread agents, spaces
+# The compact list needs every density on screen (docs/apple/ios.md "Agents list"): a space with many finished-unread agents, spaces
 # where every agent is idle ("Idle spaces"), and a machine where nothing runs at all (the Mac mini, filtered to it).
 EXTRA += [("studio", "ios-app", 5, t, "done", "unread", mins, last) for t, mins, last in [
     ("App Store 截图换成新版界面", 4, "六种尺寸的截图都换好了，深浅色各一套。"),

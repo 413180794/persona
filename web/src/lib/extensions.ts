@@ -1,4 +1,4 @@
-// Settings › Extensions (docs/extensions.md "The hub's API" and "App: Settings › Extensions", iOS ExtensionsModel): the hub's extensions, each one's
+// Settings › Extensions (docs/extensions/extensions.md "The hub's API" and "App: Settings › Extensions", iOS ExtensionsModel): the hub's extensions, each one's
 // switch, its configuration as a form drawn from its schema (`form.fields`), and its secrets, write-only. Installing,
 // upgrading and removing happen on the hub's machine (`personad extension`), never here.
 import { api, ApiError, enc } from "./api";
@@ -16,7 +16,7 @@ export type JsonObject = { [k: string]: Json };
 
 /** One of GET /api/v1/extensions. */
 export interface HubExtension {
-  /** The manager whose extension it is, in the hub's merged list (docs/protocol.md "Per-manager routing"); none: the default. */
+  /** The manager whose extension it is, in the hub's merged list (docs/protocol/protocol.md "Per-manager routing"); none: the default. */
   manager?: string;
   id: string;
   name: string;
@@ -35,7 +35,7 @@ export interface HubExtension {
   needs_setup?: string[];
   warnings?: string[];
   /** An extension from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
-   *  happened last with an upgrade (docs/extensions.md "Automatic upgrades"). */
+   *  happened last with an upgrade (docs/extensions/extensions.md "Automatic upgrades"). */
   auto_upgrade?: boolean;
   upgrade?: ExtensionUpgrade;
   upgrade_note?: ExtensionUpgradeNote;
@@ -82,7 +82,7 @@ export function channelOf(p: Pick<HubExtension, "contributes">): string | null {
   return p.contributes?.channel?.find((id) => id.trim() !== "") ?? null;
 }
 
-/** An extension's program on one machine (docs/extensions.md "Programs that run on computers"). */
+/** An extension's program on one machine (docs/extensions/extensions.md "Programs that run on computers"). */
 export interface ExtensionNodeState {
   machine_id: string;
   version?: string;
@@ -176,7 +176,7 @@ export interface HubExtensionDetail extends HubExtension {
   config?: JsonObject;
   secrets?: ExtensionSecret[];
   permissions?: ExtensionPermission[];
-  /** The pages it draws in its settings (placement plugin_page, docs/extensions.md "Declarative UI"). */
+  /** The pages it draws in its settings (placement plugin_page, docs/extensions/extensions.md "Declarative UI"). */
   ui?: UIPlace[];
   /** The field (format machine) that picks the computers its program runs on; their rows say how it is there. */
   node_machines?: string;
@@ -192,7 +192,7 @@ const base = (id: string) => `${extRoot()}/${enc(id)}/-`;
 type ListAnswer = { extensions?: HubExtension[]; plugins?: HubExtension[]; can_install?: boolean; markets?: boolean };
 
 export const listExtensions = () => api<ListAnswer>(extRoot()).then((r) => listOf(r));
-/** The list with what this hub allows: installing at all (a database), and markets (docs/extensions.md "Extension markets"). */
+/** The list with what this hub allows: installing at all (a database), and markets (docs/extensions/extensions.md "Extension markets"). */
 export const listExtensionsInfo = () =>
   api<ListAnswer>(extRoot()).then((r) => ({
     extensions: listOf(r),

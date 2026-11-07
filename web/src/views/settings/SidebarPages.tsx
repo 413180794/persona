@@ -1,4 +1,4 @@
-// Settings › General › Sidebar pages (docs/web.md "The sidebar's pages"): every page of the sidebar in its order, dragged (or moved with ↑ / ↓)
+// Settings › General › Sidebar pages (docs/web/web.md "The sidebar's pages"): every page of the sidebar in its order, dragged (or moved with ↑ / ↓)
 // into another, and switched between the list and More. Settings stays in the list; Reset forgets every choice.
 import { useState } from "react";
 import { t } from "../../i18n";

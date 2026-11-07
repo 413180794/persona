@@ -28,7 +28,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * Settings › Language in each of the app's languages, every style, light and dark (docs/i18n.md). Written as PNGs to
+ * Settings › Language in each of the app's languages, every style, light and dark (docs/protocol/i18n.md). Written as PNGs to
  * `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)

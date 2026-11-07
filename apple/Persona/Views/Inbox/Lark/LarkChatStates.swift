@@ -19,7 +19,7 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
     /// network is left to the title bar, as everywhere else (Error.shown).
     var inline: String?
 
-    /// The hub's code for the Lark gateway without a Feishu login (docs/protocol.md, Feishu routes).
+    /// The hub's code for the Lark gateway without a Feishu login (docs/protocol/protocol.md, Feishu routes).
     static let notLoggedInCode = "lark_not_logged_in"
 
     /// `subject` names what did not load in the catch-all title (this chat, this topic).

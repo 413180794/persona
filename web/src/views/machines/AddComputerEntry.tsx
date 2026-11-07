@@ -1,4 +1,4 @@
-// "Add computer" from a page that is not "Machines" (docs/onboarding.md 4.5 "Rewriting empty states"): the Agents page and "New agent" with no
+// "Add computer" from a page that is not "Machines" (docs/assistant/onboarding.md 4.5 "Rewriting empty states"): the Agents page and "New agent" with no
 // computer open the machines page's own flow (AddComputer) where the hub has it (feature machines_add), else the plain
 // how-to, like the machines page's empty state; and the empty state those pages show.
 import { useState } from "react";

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings › Extensions › Extension Market (docs/extensions.md「扩展市场」): the plugins of every market the hub has, searched and filtered by
+/// Settings › Extensions › Extension Market (docs/extensions/extensions.md「扩展市场」): the plugins of every market the hub has, searched and filtered by
 /// market; a row each with its name, version, what it does, its tags and how it stands on this hub. The markets
 /// themselves are one tap away (Markets).
 struct ExtensionMarketView: View {
@@ -26,7 +26,7 @@ struct ExtensionMarketView: View {
                     }
                     .font(Theme.Font.label)
                     // Most often GitHub's limit for a network without a token: the fix right where it shows. Not for the
-                    // official market, which asks nothing of a newcomer here (docs/onboarding.md 4.5): the hub reads it
+                    // official market, which asks nothing of a newcomer here (docs/assistant/onboarding.md 4.5): the hub reads it
                     // elsewhere when GitHub rate-limits it, and a quiet way to Markets is there for whoever wants a token.
                     if m.wantsGitHubToken && m.official == true {
                         NavigationLink(value: SettingsPage.pluginMarkets) {

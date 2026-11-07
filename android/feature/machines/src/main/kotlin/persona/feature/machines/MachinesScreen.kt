@@ -23,7 +23,7 @@ import persona.core.navigation.*
 @Composable
 internal fun MachinesScreen(
     machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null, launcherPages: Boolean = false,
-    /** What extensions draw on this machine's page, after its own sections (docs/extensions.md "UI slots"). */
+    /** What extensions draw on this machine's page, after its own sections (docs/extensions/extensions.md "UI slots"). */
     extensionSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
     /** "What this computer can do", "Browser" and "Subscription limits"; null in demo mode. */
     health: MachineHealthViewModel? = null,
@@ -93,7 +93,7 @@ internal fun MachinesScreen(
             if (!state.loading && ids.isEmpty()) item("empty") {
                 JEmptyState(stringResource(if (state.failure == null) R.string.machines_empty_title else R.string.machines_empty_unavailable),
                     stringResource(R.string.machines_empty_body), icon = PhIcons.Desktop,
-                    // How to add one (docs/onboarding.md 4.5), until the phone adds computers itself.
+                    // How to add one (docs/assistant/onboarding.md 4.5), until the phone adds computers itself.
                     action = if (state.failure == null) ({
                         JButton(stringResource(ReadinessActionId.AddComputer.label), addComputer, kind = JButtonKind.Secondary)
                     }) else null)
@@ -106,7 +106,7 @@ internal fun MachinesScreen(
                     navigator.navigate(MachineDetailRoute(id))
                 }
             }
-            // Several managers (docs/managers.md step 4): the computers under the manager they belong to.
+            // Several managers (docs/assistant/managers.md step 4): the computers under the manager they belong to.
             val byManager = roster?.groups(ids) { id -> machines.firstOrNull { it.id == id }?.manager }
             if (byManager == null) items(ids, key = { it }, contentType = { "machine" }) { card(it) }
             else byManager.forEach { group ->

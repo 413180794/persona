@@ -9,7 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-/** The kinds of the knowledge base, in the order the list offers them (docs/knowledge.md). */
+/** The kinds of the knowledge base, in the order the list offers them (docs/assistant/knowledge.md). */
 @Serializable
 enum class KnowledgeKind(val title: CoreText) {
     @SerialName("projects") Projects(CoreText.of(Key.KnowledgeProjects)),

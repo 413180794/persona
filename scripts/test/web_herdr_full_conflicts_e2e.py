@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of who gets what in the terminal's "Full view" (herdr's own client, #2700, docs/terminal.md section 26)
+"""End-to-end check of who gets what in the terminal's "Full view" (herdr's own client, #2700, docs/integrations/terminal.md section 26)
 against the fake hub's made-up herdr client, which turns on mouse reporting and bracketed paste as the real one does,
 opens a pane menu on a right-click report and types a bracketed paste at its prompt.
 

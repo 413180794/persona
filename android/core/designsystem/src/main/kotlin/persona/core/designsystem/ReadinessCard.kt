@@ -13,8 +13,8 @@ import persona.core.contracts.api.ReadinessStep
 import persona.core.domain.FailureAction
 
 /**
- * The buttons a readiness step or a coded refusal can have on Android (docs/onboarding.md 5.1 `action.id`). An id the
- * app does not know is text only (docs/onboarding.md 5 "General rules"); `enable_tls` / `open_admin` have no page on the phone.
+ * The buttons a readiness step or a coded refusal can have on Android (docs/assistant/onboarding.md 5.1 `action.id`). An id the
+ * app does not know is text only (docs/assistant/onboarding.md 5 "General rules"); `enable_tls` / `open_admin` have no page on the phone.
  */
 enum class ReadinessActionId(val wire: String, @StringRes val label: Int) {
     AddComputer("add_computer", R.string.designsystem_readiness_action_add_computer),
@@ -51,7 +51,7 @@ fun FailureAction.readinessAction(): ReadinessActionId? = when (this) {
     else -> null
 }
 
-/** What the send button says while the main conversation cannot answer (docs/onboarding.md 4.4: "Connect a model first" / "Add a computer first"). */
+/** What the send button says while the main conversation cannot answer (docs/assistant/onboarding.md 4.4: "Connect a model first" / "Add a computer first"). */
 @StringRes
 fun blockedSendLabel(step: ReadinessStep): Int = when {
     step.id != ReadinessStep.COMPUTER -> R.string.designsystem_readiness_send_connect_model

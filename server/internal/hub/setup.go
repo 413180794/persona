@@ -27,7 +27,7 @@ import (
 	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
-// `personad hub setup` (docs/onboarding.md 4.1, 5.5): one command that leaves a working hub on this machine. It writes
+// `personad hub setup` (docs/assistant/onboarding.md 4.1, 5.5): one command that leaves a working hub on this machine. It writes
 // hub.json (a whole new file only when there is none yet), makes sure there is a database (the same Postgres container
 // scripts/deploy/db.sh makes, or the one hub.json names), installs the service that keeps the hub running (the same
 // systemd units as scripts/deploy/hub-systemd.sh; a launchd agent on a Mac), waits for the hub, checks it, and prints
@@ -234,7 +234,7 @@ type installInputs struct {
 	agents  bool   // herdr or claude is here: keep this machine as a local machine
 }
 
-// newInstallConfig is the hub.json a new install gets (docs/onboarding.md 4.1). These defaults are written into new
+// newInstallConfig is the hub.json a new install gets (docs/assistant/onboarding.md 4.1). These defaults are written into new
 // files only, never added to defaultConfig(): LoadConfig decodes every existing hub.json over defaultConfig(), so a
 // default there would change every hub whose file does not name the field (Public is a value: a TLSListen default
 // would turn TLS on for every old hub.json without "public").
@@ -611,7 +611,7 @@ func (e *setupEnv) noDocker() error {
 	if !e.portFree(5432) {
 		return e.fail("database", "没有 Docker；这台电脑的 5432 端口上像是有 Postgres",
 			"在它里面建用户 persona 和库 persona，把 postgres://persona:<密码>@127.0.0.1:5432/persona 写进 "+e.hubJSON()+
-				" 的 database_url，再重跑（docs/server.md「数据库」）；或者装 Docker 后重跑")
+				" 的 database_url，再重跑（docs/server/server.md「数据库」）；或者装 Docker 后重跑")
 	}
 	if e.goos == "darwin" {
 		return e.fail("database", "这台电脑还缺数据库", "装 Docker Desktop 或 OrbStack 后重跑这条命令")
@@ -695,7 +695,7 @@ func (e *setupEnv) hubAnswers(ctx context.Context, cfg *Config) bool {
 	return true
 }
 
-// finish prints the way in: the phone's QR code and the admin URL with the setup code (docs/onboarding.md 4.1).
+// finish prints the way in: the phone's QR code and the admin URL with the setup code (docs/assistant/onboarding.md 4.1).
 func (e *setupEnv) finish(ctx context.Context, cfg *setupConfig) error {
 	p, err := cfg.requestPairCode(ctx)
 	if err != nil {

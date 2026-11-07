@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// How a call opens the microphone (docs/voice.md 6.4, #5029): nothing reads `AVAudioEngine.inputNode` unless the session
+/// How a call opens the microphone (docs/assistant/voice.md 6.4, #5029): nothing reads `AVAudioEngine.inputNode` unless the session
 /// has an input that may be recorded and, on the simulator, a short recording started; the simulator records without
 /// voice processing; a probe that does not come back is not started again until it does.
 struct VoiceCaptureTests {

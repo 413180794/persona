@@ -19,7 +19,7 @@ import (
 //go:embed all:webdist
 var webDist embed.FS
 
-// webApp serves the web client (web/, docs/web.md) from <data dir>/web on the hub's own port, so it shares the
+// webApp serves the web client (web/, docs/web/web.md) from <data dir>/web on the hub's own port, so it shares the
 // API's origin: no CORS, and the WebSocket and images authenticate the same way. Without that directory the copy built
 // into personad serves (published builds), and without either every non-API path is a 404, as before. Paths without a
 // file fall back to index.html (client-side routes).
@@ -57,7 +57,7 @@ func webFrom(dir string, embedded fs.FS) http.Handler {
 			file = "index.html"
 		}
 		switch {
-		// the service worker and the manifest (docs/web.md "Install as an app") are checked again on every load, like the shell
+		// the service worker and the manifest (docs/web/web.md "Install as an app") are checked again on every load, like the shell
 		case file == "index.html", file == "sw.js", file == "manifest.webmanifest":
 			w.Header().Set("Cache-Control", "no-cache")
 		case strings.HasPrefix(name, "assets/"):
@@ -89,7 +89,7 @@ func webFrom(dir string, embedded fs.FS) http.Handler {
 	})
 }
 
-// serveIndex serves index.html with its <base> at the sub-path a reverse proxy serves the hub under (docs/web.md "Sub-path"):
+// serveIndex serves index.html with its <base> at the sub-path a reverse proxy serves the hub under (docs/web/web.md "Sub-path"):
 // the page's files are relative to it and lib/base.ts reads it for the API, the WebSocket and the page's routes. The
 // same file answers differently per X-Forwarded-Prefix, so a cache must key on it (Vary).
 func serveIndex(w http.ResponseWriter, r *http.Request, site fs.FS) {

@@ -1,4 +1,4 @@
-// Reading a Feishu document for the panel (docs/feishu.md "Documents", the phone's FeishuDocReader / FeishuDocsModels):
+// Reading a Feishu document for the panel (docs/extensions/feishu.md "Documents", the phone's FeishuDocReader / FeishuDocsModels):
 // the Markdown export first (fast, faithful lists and tables); when the owner forbids export, the ProseMirror-style
 // JSON tree. Bases, whiteboards and files say what they are and offer the tab. Reads are cached and can start early
 // (a pointer resting on the link), so the panel usually opens on a finished page.

@@ -1,6 +1,6 @@
 package node
 
-// Golden test for the message the node writes into an assistant conversation (docs/prompts.md). Regenerate after an
+// Golden test for the message the node writes into an assistant conversation (docs/assistant/prompts.md). Regenerate after an
 // intended change with UPDATE_GOLDEN=1 go test ./internal/node -run Golden, and read the diff.
 
 import (

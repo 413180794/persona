@@ -29,7 +29,7 @@ internal fun portChipLabel(port: ListeningPort): String =
 internal fun chipPorts(ports: List<ListeningPort>?): List<ListeningPort> = ports.orEmpty().distinctBy { it.port }
 
 /**
- * The ports an agent listens on (`Session.ports`, docs/ports.md), under the conversation's header (iOS
+ * The ports an agent listens on (`Session.ports`, docs/operations/ports.md), under the conversation's header (iOS
  * `SessionPortChips`): a tap opens the page through the hub, by way of the link host, as a link to it would.
  * Nothing when the session lists none or the conversation cannot open ports.
  */
@@ -65,7 +65,7 @@ internal fun portBadgeLabel(link: PortLink, state: PortPresence.State?, stopped:
 }
 
 /**
- * Badges for a message's links to ports of its machine (docs/ports.md, iOS `PortChips`): under an agent's reply and
+ * Badges for a message's links to ports of its machine (docs/operations/ports.md, iOS `PortChips`): under an agent's reply and
  * under a Bash command's output (a dev server saying where it listens). Each is the port, its path and its page's
  * title, gray once nothing listens there; a tap opens it through the hub as the link would.
  */

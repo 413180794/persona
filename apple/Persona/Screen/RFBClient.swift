@@ -9,7 +9,7 @@ nonisolated protocol RFBTransport: AnyObject, Sendable {
     func close()
 }
 
-/// The hub's relay of the Mac's 5900 (`/api/v1/machines/{mid}/ports/5900/connect`, docs/ports.md): one binary
+/// The hub's relay of the Mac's 5900 (`/api/v1/machines/{mid}/ports/5900/connect`, docs/operations/ports.md): one binary
 /// WebSocket message a TCP read or write, through the app's own way to the hub (APIClient: its SSH tunnel, its pinned
 /// session) and with its device token.
 nonisolated final class RFBWebSocket: RFBTransport, @unchecked Sendable {

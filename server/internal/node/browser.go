@@ -1,6 +1,6 @@
 package node
 
-// ego lite on this Mac, the agent browser the assistant drives (the built-in plugin ego, docs/plan-ego-browser.md):
+// ego lite on this Mac, the agent browser the assistant drives (the built-in plugin ego, docs/plans/plan-ego-browser.md):
 // what is there (browser.status), installing it from its official DMG and opening it for its first-run setup
 // (browser.install, browser.open, browser.cancel), and running a script in it (browser.call). The hub asks only about
 // a machine while the plugin is on.

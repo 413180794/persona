@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// ---- agent work states (docs/agent-work.md) ----
+// ---- agent work states (docs/assistant/agent-work.md) ----
 
 // SessionWork is where one session stands in its work, about its latest turn (session_work).
 type SessionWork struct {

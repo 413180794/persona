@@ -11,7 +11,7 @@ import (
 
 // The node writes a session's activity, a background command's stand-in and a queued message's sender in Chinese
 // (internal/transcript): it does not know the user's language. The session lists the apps get have them in the user's
-// language (docs/i18n.md); zh-Hans, and anything not recognized (an older or newer node's wording), go out as the node
+// language (docs/protocol/i18n.md); zh-Hans, and anything not recognized (an older or newer node's wording), go out as the node
 // wrote them. The transcripts' own lines the hub rewrites for each app (hub/transcript_text.go).
 
 const transcriptNS = "hub-transcript_text."

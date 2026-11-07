@@ -138,7 +138,7 @@ func (h *Hub) busBroadcast(c *busConn, params json.RawMessage) {
 	}
 }
 
-// An install's steps (docs/protocol.md "Extension install, upgrade and uninstall progress") go only to the apps that declared they know them,
+// An install's steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress") go only to the apps that declared they know them,
 // and not into the event log: a download pushes once a second, and an app that comes back lists them again.
 const (
 	extensionOperationEvent    = "extension_operation"

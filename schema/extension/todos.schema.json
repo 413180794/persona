@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "todos.schema.json",
   "title": "To-do events",
-  "description": "What the hub tells an extension's program of the to-dos (docs/extensions.md \"Events\"): event.todo.changed and event.todo.decision. Only an extension that subscribes to the topic (contributes.events) and was granted todos.read at install is told; to read a to-do or its decisions it calls the to-do API (GET /api/v1/todos, GET /api/v1/todos/{id}/decisions) with the same scope. Plugin-side: only the hub and the program speak it.",
+  "description": "What the hub tells an extension's program of the to-dos (docs/extensions/extensions.md \"Events\"): event.todo.changed and event.todo.decision. Only an extension that subscribes to the topic (contributes.events) and was granted todos.read at install is told; to read a to-do or its decisions it calls the to-do API (GET /api/v1/todos, GET /api/v1/todos/{id}/decisions) with the same scope. Plugin-side: only the hub and the program speak it.",
   "x-side": "plugin",
   "x-events": {
     "event.todo.changed": {"from": "hub", "params": "TodoChangedEvent"},

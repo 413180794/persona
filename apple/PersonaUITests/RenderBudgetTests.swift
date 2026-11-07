@@ -1,9 +1,9 @@
 import XCTest
 
-/// What one push costs (docs/ios-state.md「一次推送的代价」): on each page at rest, pushes that change one field of one
+/// What one push costs (docs/apple/ios-state.md「一次推送的代价」): on each page at rest, pushes that change one field of one
 /// agent, as the real hub sends them (the machine's whole session list), and the view bodies they make run
 /// (`-perfCounts YES`), per push. `rev`: the transcript grew, nothing shown changed (most of the real hub's pushes);
-/// `last`: one agent's last line. Reports them (PERF lines, attachments) and fails over the budget (docs/ios-state.md
+/// `last`: one agent's last line. Reports them (PERF lines, attachments) and fails over the budget (docs/apple/ios-state.md
 /// 「第 5 步」): after steps 1–3 such a push draws only the leaf views that show the field that changed.
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/RenderBudgetTests

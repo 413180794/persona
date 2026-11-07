@@ -32,18 +32,18 @@ import (
 // larkCheck let that very call through (the phone confirmed it, or "Always allow in this session" covers it). Printing the
 // environment so yields an address that works on this machine only and skips nothing.
 //
-// In a health conversation (docs/health.md "Outbound") every write goes that way, whatever the rules say: the address of
+// In a health conversation (docs/assistant/health.md "Outbound") every write goes that way, whatever the rules say: the address of
 // a process started in the health space is marked so when it is opened, and a write there goes only with the grant larkCheck
 // gave it after the phone confirmed, as larkCheck itself holds it. Reads go as everywhere.
 //
 // The proxy also sees what the API answered. A write it forwarded that came back 2xx is told to the manager
-// (proto.MethodLarkSent), which keeps it in the sent-as-user ledger with how the gate let it through (docs/connectors.md
+// (proto.MethodLarkSent), which keeps it in the sent-as-user ledger with how the gate let it through (docs/extensions/connectors.md
 // "Sent as the user", #5278): the gate decides before the command runs and cannot know whether it sent. What does not
 // pass here is not in the ledger: lark-cli carries its own credentials, and a gate without Auth puts them in the
 // command's environment.
 //
 // The report also carries the id the API's answer gave for the message the write made (LarkSent.MessageRef), so that a
-// row can name it (docs/connectors.md "Sent as the user"). The proxy only watches the answer on its way to the
+// row can name it (docs/extensions/connectors.md "Sent as the user"). The proxy only watches the answer on its way to the
 // command: it keeps a copy of its first gateReplyMax bytes and reads the id from the copy once the answer has been
 // passed on. What the command gets is what the API sent, as it came and when it came.
 

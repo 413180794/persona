@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
-// The Agents list (docs/android-design.md 2.4): computer chips over a tree of computer → space → session. The tree is told
+// The Agents list (docs/android/android-design.md 2.4): computer chips over a tree of computer → space → session. The tree is told
 // apart by indentation, type and hairlines, not by plates: the page background stays whole and only business cards
 // (requests, notices; the board's agent strips) sit on it. Lazy lists give every heading and row its own item.
 
@@ -162,7 +162,7 @@ fun HeadingAction(icon: PhIcon, label: String, onClick: () -> Unit, modifier: Mo
  * largest type of the tree with a rule above it ([first] has none); no plate. [icon] is the device or the section's
  * mark, [online] adds the connection dot ("Offline" is also written), [detail] is the line under the name, [counts] the
  * sessions that need the user / work / are unread, [onMonitor] the gauge button to the computer's page. [tag] names
- * the hub group the computer belongs to, only when the phone has more than one (docs/android.md "Multiple hubs").
+ * the hub group the computer belongs to, only when the phone has more than one (docs/android/android.md "Multiple hubs").
  */
 @Composable
 fun AgentTreeHeader(

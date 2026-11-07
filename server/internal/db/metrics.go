@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// ---- machine monitoring (docs/machines.md) ----
+// ---- machine monitoring (docs/server/machines.md) ----
 
 func (d *DB) PutMachineSystem(ctx context.Context, machine string, s proto.System) error {
 	b, err := json.Marshal(s)

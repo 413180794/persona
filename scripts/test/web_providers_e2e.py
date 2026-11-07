@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of Settings › Model providers (#2455, docs/launchers.md): the three-step add wizard (pick → connect → models,
+"""End-to-end check of Settings › Model providers (#2455, docs/integrations/launchers.md): the three-step add wizard (pick → connect → models,
 "Advanced" folded), "Test" passing and failing, "Fetch models", the advanced fields coming back when a provider is reopened, a PUT
 that leaves out what was not touched, and "Import from ~/.zshrc" (preview, merge, the outdated and offline computers).
 

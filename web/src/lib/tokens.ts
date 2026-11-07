@@ -1,4 +1,4 @@
-// Token usage by machine (docs/machines.md "Token usage", #4973): the counts' format, the API's shapes, and what the
+// Token usage by machine (docs/server/machines.md "Token usage", #4973): the counts' format, the API's shapes, and what the
 // charts draw from them. The apps have the same rules (apple/Shared/TokenUsage.swift).
 
 /** Token counts: K / M / B with three significant digits and no trailing zeros (1,250 → 1.25K, 2,960,000 → 2.96M,

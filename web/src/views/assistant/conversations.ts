@@ -1,4 +1,4 @@
-// "All chats" (docs/assistant.md "Managing its own conversations"): the assistant's conversations, the main one first, the rest newest first
+// "All chats" (docs/assistant/assistant.md "Managing its own conversations"): the assistant's conversations, the main one first, the rest newest first
 // by day; search on the title and the last message; the archived ones apart. Pure functions, tested without a DOM.
 import type { Session } from "../../lib/types";
 import { t } from "../../i18n";
@@ -6,7 +6,7 @@ import { t } from "../../i18n";
 /** A conversation as `GET /api/v1/assistant?archived=1` lists it. */
 export type Conversation = Session & { archived?: boolean };
 
-/** "1101 | fix | search box overlaps the top bar" (docs/assistant.md "Conversation titles") → head "1101 | fix | " and topic; null for other titles. */
+/** "1101 | fix | search box overlaps the top bar" (docs/assistant/assistant.md "Conversation titles") → head "1101 | fix | " and topic; null for other titles. */
 export function splitTitle(title: string): { head: string; topic: string } | null {
   const m = /^(\d{4}\s*\|\s*[^|]+?\s*\|\s*)(.+)$/.exec(title.trim());
   return m ? { head: m[1], topic: m[2] } : null;

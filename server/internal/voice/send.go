@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Handing work to the bound conversation (protocol 2, docs/voice.md "Sending, the gate and 409"). A delegation is sent at once,
+// Handing work to the bound conversation (protocol 2, docs/assistant/voice.md "Sending, the gate and 409"). A delegation is sent at once,
 // as the model made it, once the user-speech gate lets it (gate.go); what it starts with decides what it is:
 //   - "Status:" asks how the conversation stands: answered from its live state (status.go), never sent, no gate;
 //   - "Stop:" stops it (the app's "Stop" button), behind the gate;
@@ -66,7 +66,7 @@ func splitMark(task string) (kind, rest string) {
 	return "", t
 }
 
-// The cards an approval word answers: tapped on the screen, never by voice (docs/voice.md decision 5). Not an
+// The cards an approval word answers: tapped on the screen, never by voice (docs/assistant/voice.md decision 5). Not an
 // elicitation: the hub lists one only to a client that said it renders them (hub/elicitation.go), never to the
 // extension's hub token; a form in the terminal holds its keyboard, and the node refuses the send (dialog_open).
 var approvalCards = []string{proto.IxPlan, proto.IxPermission, proto.IxScreen}
@@ -160,7 +160,7 @@ type sendFail struct {
 	plan, resendable            bool
 }
 
-// boundFailure is what a failed send to the bound conversation was (docs/voice.md "How refusals map").
+// boundFailure is what a failed send to the bound conversation was (docs/assistant/voice.md "How refusals map").
 func boundFailure(err error) sendFail {
 	var he *hubError
 	var ms maybeSentError
@@ -334,7 +334,7 @@ func (r *voiceRun) restart(now time.Time) {
 	r.Seen, r.ended, r.notFound, r.waiting, r.unsent = false, false, false, false, false
 }
 
-// resume follows the runs the app handed back of a call it picked up again (docs/voice.md "Reconnecting and resuming"): from their
+// resume follows the runs the app handed back of a call it picked up again (docs/assistant/voice.md "Reconnecting and resuming"): from their
 // base, unseen, so a turn that ended while the call was away is read at once; their words are said (their calls are
 // gone). One handed back while it was sending is not sent again: its message is looked for, and is unknown when it
 // never shows.

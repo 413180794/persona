@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The standalone terminal (docs/terminal.md "Standalone terminal"): any pane of the terminal host can be opened as a terminal,
+// The standalone terminal (docs/integrations/terminal.md "Standalone terminal"): any pane of the terminal host can be opened as a terminal,
 // agent or plain shell. The terminal stream (terminal.go) addresses a session by id; a pane with no agent session has
 // none, so it is addressed as "pane:<pane id>". Only the terminal calls (watch, unwatch, screen reads) understand
 // that address — session.send, interrupt and the rest still need a session, so a pane address can never be used to

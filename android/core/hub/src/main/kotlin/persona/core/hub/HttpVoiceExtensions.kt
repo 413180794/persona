@@ -32,8 +32,8 @@ import okio.ByteString
 import okio.ByteString.Companion.toByteString
 
 /**
- * The hub's voice extensions (docs/extensions.md "Voice") on one route of one pairing: the extension list, an extension's voices and
- * models, the model configuration of `plugin.<id>` (docs/model-config.md; the purpose kept its name) and the extension's
+ * The hub's voice extensions (docs/extensions/extensions.md "Voice") on one route of one pairing: the extension list, an extension's voices and
+ * models, the model configuration of `plugin.<id>` (docs/assistant/model-config.md; the purpose kept its name) and the extension's
  * socket. A hub before #1844 ([legacy]) has these routes only under `/api/v1/plugins`. Calls after the
  * pairing changed ([isCurrent] false) fail with a cancellation, like [HttpMachineMetricsApi].
  */
@@ -60,7 +60,7 @@ class HttpVoiceExtensions(
     private fun checkScope() { if (!isCurrent()) throw CancellationException("Pairing changed") }
 
     private fun extension(id: String, vararg rest: String): HttpUrl {
-        // Extension ids are a-z0-9_- (docs/extensions.md); anything else must not become a path ("..").
+        // Extension ids are a-z0-9_- (docs/extensions/extensions.md); anything else must not become a path ("..").
         require(id.matches(ExtensionId)) { "Invalid extension id" }
         return base.newBuilder().addPathSegments(root).addPathSegment(id)
             .apply { rest.forEach(::addPathSegment) }.build()
@@ -115,7 +115,7 @@ class HttpVoiceExtensions(
         val status = (purpose["status"] as? JsonPrimitive)?.contentOrNull?.trim()
         return VoiceModelChoice(
             model = model?.takeIf { it.isNotEmpty() },
-            // "Unverified" means nobody paid to try it, not that it is broken (docs/model-config.md).
+            // "Unverified" means nobody paid to try it, not that it is broken (docs/assistant/model-config.md).
             status = status?.takeIf { it.isNotEmpty() && it != Unverified },
         )
     }
@@ -154,7 +154,7 @@ class HttpVoiceExtensions(
                 val status = response?.code
                 val error = response?.use { HubFailure.from(it) } ?: HubFailure.from(t)
                 // OkHttp does not retry an upgrade on a pooled connection that died behind a forwarder (adb reverse,
-                // ssh -L): every later attempt failed the same way until the app restarted (docs/android.md).
+                // ssh -L): every later attempt failed the same way until the app restarted (docs/android/android.md).
                 if (response == null && !opened.get()) http.connectionPool.evictAll()
                 if (ended.compareAndSet(false, true)) listener.onFailure(error, status)
             }

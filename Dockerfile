@@ -1,15 +1,15 @@
-# The hub as a container image (docs/docker.md): personad hub with the web client inside, and every node build for the
+# The hub as a container image (docs/operations/docker.md): personad hub with the web client inside, and every node build for the
 # app's "Redeploy". Built for linux/amd64 and linux/arm64 (.github/workflows/hub-image.yml); the binaries are cross
 # compiled on the build machine, only the last stage runs on the target platform.
 #
 #   docker build -t persona-hub .
 #
-# No skills are inside: the assistant's come from ~/.persona/skills on its machine (docs/hub-update.md "Skills out of the binary").
+# No skills are inside: the assistant's come from ~/.persona/skills on its machine (docs/operations/hub-update.md "Skills out of the binary").
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-# Packages the project keeps in web/vendor/ (SheetJS publishes its current releases only as a tarball, docs/web.md "Spreadsheets").
+# Packages the project keeps in web/vendor/ (SheetJS publishes its current releases only as a tarball, docs/web/web.md "Spreadsheets").
 COPY web/vendor/ ./vendor/
 # A lockfile written against a mirror names the mirror's host, which no other network can reach: refuse it rather
 # than fail later in npm (docs/lessons/server.md).
@@ -27,7 +27,7 @@ RUN npm run build --ignore-scripts
 
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 # VERSION: what the hub reports and compares with its nodes' (a node of another build gets "Redeploy"). The image's
-# hub never replaces itself (channel docker): it says when a newer image is out (docs/hub-update.md), looking up the
+# hub never replaces itself (channel docker): it says when a newer image is out (docs/operations/hub-update.md), looking up the
 # tags of IMAGE (the workflow passes ghcr.io/<owner>/<repo>) unless the compose file says which image it runs.
 ARG VERSION=dev
 ARG IMAGE=
@@ -38,7 +38,7 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./
 COPY --from=web /src/web/dist/ internal/hub/webdist/
-# The runtime packages personad carries and keeps its runtimes on (docs/runtimes.md "Auto-update"): the DSH plugin's and
+# The runtime packages personad carries and keeps its runtimes on (docs/integrations/runtimes.md "Auto-update"): the DSH plugin's and
 # the pi extension's, the Paseo bridge's and the Agent SDK bridge's code.
 COPY integrations/agent-sdk/ /src/integrations/agent-sdk/
 COPY integrations/dsh/ /src/integrations/dsh/
@@ -53,7 +53,7 @@ RUN for t in $NODE_PLATFORMS; do \
       CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath \
         -ldflags "-s -w -X main.version=$VERSION -X main.channel=docker -X main.image=$IMAGE" -o /out/nodes/personad-${t%/*}-${t#*/} ./cmd/personad || exit 1; \
     done
-# The built-in plugins' programs (the WeChat bot, docs/wechat.md), for this image's platform only: the hub runs them next to personad, and starts one only when its `version -v` is
+# The built-in plugins' programs (the WeChat bot, docs/extensions/wechat.md), for this image's platform only: the hub runs them next to personad, and starts one only when its `version -v` is
 # personad's (the same -X).
 ARG TARGETARCH
 RUN for p in wechat; do \

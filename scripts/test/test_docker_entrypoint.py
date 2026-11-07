@@ -61,7 +61,7 @@ class DockerEntrypointTests(unittest.TestCase):
             return result.stderr, written.read_text(), written.stat().st_mode & 0o777
 
     def test_manager_gets_no_hub_config_or_reminders(self):
-        # A manager in the hub's image (docs/managers.md, "Containers"): no hub.json is seeded, none of the hub's reminders.
+        # A manager in the hub's image (docs/assistant/managers.md, "Containers"): no hub.json is seeded, none of the hub's reminders.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             bin_dir = root / "bin"
@@ -89,7 +89,7 @@ class DockerEntrypointTests(unittest.TestCase):
             with self.subTest(access=access):
                 logs, _, _ = self.run_entrypoint(True, access, "192.0.2.1/32")
                 for expected in ("gvisor", "tls_required", "security.trusted_cidrs", "netstat -tn",
-                                 "docs/docker.md", "127.0.0.1"):
+                                 "docs/operations/docker.md", "127.0.0.1"):
                     self.assertIn(expected, logs)
                 self.assertNotIn("every browser reaches the hub from the bridge's gateway", logs)
 

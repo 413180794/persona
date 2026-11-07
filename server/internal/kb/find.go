@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
-// Searching for the app (docs/knowledge.md "Search"): results are entries, not lines. Every line containing all the
+// Searching for the app (docs/assistant/knowledge.md "Search"): results are entries, not lines. Every line containing all the
 // words is found (archived messages newest day first), grouped by the entry it belongs to, the entries ranked
 // (name matches, then importance, relevance, how much matched, recency), a few lines kept for each. Opening one, Matches
 // gives every place in that entry with a few messages around each, and Day the whole day a message is in.
@@ -454,7 +454,7 @@ func messages(raw string) []message {
 	return out
 }
 
-// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package kbwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type DayMessage = kbwire.DayMessage
 
 // Day returns a chat's messages of one day ("2006-01-02") and the days before and after it that have any.

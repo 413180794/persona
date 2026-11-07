@@ -3,7 +3,7 @@ package hub
 import "net/http"
 
 // gate runs before authentication on every /api/ request: requests are refused here for how they arrive (plaintext
-// from the internet, too many failed tokens) rather than for who sent them (docs/redesign/hub-changes.md 1.4).
+// from the internet, too many failed tokens) rather than for who sent them (docs/archive/redesign/hub-changes.md 1.4).
 func (h *Hub) gate(next http.Handler) http.Handler {
 	if h.cfg.Security.AllowPublicPlaintext {
 		h.logf("WARNING: security.allow_public_plaintext is enabled; public API traffic can expose credentials")

@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** GET /api/v1/assistant/readiness as docs/protocol.md "Main chat readiness" writes it, and the step that blocks sending. */
+/** GET /api/v1/assistant/readiness as docs/protocol/protocol.md "Main chat readiness" writes it, and the step that blocks sending. */
 class AssistantReadinessTest {
     private fun read(json: String) = JsonCodec.decodeFromString<AssistantReadiness>(json)
 

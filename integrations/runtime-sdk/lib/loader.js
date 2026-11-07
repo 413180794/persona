@@ -1,4 +1,4 @@
-// The loader of a runtime that lives inside another program (docs/runtimes.md "Auto-update"): DSH loads the plugin's
+// The loader of a runtime that lives inside another program (docs/integrations/runtimes.md "Auto-update"): DSH loads the plugin's
 // index.js once and keeps it, so that file stays thin and the runtime itself is imported from a versioned directory
 // of the store, <store>/<hash>/ — a copy of the files it ships with, or the package the node sent. Never from the
 // shipped files themselves: the host's module cache keeps the first import of a path for good, so the old code would

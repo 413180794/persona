@@ -56,7 +56,7 @@ internal class ChatWebViewPool(private val context: Context) {
 
     /**
      * Drops the page kept for [url]: a forwarded port's address is the same every time it opens, and the dev server
-     * behind it has moved on (docs/ports.md, iOS #1934), so it loads anew, without the disk cache.
+     * behind it has moved on (docs/operations/ports.md, iOS #1934), so it loads anew, without the disk cache.
      */
     fun forget(url: String) {
         noCache += url

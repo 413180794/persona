@@ -26,7 +26,7 @@ import (
 // that app (AppTool).
 
 // toolNames are the tools only assistant conversations get; their descriptions and schemas are in prompts/mcp
-// (docs/prompts.md).
+// (docs/assistant/prompts.md).
 var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
 	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_interrupt", "agent_start", "agent_supervise", "interaction_answer", "inbox_suggest", "inbox_draft",
 	"kb_search", "kb_list", "kb_get", "kb_update", "persona_settings",
@@ -89,7 +89,7 @@ func (s *Service) appTool(ctx context.Context, app string, call ToolCall, args j
 }
 
 func (s *Service) runTool(ctx context.Context, machine, self, name string, args json.RawMessage) (string, error) {
-	if name == "kb_update" { // health stays in the health space (docs/health.md "Isolation")
+	if name == "kb_update" { // health stays in the health space (docs/assistant/health.md "Isolation")
 		if space, _ := s.selfSpace(ctx, self); space == SpaceHealth {
 			return "", errors.New("the health space doesn't write the knowledge base: health information stays in its conversations and memory")
 		}

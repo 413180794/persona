@@ -1,6 +1,6 @@
 import XCTest
 
-/// Demo Mode (docs/ios.md): from the pairing page into the app's own made-up hub (DemoHub, no server), every tab walked
+/// Demo Mode (docs/apple/ios.md): from the pairing page into the app's own made-up hub (DemoHub, no server), every tab walked
 /// through — Agents (filters, Compact List, a Claude and a Codex session, cards, a table, the terminal), the machines and
 /// their 24-hour charts, Persona (sidebar, a conversation, Scheduled Tasks), the inbox (a Feishu chat, a mail) — and back out to
 /// the pairing page from Settings. Needs no mock hub.

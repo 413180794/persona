@@ -14,7 +14,7 @@ import java.util.UUID
 // Comments on a Feishu document in the reader (#1290 / #2964; iOS FeishuDocsCommentsModel, web lib/doc-comments): the
 // threads from the hub's read-only Lark gateway window and, when the plugin says `lark_doc_comments`, the user's own
 // writes from this phone: a comment on the whole document or on a passage, a reply to a thread, resolve and reopen.
-// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md Lark API.
+// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol/protocol.md Lark API.
 
 data class LarkDocCommentSegment(val kind: String, val text: String, val href: String? = null)
 
@@ -108,7 +108,7 @@ class LarkDocCommentsTransport(private val transport: InboxAssistantTransport) :
 data class LarkDocCommentFailure(@StringRes val action: Int, val reason: String?, val unsupported: Boolean = false)
 
 /**
- * A document's comment threads and what the user is writing (docs/android.md: the logic beside the page): loading
+ * A document's comment threads and what the user is writing (docs/android/android.md: the logic beside the page): loading
  * them, "Send" to where [target] says, resolving and reopening. A write's answer carries the threads as Feishu has them
  * afterwards; when it cannot, they are read again.
  */

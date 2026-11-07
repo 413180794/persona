@@ -1,4 +1,4 @@
-// The narrow screen's sidebar drawer (#1996), after iOS's DrawerPan (docs/ios.md "Gestures"): a drag to the right anywhere on
+// The narrow screen's sidebar drawer (#1996), after iOS's DrawerPan (docs/apple/ios.md "Gestures"): a drag to the right anywhere on
 // the page pulls it out, a drag to the left while it is open puts it back. The drag is decided by where the finger has
 // got to from where it went down: within 45° of horizontal it is the drawer's, steeper is the page scrolling. The drawer
 // follows the finger; letting go fast goes that way, otherwise past half opens it. Something under the finger that can

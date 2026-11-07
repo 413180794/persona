@@ -20,13 +20,13 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Starting the assistant's conversations (docs/assistant.md "Processes", "New main chat"): its directory on the machine is
+// Starting the assistant's conversations (docs/assistant/assistant.md "Processes", "New main chat"): its directory on the machine is
 // prepared first (the CLAUDE.md written from what the hub tells it, the connectors' and plugins' skills), the model
 // configuration applied, then the node's assistant.send. The main conversation is one of them; putting it away for a
 // new one keeps what it left for the next one's first message.
 
 // errNoAssistantMachine: the hub has no machine for the assistant. Coded, so the app is told why in plain words with
-// what to do (apierr.Call: 409 no_machine, docs/onboarding.md 5.2); its message stays the words logs and runs record.
+// what to do (apierr.Call: 409 no_machine, docs/assistant/onboarding.md 5.2); its message stays the words logs and runs record.
 // The main conversation's start and the memory (memory) both refuse with it.
 var errNoAssistantMachine error = &rpc.Error{Code: proto.CodeNoMachine, Message: "assistant machine is not configured",
 	Data: json.RawMessage(`{"delivered":"none"}`)}
@@ -73,7 +73,7 @@ func (s *Service) prepare(ctx context.Context, machine string) (string, error) {
 }
 
 // prepareSpace is prepare for one of the assistant's spaces: "health" is the health space's directory with its own
-// CLAUDE.md (docs/health.md); the connectors and plugin skills go there as to the assistant's own.
+// CLAUDE.md (docs/assistant/health.md); the connectors and plugin skills go there as to the assistant's own.
 func (s *Service) prepareSpace(ctx context.Context, machine, space string) (string, error) {
 	if s.isWorkMachine(machine) {
 		return "", errWorkAssistant
@@ -154,7 +154,7 @@ func (s *Service) startOn(ctx context.Context, machine string, p StartParams) (p
 	s.startRefused(ctx, machine, used, err) // Claude Code or the launcher missing: the readiness's claude step
 	if err != nil {
 		if d, ok := s.device(ctx, machine); ok {
-			err = apierr.OnMachine(err, d.Name) // claude_missing on a sample user's MacBook (docs/onboarding.md 4.6)
+			err = apierr.OnMachine(err, d.Name) // claude_missing on a sample user's MacBook (docs/assistant/onboarding.md 4.6)
 		}
 		return proto.Session{}, err
 	}
@@ -436,10 +436,10 @@ func (s *Service) startRoutes() {
 			Effort         string        `json:"effort"`
 			Main           bool          `json:"main"` // becomes the main conversation
 			// Purpose is the model purpose it runs under ("assistant" when empty; a plugin's /agent asks for its own);
-			// MachineID one of the hub's machines instead of the assistant's (docs/protocol.md "Assistant").
+			// MachineID one of the hub's machines instead of the assistant's (docs/protocol/protocol.md "Assistant").
 			Purpose   string `json:"purpose"`
 			MachineID string `json:"machine_id"`
-			Space     string `json:"space"` // "health": a conversation of the health space (docs/health.md)
+			Space     string `json:"space"` // "health": a conversation of the health space (docs/assistant/health.md)
 			// ReportTasks: the tasks it opens are told back to it, as the main conversation's quiet ones are (#3192,
 			// reporters.go); a plugin's /agent hands their results on.
 			ReportTasks bool `json:"report_tasks"`

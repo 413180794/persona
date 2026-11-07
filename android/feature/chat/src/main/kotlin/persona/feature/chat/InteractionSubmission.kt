@@ -33,7 +33,7 @@ internal enum class InteractionSubmission(@androidx.annotation.StringRes val not
     }
 }
 
-/** How one answer went, with what the hub said about a card that was over (docs/protocol.md, #1673). */
+/** How one answer went, with what the hub said about a card that was over (docs/protocol/protocol.md, #1673). */
 internal data class InteractionReply(
     val submission: InteractionSubmission,
     /** The answer that took effect, for [InteractionSubmission.AlreadyAnswered]. */

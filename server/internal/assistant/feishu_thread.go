@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A message from a group chat's topic (#5279, docs/todos.md "Chat thread", docs/bots.md): the bot's chat with the
+// A message from a group chat's topic (#5279, docs/assistant/todos.md "Chat thread", docs/extensions/bots.md): the bot's chat with the
 // owner is the private one; a topic is a place the owner talks about one to-do. The hub does not hand group messages over yet
 // (its own gate comes with a later step), so this is also the second line when it does.
 //

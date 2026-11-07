@@ -35,7 +35,7 @@ import persona.core.navigation.Navigator
 import persona.core.navigation.VoiceRoute
 
 /**
- * Voice chat (docs/extensions.md "Voice", docs/android.md "Voice chat"): full duplex with the hub's voice extension. It listens
+ * Voice chat (docs/extensions/extensions.md "Voice", docs/android/android.md "Voice chat"): full duplex with the hub's voice extension. It listens
  * all the time this page is open, and only then; talking over an answer stops it. The bar says the extension, the model
  * and the voice; the menu opens the model configuration (when the host has it) and the voices.
  */

@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
-// A manager's messages to the apps (ws.broadcast, docs/managers.md "What the hub keeps of each manager"). The hub
+// A manager's messages to the apps (ws.broadcast, docs/assistant/managers.md "What the hub keeps of each manager"). The hub
 // passes on only what a manager may say, about its own things, read the way the apps read it:
 //
 //   - its types: managerMessageTypes, and the types its own extensions declare for their api.broadcast (the
@@ -28,7 +28,7 @@ import (
 //   - whose it is: a message from any manager but the assistant the hub starts gets top-level "manager" (its id,
 //     replacing one it carried), so an app showing one manager's assistant page leaves the others' live updates out.
 //     The assistant's go without it, as they always did (one it carried is taken out): no "manager" is the
-//     assistant's (docs/protocol.md).
+//     assistant's (docs/protocol/protocol.md).
 
 // managerMessageTypes are the types the managers send the apps (internal/assistant Service.event, internal/extmgr
 // Manager.broadcast and broadcastExtension).

@@ -1,6 +1,6 @@
 import XCTest
 
-/// The iPad's Persona sidebar is the iPhone drawer's (docs/ios.md「iPad」, 2026-11-05 user): Persona (the main
+/// The iPad's Persona sidebar is the iPhone drawer's (docs/apple/ios.md「iPad」, 2026-11-05 user): Persona (the main
 /// conversation) first, then Inbox … Machines, the conversations, New Chat + Settings at the foot above Persona's face and machine.
 /// Inbox and Settings are not tabs: Inbox opens beside the sidebar, Settings as a sheet. Against scripts/mock/mock_hub.py
 /// (PERSONA_MOCK_HUB), on an iPad simulator, portrait and landscape. TEST_RUNNER_PERSONA_SHOTS=<dir> keeps screenshots;

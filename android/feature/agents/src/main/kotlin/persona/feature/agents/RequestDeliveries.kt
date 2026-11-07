@@ -22,7 +22,7 @@ internal enum class DeliveryCheck {
 /**
  * How answers on the Agents page move between [RequestDelivery] states. An unconfirmed answer is checked against the
  * hub's pending list and then either ends or lets the buttons work again. Answering a second time is safe because
- * the hub's resolve is idempotent: an answered request returns 200 `already`, an ended one returns 410 (docs/protocol.md).
+ * the hub's resolve is idempotent: an answered request returns 200 `already`, an ended one returns 410 (docs/protocol/protocol.md).
  * iOS and the web put the card back the same way.
  */
 internal object RequestDeliveries {

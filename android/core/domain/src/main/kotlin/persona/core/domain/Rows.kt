@@ -44,7 +44,7 @@ fun buildRows(items: List<Item>, photo: String): List<Row> {
 }
 
 /**
- * A message as one plain text for previews (docs/protocol.md "Tags in messages"): what the hub / Claude Code wrap around
+ * A message as one plain text for previews (docs/protocol/protocol.md "Tags in messages"): what the hub / Claude Code wrap around
  * typed text unwrapped, photos as "[Image]". `<persona-context>` blocks are not what the user wrote and are left out
  * ([parseContexts]); a message of nothing but blocks previews as empty. A conversation row draws photos as thumbnails
  * instead ([messageText]) and folds the blocks into one row.
@@ -105,7 +105,7 @@ private fun genericToolVerb(n: String): Key? {
         "ToolSearch" -> Key.ToolLoadTools
         "Skill" -> Key.ToolSkill
         "Monitor" -> Key.ToolMonitor
-        // Persona managing its own conversations (docs/assistant.md "Managing its own conversations").
+        // Persona managing its own conversations (docs/assistant/assistant.md "Managing its own conversations").
         "conversations_list" -> Key.ToolConversationsList
         "conversation_read" -> Key.ToolConversationRead
         "conversation_rename" -> Key.ToolConversationRename
@@ -113,7 +113,7 @@ private fun genericToolVerb(n: String): Key? {
         "conversation_unarchive" -> Key.ToolConversationUnarchive
         "conversation_new" -> Key.ToolConversationNew
         "conversation_send" -> Key.ToolConversationSend
-        // Operating a computer through Cua Driver (docs/computer-use.md).
+        // Operating a computer through Cua Driver (docs/extensions/computer-use.md).
         "computer_state" -> Key.ToolComputerState
         "computer_run" -> Key.ToolComputerRun
         "browser_run" -> Key.ToolBrowserRun
@@ -123,14 +123,14 @@ private fun genericToolVerb(n: String): Key? {
 }
 
 private fun personaToolVerb(n: String): Key? = when (n) {
-    // Agents on the user's computers (docs/assistant.md "Agents and Lark tools").
+    // Agents on the user's computers (docs/assistant/assistant.md "Agents and Lark tools").
     "agent_read" -> Key.ToolAgentRead
     "agent_send", "send_to_agent" -> Key.ToolAgentSend
     "agents_list", "list_agents" -> Key.ToolAgentsList
     "agent_start", "task_plan" -> Key.ToolAgentStart
     "interaction_answer" -> Key.ToolInteractionAnswer
     "ask_persona" -> Key.ToolAskPersona
-    // The knowledge base (docs/knowledge.md).
+    // The knowledge base (docs/assistant/knowledge.md).
     "kb_get", "kb_list", "kb_search", "search_knowledge" -> Key.ToolKbSearch
     "kb_update" -> Key.ToolKbUpdate
     // Talking to the user.
@@ -143,7 +143,7 @@ private fun personaToolVerb(n: String): Key? = when (n) {
     "delete_routine" -> Key.ToolRoutineDelete
     "inbox_draft" -> Key.ToolInboxDraft
     "persona_settings" -> Key.ToolPersonaSettings
-    // Live cards (docs/assistant-views.md).
+    // Live cards (docs/assistant/assistant-views.md).
     "view_show" -> Key.ToolViewShow
     "view_get" -> Key.ToolViewGet
     "view_update" -> Key.ToolViewUpdate
@@ -197,7 +197,7 @@ private fun namedToolSubject(n: String, field: (String) -> String?, questions: (
         "conversation_new", "conversation_send" -> firstLine(s("text"))
         "conversation_read", "conversation_archive", "conversation_unarchive" -> s("id").orEmpty().take(8)
         "Monitor" -> s("description") ?: firstLine(s("command"))
-        // ask_user is the assistant's own question tool (docs/assistant.md); it takes AskUserQuestion's questions.
+        // ask_user is the assistant's own question tool (docs/assistant/assistant.md); it takes AskUserQuestion's questions.
         "ask_user" -> questions()
         "computer_run", "browser_look" -> s("machine").orEmpty()
         "browser_run" -> listOfNotNull(s("machine"), s("script")?.let(::firstLine)?.takeIf(String::isNotEmpty)).joinToString(" · ")

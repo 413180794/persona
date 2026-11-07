@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// What comes from the nodes is the manager's (internal/assistant fleet_*.go; docs/machines.md "Who handles computer events"):
+// What comes from the nodes is the manager's (internal/assistant fleet_*.go; docs/server/machines.md "Who handles computer events"):
 // the interactions, each Agent's state, which pushes go and when, the Live Activity's content, the nodes' MCP tools,
 // the machines' monitoring. The hub shows and delivers what it reports:
 //
@@ -98,7 +98,7 @@ func init() {
 		h.push.withdraw(p.ID) // a suspended app hears it by push (#4349)
 		event := map[string]any{"type": "interaction_resolved", "id": p.ID}
 		if p.AnsweredBy != "" {
-			event["answered_by"] = p.AnsweredBy // the app marks a question the assistant answered (docs/assistant.md)
+			event["answered_by"] = p.AnsweredBy // the app marks a question the assistant answered (docs/assistant/assistant.md)
 			if p.Reason != "" {
 				event["reason"] = p.Reason // "Assistant answered: X, because Y"
 			}

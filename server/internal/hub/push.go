@@ -41,7 +41,7 @@ type Device = db.Device
 const kindMac = "mac"
 
 // apnsConfig lives in ~/.persona/apns.json; without it the hub pushes through the relay each phone registered with
-// (docs/push-relay.md), and with neither push is off.
+// (docs/operations/push-relay.md), and with neither push is off.
 type apnsConfig = apns.Config
 
 type Pusher struct {
@@ -98,7 +98,7 @@ func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "apns.json"))
 	if err != nil {
-		logf("push: no %s, pushing through each phone's relay (docs/push-relay.md)", filepath.Join(dir, "apns.json"))
+		logf("push: no %s, pushing through each phone's relay (docs/operations/push-relay.md)", filepath.Join(dir, "apns.json"))
 		return p
 	}
 	var cfg apnsConfig
@@ -318,7 +318,7 @@ func (p *Pusher) forgetIfCurrent(d Device) {
 
 // sendLiveActivity pushes to a Live Activity token (an activity's own, or the push-to-start one): its own push type and
 // topic, the device's APNs environment. gone runs when APNs says the token is dead. Through the relay the payload is
-// not sealed: iOS reads a Live Activity's content-state itself (docs/push-relay.md "Live Activity is plaintext").
+// not sealed: iOS reads a Live Activity's content-state itself (docs/operations/push-relay.md "Live Activity is plaintext").
 func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any, priority string, gone func()) {
 	if p == nil || token == "" || !p.reachable(d) {
 		return
@@ -391,7 +391,7 @@ func directRetryable(status int) bool {
 
 type relayResult struct{ gone bool }
 
-// postRelay hands one push to the device's relay (relayproto.PushRequest, docs/push-relay.md "API"). A grant the relay
+// postRelay hands one push to the device's relay (relayproto.PushRequest, docs/operations/push-relay.md "API"). A grant the relay
 // no longer takes (its secret was replaced) is renewed once with the device's token, which the hub already has. A
 // failure that may pass is tried again (postRelayRetrying): one dropped connection used to lose the push (#2150).
 func (p *Pusher) postRelay(d Device, req relayproto.PushRequest) (res relayResult, err error) {
@@ -459,7 +459,7 @@ func (p *Pusher) postRelayOnce(d Device, req relayproto.PushRequest) (relayResul
 	_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&out)
 	switch {
 	case resp.StatusCode == 200:
-		if req.Type != "liveactivity" { // when the relay (and APNs behind it) took it: wake-up latency (docs/assistant.md)
+		if req.Type != "liveactivity" { // when the relay (and APNs behind it) took it: wake-up latency (docs/assistant/assistant.md)
 			p.logf("relay %s: %s push accepted in %d ms", d.Name, req.Type, time.Since(sent).Milliseconds())
 		}
 		return relayResult{}, 200, nil
@@ -663,7 +663,7 @@ func (p *Pusher) ready() bool {
 
 // wake sends a silent background push: iOS gives the app ~30 s to connect and run a pending phone_* call.
 // Best effort: the system throttles these and never delivers them to a force-quit app. Phones only: the phone_*
-// tools run on the iPhone (a Mac registers as a desktop, docs/mac.md).
+// tools run on the iPhone (a Mac registers as a desktop, docs/apple/mac.md).
 func (p *Pusher) wake(reason string) {
 	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason, compat.WakeField: reason}, "", "background", "5",
 		func(d Device) bool { return d.Kind != kindMac })
@@ -803,7 +803,7 @@ func (p *Pusher) sendBuiltWith(build localized, collapseID, pushType, priority s
 				if res.Gone() {
 					p.forgetIfCurrent(d)
 				}
-			} else { // when APNs took it: for measuring wake-up latency (docs/assistant.md)
+			} else { // when APNs took it: for measuring wake-up latency (docs/assistant/assistant.md)
 				p.logf("apns %s: %s push accepted in %d ms", d.Name, pushType, time.Since(sent).Milliseconds())
 			}
 		}(d)
@@ -838,7 +838,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	}
 	name := map[string]string{"codex": "Codex", "traex": "TRAEX"}[ix.Agent]
 	if name == "" && ix.Agent != "" && ix.Agent != "claude" {
-		name = ix.AgentLabel // an agent runtime's card (docs/runtimes.md): "DSH needs your permission"
+		name = ix.AgentLabel // an agent runtime's card (docs/integrations/runtimes.md): "DSH needs your permission"
 	}
 	if name != "" {
 		switch ix.Kind {

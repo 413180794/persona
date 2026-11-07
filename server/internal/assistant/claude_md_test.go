@@ -40,7 +40,7 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	s = newTestService(t, bare)
 	s.kb.dir = "<hub>/data"
 	golden(t, "assistant_claude_md.bare", s.claudeMD(ctx, "server", false))
-	// lark-cli (docs/plan-lark-cli.md).
+	// lark-cli (docs/plans/plan-lark-cli.md).
 	golden(t, "assistant_claude_md.lark_cli", s.claudeMD(ctx, "server", true))
 	// hub.json assistant.persona_view: cards are persona-view, the extensions' components (#1850).
 	bare.hello.PersonaView = true
@@ -166,7 +166,7 @@ func TestGoldenMainHandoff(t *testing.T) {
 		Until: "11月4日 21:30", Text: "你好"}))
 }
 
-// The CLAUDE.md asks for the user's language (docs/i18n.md); zh-Hans, or a hub that says none, keeps it as it was.
+// The CLAUDE.md asks for the user's language (docs/protocol/i18n.md); zh-Hans, or a hub that says none, keeps it as it was.
 func TestAssistantClaudeMDLanguage(t *testing.T) {
 	ctx := context.Background()
 	f := claudeMDHub(Device{ID: "server", Name: "服务器", Kind: "local"})

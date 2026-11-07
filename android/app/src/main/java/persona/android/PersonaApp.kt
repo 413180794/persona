@@ -57,14 +57,14 @@ class PersonaApp : Application() {
         AppText.install(resources)
     }
 
-    /** Crashes and ANRs for the hub's `error_reports` (docs/android.md "Error reports"). */
+    /** Crashes and ANRs for the hub's `error_reports` (docs/android/android.md "Error reports"). */
     private val errorReporting by lazy { persona.android.errors.ErrorReporting(this) }
 
     override fun onCreate() {
         // Before Hilt builds the graph, so a crash there is written too.
         errorReporting.installCrashHandler()
         super.onCreate()
-        // The core modules' words (errors, the data repositories' state) in the shown language (docs/i18n.md).
+        // The core modules' words (errors, the data repositories' state) in the shown language (docs/protocol/i18n.md).
         persona.core.contracts.CoreText.words = { it.resolve(this) }
         pairings = PairingStore(this)
         Notify.install(this, connection.events)

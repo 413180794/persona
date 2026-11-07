@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The subscription accounts the hubs know (docs/usage-windows.md), shared by Machines' Subscription Usage card on the phone and the
+/// The subscription accounts the hubs know (docs/server/usage-windows.md), shared by Machines' Subscription Usage card on the phone and the
 /// Mac's bars at the foot of the sections column. Empty until a hub answers, and when none has any (nothing is drawn).
 @Observable
 final class UsageWindowsStore {
@@ -158,7 +158,7 @@ struct UsageAccountsList: View {
 }
 
 #if !os(macOS)
-/// Machines' Subscription Usage (docs/usage-windows.md「界面」): the accounts' 5h / 7d windows under the machines' cards. Not drawn while
+/// Machines' Subscription Usage (docs/server/usage-windows.md「界面」): the accounts' 5h / 7d windows under the machines' cards. Not drawn while
 /// the hubs have none. The Mac has the same at the foot of its sections column (`MacUsageFooter`).
 struct UsageWindowsCard: View {
     var store = UsageWindowsStore.shared

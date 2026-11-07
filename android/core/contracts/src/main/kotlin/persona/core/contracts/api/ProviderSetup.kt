@@ -7,14 +7,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** The hub's hello feature for built-in presets, a name it makes up and `assign` (docs/launchers.md "Built-in presets"). */
+/** The hub's hello feature for built-in presets, a name it makes up and `assign` (docs/integrations/launchers.md "Built-in presets"). */
 const val BuiltinPresetsFeature = "builtin_presets"
 
-/** The categories a provider added from the wizard takes over while they are still at their default (docs/onboarding.md 5.4). */
+/** The categories a provider added from the wizard takes over while they are still at their default (docs/assistant/onboarding.md 5.4). */
 val AssignPurposes = listOf("assistant", "agent.new")
 
 /**
- * "Add model provider" (docs/launchers.md "API" "Adding from an extension"): a provider kept by the hub (gateway, key sealed there, models),
+ * "Add model provider" (docs/integrations/launchers.md "API" "Adding from an extension"): a provider kept by the hub (gateway, key sealed there, models),
  * typed in or taken from an extension's preset. Bound to the active pairing, like model configuration.
  */
 interface ProviderSetup {

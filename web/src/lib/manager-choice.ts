@@ -1,6 +1,6 @@
-// Which manager the assistant page shows (docs/managers.md "Clients"): with several managers, each a whole assistant,
+// Which manager the assistant page shows (docs/assistant/managers.md "Clients"): with several managers, each a whole assistant,
 // the page's switcher picks one; it starts on the default and is not kept across loads. The assistant's requests name
-// the chosen one (`X-Persona-Manager`, docs/protocol.md "Per-manager routing"); with the default chosen none is sent,
+// the chosen one (`X-Persona-Manager`, docs/protocol/protocol.md "Per-manager routing"); with the default chosen none is sent,
 // so a hub with one manager gets the same requests as before. Live updates of another manager's assistant (they carry
 // `manager`; none means the hub's own, `assistant`) are left out. No imports from api.ts: it reads this.
 import { createContext, useContext, useSyncExternalStore } from "react";
@@ -176,7 +176,7 @@ const CONVERSATION = /^\/assistant\/conversations\/[^/?]+/;
  *  - One conversation's routes name its manager when a page listed it, else none: the hub then sends them to the
  *    conversation's manager itself (ownership.go byConversation), and naming the page's pick would override that.
  *  - The assistant's other routes name the manager the assistant page shows, but not the health space's (`?space=`,
- *    docs/health.md: that page has no switcher and stays the default manager's).
+ *    docs/assistant/health.md: that page has no switcher and stays the default manager's).
  *  - Anything else: a pin or a thing a merged list showed as another manager's names that one. */
 export function managerHeaderFor(path: string): string | undefined {
   if (CONVERSATION.test(path)) return itemManager(path);
@@ -184,7 +184,7 @@ export function managerHeaderFor(path: string): string | undefined {
   return itemManager(path);
 }
 
-/** The manager a hub message is from: its `manager`, else the hub's own assistant (docs/protocol.md). */
+/** The manager a hub message is from: its `manager`, else the hub's own assistant (docs/protocol/protocol.md). */
 export function messageManager(msg: Record<string, unknown>): string {
   return typeof msg.manager === "string" && msg.manager ? msg.manager : BUILTIN_MANAGER;
 }

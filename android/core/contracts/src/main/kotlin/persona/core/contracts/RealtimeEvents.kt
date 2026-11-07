@@ -60,7 +60,7 @@ data class LarkEvent(
 @Serializable(with = InboxEventSerializer::class)
 class InboxEvent : ServerEvent
 
-/** The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/persona.md): list them again. */
+/** The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/apple/persona.md): list them again. */
 @KeepGeneratedSerializer
 @Serializable(with = PersonasEventSerializer::class)
 class PersonasEvent : ServerEvent

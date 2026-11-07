@@ -1,5 +1,5 @@
 // Package github is the GitHub connector: the user's PRs, issues, reviews and checks, read with the token of a
-// machine's gh login (docs/plan-connectors.md "4. GitHub connector").
+// machine's gh login (docs/plans/plan-connectors.md "4. GitHub connector").
 //
 // The token lives only in this process's memory: it is never stored, logged, returned to a client, put in an error
 // or handed to the assistant.

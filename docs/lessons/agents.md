@@ -5,9 +5,9 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
 - A successful session deletion must survive a node reclassifying an unchanged offline transcript as `interrupted`. Apply persisted deletion notes to that status too, using machine/session ID and last-use time; neither a shared project name nor a missing worktree means another conversation was deleted (#5933).
 
 - Recent directories for a new development session must be filtered with `identity.IsAssistantDir` after node combines transcript directories and running Agent directories, then sorted and limited to 15 (#1662). Assistant transcripts update continuously and otherwise dominate default suggestions; don't filter solely by the directory name `assistant`, which could hide a project with that name. Filtering affects only suggestions; existing sessions and explicit directory browsing remain.
-- Multiple Claude Code PermissionRequest hooks run concurrently. The first `allow` grants permission; the others aren't ended and run until their own timeouts (2.1.308, #2648), leaving an expired phone card from the waiting hook. The answering hook must send `hook.decided` (`docs/claude-integration.md`). In bypass mode, remaining prompts mainly come from rm targets that can't be resolved statically (relative globs after `cd`, runtime-only targets); length, heredocs, and `eval` don't prompt.
+- Multiple Claude Code PermissionRequest hooks run concurrently. The first `allow` grants permission; the others aren't ended and run until their own timeouts (2.1.308, #2648), leaving an expired phone card from the waiting hook. The answering hook must send `hook.decided` (`docs/integrations/claude-integration.md`). In bypass mode, remaining prompts mainly come from rm targets that can't be resolved statically (relative globs after `cd`, runtime-only targets); length, heredocs, and `eval` don't prompt.
 - When starting claude in a new herdr tab, an untrusted cwd first prompts "trust this folder"; text sent by `agent prompt` becomes a selection → selects No and exits.
-  node must check for a blocked screen after starting a session (`docs/claude-integration.md`).
+  node must check for a blocked screen after starting a session (`docs/integrations/claude-integration.md`).
 - Seeing an input box doesn't mean Claude can receive text (2026-11-05, #2423): an automatic update on Claude Code startup ("Updated to latest…") also showed an Auto mode explanation.
   After node waited for the input box, `agent prompt` swallowed the first message. The transcript was only 1 KB, with no user message, and the Agent sat idle for 1.5 hours. Check the transcript after sending;
   if it didn't arrive, wait for readiness and resend, finally mark "Needs you" (`node/firstprompt.go`). Sending alone isn't success.
@@ -27,7 +27,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   `--settings` with credentials in that file's `env`, appending another `--settings` in Persona overrides it. Phone-started sessions and every assistant message then return
   `Not logged in · Please run /login` (`isApiErrorMessage` + `authentication_failed` in the transcript), though typing the same alias in herdr works.
   Merging files only rescues aliases: a function's `--settings` isn't readable (#1411). Persona additions therefore use composable flags (`--plugin-dir`, `--mcp-config`),
-  not `--settings`: hooks are a plugin (`docs/claude-integration.md` ("Hooks")); only older Claude Code versions still merge. Having users recognize Persona's `--settings` by its directory name
+  not `--settings`: hooks are a plugin (`docs/integrations/claude-integration.md` ("Hooks")); only older Claude Code versions still merge. Having users recognize Persona's `--settings` by its directory name
   inside their launcher function and yield to it is also wrong: changing the data directory from `~/.persona` to `~/.persona` breaks that detection.
 - Plugin (`--plugin-dir`) hooks behave like those in `--settings` (measured 2026-11-04 on 2.1.318: SessionStart, UserPromptSubmit, Stop fire; PreToolUse `deny` and PermissionRequest `allow`
   work, in both interactive and `-p` modes), and load alongside the launcher's other `--plugin-dir` entries. Disabling hooks (`disableAllHooks`) still needs
@@ -35,7 +35,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
 - Persona-managed launchers pass keys through `ANTHROPIC_API_KEY`. Interactive claude first seeing that key prompts "Detected a custom API key … Do you want to use this API key?",
   with No selected by default (measured 2026-11-03 on 2.1.309). Selecting No puts the key in `customApiKeyResponses.rejected`, and every session from that launcher reports not logged in. `-p` doesn't ask,
   so the launcher "Check" passes but creating a session from the phone blocks. `ANTHROPIC_AUTH_TOKEN` (sends `Authorization: Bearer`) and `apiKeyHelper` don't ask, but the official API doesn't accept the former,
-  and the latter needs another `--settings` (only the last is used, above). `personad launch` now records the key as allowed before startup (`docs/launchers.md` ("How Persona-managed launchers run")).
+  and the latter needs another `--settings` (only the last is used, above). `personad launch` now records the key as allowed before startup (`docs/integrations/launchers.md` ("How Persona-managed launchers run")).
   Acquire Claude's own config lock before writing (the `<config path>.lock` directory, stale after 10 seconds), or concurrent writes by a running claude lose one side's changes.
   Claude Code 2.1.317 includes a `storageV5` config backend (off by default); once it becomes default, global config may stop reading `.claude.json`. Recheck this behavior when upgrading Claude Code.
 - If a launcher connected to a relay gateway returns 401, don't suspect the header first: the relay used here accepted both `Authorization: Bearer` and `x-api-key` from its first version (check its authentication middleware).
@@ -45,8 +45,8 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   Claude Code fills variables **absent** from the environment from settings `env`, so it sends both `Authorization: Bearer <that token>` and `x-api-key`, and the relay returns 401
   `invalid or missing API key` (2026-11-04, once misdiagnosed as "the gateway only accepts Bearer"). Existing environment variables, even empty ones, aren't overwritten by settings. `personad launch` now sets the other variable empty.
   Reproduce with a fake gateway logging headers, a `settings.json` with `env` under `CLAUDE_CONFIG_DIR=<temporary directory>`, and `claude -p`.
-- User-started claude (launchers, profile directories) lacks Persona hooks; AskUserQuestion can only be answered through screen-reading cards. These must recognize 2.1.316 multiple selection: `[ ]` / `[✔]` are state, not text. Digits toggle but don't submit; move to Submit, press enter, then press 1 on the confirmation page. A digit on the free-answer row types text; a digit on Submit does nothing. Sending several keys together loses some; send one at a time (`docs/claude-integration.md` ("Screen cards for multi-select questions")).
-- With preview-bearing AskUserQuestion options, digits only move the cursor; enter is needed to select. A digit-only screen card appears answered but has no effect. After keys, check the screen to confirm the question actually advanced (`docs/claude-integration.md` ("Questions with previews")).
+- User-started claude (launchers, profile directories) lacks Persona hooks; AskUserQuestion can only be answered through screen-reading cards. These must recognize 2.1.316 multiple selection: `[ ]` / `[✔]` are state, not text. Digits toggle but don't submit; move to Submit, press enter, then press 1 on the confirmation page. A digit on the free-answer row types text; a digit on Submit does nothing. Sending several keys together loses some; send one at a time (`docs/integrations/claude-integration.md` ("Screen cards for multi-select questions")).
+- With preview-bearing AskUserQuestion options, digits only move the cursor; enter is needed to select. A digit-only screen card appears answered but has no effect. After keys, check the screen to confirm the question actually advanced (`docs/integrations/claude-integration.md` ("Questions with previews")).
 - When a screen card is withdrawn because the Agent is no longer blocked, also mark it ended (cancelled) in the database, or history stays pending until hub restarts.
 - Screen dialog recognition must first anchor the dialog's starting row (`screen.dialogTop`: the final separator below the conversation, or the row after a selection panel's `▔` edge), then find numbers below it. Searching the whole screen mistakes the Agent's "1. … 2. …" answer for options—
   a notice dismissible with Enter becomes a question, `dismiss_notice` refuses to dismiss it, and the phone's screen card lists answer text as buttons (#2872). This anchor, `DialogHead`, was already used; both readers now share it.
@@ -58,22 +58,22 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
 - Tool permissions have the same issue (#3563): answering the terminal permission dialog doesn't end PermissionRequest, leaving the phone card until timeout. Permission cards likewise end from the tool_use_id's tool_result, but require an exact id (don't guess for id-less cards); don't collect phone-answered (claimed) cards, to avoid rewriting resolved as dismissed.
 - Hooks in `--settings <file>` are read only at startup; matcher changes require restarting claude. The hook script itself is reread on every execution.
 - `herdr agent wait` may return agent_not_found before herdr recognizes the Agent: poll `agent get` after startup.
-- On computers without herdr's claude integration, `agent list` lacks session ids (fallback in `docs/claude-integration.md`).
+- On computers without herdr's claude integration, `agent list` lacks session ids (fallback in `docs/integrations/claude-integration.md`).
 - To map panes to sessions without herdr's claude integration, get claude's pid from `herdr pane process-info`, then read
   sessionId from `~/.claude/sessions/<pid>.json`. Don't guess from "newest transcript in the same directory" (six Agents in one repo mixed every tab name).
 - Claude Code 2.1.30x `/fork` and backgrounded sessions run in Claude's daemon (`kind: "bg"` in `sessions/<pid>.json`), without panes or herdr hooks,
   and were always listed offline. The original pane's claude shows the agents view with `parkedJobId`, while herdr still reports "Working" using the original session id and the background session's terminal title (2026-11-04).
-  Before mapping panes, read `sessions/<pid>.json`: a parked process isn't running its own session (`docs/claude-integration.md` ("Background sessions")); but when the pane has opened the job it moved to, the pane belongs to that job—don't list the job separately as read-only and lose its tab. When on the agents list, keep the pane in the original session's tab too (can open the terminal and select from the list, but can't receive messages), rather than listing it nowhere.
+  Before mapping panes, read `sessions/<pid>.json`: a parked process isn't running its own session (`docs/integrations/claude-integration.md` ("Background sessions")); but when the pane has opened the job it moved to, the pane belongs to that job—don't list the job separately as read-only and lose its tab. When on the agents list, keep the pane in the original session's tab too (can open the terminal and select from the list, but can't receive messages), rather than listing it nowhere.
 - Forking from a specific reply (#2137) can't rely on the CLI: `claude --resume <id> --fork-session --session-id <new id>` copies the whole chat; hidden `--resume-session-at <uuid>` truncates in `-p`, but not interactive mode (measured 2026-11-05, 2.1.309). node copies the transcript through that turn's end, replaces only `"sessionId":"<old id>"`, then runs `claude --resume <new id>` (`node/fork.go`).
 - Agents herdr doesn't recognize (an internal Codex variant): herdr reports only built-in recognized Agents, and `agent prompt` returns not found for other panes. node uses owner files (pid → session)
-  plus `HERDR_PANE_ID` from the pid's environment (pid → pane) to identify them itself, and reads spinner title characters and screens for state (`docs/codex.md`, the internal Codex variant section).
+  plus `HERDR_PANE_ID` from the pid's environment (pid → pane) to identify them itself, and reads spinner title characters and screens for state (`docs/integrations/codex.md`, the internal Codex variant section).
 - Claude Code's config directory isn't necessarily `~/.claude`: with a launcher's `CLAUDE_CONFIG_DIR` (multiple profiles), transcripts, `sessions/<pid>.json`, and `settings.json`
   all live there. Every 30 seconds, node scans running claude process environments (Linux `/proc`, one `ps -E` on macOS), searches all directories together,
   and records discovered directories in the database. Put rarely running profiles in `machines[].claude_config_dirs` in `hub.json` (`server/internal/node/claudedirs.go`).
   The old workaround symlinked `~/.claude/projects` and `sessions` to a profile; existing symlinks are fine (deduped by real path), but no more are needed.
   Symptoms of a missed directory: assistant resume says "Session ID … is already in use", transcript not found in the App, herdr Agents can't be mapped to sessions.
   Conversely, automation running claude with its own `CLAUDE_CONFIG_DIR` is discovered and remembered by hub, flooding lists with hundreds of offline sessions. Deleting `claude_dirs/<machine>` records doesn't help
-  (the next scan reports it again); use "Mute configuration directory" (`docs/claude-integration.md`, #676).
+  (the next scan reports it again); use "Mute configuration directory" (`docs/integrations/claude-integration.md`, #676).
 - After node discovered all config directories (PR #12), a machine with over ten Agents and hundreds of MB of transcripts read disk continuously at about 20 MB/s: every herdr event rebuilt session lists,
   rereading 384 KB from each growing transcript's tail. List rebuilds are now at most once per second; growing-file meta is reread at most once per 3 seconds (`metaMinInterval`),
   background-task scanning streams (previously loaded the whole file initially), and large files' first reads run one by one in the background: list construction once waited for several GB of reads, leaving no sessions visible for minutes after node restart. Cold-opening a hundreds-of-MB transcript parses it all (317 MB takes about 20 seconds; hub 15/30-second timeouts returned 502),
@@ -95,7 +95,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   Claude panes likewise: pane bindings for Persona-started sessions live in hub's database and reload after node restart, but can be stale; `sessions/<pid>.json` takes priority.
   After changing pane identification logic, rerun verification after deployment (restart); pre- and post-restart results may differ.
 - herdr `agent.prompt` pastes, then waits about 300 ms before Enter: serialize sends to the same session, or the second screen read mistakes the first message for an input draft. Sending deduplication lives in hub Postgres (`sent_messages`):
-  node's in-memory deduplication disappears on reconnect / hub restart, exactly when the App auto-retries. Full session-reading and sending verification, with per-hop timings: `docs/archive/lanes/session-verify.md`.
+  node's in-memory deduplication disappears on reconnect / hub restart, exactly when the App auto-retries. Full session-reading and sending verification, with per-hop timings: `docs/archive/integrations/session-verify.md`.
 - Like `/effort`, `/model <alias>` writes to `~/.claude/settings.json` (`model` / `effortLevel`) as the default for future sessions, not just this one;
   cached chats first prompt "Switch model?" (changing model rereads all history). Don't test in your usual configuration; restore both keys afterward if you do.
 - Claude Code 2.1.206 changed `/effort` to a slider ("←/→ to adjust · Enter to confirm", low at the left), removing the old list's "for this session only";
@@ -103,7 +103,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   not just this session. `CLAUDE_CODE_EFFORT_LEVEL` in the environment (settings.json `env` or launcher) wins; Claude only replies "… overrides this session" and changes nothing, and the App reports that accurately.
 - Effort `auto` (Claude Code 2.1.316) works only through `/effort auto`: `--effort auto` warns and is ignored, and settings.json `effortLevel: auto`
   is silently dropped (`max` too; settings accepts only low…xhigh). The picker has no auto position. `/effort auto` clears this model's default in settings;
-  phone auto handling must differ by path (`docs/ios.md` ("Effort and permission modes")). Testing `/effort …` on a dev machine also changes real settings.json; don't use your own configuration.
+  phone auto handling must differ by path (`docs/apple/ios.md` ("Effort and permission modes")). Testing `/effort …` on a dev machine also changes real settings.json; don't use your own configuration.
 - **Settings defaults and session effort need different option lists** (#5946): Claude Code 2.1.318 / Agent SDK 0.3.318 accept only `low`, `medium`, `high`, and `xhigh` in settings.json. Keep `max` in session controls, reject it in settings writes, and report an existing stored `max` as ignored with the model default in effect. Never reuse `proto.EffortLevels` for the settings whitelist. Web settings override node descriptions with their own translations, so a server warning also needs a localized web warning.
 - ultracode is a second axis (#3427): in `2.1.203–2.1.283` it was a level to the right of max and locked effort; since `2.1.284`, it is independent `/effort ultracode on|off`,
   writes no default, and is off after resume. Persona supports only the latter, does not add ultracode to `EffortLevels`, send `--effort ultracode`, or add `--settings` for it.
@@ -116,7 +116,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   Forty-two later attempts in a separate herdr session (small PNG, 1.8 MB JPEG, saturated CPU) didn't reproduce it; cause unknown. On 11-01 a phone photo did it again. node fallback (`ensureSubmitted`): 2 seconds after sending,
   read the input box once; if it's still the just-sent text (strip `[Image #n]` / `[Pasted text #n]`, compare the first few words), press Enter once more. If empty or different, press nothing.
   Use only that post-wait read: the first version read immediately and gave up on a mismatch, which missed the 11-01 case (right after pasting the box may not yet contain this text).
-- Codex app-server integration (2026-11-02): Unix sockets carry WebSocket, not JSON-lines; external stdio has no second attach port. Directory discovery doesn't resume; control goes only to the original loaded owner. Unknown / cancelled requests must not send error / decline, which could consume the desktop approval callback. `serverRequest/resolved` withdraws cards as dismissed without fabricating approval; deduplicate using generation and typed request ID together. Generic server errors after send admission aren't "definitely not sent" and must not auto-retry; old outbox operation ids don't expire after one day (`docs/codex-app-server.md`).
+- Codex app-server integration (2026-11-02): Unix sockets carry WebSocket, not JSON-lines; external stdio has no second attach port. Directory discovery doesn't resume; control goes only to the original loaded owner. Unknown / cancelled requests must not send error / decline, which could consume the desktop approval callback. `serverRequest/resolved` withdraws cards as dismissed without fabricating approval; deduplicate using generation and typed request ID together. Generic server errors after send admission aren't "definitely not sent" and must not auto-retry; old outbox operation ids don't expire after one day (`docs/integrations/codex-app-server.md`).
 - Codex app-server `thread/loaded/list` isn't all chats (2026-11-05, #2118, 0.166): TUI creates `ephemeral: true` threads for small background tasks in the shared managed daemon
   (`threadSource: "thread_title"`, title generation), without `path` / rollout; they stay loaded and `active` after finishing. Ignoring `ephemeral` produces a row of untitled "Working" Codex entries from the same directory and second on the Agents page.
   Skip `ephemeral` before listing sessions; they also don't support `includeTurns` (returns -32600).
@@ -125,8 +125,8 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   Codex assistant rollout begins with tens of KB of instructions (AGENTS.md, snapshot), with the first user message after 70 KB: scanning only the first 32 KB for a title fails (`readQuickMeta`).
 - Codex image generation (`scripts/assets/make_persona.py generate`): `codex exec`'s built-in `image_gen` can create transparent PNGs using Codex's own ChatGPT login,
   but its HTTP client doesn't accept `socks5h://` proxies (chat requests do); use an HTTP CONNECT proxy. `-i` takes multiple values, prompts come from stdin; ChatGPT login supports only some models.
-  If generation hangs (over ten minutes per image, all parallel work stopped), measure proxy tunnel throughput before blaming rate limits: on 2026-10-31 the hub machine's outbound bandwidth was only 11 KB/s; opening `ssh -D` on a faster internet machine produced four avatars in 6 minutes (`docs/persona.md`).
-- Orca host (`docs/plan-orca-support.md` ("Orca sources")): `terminal.send`'s `client` requires `id`; providing only `type` returns `invalid_argument` on every send
+  If generation hangs (over ten minutes per image, all parallel work stopped), measure proxy tunnel throughput before blaming rate limits: on 2026-10-31 the hub machine's outbound bandwidth was only 11 KB/s; opening `ssh -D` on a faster internet machine produced four avatars in 6 minutes (`docs/apple/persona.md`).
+- Orca host (`docs/plans/plan-orca-support.md` ("Orca sources")): `terminal.send`'s `client` requires `id`; providing only `type` returns `invalid_argument` on every send
   (the first version did this; fake runtime didn't validate parameters, so all tests passed; `orcarttest` now validates Orca's schema). If Orca can't recognize the foreground Agent, it types the "prompt" straight into
   the shell and presses Enter; `accepted:false` exists only with `requireAgentStatus`. Before sending, verify the Agent is foreground using the process table + `terminal.agentStatus`;
   Orca's `agentPrompt` pastes only for Agents it has seen working; newly started claude receives raw text, and multiline input submits at the first newline. Persona sends bracketed paste itself, then Enter separately;
@@ -135,7 +135,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   to an empty directory; never touch the live Orca (its socket fully controls Orca).
   New Orca terminals (#924): omit `presentation: "background"` in `terminal.create` to avoid an orphan PTY; after creation, check identity and generation via `terminal.list` using the exact handle; ordinary creation explicitly `cd`s to the target directory. Permission to create sessions isn't permission to resume ones still open elsewhere: since #5548 Orca resumes an exited Claude session like herdr, after `openElsewhereRefusal` (a live claude on the session, including a suspended one) and a check that its last pane is closed; `orca_resume` (which also kept `openElsewhereRefusal` from ever running on Orca) now refuses only non-Claude agents. Send and retire share `orcaContinues`: retire must not close what a message cannot bring back. Orca's `terminal create --agent --resume` is a CLI of some builds only and drops the session's launcher.
   Claude with background tasks (#5463): Orca's `terminal.agentStatus` says `isRunningAgent: false` while Claude Code has background Bash tasks, though its input box takes text; requiring it refused every send to such a session with nothing logged. The process scan is the foreground gate. A `tmux new-session -d` an agent runs inherits the pane's `ORCA_PANE_KEY`, and each process in it is "in front" of tmux's own pty: a `claude -p` worker with a lower pid took the pane and its manager dropped to interrupted. Without Orca's check, "in front" must mean in front of the pane's own pty: a candidate whose pty owner (first ancestor on another terminal) carries the same pane key is nested (tmux, zellij, script…) and not the pane's. Not by `TMUX=`: Orca's agent teams set it in a real pane. A refusal and a pane changing sessions are logged since.
-- Launchers (`docs/launchers.md`, 2026-11-01): discovery once only read `_claude_launchers` helper output; a machine with all aliases in `~/.zshrc` (41 for one user)
+- Launchers (`docs/integrations/launchers.md`, 2026-11-01): discovery once only read `_claude_launchers` helper output; a machine with all aliases in `~/.zshrc` (41 for one user)
   listed only `claude`. Let zsh tokenize aliases (`${(@Q)${(z)value}}`), not Go quote parsing. Aliases defined by a script in `zsh -c` don't expand within that
   script (it is parsed all at once); tests must use `zsh -ic` like node and write definitions to temporary `$ZDOTDIR/.zshrc`. With `alias claude=…` in `~/.zshrc`,
   a probe definition like `claude() { … }` expands the alias first, breaking the whole script. Define stubs as `function claude { … }`.
@@ -169,13 +169,13 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   if so, reject (`open_elsewhere`, explaining where). Engine startup failures also get human-readable refusals (`engine_missing`). Lists still show "Not running"; there is no "Open elsewhere" state yet.
 - Codex / an internal Codex variant's sub-Agents write their own rollouts alongside the main chat, with the same directory and cwd, and newer updates. The internal variant's pre-tool automatic approval evaluation (guardian)
   is written by the same process, with its own owner file. Identifying sessions by "newest rollout / newest owner file" makes the App show the review chat, unlike the terminal (2026-11-01).
-  Always inspect `thread_source` / `source.subagent` in `session_meta`; replace sub-Agent `session_id` with its main chat (`docs/codex.md`).
+  Always inspect `thread_source` / `source.subagent` in `session_meta`; replace sub-Agent `session_id` with its main chat (`docs/integrations/codex.md`).
 - **Classic herdr and Herdr App are separate, non-interoperable runtimes that can coexist on one computer** (2026-11-03): when Herdr App connects remotely from another computer,
   the local process is `herdr-core serve` (socket `$XDG_RUNTIME_DIR/herdr-core/<session>.sock`, state `~/.local/state/herdr-core/`),
   alongside `herdr remote-client-bridge` and `peers.json`; terminal tabs live in `doc.get("herdr-app")`. It and terminal `herdr server`
   (`~/.config/herdr/herdr.sock`) can't see each other. If "sessions opened locally through App remote aren't found", check herdr-core `terminal.list` first, not only the classic socket.
   When using both on a computer, select engine `herdr-both`: node refreshes both hosts in parallel, isolates events per host (`watcherSignals`), and always creates / resumes sessions through classic herdr
-  (`docs/engines.md` ("Side by side"), `docs/plan-orca-support.md` ("Combined engines")). Don't return to "refresh asks every host sequentially": a 2-second herdr-core delay slows herdr too.
+  (`docs/integrations/engines.md` ("Side by side"), `docs/plans/plan-orca-support.md` ("Combined engines")). Don't return to "refresh asks every host sequentially": a 2-second herdr-core delay slows herdr too.
 
 ## Read colors to determine whether Claude's input box is empty (#1434)
 
@@ -215,7 +215,7 @@ but herdr's `agent.get` never reports claude; node waits 3 minutes, then says "t
 - Before the name, it reads `HERDR_AGENT` from the foreground process's exec-time environment (`/proc/<pid>/environ`, macOS `KERN_PROCARGS2`), since herdr 0.7.1 / macOS 0.7.5; older versions and Windows ignore it.
 - `HERDR_AGENT` in the pane shell's own environment is authoritative and can't be removed with `unset`; everything subsequently run in the pane counts as that Agent. Therefore put it only before the Agent command, never export it into the pane shell or tab / workspace environment.
 
-node now starts Claude in herdr panes with `HERDR_AGENT=claude <launcher> …` (only in shells supporting that syntax; `codex-start` sets `HERDR_AGENT=codex` for Codex; `docs/launchers.md` ("How herdr recognizes Agents started by launchers")).
+node now starts Claude in herdr panes with `HERDR_AGENT=claude <launcher> …` (only in shells supporting that syntax; `codex-start` sets `HERDR_AGENT=codex` for Codex; `docs/integrations/launchers.md` ("How herdr recognizes Agents started by launchers")).
 If still unrecognized (old herdr, Windows, a pane shell like tcsh that can't use the prefix, or an alias first executing `export` / `cd`), keep waiting rather than failing early. If the final check in a herdr pane sees
 an input box but herdr doesn't know claude is present (`agent_not_found` or empty agent), change the error to
 `claude's input box is on screen but herdr did not recognise the agent within 3m0s (herdr sees <foreground process name> in front): is claude a wrapper? …`,
@@ -232,10 +232,10 @@ other engines' panes (Orca) keep their original error.
   `null` and the error in `error` (`{"message":"unexpected status 503 …","codex_error_info":{"http_connection_failed":{"http_status_code":503}}}`);
   app-server reports `turn/completed` with `turn.status: "failed"` + `turn.error` (camelCase `codexErrorInfo`). Last-text-only `turn_error` is always empty for Codex:
   session triage doesn't auto-continue, tasks don't write interrupted receipts, and the last text remains the pre-error answer and may be judged done (#2185). node now reports `turn_error` and its type;
-  see `docs/agent-work.md` ("Codex error types"). To verify the protocol, `codex app-server generate-json-schema --out <dir>` exports every type for the installed version.
+  see `docs/assistant/agent-work.md` ("Codex error types"). To verify the protocol, `codex app-server generate-json-schema --out <dir>` exports every type for the installed version.
 - herdr associates SessionStart with a pane by `HERDR_PANE_ID`, which processes outside panes can inherit: a tmux server first started inside herdr (botmux's
   `tmux new-session -d`) retains it, and every claude subsequently started by botmux reports into the same pane, making the main tab show a botmux session (2026-11-04).
-  Compare herdr-reported sessions with the pane's own claude process `sessions/<pid>.json` (`docs/claude-integration.md` ("Session ids and transcripts")).
+  Compare herdr-reported sessions with the pane's own claude process `sessions/<pid>.json` (`docs/integrations/claude-integration.md` ("Session ids and transcripts")).
 - **Claude Code enables Artifacts by default; a gateway rejects every new herdr Agent's first turn** (2026-11-04): since 2.1.26x, interactive mode enables Artifact tools by default,
   including their skill description in system messages; some gateways reject the capability (`400 request is not representable on this edge: Claude Code Artifacts are enabled`).
   `claude -p` main chat works, looking like only Agents are broken. It surfaced when one computer jumped from a long-outdated Claude Code (2.1.110) to a new version,
@@ -243,7 +243,7 @@ other engines' panes (Orca) keep their original error.
   nor does another `--settings` in launcher arguments (Persona's later `--settings` replaces it entirely).
   Manually adding `enableArtifact: false` to `launcher-settings/<name>-env-settings.json` seems ineffective: node rewrites that file at every launch, losing the edit before the next Agent starts.
   Both `enableArtifact: false` in `--settings` and environment `CLAUDE_CODE_DISABLE_ARTIFACT=1` worked in tests (interactive claude in tmux, three configs compared);
-  Persona-managed launchers now carry both (`docs/launchers.md` ("How Persona-managed launchers run")).
+  Persona-managed launchers now carry both (`docs/integrations/launchers.md` ("How Persona-managed launchers run")).
 
 ## Don't default to bare claude when resuming externally created sessions (2026-11-05, #411)
 
@@ -281,12 +281,12 @@ other engines' panes (Orca) keep their original error.
   so disconnections, timeouts, and missing threads appeared "changed" on the phone, and later `turn/start` carried the stale selection, potentially changing thread settings unexpectedly after reconnect (PR review).
   Bind remembered selections to that connection and thread; invalidate on change.
 - Test method: start stdio `codex app-server` in a temporary `CODEX_HOME`; `thread/start` needs no login and calls no model, so it can test settings APIs. Don't touch live `~/.codex`.
-  See `docs/codex.md` ("Effort").
+  See `docs/integrations/codex.md` ("Effort").
 
 ## Interrupt (Esc) doesn't trigger Stop; pid files include procStart (2026-11-04)
 
 - Claude's `Stop` hook fires only on normal turn completion, not Esc interruption (local slash commands not measured): counting hooks alone leaves "submissions > completions" forever.
-  node's `judgeHookTurn` falls back to transcript interruption lines and the title's ✳ waiting marker; see `docs/agent-states.md` ("Hook turn signals").
+  node's `judgeHookTurn` falls back to transcript interruption lines and the title's ✳ waiting marker; see `docs/protocol/agent-states.md` ("Hook turn signals").
 - `~/.claude/sessions/<pid>.json` includes `procStart` (equals field 22 of `/proc/<pid>/stat` on Linux, matched in all five instances), `pidDomain`, `status` (busy / idle), and `statusUpdatedAt`.
   To determine whether a pid file still refers to the live claude, don't just use `kill -0`: another program reusing the pid makes it permanently appear "open elsewhere". Compare `procStart` with the current process start time.
 - A hook process's parent is usually a shell, not claude: walk ancestors to find the Agent process whose `sessions/<pid>.json` `sessionId` matches; don't guess by process name.
@@ -297,12 +297,12 @@ other engines' panes (Orca) keep their original error.
 
 - Before installing hooks in the user's **global** `~/.claude/settings.json`, inspect existing hooks (locally: moshi-hook, Orca synchronous `PermissionRequest`). Hooks for an event compose;
   several blocking hooks run one after another, and terminal dialogs wait until all return. Persona's permission / question hook waits for the phone (`timeout` 86400); installed globally, it prevents the person at the computer from answering in the terminal too.
-  Global hooks must therefore be asynchronous, short-timeout, reporting-only (`hub.json machines[].claude_global_hooks`, `docs/claude-integration.md` ("Global reporting-only hooks")); blocking hooks remain in the `--plugin-dir` plugin and affect only Persona-started sessions.
+  Global hooks must therefore be asynchronous, short-timeout, reporting-only (`hub.json machines[].claude_global_hooks`, `docs/integrations/claude-integration.md` ("Global reporting-only hooks")); blocking hooks remain in the `--plugin-dir` plugin and affect only Persona-started sessions.
 - `CLAUDE_CODE_PLUGIN_DIRS` exists (absolute-path list, PATH separator), but is one variable. Another tool (moshi) already occupies its `settings.json` `env` value; using it for Persona would mean changing someone else's value.
 - Global entries must be recognizable: commands end with `hook --persona-global`, and install / uninstall touches only such entries; don't use generic words like `hook --global` that other tools may also use.
 - These global hooks must not bind panes by environment `HERDR_PANE_ID` either: claude started by a tmux server (botmux) inherits it without being in that pane.
 - Global reporting-only events still count toward turns (they are the only hook signals for user-created sessions), but don't mean "this session runs Persona hooks": that makes hub suppress screen cards while waiting for a hook card that will never arrive.
-  Persona-started sessions already report through the plugin, so discard the global duplicates before counting, or each submission counts twice. See `docs/agent-states.md` ("Hook turn signals").
+  Persona-started sessions already report through the plugin, so discard the global duplicates before counting, or each submission counts twice. See `docs/protocol/agent-states.md` ("Hook turn signals").
 
 ## Sessions dispatched by other platforms: use file markers and filter before truncation (2026-11-05, #2428)
 
@@ -342,7 +342,7 @@ Recorded screens: `server/internal/screen/testdata/claude-2.1.318-rewind-*`; par
   The explanation below (`The code will be restored +1 -1 in notes.txt.` / `The code will be unchanged.`) follows the cursor. 2.1.304 wording differs (`The conversation will be forked`); recognize only by title and option names.
 - Esc: confirmation → list (cursor retained) → closed; Enter on `(current)` also closes silently. After confirmation, the panel closes immediately, the input box contains that message (including multiline), and files are restored as selected.
 - **Chat history isn't deleted**: the file is a tree; the next message after rewind has `parentUuid` equal to the uuid before the target, and abandoned turns remain. node transcript reading removes them using "two user-authored messages under the same parent abandon the earlier message's whole subtree"
-  (`transcript/branch.go`, `docs/protocol.md` ("Rewind to a message")). **Don't walk parentUuid backward from the final line**: parallel tool results and attachments are legitimate branches (7681 in a real corpus of 122 files); a compaction `compact_boundary`
+  (`transcript/branch.go`, `docs/protocol/protocol.md` ("Rewind to a message")). **Don't walk parentUuid backward from the final line**: parallel tool results and attachments are legitimate branches (7681 in a real corpus of 122 files); a compaction `compact_boundary`
   has null `parentUuid`, so walking a chain loses the entire pre-compaction chat. Real corpus (122 local jsonl files, comparing only counts / ids): 3 had such user-message branches; old → new reading removed only abandoned items, every other file matched item-for-item,
   and windowed and full reading agree (`TestCorpusWindowed`). Rewind writes no new lines, so node marks its own rewind directly (`File.Rewound`); this isn't persisted, and after node restart it becomes detectable again only with the next message.
   In windowed reads (only the last 8 MB of large files), if the earlier branch begins before the window, its in-window lines are removed only when paging back to that section; removal changes the token and clients refetch.
@@ -420,7 +420,7 @@ Found reviewing #3731 against real workflow transcripts, not the hand-written fi
 
 2026-11-05: opencode loads plugins once per project directory. Until `setup` returns, every request for that directory returns 503 ("Location plugins did not finish activating"); `setup` must return a cleanup function that aborts event subscriptions,
 or the server hangs after SIGINT. The event stream is server-wide, so N directory instances receive every event N times; deduplicate by event id and let only one instance read the stream.
-The plugin API doesn't expose lists or full chats, so read `opencode.db` read-only. Assistant messages are rewritten in place within a step without changing seq, and the runtime SDK doesn't repush batches without an increased `toSeq`, so push only finalized messages. See `docs/opencode.md`.
+The plugin API doesn't expose lists or full chats, so read `opencode.db` read-only. Assistant messages are rewritten in place within a step without changing seq, and the runtime SDK doesn't repush batches without an increased `toSeq`, so push only finalized messages. See `docs/integrations/opencode.md`.
 Agents herdr reports but Persona doesn't recognize were silently dropped by `if a.Agent != "claude" { continue }` (their panes invisible on the phone). They're now terminal-only rows; new Agent integrations must not rely on "unclaimed means disappears".
 
 ## claude dies, but its hook survives (2026-11-06, #4344, 2.1.318)
@@ -429,11 +429,11 @@ Claude Code launches hook commands with `detached: true` on Linux / macOS, so `p
 Don't assume "hook disconnected = Agent no longer waiting": while waiting, node checks every 2 seconds whether claude still exists using hook-supplied `agent_pid` / `agent_start` (`watchAgent`); withdraw only after two consecutive missing checks. A killed but unreaped claude is a zombie: `/proc/<pid>/stat` and its unchanged start time remain; inspect state `Z` to detect that it is gone (`procGone`).
 - "Closed its finished agent" with the tab still there (2026-11-06): herdr's own log (`~/.config/herdr/herdr-server.log`, UTC) showed every `tab.close` from `session.retire` succeeding on the tab the Agent ran in then. The leftover tabs were others:
   the assistant had sent `/exit` with `agent_send`, which exits claude and leaves the shell, and once even to an Agent already closed, which resumed it in a new tab only to quit (that tab stayed).
-  Before blaming a close, match the pane ids in herdr's log (`pane child spawned … pane_id=<n>`, `tab renamed … tab_id=…`) against the tabs that are left. `/exit` and `/quit` now close the Agent like **Close**, and Persona tabs left with a bare shell are swept (`docs/todos.md` ("Close Agents for completed tasks")).
+  Before blaming a close, match the pane ids in herdr's log (`pane child spawned … pane_id=<n>`, `tab renamed … tab_id=…`) against the tabs that are left. `/exit` and `/quit` now close the Agent like **Close**, and Persona tabs left with a bare shell are swept (`docs/assistant/todos.md` ("Close Agents for completed tasks")).
 
 ## Closing a question is a runtime operation (#5700)
 
-`dismiss` hands a question back to the computer and leaves its runtime waiting. A close-without-answer action needs a separate resolution and an explicit runtime capability; sending Escape to a terminal is unsafe because it can fold a question pane or interrupt the turn. See `docs/protocol.md` ("Question cancellation").
+`dismiss` hands a question back to the computer and leaves its runtime waiting. A close-without-answer action needs a separate resolution and an explicit runtime capability; sending Escape to a terminal is unsafe because it can fold a question pane or interrupt the turn. See `docs/protocol/protocol.md` ("Question cancellation").
 
 Claiming a resolution and persisting it are separate operations. A timeout or disconnected waiter must not write an earlier terminal outcome while the claimed resolution is still being persisted: the database keeps the first outcome, so a reconnect would otherwise lose the cancellation. Arbitrate under the claim lock and broadcast the committed result to overlapping resumable waiters.
 
@@ -495,6 +495,6 @@ Closing is not durable merely because the card vanished: persist the interaction
   profile's, runs under grok as well. Only `GROK_CLAUDE_HOOKS_ENABLED=0` turns that off.
 - Our hooks must assume a different program at the other end: no pane variable (`HERDR_PANE_ID`, `ORCA_*`), a session id
   grok's own, and possibly no `node.sock`. `hook --persona-global` already exits at once without a pane variable or socket
-  (`docs/claude-integration.md` "Global report-only hooks"); keep that property for anything new.
+  (`docs/integrations/claude-integration.md` "Global report-only hooks"); keep that property for anything new.
 - Read a user's global settings as "hooks that other tools may run too": a blocking entry there blocks grok's sessions and
   the other tools' sessions, not only Claude's.

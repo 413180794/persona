@@ -14,7 +14,7 @@ import (
 
 // herdrAutostartKey is where a machine's own choice is kept. hub.json's machines[].herdr_autostart is only the
 // default now: the switch in Settings › Machines › Engine answers for one machine, and an older hub never wrote this key
-// (docs/engines.md "When herdr is not running").
+// (docs/integrations/engines.md "When herdr is not running").
 func herdrAutostartKey(machine string) string { return "herdr_autostart/" + machine }
 
 // herdrAutostart is whether the machine's node may start herdr's server when it is not running: what the user chose

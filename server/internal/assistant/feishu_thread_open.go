@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Opening a to-do from a topic (#5279, docs/todos.md "Opening a to-do from a topic"): in a group chat the hub
+// Opening a to-do from a topic (#5279, docs/assistant/todos.md "Opening a to-do from a topic"): in a group chat the hub
 // registered, a topic the owner starts opens a to-do bound to it and hands the first words to the main conversation,
 // the way a new topic starts a session in a bot that auto-starts on one. In a topic that exists but is bound to nothing,
 // "/ai" followed by a line does the same.

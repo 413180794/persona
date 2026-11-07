@@ -18,12 +18,12 @@ import (
 	"github.com/nwverse/persona/server/internal/usagesource"
 )
 
-// The admin UI's usage sources page (#2595, docs/usage-windows.md "Account-pool gateways", docs/admin.md): add, edit and remove the
+// The admin UI's usage sources page (#2595, docs/server/usage-windows.md "Account-pool gateways", docs/operations/admin.md): add, edit and remove the
 // account-pool gateways whose usage windows join the sidebar's, and try one with a single read. Moved from the hub as
 // it was: the hub relays the routes (devicewire.AdminUsageRoutes) from its admin UI only, so only a signed-in admin
 // session gets here (every /api/v1/admin/ route; a device token, even a full one, does not open them), and says so
 // in assistantwire.AdminHeader; a request without it is refused here too. Nothing answers with a key: a source says
-// only whether it has one. The keys live in the manager's manager.json (0600, docs/config.md "manager.json"), written
+// only whether it has one. The keys live in the manager's manager.json (0600, docs/operations/config.md "manager.json"), written
 // in one step under a lock on its directory (managerconf.Edit), and a change applies at once.
 
 const usageTestMost = 25 * time.Second

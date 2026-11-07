@@ -4,7 +4,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
-// The model configuration is the assistant's (docs/model-config.md "Who owns models"): its records, the providers' keys, every
+// The model configuration is the assistant's (docs/assistant/model-config.md "Who owns models"): its records, the providers' keys, every
 // model call, the routes of Settings › Model providers / Models and "New agent"'s pickers (assistantwire.Routes, relayed). The
 // hub hands over what hub.json says about models (the hello) and what its plugins have (their providers, their voice
 // models, which of them need info filtering), and asks the assistant only what its plugins need: whether info filtering can be

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Build the Android app and install it on a connected phone or emulator (docs/android.md).
+# Build the Android app and install it on a connected phone or emulator (docs/android/android.md).
 #   ./scripts/app/android.sh            # debug build, install, launch
 #   ./scripts/app/android.sh test       # unit tests only
 #   ./scripts/app/android.sh lint       # Android lint
 #   ./scripts/app/android.sh shots -s <emulator> --out <directory>
 #   ./scripts/app/android.sh apk        # debug APK only (android/app/build/outputs/apk/debug/app-debug.apk)
-# shots takes optional environment variables for repeatable, pixel-comparable captures (docs/android.md):
+# shots takes optional environment variables for repeatable, pixel-comparable captures (docs/android/android.md):
 #   SHOTS_STYLE=glass|brief|board  pass debug.style on every launch
 #   SHOTS_PLUGINS=1                the mock hub serves MOCK_EXTENSIONS (Settings › Plugins) and the plugin pages are captured too
 #                                  (a plugin's own page, the plugin market and a launcher's page with a plugin's section);
@@ -317,7 +317,7 @@ SHOTS_PY
       capture "$theme" diagnostics --es debug.openDiagnostics true
       for page in notifications readiness; do capture "$theme" "settings-$page" --es debug.openLink "'persona://open?target=settings&page=$page'"; done
       for page in machines knowledge phone catalog; do capture "$theme" "$page" --es debug.openPage "$page"; done
-      # Settings › Managers (docs/managers.md): the mock's roster, a manager on another computer and the hub's own (Delete off).
+      # Settings › Managers (docs/assistant/managers.md): the mock's roster, a manager on another computer and the hub's own (Delete off).
       # The install code sheet is drawn by ManagersShotsTest (feature/settings, build/managers-shots/).
       capture "$theme" settings-managers --es debug.openPage managers
       for id in m-3fa21c assistant; do capture "$theme" "manager-$id" --es debug.openPage "manager:$id"; done

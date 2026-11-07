@@ -1,5 +1,5 @@
 // The Feishu chat's composer: text, the quoted message, and pictures / files picked, pasted or dropped
-// (docs/lark-attachments.md, iOS LarkComposer). Text and each attachment go as messages of their own.
+// (docs/extensions/lark-attachments.md, iOS LarkComposer). Text and each attachment go as messages of their own.
 // In a group, typing @ looks the members up (lib/lark-people.ts, ui/LarkPeoplePicker.tsx) and the message @s whom it
 // still names. With a `draft` key, what is typed and who is @-ed stay as the chat's draft until sent (lib/lark-chat.ts;
 // the quote is the page's and is kept with it; the box is drawn again for each chat).

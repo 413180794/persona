@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// One call's logic with a fake socket, audio and clock (docs/voice.md 6.3–6.5, 6.10): the start frame, what is held
+/// One call's logic with a fake socket, audio and clock (docs/assistant/voice.md 6.3–6.5, 6.10): the start frame, what is held
 /// before `ready`, captions, runs, reconnects with `resume`, the ways a call ends, the screen lock.
 @MainActor
 struct VoiceConversationTests {

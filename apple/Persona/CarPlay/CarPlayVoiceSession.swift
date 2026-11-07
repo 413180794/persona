@@ -21,14 +21,14 @@ nonisolated enum CarPlayMicGate {
     }
 }
 
-/// Mic permission that never prompts: CarPlay must not hang on the phone's dialog (docs/carplay.md).
+/// Mic permission that never prompts: CarPlay must not hang on the phone's dialog (docs/apple/carplay.md).
 struct CarPlayMicPermission: MicPermission {
     func request() async -> Bool {
         AVAudioApplication.shared.recordPermission == .granted
     }
 }
 
-/// CarPlay's thin shell over `VoiceCalls` / `VoiceConversation(surface: .carPlay)` (docs/voice.md 6.4, #3789).
+/// CarPlay's thin shell over `VoiceCalls` / `VoiceConversation(surface: .carPlay)` (docs/assistant/voice.md 6.4, #3789).
 @MainActor enum CarPlayVoiceSession {
     /// Starts (or restarts) the car's call on the assistant's main conversation. Returns a Chinese sentence when it
     /// cannot start; nil once `VoiceCalls` owns the call (it may still end itself with `VoiceEnd`).

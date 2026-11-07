@@ -1,6 +1,6 @@
 import Foundation
 
-// Shared answered interaction formatting and status handling (docs/protocol.md, #1688).
+// Shared answered interaction formatting and status handling (docs/protocol/protocol.md, #1688).
 // Aligns with web/src/lib/answered.ts and Android HubInteractionCenter.
 
 nonisolated struct ResolveResult: Codable, Sendable {

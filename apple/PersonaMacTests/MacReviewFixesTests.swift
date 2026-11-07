@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The first review round's findings on the Mac shell (docs/mac.md).
+/// The first review round's findings on the Mac shell (docs/apple/mac.md).
 @MainActor
 struct MacReviewFixesTests {
     /// Opening a chat from ⌘K, the menu bar or a notification leaves Knowledge / Machines even when the tab and the open

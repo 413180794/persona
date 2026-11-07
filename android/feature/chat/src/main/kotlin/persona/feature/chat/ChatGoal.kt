@@ -53,7 +53,7 @@ internal fun goalColors(goal: GoalInfo): StatusColors {
 }
 
 /**
- * The goal over the conversation (docs/agent-goal.md, iOS `GoalBar`): its first line and status in one row under the
+ * The goal over the conversation (docs/integrations/agent-goal.md, iOS `GoalBar`): its first line and status in one row under the
  * header; a tap opens [ChatGoalSheet]. Nothing when the session has no goal; a met one stays until it is replaced or
  * cleared.
  */

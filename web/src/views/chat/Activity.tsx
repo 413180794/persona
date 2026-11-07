@@ -190,7 +190,7 @@ const goalChipTone = {
 } as const;
 const goalTextTone = { active: "text-accent-ink", done: "text-green", stopped: "text-orange" } as const;
 
-/** The goal it works toward (docs/agent-goal.md, iOS GoalBar / GoalSheet): ◎ and its status in the chat's header (the
+/** The goal it works toward (docs/integrations/agent-goal.md, iOS GoalBar / GoalSheet): ◎ and its status in the chat's header (the
  *  first line too where there is room); a click shows all of it, the latest check's reason and what it has spent. */
 export function GoalChip({ goal }: { goal: GoalInfo }) {
   const [open, setOpen] = useState(false);

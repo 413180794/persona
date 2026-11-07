@@ -22,7 +22,7 @@ export interface AgentLaunch {
   permissionMode?: string;
   /** The engine host to open in (#2576), when the user picked one other than the machine's default; none: the default. */
   host?: string;
-  /** Turn ultracode on once Claude is up (#3428); only ever true: off is what a new Claude is (docs/protocol.md). */
+  /** Turn ultracode on once Claude is up (#3428); only ever true: off is what a new Claude is (docs/protocol/protocol.md). */
   ultracode?: boolean;
   text: string;
   attachments: LocalAttachment[];

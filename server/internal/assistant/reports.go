@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Task reports in Feishu (#2768, docs/bots.md "Task progress"): the user reads the bot's chat, not the app, so how the
+// Task reports in Feishu (#2768, docs/extensions/bots.md "Task progress"): the user reads the bot's chat, not the app, so how the
 // main conversation's tasks go — done, waiting for the user, cut off, did not start, closed by the judge — is told
 // there by the bot itself (no lark-cli, nothing to approve per message). Changes within reportDelay are one card:
 // what needs the user's decision on top (each with its own answerable card below it), then each task with its stage

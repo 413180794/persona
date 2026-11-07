@@ -9,10 +9,10 @@ import (
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
-// An extension's token (docs/extensions.md "Permissions"): it opens the routes of the scopes the user granted the
+// An extension's token (docs/extensions/extensions.md "Permissions"): it opens the routes of the scopes the user granted the
 // extension (permissions.hub) and no other. The hub makes one each time it starts the extension and drops the one
 // before; it drops them all when the extension is switched off, upgraded, uninstalled or reconfigured (apply). They are
-// kept in memory only: an extension's process is the hub's child and starts again with a new hub (docs/hub-restart.md),
+// kept in memory only: an extension's process is the hub's child and starts again with a new hub (docs/operations/hub-restart.md),
 // so a token never has to outlive the hub that made it.
 
 // roleExtension is an extension's token.

@@ -6,7 +6,7 @@ import UIKit
 import UniformTypeIdentifiers
 @testable import Persona
 
-/// Personas (docs/persona.md): persona.json as the hub sends it, the colors held to the app's floors and laid over a
+/// Personas (docs/apple/persona.md): persona.json as the hub sends it, the colors held to the app's floors and laid over a
 /// style, and the phone's copy of a package (downloaded whole, kept per rev, the old rev removed).
 @MainActor
 struct PersonaTests {

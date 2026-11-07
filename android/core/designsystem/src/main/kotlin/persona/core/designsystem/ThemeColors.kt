@@ -111,7 +111,7 @@ fun appDarkTheme(): Boolean = AppAppearance.scheme.dark ?: androidx.compose.foun
 
 object ThemeColors {
     private val hex = Regex("#[0-9a-fA-F]{6}")
-    /** The floor an accent holds as a link on every style's page (docs/persona.md "Contrast floor"). */
+    /** The floor an accent holds as a link on every style's page (docs/apple/persona.md "Contrast floor"). */
     private const val AccentFloor = 4.5
     /** Words on the user's own bubble. */
     private const val TextFloor = 4.5

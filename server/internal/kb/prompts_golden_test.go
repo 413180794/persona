@@ -1,6 +1,6 @@
 package kb
 
-// Golden tests for the knowledge base's prompts (docs/prompts.md): what the model is asked, byte for byte, compared
+// Golden tests for the knowledge base's prompts (docs/assistant/prompts.md): what the model is asked, byte for byte, compared
 // with testdata/prompts/<name>.golden. Regenerate after an intended change with
 //
 //	UPDATE_GOLDEN=1 go test ./internal/kb -run Golden

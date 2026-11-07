@@ -4,7 +4,7 @@ import { formatDate, formatLocale, t } from "../i18n";
 import type { UIItem } from "../lib/extension-ui";
 import type { Access, AdminMachine, AdminExtension, Device, DoctorItem, ExtensionMetrics, LogLine, MeshHub, MeshView, MetricsWindow, Peer, PeerProbe, Restart } from "./types";
 
-// ── access scope (docs/admin.md "Access scope") ──────────────
+// ── access scope (docs/operations/admin.md "Access scope") ──────────────
 
 export const ACCESS_INFO: Record<Access, { label: string; detail: string; risk: string }> = {
   loopback: { label: t("admin-logic.access_loopback"), detail: t("admin-logic.access_loopback_detail"), risk: t("admin-logic.access_loopback_risk") },
@@ -59,7 +59,7 @@ export function setupRequest(password: string, code: string, codeRequired: boole
 }
 
 // setupCodeFromHash reads the first-run setup code `personad hub setup` puts in the admin URL's fragment
-// (/admin#setup=ABCD-EFGH, docs/onboarding.md 4.1): a fragment never reaches the server or its logs.
+// (/admin#setup=ABCD-EFGH, docs/assistant/onboarding.md 4.1): a fragment never reaches the server or its logs.
 export function setupCodeFromHash(hash: string): string {
   const code = new URLSearchParams(hash.replace(/^#/, "")).get("setup") ?? "";
   return /^[A-Za-z0-9 -]{1,32}$/.test(code.trim()) ? code.trim().toUpperCase() : "";
@@ -202,7 +202,7 @@ export function validMachineId(id: string): boolean {
   return /^[a-z0-9][a-z0-9._-]{0,62}$/.test(id);
 }
 
-// ── computers: paths, adding, repairing (docs/plan-hub-center.md 4, 5) ──
+// ── computers: paths, adding, repairing (docs/archive/operations/plan-hub-center.md 4, 5) ──
 
 // hubLabel names the hub a path goes through: this hub, a hub of the group by name, else the start of its id.
 export function hubLabel(mesh: MeshView | null | undefined, hubId: string | undefined, selfId?: string): string {
@@ -299,12 +299,12 @@ export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-// linuxInstallCommand pairs, installs and starts persona-link on a Linux computer in one go (docs/link.md "Linux").
+// linuxInstallCommand pairs, installs and starts persona-link on a Linux computer in one go (docs/operations/link.md "Linux").
 export function linuxInstallCommand(pairUrl: string): string {
   return `persona-link install --pair - <<< ${shellQuote(pairUrl)}`;
 }
 
-// ── the group of hubs (docs/plan-hub-center.md 2) ──────
+// ── the group of hubs (docs/archive/operations/plan-hub-center.md 2) ──────
 
 // sortMeshHubs: the center first, then this hub, then by name.
 export function sortMeshHubs(hubs: MeshHub[]): MeshHub[] {
@@ -394,7 +394,7 @@ export function uploadProblem(file: { name: string; size: number }, most: number
   return "";
 }
 
-// ── how the extensions run (docs/extensions.md "Activity") ──
+// ── how the extensions run (docs/extensions/extensions.md "Activity") ──
 
 /** An error rate as people read it: 0%, 0.4%, 12%; "—" without calls. */
 export function rateText(rate: number, calls: number): string {

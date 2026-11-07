@@ -20,8 +20,8 @@ import (
 )
 
 // The assistant's skills call HTTP APIs as the user through commands (`<command> METHOD PATH [BODY]`, the
-// command gates the hub hands over: plugins' assistant.gate, docs/extensions.md "Assistant") and through lark-cli. Every Bash
-// call of the assistant passes a PreToolUse hook that reads the command (docs/assistant.md):
+// command gates the hub hands over: plugins' assistant.gate, docs/extensions/extensions.md "Assistant") and through lark-cli. Every Bash
+// call of the assistant passes a PreToolUse hook that reads the command (docs/assistant/assistant.md):
 //
 //   - only gated calls (and a few output filters): each call goes by its gate's rules (the first match: allow, confirm
 //     on the phone first with method, path and body on the card, or deny; none matching is confirmed); lark-cli's
@@ -559,7 +559,7 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		}
 		return "", "", nil
 	}
-	// A health conversation's writes are confirmed each time: no rule's allow, no "Always allow for this session" (docs/health.md "Outgoing").
+	// A health conversation's writes are confirmed each time: no rule's allow, no "Always allow for this session" (docs/assistant/health.md "Outgoing").
 	// Its space is the one its process was started in (assistantLarkEnv notes it, and the gate proxy goes by the same),
 	// not the directory the hook says: that is where the model's last `cd` left it. A hook directory that is a health
 	// space's counts too, so a mix-up can only ask more.

@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// Codex questions and approvals as cards (docs/codex.md "Questions and approvals"). Codex in a terminal has no hook Persona can
+// Codex questions and approvals as cards (docs/integrations/codex.md "Questions and approvals"). Codex in a terminal has no hook Persona can
 // answer through, so the node follows each live Codex and compatible variants session's rollout for the questions it asks
 // (transcript.CodexAsks) and, while the host says it waits on the user, reads its screen for an approval
 // (screen.ReadCodex). The open ones go to the hub as one list (codex.interactions) whenever it changes; the hub keeps

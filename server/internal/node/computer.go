@@ -1,6 +1,6 @@
 package node
 
-// Operating this Mac for the assistant through Cua Driver (the built-in plugin cua, docs/computer-use.md). The hub
+// Operating this Mac for the assistant through Cua Driver (the built-in plugin cua, docs/extensions/computer-use.md). The hub
 // asks only about a machine the user turned it on for: a node never looks for cua-driver by itself.
 
 import (

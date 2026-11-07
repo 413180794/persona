@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// Inbox phase 1 (docs/inbox.md): what an event adds to the inbox's screens — the row's mark, and in the detail
+// Inbox phase 1 (docs/assistant/inbox.md): what an event adds to the inbox's screens — the row's mark, and in the detail
 // recap, the suggestion card with its buttons, the chain and related items. The iPhone draws them as a page of their own
 // (`InboxEventPage`, the source behind 'view original'); the Mac in the detail's action column (`MacInboxActions`), beside
 // the source. An item without any of the new fields (an older hub) never reaches these.

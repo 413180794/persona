@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check that the terminal's "Full view" keeps every cell on the grid when a row holds Chinese, full-width punctuation,
-symbols and emoji (docs/terminal.md "Character width and CJK alignment", #2751).
+symbols and emoji (docs/integrations/terminal.md "Character width and CJK alignment", #2751).
 
 The fake hub runs this script as the herdr client (MOCK_TERMINAL_FULL_EXEC, `--client`): it draws what herdr's own
 client writes for a two-pane layout, a box table in the left pane, with the cursor placed before every wide character

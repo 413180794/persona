@@ -1,7 +1,7 @@
 // Settings › Shortcuts: the switch for all, then every shortcut with its chord; click one and press the new chord (Esc cancels),
 // a chord another command has offers "Replace" (that one is cleared) or "Cancel". Each row can be cleared (its key does nothing,
 // no default either), turned off (keeps its chord), and put back to its default; "Reset all" for the page. Stored in
-// this browser (lib/shortcuts.ts). docs/web.md "Keyboard shortcuts".
+// this browser (lib/shortcuts.ts). docs/web/web.md "Keyboard shortcuts".
 import { useEffect, useState } from "react";
 import {
   checkBinding,

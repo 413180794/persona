@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// The built-in manager's own files (docs/managers.md "The built-in manager's own files"). It used to keep its keys in the data
+// The built-in manager's own files (docs/assistant/managers.md "The built-in manager's own files"). It used to keep its keys in the data
 // directory beside the hub's; they are its own now, in DefaultDir, copied there once from the data directory
 // (MoveFiles). Copied, not moved: the same bytes open what is already sealed with them, and an older build switched back
 // still finds them where it looks. The hub reads none of them (its own secret.key stays its own).

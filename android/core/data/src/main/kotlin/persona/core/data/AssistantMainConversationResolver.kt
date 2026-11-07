@@ -11,7 +11,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 
 /**
  * Use the immutable transport for the same pairing as the outbox, never a mutable connection. This phone's main queue
- * is the default manager's (docs/managers.md step 4): its lookups name the default whatever the assistant page shows,
+ * is the default manager's (docs/assistant/managers.md step 4): its lookups name the default whatever the assistant page shows,
  * so a message waiting in it never goes to another manager's main conversation.
  */
 class AssistantMainConversationResolver(private val transport: InboxAssistantTransport) : MainConversationResolver {

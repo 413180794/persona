@@ -200,7 +200,7 @@ body {
 /* The machine page's load chart (iOS MetricColor.load): its own hue, apart from CPU / memory / network. */
 :root { --chart-load: #e87ba4; }
 .dark { --chart-load: #d55181; }
-/* Token usage's four kinds (docs/machines.md "Token usage charts", #4973): the categorical palette's light and dark
+/* Token usage's four kinds (docs/server/machines.md "Token usage charts", #4973): the categorical palette's light and dark
    steps, validated in the stacking order (input, output, cache write, cache read) for colour-blind readers. Light
    teal is under 3:1 on a light card, so the legend always writes the numbers. Same values as the apps' UsageColor. */
 :root { --usage-input: #2a78d6; --usage-output: #eb6834; --usage-cache-write: #6250d6; --usage-cache-read: #1baf7a; }
@@ -226,7 +226,7 @@ html, body, #root { height: 100%; }
 /* Text size (ui/look.ts, src/lib/text-scale.ts): "Small" / "Large" as the Mac app's 12 / 14 pt against its 13; "Standard" sets nothing. */
 :root[data-text-size="small"] { --text-scale: calc(12 / 13); }
 :root[data-text-size="large"] { --text-scale: calc(14 / 13); }
-/* Installed on a phone (PWA, docs/web.md "Install as an app"): the page runs under the home indicator and, in landscape, the
+/* Installed on a phone (PWA, docs/web/web.md "Install as an app"): the page runs under the home indicator and, in landscape, the
    notch (viewport-fit=cover); the status bar keeps its own strip (apple-mobile-web-app-status-bar-style: default). */
 #root { padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 @media (display-mode: standalone) { #root { padding-bottom: env(safe-area-inset-bottom); } }
@@ -302,7 +302,7 @@ button:disabled { cursor: default; }
    a layout, five faces in the persona picker kept /settings busy while idle. Here only where they turn from. */
 .mochi-blink { transform-box: fill-box; transform-origin: center; }
 .mochi-spin { transform-origin: 512px 512px; }
-/* Extensions' charts (docs/extensions.md "UI slots" chart): the series colors, in order, for series without a tone. The first
+/* Extensions' charts (docs/extensions/extensions.md "UI slots" chart): the series colors, in order, for series without a tone. The first
  * is the accent; the others keep clear of the role colors (green / orange / red say positive / caution / danger).
  * Checked as a set (adjacent pairs, light and dark) with the dataviz palette validator. */
 :root { --series-1: #0285ff; --series-2: #1baf7a; --series-3: #6250d6; --series-4: #e87ba4; }

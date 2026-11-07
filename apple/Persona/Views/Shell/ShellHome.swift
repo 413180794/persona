@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// A new conversation in the shell (docs/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
+/// A new conversation in the shell (docs/apple/ios.md「新外壳」): the same welcome as the old layout's (`AssistantWelcome`:
 /// greeting, what Persona can reach, things to ask), and over the composer what needs the user right now — agents
 /// waiting on them and the inbox's Needs You — one quiet line each, as many as fit under the welcome's first two rows of things
 /// to ask (`NeedsRoom`). While the conversation spins up, the first message and a typing line so the send feels instant.
@@ -402,7 +402,7 @@ struct ShellNeedsYou: View {
     }
 }
 
-/// The pages the shell pushes onto the Assistant page by value (docs/ios.md「新外壳」), and what those push in turn: the
+/// The pages the shell pushes onto the Assistant page by value (docs/apple/ios.md「新外壳」), and what those push in turn: the
 /// inbox (its items and Feishu pages), the machines (a machine, its agents). One stack, values only: a value pushed on
 /// top of a view-based push lands under it (docs/lessons/ios.md).
 struct ShellDestinations: ViewModifier {
@@ -433,6 +433,6 @@ struct ShellDestinations: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// The Persona conversation is in the shell (docs/ios.md「新外壳」): neutral bubbles, the shell's composer, modes in it.
+    /// The Persona conversation is in the shell (docs/apple/ios.md「新外壳」): neutral bubbles, the shell's composer, modes in it.
     @Entry var shellChat = false
 }

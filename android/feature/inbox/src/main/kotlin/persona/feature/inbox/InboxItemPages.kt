@@ -13,7 +13,7 @@ import persona.core.designsystem.Status
 import persona.core.designsystem.Tokens
 import persona.core.navigation.InboxItemUiRoute
 
-// An inbox item's page drawn by an extension (docs/extensions.md "UI slots" `inbox_item`, #1683): an extension's connector (the
+// An inbox item's page drawn by an extension (docs/extensions/extensions.md "UI slots" `inbox_item`, #1683): an extension's connector (the
 // Feishu extension's `lark`) may draw the body of the items it brings in. Opening such an item shows the app's header of
 // the item over the extension's view (InboxItemExtensionScreen); every other item, and every item on a hub that lists no
 // such page, opens its own page as before. When the extension cannot draw an item, its own page opens instead, saying so

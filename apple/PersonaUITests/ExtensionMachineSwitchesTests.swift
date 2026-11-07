@@ -1,6 +1,6 @@
 import XCTest
 
-/// A plugin's list of machines (schema format machine, docs/extensions.md): a switch per Mac, by name and how it is, no
+/// A plugin's list of machines (schema format machine, docs/extensions/extensions.md): a switch per Mac, by name and how it is, no
 /// machine ids typed in; a switch takes effect at once and is the machine page's Let the Assistant Control This Computer too. Against
 /// scripts/mock/mock_hub.py with MOCK_EXTENSIONS=1 MOCK_COMPUTER=ready (`TEST_RUNNER_PERSONA_EXTENSIONS_HUB`), which has the
 /// plugin cua on for MacBook; `TEST_RUNNER_PERSONA_SHOTS` keeps the screenshots, named by

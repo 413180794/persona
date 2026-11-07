@@ -7,8 +7,8 @@ import { decodeURIComponentSafe } from "./uri";
 
 // Persona's main conversation is the front door (like the app, which opens on the assistant): `/` and `/persona` open it, `/persona/<id>` is
 // one conversation, `/persona/new` starts a one-off one, and "Overview" lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
-// (docs/extensions.md "UI slots" nav_page).
-/** What the middle of an agent's page shows (docs/web.md "Terminal ⇄ chat"): its conversation, or its terminal in place. */
+// (docs/extensions/extensions.md "UI slots" nav_page).
+/** What the middle of an agent's page shows (docs/web/web.md "Terminal ⇄ chat"): its conversation, or its terminal in place. */
 export type SessionView = "chat" | "term";
 
 export type Route =
@@ -22,10 +22,10 @@ export type Route =
   | { name: "persona"; sid?: string }
   // "All chats"; `origin` filters it (lib/conversation-origins.ts): the sidebar's "Automatic" rows open it so
   | { name: "history"; origin?: string }
-  // the health space (docs/health.md): its home, or one of its conversations
+  // the health space (docs/assistant/health.md): its home, or one of its conversations
   | { name: "health"; sid?: string }
   | { name: "profile" }
-  // `manager`: whose item it is when that is another manager than the default (`?manager=`, docs/managers.md
+  // `manager`: whose item it is when that is another manager than the default (`?manager=`, docs/assistant/managers.md
   // "Clients"): two managers may list the same id
   | { name: "inbox"; id?: string; manager?: string }
   | { name: "messages"; id?: string }
@@ -35,7 +35,7 @@ export type Route =
   | { name: "machine"; mid: string }
   // one space of a machine by its name (lib/space-page.ts): its agents, the todos it hangs on, what can be done to it
   | { name: "space"; mid: string; space: string }
-  // the terminal browser (docs/terminal.md "Standalone terminals"): every pane of every machine; `id` is the terminal opened (an agent
+  // the terminal browser (docs/integrations/terminal.md "Standalone terminals"): every pane of every machine; `id` is the terminal opened (an agent
   // session's id, or "pane:<pane>" for a plain shell)
   | { name: "terminal"; mid?: string; id?: string }
   | { name: "settings" }

@@ -58,7 +58,7 @@ interface ChatActions {
 enum class RewindRestore(val wire: String) { Conversation("conversation"), CodeAndConversation("code_and_conversation") }
 
 /**
- * One of your messages as Claude Code lists it in /rewind (docs/protocol.md): its text as the transcript has it, which
+ * One of your messages as Claude Code lists it in /rewind (docs/protocol/protocol.md): its text as the transcript has it, which
  * of the messages with that text it is counting from the end (1 = the last), and how many of yours came after it.
  */
 data class RewindTarget(val prompt: String, val occurrence: Int, val promptsAfter: Int)

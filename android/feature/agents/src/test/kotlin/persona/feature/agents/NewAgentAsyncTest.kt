@@ -13,7 +13,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
 
-/** Async starts, the first message sent once, "Follow model configuration" and prefilled forms (docs/protocol.md "New session"). */
+/** Async starts, the first message sent once, "Follow model configuration" and prefilled forms (docs/protocol/protocol.md "New session"). */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class NewAgentAsyncTest {
     private val machines = MutableStateFlow(listOf(Machine("first", online = true), Machine("second", online = true)))

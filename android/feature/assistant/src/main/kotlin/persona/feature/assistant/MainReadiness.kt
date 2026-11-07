@@ -19,7 +19,7 @@ import persona.core.navigation.SettingsPage
 import persona.core.navigation.SettingsPageRoute
 
 /**
- * The main conversation's readiness on this screen (docs/onboarding.md 4.4): asked when the tab opens, when the machines
+ * The main conversation's readiness on this screen (docs/assistant/onboarding.md 4.4): asked when the tab opens, when the machines
  * change and after a refused start; [probe] is "Try a message". An old hub's 404 leaves it null for good, and the page as before.
  */
 @Stable

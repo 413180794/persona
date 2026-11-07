@@ -32,7 +32,7 @@ func (h *Hub) hello() map[string]any {
 		"type": "hello", "server_version": h.version, "client_id": randomHex(6), "features": h.features(),
 		"channel": h.build.Channel, "build": h.build.Number, "protocol": proto.Protocol, "min_app_build": proto.MinAppBuild,
 		"hub_id": h.hubID(), "hub_name": h.hubName(), "endpoints": h.endpointList(), "tls_port": port, "fp": fp,
-		// The hubs of this hub's mesh group, itself included (docs/plan-hub-mesh.md 2.6): only after authentication.
+		// The hubs of this hub's mesh group, itself included (docs/archive/operations/plan-hub-mesh.md 2.6): only after authentication.
 		"mesh": map[string]any{"hubs": h.meshHubs()},
 		// the user's language (feature locale, locale.go)
 		"locale": string(h.userLang()),

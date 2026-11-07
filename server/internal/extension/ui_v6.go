@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// UI version 6 (docs/extensions.md "UI version 6"): pictures, controls in rows, new charts and sparks, a row's extra
+// UI version 6 (docs/extensions/extensions.md "UI version 6"): pictures, controls in rows, new charts and sparks, a row's extra
 // actions, grids and carousels of tiles, date, time, multiple choice and multi-line fields, title styles, named colors
 // and more icons. downgrade6 draws them with version 5's components for an older app; CollectValues puts back what
 // such an app sends for a multichoice drawn as toggles.

@@ -15,7 +15,7 @@ const CodexTurnFailed = "Codex 这一轮出错了"
 // Kind is proto.TurnErrorTransient when the model service failed for a moment (overloaded, a 5xx, rate limited, the
 // connection or the response stream lost), proto.TurnErrorUser when the user has to act (sign-in, usage limit, context
 // window, the model, a policy, any kind this does not know), and "" when Codex gives no kind (the text is read then,
-// docs/agent-work.md "Rules first, then the model"). Null or empty: the turn did not fail.
+// docs/assistant/agent-work.md "Rules first, then the model"). Null or empty: the turn did not fail.
 func CodexTurnError(raw json.RawMessage) (text, kind string) {
 	raw = json.RawMessage(strings.TrimSpace(string(raw)))
 	if len(raw) == 0 || string(raw) == "null" {

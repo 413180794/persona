@@ -399,7 +399,7 @@ object HealthSerializer : WireSerializer<Health>(Health.generatedSerializer())
 object HeartbeatSerializer : WireSerializer<Heartbeat>(Heartbeat.generatedSerializer())
 object ErrorBodySerializer : WireSerializer<ErrorBody>(ErrorBody.generatedSerializer())
 
-/** Where a [Workflow] run stands; a status this app does not know reads as [Completed] (docs/protocol.md). */
+/** Where a [Workflow] run stands; a status this app does not know reads as [Completed] (docs/protocol/protocol.md). */
 enum class WorkflowStatus { Running, Completed, Failed, Killed, Stalled }
 
 /**

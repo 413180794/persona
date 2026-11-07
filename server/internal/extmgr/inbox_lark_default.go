@@ -15,7 +15,7 @@ import (
 )
 
 // The inbox's default Feishu account (#5098): the Feishu extension manages the accounts, so the default is the one
-// its messaging source "lark" answers to GET accounts (docs/extension-messaging.md), not hub.json's lark.account.
+// its messaging source "lark" answers to GET accounts (docs/extensions/extension-messaging.md), not hub.json's lark.account.
 // The inbox's Feishu items of the default account go without ol_account, the others' carry theirs.
 
 // larkDefaultWithin is how long inbox.config waits for the extension's account list.

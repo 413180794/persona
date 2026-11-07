@@ -1,6 +1,6 @@
 // ⌘K: Beautiful UI's Search, over every agent and Persona conversation — and the terminal panes of the computers
 // (lib/terminals.ts, the /terminal page's data). `>` first (or ⌘⇧P) is command mode: the registered commands with their
-// shortcuts, and whatever other modules add through registerContextCommands (lib/palette.ts). docs/web.md"Keyboard shortcuts".
+// shortcuts, and whatever other modules add through registerContextCommands (lib/palette.ts). docs/web/web.md"Keyboard shortcuts".
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { enc, api } from "../lib/api";
 import { machineWithHub } from "../lib/mesh";

@@ -25,7 +25,7 @@ import androidx.annotation.StringRes
 import java.time.Instant
 import java.time.ZoneId
 
-// Settings › Extensions › Channels (docs/channels.md "UI"): the words, the list's sections, where messages go, and the models of the
+// Settings › Extensions › Channels (docs/extensions/channels.md "UI"): the words, the list's sections, where messages go, and the models of the
 // list, a channel's page and its binding a step at a time. The pages are in ChannelsScreen.kt.
 
 /** What a channel is called and says in the settings (the same words as the web's lib/channels.ts). */
@@ -299,7 +299,7 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
         finally { mutable.update { it.copy(busy = null) } }
     }
 
-    // ---- binding (docs/channels.md "API": POST .../bind, a connector.Prompt a step at a time)
+    // ---- binding (docs/extensions/channels.md "API": POST .../bind, a connector.Prompt a step at a time)
 
     /** "Link": the first step. */
     suspend fun startBind(): Boolean = step(null, null)

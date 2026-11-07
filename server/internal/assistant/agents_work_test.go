@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The Agents business (agents_*.go, docs/agent-work.md): the triage of a stopped turn, what the manager does about
+// The Agents business (agents_*.go, docs/assistant/agent-work.md): the triage of a stopped turn, what the manager does about
 // it, its cards and their answers, the switches. The hub's machine "box" is the fake's; what the hub shows of it is
 // the hub's tests' (hub/agents_link_test.go).
 

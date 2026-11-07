@@ -5,7 +5,7 @@ plugins {
 }
 
 android { namespace = "persona.feature.terminal"
-    // Its pages in pictures in each language (Robolectric's native graphics, docs/i18n.md).
+    // Its pages in pictures in each language (Robolectric's native graphics, docs/protocol/i18n.md).
     testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 

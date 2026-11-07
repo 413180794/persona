@@ -1,4 +1,4 @@
-// Settings › Sent as you (#5278, docs/connectors.md "Sent as the user", docs/protocol.md "Connector API"): the ledger of what
+// Settings › Sent as you (#5278, docs/extensions/connectors.md "Sent as the user", docs/protocol/protocol.md "Connector API"): the ledger of what
 // Persona wrote in the user's name through the connectors, as GET /api/v1/connectors/sent gives it, newest first.
 // iOS and the Mac have their own page (apple/Persona/Views/Settings/SentView.swift), Android its own (android/feature/settings/src/main/kotlin/persona/feature/settings/SentScreen.kt).
 //
@@ -43,7 +43,7 @@ export interface SentItem {
   at: string;
   connector: string;
   action: string;
-  /** Where it went; the fields depend on the connector (docs/connectors.md "Sent as the user"). */
+  /** Where it went; the fields depend on the connector (docs/extensions/connectors.md "Sent as the user"). */
   target: Record<string, unknown>;
   /** What it said, at most SENT_TEXT_MOST characters. */
   text: string;

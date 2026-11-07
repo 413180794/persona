@@ -1,7 +1,7 @@
 import Foundation
 
-// The words around a call that is not on: why the page offers none (the 「+」 menu's Voice Chat, docs/voice.md 1.3 and 6.1),
-// and what stays after one ended by itself (「语音已结束 · 继续」, docs/voice.md 1.2 L). Pure, like `VoiceBarLine`; the
+// The words around a call that is not on: why the page offers none (the 「+」 menu's Voice Chat, docs/assistant/voice.md 1.3 and 6.1),
+// and what stays after one ended by itself (「语音已结束 · 继续」, docs/assistant/voice.md 1.2 L). Pure, like `VoiceBarLine`; the
 // extension's or the upstream's own words only go under Details (docs/lessons/voice.md "Implementation reminders").
 
 /// Where Open Settings goes.
@@ -16,7 +16,7 @@ nonisolated enum VoiceSettingsPlace: Equatable, Sendable {
     case system
 }
 
-/// Why Voice Chat is not offered here, for the 「+」 menu's item (it stays and explains, docs/voice.md 6.1).
+/// Why Voice Chat is not offered here, for the 「+」 menu's item (it stays and explains, docs/assistant/voice.md 6.1).
 nonisolated struct VoiceUnavailableNote: Equatable, Sendable {
     var title: String
     var message: String

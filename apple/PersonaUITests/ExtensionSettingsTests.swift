@@ -1,6 +1,6 @@
 import XCTest
 
-/// Settings › Extensions (docs/extensions.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
+/// Settings › Extensions (docs/extensions/extensions.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
 /// (and never shown again), a setting the hub refuses shown beside its field. Against scripts/mock/mock_hub.py with
 /// MOCK_EXTENSIONS=1: `TEST_RUNNER_PERSONA_EXTENSIONS_HUB=http://127.0.0.1:<port>`; `TEST_RUNNER_PERSONA_SHOTS=<dir>` keeps the
 /// screenshots, named by `TEST_RUNNER_PERSONA_EXTENSIONS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).

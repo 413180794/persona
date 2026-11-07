@@ -9,7 +9,7 @@ import persona.core.hub.HubFailure
 
 /**
  * What to tell the user after an operation failed. Pages show [localizedMessage] / [localizedActionLabel], and code
- * outside composition resolves [text] and [actionLabelRes] with its `Resources` (docs/i18n.md): there are no fixed
+ * outside composition resolves [text] and [actionLabelRes] with its `Resources` (docs/protocol/i18n.md): there are no fixed
  * words to fall back on. [hubWords] is the hub's own sentence for the main conversation's coded refusals it words (in
  * the request's language), kept for reports; never the hub's raw error (see [operationFeedback]).
  */
@@ -58,7 +58,7 @@ fun operationFeedback(error: Throwable): OperationFeedback {
     }
     val delivered = if ((error as? persona.core.contracts.api.AgentOperationFailure)?.uncertain == true && failure.delivered == null)
         "unknown" else failure.delivered
-    // The hub words these refusals in the request's language (docs/onboarding.md 4.6, apierr.codeActions); for the
+    // The hub words these refusals in the request's language (docs/assistant/onboarding.md 4.6, apierr.codeActions); for the
     // other codes its `error` is raw detail (node_unreachable: "rpc: connection closed"), never shown.
     val words = failure.message.takeIf { code in HubWordedCodes && failure.status != null && it.isNotBlank() && !it.startsWith("HTTP ") }
     return operationFeedback(mapOperationFailure(code, delivered, failure.retryable, category), words)

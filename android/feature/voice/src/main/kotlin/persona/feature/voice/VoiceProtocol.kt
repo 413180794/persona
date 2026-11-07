@@ -10,7 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
-/** What the extension says on the voice socket (docs/extensions.md "Voice"), its JSON frames decoded. */
+/** What the extension says on the voice socket (docs/extensions/extensions.md "Voice"), its JSON frames decoded. */
 internal sealed interface VoiceEvent {
     /** The session is set up: record at [inputRate], play at [outputRate] (the extension's, never assumed). */
     data class Ready(val inputRate: Int, val outputRate: Int) : VoiceEvent

@@ -97,7 +97,7 @@ func (h *Hub) linkCaller(w http.ResponseWriter, r *http.Request) (principal, boo
 
 // plainLinkAllowed: a link request that reached the hub without TLS is let in from this machine (a reverse proxy beside
 // the hub), or from the LAN when it came through a reverse proxy that took it over HTTPS (X-Forwarded-Proto or
-// Forwarded proto=https; docs/link.md "Hub behind a reverse proxy"). The header is never trusted from the internet: that is
+// Forwarded proto=https; docs/operations/link.md "Hub behind a reverse proxy"). The header is never trusted from the internet: that is
 // refused before (gate) and here. A client lying in it only gets to send its own link credential in plaintext over
 // the LAN; Persona Link itself only speaks HTTPS.
 func (h *Hub) plainLinkAllowed(r *http.Request) bool {
@@ -553,7 +553,7 @@ func (h *Hub) stopLinks() []*relayLink {
 }
 
 // linkEndpoints is where the hub can be found, and what it is called and how many hubs its mesh has (the Mac menu
-// bar shows both, docs/link.md); the manager tells Persona Link.
+// bar shows both, docs/operations/link.md); the manager tells Persona Link.
 func (h *Hub) linkEndpoints() link.Message {
 	msg := link.Message{Type: "endpoints", HubName: h.hubName(), MeshHubs: h.meshHubCount()}
 	for _, e := range h.endpointList() {

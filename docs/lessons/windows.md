@@ -1,6 +1,6 @@
 # Windows pitfalls
 
-Read this before changing the Windows node (#1090), or developing or testing `personad` on a Windows computer. See [windows.md](../windows.md) for the design and current status.
+Read this before changing the Windows node (#1090), or developing or testing `personad` on a Windows computer. See [windows.md](../operations/windows.md) for the design and current status.
 
 ## Development environment
 
@@ -20,12 +20,12 @@ Read this before changing the Windows node (#1090), or developing or testing `pe
   to read `RTL_USER_PROCESS_PARAMETERS` (command line, current directory, environment block). Pointers in the PEB are addresses in the other process: read bytes and extract fields using x/sys offsets.
   Do not read directly into a struct such as `windows.PEB` that contains Go pointer fields (the GC would treat the other process's addresses as its own pointers).
 - **Environment-variable values can contain spaces**: Whitespace-splitting regexes such as `envVarRe` are for `ps -E`; they truncate `C:\Users\A B\.claude`. On Windows, fetch the complete value by name (`pickEnv`); names are case-insensitive.
-- **There is no “foreground process group” or “suspended” state**: On Windows, the Orca host considers claude / codex foreground when its parent-process chain contains no agent process for the same pane. See [windows.md](../windows.md) (“Orca”).
+- **There is no “foreground process group” or “suspended” state**: On Windows, the Orca host considers claude / codex foreground when its parent-process chain contains no agent process for the same pane. See [windows.md](../operations/windows.md) (“Orca”).
 - **PIDs are reused quickly and do not increase monotonically**: Sorting by PID to put wrappers first does not work on Windows. Sort by start time; when walking the parent chain, require ancestors to have started before the current process.
 
 ## Scheduled tasks (automatic startup)
 
-`persona-link install` registers scheduled tasks on Windows ([windows.md](../windows.md), “Installation and automatic startup”). These findings were all tested on a physical Windows 11 machine on 2026-11-04:
+`persona-link install` registers scheduled tasks on Windows ([windows.md](../operations/windows.md), “Installation and automatic startup”). These findings were all tested on a physical Windows 11 machine on 2026-11-04:
 
 - **Standard users cannot register “Run whether user is logged on or not” tasks**: With S4U `LogonType` (no stored password), `Register-ScheduledTask` returns access denied (even for an unelevated administrator account).
   Only `InteractiveToken` works, running with the login session.
@@ -43,7 +43,7 @@ Read this before changing the Windows node (#1090), or developing or testing `pe
 
 ## Machine monitoring (sysmon)
 
-`sysmon/windows.go`; see [machines.md](../machines.md) for measurement definitions. Findings tested on a physical machine on 2026-11-04:
+`sysmon/windows.go`; see [machines.md](../server/machines.md) for measurement definitions. Findings tested on a physical machine on 2026-11-04:
 
 - **`NtQuerySystemInformation(SystemProcessorPerformanceInformation)` requires an exact-size buffer**: Given 4096 bytes, it returns `STATUS_INFO_LENGTH_MISMATCH`;
   increasing the buffer to the returned length does not help. It must be exactly “logical CPU count × 48 bytes.” Other classes (page files) allow increasing to the returned length. This was why all per-core data was initially empty.

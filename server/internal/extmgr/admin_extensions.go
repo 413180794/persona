@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The plugins page (docs/admin.md "Extensions", docs/extensions.md "Admin UI"): what `personad plugin` does on the hub's
+// The plugins page (docs/operations/admin.md "Extensions", docs/extensions/extensions.md "Admin UI"): what `personad plugin` does on the hub's
 // machine, from a signed-in admin session (CSRF and the admin scope already checked by adminRoutes). Installing runs
 // code on this machine; the admin password guards everything else here that is as strong (adding computers, issuing
 // credentials), so the session may. Every change is audited as the admin UI.

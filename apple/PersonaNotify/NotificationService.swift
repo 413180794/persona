@@ -2,7 +2,7 @@ import os
 import Foundation
 import UserNotifications
 
-/// Opens pushes that came through the relay (docs/push-relay.md): the relay only saw 「有新消息」 and a sealed payload; here
+/// Opens pushes that came through the relay (docs/operations/push-relay.md): the relay only saw 「有新消息」 and a sealed payload; here
 /// the phone decrypts it and shows the real title, text and buttons. Not opened in time, no key yet (the phone has not
 /// been unlocked since it started), or a payload that does not open: the fallback stays, never anything in the clear.
 final class NotificationService: UNNotificationServiceExtension, @unchecked Sendable {
@@ -16,7 +16,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             self.contentHandler = contentHandler
             fallback = request.content
         }
-        // Every group of hubs seals to its own key (docs/multi-hub.md「推送」): the one that opens it names the group.
+        // Every group of hubs seals to its own key (docs/protocol/multi-hub.md「推送」): the one that opens it names the group.
         let (content, outcome) = PushCrypto.service(request.content, keys: PushCrypto.allKeys)
         // Why a push stayed 「有新消息」 is the first question when one does (no content in the log).
         switch outcome {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build, install and launch Persona in the iPhone simulator, paired with the hub of the config (docs/config.md).
+# Build, install and launch Persona in the iPhone simulator, paired with the hub of the config (docs/operations/config.md).
 #   ./scripts/app/sim.sh [extra launch args...]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -8,8 +8,8 @@ python3 scripts/persona_config.py xcconfig
 RESOLVER=$(python3 scripts/persona_identity.py --service hub --prefix -)
 cd apple
 SIM="${SIM:-$PERSONA_SIM}"
-[ -n "$SIM" ] || { echo "set SIM=<udid or name> or \"simulator\" in the config (docs/config.md)" >&2; exit 2; }
-# boots it slim (SIM_PROFILE picks the simslim profile; a booted one is used as it is), docs/testing.md "Simulators"
+[ -n "$SIM" ] || { echo "set SIM=<udid or name> or \"simulator\" in the config (docs/operations/config.md)" >&2; exit 2; }
+# boots it slim (SIM_PROFILE picks the simslim profile; a booted one is used as it is), docs/operations/testing.md "Simulators"
 SIM=$(../scripts/app/sim-boot.sh "$SIM") || exit 1
 xcodegen generate -q
 xcodebuild -project Persona.xcodeproj -scheme Persona -destination "id=$SIM" -derivedDataPath ../build/DerivedData build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u

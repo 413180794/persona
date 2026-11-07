@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonElement
 import java.time.Instant
 import java.time.OffsetDateTime
 
-// Wire types mirror docs/protocol.md and tolerate optional enhancements according to D5.
+// Wire types mirror docs/protocol/protocol.md and tolerate optional enhancements according to D5.
 
 val JsonCodec = Json {
     ignoreUnknownKeys = true
@@ -55,7 +55,7 @@ data class Machine(
     @SerialName("node_version") val nodeVersion: String? = null,
     val system: MachineSystem? = null,
     @SerialName("node_mismatch") val nodeMismatch: Boolean? = null,
-    /** The terminal engine chosen for this machine (docs/engines.md); hubs send it always, herdr when never chosen. */
+    /** The terminal engine chosen for this machine (docs/integrations/engines.md); hubs send it always, herdr when never chosen. */
     @SerialName("engine") val engine: String = "herdr",
     /** What the node found there; empty from older hubs and nodes, and while the machine is offline. */
     @SerialName("engines") val engines: List<DetectedEngine> = emptyList(),
@@ -63,15 +63,15 @@ data class Machine(
     @SerialName("deploying") val deploying: Boolean = false,
     /** Why the last "Redeploy" did not work. */
     @SerialName("deploy_error") val deployError: String? = null,
-    /** ego lite on a Mac while the hub's browser plugin is on (docs/plan-ego-browser.md); absent otherwise. */
+    /** ego lite on a Mac while the hub's browser plugin is on (docs/plans/plan-ego-browser.md); absent otherwise. */
     @SerialName("browser") val browser: MachineBrowser? = null,
-    /** How Cua Driver is on this Mac (docs/computer-use.md), while the cua extension is on; null elsewhere. */
+    /** How Cua Driver is on this Mac (docs/extensions/computer-use.md), while the cua extension is on; null elsewhere. */
     @SerialName("computer") val computer: MachineComputer? = null,
     /** `pending` while it waits for the user to say it is theirs (feature machine_trust); absent: confirmed. */
     @SerialName("trust") val trust: String? = null,
     /** What kind of trouble [error] is: node_service_down | link_offline | never_connected | node_outdated. */
     @SerialName("error_code") val errorCode: String? = null,
-    /** The manager it belongs to (docs/managers.md「Ownership」); null from an older hub: the default manager. */
+    /** The manager it belongs to (docs/assistant/managers.md「Ownership」); null from an older hub: the default manager. */
     @SerialName("manager") val manager: String? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
@@ -127,7 +127,7 @@ data class MachineComputer(
     val note: String? = null,
 )
 
-/** One engine the node looked for on its machine (docs/protocol.md "Engines"); [name] and [note] are shown as given. */
+/** One engine the node looked for on its machine (docs/protocol/protocol.md "Engines"); [name] and [note] are shown as given. */
 @KeepGeneratedSerializer
 @Serializable(with = DetectedEngineSerializer::class)
 data class DetectedEngine(
@@ -138,7 +138,7 @@ data class DetectedEngine(
     @SerialName("note") val note: String? = null,
 )
 
-/** Unified agent state computed by the hub (docs/agent-states.md). */
+/** Unified agent state computed by the hub (docs/protocol/agent-states.md). */
 enum class AgentState(val wire: String, val priority: Int) {
     NeedsYou("needs_you", 0), Unread("unread", 1), Working("working", 2), Idle("idle", 3), Unknown("unknown", 4),
     Offline("offline", 5);
@@ -169,7 +169,7 @@ data class LoopInfo(
 )
 
 /**
- * A goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's `/goal`, whose Stop hook
+ * A goal the agent keeps working toward until it holds (docs/integrations/agent-goal.md): Claude Code's `/goal`, whose Stop hook
  * checks the condition each time it would stop, or a Codex thread goal.
  */
 @KeepGeneratedSerializer
@@ -212,7 +212,7 @@ data class BackgroundTask(
     val isWorkflow: Boolean get() = kind == "workflow"
 }
 
-/** What a session with a [Session.sourceKind] allows; a missing field is a refusal (docs/protocol.md "Codex sources and capabilities"). */
+/** What a session with a [Session.sourceKind] allows; a missing field is a refusal (docs/protocol/protocol.md "Codex sources and capabilities"). */
 @KeepGeneratedSerializer
 @Serializable(with = SessionCapabilitiesSerializer::class)
 data class SessionCapabilities(
@@ -225,7 +225,7 @@ data class SessionCapabilities(
 )
 
 /**
- * A session's work state (docs/agent-work.md): working, blocked on a named precondition ([on]: user, agent, external,
+ * A session's work state (docs/assistant/agent-work.md): working, blocked on a named precondition ([on]: user, agent, external,
  * transient), or done; [line] is what the lists show, [wakeAt] when the hub acts next on its own.
  */
 @KeepGeneratedSerializer
@@ -277,15 +277,15 @@ data class Session(
     @SerialName("slot_id") val slotId: String? = null,
     @WireTime @SerialName("state_since") val stateSince: String? = null,
     val subagents: List<Subagent>? = null,
-    /** The ports the agent's processes serve over HTTP (docs/ports.md "Discovering ports"): a dev server it started. */
+    /** The ports the agent's processes serve over HTTP (docs/operations/ports.md "Discovering ports"): a dev server it started. */
     val ports: List<ListeningPort>? = null,
     @SerialName("pane_id") val paneId: String? = null,
     @SerialName("agent") val agent: String? = null,
-    /** What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md). */
+    /** What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/integrations/runtimes.md). */
     @SerialName("agent_label") val agentLabelHint: String? = null,
     /**
      * Where a session comes from when it is not an agent in a terminal engine: codex_app_server, codex_history,
-     * identity_conflict, runtime (docs/protocol.md "Codex sources and capabilities"). Absent on older sources, which can do everything;
+     * identity_conflict, runtime (docs/protocol/protocol.md "Codex sources and capabilities"). Absent on older sources, which can do everything;
      * a session with a source can only do what [capabilities] explicitly allows (core:domain SessionSource).
      */
     @SerialName("source_kind") val sourceKind: String? = null,
@@ -307,10 +307,10 @@ data class Session(
     @SerialName("assistant") val assistant: Boolean = false,
     /** An assistant conversation put away (POST /api/v1/assistant/conversations/{id}/archive): kept, not listed. */
     @SerialName("archived") val archived: Boolean = false,
-    /** The manager it belongs to (docs/managers.md「Ownership」); null from an older hub: the default manager. */
+    /** The manager it belongs to (docs/assistant/managers.md「Ownership」); null from an older hub: the default manager. */
     @SerialName("manager") val manager: String? = null,
     /**
-     * Who opened an assistant conversation (docs/protocol.md "Origin of assistant conversations", #3264): user, channel, inbox, task, spawned,
+     * Who opened an assistant conversation (docs/protocol/protocol.md "Origin of assistant conversations", #3264): user, channel, inbox, task, spawned,
      * lark_agent, extension, or one this app doesn't know yet; null is the user's (older hubs never say).
      */
     @SerialName("origin") val origin: String? = null,
@@ -321,7 +321,7 @@ data class Session(
     @SerialName("slot_name") val slotName: String? = null,
     @SerialName("slot_index") val slotIndex: Int? = null,
     /**
-     * The pane's place in its tab (#2320; docs/agent-states.md "Several panes in one tab"): 0 is the top-left pane, the one
+     * The pane's place in its tab (#2320; docs/protocol/agent-states.md "Several panes in one tab"): 0 is the top-left pane, the one
      * the others were split from (the tab's initiator). Absent when the host gives no layout.
      */
     @SerialName("pane_index") val paneIndex: Int? = null,
@@ -336,19 +336,19 @@ data class Session(
     @SerialName("queued") val queued: List<String>? = null,
     @SerialName("background") val background: List<BackgroundTask>? = null,
     /**
-     * Its Workflow runs of the last day, newest first (docs/agent-states.md "Background workflow, Monitor"): a running one is
+     * Its Workflow runs of the last day, newest first (docs/protocol/agent-states.md "Background workflow, Monitor"): a running one is
      * in [background] too, as kind `workflow`. Older hubs never send it (null).
      */
     val workflows: List<Workflow>? = null,
     @SerialName("loop") val loop: LoopInfo? = null,
-    /** The goal it works toward, when one is set (docs/agent-goal.md); older hubs never send it. */
+    /** The goal it works toward, when one is set (docs/integrations/agent-goal.md); older hubs never send it. */
     val goal: GoalInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
     /** What its last reply asks the user, when its closing words put a question or a decision to them (#5096). */
     @SerialName("asks") val asks: String? = null,
     /**
-     * It stopped on a question to the user nobody answered yet (docs/agent-states.md "Awaiting your reply", #5096): set by the hub
+     * It stopped on a question to the user nobody answered yet (docs/protocol/agent-states.md "Awaiting your reply", #5096): set by the hub
      * on a stopped session (Unread or Seen). Older hubs never send it.
      */
     @SerialName("awaits_reply") val awaitsReply: Boolean = false,
@@ -361,30 +361,30 @@ data class Session(
     @SerialName("attention_reason") val attentionReason: String? = null,
     /**
      * Its host stopped the turn on an error it will not retry by itself (a botmux notice), until a message goes to it
-     * (docs/protocol.md). The chat offers a retry over the composer; it is not a wait for the user.
+     * (docs/protocol/protocol.md). The chat offers a retry over the composer; it is not a wait for the user.
      */
     @SerialName("failure_reason") val failureReason: String? = null,
-    /** Where its host shows it (a botmux session's Feishu topic, docs/engines.md "botmux"); opened only as [externalLink]. */
+    /** Where its host shows it (a botmux session's Feishu topic, docs/integrations/engines.md "botmux"); opened only as [externalLink]. */
     @SerialName("external_url") val externalUrl: String? = null,
-    /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
+    /** Where it stands in its work (docs/assistant/agent-work.md): set by the hub once it triaged a stopped turn. */
     val work: WorkState? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
     /** "Branch to new chat" works for it (a Claude Code conversation, node/fork.go); older nodes never say so. */
     @SerialName("can_fork") val canFork: Boolean = false,
     @SerialName("rev") val rev: Long? = null,
     @SerialName("suggestion") val suggestion: String? = null,
-    /** Persona is still opening its tab and starting the agent (docs/protocol.md "New session"); sends wait for it. */
+    /** Persona is still opening its tab and starting the agent (docs/protocol/protocol.md "New session"); sends wait for it. */
     @SerialName("starting") val starting: Boolean = false,
     /** Why starting it failed; the session is offline and sends get the same error. */
     @SerialName("start_error") val startError: String? = null,
     /**
-     * The channels messages came into this conversation from, newest first (`wechat`, `feishu`; docs/channels.md
+     * The channels messages came into this conversation from, newest first (`wechat`, `feishu`; docs/extensions/channels.md
      * "Source marks"): the conversation list draws the latest's mark. Older hubs never send it.
      */
     @SerialName("channels") val channels: List<String> = emptyList(),
     val todo: SessionTodo? = null,
     /**
-     * The last compaction the user asked for in an assistant conversation (POST …/compact, docs/assistant.md "Manual compaction"):
+     * The last compaction the user asked for in an assistant conversation (POST …/compact, docs/assistant/assistant.md "Manual compaction"):
      * running, then done or failed. Kept until the next one; older hubs never send it.
      */
     val compaction: SessionCompaction? = null,
@@ -519,7 +519,7 @@ data class Item(
     /** On a notice: the context was compacted here (Claude Code's compact_boundary); the chat draws it as a divider. */
     val compact: CompactBoundary? = null,
     /** A message Persona typed in for the model (a task's notice, a scheduled run…), not by the user; the hub marks it
-     *  (docs/protocol.md "Messages Persona injects"), older hubs do not (core/domain `injectedOf`). */
+     *  (docs/protocol/protocol.md "Messages Persona injects"), older hubs do not (core/domain `injectedOf`). */
     val injected: Injected? = null,
 )
 
@@ -609,7 +609,7 @@ data class Interaction(
     @SerialName("machine_id") val machineId: String = "",
     @SerialName("session_id") val sessionId: String = "",
     @SerialName("session_title") val sessionTitle: String? = null,
-    /** The task its agent works for (docs/unified-entry.md), named by the hub. */
+    /** The task its agent works for (docs/assistant/unified-entry.md), named by the hub. */
     @SerialName("task_title") val taskTitle: String? = null,
     @SerialName("cwd") val cwd: String? = null,
     @WireEnum("question", "plan", "permission", "screen", "elicitation", "unknown")
@@ -633,7 +633,7 @@ data class Interaction(
     @SerialName("mcp_server_name") val mcpServerName: String? = null,
     @SerialName("mcp_config_source") val mcpConfigSource: String? = null,
     val elicitation: Elicitation? = null,
-    /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/runtimes.md). */
+    /** Who asks when it is not Claude Code: "codex", "traex", or an agent runtime's agent ("dsh"; docs/integrations/runtimes.md). */
     val agent: String? = null,
     /** What the hub calls an agent this app does not know ("DSH"). */
     @SerialName("agent_label") val agentLabelHint: String? = null,

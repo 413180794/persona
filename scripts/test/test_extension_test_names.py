@@ -19,7 +19,7 @@ class ExtensionTestNames(unittest.TestCase):
     def test_mock_uses_the_same_extension_term(self):
         mock = (ROOT / "scripts/mock/mock_hub.py").read_text()
         self.assertIn('os.environ.get("MOCK_EXTENSIONS"', mock)
-        docs = (ROOT / "docs/testing.md").read_text()
+        docs = (ROOT / "docs/operations/testing.md").read_text()
         self.assertIn("MOCK_EXTENSIONS=1", docs)
         self.assertIn("TEST_RUNNER_PERSONA_EXTENSIONS_HUB", docs)
 

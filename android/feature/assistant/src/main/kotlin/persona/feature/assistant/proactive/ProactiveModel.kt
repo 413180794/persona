@@ -31,7 +31,7 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
- * What "Proactive" needs from the hub (docs/protocol.md, the assistant's tasks and runs). A seam of its own, so the page
+ * What "Proactive" needs from the hub (docs/protocol/protocol.md, the assistant's tasks and runs). A seam of its own, so the page
  * and its tests do not follow every change of the wider [AssistantManagement].
  */
 internal interface ProactiveApi {

@@ -8,7 +8,7 @@ import (
 )
 
 // A health conversation's card says on the lock screen that the health space wants you, not what it is about nor the
-// conversation's title (docs/health.md "Outbound"); other cards are as before.
+// conversation's title (docs/assistant/health.md "Outbound"); other cards are as before.
 func TestHealthCardPushHidesContent(t *testing.T) {
 	alert := func(ix proto.Interaction) map[string]any {
 		return interactionPayload(ix, "server")["aps"].(map[string]any)["alert"].(map[string]any)

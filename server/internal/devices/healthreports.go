@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// healthReportCall asks the machine about the health space's reports (docs/health.md"Health reports"), this manager's
+// healthReportCall asks the machine about the health space's reports (docs/assistant/health.md"Health reports"), this manager's
 // (another than the built-in names its own space, health-<id>); a node that predates them, or other managers' health
 // spaces (nodeproto.HealthSpaces: it would answer about the built-in's), says so in words the app can show.
 func (d *Devices) healthReportCall(w http.ResponseWriter, r *http.Request, m *Machine, method string, params map[string]any) {

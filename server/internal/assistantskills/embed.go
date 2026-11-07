@@ -1,5 +1,5 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
-// docs/hub-update.md "Skills out of the binary"): the user's own, kept in ~/.persona/skills/<name> on the machine that runs
+// docs/operations/hub-update.md "Skills out of the binary"): the user's own, kept in ~/.persona/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
 // Persona may redistribute (persona-office, personad office's): a copied one, like an extension's skill a user put
 // there by hand, lives in the user's space. personad never writes that space, so an update cannot touch the user's skills.
@@ -30,7 +30,7 @@ var builtin, _ = fs.Sub(embedded, "builtin")
 
 // Redistributable is every built-in skill and why Persona may ship it (TestBuiltinsAreRedistributable).
 var Redistributable = map[string]string{
-	"persona-office": "Persona's own (personad office's skill, docs/office.md)",
+	"persona-office": "Persona's own (personad office's skill, docs/assistant/office.md)",
 }
 
 // ForAgents are the built-in skills the agents Persona starts get too, as the plugin WritePlugin makes (the
@@ -257,7 +257,7 @@ func copyBuiltin(name, dir string) error {
 // pluginManifest is the plugin's .claude-plugin/plugin.json.
 const pluginManifest = `{
   "name": "persona",
-  "description": "Persona's skills for the agents it starts (docs/office.md)",
+  "description": "Persona's skills for the agents it starts (docs/assistant/office.md)",
   "version": "%s"
 }
 `

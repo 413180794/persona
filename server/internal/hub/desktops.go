@@ -8,7 +8,7 @@ import (
 
 // Desktop apps (the Mac app) on the hub, like WeChat's "WeChat for Mac is logged in": a desktop registers as one (register_desktop)
 // instead of as the phone, so the phone keeps the phone_* tools and its wake pushes; every client hears which
-// desktops are connected (the desktops event, docs/protocol.md), and a phone that turned on "Phone Muted"
+// desktops are connected (the desktops event, docs/protocol/protocol.md), and a phone that turned on "Phone Muted"
 // (NotifyPrefs.MuteWhileDesktop) gets no alert pushes while one is.
 
 // desktopView is one connected desktop as the apps see it.

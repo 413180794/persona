@@ -43,7 +43,7 @@ interface AssistantManagement {
      */
     suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult =
         throw UnsupportedOperationException("New main chat unavailable")
-    /** Scheduled tasks (GET /api/v1/assistant/tasks): one table of once / daily / interval tasks, docs/assistant.md "Scheduled tasks". */
+    /** Scheduled tasks (GET /api/v1/assistant/tasks): one table of once / daily / interval tasks, docs/assistant/assistant.md "Scheduled tasks". */
     suspend fun tasks(): List<ScheduledTask>
     /** Creates [task] (no id yet, POST) or saves what the user edits on it (PUT); returns it as the hub has it. */
     suspend fun saveTask(task: ScheduledTask): ScheduledTask
@@ -66,7 +66,7 @@ interface AssistantManagement {
 }
 
 /**
- * One scheduled task (docs/protocol.md `Task`). Read in full from the hub; [editable] is what the app writes back, so the
+ * One scheduled task (docs/protocol/protocol.md `Task`). Read in full from the hub; [editable] is what the app writes back, so the
  * hub's own fields (last / next run, its own conversation, who made it) are never sent.
  */
 @Serializable
@@ -131,7 +131,7 @@ data class ScheduledTask(
         const val ONCE = "once"
         const val DAILY = "daily"
         const val INTERVAL = "interval"
-        /** "Only when it asks to" (docs/assistant.md "Push when done"). */
+        /** "Only when it asks to" (docs/assistant/assistant.md "Push when done"). */
         const val PUSH_ASKED = "asked"
         /** The hello feature of a hub that reads and writes [push]. */
         const val PUSH_FEATURE = "task_push"

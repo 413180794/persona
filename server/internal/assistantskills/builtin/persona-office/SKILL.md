@@ -6,7 +6,7 @@ description: 生成 Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）�
 # Office 文件（persona-office）
 
 先把内容写成 Markdown（文档、演示文稿）或 JSON / CSV（表格），再用这个 skill 目录里的 `scripts/office.sh` 转成 Office 文件。
-它调这台机器上的 `personad office`，详细说明见 Persona 仓库的 `docs/office.md`。
+它调这台机器上的 `personad office`，详细说明见 Persona 仓库的 `docs/assistant/office.md`。
 
 ## 步骤
 

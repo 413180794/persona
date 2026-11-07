@@ -39,7 +39,7 @@ import java.time.ZoneOffset
 import java.util.Locale
 
 /**
- * Machine monitor and a machine's page in each of the app's languages, Glass and Brief, light and dark (docs/i18n.md). Written
+ * Machine monitor and a machine's page in each of the app's languages, Glass and Brief, light and dark (docs/protocol/i18n.md). Written
  * as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)

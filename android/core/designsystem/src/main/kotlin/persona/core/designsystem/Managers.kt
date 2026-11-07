@@ -29,7 +29,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 
-// Several managers on one hub (docs/managers.md step 4): the pages that list what managers own group it by manager,
+// Several managers on one hub (docs/assistant/managers.md step 4): the pages that list what managers own group it by manager,
 // and the assistant page switches between them. With one installed manager none of this draws anything.
 
 /**

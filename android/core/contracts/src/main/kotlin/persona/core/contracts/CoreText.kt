@@ -1,7 +1,7 @@
 package persona.core.contracts
 
 /**
- * Words the pure-JVM modules (contracts, domain, hub) hand to the screen, by name (docs/i18n.md): they have no
+ * Words the pure-JVM modules (contracts, domain, hub) hand to the screen, by name (docs/protocol/i18n.md): they have no
  * resources, so Android modules turn a [CoreText] into the shown language (core/designsystem `CoreTexts.kt`,
  * strings in `strings_core.xml` in `res/values`, `values-zh` and `values-ja`). [args] fill the placeholders in order; an argument that is itself a
  * [CoreText] is resolved first. Keys whose text is a plural take the count as the first argument.

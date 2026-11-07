@@ -1,4 +1,4 @@
-// Persona's look in the page (avatar, docs/persona.md, docs/extensions.md "Avatar"; the app's PersonaStore / PersonaViews /
+// Persona's look in the page (avatar, docs/apple/persona.md, docs/extensions/extensions.md "Avatar"; the app's PersonaStore / PersonaViews /
 // PersonaPicker): the looks the hub offers (GET /looks: the built-in ones, its packages and the extensions'), the one
 // chosen — the user's, kept on the hub so every device shows it — and its face (a still avatar) and dot (the state's
 // APNG, which the browser animates by itself). The default dumpling (MochiFace) is drawn locally and also shows while

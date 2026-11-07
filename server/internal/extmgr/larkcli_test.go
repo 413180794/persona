@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// With only lark-cli in hub.json (docs/plan-lark-cli.md), the assistant's machine learns how to run it, and there is
+// With only lark-cli in hub.json (docs/plans/plan-lark-cli.md), the assistant's machine learns how to run it, and there is
 // no gateway token to hand out (asking the Lark gateway would fail: it is not configured). A node's assistant.lark is the
 // assistant's (its fleet_tools.go gives it to its own machine only); what it hands over is the extensions' answer.
 func TestAssistantLarkWithLarkCLIOnly(t *testing.T) {

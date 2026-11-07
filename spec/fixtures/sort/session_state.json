@@ -7,7 +7,7 @@
       "description": "客户端优先使用 state，缺失时只按 status 回退。",
       "source": [
         "ios/Shared/Models.swift: Session.init(from:), AgentState.init(status:)",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "sessions": [

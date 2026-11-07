@@ -8,8 +8,8 @@ import (
 	wechat "github.com/nwverse/persona/server/internal/wechat/spec"
 )
 
-// wechatManifest is the WeChat bot as a built-in plugin (docs/wechat.md): the program at path, contributing its
-// connector (a status and a QR sign-in, known before the program ever runs) and its channel (docs/channels.md). It runs
+// wechatManifest is the WeChat bot as a built-in plugin (docs/extensions/wechat.md): the program at path, contributing its
+// connector (a status and a QR sign-in, known before the program ever runs) and its channel (docs/extensions/channels.md). It runs
 // while the connector is on. The hub's pipeline does the rest (where a message goes, the turn, what
 // is asked): the program only talks to WeChat, and needs no hub token.
 func wechatManifest(h *Manager, path string) *extension.Manifest {

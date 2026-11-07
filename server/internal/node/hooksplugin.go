@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-// Persona's hooks (questions, permission requests and turn ends go to the phone; docs/claude-integration.md) reach
+// Persona's hooks (questions, permission requests and turn ends go to the phone; docs/integrations/claude-integration.md) reach
 // the claude it starts as a plugin of their own, loaded for that session only (#1411). A start can give claude any
 // number of --plugin-dir, each adding to the rest, but Claude Code keeps only the last --settings: a launcher (an
 // alias, or a function in ~/.zshrc, whose words the node cannot read) may pass its own, with the gateway, its token

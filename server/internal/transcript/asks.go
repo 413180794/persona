@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-// What an agent's last reply asks the user (docs/agent-states.md "Awaiting your reply", #5096): its closing question ("要不要推到
+// What an agent's last reply asks the user (docs/protocol/agent-states.md "Awaiting your reply", #5096): its closing question ("要不要推到
 // beta？", "A 还是 B？"), or a closing sentence that hands a decision over ("你定一下用哪个方案", "Let me know which one").
 // Only words: no model is asked, so it costs nothing and runs on every list. A reply that only reports ("修好了，测试都过了")
 // asks nothing. The node reads the whole reply (the list's last_text is only its first 200 runes, and the question

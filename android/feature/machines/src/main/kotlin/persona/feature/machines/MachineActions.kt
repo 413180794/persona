@@ -30,7 +30,7 @@ internal sealed interface MachineNotice {
     data class DeployFailed(val reason: UiText) : MachineNotice
     /** "Also show botmux sessions" was not saved; the switch is back where it was. */
     data class BotmuxFailed(val reason: UiText) : MachineNotice
-    /** Move to…: the computer is [name]'s now (docs/managers.md). */
+    /** Move to…: the computer is [name]'s now (docs/assistant/managers.md). */
     data class Moved(val name: String) : MachineNotice
     data class MoveFailed(val reason: UiText) : MachineNotice
 

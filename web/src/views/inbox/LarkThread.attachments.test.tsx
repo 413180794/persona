@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Pictures and files in the Feishu chat's composer (#2902, docs/lark-attachments.md): offered only when the hub's
+// Pictures and files in the Feishu chat's composer (#2902, docs/extensions/lark-attachments.md): offered only when the hub's
 // extension sends them, sent after the text through the hub's own routes, and kept in the box when they quote a message
 // the extension cannot route.
 import { act } from "react";

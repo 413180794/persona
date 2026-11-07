@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Orca's structured sessions (docs/plan-orca-support.md "Structured sessions"): Orca's own chats around Claude Code, with no
+// Orca's structured sessions (docs/plans/plan-orca-support.md "Structured sessions"): Orca's own chats around Claude Code, with no
 // terminal, so not the Orca host's (hostorca.go lists terminals). While the machine's engine is Orca the node runs a
 // bridge for them in its own process: a runtime (runtimes.go) on one end of a pipe into the runtime host, Orca's
 // agentSession.* on the other. A session's content is its Claude transcript here (runtimetranscript.go); the bridge
@@ -277,7 +277,7 @@ func (b *orcaBridge) head(ctx context.Context, orca string, rev int64) *orcaHead
 var orcaModes = map[string]string{"default": "ask", "acceptEdits": "accept-edits", "auto": "auto",
 	proto.ModeBypass: "full-access"}
 
-// orcaRow is the runtime.sessions row of a chat (docs/runtimes.md).
+// orcaRow is the runtime.sessions row of a chat (docs/integrations/runtimes.md).
 func orcaRow(w orcart.Worktree, a orcart.AgentRow, h *orcaHead) map[string]any {
 	title := firstOf(a.ConversationName, a.DisplayName, a.TaskTitle, firstLine(a.Prompt), filepath.Base(w.Path))
 	updated := time.Now().UTC()

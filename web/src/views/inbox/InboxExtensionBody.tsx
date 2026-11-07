@@ -1,4 +1,4 @@
-// An inbox item's body drawn by the extension whose connector brought it in (docs/extensions.md "Inbox items", placement
+// An inbox item's body drawn by the extension whose connector brought it in (docs/extensions/extensions.md "Inbox items", placement
 // inbox_item): its View in place of the item's own body, under the detail's own header (title, "Done", the summary,
 // "AI draft reply" / "Hand to AI"), which stays the web's. The hub is told which item (context.item) and looks it up itself;
 // the extension draws it again when the item changes. When it cannot draw it — a device that may only read, the item

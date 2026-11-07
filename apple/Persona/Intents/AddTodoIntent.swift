@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// "New To-Do": writes a todo (docs/todos.md) straight to the hub, so Siri, the Action button or a shortcut can note
+/// "New To-Do": writes a todo (docs/assistant/todos.md) straight to the hub, so Siri, the Action button or a shortcut can note
 /// something down without opening the app. It goes to the hub group the app has selected, where the todos page reads.
 struct AddTodoIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "New To-Do"

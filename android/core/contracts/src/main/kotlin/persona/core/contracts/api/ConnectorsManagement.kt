@@ -96,7 +96,7 @@ data class LarkAccounts(
 )
 
 /**
- * One of `GET /api/v1/connectors`: a source the hub reads (GitHub…) and how it is doing (docs/protocol.md "Connector API").
+ * One of `GET /api/v1/connectors`: a source the hub reads (GitHub…) and how it is doing (docs/protocol/protocol.md "Connector API").
  */
 @Serializable
 data class HubConnector(
@@ -114,7 +114,7 @@ data class HubConnector(
     val enabled: Boolean? = null,
     val archive: Boolean? = null,
     val inbox: Boolean? = null,
-    /** Whose it is (several managers: the hub's merged list stamps each one, docs/managers.md); null: the default's. */
+    /** Whose it is (several managers: the hub's merged list stamps each one, docs/assistant/managers.md); null: the default's. */
     val manager: String? = null,
 )
 
@@ -127,7 +127,7 @@ data class ConnectorDataDeleted(
 )
 
 /**
- * Settings › Connectors (docs/connectors.md, docs/mail.md): managing mail accounts, Google OAuth,
+ * Settings › Connectors (docs/extensions/connectors.md, docs/extensions/mail.md): managing mail accounts, Google OAuth,
  * Lark gateway Feishu connection status and accounts, and general hub connectors.
  */
 interface ConnectorsManagement {
@@ -161,7 +161,7 @@ interface ConnectorsManagement {
     /** Settings › Translation's chat picker: `GET /api/v1/lark/pinned` (when the hub has it), then `/api/v1/lark/conversations?scope=chats`. */
     suspend fun larkChatChoices(): List<LarkChatChoice>
 
-    // Any connector with `login` / `threads` (docs/protocol.md "Connector API"): what the hub hands down, nothing per source.
+    // Any connector with `login` / `threads` (docs/protocol/protocol.md "Connector API"): what the hub hands down, nothing per source.
 
     /**
      * `POST /api/v1/connectors/{id}/login` `{step, values}`: one sign-in step ([step] empty starts over). The answer has
@@ -185,7 +185,7 @@ interface ConnectorsManagement {
     suspend fun connectorThreadReply(id: String, thread: String, action: String, text: String, replyTo: String?): ConnectorReplyOutcome =
         throw UnsupportedOperationException("Connector replies unavailable")
 
-    // Outlook's "Sign in with Microsoft" (docs/mail.md "Connecting Outlook"): the client ID the user registered lives on the hub.
+    // Outlook's "Sign in with Microsoft" (docs/extensions/mail.md "Connecting Outlook"): the client ID the user registered lives on the hub.
 
     /** `GET /api/v1/mail/oauth/microsoft/config`. */
     suspend fun microsoftConfig(): MicrosoftConfig = throw UnsupportedOperationException("Outlook sign-in unavailable")

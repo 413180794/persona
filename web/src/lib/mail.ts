@@ -1,4 +1,4 @@
-// Mail beyond the inbox's own reply (docs/mail.md): writing a new mail or answering one by hand (the app's ComposeView),
+// Mail beyond the inbox's own reply (docs/extensions/mail.md): writing a new mail or answering one by hand (the app's ComposeView),
 // and marking a mail read once it is opened (MailDetailView). The accounts are read once per page load and shared.
 
 import { t } from "../i18n";
@@ -112,7 +112,7 @@ export function sendBody(d: ComposeDraft) {
   };
 }
 
-/** Sends as one of manager's accounts (another manager's mail is its own, docs/managers.md "Clients"; none: the default's). */
+/** Sends as one of manager's accounts (another manager's mail is its own, docs/assistant/managers.md "Clients"; none: the default's). */
 export async function sendMail(d: ComposeDraft, manager?: string): Promise<void> {
   await api("/mail/send", { method: "POST", json: sendBody(d), headers: itemHeaders(manager) });
 }

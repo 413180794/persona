@@ -1,4 +1,4 @@
-// The live screen's page, /screen/<machine id> (docs/computer-use.md "Live view"): which machine, and which token.
+// The live screen's page, /screen/<machine id> (docs/extensions/computer-use.md "Live view"): which machine, and which token.
 // The app opens it in its web view with its own device token in the fragment (#token=…&embed=1): that one stays in
 // this page's memory, is never stored and never traded for a browser token (the web's sign-in link would mint one per
 // open). A signed-in browser uses its own.
@@ -39,7 +39,7 @@ export function screenTarget(href: string, stored: () => string = getToken): { t
   return { target: { mid, token: token || stored(), embedded, name: name || mid, keep, unlock }, rest };
 }
 
-/** The WebSocket that carries the Mac's VNC (its port 5900) through the hub's port relay (docs/ports.md). */
+/** The WebSocket that carries the Mac's VNC (its port 5900) through the hub's port relay (docs/operations/ports.md). */
 export function screenSocket(location: { protocol: string; host: string }, mid: string, token: string): string {
   const scheme = location.protocol === "https:" ? "wss" : "ws";
   return `${scheme}://${location.host}${BASE}/api/v1/machines/${encodeURIComponent(mid)}/ports/5900/connect?token=${encodeURIComponent(token)}`;

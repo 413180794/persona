@@ -3,7 +3,7 @@ package persona.core.contracts
 import org.junit.Assert.*
 import org.junit.Test
 
-// docs/hub-update.md "In the app": the hub broadcasts {"type":"hub_update","update":<GET /api/v1/hub/update>} on every change.
+// docs/operations/hub-update.md "In the app": the hub broadcasts {"type":"hub_update","update":<GET /api/v1/hub/update>} on every change.
 class HubUpdateContractTest {
     @Test fun anUpdateEventDecodes() {
         val event = ServerEvent.decode("""{"type":"hub_update","update":{"version":"1.42.0","build":420,"channel":"release",

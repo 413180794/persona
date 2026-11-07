@@ -618,7 +618,7 @@ func checkAgentSandbox(dir string) DoctorCheck {
 		switch sup.State {
 		case sandbox.AgentActive:
 			c.Detail += "；本机可以开启"
-			c.Hint = "开启：touch " + filepath.Join(dir, sandbox.AgentOnFile) + "；见 docs/agent-sandbox.md"
+			c.Hint = "开启：touch " + filepath.Join(dir, sandbox.AgentOnFile) + "；见 docs/server/agent-sandbox.md"
 		case sandbox.AgentUnsupported:
 			c.Detail += "；不支持：" + sup.Why
 		default:
@@ -648,7 +648,7 @@ func checkAgentSandbox(dir string) DoctorCheck {
 	return c
 }
 
-// agentSandboxLimits is what the doctor reminds of while the sandbox is on (docs/agent-sandbox.md): what it does not
+// agentSandboxLimits is what the doctor reminds of while the sandbox is on (docs/server/agent-sandbox.md): what it does not
 // stop, and what stops working in it.
 const agentSandboxLimits = "挡不住 docker；沙箱里 ps、top、sudo 这类 setuid 程序起不来"
 

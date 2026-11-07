@@ -39,7 +39,7 @@ private fun feishuBotStatus(status: FeishuBotStatus?): Status = when {
 }
 
 /**
- * Settings › Lark bot (#2806, iOS `FeishuBotView`, docs/bots.md): how the bot is doing and its switch, its app
+ * Settings › Lark bot (#2806, iOS `FeishuBotView`, docs/extensions/bots.md): how the bot is doing and its switch, its app
  * credentials (verified by the hub before it keeps them), the agents chatted with in Feishu and how to make the bot.
  * Pairing, its features and a test message are on its channel's page (Settings › Channels › Lark bot), which links here.
  */

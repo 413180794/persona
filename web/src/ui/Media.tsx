@@ -1,4 +1,4 @@
-// Video and audio from a machine (docs/web.md "Media", #1422): played straight from file/download, which the browser
+// Video and audio from a machine (docs/web/web.md "Media", #1422): played straight from file/download, which the browser
 // reads by Range, so seeking never waits for the whole file. A codec this browser lacks (HEVC outside Safari, most
 // .mkv) says so and offers the download instead of a black box.
 import { useState } from "react";

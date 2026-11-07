@@ -1,6 +1,6 @@
 import Foundation
 
-// Wire types mirroring docs/protocol.md. Explicit CodingKeys everywhere: key strategies would also rewrite
+// Wire types mirroring docs/protocol/protocol.md. Explicit CodingKeys everywhere: key strategies would also rewrite
 // arbitrary JSON keys inside tool inputs and answer dictionaries.
 
 nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
@@ -25,7 +25,7 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     /// The hub is installing its own build there (Redeploy); deployError: why the last try did not work.
     var deploying: Bool?
     var deployError: String?
-    /// OS and hardware (docs/machines.md); nil from hubs before machine monitoring, or a machine never connected.
+    /// OS and hardware (docs/server/machines.md); nil from hubs before machine monitoring, or a machine never connected.
     var system: MachineSystem?
     var engine: MachineEngine = .herdr
     var engines: [DetectedEngine] = []
@@ -33,13 +33,13 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var computer: MachineComputer? = nil
     /// Its ego lite for the assistant; nil while the hub's plugin ego is off or it is not a Mac.
     var browser: MachineBrowser? = nil
-    /// Hub mesh (docs/plan-hub-mesh.md 2.6): the hub that owns the computer in its group, its name, the computer's own
+    /// Hub mesh (docs/archive/operations/plan-hub-mesh.md 2.6): the hub that owns the computer in its group, its name, the computer's own
     /// id across hubs, and how the hub reaches it. nil from hubs before the mesh.
     var hubID: String? = nil
     var hubName: String? = nil
     var machineUID: String? = nil
     var route: MachineHubRoute? = nil
-    /// The group of paired hubs this machine came from (docs/multi-hub.md); nil for the default group. The app's own,
+    /// The group of paired hubs this machine came from (docs/protocol/multi-hub.md); nil for the default group. The app's own,
     /// never sent by a hub.
     var hubGroup: String? = nil
     /// With several groups, the group's name, for lists to say where a machine is (`title`); nil with one group.
@@ -107,7 +107,7 @@ extension Machine {
     }
 }
 
-/// How the hub the app is connected to reaches a machine (docs/plan-hub-mesh.md 2.6): directly (`local`, `ssh`,
+/// How the hub the app is connected to reaches a machine (docs/archive/operations/plan-hub-mesh.md 2.6): directly (`local`, `ssh`,
 /// `tailcat`, `link`) or through another hub of its group (`peer`, `hops` links away).
 nonisolated struct MachineHubRoute: Codable, Hashable, Sendable {
     var via: String
@@ -151,7 +151,7 @@ nonisolated extension Machine {
     }
 }
 
-/// A machine across groups of hubs (docs/multi-hub.md): its group and the id its hub gives it.
+/// A machine across groups of hubs (docs/protocol/multi-hub.md): its group and the id its hub gives it.
 nonisolated struct MachineRef: Hashable, Sendable, Codable {
     var group: String
     var id: String
@@ -181,7 +181,7 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
     static let herdrApp = Self(rawValue: "herdr-core")
     static let herdrBoth = Self(rawValue: "herdr-both")
     static let orca = Self(rawValue: "orca")
-    /// Paseo's agents (docs/paseo.md): no terminal; the node runs a bridge to the Paseo daemon.
+    /// Paseo's agents (docs/integrations/paseo.md): no terminal; the node runs a bridge to the Paseo daemon.
     static let paseo = Self(rawValue: "paseo")
     static let allCases: [Self] = [.herdr, .herdrApp, .herdrBoth, .orca, .paseo]
     var id: String { rawValue }
@@ -224,7 +224,7 @@ nonisolated struct DetectedEngine: Codable, Hashable, Identifiable, Sendable {
     var note: String?
 }
 
-/// A Mac the assistant may operate through Cua Driver (the hub's plugin cua, docs/computer-use.md). `enabled`: the user
+/// A Mac the assistant may operate through Cua Driver (the hub's plugin cua, docs/extensions/computer-use.md). `enabled`: the user
 /// turned it on for this machine; the rest is what its node found when last asked, and only for an enabled one.
 nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var enabled = false
@@ -299,7 +299,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     }
 }
 
-/// A Mac's ego lite, the browser the assistant drives (the hub's plugin ego, docs/plan-ego-browser.md). `enabled`: the
+/// A Mac's ego lite, the browser the assistant drives (the hub's plugin ego, docs/plans/plan-ego-browser.md). `enabled`: the
 /// user turned it on for this machine; the rest is what its node found when last asked.
 nonisolated struct MachineBrowser: Codable, Hashable, Sendable {
     var enabled = false
@@ -352,8 +352,8 @@ nonisolated struct MachineBrowser: Codable, Hashable, Sendable {
     var checked: Bool { ready || installed || !(note ?? "").isEmpty }
 }
 
-/// One install or grant the node runs for the machine page (docs/computer-use.md「一键安装」).
-/// An app the user always allowed the assistant to operate on a Mac (docs/computer-use.md「锁屏、防睡眠、按 App 批准」c).
+/// One install or grant the node runs for the machine page (docs/extensions/computer-use.md「一键安装」).
+/// An app the user always allowed the assistant to operate on a Mac (docs/extensions/computer-use.md「锁屏、防睡眠、按 App 批准」c).
 nonisolated struct ComputerApp: Codable, Hashable, Sendable, Identifiable {
     var bundleID: String
     var name: String
@@ -383,9 +383,9 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
     var name: String
     var baseURL: String?
     var model: String?
-    /// "codex" for plain codex or an alias running it (docs/codex.md「从手机新建」); nil: Claude Code.
+    /// "codex" for plain codex or an alias running it (docs/integrations/codex.md「从手机新建」); nil: Claude Code.
     var agent: String? = nil
-    /// An agent runtime's launcher that can run the Persona assistant (DSH's, docs/runtimes.md「助手」).
+    /// An agent runtime's launcher that can run the Persona assistant (DSH's, docs/integrations/runtimes.md「助手」).
     var assistant: Bool? = nil
     var id: String { name }
     /// A Codex start sends its first message with it and waits for the thread Codex makes.
@@ -407,7 +407,7 @@ extension Launcher {
 }
 
 /// What a launcher's agent offers in its own /model menu (`GET /api/v1/machines/{id}/launchers/{name}/models`,
-/// docs/model-config.md「新建 Agent 选模型」): Claude Code's aliases and its gateway's models, or Codex's model/list.
+/// docs/assistant/model-config.md「新建 Agent 选模型」): Claude Code's aliases and its gateway's models, or Codex's model/list.
 nonisolated struct LauncherModels: Codable, Hashable, Sendable {
     /// What the launcher runs: claude, codex, traex, a runtime's.
     var agent: String
@@ -533,7 +533,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var workspaceID: String?
     var agentName: String?
     /// The coding agent in the pane: "claude" (or nil, from older hubs), "codex" or "traex" (TRAEX, an in-house Codex fork);
-    /// for a session a runtime lists (DSH…, docs/runtimes.md), the agent it runs.
+    /// for a session a runtime lists (DSH…, docs/integrations/runtimes.md), the agent it runs.
     var agent: String? = nil
     var sourceKind: String? = nil
     var sourceThreadID: String? = nil
@@ -544,7 +544,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var attached: Bool? = nil
     /// Branch to New Chat works for it (a Claude Code conversation the node can copy, #2137); older nodes never say so.
     var canFork: Bool? = nil
-    /// How Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」): "app_server" (joined on its shared
+    /// How Persona reaches a Codex in a terminal (docs/integrations/codex.md「守护进程上的会话」): "app_server" (joined on its shared
     /// app-server) or "terminal" (its screen and session record); the note says why it is the terminal.
     var codexRoute: String? = nil
     var codexRouteNote: String? = nil
@@ -567,7 +567,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var assistant: Bool
     /// An assistant conversation moved out of the sidebar (listed under Archived; nothing is deleted).
     var archived: Bool? = nil
-    /// The assistant's space it belongs to (the hub's `space`, docs/health.md): `healthSpace` for a health conversation,
+    /// The assistant's space it belongs to (the hub's `space`, docs/assistant/health.md): `healthSpace` for a health conversation,
     /// nil for the assistant's own. Not a host's space (`spaceKind` / `spaceID` are herdr's and Orca's).
     var assistantSpace: String? = nil
     var spaceKind: String?
@@ -600,25 +600,25 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var listRunningWorkflows: Int? = nil
     /// The /loop driving this agent (it wakes itself up on a schedule).
     var loop: LoopInfo?
-    /// The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
+    /// The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/integrations/agent-goal.md).
     var goal: GoalInfo?
     /// Agents it launched (the Agent tool); each reads like a session ("<id>@<agent id>").
     var subagents: [Subagent]?
     /// Multi-agent workflows it runs in the background (Claude Code's Workflow tool, `Workflow.swift`); nil from older hubs.
     var workflows: [WorkflowRun]? = nil
-    /// The ports its processes listen on that answer HTTP (docs/ports.md): its dev servers, opened through the hub.
+    /// The ports its processes listen on that answer HTTP (docs/operations/ports.md): its dev servers, opened through the hub.
     var ports: [ListeningPort]? = nil
     var updatedAt: Date?
     var lastText: String?
     /// What the agent's last reply asks the user (`asks`, #5096): the question or decision its closing words put to
     /// them, read off the whole reply (`lastText` is only its beginning). Nil when it asks nothing, and from older hubs.
     var asks: String? = nil
-    /// It stopped on a question to the user nobody answered yet (`awaits_reply`, docs/agent-states.md "Awaiting your reply"): set by
+    /// It stopped on a question to the user nobody answered yet (`awaits_reply`, docs/protocol/agent-states.md "Awaiting your reply"): set by
     /// the hub on a Unread or Seen one; an Seen one is listed as Awaiting Reply, not folded with the idle ones. False from
     /// older hubs.
     var awaitsReply: Bool = false
     /// What it is doing when its latest step is a tool call no words came after (「在跑测试」「在读 tasks.go」), and since
-    /// when; nil once it writes again. The hub's `activity` / `activity_at` (docs/protocol.md); older hubs send neither.
+    /// when; nil once it writes again. The hub's `activity` / `activity_at` (docs/protocol/protocol.md); older hubs send neither.
     var activity: String? = nil
     var activityAt: Date? = nil
     var pendingInteractions: Int
@@ -630,7 +630,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var starting: Bool? = nil
     /// Starting it failed (shown in the chat; sends get the same error).
     var startError: String? = nil
-    /// The todo this session is linked to, filled by the hub (docs/protocol.md).
+    /// The todo this session is linked to, filled by the hub (docs/protocol/protocol.md).
     var todo: SessionTodoRef? = nil
     /// It works for a task the main conversation started while Settings › Assistant › Notify Main-Chat Tasks Only in the Main Chat was on (#1731):
     /// the main conversation tells the user about it, so it stays off the island, notifications, badges and the watch.
@@ -640,7 +640,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var attentionReason: String? = nil
     /// Its host stopped its turn on an error it will not retry by itself (a botmux notice), until a message goes in.
     var failureReason: String? = nil
-    /// How the assistant's last turn failed (docs/protocol.md「错误体」, #3531): the words, their kind, and a code when it
+    /// How the assistant's last turn failed (docs/protocol/protocol.md「错误体」, #3531): the words, their kind, and a code when it
     /// is the model's set-up to fix (not_logged_in / auth_failed / model_route / rate_limited). Nil when it answered and
     /// from older hubs.
     var turnError: String? = nil
@@ -648,7 +648,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var turnErrorCode: String? = nil
     /// Where it lives outside Persona (a botmux session's Feishu topic): Open in Lark.
     var externalURL: String? = nil
-    /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
+    /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/extensions/channels.md「来源标记」): the
     /// sidebar draws the latest one's mark. Nil from hubs without channels.
     var channels: [String]? = nil
     /// Who started an assistant conversation (#3266): "user" for the user's own, else what opened it ("inbox": the Inbox's
@@ -658,14 +658,14 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The last compaction the user asked for in an assistant conversation (POST …/compact, #1727): running, done or
     /// failed. Nil from hubs without `assistant_compact`, and before the first one.
     var compaction: CompactionRun? = nil
-    /// Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. Nil from hubs
+    /// Where it stands in its work (docs/assistant/agent-work.md): set by the hub once it triaged a stopped turn. Nil from hubs
     /// without the triage, and before it triaged.
     var work: WorkState? = nil
     /// An assistant conversation set to run on the Agent SDK (#2455): `agentsdk` while it does; and why the node ran it
     /// on the CLI instead (「找不到 Node.js 22+」). Both nil otherwise.
     var runtime: String? = nil
     var runtimeFallback: String? = nil
-    /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
+    /// The group of paired hubs it came from (docs/protocol/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String? = nil
 
     /// Awaiting Reply (#5096): seen, stopped on a question to the user nobody answered yet, and not muted. The one rule
@@ -686,7 +686,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     }
     var folderName: String { (cwd as NSString).lastPathComponent }
 
-    /// The health space's name on the wire (`space: "health"`, docs/health.md).
+    /// The health space's name on the wire (`space: "health"`, docs/assistant/health.md).
     static let healthSpace = "health"
     /// A conversation of the health space: kept off the Persona page's lists, shown on Health.
     var isHealth: Bool { assistantSpace == Self.healthSpace }
@@ -698,7 +698,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var canApprove: Bool { !hasSource || capabilities?.approve == true }
     var canTerminal: Bool { !hasSource || capabilities?.terminal == true }
     var canAttach: Bool { hasSource && capabilities?.attach == true && attached != true }
-    /// Delete Chat (docs/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished or unknown,
+    /// Delete Chat (docs/protocol/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished or unknown,
     /// not still starting, and not the assistant's (those archive). What the hub hides once deleted (`stillDeleted`).
     var canDelete: Bool { !assistant && starting != true && (status == .offline || status == .done || status == .unknown) }
     var sourceLabel: String? {
@@ -707,7 +707,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case "identity_conflict": String(localized: "Identity conflict")
         case "codex_history": String(localized: "Codex history")
         case "claude_bg": String(localized: "Claude background")
-        case "runtime": agentLabel // an agent runtime's session (docs/runtimes.md): its own name, "DSH"
+        case "runtime": agentLabel // an agent runtime's session (docs/integrations/runtimes.md): its own name, "DSH"
         case .some(let kind) where !kind.isEmpty: kind
         default: nil
         }
@@ -875,7 +875,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// A session's work state (docs/agent-work.md): the hub triages each stopped turn into done or blocked on something
+/// A session's work state (docs/assistant/agent-work.md): the hub triages each stopped turn into done or blocked on something
 /// named, with one line for the lists. Only `phase` is always there.
 nonisolated struct WorkState: Codable, Hashable, Sendable {
     /// working / blocked / done.
@@ -906,7 +906,7 @@ nonisolated struct WorkState: Codable, Hashable, Sendable {
     }
 }
 
-/// The session triage's switches (`GET / PUT /api/v1/agents/triage`, docs/agent-work.md「开关」): the triage itself, then
+/// The session triage's switches (`GET / PUT /api/v1/agents/triage`, docs/assistant/agent-work.md「开关」): the triage itself, then
 /// what it may do, each only while it is on. A switch the hub leaves out is off, apart from `replyReminder`.
 nonisolated struct TriageSwitches: Codable, Hashable, Sendable {
     var enabled = false
@@ -966,7 +966,7 @@ nonisolated struct WorkAgent: Codable, Hashable, Sendable {
     }
 }
 
-/// A TCP port an agent's processes listen on (docs/ports.md).
+/// A TCP port an agent's processes listen on (docs/operations/ports.md).
 nonisolated struct ListeningPort: Codable, Identifiable, Hashable, Sendable {
     var port: Int
     var addr: String?
@@ -1072,7 +1072,7 @@ nonisolated extension Subagent {
     }
 }
 
-/// A goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's /goal, whose hook checks the
+/// A goal the agent keeps working toward until it holds (docs/integrations/agent-goal.md): Claude Code's /goal, whose hook checks the
 /// condition each time it would stop, or a Codex thread goal.
 nonisolated struct GoalInfo: Codable, Hashable, Sendable {
     var objective: String
@@ -1174,7 +1174,7 @@ nonisolated struct BackgroundTask: Codable, Identifiable, Hashable, Sendable {
 
 nonisolated extension Session {
     /// The same apart from what ticks on every step of a working agent: `rev` (the transcript grew) and `updatedAt`.
-    /// Views that show neither take a push of only those as no change (docs/ios-state.md「第 2 步」).
+    /// Views that show neither take a push of only those as no change (docs/apple/ios-state.md「第 2 步」).
     static func sameApartFromTicks(_ a: Session?, _ b: Session?) -> Bool {
         guard var a, var b else { return a == nil && b == nil }
         a.rev = nil
@@ -1186,7 +1186,7 @@ nonisolated extension Session {
 
     /// The same as far as views about this one session show it (`AppModel.session(_:)`: its chat, its top bar, its
     /// menus): apart from the ticks and the last line and step, which only the lists and the task cards show
-    /// (docs/ios-state.md「第 3 步」).
+    /// (docs/apple/ios-state.md「第 3 步」).
     static func sameForItsPage(_ a: Session?, _ b: Session?) -> Bool {
         sameApartFromTicks(a.map(\.withoutLine), b.map(\.withoutLine))
     }
@@ -1238,7 +1238,7 @@ extension Session {
         if let w = work, w.phase == "blocked", w.on == "user", let line = w.line, !line.isEmpty { return line }
         return asks.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
     }
-    /// The row's line for a stopped session the hub triaged (docs/agent-work.md, the web's `workLine`): 「✓ 结论」 when
+    /// The row's line for a stopped session the hub triaged (docs/assistant/agent-work.md, the web's `workLine`): 「✓ 结论」 when
     /// done, what it waits for when blocked, with when the hub acts next; nil while it works or before the triage.
     func workLine(now: Date = Date()) -> String? {
         guard let w = work, let line = w.line, !line.isEmpty, w.phase != "working", state != .working else { return nil }
@@ -1278,7 +1278,7 @@ extension Session {
     var isQuiet: Bool { state == .idle || state == .unknown }
 }
 
-/// Unified agent state (docs/agent-states.md), computed by the hub from herdr status, pending interactions and
+/// Unified agent state (docs/protocol/agent-states.md), computed by the hub from herdr status, pending interactions and
 /// whether the result has been seen.
 nonisolated enum AgentState: String, Codable, Sendable, CaseIterable {
     case needsYou = "needs_you", working, unread, idle, offline, unknown
@@ -1315,7 +1315,7 @@ nonisolated enum AgentState: String, Codable, Sendable, CaseIterable {
     var isLive: Bool { self != .offline }
 }
 
-/// A session across groups of hubs (docs/multi-hub.md): group, machine id, session id. The default group ("") has no
+/// A session across groups of hubs (docs/protocol/multi-hub.md): group, machine id, session id. The default group ("") has no
 /// group in its JSON or its string forms, so everything keyed by its sessions stays byte for byte what it was.
 nonisolated struct SessionKey: Hashable, Sendable, Codable {
     var machineID: String
@@ -1389,7 +1389,7 @@ nonisolated enum ItemKind: String, Codable, Sendable {
     }
 }
 
-/// A run of the agent's work a page left out (`Item.fold`; docs/protocol.md「折叠的工作」): its counts for the folded
+/// A run of the agent's work a page left out (`Item.fold`; docs/protocol/protocol.md「折叠的工作」): its counts for the folded
 /// work line, and its range for fetching it when the line is opened.
 nonisolated struct Fold: Codable, Hashable, Sendable {
     var items: Int
@@ -1398,7 +1398,7 @@ nonisolated struct Fold: Codable, Hashable, Sendable {
     var until: Date?
     var throughSeq: Int
     var throughID: String
-    /// The images the run's calls looked at (docs/protocol.md「这一轮看过的图片」): its turn shows them before the answer
+    /// The images the run's calls looked at (docs/protocol/protocol.md「这一轮看过的图片」): its turn shows them before the answer
     /// while the run stays folded.
     var images: [FoldImage]? = nil
 
@@ -1540,7 +1540,7 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     /// kind == .notice: the context was compacted here (the hub's `compact`, or recognized by the app,
     /// `ChatStore.compactions`). Drawn as a divider across the chat (`CompactDivider`).
     var compact: Compaction?
-    /// User text Persona typed in for the model (a task's notice, a scheduled run…; docs/protocol.md「Persona 注入的消息」):
+    /// User text Persona typed in for the model (a task's notice, a scheduled run…; docs/protocol/protocol.md「Persona 注入的消息」):
     /// drawn as one line, not a bubble. Set by the hub; nil from older hubs, which `Injected.of` reads off the text.
     var injected: Injected? = nil
 
@@ -1605,7 +1605,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var machineID: String
     var sessionID: String
     var sessionTitle: String?
-    /// The task (docs/unified-entry.md) the asking agent works for: filled in by the phone for the watch, not sent by
+    /// The task (docs/assistant/unified-entry.md) the asking agent works for: filled in by the phone for the watch, not sent by
     /// the hub.
     var taskTitle: String?
     var cwd: String?
@@ -1625,7 +1625,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var secret: Bool?
     var fields: [InteractionField]?
     var requiresInput: Bool { !(fields ?? []).isEmpty }
-    /// Who asks when it is not Claude Code: "codex" / "traex" (a card read off a Codex TUI, docs/codex.md「提问和审批」).
+    /// Who asks when it is not Claude Code: "codex" / "traex" (a card read off a Codex TUI, docs/integrations/codex.md「提问和审批」).
     var agent: String?
     /// Why the agent asks for this permission, in its words.
     var reason: String?
@@ -1633,9 +1633,9 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var alwaysLabel: String?
     /// The persisted scope granted by this card; absent on older hubs and terminal-only sessions.
     var alwaysKeys: [String]?
-    /// What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/runtimes.md).
+    /// What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/integrations/runtimes.md).
     var agentLabelHint: String?
-    /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
+    /// The group of paired hubs it came from (docs/protocol/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String?
     /// The hub muted this agent or its space: stamped on the cards of GET /api/v1/interactions (#4360) so the
     /// answer-only watch hides them and never buzzes; the phone filters with its own mutes. Absent (an older hub,
@@ -1715,7 +1715,7 @@ nonisolated struct TranslatePrefsBody: Codable, Equatable, Sendable {
     var mail: Bool
 }
 
-/// A desktop app (the Mac app) connected to the hub, like WeChat's 「Mac 微信已登录」 (docs/protocol.md「桌面端」).
+/// A desktop app (the Mac app) connected to the hub, like WeChat's 「Mac 微信已登录」 (docs/protocol/protocol.md「桌面端」).
 nonisolated struct DesktopDevice: Codable, Hashable, Sendable, Identifiable {
     /// Its device token's id (what Sign Out revokes); empty when it connected with the pairing token.
     var device: String
@@ -1747,7 +1747,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     /// Phone Muted (WeChat's): no pushes to this phone while a desktop app is connected (hub/desktops.go).
     var muteWhileDesktop = false
     var done: Done = .long
-    /// The Fleet Live Activity on the lock screen / Dynamic Island (docs/live-activity.md).
+    /// The Fleet Live Activity on the lock screen / Dynamic Island (docs/apple/live-activity.md).
     var liveActivity: Bool = true
     /// Agent names on the lock screen activity; off, only counts.
     var lockDetails: Bool = false

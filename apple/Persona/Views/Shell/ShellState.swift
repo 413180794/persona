@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」): Assistant (the Persona assistant) and Agents (the Agents list)
+/// The ChatGPT-style shell on an iPhone (docs/apple/ios.md「新外壳」): Assistant (the Persona assistant) and Agents (the Agents list)
 /// under one top switch, the drawer on the left (Inbox, Scheduled Tasks, Knowledge, Machines, the conversations, Settings), Settings as a sheet.
 /// `Old Layout` (AppModel.oldLayout) brings the four tabs back unchanged.
 ///
 /// The pages read this from the environment (`\.shell`): nil means they are in the old layout, on an iPad or on the
 /// Mac, and look exactly as before.
 ///
-/// Which page is in front has one answer, `page` (docs/shell.md): the switch's segments, which page takes taps and is
+/// Which page is in front has one answer, `page` (docs/apple/shell.md): the switch's segments, which page takes taps and is
 /// read by VoiceOver, `tabIsActive` and the drawer all read it, and the strip's position follows it. It changes only
 /// through `select` (the switch, a drag that settles) and `route` (anything that sets `AppModel.selectedTab`), both at
 /// once, not when a view is next drawn: the shell's `onChange(of: selectedTab)` was skipped now and then, the strip

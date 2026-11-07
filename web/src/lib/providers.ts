@@ -1,4 +1,4 @@
-// Settings › Model providers (#2455, docs/launchers.md): the add / edit wizard's form for a compatible gateway typed by hand
+// Settings › Model providers (#2455, docs/integrations/launchers.md): the add / edit wizard's form for a compatible gateway typed by hand
 // (cindy's AddProviderWizard: connect → models, the rest folded under "Advanced"; the hub's presets are lib/launcher-presets.ts), its checks, the POST / PUT body, and the "Import from ~/.zshrc" preview. Pure: the views
 // in views/settings/Provider*.tsx only render it.
 import { ApiError, errorText } from "./api";

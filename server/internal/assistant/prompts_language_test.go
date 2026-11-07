@@ -1,6 +1,6 @@
 package assistant
 
-// The inbox's and the titles' prompts in the user's language (docs/i18n.md): golden for en / ja
+// The inbox's and the titles' prompts in the user's language (docs/protocol/i18n.md): golden for en / ja
 // (testdata/prompts/*.<locale>.golden), and zh-Hans renders the same as a hub that says no language.
 
 import (

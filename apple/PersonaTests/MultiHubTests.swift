@@ -5,7 +5,7 @@ import Testing
 import UserNotifications
 @testable import Persona
 
-/// Several hubs on one device (docs/multi-hub.md): keys, grouping, routes, events, the merged Live Activity, the push
+/// Several hubs on one device (docs/protocol/multi-hub.md): keys, grouping, routes, events, the merged Live Activity, the push
 /// keys. The default group's keys and JSON must stay byte for byte what they were before several hubs.
 struct MultiHubTests {
     // MARK: Keys
@@ -300,7 +300,7 @@ private final class Counter: @unchecked Sendable {
     func bump() { lock.withLock { n += 1 } }
 }
 
-/// The pairing must not get lost (docs/multi-hub.md「存储」): a keychain that cannot be read now is unknown, not empty,
+/// The pairing must not get lost (docs/protocol/multi-hub.md「存储」): a keychain that cannot be read now is unknown, not empty,
 /// and nothing is written over it; the old single pairing goes only once the registry is written and reads back.
 struct HubStoreTests {
     private static func defaults() -> UserDefaults {

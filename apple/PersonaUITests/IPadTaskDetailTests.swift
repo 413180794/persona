@@ -22,7 +22,7 @@ final class IPadTaskDetailTests: XCTestCase {
         guard let dir = env["PERSONA_SHOTS"] else { return }
         let tag = env["PERSONA_SHOT_TAG"] ?? "ipad"
         let file = "\(dir)/task-detail-\(tag)-\(name).png"
-        // XCUITest's own picture of a landscape screen comes out turned (docs/ios.md「iPad」): with PERSONA_HOLD the page
+        // XCUITest's own picture of a landscape screen comes out turned (docs/apple/ios.md「iPad」): with PERSONA_HOLD the page
         // stays up that long and a marker file names the picture for `simctl io screenshot` to take from outside.
         if let hold = env["PERSONA_HOLD"].flatMap(UInt32.init) {
             try Data(file.utf8).write(to: URL(fileURLWithPath: "\(dir)/hold-\(name)"))

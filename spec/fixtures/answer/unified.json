@@ -5,8 +5,8 @@
       "name": "reason_disables_allow",
       "description": "填写拒绝原因后不能允许一次。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -31,8 +31,8 @@
       "name": "reason_disables_always",
       "description": "填写拒绝原因后不能本会话总是允许。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -57,8 +57,8 @@
       "name": "deny_with_reason",
       "description": "拒绝原因通过 message 原样传给 hub。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -86,8 +86,8 @@
       "name": "clear_reason_enables_allow",
       "description": "清空拒绝原因后恢复允许。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -114,8 +114,8 @@
       "name": "feedback_disables_approve_all",
       "description": "填写计划意见后批准按钮不可用。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -141,8 +141,8 @@
       "name": "feedback_disables_approve_edits",
       "description": "填写计划意见后批准按钮不可用。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -168,8 +168,8 @@
       "name": "feedback_rejects_plan",
       "description": "填写计划意见后通过打回发送。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -197,8 +197,8 @@
       "name": "unread_plan_blocks_bypass",
       "description": "没有读过全文时不能全部放行。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -224,8 +224,8 @@
       "name": "read_plan_allows_bypass",
       "description": "对话页读过全文且无意见时可全部放行。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -254,8 +254,8 @@
       "name": "unified_accept_edits",
       "description": "无意见时可以只自动接受编辑。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -283,8 +283,8 @@
       "name": "state_answering_blocks_submit",
       "description": "非待处理状态不能再次提交作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -309,8 +309,8 @@
       "name": "state_answered_blocks_submit",
       "description": "非待处理状态不能再次提交作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -335,8 +335,8 @@
       "name": "state_expired_blocks_submit",
       "description": "非待处理状态不能再次提交作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -361,8 +361,8 @@
       "name": "state_resolvedelsewhere_blocks_submit",
       "description": "非待处理状态不能再次提交作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -387,8 +387,8 @@
       "name": "state_handedtoterminal_blocks_submit",
       "description": "非待处理状态不能再次提交作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -413,8 +413,8 @@
       "name": "state_unknown_blocks_submit",
       "description": "非待处理状态不能再次提交作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -439,8 +439,8 @@
       "name": "state_pending_allows_submit",
       "description": "待处理状态允许作答。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -467,8 +467,8 @@
       "name": "mcp_form_requires_protocol_extension",
       "description": "当前协议尚不能编码 MCP 表单作答，应走终端降级。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/protocol.md：Resolution"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/protocol/protocol.md：Resolution"
       ],
       "input": {
         "profile": "unified",
@@ -493,7 +493,7 @@
       "name": "reason_length_at_limit",
       "description": "拒绝原因按设计限制最多四千字。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "unified",
@@ -521,7 +521,7 @@
       "name": "reason_length_above_limit",
       "description": "拒绝原因按设计限制最多四千字。",
       "source": [
-        "docs/redesign/ux.md §3.4、§5.3"
+        "docs/archive/redesign/ux.md §3.4、§5.3"
       ],
       "input": {
         "profile": "unified",
@@ -547,7 +547,7 @@
       "description": "Claude 的授权卡（agent 为 claude）可以本会话总是允许。",
       "source": [
         "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
-        "docs/protocol.md：Interaction（agent、always_label）"
+        "docs/protocol/protocol.md：Interaction（agent、always_label）"
       ],
       "input": {
         "profile": "unified",
@@ -576,7 +576,7 @@
       "description": "Codex 的授权卡没有 always_label 时不能总是同意。",
       "source": [
         "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
-        "docs/protocol.md：Interaction（agent、always_label）"
+        "docs/protocol/protocol.md：Interaction（agent、always_label）"
       ],
       "input": {
         "profile": "unified",
@@ -602,7 +602,7 @@
       "description": "Codex 的授权卡带 always_label 时可以总是同意。",
       "source": [
         "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
-        "docs/protocol.md：Interaction（agent、always_label）"
+        "docs/protocol/protocol.md：Interaction（agent、always_label）"
       ],
       "input": {
         "profile": "unified",
@@ -632,7 +632,7 @@
       "description": "Agent 运行时（DSH）的授权卡没有 always_label 时不能总是同意。",
       "source": [
         "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm",
-        "docs/protocol.md：Interaction（agent、always_label）"
+        "docs/protocol/protocol.md：Interaction（agent、always_label）"
       ],
       "input": {
         "profile": "unified",

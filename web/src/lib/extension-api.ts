@@ -1,4 +1,4 @@
-// The hub's extension routes across the plugin → extension rename (docs/extensions.md "Naming and compatibility", #1844, #1845):
+// The hub's extension routes across the plugin → extension rename (docs/extensions/extensions.md "Naming and compatibility", #1844, #1845):
 // a hub that has them (hello feature `extensions`) answers under /api/v1/extensions/… with the keys extensions,
 // extension and extension_name; an older one only under /api/v1/plugins/… with plugins, plugin and plugin_name. The web
 // asks the new routes when the hub says so and reads either set of keys, so it works against both.

@@ -47,7 +47,7 @@ import java.io.File
  * graphics (no emulator), in every style, light and dark: the inbox's header of the item (title, tier and source
  * line, "Done", "AI summary", "AI draft" / "Hand to AI") over the Feishu extension's body of an event (people, time span, the event it
  * continues, the messages, a reply field, "View in conversation"). Each is checked to draw something and written as a PNG to
- * `build/inbox-item-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Extension UI slots"). Pressing
+ * `build/inbox-item-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android/android.md "Extension UI slots"). Pressing
  * "View in conversation" brings the item's source link back to the shell.
  */
 @RunWith(AndroidJUnit4::class)

@@ -38,7 +38,7 @@ import (
 //
 // Clients hold items they were already sent. A branch is abandoned when the next message or system line is written (or
 // when the node itself rewound, File.Rewound), so the history token (Span.History) carries how many abandoned branches the file has:
-// it changes then, and a client that sees it change starts over (docs/protocol.md "Continuity of items"), as it does for a
+// it changes then, and a client that sees it change starts over (docs/protocol/protocol.md "Continuity of items"), as it does for a
 // file that was rewritten. The token is a function of the file, so it is the same across node restarts.
 
 // treeLine is what parseLine saw of a line's place in the tree.

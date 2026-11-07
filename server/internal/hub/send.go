@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Sending a message from the phone (docs/protocol.md "Sending messages"). The app sends each message with its own
+// Sending a message from the phone (docs/protocol/protocol.md "Sending messages"). The app sends each message with its own
 // client_msg_id and resends what got no answer with the same id; the node types it into the agent's terminal. A
 // message must arrive once: the hub remembers every id — in memory while a send runs, in Postgres after — so a retry
 // is answered from what happened instead of typed again, also after the node reconnected (a new node process knows
@@ -181,7 +181,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	defer cancel()
 	id, _ := p["client_msg_id"].(string)
 	if ch := channel.FromClientMsgID(id, []string{"voice"}); ch != "" {
-		h.channelNoted(ch, m.cfg.ID, sid) // a voice conversation's errand (docs/channels.md "Source marks")
+		h.channelNoted(ch, m.cfg.ID, sid) // a voice conversation's errand (docs/extensions/channels.md "Source marks")
 	}
 	l := h.requestLang(r)
 	external := false

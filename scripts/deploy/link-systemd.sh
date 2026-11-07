@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kept for old notes: persona-link looks after its systemd user service itself now (docs/link.md "Linux (headless)").
+# Kept for old notes: persona-link looks after its systemd user service itself now (docs/operations/link.md "Linux (headless)").
 #   ./scripts/deploy/link-systemd.sh install     # = ~/.persona/bin/persona-link install
 #   ./scripts/deploy/link-systemd.sh restart     # after a new ~/.persona/bin/persona-link (install again does the same)
 #   ./scripts/deploy/link-systemd.sh uninstall   # = ~/.persona/bin/persona-link uninstall

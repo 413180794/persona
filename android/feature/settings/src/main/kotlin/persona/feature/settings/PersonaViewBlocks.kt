@@ -18,7 +18,7 @@ import persona.core.contracts.generated.ExtensionPersonaCard
 import persona.core.designsystem.ViewBlocks
 import kotlin.math.abs
 
-// An assistant's reply drawn with the extensions' components (docs/extensions.md "Declarative UI", #1850): a ```persona-view
+// An assistant's reply drawn with the extensions' components (docs/extensions/extensions.md "Declarative UI", #1850): a ```persona-view
 // block is a view (or one component), the older ```persona-card is turned into components. Nothing in them acts: no
 // buttons, fields, search or "Load more" (links open as anywhere in a reply).
 

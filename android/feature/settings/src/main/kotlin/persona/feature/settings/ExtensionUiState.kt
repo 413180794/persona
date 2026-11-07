@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
-// An extension's declarative UI (docs/extensions.md "Declarative UI"): drawing a view, its fields' values, its buttons. The
+// An extension's declarative UI (docs/extensions/extensions.md "Declarative UI"): drawing a view, its fields' values, its buttons. The
 // renderer is in ExtensionViewContent.kt; the pages that hold one are in ExtensionUiScreen.kt.
 
 internal object ExtensionViewText {
@@ -49,7 +49,7 @@ internal object ExtensionViewText {
 
     /**
      * The inbox item an inbox item's page asks to see at its source (`open_url: persona://inbox/<id>/source`, the one
-     * app link the hub lets that slot open, docs/extensions.md "UI slots"): the item's id, else null.
+     * app link the hub lets that slot open, docs/extensions/extensions.md "UI slots"): the item's id, else null.
      */
     fun inboxSource(url: String?): String? {
         val uri = runCatching { java.net.URI(url ?: return null) }.getOrNull() ?: return null
@@ -131,7 +131,7 @@ internal object ExtensionViewText {
     }
 
     /**
-     * Markdown an extension may write (docs/extensions.md "Declarative UI"): headings, paragraphs, lists, emphasis, code,
+     * Markdown an extension may write (docs/extensions/extensions.md "Declarative UI"): headings, paragraphs, lists, emphasis, code,
      * quotes and https links. Pictures become their words, other links their words; HTML is drawn as the text it is
      * (the renderer has no HTML).
      */
@@ -148,7 +148,7 @@ internal object ExtensionViewText {
     /** Fields aren't drawn on a card (the hub refuses them there too): it opens a page for that. */
     fun drawableOnCard(item: ExtensionViewItem): Boolean = item.type != "field" && item.type != "table" && item.type != "html" && drawable(item)
 
-    /** How deep pages pushed on each other may go (docs/extensions.md "Page navigation"). */
+    /** How deep pages pushed on each other may go (docs/extensions/extensions.md "Page navigation"). */
     const val MaxDepth = 8
 
     /**
@@ -307,7 +307,7 @@ internal class ExtensionViewModel(
     }
 
     /**
-     * The extension's data changed (`ui.invalidate`, docs/extensions.md "Declarative UI"): drawn again if on screen, else when it
+     * The extension's data changed (`ui.invalidate`, docs/extensions/extensions.md "Declarative UI"): drawn again if on screen, else when it
      * comes back.
      */
     suspend fun invalidate() {
@@ -326,7 +326,7 @@ internal class ExtensionViewModel(
         }
     }
 
-    /** A page of the extension was pushed on this one: it is drawn again when it shows (docs/extensions.md "Page navigation"). */
+    /** A page of the extension was pushed on this one: it is drawn again when it shows (docs/extensions/extensions.md "Page navigation"). */
     fun covered() { stale = true }
 
     /**

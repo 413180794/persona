@@ -1,4 +1,4 @@
-// "Engine" on a machine's page with a hub that takes sets (#2576, docs/engines.md "Host sets"): every engine is a checkbox
+// "Engine" on a machine's page with a hub that takes sets (#2576, docs/integrations/engines.md "Host sets"): every engine is a checkbox
 // (several may be on at once, or none), and one of the checked ones is the default, where new sessions open. Same row
 // shape as the single-engine picker (EngineSection); a choice stays here until "Save" (PUT …/engine {hosts, default}).
 import { useEffect, useState } from "react";

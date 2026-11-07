@@ -1,4 +1,4 @@
-// Settings › Managers' words (docs/managers.md): where one runs, its status line, why Delete is off, and the hub's refusals.
+// Settings › Managers' words (docs/assistant/managers.md): where one runs, its status line, why Delete is off, and the hub's refusals.
 import { describe, expect, it } from "vitest";
 import { ApiError, errorText } from "./api";
 import { deleteBlocked, deployText, managerError, minutesLeft, statusLine, unsupported, validName, whereText, type Manager } from "./managers";

@@ -1,6 +1,6 @@
 // @vitest-environment node
 // The page loads one language's catalog module; the en and zh-Hans entries t() can still fall back to come with it
-// (web/i18n-catalogs.ts). A key the language lacks still shows in en, then zh-Hans (docs/i18n.md).
+// (web/i18n-catalogs.ts). A key the language lacks still shows in en, then zh-Hans (docs/protocol/i18n.md).
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

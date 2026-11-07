@@ -5,7 +5,7 @@ struct ModelLaunchersRoute: Hashable {}
 /// One launcher's page.
 struct ModelLauncherRoute: Hashable { var name: String }
 
-/// Settings › Model (docs/launchers.md): every launcher the machines can start — added here (Persona keeps the gateway, model
+/// Settings › Model (docs/integrations/launchers.md): every launcher the machines can start — added here (Persona keeps the gateway, model
 /// and key), found in a machine's rc file (~/.zshrc, ~/.bashrc) or on its PATH (synced each time this opens), or the built-in
 /// claude of each machine — the hidden ones, and how each machine's list came in (offline, timed out, failed).
 struct ModelLaunchersView: View {
@@ -314,7 +314,7 @@ struct LauncherRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.sm) {
-                // A display name (「智谱 GLM」, docs/launchers.md「内置预设」) is a name, not an id; without one, the id as before.
+                // A display name (「智谱 GLM」, docs/integrations/launchers.md「内置预设」) is a name, not an id; without one, the id as before.
                 if launcher.title != launcher.name {
                     Text(launcher.title).font(Theme.Font.heading).lineLimit(1)
                 } else {
@@ -354,7 +354,7 @@ struct ModelLauncherDetailView: View {
     @State private var showDefinition = false
     /// Test Availability: per machine, running (nil) or done.
     @State private var checks: [String: LauncherCheck?] = [:]
-    /// What plugins draw on this page (docs/extensions.md「声明式 UI」), and the link one of them opens.
+    /// What plugins draw on this page (docs/extensions/extensions.md「声明式 UI」), and the link one of them opens.
     @State private var pluginSections: ExtensionLauncherModel?
     @State private var pluginLink: LinkTarget?
 

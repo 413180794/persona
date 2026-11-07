@@ -2,7 +2,7 @@ package extwire
 
 import "encoding/json"
 
-// Moving a source (a mail account) from one manager to another (docs/managers.md): each manager has its own database
+// Moving a source (a mail account) from one manager to another (docs/assistant/managers.md): each manager has its own database
 // and its own secret.key, so the source's sealed secrets cannot be copied as they are. The hub asks the old manager
 // for the source (export), gives it to the new one (import), and then tells the old one to let it go (release). The
 // hub never stores or logs the bundle.

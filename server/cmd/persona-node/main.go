@@ -59,9 +59,9 @@ func main() {
 		where := "the hub's and the manager's commands are personad's"
 		switch os.Args[1] {
 		case "hub":
-			where = "a hub needs personad (the install command with --hub, on the one computer that runs the hub; docs/release.md)"
+			where = "a hub needs personad (the install command with --hub, on the one computer that runs the hub; docs/operations/release.md)"
 		case "manager", "extension", "assistant":
-			where = "a manager needs personad (the manager's install command from the app installs both; docs/managers.md)"
+			where = "a manager needs personad (the manager's install command from the app installs both; docs/assistant/managers.md)"
 		}
 		fmt.Fprintf(os.Stderr, "\npersona-node, the device's own program, has no %q command; %s.\n", os.Args[1], where)
 		os.Exit(2)

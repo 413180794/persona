@@ -831,7 +831,7 @@ func TestScheduleDefaultsWhenNothingStored(t *testing.T) {
 	}
 }
 
-// From the model configuration (docs/model-config.md): a task never carries a model of its own.
+// From the model configuration (docs/assistant/model-config.md): a task never carries a model of its own.
 func TestTaskEditsCannotCreateModelOverrides(t *testing.T) {
 	old := Task{ID: "one", Launcher: "old", Model: "old-model", Effort: "high"}
 	in := Task{Title: "任务", Launcher: "requested", Model: "requested-model", Effort: "low", PermissionMode: "bypassPermissions"}

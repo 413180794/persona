@@ -10,12 +10,12 @@ from them instead of being written once per platform:
 | `protocol.schema.json` | The process protocol: one frame a line (`Frame`, `RPCError`), error codes, `initialize`'s params and answer, `ui.render` / `ui.action`'s params `UIParams`, the badge event, and the `UIContext` / `UIRequest` the apps send the hub to draw a slot and the `UIPlace` the hub lists |
 | `stream.schema.json` | Native UI stream protocol 1 (#5956): explicit capability, canonical app WebSocket envelopes, owner-session lifecycle requests, complete keyed snapshots, atomic deltas and bounded interaction values; source runtime activation remains independently gated |
 | `view.schema.json` | Views, sections, components (`Component`, told apart by `type`), actions, `ui.action`'s answer, and the `persona-card` in assistant answers (`PersonaCard`, folded into components in #1850) |
-| `messaging.schema.json` | The `messaging` extension point (#2138): the manifest's sources (`MessagingItem`), conversations, messages and parts (`MessagingPart`, by `kind`), sends, composer modes, documents, posts, events and errors; see `docs/extension-messaging.md` |
-| `connector.schema.json` | **Plugin-side.** The `connectors` extension point's calls (`docs/connector-protocol.md`): everything the hub asks a connector program (`connector.status`, `connector.inbox.collect`, `connector.thread.page`, `connector.archive.changes`, `connector.group.*`, `connector.login.step`…), what the program asks back (`connector.secrets.*`, the knowledge base's `connector.posts.*` and `connector.archive.chats`, `connector.credentials.gh_token`, and the hub's own `sent.record`, which puts a send of the connector's in the sent-as-user ledger), the `connector.changed` event, the capabilities, states and error codes |
-| `channel.schema.json` | **Plugin-side.** The `channel` extension point's calls (`docs/channels.md` "4. Contributing a channel"): `channel.receive` and `channel.status` from the program, `channel.send`, `channel.typing` and `channel.edit` from the hub, `cannot_send` |
-| `kb.schema.json` | **Plugin-side.** The knowledge base an extension reads and writes directly (`docs/extensions.md` "Knowledge base RPC"): `kb.list`, `kb.get`, `kb.day`, `kb.search`, `kb.update`, `kb.owner`, and the events `event.kb.changed` / `event.kb.forgotten` |
-| `models.schema.json` | **Plugin-side.** Calling a model through the hub (`docs/extensions.md` "Model calls"): `model.complete` with the permission `models` |
-| `todos.schema.json` | **Plugin-side.** The to-do events an extension subscribed to and was granted `todos.read` is told of (`docs/extensions.md` "Events"): `event.todo.changed`, `event.todo.decision` |
+| `messaging.schema.json` | The `messaging` extension point (#2138): the manifest's sources (`MessagingItem`), conversations, messages and parts (`MessagingPart`, by `kind`), sends, composer modes, documents, posts, events and errors; see `docs/extensions/extension-messaging.md` |
+| `connector.schema.json` | **Plugin-side.** The `connectors` extension point's calls (`docs/protocol/connector-protocol.md`): everything the hub asks a connector program (`connector.status`, `connector.inbox.collect`, `connector.thread.page`, `connector.archive.changes`, `connector.group.*`, `connector.login.step`…), what the program asks back (`connector.secrets.*`, the knowledge base's `connector.posts.*` and `connector.archive.chats`, `connector.credentials.gh_token`, and the hub's own `sent.record`, which puts a send of the connector's in the sent-as-user ledger), the `connector.changed` event, the capabilities, states and error codes |
+| `channel.schema.json` | **Plugin-side.** The `channel` extension point's calls (`docs/extensions/channels.md` "4. Contributing a channel"): `channel.receive` and `channel.status` from the program, `channel.send`, `channel.typing` and `channel.edit` from the hub, `cannot_send` |
+| `kb.schema.json` | **Plugin-side.** The knowledge base an extension reads and writes directly (`docs/extensions/extensions.md` "Knowledge base RPC"): `kb.list`, `kb.get`, `kb.day`, `kb.search`, `kb.update`, `kb.owner`, and the events `event.kb.changed` / `event.kb.forgotten` |
+| `models.schema.json` | **Plugin-side.** Calling a model through the hub (`docs/extensions/extensions.md` "Model calls"): `model.complete` with the permission `models` |
+| `todos.schema.json` | **Plugin-side.** The to-do events an extension subscribed to and was granted `todos.read` is told of (`docs/extensions/extensions.md` "Events"): `event.todo.changed`, `event.todo.decision` |
 | `examples/` | Examples: `<definition>.<name>.json` must hold to the schema; those under `examples/invalid/` must not. The plugin-side schemas' are in `examples/plugin/` (and `examples/plugin/invalid/`) |
 
 ## Generating
@@ -329,7 +329,7 @@ bundle together, so a new extension does not get old types.
 
 They still use View and Component, adding `View.fallback` / `pages`, `Action.reply` / `open` / `pop`, `Push.page`
 and the `html` component. `AssistantView` is a live card with an owner and a version; `ViewAction` is a stored
-submission (pending / sent / failed). The full spec is in [Assistant rich UI](../../docs/assistant-views.md).
+submission (pending / sent / failed). The full spec is in [Assistant rich UI](../../docs/assistant/assistant-views.md).
 
 - `wire.ParseAssistantView` checks the raw JSON, takes the one-component shorthand with a fallback, and limits it to
   64 KB and a JSON depth; `wire.CheckAssistantView` then checks the shared component semantics and the assistant's
@@ -362,7 +362,7 @@ An action (`Action`) is an object; later page navigation (push / pop), new conte
 (`Placement` values) are fields or values added to existing definitions, which older apps ignore.
 3b (#1850) was added this way: `markdown` / `table` / `empty` / `loading`, a row's icon / avatar / thumbnail, `key`,
 a View's `search` / `filter`, a section's `more`, `Action.push`, `ActionResult.push` / `pop`, `InvalidateEvent`
-(UI version 3, `docs/extensions.md` "UI version 3"). How `persona-card` becomes components, with its cases, is in
+(UI version 3, `docs/extensions/extensions.md` "UI version 3"). How `persona-card` becomes components, with its cases, is in
 `sdk/go/wire/personacard.go` and `examples/persona-card/`.
 UI version 6 (#5464) was added the same way: the `image` / `grid` / `carousel` components and fields such as
 `row.control`, `row.actions` and `spark`. Its numeric fields live in sub-objects of their own (`RowControl`,

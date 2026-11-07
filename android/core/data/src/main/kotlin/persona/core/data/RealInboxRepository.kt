@@ -39,7 +39,7 @@ class RealInboxRepository(
     /** The ordinary sessions' outbox (the one Agents uses): "Hand to AI" to an Agent queues its message there. */
     private val messageSender: MessageSender? = null,
     /**
-     * Manager's main conversation, in [messageSender]'s ids (docs/managers.md "Clients"): "Hand to AI" with no Agent of
+     * Manager's main conversation, in [messageSender]'s ids (docs/assistant/managers.md "Clients"): "Hand to AI" with no Agent of
      * another manager's item goes there, through [messageSender]; null: the default's main queue for every item.
      */
     private val mainConversationOf: (suspend (String) -> persona.core.contracts.SessionKey)? = null,
@@ -333,7 +333,7 @@ class RealInboxRepository(
 
     /**
      * Each manager files its own items (the merged list stamps them; the hub sends `/inbox/bulk` to the manager the
-     * request names, docs/protocol.md "Per-manager routing"): one request per manager, naming it on the request, the
+     * request names, docs/protocol/protocol.md "Per-manager routing"): one request per manager, naming it on the request, the
      * answers put together. A manager that fails (offline) leaves the others' done: its own items are `failed`, put
      * back and said so; only when every manager fails does the whole action fail.
      */
@@ -983,7 +983,7 @@ class RealInboxRepository(
     }
     /**
      * The hub's merged list as records: every one an id of its own (InboxItemKey), and the manager each is stamped with
-     * noted for the requests made for it elsewhere (its mail page; docs/protocol.md "Per-manager routing"). An id two
+     * noted for the requests made for it elsewhere (its mail page; docs/protocol/protocol.md "Per-manager routing"). An id two
      * managers have is not noted: the repository names the manager on each of its requests ([asItem]).
      */
     private fun listed(data: List<JsonObject>, transport: InboxAssistantTransport): List<InboxRecord> {

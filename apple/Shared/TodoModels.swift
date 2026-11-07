@@ -6,7 +6,7 @@ import SwiftUI
 nonisolated enum TodoStage: String, CaseIterable, Sendable {
     case plan, develop, review, merge, deploy, verify
 
-    /// The step's name on the bar (App copy is Chinese, docs/i18n.md).
+    /// The step's name on the bar (App copy is Chinese, docs/protocol/i18n.md).
     var label: String {
         switch self {
         case .plan: String(localized: "Plan [Todo Models 6f949a]")
@@ -51,7 +51,7 @@ nonisolated extension TodoItem {
         return "PR #\(last)"
     }
 
-    /// The state's label for this todo: "Auto-completed" for one the hub closed (docs/todos.md), "Accepted" /
+    /// The state's label for this todo: "Auto-completed" for one the hub closed (docs/assistant/todos.md), "Accepted" /
     /// "Canceled" for one its supervisor closed after a review (#3124).
     func statusLabel(_ state: TaskState) -> String {
         guard state == .done else { return state.todoLabel }

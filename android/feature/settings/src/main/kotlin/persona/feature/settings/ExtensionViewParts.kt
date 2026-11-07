@@ -49,7 +49,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
-// The UI version 3 parts of an extension's view (docs/extensions.md "Declarative UI"): markdown, a table, a row's icon /
+// The UI version 3 parts of an extension's view (docs/extensions/extensions.md "Declarative UI"): markdown, a table, a row's icon /
 // avatar / thumbnail, the search box and filter over a list, a section's "Load more". Drawn with the design system only.
 
 /** The fixed icons an extension may name, as this app's; one it does not know is the extension icon. */

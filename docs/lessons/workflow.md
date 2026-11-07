@@ -26,7 +26,7 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
   To retry the rejected one with the same commit without changing the number: first check with `asc_testflight.py status` whether that number is already VALID and the same commit; if so, continue with `wait` / `external`.
 - Multiple agents pushing to master at once: on a merge or rebase conflict, do not overwrite others' changes with your own old copy of the whole file (on 2026-10-25 one rebase reverted the light-blue bubbles and the notification navigation fix entirely);
   resolve only the conflict hunks, and before pushing check `git diff origin/master...HEAD --stat` for files that are not yours. Before building for TestFlight, confirm master is the fixed version.
-- Multiple agents changing the same repo in parallel (6 workers on the Lark workplace, see `docs/feishu.md`): each gets its own worktree + its own cloned simulator; new types get a domain prefix
+- Multiple agents changing the same repo in parallel (6 workers on the Lark workplace, see `docs/extensions/feishu.md`): each gets its own worktree + its own cloned simulator; new types get a domain prefix
   (`FeishuSearchXxx`…, otherwise names collide on master and the build fails); on merge or rebase conflicts, files outside your own directory always take the origin/master version; before pushing check
   that `git diff origin/master --stat` contains only your files (14fe469 once overwrote half the repo with an old copy; 941d067 restored it); when the main working tree has someone else's uncommitted changes,
   do your fix in `git worktree add --detach /tmp/x origin/master`.
@@ -65,6 +65,10 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
   the table was all broken images and the attachments were appended to the end of the comment. To control the size, post Markdown first, then fill the URLs into `<img>` with `gh api -X PATCH repos/<repo>/issues/comments/<id> -F body=@…`.
 - The repo is private, so attachments are visible only to members: `curl` without login gives 404, with `gh auth token` gives 200; the upload is not broken.
 - Screenshots use only made-up data from the mock hub / demo mode; `scripts/privacy_check.py` cannot read text inside images, so look them over yourself before posting.
+
+## Documentation moves and media cleanup
+
+- Moving root-level guides into module folders must also update documentation discovery and index tests: a `docs/*.md` glob silently stops checking the moved guides. Test discovery with a nested module fixture, rewrite both repository-root and document-relative references, and audit consumers across code, scripts, CI, module READMEs and HTML before deleting assets. A basename match is a lead, not proof of a consumer: verify its resolved directory and distinguish capture outputs from build inputs. Also inspect path constructors that split the directory and filename into separate strings; replacing only literal `docs/...` text misses these consumers. For a wide migration, read staged/commit blobs in one bounded Git batch rather than starting `git show` for every file: slow guard scans let the base branch advance into another conflict before merging. Preserve exact snapshot bytes, special-filename handling and fail-closed parsing; do not relax privacy rules. Keep verification media out of git; only required README, app and website assets remain.
 
 ## Temporary test hubs
 

@@ -5,7 +5,7 @@
     "source": [
       "server/internal/hub/hello.go: Hub.hello",
       "apple/Shared/LiveConnection.swift: ServerEvent.decode",
-      "docs/protocol.md: 鉴权"
+      "docs/protocol/protocol.md: 鉴权"
     ],
     "derived": true,
     "decoder": "event",
@@ -188,7 +188,7 @@
     "description": "健康检查与握手使用同一份能力列表。",
     "source": [
       "server/internal/hub/hello.go: Hub.health",
-      "docs/protocol.md: 鉴权"
+      "docs/protocol/protocol.md: 鉴权"
     ],
     "derived": true,
     "decoder": "health",

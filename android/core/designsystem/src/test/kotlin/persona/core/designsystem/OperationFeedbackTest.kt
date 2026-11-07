@@ -41,7 +41,7 @@ class OperationFeedbackTest {
         assertEquals(3, observed.size)
     }
 
-    /** A 502 node_unreachable is the computer, not the hub (docs/onboarding.md 4.4); the hub's own words are kept. */
+    /** A 502 node_unreachable is the computer, not the hub (docs/assistant/onboarding.md 4.4); the hub's own words are kept. */
     @Test fun codedRefusalsNameTheStep() {
         // The hub does not word node_unreachable: its error is transport detail, never shown.
         val offline = HubFailure(HubError.Server, "rpc: connection closed", status = 502, code = "node_unreachable", retryable = true)

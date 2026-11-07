@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Several managers (docs/managers.md "Clients"): an inbox item's chat is its manager's Lark. Every request its view
+// Several managers (docs/assistant/managers.md "Clients"): an inbox item's chat is its manager's Lark. Every request its view
 // makes names that manager where it is made (no page-wide pin), so one still going out after the next item opened (the
 // read report flushed as the chat closes) keeps its own; a chat of the default's names none.
 import { act } from "react";

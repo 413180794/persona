@@ -44,7 +44,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 电脑 with several managers (docs/managers.md step 4): the computers under the manager they belong to, the default's
+ * 电脑 with several managers (docs/assistant/managers.md step 4): the computers under the manager they belong to, the default's
  * first (an unstamped one is its), the offline manager greyed with 最后同步于, in every style, light and dark. Written
  * to `build/managers-shots/machines-*.png`.
  */

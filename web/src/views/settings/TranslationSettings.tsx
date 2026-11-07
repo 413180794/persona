@@ -1,4 +1,4 @@
-// Settings › Translation (docs/ios.md "Translation", the app's TranslationSettingsView): on / off, the target language, and what gets
+// Settings › Translation (docs/apple/ios.md "Translation", the app's TranslationSettingsView): on / off, the target language, and what gets
 // translated: mail (on), and the Feishu chats picked here (none: Feishu has too many messages to translate them all;
 // only on a hub that reads Feishu, feature `lark`).
 // Kept in this browser. The hub translates new mail ahead of time for the phones that ask; here a mail is translated

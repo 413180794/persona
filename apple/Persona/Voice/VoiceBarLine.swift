@@ -1,8 +1,8 @@
 import Foundation
 
-// What the voice bar says (docs/voice.md 6.2): the first line's state beside the orb, and the second line about the
+// What the voice bar says (docs/assistant/voice.md 6.2): the first line's state beside the orb, and the second line about the
 // bound conversation, with the buttons that go with it. Pure: the bar only draws them, the tests hold them to the cases
-// (docs/voice.md 6.10「VoiceBarLine 的各种相位」).
+// (docs/assistant/voice.md 6.10「VoiceBarLine 的各种相位」).
 
 /// The voice bar's second line: what the bound conversation does, what needs the user, or why the last instruction did
 /// not go, and what can be done about it. Every button is a single line; the bar puts the ones that do not fit in ⋯.
@@ -29,7 +29,7 @@ nonisolated struct VoiceBarLine: Equatable, Sendable {
         /// The computer is offline: nothing said can go.
         case offline
 
-        /// Worth saying to VoiceOver as it comes (docs/voice.md 6.6「无障碍」): it asks for the user, or the voice stops.
+        /// Worth saying to VoiceOver as it comes (docs/assistant/voice.md 6.6「无障碍」): it asks for the user, or the voice stops.
         var announced: Bool {
             switch self {
             case .needsTap, .asking, .notSent, .offline, .paused: true
@@ -60,7 +60,7 @@ nonisolated struct VoiceBarLine: Equatable, Sendable {
             }
         }
 
-        /// What the plan card is answered with for Send Back as Feedback: sent back, the words as its feedback (docs/voice.md
+        /// What the plan card is answered with for Send Back as Feedback: sent back, the words as its feedback (docs/assistant/voice.md
         /// 1.2 I.4; the app's own resolve, with this device's token: decision 5 holds, the user tapped it).
         var resolution: Resolution? {
             guard case .returnPlan(_, let feedback, _) = self else { return nil }
@@ -144,7 +144,7 @@ nonisolated struct VoiceBarLine: Equatable, Sendable {
         return VoiceBarLine(kind: .ready, text: String(localized: "Just speak; it goes to \(label)"), since: nil, actions: [])
     }
 
-    /// Why `run` did not go, in the user's words (docs/voice.md 1.3), and what can be done: send it again (when the
+    /// Why `run` did not go, in the user's words (docs/assistant/voice.md 1.3), and what can be done: send it again (when the
     /// connection up now still knows it), clear the computer's line first, give it to the plan card as its feedback.
     private static func notSent(_ run: VoiceRun, cards: [Interaction], label: String, resendable: Bool) -> VoiceBarLine {
         let dismiss = Action.dismiss(run: run.id)

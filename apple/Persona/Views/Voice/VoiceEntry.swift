@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 #endif
 
-// How a conversation's page gets into a voice call and back out of one (docs/voice.md 6.1, 1.2 L, 1.3): starting it from
+// How a conversation's page gets into a voice call and back out of one (docs/assistant/voice.md 6.1, 1.2 L, 1.3): starting it from
 // the composer's button or the 「+」 menu's Voice Chat, what the menu says where there is none, Open Settings, and the line left
 // where the bar was after a call ended by itself (「语音已结束 · 继续」).
 
@@ -73,7 +73,7 @@ extension View {
     }
 }
 
-/// Where the bar was, after a call ended by itself (docs/voice.md 1.2 L): Voice Ended, why, and Continue (or Retry), Open Settings,
+/// Where the bar was, after a call ended by itself (docs/assistant/voice.md 1.2 L): Voice Ended, why, and Continue (or Retry), Open Settings,
 /// Details as the ending allows. It stays until the page goes; Continue picks the call up with its captions and what it
 /// handed over (`VoiceCalls.resume`), and the voice says what finished meanwhile.
 struct VoiceEndedStrip: View {
@@ -140,7 +140,7 @@ struct VoiceEndedStrip: View {
 }
 
 extension PromptItems {
-    /// Voice Chat in the old layout's BeautifulUI prompt bar, beside its attachments (docs/voice.md 6.1).
+    /// Voice Chat in the old layout's BeautifulUI prompt bar, beside its attachments (docs/assistant/voice.md 6.1).
     static var voice: PromptSource {
         PromptSource(id: "voice", name: String(localized: "Voice Chat"), detail: String(localized: "What you say goes to this chat"),
                      icon: .symbol(Theme.Icon.voiceChannel), kind: .attach)
@@ -153,7 +153,7 @@ nonisolated struct VoiceProbeID: Hashable, Sendable {
     var active: Bool
 }
 
-/// The composer's side of voice (docs/voice.md 6.1, 6.8): asks the group's hub whether it has a voice extension that
+/// The composer's side of voice (docs/assistant/voice.md 6.1, 6.8): asks the group's hub whether it has a voice extension that
 /// speaks protocol 2 (3.1; at most once a minute, the entry keeps the last answer meanwhile, `VoiceSupport`), says why the
 /// 「+」 menu's Voice Chat cannot start one, and in DEBUG the screenshot switches (`VoiceSample`).
 struct ComposerVoice: ViewModifier {

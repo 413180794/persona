@@ -38,7 +38,7 @@ import java.text.DateFormat
 import java.time.Instant
 
 /**
- * What the connection details read besides the state the page already has (docs/android.md "Connection details"): the
+ * What the connection details read besides the state the page already has (docs/android/android.md "Connection details"): the
  * transport's observations (last failure, next try, last message from the hub), the messages waiting to go out, and
  * a way to try the hub again now. The app provides it for the selected hub; without it the sheet shows only the state.
  */

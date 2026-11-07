@@ -65,7 +65,7 @@ type pairCodeReply struct {
 	QR     *qrImage `json:"qr,omitempty"`
 	WebURL string   `json:"web_url,omitempty"`
 	WebQR  *qrImage `json:"web_qr,omitempty"`
-	// A computer's code (docs/onboarding.md 5.3): its name, whether it waits to be confirmed (pending / confirmed),
+	// A computer's code (docs/assistant/onboarding.md 5.3): its name, whether it waits to be confirmed (pending / confirmed),
 	// whether it was added now, the command that pairs its Persona Link and the line that installs and pairs a node
 	// by system (only linux, when the hub knows the site it was published on).
 	Name    string            `json:"name,omitempty"`
@@ -99,7 +99,7 @@ func webSignInBase(raw string) (string, error) {
 }
 
 // pairRoutes are the pairing endpoints: short-lived pairing tokens for `personad hub pair`
-// (docs/redesign/hub-changes.md 1.3), and for a signed-in device pairing another one (#2731).
+// (docs/archive/redesign/hub-changes.md 1.3), and for a signed-in device pairing another one (#2731).
 // Also a computer's code (machines_add.go): for a link computer there is, or one added now, from the master token over
 // loopback or a signed-in full device.
 func (h *Hub) pairRoutes(api *http.ServeMux) {

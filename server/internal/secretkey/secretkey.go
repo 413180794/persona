@@ -2,7 +2,7 @@
 // nonce + ciphertext). The hub seals its own with the one in its data directory (peers' tokens, the computers'
 // connector credentials); a manager with the one in its own directory (model providers' keys, extensions', connectors'
 // and bots' secrets, mail passwords). The built-in manager's started as a copy of the data directory's; it rotates to
-// a key of its own once its data is in its own database (internal/assistant keyrotate.go, docs/managers.md "Its own
+// a key of its own once its data is in its own database (internal/assistant keyrotate.go, docs/assistant/managers.md "Its own
 // secret.key").
 package secretkey
 

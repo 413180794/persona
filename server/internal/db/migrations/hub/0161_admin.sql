@@ -1,4 +1,4 @@
--- The hub admin UI (docs/admin.md): one administrator password (argon2id, PHC string) and its browser sessions.
+-- The hub admin UI (docs/operations/admin.md): one administrator password (argon2id, PHC string) and its browser sessions.
 -- A session's cookie value is never stored, only its SHA-256; csrf is the token the page sends on every write.
 CREATE TABLE IF NOT EXISTS admin_credentials (
     id            smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1),

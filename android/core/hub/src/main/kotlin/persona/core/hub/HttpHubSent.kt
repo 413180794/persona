@@ -9,7 +9,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.RequestBody
 import okhttp3.Response
 
-/** Settings › Sent as you over the pairing's connection (docs/connectors.md "Sent as the user", `GET /api/v1/connectors/sent`, answered by the hub's manager). */
+/** Settings › Sent as you over the pairing's connection (docs/extensions/connectors.md "Sent as the user", `GET /api/v1/connectors/sent`, answered by the hub's manager). */
 class HttpHubSent internal constructor(
     private val request: suspend (path: String, method: String, body: RequestBody?) -> Response,
 ) : HubSent {

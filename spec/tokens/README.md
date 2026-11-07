@@ -14,11 +14,11 @@
 | 同上 | `common.<mode>` | `Theme.brand/danger/positive/caution/cautionText/ai/loop/countBadge`、代码和终端色、`Theme.Diff`、`Theme.Hue`、`Theme.Fill` |
 | 同上 | `system.<mode>` | `Theme.systemPage/systemCard`、SwiftUI 的 `Color.primary/secondary`、UIKit 系统 fill 的显式回退值；见下文限制 |
 | `color.status.json` | `status.<mode>.<state>` | `ios/Shared/StatusPalette.swift`；待唤醒和已屏蔽的映射取 `ios/Persona/Views/Chats/ChatsView.swift` 的分组表 |
-| `dimension.json` | `radius`、`space`、`watch` | `Theme.Radius`、`Theme.Space`、`Theme.Watch`；触控区取 `docs/redesign/README.md` D7，胶囊按短边的一半 |
+| `dimension.json` | `radius`、`space`、`watch` | `Theme.Radius`、`Theme.Space`、`Theme.Watch`；触控区取 `docs/archive/redesign/README.md` D7，胶囊按短边的一半 |
 | `type.json` | `type.<role>` | `Theme.Font` 的文本样式、默认字号和字重；行高是跨端默认值，iOS 没有写死这些行高 |
 | `motion.json` | `motion` | `Theme.Motion.state/layout` 的配置时长；减少动态效果时用零时长。它们不是运行耗时的实测数据 |
 | `surface.json` | `surface.<style>` | `ios/Persona/Views/Styling.swift` 的 `Surface`：材质、阴影颜色与偏移、描边；原生回退使用无阴影实心表面 |
-| `rules.json` | `$extensions.persona` | `docs/ios.md` 可读性底线、`docs/redesign/ux.md` 第 7、8 节，以及 WCAG AA |
+| `rules.json` | `$extensions.persona` | `docs/apple/ios.md` 可读性底线、`docs/archive/redesign/ux.md` 第 7、8 节，以及 WCAG AA |
 
 风格键为 `glass`（液态玻璃）、`claude`、`clay`（黏土）、`island`、`lark`（飞书）、`native`（Android 原生）；模式键为 `light`、`dark`。每个风格、模式必须有同样的语义色字段。
 
@@ -152,7 +152,7 @@ CSS 在 `:root` 暴露全路径变量，例如 `--semantic-native-light-accent`�
 系统灰色相关失败来自上述回退假设，需在 iOS 实际环境中另行核对；不能将这些结果写成 iOS 真机结论。
 
 **两级规则**（协调者 2026-10-30 定）：
-- `level: "error"`：`docs/ios.md` 写明的三条底线（按钮字对主色 3.5、主色链接对页面 3、用户气泡正文 4.5）。不达标就让 `--check` 失败。
+- `level: "error"`：`docs/apple/ios.md` 写明的三条底线（按钮字对主色 3.5、主色链接对页面 3、用户气泡正文 4.5）。不达标就让 `--check` 失败。
 - `level: "warn"`：按 WCAG AA 补的建议项（正文、次要文字、状态字、计数、diff、终端）。只报告数量，不阻断：iOS 现在的取值有不少达不到，token 又必须和 iOS 一致，改色要两端一起改，这一轮 iOS 不改。
 - `known-failures.json`：底线规则里 iOS 现在就达不到的组合（目前只有飞书深色的按钮白字 3.3477:1）。列在这里的不让 `--check` 失败；**以后达标了必须从列表删掉**（`--check` 会提示），新增的底线不达标一律失败，所以这张表只会变短。
 

@@ -10,8 +10,8 @@ import (
 // containerHost is what Docker names a container's host by default: its id, which says nothing to a person.
 var containerHost = regexp.MustCompile(`^[0-9a-f]{12}([0-9a-f]{52})?$`)
 
-// hubName is what people see this hub as (docs/plan-hub-mesh.md 2.6; the link sends it to the Mac menu bar,
-// docs/link.md): hub.json's name (as the admin UI last set it: configuredHubName, live); else defaultHubName.
+// hubName is what people see this hub as (docs/archive/operations/plan-hub-mesh.md 2.6; the link sends it to the Mac menu bar,
+// docs/operations/link.md): hub.json's name (as the admin UI last set it: configuredHubName, live); else defaultHubName.
 func (h *Hub) hubName() string {
 	if h.cfg == nil { // a bare hub in unit tests
 		return "hub"

@@ -1,7 +1,7 @@
 # Dispatching work and delivery
 
 A retrospective from 2026-11-05: 8 machines and 20-plus Agents worked for a day, and only 6 items actually shipped. Most stopped at "opened a PR", "merged but off by default" or "not deployed".
-What made it into the product is in `docs/todos.md` ("Delivery") (#3306, the assistant setting `done_needs_delivery`, off by default; that section says how to turn it on).
+What made it into the product is in `docs/assistant/todos.md` ("Delivery") (#3306, the assistant setting `done_needs_delivery`, off by default; that section says how to turn it on).
 
 ## Why work stopped halfway
 

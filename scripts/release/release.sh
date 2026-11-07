@@ -6,7 +6,7 @@
 #   NO_PUBLISH=1 ./scripts/release/release.sh              # TestFlight only, no personad at publish.site_url (publish.sh)
 #   UPLOADER=asc ./scripts/release/release.sh              # export the ipa, check it, upload it with asc (asc_cli.py)
 #
-# The App Store Connect API key, bundle id and team come from the config (docs/config.md). Builds into build-release/
+# The App Store Connect API key, bundle id and team come from the config (docs/operations/config.md). Builds into build-release/
 # so it never touches the simulator build. The export re-signs manually with the "Persona App Store" / "Persona Watch
 # App Store" profiles (create them first with scripts/release/asc_signing.py): the App Manager API key can't cloud-sign.
 set -euo pipefail
@@ -14,11 +14,11 @@ cd "$(dirname "$0")/../.."
 _env=$(python3 scripts/persona_config.py env) || exit $?
 eval "$_env"; unset _env
 python3 scripts/persona_config.py xcconfig
-echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/config.md)"
+echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/operations/config.md)"
 # No private values in what is about to ship from this tree (CLAUDE.md).
 python3 scripts/privacy_check.py
 # The App ID must have every capability the entitlements need and the App Store profiles must be current, or the export
-# fails after a ten-minute archive (a new entitlement invalidates them, docs/release.md "entitlements"). Needs the API key.
+# fails after a ten-minute archive (a new entitlement invalidates them, docs/operations/release.md "entitlements"). Needs the API key.
 if [ -f "${ASC_KEY_PATH:-}" ]; then python3 scripts/release/asc_signing.py --check >/dev/null; fi
 # Export the ipa and check it like NO_UPLOAD does, then upload it with asc instead of xcodebuild.
 EXPORT_ONLY="${NO_UPLOAD:-}"
@@ -55,13 +55,13 @@ python3 scripts/release/check_bundle_privacy.py "$APP"
 if strings "$APP/Persona" | grep -qxE '(pairURL|openMachineFiles|showFolderUpload|openProviderWizard|scrollTrace|scrollTracePath|unfoldTrace|showUnfoldLab|showSearchTrace|searchTracePath|openSession|showNewChat|showNewMain|openAssistant|openAssistantSidebar|newAssistant|openFirstImage|openViewedImage|showViewerChromeHidden|showViewerInfo|showViewerDecodeDelay|showViewerDecodeDuringPan|showViewerPagingProbe|showDocCommentReply|showDocCommentDraft|openTerminalPane|showPad|showKeyMods|focusTerminalInput|openShortcutsPanel|openTerminalSettings|openTerminalTips|showInfo|loadAll|showFromSeq|showLark|larkTop|larkFocus|inboxDrawer|larkProfile|larkPicker|larkMoments|openWorkbench|addMail|dropUsers|openPane|simulateTap|showMenu|showRewind|openFilePath|openFileLine|jumpEnd|showOldest|openAllWork|openAgent|focusComposer|openSlashMenu|terminalPages|openEditor|openLinkURL|openChatInfo|openChatInfoPage|openChatInfoFrom|openThreadAt|openPeople|openMomentsTab|openMailLabel|openPeopleQuery|openFeishuDoc|openFeishuDocHeading|showFeishuDocSheet|openFeishuWikiSpace|openFeishuWikiNode|showFeishuWikiUpdates|openSearch|openSearchTab|openSearchFeed|openSearchFilter|openSearchFirst|openCalendarDate|openCalendarEvent|showCalendarNow|showDetailBottom|openMeeting|openMinutes|showMinutesTab|showMinutesPlaying|showMinutesSearch|openTask|openTaskScope|openOKR|showWorkBottom|showFeishuDocTableEnd|openMailThread|showMailAttachment|showMailBottom|showCloseAgent|showDeleteSession|openSpaceFromChat|openOverSpace|showHerdrStart|showShareCard|showCompactChrome|showWakeDrawer|showSampleQuestion|showRecapDrawer|openAssistantPage|showAutoScroll|showScrollToOldest|openStorage|showFoldProbe|openInboxFirst|showInboxAction|showInboxMutes|showInboxSuggestionEdit|showInboxSuggestionStale|openMachinePage|showAsUnread|showSampleScreen|showTestNotification|openNotificationSettings|showPushHealth|openSendMessage|openUploadDemo|showReportUpload|showReportDelete|openReportRecord|showFleetSample|fleetDetails|fleetIsland|showFleetCount|openIslandSettings|openIslandDiagnostics|showConnection|showConnectionCycle|showToasts|simulateOffline|openConnectionDetails|openSendDelay|openMonitor|openAgentsFresh|openChatsFresh|openRecapsFresh|openScreenFresh|showLarkSendFresh|perfCounts|openWelcome|openMonitorRange|openMonitorScrub|openMachines|openMachineDetail|openDevices|openConnectDevice|openConnectorMail|openConnectorFeishu|openConnectorBot|openConnectorGitHub|openConnectorTelegram|openConnectorPlugin|openConnectorMessages|openMessagesChats|openMessagesChat|openConnectorDevice|showFullOutput|showComposerPhoto|showFreezeProbe|showScrollState|showChatDump|showClearConfirm|showCleanUpConfirm|showPromptMenu|openModelLaunchers|openModelConfiguration|openModelPurpose|showModelSearch|showDeleteConfirm|showLauncherCheck|openModelLauncher|showKnowledgeEntry|showKnowledgeSearch|showKnowledgeLower|showKnowledgeKind|openFromDoneNotice|holdChromeOpen|showErrorDetails|openPersona|showPersonaState|openTranslationSettings|openTriageSettings|openLauncherPage|openLauncherEditor|openAppearance|showFilePerf|showFileAutoScroll|showFileAutoScrollSpeed|showSpaceTabs|showDrawerProbe|showDrawerAutoDrag|openInboxItem|openInboxAsk|openShellPage|showShellPagerAt|showDesktopSample|openDesktopSheet|showSamplePermission|showSampleCodexApproval|showSampleCodexQuestion|showKnowledgeDay|showToolDetails|showMailAskClaude|openPairSheet|openPairSSH|openPairLink|openPairLinkTimes|showPerfGlide|showPerfChurn|showPerfChanges|showPerfSeconds|showPerfSpeed|showPerfPoint|showPerfQuit|showPerfOut|showPerfDelay|showPerfRun|showPerfSections|showPerfRounds|openEngineStep|showPushKey|showRunsOpen|openQuietSpaces|showHomeState|openCodexSettings|openClaudeSettings|showPagePerf|showFrameProbe|showPopFrames|openRecording|showRecordingSample|openHubUpdate|openManagers|openManagerPage|showManagerCode|openSentAsYou|openSkills|openPlugins|openPlugin|openPluginPage|openPluginMarket|openPluginMarkets|openMarketPlugin|openExtensions|openExtension|openExtensionPage|openExtensionMarket|openExtensionMarkets|openMarketExtension|openChannels|openChannel|openHub|openHubs|openSSHTunnel|seedSSHTunnel|seedSSHKey|pairURL2|pairURL3|showLarkAttachmentDraft|showLarkQuoteDraft|showLarkThreadAttachmentDraft|showContexts|showSampleQuotes|showTaskDetail|showTaskBoard|openTodoDetail|showTodoHandoff|openMacSection|openMacPluginPage|openMacExtensionPage|showAgentInfo|openMacTodo|showDoneTodos|openTodoTitled|showModelConfigSheet|showDiscardConfirm|showUnlockWithoutAuth|showPiPSource|showSampleHTMLCard|showHealthTrends|showMacHover|showMacKeyScript|openMacListFocus|showMacDropCover|showTerminalUpload|showVoiceOrbs|showVoiceSample|openVoice|showLoopDraft|showLookBlink|showAddComputer|wizardPreset|wizardKey|showRemovalWarnings)'; then
   echo "DEBUG switches found in the Release binary" >&2; exit 1
 fi
-# Nor the runtime CLI (apple/Persona/Debug/, docs/runtime-cli.md): its switches, its type, the accessibility hook it turns on.
+# Nor the runtime CLI (apple/Persona/Debug/, docs/operations/runtime-cli.md): its switches, its type, the accessibility hook it turns on.
 if strings "$APP/Persona" | grep -qE 'runtimeCLI|RuntimeCLI|_AXSSet(Automation|ReduceMotion)Enabled'; then
   echo "the runtime CLI found in the Release binary" >&2; exit 1
 fi
 
 # Every bundle signed with its target's keychain groups (the app shares the Live Activity's persona with PersonaWidgets,
-# the push key with PersonaNotify): build 92 shipped without them (docs/release.md "entitlements").
+# the push key with PersonaNotify): build 92 shipped without them (docs/operations/release.md "entitlements").
 python3 scripts/release/entitlements.py check "$ARCHIVE"
 
 OPTS=$(mktemp -t export).plist
@@ -99,7 +99,7 @@ else
   echo "Build $BUILD uploaded. It appears in App Store Connect → TestFlight in ~10–30 min (python3 scripts/release/asc_testflight.py wait 45 $BUILD)."
 fi
 
-# The same release of personad for anyone to install (publish.sh, docs/release.md "Publishing personad"), versioned with this
+# The same release of personad for anyone to install (publish.sh, docs/operations/release.md "Publishing personad"), versioned with this
 # build's number. Not with NO_UPLOAD or NO_PUBLISH, nor when the config has no publish.site_url.
 if [ -z "${NO_UPLOAD:-}" ] && [ -z "${NO_PUBLISH:-}" ] && [ -n "${PERSONA_PUBLISH_URL:-}" ]; then
   VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD" ./scripts/release/publish.sh

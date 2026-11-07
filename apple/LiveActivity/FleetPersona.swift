@@ -99,7 +99,7 @@ nonisolated extension FleetState {
 /// the avatar only when a state has none. Each at every size the activity draws a face (compact, minimal / limited,
 /// expanded, lock screen), points × 3 pixels: a phone may not draw a Live Activity whose picture is larger than where
 /// it shows (an image decoded at 1× is as many points as it has pixels), and the simulator draws anything
-/// (docs/live-activity.md「为什么 build 98 还不对」). Each is a file of its own, read only when drawn.
+/// (docs/apple/live-activity.md「为什么 build 98 还不对」). Each is a file of its own, read only when drawn.
 nonisolated struct FleetFaces: Hashable, Sendable {
     /// One picture at each size: points → PNG.
     typealias Picture = [Int: Data]
@@ -173,7 +173,7 @@ nonisolated struct FleetLookStore: Sendable {
     static let avatarName = "avatar"
 
     /// The island's log (Console: subsystem `persona`, category `island`): every write on either side and every read
-    /// that fails, so a phone that draws the wrong persona says which step failed (docs/live-activity.md「诊断」).
+    /// that fails, so a phone that draws the wrong persona says which step failed (docs/apple/live-activity.md「诊断」).
     static let log = Logger(subsystem: "persona", category: "island")
 
     /// `Fleet/` in the container; nil when this bundle has none (not signed with the group: nothing is saved, and the
@@ -423,7 +423,7 @@ nonisolated enum FleetPersona {
 }
 
 /// The persona on the activity: its still frame for the state (a Live Activity runs no timelines or repeating
-/// effects, docs/live-activity.md「坑」), changing with a cross-fade when the state does. A package draws its picture
+/// effects, docs/apple/live-activity.md「坑」), changing with a cross-fade when the state does. A package draws its picture
 /// for the state; a state it has no frames for gets the built-ins' cue (the red ring, gray when offline). Its
 /// drawing in its color while the faces cannot be read.
 struct FleetFace: View {

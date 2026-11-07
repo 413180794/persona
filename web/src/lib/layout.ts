@@ -1,4 +1,4 @@
-// Which columns of the shell are shown on a wide screen (the shortcuts ⌘⌥B and ⌘⇧↵, docs/web.md "Keyboard shortcuts"). A narrow
+// Which columns of the shell are shown on a wide screen (the shortcuts ⌘⌥B and ⌘⇧↵, docs/web/web.md "Keyboard shortcuts"). A narrow
 // screen has a drawer and a full-screen panel instead; these do nothing there.
 //
 // The sidebar folds to a rail of icons (#2524), not away: the rail keeps the pages one click off and its own button to

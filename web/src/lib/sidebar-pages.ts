@@ -1,4 +1,4 @@
-// The sidebar's pages as the user arranged them (Settings › General › Sidebar pages, docs/web.md "The sidebar's pages"): their order, and which
+// The sidebar's pages as the user arranged them (Settings › General › Sidebar pages, docs/web/web.md "The sidebar's pages"): their order, and which
 // stay in the list and which wait under More. Kept per browser, as the pinned conversations are: a phone and a
 // laptop may well want different pages at hand.
 //

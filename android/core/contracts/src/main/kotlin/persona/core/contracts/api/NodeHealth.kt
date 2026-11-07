@@ -15,7 +15,7 @@ data class DoctorCheck(
     @SerialName("items") val items: List<String> = emptyList(),
 )
 
-/** `GET /api/v1/machines/{id}/doctor` and `POST …/doctor/fix` (docs/machines.md "Self-check"). */
+/** `GET /api/v1/machines/{id}/doctor` and `POST …/doctor/fix` (docs/server/machines.md "Self-check"). */
 @Serializable
 data class DoctorReport(
     @SerialName("ok") val ok: Boolean = false,
@@ -25,7 +25,7 @@ data class DoctorReport(
     @SerialName("fixed") val fixed: List<String> = emptyList(),
 )
 
-/** One subscription rate-limit window of an account (#2432, docs/usage-windows.md). */
+/** One subscription rate-limit window of an account (#2432, docs/server/usage-windows.md). */
 @Serializable
 data class UsageWindow(
     @SerialName("label") val label: String = "",

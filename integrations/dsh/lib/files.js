@@ -1,4 +1,4 @@
-// DSH's sessions on disk, for the node while no `dsh web` with the Persona plugin runs them (docs/dsh.md "While DSH is not
+// DSH's sessions on disk, for the node while no `dsh web` with the Persona plugin runs them (docs/integrations/dsh.md "While DSH is not
 // running"): the companion process (companion.mjs) lists the recent ones as offline and pages them, reading DSH's own
 // session store without writing anything. A send wakes DSH (a command the operator configures) and is handed over: the
 // node delivers it to the plugin once that runs the session (the node's handover feature). The plugin's rows win over

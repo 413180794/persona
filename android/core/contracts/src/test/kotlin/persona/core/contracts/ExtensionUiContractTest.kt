@@ -9,7 +9,7 @@ import persona.core.contracts.api.ExtensionCatalog
 import persona.core.contracts.api.ExtensionMarket
 import persona.core.contracts.api.ExtensionUiPlace
 
-// docs/extensions.md "UI slots" "Badges": the hub pushes a nav page's badge as an extension_ui event (plugin_ui before #1844,
+// docs/extensions/extensions.md "UI slots" "Badges": the hub pushes a nav page's badge as an extension_ui event (plugin_ui before #1844,
 // both since); null clears it.
 class ExtensionUiContractTest {
     @Test fun aBadgeEventDecodes() {

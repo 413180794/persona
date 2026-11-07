@@ -1,6 +1,6 @@
 import XCTest
 
-/// Machines (docs/machines.md「App」): the Agents list's machine menu opens every machine on one page, what needs a look
+/// Machines (docs/server/machines.md「App」): the Agents list's machine menu opens every machine on one page, what needs a look
 /// first (the offline NAS, then the busy server called out); a card opens the machine's page: its agents on top (one
 /// opens the chat), the charts below, the range switches, the system last. Against scripts/mock/mock_hub.py
 /// (TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:<port>); TEST_RUNNER_PERSONA_SHOT_DIR=<dir> also saves the screens

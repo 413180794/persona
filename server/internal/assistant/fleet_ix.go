@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// The interactions (docs/protocol.md "Interactions"): the cards the user answers on the phone — a hook's permission, question
+// The interactions (docs/protocol/protocol.md "Interactions"): the cards the user answers on the phone — a hook's permission, question
 // or plan (a node's interaction.create, waited for until it is answered, expires or its node goes; a resumable one
 // outlives its node for its hook to claim again), a TUI dialog read off the screen (a "screen" card the manager
 // answers itself with keys), a Codex question or approval the node lists, the assistant's own questions and cards,
@@ -98,7 +98,7 @@ func (s *Service) syncScreenInteractions(machine string, list []proto.Session) {
 	for _, sess := range list {
 		// A session without a terminal (a source whose capabilities leave it out: Codex app-server, an agent runtime)
 		// has no screen to read a dialog off: it asks through its own cards, and blocked there means it waits in its
-		// own UI (docs/runtimes.md).
+		// own UI (docs/integrations/runtimes.md).
 		if sess.Status == proto.StatusBlocked && (sess.SourceKind == "" || sess.Capabilities != nil && sess.Capabilities.Terminal) {
 			blocked[sess.SessionID] = sess
 		}
@@ -1007,7 +1007,7 @@ func (s *Service) finished(p *pending) {
 	}
 	s.fleet.mu.Unlock()
 	s.channelsEnded(p.ix, nil)
-	// the app marks a question the assistant answered, and why (docs/assistant.md)
+	// the app marks a question the assistant answered, and why (docs/assistant/assistant.md)
 	s.hub.Tell(assistantwire.EventFleetResolved, done)
 	s.publishSessions(p.ix.MachineID)
 }
@@ -1089,7 +1089,7 @@ func (s *Service) askHub(ctx context.Context, ix proto.Interaction) (proto.Resol
 	return s.waitInteraction(ctx, ix)
 }
 
-// ---- "Always allow in this session" (#2202, docs/assistant.md "Always allow in this session") ----
+// ---- "Always allow in this session" (#2202, docs/assistant/assistant.md "Always allow in this session") ----
 
 // The node names what a card grants (proto.Interaction.AlwaysKeys, only on assistant conversations). The manager
 // remembers explicit Always answers and rechecks every later card against the stored keys, including after a
@@ -1156,7 +1156,7 @@ func (s *Service) keepAlways(ix proto.Interaction, r proto.Resolution) {
 	}
 }
 
-// ---- Codex cards (docs/codex.md "Questions and approvals") ----
+// ---- Codex cards (docs/integrations/codex.md "Questions and approvals") ----
 
 // A node lists the Codex questions and approvals open on its machine whenever the list changes (codex.interactions,
 // node/codexask.go); the manager keeps a card for each — a new one is announced, one no longer listed (answered at

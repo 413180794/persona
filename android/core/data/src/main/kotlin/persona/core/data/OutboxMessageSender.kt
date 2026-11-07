@@ -336,7 +336,7 @@ class OutboxMessageSender(
                 val target = when (val main = resolveMain()) {
                     is MainTarget.Found -> main.session
                     // The hub said why it cannot start (no computer, no Claude Code…): nothing was started, so the
-                    // message is not queued behind it (docs/onboarding.md 4.4); the user fixes the step and retries.
+                    // message is not queued behind it (docs/assistant/onboarding.md 4.4); the user fixes the step and retries.
                     is MainTarget.Refused -> {
                         store.transition(entry.clientMessageId, dispatchable, OutboxState.Refused, main.code)
                         continue
@@ -428,7 +428,7 @@ class OutboxMessageSender(
     }
 
     companion object {
-        /** Refusals of the start that come back by themselves (docs/onboarding.md 4.6): nothing was created. */
+        /** Refusals of the start that come back by themselves (docs/assistant/onboarding.md 4.6): nothing was created. */
         private val RetryLaterCodes = setOf("node_unreachable", "assistant_offline")
         private val uncertain = setOf(OutboxState.Sending, OutboxState.Unknown, OutboxState.Verifying)
         private val reviewable = setOf(OutboxState.Unknown, OutboxState.Verifying)

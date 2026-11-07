@@ -1,4 +1,4 @@
-// Package errreport is the generic error and crash reporting of Persona (docs/extensions.md "Error reports"): the
+// Package errreport is the generic error and crash reporting of Persona (docs/extensions/extensions.md "Error reports"): the
 // reports of the hub, the manager and the apps are trimmed, scrubbed, fingerprinted, deduplicated and rate limited
 // here before an extension with an error_reports contribution is given them. Nothing here knows where they go.
 package errreport

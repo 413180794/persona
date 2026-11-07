@@ -2,7 +2,7 @@
 #if DEBUG
 import SwiftUI
 
-/// The voice mode's screenshot switches (docs/voice.md 6.8):
+/// The voice mode's screenshot switches (docs/assistant/voice.md 6.8):
 /// - `-showVoiceSample listening|speaking|working|paused|asking|approval|refused|plan_feedback|ended|setup`: a call on the
 ///   page the app opens on (`-openSession`, `-openAssistant`), in that state, with no socket and no microphone: a fake
 ///   socket hands the engine the frames that state comes from, and a fake audio plays nothing. `setup` is no call: what

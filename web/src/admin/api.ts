@@ -1,5 +1,5 @@
 import { CSRF_HEADERS } from "../lib/compatibility";
-// The admin API client (docs/admin.md "API"): a session cookie, not the web client's bearer token. Writes carry the
+// The admin API client (docs/operations/admin.md "API"): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
 import { currentLanguage, t } from "../i18n";
 import { previewConsent } from "../lib/extension-model";
@@ -41,7 +41,7 @@ export function handleLoginRequired(fn: () => void) {
 type Method = "GET" | "POST" | "PUT" | "DELETE";
 
 export async function adminApi<T>(path: string, method: Method = "GET", json?: unknown): Promise<T> {
-  // the hub writes its error text in this language (docs/i18n.md "Protocol")
+  // the hub writes its error text in this language (docs/protocol/i18n.md "Protocol")
   const headers: Record<string, string> = { "Accept-Language": currentLanguage() };
   let body: string | undefined;
   if (method !== "GET") {
@@ -53,7 +53,7 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
 }
 
 // adminUpload posts a file as it is (application/octet-stream): the one admin write whose body is not JSON (an extension
-// package, docs/admin.md "Extensions"). query carries what the body cannot.
+// package, docs/operations/admin.md "Extensions"). query carries what the body cannot.
 export async function adminUpload<T>(path: string, file: Blob, query: Record<string, string>): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream", "Accept-Language": currentLanguage() };
   if (csrf) CSRF_HEADERS.forEach(name => headers[name] = csrf);
@@ -131,7 +131,7 @@ export function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// ── the center and connectors (docs/plan-hub-center.md 6) ──
+// ── the center and connectors (docs/archive/operations/plan-hub-center.md 6) ──
 
 const enc = encodeURIComponent;
 
@@ -154,14 +154,14 @@ export const linkPair = (id: string) => adminApi<LinkPair>(`/machines/${enc(id)}
 export const repairConnector = (id: string, pairLink: string, address?: string) =>
   adminApi<ConnectorRepair>(`/machines/${enc(id)}/connector`, "POST", { pair_link: pairLink, address: address || undefined });
 
-// ── the assistant's cards (docs/admin.md "Assistant cards"): one switch, live at once; the preview never calls the hub ──
+// ── the assistant's cards (docs/operations/admin.md "Assistant cards"): one switch, live at once; the preview never calls the hub ──
 
 export const getAssistantCards = () => adminApi<AssistantCards>("/assistant");
 export const setPersonaView = (on: boolean) => adminApi<AssistantCards>("/assistant", "PUT", { persona_view: on });
 
-// ── extensions (docs/admin.md "Extensions"): install, upgrade, roll back, uninstall, switch ──
+// ── extensions (docs/operations/admin.md "Extensions"): install, upgrade, roll back, uninstall, switch ──
 
-// The routes' root: /extensions, or /plugins on a hub from before #1844 (docs/extensions.md "Naming and compatibility"). Found out once,
+// The routes' root: /extensions, or /plugins on a hub from before #1844 (docs/extensions/extensions.md "Naming and compatibility"). Found out once,
 // by the list: a 404 there means the older hub, and every call after uses its routes.
 type Root = "/extensions" | "/plugins";
 type ListAnswer = AdminExtensions & { plugins?: AdminExtension[] };
@@ -220,7 +220,7 @@ export const setExtensionEnabled = async (id: string, enabled: boolean) => admin
 export const uninstallExtension = async (id: string, keepData: boolean) =>
   adminApi<ExtensionRemovalResult>(`${await extRoot()}/${enc(id)}`, "DELETE", { keep_data: keepData });
 
-// ── extension markets (docs/extensions.md "Extension markets"): the apps' routes under /extensions/-/, behind the admin session. Installing
+// ── extension markets (docs/extensions/extensions.md "Extension markets"): the apps' routes under /extensions/-/, behind the admin session. Installing
 // and upgrading from a market's preview go through installExtension / upgradeExtension above (the preview's id and digest).
 
 const markets = async () => `${await extRoot()}/-/markets`;
@@ -235,7 +235,7 @@ export const getCatalog = async (q?: string, market?: string, refresh?: boolean)
 export const previewFromMarket = async (market: string, extension: string) =>
   adminApi<ExtensionPreview>(`${await extRoot()}/-/catalog/preview`, "POST", { market, extension, plugin: extension });
 
-// ── how the extensions run (docs/extensions.md "Activity"): counts and logs, on a hub from #1857 on (older ones 404) ──
+// ── how the extensions run (docs/extensions/extensions.md "Activity"): counts and logs, on a hub from #1857 on (older ones 404) ──
 
 export const getMetricsOverview = (window: MetricsWindow = "24h") => adminApi<MetricsOverview>(`/extensions/-/metrics?window=${window}`);
 
@@ -274,7 +274,7 @@ export function setLogFollower(f: LogFollower) {
 
 export const followExtensionLogs: LogFollower = (...args) => follower(...args);
 
-// ── usage sources (docs/usage-windows.md "Account-pool gateways"): the gateways whose usage windows join the sidebar's ──
+// ── usage sources (docs/server/usage-windows.md "Account-pool gateways"): the gateways whose usage windows join the sidebar's ──
 
 export const getUsageSources = () => adminApi<UsageSources>("/usage-sources");
 export const saveUsageSettings = (s: { enabled?: boolean; poll_minutes?: number }) => adminApi<UsageSources>("/usage-sources", "PUT", s);

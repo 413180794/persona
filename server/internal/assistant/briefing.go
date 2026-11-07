@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// The fixed part of the morning and evening routines (docs/bots.md "Morning and evening briefings"): with a task's
+// The fixed part of the morning and evening routines (docs/extensions/bots.md "Morning and evening briefings"): with a task's
 // `facts` on, Persona works out what waits for the owner, what happened in the last briefWindow and what is to be
 // verified when the run starts, once. The Lark card, the push text and the facts the model is given all come from that one
 // computation, so their numbers agree; the model only writes a sentence or two on top.

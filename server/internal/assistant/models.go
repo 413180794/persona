@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/secretkey"
 )
 
-// The model configuration (docs/model-config.md) is the assistant's: the four categories' records (settings
+// The model configuration (docs/assistant/model-config.md) is the assistant's: the four categories' records (settings
 // model_config.<id>), the providers added in Persona with their keys sealed (models_launchers.go), the hidden ~/.zshrc
 // launchers. Only the assistant reads and writes them; the hub hands over what the machines and the plugins have, and
 // asks only what its plugins need (models_hub.go). Every model call is made from here, with the keys only the
@@ -859,7 +859,7 @@ func (s *Service) providerModelUses(ctx context.Context, provider string) ([]str
 
 // triageInUse refuses a change that leaves inbox.triage uncallable while plugins that need it are on: 422
 // triage_model_in_use, naming them (not 409: the apps read a 409 from model-config as an edit conflict and would hide
-// the message; a 422 they show as it is). nil when the change may go (docs/extensions.md "General inbox rules").
+// the message; a 422 they show as it is). nil when the change may go (docs/extensions/extensions.md "General inbox rules").
 func (s *Service) triageInUse(ctx context.Context, id string, effective ModelBinding) (map[string]any, error) {
 	if id != "inbox.triage" || s.modelUsable(ctx, effective) {
 		return nil, nil

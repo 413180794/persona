@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// Questions that can wait (#6287, docs/bots.md "Questions that can wait"): an Agent of a supervised task that asks with
+// Questions that can wait (#6287, docs/extensions/bots.md "Questions that can wait"): an Agent of a supervised task that asks with
 // report_to_supervisor kind "question" and urgent false does not wake anyone. The question is kept here, and the next
 // morning or evening briefing (with `facts` on) lists it under "Can wait". It leaves the queue in three ways only: the
 // owner marks it handled, its to-do ends (closed or deleted), or laterKeep passes. Nothing guesses from the chat that it

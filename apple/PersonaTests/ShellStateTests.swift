@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The shell's one source of the page in front (docs/shell.md): `select` and `route` change it at once and the strip
+/// The shell's one source of the page in front (docs/apple/shell.md): `select` and `route` change it at once and the strip
 /// and the app's tab follow; the strip's `slide` is idempotent and a slide not started yet is replaced. And the status
 /// row (`ShellNotices`): only the link's state (the toasts float), waiting for a finger unless urgent.
 @MainActor

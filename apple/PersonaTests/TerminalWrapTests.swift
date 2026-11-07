@@ -137,7 +137,7 @@ struct KeyBatcherTests {
 }
 
 /// What one streamed frame costs the phone: parse it, cut the rows into lines, draw what shows. Printed for the
-/// record (docs/terminal.md); the bound only catches a large regression (debug build, simulator).
+/// record (docs/integrations/terminal.md); the bound only catches a large regression (debug build, simulator).
 @MainActor struct TerminalFrameCostTests {
     @Test func aStreamedFrameIsCheap() throws {
         let url = try #require(Bundle(for: FixtureBundle.self).url(forResource: "terminal-observe-mixed", withExtension: "jsonl"))

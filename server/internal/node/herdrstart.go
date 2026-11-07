@@ -19,7 +19,7 @@ import (
 
 // A machine that rebooted has the node back (launchd / systemd start it) but not herdr: nobody opened a terminal and
 // ran it. Instead of refusing every start and resume until someone does, the node starts herdr's headless server
-// itself when it needs one (#1879, docs/engines.md "When herdr is not running"): when it starts, and before a start or resume.
+// itself when it needs one (#1879, docs/integrations/engines.md "When herdr is not running"): when it starts, and before a start or resume.
 // Only classic herdr (engines herdr and herdr-both), never Herdr App's herdr-core: that has its own lifecycle.
 //
 // The server runs in a clean login shell (env -i + $SHELL -l): herdr hands its environment to every pane and the

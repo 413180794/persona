@@ -1,6 +1,6 @@
 package extmgr
 
-// Per-app approval for the assistant operating a Mac (docs/computer-use.md "Lock screen, staying awake, per-app
+// Per-app approval for the assistant operating a Mac (docs/extensions/computer-use.md "Lock screen, staying awake, per-app
 // approval" c, #1507): the first time it operates an app on a Mac (or reads its whole screen) the phone asks once,
 // "Allow once" / "Always allow" / "Deny". Apps always allowed are kept by bundle id for that Mac in the hub's settings
 // (computerAppsKey) and listed, and removable, on the machine's page. Some are never remembered and asked about every

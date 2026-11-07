@@ -13,7 +13,7 @@ export function sourceSubtitle(s?: Session): string {
   if (!s?.source_kind) return "";
   const label = s.source_kind === "codex_app_server" ? t("lib-format.source_codex_live") : s.source_kind === "codex_history" ? t("lib-format.source_codex_history") : s.source_kind === "identity_conflict" ? t("lib-format.source_identity_conflict")
     : s.source_kind === "claude_bg" ? t("lib-format.source_claude_background")
-    : s.source_kind === "runtime" ? s.agent_label || s.agent || "runtime" // an agent runtime's session (docs/runtimes.md): its own name
+    : s.source_kind === "runtime" ? s.agent_label || s.agent || "runtime" // an agent runtime's session (docs/integrations/runtimes.md): its own name
     : s.source_kind;
   const detail = s.source_kind !== "identity_conflict" && s.agent_name ? ` · ${s.agent_name}` : "";
   return sessionCan(s, "send") ? label + detail : t("lib-format.read_only", { source: label + detail, reason: s.read_only_reason || t("lib-format.read_only_default_reason") });
@@ -49,7 +49,7 @@ export function sessionDeletable(s: Session): boolean {
   return !s.assistant && s.status === "offline" && !s.starting;
 }
 
-// docs/agent-states.md: needs you → unread → awaiting reply (seen, awaiting the user's reply, #5096) → working → idle → unknown → offline
+// docs/protocol/agent-states.md: needs you → unread → awaiting reply (seen, awaiting the user's reply, #5096) → working → idle → unknown → offline
 const RANK: Record<AgentState, number> = { needs_you: 0, unread: 1, working: 3, idle: 4, unknown: 5, offline: 6 };
 
 // A seen agent awaiting the user's reply ranks between unread and working. The comparator has no mutes: a muted one
@@ -105,7 +105,7 @@ export function attentionReason(s: Session): string | undefined {
 }
 
 /** The line a list row shows for it: why it waits for you when its host says so, else why its host stopped it on an
- *  error, else where its work stands when the hub triaged its turn (docs/agent-work.md), else its last words (iOS
+ *  error, else where its work stands when the hub triaged its turn (docs/assistant/agent-work.md), else its last words (iOS
  *  listPreview). */
 export function sessionPreview(s: Session): string {
   return attentionReason(s) ?? failureReason(s) ?? workLine(s) ?? s.last_text ?? "";

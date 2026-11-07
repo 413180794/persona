@@ -51,15 +51,15 @@ data class ChatAppBindings(
     val draftVersions: (SessionKey) -> Flow<DraftSessionVersion> = { emptyFlow() },
     /** Read-only access to the machines (the photos sent with messages load from them); null where there is none. */
     val files: SessionFiles? = null,
-    /** The group's machines' ports on the phone (docs/ports.md); null where there is no hub. */
+    /** The group's machines' ports on the phone (docs/operations/ports.md); null where there is no hub. */
     val ports: persona.core.contracts.api.PortOpener? = null,
-    /** Tasks from the assistant's conversations (docs/unified-entry.md); null where the hub group has none. */
+    /** Tasks from the assistant's conversations (docs/assistant/unified-entry.md); null where the hub group has none. */
     val tasks: persona.core.domain.tasks.TasksStore? = null,
 )
 
 interface ChatWiringSource {
     val current: StateFlow<ChatAppBindings?>
-    /** The services of the hub group [session] belongs to (docs/android.md "Multiple hubs"); a single hub has only [current]. */
+    /** The services of the hub group [session] belongs to (docs/android/android.md "Multiple hubs"); a single hub has only [current]. */
     fun bindingsFor(session: SessionKey): StateFlow<ChatAppBindings?> = current
 }
 

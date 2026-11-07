@@ -7,7 +7,7 @@ nonisolated enum Keychain {
 
     /// Whether it was written (callers that must not lose what they replace read it back: HubStore).
     /// `thisDeviceOnly`: never leaves this device (not restored onto another one from a backup, not synced): the SSH
-    /// tunnel's private key (docs/network.md「经 SSH 隧道连 hub」).
+    /// tunnel's private key (docs/operations/network.md「经 SSH 隧道连 hub」).
     @discardableResult
     static func save(_ data: Data, account: String, thisDeviceOnly: Bool = false) -> Bool {
         #if os(macOS) && DEBUG
@@ -76,7 +76,7 @@ nonisolated enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// The single pairing and the watch's credential from before several hubs (docs/multi-hub.md): `HubStore` moves
+    /// The single pairing and the watch's credential from before several hubs (docs/protocol/multi-hub.md): `HubStore` moves
     /// them into the default group and drops them once the registry is written.
     static let legacyServerAccount = "server"
     static let legacyWatchAccount = "watch"

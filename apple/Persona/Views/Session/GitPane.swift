@@ -5,7 +5,7 @@ import SwiftUI
 struct GitPane: View {
     @Environment(AppModel.self) private var model
     let machineID: String
-    /// The group of hubs the machine is in (docs/multi-hub.md).
+    /// The group of hubs the machine is in (docs/protocol/multi-hub.md).
     var group: String = ""
     let cwd: String
     @Binding var status: GitStatus?
@@ -312,7 +312,7 @@ struct GitDiffSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let machineID: String
-    /// The group of hubs the machine is in (docs/multi-hub.md).
+    /// The group of hubs the machine is in (docs/protocol/multi-hub.md).
     var group: String = ""
     let cwd: String
     /// The repository's root: the working tree's version of a file is read there (comparing, `CompareView`).
@@ -321,7 +321,7 @@ struct GitDiffSheet: View {
     @State private var diff: GitDiff?
     @State private var error: String?
 
-    /// A picture or a document the hub can give the versions of: compared instead of a text diff (docs/ios.md「对比」).
+    /// A picture or a document the hub can give the versions of: compared instead of a text diff (docs/apple/ios.md「对比」).
     private var compares: DocumentText.Kind? {
         guard model.features(group).contains("git_blob"), root != nil else { return nil }
         return DocumentText.kind(target.file.name)
@@ -394,7 +394,7 @@ struct GitCommitSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let machineID: String
-    /// The group of hubs the machine is in (docs/multi-hub.md).
+    /// The group of hubs the machine is in (docs/protocol/multi-hub.md).
     var group: String = ""
     let cwd: String
     let commit: GitCommit

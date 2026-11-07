@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalResources
 
 /**
  * Text that code outside composition decides on (a view model's status line, a failure's message) and the page
- * shows in its own language (docs/i18n.md): a string resource with its arguments, or words that are already final
+ * shows in its own language (docs/protocol/i18n.md): a string resource with its arguments, or words that are already final
  * (the hub's own reason, a name). Arguments that are themselves [UiText] are resolved first.
  */
 sealed interface UiText {

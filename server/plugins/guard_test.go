@@ -1,5 +1,5 @@
 // Package plugins_test guards server/plugins, which holds the plugins built and bundled with personad
-// (docs/extensions.md, the extensions' sources): each is a plugin like any other, written against the Go SDK (sdk/go)
+// (docs/extensions/extensions.md, the extensions' sources): each is a plugin like any other, written against the Go SDK (sdk/go)
 // and its own packages only, and run only by its own program in cmd/.
 package plugins_test
 
@@ -336,7 +336,7 @@ func TestPluginsDependOnlyOnTheSDK(t *testing.T) {
 type pkg struct{ path, dir, platform string }
 
 // platforms are the GOOS/GOARCH pairs the server ships for: the release builds (scripts/release/publish.sh) and the
-// node on Windows (docs/windows.md).
+// node on Windows (docs/operations/windows.md).
 var platforms = []string{"linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64", "windows/amd64"}
 
 // buildTags are the tag sets the server is built with: the release builds' public, and none (the Docker image,

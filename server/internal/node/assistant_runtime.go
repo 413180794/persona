@@ -1,6 +1,6 @@
 package node
 
-// The assistant on an agent runtime (docs/runtimes.md "Assistant"; DSH first, docs/dsh.md "Assistant"): a runtime that declares
+// The assistant on an agent runtime (docs/integrations/runtimes.md "Assistant"; DSH first, docs/integrations/dsh.md "Assistant"): a runtime that declares
 // the assistant capability runs the conversation, driven with the runtime protocol's own session calls. What is the
 // assistant's stays here, as for Claude and Codex: the conversation's state (launcher, directory), the live snapshot
 // each message starts with, the permission mode, the shared memory, and the gated skill commands Feishu goes through

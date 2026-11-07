@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The hub's own settings persona_settings offers (docs/assistant.md "Operating Persona itself", 2026-11-01): the tool is the
+// The hub's own settings persona_settings offers (docs/assistant/assistant.md "Operating Persona itself", 2026-11-01): the tool is the
 // assistant's (its own settings are its own: "About me", its launcher, …), which lists these (app.call settings.list) and
 // hands the actions on them to the hub (app.tool persona_settings). One registry: each setting says what it is, how to
 // read it and how a change is made. Reads are free; every change is a card on the phone that says what changes (before

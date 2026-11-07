@@ -1,7 +1,7 @@
 // Comments on a Feishu document in the reader (#1290; the phone's FeishuDocsComments / FeishuDocsCommentsModel):
 // the threads from the hub's read-only Lark gateway window, and, when the plugin says `lark_doc_comments`, the user's own
 // writes from this browser: a comment on the whole document or on a passage, a reply to a thread, resolve and reopen.
-// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol.md "Lark API".
+// They are not the AI's, so no gate asks (as with replies in the inbox, #1203). Routes: docs/protocol/protocol.md "Lark API".
 // No DOM here.
 
 import { ApiError, api, enc, getToken } from "./api";

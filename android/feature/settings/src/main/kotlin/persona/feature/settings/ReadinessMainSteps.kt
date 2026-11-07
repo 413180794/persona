@@ -28,7 +28,7 @@ import persona.core.navigation.ModelProviderRoute
 import persona.core.navigation.SettingsPage
 import persona.core.navigation.SettingsPageRoute
 
-/** The four steps the checklist shows for the main conversation (docs/onboarding.md 4.5), in the hub's order. */
+/** The four steps the checklist shows for the main conversation (docs/assistant/onboarding.md 4.5), in the hub's order. */
 internal val MainStepIds = listOf(ReadinessStep.COMPUTER, ReadinessStep.CLAUDE, ReadinessStep.MODEL, ReadinessStep.FIRST_MESSAGE)
 
 @StringRes

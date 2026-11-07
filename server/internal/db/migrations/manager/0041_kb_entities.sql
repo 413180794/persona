@@ -1,4 +1,4 @@
--- Index of the knowledge base under ~/.persona/data (hub/kb.go, docs/knowledge.md): the files are the source of
+-- Index of the knowledge base under ~/.persona/data (hub/kb.go, docs/assistant/knowledge.md): the files are the source of
 -- truth, this table only ranks and filters them, and can be rebuilt from the files.
 CREATE TABLE IF NOT EXISTS kb_entities (
     kind       text NOT NULL,          -- chats | people | projects | docs | meetings | events

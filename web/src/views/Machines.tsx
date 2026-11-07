@@ -1,4 +1,4 @@
-// Machines: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards. "Add computer"
+// Machines: every computer's CPU / memory / disk now and over the last hour (docs/server/machines.md), as Insight Cards. "Add computer"
 // (feature machines_add) adds one from here, and a computer waiting to be confirmed (trust pending) says so on its card.
 import { memo, useCallback, useEffect, useId, useState } from "react";
 import { t as tr } from "../i18n";
@@ -26,7 +26,7 @@ import { addTokens, formatTokens, hitRate, percentText, totalTokens, type UsageT
 
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
-  // with several managers, each one's computers under its name (docs/managers.md "Clients"); one: as before
+  // with several managers, each one's computers under its name (docs/assistant/managers.md "Clients"); one: as before
   const roster = useRoster();
   const groups = groupByManager(machines, roster, (m) => m.manager);
   const loaded = useStore((s) => s.loaded);

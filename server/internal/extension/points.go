@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Point is an extension point: a place in the hub a plugin contributes to (docs/plan-extensions.md "contributes").
+// Point is an extension point: a place in the hub a plugin contributes to (docs/plans/plan-extensions.md "contributes").
 type Point struct {
 	Name string // the key under contributes ("connectors")
 	// Namespace is the prefix of its methods ("connector": connector.status).
@@ -32,7 +32,7 @@ type Point struct {
 
 var connectorID = regexp.MustCompile(`^[a-z][a-z0-9]*$`)
 
-// ConnectorItem is a contribution to connectors: the connector protocol's manifest (docs/connector-protocol.md), known
+// ConnectorItem is a contribution to connectors: the connector protocol's manifest (docs/protocol/connector-protocol.md), known
 // before the program ever runs.
 type ConnectorItem struct {
 	ID           string   `json:"id"`
@@ -59,28 +59,28 @@ type ConnectorItem struct {
 	CLI string `json:"cli,omitempty"`
 	// SendsAsUser: the connector's program sends messages in the user's name on its own, outside the hub's write gate
 	// (a read tool that also replies, say). The user agrees to it at install, and the program may then keep each such
-	// send in the sent-as-user ledger with sent.record (docs/extensions.md "Sent as the user").
+	// send in the sent-as-user ledger with sent.record (docs/extensions/extensions.md "Sent as the user").
 	SendsAsUser bool `json:"sends_as_user,omitempty"`
 }
 
 // metaDescriptionMost is the longest meta_description (runes): a paragraph the relating prompt carries every time.
 const metaDescriptionMost = 4000
 
-// VoiceItem is a contribution to voice: the voice conversation's contract (docs/extensions.md "Voice").
+// VoiceItem is a contribution to voice: the voice conversation's contract (docs/extensions/extensions.md "Voice").
 type VoiceItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
 }
 
 // ComputerItem is a contribution to computer: operating the user's computers for the assistant (the built-in plugin
-// cua, docs/computer-use.md).
+// cua, docs/extensions/computer-use.md).
 type ComputerItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
 }
 
 // ShortcutItem is a contribution to shortcuts: an action of the extension the system runs — Shortcuts and Siri on
-// iPhone, Mac and Apple Watch (docs/extensions.md "System-level places"). The hub asks shortcut.run with its values.
+// iPhone, Mac and Apple Watch (docs/extensions/extensions.md "System-level places"). The hub asks shortcut.run with its values.
 type (
 	ShortcutItem  = wire.ShortcutItem
 	ShortcutParam = wire.ShortcutParam
@@ -116,7 +116,7 @@ func checkShortcut(s ShortcutItem) error {
 	return nil
 }
 
-// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/extensions.md "Quota").
+// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/extensions/extensions.md "Quota").
 type QuotaItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -126,7 +126,7 @@ type QuotaItem struct {
 }
 
 // AgentSourceItem is a contribution to agent_sources: a source of personal agents' sessions in the Agents tab, next
-// to the hub's own (docs/extensions.md "Personal Agent sources"). Its id is the source part of the sessions' ids
+// to the hub's own (docs/extensions/extensions.md "Personal Agent sources"). Its id is the source part of the sessions' ids
 // (<id>:<sessionKey>).
 type AgentSourceItem struct {
 	ID   string `json:"id"`
@@ -138,7 +138,7 @@ type AgentSourceItem struct {
 var providerPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 
 // ProviderItem is a contribution to providers: a model provider the user can add a launcher from (Settings › Model providers),
-// its address and models filled in (docs/extensions.md "Model providers").
+// its address and models filled in (docs/extensions/extensions.md "Model providers").
 type ProviderItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -157,14 +157,14 @@ type ProviderItem struct {
 	KeyHint string `json:"key_hint,omitempty"`
 }
 
-// Defined in the contract package extwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package extwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type (
 	APIReceipt    = extwire.APIReceipt
 	ProviderModel = extwire.ProviderModel
 )
 
 // APIItem is a contribution to api: a part of the app's API the plugin serves on its HTTP side, under /api/v1/<prefix>/
-// (docs/extensions.md "App API").
+// (docs/extensions/extensions.md "App API").
 type APIItem struct {
 	ID     string `json:"id"`
 	Prefix string `json:"prefix"`
@@ -177,7 +177,7 @@ type APIItem struct {
 }
 
 // AssistantItem is a contribution to assistant: skills and a part of the assistant's instructions, in the package
-// (docs/extensions.md "Assistant").
+// (docs/extensions/extensions.md "Assistant").
 type AssistantItem struct {
 	ID string `json:"id"`
 	// Skills are directories in the package, each a skill (SKILL.md first), put in with the assistant's.
@@ -190,7 +190,7 @@ type AssistantItem struct {
 }
 
 // MCPServerItem is a contribution to mcp_servers: a command line on the assistant's machine that the Claude assistant
-// gets as an MCP server of its own, its tools as mcp__<id>__<tool> (docs/extensions.md "MCP servers"). The command reads
+// gets as an MCP server of its own, its tools as mcp__<id>__<tool> (docs/extensions/extensions.md "MCP servers"). The command reads
 // its own configuration; Persona adds nothing to its environment (Claude starts it with the assistant process's, as
 // any MCP server). Without the command there (or when `<command> --help` does not mention every word of Requires)
 // nothing is added. Installing the extension trusts it to run that command on the assistant's machine, as its
@@ -551,7 +551,7 @@ var Points = map[string]Point{
 		}
 		return m.ID, nil
 	}},
-	// messaging: a messaging source (docs/extension-messaging.md, #2138): the app's "Messages" entry, its API under
+	// messaging: a messaging source (docs/extensions/extension-messaging.md, #2138): the app's "Messages" entry, its API under
 	// /api/v1/messaging/<id>/ on the extension's HTTP side.
 	"messaging": {Name: "messaging", Namespace: "messaging", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var m wire.MessagingItem
@@ -637,7 +637,7 @@ var Points = map[string]Point{
 		return e.ID, nil
 	}},
 	// error_reports: the hub's and the devices' errors and crashes, scrubbed, given to the program as
-	// error_reports.deliver (docs/extensions.md "Error reports").
+	// error_reports.deliver (docs/extensions/extensions.md "Error reports").
 	"error_reports": {Name: "error_reports", Namespace: "error_reports", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var e ErrorReportsItem
 		if err := strict(raw, &e); err != nil {
@@ -654,7 +654,7 @@ var Points = map[string]Point{
 		return e.ID, nil
 	}},
 	// auth_relay: the authorization links the user's Agents stop at, on the hosts and paths it names, completed with
-	// the account it is signed in with (auth_relay.complete, docs/auth-relay.md).
+	// the account it is signed in with (auth_relay.complete, docs/operations/auth-relay.md).
 	"auth_relay": {Name: "auth_relay", Namespace: "auth_relay", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var a AuthRelayItem
 		if err := strict(raw, &a); err != nil {
@@ -698,7 +698,7 @@ var Points = map[string]Point{
 		}
 		return c.ID, nil
 	}},
-	// channel: a way to talk to Persona, a chat app's bot (docs/channels.md "How extensions contribute channels"). The hub follows the
+	// channel: a way to talk to Persona, a chat app's bot (docs/extensions/channels.md "How extensions contribute channels"). The hub follows the
 	// turns; the program only talks to the chat app.
 	"channel": {Name: "channel", Namespace: "channel", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var c channel.Item

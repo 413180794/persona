@@ -28,7 +28,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
- * Settings › Extensions › Channels over the pairing's connection (docs/channels.md "API"). The hub answers a binding step and a test
+ * Settings › Extensions › Channels over the pairing's connection (docs/extensions/channels.md "API"). The hub answers a binding step and a test
  * message only after asking the chat app (a QR code to fetch, a message to send): those two wait longer than the
  * client's usual read timeout.
  */
@@ -115,7 +115,7 @@ class HttpChannelManagement internal constructor(
 
     private companion object {
         val json = "application/json; charset=utf-8".toMediaType()
-        // docs/channels.md: ^[a-z][a-z0-9_]*$, at most 32 for an extension's.
+        // docs/extensions/channels.md: ^[a-z][a-z0-9_]*$, at most 32 for an extension's.
         val ChannelId = Regex("[a-z][a-z0-9_]{0,63}")
         /** A bind step may fetch a QR code from the chat app, a test message waits on it (the hub gives it 30 s). */
         const val SlowSeconds = 40L

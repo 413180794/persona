@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// One group of paired hubs as the app runs it (docs/multi-hub.md): its socket, the hello of the hub it is on, and the
+/// One group of paired hubs as the app runs it (docs/protocol/multi-hub.md): its socket, the hello of the hub it is on, and the
 /// per-hub things that came with it. The default group's link is the only one until a second group is paired.
 @Observable
 final class HubLink: Identifiable {
@@ -45,7 +45,7 @@ final class HubLink: Identifiable {
     }
     var isDemo: Bool { config.isDemo }
 
-    /// The hub's messaging sources (#2138, docs/extension-messaging.md): the Feishu screens go through the first.
+    /// The hub's messaging sources (#2138, docs/extensions/extension-messaging.md): the Feishu screens go through the first.
     private(set) var messagingSources: [ExtensionMessagingSource] = []
 
     /// Reads the sources when the hub has the feature, forgets them when it does not.
@@ -91,7 +91,7 @@ final class HubLink: Identifiable {
 
 extension AppModel {
     /// Sends the error reports kept on disk to `group`'s hub (the caller passes the hub-level one), or deletes them when its last hello has no
-    /// `error_reports` (#5621, docs/protocol.md "Error reports"). The watch and visionOS do not report yet.
+    /// `error_reports` (#5621, docs/protocol/protocol.md "Error reports"). The watch and visionOS do not report yet.
     func flushErrorReports(_ group: String) {
         #if os(iOS) || os(macOS)
         guard let link = link(group), !link.isDemo else { return }
@@ -100,7 +100,7 @@ extension AppModel {
         #endif
     }
 
-    // MARK: Groups (docs/multi-hub.md)
+    // MARK: Groups (docs/protocol/multi-hub.md)
 
     /// The groups in order (the default group first).
     var groupIDs: [String] { links.map(\.group) }
@@ -134,7 +134,7 @@ extension AppModel {
             link.live.suspended = true
             link.live.disconnect()
         }
-        // iOS cuts them in the background anyway; back in front each socket picks its way again (docs/network.md).
+        // iOS cuts them in the background anyway; back in front each socket picks its way again (docs/operations/network.md).
         closeAllTunnels()
     }
 
@@ -188,7 +188,7 @@ extension AppModel {
     }
 
     /// The group a push came from: the hub that sent it (`hub_id`), the push key that opened it, else the group that
-    /// has its session (docs/multi-hub.md「推送」).
+    /// has its session (docs/protocol/multi-hub.md「推送」).
     func pushGroup(_ info: [AnyHashable: Any]) -> String? {
         if let id = info["hub_id"] as? String, let g = registry.group(hubID: id), link(g) != nil { return g }
         if let g = info[PushCrypto.groupKey] as? String, link(g) != nil { return g }
@@ -200,7 +200,7 @@ extension AppModel {
     // MARK: Routes, hellos, groups changing
 
     /// What a group's socket asks before each attempt when the group has more than one place to go: the quickest
-    /// hub that answers (HubRoute), or a tunnel when none does (`tunnelRoute`, docs/network.md「经 SSH 隧道连 hub」
+    /// hub that answers (HubRoute), or a tunnel when none does (`tunnelRoute`, docs/operations/network.md「经 SSH 隧道连 hub」
     /// 「经 App 内隧道连 hub」). One place and no tunnel: nil, the socket goes where it was told.
     func routePicker(_ group: String) -> (@MainActor () async -> ServerConfig?)? {
         let tunneled = !hubTunnels(group).isEmpty
@@ -214,7 +214,7 @@ extension AppModel {
     }
 
     /// A hello came: remember which hub answered, its name and its group (`mesh`), and regroup the paired hubs when
-    /// that changed what belongs together (docs/multi-hub.md「分组」).
+    /// that changed what belongs together (docs/protocol/multi-hub.md「分组」).
     func learned(_ hello: HubHello, group: String) {
         guard let link = link(group), !link.isDemo else { return }
         defer { watchCenter(group) } // on a member now? (after the registry learned who the center is)
@@ -264,7 +264,7 @@ extension AppModel {
         pushWatchConfigs()
     }
 
-    /// The socket is on a member while the group's center is another hub (docs/multi-hub.md「选路」): ask the center
+    /// The socket is on a member while the group's center is another hub (docs/protocol/multi-hub.md「选路」): ask the center
     /// every few minutes and move there once it answers. Ends when the socket is on the center, or the group or its
     /// center is gone.
     func watchCenter(_ group: String) {
@@ -353,7 +353,7 @@ extension AppModel {
 
     // MARK: Live Activity
 
-    /// Every group's Fleet state as one (docs/multi-hub.md「实时活动」): counts added up, the requests of every group
+    /// Every group's Fleet state as one (docs/protocol/multi-hub.md「实时活动」): counts added up, the requests of every group
     /// first, then the working and finished agents; another group's rows carry it in their ids ("group|…"), so a tap
     /// or a button reaches the right hub. One group: its state as the hub sent it.
     /// Agents of quiet tasks (#1731) are left out of each group's first: a hub that knows them never sends them, this
@@ -405,7 +405,7 @@ nonisolated struct PushRef: Sendable, Equatable {
     }
 
     /// The session in its group: the hub that sent the push, the key that opened it, else the group that has such a
-    /// session, else the first group (docs/multi-hub.md「推送」).
+    /// session, else the first group (docs/protocol/multi-hub.md「推送」).
     @MainActor func key(_ model: AppModel) -> SessionKey {
         var info: [AnyHashable: Any] = [:]
         if let hubID { info["hub_id"] = hubID }

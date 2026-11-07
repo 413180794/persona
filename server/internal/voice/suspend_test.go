@@ -22,7 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Pausing the upstream while the bound conversation works (docs/voice.md 4.9 "Suspension", suspend.go).
+// Pausing the upstream while the bound conversation works (docs/assistant/voice.md 4.9 "Suspension", suspend.go).
 
 // sessionsUp is a live service that keeps each session's frames apart, in the order the sessions began; with hand, its
 // model hands every line the user types over as a client delegation (dlg1, dlg2…). refuse says whether session n

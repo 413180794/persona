@@ -21,7 +21,7 @@ import (
 // says assistant.external, the hub starts it beside itself, from its own binary, with a fresh bus token on its
 // stdin (never on the command line; it stops when its stdin closes), and starts it again when it exits: 1 s doubling
 // to a minute, from 1 s again once it ran a minute. So a hub's systemd unit, its Docker image and deploy.sh stay as they are. An assistant run
-// elsewhere gets its token from `personad hub assistant-token` (docs/assistant.md "Process").
+// elsewhere gets its token from `personad hub assistant-token` (docs/assistant/assistant.md "Process").
 
 // assistantCommand is the assistant's command line (tests run another).
 var assistantCommand = func(ctx context.Context) (*exec.Cmd, error) {

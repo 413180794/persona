@@ -1,6 +1,6 @@
 import { managedProvider, storedCredentials } from "../lib/compatibility";
-// Settings (docs/web.md): appearance, where the assistant runs, "Models" (every launcher: rc-file and PATH ones synced, the
-// built-in claude, Persona ones kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's Settings.
+// Settings (docs/web/web.md): appearance, where the assistant runs, "Models" (every launcher: rc-file and PATH ones synced, the
+// built-in claude, Persona ones kept by the hub — docs/integrations/launchers.md), this browser and the other devices, about. The same data as the app's Settings.
 import { BASE, stripBase } from "../lib/base";
 import { href } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
@@ -53,7 +53,7 @@ import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_I
 import { SHEET_QUERY, useMedia } from "../ui/overlay";
 import { formatList, t } from "../i18n";
 
-// ── types (docs/launchers.md) ───────────────────────────
+// ── types (docs/integrations/launchers.md) ───────────────────────────
 
 interface LauncherDetail {
   agent?: string;
@@ -150,7 +150,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   useScrollMemory(scroller, listed ? "settings" : `settings/${at.tab ?? "general"}/${at.sub ?? ""}`);
   const tab: Tab = at.tab ?? "general";
   const { sub } = at;
-  // "Extensions" only on a hub with the extension base (docs/extensions.md "The hub's API"); a link to it still opens it.
+  // "Extensions" only on a hub with the extension base (docs/extensions/extensions.md "The hub's API"); a link to it still opens it.
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
   const hasChannels = useStore((s) => s.features.includes("channels"));
   const shown = (k: Tab) => (k !== "extensions" || hasExtensions || tab === "extensions") && (k !== "channels" || hasChannels || tab === "channels");
@@ -358,7 +358,7 @@ export function assistantFooter(machine: string | undefined, loaded: boolean): s
 function About() {
   const machines = useStore((s) => s.machines);
   const hubName = useStore((s) => s.hubName);
-  // interconnected hubs (docs/plan-hub-mesh.md 2.6): this page talks to one hub and sees its whole group
+  // interconnected hubs (docs/archive/operations/plan-hub-mesh.md 2.6): this page talks to one hub and sees its whole group
   const mesh = useStore((s) => s.mesh);
   const others = mesh.filter((h) => !h.self);
   const logout = async () => {
@@ -594,7 +594,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
   const [confirm, setConfirm] = useState(false);
   const [showDef, setShowDef] = useState(false);
   const mname = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
-  // extensions draw a section here (docs/extensions.md "Declarative UI" launcher_section)
+  // extensions draw a section here (docs/extensions/extensions.md "Declarative UI" launcher_section)
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
 
   // The dialog stays mounted from one launcher to the next: an answer or a test result for a name it no longer shows

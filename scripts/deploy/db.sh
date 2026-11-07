@@ -7,7 +7,7 @@
 # is the one that serves it: on a hub set up before the rename that is jarvis-postgres (volume jarvis-pgdata, user and
 # database jarvis), even when a persona-postgres container exists too. A container is made only when there is neither a
 # database_url nor any hub database container or volume. Moving a database to the new names is the operator's step in
-# docs/persona-cutover.md, never this script's.
+# docs/operations/persona-cutover.md, never this script's.
 set -euo pipefail
 NAME=persona-postgres
 VOLUME=persona-pgdata
@@ -35,7 +35,7 @@ container_user() {
 has_container() { docker ps -a --format '{{.Names}}' | grep -qx "$1"; }
 has_volume() { docker volume inspect "$1" >/dev/null 2>&1; }
 
-# No docker on the hub machine: the database is one set up by hand (the distribution's own Postgres, docs/server.md
+# No docker on the hub machine: the database is one set up by hand (the distribution's own Postgres, docs/server/server.md
 # "Database") and hub.json's database_url points at it. Nothing to create here; only check that it answers.
 answers() {
   if command -v pg_isready >/dev/null 2>&1; then
@@ -43,7 +43,7 @@ answers() {
   fi
 }
 if ! command -v docker >/dev/null 2>&1; then
-  [ -n "$(url)" ] || { echo "no docker and no database_url in hub.json: install docker, or set up Postgres yourself (docs/server.md)" >&2; exit 1; }
+  [ -n "$(url)" ] || { echo "no docker and no database_url in hub.json: install docker, or set up Postgres yourself (docs/server/server.md)" >&2; exit 1; }
   answers
   echo "postgres from hub.json's database_url (no docker)"
   exit 0

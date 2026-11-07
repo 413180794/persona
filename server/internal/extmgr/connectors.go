@@ -23,11 +23,11 @@ import (
 
 // Connectors: each source of the user's information plugs in as a connector, and the hub's pipes pick up what it
 // implements — the assistant's tools (writes behind the gate), Settings › Connectors' status, realtime kicks
-// (internal/connector, docs/plan-connectors.md).
+// (internal/connector, docs/plans/plan-connectors.md).
 
 // addConnector registers c, refusing one that offers a tool the hub has itself ("kb_search", "phone_…"): calls go
 // to the connector first. A connector may share a prefix with the hub's tools ("lark") as long as it does not offer
-// them; the hub's own then move to it (docs/plan-connectors.md M4).
+// them; the hub's own then move to it (docs/plans/plan-connectors.md M4).
 func (h *Manager) addConnector(c connector.Connector) error {
 	for _, t := range connector.ToolNames(c) {
 		for _, b := range h.builtinTools() {

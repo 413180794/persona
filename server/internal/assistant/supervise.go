@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Supervised tasks (#3124, docs/unified-entry.md"Supervision"). A task the main conversation hands out (task_plan, or an
+// Supervised tasks (#3124, docs/assistant/unified-entry.md"Supervision"). A task the main conversation hands out (task_plan, or an
 // agent_start that became a quiet task) has the main conversation as its supervisor: the task keeps a ledger (what
 // done means, how long it should take, where its review stands) and the hub watches it without a model call. What
 // needs the supervisor — the work looks finished and waits for review, an agent stopped short of it, waits for an

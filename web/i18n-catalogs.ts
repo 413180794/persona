@@ -2,7 +2,7 @@
 // and one admin catalog per language from the namespace JSON beside _meta.json; adding a directory needs no code.
 //
 // The page loads only its own language's catalog (src/i18n/index.ts initI18n). t() still falls back to en, then
-// zh-Hans, for a key the language lacks (docs/i18n.md), so each catalog module also exports `fallbacks`: the entries
+// zh-Hans, for a key the language lacks (docs/protocol/i18n.md), so each catalog module also exports `fallbacks`: the entries
 // of those two languages that t() could still reach from this one, computed here at build time. With complete
 // catalogs (src/i18n/catalog.test.ts) that is almost nothing, instead of two more full catalogs on the first load.
 import { readdirSync, readFileSync } from "node:fs";

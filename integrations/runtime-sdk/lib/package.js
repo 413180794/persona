@@ -1,4 +1,4 @@
-// Runtime packages (docs/runtimes.md "Auto-update"): the code of a runtime's plugin as files with one hash, the same as
+// Runtime packages (docs/integrations/runtimes.md "Auto-update"): the code of a runtime's plugin as files with one hash, the same as
 // personad's (server/internal/runtimepkg). The loader (loader.js) hashes the copy it ships with, keeps the versions the
 // node sends in a store and checks every one before it runs it.
 

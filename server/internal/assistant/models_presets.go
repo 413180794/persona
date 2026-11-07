@@ -16,7 +16,7 @@ import (
 )
 
 // The model providers Settings › Model providers adds a provider from (the user fills in only the key): the built-in ones
-// (presets_builtin.json, docs/onboarding.md 4.3) and the plugins' (docs/extensions.md "Model providers", as the hub has them:
+// (presets_builtin.json, docs/assistant/onboarding.md 4.3) and the plugins' (docs/extensions/extensions.md "Model providers", as the hub has them:
 // plugins.presets). A launcher on a preset's gateway offers the gateway's models in "New Agent".
 
 type LauncherPreset = assistantwire.LauncherPreset

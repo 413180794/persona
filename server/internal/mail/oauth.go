@@ -25,7 +25,7 @@ import (
 // Gmail "Sign in with Google": the app opens Google's consent page in the system browser
 // (ASWebAuthenticationSession), Google redirects to the reversed client ID scheme of an
 // iOS OAuth client, and the hub exchanges the code (PKCE, no client secret) for a refresh
-// token. IMAP and SMTP then authenticate with SASL XOAUTH2. See docs/mail.md.
+// token. IMAP and SMTP then authenticate with SASL XOAUTH2. See docs/extensions/mail.md.
 
 const (
 	AuthOAuth2 = "oauth2"

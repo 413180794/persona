@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The checklist after pairing and Settings' steps-left row (#4195, docs/onboarding.md 4.5), the expired-code message, and the
+/// The checklist after pairing and Settings' steps-left row (#4195, docs/assistant/onboarding.md 4.5), the expired-code message, and the
 /// first screen's getting-started link.
 @MainActor
 struct OnboardingChecklistTests {

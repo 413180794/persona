@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Control Computer on a Mac's page while the hub's plugin cua is on (docs/computer-use.md): the switch that lets the assistant
+/// Control Computer on a Mac's page while the hub's plugin cua is on (docs/extensions/computer-use.md): the switch that lets the assistant
 /// operate it through Cua Driver, and whether it can now. What is missing comes with what to do about it: Install Cua Driver
 /// when it is not there, Grant Access when a permission is missing (macOS asks on the Mac's own screen), with the node's
 /// progress while it works. The node is asked again when the page opens, and every few seconds while a job runs.
@@ -114,7 +114,7 @@ struct ComputerSection: View {
             }
         } else if c.desktop == "locked" {
             // Locked: nothing gets through to its apps (Cua refuses, screen_locked), so unlocking comes first. Its live
-            // screen shows the lock screen, where the password is typed (docs/computer-use.md「锁屏」).
+            // screen shows the lock screen, where the password is typed (docs/extensions/computer-use.md「锁屏」).
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 line(String(localized: "This Mac is locked. Unlock it to control it."), ok: false)
                 if !c.screenSharing {

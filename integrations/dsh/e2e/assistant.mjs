@@ -1,4 +1,4 @@
-// End-to-end check of the Persona assistant on DSH (docs/dsh.md "Assistant", docs/runtimes.md "Assistant"): a real `dsh web` with
+// End-to-end check of the Persona assistant on DSH (docs/integrations/dsh.md "Assistant", docs/integrations/runtimes.md "Assistant"): a real `dsh web` with
 // the plugin (isolated DSH_HOME, DSH's own mock model), a real `personad node --stdio` (the harness plays the hub). The
 // "hub" sends assistant messages with the DSH launcher, as the Persona tab, AI twin, Feishu /agent and scheduled tasks
 // do (all go through assistant.send): a new conversation in the assistant's directory, the live snapshot and the

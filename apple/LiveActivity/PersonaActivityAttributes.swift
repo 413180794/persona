@@ -1,7 +1,7 @@
 import ActivityKit
 import Foundation
 
-/// The one Live Activity Persona runs: the "Fleet" (docs/live-activity.md). Built into the app (starts it, reports its
+/// The one Live Activity Persona runs: the "Fleet" (docs/apple/live-activity.md). Built into the app (starts it, reports its
 /// tokens) and the widget extension (draws it). The hub push-starts it with `attributes-type: PersonaActivityAttributes`
 /// and `attributes: {"kind": "fleet"}`, so neither name may change.
 nonisolated struct PersonaActivityAttributes: ActivityAttributes {

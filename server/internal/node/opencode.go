@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// opencode (docs/opencode.md). An opencode in a herdr pane is a herdr session, as a pi there is (pi.go): the pane, its
+// opencode (docs/integrations/opencode.md). An opencode in a herdr pane is a herdr session, as a pi there is (pi.go): the pane, its
 // space and tab, the terminal and the keys are herdr's, and so are the state and the session id (herdr's opencode
 // plugin reports both from the TUI). Its conversation and its control (send, interrupt, cards, live text) come from
 // the Persona plugin in the opencode server process, a runtime (runtimes.go) that lists the session by the same id;
@@ -69,7 +69,7 @@ func (n *Node) mergeOpencodeRow(s *proto.Session) {
 	}
 }
 
-const opencodeNoPlugin = "这个 opencode 没有装 Persona 的插件：手机上只能看终端。把插件装进 opencode（见 docs/opencode.md）并重启 opencode 服务，就能看对话、发消息"
+const opencodeNoPlugin = "这个 opencode 没有装 Persona 的插件：手机上只能看终端。把插件装进 opencode（见 docs/integrations/opencode.md）并重启 opencode 服务，就能看对话、发消息"
 
 // otherNoReader is what a pane of an agent Persona cannot read says.
 func otherNoReader(agent string) string {

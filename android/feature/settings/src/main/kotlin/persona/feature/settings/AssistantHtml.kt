@@ -61,7 +61,7 @@ import persona.core.domain.views.AssistantCard
 import persona.core.domain.views.AssistantCards
 import java.util.concurrent.atomic.AtomicInteger
 
-// An assistant's `html` component (docs/assistant-views.md "Free-form HTML" "Security boundaries every client must verify").
+// An assistant's `html` component (docs/assistant/assistant-views.md "Free-form HTML" "Security boundaries every client must verify").
 //
 // Android has not passed the security acceptance yet: the cases the spec lists (fetch, XHR, images, CSS, iframes,
 // WebSocket, beacons, redirects, meta refresh, popups, forms, cookies / storage, forged bridge messages, confirm floods,

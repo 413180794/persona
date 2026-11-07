@@ -7,7 +7,7 @@ import persona.core.contracts.generated.ExtensionErrorException
 import persona.core.contracts.generated.ExtensionErrorFrame
 import persona.core.contracts.generated.ExtensionErrorReport
 
-/** The hub feature that says an extension takes error reports (docs/protocol.md "Error reports"). */
+/** The hub feature that says an extension takes error reports (docs/protocol/protocol.md "Error reports"). */
 const val ErrorReportsFeature = "error_reports"
 
 /**
@@ -22,7 +22,7 @@ data class ErrorReportContext(
 )
 
 /**
- * Builds [ExtensionErrorReport]s (docs/android.md "Error reports"). Only code-chosen text goes in: exception types,
+ * Builds [ExtensionErrorReport]s (docs/android/android.md "Error reports"). Only code-chosen text goes in: exception types,
  * frames (class, method, source file name, line) and the exception messages, cut to [MaxMessage]; never user content.
  */
 class ErrorReportBuilder(

@@ -4,7 +4,7 @@ package identity
 // guard (node/pathguard.go: files a client names by path) and the agent sandbox (extension/sandbox/agent.go: files
 // an agent's own processes open). Both match them where they are written, at the top of the data directory (the path
 // guard also at the top of a manager's folder, managers/<id>/, which the sandbox closes whole, and of a manager's
-// folder anywhere, one holding a manager's manager.json); docs/agent-sandbox.md "Which files" says where the two
+// folder anywhere, one holding a manager's manager.json); docs/server/agent-sandbox.md "Which files" says where the two
 // differ.
 
 // DataSecrets are the credential files in the data directory by the start of their name, so a backup beside one is

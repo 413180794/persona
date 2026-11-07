@@ -1,4 +1,4 @@
-// Settings › Connectors › Lark bot (docs/bots.md, the app's FeishuBotModel): GET / PUT /api/v1/bots/feishu, pairing with a
+// Settings › Connectors › Lark bot (docs/extensions/bots.md, the app's FeishuBotModel): GET / PUT /api/v1/bots/feishu, pairing with a
 // code sent to the bot from Feishu, and what the bot may do. Pure helpers here; the page is views/settings/FeishuBot.tsx.
 import { t } from "../i18n";
 import { api } from "./api";

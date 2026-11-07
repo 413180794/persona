@@ -1,4 +1,4 @@
--- The ledger of what Persona wrote as the user through the connectors' write gate (docs/connectors.md "Sent as the
+-- The ledger of what Persona wrote as the user through the connectors' write gate (docs/extensions/connectors.md "Sent as the
 -- user", #5278): one row per write that went out, never one that was refused or failed. Kept on the manager's side
 -- (the gate runs there); rows older than hub.json's sent_ledger_days (90 by default) are deleted.
 --   target       where it went, by connector (GitHub: {"ref": "owner/name#12"}, mail: {"to": [...], "subject": ...})

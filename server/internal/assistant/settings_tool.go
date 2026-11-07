@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// persona_settings: Persona changes its own settings for the user (docs/assistant.md "Operating Persona itself"). The
+// persona_settings: Persona changes its own settings for the user (docs/assistant/assistant.md "Operating Persona itself"). The
 // assistant's own ("About me", its launcher, "notify tasks the main chat starts only in the main chat") are its to read and change; the hub's (the
 // inbox's rules, the blocked Claude config directories, mail accounts…) are the hub's settings app's, which asks the
 // user itself (app.tool persona_settings). Reads are free; every change is a card on the phone that says what changes

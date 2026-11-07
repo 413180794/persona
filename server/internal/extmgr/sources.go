@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Moving a source from one manager to another (extwire.MethodSource*, docs/managers.md): the hub asks the old manager
+// Moving a source from one manager to another (extwire.MethodSource*, docs/assistant/managers.md): the hub asks the old manager
 // to export it, gives what came back to the new one to import, then tells the old one to release it. Mail accounts are
 // the only kind so far. A bundle holds the source's secrets in plaintext: it is never logged, and no error quotes it.
 

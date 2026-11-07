@@ -87,7 +87,7 @@ import persona.core.domain.answer.askLine
 import persona.core.domain.answer.firstBySession
 import persona.core.domain.answer.waitingCard
 
-// The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks, web
+// The unified entry in the assistant's conversation (docs/assistant/unified-entry.md; iOS Views/Assistant/Tasks, web
 // views/assistant/Tasks.tsx): the lines the assistant's host adds — plan cards, task cards, receipts, answered lines,
 // routed bubbles, the "Today" card, message cards, quick results, day lines — and the dock and route chip above the composer.
 
@@ -192,7 +192,7 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
         }
         "today" -> TodayCard(item, host, todos)
         "message" -> if (item.ref != null && item.ref !in later) MessageCard(item, host, todos)
-        // A live card: drawn where it was created, as the hub's latest version of it (docs/assistant-views.md "Live cards").
+        // A live card: drawn where it was created, as the hub's latest version of it (docs/assistant/assistant-views.md "Live cards").
         "view" -> item.ref?.let { id -> persona.core.designsystem.LocalViewBlocks.current?.live?.invoke(id) }
     }
 }

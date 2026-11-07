@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Persona · Agents chat top bar prototype</title>
+<!-- Interactive prototype for docs/archive/apple/plan-chat-topbar.md. Plain HTML/CSS/JS, no dependencies; sample data only. -->
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+  --s:1;
+}
+[data-theme=light]{
+  --page:#eceef2; --page-ink:#1d1d1f; --page-sub:#5f6168; --page-card:#fff; --page-line:#dcdfe5;
+  --bg:#fff; --ink:#111113; --sub:#6c6c72; --faint:#a1a1a8; --line:rgba(0,0,0,.08);
+  --chip:rgba(120,120,128,.12); --glass:rgba(255,255,255,.82); --glass-line:rgba(0,0,0,.06);
+  --bubble:#ececf0; --accent:#c4561f; --sheet:#f2f2f7; --row:#fff;
+  --orange:#e07a00; --red:#e5342a; --green:#2a9d48; --gray:#8e8e93; --blue:#2f6fe0; --amber:#b7791f;
+}
+[data-theme=dark]{
+  --page:#0d0e11; --page-ink:#f2f2f4; --page-sub:#9a9ca4; --page-card:#17181c; --page-line:#2a2c32;
+  --bg:#000; --ink:#f4f4f6; --sub:#9a9aa2; --faint:#5e5e66; --line:rgba(255,255,255,.1);
+  --chip:rgba(120,120,128,.24); --glass:rgba(30,30,33,.82); --glass-line:rgba(255,255,255,.08);
+  --bubble:#2a2a2e; --accent:#e0703a; --sheet:#1c1c1e; --row:#2c2c2e;
+  --orange:#ff9f0a; --red:#ff453a; --green:#30d158; --gray:#8e8e93; --blue:#5a91ff; --amber:#e3a43a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--page);color:var(--page-ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+svg.ic{width:1em;height:1em;flex:none;display:block}
+
+/* ---------- page ---------- */
+.wrap{display:grid;grid-template-columns:300px 1fr;gap:32px;max-width:1360px;margin:0 auto;padding:24px 28px 60px}
+.panel{position:sticky;top:16px;align-self:start;display:flex;flex-direction:column;gap:16px}
+.panel h1{font-size:20px;letter-spacing:-.01em}
+.panel p{font-size:13px;color:var(--page-sub);line-height:1.5}
+.group{background:var(--page-card);border:1px solid var(--page-line);border-radius:14px;padding:12px}
+.group h2{font-size:12px;color:var(--page-sub);font-weight:600;margin-bottom:8px}
+.ctl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;padding:5px 0}
+.seg{display:flex;background:var(--chip);border-radius:8px;padding:2px;flex-wrap:nowrap}
+.seg button{font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;color:var(--page-sub)}
+.seg button.on{background:var(--page-card);color:var(--page-ink);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--chip);white-space:nowrap}
+.presets button.on{background:var(--page-ink);color:var(--page-card)}
+.hint{font-size:12px;color:var(--page-sub);line-height:1.5}
+.stage{display:flex;gap:40px;justify-content:center;flex-wrap:wrap;min-width:0}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.col h3{font-size:14px;font-weight:600}
+.col h3 span{font-weight:400;color:var(--page-sub);font-size:12px;margin-left:6px}
+
+/* ---------- phone ---------- */
+.phone{position:relative;width:var(--w,402px);height:860px;border-radius:52px;background:var(--bg);color:var(--ink);
+  overflow:hidden;box-shadow:0 0 0 10px #1b1b1d,0 0 0 11px #3a3a3c,0 30px 60px rgba(0,0,0,.25)}
+.sbar{position:absolute;top:0;left:0;right:0;height:54px;display:flex;align-items:center;justify-content:space-between;
+  padding:6px 34px 0 44px;font-size:16px;font-weight:600;z-index:6}
+.sbar .island{position:absolute;left:50%;top:11px;width:124px;height:36px;margin-left:-62px;background:#000;border-radius:20px}
+.chat{position:absolute;inset:0;overflow-y:auto;padding:0 16px 110px;scrollbar-width:none}
+.chat::-webkit-scrollbar{display:none}
+.hdr{position:absolute;top:54px;left:0;right:0;z-index:5}
+.fog{position:absolute;left:0;right:0;top:-54px;bottom:-16px;pointer-events:none;
+  background:linear-gradient(var(--bg) calc(100% - 16px),transparent)}
+.hdr-in{position:relative;font-size:calc(15px * var(--s))}
+
+/* rows */
+.row1{display:flex;align-items:center;gap:8px;padding:2px 16px 6px}
+.circ{width:calc(44px * min(var(--s),1.3));height:calc(44px * min(var(--s),1.3));border-radius:50%;flex:none;display:grid;place-items:center;
+  background:var(--glass);box-shadow:0 0 0 .5px var(--glass-line),0 2px 10px rgba(0,0,0,.08);backdrop-filter:blur(12px);font-size:calc(19px * min(var(--s),1.3))}
+.ttl{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+.ttl .t{font-size:calc(17px * var(--s));font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ttl .st{font-size:calc(12px * var(--s));color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+  display:flex;align-items:center;gap:4px}
+.ttl .st b{font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block}
+.row{display:flex;align-items:center;gap:8px;padding:0 16px 8px}
+.scroll{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:1}
+.scroll::-webkit-scrollbar{display:none}
+.scroll.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}
+.scroll.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 24px);mask-image:linear-gradient(90deg,transparent,#000 24px)}
+.scroll.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
+.pill{flex:none;display:flex;align-items:center;gap:5px;height:calc(30px * var(--s));padding:0 12px;border-radius:999px;
+  font-size:calc(13px * var(--s));font-weight:500;white-space:nowrap;background:var(--chip);cursor:pointer}
+.pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill.on{font-weight:700;box-shadow:inset 0 0 0 1.5px currentColor}
+.pill .mark{font-size:.8em;opacity:.7;font-weight:500}
+.pill .ic{font-size:.95em}
+.badge-dot{position:absolute;top:-1px;right:-1px;width:7px;height:7px;border-radius:50%;background:var(--red)}
+.rel{position:relative}
+.status{display:flex;align-items:center;gap:8px;margin:0 16px 8px;height:calc(30px * var(--s));font-size:calc(13px * var(--s));cursor:pointer;min-width:0}
+.status .lbl{color:var(--sub);flex:none;white-space:nowrap}
+.status .val{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.status .chev{color:var(--faint);flex:none}
+.spin{width:12px;height:12px;border-radius:50%;border:2px solid var(--chip);border-top-color:var(--orange);animation:spin 1s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* compact (folded) bar, same for both */
+.compact{display:flex;align-items:center;height:40px;padding:0 4px}
+.compact .bk{width:44px;height:34px;display:grid;place-items:center;font-size:15px}
+.compact .cap{margin:0 auto;display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;background:var(--chip);
+  font-size:12px;font-weight:600;max-width:220px;cursor:pointer}
+.compact .cap span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.compact .marks{display:flex;min-width:44px;justify-content:flex-end;padding-right:8px;gap:8px;font-size:12px;font-weight:800}
+
+/* chat body */
+.msg{font-size:15px;line-height:1.55;margin:12px 0}
+.msg.me{margin-left:auto;max-width:78%;background:var(--accent);color:#fff;padding:10px 14px;border-radius:20px;width:fit-content}
+.msg .code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--bubble);padding:1px 5px;border-radius:5px}
+.work{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--sub);margin:16px 0}
+.sublead{font-size:12px;color:var(--sub);margin:14px 0 4px}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:8px 14px 30px;background:linear-gradient(transparent,var(--bg) 30%);z-index:4}
+.composer{display:flex;align-items:center;gap:10px;height:52px;padding:0 8px 0 16px;border-radius:26px;background:var(--glass);
+  box-shadow:0 0 0 .5px var(--glass-line),0 4px 18px rgba(0,0,0,.1);color:var(--faint);font-size:15px}
+.composer .stop{margin-left:auto;width:40px;height:40px;border-radius:50%;background:var(--ink);display:grid;place-items:center}
+.composer .stop i{width:13px;height:13px;border-radius:3px;background:var(--bg)}
+.footer{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:22px;background:var(--glass);box-shadow:0 0 0 .5px var(--glass-line),0 4px 18px rgba(0,0,0,.1)}
+.footer .tx{flex:1;min-width:0}
+.footer .tx b{display:block;font-size:13px}
+.footer .tx span{font-size:12px;color:var(--sub)}
+.footer button{font-size:13px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--chip);white-space:nowrap}
+
+/* sheet */
+.layer{position:absolute;inset:0;z-index:10;display:none}
+.layer.open{display:block}
+.layer .dim{position:absolute;inset:0;background:rgba(0,0,0,.25)}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:62%;overflow:auto;background:var(--sheet);border-radius:28px 28px 0 0;padding:8px 16px 34px;
+  animation:up .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes up{from{transform:translateY(100%)}}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--faint);opacity:.5;margin:0 auto 10px}
+.sheet .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sheet .sh b{font-size:17px}
+.sheet .sh button{color:var(--accent);font-weight:600;font-size:15px}
+.list{background:var(--row);border-radius:12px;overflow:hidden}
+.li{display:flex;align-items:center;gap:10px;padding:12px 14px;font-size:15px;border-bottom:.5px solid var(--line);cursor:pointer}
+.li:last-child{border-bottom:0}
+.li .grow{flex:1;min-width:0}
+.li .grow small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+.li .tag{font-size:12px;color:var(--sub);white-space:nowrap}
+.li .act{font-size:13px;font-weight:600;color:var(--red);white-space:nowrap}
+.sec{font-size:12px;color:var(--sub);margin:14px 4px 6px}
+.toast{position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:rgba(0,0,0,.78);color:#fff;font-size:13px;
+  padding:8px 14px;border-radius:999px;z-index:20;white-space:nowrap;pointer-events:none;transition:opacity .3s}
+/* current design's own looks */
+.cur .pill.tint{background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--c)}
+.cur .pill.tint.on{background:color-mix(in srgb,var(--c) 26%,transparent)}
+.cur .act{flex:none;display:flex;align-items:center;gap:4px;padding:10px;border-radius:999px;font-size:calc(13px * var(--s));font-weight:600;white-space:nowrap;cursor:pointer;
+  background:color-mix(in srgb,var(--c) 12%,transparent);color:var(--c)}
+.cur .ttl{max-width:calc(260px * var(--s));margin:0 auto}
+.bar{margin:0 16px 8px;padding:8px 12px;border-radius:14px;background:var(--chip);font-size:calc(13px * var(--s));display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden}
+.bar span{overflow:hidden;text-overflow:ellipsis}
+.agstrip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 16px 6px}
+.agstrip::-webkit-scrollbar{display:none}
+/* proposed */
+.new .tabs .pill .nm{max-width:calc(120px * min(var(--s),1.6))}
+.new .actpill{flex:none;gap:8px;padding:0 10px;font-weight:600}
+.new .actpill .grp{display:flex;align-items:center;gap:3px}
+.new .actpill .sep{width:1px;height:12px;background:var(--line)}
+.mute{color:var(--sub)}
+.legend{font-size:11px;color:var(--page-sub);max-width:402px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="panel">
+    <div>
+      <h1>Agents chat top bar</h1>
+      <p>Today's header on the left, the plan in <code>docs/archive/apple/plan-chat-topbar.md</code> on the right, from the same data: the switches change both. In the phones you can tap the title, a tab, ⋯ / ▦, the activity pill and the subagent line; scrolling the chat up folds the header, a tap on the slim bar opens it.</p>
+    </div>
+    <div class="group">
+      <h2>Scenes</h2>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div class="group" id="data"><h2>Data</h2></div>
+    <div class="group" id="decide"><h2>Decisions (right phone only)</h2></div>
+    <div class="group" id="view"><h2>View</h2></div>
+    <p class="hint">Sample data, not a real session. Link parameters: <code>#preset=all&amp;theme=dark</code>.</p>
+  </aside>
+  <main class="stage">
+    <div class="col"><h3>Today<span>devChrome</span></h3><div class="phone cur" id="p-cur"></div><div class="legend" id="lg-cur"></div></div>
+    <div class="col"><h3>Plan<span>three rows at most</span></h3><div class="phone new" id="p-new"></div><div class="legend" id="lg-new"></div></div>
+  </main>
+</div>
+<script>
+const I = {
+  back:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  more:'<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  loop:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>',
+  gear:'<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm9 4.6v-2.2l-2.4-.5a6.9 6.9 0 0 0-.7-1.7l1.4-2-1.6-1.6-2 1.4a6.9 6.9 0 0 0-1.7-.7L13.1 3h-2.2l-.5 2.4a6.9 6.9 0 0 0-1.7.7l-2-1.4-1.6 1.6 1.4 2a6.9 6.9 0 0 0-.7 1.7L3 10.9v2.2l2.4.5c.2.6.4 1.2.7 1.7l-1.4 2 1.6 1.6 2-1.4c.5.3 1.1.5 1.7.7l.5 2.4h2.2l.5-2.4c.6-.2 1.2-.4 1.7-.7l2 1.4 1.6-1.6-1.4-2c.3-.5.5-1.1.7-1.7z"/></svg>',
+  space:'<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>',
+  chev:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  user:'<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/></svg>',
+  goal:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
+  flow:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/><path d="M6.5 10v4a3 3 0 0 0 3 3H14"/></svg>',
+  port:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16v10H4z"/><path d="M8 11h.01M12 11h.01M16 11h.01"/></svg>',
+};
+const TONE = {working:'var(--orange)', needs:'var(--red)', unseen:'var(--green)', seen:'var(--gray)'};
+const WORD = {working:'工作中', needs:'需要你', unseen:'完成未看', seen:'已看'};
+const ALL_TABS = [
+  {name:'31', state:'working'}, {name:'tab-a', state:'unseen'}, {name:'review', state:'needs'}, {name:'docs-sync', state:'seen'},
+  {name:'a-rather-long-tab-name-for-testing', state:'working'}, {name:'perf', state:'seen'}, {name:'release-notes', state:'unseen'}, {name:'cleanup', state:'seen'},
+];
+const SUBS = [
+  {title:'Trace the entry code in both implementations', type:'Explore'},
+  {title:'Audit the metrics schema against the dashboard', type:'general-purpose'},
+  {title:'Draft the report', type:'general-purpose'},
+];
+const TITLES = {short:'修复登录页闪退', long:'对比两套播放入口的实现并核算埋点口径（长标题示例）'};
+const PRESETS = {
+  shot:{label:'The screenshot', tabs:2, loop:true, bg:1, subs:1, done:0, goal:false, wf:false, ports:false, long:true, viewing:-1},
+  calm:{label:'Title only', tabs:0, loop:false, bg:0, subs:0, done:0, goal:false, wf:false, ports:false, long:false, viewing:-1},
+  act:{label:'Activity only', tabs:0, loop:true, bg:2, subs:0, done:0, goal:false, wf:false, ports:false, long:false, viewing:-1},
+  many:{label:'8 tabs', tabs:8, loop:false, bg:0, subs:0, done:0, goal:false, wf:false, ports:false, long:true, viewing:-1},
+  subs:{label:'3 subagents', tabs:2, loop:false, bg:1, subs:3, done:2, goal:false, wf:false, ports:false, long:true, viewing:-1},
+  view:{label:'Reading a subagent', tabs:2, loop:true, bg:1, subs:2, done:0, goal:false, wf:false, ports:false, long:true, viewing:0},
+  all:{label:'Everything (6 rows)', tabs:4, loop:true, bg:3, subs:2, done:1, goal:true, wf:true, ports:true, long:true, viewing:-1},
+};
+const OPEN_H = {cur:0,new:0};
+const S = {preset:'shot', current:0, q1:false, q2:'tone', q3:'time', theme:'light', size:'std', fold:{cur:false,new:false}, sheet:{cur:null,new:null}};
+Object.assign(S, PRESETS.shot);
+
+/* ---------- control panel ---------- */
+function seg(id, label, opts, get, set, box){
+  const d = document.createElement('div'); d.className='ctl';
+  d.innerHTML = `<span>${label}</span><div class="seg">${opts.map(([v,t])=>`<button data-v="${v}">${t}</button>`).join('')}</div>`;
+  d.querySelectorAll('button').forEach(b=>b.onclick=()=>{ set(isNaN(+b.dataset.v)||b.dataset.v===''?b.dataset.v:+b.dataset.v); S.preset=null; render(); });
+  d.sync = ()=>d.querySelectorAll('button').forEach(b=>b.classList.toggle('on', String(get())===b.dataset.v));
+  document.getElementById(box).appendChild(d); syncs.push(d.sync);
+}
+const syncs = [];
+const yn = [['1','yes'],['0','no']];
+const bool = k => [()=>S[k]?1:0, v=>S[k]=!!v];
+seg('tabs','Sibling tabs',[[0,'0'],[2,'2'],[4,'4'],[8,'8']],()=>S.tabs,v=>{S.tabs=v;S.current=0},'data');
+seg('loop','Loop',yn,...bool('loop'),'data');
+seg('bg','Background tasks',[[0,'0'],[1,'1'],[3,'3']],()=>S.bg,v=>S.bg=v,'data');
+seg('subs','Subagents running',[[0,'0'],[1,'1'],[3,'3']],()=>S.subs,v=>{S.subs=v;if(S.viewing>=v)S.viewing=-1},'data');
+seg('done','Ended subagents',[[0,'0'],[2,'2']],()=>S.done,v=>S.done=v,'data');
+seg('goal','Goal',yn,...bool('goal'),'data');
+seg('wf','workflow',yn,...bool('wf'),'data');
+seg('ports','Ports',yn,...bool('ports'),'data');
+seg('long','Title',[['1','long'],['0','short']],...bool('long'),'data');
+seg('q1','Q1 goal etc. in the status line',[['0','phase 1'],['1','phase 2']],()=>S.q1?1:0,v=>S.q1=!!v,'decide');
+seg('q2','Q2 tab fill',[['neutral','neutral'],['tone','state']],()=>S.q2,v=>S.q2=v,'decide');
+seg('q3','Q3 loop text',[['time','13:24'],['next','下次 13:24']],()=>S.q3,v=>S.q3=v,'decide');
+seg('theme','Appearance',[['light','light'],['dark','dark']],()=>S.theme,v=>S.theme=v,'view');
+seg('size','Text size',[['std','default'],['xl','large']],()=>S.size,v=>S.size=v,'view');
+const pr = document.getElementById('presets');
+for (const [k,p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button'); b.textContent=p.label; b.dataset.k=k;
+  b.onclick=()=>{ Object.assign(S,p); S.preset=k; S.current=0; S.fold={cur:false,new:false}; S.sheet={cur:null,new:null}; render(); };
+  pr.appendChild(b);
+}
+
+/* ---------- shared pieces ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tabs = () => ALL_TABS.slice(0, S.tabs);
+const me = () => S.tabs ? tabs()[S.current] : {name:'31', state:'working'};
+const loopText = full => full ? '下次 13:24' : '13:24';
+function subtitle(){
+  const st = me().state, quiet = st==='seen';
+  const place = 'demo-app' + (S.tabs ? '' : ' › 31');
+  const words = st==='working' ? '工作中 5 分' : WORD[st];
+  return `<span class="dot" style="background:${TONE[st]}"></span>` +
+    (quiet ? `<span>工作 Mac · ${place}</span>` : `<span><b style="color:${TONE[st]}">${words}</b> · 工作 Mac · ${place}</span>`);
+}
+function row1(){
+  return `<div class="row1"><button class="circ" data-a="back" aria-label="返回">${I.back}</button>
+    <div class="ttl" data-a="info" role="button" aria-label="${esc(TITLES[S.long?'long':'short'])}，查看会话信息"><div class="t">${esc(TITLES[S.long?'long':'short'])}</div><div class="st">${subtitle()}</div></div>
+    <button class="circ" data-a="menu" aria-label="更多">${I.more}</button></div>`;
+}
+function compact(){
+  const marks = (S.goal?`<span style="color:var(--blue)">${I.goal}</span>`:'') +
+    (S.bg?`<span style="color:var(--orange);display:flex;gap:2px;align-items:center">${I.gear}${S.bg}</span>`:S.loop?`<span style="color:var(--blue)">${I.loop}</span>`:'');
+  return `<div class="compact"><span class="bk">${I.back}</span><div class="cap" data-a="unfold"><span class="dot" style="background:${TONE[me().state]}"></span><span>demo-app › ${esc(me().name)} · 对话</span></div><div class="marks">${marks}</div></div>`;
+}
+function tabPill(t, i, mode){
+  const on = i===S.current, quiet = t.state==='seen';
+  const tinted = mode==='cur' || S.q2==='tone';
+  const style = tinted ? (quiet?'':`--c:${TONE[t.state]}`) : '';
+  const cls = 'pill' + (on?' on':'') + (tinted && !quiet ? ' tint' : '');
+  const dot = (!tinted && !quiet) ? `<span class="dot" style="background:${TONE[t.state]}"></span>` : '';
+  const color = tinted && !quiet ? `color:${TONE[t.state]};background:color-mix(in srgb,${TONE[t.state]} ${on?26:16}%,transparent)` : '';
+  return `<button class="${cls}" style="${style};${color}" data-a="tab" data-i="${i}" aria-label="${esc(t.name)}，${WORD[t.state]}">${dot}<span class="nm">${esc(t.name)}</span></button>`;
+}
+const waiting = () => tabs().some((t,i)=>i!==S.current && t.state==='needs');
+
+/* ---------- current design ---------- */
+function headerCur(){
+  if (S.fold.cur) return compact();
+  let h = row1();
+  const act = S.loop || S.bg;
+  if (S.tabs || act) {
+    h += `<div class="row">`;
+    if (S.tabs) h += `<div class="scroll">${tabs().map((t,i)=>tabPill(t,i,'cur')).join('')}</div>
+      <button class="pill rel" data-a="tabs" style="padding:0 10px;color:var(--sub)" aria-label="同一空间的 ${S.tabs} 个 Agent">${I.more}${waiting()?'<span class="badge-dot"></span>':''}</button>`;
+    if (S.loop) h += `<button class="act" style="--c:var(--blue)" data-a="activity">${I.loop}${loopText(false)}</button>`;
+    if (S.bg) h += `<button class="act" style="--c:var(--orange)" data-a="activity">${I.gear}后台 ${S.bg}</button>`;
+    h += `</div>`;
+  }
+  if (S.goal) h += `<div class="bar"><span style="color:var(--blue)">${I.goal}</span><b>目标</b><span class="mute">让两套入口的埋点口径对齐，并写出报告</span></div>`;
+  if (S.wf) h += `<div class="bar"><span style="color:var(--orange)">${I.flow}</span><span>后台 workflow「parity-audit」· Verify 2/2 · 169/185</span></div>`;
+  if (S.ports) h += `<div class="row"><span class="pill">${I.port}:3000</span><span class="pill">${I.port}:5173</span></div>`;
+  const running = SUBS.slice(0,S.subs);
+  if (S.subs || S.done) {
+    h += `<div class="agstrip"><button class="pill${S.viewing<0?' on':''}" data-a="main">${I.user}主 Agent</button>` +
+      running.map((a,i)=>`<button class="pill${S.viewing===i?' on':''}" data-a="sub" data-i="${i}"><span class="dot" style="background:var(--orange)"></span>${esc(a.title)}</button>`).join('') +
+      (S.done ? `<button class="pill" data-a="tree">全部子 Agent <span class="mute">${S.subs+S.done}</span></button>` : '') + `</div>`;
+  }
+  return h;
+}
+
+/* ---------- proposed design ---------- */
+function statusItems(){
+  const items = [];
+  if (S.viewing>=0) items.push({k:'viewing', html:`<span style="color:var(--accent)">${I.user}</span><span class="lbl">正在看子 Agent</span><span class="val">${esc(SUBS[S.viewing].title)}（只读）</span>`});
+  else if (S.subs===1) items.push({k:'sub', html:`<span class="spin"></span><span class="lbl">子 Agent</span><span class="val">${esc(SUBS[0].title)}</span><span class="chev">${I.chev}</span>`});
+  else if (S.subs>1) items.push({k:'tree', html:`<span class="spin"></span><span class="lbl">${S.subs} 个子 Agent 在跑</span><span class="val mute">· ${esc(SUBS[S.subs-1].title)}</span><span class="chev">${I.chev}</span>`});
+  if (S.q1) {
+    if (S.wf) items.push({k:'wf', html:`<span style="color:var(--orange)">${I.flow}</span><span class="lbl">workflow</span><span class="val">parity-audit · Verify 2/2 · 169/185</span><span class="chev">${I.chev}</span>`});
+    if (S.goal) items.push({k:'goal', html:`<span style="color:var(--blue)">${I.goal}</span><span class="lbl">目标</span><span class="val">让两套入口的埋点口径对齐，并写出报告</span><span class="chev">${I.chev}</span>`});
+    if (S.ports) items.push({k:'ports', html:`<span>${I.port}</span><span class="lbl">端口</span><span class="val">:3000 · :5173</span><span class="chev">${I.chev}</span>`});
+  }
+  return items;
+}
+function headerNew(){
+  if (S.fold.new) return compact();
+  let h = row1();
+  const act = S.loop || S.bg;
+  if (S.tabs || act) {
+    h += `<div class="row">`;
+    h += S.tabs ? `<div class="scroll tabs" data-fade>${tabs().map((t,i)=>tabPill(t,i,'new')).join('')}</div>
+      <button class="pill rel" data-a="tabs" style="padding:0 10px;gap:4px;color:var(--sub)" aria-label="同一空间的 ${S.tabs} 个 Agent${waiting()?'，有 Agent 需要你':''}">${I.space}<span style="color:var(--ink)">${S.tabs}</span>${waiting()?'<span class="badge-dot"></span>':''}</button>`
+      : `<div style="flex:1"></div>`;
+    if (act) {
+      const big = S.size==='xl';
+      const parts = [];
+      if (S.loop) parts.push(`<span class="grp"><span style="color:var(--blue)">${I.loop}</span>${big && S.bg ? '' : loopText(S.q3==='next')}</span>`);
+      if (S.bg) parts.push(`<span class="grp"><span style="color:var(--orange)">${I.gear}</span>${S.bg}</span>`);
+      h += `<button class="pill actpill" data-a="activity" aria-label="${[S.loop?'循环中，下次 13:24':'', S.bg?S.bg+' 个后台任务':''].filter(Boolean).join('，')}，点按查看">${parts.join('<span class="sep"></span>')}</button>`;
+    }
+    h += `</div>`;
+  }
+  if (!S.q1) {
+    if (S.goal) h += `<div class="bar"><span style="color:var(--blue)">${I.goal}</span><b>目标</b><span class="mute">让两套入口的埋点口径对齐，并写出报告</span></div>`;
+    if (S.wf) h += `<div class="bar"><span style="color:var(--orange)">${I.flow}</span><span>后台 workflow「parity-audit」· Verify 2/2 · 169/185</span></div>`;
+    if (S.ports) h += `<div class="row"><span class="pill">${I.port}:3000</span><span class="pill">${I.port}:5173</span></div>`;
+  }
+  const items = statusItems();
+  if (items.length) {
+    const more = items.length - 1;
+    h += `<div class="status" data-a="status" data-k="${items[0].k}">${items[0].html}${more>0?`<span class="pill" style="height:22px;padding:0 8px;font-size:12px" data-a="summary">+${more}</span>`:''}</div>`;
+  }
+  return h;
+}
+
+/* ---------- chat body, sheets ---------- */
+function body(){
+  if (S.viewing>=0) {
+    const a = SUBS[S.viewing];
+    return `<div class="sublead">子 Agent · ${a.type} 的对话</div><div class="msg me">${esc(a.title)}</div>` +
+      `<div class="work"><span class="spin"></span>正在工作 · 9 次工具调用</div>` + filler(4);
+  }
+  return `<div class="msg">先把两套实现的入口找全，再对口径。我会开一个子 Agent 专门追入口代码，主线这边先看埋点字段。</div>` +
+    `<div class="msg me">跑口径核算，先跑 dry-run</div>` +
+    `<div class="work"><span class="spin"></span>正在工作 5 分 53 秒 · 22 次工具调用</div>` +
+    `<div class="msg">dry-run 能预览执行计划和 SQL，不会提交。我先查一下它对 <span class="code">task-id</span> 有什么要求，再预演。</div>` + filler(6);
+}
+function filler(n){ let s=''; for(let i=0;i<n;i++) s+=`<div class="msg mute">示例内容第 ${i+1} 段：往上滚动对话，看顶栏收起成细条；点细条再展开。这里的文字只用来撑出滚动的长度。</div>`; return s; }
+function bottom(){
+  if (S.viewing>=0) return `<div class="footer"><div class="tx"><b>子 Agent · ${SUBS[S.viewing].type}</b><span>运行中，只读</span></div><button data-a="main">回到主 Agent</button></div>`;
+  return `<div class="composer">＋　补充说明（会排队发送）<span class="stop"><i></i></span></div>`;
+}
+function sheet(kind){
+  if (!kind) return '';
+  let t='', c='';
+  if (kind==='tabs') { t='同一空间的 Agent';
+    c = `<div class="list"><div class="li">${I.space}<div class="grow">空间 demo-app 的所有 Agent</div>${I.chev}</div></div><div class="sec">标签</div><div class="list">` +
+      tabs().map((x,i)=>`<div class="li" data-a="tab" data-i="${i}"><span class="dot" style="background:${TONE[x.state]}"></span><div class="grow">${esc(x.name)}</div><span class="tag">${WORD[x.state]}${i===S.current?' ✓':''}</span></div>`).join('') + `</div>`; }
+  if (kind==='activity') { t = S.loop&&S.bg ? '循环与后台任务' : S.loop ? '循环' : '后台任务';
+    c = (S.loop?`<div class="list"><div class="li"><span style="color:var(--blue)">${I.loop}</span><div class="grow">/loop 每 30 分钟<small>下次 13:24</small></div><span class="act">停止</span></div></div>`:'') +
+      (S.bg?`<div class="sec">后台任务</div><div class="list">${Array.from({length:S.bg},(_,i)=>`<div class="li"><span style="color:var(--orange)">${I.gear}</span><div class="grow">${['npm run dev','pytest -x --watch','tail -f server.log'][i]}<small>运行中 · ${12-i*3} 分</small></div><span class="tag">输出 ›</span></div>`).join('')}</div>`:''); }
+  if (kind==='tree') { t='全部子 Agent';
+    c = `<div class="list">` + SUBS.slice(0,S.subs).map((a,i)=>`<div class="li" data-a="sub" data-i="${i}"><span class="spin"></span><div class="grow">${esc(a.title)}<small>${a.type} · 运行中</small></div></div>`).join('') +
+      Array.from({length:S.done},(_,i)=>`<div class="li"><span class="dot" style="background:var(--green)"></span><div class="grow">已完成的子 Agent ${i+1}<small>Explore · 已完成</small></div></div>`).join('') + `</div>`; }
+  if (kind==='summary') { t='此刻的状态';
+    c = `<div class="list">` + statusItems().map(x=>`<div class="li status" style="margin:0;height:auto">${x.html}</div>`).join('') + `</div>`; }
+  if (kind==='info') { t='会话信息';
+    c = `<div class="list"><div class="li"><div class="grow">${esc(TITLES[S.long?'long':'short'])}<small>完整标题</small></div></div><div class="li"><div class="grow">工作 Mac · demo-app › ${esc(me().name)}<small>位置</small></div></div></div>`; }
+  if (kind==='menu') { t='更多';
+    c = `<div class="list">${['终端','文件','Git','实时接入','重命名…','屏蔽通知','拷贝恢复命令','空间里的所有 Agent'].map(x=>`<div class="li"><div class="grow">${x}</div></div>`).join('')}</div>`; }
+  return `<div class="dim" data-a="close"></div><div class="sheet"><div class="grab"></div><div class="sh"><b>${t}</b><button data-a="close">完成</button></div>${c}</div>`;
+}
+
+/* ---------- render & events ---------- */
+function mount(id, mode){
+  const p = document.getElementById(id);
+  const keep = p.querySelector('.chat')?.scrollTop || 0;
+  p.innerHTML = `<div class="sbar"><span>13:03</span><span class="island"></span><span>5G ▮</span></div>
+    <div class="chat"><div class="pad"></div>${body()}</div>
+    <div class="hdr"><div class="fog"></div><div class="hdr-in">${mode==='cur'?headerCur():headerNew()}</div></div>
+    <div class="bottom">${bottom()}</div><div class="layer${S.sheet[mode]?' open':''}">${sheet(S.sheet[mode])}</div>`;
+  const chat = p.querySelector('.chat'), hdr = p.querySelector('.hdr');
+  // The list keeps the open header's room while it is folded, so the messages do not move (as in the app).
+  if (!S.fold[mode]) OPEN_H[mode] = hdr.getBoundingClientRect().height;
+  p.querySelector('.pad').style.height = (54 + OPEN_H[mode] + 4) + 'px';
+  chat.scrollTop = keep;
+  chat.onscroll = () => {
+    const f = chat.scrollTop > 60;
+    if (f !== S.fold[mode] && !(f===false && chat.scrollTop>8)) { S.fold[mode]=f; mount(id, mode); }
+  };
+  p.querySelectorAll('[data-fade]').forEach(sc=>{
+    const upd=()=>{ sc.classList.toggle('fade-l', sc.scrollLeft>2); sc.classList.toggle('fade-r', sc.scrollLeft+sc.clientWidth < sc.scrollWidth-2); };
+    const on = sc.querySelector('.pill.on'); if (on && on.offsetLeft+on.offsetWidth > sc.clientWidth) sc.scrollLeft = on.offsetLeft - 8;
+    upd(); sc.onscroll = upd;
+  });
+  p.onclick = e => {
+    const el = e.target.closest('[data-a]'); if (!el) return;
+    const a = el.dataset.a, i = +el.dataset.i;
+    e.stopPropagation();
+    if (a==='tab') { S.current=i; S.sheet[mode]=null; S.viewing=-1; return render(); }
+    if (a==='sub') { S.viewing=i; S.sheet={cur:null,new:null}; return render(); }
+    if (a==='main') { S.viewing=-1; return render(); }
+    if (a==='unfold') { S.fold[mode]=false; p.querySelector('.chat').scrollTop=0; return mount(id, mode); }
+    if (a==='close') { S.sheet[mode]=null; return mount(id, mode); }
+    if (a==='back') return toast(p, '返回 Agents 列表');
+    if (a==='status') { const k=el.dataset.k; if (k==='sub') { S.viewing=0; return render(); } if (k==='viewing') return toast(p,'正在看子 Agent，底部「回到主 Agent」回去'); S.sheet[mode] = k==='tree'?'tree':'summary'; return mount(id, mode); }
+    S.sheet[mode] = a; mount(id, mode);
+  };
+}
+function toast(p, msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; p.appendChild(t); setTimeout(()=>t.style.opacity=0,1100); setTimeout(()=>t.remove(),1500); }
+function legends(){
+  const rowsCur = 1 + ((S.tabs||S.loop||S.bg)?1:0) + S.goal + S.wf + S.ports + ((S.subs||S.done)?1:0);
+  const extras = S.q1 ? 0 : (S.goal + S.wf + S.ports);
+  const rowsNew = 1 + ((S.tabs||S.loop||S.bg)?1:0) + extras + (statusItems().length?1:0);
+  document.getElementById('lg-cur').textContent = `${rowsCur-1} rows under the title (5 at most).`;
+  document.getElementById('lg-new').textContent = `${rowsNew-1} rows under the title` + (S.q1 ? ' (2 at most).' : ' (phase 1: goal / workflow / ports as before; 2 at most with Q1 phase 2).');
+}
+function render(){
+  document.documentElement.dataset.theme = S.theme;
+  document.documentElement.style.setProperty('--s', S.size==='xl' ? 1.25 : 1);
+  syncs.forEach(f=>f());
+  pr.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.k===S.preset));
+  mount('p-cur','cur'); mount('p-new','new'); legends();
+  const h = new URLSearchParams({preset:S.preset||'', theme:S.theme}); history.replaceState(null,'','#'+h);
+}
+(()=>{ const h = new URLSearchParams(location.hash.slice(1));
+  if (PRESETS[h.get('preset')]) { Object.assign(S, PRESETS[h.get('preset')]); S.preset=h.get('preset'); }
+  if (h.get('theme')==='dark') S.theme='dark'; })();
+render();
+</script>
+</body>
+</html>

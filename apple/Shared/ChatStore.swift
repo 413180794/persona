@@ -1157,12 +1157,12 @@ nonisolated enum ChatCache {
     /// The caches folder holding the copies. v2: items carry `wake`; older copies would keep the merged turns until
     /// they scrolled out. v3: notices carry `task` (a page's copy of an item never replaces the cached one: old
     /// notices stayed centered blocks). v4: Codex unknown events are retained and external sources have distinct identities.
-    /// v5: several groups of hubs (docs/multi-hub.md): the default group's copies at the top, another group's in
+    /// v5: several groups of hubs (docs/protocol/multi-hub.md): the default group's copies at the top, another group's in
     /// `group-<id>/`. v6: a Feishu /agent request's first message is rewritten by the hub (its instructions in a
     /// <persona-context> block, #876), so v5's copies would keep showing the old text: they are dropped, not moved
     /// (`dropOlder`). v7: items carry `client_msg_id`, the message sent from the phone they came from (#968).
     /// v8: folds carry the images their work looked at (`Fold.images`); v7's folds had none, and their turns no strip.
-    /// v9: user lines Persona typed in for the model carry `injected` (docs/protocol.md「Persona 注入的消息」, #2358).
+    /// v9: user lines Persona typed in for the model carry `injected` (docs/protocol/protocol.md「Persona 注入的消息」, #2358).
     /// v10: a background workflow's end notice is kind `workflow` (#3731) and the hub gives it in the App's language
     /// (#5511); v9's copies would keep its Chinese text for English and Japanese users.
     /// Bump it whenever the item structure or the text the hub gives an item changes.
@@ -1185,7 +1185,7 @@ nonisolated enum ChatCache {
         return !version.isEmpty && version.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
-    /// The default group's copies where they always were; another group's in a folder of its own (docs/multi-hub.md:
+    /// The default group's copies where they always were; another group's in a folder of its own (docs/protocol/multi-hub.md:
     /// the same machine and session ids can be in two groups).
     private static func url(_ key: SessionKey) -> URL? {
         guard let dir = directory(key.group) else { return nil }

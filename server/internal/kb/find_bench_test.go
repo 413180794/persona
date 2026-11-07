@@ -11,7 +11,7 @@ import (
 )
 
 // A synthetic archive a little over the size the search was written for (~33 MB of text in ~37k files; the real one
-// is ~25 MB, docs/knowledge.md): benchChats chats with a year of day files each, plus people, projects and docs.
+// is ~25 MB, docs/assistant/knowledge.md): benchChats chats with a year of day files each, plus people, projects and docs.
 // Built once per test binary; every benchmark reads it.
 const (
 	benchChats  = 100

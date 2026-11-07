@@ -29,7 +29,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-// Settings › Sent as you (#5278, docs/connectors.md "Sent as the user"): what Persona wrote in the user's name through the
+// Settings › Sent as you (#5278, docs/extensions/connectors.md "Sent as the user"): what Persona wrote in the user's name through the
 // connectors, newest first, from GET /api/v1/connectors/sent. The words and rules follow the web page (web/src/lib/sent.ts,
 // views/settings/SentSettings.tsx) and iOS (SentModel.swift): where a send went, how the gate let it through, who asked, paging
 // and refreshing the list, the connector chips, and the hub's refusals in plain words. The page is in SentScreen.kt.

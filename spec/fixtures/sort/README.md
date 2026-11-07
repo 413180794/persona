@@ -1,6 +1,6 @@
 # Agents 列表夹具
 
-本目录以当前 iOS App 的实现为准，供 Android 纯 Kotlin 核心的 JUnit 读取，以后 XCTest 使用同一批数据。基线为本车道起点 `e491af2`，依据见 `docs/redesign/README.md` 的 2.3、D1、D4，`docs/redesign/ux.md` 的 3.1，以及 `docs/redesign/parity.md` 的 26.4、26.5。所有会话、项目、机器标识和内容均为编造。
+本目录以当前 iOS App 的实现为准，供 Android 纯 Kotlin 核心的 JUnit 读取，以后 XCTest 使用同一批数据。基线为本车道起点 `e491af2`，依据见 `docs/archive/redesign/README.md` 的 2.3、D1、D4，`docs/archive/redesign/ux.md` 的 3.1，以及 `docs/archive/redesign/parity.md` 的 26.4、26.5。所有会话、项目、机器标识和内容均为编造。
 
 ## 规则与用例
 
@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | 客户端优先解码 `state`，缺失或 null 时才按 `status` 回退，未知枚举变为 `unknown`。 | Models 的 `Session.init(from:)`、`AgentState.init(status:)` | `client_state_precedence` |
 | 客户端不根据 `seen_at` 或 `pending_interactions` 重算状态。 | Models 的 `Session.init(from:)` | `client_state_precedence` |
-| hub 遇到待处理交互或 blocked 优先产生 needs_you，其余按宿主状态派生。 | `server/internal/assistant/fleet.go` 的 `agentState`；`docs/agent-states.md`「统一状态」 | `hub_blocked`、`hub_pending_offline`、`hub_working_seen`、`hub_idle`、`hub_offline`、`hub_unknown` |
-| hub 对 done 使用 `seen_at >= updated_at - 2 秒` 的已看容差，未看过则 unread。 | `agentState`；`docs/agent-states.md`「看过」 | `hub_done_unseen`、`hub_done_seen_before_tolerance`、`hub_done_seen_at_tolerance`、`hub_done_seen_equal`、`hub_done_seen_after` |
+| hub 遇到待处理交互或 blocked 优先产生 needs_you，其余按宿主状态派生。 | `server/internal/assistant/fleet.go` 的 `agentState`；`docs/protocol/agent-states.md`「统一状态」 | `hub_blocked`、`hub_pending_offline`、`hub_working_seen`、`hub_idle`、`hub_offline`、`hub_unknown` |
+| hub 对 done 使用 `seen_at >= updated_at - 2 秒` 的已看容差，未看过则 unread。 | `agentState`；`docs/protocol/agent-states.md`「看过」 | `hub_done_unseen`、`hub_done_seen_before_tolerance`、`hub_done_seen_at_tolerance`、`hub_done_seen_equal`、`hub_done_seen_after` |
 | idle 或 unknown 才算空闲，空闲会话有循环、后台任务或运行中的子代理时算待唤醒。 | Models 的 `isQuiet`；ChatsView 的 `Session.isWaiting` | `waiting_requires_quiet_state` |
 | 行优先级是需要你、完成未看、工作中、待唤醒、已屏蔽、已看，屏蔽不降低需要你的优先级。 | ChatsView 的 `rank` | `rank_all_states_and_mutes` |
 | 工作中用 `state_since`，缺失时用 `updated_at`，其余状态用 `updated_at`，时间缺失排最后，同时间按 `session_id` 升序。 | Models 的 `sortDate`；ChatsView 的 `ordered`；`CLAUDE.md`「同一时间再按 id」 | `working_since_then_id`、`working_since_then_id_reversed` |
@@ -70,7 +70,7 @@
 
 ## 与设计文档的差异
 
-- `docs/agent-states.md` 开头写「需要你 → 工作中 → 完成未看」，但同文后段及 App 行排序都是完成未看先于工作中；夹具采用 App 的 `rank`。
+- `docs/protocol/agent-states.md` 开头写「需要你 → 工作中 → 完成未看」，但同文后段及 App 行排序都是完成未看先于工作中；夹具采用 App 的 `rank`。
 - 手表 `apple/PersonaWatch/PersonaWatchApp.swift` 使用 `AgentState.priority`，没有 App 的待唤醒和已屏蔽分档；SpaceGroup 也使用 priority，随后才由 ChatsView 调整空间和行次序，不能用一个 rank 替代所有层次。
 - 文档写空间里按 tab 顺序；当前 App 的活跃空间实际调用 ordered，只有空闲空间展开后保留 SpaceGroup 的槽位顺序。
 - 文档写有「最近（未运行）」；当前 ChatsView 普通分组过滤 offline，没有最近段，置顶 offline 则仍显示。

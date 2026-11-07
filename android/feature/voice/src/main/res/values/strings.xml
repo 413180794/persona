@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- English is the fallback (docs/i18n.md); values-zh and values-ja hold the same keys. -->
+<!-- English is the fallback (docs/protocol/i18n.md); values-zh and values-ja hold the same keys. -->
 <resources>
     <string name="voice_title">Voice</string>
     <string name="voice_connecting">Connecting…</string>

@@ -1,4 +1,4 @@
-// Inbox policies (docs/inbox.md "Policies", #5764): "Rule for this chat / sender / repository…" from an item's menu opens
+// Inbox policies (docs/assistant/inbox.md "Policies", #5764): "Rule for this chat / sender / repository…" from an item's menu opens
 // PolicyDialog (the tier its items get, what the AI twin does with them); "Rules" in the Inbox's ⋯ menu lists them
 // (RulesDialog) with Edit and Remove. The hub decides in code; this only sets and lists.
 import { useEffect, useState, useSyncExternalStore } from "react";

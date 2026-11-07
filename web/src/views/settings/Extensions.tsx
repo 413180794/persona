@@ -1,4 +1,4 @@
-// Settings › Extensions (docs/extensions.md "App: Settings › Extensions", iOS ExtensionsView / ExtensionDetailView): the hub's extensions (built in,
+// Settings › Extensions (docs/extensions/extensions.md "App: Settings › Extensions", iOS ExtensionsView / ExtensionDetailView): the hub's extensions (built in,
 // from hub.json, installed on the hub's machine) and their states; an extension's page has its switch, its settings as a
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
 // contributes, what it may do and where it came from. An extension written in hub.json is only looked at here. Installing,
@@ -205,7 +205,7 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
   useEffect(() => onAuthChange((id, auth, from) => setExtensions((cur) => cur?.map((x) => ((x.manager || defaultManager()) === from ? withAuth(x, id, auth) : x)) ?? cur)), []);
   // a reconnect the hub could not resume: the extension_auth pushes missed meanwhile are not replayed (#4954)
   useEffect(() => onHubEvent("hello", (m) => !isResumed(m) && load()), []);
-  // with several managers, each one's extensions under its name (docs/managers.md "Clients"); one: as before
+  // with several managers, each one's extensions under its name (docs/assistant/managers.md "Clients"); one: as before
   const roster = useRoster();
   const groups = groupByManager(extensions ?? [], roster, (x) => x.manager);
 
@@ -321,7 +321,7 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
 type Typed = Record<string, { text: string; integer: boolean }>;
 
 /**
- * A market extension's upgrades (docs/extensions.md "Auto-upgrade"): its own switch, its newer version (opening the market's
+ * A market extension's upgrades (docs/extensions/extensions.md "Auto-upgrade"): its own switch, its newer version (opening the market's
  * upgrade when it waits for the user) or what happened last. The App's "Upgrades" section.
  */
 function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy: boolean; onToggle: (on: boolean) => void; onUpgrade: (market: string, id: string) => void }) {

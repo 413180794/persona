@@ -1,6 +1,6 @@
 import { daemonBinary, mcpServers } from './compat.js'
 import { contextWrapped } from '../../runtime-sdk/lib/compat.js'
-// Antigravity (agy) runtime for Persona (docs/runtimes.md).
+// Antigravity (agy) runtime for Persona (docs/integrations/runtimes.md).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'

@@ -14,7 +14,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The Android error reporter's pure parts (docs/android.md "Error reports"). */
+/** The Android error reporter's pure parts (docs/android/android.md "Error reports"). */
 class ErrorReportsTest {
     private val context = ErrorReportContext(release = "1.4.0", build = "512", osVersion = "16", deviceModel = "Pixel 9")
     private var ids = 0

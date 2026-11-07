@@ -9,7 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Settings › Hub version (docs/hub-update.md "In the app"): the selected hub's version and channel, checking for and installing a
+ * Settings › Hub version (docs/operations/hub-update.md "In the app"): the selected hub's version and channel, checking for and installing a
  * release, what an update waits for, auto-update and the history. The same API the web's `lib/hub-update.ts` and
  * iOS's `HubUpdate.swift` use. Bound to the active pairing's selected hub.
  */

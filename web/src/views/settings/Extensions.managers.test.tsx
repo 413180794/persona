@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Another manager's extension page (docs/managers.md "Clients"): the connectors it contributes, its channel and its
+// Another manager's extension page (docs/assistant/managers.md "Clients"): the connectors it contributes, its channel and its
 // upgrade are that manager's, not the default's of the same id; a link that names no manager waits for the roster.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

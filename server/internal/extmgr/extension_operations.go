@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Installs, upgrades and uninstalls as operations with steps (docs/protocol.md "Extension install, upgrade and
+// Installs, upgrades and uninstalls as operations with steps (docs/protocol/protocol.md "Extension install, upgrade and
 // uninstall progress", #3277): each one is kept here while it runs and for opKeep after, and every change of a step
 // goes to the apps as an extension_operation event, so a page closed and opened again still shows an install in
 // progress. They are only in memory: a hub that restarts forgets them (what was not installed yet is not installed).

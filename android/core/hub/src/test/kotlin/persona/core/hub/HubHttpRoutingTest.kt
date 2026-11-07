@@ -247,7 +247,7 @@ class HubHttpRoutingTest {
     private fun message() = MessageRequest(pairing, session, "hello", "stable-id", null)
 
     /**
-     * The manager a request is made for (docs/managers.md "Clients"): named on the request itself (`?manager=`), so it
+     * The manager a request is made for (docs/assistant/managers.md "Clients"): named on the request itself (`?manager=`), so it
      * holds wherever the request goes later; the default's ("") names none, over what a list noted for the path too.
      */
     @Test fun aRequestNamesTheManagerItWasMadeFor() = runBlocking {

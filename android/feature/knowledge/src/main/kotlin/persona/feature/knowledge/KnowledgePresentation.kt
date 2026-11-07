@@ -34,7 +34,7 @@ internal data class KnowledgeSearchGroup(
     val key: String get() = "${kind.wire}/$id"
 }
 
-/** Every kind the app knows: all conversations, private ones too (docs/redesign/parity.md 3.1). */
+/** Every kind the app knows: all conversations, private ones too (docs/archive/redesign/parity.md 3.1). */
 internal fun KnowledgeEntry.inScope(): Boolean = KnowledgeKind.fromWire(kind) != null
 
 /** Projects as iOS groups them: "Focus" (P0 / P1), "Other active", "Done", then "Not projects" folded with a word on why. */
@@ -283,7 +283,7 @@ internal sealed interface RecordingLength {
 }
 
 /**
- * What a recording's page shows above its transcript, read from its meta.json (docs/knowledge.md "Recordings"). A meta
+ * What a recording's page shows above its transcript, read from its meta.json (docs/assistant/knowledge.md "Recordings"). A meta
  * without `complete` is from a finished recording; a missing `duration` is measured from `ended_at`.
  */
 internal data class RecordingFacts(

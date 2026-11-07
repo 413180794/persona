@@ -43,7 +43,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The Agents pages in each of the app's languages (docs/i18n.md): the list (several computers, spaces and states, the
+ * The Agents pages in each of the app's languages (docs/protocol/i18n.md): the list (several computers, spaces and states, the
  * hub notice and requests), request cards, the new session page, to-dos and a to-do's detail. Glass in light and
  * dark, the other styles in light. Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  */

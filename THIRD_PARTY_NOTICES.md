@@ -191,7 +191,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## SwiftNIO SSH and its dependencies
 
-The iOS and macOS apps link `apple/Packages/PersonaSSH` (the SSH tunnel to the hub, docs/network.md), which depends on
+The iOS and macOS apps link `apple/Packages/PersonaSSH` (the SSH tunnel to the hub, docs/operations/network.md), which depends on
 the packages below. `Glue` and `ChannelDataUnwrapper` in `apple/Packages/PersonaSSH/Sources/PersonaSSH/Handlers.swift`
 follow the `GlueHandler` and `SSHWrapperHandler` of swift-nio-ssh's `NIOSSHClient` example.
 
@@ -235,7 +235,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## openclaw-weixin
 
-`server/plugins/wechat/ilink` (the iLink client for the WeChat bot, docs/wechat.md) follows the wire behavior of Tencent's
+`server/plugins/wechat/ilink` (the iLink client for the WeChat bot, docs/extensions/wechat.md) follows the wire behavior of Tencent's
 openclaw-weixin v2.4.6: its API types and calls, the QR authorization, the media AES-128-ECB, and its markdown filter. The Go
 code is written for Persona; nothing of the plugin's runtime is copied.
 

@@ -14,8 +14,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Subscription rate-limit windows across machines (#2432, docs/usage-windows.md). Every node reads its agents'
-// local files and answers usage.windows; the manager, which connects the machines (docs/machines.md "Who connects the computers"), asks
+// Subscription rate-limit windows across machines (#2432, docs/server/usage-windows.md). Every node reads its agents'
+// local files and answers usage.windows; the manager, which connects the machines (docs/server/machines.md "Who connects the computers"), asks
 // the ones that are online (at most every usageHubFresh), remembers each machine's last answer, and merges them into
 // one list per account: the same account on two computers shows once, with the newest numbers. Nothing here is
 // stored: a restarted manager asks again, and an offline machine's last answer is only kept in memory until it is
@@ -363,7 +363,7 @@ func usageAccountID(a proto.UsageAccount) string {
 }
 
 // usageWindowRoutes: GET /api/v1/usage/windows, the accounts' windows for the sidebar's usage bars. Read-only, from
-// local files on the machines (docs/usage-windows.md); an empty list when no machine has any.
+// local files on the machines (docs/server/usage-windows.md); an empty list when no machine has any.
 // (#2432: its own block so that merges with the other route blocks stay additive.)
 func (d *Devices) usageWindowRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/usage/windows", func(w http.ResponseWriter, r *http.Request) {

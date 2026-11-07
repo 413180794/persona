@@ -22,7 +22,7 @@ import (
 
 // fakeAppServer plays `codex app-server` on the other end of a codexConn: it records what the node sends, answers
 // requests with canned results, and pushes notifications / requests of its own. The frames follow what codex-cli
-// 0.159.3 sent in a real run (docs/assistant.md "Codex").
+// 0.159.3 sent in a real run (docs/assistant/assistant.md "Codex").
 type fakeAppServer struct {
 	t   *testing.T
 	out io.Writer

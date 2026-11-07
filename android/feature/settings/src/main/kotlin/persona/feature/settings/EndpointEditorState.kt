@@ -73,7 +73,7 @@ internal data class EndpointEditorUi(
 )
 
 /**
- * Edits to the candidate list of Settings › Connection diagnostics (docs/android.md "Connection addresses"). Calls come from the UI
+ * Edits to the candidate list of Settings › Connection diagnostics (docs/android/android.md "Connection addresses"). Calls come from the UI
  * dispatcher; changes run one at a time in the order asked, tests run alongside them. The list's order is the
  * order the connection tries: dragging a row or moving it up and down stores the order shown.
  */

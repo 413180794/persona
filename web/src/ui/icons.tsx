@@ -54,7 +54,7 @@ const P: Record<string, React.ReactNode> = {
   fork: <path d="M16 3h5v5M8 3H3v5M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3M15 9l6-6" />,
   sidebar: <g><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16" /></g>,
   loop: <path d="M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3" />,
-  // a goal the agent works toward (docs/agent-goal.md)
+  // a goal the agent works toward (docs/integrations/agent-goal.md)
   target: <g><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /></g>,
   gear: <g><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></g>,
   arrowDown: <path d="M12 5v14M19 12l-7 7-7-7" />,
@@ -101,17 +101,17 @@ const P: Record<string, React.ReactNode> = {
   arrowLeft: <path d="M19 12H5M12 19l-7-7 7-7" />,
   arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
   textSize: <path d="M4 7V4h16v3M9 20h6M12 4v16" />,
-  // an extension's entry on the sidebar (docs/extensions.md "UI slots" nav_page icons; extension, list, bell and doc reuse the above)
+  // an extension's entry on the sidebar (docs/extensions/extensions.md "UI slots" nav_page icons; extension, list, bell and doc reuse the above)
   chart: <path d="M3 3v16a2 2 0 0 0 2 2h16M8 17v-4M13 17V8M18 17v-7" />,
   gauge: <g><path d="M12 14l4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></g>,
   calendar: <g><rect x="3" y="4" width="18" height="18" rx="2.5" /><path d="M16 2v4M8 2v4M3 10h18" /></g>,
   money: <g><rect x="2" y="6" width="20" height="12" rx="2.5" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></g>,
-  // a row's icons in an extension's view (docs/extensions.md "Declarative UI" row icon; the rest reuse the above)
+  // a row's icons in an extension's view (docs/extensions/extensions.md "Declarative UI" row icon; the rest reuse the above)
   person: <g><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></g>,
   star: <path d="M12 2.8l2.84 5.76 6.36.92-4.6 4.49 1.09 6.33L12 17.31l-5.69 2.99 1.09-6.33-4.6-4.49 6.36-.92z" />,
   warning: <g><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><path d="M12 9v4M12 17h.01" /></g>,
   tag: <g><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.41l8.71 8.71a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z" /><path d="M7.5 7.5h.01" /></g>,
-  // Health (docs/health.md)
+  // Health (docs/assistant/health.md)
   heart: <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z" />,
   upload: <g><path d="M12 15V3M7 8l5-5 5 5" /><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></g>,
   // Lark emoji reactions (LarkThread)

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The inbox with several managers (docs/managers.md "Clients"): each manager's group keeps its own sections open or
+// The inbox with several managers (docs/assistant/managers.md "Clients"): each manager's group keeps its own sections open or
 // closed, a route opens the copy of its manager, the Muted and Rules dialogs list each manager's under its name, and
 // a rule from another manager's item is read and saved with that manager.
 import { act } from "react";

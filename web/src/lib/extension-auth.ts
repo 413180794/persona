@@ -1,4 +1,4 @@
-// An extension's sign-in and its command-line tools (#4507, docs/protocol.md "Extension sign-in"): the hub asks the extension's
+// An extension's sign-in and its command-line tools (#4507, docs/protocol/protocol.md "Extension sign-in"): the hub asks the extension's
 // program (auth.status / auth.step / auth.logout) and keeps its state; the page draws a "Sign in" group on the extension's
 // detail, a sign-in dialog of steps (fields, a device code, a QR code), and lists the tools in "About". Only with a hub
 // that has `extension_auth`; the hub pushes `extension_auth` whenever a sign-in state changes.
@@ -47,7 +47,7 @@ export const authStep = (id: string, step: string, values: Record<string, string
 export const authLogout = (id: string) => api<ExtensionAuth>(`${base(id)}/logout`, { method: "POST", json: {} });
 
 /** Calls l with each extension_auth the hub pushes (extension id, its new state, and the manager whose extension it is:
- *  the same id may be installed under several managers, docs/managers.md "Clients"). */
+ *  the same id may be installed under several managers, docs/assistant/managers.md "Clients"). */
 export function onAuthChange(l: (id: string, auth: ExtensionAuth, manager: string) => void): () => void {
   return onHubEvent("extension_auth", (msg) => {
     const id = extIdOf(msg as { extension?: unknown; plugin?: unknown });

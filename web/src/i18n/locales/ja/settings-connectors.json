@@ -55,7 +55,7 @@
   "not_configured": "未設定",
   "connected": "接続済み",
   "unreachable": "Lark ゲートウェイ に接続できません",
-  "lark_footer_unconfigured": "ハブはまだ Lark に接続されていません。ハブのマシンで Lark ゲートウェイ を実行し、マネージャーの manager.json の lark に設定してください（docs/feishu.md）。",
+  "lark_footer_unconfigured": "ハブはまだ Lark に接続されていません。ハブのマシンで Lark ゲートウェイ を実行し、マネージャーの manager.json の lark に設定してください（docs/extensions/feishu.md）。",
   "lark_footer": "Lark アカウントはハブのマシンの Lark ゲートウェイ でログインします。ここでは接続状態のみ表示します。",
   "recheck": "再確認",
   "last_event": "最新のリアルタイムメッセージ",

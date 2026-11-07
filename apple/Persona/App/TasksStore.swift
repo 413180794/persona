@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Task presentation for the hub-level group's assistant conversations (docs/unified-entry.md): todos come from
+/// Task presentation for the hub-level group's assistant conversations (docs/assistant/unified-entry.md): todos come from
 /// TodoStore's shared index; plans and each conversation's feed stay here. Feeds refresh when shown and on
 /// reconnect, with assistant_feed and task_plan events keeping them current. A task's agents come from AppModel's
 /// sessions and interactions, so a card follows them like the Agents page does.

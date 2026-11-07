@@ -16,7 +16,7 @@ import (
 )
 
 // Text the hub writes for people (API errors, statuses, pushes, notify, server-rendered pages) comes from the
-// catalogs, not from Chinese written into the code (docs/i18n.md). This is a ratchet while the strings move: per
+// catalogs, not from Chinese written into the code (docs/protocol/i18n.md). This is a ratchet while the strings move: per
 // file, the number of string literals with CJK text may only go down (hardcoded-baseline.json; a file at zero leaves
 // it), the same as the web's src/i18n/hardcoded-baseline.json. Comments and tests don't count; a line that has to
 // keep its Chinese (it is matched by its original, it goes to a model, it is stored) says `i18n-ignore` in a comment

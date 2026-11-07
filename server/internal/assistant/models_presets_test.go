@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The built-in providers (presets_builtin.json, docs/onboarding.md 4.3 / 5.4): what each declares, how they merge with
+// The built-in providers (presets_builtin.json, docs/assistant/onboarding.md 4.3 / 5.4): what each declares, how they merge with
 // the plugins', the names a provider added from one gets, and assign.
 
 func presetsIn(t *testing.T, s *Service, lang string) []LauncherPreset {

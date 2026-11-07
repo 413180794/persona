@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// Settings › Managers (docs/managers.md): the list, one manager's page, and the install code sheet. The logic and words
+// Settings › Managers (docs/assistant/managers.md): the list, one manager's page, and the install code sheet. The logic and words
 // are in ManagersModel.swift.
 
 /// The dot before a manager's status: online, offline, installing.
@@ -212,7 +212,7 @@ struct ManagerDetailView: View {
         let blocked = ManagersText.deleteBlocked(m)
         Section {
             #if os(macOS)
-            // docs/mac-design.md: a detail page's buttons are regular-size and grouped, not a row each.
+            // docs/apple/mac-design.md: a detail page's buttons are regular-size and grouped, not a row each.
             HStack(spacing: Theme.Space.s) {
                 actionButtons(m, blocked: blocked)
                     .buttonStyle(.bordered)

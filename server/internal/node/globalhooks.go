@@ -14,14 +14,14 @@ import (
 )
 
 // Opt-in report-only hooks for the claude sessions Persona did not start (hub.json machines[].claude_global_hooks,
-// docs/claude-integration.md "Global report-only hooks"). Sessions Persona starts load the persona-hooks plugin for that
+// docs/integrations/claude-integration.md "Global report-only hooks"). Sessions Persona starts load the persona-hooks plugin for that
 // session alone (hooksplugin.go); the ones the user starts in a herdr pane themselves have no hooks, so the node reads
 // the screen and the transcript for them. These entries go into the user's own settings.json, where hooks of every
 // tool add up, so they differ from the plugin's in two ways that matter:
 //
 //   - They never block. Other tools already put synchronous PermissionRequest hooks there; one more would stack the
 //     approvals, and one that waits for the phone for 24 hours would leave the person at the computer unable to answer
-//     in the terminal (the reason docs/codex.md rejects Codex's PermissionRequest hook). Every entry is async with a
+//     in the terminal (the reason docs/integrations/codex.md rejects Codex's PermissionRequest hook). Every entry is async with a
 //     short timeout, and there is no PermissionRequest, Elicitation or blocking PreToolUse among them: answers from
 //     the phone for these sessions keep going through the screen card.
 //   - Every entry is tagged, so install and uninstall touch nothing else. The tag is the command itself: it ends in

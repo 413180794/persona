@@ -17,7 +17,7 @@ struct ConnectorDeps {
 }
 
 /// Settings › Connectors › Telegram's own part (a connector the user signs in to here, `HubConnector.signsInHere`): its switch,
-/// the sign-in a step at a time (the hub says what each step asks for: docs/plan-telegram.md), signing out and
+/// the sign-in a step at a time (the hub says what each step asks for: docs/archive/extensions/plan-telegram.md), signing out and
 /// deleting what it brought in.
 @Observable final class ConnectorSignInModel {
     let id: String

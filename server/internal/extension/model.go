@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// The extension model (docs/extensions.md "Dependencies, exports and packs", #1854): an extension may need others (depends), open its
+// The extension model (docs/extensions/extensions.md "Dependencies, exports and packs", #1854): an extension may need others (depends), open its
 // own extension points to them (exports), or be nothing but a set of others installed together (extension_pack).
 
 // Dependency is an extension this one needs installed and on.

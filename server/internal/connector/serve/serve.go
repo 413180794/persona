@@ -7,7 +7,7 @@
 // A write (actions.do) comes only once the hub's gate let it through; the program never starts one itself.
 //
 // A program answers two openings: init and the bare method names (connector protocol 2 on its own), and the plugin
-// protocol's initialize with the same methods in the connector namespace (connector.status, …; docs/extensions.md). The
+// protocol's initialize with the same methods in the connector namespace (connector.status, …; docs/extensions/extensions.md). The
 // hub starts its connector programs as plugins; the bare opening stays for one release.
 package serve
 
@@ -68,7 +68,7 @@ const (
 	// One of the user's computers connected (connector.Machines): MachineParams → {}.
 	MMachineOnline = "machines.online"
 	// Where the connector's sign-in comes from, the hub keeping the user's choice (GitHub's "Authorized from",
-	// docs/connector-protocol.md): {} → AuthView, AuthSource → AuthView.
+	// docs/protocol/connector-protocol.md): {} → AuthView, AuthSource → AuthView.
 	MAuthGet = "auth.get"
 	MAuthSet = "auth.set"
 )
@@ -120,14 +120,14 @@ type (
 	}
 )
 
-// Namespace is the connector extension point's (docs/extensions.md): under the plugin protocol every method above is
+// Namespace is the connector extension point's (docs/extensions/extensions.md): under the plugin protocol every method above is
 // Namespace + "." + method, with the connector's id as the contribution.
 const Namespace = "connector"
 
 // InPlugin is a method's name under the plugin protocol.
 func InPlugin(method string) string { return Namespace + "." + method }
 
-// Protocol is the version of this protocol (docs/connector-protocol.md): the hub sends it with init, the program
+// Protocol is the version of this protocol (docs/protocol/connector-protocol.md): the hub sends it with init, the program
 // answers with its own in the manifest, and the hub refuses a program of another version.
 const Protocol = 2
 
@@ -256,7 +256,7 @@ type Init struct {
 	Declared map[string]string
 	// DataDir is the plugin's own directory for caches (plugin protocol only).
 	DataDir string
-	// Channel is the hub for a connector that is also a channel (docs/channels.md): it hands the owner's messages
+	// Channel is the hub for a connector that is also a channel (docs/extensions/channels.md): it hands the owner's messages
 	// over. Plugin protocol only; nil under the bare opening.
 	Channel channel.Hub
 	// Locale is the user's language as the hub said it at this start (plugin protocol only; "" under the bare
@@ -265,7 +265,7 @@ type Init struct {
 }
 
 // Listener is a connector that also hears the hub's events: a plugin that contributes the events extension point
-// (docs/extensions.md "Events") next to its connector. Hear gets the event's name without its namespace
+// (docs/extensions/extensions.md "Events") next to its connector. Hear gets the event's name without its namespace
 // ("agent.needs_you") and its parameters, on a goroutine of its own; nothing is answered.
 type Listener interface {
 	Hear(ctx context.Context, event string, params json.RawMessage)

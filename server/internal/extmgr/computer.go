@@ -1,7 +1,7 @@
 package extmgr
 
 // Operating the user's Macs for the assistant through Cua Driver: the built-in plugin cua, off until the user turns
-// it on, then machine by machine (docs/computer-use.md). While it is off no node is asked about cua-driver, the
+// it on, then machine by machine (docs/extensions/computer-use.md). While it is off no node is asked about cua-driver, the
 // assistant has no computer_* tools and the machines carry no Computer.
 
 import (

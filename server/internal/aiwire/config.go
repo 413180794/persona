@@ -1,4 +1,4 @@
-// Package aiwire is the model configuration as the contract carries it (docs/architecture.md "Contract packages"):
+// Package aiwire is the model configuration as the contract carries it (docs/server/architecture.md "Contract packages"):
 // the manager's model settings travel over the bus in it. Types and pure helpers only; internal/ai, which calls the
 // models, aliases it.
 package aiwire

@@ -422,7 +422,7 @@ func TestInboxModelsLive(t *testing.T) {
 	}
 }
 
-// An item about one of the user's tasks (docs/unified-entry.md): the judge sees the tasks and links the item; the AI
+// An item about one of the user's tasks (docs/assistant/unified-entry.md): the judge sees the tasks and links the item; the AI
 // twin is told the task's progress; its draft puts a card into the task's conversation.
 func TestInboxItemAboutATask(t *testing.T) {
 	ctx := context.Background()

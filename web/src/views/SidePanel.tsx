@@ -1,4 +1,4 @@
-// The right-hand panel next to the page (docs/web.md "Side panel"): one at a time, chosen in lib/panel.ts. (A session's
+// The right-hand panel next to the page (docs/web/web.md "Side panel"): one at a time, chosen in lib/panel.ts. (A session's
 // terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";

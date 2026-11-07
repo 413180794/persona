@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// The built-in manager's own database (docs/server.md "The default manager's own database"): where it is, in its
+// The built-in manager's own database (docs/server/server.md "The default manager's own database"): where it is, in its
 // manager.json, with the keys a manager made in the app uses for its own (database_url, database_container), and when
 // its data moved there out of the database it shared with the hub (DatabaseMovedKey).
 

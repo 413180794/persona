@@ -1,7 +1,7 @@
 import Foundation
 @testable import Persona
 
-// Stand-ins for a voice call's socket, audio, permission, screen lock and clock (docs/voice.md 6.10), so
+// Stand-ins for a voice call's socket, audio, permission, screen lock and clock (docs/assistant/voice.md 6.10), so
 // VoiceConversation and VoiceCalls run their real logic with no network, microphone or waiting.
 
 /// A clock that only moves when a test says so; `sleep` waits until it has moved far enough.

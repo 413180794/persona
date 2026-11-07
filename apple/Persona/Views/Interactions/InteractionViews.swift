@@ -56,7 +56,7 @@ extension Interaction {
     }
 
     /// The agent's name on a card not from Claude Code: one the node read off a Codex / TRAEX TUI, or an agent
-    /// runtime's own ("DSH", the hub's agent_label; docs/runtimes.md). Nil for Claude's.
+    /// runtime's own ("DSH", the hub's agent_label; docs/integrations/runtimes.md). Nil for Claude's.
     var agentName: String? {
         switch agent {
         case "codex": "Codex"
@@ -298,7 +298,7 @@ struct InteractionPanel: View {
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(StatusPalette.needsYou.dot)
             Text(panelTitle).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
-            VoiceAskMark(interaction: interaction) // Asking by Voice (docs/voice.md 1.2 H)
+            VoiceAskMark(interaction: interaction) // Asking by Voice (docs/assistant/voice.md 1.2 H)
             if collapsed {
                 Text(previewText).font(Theme.Font.secondary).foregroundStyle(.primary).lineLimit(1)
             }
@@ -699,7 +699,7 @@ struct PermissionForm: View {
     }
 }
 
-/// A Codex / TRAEX approval read off its TUI (docs/codex.md「提问和审批」): the command or the edits in full, the agent's
+/// A Codex / TRAEX approval read off its TUI (docs/integrations/codex.md「提问和审批」): the command or the edits in full, the agent's
 /// reason, Deny / Approve, Always Approve naming what it would allow (only when the TUI offers it), and Deny and Explain: the reason
 /// stops the turn and goes to the agent as its next message.
 struct AgentPermissionForm: View {
@@ -1373,7 +1373,7 @@ struct BUIPlanForm: View {
 
 /// The BeautifulUI style's tool approval: an approval card with the tool and what it will run on top, then Allow /
 /// Always Allow in Session / Deny. A tap sends, as the plain form's buttons do. Typing in the field denies with that reason,
-/// which Claude reads. A Codex card (docs/codex.md「提问和审批」) offers Approve / Always Approve (what it allows, only when Codex
+/// which Claude reads. A Codex card (docs/integrations/codex.md「提问和审批」) offers Approve / Always Approve (what it allows, only when Codex
 /// does) / Deny, with Codex's reason over the command.
 struct BUIPermissionForm: View {
     @Environment(AppModel.self) private var model
@@ -1646,7 +1646,7 @@ struct SessionlessCardSheet: View {
 
 extension Interaction {
     /// The line under a card's title in a list: its session's title; a sessionless card says where it comes from, and
-    /// Script when its title does not already name who asks (`personad ask` labels its cards Script, docs/script-cli.md).
+    /// Script when its title does not already name who asks (`personad ask` labels its cards Script, docs/integrations/script-cli.md).
     func placeLine(machine: String?) -> String {
         let mark = (agentLabelHint ?? "").isEmpty ? String(localized: "Script") : nil
         let parts: [String?] = isSessionless ? [mark, sessionlessPlace, machine] : [sessionTitle, machine]

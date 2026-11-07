@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// A node's coded refusal of a send is explained in the request's language and names the machine (docs/onboarding.md
+// A node's coded refusal of a send is explained in the request's language and names the machine (docs/assistant/onboarding.md
 // 4.6 rule 2).
 func TestSendRefusalSaysWhyInTheRequestLanguage(t *testing.T) {
 	h := newTestHub(t)

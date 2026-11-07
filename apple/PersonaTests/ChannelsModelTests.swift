@@ -3,7 +3,7 @@ import PersonaKit
 import Testing
 @testable import Persona
 
-/// Settings › Channels (docs/channels.md): what the hub sends decodes (and what it leaves out falls back), the list's
+/// Settings › Channels (docs/extensions/channels.md): what the hub sends decodes (and what it leaves out falls back), the list's
 /// sections and words, a channel's changes go out as only what changed, binding is the connectors' steps on …/bind
 /// (a QR code, the Feishu bot's pairing code), and a message's source is read from its client_msg_id. Made-up values.
 @MainActor

@@ -52,7 +52,7 @@ nonisolated enum Theme {
     #endif
 
     static var accent: Color { spec.accent }
-    /// The persona's own color (primary color, docs/persona.md): its face's glow and backdrop, never something to tap (that is
+    /// The persona's own color (primary color, docs/apple/persona.md): its face's glow and backdrop, never something to tap (that is
     /// `accent`). The accent when the persona brings none (the built-in Persona is drawn in the accent).
     static var persona: Color { spec.personaPrimary ?? spec.accent }
     /// The app icon's coral. Only for Persona' own mark (the glyph in Settings / Chat, the Live Activity's star), never for
@@ -468,7 +468,7 @@ nonisolated enum Theme {
     static let systemSidebar = Color(light: 0xE6E9EE, dark: 0x191C20)
 
     /// Motion: a state change snaps, a layout change glides. Nothing repeats except the Needs You dot, the work spinner and
-    /// the persona's dot in the Persona tab's top bar (docs/persona.md), and those stop with Reduce Motion (the spinner
+    /// the persona's dot in the Persona tab's top bar (docs/apple/persona.md), and those stop with Reduce Motion (the spinner
     /// is the system's).
     enum Motion {
         static let state = Animation.snappy(duration: 0.25)
@@ -517,7 +517,7 @@ nonisolated enum Theme {
         static let purple = Color(light: 0x7A5AF8, dark: 0x9D8BFF)
         /// System indigo.
         static let indigo = Color(light: 0x5856D6, dark: 0x5E5CE6)
-        /// Health's heart (the health space, docs/health.md).
+        /// Health's heart (the health space, docs/assistant/health.md).
         static let pink = Color(light: 0xD62E5C, dark: 0xFF6B8B)
         /// A quiet mark: a list row's tile that is information, not a place to go.
         static let gray = Color(light: 0x8E8E93, dark: 0x636366)
@@ -537,7 +537,7 @@ nonisolated enum Theme {
         LinearGradient(colors: [c, c.blended(with: .black, by: 0.12)], startPoint: .top, endPoint: .bottom)
     }
 
-    /// The ChatGPT-style shell (docs/ios.md「新外壳」, iPhone without Old Layout): neutral like ChatGPT's, in every style.
+    /// The ChatGPT-style shell (docs/apple/ios.md「新外壳」, iPhone without Old Layout): neutral like ChatGPT's, in every style.
     enum Shell {
         /// The Assistant | Agents switch's selected segment, inside its glass capsule.
         static let segment = Color(light: 0xE6E6E6, dark: 0x3A3A3C)
@@ -580,7 +580,7 @@ nonisolated enum Theme {
     static let primaryText = Color(light: 0x1C1C1E, dark: 0xF2F2F7)
     static let codeBackground = Color(light: 0xF3F1EC, dark: 0x1C1D21)
 
-    /// Syntax colors in the file viewer (docs/ios.md「文件查看器」), on `codeBackground` in every style (it does not
+    /// Syntax colors in the file viewer (docs/apple/ios.md「文件查看器」), on `codeBackground` in every style (it does not
     /// change with the style, so neither do they): GitHub's palette, every one ≥ 4.5:1 on that background in light
     /// and dark (`SyntaxPaletteTests`). Words that are none of these stay `.primary`.
     enum Syntax {
@@ -601,7 +601,7 @@ nonisolated enum Theme {
     }
     static let terminalBackground = Color(light: 0x16171B, dark: 0x0E0F12)
     static let terminalText = Color(light: 0xE6E3DA, dark: 0xE6E3DA)
-    // Agent states (docs/agent-states.md): the dots. Text and soft backgrounds come from `AgentState.tone`
+    // Agent states (docs/protocol/agent-states.md): the dots. Text and soft backgrounds come from `AgentState.tone`
     // (StatusPalette.swift, shared with the watch and the Live Activity).
     static var needsYou: Color { StatusPalette.needsYou.dot }
     static var busy: Color { StatusPalette.working.dot }

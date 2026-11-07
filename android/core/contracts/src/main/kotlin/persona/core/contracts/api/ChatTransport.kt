@@ -43,7 +43,7 @@ data class ItemsQuery(
 }
 
 /**
- * The hub's 200 to an answer (docs/protocol.md, #1673): sent now, or [already] answered, [resolution] being the answer
+ * The hub's 200 to an answer (docs/protocol/protocol.md, #1673): sent now, or [already] answered, [resolution] being the answer
  * that took effect then (redacted as the history keeps it; it can differ from the one just sent).
  */
 data class ResolveOutcome(val already: Boolean = false, val status: String? = null, val resolution: Resolution? = null)

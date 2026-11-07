@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
-// The hub's own errors (docs/extensions.md "Error reports"): its log's error lines and the panics of its handlers
+// The hub's own errors (docs/extensions/extensions.md "Error reports"): its log's error lines and the panics of its handlers
 // become reports, sent to the managers, which own the pipeline and the extensions. Only while the managers' report
 // says error_reports (an extension takes them); otherwise nothing is built.
 

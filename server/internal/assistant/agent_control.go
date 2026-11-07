@@ -16,12 +16,12 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The main conversation in charge of any agent (#5112, docs/unified-entry.md"Supervision"): stopping and redirecting one
+// The main conversation in charge of any agent (#5112, docs/assistant/unified-entry.md"Supervision"): stopping and redirecting one
 // (agent_interrupt), taking one it did not hand out under its supervision (agent_supervise), and the agents' own way
 // up to their supervisor (report_to_supervisor, one of the tools an agent gets, not the assistant; agentToolNames).
 
 // agentToolNames are the tools of the agents (not the assistant's conversations) that are this manager's own; their
-// descriptions and schemas are in prompts/mcp (docs/prompts.md). Each needs to know which agent calls it: the node
+// descriptions and schemas are in prompts/mcp (docs/assistant/prompts.md). Each needs to know which agent calls it: the node
 // names the session of the agent's pane for them (node.callerTools).
 var agentToolNames = []string{"report_to_supervisor", "todo_decisions", "todo_decision_add", "todo_bind_thread"}
 

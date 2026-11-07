@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-// Extension markets (docs/extensions.md "Extension market") publish persona-extensions.json
+// Extension markets (docs/extensions/extensions.md "Extension market") publish persona-extensions.json
 // at the root of a repository or website path. A registered market lists its packages
 // and pins each download's sha256.
 
@@ -282,7 +282,7 @@ type Market struct {
 	GitHubWeb string
 	// Dir is where git markets' clones are kept (the hub's data directory).
 	Dir string
-	// Cache is where downloaded packages are kept by their sha256 ("": none), docs/protocol.md "Extension install, upgrade and uninstall progress".
+	// Cache is where downloaded packages are kept by their sha256 ("": none), docs/protocol/protocol.md "Extension install, upgrade and uninstall progress".
 	Cache string
 	// allowLocal lets tests clone a local repository.
 	allowLocal bool

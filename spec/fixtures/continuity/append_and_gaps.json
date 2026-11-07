@@ -7,7 +7,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: aBatchThatDoesNotContinueRevealsAHole",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -836,7 +836,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: emptyBatchesMoveCoveredForward",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1026,7 +1026,7 @@
       "description": "接续范围重叠时推进到较大位置，迟到的旧批次不回退。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1257,7 +1257,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: aBatchFromTheFirstLineIsABaseline",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1364,7 +1364,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: noFillBeforeABaseline",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1564,7 +1564,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: aLostFirstPushOfANewSessionIsNoticed",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1644,7 +1644,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: aCappedCatchUpAsksForTheRest",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -2218,7 +2218,7 @@
         "ios/Persona/App/AppModel.swift: fill, reload",
         "ios/Shared/ChatStore.swift: replace",
         "server/internal/transcript/continuity_corpus_test.go: simRun.fill",
-        "docs/redesign/flows.md：第 11 张"
+        "docs/archive/redesign/flows.md：第 11 张"
       ],
       "input": {
         "initial": {

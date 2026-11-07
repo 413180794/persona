@@ -37,7 +37,7 @@ interface Dirs {
 export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: () => void; /** Filled in when another page opens it (the knowledge base's "Open agent"). */ preset?: NewAgentPreset | null }) {
   const machines = useStore((s) => s.machines);
   const online = useMemo(() => machines.filter((m) => m.online), [machines]);
-  // no computer at all (docs/onboarding.md 4.5): the "Computer" field says why it is empty and adds one, nothing else to fill in
+  // no computer at all (docs/assistant/onboarding.md 4.5): the "Computer" field says why it is empty and adds one, nothing else to fill in
   const loaded = useStore((s) => s.loaded);
   const none = loaded && machines.length === 0;
   const adding = useAddComputer();

@@ -21,7 +21,7 @@ nonisolated enum VoiceAudioEvent: Equatable, Sendable {
     case playing(Bool)
     /// The voice's loudness right now, 0…1, for the orb.
     case outputLevel(Float)
-    /// A phone call, or another app, took the audio session (docs/voice.md 6.5「来电」).
+    /// A phone call, or another app, took the audio session (docs/assistant/voice.md 6.5「来电」).
     case interrupted
     /// The system's media services restarted: every audio object is gone.
     case reset
@@ -40,7 +40,7 @@ nonisolated enum VoiceAudioError: Error, Equatable {
     case noInput
 }
 
-/// How a call opens the microphone, decided before anything reads `AVAudioEngine.inputNode` (docs/voice.md 6.4, #5029).
+/// How a call opens the microphone, decided before anything reads `AVAudioEngine.inputNode` (docs/assistant/voice.md 6.4, #5029).
 /// Reading that property initializes the audio I/O unit, and an input that cannot start makes the initialization wait
 /// for an RPC that times out and aborts the app: there is no error to catch, so the call has to know beforehand.
 nonisolated enum VoiceCapture: Equatable, Sendable {
@@ -90,7 +90,7 @@ nonisolated enum VoiceCapture: Equatable, Sendable {
 }
 
 /// The call's audio: the microphone into the uplink, the voice out of the speaker, `clear` to drop what has not been
-/// played (docs/voice.md 6.4). `PhoneVoiceAudio` on iOS; the tests' fake elsewhere.
+/// played (docs/assistant/voice.md 6.4). `PhoneVoiceAudio` on iOS; the tests' fake elsewhere.
 @MainActor protocol VoiceAudio: AnyObject {
     /// Opens the microphone (PCM16 at `format.inputRate` into `uplink`) and the player (`format.outputRate`).
     func start(_ format: VoiceAudioFormat, uplink: VoiceUplink, events: @escaping @MainActor (VoiceAudioEvent) -> Void) throws
@@ -105,7 +105,7 @@ nonisolated enum VoiceCapture: Equatable, Sendable {
     func clear()
     func stop()
     /// The microphone records with echo cancellation: what the speaker plays is taken out of it. Without it the voice
-    /// can come back as the user's caption, which the `start` frame tells the extension (docs/voice.md 3.2).
+    /// can come back as the user's caption, which the `start` frame tells the extension (docs/assistant/voice.md 3.2).
     var cancelsEcho: Bool { get }
 }
 
@@ -136,7 +136,7 @@ nonisolated enum VoiceCapture: Equatable, Sendable {
     func request() async -> Bool
 }
 
-/// Keeps the screen from locking while a call waits on a long task (docs/voice.md 6.5).
+/// Keeps the screen from locking while a call waits on a long task (docs/assistant/voice.md 6.5).
 @MainActor protocol IdleTimerControl: AnyObject {
     var isDisabled: Bool { get set }
 }
@@ -179,7 +179,7 @@ final class SystemIdleTimer: IdleTimerControl {
     }
 }
 
-/// Where there is no call audio (the Mac and visionOS for now, docs/voice.md 6.9): starting fails.
+/// Where there is no call audio (the Mac and visionOS for now, docs/assistant/voice.md 6.9): starting fails.
 final class NoVoiceAudio: VoiceAudio {
     func start(_ format: VoiceAudioFormat, uplink: VoiceUplink, events: @escaping @MainActor (VoiceAudioEvent) -> Void) throws {
         throw VoiceAudioError.unsupported

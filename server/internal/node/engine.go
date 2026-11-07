@@ -23,7 +23,7 @@ import (
 // default, as every node did before), herdr-core (the Herdr desktop app), orca (the Orca desktop app) and paseo (a
 // runtime, not a terminal), or none — with one of them the default, where pane-less operations (new sessions,
 // continuing one, renaming a space) go. The user picks them per machine in the app; the hub stores them and tells
-// the node with engine.use when it connects and when they change (docs/protocol.md "Engines"). Only the hosts in the
+// the node with engine.use when it connects and when they change (docs/protocol/protocol.md "Engines"). Only the hosts in the
 // set are registered, and each runs isolated from the others: refreshes in parallel, each watcher refreshing only its
 // own host (sessions.go, herdrevents.go), so one host that is slow or down does not hold up another.
 

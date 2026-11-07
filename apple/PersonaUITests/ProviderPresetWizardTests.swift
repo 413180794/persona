@@ -1,6 +1,6 @@
 import XCTest
 
-/// Settings › Model Providers › Add on a hub with built-in presets (#4197, docs/onboarding.md 4.3「三条路」): A "I already use Claude Code"
+/// Settings › Model Providers › Add on a hub with built-in presets (#4197, docs/assistant/onboarding.md 4.3「三条路」): A "I already use Claude Code"
 /// (one try, answered and failed), B only a key (pick → paste → tested → saved, what was assigned and kept), C "Where to get a model"
 /// (Sign Up opens the signup page in the app; back from it, the key is next). Against scripts/mock/mock_scenarios.py,
 /// which restarts the mock hub with the variables each test needs:

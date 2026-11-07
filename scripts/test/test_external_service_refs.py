@@ -14,7 +14,9 @@ any service's internals lives here: such a list would itself describe what it gu
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from compatibility_identifiers import registered_external_ref
 
@@ -25,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO_REF = re.compile(r"\bnwverse/(?!persona\b)([\w.-]+)", re.IGNORECASE)
 # A placeholder for another checkout followed by its integrations or test fixtures directory.
 PATH_PLACEHOLDER = re.compile(r"<[a-z-]+>/(?:integrations|test/fixtures)/")
+# A complete, existing path in this checkout is not an external repository name.
+REPOSITORY_PATH = re.compile(r"(?<![\w/])(?:server|apple|android|site|web|schema|sdk|integrations|scripts)/[\w./-]+")
 
 # Repositories Persona depends on in the open; the docs and code cite them as sources.
 ALLOWED_REPOS = {
@@ -37,11 +41,24 @@ ALLOWED_IN_FILE = {
 }
 
 
+def local_repository_path(path):
+    candidate = ROOT / path.rstrip(".,;")
+    try:
+        candidate.resolve().relative_to(ROOT.resolve())
+    except (OSError, ValueError):
+        return False
+    return candidate.exists()
+
+
 def hits(text, path="", registry=None):
     """Return (line number, finding) for every external repository reference in text."""
     found = []
     for number, line in enumerate(text.splitlines(), 1):
+        local_spans = [match.span() for match in REPOSITORY_PATH.finditer(line)
+                       if local_repository_path(match.group(0))]
         for match in REPO_REF.finditer(line):
+            if any(start <= match.start() and match.end() <= end for start, end in local_spans):
+                continue
             name = match.group(1).rstrip(".").lower()
             if (name not in ALLOWED_REPOS and (path, name) not in ALLOWED_IN_FILE
                     and not registered_external_ref(path, match.group(0), registry)):
@@ -76,6 +93,26 @@ class ExternalServiceRefTests(unittest.TestCase):
         self.assertEqual([], hits('"publisher": "' + org + '"'))
         self.assertEqual([], hits("github.com/" + org + "/persona/server"))
         self.assertEqual([], hits("see #1420 and the service's public API reference"))
+
+    def test_existing_local_paths_are_not_repository_references(self):
+        org = "nwverse"
+        relative = "server/testdata/" + org + "/example-art/frames"
+        with tempfile.TemporaryDirectory(prefix="service-ref-paths-") as directory:
+            root = Path(directory)
+            (root / relative).mkdir(parents=True)
+            with patch(__name__ + ".ROOT", root):
+                self.assertEqual([], hits('default="' + relative + '"'))
+                self.assertEqual(1, len(hits(relative + "/missing")))
+                self.assertEqual(1, len(hits("https://github.com/" + org + "/example-art")))
+                self.assertEqual(1, len(hits(relative + " and " + org + "/example-service#1")))
+            with tempfile.TemporaryDirectory(prefix="service-ref-outside-", dir=root.parent) as outside_dir:
+                outside = Path(outside_dir)
+                (outside / org / "example-art").mkdir(parents=True)
+                (root / "server/link").symlink_to(outside, target_is_directory=True)
+                with patch(__name__ + ".ROOT", root):
+                    self.assertEqual(1, len(hits("server/link/" + org + "/example-art")))
+                    traversal = "server/../../" + outside.name + "/" + org + "/example-art"
+                    self.assertEqual(1, len(hits(traversal)))
 
     def test_tracked_files_have_no_external_repository_refs(self):
         found = [f"{path}:{number}: {ref}" for path, text in tracked_text_files() for number, ref in hits(text, path)]

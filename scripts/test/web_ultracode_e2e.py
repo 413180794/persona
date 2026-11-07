@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of Claude Code's ultracode switch on the web (#3428, docs/web.md "ultracode"): the row under the
+"""End-to-end check of Claude Code's ultracode switch on the web (#3428, docs/web/web.md "ultracode"): the row under the
 thinking effort in the model and effort popover (on / queued for the turn, by this page or elsewhere / the node's reason
 in orange with the switch still usable, the Claude quota under it), the workflow mark on the thinking chip, on the
 sidebar's agent row (not on an offline one) and on a Codex "ultra" chip, the line above the composer after a resume

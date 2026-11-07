@@ -1,6 +1,6 @@
 import XCTest
 
-/// The voice mode in the main conversation and an agent's chat (docs/voice.md 6.2, 6.8, #3508), against
+/// The voice mode in the main conversation and an agent's chat (docs/assistant/voice.md 6.2, 6.8, #3508), against
 /// scripts/mock/mock_hub.py with MOCK_VOICE=1 (scripts/mock/voice_mock.py):
 ///   MOCK_VOICE=1 PORT=<port> python3 scripts/mock/mock_hub.py
 ///   TEST_RUNNER_PERSONA_VOICE_HUB=http://127.0.0.1:<port>
@@ -12,7 +12,7 @@ import XCTest
 final class VoiceModeTests: XCTestCase {
     private static let agent = ["-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000001"]
     private static let main = ["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", "server/b2e4d6f8-0000-4000-8000-000000000001"]
-    /// The states the screenshot matrix covers (docs/voice.md 6.8), each with what proves it is on screen.
+    /// The states the screenshot matrix covers (docs/assistant/voice.md 6.8), each with what proves it is on screen.
     private static let samples: [(name: String, shows: String)] = [
         ("listening", "voice-bar"), ("working", "voice-line-stop"), ("asking", "voice-asking"), ("approval", "voice-bar"),
         ("refused", "voice-line-clear"), ("plan_feedback", "voice-line-plan"), ("paused", "voice-bar"), ("speaking", "voice-bar"),
@@ -79,7 +79,7 @@ final class VoiceModeTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    /// The real path against the mock's script (docs/voice.md 7「#3508 验收」): connected → handed over → run → paused →
+    /// The real path against the mock's script (docs/assistant/voice.md 7「#3508 验收」): connected → handed over → run → paused →
     /// asked → refused, Clear and Send → done → Stop; then the background, another page and leaving each end the call.
     @MainActor func testOpenVoiceWalksTheScript() throws {
         let hub = try hub

@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// `personad hub admin …` on the hub's machine (docs/admin.md): widen or set the admin UI's scope, reset its password.
+// `personad hub admin …` on the hub's machine (docs/operations/admin.md): widen or set the admin UI's scope, reset its password.
 
 const adminUsage = `usage:
   personad hub admin access                        show who may open the admin UI

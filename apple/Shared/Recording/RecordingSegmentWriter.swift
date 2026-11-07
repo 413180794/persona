@@ -6,7 +6,7 @@ import os
 /// The input tap converts to 16 kHz and hands buffers to a serial queue that writes the current file; when a file
 /// reaches `RecordingAudioSpec.segmentSeconds` it is closed (finalized) and reported through `onSegment`, and the next buffer
 /// opens the next file. Pausing stops the tap, so the timeline (`elapsed`, segment offsets, marks) never contains
-/// the paused time. Used by both the watch and the iPhone (docs/recording.md).
+/// the paused time. Used by both the watch and the iPhone (docs/apple/recording.md).
 nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
     struct Segment: Sendable {
         let index: Int

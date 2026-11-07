@@ -54,7 +54,7 @@ nonisolated enum UsageKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The four kinds of tokens and the replies, summed over some time (docs/machines.md "Token usage").
+/// The four kinds of tokens and the replies, summed over some time (docs/server/machines.md "Token usage").
 nonisolated struct UsageTokens: Codable, Hashable, Sendable {
     var input: Int64 = 0
     var cacheWrite: Int64 = 0

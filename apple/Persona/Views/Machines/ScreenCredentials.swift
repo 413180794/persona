@@ -5,7 +5,7 @@ import SwiftUI
 /// A Mac's Screen Sharing account and password remembered on this device (#1322, 「在这台手机上记住」), by machine: in
 /// the keychain under a service of their own, readable only while the device is unlocked and never leaving it (not in
 /// the iCloud keychain, not restored onto another device). From here they go only into the live screen's page
-/// (ScreenBridge) when the Mac asks to sign in, never to the hub or a log. One-tap unlock (docs/computer-use.md
+/// (ScreenBridge) when the Mac asks to sign in, never to the hub or a log. One-tap unlock (docs/extensions/computer-use.md
 /// 「锁屏、防睡眠、按 App 批准」a-2) reads the same.
 nonisolated enum ScreenCredentials {
     struct Saved: Codable, Equatable, Sendable {

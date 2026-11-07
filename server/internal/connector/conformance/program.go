@@ -54,7 +54,7 @@ func WithLogin(values map[string]string) ProgramOption {
 // something to show, so a program that passes by saying nothing does not pass.
 func RequireData() ProgramOption { return func(o *programOptions) { o.data = true } }
 
-// CheckProgram holds a connector program written in any language to the connector protocol (docs/connector-protocol.md).
+// CheckProgram holds a connector program written in any language to the connector protocol (docs/protocol/connector-protocol.md).
 // Check compares the wire with a Go connector's own answers; a program has no Go side, so what it says is held to the
 // Go types the hub reads instead: each answer is decoded strictly (a field the hub does not know, a key that is not
 // snake_case, a time that is not RFC 3339 fails) and then to what the hub relies on, see the check functions below.

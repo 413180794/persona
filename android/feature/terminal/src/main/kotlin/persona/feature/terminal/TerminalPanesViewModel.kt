@@ -31,7 +31,7 @@ sealed interface TerminalPanesEvent {
 }
 
 /**
- * "Terminal" (docs/terminal.md "Standalone terminal"): every online machine's panes, read when the page is in front and every few seconds
+ * "Terminal" (docs/integrations/terminal.md "Standalone terminal"): every online machine's panes, read when the page is in front and every few seconds
  * while it stays (like the web, agents' states are live from the sessions already), and "New tab" in a workspace.
  */
 class TerminalPanesViewModel(private val panes: TerminalPanes, private val sessions: SessionsRepository) : ViewModel() {

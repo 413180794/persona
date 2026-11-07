@@ -97,7 +97,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </div>
           </div>
 
-          {/* the extensions' cards (docs/extensions.md"UI slots" overview_card), under the agents' summary */}
+          {/* the extensions' cards (docs/extensions/extensions.md"UI slots" overview_card), under the agents' summary */}
           <OverviewCards />
 
           {/* Before the first snapshot the socket streams the machines' agents and cards in one by one, each moving the

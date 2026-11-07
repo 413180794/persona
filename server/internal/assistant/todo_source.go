@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Where a todo was asked for, and telling it there (#6146, docs/todos.md "Where it came from"). A todo opened from a
+// Where a todo was asked for, and telling it there (#6146, docs/assistant/todos.md "Where it came from"). A todo opened from a
 // request made in another chat (openFromElsewhere) records that chat and message; when it is done (or its Agent never
 // started) or the user accepts it, the outcome is told there, once: a reply to the message that asked. "Don't report
 // back" in the topic stops it. That it was told is kept with the todo, so a restart does not tell it again.
@@ -443,7 +443,7 @@ func (s *Service) tellOwner(ctx context.Context, t Todo, st FeishuStatus, key st
 }
 
 // sendSourceReport writes text under the message that asked, through the channel it came in by. Feishu: a reply to the
-// message in its chat (the only place the hub lets the bot write in a group that is not opted in, docs/bots.md).
+// message in its chat (the only place the hub lets the bot write in a group that is not opted in, docs/extensions/bots.md).
 func (s *Service) sendSourceReport(ctx context.Context, src TodoSource, todoID, text string) error {
 	switch src.Channel {
 	case channel.Feishu:

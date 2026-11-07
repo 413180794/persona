@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Write in any language. Redact tokens, hub addresses, emails and chat content before pasting logs or screenshots.
-        TestFlight feedback: also add the `testflight` label (see docs/collaboration.md).
+        TestFlight feedback: also add the `testflight` label (see docs/operations/collaboration.md).
   - type: textarea
     id: what-happened
     attributes:

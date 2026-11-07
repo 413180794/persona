@@ -9,7 +9,7 @@ The values are scripts/privacy_check.py's (config, private-words.txt, CLAUDE.loc
 IPv4 addresses and emails outside placeholder domains, looked for in every file's printable strings (like `strings`,
 after decompressing lzfse files) and in binary plists. The bundle id and team id are in every signed build on purpose
 and are removed before matching. App mode also recognizes only the exact configured public HTTPS /relay endpoint, and
---whole-short only the exact public download address (publish.site_url + /dl, the hub's update URL, docs/hub-update.md);
+--whole-short only the exact public download address (publish.site_url + /dl, the hub's update URL, docs/operations/hub-update.md);
 their host in any other context, related paths and credentials remain subject to private-value checks.
 Signing data is Apple's and is skipped: embedded.mobileprovision (embedded.provisionprofile on the Mac), _CodeSignature,
 and each Mach-O slice's validated embedded-signature blob (certificate names; the archive's development profile lists

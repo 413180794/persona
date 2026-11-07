@@ -34,7 +34,7 @@
 | WT | [TerminalWrapTests.swift](../../../apple/PersonaTests/TerminalWrapTests.swift) |
 | TT | [TerminalTests.swift](../../../apple/PersonaTests/TerminalTests.swift) |
 
-设计依据为 [终端文档](../../../docs/terminal.md) 的第七至九节、第十一节「手机上的滚动历史」及第十二节更正，[Android 方案 5.11](../../../docs/redesign/android.md)，以及[设计总纲 D1、D4、4.1](../../../docs/redesign/README.md)。
+设计依据为 [终端文档](../../../docs/integrations/terminal.md) 的第七至九节、第十一节「手机上的滚动历史」及第十二节更正，[Android 方案 5.11](../../../docs/archive/redesign/android.md)，以及[设计总纲 D1、D4、4.1](../../../docs/archive/redesign/README.md)。
 
 ## 网格规则
 

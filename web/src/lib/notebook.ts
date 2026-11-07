@@ -1,4 +1,4 @@
-// Jupyter notebooks for the web's file viewer (docs/web.md "Jupyter", #1407; iOS / Mac: #1296): nbformat 4 (and 3's
+// Jupyter notebooks for the web's file viewer (docs/web/web.md "Jupyter", #1407; iOS / Mac: #1296): nbformat 4 (and 3's
 // worksheets) into cells, each output reduced to the one representation the viewer shows. Pure; notebook.test.ts.
 import { t } from "../i18n";
 

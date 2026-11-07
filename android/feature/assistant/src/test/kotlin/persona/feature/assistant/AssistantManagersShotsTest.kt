@@ -46,7 +46,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The assistant page with several managers (docs/managers.md step 4): the switcher under the top bar (the default
+ * The assistant page with several managers (docs/assistant/managers.md step 4): the switcher under the top bar (the default
  * first), an offline manager chosen (greyed, its composer off and saying 最后同步于, nothing sent), an online one, and
  * one manager (no switcher), in every style, light and dark. Written to `build/managers-shots/assistant-*.png`.
  */

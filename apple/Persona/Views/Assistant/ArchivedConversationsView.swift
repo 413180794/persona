@@ -2,7 +2,7 @@ import PersonaKit
 import SwiftUI
 
 /// Archived: the conversations swiped out of the sidebar (or archived by Persona), newest first. A tap opens one, a swipe
-/// or a long press brings it back into the list. Nothing here deletes: archiving only hides (docs/assistant.md).
+/// or a long press brings it back into the list. Nothing here deletes: archiving only hides (docs/assistant/assistant.md).
 struct ArchivedConversationsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

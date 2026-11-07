@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// The "Fleet" Live Activity's content (docs/live-activity.md): one activity per phone, on the lock screen and in the
+// The "Fleet" Live Activity's content (docs/apple/live-activity.md): one activity per phone, on the lock screen and in the
 // Dynamic Island, summing up every agent that needs you, is working, or finished unseen. The manager works it out
 // (FleetState) from the session lists and the pending interactions, with the island's numbers (FleetStats), and
 // tells the hub when it changes (fleet.live); the hub pushes it to each device's activity token at the pace Apple
@@ -152,7 +152,7 @@ type fleetInput struct {
 	TurnStart time.Time // zero: unknown
 }
 
-// buildFleet sums agents up the way the Agents list does (docs/ios.md): needs you first (oldest request first), then
+// buildFleet sums agents up the way the Agents list does (docs/apple/ios.md): needs you first (oldest request first), then
 // working (longest first), then finished unseen. Muted agents, idle / offline ones, and /loop agents waiting for
 // their next tick are left out; the assistant only counts when it asks something.
 func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {

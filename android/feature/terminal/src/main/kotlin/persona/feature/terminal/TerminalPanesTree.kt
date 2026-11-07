@@ -9,7 +9,7 @@ import persona.core.contracts.api.PaneTab
 import persona.core.contracts.api.PanesResponse
 import persona.core.contracts.api.TerminalAddress
 
-// The terminal browser's tree (docs/terminal.md "Standalone terminal"), as the web builds it (web/src/lib/terminals.ts): what a
+// The terminal browser's tree (docs/integrations/terminal.md "Standalone terminal"), as the web builds it (web/src/lib/terminals.ts): what a
 // machine's `GET /machines/{mid}/panes` lists turned into workspaces → tabs → panes, each pane with the key its
 // terminal opens by. Pure, so it is tested without Android.
 

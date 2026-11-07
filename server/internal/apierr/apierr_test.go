@@ -33,7 +33,7 @@ func call(t *testing.T, w http.ResponseWriter, rec *httptest.ResponseRecorder, e
 }
 
 // The refusals that say why the main conversation cannot start are 409 with a sentence for people in the request's
-// language, the caller's words as the detail and what to do (docs/onboarding.md 5.2), wrapped or not.
+// language, the caller's words as the detail and what to do (docs/assistant/onboarding.md 5.2), wrapped or not.
 func TestCallExplainsCodedRefusals(t *testing.T) {
 	raw := "claude 没有启动起来（0s 后退出），消息没有送达：zsh:1: command not found: claude"
 	refusal := &rpc.Error{Code: proto.CodeClaudeMissing, Message: raw, Data: json.RawMessage(`{"delivered":"none","launcher":"claude"}`)}

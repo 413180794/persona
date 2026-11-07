@@ -32,12 +32,12 @@ import (
 	wechat "github.com/nwverse/persona/server/internal/wechat/spec"
 )
 
-// Plugins (docs/extensions.md): one registry of every plugin — built into personad, written in hub.json, installed on
+// Plugins (docs/extensions/extensions.md): one registry of every plugin — built into personad, written in hub.json, installed on
 // this machine — and the plugin host running them. A plugin's contributions plug into the hub where they belong: a
 // connector into the connector registry, a voice plugin into the app's voice conversation (relayed under
 // /api/v1/plugins/<id>/…).
 
-// PluginConfig is hub.json's plugins[]: a process the hub runs next to itself (docs/extensions.md "Extensions in
+// PluginConfig is hub.json's plugins[]: a process the hub runs next to itself (docs/extensions/extensions.md "Extensions in
 // hub.json"). The hub starts it, restarts it when it exits and relays /api/v1/plugins/{id}/… to the HTTP server it
 // serves on the unix socket in PERSONA_PLUGIN_SOCKET (WebSockets included). Without a command the plugin runs elsewhere
 // and only its socket is here (e.g. forwarded with ssh -R from a machine that reaches what the plugin needs). The
@@ -53,7 +53,7 @@ type ExtensionConfig struct {
 	Dir      string            `json:"dir,omitempty"` // working directory; "~/" is the hub machine's home
 	Disabled bool              `json:"disabled,omitempty"`
 	// Config is the plugin's own settings, handed over as JSON in PERSONA_PLUGIN_CONFIG (the built-in voice plugin's
-	// providers, docs/extensions.md "Built-in voice extension").
+	// providers, docs/extensions/extensions.md "Built-in voice extension").
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
@@ -894,7 +894,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		for _, c := range m.Channels() {
 			params.Active["channel"] = append(params.Active["channel"], c.ID)
 		}
-		for point := range m.Contributes { // the rest, without what the user switched off (docs/extensions.md "Contribution switches")
+		for point := range m.Contributes { // the rest, without what the user switched off (docs/extensions/extensions.md "Contribution switches")
 			if ids := m.Items(point); len(ids) > 0 && point != "connectors" && point != "channel" {
 				params.Active[point] = ids
 			}

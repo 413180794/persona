@@ -459,7 +459,7 @@ enum class SendKind { Send, Stop }
 
 /** The send (or stop) button of a composer: a filled circle, or a square on the board. */
 /**
- * The send button while nothing can be sent yet ("Connect a model first", "Add a computer first": docs/onboarding.md 4.4): a one-line pill in the
+ * The send button while nothing can be sent yet ("Connect a model first", "Add a computer first": docs/assistant/onboarding.md 4.4): a one-line pill in the
  * send button's place, centred on the same 48 dp row, that opens the missing step.
  */
 @Composable

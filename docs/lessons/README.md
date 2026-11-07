@@ -1,6 +1,6 @@
 # Lessons index
 
-The product name is Persona. This version has no previous-brand runtime compatibility; current contracts and the approval-gated operational migration are in [the naming contract](../rename.md) and [the cutover](../persona-cutover.md). Historical verification records do not authorize deployment.
+The product name is Persona. This version has no previous-brand runtime compatibility; current contracts and the approval-gated operational migration are in [the naming contract](../operations/rename.md) and [the cutover](../operations/persona-cutover.md). Historical verification records do not authorize deployment.
 
 Pitfalls, odd behavior, and design trade-offs, one file per topic. Read the matching file before touching an area. Write new lessons into the matching section on the spot (if none fits, start a new section or a new file and register it here).
 The most common, cross-module ones also get one line in `CLAUDE.md` ("Most common pitfalls"). Design conclusions tied to a specific feature go into that feature's doc (`docs/<topic>.md`); this directory only records pitfalls.

@@ -1,4 +1,4 @@
-# Every pull request links an issue (docs/collaboration.md): its description has `Fixes #N`, `Closes #N`, `Refs #N`
+# Every pull request links an issue (docs/operations/collaboration.md): its description has `Fixes #N`, `Closes #N`, `Refs #N`
 # (or another closing keyword, any case) or a link to an issue of this repository. Without one the PR gets a comment
 # explaining the rule and is closed; when the author edits the description to add a link, the next run reopens it.
 # Pull requests from bot accounts (dependabot …) are exempt.
@@ -120,10 +120,10 @@ jobs:
               core.info(`#${number}: no linked issue, already closed`);
               return;
             }
-            const doc = `${context.serverUrl}/${owner}/${repo}/blob/${context.payload.repository.default_branch}/docs/collaboration.md`;
+            const doc = `${context.serverUrl}/${owner}/${repo}/blob/${context.payload.repository.default_branch}/docs/operations/collaboration.md`;
             await github.rest.issues.createComment({ owner, repo, issue_number: number, body: [
               MARKER,
-              `这个 PR 的描述里没有关联 issue，按仓库的协作规则（[docs/collaboration.md](${doc})）先关闭。`,
+              `这个 PR 的描述里没有关联 issue，按仓库的协作规则（[docs/operations/collaboration.md](${doc})）先关闭。`,
               '',
               '在描述里加一行 `Fixes #<号>`、`Closes #<号>` 或 `Refs #<号>`（也可以贴本仓库 issue 的链接；写在代码块和注释里的不算），' +
                 '保存后会自动重新打开；没有自动打开的话，补上后手动 Reopen。',

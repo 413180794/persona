@@ -32,7 +32,7 @@
   "not_running_open": "{name} 没在运行：先打开它",
   "no_binding_step": "{name} 没有绑定这一步",
   "domain_label": "域名（feishu / lark，或私有部署的地址；不填是 feishu）",
-  "credentials_hint": "在飞书开放平台建企业自建应用、开启机器人能力，订阅方式选「使用长连接接收事件」（docs/bots.md「在开放平台上要做的」）",
+  "credentials_hint": "在飞书开放平台建企业自建应用、开启机器人能力，订阅方式选「使用长连接接收事件」（docs/extensions/bots.md「在开放平台上要做的」）",
   "pair_hint": "在飞书里私聊机器人，把这 6 位数字发给它（10 分钟内有效）",
   "not_bound": "{name} 没有绑定",
   "not_running": "{name} 没在运行"

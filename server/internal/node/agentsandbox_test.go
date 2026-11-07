@@ -361,7 +361,7 @@ func TestSDKBridgeInAgentSandbox(t *testing.T) {
 }
 
 // Everything the path guard calls a secret of the data directory, the sandbox closes too: they share the list
-// (identity/secrets.go). The sandbox closes a few more things the path guard leaves (docs/agent-sandbox.md "Which
+// (identity/secrets.go). The sandbox closes a few more things the path guard leaves (docs/server/agent-sandbox.md "Which
 // files"), and neither touches a project's files below the data directory.
 func TestAgentSandboxCoversPathGuard(t *testing.T) {
 	home := t.TempDir()

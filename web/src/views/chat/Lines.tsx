@@ -253,7 +253,7 @@ export function closeRecap(key: string, id: string) {
 // ── model API errors ──
 
 /** A model API error: why, whether it passes by itself, the original under the fold, "Retry". One the user must fix (not
- *  signed in, a wrong key, a model that is not there) says so instead, with "Fix it" (docs/onboarding.md 4.4). */
+ *  signed in, a wrong key, a model that is not there) says so instead, with "Fix it" (docs/assistant/onboarding.md 4.4). */
 function APIErrorCard({ info, count, at, onRetry, fix }: { info: APIErrorInfo; count: number; at?: string; onRetry?: () => void; fix?: { title: string; detail: string; action: string } | null }) {
   const [open, setOpen] = useState(false);
   const sub = fix ? fix.detail : info.transient === true ? t("chat-lines.api_transient") : info.transient === false ? t("chat-lines.api_permanent") : "";

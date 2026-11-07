@@ -4,7 +4,7 @@ import java.util.Locale
 
 /**
  * An interface language from android/i18n/<tag>.properties. Gradle generates [GeneratedLanguages] from these
- * resources: adding a language never needs another enum case or changes to the picker (docs/i18n.md).
+ * resources: adding a language never needs another enum case or changes to the picker (docs/protocol/i18n.md).
  */
 data class AppLanguage internal constructor(val tag: String?, val ownName: String, internal val matches: List<String>) {
     companion object {
@@ -29,7 +29,7 @@ data class AppLanguage internal constructor(val tag: String?, val ownName: Strin
 
 /**
  * The language the app shows right now, resolved (never [AppLanguage.System]); the hub client sends it as
- * `Accept-Language` with every request and as `client_hello.locale` (docs/i18n.md "Protocol"). Set by the app at start
+ * `Accept-Language` with every request and as `client_hello.locale` (docs/protocol/i18n.md "Protocol"). Set by the app at start
  * and whenever Settings › Language or the phone's language changes; [changes] tells the socket to say hello again.
  */
 object ClientLanguage {

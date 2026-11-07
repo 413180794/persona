@@ -1,4 +1,4 @@
-// Package update is how a hub knows what it is and whether a newer one is out (docs/hub-update.md): the build it was
+// Package update is how a hub knows what it is and whether a newer one is out (docs/operations/hub-update.md): the build it was
 // made as (channel, build number), the manifest the publisher puts next to the downloads (latest.json, with every
 // file's sha256), the publisher's checks before a release, and installing one (download, swap, the watchdog).
 package update
@@ -77,7 +77,7 @@ func (b Build) Newer(latest int64) bool { return b.Number > 0 && latest > b.Numb
 
 // Hold says why this build must not install release m by itself, or "" when it may: m's code has to include the
 // commit this build was made from. A release published from older code (a checkout behind the master a hub was
-// deployed from) has the larger build number all the same, and would take that hub back (docs/hub-update.md
+// deployed from) has the larger build number all the same, and would take that hub back (docs/operations/hub-update.md
 // "No rollback"). The reason is for people: the app shows it, the update history keeps it.
 func (b Build) Hold(m *Manifest) string {
 	commit, dirty := strings.CutSuffix(b.Commit, "-dirty")

@@ -9,7 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Settings › Managers (docs/managers.md, docs/protocol.md"Managers"): the selected hub's roster of managers, each a whole
+ * Settings › Managers (docs/assistant/managers.md, docs/protocol/protocol.md"Managers"): the selected hub's roster of managers, each a whole
  * assistant, and the one-time install codes that put a new one (or one moved elsewhere) on a computer. The hub answers
  * these itself (`/api/v1/managers`). Bound to the active pairing's selected hub.
  */
@@ -84,7 +84,7 @@ data class ManagerRoster(
 data class ManagerGroup<T>(val id: String, val manager: HubManager?, val items: List<T>)
 
 /**
- * Which manager the assistant page shows (docs/managers.md step 4): null is the default manager, and requests go as
+ * Which manager the assistant page shows (docs/assistant/managers.md step 4): null is the default manager, and requests go as
  * before; an id puts `X-Persona-Manager` on the assistant's requests (`/api/v1/assistant…`) to [hubId]'s hub, and the
  * page lists that manager's conversations. Live updates that name a conversation (feed items, cards, plans) go by it,
  * whichever manager's it is, so another manager's conversation open elsewhere stays live. Process-wide like
@@ -214,7 +214,7 @@ data class ManagerCode(
 data class ManagerCommands(val service: String? = null, val docker: String? = null)
 
 /**
- * The manager the hub requests made inside it are for (an inbox item's, docs/managers.md "Clients"): the connection
+ * The manager the hub requests made inside it are for (an inbox item's, docs/assistant/managers.md "Clients"): the connection
  * names it on each request (`?manager=`) where the request is made, so one still going out after the page moved on
  * keeps it, and two things of the same id under two managers each go to their own. [id] "" is the default's: no manager
  * named, and no stamp a list noted for the path either.

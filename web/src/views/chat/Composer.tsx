@@ -100,7 +100,7 @@ export function Composer({
   draftKey: string;
   placeholder: string;
   machineId?: string;
-  /** Where a file sent to machineId lands: "health" keeps it in the health space's reports/ (docs/health.md "Checkup reports"). */
+  /** Where a file sent to machineId lands: "health" keeps it in the health space's reports/ (docs/assistant/health.md "Checkup reports"). */
   uploadDest?: "health";
   working?: boolean;
   /** Waits on a question, plan or approval card: no suggestion pill then (iOS status.isActive). */
@@ -117,7 +117,7 @@ export function Composer({
   mention?: MentionSource;
   /** The text box gains / loses focus (on a phone: the keyboard comes up / goes down). */
   onFocusChange?: (focused: boolean) => void;
-  /** The main conversation cannot answer yet (docs/onboarding.md 4.4): the send button says what to do first and opens
+  /** The main conversation cannot answer yet (docs/assistant/onboarding.md 4.4): the send button says what to do first and opens
    *  it; the box still takes typing and keeps the draft, nothing is sent or queued. */
   blocked?: { label: string; onClick?: () => void; onNudge?: () => void };
   /** Set to this box's send (what is in it now): a failed send's "Send again" sends the words that were put back (#4270). */
@@ -450,7 +450,7 @@ export function Composer({
     if (refused) refuseImages();
   };
 
-  // a file goes to the session's machine; its path lands in the input (docs/protocol.md "Sending files")
+  // a file goes to the session's machine; its path lands in the input (docs/protocol/protocol.md "Sending files")
   const upload = async (f: File) => {
     const count = (key: string, by: number) =>
       setUploads((u) => {
@@ -514,7 +514,7 @@ export function Composer({
     setAtts([]);
     refs.forEach((r) => removeContext(draftKey, r.id));
     setQuotes(draftKey, []);
-    // picked contexts ride in front as <persona-context> tags (docs/protocol.md "Tags in messages"), the quote as `> ` lines
+    // picked contexts ride in front as <persona-context> tags (docs/protocol/protocol.md "Tags in messages"), the quote as `> ` lines
     const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) }, true);
     setSending(false);
     if (ok) {

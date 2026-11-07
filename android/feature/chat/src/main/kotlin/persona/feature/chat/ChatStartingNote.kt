@@ -13,7 +13,7 @@ import persona.core.designsystem.Tokens
 internal data class StartingNote(val text: String, val failed: Boolean)
 
 /**
- * A session Persona is still starting (docs/protocol.md "New session"): what is sent now goes in once the agent is ready.
+ * A session Persona is still starting (docs/protocol/protocol.md "New session"): what is sent now goes in once the agent is ready.
  * Or why it did not start; sends then fail with the same reason and can be sent again.
  */
 internal fun startingNote(res: Resources, session: Session?): StartingNote? = when {

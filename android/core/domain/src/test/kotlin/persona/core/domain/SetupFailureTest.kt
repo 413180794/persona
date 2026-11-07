@@ -3,7 +3,7 @@ package persona.core.domain
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The main conversation's coded refusals (docs/onboarding.md 4.6): each names its step, none says the hub is gone. */
+/** The main conversation's coded refusals (docs/assistant/onboarding.md 4.6): each names its step, none says the hub is gone. */
 class SetupFailureTest {
     @Test fun eachCodeOpensItsStep() {
         val cases = mapOf(

@@ -1,7 +1,7 @@
 import AuthenticationServices
 import SwiftUI
 
-// Add Mail Account › Outlook (docs/mail.md「Outlook 接入方式」): Microsoft's sign-in for personal Outlook.com and work Microsoft
+// Add Mail Account › Outlook (docs/extensions/mail.md「Outlook 接入方式」): Microsoft's sign-in for personal Outlook.com and work Microsoft
 // 365 mailboxes, with a client ID the user registered in Microsoft Entra themselves (never built into the app): the
 // first time, the field for it with the steps; then Sign In with Microsoft, the same flow as Google's.
 
@@ -77,7 +77,7 @@ struct OutlookSignInSection: View {
         } header: {
             Text("Register Your Own App First")
         } footer: {
-            Text("Outlook sign-in uses an app you register yourself in Microsoft Entra (free; register once and this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, then App registrations → New registration.\n2. For supported account types, choose “Accounts in any organizational directory and personal Microsoft accounts”.\n3. For the redirect URI platform, choose “Public client/native (mobile & desktop)” and enter the address above.\n4. Under Authentication, set “Allow public client flows” to “Yes”.\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated permissions).\n6. Enter the “Application (client) ID” from the Overview page here.\nFor detailed steps, see docs/mail.md, “Outlook Connection”.")
+            Text("Outlook sign-in uses an app you register yourself in Microsoft Entra (free; register once and this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, then App registrations → New registration.\n2. For supported account types, choose “Accounts in any organizational directory and personal Microsoft accounts”.\n3. For the redirect URI platform, choose “Public client/native (mobile & desktop)” and enter the address above.\n4. Under Authentication, set “Allow public client flows” to “Yes”.\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated permissions).\n6. Enter the “Application (client) ID” from the Overview page here.\nFor detailed steps, see docs/extensions/mail.md, “Outlook Connection”.")
         }
     }
 

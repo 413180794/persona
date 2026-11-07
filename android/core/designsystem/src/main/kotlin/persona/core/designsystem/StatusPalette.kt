@@ -237,7 +237,7 @@ internal fun PersonaPalette.legacy() = PersonaColors(
 
 /**
  * A role colour for something that is not an agent's state: good, needs a look, broken, or plain. Extensions' views
- * (docs/extensions.md "Declarative UI") name these four and never a colour.
+ * (docs/extensions/extensions.md "Declarative UI") name these four and never a colour.
  */
 enum class Tone { Neutral, Positive, Caution, Danger }
 
@@ -252,7 +252,7 @@ fun PersonaPalette.tone(tone: Tone): StatusColors = when (tone) {
     Tone.Neutral -> idle
 }
 
-/** An agent's state (docs/agent-states.md). Pages show [localizedLabel] (or [labelRes] outside composition). */
+/** An agent's state (docs/protocol/agent-states.md). Pages show [localizedLabel] (or [labelRes] outside composition). */
 enum class Status {
     NeedsYou, Working, Unread, Idle, Offline, Unknown, Waiting, Muted;
 

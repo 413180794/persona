@@ -19,7 +19,7 @@ final class PhoneRecordingReceiver {
         }
         RecordingCapture.shared.onSaved = { RecordingTranscription.shared.enqueue($0) }
         RecordingTranscription.shared.resumePending()
-        // Each transcribed segment is saved, and each save syncs the text to the knowledge base (docs/recording.md).
+        // Each transcribed segment is saved, and each save syncs the text to the knowledge base (docs/apple/recording.md).
         RecordingSync.shared.start()
     }
 }

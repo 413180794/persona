@@ -17,7 +17,7 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
- * Paths in messages as links (docs/android.md "Chat content", the "File paths" item): those there on the session's machine
+ * Paths in messages as links (docs/android/android.md "Chat content", the "File paths" item): those there on the session's machine
  * ([PathPresence]) open in the files pane. A user's plain text gets clickable spans ([messageLinkAnnotations]); a
  * reply's Markdown gets `[path](persona-path:…)` links ([markdown]), which [handler] opens instead of the page's
  * link host. A path with a line (`src/a.kt:12`, `a.kt#L12`) opens the file at that line (iOS `PathLinkURL`).

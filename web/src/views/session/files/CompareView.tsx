@@ -1,4 +1,4 @@
-// Two versions of a changed file side by side in the Git panel (docs/web.md "Compare", #1437; iOS / Mac: #1299): pictures
+// Two versions of a changed file side by side in the Git panel (docs/web/web.md "Compare", #1437; iOS / Mac: #1299): pictures
 // next to each other or under a slider, documents (PDF / docx / pptx / xlsx) as a diff of their text by page, slide or
 // sheet. A version comes from git/blob (written into the node's cache) or the working tree.
 import { useEffect, useState } from "react";

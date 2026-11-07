@@ -1,4 +1,4 @@
-// "Messages" (docs/lark-migration.md "Entry", #392's narrow exception): every Feishu private and group chat, for a browser
+// "Messages" (docs/extensions/lark-migration.md "Entry", #392's narrow exception): every Feishu private and group chat, for a browser
 // that turned on Settings › Connectors › Lark › Show messages on home, on a hub that reads Feishu (feature `lark`). Not a second Feishu: one list and the inbox's own chat view
 // (LarkThread: reading, sending, Pins), no contacts or workbench. Wide: the list (380px) and the chat side by side;
 // narrow: the chat takes the list's place, with a way back. The pinned chats sit on top as a row of faces.
@@ -26,7 +26,7 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
   const larkSwitch = useLarkHome();
   const on = lark && larkSwitch;
   const accounts = useLarkAccounts();
-  // The chosen Feishu account's list (docs/feishu.md "Multiple accounts"): each account keeps its own.
+  // The chosen Feishu account's list (docs/extensions/feishu.md "Multiple accounts"): each account keeps its own.
   const larkChats = larkChatsFor(accounts.request);
   const s = useLarkChats(larkChats);
   const [pins, setPins] = useState(false);

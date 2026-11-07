@@ -2,7 +2,7 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Files in and out of a folder the file browser shows (docs/protocol.md "Changing files", #4858): uploads keep their names in
+// Files in and out of a folder the file browser shows (docs/protocol/protocol.md "Changing files", #4858): uploads keep their names in
 // that folder (only folders in the machine's home take them), one after another with progress; a taken name asks
 // Replace / Keep Both before anything is sent. A download lands in a temporary folder of its own and goes on to Save to Files.
 

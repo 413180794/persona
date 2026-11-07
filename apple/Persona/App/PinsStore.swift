@@ -3,7 +3,7 @@ import SwiftUI
 /// Pinned and muted spaces / agents. The hub keeps them; this keeps a copy in UserDefaults so the list orders right
 /// before the hub answers, and changes them optimistically. Keys are "machine/space name" and "machine/session id"
 /// (`AppModel.pinKey`). Split out of AppModel (ARCH-PLAN step 9); AppModel forwards to it. One per group of hubs
-/// (docs/multi-hub.md): the default group's copy is where it always was ("dev.pins"), another group's has its id after.
+/// (docs/protocol/multi-hub.md): the default group's copy is where it always was ("dev.pins"), another group's has its id after.
 @Observable final class PinsStore {
     struct Deps {
         var api: () -> APIClient?

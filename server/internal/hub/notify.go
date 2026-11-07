@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/bus"
 )
 
-// When a "finished" push is worth sending (docs/server.md "Pushes"). Borrowed from Ovis (github.com/devswha/ovis,
+// When a "finished" push is worth sending (docs/server/server.md "Pushes"). Borrowed from Ovis (github.com/devswha/ovis,
 // server/push.ts, MIT): a push is for someone away from the computer, so
 //   - wait a while after the turn ends; if the agent resumes, or the user looks at it (herdr idle, or opened in the
 //     app), nothing is sent;
@@ -29,7 +29,7 @@ type NotifyConfig struct {
 	// BackgroundHoldMinutes: give up on a turn whose background work has not finished after this long. Default 120.
 	BackgroundHoldMinutes int `json:"background_hold_minutes,omitempty"`
 	// LiveMetricsSeconds: the least time between two Live Activity pushes to a device when only the numbers it shows
-	// (TPM, today's tokens, load…) changed. Default 60; state changes are not held back (docs/live-activity.md).
+	// (TPM, today's tokens, load…) changed. Default 60; state changes are not held back (docs/apple/live-activity.md).
 	LiveMetricsSeconds int `json:"live_metrics_seconds,omitempty"`
 }
 
@@ -74,7 +74,7 @@ type NotifyPrefs struct {
 	Look *FleetLook `json:"look,omitempty"`
 	// Quiet: this device's quiet hours (quiethours.go): no "Agent finished", and "Needs you" without sound, inside the window.
 	Quiet QuietHours `json:"quiet"`
-	// MutedManagers: the managers (their ids, docs/managers.md) whose pushes this device does not want (Settings ›
+	// MutedManagers: the managers (their ids, docs/assistant/managers.md) whose pushes this device does not want (Settings ›
 	// Managers › one › Notifications). A push a manager asks for (notify.request, its extensions' pushes, a computer's
 	// `personad notify`) skips this device; the hub's own (pairing, a computer joining, updates) and the Live Activity
 	// are no manager's and still come.
@@ -128,7 +128,7 @@ type TranslatePrefs struct {
 	Mail    bool   `json:"mail"`
 }
 
-// IslandPrefs picks the two sides of the compact Dynamic Island (docs/live-activity.md). "Needs you" always takes the
+// IslandPrefs picks the two sides of the compact Dynamic Island (docs/apple/live-activity.md). "Needs you" always takes the
 // left side when there is any, whatever is chosen.
 type IslandPrefs struct {
 	Preset  string `json:"preset"`            // a: status counts on both sides | b: status + TPM | c: status + today's tokens | custom

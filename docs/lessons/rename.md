@@ -1,6 +1,6 @@
 # Lessons: a naming cutover without compatibility
 
-The #277 requirement changed on 2026-11-06: Persona is the only source/runtime spelling, without command aliases, fallback reads or dual writes. Keep actual registered application IDs unchanged; all other renamed contracts require a coordinated, approval-gated [cutover](../persona-cutover.md). Earlier compatibility guarantees are not valid for this version.
+The #277 requirement changed on 2026-11-06: Persona is the only source/runtime spelling, without command aliases, fallback reads or dual writes. Keep actual registered application IDs unchanged; all other renamed contracts require a coordinated, approval-gated [cutover](../operations/persona-cutover.md). Earlier compatibility guarantees are not valid for this version.
 
 ## Inventory first, replace second, resolve collisions third
 

@@ -464,7 +464,7 @@ test('the companion gives sessions that ran in herdr a resume command, and never
   assert.equal(posts.length, 1)
 })
 
-// ---- updates from the node (docs/pi.md "Auto-update") ----
+// ---- updates from the node (docs/integrations/pi.md "Auto-update") ----
 
 const PKG = wirePackageName('persona-pi-runtime')
 /** The package a node carries: what runtime.package answers. */

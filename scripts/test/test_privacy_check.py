@@ -621,6 +621,53 @@ class RangeAndPushTests(unittest.TestCase):
         self.assertNotIn("secretbox", result.stdout + result.stderr)
 
 
+class GitBatchTests(unittest.TestCase):
+    """Index/commit reads retain exact git-show bytes without one process per file."""
+
+    run_command = PrivacyCheckIntegrationTests.run_command
+    git = PrivacyCheckIntegrationTests.git
+
+    def setUp(self):
+        PrivacyCheckIntegrationTests.setUp(self)
+        self.payloads = {"notes with spaces.md": b"first\nsecond\n", "empty.txt": b"",
+                         "binary.dat": b"head\0body\xff\ntail", "odd\nname.md": b"linebreak filename\n"}
+        for name, data in self.payloads.items():
+            (self.repo / name).write_bytes(data)
+        self.git("add", *self.payloads)
+        self.git("commit", "-q", "--no-verify", "-m", "batch fixture")
+
+    def test_exact_index_and_commit_bytes_even_when_worktree_changes(self):
+        for prefix in (":", "HEAD:"):
+            with self.subTest(prefix=prefix), patch.object(pc, "ROOT", str(self.repo)):
+                for name in self.payloads:
+                    (self.repo / name).write_bytes(b"worktree changed\n")
+                actual = pc.git_file_data(list(self.payloads) + ["missing.txt"], prefix)
+                self.assertEqual(actual, self.payloads)
+                for name, expected in actual.items():
+                    self.assertEqual(pc.git("show", prefix + name), expected)
+
+    def test_regular_paths_use_one_git_process(self):
+        names = [name for name in self.payloads if "\n" not in name]
+        with patch.object(pc, "ROOT", str(self.repo)), patch.object(pc.subprocess, "run", wraps=subprocess.run) as run:
+            self.assertEqual(pc.git_file_data(names, "HEAD:"), {name: self.payloads[name] for name in names})
+        self.assertEqual(run.call_count, 1)
+        self.assertIn("--batch", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["timeout"], 120)
+
+    def test_truncated_or_invalid_batch_output_is_rejected(self):
+        for output in (b"", b"invalid\n", b"oid blob 5\nabc\n", b"oid blob 0\nx", b"oid blob 0\n\nextra"):
+            with self.subTest(output=output), patch.object(pc.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, output)):
+                with self.assertRaises(ValueError):
+                    pc.git_file_data(["one.txt"], "HEAD:")
+
+    def test_main_fails_closed_if_batch_read_fails(self):
+        with patch.object(pc, "git_file_data", side_effect=ValueError("broken batch")), \
+                patch.object(pc, "terms", return_value=([], [])), patch.object(pc, "module_paths", return_value=None), \
+                patch.object(pc, "git", return_value=b"one.txt\0"), patch.object(sys, "argv", ["privacy_check", "--staged"]):
+            with self.assertRaisesRegex(SystemExit, "scan did not complete"):
+                pc.main()
+
+
 class URLTermTests(unittest.TestCase):
     def test_a_shared_host_keeps_the_path(self):
         self.assertEqual(pc.url_term("https://docs.google.com/document/d/abc123/edit?usp=sharing"),

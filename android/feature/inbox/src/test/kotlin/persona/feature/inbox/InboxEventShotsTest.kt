@@ -50,7 +50,7 @@ import java.io.File
  * Inbox phase 1 on the JVM with Robolectric's native graphics, in every style, light and dark, from the shared fixture
  * with every state: the list (Needs you · In progress · FYI · Collapsed · Done and the rows' marks) and the event pages (the
  * suggestion of each kind, In progress, Urgent, failed, the chain folded and open), plus the Edit sheet. PNGs go to
- * `build/inbox-event-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md"Inbox: events, suggestions, and handling chains".
+ * `build/inbox-event-shots/` (or `-Dpersona.shots=<dir>`), docs/android/android.md"Inbox: events, suggestions, and handling chains".
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

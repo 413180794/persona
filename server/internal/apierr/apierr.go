@@ -1,4 +1,4 @@
-// Package apierr writes the JSON bodies of the hub's HTTP API (docs/protocol.md "Errors"): a result, or an error with a
+// Package apierr writes the JSON bodies of the hub's HTTP API (docs/protocol/protocol.md "Errors"): a result, or an error with a
 // stable code. It is shared by the hub and the services whose requests the hub relays (internal/assistant), so an
 // error reads the same whichever of them answered.
 package apierr
@@ -31,7 +31,7 @@ func Write(w http.ResponseWriter, status int, err error) {
 }
 
 // WriteCode preserves error for old clients and adds a stable machine-readable code.
-// An i18n.Message reads in the request's language (docs/i18n.md "Protocol").
+// An i18n.Message reads in the request's language (docs/protocol/i18n.md "Protocol").
 func WriteCode(w http.ResponseWriter, status int, code string, err error) {
 	l := i18n.OfWriter(w)
 	body := LocalizedBody(status, code, err, l)
@@ -271,7 +271,7 @@ func RPCText(l i18n.Lang, text string) string {
 }
 
 // codeActions are the refusals whose words the hub writes itself, wherever they came from (the assistant, a node),
-// with what a client offers to fix each (docs/onboarding.md 4.6, 5.2).
+// with what a client offers to fix each (docs/assistant/onboarding.md 4.6, 5.2).
 var codeActions = map[string]string{
 	proto.CodeNoMachine:       "add_computer",
 	proto.CodeMachinePending:  "confirm_computer",

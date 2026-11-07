@@ -129,7 +129,7 @@ func TestSubagentEdgesCached(t *testing.T) {
 }
 
 // A goal set at the start of a long transcript is still known once the start is out of the quick tail
-// (docs/agent-goal.md), and its later check is read from the appended lines.
+// (docs/integrations/agent-goal.md), and its later check is read from the appended lines.
 func TestBackgroundTasksKeepsGoal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.jsonl")
 	set := `{"type":"attachment","uuid":"g1","timestamp":"2026-11-05T08:00:00Z","attachment":{"type":"goal_status","met":false,"sentinel":true,"condition":"ship it"}}` + "\n"
@@ -152,7 +152,7 @@ func TestBackgroundTasksKeepsGoal(t *testing.T) {
 	}
 }
 
-// The agent's plan (docs/agent-goal.md "Plan") written far before the quick tail is known, and follows the calls
+// The agent's plan (docs/integrations/agent-goal.md "Plan") written far before the quick tail is known, and follows the calls
 // appended later, through the result lines that do not name their tool; the session list's meta carries it.
 func TestBackgroundTasksKeepsPlan(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.jsonl")

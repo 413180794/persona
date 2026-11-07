@@ -2,7 +2,7 @@
 // reach it (a laptop on whatever network it is on), and the protocol it speaks with the hub. persona-link finds the
 // hub, tells it which machine it is, keeps the link up and hands each stream the hub opens on it to the computer's
 // resident node (`personad node --attach`), byte for byte. It does nothing else: what a node does stays in personad
-// (docs/link.md).
+// (docs/operations/link.md).
 package link
 
 import (
@@ -87,7 +87,7 @@ type Message struct {
 	// pong, in milliseconds; Persona Link keeps this link's to them (PingTimes). Without them it keeps its own.
 	PingMS        int `json:"ping_ms,omitempty"`
 	PingTimeoutMS int `json:"ping_timeout_ms,omitempty"`
-	// endpoints: this computer waits for the user to confirm it (a signed-in device added it, docs/onboarding.md
+	// endpoints: this computer waits for the user to confirm it (a signed-in device added it, docs/assistant/onboarding.md
 	// 4.2). Every endpoints message says how it is now, so a confirmed one (and an older hub) leaves it out.
 	Pending bool `json:"pending,omitempty"`
 	// node (hub → persona-link): whether the hub got through to the resident node.
@@ -119,7 +119,7 @@ type Config struct {
 	// With FP set every candidate is checked against it and nothing else.
 	FP string `json:"fp"`
 	// Trust is TrustSystem when the pairing link had no FP: the hub has no TLS of its own and sits behind an HTTPS
-	// reverse proxy, whose certificate is checked against the system's CAs and the host name (docs/link.md "Hub behind a
+	// reverse proxy, whose certificate is checked against the system's CAs and the host name (docs/operations/link.md "Hub behind a
 	// reverse proxy"). Ignored while FP is set.
 	Trust     string     `json:"trust,omitempty"`
 	Token     string     `json:"token"`
@@ -129,7 +129,7 @@ type Config struct {
 	Passive *Passive `json:"passive,omitempty"`
 }
 
-// The two modes (docs/link.md "Passive mode").
+// The two modes (docs/operations/link.md "Passive mode").
 const (
 	ModeActive  = "active"  // persona-link dials the hub's /api/v1/link
 	ModePassive = "passive" // the hub dials the TLS port persona-link listens on
@@ -240,7 +240,7 @@ func Update(path string, change func(*Config) error) error {
 	return os.Rename(tmp, path)
 }
 
-// kindOf says what kind of address a hub URL is: the link tries lan first (docs/link.md "Route choice").
+// kindOf says what kind of address a hub URL is: the link tries lan first (docs/operations/link.md "Route choice").
 func kindOf(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {

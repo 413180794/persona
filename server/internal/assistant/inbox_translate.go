@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// Translation (docs/ios.md "Translation") is the manager's. The app decides what needs translating (its own setting, its
+// Translation (docs/apple/ios.md "Translation") is the manager's. The app decides what needs translating (its own setting, its
 // own language detection) and asks (POST /api/v1/translate, /api/v1/translate/mail, relayed by the hub); the manager
 // asks the translation model (purpose "translate": a cheap one is enough) and keeps the answers in memory, so opening
 // the same mail again is instant. Mail is translated by reference (the hub reads the message: inbox.mail_body,

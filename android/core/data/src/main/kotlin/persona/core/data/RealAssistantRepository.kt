@@ -27,7 +27,7 @@ class RealAssistantRepository(
     override val pinned = currentPins.asStateFlow()
     private val lock = Mutex()
     private var restoredScope: String? = null
-    /** The manager the page shows (docs/managers.md step 4): each keeps its own conversations, cached apart. */
+    /** The manager the page shows (docs/assistant/managers.md step 4): each keeps its own conversations, cached apart. */
     private fun manager(): String? = AssistantManagerChoice.current.value.manager
     private fun cacheKey(transport: InboxAssistantTransport, manager: String? = manager()) =
         "${transport.scope}:assistant" + (manager?.let { "@$it" } ?: "")

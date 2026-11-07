@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Errors and crashes for the hub's error reports (#5621, docs/protocol.md "Error reports"): the queue on disk, the
+/// Errors and crashes for the hub's error reports (#5621, docs/protocol/protocol.md "Error reports"): the queue on disk, the
 /// feature gate, batching and what each answer does to the batch.
 struct ErrorReportsTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)

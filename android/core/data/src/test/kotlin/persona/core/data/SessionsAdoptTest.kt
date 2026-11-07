@@ -16,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-/** A session the hub just started and a machine the hub just changed show before the next push (docs/protocol.md). */
+/** A session the hub just started and a machine the hub just changed show before the next push (docs/protocol/protocol.md). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionsAdoptTest {
     @get:Rule val temporary = TemporaryFolder()

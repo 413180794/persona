@@ -36,10 +36,10 @@ struct LinkStatus: Decodable, Equatable {
     var from: String?
     var codeExpires: Date?
     /// "system": the hub sits behind an HTTPS reverse proxy and is checked with the system's CAs and its host name, not
-    /// a pin (docs/link.md「hub 在反向代理后面」); nil when pinned or with older helpers.
+    /// a pin (docs/operations/link.md「hub 在反向代理后面」); nil when pinned or with older helpers.
     var trust: String?
     /// The hub still waits for someone to confirm this computer in the phone App or on the web (「是我的电脑」,
-    /// docs/onboarding.md 4.2). Helpers and hubs that do not say yet send nothing: shown as connected.
+    /// docs/assistant/onboarding.md 4.2). Helpers and hubs that do not say yet send nothing: shown as connected.
     var pending: Bool?
 
     var passive: Bool { mode == "passive" }
@@ -210,7 +210,7 @@ enum LinkText {
 
     nonisolated static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/persona-link")
     /// The device's program the app carries (persona-node), for the resident node when this Mac has none
-    /// (`persona-link node install --node-bin`, docs/link.md "The device's program").
+    /// (`persona-link node install --node-bin`, docs/operations/link.md "The device's program").
     nonisolated static let nodeURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/persona-node")
     /// Set once the app has set up (or found) the resident node by itself: later it only offers to.
     static let nodeSetUpKey = "nodeServiceSetUp"

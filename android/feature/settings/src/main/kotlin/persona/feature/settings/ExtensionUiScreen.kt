@@ -23,7 +23,7 @@ import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-// The places an extension's View is drawn (docs/extensions.md "Declarative UI"): a page of its own (extension_page, from the
+// The places an extension's View is drawn (docs/extensions/extensions.md "Declarative UI"): a page of its own (extension_page, from the
 // extension's page in Settings › Extensions; nav_page, from the "Extensions" section of the settings home) and a section on a launcher's
 // page (launcher_section). The UI slots of the settings home and a machine's page are in ExtensionSlots.kt.
 
@@ -78,7 +78,7 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
         ExtensionViewText.pushed(extensionId, uiId, title, depth, push, manager)?.let { model.covered(); onPush(it) }
     }, onPop = onBack)
     LaunchedEffect(model) { model.load() }
-    // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md "UI slots" "Refresh"),
+    // A view with refresh_after is drawn again while this page is on screen (docs/extensions/extensions.md "UI slots" "Refresh"),
     // one the extension invalidated (ui.invalidate) at once or when it shows again, and one back from a page pushed on it.
     KeepFresh(model, extensions.uiEvents)
     val view = state.view

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of the web page's Feishu accounts (#1321, docs/feishu.md "Multiple accounts"): the "Messages" page's account chips,
+"""End-to-end check of the web page's Feishu accounts (#1321, docs/extensions/feishu.md "Multiple accounts"): the "Messages" page's account chips,
 a chat of the second account read and named as that account, its inbox item opening in it, and Settings › Connectors listing
 the accounts.
 

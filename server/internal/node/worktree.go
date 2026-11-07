@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// "New worktree…" (docs/terminal.md "New worktree"): a Git worktree of a workspace's repository, opened as a workspace of
+// "New worktree…" (docs/integrations/terminal.md "New worktree"): a Git worktree of a workspace's repository, opened as a workspace of
 // the terminal host. The host does it when it can (herdr: `worktree create`, which groups the checkout under the
 // repository's workspace); a host that cannot gets `git worktree add` and a plain new workspace. The hub lets only a
 // full device call it. The request names a workspace the host lists, a branch and a path; the checkout is never forced

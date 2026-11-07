@@ -1,4 +1,4 @@
-// One chart of the machine details (docs/machines.md "Charts"): a title with the value now, or at the hovered moment; the lines over
+// One chart of the machine details (docs/server/machines.md "Charts"): a title with the value now, or at the hovered moment; the lines over
 // the range, each run between gaps its own line (no line across a time the machine sent nothing); a hairline grid,
 // round ticks on the right and below; a crosshair that snaps to the nearest point. Every chart of the page follows
 // the same moment (the page holds it). Drawn at the real pixel size, so the labels are not stretched.

@@ -40,10 +40,10 @@ export interface Todo {
   updated_at: string;
   agents?: TodoAgent[];
   spaces?: TodoSpace[];
-  /** The assistant conversation that opened it as a task, and the plan (docs/unified-entry.md); unset for a todo made by hand. */
+  /** The assistant conversation that opened it as a task, and the plan (docs/assistant/unified-entry.md); unset for a todo made by hand. */
   origin?: string;
   plan_id?: string;
-  /** "auto" when the hub marked the task done because its work was judged finished, with why (docs/todos.md "Auto-complete"). */
+  /** "auto" when the hub marked the task done because its work was judged finished, with why (docs/assistant/todos.md "Auto-complete"). */
   done_by?: string;
   done_reason?: string;
   /** When the user last reopened it after it was done. */
@@ -59,9 +59,9 @@ export interface Todo {
   stage?: string;
   /** The pull request the work is in, when the hub knows one (#2776). */
   pr_url?: string;
-  /** How far its finished work went out; short of live, where it is held and who can unhold it (docs/todos.md "Delivery"). */
+  /** How far its finished work went out; short of live, where it is held and who can unhold it (docs/assistant/todos.md "Delivery"). */
   delivery?: TodoDelivery;
-  /** The chat thread the todo is bound to (#5279, docs/todos.md "Chat thread"); unset while it has none. */
+  /** The chat thread the todo is bound to (#5279, docs/assistant/todos.md "Chat thread"); unset while it has none. */
   thread?: TodoThread;
 }
 
@@ -131,7 +131,7 @@ export function isRemovable(status: TodoStatus): boolean {
 
 export type SessionLookup = (mid: string, sid: string) => Session | undefined;
 
-/** The hub closed it because its task's work was judged finished; reopening undoes it (docs/todos.md "Auto-complete"). */
+/** The hub closed it because its task's work was judged finished; reopening undoes it (docs/assistant/todos.md "Auto-complete"). */
 export function isAutoDone(todo: Todo): boolean {
   return Boolean(todo.done_at) && todo.done_by === "auto";
 }
@@ -413,7 +413,7 @@ export function formatTodoContext(title: string, notes?: string): string {
   return `<persona-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</persona-context>`;
 }
 
-// ── Decision log (#1618, docs/todos.md "Decision log") ───────────────
+// ── Decision log (#1618, docs/assistant/todos.md "Decision log") ───────────────
 
 /** One call the user made on a todo: written by hand, or their answer to a question card of an agent on it. */
 export interface TodoDecision {
@@ -651,7 +651,7 @@ export interface DockAgent {
 }
 
 /**
- * What a conversation's dock shows after its tasks (docs/unified-entry.md "Manual agents in the main chat's task dock"): in the main
+ * What a conversation's dock shows after its tasks (docs/assistant/unified-entry.md "Manual agents in the main chat's task dock"): in the main
  * conversation, every agent going on that no task stands for — the ones opened by hand on the Agents page — waiting
  * for the user first, then the newest in its state; elsewhere nothing. Persona's own conversations are not agents. A
  * task's agents (a task not done, from any conversation) are its pill already; an agent the hub tags with a todo shows
@@ -688,7 +688,7 @@ export type TaskNow = { kind: "words"; text: string } | { kind: "step"; text: st
 /**
  * A working agent's step (its latest tool call, which the hub only sends when it is newer than its words) comes
  * before its words; once it stopped, its words do (a turn cut short on a tool call), and the step only stands in for
- * words it never said. Null when it has said and done nothing yet (docs/unified-entry.md "Task card progress", #1583).
+ * words it never said. Null when it has said and done nothing yet (docs/assistant/unified-entry.md "Task card progress", #1583).
  */
 export function taskNow(lead: Session | undefined, working: boolean): TaskNow | null {
   const words = lead?.last_text?.trim() ?? "";

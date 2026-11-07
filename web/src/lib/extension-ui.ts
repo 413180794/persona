@@ -1,11 +1,11 @@
 import { canonicalAppURL } from "./compatibility";
-// An extension's declarative UI (docs/extensions.md "Declarative UI"): the extension sends a View (a few fixed kinds of items), the
+// An extension's declarative UI (docs/extensions/extensions.md "Declarative UI"): the extension sends a View (a few fixed kinds of items), the
 // web draws it with its own design system, and buttons go back to the extension. No extension code runs here, no extension
 // colors, sizes or icons: a tone becomes one of the theme's role colors. The checks match server/internal/extension/ui.go
 // (the hub refuses a bad view before it gets here; the web still draws only what it knows). UI version 2
-// (docs/extensions.md "UI slots") adds the slots (nav_page, overview_card, machine_section), chart, stat_grid, segmented,
+// (docs/extensions/extensions.md "UI slots") adds the slots (nav_page, overview_card, machine_section), chart, stat_grid, segmented,
 // refresh_after and the render context; an item type the web does not know is skipped, never a white page. An
-// inbox_item (docs/extensions.md "Inbox items") draws the body of an inbox item from the extension's own connector.
+// inbox_item (docs/extensions/extensions.md "Inbox items") draws the body of an inbox item from the extension's own connector.
 import { api, ApiError, enc } from "./api";
 import { itemHeaders } from "./manager-choice";
 import { extRoot } from "./extension-api";
@@ -29,7 +29,7 @@ export interface UIAction {
   values?: Record<string, string>;
 }
 
-/** A page pushed on the navigation stack (docs/extensions.md "Page navigation"): drawn with this state, by this ui (the same one
+/** A page pushed on the navigation stack (docs/extensions/extensions.md "Page navigation"): drawn with this state, by this ui (the same one
  *  when empty); the title shows until its view says its own. */
 export interface UIPush {
   state?: string;
@@ -261,7 +261,7 @@ export interface UIContext {
   size?: "compact" | "full";
 }
 
-/** What the web says with every render and action (docs/extensions.md "Context"): time zone, language, platform, UI version. */
+/** What the web says with every render and action (docs/extensions/extensions.md "Context"): time zone, language, platform, UI version. */
 export interface UIContextSent extends UIContext {
   tz?: string;
   locale?: string;
@@ -291,7 +291,7 @@ export function uiContext(context?: UIContext): UIContextSent {
 // ── the hub ─────────────────────────────────────────────
 
 /** The extensions' places of a placement; no placement: every slot's but launcher sections' (nav, overview, machines).
- *  `manager`: whose extensions (several managers, docs/managers.md "Clients"); none: the default's. */
+ *  `manager`: whose extensions (several managers, docs/assistant/managers.md "Clients"); none: the default's. */
 export function uiPlaces(placement: string, launcher?: string, machine?: string, manager?: string): Promise<UIPlace[]> {
   const q = new URLSearchParams(placement ? { placement } : {});
   if (launcher) q.set("launcher", launcher);
@@ -327,7 +327,7 @@ export const actUI = (extension: string, ui: string, action: string, opts: { con
   }));
 
 /**
- * The extension said this is not its gateway (a launcher_section without `hosts` is listed on every launcher; docs/extensions.md
+ * The extension said this is not its gateway (a launcher_section without `hosts` is listed on every launcher; docs/extensions/extensions.md
  * "Declarative UI"): 404 {code: "unsupported"}. The section is hidden, not an error.
  */
 export const isUnsupported = (e: unknown) => e instanceof ApiError && e.status === 404 && e.code === "unsupported";
@@ -432,7 +432,7 @@ export function outcome(
   };
 }
 
-/** How deep the pages pushed on one another go (docs/extensions.md "Page navigation"): a push past it replaces the top one. */
+/** How deep the pages pushed on one another go (docs/extensions/extensions.md "Page navigation"): a push past it replaces the top one. */
 export const MAX_STACK = 8;
 
 /** One page of the navigation stack: drawn by `ui` with `state`; `title` until the view says its own. */
@@ -449,7 +449,7 @@ export function pushPage(stack: readonly UIPage[], push: UIPush, ui: string): UI
   return out.length > MAX_STACK ? [...out.slice(0, MAX_STACK - 1), page] : out;
 }
 
-/** The fixed icons a row may have (docs/extensions.md "Declarative UI"): each app draws its own; unknown ones are left out. */
+/** The fixed icons a row may have (docs/extensions/extensions.md "Declarative UI"): each app draws its own; unknown ones are left out. */
 export const ROW_ICONS = [
   "extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "person", "chat", "mail", "link", "folder",
   "star", "check", "warning", "clock", "tag", "search", "settings", "branch", "commit", "code", "pull_request", "merge", "file",
@@ -478,7 +478,7 @@ export function tableRows(item: UIItem): string[][] {
 
 /**
  * The item an inbox item's source link names (persona://inbox/<item>/source, the id escaped as one path segment, as
- * docs/extensions.md "Inbox items" says); undefined for any other link.
+ * docs/extensions/extensions.md "Inbox items" says); undefined for any other link.
  */
 export function inboxSourceItem(url: string): string | undefined {
   const m = /^persona:\/\/inbox\/([^/?#]+)\/source$/.exec(canonicalAppURL(url));
@@ -686,7 +686,7 @@ export function refreshDelay(view: UIView | null | undefined): number {
 
 // ── slots ───────────────────────────────────────────────
 
-/** A nav_page's icons (docs/extensions.md "UI slots"); each app draws its own. `plugin` is `extension` under its name
+/** A nav_page's icons (docs/extensions/extensions.md "UI slots"); each app draws its own. `plugin` is `extension` under its name
  *  before #1844 (the hub still sends it). */
 export const UI_ICONS = ["extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "branch", "code", "pull_request", "merge"] as const;
 export type UIIcon = (typeof UI_ICONS)[number];

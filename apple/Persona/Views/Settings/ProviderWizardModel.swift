@@ -19,7 +19,7 @@ enum LauncherName {
 /// Settings › Model Providers › Add / Edit (#2455, after cindy's AddProviderWizard): Choose Provider → Connect (name, address, auth, key;
 /// Test Connection, Get Model List) → Choose Models (context window, thinking levels, the default), with the rest under Advanced.
 ///
-/// A hub with `builtin_presets` (docs/onboarding.md 4.3「三条路」, 5.4, #4197) starts from the providers it offers
+/// A hub with `builtin_presets` (docs/assistant/onboarding.md 4.3「三条路」, 5.4, #4197) starts from the providers it offers
 /// instead: pick one → paste the key (tested by itself) → what now runs on it (`assign`, `assigned` / `kept`); a
 /// compatible gateway typed by hand is the last of the list and goes the three steps above. Beside it, "I already use
 /// Claude Code" tries the main conversation once (readiness `?probe=1`) and "Where to get a model" lists where to get a
@@ -39,7 +39,7 @@ enum LauncherName {
         }
     }
 
-    /// The main conversation already runs on a Claude Code that answers (docs/onboarding.md 4.3 B.3): its computer,
+    /// The main conversation already runs on a Claude Code that answers (docs/assistant/onboarding.md 4.3 B.3): its computer,
     /// Claude Code and model all check out (a launcher that runs Codex or a runtime skips the Claude Code step, so it
     /// is not this). The "use it for the main conversation and new agents" toggle then starts off, so a working default is not swapped out quietly.
     static func claudeCodeWorks(_ r: AssistantReadiness?) -> Bool {
@@ -47,9 +47,9 @@ enum LauncherName {
         return r.step("claude")?.state == "ok"
     }
 
-    /// The hub's feature for built-in presets, a name it makes up, `display_name` and `assign` (docs/launchers.md「内置预设」).
+    /// The hub's feature for built-in presets, a name it makes up, `display_name` and `assign` (docs/integrations/launchers.md「内置预设」).
     static let presetsFeature = "builtin_presets"
-    /// The uses a provider added in the wizard takes over while they are still at their default (docs/onboarding.md 5.4).
+    /// The uses a provider added in the wizard takes over while they are still at their default (docs/assistant/onboarding.md 5.4).
     static let assignPurposes = ["assistant", "agent.new"]
 
     enum Kind: String, CaseIterable, Hashable {

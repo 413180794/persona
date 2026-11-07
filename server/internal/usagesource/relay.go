@@ -26,7 +26,7 @@ import (
 //
 // refresh is always false here: the gateway answers from its database and never calls an upstream (a refresh would
 // spend the pool's probe budget, and every probe leaves from the gateway's one address). No other route is used.
-// A scoped key (an "onboarder" or "operator" group key, docs/admin-access.md) lists and reads only its group's accounts,
+// A scoped key (an "onboarder" or "operator" group key, gateway/docs/admin-access.md) lists and reads only its group's accounts,
 // so a dedicated group key is the recommended one.
 const (
 	relayAccountsPath = "/api/admin/accounts?view=compact"
@@ -85,7 +85,7 @@ type relayEntry struct {
 
 // fetchRelay reads the gateway once: the account list (paged), then the stored usage of the accounts that are not
 // disabled. One pass gives both the samples the sidebar's strip draws (Accounts, mapRelay) and the account list
-// the extensions read (Inventory, docs/usage-windows.md"Gateway account inventory"), disabled accounts included.
+// the extensions read (Inventory, docs/server/usage-windows.md"Gateway account inventory"), disabled accounts included.
 func fetchRelay(ctx context.Context, c *client, now time.Time) (Result, error) {
 	list, complete, err := relayList(ctx, c)
 	if err != nil {

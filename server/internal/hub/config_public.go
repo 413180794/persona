@@ -1,6 +1,6 @@
 package hub
 
-// PublicConfig is how the hub is reached from outside its LAN (docs/redesign/hub-changes.md §1): the TLS listener,
+// PublicConfig is how the hub is reached from outside its LAN (docs/archive/redesign/hub-changes.md §1): the TLS listener,
 // the addresses it hands out, and how it treats plaintext requests from the internet. Empty means the hub behaves
 // as before: plaintext on Listen only.
 type PublicConfig struct {

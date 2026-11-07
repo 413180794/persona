@@ -3,11 +3,11 @@ import SwiftUI
 
 /// The Files tab: the session's directory as a tree you walk into, with git change marks; tap a file to read it.
 /// Files go into the folder shown from this device (Upload: the Files app or the photo library) and out of it (Save to Files),
-/// docs/protocol.md "Changing files". The machine page opens it on the home (`cwd` "~").
+/// docs/protocol/protocol.md "Changing files". The machine page opens it on the home (`cwd` "~").
 struct FilesPane: View {
     @Environment(AppModel.self) private var model
     let machineID: String
-    /// The group of hubs the machine is in (docs/multi-hub.md).
+    /// The group of hubs the machine is in (docs/protocol/multi-hub.md).
     var group: String = ""
     let cwd: String
     var git: GitStatus?

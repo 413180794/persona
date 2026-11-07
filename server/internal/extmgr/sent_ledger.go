@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The ledger of what Persona wrote as the user (sent_as_user, docs/connectors.md "Sent as the user", #5278). The
+// The ledger of what Persona wrote as the user (sent_as_user, docs/extensions/connectors.md "Sent as the user", #5278). The
 // connectors' write gate runs here, so this is where a write that went out is known with the conversation that asked
 // and the card the user answered. Registry.SetSent tells recordSent of every gated write whose action succeeded;
 // refusals, declines, failures and the user's own sends (Registry.Run) never get here. A send an extension's connector
@@ -313,7 +313,7 @@ func (l *sentLimiter) take(id string) time.Duration {
 	return time.Duration((1 - b.tokens) * float64(sentRecordEvery))
 }
 
-// extensionSentRecord answers an extension's sent.record (docs/extensions.md "Sent as the user: sent.record"): its
+// extensionSentRecord answers an extension's sent.record (docs/extensions/extensions.md "Sent as the user: sent.record"): its
 // connector says it sent a message in the user's name outside the write gate, which this keeps in the ledger like the
 // gate's own. At most sentRecordBurst calls at once and then one a second per extension, refused or not (rate_limited,
 // data {retry_after}). Only a connector of the caller's that declares sends_as_user may (permission_denied otherwise,
@@ -506,8 +506,8 @@ func nodeLetThrough(t proto.LarkLetThrough) (map[string]any, error) {
 }
 
 // nodeCreationRoutes are the routes of a gated API that create one message in the conversation their path names: the
-// text send, and the attachments' own (images and files, docs/lark-attachments.md; the messaging extension point's
-// attachments, docs/extension-messaging.md "6"). Their answer is the receipt of that message.
+// text send, and the attachments' own (images and files, docs/extensions/lark-attachments.md; the messaging extension point's
+// attachments, docs/extensions/extension-messaging.md "6"). Their answer is the receipt of that message.
 var nodeCreationRoutes = []string{"messages", "images", "files", "attachments"}
 
 // createsMessage says whether a write forwarded by the node's gate proxy is one of nodeCreationRoutes: POST
@@ -593,7 +593,7 @@ func (h *Manager) sentLedgerLoop(ctx context.Context) {
 }
 
 // sentRoutes: GET /api/v1/connectors/sent?before=&limit=&connector=, the ledger newest first, a page at a time
-// (docs/protocol.md "Connector API"). Read by one of the user's own full devices or the owner on this machine, never
+// (docs/protocol/protocol.md "Connector API"). Read by one of the user's own full devices or the owner on this machine, never
 // by an answer-only device, a pairing token (a script or an AI the user paired) or an extension's token: it holds the
 // text of what was written as the user.
 func (h *Manager) sentRoutes(api *http.ServeMux) {

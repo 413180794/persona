@@ -1,7 +1,7 @@
 package extwire
 
 // A manager's proof that a request with one of its extensions' tokens came through it (its relay to the hub,
-// docs/managers.md "Extensions and the hub's API"). The hub takes an extension's token from the internet only with
+// docs/assistant/managers.md "Extensions and the hub's API"). The hub takes an extension's token from the internet only with
 // it, so a token that leaked is no use on its own. The proof is an HMAC keyed by ProofKey of the manager's bus token,
 // which the hub derives from the token when the manager connects and keeps with that live connection only (its
 // database has another hash of the token, which opens nothing here); it signs the request's method and URI, the
@@ -24,7 +24,7 @@ import (
 // HeaderManagerProof carries the proof.
 const HeaderManagerProof = "X-Persona-Manager-Proof"
 
-// The hub's answers to a proof that is the manager's but not taken (docs/managers.md "Extensions and the hub's API").
+// The hub's answers to a proof that is the manager's but not taken (docs/assistant/managers.md "Extensions and the hub's API").
 const (
 	CodeClockSkew     = "clock_skew"     // 403: its time is out of ProofWindow
 	CodeProofReplayed = "proof_replayed" // 403: its nonce was taken already

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The extensions' places with several managers (docs/managers.md "Clients"): another manager's inbox item is drawn by
+// The extensions' places with several managers (docs/assistant/managers.md "Clients"): another manager's inbox item is drawn by
 // its own extensions and a computer of another manager gets that manager's sections, each asked for and drawn with the
 // manager's name. The sidebar's badges and the workflow board's switch are the default's: before the roster says which
 // manager that is none of their pushes is taken, and both are read again once it does.

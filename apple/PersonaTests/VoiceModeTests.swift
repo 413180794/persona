@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The page's side of a call (docs/voice.md 6.2, 6.5, 6.10): what it may read without being drawn again on every phase,
+/// The page's side of a call (docs/assistant/voice.md 6.2, 6.5, 6.10): what it may read without being drawn again on every phase,
 /// what Never Mind and Send Back as Feedback do, and the cues.
 @MainActor
 struct VoiceModeTests {

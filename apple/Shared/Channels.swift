@@ -1,6 +1,6 @@
 import Foundation
 
-// Channels (docs/channels.md): the wire types of GET /api/v1/channels and where a message came from. Shared with the
+// Channels (docs/extensions/channels.md): the wire types of GET /api/v1/channels and where a message came from. Shared with the
 // watch, which marks a message that came in from a channel as the phone does; the settings pages are the app's
 // (Persona/Views/Settings/ChannelsModel.swift).
 
@@ -193,7 +193,7 @@ extension APIClient {
     }
 }
 
-/// Where a message came from, by its client_msg_id (docs/channels.md「来源标记」): a channel's are `<channel>-<message
+/// Where a message came from, by its client_msg_id (docs/extensions/channels.md「来源标记」): a channel's are `<channel>-<message
 /// id>`, the app's own a UUID (its first part 8 hex digits, which no channel id can be).
 nonisolated enum ChannelSource {
     /// The channel a message came from, when its prefix is a channel the hub has; the apps' channel is never a source.

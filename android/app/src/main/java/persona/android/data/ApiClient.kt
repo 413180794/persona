@@ -17,11 +17,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-/** An error answer from the hub: the HTTP status, its `error` text and, for refusals, its `code` (docs/protocol.md). */
+/** An error answer from the hub: the HTTP status, its `error` text and, for refusals, its `code` (docs/protocol/protocol.md). */
 class HubException(val status: Int, override val message: String, val code: String? = null, val fields: JsonObject? = null) :
     Exception(message)
 
-/** REST calls to the hub (docs/protocol.md "REST"). One instance per paired hub. */
+/** REST calls to the hub (docs/protocol/protocol.md "REST"). One instance per paired hub. */
 class ApiClient(
     val baseUrl: String,
     val token: String,
@@ -39,7 +39,7 @@ class ApiClient(
 
     // Compatibility callers also use this client for streaming uploads.
     val http = http.newBuilder().addInterceptor { chain ->
-        // The language the app shows, so the hub answers in it (docs/i18n.md).
+        // The language the app shows, so the hub answers in it (docs/protocol/i18n.md).
         val request = chain.request().newBuilder()
             .header("Accept-Language", persona.core.contracts.ClientLanguage.tag).build()
         chain.proceed(request).also { response ->

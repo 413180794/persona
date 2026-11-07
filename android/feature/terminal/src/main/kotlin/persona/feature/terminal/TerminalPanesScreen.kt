@@ -20,7 +20,7 @@ import persona.core.navigation.Navigator
 import persona.core.navigation.TerminalRoute
 
 /**
- * "Terminal" (docs/terminal.md "Standalone terminal"): machine -> workspace -> tab -> pane, agents and plain shells, each opened in the
+ * "Terminal" (docs/integrations/terminal.md "Standalone terminal"): machine -> workspace -> tab -> pane, agents and plain shells, each opened in the
  * terminal page; "New tab" opens a shell tab in a workspace. A pane with an agent opens by its session (the stream its
  * chat's terminal uses), the others by their address.
  */

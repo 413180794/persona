@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The extension model in the hub (docs/extensions.md "Dependencies, exports and bundles", #1854): what installs
+// The extension model in the hub (docs/extensions/extensions.md "Dependencies, exports and bundles", #1854): what installs
 // together (a preview's bundle: missing dependencies, a pack's members), what a switch-off or removal takes with it
 // (dependents), and telling an exporter its contributions changed.
 

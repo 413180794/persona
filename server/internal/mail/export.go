@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Moving an account to another manager (docs/mail.md, "Moving an account"): the other manager has its own
+// Moving an account to another manager (docs/extensions/mail.md, "Moving an account"): the other manager has its own
 // secret.key, so the account goes as a whole with its secrets in plaintext (over the bus only) and is sealed again on
 // arrival.
 

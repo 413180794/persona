@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-// Engine hosts (#2576, docs/protocol.md "Engines", "Host sets"): a machine enables a set of terminal hosts side by side — any of
+// Engine hosts (#2576, docs/protocol/protocol.md "Engines", "Host sets"): a machine enables a set of terminal hosts side by side — any of
 // herdr, herdr-core, orca and paseo, or none — and names one of them its default, where sessions started from the
 // phone go unless the start says otherwise. The single engines before it (EngineNames) are sets of one; herdr-both
 // is {herdr, herdr-core} with herdr the default. The hub keeps both forms: the set for nodes that take one

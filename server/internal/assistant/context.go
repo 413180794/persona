@@ -133,10 +133,10 @@ func (s *Service) ProfileChanged(context.Context) {
 	s.prefs.mu.Unlock()
 }
 
-// snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/agent-work.md) says what a stopped one
+// snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/assistant/agent-work.md) says what a stopped one
 // waits for or concluded. Each has its page in the web app at web ("" for none). The muted ones (the agent or its
 // space) are in none of the others: the Live Activity, the Agents badge and the inbox leave them out
-// (docs/live-activity.md), so "Needs you" here does too; they are told apart, for when the user asks about them (#4562).
+// (docs/apple/live-activity.md), so "Needs you" here does too; they are told apart, for when the user asks about them (#4562).
 func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, awaiting, waiting, done, muted []prompts.SnapshotAgent,
 	working []prompts.SnapshotAgent, workflows []prompts.SnapshotWorkflow) {
 	for _, m := range devices {
@@ -172,7 +172,7 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 			case c.AwaitsReply && c.State == proto.StateIdle && recent:
 				into = &awaiting // seen, its question unanswered (#5096)
 			// A decision with no card up (cards off, muted, "Not now") is not "Needs you": the lists, the badges and the Live
-			// Activity go by the state (docs/agent-states.md), so it stays "Unread" with what it waits for, or is seen.
+			// Activity go by the state (docs/protocol/agent-states.md), so it stays "Unread" with what it waits for, or is seen.
 			case w != nil && w.Phase == proto.WorkBlocked && w.On != proto.WaitUser && c.State != proto.StateUnread && recent:
 				into = &waiting // the hub waits it out (an unread one is left for the user)
 			case w != nil && w.Phase == proto.WorkDone && recent:

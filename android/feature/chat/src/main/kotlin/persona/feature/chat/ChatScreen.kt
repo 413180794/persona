@@ -163,7 +163,7 @@ private fun ChatPage(
             queued = null, loop = null, background = null, workflows = null, pendingInteractions = 0)
     } ?: lastSession
     SideEffect { if (session != null) lastSession = session }
-    // What the session's source lets the phone do (docs/protocol.md "Codex sources and capabilities"). Older sessions, and one whose
+    // What the session's source lets the phone do (docs/protocol/protocol.md "Codex sources and capabilities"). Older sessions, and one whose
     // metadata has not arrived, can do everything: the hub and the node refuse what is not allowed anyway.
     val canSend = session?.canSend ?: true
     val canApprove = session?.canApprove ?: true
@@ -183,7 +183,7 @@ private fun ChatPage(
     var offerNext by remember { mutableStateOf(false) }
     var uncertain by remember { mutableStateOf(emptySet<String>()) }
     var busyId by remember { mutableStateOf<String?>(null) }
-    // The assistant's tasks (docs/unified-entry.md): their agents' questions are answered here too, oldest first.
+    // The assistant's tasks (docs/assistant/unified-entry.md): their agents' questions are answered here too, oldest first.
     val tasks = chrome.tasks
     val taskTodos by (tasks?.todos ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<persona.core.contracts.Todo>()) })
         .collectAsStateWithLifecycle()
@@ -376,7 +376,7 @@ private fun ChatPage(
         if (readOnly || !canSend) return false
         if (sending || submittedDraft != null) return false
         if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return false
-        // Routed to a task ("Say to "xx""): straight to its agent, not to Persona (docs/unified-entry.md "Who it points to").
+        // Routed to a task ("Say to "xx""): straight to its agent, not to Persona (docs/assistant/unified-entry.md "Who it points to").
         if (command == null && tasks != null && linkContexts.isEmpty() && composer.attachments.isEmpty() &&
             tasks.sendRouted(key.sessionId, composer.value.text.trim()) { notice = operationFeedback(it).text.resolve(res) }) {
             composer.clearIfUnchanged(composer.draft)
@@ -588,7 +588,7 @@ private fun ChatPage(
     val replacement = if (snapshot.replaced) sessionList.firstOrNull { candidate ->
         session != null && candidate.key != key && SessionRuntimeState.map(session, listOf(candidate), true).replaced
     } else null
-    // The machine this conversation runs on, for its port links (docs/ports.md "Recognizing links in replies").
+    // The machine this conversation runs on, for its port links (docs/operations/ports.md "Recognizing links in replies").
     val portPresence = remember(chrome.ports, key.machineId) {
         chrome.ports?.let { opener -> PortPresence(scope, { port -> opener.probe(key.machineId, port).let { it.listening to it.title } }) }
     }
@@ -604,7 +604,7 @@ private fun ChatPage(
     // The @ menu: files this chat's tools used (newest first) and the other sessions, to quote (iOS PromptItems).
     val mentionFiles = remember(snapshot.items) { chatFiles(snapshot.items) }
     val mentions = if (readOnly || !canSend) null else ComposerMentions(mentionFiles, session?.cwd.orEmpty(), sessionList, key)
-    // An assistant conversation's cards answer through its hub's store (docs/assistant-views.md); elsewhere they only draw.
+    // An assistant conversation's cards answer through its hub's store (docs/assistant/assistant-views.md); elsewhere they only draw.
     val cardsHost = remember(tasks, key.sessionId, readOnly, canSend) {
         tasks?.let { persona.core.domain.views.AssistantCardsHost(key.sessionId, it.cards, it.cardActions, interactive = !readOnly && canSend) }
     }
@@ -642,9 +642,9 @@ private fun ChatPage(
                             }
                             // The space's other tabs under the title (iOS SiblingTabs); not for the assistant's conversation.
                             if (showTopBar && renderStyle != ChatRenderStyle.Assistant) ChatSiblingTabs(session, sessionList, chrome.onOpenSession)
-                            // The ports it listens on (its dev servers, docs/ports.md): a tap opens the page.
+                            // The ports it listens on (its dev servers, docs/operations/ports.md): a tap opens the page.
                             if (showTopBar && renderStyle != ChatRenderStyle.Assistant) ChatPortChips(session?.ports)
-                            // The goal it works toward (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md): a tap opens it.
+                            // The goal it works toward (Claude Code's /goal, a Codex thread goal; docs/integrations/agent-goal.md): a tap opens it.
                             if (showTopBar) ChatGoalBar(session?.goal)
 
                             ChatTasks(projection.tasks, lines, chatList,

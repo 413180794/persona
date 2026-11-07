@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/netaddr"
 )
 
-// Passive mode (docs/link.md "Passive mode"): the hub dials this computer instead. persona-link listens on a TLS port with its
+// Passive mode (docs/operations/link.md "Passive mode"): the hub dials this computer instead. persona-link listens on a TLS port with its
 // own identity (tlsid.go) and offers three things there, nothing else: pairing, a little about itself, and streams
 // to the resident node (listen.go). Pairing goes the other way round from active mode, as the computer may not reach
 // the hub: `persona-link pair --listen` makes a one-time code and prints a link for the hub's admin page; the hub dials

@@ -1,6 +1,6 @@
 package hub
 
-// What is each manager's own beside its machines (docs/managers.md "Directories on a computer", "Ownership"): its
+// What is each manager's own beside its machines (docs/assistant/managers.md "Directories on a computer", "Ownership"): its
 // assistant's directories on a computer, and its extensions' tokens.
 
 import (

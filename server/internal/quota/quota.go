@@ -1,6 +1,6 @@
-// Package quota is what a launcher's quota looks like (docs/launchers.md "Quota") and how a quota plugin reaches the
+// Package quota is what a launcher's quota looks like (docs/integrations/launchers.md "Quota") and how a quota plugin reaches the
 // launcher's gateway without ever seeing its key. Which gateways are read and how is the quota plugins' business
-// (docs/extensions.md "Quota"): a plugin answers quota.query with a Report, asking the hub (quota.http) to send requests in
+// (docs/extensions/extensions.md "Quota"): a plugin answers quota.query with a Report, asking the hub (quota.http) to send requests in
 // which ${launcher_key} stands for the key. Whoever holds the key — the hub for a launcher added in Persona, the
 // machine for a ~/.zshrc one — puts it in (Do), only toward the launcher's own gateway, and takes it out of the answer.
 package quota

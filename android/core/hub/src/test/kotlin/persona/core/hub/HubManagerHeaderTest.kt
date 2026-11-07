@@ -18,7 +18,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The manager the assistant page shows names itself on the assistant's requests only (docs/managers.md step 4). */
+/** The manager the assistant page shows names itself on the assistant's requests only (docs/assistant/managers.md step 4). */
 class HubManagerHeaderTest {
     @After fun reset() { AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems() }
 

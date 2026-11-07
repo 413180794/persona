@@ -30,7 +30,7 @@ extension GoalInfo {
     }
 }
 
-/// The goal over the chat (docs/agent-goal.md): its first line and status in one row; a tap opens `GoalSheet`.
+/// The goal over the chat (docs/integrations/agent-goal.md): its first line and status in one row; a tap opens `GoalSheet`.
 struct GoalBar: View {
     var goal: GoalInfo
     @State private var showing = false

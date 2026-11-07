@@ -341,7 +341,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.runsWithSection(
 }
 
 /**
- * "Push when done" (docs/assistant.md "Push when done", iOS pushSection): every run, or only what a run sends with notify_user. Only its
+ * "Push when done" (docs/assistant/assistant.md "Push when done", iOS pushSection): every run, or only what a run sends with notify_user. Only its
  * alerts runs the task in its own conversation, so "Continue the original chat" goes.
  */
 private fun androidx.compose.foundation.lazy.LazyListScope.pushSection(draft: TaskDraft, busy: Boolean, onPush: (String) -> Unit) {
@@ -359,7 +359,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.pushSection(draft: Ta
 }
 
 /**
- * "Chat" (docs/assistant.md "Scheduled tasks"): the conversation it came from ("Continue the original chat"), else the task's own one, which
+ * "Chat" (docs/assistant/assistant.md "Scheduled tasks"): the conversation it came from ("Continue the original chat"), else the task's own one, which
  * the first run starts and the next ones continue; "New chat next time" lets the next run start over.
  */
 private fun androidx.compose.foundation.lazy.LazyListScope.conversationSection(

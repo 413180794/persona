@@ -1,9 +1,9 @@
-// Pure logic of a session's files / Git panels and the file viewer (docs/ios.md "File viewer", the session page's
+// Pure logic of a session's files / Git panels and the file viewer (docs/apple/ios.md "File viewer", the session page's
 // "Files" / Git; iOS: FilesPane, GitPane, FileViewer, Persona/Code). No DOM here: tested in files.test.ts.
 
 import { decodeURIComponentSafe } from "./uri";
 
-// ── wire types (docs/protocol.md: /machines/{mid}/fs, /file, /git/*) ─────────
+// ── wire types (docs/protocol/protocol.md: /machines/{mid}/fs, /file, /git/*) ─────────
 
 export interface FsEntry {
   name: string;

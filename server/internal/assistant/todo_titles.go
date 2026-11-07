@@ -21,7 +21,7 @@ import (
 
 // A todo a task opens (task_plan, agent_start) used to be titled with its prompt's first line, which opens with what
 // the agent is told rather than what the work is: "ultrathink ultracode, the owner's feedback of 11-05 19:47, cleared to start: …" (in Chinese)
-// (#2775, docs/todos.md "To-do titles"). The todo now gets that line cleaned up at once (cleanTodoTitle), so nothing
+// (#2775, docs/assistant/todos.md "To-do titles"). The todo now gets that line cleaned up at once (cleanTodoTitle), so nothing
 // waits; the small-task model then names it from the prompt in the background, and its title replaces the cleaned
 // one only while the todo still has it: a title the user gave meanwhile stays.
 

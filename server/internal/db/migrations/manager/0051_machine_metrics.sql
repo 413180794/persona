@@ -1,4 +1,4 @@
--- Machine monitoring (docs/machines.md). machine_systems: what each machine is, from its node's last connection, so
+-- Machine monitoring (docs/server/machines.md). machine_systems: what each machine is, from its node's last connection, so
 -- the pages know an offline machine's OS after a hub restart. machine_metrics: the last 24 hours of samples: raw rows
 -- (step 10, every 10 s) for the latest hour, rolled up into one row a minute (step 60) after that (hub/metrics.go).
 CREATE TABLE IF NOT EXISTS machine_systems (

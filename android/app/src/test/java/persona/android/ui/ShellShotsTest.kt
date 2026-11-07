@@ -47,7 +47,7 @@ import java.io.File
 
 /**
  * The shell's tabs (bottom dock and rail) and a page the demo cannot show, in each language and style, light and dark
- * (docs/i18n.md). Persona and Agents read the same in every language. PNGs go to `build/i18n-shots/` (or
+ * (docs/protocol/i18n.md). Persona and Agents read the same in every language. PNGs go to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`). The plain Application keeps Hilt's PersonaApp out of the test.
  */
 @RunWith(AndroidJUnit4::class)

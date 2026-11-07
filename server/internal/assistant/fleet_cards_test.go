@@ -621,7 +621,7 @@ func TestScreenCardBackAfterTheGraceIsPushed(t *testing.T) {
 	}
 }
 
-// A runtime's session (docs/runtimes.md) has no terminal: blocked there, no screen is read; a session with a terminal
+// A runtime's session (docs/integrations/runtimes.md) has no terminal: blocked there, no screen is read; a session with a terminal
 // still gets its card.
 func TestNoScreenCardWithoutATerminal(t *testing.T) {
 	ft, n := newCardFleet(t, false)

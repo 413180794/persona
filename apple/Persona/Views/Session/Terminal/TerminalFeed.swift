@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Where the terminal tab's screen comes from (docs/terminal.md): the hub's live stream of the pane — herdr's frames
+/// Where the terminal tab's screen comes from (docs/integrations/terminal.md): the hub's live stream of the pane — herdr's frames
 /// applied to a grid of the pane's size, continued from the last frame after a reconnect — or, with a hub, node or
 /// herdr that cannot stream, the colored screen read once a second. Pages of scrollback load above it either way.
 ///

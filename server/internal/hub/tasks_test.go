@@ -594,7 +594,7 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 	}
 }
 
-// todoState is a task's state as far as its todo tells it (docs/todos.md "How state is computed"): failed, done, not started.
+// todoState is a task's state as far as its todo tells it (docs/assistant/todos.md "How state is computed"): failed, done, not started.
 func todoState(t Todo) string {
 	switch {
 	case t.DoneAt != nil && t.StartError != "":

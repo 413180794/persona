@@ -1,4 +1,4 @@
-// Package db is the hub's Postgres store (docker container persona-postgres on the hub machine, see docs/server.md).
+// Package db is the hub's Postgres store (docker container persona-postgres on the hub machine, see docs/server/server.md).
 package db
 
 import (
@@ -26,7 +26,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The migrations are two sets (docs/server.md "Migrations"): the hub's tables in migrations/hub, the manager's in
+// The migrations are two sets (docs/server/server.md "Migrations"): the hub's tables in migrations/hub, the manager's in
 // migrations/manager. A hub's database runs the hub set, a manager's the manager set; while the default manager
 // shares the hub's database, both run there, each recording its own part.
 //
@@ -214,7 +214,7 @@ func connectTracked(ctx context.Context, url, app string, pids *pidSet) (*pgxpoo
 }
 
 // utcTimes makes m read timestamptz values in UTC. pgx reads them in time.Local by default, which puts the hub
-// machine's offset ("+08:00") into every time the protocol sends, where docs/protocol.md has UTC.
+// machine's offset ("+08:00") into every time the protocol sends, where docs/protocol/protocol.md has UTC.
 func utcTimes(m *pgtype.Map) {
 	m.RegisterType(&pgtype.Type{Name: "timestamptz", OID: pgtype.TimestamptzOID, Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC}})
 }
@@ -392,7 +392,7 @@ type Device struct {
 	APNSToken    string `json:"apns_token,omitempty"`
 	APNSEnv      string `json:"apns_env,omitempty"`
 	Topic        string `json:"topic,omitempty"`
-	// Pushing through the relay (docs/push-relay.md): the phone's public key (base64 X9.63), the relay's URL and the
+	// Pushing through the relay (docs/operations/push-relay.md): the phone's public key (base64 X9.63), the relay's URL and the
 	// grant it gave the phone.
 	PushKey    string `json:"push_key,omitempty"`
 	RelayURL   string `json:"relay_url,omitempty"`
@@ -403,7 +403,7 @@ type Device struct {
 	// Features: what the app on it understands beyond the first version's pushes ("withdraw": a background push
 	// naming the cards that are over, hub/push_withdraw.go). The hub keeps only names it knows.
 	Features []string `json:"features,omitempty"`
-	// Locale: the interface language it registered with (zh-Hans / en / ja, docs/i18n.md); "" is the user's.
+	// Locale: the interface language it registered with (zh-Hans / en / ja, docs/protocol/i18n.md); "" is the user's.
 	Locale string `json:"locale,omitempty"`
 	// Credential: the device token (device_tokens.id) that registered it, set by the hub, never from the request;
 	// empty for the pairing token. Revoking it forgets the device (hub: Pusher.signedOut).
@@ -934,7 +934,7 @@ func (d *DB) DeleteConnectorSecret(ctx context.Context, connector string) error 
 
 // ---- settings ----
 
-// Each side has its own settings (docs/server.md "Migrations"): the hub's in hub_settings, a manager's in settings.
+// Each side has its own settings (docs/server/server.md "Migrations"): the hub's in hub_settings, a manager's in settings.
 // A database opened for the hub alone reads and writes the hub's; one opened for a manager (or for both, in tests)
 // the manager's. Neither side reads the other's keys: what one needs of the other comes over the bus.
 
@@ -976,7 +976,7 @@ func (d *DB) keepForOlderHub(ctx context.Context, tx pgx.Tx, key string, raw []b
 }
 
 // followOlderHub takes up what a hub build from before hub_settings wrote in the settings table it shares with the
-// default manager, at every start of the hub: a switch back to such a build (blue-green, docs/hub-restart.md) and
+// default manager, at every start of the hub: a switch back to such a build (blue-green, docs/operations/hub-restart.md) and
 // forward again keeps the changes made meanwhile. A key it wrote later than this build is taken, its event log
 // hand-over too; taking a hand-over removes it from both tables (a hand-over is read once: left there, a later switch
 // back would resume a stale stream).
@@ -1133,7 +1133,7 @@ type execer interface {
 }
 
 // TakeSetting is Setting that also removes the key, in one statement: a value meant to be read once (the event log a
-// stopping hub hands to the next one, docs/hub-restart.md) is never read twice.
+// stopping hub hands to the next one, docs/operations/hub-restart.md) is never read twice.
 func (d *DB) TakeSetting(ctx context.Context, key string, out any) (bool, error) {
 	var raw []byte
 	shared := false

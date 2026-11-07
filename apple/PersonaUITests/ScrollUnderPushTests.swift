@@ -2,13 +2,13 @@ import XCTest
 
 /// Scrolling while the hub pushes (2026-11-01, TestFlight 77, the user: 「滚动列表的被迫刷新，影响体验的」). The real hub
 /// pushes some machine's agents every two seconds, nearly half of them in a new order (recorded through a read-only
-/// proxy, docs/archive/lanes/live-updates.md「滚动时被迫刷新」). The mock pushes the same kinds at that pace (/mock/churn, one
+/// proxy, docs/archive/apple/live-updates.md「滚动时被迫刷新」). The mock pushes the same kinds at that pace (/mock/churn, one
 /// round every 2 s, &real=1: rows that change height, an agent that finishes and starts again, the inbox, a question
 /// that comes and goes, new steps in the open chat) while the test drags and flicks the list; the app watches every
 /// frame of the scroll (`PerfScroll`, `-perfCounts YES`): what is on screen moves with the finger or the glide only.
 ///   PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_PERSONA_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/ScrollUnderPushTests
-/// Both layouts: TEST_RUNNER_PERSONA_LAYOUT=shell runs it in the shell (docs/testing.md).
+/// Both layouts: TEST_RUNNER_PERSONA_LAYOUT=shell runs it in the shell (docs/operations/testing.md).
 final class ScrollUnderPushTests: XCTestCase {
     private var hub = ""
     private var app: XCUIApplication!

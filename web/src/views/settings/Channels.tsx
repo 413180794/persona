@@ -1,4 +1,4 @@
-// Settings › Channels (docs/channels.md "UI", iOS ChannelsView): every way of talking to Persona, connected or not, and
+// Settings › Channels (docs/extensions/channels.md "UI", iOS ChannelsView): every way of talking to Persona, connected or not, and
 // each one's page — its switch, binding a step at a time (a QR code to scan in the chat app, a pairing code to send the
 // bot, credentials), where its messages go, what it does, a test message to the owner — and, for a market's, the way
 // to install it. Read-only ones (the apps, /agent, voice) say where they are set up.
@@ -50,7 +50,7 @@ function useOtherChannels(manager: string | undefined, has: boolean): Channel[] 
 
 /** On a connector's page (WeChat's, the Feishu bot's): it is a way of talking to Persona, set up under "Channels". Only for a
  * channel there is, on a hub that has them. `manager`: whose connector the page is (another manager's channel is its
- * own, docs/managers.md "Clients"); none: the default's. */
+ * own, docs/assistant/managers.md "Clients"); none: the default's. */
 export function ChannelLink({ id, manager, onOpen }: { id: string; manager?: string; onOpen: (id: string, manager?: string) => void }) {
   const has = useStore((s) => s.features.includes("channels"));
   const other = otherManager(manager);

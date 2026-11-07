@@ -127,7 +127,7 @@ func TestEndlessVoiceDoesNotHoldTheAnswer(t *testing.T) {
 	a.protocolOne()
 }
 
-// docs/voice.md 4.5 rule 4: a service that refuses the result on its delegation (gone: expired, closed) has it said
+// docs/assistant/voice.md 4.5 rule 4: a service that refuses the result on its delegation (gone: expired, closed) has it said
 // instead, so the turn's one answer is not lost.
 func TestRefusedResultIsSaid(t *testing.T) {
 	hub := newFakeHub(t)

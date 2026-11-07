@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The admin page's peers API (docs/plan-hub-mesh.md 2.7): the admin routes (#296) call registerPeerAdmin on their mux,
+// The admin page's peers API (docs/archive/operations/plan-hub-mesh.md 2.7): the admin routes (#296) call registerPeerAdmin on their mux,
 // behind the admin login. Until they are there, peerAdminRoutes serves it on the API for the master token from this
 // machine only (the CLI: personad hub pair --peer, personad hub peer …).
 

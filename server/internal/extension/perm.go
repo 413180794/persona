@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Permissions are what a plugin asks for (docs/plan-extensions.md "Permissions"). The vocabulary is closed: a manifest naming
+// Permissions are what a plugin asks for (docs/plans/plan-extensions.md "Permissions"). The vocabulary is closed: a manifest naming
 // a permission this hub does not know does not install, so nobody is shown one the hub cannot explain.
 type Permissions struct {
 	// Network are the hosts it reaches ("api.example.com", "*.example.com"). Shown and recorded; the hub does not
@@ -27,23 +27,23 @@ type Permissions struct {
 	// Hub are the parts of the hub's API it calls (HubScopes): it gets a token that opens those routes and no other.
 	Hub []string `json:"hub,omitempty"`
 	// LauncherKeys: it reads launchers' quota with their keys — never seeing them: the hub (or the machine with the
-	// launcher) sends its requests, to the launcher's own gateway only (docs/extensions.md "Quota").
+	// launcher) sends its requests, to the launcher's own gateway only (docs/extensions/extensions.md "Quota").
 	LauncherKeys bool `json:"launcher_keys,omitempty"`
 	// GhLogin: it asks the hub for the GitHub token of a computer's gh login (the one the user picks for the GitHub
-	// connector), held in its memory only (docs/extensions.md "Permissions"). For the GitHub connector moved out of the hub.
+	// connector), held in its memory only (docs/extensions/extensions.md "Permissions"). For the GitHub connector moved out of the hub.
 	GhLogin bool `json:"gh_login,omitempty"`
 	// UsageGateways: it reads the account list of the account-pool gateways among the hub's usage sources
 	// (usage.gateway_accounts: accounts, their status and quota windows, from the hub's last read), never a key
-	// (docs/extensions.md "Quota", docs/usage-windows.md "The gateway's account list").
+	// (docs/extensions/extensions.md "Quota", docs/server/usage-windows.md "The gateway's account list").
 	UsageGateways bool `json:"usage_gateways,omitempty"`
-	// AgentRuntimes: its program is an agent runtime that connects to this machine's node (docs/runtimes.md); in a
+	// AgentRuntimes: its program is an agent runtime that connects to this machine's node (docs/integrations/runtimes.md); in a
 	// sandbox it gets a socket in its run directory that leads to the node's runtime.sock and nowhere else (#5413).
 	AgentRuntimes bool `json:"agent_runtimes,omitempty"`
 	// ErrorReports: it is given the error and crash reports of the hub and the user's devices, scrubbed first
-	// (contributes.error_reports, docs/extensions.md "Error reports").
+	// (contributes.error_reports, docs/extensions/extensions.md "Error reports").
 	ErrorReports bool `json:"error_reports,omitempty"`
 	// AuthRelay: it is handed the authorization links the user's Agents stop at, the ones its contributes.auth_relay
-	// names, to complete them with the account it is signed in with (docs/auth-relay.md).
+	// names, to complete them with the account it is signed in with (docs/operations/auth-relay.md).
 	AuthRelay bool `json:"auth_relay,omitempty"`
 }
 

@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 
 /**
- * The ongoing notification (the iPhone Live Activity's counterpart, docs/android.md "Ongoing summary notification"): the hub's fleet
+ * The ongoing notification (the iPhone Live Activity's counterpart, docs/android/android.md "Ongoing summary notification"): the hub's fleet
  * summed up when there is something to show, otherwise the connection line. Only visible content takes part in
  * equality, so the throttled updates skip anything the user would not see change.
  */

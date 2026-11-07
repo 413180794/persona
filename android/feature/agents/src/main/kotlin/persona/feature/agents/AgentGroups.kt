@@ -19,7 +19,7 @@ import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 
 /*
- * Hub groups in the Agents list (docs/android.md "Multiple hubs"). The list merges every group; with more than one, each
+ * Hub groups in the Agents list (docs/android/android.md "Multiple hubs"). The list merges every group; with more than one, each
  * computer says which group it belongs to and a row of group chips filters by group. With a single group none of
  * this is drawn, so the page looks exactly as before groups existed.
  */

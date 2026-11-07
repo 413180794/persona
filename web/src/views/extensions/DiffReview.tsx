@@ -1,4 +1,4 @@
-// A file's diff for reviewing (UI version 4's diff with version 5's code review, docs/extensions.md, #3136): line
+// A file's diff for reviewing (UI version 4's diff with version 5's code review, docs/extensions/extensions.md, #3136): line
 // numbers on both sides, one column or side by side, syntax highlighting with the words that changed marked, hidden
 // lines shown 20 at a time or all (asked of the extension as lines, not a new page), viewed marks, generated and big
 // files folded at first, comments on a line or a range picked on the numbers (alone, or as a draft of a pending

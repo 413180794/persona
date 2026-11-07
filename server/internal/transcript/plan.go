@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The agent's plan (docs/agent-goal.md "Plan"): Claude Code keeps a task list, the TodoWrite list (each call writes
+// The agent's plan (docs/integrations/agent-goal.md "Plan"): Claude Code keeps a task list, the TodoWrite list (each call writes
 // the whole list) or, with the newer task tools, items TaskCreate adds and TaskUpdate edits by id (TaskList reads
 // them all back). Meta.Plan counts the latest list. The list is rebuilt from the calls' successful results the way
 // the transcript view folds them (foldTaskSnapshots), so a call that failed changes nothing.

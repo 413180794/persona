@@ -43,7 +43,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * The data-source settings in each of the app's languages (docs/i18n.md): mail, a hub connector, Feishu, channels, model
+ * The data-source settings in each of the app's languages (docs/protocol/i18n.md): mail, a hub connector, Feishu, channels, model
  * configuration, a new model provider, Claude Code settings and a launcher's quota, in Glass light and dark (and the
  * other styles light). The data is made up and language-neutral, so English pages must show no Chinese at all. Written
  * as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.

@@ -68,7 +68,7 @@ internal fun selectedPoint(points: List<MetricPoint>, time: Long, step: Int): Me
         ?.takeIf { abs(it.t - time) <= 2L * step }
 }
 
-/** Numbers, sizes, rates and times on the machine pages, in the language of the page (docs/i18n.md). */
+/** Numbers, sizes, rates and times on the machine pages, in the language of the page (docs/protocol/i18n.md). */
 internal object MetricFormat {
     private fun oneDecimal(format: NumberFormat) = format.apply { minimumFractionDigits = 1; maximumFractionDigits = 1 }
     fun number(value: Double?, locale: Locale): String =

@@ -1,4 +1,4 @@
-// "Browser sign-ins" on a Mac's page (#1304, docs/plan-ego-browser.md "Importing cookies"; iOS BrowserLoginsSection): the sites
+// "Browser sign-ins" on a Mac's page (#1304, docs/plans/plan-ego-browser.md "Importing cookies"; iOS BrowserLoginsSection): the sites
 // whose sign-ins ego lite keeps (how many cookies, until when, never what), clearing a site's or all, and importing a
 // cookie file (cookies.txt, or an extension's JSON). The file is read here, its sites ticked by the user (none at first),
 // and only the ticked ones go to the hub, which passes them to the Mac and keeps nothing. The Mac must be online.

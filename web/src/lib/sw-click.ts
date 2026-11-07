@@ -89,7 +89,7 @@ export function answeringWindows(wins: ClickWindow[]): ClickWindow[] {
     } catch {
       return false;
     }
-    // the admin UI is at the root only (docs/web.md"Subpaths"), and the worker is registered only there: an app page
+    // the admin UI is at the root only (docs/web/web.md"Subpaths"), and the worker is registered only there: an app page
     // with "admin" further down its path (a session or machine called admin) is still asked
     return !/^\/admin(\/|$)/.test(p);
   });

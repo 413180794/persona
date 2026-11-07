@@ -1,5 +1,5 @@
-// The DSH runtime's implementation (docs/dsh.md): what index.js — the loader DSH keeps — imports from the version it
-// runs, the shipped one or one the node sent (docs/runtimes.md "Auto-update"). It wires DSH's Cordis services into
+// The DSH runtime's implementation (docs/integrations/dsh.md): what index.js — the loader DSH keeps — imports from the version it
+// runs, the shipped one or one the node sent (docs/integrations/runtimes.md "Auto-update"). It wires DSH's Cordis services into
 // createDshRuntime; everything here may change from one version to the next, the loader contract (api, start) may not.
 
 import { readFileSync } from 'node:fs'
@@ -44,7 +44,7 @@ function presetsOf(p) {
 }
 
 /**
- * listen in the config: be a daemon the node dials (docs/daemons.md) — {port, host?, path?, token | token_file} — for a
+ * listen in the config: be a daemon the node dials (docs/integrations/daemons.md) — {port, host?, path?, token | token_file} — for a
  * DSH that cannot reach the node's runtime.sock (another system user, a container, another machine). The token file
  * is read at every connection.
  */
@@ -66,7 +66,7 @@ function listenOf(l) {
  *   sessionController; config is the plugin's config: { socket?, interactions?: 'auto'|'phone'|'browser', listDays?,
  *   maxSessions?, runtime?, name?, launcher?, phoneTools?, assistant?, presets?, listen?, autoUpdate? }.
  *   runtime / name / launcher: how this DSH appears in Persona (default dsh / DSH / dsh); a second DSH on the same
- *   machine needs its own. assistant (default true): its launcher may run the Persona assistant (docs/dsh.md "Assistant");
+ *   machine needs its own. assistant (default true): its launcher may run the Persona assistant (docs/integrations/dsh.md "Assistant");
  *   presets: the DSH permission preset per Persona permission mode there. listen: be a daemon the node dials instead
  *   (listenOf). autoUpdate is the loader's.
  * @returns {{ stop(): void, busy(): boolean, fetchPackage(name: string): Promise<object> }}

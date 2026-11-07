@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
-// The sources are the hub's connectors (docs/knowledge.md "Pipeline"): the knowledge base asks the hub which of them
+// The sources are the hub's connectors (docs/assistant/knowledge.md "Pipeline"): the knowledge base asks the hub which of them
 // to read now and reads them through it (app.call connectors.*), as data. Each connector's cursor is a file in the
 // data dir, its batches are ingested as chats "<id>-<chat id>"; compressing, tagging and projects follow as for any
 // chat. The cursor only moves past what was ingested, so while the assistant is away nothing is lost: the next run

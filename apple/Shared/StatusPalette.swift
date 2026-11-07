@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The agent-state colors (docs/agent-states.md): the one table the app, the watch and the Live Activity draw states
+/// The agent-state colors (docs/protocol/agent-states.md): the one table the app, the watch and the Live Activity draw states
 /// from. Built into all three targets, so it holds only SwiftUI and the hex helpers they share (no app types).
 /// `dot` marks a state (dots, symbols, filled shapes), `text` is the same hue dark enough for small text on the page
 /// (≥ 4.5:1 on white), `tint` is the soft background behind either.

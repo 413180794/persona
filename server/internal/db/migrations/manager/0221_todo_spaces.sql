@@ -1,4 +1,4 @@
--- Todo spaces and agent link sources (hub/todos.go, docs/todos.md, #762).
+-- Todo spaces and agent link sources (hub/todos.go, docs/assistant/todos.md, #762).
 CREATE TABLE IF NOT EXISTS todo_spaces (
     todo_id    text NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
     machine_id text NOT NULL,

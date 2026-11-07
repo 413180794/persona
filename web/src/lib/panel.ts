@@ -1,4 +1,4 @@
-// The page's right-hand panel: a session's files / Git, or a link opened in the page (docs/web.md "Side panel"). A
+// The page's right-hand panel: a session's files / Git, or a link opened in the page (docs/web/web.md "Side panel"). A
 // session's terminal is the page's own view now (lib/session-view.ts), not a panel.
 // One panel at a time; opening another replaces it. Session panels close when the page moves to another conversation;
 // a link stays until closed (it is not tied to the conversation it came from).
@@ -24,7 +24,7 @@ export type Panel =
   /** `sid`: the session whose message box takes the comments made in it (else the one last used). */
   | { kind: "file"; mid: string; path: string; cwd?: string; line?: number; to?: number; sid?: string }
   | { kind: "link"; url: string; title?: string }
-  /** A task of the assistant's conversation: its agent's chat (docs/unified-entry.md). */
+  /** A task of the assistant's conversation: its agent's chat (docs/assistant/unified-entry.md). */
   | { kind: "task"; todo: string }
   /** An agent the main conversation's dock shows that no task stands for (#1113): its chat. */
   | { kind: "agent"; mid: string; sid: string }

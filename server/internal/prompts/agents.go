@@ -1,7 +1,7 @@
 package prompts
 
 // AgentTriage is the system prompt that reads a stopped agent's last reply and says where its work stands
-// (agents/triage, docs/agent-work.md).
+// (agents/triage, docs/assistant/agent-work.md).
 type AgentTriage struct {
 	Owner string // "" is the user
 }
@@ -45,7 +45,7 @@ func RenderAgentWake(w AgentWake) string { return render("agents/wake", w) }
 // AgentAnswer is the user's answers to the hub's decision card, sent on to the agent (agents/answer).
 type AgentAnswer struct {
 	Items []AgentAnswerItem
-	// ByAssistant: the assistant answered for the user (docs/assistant.md "The assistant answers questions first"), Reason says why.
+	// ByAssistant: the assistant answered for the user (docs/assistant/assistant.md "The assistant answers questions first"), Reason says why.
 	ByAssistant bool
 	Reason      string
 }
@@ -57,7 +57,7 @@ type AgentAnswerItem struct {
 func RenderAgentAnswer(a AgentAnswer) string { return render("agents/answer", a) }
 
 // AgentAuthRelayed tells an agent an extension authorized the link it stopped at with the user's account
-// (agents/auth_relayed, docs/auth-relay.md).
+// (agents/auth_relayed, docs/operations/auth-relay.md).
 type AgentAuthRelayed struct {
 	App string // the app, as the authorization page names it; "" when it was not read
 }
@@ -65,7 +65,7 @@ type AgentAuthRelayed struct {
 func RenderAgentAuthRelayed(a AgentAuthRelayed) string { return render("agents/auth_relayed", a) }
 
 // LauncherRepair is the first message of the agent that repairs a machine's launchers (agents/launcher_repair,
-// docs/launcher-health.md).
+// docs/server/launcher-health.md).
 type LauncherRepair struct {
 	Skill     string // the skill that sets up and repairs the agent CLIs
 	Machine   string // the broken machine's id
@@ -85,7 +85,7 @@ type LauncherRepairItem struct {
 func RenderLauncherRepair(r LauncherRepair) string { return render("agents/launcher_repair", r) }
 
 // AgentReanswer is the user's answers to questions the assistant answered for them, sent on to the agent, which went
-// on with the assistant's (agents/reanswer, docs/assistant.md "The assistant answers questions first").
+// on with the assistant's (agents/reanswer, docs/assistant/assistant.md "The assistant answers questions first").
 type AgentReanswer struct {
 	Items []AgentReanswerItem
 }
@@ -97,7 +97,7 @@ type AgentReanswerItem struct {
 func RenderAgentReanswer(a AgentReanswer) string { return render("agents/reanswer", a) }
 
 // AgentDelegate is the system prompt that decides whether the assistant answers an agent's question for the user
-// (agents/delegate, docs/assistant.md "The assistant answers questions first").
+// (agents/delegate, docs/assistant/assistant.md "The assistant answers questions first").
 type AgentDelegate struct {
 	Owner string // "" is the user
 	Rules string // the user's own rules, trimmed: manager.json agents.delegate.rules

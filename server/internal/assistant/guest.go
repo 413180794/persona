@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Guest conversations (docs/assistant.md ("Guest conversations"), #5195): a conversation an extension opens to answer someone else
+// Guest conversations (docs/assistant/assistant.md ("Guest conversations"), #5195): a conversation an extension opens to answer someone else
 // for the user (the Feishu extension's auto replies) with POST /api/v1/assistant/conversations guest.tools. It runs in
 // its own directory (guestDir: no CLAUDE.md, memory or skills of the assistant's), on the node with no built-in tools
 // and only Persona's MCP server (node/assistant_guest.go), and here it is listed and may call only the connector tools

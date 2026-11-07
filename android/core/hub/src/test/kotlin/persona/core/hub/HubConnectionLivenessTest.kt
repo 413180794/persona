@@ -45,7 +45,7 @@ class HubConnectionLivenessTest {
         }
     }
 
-    /** client_hello carries the shown language and is sent again when it changes (docs/i18n.md "Protocol"). */
+    /** client_hello carries the shown language and is sent again when it changes (docs/protocol/i18n.md "Protocol"). */
     @Test fun helloCarriesTheLanguageAndRepeatsWhenItChanges() = runBlocking {
         try {
             persona.core.contracts.ClientLanguage.current = persona.core.contracts.AppLanguage.Ja

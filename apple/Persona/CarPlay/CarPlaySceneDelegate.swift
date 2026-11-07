@@ -32,7 +32,7 @@ import UIKit
 
 /// The CarPlay scene: launches straight into the voice conversation (Apple's voice-based conversation category).
 /// Instantiated by name from Info.plist (`$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate`), so keep the name.
-/// The call itself is `VoiceConversation(surface: .carPlay)` via `VoiceCalls` (#3789 / docs/voice.md 6.4).
+/// The call itself is `VoiceConversation(surface: .carPlay)` via `VoiceCalls` (#3789 / docs/assistant/voice.md 6.4).
 @MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var controller: CPInterfaceController?

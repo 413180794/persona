@@ -1,4 +1,4 @@
-// Settings › Extensions › Extension marketplace (docs/extensions.md "Extension marketplace"): the catalog of the markets this hub reads (search, a market at a
+// Settings › Extensions › Extension marketplace (docs/extensions/extensions.md "Extension marketplace"): the catalog of the markets this hub reads (search, a market at a
 // time), one extension of it (what it may do; preview → install / upgrade; uninstall when this market installed it), and
 // the markets themselves (add with an optional write-only token, remove, read again, change the token). Logic in
 // lib/extension-market.ts.
@@ -147,7 +147,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
       )}
       {broken.map((m) =>
         // the official market out of reach is the network's, grey not red and no token asked of a newcomer here
-        // (docs/onboarding.md 4.5); the hub reads it elsewhere when GitHub rate-limits it, and for whoever still wants a
+        // (docs/assistant/onboarding.md 4.5); the hub reads it elsewhere when GitHub rate-limits it, and for whoever still wants a
         // token a quiet way to the markets page, where it is set
         m.official ? (
           <div key={m.id} className="mb-3">
@@ -245,7 +245,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
 
 // ── one extension of a market ──────────────────────────────
 
-/** `manager`: whose copy it is for (an upgrade from another manager's extension page, docs/managers.md "Clients"): its
+/** `manager`: whose copy it is for (an upgrade from another manager's extension page, docs/assistant/managers.md "Clients"): its
  *  catalog, preview, consent and operation are that manager's, named on each request, and the page says so; none: the
  *  default's. */
 export function MarketItem({ market, id, manager, onBack, onInstalled }: { market: string; id: string; manager?: string; onBack: () => void; onInstalled: (id: string) => void }) {
@@ -674,7 +674,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
   const [tokenFor, setTokenFor] = useState<Market | null>(null);
   const [busy, setBusy] = useState<Record<string, "refresh" | "remove">>({});
   const [confirm, setConfirm] = useState("");
-  // The switch for all market extensions (docs/extensions.md "Auto-upgrade"); null: a hub without it.
+  // The switch for all market extensions (docs/extensions/extensions.md "Auto-upgrade"); null: a hub without it.
   const [auto, setAuto] = useState<boolean | null>(null);
   const [savingAuto, setSavingAuto] = useState(false);
   useEffect(() => void extensionUpgrades().then(setAuto), []);

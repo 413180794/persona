@@ -1,4 +1,4 @@
-// How one exchange's work reads in the chat (cindy's workRunGrouping + messageWorkGroups, docs/web.md "Chat"): the
+// How one exchange's work reads in the chat (cindy's workRunGrouping + messageWorkGroups, docs/web/web.md "Chat"): the
 // agent's steps fold into "Worked Xs" groups and only what it delivered stays in the open.
 //
 // - While the agent works, each run of tools and thoughts at the end is one live group (its newest five steps peek

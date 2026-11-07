@@ -1,4 +1,4 @@
-// A session's work state as the lists show it (docs/agent-work.md): the hub triages each stopped turn into done or
+// A session's work state as the lists show it (docs/assistant/agent-work.md): the hub triages each stopped turn into done or
 // blocked on something named, with one line for the row.
 import { t } from "../i18n";
 import type { Session, WorkState } from "./types";

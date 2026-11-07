@@ -45,7 +45,7 @@ data class Hello(
     val endpoints: List<Endpoint> = emptyList(),
     @SerialName("tls_port") val tlsPort: Int? = null,
     val fp: String? = null,
-    /** The hub's display name (docs/plan-hub-mesh.md 2.6). */
+    /** The hub's display name (docs/archive/operations/plan-hub-mesh.md 2.6). */
     @SerialName("hub_name") val hubName: String? = null,
     /** Every hub of this hub's mesh, itself included; only in the authenticated hello. */
     val mesh: HubMesh? = null,
@@ -163,7 +163,7 @@ data class NotifyEvent(
 ) : ServerEvent
 
 /**
- * An extension changed the badge of its entry on the navigation (`nav_page`, docs/extensions.md "UI slots" "Badges"): `null`
+ * An extension changed the badge of its entry on the navigation (`nav_page`, docs/extensions/extensions.md "UI slots" "Badges"): `null`
  * clears it. The event is `extension_ui`; a hub before #1844 says `plugin_ui`, and a newer one sends both (the same badge
  * twice is no change). The app changes the badge without reading the list again.
  */
@@ -181,13 +181,13 @@ data class ExtensionUiEvent(
     val invalidate: Boolean = false,
 ) : ServerEvent
 
-/** The hub's update status changed (docs/hub-update.md "In the app"): `update` is what GET /api/v1/hub/update answers. */
+/** The hub's update status changed (docs/operations/hub-update.md "In the app"): `update` is what GET /api/v1/hub/update answers. */
 @KeepGeneratedSerializer
 @Serializable(with = HubUpdateEventSerializer::class)
 data class HubUpdateEvent(val update: persona.core.contracts.api.HubUpdateStatus) : ServerEvent
 
 /**
- * An extension's install, upgrade or uninstall moved on (docs/protocol.md "Extension install, upgrade and uninstall progress"): only to a client
+ * An extension's install, upgrade or uninstall moved on (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress"): only to a client
  * that says `extension_operations`, and not replayed after a reconnect (the page lists them again).
  */
 @KeepGeneratedSerializer
@@ -203,7 +203,7 @@ data class ExtensionOperationEvent(val operation: persona.core.contracts.api.Ext
 data class ExtensionAuthEvent(val extension: String, val auth: persona.core.contracts.api.ExtensionAuth) : ServerEvent
 
 /**
- * The managers' roster changed (docs/managers.md: made, renamed, connected, gone): only to an app that asks for the
+ * The managers' roster changed (docs/assistant/managers.md: made, renamed, connected, gone): only to an app that asks for the
  * `managers` feature, and not replayed after a reconnect (the page reads the list again).
  */
 data object ManagersEvent : ServerEvent

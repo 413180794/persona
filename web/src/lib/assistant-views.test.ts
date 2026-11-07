@@ -50,7 +50,7 @@ describe("活卡片和回答的顺序", () => {
 
   it("a snapshot adds what events missed and takes nothing away", () => {
     applyBlock("c1", "item-1/0");
-    // the feed's shape (docs/protocol.md): view_actions keyed by card, {} when there are none
+    // the feed's shape (docs/protocol/protocol.md): view_actions keyed by card, {} when there are none
     applySnapshot("c1", { views: { view_1: view("view_1", 4) }, view_actions: { view_1: action("view_1", "x", 1) }, view_blocks: ["item-2/0"] });
     applySnapshot("c1", { views: {}, view_actions: {}, view_blocks: [] });
     const c = conversationCards("c1");

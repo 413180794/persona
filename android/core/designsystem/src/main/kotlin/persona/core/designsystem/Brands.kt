@@ -92,7 +92,7 @@ fun channelBrand(id: String): Brand? = when (id) {
     else -> null
 }
 
-/** A channel's mark (docs/channels.md "UI"): its product's own, else the first character of its name. */
+/** A channel's mark (docs/extensions/channels.md "UI"): its product's own, else the first character of its name. */
 @Composable
 fun JChannelMark(channel: HubChannel, modifier: Modifier = Modifier, size: MarkSize = MarkSize.Row) =
     JSourceMark(channel.label, modifier, channelBrand(channel.id), size)

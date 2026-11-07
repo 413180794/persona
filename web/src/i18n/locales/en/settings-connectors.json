@@ -55,7 +55,7 @@
   "not_configured": "Not set up",
   "connected": "Connected",
   "unreachable": "Can't reach the Lark gateway",
-  "lark_footer_unconfigured": "The hub isn't connected to Lark yet. Run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/feishu.md).",
+  "lark_footer_unconfigured": "The hub isn't connected to Lark yet. Run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/extensions/feishu.md).",
   "lark_footer": "Lark accounts sign in through the Lark gateway on the hub machine. This only shows the connection status.",
   "recheck": "Check again",
   "last_event": "Last live message",

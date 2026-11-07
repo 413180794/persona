@@ -66,7 +66,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
 
-/** What the persona's face shows (docs/persona.md "States"); the wire values are persona.json's. */
+/** What the persona's face shows (docs/apple/persona.md "States"); the wire values are persona.json's. */
 enum class PersonaState(val wire: String, @StringRes val labelRes: Int) {
     Idle("idle", R.string.designsystem_persona_idle), Thinking("thinking", R.string.designsystem_persona_thinking),
     Working("working", R.string.designsystem_persona_working), NeedsYou("needs_you", R.string.designsystem_persona_needs_you),

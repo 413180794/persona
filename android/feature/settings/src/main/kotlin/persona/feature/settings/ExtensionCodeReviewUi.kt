@@ -51,7 +51,7 @@ import persona.core.contracts.api.ExtensionViewItem
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
-// A file's diff for reviewing (UI version 4's diff with version 5's code review, docs/extensions.md, #3136), as the
+// A file's diff for reviewing (UI version 4's diff with version 5's code review, docs/extensions/extensions.md, #3136), as the
 // web's DiffReview.tsx: line numbers, the words that changed marked, hidden lines shown 20 at a time or all (asked of the
 // extension as lines, not a new page), viewed marks, generated and big files folded at first, comments on a line or a
 // range (tap a line, then another on the same side), alone or as a draft of the pending review, with a suggestion;

@@ -1,0 +1,388 @@
+# hub versions, update checks and automatic updates
+
+User, 2026-11-02: "Can the phone manage the hub's version? Does the hub check for updates, can it update itself? …When the App opens, offer a one-tap hub update, or have the hub update itself."
+Issue #284. The plan is decided (see "Decisions" at the end): skills move out of the binary, there is only one binary, every hub updates automatically to the version the publisher releases manually, with no staged rollout and no automatic releases.
+Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten as the current state, keeping the trade-offs.
+
+## Implementation progress
+
+- **Step 1 (one binary and a version manifest) done** (the "Current state" below this section describes things before work started):
+  - Skills out of the binary: `internal/assistantskills` only holds built-in skills (currently empty); node runs `Sync` every time it starts the assistant: it links the user's skills in `~/.persona/skills/`,
+    deletes broken links, and automatically moves skills an older version installed into the assistant directory (`TestSyncMovesTheOldCopy`); the gate command only appears when a skill that carries it exists (`TestGatedCommandOnlyWithTheSkill`);
+    without it, the assistant's CLAUDE.md only covers MCP's `lark_*` (golden `assistant_claude_md.bare`); the hub asks node via `skills.list`;
+    `GET /api/v1/skills` is the read-only list for the App. The copy of the Lark gateway skill was moved under the repo's `skills/` at the time (#1571 deleted that copy and its sync script; the skill is now provided by the Lark extension).
+  - One binary: there are no longer files that differ by `public` (`TestOneBuild`); publish.sh keeps `-tags public` only as a marker for the privacy scan (the scan uses it to recognize dependency constants it can skip).
+  - Channel and build number: `main.channel`, `main.build`, `main.updateURL`; publish.sh and deploy.sh stamp `release`, Docker stamps `docker`;
+    `personad version -v` shows the channel and build number; `/api/v1/health` and `hello` carry `channel`, `build`, `protocol`, `min_app_build`.
+  - Version manifest: `internal/update` (manifest, `CheckNext`, no downgrade `TestNoDowngrade`), `personad release manifest|check-next`;
+    publish.sh publishes `latest.json` (sha256 of each file), and before publishing checks that the build number increases and that the live version's commit is an ancestor of this one.
+    Step 1 originally had ed25519 signatures; after the user changed their mind, step 2 removed them (see "Security").
+- **Step 2 (hub update and rollback) done**: `hub/selfupdate.go` (check, download and verify, wait for idle and "Update Now", replace, confirm or roll back, bad versions, update history, node updating along),
+  `internal/update`'s download / replace / watchdog, `personad update-watch`; APIs in section 12.
+- **Step 3 (App) done**: `apple/Shared/HubUpdate.swift` (state, history, Skills, compatibility check `HubCompat`, which banner to show `HubNotice`),
+  `Views/Settings/HubUpdateViews.swift` (Settings › hub, banner, Skills page); after an automatic update is installed or rolled back, the hub sends a regular notification. Section 10 has been rewritten as the current state.
+- **Step 4 (Docker check and notice) done**: a Docker hub asks the registry every hour which tags its image has (`internal/update/image.go`);
+  if the newest release is newer than itself it shows a notice, and the App gives the command to run (pinned versions edit `.env` first). See the "Docker" section.
+
+## Current state (verified 2026-11-02)
+
+- Version: `personad version` is a string written in with `-X main.version`.
+  - `deploy.sh`, `publish.sh`: `git describe --always --dirty` plus a minute-resolution timestamp, like `v0.1.1-23-gabc1234-202611021530`;
+  - Docker image: built by CI when a `v*` tag is pushed; the version is the tag without `v`.
+- hub:
+  - `GET /api/v1/health` returns `{ok, version, features}`; the WebSocket `hello` carries `server_version`;
+  - when a node's version differs from the hub's, the machine list marks it and offers **Redeploy** (`devices/deploy.go`, using binaries in `~/.persona/bin/nodes/` on the hub machine).
+- The **only difference** between the full build and the public build is `-tags public`:
+  - the full build embeds the Lark gateway skill into the binary with `go:embed` (`internal/assistantskills`, copied from upstream, not redistributable);
+  - when node starts the assistant process, it installs it into the assistant directory's `.claude/skills/` and puts its command on PATH (`node/larkgate.go`);
+  - the public build does not include it.
+- Publishing: `publish.sh` builds the public build for four platforms, gzips them and, together with `SHA256SUMS` and `VERSION`, uploads them with wrangler to `dl/` under `publish.site_url` (Cloudflare Workers static assets),
+  keeping only the latest version. wrangler uses an OAuth login that expires after about an hour, so it cannot run unattended.
+- `install.sh` only installs the binary (`~/.persona/bin/personad`), not a service; the resulting hub machine has no `~/.persona/bin/nodes`, so tapping **Redeploy** on the public build fails.
+- Our own hub is deployed over ssh (`deploy.sh`, plus the main session's deploy script), with three gates:
+  - run all tests against real Postgres on the hub machine;
+  - wait if the assistant has a turn running;
+  - keep the previous version; done only once every machine has reconnected after the restart.
+- App: Settings only shows the App's own version; machine details show the node version. There is no update check or self-update at all.
+
+## Principles
+
+1. **Only one binary**: skills are not in the binary; every hub (ours included) runs the same release build and can update automatically.
+2. The user's skills live in their own space, and updates never touch them.
+3. The publisher releases manually (`publish.sh`); each hub (ours included) updates itself when idle, then updates its own nodes. When a master change is urgently needed, it can be deployed directly and will not be downgraded by an older public release.
+4. Check sha256 before installing and have the new binary self-test; if any step fails, the current binary is left alone.
+5. Do not restart while a chat is running or waiting for an answer.
+6. If the new version does not start or machines cannot connect, automatically go back to the previous version; a version that was rolled back is not retried automatically.
+7. No staged rollout: every gate before release must pass; after release all hubs update at once, and each rolls back on its own if it has problems.
+
+## 1. Skills move out of the binary
+
+- **The user's skill space**: `~/.persona/skills/<name>/` on the machine that runs the assistant.
+  - Each directory is one skill (with a `SKILL.md` inside); the user adds and edits them, and personad only reads, never writes;
+  - The machine that runs the assistant is usually the hub machine's local node; when the assistant is configured on another machine, it is that one.
+- **Syncing into the assistant directory**: every time node starts the assistant process (both Claude and Codex assistants; `/agent` and the AI twin also use the assistant directory):
+  1. For each skill under `~/.persona/skills/`, create a symlink at `<assistant dir>/.claude/skills/<name>`.
+     When the user edits a skill, it takes effect the next time the assistant starts; Claude Code only reads skill files, so symlinks are fine.
+  2. Delete links that point into `~/.persona/skills/` but whose target is gone; real directories the user placed directly in `.claude/skills/` are not touched.
+  3. Built-in skills shipped in the binary (only ones we may redistribute; currently none) are still copied in by version stamp; a same-named skill in the user space wins.
+  4. The gate command is only put on PATH when a skill that carries it is installed; the section about it in the assistant's prompt (`prompts/assistant/claude_md.md`) is also only written in when it is installed.
+- **Migration**: two ways, each done only once.
+  - **Automatic**: when node starts the assistant, each real directory under `<assistant dir>/.claude/skills/` installed by an old personad (with a `.persona-skills` version stamp next to it) that has no same-named entry in `~/.persona/skills/` yet
+    is moved to `~/.persona/skills/<name>`, replaced in place with a symlink, and one log line is written; if a same-named user skill already exists, the user's wins.
+  - **Manual** (on our hub, done by the main session): copy from the assistant directory's `.claude/skills/<name>` to `~/.persona/skills/<name>`.
+    (Since #1571 such skills are provided by the Lark extension, see the top of `docs/extensions/lark-agent.md`; no more manual copying.)
+  - That way the assistant still has its original skills when the new version starts. The copy of the upstream skill was moved under the repo's `skills/` at the time (the upstream sync script stayed, now writing there), and does not go into any binary;
+    it does not matter that the public build lacks it: users put it (or their own skills) in `~/.persona/skills/`.
+- **Drop `-tags public`**: there is no difference between the two anymore; `files_public.go` / `files_bundled.go` merge into one embed holding only built-in skills.
+  - The privacy scan before release stays, and also checks that every skill in the binary is registered as redistributable (`assistantskills.Redistributable`);
+  - A test guards it: the built-in skills directory may only contain skills registered as redistributable.
+- **App**: Settings › Assistant › Skills, a read-only list (name, the description from `SKILL.md`, whether it comes from "my skills" or **Built-in**).
+  API `GET /api/v1/skills`; the hub asks the node that runs the assistant. Management (add / delete / edit) comes later.
+
+## 2. Build channels
+
+The binary gets three more `-X` variables (`cmd/personad`):
+
+| Variable | Value |
+| --- | --- |
+| `main.channel` | `release` (published, updates automatically), `docker` (in the image, only suggests pulling a new image), `dev` (default when unset: local builds, tests) |
+| `main.build` | A monotonic build number, see "Version numbers" |
+| `main.updateURL` | `dl/` at the publish address (`publish.site_url`, already public). If unset, no checks |
+
+- Only `release` swaps its own binary; `docker` tells the user to pull the image; `dev` only shows the version.
+- Direct deploys (`deploy.sh` and the main session's deploy script) also stamp `release` and use the build time as the build number: newer than the public release at the time, so they are not downgraded; once the publisher releases a newer version, the hub takes over on its own (section 6).
+- `/api/v1/health` and `hello` also carry `channel`, `build` and `protocol`.
+
+## 3. Version numbers: release time as the build number
+
+- Newer vs older is compared by **release time** (UTC, `YYYYMMDDHHMM`, an integer); the version string stays as is, for people only (decided by the user 2026-11-02).
+- Why:
+  - every version string already ends with this time, so there is no new counter to maintain, and a tag is not required every time;
+  - there is only one publisher, so time naturally increases;
+  - nobody has to decide whether this counts as minor or patch.
+- Guarding against non-monotonic numbers: `publish.sh` reads the live manifest and refuses to publish in two cases:
+  - the new build number is not larger than the live one;
+  - the live version's commit is not an ancestor of this one.
+- A build number only says it was released later, not that the code is newer: before installing automatically, the hub also checks whether the new version's code contains its own commit ("no regression").
+- Docker keeps the image tag's semver, compared only within the docker channel.
+
+## 4. Version manifest
+
+`dl/` gets one more file, `latest.json`:
+
+```json
+{
+  "version": "v0.1.1-30-gabc1234-202611021530",
+  "build": 202611021530,
+  "commit": "abc1234…",
+  "released": "2026-11-02T07:30:00Z",
+  "min_app_build": 95,
+  "protocol": 3,
+  "notes": "Highlights of this version",
+  "files": {
+    "linux-amd64": {"name": "personad-linux-amd64.gz", "size": 12345678, "sha256": "<of the archive>", "binary_sha256": "<after decompression>"},
+    "linux-arm64": {}, "darwin-arm64": {}, "darwin-amd64": {}
+  },
+  "ancestors": "<base64>"
+}
+```
+
+- `ancestors`: all commits reachable from this commit (`git rev-list <commit>`), the first 6 bytes of each, sorted, then base64 ("no regression").
+- `programs`: programs published together with personad that the hub runs alongside (`update.ProgramNames`: `personad-wechat`, `docs/extensions/wechat.md`;
+  Telegram's `personad-telegram` was also here up to #1704; after that it is an extension and goes through the extension market):
+  `{"personad-wechat": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`. Old hubs ignore this field and still only swap personad.
+
+- A downloaded file must match both `sha256` (archive) and `binary_sha256` (decompressed), and the new binary's `version -v` must report the version and build number in the manifest.
+  `SHA256SUMS` stays for install.sh.
+- `min_app_build`: Apps below it cannot use this hub version. For `protocol`, see "Compatibility".
+- There is no minimum node build: a node reports a version string, and the hub redeploys any node whose version differs from its own. That redeploy runs after the new hub has confirmed
+  (section 8, step 9 "Update nodes along with it"), not before the new hub starts; a machine that fails to update keeps the reason.
+
+## 5. Publishing (manual, publish.sh; user, 2026-11-02)
+
+No automatic releases: the publisher still runs `publish.sh` manually on their own dev machine, and the site's Worker is under the publisher's Cloudflare account.
+- The push relay (`docs/operations/push-relay.md`, `/relay/*`) is in the same Worker as the downloads, so every time `publish.sh` redeploys the site it deploys the relay too
+  (a Worker deploy is an atomic switch, never half old and half new; relay code changes also go live with this release).
+- Tests must still pass before publishing, plus `publish.sh`'s own checks (if any fails, nothing is published):
+  1. Read the live `latest.json` (if any): the new build number must be larger, and the live version's commit must be an ancestor of this one (`git merge-base --is-ancestor`);
+  2. Build the four platforms (with `channel=release`, `build`, `updateURL` written in), privacy scan (the binary may only contain redistributable skills);
+  3. Generate `latest.json` (version, build number, commit, the commits it contains `ancestors`, release time, sha256 of each platform's archive and decompressed binary, `min_app_build`, `protocol`);
+     do not publish when the working tree has uncommitted changes in server/ or web/ (`NO_DEPLOY=1` still builds, and the commit in the binary carries `-dirty`): whatever commit the manifest names, the binary must be exactly it;
+  4. After publishing, read back `VERSION`, `SHA256SUMS`, `latest.json` and compare them with the local ones.
+
+### Security: no signing (decided by the user 2026-11-02)
+
+User: "Why sign at all? Skip signing for the Linux service, it's too complicated." The trade-off, spelled out:
+- **Protects against**: corrupted or truncated downloads (if sha256 does not match, delete and do not install), and installing a binary that does not run or is not this version (`version -v` self-check, plus confirmation after it starts, otherwise roll back).
+  Downloads go over HTTPS; tampering in transit requires breaking TLS first.
+- **Does not protect against**: the publish site (the Worker at `publish.site_url`, the publisher's Cloudflare account) being impersonated or compromised. Then an attacker could replace both the binary and the sha256 in `latest.json`,
+  and every hub with automatic updates on would install it, running as the user that runs the hub.
+- The user knows this and decided against signing. To add it later: put a signature next to the manifest, compile the public key into the binary, and have the hub install only what verifies (step 1 once implemented this; see git history).
+- Hubs that do not want this risk: turn automatic updates off in the App, or deploy with Docker (you decide when you pull the image).
+
+## 6. Direct deploys (when a master change is urgently needed)
+
+The existing path of building from master and deploying directly (`deploy.sh`, plus the main session's deploy script) stays, for when waiting for a release is not an option.
+- The resulting binary also gets `channel=release`, `build` (build time, UTC `YYYYMMDDHHMM`) and `updateURL`:
+  - it is newer than the public release live at the time, so the hub's auto-update will not install the older public release: **no downgrade**;
+  - once the publisher releases a newer version (larger build number), the hub takes over on its own;
+  - `TestNoDowngrade` guards this: if the manifest's build number is not larger than its own, it is not installed; equal is not installed either.
+- It also gets `commit` (`-X main.commit`, with `-dirty` appended when server/ has uncommitted changes): a later public release only installs itself if it contains this commit ("no regression").
+- The main session's deploy script lives outside the repo and must add the same four `-X` flags to its `go build` (the report gives the line to add).
+- **Deploy only from a working tree that contains master** (#1314): `deploy.sh` first runs `git fetch origin master`; if the current HEAD does not contain it, nothing is deployed and it exits 2 (same if master cannot be fetched);
+  deploying a branch that is behind would swap changes someone else just deployed (hub and web) back to old ones. For a deliberate rollback, use `PERSONA_DEPLOY_ANY_COMMIT=1`. See `docs/lessons/server.md` ("Deploying from a branch that is behind").
+- The hub machine also needs `personad-wechat` (the WeChat bot program, `docs/extensions/wechat.md`): `deploy.sh` builds the same version for the hub and puts it next to personad; nodes do not need it.
+  Telegram is not here: it is an extension (#1704), installed and upgraded on the hub from the extension market.
+- No staged rollout: after a release all hubs (ours included) update at the same time when idle; problems are handled by each hub's own rollback and bad-version marking.
+
+### No regression (2026-11-02, #454)
+
+Comparing only build numbers can go backwards: a directly deployed hub runs commit D on master (build number = deploy time); later someone runs
+`publish.sh` from code that is behind master (commit B), the build number is larger, and the hub would "update" itself to the older B. `publish.sh`'s `check-next` only compares against the live release and cannot cover directly deployed hubs.
+
+- **How it decides**: the binary records its own commit (`-X main.commit`), and the manifest carries all commits the new version contains (`ancestors`).
+  The hub only installs automatically when the new version is this very commit, or `ancestors` contains it (`update.Build.Hold`, `TestHold`).
+- **Why not ask GitHub**: the repository is private, the hub cannot necessarily reach GitHub, and it should not be given a token; with the manifest carrying the list, no network lookup is needed.
+  6 bytes per commit, 900 commits is about 7 KB (base64); a few hundred KB a year from now is still within the manifest's 1 MB limit;
+  the chance that a commit not in the list happens to collide with some prefix is about 10^-10 at ten thousand commits.
+- **Cannot confirm counts as not satisfied**: the binary has no recorded commit (old deploy scripts), it has uncommitted changes (`-dirty`), the commit is too short, the manifest has no `ancestors` (old `publish.sh`), or it cannot be read.
+  A direct deploy from a PR branch that is later squash-merged into master cannot be confirmed either (the merge produces a different commit): the next deploy from master or a manual update fixes it.
+- **When not satisfied**:
+  - It is not installed automatically. The App still says a new version is available, also when automatic updates are on; Settings › hub shows the reason (`latest.held`), and manual **Update Hub** can still be tapped;
+  - The update history gets one "not installed automatically" entry per new version (`result: held`) with the reason, e.g. "新版本（提交 b2b2b2b2）不包含这个 hub 正在运行的提交 d4d4d4d4" ("the new version (commit b2b2b2b2) does not contain commit d4d4d4d4 that this hub is running"; text emitted by the hub).
+- When automatic updates are off it would not install by itself anyway, so nothing is recorded.
+
+### Programs swapped together with personad (2026-11-03, #533)
+
+- When the manifest has `programs` for this hub's platform, they are downloaded and verified (same sha256, and `version -v` must be this version), then swapped in together with personad: placed next to personad,
+  existing ones kept as `.prev`, and ones that did not exist before recorded as newly installed. If any one fails to download or verify, the whole update is skipped.
+- Rollback (the new version does not start, the watchdog, an error during the swap) swaps them back together with personad and deletes the newly installed ones (`update.RestoreAll`, `programs` in `pending.json`).
+- The first update that carries programs: the watchdog running is the old personad, which does not know `programs`, so a rollback only swaps personad back; the new programs left behind do not match the old hub version, and the hub will not start them
+  (status says "not the same version"), until the next update.
+
+## 7. Checking for updates
+
+- **Release build**:
+  - The hub checks 1 minute after startup, then every hour (every 6 hours until 2026-11-07, when the user asked for hourly so a release reaches hubs sooner); the App can "Check now" (`POST /api/v1/hub/update/check`);
+  - It only fetches the manifest (a few KB): there is an update only if the build number is larger than its own and not in the bad-version list; the result is broadcast to open Apps.
+- **Docker build**:
+  - Every hour, query the image repository's tags (anonymous GHCR `tags/list`), take the highest stable semver, and show a notice if it is newer;
+  - The hub installs nothing; Docker pulls the image and verifies by digest;
+  - CI writes the image name into the binary at build time; it is not hard-coded in the source.
+- **dev**: no checks, only shows the version.
+- Network unavailable or bad manifest: log it and show the reason under **Check for Updates** in the App; do not hammer retries (keep the hourly interval).
+
+## 8. Updating (release build; automatic and manual use the same flow)
+
+```
+Download → Verify → Prepare → Wait for idle → Replace → Restart → Confirm → (on failure) Roll back
+```
+
+1. **Download**:
+   - Download into `~/.persona/update/<build>/`: the archive for the hub's own platform, plus node binaries for **every platform** in the release (four platforms, for updating nodes along with the hub);
+     not just the platforms of machines currently connected or known to the hub at the moment of the update. Machines added after the update, or that had never connected when it happened,
+     need these for **Redeploy** too, and the manifest is only read during this self-update (#3186). The node binary for the hub's own platform is the hub binary itself,
+     so reuse the copy already downloaded and verified rather than downloading it twice;
+   - If a node binary for any platform fails to download or verify, the self-update fails (just like programs below). Previously it downloaded only the platforms of the machines known at the time;
+     now a missing platform is one that should have been in the release, and installing cannot recover it later. The release script uploads every `.gz` first, then switches the site serving `latest.json`
+     (`scripts/release/publish.sh`), so "listed in the manifest but not uploaded yet" cannot happen;
+   - Restart interrupted downloads, at most 3 attempts; rename the temporary file only after the download finishes.
+2. **Verify**:
+   - Continue only if both sha256 values match the manifest; otherwise delete the download and report an error, leaving the current binary untouched;
+   - After decompression, run `<new> version` once; it must report the manifest's version and the `release` channel.
+3. **Prepare**:
+   - Put node binaries in `~/.persona/bin/nodes/`: publicly installed hubs can now **Redeploy** too;
+   - Write `~/.persona/update/pending.json`: from/to versions, previous version's path, start time, machines online before restart, startup count.
+   - This is the only exception to "all server state goes into Postgres": rollback must work even when the new version cannot connect to the database or cannot start at all, so the marker sits beside the binary and is deleted when the update ends.
+     Update history and bad versions still go into Postgres.
+4. **Wait for idle** (check every 30 seconds; also do not restart while redeploying a machine): automatic and manual are the same: **restart only when the assistant and every Agent are idle**, with no time-of-day restriction (user, 2026-11-02).
+   - Idle = no session working or waiting for the user's answer (both assistant chats and Agents in herdr count). If they never become idle, never install; keep the download ready.
+   - For a manual update, the App shows "what is still busy" (which chats, on which machine), and offers **Update Now** in a second confirmation:
+     the confirmation states, "This interrupts anything waiting on the hub (the assistant's current turn, uploads in progress, terminal connections). Agents in herdr aren't affected and reconnect on their own."
+     After confirmation, skip waiting for idle; all other steps (verification, rollback) stay the same.
+5. **Replace**: backups and temporary files still use the compatible names `personad.prev` / `personad.new`; atomically replace the actual server binary in the same directory. The target path follows the installation layout and runtime migration implementation; the product becoming Persona does not mean the updater has already renamed these files.
+6. **Restart**:
+   - **With an entry process** (`personad hub run` on Linux and macOS, since 2026-11-06), use blue-green switching ([hub-restart.md](hub-restart.md), "Blue-green switching"):
+     - The hub asks the entry process to switch to the new binary and gives it the expected build number;
+     - The entry process first starts the new version as standby; only after its version matches and self-check passes does it hold connections, release the old version, activate the new one and switch routing;
+     - If the new version cannot start, the entry process returns `switch_failed`; the old version restores the files, deletes pending and records this attempt as failed (not as a bad version, since the new version never ran);
+     - No watchdog is started: the entry process is the watchdog.
+   - **Without an entry process** (Windows, `PERSONA_HUB_EDGE=0`): start the watchdog first (below), then `syscall.Exec` the new binary with the same arguments and environment.
+     Carry the socket passed by systemd along (`LISTEN_FDS`, `execListenEnv` in `listen.go`; this step used to be missing, so the new process failed because the port was occupied);
+     restart under the same process id, without relying on the service manager.
+   - The local node is a child process of the hub and exits with it; the new hub starts it with the new binary.
+7. **Confirm**: on startup the new hub sees `pending.json`; success requires all three conditions below (delete pending, write update history, broadcast "Updated to …"):
+   - HTTP is up;
+   - The database is connected;
+   - Every machine that was online before restart reconnects within 2 minutes (offline machines do not count).
+8. **Rollback**, two layers:
+   - **The new process itself**: if conditions are not met within 2 minutes, or startup count exceeds 3 (repeated crashes under a service manager), replace with `.prev` and `exec` it.
+     If the startup count cannot be written to `pending.json` (disk full, read-only, wrong directory owner), roll back immediately too: without a stored count, repeated crashes can never reach 3 (#2613).
+     If the directory remains unwritable (read-only, wrong owner), the rollback record cannot be written and `pending.json` cannot be deleted either: this rollback does not enter history, mark a bad version or send a push; after 3 minutes the watchdog restarts the already-rolled-back hub once more, and every later startup logs a deletion failure.
+   - **With an entry process**, a new process that needs to roll back asks it to switch to the old binary: if already serving, perform a `rollback` switch; if not yet serving (startup count exceeded),
+     exit with code 75 so the entry process immediately restarts the restored old version at the same path. In the two cases below, the entry process handles rollback: restore the files from pending, write the rollback marker, start the old version:
+     - The new version fails to activate;
+     - The new version does not report "confirmed" within 3 minutes.
+   - **Watchdog** (without an entry process; code from the old binary, `personad update-watch`, started separately before exec and detached from the process group):
+     if it does not see the new build number and "confirmed" from the local `/api/v1/health` within 3 minutes, it rolls back itself:
+     - Under systemd (with `INVOCATION_ID`) or launchd: restore `.prev`, kill the main process, and let the service manager start the old binary;
+     - Without a service manager: after restoring it, start the old hub in the background with the original arguments.
+   - After rollback, record this build number in the **bad-version** list: automatic updates no longer try it and wait for a newer version. The user can still install it manually; the App says, "This version failed to start last time and was rolled back."
+9. **Update nodes along with it**:
+   - After the hub confirms success, run `deploy.go` for each online machine with a different version (push binary, restart the persistent node, wait for it to reconnect), one at a time;
+   - Keep the failure reason for machines that fail; it does not affect the hub. If an old node does not support the update protocol, ask for one local upgrade first;
+   - SSH / tailcat keep their original deploy path; Persona Link active / passive connections and nodes forwarded by member hubs update through existing RPC, with local rollback and reconnect confirmation. Offline Link machines store their target in Postgres and resume on their next connection; old targets stop when the hub version changes. See [node-update.md](node-update.md).
+10. **History**: one record per update (automatic or manual): from/to versions, start and end times, result (updated / rolled back with reason / failed with reason), automatic or manual.
+    Stored in Postgres (`hub_update_history` in settings, most recent 50 records kept).
+
+## 9. Three ways to run
+
+| | Release (our hub, installed with install.sh) | Docker | dev |
+| --- | --- | --- | --- |
+| Check | Version manifest | Image tags in the registry (see "Docker") | No checks |
+| Update | Automatic (on by default) / one tap in the App | Suggest `docker compose pull && docker compose up -d` (edit `.env` first if a version is pinned) | None |
+| Restart | `exec` the new binary itself | User recreates the container | — |
+| Rollback | Automatic (`.prev`, bad versions are not retried) | Restore the previous tag | — |
+| node | Automatically redeployed with the hub | Image includes node binaries; **Redeploy** works as before after recreation | — |
+| Urgent master change | Direct deploy (stamped `release` and build time; an older public release will not downgrade it, a newer one takes over automatically) | — | — |
+
+### Docker (step 4)
+
+- **Which image to check**: compose passes `.env`'s `PERSONA_IMAGE` into the container, and that is what the hub checks; if absent (old compose files), use the build-time
+  `main.image` (`hub-image.yml` passes `ghcr.io/<owner>/<repo>`, not hard-coded).
+- **How to check**: registry `GET /v2/<repo>/tags/list`; first obtain a pull token as directed by its `WWW-Authenticate` response (public images allow anonymous access, both ghcr.io
+  and Docker Hub do this), and follow `Link` for pagination. Only recognize `X.Y.Z`, and take the highest; it counts as a "new image" only if newer than the hub's own version. Its own version must also be `X.Y.Z`
+  (or a prerelease such as `-rc1`): a manually built `edge` image uses `git describe`, is newer than the tag, and cannot be compared, so only the latest stable version is shown.
+- **Private images**: when the repo is private, its ghcr image is private by default too, so anonymous access cannot get a token. Set `PERSONA_REGISTRY_TOKEN` in `.env` (a token that can read this image),
+  or make the image public; when unset, Settings › hub explains why it cannot check and what to set. It does not read credentials saved by `docker login` on the NAS (they are on the host, not in the container).
+- **App**: at the top of Agents, "New hub image: X", with only × (remembered per version; the next version is shown again). Settings › hub gives the commands; when a version tag is pinned, first show the line to edit `.env`.
+- Not done: pulling images or recreating containers for the user (requires mounting the Docker socket, effectively handing the NAS to the hub).
+
+## 10. In the App
+
+- **Settings › hub** (a new row in the **Server** group, with version and status on the right; `HubSettingsPage`):
+  - Version, channel (**Release** / **Docker** / **Development**), last check, **Check for Updates** (pull down also checks);
+  - Update: when available, show the version and notes, and **Update Hub**; mark versions that were rolled back (automatic updates will not install them again);
+    while updating, show progress (downloading / waiting for idle / restarting / **Confirming the new version**); while waiting for idle, list busy chats and machines, with **Update Now…** below,
+    followed by a second confirmation explaining what will be interrupted (the assistant's current turn, uploads in progress, terminal connections; Agents in herdr are unaffected);
+    Development explains why it will not update itself; Docker shows the command to run on the NAS, with copy;
+  - **Update Hub Automatically** toggle (release builds only, on by default);
+  - personad on each computer: version, **Mismatch** if not from the same deployment as the hub; open the machine page for **Redeploy**;
+  - **Update History**: last 10 attempts, result (updated / rolled back / **Update failed** / **Not installed automatically**), automatic attempts marked, from/to versions, time, rollback and held-update reasons.
+  - Old hub (no `/api/v1/hub/update`): explain that install.sh must be run once on the hub machine to update it.
+- Android Settings has the same items (**Hub Version**, `HubUpdatePage`, see `../android/android.md`, "Hub version"); Android does not yet have the row at the top of Agents.
+- **A row at the top of Agents** (`HubNoticeRow`, same position and appearance as **Persona is signed in on your Mac**, hidden while searching): only one at a time, most important first:
+  1. App too old (its build number is below the hub's `min_app_build`): "This app is too old for this hub. Update it in TestFlight", cannot dismiss;
+  2. Hub too old (`protocol` below what the App requires; old hubs that do not report it count as 0): "The hub is out of date; some features won't work", dismissed with × and not shown again;
+  3. Updating: e.g. "Hub updating: waiting for 2 busy chats to finish";
+  4. Rolled back: reason, × to dismiss (remembered for this version);
+  5. First-time notice: "The hub updates itself when idle", with **Turn Off** (disables automatic updates) and **OK**; tapping either makes the hub record `auto_notice_seen`, and it does not appear again;
+  6. New version with automatic updates off: "Hub update available: X", with **Update** and × (not shown again for this version). Not shown with automatic updates on; it will install itself;
+     Docker hubs show "New hub image: X", with only ×. After dismissing one, the next appears as usual; the App remembers the most recently dismissed notices.
+  Tapping elsewhere in the row opens the hub page (sheet). No popup or blocked interaction; button labels stay single-line, and each button handles only its own action (`.borderless`, `HubNoticeUITests`).
+  Only on Agents: the assistant page is a chat, and an extra top row would push it down; hub status belongs with machines and Agents.
+  On the web (#2897), it sits below the filter bar in the sidebar's Agents block (`web/src/views/agents/HubNoticeRow.tsx`); items, order and buttons match the App, and dismissals are stored in this browser (last 8, same keys as the App);
+  no items 1 or 2: the web is served by the hub itself, so their versions always match. Tapping the row opens Settings › hub.
+- **Notifications**: after an automatic update installs, push "Hub updated to X"; after rollback, push "Hub update failed" with the reason (hub's `updater.notify`). Manual updates are visible in the App and do not send an extra push.
+- **During restart**: disconnection is expected; the usual "Connecting…" title becomes "Hub updating…", and its explanation says the hub is restarting and will automatically return to the previous version if the new one cannot start; after reconnect, show the new version.
+- **Settings › Assistant › Skills** (`SkillsPage`): skills on the computer running the assistant (`GET /api/v1/skills`), read-only, marked as user-provided or built-in, explaining where to put them and when they take effect.
+- All use the design system; screenshots reviewed for both styles (Liquid Glass, BeautifulUI) × light/dark.
+
+## 11. Compatibility
+
+- `protocol`: the App ↔ hub major version (`proto.Protocol`), incremented only for incompatible changes; fine-grained capabilities still use `features`.
+  The hub reports `protocol` and `min_app_build` in `/api/v1/health` and `hello`; the App records its minimum required `protocol`.
+- Old Apps ignore these fields and keep working; they just do not show update-related features.
+- Old hubs lack these APIs: the App shows the version, and **Check for Updates** says, "This hub is too old to support updates in the App."
+  Publicly installed old hubs need one manual install.sh run to get an update-capable version; our hub gets one final ssh deploy from the main session.
+
+## 12. API (draft)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/hub/update` | `{version, build, channel, can_update, latest?{version, build, released, notes, bad}, state, progress, busy[]{machine, session, title}, error, auto, auto_notice, last_check}` |
+| POST | `/api/v1/hub/update/check` | Check immediately |
+| POST | `/api/v1/hub/update` | Start update (409 with a reason for non-release builds); `{"now": true}` is **Update Now** after the second confirmation, skipping the idle wait |
+| PUT | `/api/v1/hub/update/settings` | `{auto}`; `{auto_notice_seen: true}` |
+| GET | `/api/v1/hub/update/history` | Update history, newest first |
+| GET | `/api/v1/skills` | Skills on the machine running the assistant: `[{name, description, source: user\|builtin}]` |
+| WS event | `hub_update` | Push to open Apps when state or progress changes |
+
+`state`: `idle` / `checking` / `available` / `downloading` / `waiting_idle` / `restarting` / `confirming` / `updated` / `rolled_back` / `failed`.
+
+## 13. Tests
+
+- Go:
+  - Bad download: delete without installing when sha256 does not match; restart an interrupted download;
+  - Retry after interrupted download; delete without replacing on a sha256 mismatch;
+  - New version cannot start: compile a deliberately unstartable binary in the test; verify both the new process's self-check and the watchdog can roll back, record the bad version and do not retry it automatically;
+  - Wait for idle: do not restart while the assistant or any Agent is busy (automatic and manual alike); `now` skips the wait;
+  - Skills: symlink creation and cleanup, automatic migration of old installs, user precedence on a name collision, gate command only present with its skill; built-in skill directory contains only redistributable skills;
+  - dev / docker channels never install, however new the manifest is (API 409);
+  - **No downgrade** (`TestNoDowngrade`): a directly deployed binary (build number = build time) does not install a manifest with a smaller or equal build number; only larger ones install;
+- publish.sh: no publishing if the build number does not increase or the live commit is not an ancestor.
+- App: FakeHub tests for the hub row in Settings, first-time notice, banner (appears, dismissed with × and not shown again, progress, explanation while disconnected, both incompatibility notices), update history and Skills list.
+  Screenshots: two styles × light/dark.
+
+## 14. Implementation steps
+
+1. **One binary and a version manifest**: move skills out (user space, symlinks, migration, `ol` and prompts on demand, read-only list API), remove `-tags public`,
+   channel and build number (publish.sh, deploy.sh, Docker), `internal/update` (manifest, pre-release checks), publish.sh publishes the manifest and performs the two monotonicity checks;
+   `/api/v1/health` carries the new fields. Before deploying, put the Lark gateway skill in our hub's `~/.persona/skills/` (or rely on automatic migration).
+2. **Hub update and rollback**: check, download and verify, wait for idle (**Update Now**), replace, watchdog, bad versions, history, no downgrade; update nodes along with it (add `via` and tailcat).
+3. **App**: hub row in Settings, first-time notice, banner, progress, what it is waiting for, update history, incompatibility notices, Skills list.
+4. **Docker checks and notices**.
+
+## Decisions (2026-11-02)
+
+1. Move skills out of the binary into the user's own space (`~/.persona/skills/`), never overwritten by updates; merge full and public builds into one, and every hub updates automatically,
+   ours included (user: "Skills definitely need to be highly customizable"). Keep ssh deployment only for emergencies.
+2. Automatic updates are **on by default**; clearly tell the user the first time and offer a way to turn them off; record every update; do not automatically retry rolled-back versions.
+3. No time-of-day restriction: install when the assistant and Agents are all idle. Do not restart while a chat is running or waiting for an answer.
+4. Use release time (UTC `YYYYMMDDHHMM`) as the build number.
+5. **No automatic releases**: the publisher still runs publish.sh manually (the Worker is under their account); add the manifest, build-number and commit-ancestry checks to publish.sh.
+   Our hub also updates automatically to their releases; direct deploys remain for urgent master changes and will not be downgraded.
+6. No staged rollout; all hubs update at once after release, each handles its own rollback.
+9. **No signing** (user: "Skip signing for the Linux service, it's too complicated"): the manifest has only sha256, fetched over HTTPS; install automatically when it matches. This only protects against corrupt transfers, not an impersonated or compromised publish site (see "Security").
+7. Manual updates also wait for the assistant and Agents to be idle; the App shows what it is waiting for and offers **Update Now** in a second confirmation.
+8. The skill space is `~/.persona/skills/` on the machine running the assistant.

@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// Settings › Channels (docs/channels.md「界面」): the list and one channel's page; the Channels row on Settings; the line on a
+// Settings › Channels (docs/extensions/channels.md「界面」): the list and one channel's page; the Channels row on Settings; the line on a
 // connector's page that says it is a channel; the 「来自 …」 under a message and the mark beside a conversation's title.
 
 /// A channel's mark: its brand's (Lark), else a symbol of its kind in the accent color.
@@ -498,7 +498,7 @@ struct ChannelLinkSection: View {
     }
 }
 
-/// 「来自 微信」 under a message that came in from a channel (its client_msg_id is `<channel>-…`, docs/channels.md
+/// 「来自 微信」 under a message that came in from a channel (its client_msg_id is `<channel>-…`, docs/extensions/channels.md
 /// 「来源标记」); nothing for the app's own, or on a hub without channels. The names come from `ChannelDirectory`, which
 /// the root view keeps loaded (`.loadsChannels()`): this view is empty until then, and an empty view runs no task.
 struct ChannelSourceLine: View {

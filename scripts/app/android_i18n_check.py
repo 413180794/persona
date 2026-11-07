@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the Android app's translations (docs/i18n.md).
+"""Check the Android app's translations (docs/protocol/i18n.md).
 
 - Every language in android/i18n/*.properties has complete resources in each module, matching keys and placeholders,
   and plurals

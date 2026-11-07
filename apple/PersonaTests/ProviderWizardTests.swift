@@ -342,7 +342,7 @@ struct ProviderWizardTests {
         #expect(old.default == nil)
     }
 
-    // MARK: Built-in presets (#4197, docs/onboarding.md 4.3「三条路」, 5.4)
+    // MARK: Built-in presets (#4197, docs/assistant/onboarding.md 4.3「三条路」, 5.4)
 
     private static let builtin = #"""
     {"presets":[

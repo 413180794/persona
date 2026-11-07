@@ -1,6 +1,6 @@
 import XCTest
 
-/// Files on a machine's page and an upload into its home (#4858, docs/protocol.md "Changing files"), against
+/// Files on a machine's page and an upload into its home (#4858, docs/protocol/protocol.md "Changing files"), against
 /// scripts/mock/mock_hub.py started with MOCK_FILES=1 MOCK_FILE_OPS=1:
 ///   TEST_RUNNER_PERSONA_FILES_HUB=http://127.0.0.1:<port>
 /// The upload is the DEBUG `-showFolderUpload` file (no picker to drive); its name is taken, so the alert comes first.

@@ -30,7 +30,7 @@ import (
 // The assistant on a Codex launcher runs `codex app-server` (Codex's JSON-RPC server for IDEs, newline-delimited JSON
 // on stdio; protocol: `codex app-server generate-ts`) instead of claude -p. One app-server per conversation, one
 // thread in it: the thread id is the session id, its rollout is the transcript (transcript/codex.go), so the app
-// shows it like any other conversation. docs/assistant.md "Codex".
+// shows it like any other conversation. docs/assistant/assistant.md "Codex".
 //
 // What the node does in between, compared with the Claude version:
 //   - messages: turn/start when idle, turn/steer while a turn runs (Claude's queued messages are taken up mid-turn too);

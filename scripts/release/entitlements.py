@@ -2,7 +2,7 @@
 """Each bundle's entitlements in a release build: sign an unsigned archive with them, check a built one has them.
 
 The app shares keychain items with PersonaNotify (the push key) and files with PersonaWidgets (the Live Activity's
-persona, in an App Group; docs/release.md "entitlements"), which only works when every bundle is signed with its
+persona, in an App Group; docs/operations/release.md "entitlements"), which only works when every bundle is signed with its
 target's keychain groups and App Groups. An archive built unsigned (CODE_SIGNING_ALLOWED=NO, for a cloud-signed export on a Mac without an
 Apple Distribution certificate) carries none, and the export signs each bundle with what it finds in it: build 92
 shipped the widget extension without any (the island drew the default persona whatever was chosen) and the app with

@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The manager's reminder of an agent still waiting on the user's answer (docs/agent-states.md "Awaiting your reply", #5096): the
+// The manager's reminder of an agent still waiting on the user's answer (docs/protocol/agent-states.md "Awaiting your reply", #5096): the
 // user looked at an agent that stopped on a question (Session.AwaitsReply) and moved on. Once it has waited
 // replyAfter since they looked, one push says it still waits — what it asks, answerable from the notification. Rules
 // only: no model is asked and no conversation started, so it costs no tokens and is on unless the user turns it off

@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Cards by voice (docs/voice.md 4.7): a question is asked a question at a time by its options' names, what the user
+// Cards by voice (docs/assistant/voice.md 4.7): a question is asked a question at a time by its options' names, what the user
 // says while it is asked is its answer, and the card is resolved; other cards are only said by their kind.
 
 // dbQuestion is a question card in conversation sid: which database, Postgres or SQLite (each with what it means).

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Inbox policies (docs/inbox.md "Policies"): which rule applies to an item (sender before chat before repository), the
+// Inbox policies (docs/assistant/inbox.md "Policies"): which rule applies to an item (sender before chat before repository), the
 // rule dialog prefilled from the hub and saving with the chosen tier / twin, and the Rules list's Remove.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

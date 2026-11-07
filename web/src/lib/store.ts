@@ -52,7 +52,7 @@ export interface State {
   version: string;
   /** What the hub can do (hello `features`): terminal_stream, terminal_control… */
   features: string[];
-  /** This hub's name and its interconnected group (docs/plan-hub-mesh.md 2.6); empty on older hubs. */
+  /** This hub's name and its interconnected group (docs/archive/operations/plan-hub-mesh.md 2.6); empty on older hubs. */
   hubName: string;
   mesh: MeshHub[];
   machines: Machine[];
@@ -266,9 +266,9 @@ function deltaOn(): boolean {
  */
 export const LARK_FEATURE = "lark";
 
-/** The web reads working Claudes' status lines (`live` pushes, lib/live.ts; docs/protocol.md "Live status"). */
+/** The web reads working Claudes' status lines (`live` pushes, lib/live.ts; docs/protocol/protocol.md "Live status"). */
 export const SESSION_LIVE_FEATURE = "session_live";
-/** The hub answers a client's {"type":"ping","id"} with a pong carrying the id (docs/protocol.md). */
+/** The hub answers a client's {"type":"ping","id"} with a pong carrying the id (docs/protocol/protocol.md). */
 export const APP_PING_FEATURE = "app_ping";
 
 export function larkOn(s: Pick<State, "features"> = state): boolean {
@@ -396,7 +396,7 @@ export function connect() {
   // an attempt does not move offline back to connecting: the pill stays on one phase while the hub is down instead of
   // flipping at every backoff tick (the app's ConnectionTitle); shownConn decides it when the attempt fails
   sock.onopen = () => {
-    // the interface language: this connection's text, and the user's language for pushes and the assistant (docs/i18n.md)
+    // the interface language: this connection's text, and the user's language for pushes and the assistant (docs/protocol/i18n.md)
     // and what it can render: MCP forms and links come only to a socket that says so
     sock.send(JSON.stringify({ type: "client_hello", platform: CLIENT_PLATFORM, version: CLIENT_VERSION, features: CLIENT_FEATURES, locale: currentLanguage() }));
     retry = 0;
@@ -492,7 +492,7 @@ export function disconnect() {
 
 // A socket that went quiet (sleep, network change) is reconnected. The hub's own pings are WebSocket control frames
 // the page never sees, and an idle hub pushes nothing, so a hub that has app_ping is asked: every APP_PING_EVERY a
-// {"type":"ping"} goes out and its pong counts as hearing from the hub (docs/protocol.md). A hub without it is left
+// {"type":"ping"} goes out and its pong counts as hearing from the hub (docs/protocol/protocol.md). A hub without it is left
 // as before: the quiet limit alone, so a hub with nothing to say is reconnected now and then. Checked every 5 s, so a
 // ping goes out every 25 to 30 s while timers run normally; background tabs can delay it further.
 const APP_PING_EVERY = 25_000;
@@ -698,7 +698,7 @@ export function setOutbox(key: string, list: OutboxEntry[]) {
   set({ outbox: next });
 }
 
-// A deleted conversation leaves the list right away; the hub's next sessions push agrees (docs/protocol.md DELETE /sessions).
+// A deleted conversation leaves the list right away; the hub's next sessions push agrees (docs/protocol/protocol.md DELETE /sessions).
 export function dropSession(mid: string, sid: string) {
   const list = state.sessions[mid];
   if (!list?.some((x) => x.session_id === sid)) return;

@@ -83,7 +83,7 @@
 - Multiple images of 8 MB each may exceed `/messages`' 32 MiB JSON limit in aggregate; account for base64 expansion before sending. Carry images in optimistic bubbles across real-session navigation, clearing only after transcript text and images arrive.
 - Browser regression tests delay creation / sending to prove the dialog closes and local session opens before backend completion. Check image selection, removal, same-ID draft-conflict retry, and navigation without focus theft. Screenshot images cannot be transparent-pixel placeholders; verify `naturalWidth` and use visible demo images.
 
-## Separate admin entry point (web/admin, docs/admin.md)
+## Separate admin entry point (web/admin, docs/operations/admin.md)
 
 - Vite multi-page builds: after adding `admin/index.html` to `build.rollupOptions.input`, dev-server SPA fallback still returns root `index.html`, so routes such as `/admin/machines`
   open the ordinary app. A dev-only plugin in `vite.config.ts` rewrites `/admin/*` to `/admin/index.html`.
@@ -238,7 +238,7 @@ Six parallel lanes (chat rendering, message actions, Agents list / Machines, Ter
 - Upward scroll position does not necessarily mean user action: composer height remeasurement briefly collapses it, growing the viewport and causing the browser to clamp `scrollTop` upward a few pixels; again, the event arrives late.
   Stop following only when the user is scrolling (upward wheel, touch, scroll keys, scrollbar drag, and within 700ms afterward) and position moves upward (`followsAfterScroll`).
 - When content below the list (composer, task dock, question card) grows, content stays unchanged but viewport shrinks. ResizeObserver must observe the viewport too, or the latest row is covered.
-- Regression: `scripts/test/web_chat_scroll_e2e.py` (usage in `docs/web.md`, "How to run").
+- Regression: `scripts/test/web_chat_scroll_e2e.py` (usage in `docs/web/web.md`, "How to run").
 
 ## Spreadsheet viewer (2026-11-04, #1310)
 
@@ -309,7 +309,7 @@ Six parallel lanes (chat rendering, message actions, Agents list / Machines, Ter
 ## Question cards remain after answering (2026-11-04, #1673)
 
 - **`refresh()` snapshots restore just-resolved cards**: it concurrently fetches `/sessions` (seconds on busy hub) and `/interactions`, replacing state when all finish. An intervening `interaction_resolved` removes the card; the old snapshot restores it, still clickable, and another click gets 410 "no longer pending." Number every pending-card change (`changeInteraction` in `store.ts`); snapshots update only state predating the request. Android `HubInteractionCenter` uses the same approach.
-- **Collapse cards locally on successful submission**, not only on WS events (late or lost on disconnection); iOS / Android already do this. Hub idempotently returns 200 with the original answer (`already`) for answered cards; 410 only for expiry, withdrawal, or hand-back to computer. See `docs/protocol.md`.
+- **Collapse cards locally on successful submission**, not only on WS events (late or lost on disconnection); iOS / Android already do this. Hub idempotently returns 200 with the original answer (`already`) for answered cards; 410 only for expiry, withdrawal, or hand-back to computer. See `docs/protocol/protocol.md`.
 
 ## Chat rendering aligned with a reference client (2026-11-05, #1963)
 

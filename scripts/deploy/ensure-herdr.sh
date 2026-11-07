@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install herdr (the default engine, docs/engines.md) on this computer if it has none. deploy.sh pipes it to each
+# Install herdr (the default engine, docs/integrations/engines.md) on this computer if it has none. deploy.sh pipes it to each
 # machine it installs personad on (`ssh <host> sh -s < scripts/deploy/ensure-herdr.sh`); install.sh has the same steps inline
 # (it is served alone): keep the two in step. herdr's own installer puts it in ~/.local/bin, where the node looks.
 # PERSONA_SKIP_HERDR=1 skips it. Prints one line; a failed install only warns (exit 0) so the deploy goes on.

@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Settings › Channels (docs/channels.md "UI"): every way of talking to Persona in three sections - Persona's own
+ * Settings › Channels (docs/extensions/channels.md "UI"): every way of talking to Persona in three sections - Persona's own
  * apps, the ones installed (connected or not), and the ones an extension market offers (opening the market's page).
  */
 @Composable

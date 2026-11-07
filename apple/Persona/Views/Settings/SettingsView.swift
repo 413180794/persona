@@ -11,7 +11,7 @@ struct SettingsView: View {
     @State private var showPair = false
     @State private var storage: Int64?
     @State private var plugins: [HubExtension]?
-    /// Where links in the plugins' cards open (docs/extensions.md「UI 插槽」).
+    /// Where links in the plugins' cards open (docs/extensions/extensions.md「UI 插槽」).
     @State private var pluginLink: LinkTarget?
     @StoredValue(TranslationPrefs.enabledKey) private var translating = false
     @StoredValue(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
@@ -75,7 +75,7 @@ struct SettingsView: View {
                 if !model.isDemo { ChecklistSettingsRow() }
 
                 #if os(iOS) || os(visionOS)
-                // The plugins' cards and pages (docs/extensions.md「UI 插槽」): at the top, where the main navigation's
+                // The plugins' cards and pages (docs/extensions/extensions.md「UI 插槽」): at the top, where the main navigation's
                 // entries are on an iPhone (the Mac has them in its sidebar).
                 ExtensionSlotsSettingsSection(link: $pluginLink)
                 #endif
@@ -123,7 +123,7 @@ struct SettingsView: View {
 
                 ConnectorsSection()
 
-                // What Persona sent in the user's name through the connectors (#5278, docs/connectors.md "Sent as the user").
+                // What Persona sent in the user's name through the connectors (#5278, docs/extensions/connectors.md "Sent as the user").
                 if !model.isDemo {
                     Section {
                         Group {
@@ -137,7 +137,7 @@ struct SettingsView: View {
                     }
                 }
 
-                // Extensions (docs/extensions.md): only with a hub that has the plugin base.
+                // Extensions (docs/extensions/extensions.md): only with a hub that has the plugin base.
                 if model.hubFeatures.hasExtensionFeature("manager") {
                     Section {
                         Group {
@@ -185,7 +185,7 @@ struct SettingsView: View {
                 if !model.isDemo {
                     Section {
                         Group {
-                            // Every hub paired, by group: add one, rename, disconnect one (docs/multi-hub.md). Also with
+                            // Every hub paired, by group: add one, rename, disconnect one (docs/protocol/multi-hub.md). Also with
                             // one hub: it is where a second one is added (the only row the single-hub page gained).
                             NavigationLink(value: SettingsPage.hubs) {
                                 SettingsRow(title: "hub", symbol: Theme.Icon.hubGroup, tint: Theme.Hue.green,
@@ -199,7 +199,7 @@ struct SettingsView: View {
                             }
                             .settingsListRow(SettingsPage.hub)
                             .accessibilityIdentifier("settings.hub")
-                            // The hub's managers, each a whole assistant (docs/managers.md).
+                            // The hub's managers, each a whole assistant (docs/assistant/managers.md).
                             NavigationLink(value: SettingsPage.managers) {
                                 SettingsRow(title: String(localized: "Managers"), symbol: Theme.Icon.managers, tint: Theme.ai)
                             }
@@ -255,7 +255,7 @@ struct SettingsView: View {
             #endif
             .themedPage()
             .pageToolbar {
-                    // As a sheet over the shell (docs/ios.md「新外壳」): ChatGPT's × to close it.
+                    // As a sheet over the shell (docs/apple/ios.md「新外壳」): ChatGPT's × to close it.
                     if shell != nil || inSheet {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { model.shellSettings = false } label: { Label("Close", systemImage: Theme.Icon.close) }
@@ -450,32 +450,32 @@ struct SettingsView: View {
 /// The pages of Settings that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
     case persona, themeColor, style, layout, colorScheme, language, assistant, claude, codex, devices, phoneData, mail, feishu, feishuBot, notifications, storage, translation, modelConfiguration
-    /// Settings › Session Triage (docs/agent-work.md「开关」).
+    /// Settings › Session Triage (docs/assistant/agent-work.md「开关」).
     case triage
-    /// Settings › hub: the hubs paired, by group (docs/multi-hub.md).
+    /// Settings › hub: the hubs paired, by group (docs/protocol/multi-hub.md).
     case hubs
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
-    /// Settings › Extensions, and one plugin by its id (docs/extensions.md).
+    /// Settings › Extensions, and one plugin by its id (docs/extensions/extensions.md).
     case plugins
     case plugin(String)
-    /// A page a plugin draws (placement plugin_page, docs/extensions.md「声明式 UI」), titled until its View says otherwise.
+    /// A page a plugin draws (placement plugin_page, docs/extensions/extensions.md「声明式 UI」), titled until its View says otherwise.
     case pluginPage(plugin: String, ui: String, title: String)
-    /// Settings › Extensions › Extension Market, one plugin of a market, and the markets (docs/extensions.md「扩展市场」).
+    /// Settings › Extensions › Extension Market, one plugin of a market, and the markets (docs/extensions/extensions.md「扩展市场」).
     case pluginMarket
     case marketExtension(market: String, id: String)
     case pluginMarkets
-    /// Settings › Channels, and one channel by its id (docs/channels.md).
+    /// Settings › Channels, and one channel by its id (docs/extensions/channels.md).
     case channels
     case channel(String)
-    /// Settings › hub › SSH Tunnel of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
+    /// Settings › hub › SSH Tunnel of one paired hub (its id; docs/operations/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
     case inAppTunnel(String)
-    /// Settings › Managers, and one manager by its id (docs/managers.md).
+    /// Settings › Managers, and one manager by its id (docs/assistant/managers.md).
     case managers
     case manager(String)
-    /// Settings › Sent as You: what Persona sent in the user's name through the connectors (docs/connectors.md "Sent as the user").
+    /// Settings › Sent as You: what Persona sent in the user's name through the connectors (docs/extensions/connectors.md "Sent as the user").
     case sent
 
 }
@@ -742,7 +742,7 @@ struct AppGlyph: View {
     }
 }
 
-/// The first screen (docs/onboarding.md 4.5「首屏」, #4195): what Persona is, one button that pairs (scan the hub's code;
+/// The first screen (docs/assistant/onboarding.md 4.5「首屏」, #4195): what Persona is, one button that pairs (scan the hub's code;
 /// the Mac pastes the link), "No hub yet?" (the public getting-started page, when the build has its address), the demo,
 /// and Other ways for the rest — typing the address, an SSH tunnel, the command line. No command on the screen itself.
 struct WelcomeView: View {
@@ -858,7 +858,7 @@ struct WelcomeView: View {
     }
 }
 
-/// The public 「开始使用」 page (docs/getting-started.md as published): from the build config (`publish.getting_started_url`,
+/// The public 「开始使用」 page (docs/operations/getting-started.md as published): from the build config (`publish.getting_started_url`,
 /// Info.plist `PersonaGettingStartedURL`); nil when the build has none, and "No hub yet?" is not shown.
 enum GettingStarted {
     static var url: URL? {
@@ -878,7 +878,7 @@ struct PairView: View {
     var start: Start = .scan
     @State private var url = ""
     @State private var token = ""
-    /// The SSH tunnel set up here, for a hub this device cannot reach directly (docs/network.md「经 SSH 隧道连 hub」).
+    /// The SSH tunnel set up here, for a hub this device cannot reach directly (docs/operations/network.md「经 SSH 隧道连 hub」).
     @State private var ssh: SSHRoute?
     #if os(macOS)
     @State private var editingSSH = false
@@ -1373,6 +1373,6 @@ struct SettingsButtonLook: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// Settings is a sheet of its own (the iPad's, docs/ios.md「iPad」): its × closes it, as over the shell.
+    /// Settings is a sheet of its own (the iPad's, docs/apple/ios.md「iPad」): its × closes it, as over the shell.
     @Entry var settingsSheet = false
 }

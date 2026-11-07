@@ -1,4 +1,4 @@
-// The inbox list (docs/inbox.md"App"): filters by source and kind, search, then Needs you (agents waiting on you first),
+// The inbox list (docs/assistant/inbox.md"App"): filters by source and kind, search, then Needs you (agents waiting on you first),
 // FYI, Collapsed and Done, each a section that opens / closes from its title.
 import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import {
@@ -81,7 +81,7 @@ export function InboxList({ selected }: { selected?: { id: string; manager?: str
   }, [selectedKey, loaded, storeLoaded]);
 
   const s = useMemo(() => sections(items, { source, kind, query }), [items, source, kind, query]);
-  // with several managers, each one's items and waiting agents under its name, sectioned as before (docs/managers.md
+  // with several managers, each one's items and waiting agents under its name, sectioned as before (docs/assistant/managers.md
   // "Clients"); one: the list as it was
   const roster = useRoster();
   const byManager = useMemo(() => {
@@ -398,7 +398,7 @@ export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
       : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void markFromRow(it, true, true) }, // a menu pick: "Undo" on any screen (#4162)
   ];
   (it.mutes ?? []).forEach((m, i) => items.push({ key: `mute:${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", divider: i === 0, onSelect: () => void muteItem(it, m) }));
-  // then a rule for each (docs/inbox.md "Policies"): the tier its items get, what the AI twin does with them
+  // then a rule for each (docs/assistant/inbox.md "Policies"): the tier its items get, what the AI twin does with them
   (it.mutes ?? []).forEach((m, i) => items.push({ key: `policy:${m.tag}:${m.value}`, label: policyMenuTitle(m), hint: muteShortName(m), icon: "target", divider: i === 0, onSelect: () => openPolicyDialog({ item: it, option: m, source: it.source }) }));
   return items;
 }

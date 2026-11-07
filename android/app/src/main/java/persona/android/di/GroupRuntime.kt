@@ -27,7 +27,7 @@ class GroupConnectionSettings internal constructor(
 )
 
 /**
- * One hub group's connection and data (docs/android.md "Multiple hubs"): what ConnectionRuntime held for its only pairing
+ * One hub group's connection and data (docs/android/android.md "Multiple hubs"): what ConnectionRuntime held for its only pairing
  * before groups existed. One WebSocket for the whole group: the group's first paired hub is the connection's own
  * hub, the group's other hubs (paired, or learned from the mesh) are its members and take over when it is down.
  * Everything here speaks the group's plain machine ids; [namespace] is applied above, by the facades.

@@ -4,7 +4,7 @@ import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
 
-/** `Session.goal` as the hub sends it (docs/protocol.md, docs/agent-goal.md). */
+/** `Session.goal` as the hub sends it (docs/protocol/protocol.md, docs/integrations/agent-goal.md). */
 class GoalInfoTest {
     @Test fun decodesTheGoalTheHubSends() {
         val session = JsonCodec.decodeFromString<Session>("""{"session_id":"s1","status":"working","goal":{"objective":"给天气 App 加主屏幕小组件\n并跑通 UI 测试",

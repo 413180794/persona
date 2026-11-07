@@ -31,7 +31,7 @@ class HubTerminalTransport(private val hub: OkHttpHubConnection) : TerminalTrans
     }
 
     override suspend fun keys(key: SessionKey, keys: List<String>, text: String) {
-        // `/keys` is a session's: a pane address reaches only the terminal stream and the screen read (docs/protocol.md).
+        // `/keys` is a session's: a pane address reaches only the terminal stream and the screen read (docs/protocol/protocol.md).
         if (key.isPaneAddress) throw UnsupportedOperationException("A terminal opened by pane takes keys only while driven")
         val (path, body) = keysRequest(key, keys, text)
         hub.request(path, "POST", body.toString().toRequestBody("application/json".toMediaType())).close()

@@ -5,7 +5,7 @@ import (
 	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
-// The knowledge base is the assistant's (docs/knowledge.md "Who owns what"): its engine and loop, its files under the data
+// The knowledge base is the assistant's (docs/assistant/knowledge.md "Who owns what"): its engine and loop, its files under the data
 // directory and its index rows. The hub keeps the sources: the assistant reads what the connectors deliver through
 // app.call connectors.* (data in, data out; the cursors are the assistant's, so nothing is lost while it is away), and
 // the hub's own features that read the knowledge base ask the assistant (kb.*), as the posts the connectors' programs
@@ -64,7 +64,7 @@ const (
 	// MethodKBForget: {source} → KBForgotten: a source's chats and people go, with their index rows, their places in
 	// projects and the cursor ("Delete saved data").
 	MethodKBForget = "kb.forget"
-	// The posts a connector's program hands the hub (connector.KnowledgeBase, docs/connector-protocol.md "Knowledge base"),
+	// The posts a connector's program hands the hub (connector.KnowledgeBase, docs/protocol/connector-protocol.md "Knowledge base"),
 	// for that connector (KBPosts.Connector; the hub checked it may write now):
 	//   kb.posts_put {connector, sources, posts} → {statuses}
 	//   kb.posts_comments {connector, id, count, comments} → {}

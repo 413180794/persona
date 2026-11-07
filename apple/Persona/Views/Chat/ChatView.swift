@@ -134,7 +134,7 @@ struct ChatView: View {
     /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
     @Environment(\.splitDetail) private var split
     @Environment(\.splitShowList) private var showList
-    /// The Persona conversation in the shell (docs/ios.md「新外壳」).
+    /// The Persona conversation in the shell (docs/apple/ios.md「新外壳」).
     @Environment(\.shellChat) private var shellChat
     @Environment(\.shell) private var shell
     /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
@@ -239,7 +239,7 @@ struct ChatView: View {
     @ViewBuilder private var chatPage: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ChatView")
-        // `-showPerfChanges YES`: what made the page draw again, in the log (docs/mac.md「卡顿怎么量」).
+        // `-showPerfChanges YES`: what made the page draw again, in the log (docs/apple/mac.md「卡顿怎么量」).
         let _ = Self.printsChanges ? Self._printChanges() : ()
         #endif
         let _ = actions.set(handlers)
@@ -512,7 +512,7 @@ struct ChatView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        // The assistant's tasks (docs/unified-entry.md): a task's detail rises like a link; All is the board.
+        // The assistant's tasks (docs/assistant/unified-entry.md): a task's detail rises like a link; All is the board.
         // In regular width (iPad) it fills the detail column instead, as an agent opened from the Agents list (#2816).
         .detailPresentation(isPresented: Binding(get: { style == .assistant && (TasksStore.shared.detailTask != nil || TasksStore.shared.detailAgent != nil) },
                                                  set: { if !$0 { TasksStore.shared.detailTask = nil; TasksStore.shared.detailAgent = nil } })) {
@@ -608,7 +608,7 @@ struct ChatView: View {
         #endif
         // A different chat shown in place: its own cards decide whether another conversation needs you (#4348).
         .onChange(of: key) { _, _ in offeredNext = nil }
-        // Leaving the conversation ends the phone's voice call bound to it (docs/voice.md 6.5): another agent shown in
+        // Leaving the conversation ends the phone's voice call bound to it (docs/assistant/voice.md 6.5): another agent shown in
         // place, the page gone, or hidden in the shell (`onTabVisibility`).
         .onChange(of: key) { old, _ in VoiceCalls.shared.leave(old) }
         .onTabVisibility(appear: {}, disappear: { [key] in VoiceCalls.shared.leave(key) })
@@ -771,7 +771,7 @@ struct ChatView: View {
             blocks = built.blocks
         }
         var lines = lineBuilder.build(Self.debugTrim(blocks), live: key.live, streaming: key.streaming)
-        if style == .assistant { // docs/unified-entry.md: the hub's items, quick results, a line for each day
+        if style == .assistant { // docs/assistant/unified-entry.md: the hub's items, quick results, a line for each day
             lines = ChatLines.daySections(ChatLines.quickResults(ChatLines.mergeFeed(lines, feed)))
         }
         scratch.lines = lines
@@ -988,7 +988,7 @@ struct ChatView: View {
             openFileAt: { [key, session] path, line in
                 file = FileRef(group: key.group, machineID: key.machineID, path: path, cwd: session?.cwd, line: line)
             },
-            // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
+            // A link to this machine's localhost is one of its ports, opened through the hub (docs/operations/ports.md).
             // The hub's own pages first: a hub on the agent's machine (or the phone's localhost, a mock) would read as a port.
             openLink: { [model, key] url in
                 if openHubPage(url) { return }
@@ -1141,7 +1141,7 @@ struct ChatView: View {
         ChatPin.Spot(y: g.frame(in: .global).minY, content: g.frame(in: .named(ChatPin.space)).maxY)
     }
 
-    /// Persona's last turn ended on a model set-up error the hub named (`turn_error_code`, docs/onboarding.md 4.4):
+    /// Persona's last turn ended on a model set-up error the hub named (`turn_error_code`, docs/assistant/onboarding.md 4.4):
     /// the fix to show instead of Claude Code's 「Not logged in」 as an answer. Persona's conversations only, as the web.
     private var turnFix: TurnErrorFix? { style == .assistant ? TurnErrorFix(code: session?.turnErrorCode) : nil }
 
@@ -1770,7 +1770,7 @@ struct ChatView: View {
         }
     }
 
-    /// Opening a work line the page folded fetches its steps (docs/protocol.md「折叠的工作」).
+    /// Opening a work line the page folded fetches its steps (docs/protocol/protocol.md「折叠的工作」).
     private var openFold: (Item) async throws -> Void {
         { [model, shownKey] fold in try await model.unfold(shownKey, fold) }
     }
@@ -1866,7 +1866,7 @@ struct ChatView: View {
             }
     }
 
-    /// Above the assistant's composer (docs/unified-entry.md): what the conversation's tasks ask, the @ list while
+    /// Above the assistant's composer (docs/assistant/unified-entry.md): what the conversation's tasks ask, the @ list while
     /// a mention is typed, the dock, and the route chip.
     @ViewBuilder private var taskFooter: some View {
         let conversation = key.sessionID
@@ -1882,7 +1882,7 @@ struct ChatView: View {
                 }
             }
         }
-        // Out of the way of a voice call (docs/voice.md 6.2「通话期间」), back when it ends.
+        // Out of the way of a voice call (docs/assistant/voice.md 6.2「通话期间」), back when it ends.
         VoiceCallHides(key: key) {
             TaskDock(conversation: conversation, computer: computerActivity)
             RouteChip(conversation: conversation)
@@ -2030,7 +2030,7 @@ struct ChatView: View {
             Color.clear
                 .frame(height: Theme.Size.line)
                 .id(Self.bottomID)
-            // A voice call's captions, the thread's last rows while it is bound here (docs/voice.md 6.2): they read the
+            // A voice call's captions, the thread's last rows while it is bound here (docs/assistant/voice.md 6.2): they read the
             // call themselves; the page only asks whether one is bound.
             if viewing == nil, VoiceCalls.shared.isBound(to: key) {
                 VoiceThreadTail(key: key, held: frozen != nil)
@@ -2717,7 +2717,7 @@ struct ChatView: View {
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
                 }
-                // The goal it works toward (docs/agent-goal.md): a tap shows all of it.
+                // The goal it works toward (docs/integrations/agent-goal.md): a tap shows all of it.
                 if host == nil, let goal = session?.goal {
                     GoalBar(goal: goal)
                         .padding(.horizontal, Theme.Space.l)
@@ -2728,7 +2728,7 @@ struct ChatView: View {
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
                 }
-                // The ports it listens on (its dev servers, docs/ports.md): a tap opens the page.
+                // The ports it listens on (its dev servers, docs/operations/ports.md): a tap opens the page.
                 if let ports = session?.ports, !ports.isEmpty {
                     SessionPortChips(machine: key.machineRef, ports: ports)
                         .padding(.horizontal, Theme.Space.l)
@@ -3377,7 +3377,7 @@ struct ChatView: View {
         switch row {
         case .user(let i):
             if let n = Injected.of(i) {
-                // Persona's message for the model: one line in its place, never its words (docs/protocol.md「Persona 注入的消息」).
+                // Persona's message for the model: one line in its place, never its words (docs/protocol/protocol.md「Persona 注入的消息」).
                 InjectedLine(item: i, injected: n, conversation: style == .assistant ? shownKey.sessionID : nil)
             } else if (i.text ?? "").hasPrefix("/loop") {
                 LoopTickRow(item: i)
@@ -3664,14 +3664,14 @@ struct Composer: View, Equatable {
     @State private var macWindow: Int?
     #endif
     @FocusState private var focused: Bool
-    /// The 「+」 menu's Voice Chat where the page offers no call: why (docs/voice.md 1.3).
+    /// The 「+」 menu's Voice Chat where the page offers no call: why (docs/assistant/voice.md 1.3).
     @State private var voiceNote: VoiceUnavailableNote?
 
-    /// The voice call bound to this conversation, live or ended (docs/voice.md 6.2): the bar takes the box's place while
+    /// The voice call bound to this conversation, live or ended (docs/assistant/voice.md 6.2): the bar takes the box's place while
     /// it is on, and 「语音已结束 · 继续」 sits over the box after it ended by itself.
     private var voiceCall: VoiceConversation? { VoiceCalls.shared.call(on: key) }
 
-    /// The composer's voice button (docs/voice.md 6.1): only where a call can start; the 「+」 menu's item stays and says why
+    /// The composer's voice button (docs/assistant/voice.md 6.1): only where a call can start; the 「+」 menu's item stays and says why
     /// not.
     private var voiceEntry: (() -> Void)? {
         guard VoiceSupport.shared.availability(for: model.session(key), group: key.group).isAvailable else { return nil }
@@ -3683,7 +3683,7 @@ struct Composer: View, Equatable {
         voiceNote = VoiceEntry.start(key, model: model)
     }
 
-    /// Voice Chat in the 「+」 menu (iOS only: the Mac and visionOS have no call audio yet, docs/voice.md 6.9).
+    /// Voice Chat in the 「+」 menu (iOS only: the Mac and visionOS have no call audio yet, docs/assistant/voice.md 6.9).
     @ViewBuilder private var voiceMenuItem: some View {
         if VoicePlatform.current == .phone {
             Button { startVoice() } label: { Label("Voice Chat", systemImage: Theme.Icon.voiceChannel) }
@@ -3698,7 +3698,7 @@ struct Composer: View, Equatable {
     }
 
     private var allowsSend: Bool { model.session(key)?.canSend == true }
-    /// A health conversation's files go to the health space's reports/ (docs/health.md「体检报告」), not the temp directory.
+    /// A health conversation's files go to the health space's reports/ (docs/assistant/health.md「体检报告」), not the temp directory.
     private var uploadDest: String? { model.session(key)?.isHealth == true ? Session.healthSpace : nil }
 
     /// /loop for Claude agents (`LoopCommand.offered`, as on the web): in the quick commands, with a line saying what
@@ -3823,7 +3823,7 @@ struct Composer: View, Equatable {
     }
 
     /// The notes over the box, the attachments and the box itself (`body` adds what happens around them). In a voice
-    /// call the voice bar takes the box's place (docs/voice.md 6.2); what goes with a typed message waits, kept.
+    /// call the voice bar takes the box's place (docs/assistant/voice.md 6.2); what goes with a typed message waits, kept.
     private var composerStack: some View {
         composerNotes
             .readinessSheets($failureRoute)
@@ -3857,7 +3857,7 @@ struct Composer: View, Equatable {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if isMain {
-                // The main conversation: what it still needs, or a refused send (docs/onboarding.md 4.4, 5.2).
+                // The main conversation: what it still needs, or a refused send (docs/assistant/onboarding.md 4.4, 5.2).
                 ReadinessHomeCard(route: $failureRoute)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if model.session(key)?.assistant == true, let f = model.readiness.failure {
@@ -3896,7 +3896,7 @@ struct Composer: View, Equatable {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            // A call that ended by itself: 「语音已结束 · 继续」 over the box, until the page goes (docs/voice.md 1.2 L).
+            // A call that ended by itself: 「语音已结束 · 继续」 over the box, until the page goes (docs/assistant/voice.md 1.2 L).
             if let call, call.isOver, case .ended(let end) = call.phase, let note = VoiceEndNote.make(end, extensionID: call.extensionID) {
                 VoiceEndedStrip(call: call, note: note)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -3905,7 +3905,7 @@ struct Composer: View, Equatable {
                 VoiceBar(call: call, key: key, label: VoiceEntry.label(model.session(key), model: model))
                     .transition(.opacity)
             } else if usesShellComposer {
-                // The shell's composer (docs/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
+                // The shell's composer (docs/apple/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
                 ShellComposerBar(placeholder: status.isActive ? String(localized: "Add a note (queued)")
                                      : (suggestion ?? (shellChat ? String(localized: "Ask \(model.persona.name)") : placeholder ?? String(localized: "Message Claude"))),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
@@ -4015,7 +4015,7 @@ struct Composer: View, Equatable {
             guard phase == .active else { return }
             await declarations.refreshWhileActive(api: model.api(key.group))
         }
-        // Voice (docs/voice.md 6.1): asks the hub about it, says why there is none, and the DEBUG switches (6.8).
+        // Voice (docs/assistant/voice.md 6.1): asks the hub about it, says why there is none, and the DEBUG switches (6.8).
         .modifier(ComposerVoice(key: key, note: $voiceNote, active: phase == .active, offered: { voiceEntry != nil }, start: { startVoice() }))
         #if DEBUG
         .task { // `-showSampleQuotes YES`: a page's text and another session quoted over the box (#986, screenshots)
@@ -4103,7 +4103,7 @@ struct Composer: View, Equatable {
             uploads.start(urls, machine: key.machineRef, model: model, dest: uploadDest) { insertPath($0) }
         }
         #if os(macOS)
-        // Finder drags: pictures are attached like Photos, other files uploaded to the machine like Files (docs/mac.md).
+        // Finder drags: pictures are attached like Photos, other files uploaded to the machine like Files (docs/apple/mac.md).
         // ⌘V of a screenshot or of files copied in Finder does the same; text is pasted as usual.
         .macComposerFiles(images: images.count, focused: focused, attach: { add($0) }, upload: { upload($0) })
         #if DEBUG
@@ -4174,7 +4174,7 @@ struct Composer: View, Equatable {
         // Picked page excerpts ride along as <persona-context> tags before what was typed, videos as <persona-file> after.
         let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "See the context above.") : String(localized: "Please look at the image [Assistant View a3e0a0]")) : String(localized: "Please look at the image [Assistant View 5ad878]")) : t, files: files)
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
-        // Routed to a task ("Tell “xx”"): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+        // Routed to a task ("Tell “xx”"): straight to its agent, not to Persona (docs/assistant/unified-entry.md「指向谁」).
         // Not with videos: they are on this conversation's machine, the task's agent may be on another.
         if images.isEmpty, files.isEmpty, key.group == (model.hub?.group ?? ""), TasksStore.shared.sendRouted(key.sessionID, text: message) {
             if raw == text { text = "" }
@@ -4564,7 +4564,7 @@ struct SessionInfoSheet: View {
     @State private var showTodo = false
     @State private var grants = AlwaysGrantsModel()
 
-    /// Only assistant conversations remember "always allow" (docs/assistant.md); Agents sessions keep theirs in Claude.
+    /// Only assistant conversations remember "always allow" (docs/assistant/assistant.md); Agents sessions keep theirs in Claude.
     private var isAssistant: Bool { assistant || (model.session(key) ?? session)?.assistant == true }
 
     var body: some View {
@@ -4703,7 +4703,7 @@ struct SessionInfoSheet: View {
         }
     }
 
-    /// How Persona reaches this Codex (docs/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
+    /// How Persona reaches this Codex (docs/integrations/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
     private func routeRow(_ route: String, note: String?) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             row(Theme.Icon.link, String(localized: "Connect [V N C Page a55741]"), route == "app_server" ? String(localized: "app-server (structured)") : String(localized: "Terminal (screen reading)"))
@@ -4765,13 +4765,13 @@ struct ChatLine: Identifiable {
         case workEnd(group: String, count: Int, files: [ChangedFile])
         /// A model API error (`APIErrorInfo`), repeated `count` times in a row.
         case apiError(item: Item, info: APIErrorInfo, count: Int)
-        /// What the hub added to an assistant conversation: a plan, a task, a receipt… (docs/unified-entry.md).
+        /// What the hub added to an assistant conversation: a plan, a task, a receipt… (docs/assistant/unified-entry.md).
         case feed(FeedItem)
         /// A reminder or an event the assistant added on the phone, under its turn's work line (QuickResult).
         case quick(QuickResult)
         /// The date over the first line of a day (the assistant's conversation).
         case day(Date)
-        /// The images an exchange's work looked at, between it and the answer (`ViewedImages`, docs/protocol.md「这一轮看过的图片」).
+        /// The images an exchange's work looked at, between it and the answer (`ViewedImages`, docs/protocol/protocol.md「这一轮看过的图片」).
         case viewed(id: String, images: [ViewedImage])
 
         var id: String {
@@ -5562,7 +5562,7 @@ private struct VerticalBarsEdgeReader: ViewModifier {
 #endif
 
 #if DEBUG
-/// The open conversation (`probe.chat`, docs/ios-state.md): which one, for the tests to check against what was tapped.
+/// The open conversation (`probe.chat`, docs/apple/ios-state.md): which one, for the tests to check against what was tapped.
 nonisolated struct ChatShown: Encodable, Equatable {
     var key: String
     /// How many times this conversation has appeared since launch (`ChatView.appearances`).

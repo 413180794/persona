@@ -1,4 +1,4 @@
-// Whether anything feeds the inbox yet (docs/onboarding.md 4.5 "Rewriting the empty states"): an empty inbox with no source connected says
+// Whether anything feeds the inbox yet (docs/assistant/onboarding.md 4.5 "Rewriting the empty states"): an empty inbox with no source connected says
 // "No message sources yet" and lists the sources a few taps connect, not "All caught up". A source is connected when the hub has a mail
 // account, Feishu set up (feature lark), or a connector that brings items in and is signed in.
 import { useEffect, useState } from "react";

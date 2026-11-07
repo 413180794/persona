@@ -1,4 +1,4 @@
-"""mock_hub.py's MOCK_SENT ledger answers as the hub does (docs/connectors.md "Sent as the user", docs/protocol.md
+"""mock_hub.py's MOCK_SENT ledger answers as the hub does (docs/extensions/connectors.md "Sent as the user", docs/protocol/protocol.md
 "Connector API", server/internal/extmgr/sent_ledger.go): the rows' shape, the paging, the connector filter, the
 refusals. Run: python3 -m unittest scripts/mock/test_sent_ledger_mock.py (or from scripts/mock)."""
 import os

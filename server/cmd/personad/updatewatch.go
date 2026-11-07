@@ -14,7 +14,7 @@ import (
 )
 
 // runUpdateWatch is `personad update-watch <pending.json>`: the old binary's watchdog over an update (hub/selfupdate.go,
-// docs/hub-update.md "Rollback"). The hub starts it just before running the new version; if that does not answer as the
+// docs/operations/hub-update.md "Rollback"). The hub starts it just before running the new version; if that does not answer as the
 // new build with the update confirmed within 3 minutes, the old binary goes back and the hub restarts on it.
 func runUpdateWatch(ctx context.Context, args []string) error {
 	if len(args) != 1 {

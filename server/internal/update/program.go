@@ -42,7 +42,7 @@ func CheckReplace(current, next string) error {
 }
 
 // IsDeviceFile says path is the device's own program file, <dir>/persona-node (persona-node.exe on Windows), which only
-// a node service runs (docs/link.md "The device's program").
+// a node service runs (docs/operations/link.md "The device's program").
 func IsDeviceFile(path string) bool {
 	return strings.TrimSuffix(filepath.Base(path), ".exe") == nodeproto.ProgramPersonaNode
 }

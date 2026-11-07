@@ -7,7 +7,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -28,7 +28,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -49,7 +49,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -70,7 +70,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -91,7 +91,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -112,7 +112,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -133,7 +133,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -154,7 +154,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -175,7 +175,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -196,7 +196,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {
@@ -217,7 +217,7 @@
       "description": "按宿主状态、交互和看过时间派生统一状态。",
       "source": [
         "server/internal/hub/state.go: agentState",
-        "docs/agent-states.md: 统一状态、看过"
+        "docs/protocol/agent-states.md: 统一状态、看过"
       ],
       "input": {
         "session": {

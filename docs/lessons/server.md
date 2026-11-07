@@ -163,7 +163,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - Sandboxed extensions connecting to hub-machine loopback bypass the proxy entirely in HTTP libraries (2026-11-05, #2942): the egress proxy allowed literal `127.0.0.1` entries in `permissions.network`,
   but Go `net/http` (`httpproxy`) hardcodes direct access for `localhost` and loopback IPs, even with empty `NO_PROXY`. Requests never reached the proxy (`sandbox.egress` count 0) and sandbox-exec rejected them with
   `connect: operation not permitted`; Linux sandbox loopback isn't the hub machine's anyway. Reserve `host.persona.internal`, which the proxy connects to the hub machine's `127.0.0.1:<port>`,
-  only for extensions listing loopback addresses; never allow the proxy's own port (`docs/extensions.md` ("Egress")). For "local access fails in sandbox, count is 0", suspect client proxy bypass before proxy rules.
+  only for extensions listing loopback addresses; never allow the proxy's own port (`docs/extensions/extensions.md` ("Egress")). For "local access fails in sandbox, count is 0", suspect client proxy bypass before proxy rules.
   `TestDarwinSandboxForReal` uses default `http.Get` inside a real sandbox to test both `127.0.0.1` (fails) and this hostname (works).
 
 - An ownership rule between managers has to hold on every path into the hub, not just the obvious one (2026-11-06, #5923). After #5556 made `device.call` and the cards check the caller's machine, a review still found a manager reaching another's things through `ws.broadcast` (relabelling its own card as another session's question), `notify.request`, extension pushes, `app.call`, relayed Persona Links that outlived a move or a revoke, and extension events sent to every manager. When adding a bus method, event, relay or push, take the caller (`handleBus`, `c.managerID()`), check what it names with `ownsRef` / `machineOwner`, and recheck after anything a move can change in between (`withCaller`, cards and relays checked again once kept). For what a manager sends on, allowlist its types (`TestBroadcastTypes` reads them and the hub's from the code with `go/ast`) rather than denylisting the hub's, and read it with exact keys: Go's `encoding/json` matches keys regardless of case and takes the last of a repeated key, so `{"type":"interaction","Type":"x"}` read into a struct passed a denylist while the apps read `interaction`; refuse repeated and case-variant keys and pass on what was checked, re-marshalled (#5960 review).
@@ -188,7 +188,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - GitHub device-code sign-in isn't on the API domain (2026-11-04, #1106): code acquisition and polling use `github.com/login/device/code` and `github.com/login/oauth/access_token`,
   while the API uses `api.github.com`. Some networks let the hub reach `api.github.com` but time out on `github.com`; the GitHub connector works with the computer's gh login,
   then device-code login returns 502 `dial tcp …:443: connection timed out`. Verify device login through personad's actual `POST /api/v1/connectors/github/login`,
-  not just curl against the API; configure `github.proxy` if unreachable (`docs/config.md`).
+  not just curl against the API; configure `github.proxy` if unreachable (`docs/operations/config.md`).
 
 - Don't treat every `EnvironmentFile` as unrecoverable root configuration (2026-11-03, #277): an old service may keep only unrelated runtime fields there, so rejecting it breaks upgrades using the default root. Extract only HOME assignments, honoring file fields overriding unit assignments, later files winning, optional files, and `UnsetEnvironment` last. Don't return/log other fields or execute shell expansion. HOME text inside multiline unrelated fields isn't a new assignment. Missing required files must still stop, not silently switch to an empty new root.
 
@@ -204,10 +204,10 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   Scheduled tasks themselves (e.g. a morning briefing's own chat) later moved to the main-chat category too (#1544): work in the assistant directory shouldn't use the "new Agent" default.
 - Occasional launcher `command not found: claude`, or node-started chats reporting `send to claude: write |1: file already closed` (2026-11-05, #2581), usually means npm is globally reinstalling Claude Code (auto-update moves the old install first, writes the new one about 2.5 seconds later). Long-lived old claude processes (months-old sessions in botmux / herdr) each periodically detect "new version", reinstall, then never restart themselves, causing reinstalls every minute or two (7 times in 8 minutes measured). Check repeated `install --global @anthropic-ai/claude-code` in `~/.npm/_logs/` and versions via `/proc/<pid>/exe --version`; the root fix is ending old processes. node retries early "command missing" exits every 2 seconds, at most 3 times, and reports stderr instead of a pipe error.
 - SSH sessions can't read macOS's login keychain: claude started by an SSH-started node gets 401 if its API key comes from the keychain (Agents in herdr work because herdr is in the login session).
-  Install resident node on that Mac (`scripts/deploy/node-launchd.sh install`, `docs/server.md` ("Resident node")).
+  Install resident node on that Mac (`scripts/deploy/node-launchd.sh install`, `docs/server/server.md` ("Resident node")).
 - Go `UnixListener.Close()` deletes the socket file by default: during redeploy, old node exit deleted the new node's `~/.persona/node.sock`,
   silently disabling every hook / MCP (unreachable hooks allow the TUI). Fixed with `SetUnlinkOnClose(false)` and a rebuild self-check every 15 seconds.
-  Suspect inactive hooks / MCP? Run `personad node doctor` first (actual socket response, generated files matching the binary, command paths still present; `docs/claude-integration.md` ("Self-check")).
+  Suspect inactive hooks / MCP? Run `personad node doctor` first (actual socket response, generated files matching the binary, command paths still present; `docs/integrations/claude-integration.md` ("Self-check")).
 - macOS `lsof -p a,b,c` exits 1 if any pid has exited or is a zombie, but still prints other processes' results to stdout (2026-11-03, #541):
   a pid merely not listening doesn't count (exit 0). Short Agent commands often disappear between `ps` and `lsof`; discarding results as errors froze the port list and logged every 4 seconds.
   `lsof` complaints go only to stderr; parse stdout even on exit 1, and log the same error once.
@@ -222,7 +222,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   APNs is a persistent HTTP/2 connection; Go doesn't detect that it's dead after a network outage. Close idle connections when a push request errors so the next request redials (`push.go`).
 - `URLSessionWebSocketTask.sendPing` callbacks require both: the pong echoes the ping payload unchanged (empty pong doesn't count),
   and a pending `receive` exists. `scripts/mock/mock_hub.py` once returned empty pong, causing App heartbeat to declare the connection dead and reconnect every minute (hub coder/websocket was fine).
-- Machine monitoring (`docs/machines.md`): darwin personad is cross-compiled with `CGO_ENABLED=0`, so Mach calls like `host_statistics` are unavailable,
+- Machine monitoring (`docs/server/machines.md`): darwin personad is cross-compiled with `CGO_ENABLED=0`, so Mach calls like `host_statistics` are unavailable,
   and `vm.page_*` sysctls lack anonymous-page and compressor counts. macOS CPU / memory come from persistent `iostat -n 0 -w 10` / `vm_stat 10` (one line per 10 seconds, not a new process per sample),
   the rest from sysctl, route socket (`NET_RT_IFLIST2`), and statfs. Before manually decoding C structs (`if_msghdr2`, `struct loadavg`), print `offsetof` with a small C program to confirm offsets (`#pragma pack(4)` exists).
   Linux virtual interfaces are identified by whether `/sys/class/net/<name>` points into `/sys/devices/virtual/`, more reliable than names (TUN proxies use varied names).
@@ -232,7 +232,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   so the phone can't open files there. node explains the error (`explainDenied`): for an SSH-started node, enable sshd-keygen-wrapper in Full Disk Access; for the LaunchAgent node, add the node binary itself; or use another folder (#5944, "A LaunchAgent node is throttled, and a protected folder stalls Claude before any hook" below).
   Put user-visible files (screenshots etc.) in an ordinary directory under `~/`, not Desktop.
   TCC attributes permission to the responsible process: SSH-started node and children all count as `sshd-keygen-wrapper`; granting the personad binary itself doesn't help (and redeployment replaces the binary and loses authorization).
-  Granting it gives every SSH login Full Disk Access (including `~/Library/Messages/chat.db`). To authorize only one program, launch it via launchd (LaunchAgent), see `docs/plan-connectors.md`.
+  Granting it gives every SSH login Full Disk Access (including `~/Library/Messages/chat.db`). To authorize only one program, launch it via launchd (LaunchAgent), see `docs/plans/plan-connectors.md`.
 - If node differs from the hub version (`node_mismatch`), App "Redeploy" asks the hub to install it: hub deployment leaves platform node binaries in
   `~/.persona/bin/nodes/`; the hub installs via SSH, kills resident node for launchd to restart, then reconnects (`devices/deploy.go`). Deploying only one machine, not the hub, leaves old binaries there and the button reinstalls the old version.
 - SSH remote commands are parsed by the target's **login shell**, not necessarily POSIX (2026-11-04, #1770): fish rejected the deployment script's first `b=…` with
@@ -243,7 +243,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   downloaded files also carry source URLs. Two mechanisms: `._<name>` AppleDouble files (GNU tar extracts as normal files) need `COPYFILE_DISABLE=1`;
   `LIBARCHIVE.xattr.*` in pax headers (GNU tar drops them and logs `Ignoring unknown extended header keyword`) need `--no-xattrs`. Use both.
 - Building personad on a hub in China: `proxy.golang.org` may be entirely unreachable (TCP timeout; working OS repositories / Docker Hub don't prove it works).
-  Before building, `go env -w GOPROXY=https://goproxy.cn,direct`. If Postgres image pulls fail, use `public.ecr.aws/docker/library/postgres:18-alpine` (`docs/server.md`).
+  Before building, `go env -w GOPROXY=https://goproxy.cn,direct`. If Postgres image pulls fail, use `public.ecr.aws/docker/library/postgres:18-alpine` (`docs/server/server.md`).
 - Cloud public IPs / EIPs usually have an outer firewall or NAT (measured on UCloud: all ports including 22 and 8080 unreachable publicly, though local ss showed listeners,
   and local curl to its public IP failed too—hairpin self-connect can't establish port openness). Prefer the user's VPN / private address for phone access, or open ports in the cloud console;
   test public reachability externally (e.g. check-host.net TCP checks), not only on the machine.
@@ -251,26 +251,26 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   channel=release, valid build number (YYYYMMDDHHMM), and updateURL (`<release site>/dl`) compiled in.
   `deploy.sh` injects it with ldflags from build config `publish.site_url`; manual go build deployments often omit it. Missing `publish.site_url`
   means no `-X main.updateURL=...`; add config and rebuild with `deploy.sh`'s ldflags. Docker updates images, not the binary,
-  so prompting to change the image is expected (`docs/hub-update.md`).
+  so prompting to change the image is expected (`docs/operations/hub-update.md`).
 - Closing an RPC peer doesn't end the hub connection: the SSH child may stay alive. Connection loops must wait on `peer.Done()` too, or "reconnected" machines stay online while every call returns `rpc: connection closed` (`TestReconnectGivesAWorkingConnection`).
-- tailcat (`docs/server.md` ("tailcat hole punching"), 2026-11-01): empty `Server.AllowedClients` lets **everyone** connect; refuse to load a node key file without the hub public key.
+- tailcat (`docs/server/server.md` ("tailcat hole punching"), 2026-11-01): empty `Server.AllowedClients` lets **everyone** connect; refuse to load a node key file without the hub public key.
   `Server.TailcatAddr()` embeds DERP-region servers in the address and, without `RegionID`, reselects by latency each start, changing addresses. Build addresses with `ConnInfo{RegionID}` and select the region during `init`.
   Ports outside `ServedTCPPorts` time out rather than return RST; dialing needs its own timeout. After node restart, an old hub tailcat client fails its first dial;
   discard it on connection failure (`Dialer.Reset`) and rebuild next time. tailcat connections (gVisor netstack) lack keepalive and read forever after peer disappearance; hub must ping periodically. On node exit, close hub connections, `DrainTCP`, then close the tailcat endpoint;
   reversed order prevents FIN delivery, so the hub waits for two ping timeouts (about 2 minutes), causing redeployment timeout (integration testing 2026-11-01).
   Receiving files over tailcat needs `Multistream(false)` on `gzip.Reader`, otherwise it waits for another stream and the connection's reply never sends.
-- Self-hosted derper (`docs/server.md` ("Self-hosted relay"), 2026-11-02): `-certmode manual -hostname <IP>` without a certificate makes derper generate a self-signed one
+- Self-hosted derper (`docs/server/server.md` ("Self-hosted relay"), 2026-11-02): `-certmode manual -hostname <IP>` without a certificate makes derper generate a self-signed one
   and log a map node (with `CertName`), convenient but valid only 1 year. tailscale `tlsdial` still checks `NotAfter` for pinned certificates,
   so expiry breaks relay access; generate a long-lived certificate yourself.
   derper doesn't serve DERP maps; tailcat HTTP GETs `--derp-map-url`, requiring a separate static server. Running as root without `-c` writes the key to `/var/lib/derper/derper.key`.
   Changing the map reselects the region on `init`, changing the address but not the key.
-- Don't expect `http.Server.Shutdown` to finish WebSockets: it doesn't wait for hijacked connections, while `pgxpool.Close` waits unboundedly for all borrowed connections. During a NAS upgrade on 2026-10-31, old hub hung after SIGTERM until SIGKILL, causing about 46 seconds downtime (normally ~1 second). Now close listeners, send WS 1001, and drain with bounds; every step has a timeout and total shutdown has a budget (`shutdown_timeout_seconds`, default 8 seconds), see `docs/server.md` ("Shutdown"). External `docker stop -t` must exceed it.
+- Don't expect `http.Server.Shutdown` to finish WebSockets: it doesn't wait for hijacked connections, while `pgxpool.Close` waits unboundedly for all borrowed connections. During a NAS upgrade on 2026-10-31, old hub hung after SIGTERM until SIGKILL, causing about 46 seconds downtime (normally ~1 second). Now close listeners, send WS 1001, and drain with bounds; every step has a timeout and total shutdown has a budget (`shutdown_timeout_seconds`, default 8 seconds), see `docs/server/server.md` ("Shutdown"). External `docker stop -t` must exceed it.
 - coder/websocket reads, writes, and pings close the entire connection as soon as their context ends (`context.AfterFunc`), without a close frame.
   Connections needing close codes (persona-link replacement 4001, revocation 4002) mustn't read/write with a context canceled first: the hub canceled link ctx then called Close,
   so an in-flight write cut the connection and the client got -1 instead of 4002 (`send`, `close` in `devices/link.go`; regression `TestLinkReplacedAndRevoked` in `hub/link_test.go`).
 - coder/websocket `Conn.Close` is a handshake: waits for the write lock to send a close frame (up to 5 seconds), then for the peer's close frame (up to 5 seconds). A client no longer reading never replies, typically waiting the full 5 seconds, up to about 10. Don't synchronously Close under shared locks like `h.mu`: `sendJSON` did this under `notifyWS`'s lock for slow clients and stalled the whole hub. Use `go conn.Close(...)` (`client.queue`) or `CloseNow`; regression `TestWSNotifyDropsASlowClientWithoutHoldingTheHub`.
 
-## persona-link on Linux (docs/link.md ("Linux (headless)"), 2026-11-02)
+## persona-link on Linux (docs/operations/link.md ("Linux (headless)"), 2026-11-02)
 
 - `errors.Join()` with no errors returns nil: persona-link route `race` returned "no winner, no error" when all candidates were canceled (service stopped during dialing),
   and the caller crashed on a nil link. Explicitly return `ctx.Err()` when all are canceled (`TestRaceCalledOffIsAnError`).
@@ -288,9 +288,9 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - `docker pull --platform linux/amd64 <image>` replaces the local same-name tag with amd64; later `docker run` without `--platform` uses emulation.
   After testing, restore with `docker pull --platform linux/arm64 <image>`.
 
-## persona-link passive mode and node service (docs/link.md ("Passive mode", "Installing the node service"), 2026-11-02)
+## persona-link passive mode and node service (docs/operations/link.md ("Passive mode", "Installing the node service"), 2026-11-02)
 
-- Link only relays node streams; remote updates belong in node RPC (#1158, `docs/node-update.md`). Each attach creates a new `Node`, so update exclusion and installation transactions must belong to the resident process; closing the current RPC doesn't restart resident node. Shut down the resident service only after the success response is actually written; a separate recovery process rolls back if the new version can't start. Old nodes don't know the update protocol and need one local upgrade first; version mismatch alone mustn't enable a deployment button.
+- Link only relays node streams; remote updates belong in node RPC (#1158, `docs/operations/node-update.md`). Each attach creates a new `Node`, so update exclusion and installation transactions must belong to the resident process; closing the current RPC doesn't restart resident node. Shut down the resident service only after the success response is actually written; a separate recovery process rolls back if the new version can't start. Old nodes don't know the update protocol and need one local upgrade first; version mismatch alone mustn't enable a deployment button.
 
 - Linux `setsid` detaches the process group, not the systemd service cgroup: when node startup fails, the manager kills rollback processes in the same cgroup (#1158). Recovery must run in a separate transient user service and be ready before binary replacement. Complete its readiness handshake before acquiring the update-directory lock, or the parent waits for readiness holding the lock while recovery waits for that lock. Tests use fake `systemd-run`, never installing recovery services on the development machine.
 - On macOS, reopening an already-executed signed Mach-O staging file with `O_RDWR` may cause later self-check retries to receive `SIGKILL` (#1158). Use a read-only handle for post-validation `fsync`; don't request write access just to sync. Canceled commits return before self-check. Verify busy / cancellation retries five consecutive times, not just first execution.
@@ -338,7 +338,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 ## Upstream rate limits (2026-11-02)
 
 - Gateways return `HTTP 429 account_quota_exhausted` for exhausted quota and `HTTP 503 account_concurrency_full` for full concurrency. Previously each caller treated these as ordinary failures: knowledge processing and Inbox sorting retried item by item, producing 429 requests and log lines in 15 minutes; Inbox items were marked sorted "by rules" and weren't reprocessed after quota recovery.
-  Handle rate limits per connection in the shared client (`ai/limit.go`, `docs/model-config.md` ("Upstream rate limits")): while paused, return `ai.PausedError` without sending; callers seeing `ai.IsPaused` stop the round, don't log, and don't mark items processed. New model-calling loops must do the same.
+  Handle rate limits per connection in the shared client (`ai/limit.go`, `docs/assistant/model-config.md` ("Upstream rate limits")): while paused, return `ai.PausedError` without sending; callers seeing `ai.IsPaused` stop the round, don't log, and don't mark items processed. New model-calling loops must do the same.
 - Thinking models (e.g. `claude-haiku-5-5` thinks by default) count thinking tokens toward `max_tokens` too (2026-11-03, #1000): a project profile of about 2000 Chinese characters needs 3.7–4.7K,
   so `kb.project`'s old 4000 cap often truncated into thinking plus half a JSON object, reported as "unterminated JSON object", retrying every 2 minutes.
   Inspect Messages `stop_reason`: if `ai.JSONMax` lacks a complete object and stopped on `max_tokens`, double the cap and retry once; if still truncated, return `ai.ErrTruncated`.
@@ -358,28 +358,28 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - Tests mustn't depend on the test machine's zone: construct UTC times and explicitly pass the display zone (e.g. schedule and prompt golden tests in `internal/assistant` use `Asia/Shanghai`; knowledge goldens use `goldenZone`);
   after time-related changes, run `go test ./...` on the hub with `TZ=UTC`, `TZ=Asia/Shanghai`, and `TZ=America/Los_Angeles`.
 - Files storing only clock times (knowledge day files, timelines) need whole-file migration when changing zones and must record their zone; don't simply change the write zone:
-  otherwise one file mixes old and new clock times, and `Since` parsing old rows in the new zone shifts them 8 hours and misses messages in compaction windows (`docs/knowledge.md` ("Time zones")).
+  otherwise one file mixes old and new clock times, and `Since` parsing old rows in the new zone shifts them 8 hours and misses messages in compaction windows (`docs/assistant/knowledge.md` ("Time zones")).
 - Send IANA zone names to other programs (the manager's `Manager.userTZName()`, `extmgr/usertz.go`): `time.Local.String()` is "Local", not a zone name.
 - pgx reads `timestamptz` into `time.Local` by default (#3755): a non-UTC hub serializes database times with `+08:00`, violating protocol UTC. `AfterConnect` in `db.Open` registers a `ScanLocation: time.UTC` codec (`utcTimes`) per connection, so all reads are UTC; don't scatter `.UTC()` fixes.
-- Hub Docker images (`docs/docker.md`, 2026-11-01): lockfile `resolved` entries pointing at other npm registries make `npm ci` on other networks (GitHub Actions, NAS)
+- Hub Docker images (`docs/operations/docker.md`, 2026-11-01): lockfile `resolved` entries pointing at other npm registries make `npm ci` on other networks (GitHub Actions, NAS)
   stall over a minute then report npm's "Exit handler never called!", hiding the network cause. `privacy_check.py` rejects nonstandard lockfile registries
-  (`docs/testing.md` ("npm registry checks")); `Dockerfile` checks before installation too. Web builds inside the image use `--ignore-scripts` to skip `prebuild`'s
+  (`docs/operations/testing.md` ("npm registry checks")); `Dockerfile` checks before installation too. Web builds inside the image use `--ignore-scripts` to skip `prebuild`'s
   privacy check (build context lacks `scripts/` and git); workflow runs that check against the full checkout before building.
 - Container ssh can't identify uids absent from passwd (`No user exists for uid`); duplicate uid entries use the first home (alpine guest is 405,
   home `/dev/null`, making mounted `~/.ssh` useless). The entry script changes the `persona` user itself to PUID / PGID and removes colliding entries rather than using
   `docker run --user <uid>`. `docker compose exec` defaults to root; image `personad` wraps privilege dropping to `persona`, or newly generated tailcat keys belong to root and the hub can't read them.
 
-## Knowledge base (docs/knowledge.md)
+## Knowledge base (docs/assistant/knowledge.md)
 
 - Enforce retention at write entry points, not only daily cleanup: initial archive reads "latest 100 messages", which in quiet sessions can reach years back;
   after cleanup, 47 expired day files reappeared 6 seconds later (production 2026-11-02). All day-file writes (`Archive`, `Ingest`, `Backfill`) share
   `Engine.textCutoff()` (midnight of the earliest retained day); cleanup uses `Engine.Prune`, with the same retention days. New write paths use it too. `TestArchiveKeepsToTheTextRetention` checks "cleanup immediately after writing should delete 0 days".
 - For slow search, measure traversal first (#2632): with 37,000 archived files, caching contents improved only 1.6×; most remaining cost was serial `filepath.WalkDir` (~70 ms,
   more than 8-way parallel `stat` on all files at ~30 ms). Directory mtime changes for entry additions/deletions/renames, not content appends; cache directory listings by directory mtime,
-  file contents by mtime + size. Together, warm search improves ~360 ms → 85 ms (~4.2×, docs/knowledge.md). Skip "just changed" entries for mtime caches (another same-tick write with unchanged size is invisible).
+  file contents by mtime + size. Together, warm search improves ~360 ms → 85 ms (~4.2×, docs/assistant/knowledge.md). Skip "just changed" entries for mtime caches (another same-tick write with unchanged size is invisible).
   Tests age files/directories with `os.Chtimes`, or never exercise the cache path.
 
-## Port forwarding (docs/ports.md)
+## Port forwarding (docs/operations/ports.md)
 
 - RPC `OnEvent` runs in the read loop: blocking there (e.g. writing received bytes directly to a slow WebSocket) stalls every RPC on that machine.
   Queue bytes per stream and write from a separate goroutine; bound queues through windows (sender waits for ack), not dropped data.
@@ -387,7 +387,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   as do test WebSocket clients / servers, or larger HMR messages look like forwarding failures.
 - A dev server's first request may compile for seconds (next dev): when probing "is it HTTP?", a connected but silent timeout doesn't mean "not HTTP". List it first, then ask.
 
-## Admin UI (docs/admin.md)
+## Admin UI (docs/operations/admin.md)
 
 - **Don't trust source addresses twice**: Docker's userspace proxy (docker-proxy) replaces port-mapped connection sources with the bridge gateway (`172.x.0.1`, private):
   host-local connections, all IPv6 when Docker IPv6 is disabled, and all Docker Desktop / OrbStack connections, including public arrivals. "Private = LAN" then classifies
@@ -411,7 +411,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 
 - **Socket addresses can mislead too**: public 443 → reverse tunnel → local nginx `stream` (`ssl_preread` SNI passthrough) → hub TLS port makes every connection appear as
   `127.0.0.1`. Admin `cidrs` becomes ineffective (loopback always allowed; public `/api/v1/admin/state` returns `can_setup: true`), master token works publicly,
-  auth failures aren't counted, logs show loopback. TLS passthrough can't add forwarding headers; use PROXY protocol (`security.proxy_protocol`, `docs/network.md` ("PROXY protocol")).
+  auth failures aren't counted, logs show loopback. TLS passthrough can't add forwarding headers; use PROXY protocol (`security.proxy_protocol`, `docs/operations/network.md` ("PROXY protocol")).
 - **Reject trusted upstreams without headers**, not "use headers if present, otherwise old behavior": direct proxy bypasses and proxies forgetting headers would become loopback again.
   Conversely, never read headers from sources outside `from`; existing clients remain unchanged. v1 `UNKNOWN` / v2 `UNSPEC` permit the socket address,
   but that's loopback for same-host upstreams, so reject them; only v2 `LOCAL` (proxy's own connection) uses the socket address.
@@ -431,7 +431,7 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   wrapping inside makes every 401 log twice. Implement `Flush` for streaming, and `Unwrap` so `http.ResponseController` can reach underlying connections for deadlines and hijack.
   WebSocket upgrades and `longLived` paths bypass this wrapper.
 
-## Linked hubs (docs/mesh.md, 2026-11-02)
+## Linked hubs (docs/server/mesh.md, 2026-11-02)
 
 - In v1 peer linking, machine ids sent to the App had to change **before serialization**: `Hub.broadcast` called `json.Marshal` first, then modified the message map without changing encoded bytes.
   In v2 (single primary), the primary's machine object already uses the App-visible id (member computers become kind `hub` machines on the primary), so this translation was removed entirely.
@@ -482,9 +482,9 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - For `site/`-only changes (domains, pages), use `SITE_ONLY=1 ./scripts/release/publish.sh`: reuse published production artifacts, no new release (#951).
   Large-file downloads on this machine often reset connections, so curl uses `--retry-all-errors` (default `--retry` doesn't retry "Connection reset").
 - Decide what happens to the old domain: shipped Apps hardcode the push-relay address and deployed personad checks old-domain `/dl/` for updates.
-  With only 301 redirects, POST (push relay) isn't resent unchanged and breaks; the user accepted this on 2026-11-05, redirecting the whole old domain with 301 (#2389, `docs/site.md` ("Old domain")).
+  With only 301 redirects, POST (push relay) isn't resent unchanged and breaks; the user accepted this on 2026-11-05, redirecting the whole old domain with 301 (#2389, `docs/operations/site.md` ("Old domain")).
 
-## Faster access from China (2026-11-04, #1134, `docs/site.md`)
+## Faster access from China (2026-11-04, #1134, `docs/operations/site.md`)
 
 - "CDN node in Hong Kong" doesn't mean fast mainland access: Alibaba Cloud CDN "global excluding mainland China" Hong Kong nodes took 200–390ms to connect, versus 37–38ms for Function Compute / ECS in Hong Kong. Measure ping and HTTPS using Globalping mainland probes (all three carriers) before deciding.
 - Corporate-network international bandwidth varies wildly: the same 15MB file from the same entry point takes 1 second at one moment, over 60 seconds at another. Don't conclude throughput from corporate-network tests alone.
@@ -647,7 +647,7 @@ Fake unsigned markets return 404 for `.sig`; test both first read and an already
 - Future long-lived daemon-independent processes follow `launchHerdrServer`: transient units plus no-user-bus fallback, with generated command lines tested separately.
 - Known, not fixed:
   - Hub self-update rollback watchdog (`startWatchdog` in `hub/selfupdate.go`) only uses `setsid`, remaining in the hub cgroup under systemd.
-  - Without resident node (`personad-node`), hub's local `node --stdio` and assistant claude live in `personad.service` and stop on hub restart (`docs/hub-restart.md` ("Uninterrupted chats")).
+  - Without resident node (`personad-node`), hub's local `node --stdio` and assistant claude live in `personad.service` and stop on hub restart (`docs/operations/hub-restart.md` ("Uninterrupted chats")).
   - `herdrstart_test.go` doesn't cover the `systemd-run` command branch.
   - Whether macOS `setsid` protects herdr from launchd job-stop cleanup hasn't been checked on Mac; Windows node doesn't launch herdr, so no equivalent issue.
 - When a field can mean either "package to send" or "built-in, no package", add a package-only accessor (2026-11-05, #1830 wrap-up, `Manifest.NodeProgram()`):
@@ -696,7 +696,7 @@ Hub startup takes sockets from `LISTEN_FDS`, then clears the environment. `net.F
 So self-update `syscall.Exec` leaves the new process without either fd or environment; it tries to `bind`, but `personad.socket` owns the port, causing `address already in use`.
 Reproduced on Linux with a minimal program (same `listen.go`, simulating systemd → hub → exec).
 
-Hub now runs behind an entry process that keeps the port; version changes no longer exec (`docs/hub-restart.md` ("Blue-green switching")). Without an entry process, retain systemd fds marked close-on-exec,
+Hub now runs behind an entry process that keeps the port; version changes no longer exec (`docs/operations/hub-restart.md` ("Blue-green switching")). Without an entry process, retain systemd fds marked close-on-exec,
 then clear the flag and provide `LISTEN_FDS` / `LISTEN_PID` before exec (`execListenEnv`).
 Don't get fd numbers with `os.File.Fd()`: it switches fds to blocking mode; duplicates share a file description, making the listener blocking too. Record fd numbers beforehand.
 
@@ -725,7 +725,7 @@ For future safety-driven delete/reject decisions, don't rely on error-swallowing
 At about 30 KB/s from hub to a computer, its link repeatedly disconnected with "no pong within 5s", failing every message. Ping doesn't jump the queue: it follows bytes already given to TCP,
 and the peer must receive those before ping, then pong. One 1 MiB block (downloads, uploads, node update packages all use this size) takes over 30 seconds at 30 KB/s, so a 5-second timeout always wins, and the next block breaks again after reconnect.
 Heartbeat timeout must exceed "the largest message on this connection delivered over the slowest link", otherwise it measures bandwidth, not liveness. `link.ping_seconds` / `ping_timeout_seconds` in hub.json
-are now configurable (`docs/config.md`); the hub informs Persona Link through the manager (`endpoints`, `X-Persona-Ping`), both bounded by `link.PingTimes`. Old Persona Link ignores it and still uses 5 seconds.
+are now configurable (`docs/operations/config.md`); the hub informs Persona Link through the manager (`endpoints`, `X-Persona-Ping`), both bounded by `link.PingTimes`. Old Persona Link ignores it and still uses 5 seconds.
 Disconnect reasons include the ping error ("no pong within …: …"), distinguishing no pong from ping never sent.
 
 Two remaining limits aren't fixed by heartbeat settings:
@@ -850,7 +850,7 @@ When a `httputil.ReverseProxy` has to read what it forwards (the sent-as-user le
 ## A LaunchAgent node is throttled, and a protected folder stalls Claude before any hook (macOS, measured 2026-11; re-check; #5944)
 
 - A plist with no `ProcessType` doesn't get "Standard" scheduling: launchd gives the job the Background policy, low scheduling priority and throttled I/O (`launchctl print gui/<uid>/<label>` shows `spawn type = daemon (3)`). A resident node under it got 15.45 CPU seconds in 139 s (scheduling priority 4 instead of 31), and the Claude Code it started did not become ready in time. Nothing looks wrong in the node's own logs; only the timings are long. When a Mac's Agents start slowly or time out, look at the agent's spawn type before blaming the machine's load.
-- `ProcessType=Interactive` gives `spawn type = interactive (4)`. It changes scheduling only and grants no TCC permission: a job that cannot read a protected folder still cannot (`docs/plan-connectors.md` "Full Disk Access (TCC)"). The plists Persona wrote (`scripts/deploy/node-launchd.sh`, `nodePlist` in `cmd/persona-link/nodesvc.go`) did not set it; both write it now, and `personad node doctor` reports an agent without it.
+- `ProcessType=Interactive` gives `spawn type = interactive (4)`. It changes scheduling only and grants no TCC permission: a job that cannot read a protected folder still cannot (`docs/plans/plan-connectors.md` "Full Disk Access (TCC)"). The plists Persona wrote (`scripts/deploy/node-launchd.sh`, `nodePlist` in `cmd/persona-link/nodesvc.go`) did not set it; both write it now, and `personad node doctor` reports an agent without it.
 - Editing the plist isn't enough. `kickstart -k` restarts the job from the definition launchd loaded, so the change needs `bootout` then `bootstrap`. Right after `bootout`, `bootstrap` can briefly fail with `5: Input/output error`, so retry it. Whether a running agent has the key is visible only in `launchctl print`'s spawn type, not in the file.
 - The rename (#277) introduced a new node-agent label, but both installers leave an installed agent as it is. A Mac can have either supported plist, or both. Code that looks for the node's agent has to recognize the installed definitions. With both there, use the one launchd has loaded: the other is a file launchd is not running, and loading it starts a second node next to the running one.
 - Never reload the agent from inside the node. The web page's Fix (`node.doctor.fix`) and a doctor running under the agent (`XPC_SERVICE_NAME` is the agent's label, either one) would be stopped by their own `bootout` before the `bootstrap`, leaving the node unloaded. Only `personad node doctor --fix` from a terminal does it. Test the real `launchctl` sequence with a throwaway label (`go test -tags launchdlive -run TestLiveLaunchAgentFix ./internal/node/`), never with the node's labels.

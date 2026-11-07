@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// fs.find: every file under a directory, as paths relative to it, for the web client's ⌘K file search (docs/web.md
+// fs.find: every file under a directory, as paths relative to it, for the web client's ⌘K file search (docs/web/web.md
 // "Command palette"). The client matches them itself; this only lists. In a git repository the list is what git tracks plus
 // what it does not ignore, so node_modules and build output are not in it; elsewhere it is a bounded breadth-first
 // walk. Both go through the path guard of fs.list: the directory is resolved with realPath, no name that is off limits

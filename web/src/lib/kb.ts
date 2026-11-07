@@ -1,4 +1,4 @@
-// The knowledge base (docs/knowledge.md "App API"): the hub's wire types and the pure logic of the "Knowledge" page —
+// The knowledge base (docs/assistant/knowledge.md "App API"): the hub's wire types and the pure logic of the "Knowledge" page —
 // list grouping and ranking, search results merged by entry with the words marked, which tags a row has room for,
 // the timeline, the profile without what the header shows, and the message "Ask Persona" sends. The iOS app is the
 // reference (apple/Persona/Views/Knowledge/KnowledgeView.swift, apple/Shared/Knowledge.swift).
@@ -70,7 +70,7 @@ export interface KBDetail {
   recent?: string;
   links?: KBEntry[] | null;
   moments?: KBMomentRef[] | null;
-  /** recordings: the transcript, seconds from the start (docs/protocol.md "Recording sync"). */
+  /** recordings: the transcript, seconds from the start (docs/protocol/protocol.md "Recording sync"). */
   segments?: KBSegment[] | null;
 }
 

@@ -36,7 +36,7 @@ type TodoRow struct {
 	Quiet bool `json:"quiet"`
 }
 
-// DoneByAuto marks a todo the hub closed because its task's work was judged finished (docs/todos.md "Auto-complete").
+// DoneByAuto marks a todo the hub closed because its task's work was judged finished (docs/assistant/todos.md "Auto-complete").
 const DoneByAuto = "auto"
 
 // DoneByReview marks a todo its supervisor (the main conversation's assistant) closed after reviewing the work, with

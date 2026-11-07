@@ -1,0 +1,2795 @@
+# Protocol (frontend/backend contract)
+
+Last reviewed: 2026-10-31, against the routes, event emission and database records in `server/internal/hub/` at commit `f3a13fdb7672927197cb8ac38bccb9c65671677b`. The timeouts, retention periods and count limits below are protocol or configuration values; actual performance was not measured.
+
+All JSON fields are snake_case. Times are RFC3339 (UTC). HTTP `listen` defaults to `:18660`; TLS is turned on explicitly with `public.tls_listen` and serves HTTPS / WSS. Over the public internet IPv6 is preferred; see [network.md](../operations/network.md) for configuration and firewall rules.
+
+## Authentication
+
+- Prefer `Authorization: Bearer <token>`. The current implementation has not locked down URL tokens: when there is no Authorization value, every authenticated API (WebSocket included) still falls back to `?token=`, not only on loopback or for WS. Clients should use the header so credentials stay out of URLs.
+- The workspace board (#1646) adds GET `/api/v1/workspace-board` and `/api/v1/workspaces` to the `answer` read allowlist; changing the board still requires `full`. See "Workspace board".
+- The `token` in hub.json is the master token. It is accepted only from trusted sources such as loopback / LAN; from the public internet it returns `403 master_token_local_only` even over TLS. Public clients should use a temporary pairing token or a device token. Plaintext API over the public internet is rejected by default with `403 tls_required`; the only exception is `GET /api/v1/health`.
+- Per-device credentials: `POST /api/v1/auth/tokens {"name":"<device name>","kind":"phone"}` → `{id,token,role,name}`. Device tokens start with `jd_`; the hub stores only a hash. `kind: watch` gets `answer`, every other kind gets `full`. The stored kind is `phone`, `watch`, `web` or `link`; anything else is stored as `other`.
+The web client may send `"replaces":"<this browser's previous device id>"`: once the new credential is created, the hub revokes that one (only if it is a `kind: web` credential not yet revoked; other kinds and unknown ids are left alone, and the new credential is issued either way), and the response gains `"replaced":"<id>"`. Logging in again from the same browser no longer piles up devices (#3356). Web devices stored as `other` before the upgrade are not replaced and must be revoked by hand. `full` can create device tokens. `answer` can only do what the watch needs (an allowlist, `devicetokens.go`); everything else is 403, GET included. Allowed: reading machines, sessions, chat content, interactions and the Inbox list; answering interactions; sending messages; marking read / interrupting; marking Inbox items done, drafting, replying. Files, launchers, device registration and WebSocket are not allowed. When answering a screen card it can only pick an option or press `1`–`9`, `esc`, `enter`; it cannot type, and cannot pick the free-input option ("Type something", which needs text; this is rejected before the card is claimed, so the card stays for the phone). It can only send messages to sessions in the list, text only (control characters stripped), with no launcher or model choice and no images. Inbox replies cannot carry document state changes, and cannot send `/agent` when `lark_agent` is on. Sending messages and approving plans are capabilities it has by design, so a lost watch still needs to be revoked. A newly paired App immediately exchanges for its own token and uses only that from then on. A paired watch exchanges for a separate `kind: watch` one and the watch only ever gets that. Until the exchange succeeds (request failed, old hub) the watch gets no credential at all and shows "No watch credential yet"; tapping "Sync from iPhone" makes the phone exchange again (#1185: it used to borrow the phone's `full` token for the time being, which defeated the restriction from #1128).
+- `GET /api/v1/auth/tokens` returns `{tokens,current,push}`; `push` maps a credential id to the push way of the device it registered last (`docs/operations/push-relay.md` "Which way a device is pushed"). `DELETE /api/v1/auth/tokens/{id}` revokes a credential, clears the cache (authentication results are cached for 30 seconds and cleared on revoke) and disconnects that device's WebSocket. The App manages these in **Settings › Devices**. When an old hub lacks this API, old clients keep using credentials through the original pairing flow.
+- Credentials for a computer's link ([link.md](../operations/link.md)): `POST /api/v1/auth/tokens {"kind":"link","machine":"<a machine in hub.json with kind link>"}` → `role: link`,
+  which can only open `/api/v1/link` and `/api/v1/link/stream`; every other API is 403. The list includes `machine_id`. When redeeming a pairing code generated for that computer (`{"machine"}` below),
+  kind and machine are set by the pairing code; naming a different machine in the request returns 403.
+- Extension tokens (starting with `pext_`, #1855): the hub issues them for the scopes the extension was granted (`permissions.hub`). They open only the routes registered for those scopes; everything else is 403 `permission_denied` (with `scope` when a scope is missing),
+  and only requests from the local machine are accepted, unless they carry their manager's proof that they came through it (`X-Persona-Manager-Proof`, a relayed manager's extensions: [managers.md](../assistant/managers.md) "Extensions and the hub's API"). See [extensions.md](../extensions/extensions.md) ("Permissions", "Hub API: scopes").
+- Linked hubs ([mesh.md](../server/mesh.md)): another hub's credential has kind / role `peer` (`machine_id` is the other side's hub_id) and can only open `GET /api/v1/peer`;
+  a link code `jx_…` can only `POST /api/v1/peer/pair`; every other API is 403. In a group only the **primary hub** accepts App credentials: a member forwards App requests unchanged (with `Authorization`)
+  to the primary, and when it joins it hands the credentials it has issued (hashes) to the primary, so devices paired with the member keep working. When the primary is unreachable, the member returns
+  `503 {"code":"center_unreachable","center":{"hub_id","name"}}`.
+- Public authentication failures are counted per IPv4 address and per IPv6 /64, and the ban check runs before the database lookup; `429 rate_limited` carries `Retry-After` in seconds. LAN / VPN is not counted. Parameters are in [network configuration](../operations/network.md#hubjson-网络配置).
+- Services (separate processes such as the assistant) connect to the hub's bus with a different token (`jb_…`), which can only open `GET /api/v1/bus`. See "Bus" below.
+- Requests may send `Accept-Language: zh-Hans|en|ja` (the full list a browser sends is also accepted; the first entry is taken and falls back per [i18n.md](i18n.md)): human-readable text in that response (`error`, status descriptions) uses that language. `code` does not change; clients still branch on `code`. Without it, the user's language is used (see `client_hello.locale` in "Client capabilities and heartbeat").
+- Every response carries `X-Request-Id`. A request may send `X-Client-Request-Id` (4–32 hex characters / `-`), and the hub then uses it (`docs/server/server.md`, "Operations").
+
+### Health check and feature flags
+
+`GET /api/v1/health` needs no authentication. Public sources get only:
+
+```json
+{"ok":true,"hub_id":"<hub UUID>","hub_name":"Home","tls_port":18662,"fp":"<SPKI SHA-256 base64url>"}
+```
+
+Trusted sources such as LAN / loopback also get `version` and `features`. The source is judged by the connection address, regardless of whether a token is sent; a public HTTPS health response is trimmed too. No source gets candidate addresses. When TLS is off, `tls_port` is `0` and `fp` is an empty string.
+
+For trusted sources the health check also returns `channel` (`release` / `docker` / `dev`), `build` (UTC `YYYYMMDDHHMM`, 0 if absent), `protocol` (the App ↔ hub major version), `min_app_build` (the oldest App it can pair with, `docs/operations/hub-update.md` "Compatibility"), and `update.confirmed` (whether the process has finished confirming an update: true when there is no update to confirm; the watchdog waits on it). `channel` and `build` tell how this hub was built and whether it can update itself; WS `hello` carries the same fields. WS `hello` (after authentication) also carries `public_url` (hub.json's `public_url` with the trailing `/` removed; omitted if unset): hub links in assistant answers are built from it, and the App uses it to recognize "links to this hub", even when the phone reaches the hub through another address (#2696).
+
+`hub_name` is this hub's human-readable name (hub.json's `name`, [config.md](../operations/config.md)). `hub_id` is a UUID persisted in the database's `settings`. Clients use it to tell hubs apart and to check they still reach the same instance after switching candidates. `fp` must come from a trusted QR scan or an authenticated trusted channel; never trust an arbitrary public health response to establish pinning.
+
+The authenticated WS `hello.features` always lists server capabilities. The current `proto.Features` contains:
+
+- New in P0: `tls`, `endpoints`, `client_hello`, `heartbeat`, `app_ping`, `error_codes`, `client_ops`, `ws_notify`, `lock_test`, `android_update`.
+- Existing: `client_msg_id`, `send_refusals`, `screen_dialog`, `resumable_interactions`, `secret_prompts`, `request_id`, `terminal_stream`, `terminal_control`, `terminal_scroll`, `terminal_click`, `terminal_mouse`, `herdr_client` (the web client's full herdr interface: `herdr_open` etc., see "Full herdr interface" below), `herdr_focus` (focus sync for the full interface: `herdr_focus` etc., see "Focus sync" below), `file_upload`.
+- Present depending on hub.json: `assistant_views` (`assistant.persona_view` on: declarative actions carry `expected_version`, live cards, and the APIs registered by in-body cards are available), `assistant_html_bridge` (additionally `assistant.html_views` not turned off: `…/html-actions` is available; whether a client runs HTML still depends on its own security sign-off, and it does not run JS based on this flag). See the card APIs under "Assistant" below and [assistant-views.md](../assistant/assistant-views.md).
+- Also: `assistant_compact` (manually compacting an assistant chat, the session's `compaction`), `assistant_main_new` (new main chat), see the two APIs under "Assistant" below; `assistant_readiness` (main chat readiness, see "Main chat readiness" below); `elicitation` (MCP forms and links), `model_configuration` (models configured by purpose), `plugins` ([plugins](../extensions/extensions.md)), `plugin_ui_slots` (plugin UI slots, UI version 2, `plugin_ui` events, [extensions.md](../extensions/extensions.md) "UI slots"), `plugin_auto_upgrade` (the toggle and list for auto-upgrading market plugins, `plugin_upgrade` events, [extensions.md](../extensions/extensions.md) "Auto-upgrade"), `extension_operations` (install, upgrade, uninstall in steps with progress, see "Extension install, upgrade and uninstall progress" below), `extension_auth` (extension sign-in `/api/v1/extensions/{id}/-/auth…`, `extension_auth` events, the install step `tools`, [extensions.md](../extensions/extensions.md) "Sign-in (auth)"), `desktops` (desktop client registration, see `register_desktop` below), `locale` (honors `Accept-Language`, `client_hello.locale` and the device's `locale`; human-readable text follows the language, [i18n.md](i18n.md)), `terminal_panes` (`GET/POST /machines/{mid}/panes` and terminal stream ids of the form `pane:<pane id>`, [terminal.md](../integrations/terminal.md) section 19), `machine_trust` (a machine's `trust` / `error_code` and `POST /machines/{id}/confirm`, `…/reject`, see "Computer trust" below), `machines_add` (a signed-in device adds a computer and gets the computer's pairing code via `add` on `POST /api/v1/auth/pair-codes`, see "Computer pairing codes" under "Temporary pairing" below), `todo_threads` (a to-do's chat thread: `PUT` / `DELETE /api/v1/todos/{id}/thread` and `thread` on the to-dos `GET` returns, [todos.md](../assistant/todos.md) "Chat thread"; the web shows its Topic section only when it is there).
+
+A feature flag means the implementation supports it; `tls` does not mean the listener is on, so also check `tls_port` / `fp`. A new client talking to an old hub falls back to the old behavior based on the flags. `node_version` / `node_mismatch` in the machine list flag whether the hub offers to redeploy the node: it runs another build than the hub's (the personad on that computer was not deployed by this hub deployment, i.e. `deploy.sh` deployed only part of it, or it was installed on its own; the hub also logs a line when it connects), or its manager cannot drive it. Another build alone is an upgrade offer, not a fault: whether a node can be used is decided by the node handshake (`node_protocol`, `node_incompatible`; see "Node handshake"). New fields are all optional, and the App currently checks whether a field is present. When a future request would be "misunderstood by an old hub", check here first.
+
+`ultracode` indicates support for Claude Code's independent session toggle (#3427; see "Claude Code ultracode" below). This is a hub capability: switching it on a computer with an older node can still return `409 node_outdated`.
+
+`POST /api/v1/machines/{id}/deploy`: the hub installs the node from its own deployment (left by `deploy.sh` on the hub machine at `~/.persona/bin/nodes/personad-<os>-<arch>`) on that computer over ssh (when it is going through tailcat, it is sent to the resident node through tailcat; the node replaces itself, exits and is restarted by launchd / systemd), kills the resident node (launchd restarts it with the new binary; `launchctl kickstart` over ssh does not always work) and reconnects. It runs in the background and returns `{ok}` immediately (409 with a reason when it cannot start). Progress is in the machine list: `deploying` (in progress), `deploy_error` (why the last attempt failed); on success `node_mismatch` goes away. The App shows a notice in **Settings › Machines** with a **Redeploy** button.
+
+Persona Link's active `link` / passive `service` machines, and nodes forwarded through a member hub, are updated over the existing node RPC when they support the update protocol; no SSH is needed. `node.info`'s `node_update` / `node_update_reason` report the local update capability; the machine list's `can_deploy` / `deploy_reason` say whether that entry point can be used right now, and `deploy_phase` is `waiting_idle` / `transferring` / `restarting` / `confirming`. An old node is first upgraded once locally. Deploy jobs are stored in Postgres and support waiting for idle, verifying the install, restarting the resident process, local rollback and confirming it is back online. The detailed RPC and recovery conventions are in [node-update.md](../operations/node-update.md).
+
+<a id="临时配对"></a>
+
+### Temporary pairing
+
+`POST /api/v1/auth/pair-codes` accepts two kinds of callers: **loopback source + master token** (`personad hub pair`), or **a signed-in `full` device token** (any source, #2731: the web client's **Settings › Devices › Connect New Device**).
+No request body is needed; when the body carries `machine` or `add`, it generates a pairing code for a computer's Persona Link (see "Computer pairing codes" below).
+Watch (`answer`), link, peer and extension credentials, the temporary pairing token itself (one code cannot generate the next), and a master token from a non-loopback source all get 403.
+A `full` device can already create long-lived credentials with `POST /api/v1/auth/tokens`; what this gives is a 10-minute, single-use code, so it does not widen permissions. The hub logs a line (device name and id) when a device requests one.
+Codes for the App (without `machine`) also return `qr: {size, rows}` (the QR code of the pairing link, one string of `0` / `1` per row, no quiet zone, same as `/admin`).
+When the body also carries `"web": "<web URL>"` (an absolute http(s) URL with no `#` fragment and no user/password, otherwise 400), the response also includes `web_url` (`<web URL>#token=<temporary token>`: opening it signs in to the web client, and the part after `#` is not sent to the server) and its QR code `web_qr`. On success it returns HTTP 200 with:
+
+```json
+{
+  "token":"<temporary token>",
+  "expires_at":"<RFC3339 UTC>",
+  "url":"http://hub.example.com:18660",
+  "hub_id":"<hub UUID>",
+  "fp":"<SPKI SHA-256 base64url>",
+  "tls_port":18662,
+  "alt":["https://hub.example.com:18662"],
+  "pair_url":"persona://pair?..."
+}
+```
+
+The response carries `Cache-Control: no-store`. The temporary token is `jp_` plus the hex encoding of 32 random bytes; the database stores only its hash. It is valid for 10 minutes and works as a full `full` Bearer for the API / WS, for compatibility with the old iOS flow that reads machines, connects WS and registers push before exchanging credentials.
+
+It can **exchange for a device token only once** through `POST /api/v1/auth/tokens`; a second exchange returns `401 invalid_token`. After the exchange, other APIs keep working until `min(original expiry, exchange time + 2 minutes)`; then it expires, and WS connections already opened with the temporary token are canceled too. The validity and grace periods are protocol policy, not measured performance. After a new device pairs successfully, the hub tries to send a pairing notification; if push is unavailable it logs instead.
+
+`personad hub pair` calls the local API above and prints the temporary link and QR code; the running hub must be reachable over IPv4 loopback HTTP. Only `--legacy` prints the old format with the master token offline. Existing iOS ignores the new parameters and can keep scanning the default temporary code on the LAN; it does not need `--legacy`.
+
+The QR code keeps `url` / `token`; the extra fields follow redesign/hub-changes.md 1.3:
+
+```text
+persona://pair?url=<compatible URL>&token=<temporary token>&hub=<hub_id>&fp=<fingerprint>&tls=<TLS port>&alt=<HTTPS candidate>&alt=<HTTPS candidate>
+```
+
+This shows the structure; actual parameter values are each URL-encoded, and order does not matter.
+
+| Parameter | Format |
+| --- | --- |
+| `url` | `public_url`; old Apps still use it, so keep a reachable LAN / VPN address here |
+| `token` | Temporary Bearer token; the master token with `--legacy` |
+| `hub` | hub UUID |
+| `fp` | SHA-256(SubjectPublicKeyInfo DER), base64url without padding, 43 characters; not a hash of the whole certificate |
+| `tls` | TLS listen port, decimal |
+| `alt` | Full HTTPS URL, repeatable; currently at most two, picked in candidate order, excluding `lan` |
+
+When TLS is off the QR code omits `fp` / `tls`; with no suitable candidate it omits `alt`. The API response still has the matching fields (empty string, 0 or empty array). Renewing a certificate with the same key does not change `fp`; changing the key requires restarting the hub and re-pairing devices through a trusted path. There is no `fp_next` yet.
+
+#### Computer pairing codes (feature `machines_add`, #3735)
+
+From the new-user onboarding plan (#287) 4.2, 5.3. Request bodies:
+
+```
+{"add": {"name": "Lin's MacBook", "os": "mac", "icon": "laptop"}}   add a new "Computer connects" (kind link) computer and get its code
+{"add": {"id": "macbook", "name": "…"}}                              same, with an explicit id (`personad hub pair --machine <id> --add`)
+{"machine": "macbook"}                                               another code for an existing link computer
+```
+
+- `add.name` may be Chinese (at most 40 characters). Without `add.id`, the id is derived from the name: the ASCII letters and digits in the name (lowercased, everything else becomes `-`); if there are none, `add.os` (`mac` / `linux` / `windows`); failing that, `computer`.
+  On collision with an existing id, `-2`, `-3` are appended. `add.os` only decides which install instructions the client shows; the hub does not store it. `add.icon` is `laptop` (default) / `desktop` / `server`.
+- The hub uses the same function as the admin page's **Add Computer › Computer connects** to write hub.json and hand it to the manager (effective while running, no restart).
+  Computers added by a **device** are pending confirmation ("Computer trust" below); those added by **loopback + master token** are confirmed.
+- When a device adds the same name again and that computer is still pending and has never connected, it is reused and a new code issued (`added: false`). A master token with `add.id` that hits an existing link computer also just reissues a code.
+- A device can only issue codes for **pending** computers (`machine` or reuse); a confirmed one returns 409 `not_pending`. Every code a device issues goes through "pending → confirmed"; re-pairing a confirmed computer is done on the admin page or on the hub machine.
+  This is not a security boundary (a full device can already sign credentials for any link computer with `kind: link` on `POST /api/v1/auth/tokens`).
+- When a device reissues a code for a pending computer (`machine` or reuse), the computer's existing Persona Link credentials are revoked first: whichever computer redeemed the previous code, it cannot get confirmed along with the one holding the new code.
+- Success is 200 with `Cache-Control: no-store`. Besides the fields above (`token`, `expires_at`, `url`, `hub_id`, `fp`, `tls_port`, `alt`, `machine`, `pair_url`; no `qr`), it adds:
+
+```json
+{"machine": "macbook", "name": "Lin's MacBook", "trust": "pending", "added": true,
+ "pair_url": "persona://link?url=…&token=…&machine=macbook&hub=…&fp=…&tls=…",
+ "command": "persona-link pair '<pair_url>'",
+ "install": {"linux": "curl -fsSL <site>/install.sh | sh -s -- --node --pair '<pair_url>'"}}
+```
+
+  `trust` is `pending` or `confirmed` (always present here). `added` says whether this call added it (omitted when not). `install` is present only when the hub knows which site it was published from
+  (the build-time `publish.site_url`, [config.md](../operations/config.md); local builds and Docker images don't have it), and currently only has `linux`.
+- Errors (`error` is localized per `Accept-Language`):
+
+| HTTP | code | When |
+| --- | --- | --- |
+| 403 | `forbidden` | Not a full device: a watch, a link, a temporary identity from a pairing code, an extension; a master token from non-loopback |
+| 409 | `tls_required` | The hub has no TLS and is not behind an HTTPS reverse proxy, so Persona Link cannot connect; carries `"action": "enable_tls"` |
+| 409 | `mesh_member` | The device is connected to a member hub of a linked-hub group: add it on the primary hub |
+| 429 | `too_many_pending` | The device is adding a new computer while 3 are already pending (reuse and reissue don't count) |
+| 409 | `exists` / `not_pending` | The given id already exists (and is not a reusable link computer) / a device issuing a code for a confirmed computer |
+| 404 | `not_found` | The `machine` a device sent is not a link computer in hub.json |
+| 400 | `unknown_machine` | The `machine` sent with a master token is not a link computer in hub.json (`hub pair --machine` then suggests adding `--add`) |
+| 400 | `invalid_name` / `invalid_id` / `invalid_os` / `bad_request` | Missing or too-long name / id breaks the rules / unknown os / `machine` and `add` sent together, or `web` included |
+
+- Receipts: when a device issues a computer code, the **other** paired devices get a push "<device> made a pairing code for the computer “<name>”"; when a pending computer's Persona Link redeems the code, all devices get "A new computer, “<name>”, wants to join. Open the app to confirm it’s yours"
+  (instead of the usual "New device paired"). The code-issued receipt is a security receipt and deliberately ignores the device's notification preferences, mute and "don't push while the computer is in use". If push is unavailable it logs. Both issuing (`code`) and redeeming (`redeem`) are written to `machine_audit`.
+- Receipt push payload (#4199): all three carry `aps.category` and a top-level `pair`. The ids the notification buttons need go only in `pair`; the notification text contains no ids or addresses
+  (when the issuing device has no name, the text says "A device", not the credential id):
+
+  | When | `aps.category` | `pair` |
+  | --- | --- | --- |
+  | A device issues a code for a computer (pushed to other devices) | `pair_receipt` | `{"kind":"computer_code","device_id":"<credential id of the issuing device>","machine":"<computer id>"}` |
+  | A pending computer redeemed the code (pushed to all devices) | `computer_joining` | `{"kind":"computer_joining","machine":"<computer id>"}` |
+  | A new credential (new device, Persona Link of a confirmed computer) paired (pushed to all devices) | `pair_receipt` | `{"kind":"device","device_id":"<new credential id>"}` |
+
+  Client buttons: `pair_receipt`'s **Not you? Revoke** calls `DELETE /api/v1/auth/tokens/{device_id}` for `kind: device`, and `POST /api/v1/machines/{machine}/reject` for `kind: computer_code`
+  (409 `not_pending` if the computer is already confirmed, which opens the machine details). `computer_joining`'s **It's Mine** / **Not Mine** call `…/confirm` / `…/reject`. Through the push relay, `category` and `pair` are encrypted along with the rest of the plaintext
+  ([push-relay.md](../operations/push-relay.md) "Encryption"), so the relay cannot see them; the notification service extension decrypts, restores the category, and keeps `pair` in `userInfo`. Old hubs don't send these two fields, and clients show a normal notification.
+  iOS / Mac already register both categories (`apple/Persona/App/PairReceiptActions.swift`): the buttons require unlocking and don't open the App, and the result comes as a local notification ("Pairing revoked", "Computer confirmed", or the reason on failure).
+  The action goes to the hub that sent the push, found by the push's `hub_id` (or by the key set that decrypted it). Tapping the notification itself: `computer_joining` opens **Confirm Computer**, `pair_receipt` opens **Settings › Devices**.
+  The watch does not register these categories; Android and web are not done yet.
+
+<a id="候选地址"></a>
+
+### Candidate addresses
+
+`GET /api/v1/endpoints` requires authentication and returns `{hub_id,tls_port,fp,endpoints}`. Each endpoint:
+
+```json
+{"url":"https://[2001:db8::1234]:18662","kind":"ipv6","port":18662,"scheme":"https","seen_at":"<RFC3339 UTC>"}
+```
+
+The address is a documentation example. `kind` is `ipv6` / `name` / `lan` / `ipv4`, sorted in that order; within a kind HTTPS comes first. `scheme` is `https` / `http`. `seen_at` is when it was collected, not proof of reachability. Candidates merge `public_url`, `public.advertise` and qualifying local addresses; public IPv4 is published only from explicit configuration. When TLS is off, automatic candidates use HTTP, and clients must not send tokens in plaintext over the public internet because of that.
+
+WS `hello` carries the candidates too. When the address list changes, the hub sends `{"type":"endpoints","endpoints":[...]}`, only to clients that declared `endpoints` in `client_hello.features` on that connection; a change in `seen_at` alone does not trigger the event. The event is the complete candidate list and may be empty; clients should replace the old list.
+
+### Error body
+
+The main API's shared error handling keeps the `error` text and adds a stable `code`. `retryable` and `delivered` are **optional** and only given when they can be determined. 404 / 405 on the main router also return JSON. Separate sub-handlers such as mail, and streaming responses, follow their own protocols; don't assume they all carry the new fields.
+
+```json
+{"error":"invalid token","code":"invalid_token","retryable":false,"delivered":"none"}
+```
+
+`delivered` is `none` / `unknown` / `yes`; absent does not mean not executed. In particular, a plain timeout never gets a made-up `none`. Absent `retryable` does not mean automatic retry is OK either. Node 409 details stay flat (e.g. `draft`, `clearable`) and are not wrapped in a new `data`.
+
+| code | Typical HTTP status | Meaning |
+| --- | --- | --- |
+| `tls_required` | 403 | Plaintext public API rejected; `delivered: none` |
+| `master_token_local_only` | 403 | The master token can't be used over the public internet; `delivered: none` |
+| `invalid_token` | 401 | Credential invalid, expired, revoked, or a temporary token exchanged twice; `retryable: false`, `delivered: none` |
+| `forbidden` | 403 | Permission or pairing-code source requirements not met; `retryable: false`, `delivered: none` |
+| `rate_limited` | 429 | The source is banned after authentication failures; wait per `Retry-After` |
+| `bad_request` | 400 | Bad parameter / JSON; `retryable: false` |
+| `not_found` / `method_not_allowed` | 404 / 405 | Resource doesn't exist / method not supported; `retryable: false` |
+| `gone` | 410 | The interaction is no longer pending, etc.; `retryable: false` |
+| `conflict` | 409 | A conflict with no more specific code |
+| `input_draft` / `dialog_open` / `prompt_changed` | 409 | The send or answer was explicitly refused; `retryable: false`, `delivered: none`, see below |
+| `op_id_reused` | 409 | The operation ID was already used for a different device, target or parameters; don't blindly retry with a new ID |
+| `node_outdated` | 409 | The node doesn't support the requested feature, e.g. file upload |
+| `too_large` | 413, or 409 mapped from node RPC | Request / file over the limit |
+| `timeout` | 408 / 504, often 502 for node calls | Timed out; the outcome can't be judged from this code alone |
+| `node_unreachable` | 502 / 503 | The node is offline or the connection dropped; when clearly offline, `retryable: true`, `delivered: none`; not necessarily so for a dropped connection |
+| `no_machine` / `machine_pending` / `claude_missing` / `launcher_missing` | 409 | The main chat (and other assistant chats) can't start: no computer / the computer isn't confirmed yet / Claude Code isn't installed on that computer / launcher not found. `error` is a plain-language sentence the hub writes in the request's language (naming the computer), `detail` is the raw text (the shell's error, shown only under "Details"), `action` is the suggested action (`add_computer` / `confirm_computer` / `install_claude` / `connect_model`), plus `machine_name`, `launcher` (sometimes) and `delivered: none`. `machine_pending` is defined and appears only once pending computers ship. Design: new-user onboarding plan (#287, #3339) sections 4.6, 5.2 |
+| `center_unreachable` | 503 | Connected to a member hub of a linked-hub group, and the group's primary hub is unreachable right now (carries `center: {hub_id, name}`); the member does not take over on its own; switch to another or wait for the primary to return ([mesh.md](../server/mesh.md) "Primary") |
+| `internal` | 5xx | Other internal errors |
+
+The table lists the shared handler and the main business codes; other explicit node RPC error codes are passed through too, usually mapped to 409. Clients should branch on `code`, show `error` for unknown codes, and keep the old behavior when an old hub sends only `error`.
+
+App APIs that take a JSON body all have a size limit (`decodeJSONBody`, 4 KiB–4 MiB depending on the API: small settings, answers, pairing 4–16 KiB; pin / mute / launchers / answer cards / connector replies 1 MiB). Over the limit returns 413 `too_large`; the hub stops reading at the limit instead of reading it all. Malformed input is still 400.
+
+## Operation receipts (client_ops)
+
+Once the server declares `client_ops`, clients may send `X-Persona-Op-Id: <UUID>` on the following write requests:
+
+| Operation kind | Path |
+| --- | --- |
+| `message` | `POST /api/v1/sessions/{mid}/{sid}/messages` |
+| `start` | `POST /api/v1/sessions` |
+| `resolve` | `POST /api/v1/interactions/{id}/resolve` |
+| `interrupt` / `close` / `rename` / `modes` | `POST /api/v1/sessions/{mid}/{sid}/interrupt`, `/close`, `/rename`, `/modes` |
+
+The UUID is case-insensitive. The hub builds a digest from the operation kind, path, normalized query parameters and JSON parameters, then claims the ID atomically. A repeated request reuses the receipt only for the same device, target and parameters; a conflict returns `409 {"code":"op_id_reused"}`. Message requests set `client_msg_id` to the operation UUID, overriding any value of that name in the body. Without the header the old behavior stays, including old iOS's non-UUID `client_msg_id` and `sent_messages` dedup.
+
+`GET /api/v1/ops/{id}` returns the record `{id,device_id,kind,target,digest,state,result,created_at,updated_at}`. `target` contains `path` / `query`. Once recorded, `result` is `{status,body,content_type?}`, where `body` is the base64 of the original HTTP response bytes. It returns 404 when the record doesn't exist or doesn't belong to the current device credential. The master token has no device ID, so its queries are not filtered by device ownership.
+
+| `state` | Meaning and retry behavior |
+| --- | --- |
+| `pending` | Claimed, execution not finished; a repeated write waits for the receipt and returns `202 {"state":"pending"}` when the configured wait runs out |
+| `done` | Success receipt stored; a repeated write replays the original HTTP status and body without executing again |
+| `failed` | Definitely failed, receipt stored; a repeated write still replays the original result |
+| `unknown` | Outcome unknown; for ordinary operations a repeated request returns `202 {"state":"unknown"}`. Query or check by hand; never treat it as success or resend automatically |
+
+For ordinary operations, HTTP 400 / 409 are usually recorded as `failed`; other errors are recorded as `unknown` unless it can be shown they didn't execute. On startup the hub marks leftover `pending` as `unknown` and does not re-execute them. After completion it still tries to store the receipt even if the HTTP caller has disconnected; if storing fails it returns 503 with `state: unknown`. Receipts are kept for 30 days from creation. That is a retention policy; dedup beyond the window is not guaranteed.
+
+Lark sends and Inbox replies also derive receipts from the body's `client_id`; see "Lark API" below. They reuse `client_ops` too, but an existing upstream error response is replayed as-is. Don't apply that response rule to all ordinary operations.
+
+When a new session is started with an operation ID, the hub keeps finishing an accepted start after the caller disconnects and stores the receipt. Replaying the same ID won't start it again; an existing HTTP result is returned as-is even if marked `unknown`, and leftover operations with no result still return `202 {"state":"unknown"}`. Android persists the ID and parameters before sending, and queries the ID if the response is lost. Neither a 404 nor an unknown result proves it didn't start, so it keeps the pending-confirmation record and doesn't POST again. Only a clearly failed receipt allows editing the form and starting a new operation. Clients without the header keep the old behavior.
+
+## Device connections and lock screen test
+
+### Connection records
+
+`GET /api/v1/devices/{id}/sessions?since=<RFC3339 UTC>` returns `{sessions,summary}`. It defaults to the last 24 hours and is clipped to at most the last 14 days; a future or invalid time returns 400. `{id}` is the device credential ID, distinct from the push registration ID and the client-reported `client_hello.device_id`. This query uses the existing general authentication and currently has no extra restriction to the calling device; the lock screen test APIs do strictly check the current device.
+
+Each session is `{id,device_id,connected_at,disconnected_at,reason,source,heartbeat_interval}`. `id` is the numeric database ID, used only over HTTP. While the connection is still open, `disconnected_at` is null and `reason` is empty. `source` stores only the IPv4 /24 or IPv6 /64 prefix. The heartbeat interval is the current protocol configuration, not a measured send rate.
+
+- Only WS connections with a device token create connection records; master tokens and temporary pairing tokens are not recorded.
+- `reason` is `closed`, `pong_timeout`, `error`, `replaced` or `hub_stopped`. When the hub starts or stops and fixes up unfinished records, it marks them `hub_stopped` and does not assume it can recover the exact crash time.
+- `summary.disconnects` counts non-`hub_stopped` disconnects in the window; parallel connections may each count. `summary.longest_gap_seconds` merges overlapping connection intervals and computes the longest offline gap, including a gap still open at query time and excluding gaps caused by hub stops. The unknown period before the first known connection is not inferred.
+- Records are kept for 14 days. The connection summary reflects what the hub observed; on its own it can't prove the phone was locked or the system killed the process.
+
+### Lock screen test
+
+The server capability is `lock_test`. In these APIs `{id}` must equal the current device credential ID; master tokens, temporary pairing tokens and other devices' credentials cannot act on its behalf.
+
+| Method | Path | Request and response |
+| --- | --- | --- |
+| POST | `/api/v1/devices/{id}/lock-tests` | `{delay_seconds?}`, default 30, 1–3600 seconds allowed; body optional. Returns the test record |
+| GET | `/api/v1/devices/{id}/lock-tests/{test_id}` | Returns the current test record, 404 if missing |
+| POST | `/api/v1/devices/{id}/lock-tests/{test_id}/receipt` | `{notification_shown?}`, body optional; returns the record after the first report, repeated reports keep the first result, 409 if not sent yet or no matching test |
+
+The record is `{test_id,device_id,created_at,due_at,status,device_session_id?,sent_at?,received_at?,notification_shown?}`. `device_session_id` is the numeric ID of the connection record actually chosen. When due, the hub picks only the most recently established connection of this device that declared `client_hello.features: ["lock_test"]` and has a connection record, and sends a standalone event:
+
+```json
+{"type":"lock_test","lock_test_id":"<test ID>","lock_test_due_at":"<RFC3339 UTC>","lock_test_sent_at":"<RFC3339 UTC>","lock_test_title":"Lock screen test","lock_test_body":"Test notification received. Go back to the app to see the result."}
+```
+
+All new payload fields have the `lock_test_` prefix to avoid clashing with old iOS Envelope types. The client shows a local notification and then reports back. Absent `notification_shown` means unknown, and true doesn't prove the user saw the notification or that the device was locked at the time. The test is scheduled by the user, is not subject to ordinary notification preferences, and does not require the `ws_notify` capability.
+
+| `status` | Meaning |
+| --- | --- |
+| `scheduled` | Stored, waiting until due |
+| `sent` | A send attempt was recorded, no device report yet; not to be treated as delivered |
+| `received` | The hub received the device's report |
+| `unavailable` | No qualifying connection when due; not resent |
+| `interrupted` | The schedule had expired when the hub restarted; not resent |
+
+A hub restart keeps future schedules. Recording the send and writing to WS can't be done atomically, so `sent` with no report may also mean an interruption or a failed write; it is not resent automatically. Records are kept for 14 days, and the link may be empty after connection records are cleaned up. The schedule delay is configuration; scheduling precision, background survival and whether the notification actually shows were not measured.
+
+## Android packages
+
+Both APIs require authentication; the feature flag is `android_update`:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/v1/app/android/latest` | Returns the published `latest.json` as-is; the release script writes `{version_code,version_name,min_sdk,notes,sha256,size}` |
+| GET | `/api/v1/app/android/apk` | Reads the APK by the manifest's `sha256`; MIME `application/vnd.android.package-archive`, attachment name `persona.apk`, ETag is the quoted digest, supports ServeContent range and conditional requests |
+
+Published files live in `apps/android/` under the hub's config directory, with APKs named `<sha256>.apk`. Unpublished returns 404; an invalid manifest digest returns 500. Clients should verify size and digest, keep downloads same-origin, and leave installation to the system's confirmation. Upgrades with the same package name and signature still need on-device sign-off after artifacts are published.
+
+## Codex sources and capabilities
+
+External Codex sessions keep using `(machine_id, session_id)`. The fixed legacy home keeps its existing raw thread IDs; threads in other canonical homes use an opaque ID of `c0de-` plus a deterministic digest. Changes in PID, endpoint or connection generation don't change the session ID. `source_thread_id` is the original thread ID; never put the opaque ID into `claude --resume`.
+
+New optional Session fields: `source_kind` (`codex_history` / `codex_app_server` / `identity_conflict`; Agent runtime sessions are `runtime`, see "Runtime ↔ node"; Claude Code background sessions are `claude_bg`, read-only, see `docs/integrations/claude-integration.md` "Background sessions"), `source_thread_id`, `source_instance_id`, `parent_thread_id`, `read_only_reason`, `attached`, `capabilities` (six booleans: read/send/interrupt/approve/terminal/attach). Old sources lacking these fields stay compatible; new sources lacking capabilities default to refusing writes. Without the terminal capability, terminal / keys / close pane are not shown.
+Session also has the optional field `pane_index` (#2320): this pane's positional index within its tab (from 0, top-left is 0). The herdr node computes it from the split tree in the snapshot's `layouts` (`splits`; by rect on older herdr without it). It is omitted when the host gives no layout, on old nodes, or when the pane isn't in the layout; `0` is still sent, and only absence means unknown. A change in it alone also pushes `sessions.changed`. Clients group the Agents of one tab (`slot_id`) in this order, with 0 as the initiator; old clients ignore it (`docs/protocol/agent-states.md` "Several panes in one tab").
+Session also has the optional field `space` (#2691): which assistant space an assistant chat belongs to. Chats in the health space are `"health"`; the assistant's own chats omit it. The hub fills it from the session's `cwd` (the health directory `~/.persona/health`); it has nothing to do with herdr's `space_id` / `space_name`. Old clients ignore it (`docs/assistant/health.md`).
+A Session's space also has the optional field `parent_space_id` (#2073): which space this space hangs under in the host, same machine, same `space_kind`; top-level spaces omit it. The Orca host fills it from `worktree.ps`'s `parentWorktreeId` (pointing at itself counts as none), and the hub forwards it as-is. Old clients ignore it and stay flat; the web client's **By Machine** and iOS / Mac's **By Repository** fold child spaces under their parent (`docs/web/web.md`, `docs/apple/ios.md`).
+
+Reasoning effort (`docs/integrations/codex.md` "Reasoning effort"): Codex sessions the phone drives through app-server (sendable ones in `codex_app_server`, and herdr panes attached to the shared daemon, which have no `source_kind`) carry `efforts`: the levels `effort` on `POST …/modes` can take, weakest to strongest (as reported by `model/list` for this thread's model; Codex's minimal … ultra when unavailable). `effort` is its current value, and `permission_mode` is omitted. For these sessions `/modes` accepts only `effort`; sending `permission_mode` is an error, a level not in `efforts` is an error, and failing to apply it (app-server disconnected, no timely response, Codex refused) is an error too, never a premature success. All other sessions omit `efforts`: Claude Code and the assistant keep the client's own set of levels, and the rest can't be changed. Clients show only reasoning effort when `efforts` is non-empty and sending is possible, without guessing from the Agent type; old clients ignore the field.
+
+Context usage (#2430): sessions carry `context_tokens` (the tokens the model saw on the agent's latest reply: for Claude `input + cache_read + cache_creation`, for Codex the latest rollout `token_count`'s `last_token_usage.input_tokens`) and `context_window` (the model's window). The node computes these from the transcript tail that `readQuickMetaSince` already reads, without reading extra files; when the tail has no reply it keeps the last value read (`node/contextwindow.go`). Window: Codex uses the `model_context_window` recorded in its own rollout; Claude goes by model id: a `[1m]` suffix is 1 million, and a session that has already seen more than 200k tokens also counts as 1 million (ids in the transcript have no suffix); other `claude-*` are 200k. For non-Claude models (the gateway's own) the window is unknown and only `context_tokens` is sent. Unknown fields are omitted (`omitempty`): no reply yet, old node. Clients compute the percentage as `context_tokens / context_window` and draw nothing if either is missing.
+
+`POST /api/v1/sessions/{mid}/{sid}/attach`: the user asks to attach live. The node requests resume only for a thread still loaded on its original instance with a unique owner, and without overriding run configuration. Discovery and ordinary history reads don't call resume. Attach permission is stored in settings per thread / stable instance; after a disconnect the owner is re-checked, with no automatic cold resume or instance switch. loaded/list and resume aren't atomic, so there's no promise against an unload race in between.
+
+External sends also use `/messages`, must carry `client_msg_id`, and must successfully register a dedup record in Postgres; nothing is sent unprotected when storage is unavailable. An unknown send outcome (including a generic server error that may come after admission) returns `delivered: unknown`; it must not be resent automatically, and a failed steer must not be turned into a start. Send records don't expire after a day, so restoring a very old outbox can't execute twice; only records known not to have been sent may be forgotten.
+
+Approval IDs contain machine / instance / connection generation / thread / the original typed request ID. Only an explicit answer from the phone replies on the original connection; unknown requests, cancels and disconnects don't automatically send error/decline. `serverRequest/resolved` only marks the card dismissed and takes it down; it never produces an approval. External interrupt doesn't clean up all background terminals; directly driving child threads from a parent isn't open yet.
+
+## Claude Code ultracode (#3427)
+
+ultracode is independent of reasoning effort and adds no level to `EffortLevels`. It applies only to the current Claude process, defaults to off, and does not remember the last choice or change launcher settings or the user's default effort.
+This API is for ordinary Claude Code Agent sessions; Persona's headless assistant chats, including the main chat, do not support it. Client controls are tracked in web #3428, Android #3429 and Apple #3430; choices for dispatch and to-dos are in #3431.
+
+Optional Session fields:
+
+| Field | Meaning |
+| --- | --- |
+| `ultracode: bool` | The observed state; `false` is sent too. Omitted means unknown (no evidence yet, an old node, a non-Claude session, etc.), not off |
+| `ultracode_note: string` | A node-provided reason, in Chinese, why the toggle is unavailable, was refused, could not be confirmed, or still waits (a draft or a dialog in the computer's terminal). A fixed text: it never quotes what was typed at the computer. Clients show the reason and do not treat request success as proof that ultracode is on |
+| `ultracode_pending: bool` | A request is queued: the agent's turn is still running, or the terminal's input box or a dialog is in the way. Clients can show "Applies next turn"; this is a queue flag, not the requested toggle value |
+| `ultracode_lost_at: time` | When a previously enabled session resumed with ultracode off. Clients can show a resume notice and offer to turn it back on; the server never re-enables it automatically |
+
+`POST /api/v1/sessions/{mid}/{sid}/modes {"ultracode":true|false}`: the hub applies model, permission mode and effort changes through the existing path, then calls the node's separate `session.ultracode` method.
+An ultracode-only request does not call `session.modes`. If an old node does not recognize the new method, the hub returns `409 {"code":"node_outdated","error":"…"}` rather than accepting a silently ignored field.
+The same `/modes` endpoint accepts `{"ultracode_dismiss_lost":true}` to dismiss only the resume notice; the node parameter is `dismiss_lost`. Successfully turning ultracode back on also clears the notice. No confirmation dialog is required.
+A request the session cannot take is refused with `409 {"code":"ultracode_unsupported"}` and nothing typed: the main chat, a non-Claude agent, a known CLI older than `2.1.284`, or a terminal the node cannot read or type into (botmux sessions, which only take messages).
+A request that has to wait succeeds with `ultracode_pending` set; the node applies it later on its own. Right after a node restart, a request (a toggle or a dismissal) first waits for the node to load its session state from the hub (at most about 20 seconds), so the stored observation it changes is read in before it, not after it. Asking for the value the process already has while the opposite value is still queued takes the queued request back.
+
+`POST /api/v1/sessions {"ultracode":true,…}` (also accepted by the node's `session.start`) types `/effort ultracode on` after Claude is ready and before the first prompt.
+It is best effort: a refusal (model, dynamic workflows, `Invalid argument`), a verdict not read back in time, or a dialog the new Claude came up with never fails the start. The first prompt is typed as usual, and the reason is in `ultracode_note` (a dialog leaves the request queued). The one exception is a command that may still sit in the input box (typed, no verdict, and the box then shows a draft or a dialog, or cannot be read): the first prompt is not typed after it, and the session is listed as needing the user with the reason, as when a dialog holds the first prompt back.
+Async creation still returns `starting:true` immediately; clients then read the actual result from the session fields. Omitting the parameter does not inherit the last choice or re-enable ultracode on resume.
+`"ultracode":false` is the same as leaving it out: a new process is off anyway, so there is no agent or version check and no command. `true` is refused before anything starts (`ultracode_unsupported`) for a non-Claude agent, a known CLI older than `2.1.284`, or an engine that cannot read its terminals; a node without the `ultracode` capability gets `409 node_outdated` instead of starting without it.
+Requests made while the foreground turn is working or blocked are queued until it ends and the input box is empty. A dynamic workflow that runs on after the turn ended does not hold the toggle back: the input box is free then.
+A queued toggle never holds a message back. When a message arrives while Claude rests, the node types the pending toggle first, then the message; while the turn is still running, the message goes into Claude's own queue and the toggle waits for the next rest. Whatever the toggle's result (it lands in `ultracode_note`), the message is sent; only when the toggle's command may still sit in the input box (typed, its verdict not read back) does the send stop rather than type after it: with the usual `input_draft` / `dialog_open` refusal, or `not_delivered` when the terminal's screen cannot be read at that moment, since an unread screen says nothing about the box. Nothing of the message is typed in either case (`delivered: none`).
+An existing terminal draft or dialog is left untouched: the slash command is never appended to a draft or used to answer a dialog. A queued toggle that waits for one is tried again with growing pauses (3 s, doubling up to 5 minutes). Refusals and mismatches between requested and observed state are recorded in `ultracode_note`.
+
+Version gate: a running session uses the Claude version its transcript recorded since the current process started (a newer CLI resuming an old session has written nothing yet, so the old version says nothing about it and the command is tried); before starting, the node uses the machine's `claude_version`. Known versions older than `2.1.284` are rejected with an upgrade notice. Offline rows show no version notice.
+The old `2.1.203–2.1.283` behavior, where ultracode was an effort level, is unsupported. An unknown version may be tried, but the command response decides the result: a launcher may run a different CLI from the login shell's default.
+Dynamic workflows can be enabled through the existing **Claude Code Settings** boolean `enableWorkflows`. When unset, its default depends on the account's plan (`default:null` in the settings list); organization policy and other restrictions can still make Claude refuse.
+
+State comes from the newest timestamped evidence within the same process: the screen response after a command, `/effort` output in `local-command-stdout`, or non-sidechain `ultra_effort_enter` / `ultra_effort_exit` attachments.
+A recognized `/effort` status line ending in `· Ultracode on` means on; a recognized status line without that suffix means off. Ordinary assistant text is not state evidence.
+Persona starts/resumes and `SessionStart` hooks with source `startup` or `resume` establish process boundaries; earlier evidence is invalid. `clear` and `compact` do not start a new process.
+Toggle commands and their responses become notices in the chat. An `enter` attachment with `reminderType:full` and an `exit` attachment each produce a notice; `sparse` updates state without another notice.
+Assistant snapshots and `agents_list` also carry the state. When on, they explain that each substantive task uses a multi-Agent workflow so background work is not mistaken for a stalled agent and rushed.
+
+## Model providers and per-purpose configuration
+
+The original `/api/v1/launchers` stays compatible. Providers gain `kind` (`launcher` / `api`) and `api` (`messages` / `responses`). An API connection using the Messages protocol can also serve as a launcher for the main chat and Agents (the node starts claude with its URL and Key, #2455); Responses ones can't.
+
+- `GET /api/v1/model-config` → `{purposes, providers}`.
+- `GET /api/v1/model-config/purposes/{id}` → `{purpose, providers}`.
+- `PUT /api/v1/model-config/purposes/{id}` and compatible `PATCH` take `{revision, provider?, model?, effort?, runtime?}`; missing fields are unchanged, `null` clears the override, and a revision conflict returns 409. On success they return the same as the single-item GET. `lark.agent` is an editable child of `agent.new` with its own revision and override; empty selections follow Agents. Its retired record is not consulted. Other legacy children with empty `fields` remain read-only (`docs/assistant/model-config.md`, “Lark /agent override”).
+  `runtime` (`cli` / `agentsdk`) can only be written for `assistant`; other purposes sending it get 400. The `assistant` entry's `fields` has an extra `runtime`, plus `runtimes: ["cli","agentsdk"]`. Changing the provider does not clear runtime.
+  The node's `assistant.send` / `assistant.start` / `assistant.warm` (params the manager fills in from the model configuration) carry `runtime: "agentsdk"`; CLI (empty or `cli`) omits it. `model_fingerprint` includes the runtime: when it changes, the node restarts the process and reattaches with `--resume`.
+- `GET /api/v1/launchers/import?machine=<id>` → `{machine, providers:[{name, base_url, auth, has_key, has_headers, model, models, opus_model, sonnet_model, haiku_model, fable_model, small_model, subagent_model, subagent_force, effort, compact_window, max_context, proxy, no_proxy, timeout_ms, args, source, aliases, existing?}]}`:
+  the manager calls that machine's `launchers.zshrc` and merges aliases that call claude into providers by `base_url + key` (the name is the first alias, with invalid characters replaced by `-`; `[1m]` is stripped from model names and the context window recorded as 1000000; the `ANTHROPIC_MODEL`s in one group are merged into `models`).
+  `existing` is the name of an already saved provider with the same `base_url + key`. Keys and request headers are not returned. Machine offline is 503 `code: "offline"`, node too old is 409 `code: "node_outdated"`, no such machine is 404.
+- `POST /api/v1/launchers/import` `{machine, providers:[name…]}` → `{created:[…], updated:[…]}`: reads the aliases again; keys and request headers pass only through the manager and are saved encrypted, and `source` is written as `zshrc:<alias>@<machine>`.
+  An existing provider only gets `models` filled in (new ids added, existing ones only get unknown context windows filled), other fields untouched; a new one whose name collides gets `-2`, `-3`. Unknown names are 400.
+  If it would make `inbox.triage` unusable while a plugin that needs it is on, it returns 422 `{code: "triage_model_in_use", plugins: [names], error}` (`docs/extensions/extensions.md` "Shared Inbox rules").
+- `GET /api/v1/launchers/presets` → `{presets}`: built-in presets (`plugin: "builtin"`, id `builtin/<vendor>`, with extra `auth`, `signup_url`, `display_name`) plus plugin ones, sorted by request language; a plugin preset with the same id overrides the built-in one (`docs/integrations/launchers.md` "Built-in presets").
+- `POST /api/v1/launchers` with `preset` may leave `name` empty (vendor slug, `-2` on collision); an empty `display_name` uses the preset's. With `assign: ["assistant","agent.new"]` it returns
+  `{launcher, assigned: [purposes], kept: [{purpose, reason: "customized"|"incompatible"|"failed"}]}`, changing only purposes still at their defaults; other purposes are 400. `POST /api/v1/launchers/test` and `/discover` with `preset` use the preset's URL (and model) where not filled in. All of the above is registered in `features` as `builtin_presets`; clients use it only when they see it.
+- A purpose's `fields` and `provider_ids` limit the editable parameters and compatible providers. `override` and `effective` are separate, `inherited_from` marks the source, and `status` is a status description in Chinese. Real tasks / plugins use `task.<id>` / `plugin.<id>`.
+
+Provider responses carry only the description and `has_key`, never secrets. Defaults, execution boundaries and compatibility rules are in `docs/assistant/model-config.md`.
+
+## Data types
+
+```jsonc
+// Machine. kind: local | ssh | link; a link machine gains "link":{"version","address","since"} while persona-link is connected (docs/operations/link.md)
+{"id":"laptop","name":"Laptop","kind":"ssh","ssh_host":"<SSH config alias>","online":true,"error":"",
+ "hostname":"<machine hostname>","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
+ "last_seen":"...",
+ // How it's connected (docs/server/server.md "tailcat hole punching"): transport is local | ssh | tailcat (absent when offline); tailcat: a tailcat address is configured;
+ // tailcat_path only when going through tailcat: direct (hole punched, peer-to-peer) | relay (via DERP relay). Old hubs don't have these fields
+ "transport":"ssh","tailcat":true,
+ // Engine ("Engines" below): the terminal host the user chose for this machine (the saved choice, not what the node reports); the hub always sends it (herdr if never chosen); engines is what the node
+ // found on this machine (empty array when offline). Old hubs don't have these two fields
+ "engine":"herdr",
+ "engines":[{"id":"herdr","name":"herdr","available":true,"version":"0.9.3"},
+            {"id":"herdr-core","name":"Herdr App","available":false},
+            {"id":"herdr-both","name":"herdr + Herdr App","available":false}],
+ // System info (docs/server/machines.md): reported by the node the last time it connected, stored in the hub's database, present even when offline; old nodes don't have this field
+ "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
+           "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,
+           "memory":51539607552,"boot_time":1790000000},
+ // How the primary reaches this one (docs/server/mesh.md "One computer, several paths", plan-hub-center.md 5): hub_id / hub_name is the hub it currently goes through (direct means the primary itself,
+ // through a member means that member); machine_uid is the computer's own uid (old nodes don't have it); route.via is local | service | link | ssh | tailcat (hops 0) or
+ // hub (through a member, hops 1); rtt_ms is omitted when not measured. Present without linked hubs too (all this hub). id: the primary's id if the primary's hub.json has it; for ones configured only on a member, the member's
+ // id, with @<member name> appended on collision. kind is the hub's: a computer configured only on a member. Old hubs don't have these fields
+ "hub_id":"<hub UUID>","hub_name":"Home","machine_uid":"<UUID>","route":{"via":"service","hops":0,"rtt_ms":12},
+ // Optional: when there is more than one path (or only through a member), one entry per path: method, which hub (the primary's own paths use the primary's hub_id), usable now, latest RTT, whether it's the active one
+ "paths":[{"via":"service","hub_id":"<hub UUID>","ok":true,"rtt_ms":12,"active":true},{"via":"hub","hub_id":"<member hub UUID>","ok":true,"rtt_ms":40}],
+ // Optional (feature machine_trust, onboarding plan #287 5.3): trust pending means this computer is waiting for the user to confirm ("Computer trust" below); omitted = confirmed;
+ // error_code says which kind error is: node_service_down (link is up, resident node not running) | link_offline (connected before, disconnected now) | never_connected (a computer-connects /
+ // hub-connects computer that has never connected) | node_outdated (online, the node is another version and too old to update remotely from here); the raw error is still sent, unknown codes show error
+ "trust":"pending","error_code":"never_connected"}
+
+// MetricSample: one reading (every 10 seconds). Unmeasured fields are absent (the first reading has no cpu / net_*), not 0; cores is Linux only
+{"t":1790003600,"cpu":42.5,"cores":[40,45],"load":3.1,"mem_used":34359738368,"mem_total":68719476736,
+ "swap_used":0,"swap_total":0,"net_rx":1024.5,"net_tx":512,"disk_used":10737418240,"disk_total":107374182400}
+
+// MetricPoint: one step in history (average within the step); gap means a break here, don't draw a line across it. mem / swap / disk are bytes used
+{"t":1790000000,"cpu":10.2,"load":1.25,"mem":34359738368,"swap":0,"rx":2048,"tx":512,"disk":10737418240}
+{"t":1790000240,"gap":true}
+
+// Launcher (from zsh: functions listed in _claude_launchers, plus aliases that call claude; docs/integrations/launchers.md). Each item from GET …/launchers also carries agent_type
+// (claude / codex / traex / a runtime's agent; treated as Claude when an old hub lacks it): when unset it is inferred from agent, then from the name (codex, traex). hub.json's
+// machines[].launchers can add wrapper functions or override the type, e.g. [{"name":"example_wrapper","agent_type":"codex"}]; same-name config keeps the model and gateway fields it doesn't override
+// (sessionLaunchers in the manager's assistant/models_launchers.go). Android filters launchers by type.
+{"name":"example_launcher","base_url":"https://example.com","model":"<model name>","agent_type":"claude"}
+// Codex launchers (codex on PATH, aliases that run codex) carry agent; starting one requires prompt and can't be async (docs/integrations/codex.md "Starting from the phone")
+{"name":"codex","model":"Default","agent":"codex","agent_type":"codex"}
+// A start request may carry agent_type, and wrapper functions launch per the declared type: Claude keeps the original arguments, Codex / compatible forks don't get Claude-only arguments, and get the real session ID
+// through the existing herdr / process detection; the first message is passed to the launcher as a single argument. Permission mode and reasoning effort apply only to Claude for now; Android's new-session form hides both when another type is chosen.
+
+// Session: (machine_id, session_id) is unique. session_id is Claude Code's session uuid.
+{"machine_id":"server","session_id":"uuid","title":"AI-generated title or directory name","cwd":"<project directory>",
+ "workspace_cwd":"<physical directory verified by the node>",   // optional; used for workspace association, falls back to cwd when missing, doesn't replace the original cwd
+ "repo_root":"<main checkout of the repo cwd belongs to>",   // optional (#2840): only when the host knows the repo (the Paseo bridge: its worktrees live under Paseo's own directory, so the repo can't be recognized from the path);
+                   // "By Repository" groups by it: cwd inside it is the main checkout, otherwise one of its worktrees. When absent, clients infer from the cwd path as before
+ "status":"idle|working|blocked|done|unknown|offline",   // offline = not running in herdr, only a transcript, can be resumed
+ "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
+ "pane_index":0,   // optional (#2320): this pane's positional index within its tab, from 0, top-left is 0 (the other panes were all split from it; with Agents, it's the group's initiator);
+                   // the herdr node computes it from the snapshot's layouts; omitted when the host gives no layout, on old nodes, or when the pane isn't in the layout (0 is still sent; only absence means unknown). See docs/protocol/agent-states.md "Several panes in one tab"
+ "agent":"claude","agent_label":"",   // agent_label only on Agents the App doesn't know: the runtime's name for it ("DSH", see "Runtime ↔ node")
+ "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_persona":true,"assistant":false,
+ "ultracode":false,"ultracode_note":"…","ultracode_pending":true,"ultracode_lost_at":"...", // Optional; see "Claude Code ultracode". Omitted ultracode means unknown
+ "origin":"inbox","origin_ref":"<Inbox item id>",   // only on assistant chats (assistant: true): who opened this chat, see "Origin of assistant chats" below; absent = user
+ "updated_at":"...","last_text":"first 200 characters of the last assistant text",
+     "turn_error":"API Error: Connection lost mid-response… (only when stopped and this turn was interrupted by a model API error, otherwise absent; its task counts as \"interrupted\", #1516. Claude Code: the hub recognizes it from the start of the last line; Codex: the node reports it from task_complete.error / a failed turn/completed, #2185)",
+     "turn_error_kind":"transient (optional: only when the agent itself states the error kind, Codex's codex_error_info: transient is worth a \"continue\", user needs the user to act; otherwise judged from the turn_error text, docs/assistant/agent-work.md \"Triage\"; for Claude Code's \"Not logged in\", a wrong Key or a wrong model the hub fills in user)",
+     "turn_error_code":"not_logged_in (optional: only when the hub recognizes the problem from turn_error: not_logged_in / auth_failed / model_route / rate_limited; clients use it to draw a \"fix it\" card, see the new-user onboarding plan section 5.2)","pending_interactions":1,
+ "work":{"phase":"blocked","on":"external","line":"Wait for the deploy to finish, then run the production tests","wait":"deploy finished","then":"run the production tests","every_minutes":5,
+         "wake_at":"...","attempts":1,"max":6,"turn_at":"...","at":"...","by":"model"},
+     // Work state (docs/assistant/agent-work.md): phase working | blocked | done; blocked's on is user (waiting for your decision; questions / link /
+     // interaction_id are the card Persona opened for it) | agent (waiting for another Agent, agent:{machine_id,session_id,label}) | external (waiting for a deploy, CI, a point in time;
+     // Persona wakes it at wake_at) | transient (the model service is temporarily failing; Persona sends "continue" at wake_at); done carries artifacts:[{kind:pr|commit|doc|build|url,ref}].
+     // Working is just {"phase":"working"}; absent after a turn stops and before triage (or when it can't tell). For finished ones and ones waiting for Persona to wake them, state is idle, not unread.
+     // Triage is done by the manager (the assistant process); the hub fills it in from what it reports in the snapshot (only for sessions still stopped on that turn), see "Agents" under "Bus" below
+ "activity":"running tests","activity_at":"...",   // only when the latest step is a tool call with no new text since: what this step is doing (summarized by the node from the transcript, within 40 characters) and when it started; gone once new text is written or a new turn starts
+ "queued":["messages typed while working, not yet picked up"],
+ "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
+                "parent_id":"c27d03b1…","fork":true,   // who started it: the id of the subagent that started it (absent when the main session did); fork = forked off. Treated as top-level when the parent isn't in the list
+                "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…",   // subagents are read as sessions
+                "steps":7,"last_tool":{"id":"toolu_…","name":"Bash","summary":"running the tests"}}],   // #5602: tool calls made, the latest one (what it does now; summary in the request's language, like a workflow agent's latest_tool); updated_at is its last message's time, not the file's mtime
+ "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
+ "goal":{"objective":"…","status":"active|paused|blocked|usage_limited|budget_limited|complete","reason":"…",   // the goal it's working on (docs/integrations/agent-goal.md)
+        "tokens_used":12345,"token_budget":500000,"seconds":600,"updated_at":"..."},                              // absent when there is no goal
+ "plan":{"done":3,"total":5,"current":"Reproducing the crash in landscape","at":"..."},   // the agent's own task list (Claude Code's TodoWrite / TaskCreate / TaskUpdate; docs/integrations/agent-goal.md "Plan"): done of total items completed, current = the item in progress (its activeForm, else its subject; one line, at most 120 characters; absent when none is), at = when these last changed. Absent when it keeps no list, and for Codex and runtimes. Old nodes don't have this field
+ // TCP ports the Agent's processes listen on that answer HTTP (docs/operations/ports.md): one entry per port; title is its home page's <title> (absent if none). Old nodes don't have this field
+ "ports":[{"port":5173,"addr":"127.0.0.1","pid":4242,"process":"node","title":"Vite + React"}],
+ // Linked unfinished to-do (docs/assistant/todos.md): only present while currently linked (not released) and the to-do is unfinished; filled in by the hub
+ "todo":{"id":"todo_…","title":"Ship version 1.3 of the weather App"},
+ "quiet":true,   // an Agent working (or that worked) on a quiet task (#1731, docs/assistant/unified-entry.md "Quiet tasks"): kept out of task notifications and the global badge, and stays set after the task is done
+ "background":[{"id":"b85polnoj","kind":"shell|agent|monitor|workflow","description":"…","command":"…",   // background commands / subagents / Monitors / workflows that haven't reported back yet
+                "output_file":"/private/tmp/…/b85polnoj.output","started_at":"...",
+                "expires_at":"...",          // Monitor: stops by itself at this time (the "expires in 30m" in the result); absent if not stated
+                "run_id":"wf_c1d9daf8-cd2"}], // workflow: which run in workflows it is; only running workflows are here (old clients still treat it as a background task)
+ // Claude Code workflows (multi-agent scripts the Workflow tool runs in the background, #2935, docs/protocol/agent-states.md "Background workflows"): the last day's, newest first.
+ // Running ones (running=true) count as background work: the hub computes state as working, doesn't push "done", doesn't judge the to-do complete or auto-close this Agent. Old nodes don't have this field
+ // phase_stats follows phases order, including phases with no agents yet, then appends undeclared phases; title="" means unknown. done counts journal results only; failed counts the journal's failed lines (#5511, omitted when 0; older nodes counted them as done); agents stopped when the run ended are in none of done / failed / running.
+ // Each agent's tokens is the latest assistant usage's input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens, not a cumulative total. Claude Code's own error replies (model <synthetic> / isApiErrorMessage, usage all zeros), usage whose input_tokens + cache_read_input_tokens + cache_creation_input_tokens is 0 (a gateway's on a turn's other replies, whatever its output_tokens) and a gateway's whole-turn sum (over transcript.PlausibleContext) are skipped: the last real one stands.
+ // calls counts tool_use / server_tool_use, deduplicated by nonempty tool_use_id; latest_tool keeps the last tool even after the final reply. latest_tool.summary is a short line on what the call does, in the request's language (the node writes it in Chinese and the hub rewrites it, like activity). Clients retain their existing display when these fields are absent.
+ // Pushes: sessions.changed goes out when a workflow's status, phase, any of its agent counts, or a listed agent's latest_tool name / calls change, at most as often as node rereads workflows (1.5 s); tokens, last_text and the rest ride along with those pushes.
+ "workflows":[{"task_id":"wdp5zxh37","run_id":"wf_c1d9daf8-cd2","name":"parity-audit","summary":"…",
+               "status":"running|completed|failed|killed|stalled","running":true,   // stalled: no end notification, but no activity for 30 minutes (its claude is gone); not counted as running
+               "phases":["Audit","Verify"],"phase":"Verify","phase_index":2,"phase_count":2,   // phases from the script's meta; phase is the phase of the most recently started agent still running, phase_index counts from 1, 0 = unknown
+               "phase_stats":[{"title":"Audit","started":180,"done":167,"failed":2,"running":11},{"title":"Verify","started":5,"done":0,"running":5}], // per-phase counts across all agents, unaffected by the 60-agent response limit
+               "tool_use_id":"toolu_…",                                            // the Workflow call that started it
+               "agents_started":185,"agents_done":167,"agents_failed":2,"agents_running":16, // the total is known only once finished (the script dispatches as it runs): show "done / started"; agents_failed only when > 0
+               "tokens":123400,"calls":420,                                    // sums across all agents, before truncation; tokens is not cumulative consumption
+               "started_at":"...","ended_at":"...","updated_at":"...",           // ended_at only once finished; duration = (ended_at or now) - started_at
+               "error":"Error: Workflow aborted",                                 // first line for failed / killed
+               "agents":[{"id":"a55ab0b9…","session_id":"<id>@a55ab0b9…","label":"audit:chat-rich","phase":"Audit",   // in start order, at most 60 (newest kept)
+                          "running":false,"status":"running|done|failed|stopped",   // failed: the journal says it failed (an API error ended it; older nodes said done); stopped: it hadn't come back when the run ended
+                          "started_at":"...","ended_at":"...","updated_at":"...","last_text":"…", // ended_at is absent while running; done and failed agents use the last exchange time (file mtime as fallback), stopped agents prefer the run's end time; omitted if unknown
+                          "model":"claude-example","latest_tool":{"id":"toolu_…","name":"Read","summary":"Reading example.go"}, // summary in the request's language
+                          "tokens":1234,"calls":8}]}],                   // each agent is read as a subagent: GET the content of session session_id
+ "asks":"Push it to beta?",   // what the last reply asks the user, read by the node off the whole reply (last_text is only its start); absent when it asks nothing (#5096, docs/protocol/agent-states.md "Awaiting your reply")
+ "asks_read":true,            // the node read asks off the reply (empty asks then means it asks nothing or was answered); without it the hub reads last_text when it is whole
+ "awaits_reply":true,         // stopped (unread / idle) on a question nobody answered, with no card, error or background work. Computed by the hub; clients list an idle one as "Awaiting your reply", not folded with the idle ones
+ "background_waiting":true,   // background_working, and all that background work only waits (#6045): its background commands sleep, loop on a check or watch something, using next to no CPU, and no subagent or workflow runs. Clients write "Waiting in the background", lighter than Working and not in its count; state stays working, so older apps show Working. Omitted when false
+ "background_working":true,   // state is working only because of background work (this turn is over, workflows / background commands / Monitors / subagents are running, #2935): clients write "Working (Background)". Computed by the hub; omitted when false, so its absence means an old hub (before #3127) only when no run carries tool_use_id and no agent status: there, look for state=working with a running workflow
+ // The user's latest manual compaction (assistant chats only, present only after POST …/compact): running → done | failed (error is a human-readable reason); the node keeps it until the next one
+ "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}
+
+// Todo: a to-do item (docs/assistant/todos.md)
+{"id":"todo_…","title":"Ship version 1.3 of the weather App","notes":"Notes","done_at":null,
+ "created_at":"...","updated_at":"...",
+ "origin":"<assistant chat id>","plan_id":"plan_…",   // only on tasks opened from an assistant chat (docs/assistant/unified-entry.md)
+ "start_error":"rpc: connection closed",         // the task's Agent failed to start: the hub also sets done_at, and the task ends there; cleared on reopen (#1077)
+ "quiet":true,   // dispatched by the main chat while "notify about main-chat tasks only in the main chat" was on: fixed at creation, never changes (#1731)
+ "done_by":"auto|review",   // empty = the user marked it; auto = the hub judged it done and closed it; review = closed after the supervisor's review (#3124), reason in done_reason
+ // Supervision record (#3124, docs/assistant/unified-entry.md "Supervision"): only on tasks dispatched by the main chat; clients that don't know it show the to-do as usual
+ "supervision":{"supervisor":"<main chat id>",
+                "done_when":["PR merged into master","Light / dark screenshots posted in the PR"],   // acceptance criteria, may be an empty array
+                "expect_minutes":30,                                    // estimated minutes, 0 / absent = not given
+                "state":"",       // "" in progress | pending_review awaiting review | rework being reworked | needs_user waiting for the user to decide | accepted accepted | cancelled cancelled
+                                  // (for accepted / cancelled the to-do is done; after the user reopens it, it counts as in progress)
+                "round":1,        // how many rework rounds, at most 2
+                "reviews":[{"at":"...","verdict":"accepted|rework|needs_user|cancelled","round":1,   // round only on rework
+                            "checks":[{"criterion":"Light / dark screenshots posted in the PR","met":false,"evidence":"Only the light one"}],"note":"Add the dark screenshot"}],
+                // its agent's latest report to the supervisor (report_to_supervisor, #5112); absent until it reports, and after a hub restart until it reports again
+                "progress":{"kind":"progress|question|blocked|done","step":3,"steps":5,"text":"one line of what it said","at":"..."},   // step / steps absent = not said
+                "updated_at":"..."},
+ "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
+ "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
+           "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}
+
+// Item: one normalized transcript entry (one per content block)
+{"id":"<entry uuid>#<block idx>","seq":123,            // seq = transcript line number, monotonically increasing, used for increments and paging
+ "ts":"...","role":"user|assistant|system",
+ "kind":"text|thinking|tool_use|tool_result|notice|image|fold|turn_duration",
+ "text":"…",                                           // text of text / thinking / notice / tool_result
+ "tool_use_id":"toolu_…",                             // shared by tool_use and tool_result; the App merges them into one card by it
+ "tool_name":"Bash", "tool_input":{...},              // tool_use only
+ "is_error":false,                                    // tool_result only
+ "full_size":4874,                                    // text was truncated (in pages and pushes, tool output is at most 4 KB, other text 24 KB): the byte size of the full text;
+                                                      // truncated text ends in a note line: for tool output "…（已截断，点开看全文，共 N 字节）" ("truncated, tap to see the full text, N bytes"; the App has a "view full text" button),
+                                                      // for other text "…（已截断，共 N 字节）" ("truncated, N bytes"); old Apps still understand it
+ "queued":true,                                       // user text only: a message typed while working, absorbed mid-turn
+ "client_msg_id":"…",                                 // this item comes from a message the App sent with this client_msg_id (text, image, or the notice /compact turns into),
+                                                      // recognized by the node, see "Matching pending messages"; old hubs / nodes omit it
+ "wake":true,                                         // notice only: Claude was idle when a background task finished, and this notification started a new turn
+ "injected":{"kind":"task_notice","state":"done",…},   // user text only: this is a message Persona sent to the model (task notification, scheduled task, wake-up…), not written by the user; added by the hub when sending, see "Messages Persona injects"
+ "compact":{"trigger":"manual|auto","pre_tokens":151467}, // notice only: the context was compacted here (Claude Code's compact_boundary); the App draws a divider and folds the following "已从压缩的上下文继续" ("continued from compacted context") and the idle-compaction note into it
+ "task":{"kind":"shell|monitor|agent|workflow|task",     // notice only: a background task notification (command, Monitor event / end, subagent, workflow); text is a one-line summary
+         "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description or the command's first line",
+         "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",
+         "detail":"the Monitor event / the subagent's result / the whole command (entities decoded)"},
+ "fold":{"items":1294,"tools":647,"thoughts":110,     // kind=fold only (only when the request carries fold_work): a folded stretch of work, see "Folded work"; may carry tasks, images
+         "until":"...","through_seq":6890,"through_id":"…#0"},
+ "image":{"mime":"image/png","data":"base64"}}        // image only (images in tool_result are also split into image items, with tool_use_id)
+
+// Interaction: something that needs a person
+{"id":"ix_…","machine_id":"server","session_id":"uuid","session_title":"…","cwd":"…",
+ "task_title":"…",   // when the asking Agent works on a task opened from an assistant chat, the hub fills in the task name when sending to clients (docs/assistant/unified-entry.md)
+ "kind":"question|plan|permission|screen|elicitation",
+ "created_at":"…","expires_at":"…","tool_name":"AskUserQuestion","tool_use_id":"…",
+ "questions":[{"question":"…","header":"…","multi_select":false,
+               "options":[{"label":"…","description":"…"}]}],   // question
+ "plan":"markdown",                                              // plan
+ "tool_input":{...}, "summary":"rm -rf build",                   // permission
+ "screen":"visible terminal text",                                // screen (TUI dialogs hooks can't cover)
+ "always_keys":["tool:Bash"],  // node → hub: what "Always Allow" on an assistant chat's permission card lets through; the hub records it and answers the same card itself (docs/assistant/assistant.md "Always allow for this session"); not used by clients
+ "agent":"codex", "reason":"…", "always_label":"本会话不再问这个命令"} // a card the node read from the Codex / compatible forks TUI ("Codex questions and approvals"); always_label is emitted in Chinese: "don't ask about this command again this session"
+
+// Resolution (by kind)
+{"answers":{"<original question text>":"the chosen label; multiple joined with \", \"; or custom text"}}   // question
+{"approve":true,"mode":"bypassPermissions|acceptEdits|default"}               // plan approved
+{"approve":false,"feedback":"Change it to…"}                                  // plan sent back
+{"allow":true,"always":false} / {"allow":false,"message":"…"}                // permission
+{"keys":["down","enter"],"text":""}                                         // screen: keys / text sent to the pane
+{"dismiss":true}                                                            // any: give up, hand back to the computer's TUI
+{"cancel":true}                                                             // question with can_cancel:true: discard without an answer
+{"answers":{"…":"…"},"answered_by":"assistant"}                               // answered by the assistant (#1602): question only; App replies don't carry answered_by
+```
+
+### Closing a question without an answer
+
+A question advertises `can_cancel:true` only when its runtime can discard that request and release its waiter without interrupting the task. Clients hide the close action when the field is absent or false. Send only `{"cancel":true}` to the existing resolve endpoint; mixing cancellation with answers, dismissal, approvals, keys, or other actions returns 400 and leaves the card pending. Approvals cannot be cancelled through this action. Folding a card remains local UI state.
+
+The manager records `cancelled` with the cancellation resolution, removes the pending card, and releases its waiter once. Repeated HTTP cancellation returns the recorded result, and a reconnecting resumable hook receives the same cancellation instead of a new question. Claude `AskUserQuestion` hooks deny only that tool call without `updatedInput.answers`; Codex owned and joined app-server `item/tool/requestUserInput` requests receive `{"answers":{}}` on the original request, with no user message or `turn/interrupt`. The assistant's `ask_user` tool also releases its wait with an explicit no-answer result. Existing `dismiss` still hands control back to the computer.
+
+Manager-owned `persona_triage` cards also advertise cancellation, including restored cards created by older versions. Their cancellation defers only that turn, removes its wakeup, and sends no Agent message. Triage option objects may carry `action:"defer"`; clients still submit the selected label in `answers`, and the owner interprets the action on that exact offered single-choice option. Existing clients can ignore the new optional field. Terminal outcomes are replayed to the owner without showing the same ID again.
+
+Terminal-only Codex questions (including asynchronous rollout questions) do not advertise cancellation: sending Escape may fold a pane, clear notes, or stop a turn. Upgrade the hub, manager, and the node running the supported runtime before expecting the button; older components omit the capability. Existing runtime questions created before the upgrade keep their original capability; manager-owned triage cards are upgraded when restored.
+
+### MCP elicitation
+
+`hello.features` adds `elicitation`. Clients must declare it explicitly in `client_hello.features`; Android and the web client declare it by default (the web client's `X-Persona-Client` gives platform web, version 1, matching the `platform` / `version` in its `client_hello`). The `interaction` object in the existing `interaction` event gains the following optional fields; no keys are added at the envelope's top level:
+
+```json
+{
+  "kind": "elicitation",
+  "mcp_server_name": "example-mcp",
+  "agent_id": "agent_example",
+  "agent_type": "worker",
+  "elicitation": {
+    "mode": "form",
+    "message": "Please choose",
+    "requested_schema": {
+      "type": "object",
+      "properties": {"choice": {"type": "string", "enum": ["yes", "no"]}}
+    }
+  }
+}
+```
+
+In URL mode `elicitation` is `{"mode":"url","message":"Open the link to confirm","url":"https://example.com/confirm","elicitation_id":"request_example"}`. `mcp_config_source`, `tool_name` and `tool_use_id` are all optional and present only when the source provides them; Claude Code 2.1.306's Elicitation input provides no tool association or config source, and nothing is inferred when they're missing.
+
+Resolution gains optional `action` and `content`. `{"action":"accept","content":{"choice":"yes"}}` submits a form; accepting a URL sends only `{"action":"accept"}`; decline and cancel are `{"action":"decline"}` and `{"action":"cancel"}`. `{"dismiss":true}` still means giving up the phone takeover and handing it to the terminal. A reply without a valid action returns 400 and the request stays pending.
+
+Delivery and fallback rules:
+
+- Both broadcasts and connection initialization filter out connections that didn't declare the capability. After a connection first declares it, still-pending elicitations are resent; repeated hellos don't resend.
+- The REST pending and history lists are filtered too. That kind is returned only if an active connection with the same credential and the same `X-Persona-Client` platform / version has declared the capability; an HTTP header can't declare a capability by itself.
+- If there is no compatible connection at creation, it is handed back to the terminal immediately, leaving no request waiting for a phone answer. The existing timeout, revocation and restart-recovery rules for interactions still apply.
+- Elicitation notifications go only to connections that declared both `ws_notify` and `elicitation`; the old iOS APNs interaction category is not sent. The shared Fleet keeps using the existing terminal prompt and is not given the new kind.
+
+The new fields are stored in the existing interaction JSON payload; no database migration is needed. In-package protocol checks and items not yet signed off are in the [Claude integration doc](../integrations/claude-integration.md#mcp-elicitation-hooks).
+
+<a id="工作区看板"></a>
+
+## Workspace board
+
+Workflow, upgrades and persistence are covered in [Workspace board](../web/workspace-board.md). The APIs below belong to the manager (the hub forwards them unchanged over the bus `http.request`, see "Forwarding App requests"; `503 assistant_offline` when the manager isn't there), and the two events are sent by the manager via `ws.broadcast` and pushed unchanged by the hub. The APIs use the hub machine's Postgres as the only persistent state, with no fallback to in-memory or JSON file writes. `answer` may GET the board and the list; POST requires `full`. `can_write` says whether the current request's role can edit; it grants no extra file, Git or Agent permissions.
+
+```text
+BoardState { revision: int64, columns: Column[], cards: Card[], can_write: bool }
+Column { id, title }
+Card { id, machine_id, workspace_id, title, cwd, source, source_id?, branch?,
+       column_id, pinned: bool, archived: bool }
+Workspace { id, machine_id, source, source_id, title, cwd, branch?,
+            online: bool, available: bool, last_seen?: RFC3339 }
+```
+
+The default revision is 0 and the column IDs are `todo`, `doing`, `review`, `done`. Array order is the manual order; clients group by column, archived state and pinned, keeping the arrays' relative order. Card IDs are stable. Workspace IDs are scoped by the hub to machine, source and source ID; a host's local ID can't be matched directly against another machine.
+
+POST must give `revision` explicitly; on success the database increments it atomically and returns the full state. Available actions and parameters:
+
+| action | Parameters |
+| --- | --- |
+| `add_card` | `column_id,machine_id`, plus `workspace_id` or `cwd`, optional `title,pinned,archived`; the ID is generated by the hub |
+| `update_card` | `id`; updates only the given `title,pinned,archived` |
+| `move_card` | `id,column_id,before_id?`; omitting before puts it at the end of the target column |
+| `add_column` | `title`; the ID is generated by the hub |
+| `update_column` | `id,title` |
+| `move_column` | `id,before_id?`; omitting before puts it at the end |
+| `delete_column` | `id,move_to?`; another column is required when it has cards (archived included); the last column can't be deleted |
+
+The workspace in `add_card` must belong to the given machine. The hub re-enumerates or checks the session directories, then has the node verify and resolve the physical directory with `workspace.resolve`; clients can't write `source/source_id/branch`. Only one new binding is allowed per effective machine and canonical directory, with archived cards counted in the duplicate check. Paths are handled in the remote syntax (POSIX, Windows drive letters, UNC); remote paths are never resolved with the hub's own filesystem. When a machine alias is later absorbed, it is only projected onto the current routing identity in responses; the original card's column and order are not merged or rewritten, and the original state still takes part in edits and CAS.
+
+Errors: invalid action, path, reference, duplicate binding etc. return 400; writes by non-full roles 403; a stale revision or a race at commit returns 409 `conflict`; storage unavailable returns 503 (code `not_supported` when the storage capability isn't implemented). On 409 clients should re-read first and never overwrite the latest state automatically; on other failures restore the last confirmed state. Old hubs may return 404.
+
+The GET list merges host spaces, current session directories and bound directories. A host's unknown directory may be empty, and clients can't bind based on it. When a machine is offline or enumeration fails, the last snapshot is used with availability marked, and discovery errors go into `errors`. One host failing must not clear other hosts' results. Alias snapshots are grouped by the current effective machine, with the latest complete snapshot winning. Cards survive a workspace disappearing, a machine going offline and a hub restart.
+
+Session gains optional `workspace_cwd`: the physical directory verified by the node with symlinks resolved, used only for workspace association; the original `cwd` stays unchanged. The field may be omitted for directories that don't exist, can't be resolved or can't be read. Old clients ignore it; new clients prefer it and fall back to `cwd` when it's missing. The value is cached briefly and is no guarantee of permission or existence for later file operations.
+
+The board is off by default (#2475): `GET /api/v1/workspace-board/settings` returns `{enabled,can_write}`. The value lives in Postgres's `settings` table (key `workspace_board.settings`, `{"enabled":bool}`), one per hub, the same for all browsers and devices. If it was never set, it counts as on when `workspace_board`'s `revision > 0` (the board has been edited), otherwise off; the inferred value isn't written back, and only the first PUT stores it. PUT `{enabled}` requires `full`; on success WS pushes `{"type":"workspace_board_settings","enabled":bool}`. The toggle only decides whether clients show it: when off, the board and list APIs still work and no data is deleted. Old hubs without this API return 404; clients then treat it as on (the old version showed it to everyone) and hide the toggle.
+
+Board edits such as move and archive don't trigger Agent or Git operations. On success WS pushes `{"type":"workspace_board","revision":<new version>}`, and clients re-read. While the board is visible the web client also refreshes discovery every 10 seconds, and immediately when it comes back to the foreground, to catch changes in directories and connection state.
+
+## Main chat readiness (`assistant_readiness`, #3710)
+
+Whether the main chat works right now and which step is missing is computed by the hub for all four clients (design: new-user onboarding plan sections 4.4, 5.1). The assistant service answers (via "Forwarding App requests"), for `full` devices only. When the assistant isn't connected it returns 503 `assistant_offline` like the other assistant APIs; old hubs return 404 and clients fall back to the current behavior.
+
+```
+GET  /api/v1/assistant/readiness            → Readiness
+GET  /api/v1/assistant/readiness?probe=1    → Readiness, plus an actual one-word check (costs money; calls for the same computer and launcher within 30 seconds return the last result, and only one runs at a time)
+POST /api/v1/assistant/readiness/dismiss    {"dismissed": true}  →  {"ok": true} (an empty body equals true; false undoes it)
+POST /api/v1/assistant/warm                 → {"ok": true, "readiness"?: Readiness} (same structure, no probe; if it can't finish within 2.5 seconds it returns the last recorded one, omitted if none was ever recorded)
+```
+
+```jsonc
+{
+  "version": 1,
+  "mode": "setup",                 // full / setup; chat_only is reserved for P1 and not produced yet
+  "ready": false,                  // mode == "full"
+  "next": "model",                 // the first step that isn't ok / skipped; null when all are fine
+  "machine": {"id": "mbp", "name": "Lin's MacBook"},   // the main chat's computer; null if none
+  "launcher": "claude",            // the effective launcher (Model configuration › Main chat takes precedence)
+  "steps": [
+    {"id": "computer", "state": "ok", "machine": "mbp"},
+    {"id": "claude", "state": "ok", "version": "2.1.308"},
+    {"id": "model", "state": "problem", "code": "not_logged_in", "machine": "mbp", "launcher": "claude",
+     "title": "Claude Code isn't signed in", "detail": "Sign in once on Lin's MacBook, or use an API key instead.",
+     "action": {"id": "connect_model"}, "alt_actions": [{"id": "login_claude"}]},
+    {"id": "first_message", "state": "todo", "code": "never_tried", "title": "Say hello", "detail": "…", "action": {"id": "test_assistant"}}
+  ],
+  "suggestions": [{"id": "what_can_you_do", "title": "What can you do for me?", "local": true}],
+  "probe": {"ok": false, "agent": "claude", "millis": 2140, "error": "…"},   // only with ?probe=1 and the computer ok
+  "dismissed": false,
+  "checked_at": "2026-11-06T09:00:00Z"
+}
+```
+
+- `steps` always has four entries in a fixed order: `computer`, `claude`, `model`, `first_message`. `state`: `ok` / `todo` / `problem` / `checking` / `unknown` / `skipped`. `todo` / `problem` always carry `code`, `title`, `detail` (per `Accept-Language`) and usually `action`; `model` in `unknown` carries them too (`model_unverified`).
+- `computer`: no computer is `todo` + `no_machine` (`add_computer`); computer not online is `problem` + `node_unreachable` (`wake_computer`); node too old (doesn't know model configuration) is `problem` + `node_outdated` (no button). `machine_pending` appears only once pending-computer confirmation (5.3) ships. When the computer isn't `ok`, the next three steps are all `unknown`.
+- `claude`: the node self-check (`node.doctor`'s `claude-version`, cached per computer: 10 minutes when a version was read, 1 minute when not) reading a version is `ok` + `version`. The default launcher `claude` not readable is `problem` + `claude_missing` (`install_claude`, alternative `connect_model`). The last chat start being refused gives `claude_missing` / `launcher_missing` (no longer counted once a later self-check reads a version, or the launcher is back on this computer), and the same when the launcher health check's record says the command wasn't found. Your own launcher no longer existing on this computer is `launcher_missing` (`connect_model`; launchers added in Persona and direct API providers speaking Messages count as present on every computer). A launcher running Codex or a runtime is `skipped`. An old node without the self-check, or your own launcher whose version can't be read, is `unknown`. A self-check that didn't finish answering this time is `checking` (GET waits at most 12 seconds, warm 2 seconds; the result is cached either way). Once the model has answered, it is always `ok`.
+- `model`: takes the newest piece of evidence: the latest probe (same computer, same launcher), the main chat's latest turn (the session's `turn_error` / `turn_error_code`, or a normal answer), the launcher health check record (within 6 hours). If the newest is an answer, `ok`; if it's a failure with a recognized cause, `problem` + `not_logged_in` (`connect_model`, alternative `login_claude`) / `auth_failed` (`edit_provider`) / `model_route` / `rate_limited` (`connect_model`); with no evidence, or a failure of unrecognized cause, `unknown` + `model_unverified` (`test_assistant`), which doesn't count as a problem. It never spends tokens on its own. The evidence also includes the node's `claude.auth_status` (free, #4048; cached per computer per launcher: 10 minutes when signed in, 1 minute when not signed in or no answer (the call failed, `timeout`, `unreadable`), 10 minutes for an old node's `unknown method`): `not_logged_in` counts as a failure (`not_logged_in`). A `claude.ai` sign-in counts as an answer only when there's no other evidence or the newest is `not_logged_in`; it can't override a recognized `auth_failed` / `model_route` / `rate_limited`. Keys, gateway tokens and cloud providers (`api_key`, `api_key_helper`, `oauth_token`, `third_party`) don't count as evidence; with no other evidence, the `unknown` `detail` says "uses an account or key it was set up with, not tried yet". `unknown` doesn't count as evidence.
+- `first_message`: `ok` once the main chat has answered (recorded, then always `ok`; a changed main chat counts too); if it never answered and the latest turn failed, `problem` + that turn's code; otherwise `todo` + `never_tried` (`test_assistant`). While `first_message` offers `test_assistant`, an unverified `model` step has no action: the try is one button, on `first_message`, where clients show its spinner and answer; the probe it runs verifies the model (#6317). It doesn't affect `mode`.
+- `mode`: `setup` when any of `computer`, `claude`, `model` is `todo` or `problem`, except `rate_limited` (it recovers by itself, so `mode` stays `full`); `unknown` / `checking` don't block.
+- `suggestions`: in `setup` only the two `local: true` ones (`what_can_you_do`, `how_to_connect_model`; the client opens local help, nothing goes to the model); in `full` also `largest_folders`, `today` (`needs: ["phone_calendar"]`), `connect_mail`, with `prompt` (the exact text sent when tapped).
+- `probe` is `POST /api/v1/launchers/{name}/check`'s `{ok, agent, model, answer, millis, error}` on the main chat's computer. When the computer didn't answer (offline, timeout) only `error` is present; such results are not recorded and not used as model evidence.
+- Scheduled tasks (#4253): a run that comes due first computes readiness with the same rules (no probe). If a step this run needs is blocking, it isn't sent; the run record has `status: "skipped"` and `error` "Your computer or model isn’t set up yet, so this one was skipped", with no push. **Run Now** and one-off tasks don't check (a one-off closes when due, so a skip would lose it).
+- Storage: the latest result, `dismissed`, the latest probe, chat start refusals, the main chat having answered once, and scheduled tasks waiting for readiness (`routines_waiting`, #4253) are stored in Postgres `settings` under `assistant.readiness`; nothing is written when the result is unchanged (ignoring time). The first version pushes no events; clients re-fetch when entering the Persona tab, after pairing succeeds, after adding / confirming a computer, after saving a provider, and on `machines` changes.
+
+## Origin of assistant chats (`origin`, #3264)
+
+Assistant chats (sessions with `assistant: true`) carry `origin`: who opened the chat. The hub records it when the chat is opened (the assistant's settings `assistant.origins`: session id → origin, `origin_ref`, start time),
+and fills it into the session lists sent to the App through the snapshot (`SessionView.origin` / `origin_ref`) (`sessions` / `sessions_delta` pushes, `GET /api/v1/sessions`, `conversations` in `GET /api/v1/assistant`).
+Once recorded, the origin never changes; Agent sessions (`assistant: false`) don't carry it. Hubs that know this field include `conversation_origin` in features.
+
+| `origin` | Opened by | `origin_ref` | Sidebar |
+| --- | --- | --- | --- |
+| `user` (or absent) | The user creating one in the App / web (including the main chat, and ones opened with **Hand to AI** in the Inbox or a Lark chat) | — | Recent |
+| `channel` | The user sending `/new` in a channel such as the Lark bot or WeChat | Channel id (`feishu`, `wechat`…) | Recent |
+| `inbox` | The handling chat for an Inbox item (AI twin, `docs/assistant/inbox.md`) | Inbox item id | Auto · Inbox |
+| `task` | Scheduled tasks and follow-ups (`schedule_followup`, including `new_conversation` ones and the own chats of `notify_user`-only `push: "asked"` tasks) | Task id | Auto · Scheduled Tasks |
+| `spawned` | Opened by another chat with `conversation_new` | Session id of the chat that opened it | Auto · Spawned from Chats |
+| `lark_agent` | Sending `/agent …` in Lark (the extension via `POST /api/v1/assistant/conversations`, `purpose: "lark.agent"`, `docs/extensions/lark-agent.md`) | Extension id | Auto · Lark /agent |
+| `extension` | Opened by another extension via `POST /api/v1/assistant/conversations` | Extension id | Auto · Extensions |
+
+- Sending into an existing chat doesn't open a new one and isn't an origin: a task continuing in its own chat, quiet-task notifications (`task_notice`) going into the main chat, channel messages to the main chat, `conversation_send`.
+- **How clients use it**: absent, empty, `user` and `channel` count as the user's own; everything else counts as an auto chat, including values added later that the client doesn't know (shown as **Other**). Old clients don't know the field and list everything as before.
+- **Titles**: an auto chat's title is set from the start (no waiting for the first turn, no model call), following "MMDD | kind | topic": Inbox `MMDD | 收件箱 | <the item's title>`, scheduled tasks `MMDD | 定时 | <task name>` (the kind words are emitted in Chinese: 收件箱 = Inbox, 定时 = scheduled).
+  `收件箱` is not among the kinds the model may pick (only the hub uses it). Other origins still get a title after the first turn (`docs/assistant/assistant.md` "Chat titles").
+- **Backfilling old chats**: when the hub sees the session list of the assistant's machine, it fills in assistant chats that have no origin yet (`by: "backfill"`): AI twin sessions recorded on Inbox items → `inbox` (filling the title too);
+  chats recorded on tasks (`run_session_id`, sessions in run records) and titles started with `定时` (scheduled) → `task`; a first message starting with the Inbox AI twin / chat-forward / scheduled-task prompt → the matching origin;
+  the rest → `user`. It can run repeatedly: already recorded ones are untouched. `POST /api/v1/assistant/origins/backfill` (full-permission devices only; with `{"redo":true}` it also re-judges `by: "backfill"` ones)
+  → `{"checked","filled":{"inbox":3,…}}`.
+
+### Sidebar (same on every client)
+
+- **Recent** under **Persona Chats** lists only the user's own chats (the "Recent" kinds in the table above); pinned ones still appear under pinned regardless of origin.
+- Auto chats are collapsed into one row below **Recent**, "Auto Chats N" (N is the number of unarchived auto chats), **collapsed by default**, with the expanded state remembered per device.
+  While collapsed the row still shows status on the right: a working dot when something is running, and a **Needs You** dot with a count when something is waiting for you (`state: needs_you`), so nothing is missed because it's folded.
+- When expanded, each origin gets a row with a small label (Inbox · Scheduled Tasks · Lark /agent · Spawned from Chats · Extensions · Other), with a count and the same status dots; only origins that have chats are listed. Tapping a row opens **All Chats** filtered to that origin.
+- **All Chats** gets an origin filter at the top (All · Mine · Inbox · Scheduled Tasks · …), defaulting to **All**; search still covers all chats regardless of origin and folding.
+
+## Extension install, upgrade and uninstall progress (`extension_operations`, #3277)
+
+The hub records each install, upgrade and uninstall as an **operation**: split into named steps, each with a state; the download step carries byte counts, and on failure it records which step it stopped at and why. Whenever an operation changes, WebSocket pushes `extension_operation`; after closing the page and coming back, `GET /api/v1/extensions/-/operations` returns the ones in progress and just finished. These exist only when `hello.features` carries `extension_operations`; otherwise clients keep using the synchronous preview / install (the old APIs below are unchanged).
+
+### Operation (`ExtensionOperation`)
+
+```json
+{
+  "id": "3f9c…",                 // operation id
+  "kind": "install",             // install | upgrade | uninstall
+  "extension": "larkext",        // extension id (before preview only the market id is known)
+  "name": "Lark",                // human-readable name, only once known
+  "market": "c0bbc68b20",        // which market it comes from, optional
+  "source": "market:c0bbc68b20/larkext", // install source (same as the extension's origin), optional
+  "version": "0.11.1",           // version to install, only once known
+  "from": "0.10.0",              // version before the upgrade, upgrade only
+  "actor": "Web",                // who started it: device name, personad extension, hub (auto-upgrade)
+  "state": "running",            // running | needs_consent | succeeded | failed | canceled
+  "step": "download",            // the step id in progress (or stopped at)
+  "steps": [
+    {"id": "download", "state": "running", "bytes": 5242880, "total": 17302381, "started_at": "…"},
+    {"id": "verify", "state": "pending"},
+    {"id": "unpack", "state": "pending"}
+  ],
+  "error": "Download stalled: no data received for 30 seconds",  // on failure, in the language of the request that started it
+  "error_code": "download_stalled", // on failure, optional, see below
+  "preview_id": "…",             // when needs_consent: the preview the user must agree to
+  "retryable": true,             // whether POST …/retry is possible after failure
+  "warnings": ["…"],             // uninstall only, optional: what succeeded but needs a hand, e.g. files that could not be deleted (the same as the synchronous answer's `warnings`)
+  "started_at": "…", "updated_at": "…", "ended_at": "…"
+}
+```
+
+- Step `state`: `pending` (not reached yet), `running`, `done`, `failed`, `skipped` (not needed this time, e.g. no `download` when installing from a local directory). A `download` in `done` with `cached: true` means the package came from the local cache and wasn't downloaded again.
+- `bytes` / `total` exist only on `download`: `total` is the size written in the index or the response's Content-Length, absent when unknown (draw an indeterminate progress bar). Other steps have no percentage.
+- Step ids (in order; unused ones are `skipped`; clients show ids they don't know as-is, without erroring):
+
+| kind | Steps |
+| --- | --- |
+| install / upgrade | `download` (download the package) → `verify` (check sha256 and the market index) → `unpack` (unpack) → `check` (manifest, permissions, dependencies, conflicts; bundles and missing dependencies are previewed together) → `consent` (wait for the user to agree) → `tools` (install the command-line programs in the manifest's `tools`, #4507) → `install` (put into installed/, write to the database) → `start` (start it and wait until it's up) → `nodes` (send its computer-side program to each computer, only for ones with a `node` section) |
+| uninstall | `stop` (stop it) → `remove` (delete files and records) → `nodes` (stop and delete its program on each computer, only for ones with a `node` section) |
+
+- While `consent` is `running`, the operation's `state` is `needs_consent`: it carries `preview_id`, and the client `GET …/operations/{id}` gets the full preview (same as the `catalog/preview` answer) to show the user. On agreement, `POST /-/install` (or `/{id}/-/upgrade`) with this `preview_id` as before, and the hub continues this operation; on refusal, `DELETE …/operations/{id}`. If the preview expires (`expires_at`) the operation becomes `canceled`. Upgrades that need no user consent (auto-upgrades, ones whose permissions didn't grow) have this step `skipped`.
+- `start`: extensions with no program (declarations only) and on-demand ones (started on first call) are `done` immediately; otherwise it's `done` once `running`, and `failed` if it can't start (an upgrade rolls back to the original version, stated in `error`). It waits at most `host.ReadyWithin` plus 5 seconds.
+- `tools`: `skipped` for extensions without `tools`; `done` immediately when everything is reused or the same spec was installed before. The step carries `tools: [{"name", "state", "reused"?}]` (`state`: `pending` / `running` / `done` / `failed`, in install order), and `bytes` / `total` are for the one being downloaded (`total` is often unknown). On failure nothing is installed, `error_code` is `tools_failed`, and `error` says which program and why; see [extensions.md](../extensions/extensions.md) ("Command-line programs (tools)").
+- `next`: when the operation `succeeded` and the extension has `auth` but isn't signed in (`signed_out` / `expired`), the operation carries `"next": "auth"`: the client opens sign-in in the extension details ([extensions.md](../extensions/extensions.md) "Sign-in (auth)").
+- `nodes`: waits for every online computer to finish syncing (offline ones aren't waited for; the hub sends to them when they come online, as before). The step carries `machines: {"done": 1, "total": 2}`; one computer failing doesn't fail the whole operation, and its reason is in `machines.errors` (`{"<machine id>": "…"}`).
+- `error_code`: `download_stalled` (no data received for 30 seconds during download), `download_failed`, `checksum_mismatch`, `invalid_package`, `tools_failed`, `needs_consent` (what was agreed to isn't this preview), `start_failed`, `rolled_back`, `uninstall_failed`; unknown ones are shown via `error`.
+- Operations live only in the hub's memory: ones in progress and those finished within the last 10 minutes are listed, and they're gone after a hub restart (an install unfinished before the restart is simply not installed; install again).
+
+### Endpoints
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| POST | `/api/v1/extensions/-/catalog/preview`, `/api/v1/extensions/-/preview` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` right away, downloads and checks in the background, and the operation stops at `needs_consent` (or `failed`) when done. Without `async` the synchronous response is as before, plus an `operation_id` |
+| POST | `/api/v1/extensions/-/install`, `/api/v1/extensions/{id}/-/upgrade` | Unchanged; with `"async": true` in the body it returns 202 `{"operation": …}` and runs `install` / `start` / `nodes` in the background. The synchronous form still returns the extension details once installed (plus an `operation_id`), without waiting for `start` and `nodes`. The first call with a `preview_id` takes over the operation waiting with it; another call with the same `preview_id` while that install runs (a double click, two clients) is 409 `installing_already` and changes nothing |
+| DELETE | `/api/v1/extensions/{id}/-/` | Unchanged; with `async=1` in the query string it returns 202 `{"operation": …}` |
+| GET | `/api/v1/extensions/-/operations` | `{"operations": [ExtensionOperation…]}`: in progress, waiting for consent, and finished within the last 10 minutes, newest first |
+| GET | `/api/v1/extensions/-/operations/{id}` | One operation; in `needs_consent` it also has `preview` (the full preview). 404 if missing or expired |
+| POST | `/api/v1/extensions/-/operations/{id}/retry` | Runs a failed operation again from the start and returns 202 `{"operation": new operation}`. A package already downloaded is in the cache, so `download` is `done` immediately (`cached`); if it failed after `consent` and the new preview's permission digest matches what the user agreed to, it does not ask again and goes straight on to install. A failed operation is retried once: afterwards its `retryable` is `false` (pushed to the apps) and the new operation carries on, so a second `POST` (a double tap, another app or the CLI) is 409 `not_retryable` and starts nothing |
+| DELETE | `/api/v1/extensions/-/operations/{id}` | Cancel: a download or check in progress (started async) stops, one waiting for consent drops its preview, and the operation becomes `canceled`; a finished one is removed from the list; once `install` has started it cannot be canceled (409 `cannot_cancel`) |
+
+Permissions follow the endpoint that started the operation: only a device that can preview / install can list, view, retry and cancel operations (a full-access device installs extensions from a market; every other source only accepts the main token over loopback).
+
+### Events
+
+`{"type": "extension_operation", "operation": ExtensionOperation}`: pushed whenever the step changes; at most one per second while downloading, without `preview`. Only pushed to connections that declared `extension_operations` in the WebSocket `?features=` or `client_hello.features`, and not written to the event log (`event_seq` resume cannot fill it in): after reconnecting, `GET …/operations` once more. Old clients don't receive it; those that only know `extension_upgrade` still get the result of automatic upgrades.
+
+### How clients use it
+
+0. When connecting the WebSocket, include `extension_operations` in `?features=` (or `client_hello.features`).
+1. Tap **Install**: `POST …/catalog/preview {"market", "extension", "async": true}`, get the operation and draw the step list; from then on just listen to `extension_operation` (replace by `id`).
+2. `needs_consent`: `GET …/operations/{id}` to get `preview`, show the existing permission confirmation; if the user agrees, `POST /-/install {"preview_id", "permissions_digest", "bundle", "async": true}`.
+3. `succeeded`: refresh the extension list; `failed`: show `error` next to the step that failed, and when `retryable` offer **Retry** (`POST …/retry`).
+4. When opening the extensions page (or reconnecting), `GET …/operations` and keep drawing the ones in progress.
+
+## Error reports (feature `error_reports`, #5533)
+
+Clients report their errors and crashes only while `features` has `error_reports` (an extension takes them, [extensions.md](../extensions/extensions.md) ("Error reports")). Without it they send nothing, and drop what they kept.
+
+`POST /api/v1/error-reports` (full device credentials: the phone, the Mac, the web; not the watch, pairing tokens or extension tokens)
+
+```json
+{"reports": [{"id": "4f0c…", "source": "android", "kind": "crash", "level": "fatal", "time": "2026-11-06T09:00:00Z",
+  "release": "1.4.0", "build": "512", "os": "android", "os_version": "16", "device_model": "Pixel 9",
+  "message": "IllegalStateException in InboxViewModel",
+  "exceptions": [{"type": "java.lang.IllegalStateException", "value": "…",
+    "frames": [{"function": "load", "module": "persona.feature.inbox.InboxViewModel", "file": "InboxViewModel.kt", "line": 88, "in_app": true}]}],
+  "breadcrumbs": [{"time": "…", "category": "navigation", "message": "inbox", "level": "info"}],
+  "tags": {"screen": "inbox"}, "previous_launch": true}]}
+```
+
+- `ErrorReport` in `schema/extension/protocol.schema.json` is the format; `source` is the client's own (`web`, `android`, `ios`, `mac`, `vision`); `hub` and `manager` are refused. `fingerprint`, `count` and `received_at` are the manager's: what a client sends there is ignored.
+- At most 20 reports and 256 KB a request (400 beyond). `202 {"enabled": true, "accepted": n, "dropped": m}`: dropped are invalid, repeated (same `id`), folded (the same problem within 10 minutes) or over the rate limit; none of them should be sent again. `200 {"enabled": false, "accepted": 0}`: the feature is off; nothing was kept.
+- **What clients put in**: no user content (message text, mail, documents, prompts, notification bodies, file names the user chose), no device ids, account, hub address or machine names; breadcrumbs carry short code-chosen text (a screen's name, a route pattern). The manager scrubs again whatever slips through.
+- **Keeping and retrying**: a client keeps reports locally until it gets a 2xx (a crash is written before the process dies and sent at the next start with `previous_launch`), at most 50 for at most 7 days, and makes each report's `id` once so a retry is recognized.
+
+## REST (App → hub)
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/v1/machines` | `{"machines":[Machine]}` |
+| GET | `/api/v1/workspace-board` | `{revision,columns,cards,can_write}`, the full workflow board; readable by `answer`, see "Workspace board" |
+| POST | `/api/v1/workspace-board` | `{revision,action,...}` → the full updated board; `full` only, a stale revision gets 409 `conflict` |
+| GET | `/api/v1/workspace-board/settings` | `{enabled,can_write}`: the board switch (#2475), one per hub; when never set, inferred from whether the board has been changed, see "Workspace board" |
+| PUT | `/api/v1/workspace-board/settings` | `{enabled}` → `{enabled,can_write}`; `full` only, missing `enabled` returns 400 |
+| GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`; workspace discovery independent of Agents, keeps the last known info on failure, readable by `answer` |
+| POST | `/api/v1/machines/{mid}/reconnect` | Reconnect that machine's node |
+| POST | `/api/v1/machines/{id}/confirm` · `…/reject` | Confirm / reject a computer waiting for confirmation (feature `machine_trust`, "Computer trust" below); only accepts a signed-in full device or the main token (a temporary identity from a pairing code gets 403) → `{"ok":true}`. confirm: confirming an already-confirmed one is also 200, unknown machine 404; reject only works on pending ones (already confirmed 409 `not_pending`, unknown 404) |
+| GET | `/api/v1/machines/{mid}/panes` | The terminal browser tree (feature `terminal_panes`, `full` only): `{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`; includes shell panes with no Agent. `terminal` is the terminal-stream address `pane:<pane>`, `session_id` is the Agent session running in that pane (use it to open the terminal when present) |
+| POST | `/api/v1/machines/{mid}/panes` | `{workspace_id, kind?}`: open a new shell tab in this space (doesn't steal focus on the computer; the directory is the space's own, the request cannot set it) → `{pane, terminal, tab_id}`; `full` only, called only when the user taps |
+| POST | `/api/v1/machines/{mid}/panes/close` · `…/panes/split` · `…/panes/agent` · `…/panes/git` · `…/tabs/close` · `…/tabs/rename` | Terminal node menu actions (`docs/integrations/terminal.md` section 21), `full` only: `{pane}` closes a pane; `{pane, direction: right\|down}` splits → `{pane, terminal}`; `{pane, launcher}` starts an Agent in a shell pane → `{session_id}`; `{op: pull\|push\|fetch, pane \| workspace_id+kind?}` → `{op, message, output?}`; `{tab_id, kind?}` closes a tab; `{tab_id, label, kind?}` renames a tab. Only these fields are accepted; a directory or command cannot be specified |
+| GET · POST | `/api/v1/machines/{mid}/doctor` · `…/doctor/fix` | The machine page's **What This Computer Can Do** (#2429, `docs/server/machines.md` ("Self-check")), `full` only: GET is read-only and returns the `personad node doctor --json` report `{ok, dir, checks:[{name, status: ok\|warn\|fail, state, detail, hint, items}], fixed}`; POST rewrites the files Persona generated itself (same path as `--fix`), checks again, and returns the new report. An old node returns 502 `unknown method node.doctor` |
+| POST | `/api/v1/machines/{mid}/worktree/prepare` · `…/worktree/create` | #2431 **New Worktree…** (`docs/integrations/terminal.md` section 23), `full` only: `{workspace_id, kind?}` → `{root, repoName, branch, path}` (repo top level, repo name, the workspace's current branch, the directory the host puts checkouts of this repo in: herdr's configured one, Orca's default workspace directory); `{workspace_id, branch, path, kind?}` → `{workspace_id, tab_id?, pane?, terminal?, path, branch}`: checks out the branch if it exists, otherwise creates it from the workspace's HEAD, and opens it as a herdr workspace or an Orca worktree under the source one (Orca picks the folder from its own setting and names it after the path's last element; the answer's `path` is where it is); the path must be absolute and either not exist or be an empty directory; never forces, never deletes. Each host in `panes` gains a `worktree` boolean |
+| POST | `/api/v1/machines/{mid}/worktree/add` · `…/worktree/status` · `…/worktree/remove` | #6115 a new agent's own worktree (`docs/integrations/terminal.md` "A new agent in a worktree"), `full` only: `{cwd, branch?, name_hint?, kind?}` → `{path, branch, root}` (`git worktree add` from the folder's repository on `persona/<slug of name_hint>`, made unique, under the checkouts directory; opens no workspace); `{cwd, kind?}` → `{worktree, ours, path?, branch?, root?, main_branch?, checkouts?, dirty, unmerged}` (`checkouts`: where a new agent's worktree of this repository goes); `{path, kind?, delete_branch?:bool, force?:bool}` → `{removed, branch_deleted}`. 409 `not_a_repository`, `not_our_worktree` (not one of Persona's, or a folder inside one), `worktree_in_use` (a live agent's folder is in it), `worktree_dirty` (`dirty`), `worktree_unmerged` (`unmerged`, `main_branch`), `worktree_failed` (git's reason); `force` removes uncommitted work and an unmerged branch, and a client sends it only after the user confirmed |
+| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"\|"paseo"}` → 200 with the updated Machine; unknown engine 400 `{"error"}`, unknown machine 404. Works while offline too (stored, takes effect on connect); `machines` is pushed as usual afterwards ("Engine" below) |
+| GET / PUT | `/api/v1/machines/{mid}/botmux` | PUT `{"on":bool}` → 200 `{"on"}`; GET also returns `{"on"}`. **Also Show botmux Sessions**: stored per machine; if never set, uses `machines[].botmux` from hub.json, otherwise on; works while offline, and a PUT sends `node.configure {"botmux"}` right away. Missing `on` 400 (#2575) |
+| GET / PUT | `/api/v1/machines/{mid}/herdr` | "Start herdr automatically when needed" under **Settings › Machines › Engine**: GET → `{autostart, running, known, installing?, install_error?}` (`known` says whether the node can tell if herdr is running); if the machine is online and the last check is more than 3 seconds old, it first asks the node's `herdr.server.status`; PUT `{"autostart": bool}` changes the switch and returns the same as GET: missing `autostart` 400, engine not `herdr` / `herdr-both` 404, can't save 500 ([engines.md](../integrations/engines.md) "When herdr isn't running") |
+| POST | `/api/v1/machines/{mid}/herdr/start` | The "Start" button next to "herdr isn't running" in the Agents list: the node's `herdr.server.start` (waits up to 40 seconds) → `{autostart, running, known: true}`; node too old or the call fails 502 ("Engine" below) |
+| GET | `/api/v1/machines/{mid}/computer` | Whether this Mac has Cua Driver right now and can be controlled by the assistant (the hub asks the node's `computer.status` on the spot) → 200 `Computer` (`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`, [computer-use.md](../extensions/computer-use.md)); plugin `cua` not enabled, or not a Mac → 404 |
+| PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`: the machine page's **Let the Assistant Control This Computer** switch, written to `machines` in the `cua` plugin config → 200 `Computer`; plugin not enabled or not a Mac → 404. `machines` is pushed as usual afterwards |
+| POST | `/api/v1/machines/{mid}/computer/{install\|grant\|cancel}` | The machine page's **Install Cua Driver**, **Grant Access**, **Cancel**: the node runs it in the background (`computer.install` / `computer.grant` / `computer.cancel`), → 200 `Computer`, progress is in its `job` (`{kind, state: running\|done\|failed\|cancelled, step?, error?, started}`), and the page keeps polling with GET. Plugin not enabled for this machine 404; offline, a job already running, or node too old 409 |
+| GET / DELETE | `/api/v1/machines/{mid}/computer/apps`, `…/computer/apps/{bundle}` | The machine page's **Apps Allowed for the Assistant**: GET → `{"apps":[{bundle_id, name, at}]}`; DELETE removes by bundle id (it will ask again next time) and returns the remaining list; can't save 500 ([computer-use.md](../extensions/computer-use.md) "Approving per app") |
+| GET / POST | `/api/v1/machines/{mid}/computer/clipboard` | This Mac's clipboard (used while the App is viewing the screen, #1343): GET → `{"text"}` (truncated beyond 1 MiB); POST `{"text"}` puts it there and returns `{"text":""}` on success (doesn't echo the text). Goes through the node's `computer.clipboard` (`pbcopy` / `pbpaste`); plugin `cua` or `ego` not enabled for this machine 404, offline 409, and a node error (too old, text over 1 MiB, read/write failure) is also 409 ([computer-use.md](../extensions/computer-use.md) "App") |
+| GET / PUT | `/api/v1/machines/{mid}/browser` | This Mac's ego lite (plugin `ego`, [plan-ego-browser.md](../plans/plan-ego-browser.md)): GET asks the node's `browser.status` on the spot → `Browser` (`{enabled, installed, version?, set_up, imported, analytics?, ready, note?, screen_sharing, job?}`); PUT `{"enabled": bool}` is the machine page's switch (the plugin's `machines`). Plugin not enabled or not a Mac → 404 |
+| POST | `/api/v1/machines/{mid}/browser/{install\|open\|cancel}` | The machine page's **Install ego lite**, **Open ego lite**, **Cancel**: the node runs it in the background, progress is in `job`. Plugin not enabled for this machine 404; offline, a job already running, or node too old 409 |
+| GET | `/api/v1/machines/{mid}/launchers?purpose=` | `{"launchers":[Launcher], "default":{provider, model, effort, runtime?}}`: `default` is the effective value for this purpose in **Model Settings** (`purpose` defaults to `agent.new`; the main chat's picker passes `assistant`), `provider` is the launcher name, and only `assistant` has `runtime`; the client shows "Default: …". For purposes that are not launcher-based, `default` is null |
+| GET | `/api/v1/machines/{mid}/launchers/{name}/models?refresh=1` | The models this launcher's CLI lists in `/model` (choosing a model for a new Agent, `docs/assistant/model-config.md` ("Choosing a model for a new Agent")): `{"agent","models":[{"id","name","description"?,"resolved"?,"default"?,"efforts"?,"default_effort"?}],"locked"?}`. `id` is the value to put in `model` when starting a session; `default` is the one that runs when no model is given (picking it is the same as not picking); `resolved` is what an alias (opus…) maps to under this launcher's settings; `efforts` are the reasoning efforts it supports, weakest to strongest; `locked` is the reason the launcher hard-codes its own `--model`, so picking has no effect. Agents with no list to ask (compatible Codex forks, runtime ones) return `models: []`. The node starts the CLI once to ask (a few seconds) and caches for 10 minutes; `refresh=1` asks again; if it can't list them, 502 `{"error"}`; if this computer's node doesn't have the feature yet, 404 `{"error","code":"node_outdated"}` (same as an old hub; the App hides the model row) |
+| GET | `/api/v1/model-config/providers/{id}/models?refresh=1&machine=` | The `/model` list of a launcher-type provider (`launcher.<name>`) in model settings (`docs/assistant/model-config.md` ("Choosing a model in model settings")): the same response as the row above, plus `machine` (which one was asked). It picks one of the online computers that have this launcher: the one named by `machine`, the assistant's, the hub's own, then the rest. Unknown provider, or a plugin / API-type provider 404; all computers that have it offline 503; node too old 404 `node_outdated` |
+| GET | `/api/v1/launchers/presets` | Provider presets supplied by plugins `{"presets":[{id, plugin, name, description?, kind, api?, base_url, model?, small_model?, models?…}]}` (`id` is `<extension>/<provider>`), picked under "Add from plugin" when adding a provider; an empty list when plugins can't be reached ([launchers.md](../integrations/launchers.md) "Add from plugin") |
+| POST | `/api/v1/launchers/test` | Test connection, without going through a node: `{name?, base_url?, auth?, api_key?, headers?, model}` → always 200 `{ok, ms, model, error?, code?}` (`code` is currently only `region_blocked`: Anthropic blocks by region, 403 `{"error":{"type":"forbidden","message":"Request not allowed"}}`, and switching keys won't help; with `name`, unset fields come from that stored provider; if `base_url` differs from the stored one, the stored key and headers are not sent) |
+| POST | `/api/v1/launchers/discover` | Fetch models: same request as above (without `model`) → always 200 `{models:[{id, name?, context_window?…}], error?, code?}` (`code` as above) |
+| POST | `/api/v1/launchers/{name}/check?machine=` | Test availability: actually sends a request → `{machine, check:{ok, agent?, model?, answer?, millis, error?}}`; an unknown `machine` uses the assistant's machine, and 400 if there is none; API-type providers managed by Persona are requested by the manager directly and return `{check}` without `machine` ([launchers.md](../integrations/launchers.md) "Test availability") |
+| POST | `/api/v1/launchers/{name}/restore` | Unhide a launcher from `~/.zshrc` → `{"ok":true}` |
+| GET | `/api/v1/launchers/{name}/quota?machine=&refresh=1` | Quota: `{machine, checked_at, quota}`, or `{machine, checked_at, error, unsupported}` when it can't be checked (still 200); that computer offline 503, no such launcher 502; cached for one minute, `refresh=1` re-reads ([launchers.md](../integrations/launchers.md) "Quota") |
+| GET | `/api/v1/launchers/health?state=&machine=` | Launcher health-check records `{"records":[{machine, launcher, agent?, state, kind?, error?, model?, millis?, checked_at, source, fails?, repairs?, repair?, blocked_reason?}]}`, filterable by state and computer ([launcher-health.md](../server/launcher-health.md) "Endpoints for the board") |
+| POST | `/api/v1/launchers/health/check?machine=&launcher=` | Check now: with no parameters checks all online computers, returns this run's `{"records":[…]}`, waits up to 10 minutes |
+| GET | `/api/v1/todos` | All to-dos (newest first): `{"todos":[Todo]}`, each with `spaces` and `agents` (dismissed filtered out; current ones first by `linked_at` descending, then past participants by `released_at` descending) |
+| POST | `/api/v1/todos` | Create a to-do `{"title","notes"?}` → 200 `{"todo":Todo}`; `title` can't be empty (400); read-only device 403 |
+| PATCH | `/api/v1/todos/{id}` | Edit a to-do `{"title"?,"notes"?,"done"?}` → 200 `{"todo":Todo}`; `done: true` marks it done, `false` reopens it; missing 404; read-only device 403 |
+| DELETE | `/api/v1/todos/{id}` | Delete the to-do and its links (the Agents themselves are untouched) → 200 `{"ok":true}`; missing 404; read-only device 403 |
+| PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Attach a whole workspace project to the to-do → 200 `{"ok":true,"linked":N}`; `space` is the URL-encoded project name (caught by the wildcard); done 409, missing 404, read-only device 403 |
+| DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | Detach the whole group (physically deletes the space-linked Agents for that project under the to-do) → 200 `{"ok":true}`; missing 404, read-only device 403 |
+| PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Link an existing Agent → 200 `{"ok":true}`; if the same Agent was attached elsewhere, that link is marked released; clears dismissed; done 409, missing 404, read-only device 403 |
+| POST | `/api/v1/todos/{id}/retry` | Retry a task that failed to start (#1396): starts an Agent again on the same to-do according to this task in the plan (machine, directory, prompt, launcher / model, permissions, title); the to-do is reopened immediately (`done_at`, `start_error` cleared, `reopened_at` recorded), this task's `error` in the plan is cleared and `task_plan` is pushed, and the Agent starts in the background → 200 `{"todo":Todo}`. Already reopening or already started is also 200 (returned as is, not started again); if it fails again, `done_at` + `start_error` are written back as usual and the plan's `error` is updated, without appending a second receipt. Target machine offline 409 `“{name}” is offline. Try again once it’s connected.` (to-do unchanged); not a task dispatched by the assistant, or not a start failure (e.g. completed manually) 409, missing 404, read-only device 403. **Unfinished tasks** are not restarted: if an Agent is stuck on a model API error (`turn_error`, #1516), it is sent "Continue" and the to-do is returned as is with 200; repeated taps on the same interruption send it only once; that computer offline 409; no interrupted Agent (working, waiting for you…) returns 200 as is and sends nothing |
+| POST | `/api/v1/todos/retitle?dry_run=1` | Rename task to-dos that used to be titled with the prompt's first line to short titles → `{"dry_run","todos":[{"id","old_title","new_title"}]}`; `dry_run=1` lists without changing; to-dos not loaded yet 503, read-only device 403 ([todos.md](../assistant/todos.md) "To-do titles") |
+| POST | `/api/v1/todos/{id}/accept` | Verify a to-do from a `brief` item's Accept button `{"asked_at"}` (the item's `accept[].asked_at`) → `{"ok":true}`; `asked_at` missing 400; the round that waits now is the one named: a button of an earlier round, a to-do already verified, never asked or unknown 409 ("already handled"); read-only device 403 (`docs/extensions/bots.md` ("Morning and evening briefings")) |
+| POST | `/api/v1/later/{id}/handled` | Take a question that can wait out of the queue, from a `brief` item's Handled button (the item's `later[].id`) → `{"ok":true}`; a question already handled, dropped (its to-do ended, or 7 days) or unknown 409 ("already handled"); read-only device 403 (`docs/extensions/bots.md` ("Questions that can wait")) |
+| POST | `/api/v1/todos/{id}/done-check` | Run the "auto-complete" judgment once against the current state, without writing to the database → `{"verdict","reason","would_close","skip","replies","signals"}`; judgment failed 502, missing 404, to-dos not loaded yet 503, read-only device 403 ([todos.md](../assistant/todos.md) "Auto-complete") |
+| PUT | `/api/v1/todos/{id}/thread` | Bind the to-do to a chat thread `{"channel","chat_id","thread_id","title"?}` → 200 `{"todo":Todo}` (with `thread`); the three ids required (trimmed, at most 256 characters, else 400); another to-do holds the thread 409; missing 404; read-only device 403 ([todos.md](../assistant/todos.md) "Chat thread") |
+| DELETE | `/api/v1/todos/{id}/thread` | Unbind it → 200 `{"todo":Todo}`; a to-do with no thread is left as it is; missing 404; read-only device 403 |
+| GET | `/api/v1/todos/{id}/decisions?all=1` | Decision list `{"decisions":[Decision]}`, in chronological order; by default only those in effect, `all=1` also includes superseded ones; missing 404, hub without a database 503 ([todos.md](../assistant/todos.md) "Decision log") |
+| POST | `/api/v1/todos/{id}/decisions` | Record one manually `{"question","choice","reason"?,"supersedes_id"?}` → `{"decision":Decision}`; empty question or choice 400, bad `supersedes_id` 400; to-do missing 404, hub without a database 503; read-only device 403 |
+| PATCH | `/api/v1/todos/{id}/decisions/{did}` | Mark it as superseding after the fact `{"supersedes_id"}` (empty string undoes; omitted 400) → `{"decision":Decision}`; to-do or decision missing 404, hub without a database 503; read-only device 403 |
+| GET | `/api/v1/task-plans/{id}` | One plan (`TaskPlan`, see "Tasks and chat feed" below) → 200 `{"plan":TaskPlan}`; missing 404 |
+| POST | `/api/v1/task-plans/{id}/start` | Start a plan `{"tasks"?:[PlanTask],"remember"?:bool}`: `tasks` overrides, by index, the fields the user changed on the card (empty ones unchanged), and `remember` remembers "Start These Directly" for this kind; creates a to-do per task (`origin`, `plan_id`) and starts the Agents in the background → 200 `{"plan":TaskPlan}`; already started or dismissed 409, missing 404, read-only device 403 |
+| POST | `/api/v1/task-plans/{id}/dismiss` | Don't start → 200 `{"plan":TaskPlan}`; already started 409 |
+| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | Chat feed: entries after `since` (RFC3339), oldest first, at most 500 at a time → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan},"views":{"view_…":AssistantView},"view_actions":{"<key>":ViewAction},"view_blocks":["<item id>/0"]}` (plans and views are the current state of referenced objects; views, view_actions and view_blocks are always the full snapshot for the chat, not limited by since, and updates don't move the original feed position; view_blocks only holds the keys of body cards registered on the server, without resending the body) |
+| POST | `/api/v1/assistant/conversations/{id}/views/{key}/actions` | One reply on a live card or a registered body card (feature `assistant_views`): request body `ViewActionInput` `{action,page?,values?,client_msg_id,confirmed?,expected_version?}` → `{action:ViewAction}`. The server takes the reply text and form definition from the saved View and rejects client overrides and undeclared fields (400 `bad_request`). `expected_version` is the whole card's `AssistantView.version` at display / native confirmation time (always 1 for body cards), a JS-safe positive integer; required when the action has `confirm`, 400 if missing. Without it (only for actions without confirm), the version the hub read when validating the binding is used. A version different from the saved one returns 409 `view_changed`: `{error,code,version,view?}` (`ViewChangedError`, `version` is the current version, `view` is the `AssistantView` envelope); the client keeps the draft, refreshes and has the user confirm again, and **must not resend automatically with the new version**. The submission locks the card inside a transaction before comparing versions, so concurrent with `view_update` it can only bind to the version still saved at submit time. Another submission 409 `already_answered`, with the existing action; retrying with the same client_msg_id / action / values / version returns the original record (older records without a version stay idempotent as before). The submission is stored together with the text to send; pending / sent / failed are synced via events and the feed. The key is URL-encoded as a whole (including `/` and `#`); read-only device 403 `permission_denied`, extension token 403 `permission_denied`, `persona_view` off 403 |
+| POST | `/api/v1/assistant/conversations/{id}/views/{key}/html-actions` | Bridge for HTML components (feature `assistant_html_bridge`, present only when both `persona_view` and `html_views` are on; **it does not mean any client can run HTML safely yet**): request body `AssistantHTMLActionInput` `{kind:"reply"\|"open",component_key,page?,expected_version,text?\|url?,client_msg_id,confirmed:true}`. `component_key` must be the `key` of an `html` component saved on that page (`page` defaults to the root page); HTML without a key has no bridge; `confirmed` must be `true` (the native confirmation dialog showed the full text or url). `reply`: text of 1–2000 characters, no control characters and no `persona-action`; it shares the card's single choice and outbox with declarative replies → `{action:ViewAction}` (`kind:"html"`, `action` is the component key, `text` is the confirmed text, `version`); if any choice exists, 409 `already_answered`, and retrying the same request returns the original record. The body sent to the assistant is the text plus `<persona-action view="…" action="<component key>">{"html":true,"values":{}}</persona-action>`. `open`: url validated by `CheckAssistantOpen` (https or a supported `persona://`) → `AssistantHTMLOpenResult` `{open,version}`, doesn't lock the card or store anything; the client re-checks version before opening and opens it in the App. Different version 409 `view_changed` (as above); missing fields / invalid values 400 `bad_request`; read-only device, extension token 403 `permission_denied`; either switch off 403 |
+| POST | `/api/v1/assistant/conversations/{id}/today` | Today's "Today" card for this chat: returns the existing one, or creates one (a `today` entry, `at` is midnight of the user's day) → `{"item":FeedItem,"new":bool}`; read-only device 403 |
+| GET | `/api/v1/task-trust` | Kinds remembered by "Start These Directly" → `{"kinds":[{"key","machine","cwd","readonly"}]}` |
+| DELETE | `/api/v1/task-trust?key=` | Forget a kind (a plan is required first again) → `{"ok":true}`; not remembered 404; read-only device 403 |
+| POST | `/api/v1/assistant/conversations/{id}/route` | Talk to a task directly `{"todo_id","text"}`: the hub sends it to the task's most pressing Agent (waiting for you > working > unread > most recent) and appends a `routed` entry → 200 `{"item":FeedItem}`; not this chat's task, or no running Agent 409; read-only device 403 |
+| DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | Remove an Agent (soft removal: sets `released_at` and `dismissed_at`; the row is no longer returned and isn't re-attached automatically) → 200 `{"ok":true}`; missing 404; read-only device 403 |
+| GET | `/api/v1/machines/{mid}/dirs?path=` | Directory browsing: `{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`; with an empty path, entries is home |
+| GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`, including running ones (herdr) and offline sessions from the last 7 days |
+| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","agent_type"?,"model"?,"prompt"?,"resume_session_id"?,"workspace_id"?,"permission_mode"?,"effort"?,"ultracode"?,"tab_name"?,"async"?,"name_hint"?,"todo_id"?}` → `{"session":Session}`. Optional `X-Persona-Op-Id` hooks into the persistent `start` receipt. `model` is optional: the model picked in the new-Agent sheet (the `id` from `…/launchers/{name}/models` above), for this one time only, overriding **Model Settings › Agents** (the manager's `agents.start_params`, see "Agents" under "Bus"; when the manager isn't connected the hub waits for it a while, and if it doesn't come, applies **Model Settings › Agents** itself and doesn't generate a tab name). `todo_id` is optional: attached within the same request after a successful start (missing 404, done 409, read-only device 403); with `prompt`, the background of the project the directory belongs to and the to-do's decisions are prepended to it; without `prompt` (`async`), they're prepended to the session's first message (`docs/assistant/todos.md` ("Record the conclusion when done")). `tab_name` is the herdr tab name; if not given, the manager uses the small-task model to make a short English name from `prompt` (`assistant/agents_start.go`, about 2 seconds; if it fails or the manager isn't connected, no name), and the node falls back to `agent-<n>`, adding `-2`, `-3` for duplicates in the same space (`node.tabLabel`). When a new space is created, its first tab also gets this name. The assistant's `agent_start` names tabs automatically the same way. `"async": true` (all Apps send it): returns the session right away (new session id, directory, launcher, `starting: true`) and opens the tab and waits for Claude to be ready in the background, see "New session" below; in this case the hub doesn't wait for naming, the tab is called `agent-<n>` first and `session.rename` follows once the name is ready. `name_hint`: when the App sends the first message as a normal message (so it shows up immediately), it's used for naming and not put into `prompt` |
+| POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`: renames tabs of running Agents that "nobody has named" (`persona`, `persona-N`, herdr's numbers, `agent-N`) to short English names based on the session title, same rules as new sessions; `dry_run` only lists what they'd become, `all` also renames tabs the user named. The model occasionally returns nothing, so it asks once more, and if still nothing keeps the old name (`error`). Run once on 2026-10-31 on two machines: of 61 tabs, 39 were renamed and the user's own 21 were untouched. Answered by the manager (forwarded by the hub); 503 `assistant_offline` when it isn't connected |
+| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | History paging `{"items":[Item],"has_more":bool}` (ascending by seq). `turns`: go back far enough to get N complete "user input + answer" turns; the page always starts with a user input (at most 2000 items; when one turn is very long and going back would mean parsing tens of MB, the page is shorter with `has_more: true`, and paging back continues from there; but as long as there is earlier content, a page contains at least one item, since an empty page with `has_more: true` would leave the App with no seq to page back from); old clients' `limit` still counts items. With `lazy_images=1`, images carry no data (`image: {mime, lazy:true, size, width, height}`) and are fetched when displayed. With `after_seq=N`, returns new content with seq > N (for background sync, about 500 items per page, never splitting the items of one line; `more_after: true` means there's more, fetch again from the last item's seq, or fetch the latest page instead). With `fold_work=1`, pages going back from the end fold the work; with `from_seq=&through_seq=`, returns the items of those lines (for expanding a fold, about 1000 items per page, `more: true` means `through_seq` isn't reached yet). See "Folded work" |
+| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | The raw bytes of an item's image (Content-Type is the image type, cacheable forever); the item id contains `#` and must be percent-encoded |
+| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | An item's full text (`Item`, without images and without `full_size`; at most 1 MB): fetched when the App taps "show full text". The node re-reads and parses that line |
+| POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?,"todo_id"?}`; `todo_id` is optional: attached after a successful send (missing 404, done 409, read-only device 403), and the to-do's decisions are prepended to `text`; for a session created with `todo_id` and no `prompt`, its first message (within 15 minutes, with or without `todo_id`) also gets the project background prepended (`docs/assistant/todos.md` ("Record the conclusion when done")); if the session is offline, it is first started with the original launcher via `--resume`; for rejections see "Sending messages" below |
+| GET | `/api/v1/sessions/{mid}/{sid}/info` | Session info: `{session_id,transcript_path,cwd,model,launcher,git_branch,version,permission_mode,effort,context_tokens,output_tokens,compactions,turns,started_at,last_activity}` |
+| POST | `/api/v1/sessions/{mid}/{sid}/queue` | `{keep:[indexes]}`: takes back the queued input and keeps only the given items, in the order given, returns `{queue}`; used for editing, deleting and reordering (a permutation of the indexes, #6088); doesn't go through client_ops |
+| POST | `/api/v1/sessions/{mid}/{sid}/queue/send-now` | Gives the agent what waits in Claude Code's queue now (#6088, node `session.queue.send_now`): Claude Code's own send-now (ctrl+x ctrl+s), so a command it runs moves to the background and goes on, and a reply it is writing is asked again with the message (Esc would stop the command). The node presses it only while the screen offers it (the hint "ctrl+x ctrl+s to send now" under a queued message): that is the queue at that moment, which the transcript reports about a second late. → `{sent:true}` once the queue is gone from the screen. 409 `nothing_queued` (nothing queued on the screen), `send_now_unsupported` (not a Claude in a terminal, or a Claude Code with no send-now while something is queued), `send_now_in_doubt` (`delivered: "unknown"`: the key went in, the queue is still shown); an older node: `node_outdated`. It sends the whole queue |
+| POST | `/api/v1/sessions/{mid}/{sid}/seen` | Mark the session as seen, returns `{ok:true}`; `seen` can also be sent over WS |
+| POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | Send Esc |
+| POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
+| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}` (`lines=40` with `source=visible` is a screen card's read: on a pane herdr can't send 40 plain rows of, fewer, see "screen card"); `source=recent` also reads the pane's scrollback (lines up to 20000; fewer lines returned than requested means it reached the top); `format=ansi` includes colors (SGR, lines end in `\r\n`; old nodes don't understand it and return plain text as before) |
+| POST | `/api/v1/sessions/{mid}/{sid}/screen/before` | `{"anchor":["the top few lines on screen"],"lines":200,"format"?:"ansi"}` → `{"text","has_more","at_limit"}`: a stretch of scrollback before the anchor (located by content, the anchor compared as plain text; herdr keeps only about 1000 lines, `at_limit` means it reached the top) |
+| POST | `/api/v1/machines/{mid}/spaces/{wid}/rename` | `{"name"}`: `herdr workspace rename`, and updates "machine/old name" in pins / mutes to the new name |
+| POST | `/api/v1/sessions/{mid}/{sid}/modes` | `{"permission_mode"?, "effort"?, "model"?, "ultracode"?, "ultracode_dismiss_lost"?}`: change a running session's permission mode / reasoning effort (`effort` is `auto` / `low` / `medium` / `high` / `xhigh` / `max`, `auto` being the model's own default, see `docs/apple/ios.md` ("Reasoning effort and permission mode")); `model` (#2434) is only for Claude Code terminal sessions: the node types `/model <id>` into its input box (with the same checks as sending a message: `dialog_open` / `input_draft` reject, Agent working rejects, and the screen is read afterwards to confirm), the id comes from `GET /machines/{mid}/launchers/{name}/models`, and within one request the model is switched first, then the rest; the session list's `model` shows this choice until a new model appears in the transcript; `permission_mode` and `effort` in the session list are the current values. Sessions with `efforts` (Codex via app-server) only accept `effort`, with values from `efforts` ("Codex sources and capabilities"). `POST /api/v1/sessions` and `POST /api/v1/assistant/conversations` also accept these two fields, as the starting values. `ultracode` calls the separate `session.ultracode` method after model and effort changes; `ultracode_dismiss_lost:true` only dismisses the resume notice. See "Claude Code ultracode" |
+| POST | `/api/v1/sessions/{mid}/{sid}/rename` | `{"tab_name"?, "title"?}`: the tab uses `herdr tab rename`; the session name sends `/rename <name>` to the running claude (it writes `custom-title`), and if it isn't running, appends the same `custom-title` line to the transcript directly. For assistant chats, `title` is also recorded as the user-given title (the hub's `assistant.titles`, no longer overwritten by automatic titles, `docs/assistant/assistant.md` ("Chat titles")); Codex assistant chats are only recorded on the hub |
+| GET / PUT | `/api/v1/mutes` | Mutes, same structure as pins, plus `allowed` (Agents with notifications turned on individually while their space is muted). Rule: the Agent itself in sessions → muted; in allowed → not muted; otherwise go by its space. Muted Agents / spaces get no notifications at all (done, needs you) and are shown dimmed on the phone; cached in hub memory, updated on PUT |
+| GET | `/api/v1/hub/update` | The hub's version and update state (`docs/operations/hub-update.md`): `{version, build, channel, can_update, why_not?, latest?{version, build, released, notes, newer, bad, held?}, state, progress?, busy:[{machine_id, machine, session_id?, title}], error?, auto, auto_notice, last_check?, confirmed}`; `state`: `idle` / `checking` / `available` / `downloading` / `waiting_idle` / `restarting` / `confirming` / `updated` / `rolled_back` / `failed`; `busy` lists what a restart would interrupt (chats working or waiting for an answer, machines being redeployed); `auto_notice`: the user hasn't been told "automatic updates are on" yet; `latest.held`: why automatic update won't install this newer version (its code may not include the commit this hub is running, `docs/operations/hub-update.md` ("No going backwards")), though a manual update still can; a Docker hub also has `image{name, tag, pinned}` (the image it runs; `pinned`: the tag is a version number, so `.env` must be changed first), `latest` is the newest release on the registry (`build` is 0, no `released`), and `POST …/check` asks the registry |
+| POST | `/api/v1/hub/update/check` | Check now, returns the same as above |
+| POST | `/api/v1/hub/update` | `{"now"?: true}` start updating: download, verify, wait until the assistant and Agents are idle, replace, restart; `now` is "update now" after a second confirmation and doesn't wait for idle. Not a release build (`dev` / `docker`), or no newer version 409 (`error` explains; for Docker it gives the `docker compose pull` command) |
+| PUT | `/api/v1/hub/update/settings` | `{"auto"?: bool, "auto_notice_seen"?: bool}`: the automatic update switch (on by default); changing the switch also counts as having told the user |
+| GET | `/api/v1/hub/update/history` | `{"history":[{from_version, to_version, to_build, started, ended, result: updated\|rolled_back\|failed\|held, reason?, auto}]}`, newest first, keeps 50; `held`: the newer version wasn't installed automatically (`reason` says why), recorded once per version |
+| GET | `/api/v1/skills` | Skills on the machine running the assistant (read-only): `{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`; the user's are in that machine's `~/.persona/skills/` (`docs/operations/hub-update.md`). Node too old (no `skills.list`) or offline 502 |
+| GET / PUT | `/api/v1/pins` | Pins in the dev list: `{"spaces":["server/app"],"sessions":["server/<session id>"]}`; spaces use "machine/space name" (herdr workspace ids change after a herdr restart); stored in Postgres settings |
+| GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | Read a file (file viewer, `docs/apple/ios.md` ("File viewer")): `{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`. Text files at most 2 MB per call, read from `offset`; if not finished, it stops at the end of the last complete line, and `next` is where the next page starts (0 when done); binary files are given whole (up to 2 MB) and can't be read from the middle; directories give the first 500 entries. `~` is home, relative paths are inside `cwd`; iCloud is refused. With `stream=1` (hub feature `file_stream`), binary files return only a descriptor `{"stream":true,"revision",...}` without `data`, and the content goes through `/file/download`; `mime` comes from a fixed extension table, then sniffing the leading bytes (see "File preview" below) |
+| GET | `/api/v1/machines/{mid}/file/download?path=&cwd=&inline=` | The raw bytes of the complete file, authenticated by the App with the same Bearer; the web's `<video>` / `<audio>` / `<img>` can't send headers, so they use `?token=` (the hub never logs query strings); the hub reads via the node's `file.chunk` at most 1 MiB at a time, and a single request never holds the whole file in memory. Supports HTTP Range / Content-Range (including suffix ranges), with Content-Length, ETag and an attachment file name; empty path 400, old node 409 `node_outdated`, non-regular files, iCloud and read errors are refused. Later chunks must match the size and version from the first read; if the file changes midway or the request is canceled, the download stops. The old `/file` 2 MiB binary preview is unchanged. `inline=1` only applies to images, audio/video and PDF (`Content-Disposition: inline`); everything else is still an attachment; everything except PDF carries `Content-Security-Policy: sandbox` |
+| GET | `/api/v1/machines/{mid}/file/thumb?path=&cwd=&size=` | A file's thumbnail (hub feature `file_thumb`, node `file.thumb`): long side at most `size` pixels (default 256, 32–1024), JPEG when opaque, PNG when transparent; `ETag` is "file version-size", `If-None-Match` gets 304, `Cache-Control: private, max-age=86400`. Can't render 404 `no_thumbnail` (the client shows an icon), old node 409 `node_outdated` |
+| GET | `/api/v1/machines/{mid}/file/convert?path=&cwd=&to=pdf` | Convert a document to PDF with that computer's LibreOffice (hub feature `file_convert`, node `file.convert`, the web's Office fallback, #1345): returns `{"path","size","mime"}`, where `path` is the PDF in the node's cache, then read with `/file/download?path=<it>&inline=1`. Cached per file version, cleared after 7 days; one conversion at a time, 90-second timeout; the input is first copied to a fixed file name and a temporary profile directory is used, so it doesn't fight with a LibreOffice the user has open. Not installed 404 `no_converter`, old node 409 `node_outdated` |
+| GET | `/api/v1/machines/{mid}/git/blob?cwd=&path=&rev=` | A file's content at some revision (hub feature `git_blob`, node `git.blob`, for the web's diff, #1437): `rev` is `HEAD`, `INDEX` (the staging area), a commit hash or "hash^" (its parent), `path` is relative to the repo root. Returns `{"path","size"}`, where `path` is a file in the node's cache named by blob id (with the original extension), then read with `/file/download`; if the file doesn't exist at that revision, `{"missing":true}`. Up to 200 MB, cleaned after 7 days |
+| GET / POST / DELETE | `/api/v1/machines/{mid}/browser/cookies` | Sign-ins in ego lite (plugin ego, #1304, `docs/plans/plan-ego-browser.md` ("What importing cookies does")): GET lists sites `{"sites":[{"domain","count","expires"?}]}` (no names or values); POST `{"cookies":[{name,value,domain,path?,expires?,secure?,http_only?,same_site?,host_only?}]}` imports and returns `imported`, `skipped`; DELETE `?site=a&site=b` or `?all=1` clears and returns `removed`. Only accepts the user's own device tokens (pairing tokens etc. 403); the hub stores nothing; target Mac offline 409 |
+| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | Whether paths mentioned in a session exist on this machine: `paths` one per line (also accepts `path=a&path=b`), at most 200 → `{"stats":[{"path"(as given),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`. `denied` is a folder macOS won't let personad read (opening it explains how to grant access); relative paths without `cwd`, paths in iCloud, and sensitive files (see below) are always `missing`; waits at most 3 seconds per call, and anything not answered by then (a hung network drive) is also `missing`. The phone only turns file / dir / denied paths into tappable file blocks; the web inlines them as links |
+| GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | File tree: `{"path","entries":[{"name","dir","symlink","size","mtime","ignored"}],"truncated"}`, directories first, at most 2000 entries; iCloud is refused; `ignored` (#2439): Git ignores it (the node runs `git check-ignore` once over the names on this page; outside a repo or without git nothing is marked and the field doesn't appear) |
+| GET | `/api/v1/machines/{mid}/fs/find?cwd=&limit=` | All files under a directory (#2438, node `fs.find`, for the web's ⌘K file search): `{"cwd","files":[relative paths, "/"-separated],"truncated","source":"git"\|"walk"}`. Inside a git repo (including subdirectories) it uses `git ls-files --cached --others --exclude-standard` (ignored files and files deleted on disk aren't listed); otherwise it walks breadth-first from `cwd` (skips `.git`, `node_modules` and various cache directories, doesn't follow symlinks into directories, capped at 5 seconds), so when over the limit the shallowest files are kept. At most `limit` files (default and maximum 50,000); sensitive paths are not listed (same as `fs`: ssh keys, the hub's token, etc.), and iCloud and sensitive directories are refused entirely. The node reuses the result for the same directory within 10 seconds. Same permissions as `fs`: full role only, answer-only devices (the watch) can't |
+| GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[latest 30]}` (read-only, `GIT_OPTIONAL_LOCKS=0`) |
+| POST | `/api/v1/machines/{mid}/git/pull` | `{"cwd"}` → `{"status": GitStatus, "updated": bool}`; only allowed on a normal branch with an upstream and a clean worktree, runs `git pull --ff-only --no-rebase --no-autostash --no-recurse-submodules`. Divergence, uncommitted changes, no upstream, auth failure or timeout all report an error; it never stashes / merges / rebases automatically; the pull command gets at most 60 seconds, the node 75 seconds total, the hub 90 seconds. Full role only |
+| GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`; untracked files are diffed against /dev/null, at most 512 KB |
+| GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
+| GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` paged |
+| GET | `/api/v1/machines/{mid}/git/branches?cwd=` | #6121: `{"branches":[{"name","remote","current","upstream","hash","subject","date"}]}`: local branches, then remote ones without a local branch of the same name, newest first, at most 300. Full role only |
+| GET | `/api/v1/machines/{mid}/git/pr?cwd=` | #6121, through `gh` on that machine as it is signed in: the current branch's pull request `{"branch","pr":{"number","url","title","state","draft","base","head","mergeable","merge_state","review","auto_merge","checks":[{"name","state":"pass\|fail\|pending\|skipped","url"}],"checks_state":"passing\|failing\|pending","threads":[{"path","line","outdated","comments":[{"author","body","url","at"}]}]}}` (`threads`: the unresolved review threads only); `"pr":null` when the branch has none. Full role only |
+| POST | `/api/v1/machines/{mid}/git/stage` · `…/git/commit` · `…/git/push` · `…/git/switch` · `…/git/stash` | #6121, the Git panel's writes, each a click the client confirmed; answer `{"status": GitStatus, …}`. `stage {cwd, paths, unstage?}` (`git add` / `git restore --staged`; paths `file.read` refuses are refused); `commit {cwd, message}` commits what is staged (nothing staged is refused, never `-a`; hooks run, the hub waits up to 5 minutes) → `+ commit`; `push {cwd, set_upstream?}` pushes the branch to its own upstream branch by an explicit refspec with no `+` (a forcing refspec in the config does not apply), a branch without one only with `set_upstream` (to `origin`, same name) → `+ output`; `switch {cwd, branch, create?, from?}`: uncommitted files the target has differently are listed and nothing is switched, other uncommitted changes go along; a remote-only branch gets a local branch tracking it; `stash {cwd, op: push\|list\|apply\|pop\|drop, index?, message?, untracked?}` → `+ stashes:[{index,message,date}]`. Nothing forces, resets, stashes on its own or skips a hook; one write at a time per repository. A refusal is a 409 with `code`: `git_not_repo`, `git_detached`, `git_nothing_staged`, `git_hook_failed` (its output is `error`), `git_identity`, `git_no_upstream`, `git_no_remote`, `git_push_rejected` (pull first), `git_auth`, `git_conflict` (`files`), `git_busy` (another git holds the lock), `git_no_branch`, `git_no_stash`, `git_failed`. Full role only |
+| POST | `/api/v1/machines/{mid}/git/pr` · `…/git/pr/merge` | #6121: `{cwd, title, body, base?, draft?}` opens a pull request for the current branch (pushed, nothing left to push, else `git_not_pushed`); `{cwd, number, method: squash\|merge\|rebase, auto?}` merges it now or sets it to merge when ready, `{cwd, number, auto_off: true}` takes that back; the branch is never deleted (gh would switch the checkout). Both answer as `GET git/pr`. `gh` missing: `no_gh`; not signed in: `not_signed_in`; no pull request: `git_no_pr`; no GitHub remote: `git_not_github`. Full role only |
+| POST | `/api/v1/sessions/{mid}/{sid}/fork` | Branch into a new chat (#2137): body `{at_item_id}` (the item id of a reply; empty means the whole thing) → `{session_id}`. The node copies Claude's transcript up to the end of the turn that reply is in, under a new session id, leaving the original session untouched; the new session is an offline session, and the next message `--resume`s it as usual. Only supported when the session has `can_fork: true` (Claude Code, with a transcript, not an external source / runtime / Codex), otherwise returns `code: fork_unsupported`; branching from the turn still being written returns `fork_turn_running`. Limits: only the conversation itself is copied; the file snapshots `/rewind` uses (`~/.claude/file-history/<id>/`) and subagent records are not, so `/rewind` in the branch can't go back to changes made before the branch |
+| POST | `/api/v1/sessions/{mid}/{sid}/close` | Quit claude and close the tab (any Agent in herdr, including manually started ones; for a split tab only its own pane is closed) |
+| DELETE | `/api/v1/sessions/{mid}/{sid}` | Delete a chat: only removes it from the session lists everywhere (the hub records the time in settings `sessions.deleted`, and neither the `sessions` push nor `GET /api/v1/sessions` includes it anymore); the transcript on the computer is untouched; if the session is used again later (`updated_at` later than the deletion, or it runs again), it reappears. Sessions that failed to start (`start_error`) can also be deleted and disappear immediately. → `{"ok":true}`; running or still starting 409, assistant chats 400 (use archive), no such session 404, read-only device 403 |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","recording_days","conversations":[Session]}`: `notes` is present only if saved in the App; `main_tasks_quiet` is the effective value of "notify tasks dispatched by the main chat only in the main chat" (`true` if never changed, #1731); `recording_days` is the effective number of days recordings stay in the knowledge base (default 14, #3235); `main` is the main chat's session id (on the `machine_id` machine); archived chats are not listed by default, `?archived=1` includes them (`archived: true`). `?space=health` lists chats in the health space, with `cwd` being the health directory; without `space` only the assistant's own are listed, not the health chats; any other `space` returns 400 (`docs/assistant/health.md`) |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?,"recording_days"?}`, stored in Postgres settings (`docs/assistant/assistant.md`); only the fields present are changed; `recording_days` is 1–365; an empty string for `notes` also counts as a change; `main` of `"-"` clears the main chat (the App sends it together when switching machines) |
+| POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?,"main"?,"space"?,"report_tasks"?}` → `{"session"}`: writes CLAUDE.md, then starts a new session in the assistant directory. `space: "health"` starts it in the health space's directory (the health CLAUDE.md, `docs/assistant/health.md`); together with `main: true` it's 400, and any other `space` is 400. `purpose`: which model purpose to use (one the hub knows, e.g. `lark.agent`; unknown 400; empty means `assistant`); `machine_id`: which of the hub's machines to run on (empty means the assistant's; unknown machine 400). The plugin's /agent uses these two (#1484). `report_tasks: true`: tasks dispatched by this chat (`task_plan`, `agent_start`) are, like the main chat's "quiet tasks", not pushed separately; their status changes are sent into this chat as task notifications (#3192, `docs/extensions/lark-agent.md` ("Dispatched tasks")); the plugin's /agent sets it. `guest: {"tools": [...]}`: starts a guest conversation (`docs/assistant/assistant.md` ("Guest conversations")): it can use only these 1–8 connector tools, runs in its own directory with no built-in tools and no live snapshot, can't be combined with `main` / `space`; 400 when the node is too old |
+| GET | `/api/v1/assistant/capabilities` | What the assistant supports, for extensions to ask before relying on it: `{"guest_conversations": true}` (404 on an older hub) |
+| GET | `/api/v1/assistant/conversations/{id}/always` | Full-access clients only: `{"grants":[{"key_hash","tool_name","created_at"}]}` for this conversation. Exact command/directory scopes were hashed and cannot be reconstructed. See `docs/assistant/assistant.md` ("Always allow in this session") |
+| DELETE | `/api/v1/assistant/conversations/{id}/always/{hash}` | Full-access clients only: remove one grant, then reset the running assistant's permissions (stops its current response). Idempotent, including retrying the reset. `{"ok":true,"restart_required":false}`; `restart_required: true` means storage was revoked but the conversation must restart before cached rules are gone (old/offline node or unsupported runtime). Other conversations and grants remain unchanged |
+| POST | `/api/v1/assistant/conversations/{id}/stop` | Stop a chat opened with `report_tasks` (Lark /agent's `/stop`, #3308) → `{"conversation","tasks":[{"id","title","agents"}],"already"}`: interrupts its running turn (`conversation`) and the running Agents of the unfinished tasks it dispatched (`tasks`, `agents` is how many were interrupted), and drops queued task notifications; after that its task notifications are discarded until the user messages it again. If nothing was running, `already: true`. Not such a chat 404 |
+| GET | `/api/v1/assistant/reporters` | Chats opened with `report_tasks` (within 14 days) → `{"reporters":[{"session_id","machine_id","at","stopped_at"?,"stopped_by"?}]}`; `stopped_by` is `lark` (`…/stop`) or `app` (the App's stop button: an assistant chat stopped with `POST /api/v1/sessions/{mid}/{sid}/interrupt`, for which the hub sends `session.user_stopped` to the assistant); the plugin uses it to know a request was stopped in the App |
+| POST | `/api/v1/assistant/conversations/{id}/archive` | Archive one of the assistant's chats (just hidden from the list, data kept) → `{"ok","archived":true}`; the main chat 400. In the session list (`sessions` push) it carries `archived: true` and the App files it under **Archived**; when the user messages it again (`POST …/messages`) it's unarchived automatically (`docs/assistant/assistant.md` ("Managing its own chats")) |
+| POST | `/api/v1/assistant/conversations/{id}/unarchive` | Unarchive → `{"ok","archived":false}` |
+| POST | `/api/v1/assistant/conversations/{id}/compact` | `{"machine_id"?}` (empty means the assistant's machine): compact this chat manually (Claude gets `/compact`, `--resume`d first if the process isn't there; Codex `thread/compact/start`) → returns `{"ok":true}` once started; progress is in the session's `compaction`. 409 + `code`: `busy` (answering), `compacting` (already compacting), `gone` (the record no longer exists), `unsupported` (a chat run by a runtime); `error` is a human-readable message (in Chinese) |
+| POST | `/api/v1/assistant/main/new` | `{"carry":"summary"\|"none","expect"?}`: start a new main chat. `carry` (default `summary`) brings along the old main chat's latest compaction summary and the few messages after it; `expect` is the main chat id the App sees, and a mismatch returns 409 `main_changed`; the old main chat answering / compacting 409 `busy`. On success the main chat is cleared (`main` disappears from `GET /api/v1/assistant`), and the old one is renamed "旧主对话 · 至 M月D日" ("Old main chat · until <month/day>") and archived → `{"ok","archived":"<old id, empty if there was no main chat>","carried":bool}`. The next `POST /api/v1/assistant/conversations` with `main:true` (and messages to the main chat from the Lark bot or channels) starts the new main chat, with the carried background placed before the first message as `<persona-context kind="context" title="接上旧主对话">` ("Continuing the old main chat"), used once (`docs/assistant/assistant.md` ("New main chat")) |
+| POST | `/api/v1/assistant/warm` | `{"launcher"?}`: start a spare claude process in advance for new chats to use → `{"ok":true,"readiness"?}` (`readiness` see "Main chat readiness" above, without probe; if it can't be computed in time, returns the last recorded value or omits it) |
+| GET | `/api/v1/assistant/readiness` | Main chat readiness (`?probe=1` actually runs a one-word check, reused within 30 seconds), see "Main chat readiness" above |
+| POST | `/api/v1/assistant/readiness/dismiss` | `{"dismissed":bool}`: remember "Later" → `{"ok":true}` |
+| GET | `/api/v1/assistant/tasks` | Scheduled tasks (one table, `docs/assistant/assistant.md` ("Scheduled tasks")): `{"tasks":[Task]}`; one-off follow-ups that have already run aren't listed. `Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run,run_machine_id,run_session_id,run_launcher,push,facts}`: `once` uses `at`, `daily` uses `time` + `weekdays` (empty = every day), `interval` runs every `every_minutes` (5 minutes to 7 days) with `at` being the next run; when `session_id` is set it posts into that chat, empty = the task's own chat (`run_session_id`, recorded by the hub: created on the first run and reused after; empty = created on the next run); `launcher` / `permission_mode` (`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`) / `effort` (`low`…`max`) empty = the assistant's default, changeable only in the App; `created_by: "assistant"` means the assistant created it in a chat; `facts`: the run's fixed part (what waits for the owner, the last 12 hours, what is to be verified) is computed by Persona and sent as one Lark card, the model writing only a summary on top (`docs/extensions/bots.md` ("Morning and evening briefings")); on for the default morning and evening routines, `false` or absent otherwise; `push`: `""` pushes every run's answer (default), `"asked"` only pushes what the run itself sends with `notify_user`, and such tasks always run in their own chat with an empty `session_id` (`docs/assistant/assistant.md` ("Push when done")); a hub that understands this field includes `task_push` in features, and clients show the switch based on that |
+| POST | `/api/v1/assistant/tasks` | Create a `Task` (`session_id` ignored; the task's own chat is used) → `{"task"}`; invalid 400, with a user-facing message (in Chinese) |
+| PUT | `/api/v1/assistant/tasks/{id}` | Save the user-editable fields (`title,prompt,repeat,at,time,weekdays,every_minutes,enabled,launcher,permission_mode,effort,push,facts`, `""` = default; when the body has no `push` (or no `facts`) the existing value is kept, `null` or an unknown value returns 400) → `{"task"}`; `session_id` can only be cleared (switching to the task's own chat); `run_*` is written only by the hub; for `interval`, the next run is counted from now when the interval or rule changes, or when it's re-enabled |
+| DELETE | `/api/v1/assistant/tasks/{id}` | Delete |
+| POST | `/api/v1/assistant/tasks/{id}/run` | Run now → `{"session_id","machine_id"}`; a one-off task ends after running, a repeating one keeps its schedule; previous run still going 409 (a skip is recorded) |
+| POST | `/api/v1/assistant/tasks/{id}/fresh` | New chat next time: clears `run_*`, so the next run opens a new chat and records it → `{"task"}` |
+| GET / PUT | `/api/v1/assistant/routines` | For old Apps (before 2026-10-31): `daily` tasks, same shape as `Task`; PUT replaces all `daily` ones wholesale, leaving other tasks and each task's launcher / permission mode untouched |
+| GET / DELETE | `/api/v1/assistant/followups[/{id}]` | For old Apps: enabled `once` and `interval` tasks (`at` = next run); DELETE deletes the task |
+| POST | `/api/v1/assistant/routines/{id}/run`, `/api/v1/assistant/followups/{id}/run` | For old Apps, same as `tasks/{id}/run` |
+| GET | `/api/v1/assistant/runs[?ref=<id>]` | Run records, newest first: `{"runs":[{id,kind:"routine"\|"followup" (one-offs are followup),ref_id (task id),title,due,at,status,error,manual,machine_id,session_id}]}` |
+| GET | `/api/v1/assistant/memory` | `{"files":[{name,content,updated_at}],"dir"}`; `?space=health` is the health space's memory (same for the next row) |
+| PUT / DELETE | `/api/v1/assistant/memory/{name}` | `{"content"}`; deleting also removes its index line in MEMORY.md |
+| GET / PUT | `/api/v1/machines/{mid}/claude-settings` | Allow-listed Claude Code settings; PUT `{"key","value"}` (value null restores the default). `effortLevel` options are `auto`, `low`, `medium`, `high`, `xhigh`; `auto` removes the key. A stored `max` returns `value: null`, `default: "auto"`, `ignored_value: "max"`, and an explanatory `detail`; reads do not rewrite the file. Use session modes for `max` |
+| GET / PUT | `/api/v1/machines/{mid}/codex-settings` | Allow-listed Codex settings (a few top-level entries of this machine's `~/.codex/config.toml`): GET → `{"settings":[{key, title, detail, type, options?, default, value}]}`; PUT `{"key","value"}`, same as `claude-settings` |
+| GET | `/api/v1/machines/{mid}/claude-dirs` | This machine's Claude Code config directories and block rules: `{"dirs":[{"path","default"?,"blocked"?,"blocked_by"?,"source","running","sessions"?}],"blocked":[…],"home","live"}` (`docs/integrations/claude-integration.md` ("Blocking config directories")) |
+| PUT | `/api/v1/machines/{mid}/claude-dirs/blocked` | Replace the block rules wholesale `{"blocked":["~/.automation/*", …]}` (paths or globs starting with `/` or `~/`, otherwise 400); returns the same state as GET |
+| GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
+| GET | `/api/v1/interactions` | `{"interactions":[Interaction]}` (pending) |
+| POST | `/api/v1/interactions/{id}/reanswer` | `{answers: {question text: answer}}` (#3029): replace the assistant's answer to a question with the user's. The Agent has already moved on with the assistant's answer, so the new answer is sent to it as a message (`prompts/agents/reanswer.md`, including what the assistant answered), and the same answer is sent only once; returns `{"ok":true}`. The hub forwards to the manager (503 `assistant_offline` when absent); devices that can only answer cards 403; not answered by the assistant 409, no answers 400, couldn't send 502 |
+| POST | `/api/v1/interactions/{id}/resolve` | Body is a Resolution; returns `{"ok":true}`. Already finished (#1673): answered (or handed back to the computer and back again) is idempotent with 200 `{"ok":true,"already":true,"status","resolution"}`, where `resolution` is the answer that took effect (redacted per the history record), possibly different from the one sent now, and the App uses it to show the card as answered; expired, withdrawn, or handed back to the computer returns 410 `{"error","code":"gone","status"}`, and when the outcome can't be found, 410 without `status` |
+| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"relay_error"?,"features"?,"locale"?}` → `{ok,push}`; `features` lists what the app understands beyond the first version's pushes, the hub keeps only names it knows: `withdraw` gets a silent push naming the cards that are over (`{"aps":{"content-available":1},"resolved_interaction_ids":[…]}`, `background`, priority 5) when a card pushed to it is answered elsewhere, withdrawn or expires, so the app removes those notifications (#4349; within 5 s in one push, at most one a minute per device, only the devices the card went to, sealed through the relay like any other); `relay_error` is why the phone got no grant from its relay, in its words, and `push` this device's way (`route` direct / relay / none, `reason`, `detail`, `docs/operations/push-relay.md` "Which way a device is pushed"); `locale` is the device's UI language (`zh-Hans` / `en` / `ja`), and notifications to it use that language, falling back to the user's language if absent; `push_key`, `relay_url`, `relay_grant` are for the push relay (the phone's public key, the relay URL, the credential the relay issued, `docs/operations/push-relay.md`), used to push when the hub has no APNs key. In a linked-hub group only the primary hub pushes: when connected to a member, this is also forwarded to the primary; push payloads (direct and relay-sealed) carry the primary's `hub_id` at the top level ([mesh.md](../server/mesh.md) "Credentials and push"). `mac` is the Mac App (same bundle id, same topic): it gets no silent wakeups, and while connected to the hub it doesn't get "Needs You" or "Agent finished" (the App posts local notifications itself). The hub records which device credential registered it, and revoking that credential deletes the device too, so it no longer gets pushes |
+| GET | `/api/v1/devices/push` | `{direct,devices:[{device_id,name,kind,updated_at,push}]}`: whether the hub has its own APNs key, and every device it pushes to with its way (`personad hub doctor`; not for a watch) |
+| POST | `/api/v1/devices/{id}/live-activity` | Live Activity tokens: `{"push_to_start_token"}`, `{"activity_id","push_token"}` (rotates; sent repeatedly), `{"activity_id","ended":true}` (`docs/apple/live-activity.md`) |
+| GET | `/api/v1/fleet` | `{"fleet": FleetState}`: the current Live Activity content (pulled when the App returns to the foreground); `stats` has all the numbers and each machine's load |
+| GET | `/api/v1/usage/windows` | `{"accounts": [{id, provider, name, plan?, windows: [{label, window_minutes, used_percent, resets_at?, model?}], sampled_at, stale?, local?, sources?, problem?}], "checked_at"}`: Codex / Claude subscription quota windows read by each computer's node from local files, plus those the manager reads from account-pool gateways (`local`: seen on a computer, `sources`: gateway names, `problem`: `unreachable` / `error`, `model`: a single-model window); the manager merges the same account and sorts by the fullest window, the hub forwards, and 503 `assistant_offline` when the manager is absent; no data is `[]` (`docs/server/usage-windows.md`, #2432, #2595) |
+| GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| none, points: [MetricPoint], usage?: {today: {in, cache_write, cache_read, out, req}, per_minute, recent: [60 per-minute totals, oldest first]}}], "step": 60}`: current values and trends on each card of the App's **Machines** page, for every machine in configured order; `points` is the last hour, one per minute; `latest` is only present if a sample arrived within 30 seconds (`docs/server/machines.md`) |
+| GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {as above, one machine}, "range", "step"}`: the machine detail charts, step 10 / 60 / 240 seconds (about 360 points); unknown machine 404, bad range 400 |
+| GET | `/api/v1/machines/{id}/usage?range=1h\|24h\|7d[&model=…][&launcher=…]` | `{"usage": {machine_id, online, range, step, points: [{t, in, cache_write, cache_read, out, req, gap?}], total, models: [{name, …sums}], launchers: [{name, …sums}], launchers_known, stored}}`: a machine's token usage (`docs/server/machines.md` ("Token usage")); steps 60 / 600 / 3600 seconds, a point is the step's sums; `model` / `launcher` filter (`launcher=-` is the unknown launcher); `models` are under the launcher filter and `launchers` under the model filter, largest first; `launchers_known` false for an older node; default range 24h, bad range 400, unknown machine 404 |
+| GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, input, cache_write, cache_read, machines:[{id, tpm, tokens, load}]}}`: token usage across all machines ("today" in the phone's time zone; `load` is 1-minute load / cores), see `docs/apple/live-activity.md` ("Usage") |
+| GET / PUT | `/api/v1/devices/{id}/prefs` | Which pushes this device wants: `{"input":true,"done":"off|long|always"}`, plus `translate` (Settings › Translation: `{enabled,target,mail}`; the Inbox (assistant) uses it to translate new mail in advance), `live_activity` (default true), `lock_details` (Show Details on Lock Screen, default false), `island` (the two sides of the Dynamic Island: `{"preset":"a|b|c|custom","left","right","machine"}`, default `a`), `mute_while_desktop` (Phone Muted, default false: while a desktop client is connected, this device doesn't get "Needs You" or "Agent finished"; reminders the assistant sends at your request are still pushed); `look` (which avatar this phone's Live Activity draws: `{"design","light","dark","package"?}`, PUT separately when the App switches avatars; the hub puts it as is into the content-state pushed to this device, see `docs/apple/live-activity.md` ("Avatar"); a design over 32 bytes or package over 160 bytes is not stored); `quiet` (quiet hours, #5806: `{"enabled","start":"HH:MM","end":"HH:MM","tz"?}`, all empty until set; the window may cross midnight, start = end is no window, an empty `tz` is the user's time zone the hub knows; inside it this device gets no "Agent finished", and "Needs you" (cards, reply reminders) arrives without sound and with `interruption-level: passive`; a Live Activity push-to-start leaves out its alert; the assistant's reminders, `POST /api/v1/notify` and the hub's own notices are unchanged; bad times or an unknown zone return 400); `muted_managers` (Settings › Managers › one › Notifications: the ids of the managers whose pushes this device doesn't want, default `[]`, always a list in answers (an app offers the switch only when it is there), trimmed and without repeats, only managers of the roster (a write drops the others, so a removed manager's id takes no place; checked against one read of the roster, and when the roster can't answer every id is kept), at most 64 ids of at most 64 bytes; what a manager asks for skips this device: `notify.request` (its assistant's reminders, finished turns, reply reminders and cards), its extensions' `hub.push_localized` and `POST /api/v1/notify` with their token, `POST /api/v1/notify` with another credential that names one of its computers (one naming no computer of this hub is the hub's own), and `personad notify` on one of its computers, on APNs and as `notify` WebSocket events alike; a Live Activity it counts (the activity shows one manager's agents) starts on this device without its alert; the hub's own pushes (pairing, a computer joining, updates) and an extension's silent `hub.push_background` are no manager's and still come, see `docs/assistant/managers.md` ("Clients")); PUT may carry only the fields to change; the response also has the hub's `long_turn_seconds` and `done_delay_seconds` (read-only). Can be set before the device has registered for push |
+| PUT | `/api/v1/devices/{id}/widgets` | Which extension widgets are on this device's screen `{"widgets":[{extension,id,family}]}` (replaced wholesale, at most 64): when an extension sends `ui.invalidate`, the hub sends the background push `extension_widget` to devices with that widget (at most one per device per widget every 15 minutes), see `docs/extensions/extensions.md` ("System-level placements") |
+| POST | `/api/v1/notify` | Send a reminder to the devices (for extensions, see `docs/extensions/extensions.md` ("Sending notifications")): `{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"silent"?,"actions"?,"ui"?,"state"?}`, at least one of title and body (title at most 120 characters, body 1000), `machine_id` and `session_id` both given or neither, `level` defaults to `active`, the same `id` replaces the previous one on the phone (apns-collapse-id, at most 64 bytes), `silent: true` has no sound. Extension credentials may carry up to 3 `actions`, `ui` and `state` (notification button spec in `docs/extensions/extensions.md` ("Notification buttons")). With a session, tapping opens that session; a muted session returns `{"sent":false,"reason":"muted"}` and nothing is sent. Respects the device's `input` switch (turn off "Needs You" and it's not received), and the "Phone Muted" and desktop-online rules; on the persistent connection it's a `notify` event with `kind` `alert` and the caller's `id` (without a session, `machine_id` and `session_id` are empty strings); the push collapse id is `notify:<id>`, so it never collides with the hub's own pushes. An encoded payload over 3500 bytes, or `machine_id` / `session_id` over 128 bytes, returns 400. Callable with full-access credentials and extension credentials with the `notify` scope; a non-extension credential sending `actions`/`ui`/`state` gets 400. `{"sent":true}` only means it was handed to push, not that it was delivered |
+| GET | `/api/v1/personas` | Avatars (`docs/apple/persona.md`): `{"personas":[{"id","rev","bytes","manifest":{persona.json as is}}]}`; the packages built into personad first (a directory with the same id in `~/.persona/personas/` takes precedence), then the packages under `~/.persona/personas/` that pass the checks (all files present, id matches the directory name, within the size limit); `rev` is a hash of the whole package content and changes if any byte changes, and the phone caches by rev. Tiered avatars (such as `nwverse`) only expose the current tier: `manifest` is that tier's own persona.json (files under `tiers/<tier>/`), `rev` is a hash of that tier's files, and changing tier means rev changes. An empty list when there are no packages |
+| GET | `/api/v1/personas/{id}/{file…}` | One file from the package (PNG / SVG / persona.json); only regular files inside the package directory (no following symlinks, no dotfiles); extension avatars only serve files named in the manifest, and SVGs are sanitized (with CSP); when `?rev=` is the current rev, `Cache-Control: immutable` is set |
+| GET | `/api/v1/looks` | All avatars (#3200, `docs/extensions/extensions.md` ("Avatars")): `{"looks":[{"id","source":"builtin\|hub\|extension","name","names?","subtitle?","subtitles?","app_icon","extension?","extension_name?","rev?","bytes?","manifest?"}],"current":{"id":the chosen one or null,"effective":the one to show,"updated_at?"}}`; built-in avatars first, then avatar packages and extension avatars (`/api/v1/personas` lists them too) |
+| PUT | `/api/v1/looks/current` | `{"id", "if_unset?"}` choose an avatar (stored on the hub, synced across clients), returns the new `current`; not in the list 404; with `if_unset`, if the hub already has a choice it's returned unchanged (clients use this to migrate their old local choice up). A change broadcasts `look` |
+| GET | `/api/v1/plugins` | The hub's plugins: `{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`; `status` is `disabled / needs_setup / incompatible / stopped / starting / running / error` (`docs/extensions/extensions.md` ("Hub endpoints")); only present when `features` has `plugins` |
+| GET / PUT / DELETE | `/api/v1/plugins/{id}/-/…`, `/api/v1/plugins/-/…` | Plugin details, switch, config and secrets (full-access devices), preview / install / upgrade / rollback / uninstall (main token over loopback only); only present when `features` has `plugin_manager`, see `docs/extensions/extensions.md` ("Hub endpoints") |
+| GET | `/api/v1/machines/{mid}/ports/{port}` | Port probe (`docs/operations/ports.md`): `{"port","listening","http","title"?}`, only looks, doesn't allow |
+| POST | `/api/v1/machines/{mid}/ports/{port}/open` | The user taps a port in the App that doesn't belong to any Agent: if something is listening it's allowed for 24 hours and returns the same as above; nothing there 404; read-only device 403 |
+| GET | `/api/v1/machines/{mid}/ports/{port}/connect` | Port forwarding: upgrades to a WebSocket whose binary messages are the bytes of one TCP connection (the phone listens locally and connects once for each connection the browser opens). The port must be in `ports` of some session on this machine or have been opened, otherwise 403; not listening 404; read-only device 403; machine offline 503; more than 64 concurrent per machine 429 |
+| GET | `/api/v1/agents/sessions/{id}/messages?cursor=&limit=` | Messages of one personal-Agent session (`id` is `<source>:<sessionKey>`, percent-encoded in the path) → `{session?, messages, hasMore, nextCursor?}`; to page back, pass the previous `nextCursor` (see "Personal Agent source state" below) |
+| POST | `/api/v1/agents/sessions/{id}/messages` | Send a message `{"clientId"?,"text","origin"?}` → `{outbox, duplicate, upstream?}`; if `clientId` isn't given the hub generates one, and resending the same one won't send twice (`duplicate: true`); `origin` defaults to `app`; empty text or a `clientId` that isn't a UUID 400, over 20000 (counted in UTF-16) 413; `clientId` already used on another session, or the session can't send right now (`canSend=false`) 409 |
+| DELETE | `/api/v1/agents/sessions/{id}/messages/{clientId}` | Delete one outbox entry (by `clientId`) → `{"ok":true}` |
+| POST | `/api/v1/agents/sessions/{id}/read` | Mark this session as read → `{"ok":true}` |
+| GET | `/api/v1/agents/sessions/{id}/avatar` | The session's avatar image as is, with `ETag`; a matching `If-None-Match` returns 304; cached for a day |
+| GET | `/api/v1/agents/outbox?session_id=&limit=` | The personal Agents' outbox `{"outbox":[{clientId, sessionId, preview, length, origin?, status, error?, attempts, createdAt, updatedAt}]}`; `status` is `sending` / `sent` / `failed` / `deleted` (resending a `failed` one with the same `clientId` is safe) |
+| POST | `/api/v1/channels/{id}/test` | Send a test message to the owner bound to the channel → `{"ok":true}`; couldn't send 502; no such channel 404 `not_found`, read-only ones or ones from a market not installed yet 409 `read_only`, read-only device 403 ([channels.md](../extensions/channels.md) "6. Endpoints") |
+| DELETE | `/api/v1/channels/{id}/binding` | Unbind: for a plugin channel the connector signs out, for the Lark bot it unpairs; returns the channel details after unbinding; unbind failed 502, other errors as in the row above |
+| POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`: have the DEBUG build on the phone run one Runtime CLI command (`docs/operations/runtime-cli.md` ("Connecting to a real device via the hub")), returns the App's response as is `{"ok": …}`. Full device credentials only (read-only device 403); no App online that registered `phone_runtime_cli` 503 `phone_offline` (doesn't wake it); no answer within `timeout` seconds (at most 120) 504; the App says the call failed 502. The hub logs one line per call (command, caller device id, status, duration), without arguments or responses |
+| Any | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | HTTP to the plugin's program on computer `mid` (`node.http`, `docs/extensions/extensions.md` ("Programs that run on computers")), WebSocket too: the hub opens a stream via `plugin.node.dial` and forwards, stripping `Authorization` and `token`; full-access devices only; plugin not enabled on this machine 404, machine offline 409, program not responding 502 |
+| Any | `/api/v1/plugins/{id}/{path…}` | Forwarded as is to the plugin's `/{path…}` (except paths starting with `/-/`) (WebSocket too), stripping `Authorization` and `token`; read-only device 403. The voice plugin's contract is in `docs/extensions/extensions.md` ("Voice") |
+
+**Limits on reading files by path** (`file`, `file/download`, `file/thumb`, `file/convert`, `stat`, `fs`; the node's `pathguard.go`): only for authenticated clients (device tokens). Symlinks are resolved one segment at a time and **each segment is checked before it is looked at**, so anything reached through a link is blocked too, and the target is never touched:
+- **iCloud** (any segment containing `Library/Mobile Documents`, case-insensitive): touching it on a locked Mac hangs, so `stat` treats it as nonexistent and reads are refused.
+- **Sensitive files**: the whole directories `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.password-store`, `Library/Keychains`, `.local/share/keyrings`, `.config/gcloud`, `.config/gh` under home,
+  `.netrc`, `.git-credentials`, `.npmrc`, `.pypirc`, `.pgpass`, `.claude/.credentials.json`, `.codex/auth.json`, private keys named `id_rsa` / `id_ed25519` etc. anywhere, and the data folder's credentials where they are written, in any `.persona` / `.persona` folder and in the folder `PERSONA_HOME` names: directly in it or in a manager's folder (`managers/<id>/`), the files whose names start with `hub.json` (including backups `hub.json.*`), `link.json`, `tailcat.json`, `tailcat-hub.json`, `daemons.json`, `manager.json`, `apns`, `relay.json`, `relay.secret`, `devices.json`, `mail_accounts.json`, and the `.key` / `.p8` / `.pem` / `.crt` files; and `launcher-settings/`, `tls/`, `link-tls/`, `extensions/data/` (the extensions' own data, their sign-ins and tokens among it), `extensions/staging/` (what an uninstall or an upgrade sets aside of it), `plugins/` (the extensions' folder of a hub from before #1844, or the link to `extensions/` it left: paths through it are refused, use `extensions/`) and `node-plugins/` (the programs extensions run on a computer and their data), whole, the folders themselves included; a link standing where one of these, or a folder on the way to one, is named is not followed. The rest of the folder (the knowledge base `data/`, a `.pem` deeper in it) stays readable, and so does a project's file of the same name elsewhere (with `PERSONA_HOME=~`, a project's `link.json` or `certs/dev.pem`). `stat` treats them as nonexistent; reading, listing and downloading are all refused.
+- The Git panel reads the same files' content: `git/diff` and `git/blob` refuse these paths; `git/show` still lists every file of the commit but leaves the refused ones (both sides of a rename or copy that has one) out of `diff` (with no working tree to check the names against, a bare repository or a `cwd` inside `.git`, `diff` is empty).
+- **A manager's folder anywhere** (`personad manager join/run --dir`, #5877): a folder holding a manager's `manager.json` (one naming its hub and token, or one that doesn't read but may hold a token) has the same credentials refused as a data folder's (`manager.json` and its copies, `secret.key` and the other keys, the same folders), also when they are not in the working tree any more. The folder is only looked at for such names, once the links up to it are followed; a link named `manager.json`, or a placeholder of one that is not downloaded, counts as a manager's without being opened.
+- Links are followed at most 40 levels deep (a loop stops it). This is basic protection, not a sandbox: a device token can already have an Agent read these files.
+
+For mail, see "Mail API" below. For the HTTP error format and optional fields, see "Error body" above.
+
+### Computer trust (feature `machine_trust`, #3347)
+
+From the onboarding plan (#287) 4.2 and 5.3: a signed-in device can add a computer itself (feature `machines_add`); an added computer starts out **pending** (`trust: "pending"`) and is confirmed only when the user taps **It's mine**.
+Trust is stored in the Postgres table `machine_trust`, and **no record = confirmed**: machines from before the upgrade, ones added via `/admin`, and ones added via `hub pair --machine` are all confirmed directly, with unchanged behavior. A pending computer:
+
+- Doesn't receive Persona-managed keys (the assistant's `pushManaged` and `launchers.managed` on new connections both skip it); all its requests to the manager (`assistant.context`, MCP tools) are refused;
+- Isn't an assistant machine (`defaultAssistantMachine` and hello's `assistant.machines` exclude it), isn't in the assistant's `devices.list` (dispatch, starting Agents and to-dos don't see it), and the hub doesn't forward the assistant's `device.call` to it;
+- `POST /api/v1/sessions` starting an Agent on it returns 409 `machine_pending` (old Apps still list it in the new-Agent list);
+- Is still listed in the machine list (the App needs to show the confirmation), with `error` set to "Waiting for you to confirm this computer is yours in the latest app or on the web", followed by the original `error` in parentheses;
+- Is deleted automatically if not confirmed within 24 hours (the hub.json entry and the record; its Persona Link credential and unused pairing codes are revoked), the same as `reject`.
+
+After rejection or timeout deletion the record is gone (so it looks confirmed), but until the manager disconnects it (config changes take a moment), the hub still keeps it out as pending, and the machine list no longer lists it, so hello won't treat it as a just-confirmed computer and push keys to it.
+When the hub can't read pending computers (database unreachable), every computer is kept out as pending (the machine list doesn't mark `trust`), re-read every 5 seconds until it succeeds; no timeout deletion happens during that time. When the manager can't read them, requests from computers are refused with the error "the hub's database isn't responding", without saying the computer is waiting for confirmation.
+`error` for `confirm` / `reject` is localized by `Accept-Language` (403 `forbidden`, 404 `not_found`, 409 `not_pending`).
+
+Once confirmed, hello's machine list includes it, and the assistant then pushes keys to it. Issuing a code, redeeming, confirming, rejecting and timeout deletion are all written to the `machine_audit` table (who, when, what was done, no credentials).
+How a device adds a pending computer: see "Computer pairing codes" under "Temporary pairing" above.
+
+## WebSocket `/api/v1/ws`
+
+Envelope `{"type":"…", ...}`.
+
+Server → client:
+
+| type | Fields |
+| --- | --- |
+| `hub_restarting` | `back_in_ms`: the hub is about to restart (deploy, `systemctl restart`, update), followed by 1001 "hub restarting". The client reconnects immediately and keeps the UI as is ([hub-restart.md](../operations/hub-restart.md)). No `event_seq`, not replayed |
+| `hub_update` | `update` (same as `GET /api/v1/hub/update`): checking, downloading, waiting for idle, restarting, confirming, rolling back; pushed whenever the state changes; after `restarting` the connection drops for a while, which is expected |
+| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build` (the last four same as `/api/v1/health`), `event_stream`, `event_seq`, `resumed` (see "Event resume" below), `locale` (the user's language, feature `locale`); the first message on every WS, not yet including the negotiated heartbeat. `mesh`: `{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`, every hub in the linked-hub group (including itself, `self: true`; paired but currently unreachable ones `online: false`; `center: true` is the group's primary hub, which clients prefer among those in the same group); without linking, only itself. When connected to a member, hello comes from the primary (`hub_id` is the primary's) ([mesh.md](../server/mesh.md)) |
+| `endpoints` | `endpoints` (the full candidate list, only sent to connections that declared the capability of the same name) |
+| `client_hello_ack` | `heartbeat: {interval, pong_timeout}` (the seconds actually used after this negotiation) |
+| `machines` | `machines` |
+| `workspace_board` | `revision`: a board change was saved; the client re-reads the full state; doesn't indicate an Agent state change |
+| `workspace_board_settings` | `enabled`: the board switch changed (`PUT /api/v1/workspace-board/settings`); clients show or hide the entry accordingly |
+| `todos` | —: pushed whenever to-dos or links change; clients re-fetch `GET /api/v1/todos` |
+| `extension_operation` | `operation` (`ExtensionOperation`): an extension install, upgrade or uninstall moved to the next step, or the download progressed (at most one per second); only sent to connections that declared `extension_operations`, not in the event log; see "Extension install, upgrade and uninstall progress" above |
+| `extension_auth` | `extension`, `auth` (`ExtensionAuth`): an extension's sign-in state changed (sign-in finished, signed out, expired, the extension sent `auth.changed`), see [extensions.md](../extensions/extensions.md) "Sign-in (auth)" |
+| `plugin_ui` | `plugin`, `id`, `badge` (`{text, tone}`, `null` clears it): a plugin changed the badge on its main navigation entry (`nav_page`), [extensions.md](../extensions/extensions.md) "UI slots" |
+| `assistant_feed` | `conversation`, `item` (`FeedItem`): a new entry in the chat feed; kind `view` is a live card's original position, and body.view is the AssistantView |
+| `assistant_view` | `conversation`, `view` (the schema's AssistantView: id, conversation, version, view, created_at, updated_at): an update to a live card already stored in the database; at most once per second per card, old updates ignored by version; no separate notification |
+| `assistant_view_block` | `conversation`, `key`: a body card has been validated from a trusted assistant text item and stored in the database, so its single reply can be enabled; replaying the same source doesn't broadcast again; goes into the existing event resume, and if missed is filled in by the feed.view_blocks snapshot |
+| `assistant_view_action` | `conversation`, `action` (ViewAction: key, action, page?, values, client_msg_id, status, revision, error?, at, updated_at, kind?, version?, text?): card submission and send status; `kind` absent or `action` means a declarative action, `html` is an HTML bridge reply (`action` is the component key, `text` is the confirmed text); `version` is the card version the user saw when submitting (older records don't have it); old states ignored by revision; goes into the existing event resume |
+| `task_plan` | `plan` (`TaskPlan`): a plan handed to the user, started, dismissed, or one of its tasks failed to start (`tasks[i].error`) |
+| `sessions` | `machine_id`, `sessions` (the full set for that machine, pushed on change, not pushed if identical to the last one; each session carries `rev` = transcript byte count, and a change means new content; optional `suggestion`: the gray "next message" suggestion Claude puts in the input box after a turn, see `docs/integrations/claude-integration.md`; optional `attention_reason`: when the session is in "Needs you", the reason the host gave (botmux's attention reason); optional `external_url`: where to open it outside Persona (the Lark thread of a botmux session), see `docs/integrations/engines.md` ("botmux")) |
+| `revs` | `machine_id`, `revs` (`{session_id: rev}`, changed ones only; sent when the fields visible in the list haven't changed but the transcript grew, pushed to all clients, and the App fetches the increment in the background) |
+| `lark` | `feed_ids` (chats with new Lark messages / changes); `settings_changed` (optional boolean, default false; this batch includes a change to message display settings, independent of the chat IDs; the client also re-reads settings); `account` (the Lark gateway account number these chats belong to); `ol_account` (only present when not the default account, equal to `account`: the parameter needed to read these chats, `docs/extensions/feishu.md` ("Multiple accounts")). The hub follows the live events `/agent/v1/events` of every signed-in account on the Lark gateway, sends at most once every 400 ms per account, and pushes to all clients. |
+| `messaging` | `source` (message source id), `conversations` (ids of changed chats), `account` (optional, which account), `settings_changed` (optional): an extension's `messaging.changed`, coalesced for one second, then pushed to all clients (`docs/extensions/extension-messaging.md` ("9")) |
+| `items` | `machine_id`, `session_id`, `items`, plus this batch's position in the transcript (see "Continuity of items" below): `history`, `to_seq`, `from_seq` (only on continuation batches). Only pushed to clients subscribed to that session; lines with no item (ai-title and the like) also get an empty `items`, so the App knows those lines have been seen |
+| `delta` | `machine_id`, `session_id`, `text` (the whole text the headless assistant is generating; an empty string means the turn is over). About one every 80 ms; the App draws each chat at most 5 times a second, the first one after a pause immediately and then the latest; an empty string is drawn immediately; anything not yet drawn is dropped when the message lands in the transcript or on reconnect (`DeltaPacer`) |
+| `live` | `machine_id`, `session_id`, `live` (`SessionLive` or `null`): the status line of a working Claude, only sent to connections subscribed to that session that declared `session_live`; see "Live status" below |
+| `screen` | `machine_id`, `session_id`, `text`, `status`, `ts` (the node no longer samples the screen per subscription: the terminal page reads `/screen` itself on demand, and old Apps not receiving this doesn't matter) |
+| `fs_changed` | #2439: `machine_id`, `cwd`, `dirs` (folders in this page's `fs_watch` that changed), `git` (the Git status of `cwd` changed). Only sent to pages that did `fs_watch`; not in the event log and not replayed on reconnect (the page refreshes itself once after reconnecting) |
+| `terminal_control` | `machine_id`, `session_id`, `state`: `active` (took control, with `cols`, `rows`), `busy` (another program on the computer holds it; ask the user whether to `takeover`; mirror in the meantime), `taken` (grabbed by another device or program), `lost` (the node let go itself), `unsupported` (old node / herdr, mirror only); `error` is a human-readable reason |
+| `terminal` | `machine_id`, `session_id`, plus a frame `epoch`, `seq`, `full`, `cols`, `rows`, `data` (base64 VT bytes), or `error` (the stream stopped: computer offline, session not running…) + `unsupported` (old node / herdr can't stream; poll `/screen` instead). See "Terminal stream" below |
+| `herdr_state` / `herdr_data` / `herdr_end` | `id` plus `state: "open"`, `cols`, `rows` / `data` (base64, ≤ 32 KB each) / `error?`, `code?` (`forbidden` `too_many` `bad_request` `offline`), `unsupported?`: a view of the full herdr interface (the response to `herdr_open`). The hub ends the view when un-acked bytes exceed 1 MiB |
+| `herdr_focus` | `id` (the view), `machine_id`, `workspace_id`, `tab_id`, `pane_id`, `session_id?` (the Agent session in that pane), `source` (`client`: some full client on this computer was just typed into / `persona`: requested by a `herdr_focus` / `other`: anything else), `mine` (done by this view itself): herdr's focus changed, pushed to every view on this computer. The web only follows ones that are `mine` and `client`; `persona` + `mine` is an echo; the rest only show a hint. Feature `herdr_focus`. `docs/integrations/terminal.md` section 28 |
+| `interaction` | `interaction` (a new pending one, pushed to all clients). When a question is first answered by the assistant on the user's behalf (#3029), the same card comes twice: first with `delegating: true` (the assistant is looking; not pushed yet), then again when the assistant hands it to the user, without `delegating` and possibly with `delegate` (`what` / `why_now` / `recommend` / `cost` / `reason` / `deadline`, the context the assistant filled in); overwrite by `id` |
+| `interaction_resolved` | `id`; when the assistant answered on the user's behalf, also `answered_by: "assistant"` (#1602), plus `reason` (why it answered that way) and `answers` (what it answered; re-answering starts from here, #3029) |
+| `interaction_reanswered` | `id`, `resolution` (`{answers}`): the user changed the assistant's answer, and the new answer has been sent to that Agent (#3029) |
+| `fleet` | `fleet` (the Live Activity summary, matching the content of HTTP `/api/v1/fleet`) |
+| `hook_event` | The node hook event's original fields; the hub adds `machine_id` and sets `type: hook_event`; used to refresh session run state; `Stop` carries `stop_sig` (a reply signature the hub uses to dedupe "done" pushes, see `agent-states.md` ("Turn signals from hooks")); global report-only hooks (`../integrations/claude-integration.md` ("Global report-only hooks")) carry `report_only: true`, so the hub doesn't take them to mean the session has Persona's hooks; otherwise as before |
+| `tool_call` | `call_id`, `name`, `args` (only sent to phones that did `register_phone` and provide that tool) |
+| `desktops` | `desktops`: connected desktop clients (the Mac App), `[{"device","name","since"}]`; `device` is its device credential id (empty for those connected with a pairing credential, which can't be signed out individually). Sent once on connect, then pushed to all clients whenever a desktop client connects / disconnects (feature `desktops`). The iPhone uses it to show "Persona is signed in on a Mac" |
+| `notify` | `kind: interaction / done / assistant / alert`, `machine_id`, `session_id`, `title`, `subtitle`, `body`; interactions also carry `interaction_id`, alerts the caller's `id` when it gave one (Android replaces the earlier alert with the same `id`, #5614); `quiet: true` when the device is inside its quiet hours (post it without sound); only sent to connections that declared `ws_notify`, see below |
+| `lock_test` | `lock_test_id`, `lock_test_due_at`, `lock_test_sent_at`, `lock_test_title`, `lock_test_body`; only sent to the selected connection on this device that declared `lock_test`, see "Lock screen test" |
+| `inbox` | No payload; a list-change hint, the client re-fetches the Inbox |
+| `look` | `{"id","effective"}`: the selected avatar changed (chosen on another device, or back to the default after an extension was uninstalled); every client switches to `effective` (#3200) |
+| `personas` | No payload; the avatar list changed (a tiered avatar changed tier, an extension with avatars was installed / uninstalled / disabled); clients re-fetch `GET /api/v1/personas` and switch once the new package has fully downloaded (`docs/apple/persona.md` ("Tiered avatars")) |
+| `error` | `machine_id`, `session_id`, `error`; e.g. a subscription replay failed, and the client checks the session against it |
+| `pong` | `id` (a string, echoing the client's application-level ping) |
+
+Client → server:
+
+| type | Fields |
+| --- | --- |
+| `subscribe` | `machine_id`, `session_id`, `since_seq` (optional; the App passes its local `covered`; if present, all items after it are replayed, one `items` per page (`backlog: true`), at most 8 pages / 4000 items, and beyond that the last one carries `more_after: true`; otherwise the last two turns are replayed), `lazy_images` (optional; when true, items received on this connection carry no image data), `fold_work` (optional; when true, the last two turns replayed from the end on this connection fold their work; `since_seq` replays are not folded) |
+| `seen` | `machine_id`, `session_id`; same as HTTP `/seen` |
+| `unsubscribe` | `machine_id`, `session_id` |
+| `terminal_subscribe` | `machine_id`, `session_id`, `epoch` (optional), `after_seq` (optional): start receiving live frames of this session's terminal (only sent when the hub's `features` has `terminal_stream`); `control: {cols, rows}` (optional, `terminal_control`): the phone takes control of the terminal at this size, and `takeover: true` grabs it even when another program holds it |
+| `terminal_input` | `machine_id`, `session_id`, `text` (terminal bytes, written as is), `control: {cols, rows}` (optional, new size), `scroll` (optional, wheel lines, > 0 goes back, < 0 goes newer, feature `terminal_scroll`), `at` (optional, `[column, row]` from 0, which cell of the screen the wheel lands on: where the finger went down; without it the node uses the center of the screen), `click` (optional, `[column, row]` from 0, a left click on that cell, feature `terminal_click`), `mouse` (optional, `{action: down|up|drag|move, button: left|middle|right, at: [column, row], mods}`, `mods` bits: shift 1, ctrl 2, alt 4; one mouse event, feature `terminal_mouse`, docs/integrations/terminal.md section 23): only forwarded to the node when sent by the connection currently in control |
+| `terminal_unsubscribe` | `machine_id`, `session_id` |
+| `fs_watch` | #2439 (automatic refresh of files and Git, "Automatic file refresh" below): `machine_id`, `cwd` (the session directory), `paths` (folders open on this page, absolute paths, at most 32), `git` (whether the Git status of `cwd` is shown). Replaces this page's whole set for this machine and this `cwd`; empty `paths` with `git` false releases it (so does disconnecting). Only full-access devices can send it; answer devices (the watch) are ignored |
+| `herdr_open` | `id` (chosen by the browser, ≤ 64 characters), `machine_id`, `session_id` (optional, a session id or a `pane:` address, whose tab is focused first), `cols`, `rows`, `focus`: have the node run herdr's own client in a PTY and stream the bytes back (feature `herdr_client`, `full` devices only). `docs/integrations/terminal.md` section 24 |
+| `herdr_input` / `herdr_resize` / `herdr_ack` / `herdr_close` | `id` plus `data` or `b64` (≤ 1 MiB) / `cols`, `rows` / `bytes` (cumulative bytes parsed) / —: only the connection that opened the view can use it |
+| `herdr_focus` | `id` (the view's id), `session_id` (a session id or a `pane:` address, ≤ 256 characters): the page now shows this pane, so move herdr's focus there (feature `herdr_focus`, `full` devices only, only the connection that opened the view; it changes state on the computer, since focus is shared by the whole herdr session). No reply; if focus actually changes, it comes back as `herdr_focus` (`source: "persona"`). `docs/integrations/terminal.md` section 28 |
+| `register_phone` | `device_name`, `tools` (`[{"name","description","input_schema"}]`, i.e. MCP tool definitions), `simulator` (a simulator only takes tool calls when no real device is connected); optional `device_id`, `platform`. Registration is replaced per device; an empty tool list only clears that device's tools; without `device_id`, the authenticated device ID is used, falling back to `legacy`. A call first filters online phones that provide the tool, then prefers real devices and the most recently active connection. The iPhone's `device_id` is the device id used for push (same as `POST /api/v1/devices`): while it's connected, the hub doesn't send APNs pushes for this device's Live Activity and the App draws it itself, `docs/apple/live-activity.md` ("Push cadence"); old Apps don't send it. `phone_runtime_cli` in `tools` (a DEBUG build with Runtime CLI via the hub turned on) doesn't count as a phone tool: the hub takes it out, so it's not in the Agents' tool list and Agents can't call it; it's only for `POST /api/v1/phone/runtime-cli`; a connection that registers only that one (a script-driven simulator) doesn't count as a phone. |
+| `register_desktop` | `device_name`: the Mac App registers as a desktop client, not a phone: it doesn't take `phone_*` and doesn't stop the hub from sending pushes that wake the iPhone (`hub/desktops.go`); `device_id` (the device id used for push, same as `POST /api/v1/devices`: while it's connected, the hub doesn't push "Needs You" or "Agent finished" to this Mac, and it posts local notifications itself; old Apps don't send it). Signing it out means revoking its device credential (`DELETE /api/v1/auth/tokens/{id}`; the hub then drops its connection and deletes the push registration it made) |
+| `tool_result` | `call_id`, `content` (`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`), `is_error` |
+| `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`, `locale` (`zh-Hans` / `en` / `ja`, the UI language), all optional, see below |
+| `ping` | Must carry a string `id`; an empty string is allowed; no reply if it's missing, null or not a string |
+
+### Event resume (`event_seq`, 2026-11-04)
+
+Broadcasts the hub sends to all clients (everything in this table except `hello`, connection snapshots, `sessions_delta`, `items`, `delta`, `terminal*`, `tool_call`, `notify`, `lock_test`, `pong`, `error`,
+`client_hello_ack`, `hub_restarting`) carry `event_seq`: it increments by one per event within a stream (`hello.event_stream`), and numbering continues after a hub restart.
+
+- The client remembers `event_stream` and the highest `event_seq` it received, and passes them when reconnecting: `/api/v1/ws?event_stream=<stream>&event_seq=<n>` (both are required).
+- `hello.resumed: true`: right after hello, broadcasts with `event_seq > n` are replayed (in order, no duplicates), then live ones follow; the client doesn't need a full re-fetch. Connection snapshots are sent as usual (full state, applied silently).
+- `resumed: false` (the stream changed: the hub crashed; what was missed is no longer in the last 2000 events / 15 minutes the hub keeps; more than 400 events) or an old hub without these fields: do a full refresh as before.
+  `hello.event_seq` is the last event at this moment; after the full refresh, keep counting from it.
+- Permission cards that need filling in (elicitation `interaction`s) are not replayed; they come from the pending-interaction snapshot after connecting.
+- After a subscription (`subscribe`) replay, a headless assistant session that is still generating is followed immediately by one current `delta`.
+
+### Notifications over the persistent connection (ws_notify)
+
+`notify` is the event name; `ws_notify` is the capability name both sides declare. The hub reuses the APNs decisions for questions and completions, mute rules and device preferences, and sends it to a connection only when `c.has("ws_notify")`. It's received even without an APNs token or key; old iOS versions don't declare it and so don't get the new event.
+
+`interaction` means an interaction that needs handling, `done` means an Agent finished, `assistant` means the assistant finished, and `alert` is a reminder an extension sent via `POST /api/v1/notify` (or a script's `personad notify`, `../integrations/script-cli.md`) (clients ignore unknown kinds). Preferences are read from `/api/v1/devices/{id}/prefs` by the authenticated device ID: interactions follow `input`, completions follow the existing completion policy; quiet hours (`quiet`) drop completions and mark interactions and reply reminders `quiet: true`; machine and space mutes use the existing checks. Completion events are decided by the hub, and Android should not generate another one from session state changes. The raw `interaction` and `interaction_resolved` events are still sent, for request cards and withdrawing notifications; don't treat both as new reminders.
+
+Events are not persisted for replay and don't prove a notification was actually shown; after a disconnect the client must still fetch interactions and sessions to reconcile. Notification reliability, lock screen display and battery use have not been measured.
+
+### Client capabilities and heartbeat
+
+Once the client sees that the server supports `client_hello`, it may send:
+
+```json
+{"type":"client_hello","device_id":"<device id>","platform":"android","version":"<version>","build":1,"os":{"name":"Android","version":"<OS version>","sdk":36},"features":["endpoints"],"locale":"en","heartbeat":{"interval":240,"pong_timeout":15}}
+```
+
+`locale` is the resolved UI language (`zh-Hans` / `en` / `ja`, [i18n.md](i18n.md)), not "Match System". The hub uses it for the text of `notify`, `error` and the like on this connection; the value reported by a `full`-role connection is also recorded as the **user language** (Postgres `settings.user_locale`), used for assistant answers, injected messages, task notifications, bot replies, and pushes to devices without their own `locale`. If no client has ever reported one, it's `zh-Hans`. Omitting `locale` changes neither. When the user changes the language (or the system language changes under Match System), send `client_hello` again right away (with the other fields as before; omitting `features` clears the capability set).
+
+This metadata is only recorded on the current connection and doesn't change the authenticated device identity or permissions. `build` currently accepts any JSON. Each `client_hello` replaces the client's capability set, and omitting `features` clears it; don't substitute the server's capability list for the capabilities the client itself supports.
+
+The seconds below are all negotiation bounds and timer settings in the code; **network latency, actual packet frequency, battery use and carrier idle timeouts have not been measured**.
+
+- Without negotiation, the old behavior holds: the hub sends WebSocket protocol pings every 20 seconds and waits 15 seconds for the protocol pong; TCP keepalive settings on old connections are unchanged.
+- `heartbeat.interval` is in whole seconds, first clamped to 10–900, then jittered downward only: a random integer in `0..min(interval-10, floor(interval/10))` is subtracted. It's drawn once per negotiation, and `client_hello_ack` returns the value actually used.
+- `heartbeat.pong_timeout` is in whole seconds, clamped to 5–60; an omitted item keeps the previous or default value. An empty `heartbeat` object also marks it as negotiated; omitting the whole field keeps the previous negotiation state.
+- After the writer goroutine applies the new settings, it returns `{"type":"client_hello_ack","heartbeat":{"interval":<actual>,"pong_timeout":<actual>}}`. The client can send it again to renegotiate; even sending only metadata without heartbeat gets an ack with the current values.
+- After negotiation it also tries to adjust TCP keepalive: Idle uses interval, Interval uses pong_timeout, Count is 3; this depends on whether the underlying connection supports it. A protocol pong timeout closes the connection. Only one protocol ping is outstanding at a time, and it doesn't block application-level replies.
+
+Application-level probes use separate client-initiated JSON messages:
+
+```json
+{"type":"ping","id":"probe-1"}
+{"type":"pong","id":"probe-1"}
+```
+
+The first is sent by the client, the second is the hub's reply, with `id` echoed as is. Check the server's `app_ping` capability first; it's independent of WebSocket protocol control-frame ping / pong, and neither replaces the other. The hub never sends JSON `ping` on its own and doesn't handle client JSON `pong`. Old clients that don't send `client_hello` don't receive the new `endpoints` event or the negotiation ack.
+
+New fields must be optional and must not use a type that conflicts with a same-named key in the existing iOS `Envelope`; for example, `id` stays a string and can't become an object for the new protocol.
+
+### Codex questions and approvals
+
+Codex / compatible forks have no hooks in the terminal, so the node reads questions from the rollout itself (`request_user_input_async` / `request_user_input`) and approvals from the screen, turning them into ordinary
+`question` / `permission` interactions with `agent: "codex" | "traex"`; permission cards also carry `reason` (the reason Codex gave) and `always_label` (what **Always Approve** would allow;
+without this field there's no **Always Approve**). The answer format is the same as Claude's: `{"answers":…}`, `{"allow":true,"always":…}`, `{"allow":false,"message":"…"}`
+(with `message`, the turn stops and the message is sent in as the next message). Answers are synchronous: the hub hands it to the node (`codex.answer`), and the node checks that the computer still shows this question / this approval
+and that the TUI is back in a state where it can be answered, types the input, then confirms Codex accepted it before returning success; otherwise it returns 409 `input_draft` / `dialog_open` / `prompt_changed` (nothing typed),
+and the card stays (except for `prompt_changed`). Details in `docs/integrations/codex.md` ("Questions and approvals").
+
+### Permission cards that need filling in
+
+A `permission` interaction can carry `fields: [{key,label,placeholder?,secret?,optional?}]`; the App fills in passwords with a secure input field and on approval sends
+`{"allow":true,"values":{"password":"…"}}`. If a required field is missing, the hub rejects this approval and keeps the card; secret fields in the interaction history are recorded only as `<redacted>`,
+and the raw values only go to the waiting tool. The notification category for these cards is `INTERACTION_INPUT` (no quick allow button), and the list, the watch and Siri don't approve them directly.
+
+### Terminal dialogs (screen interactions)
+
+When an Agent is blocked without a hook interaction, the hub reads the screen once (`session.screen`, 40 lines) and builds a `screen` card:
+
+- The node reads those 40 plain rows the same way for the card and for its answer (`node/hosts.go` `dialogScreen`). When herdr can't send them whole (a wide pane full of CJK text is past 8 KB in 30 plain rows),
+  both take the most bottom rows that fit (30, 24, 16, 12), and a dialog is read from them only when they show it whole, from the rule that opens it (`screen.DialogWhole`).
+  Then it is the dialog a whole screen shows, with the same `rev` whatever rows fit at the card and at the answer. A dialog taller than those rows stays unreadable as before:
+  no card, and an answer presses nothing, since part of it (a permission's command) would be neither shown nor in `rev` (#6318).
+
+- When it's built: for Claude Code without Persona hooks (started from the user's own profile), it reads the screen and builds the card as soon as it's blocked; for sessions with hooks (that sent a hook event since this hub started,
+  or that Persona started), it first waits 1.5 s so the hook's own card arrives first (3 s for Codex / compatible forks). If the hook's card arrives late, it still replaces the screen card.
+- After a screen card is answered, the hub looks at the screen again every 250 ms for up to 2 s: when the Agent asks again right away (the next AskUserQuestion question, the next permission), herdr may stay blocked
+  with no state change, and this check is what builds a card for the new dialog; if it still sees the one just answered (the keys haven't landed yet) or no dialog, it keeps looking, and stops once the Agent is no longer blocked or another card exists.
+- Measurements of the whole path and the no-rate-limit convention are in `docs/server/server.md` ("Fast lane for cards") (#751).
+
+- The hub parses the dialog with `server/internal/screen` and puts it into `interaction.dialog`: `header`, `question`, `detail`,
+  `options[{key,label,detail,kind,keys}]` (`kind`: `type_something` / `chat` / empty), `rev` (a hash of the question and options, excluding the cursor and spinner).
+  Numbered options are chosen by number; unnumbered lists like Claude 2.1.312's trust-folder prompt are computed as `up/down` + `enter` from the cursor. The card id includes `rev`: a changed dialog is a new card,
+  and what was selected on the previous card doesn't carry over.
+- The App's answer carries `option` (plus `text` for `type_something`) instead of guessing keys itself; the hub passes `rev` and `option` to the node's `session.keys`,
+  and the node **re-reads the screen, re-parses and compares `rev` before pressing any key**; if they differ it presses nothing and returns 409 `{"code":"prompt_changed"}`, and the hub then builds a new card from the current screen.
+  The keys are also computed on the node from the screen at that moment (so it won't pick the wrong thing if the cursor was moved on the computer).
+- Compatibility: old Apps don't know `dialog` and keep parsing `screen` and sending `keys` themselves; the hub adds `rev` to those too and checks it the same way; old nodes don't know `rev` / `option`,
+  so the hub also passes the computed `keys`, behaving as before. Cards where no dialog was parsed (only the terminal and the key bar) aren't checked.
+- Screen card answers are synchronous: the hub waits until the node has pressed the keys before replying to the App (it used to reply success first and press in the background).
+- `rev` hashes the header, what is asked and each option's label and detail with all white space and ANSI escapes left out, so the same dialog redrawn at another pane width (a phone or the web viewing the pane resizes it) keeps its `rev` (#5538).
+  The card takes the `rev` the node will check: `session.screen` with `lines` 40 (plain, visible) also returns `dialog_rev`, the node's own parse of that screen, so a hub and a node of different builds still agree.
+  A node that returns no `dialog_rev` (older than #5538) gets the old formula (`LegacyRev`, which kept the wrapped rows), and a node also accepts that one from an older hub.
+  A `prompt_changed` refusal's data carries `rev` (the card's) and, when a dialog is on screen, `seen_rev`, `seen_question` and `seen_options`. The node logs the same with the pane the answer read and the agent's pane (the one `session.screen` reads for the card), and the hub logs the refusal's data.
+  The card the hub makes after a `prompt_changed` is named by the node's `dialog_rev` too, so a dialog the node reads differently gets a new card rather than the old id again.
+- The watch also answers with `option` when there's a `dialog` (Siri's **Approve First Pending** doesn't handle screen cards).
+- **Multi-select** (AskUserQuestion `multiSelect` in Claude Code 2.1.316, `docs/integrations/claude-integration.md` ("Screen cards for multi-select questions")): `dialog` also carries
+  `multi: true`, `submit` (`Submit`, or `Next` when more questions follow), and options also carry `checked` (already checked on the computer) and `text` (what's already typed in the free-answer box);
+  with several questions, `steps[{label,done}]` is the tab bar at the top; the confirmation page before submitting is `review: true` (`incomplete: true`: some questions unanswered), with options "Submit answers / Cancel".
+  `checked`, the cursor, typed text and tab checkmarks don't go into `rev`.
+  The App's answer carries `options` (the keys of options to check; unlisted ones get unchecked) and `text` (the free answer; empty means don't check it). The hub passes it to the node's `session.keys`
+  (`multi: true`, `options`, `free_text`), and the node presses one key at a time, re-reading the screen after each, and finally presses Submit / Next; on the confirmation page, if all questions are answered it presses "Submit answers" too.
+  Old Apps send only one `option` for a multi-select card: treated as checking just that one.
+- Passwords: when the last line on the screen is a password prompt (`[sudo] password for …:`, `Password:`, an ssh passphrase…; the rules are deliberately narrow, and the word password in body text doesn't count), the card carries
+  `secret: true` and the App uses a password field (not saved to drafts). Password or not, `text` in terminal card answers is always stored as `<redacted>` in the database;
+  the terminal panel's key endpoint (`/keys`) isn't stored at all, and the hub's request log only records the path and status code.
+
+### Session deltas (`sessions_delta`, 2026-11-02)
+
+A machine's session list has hundreds of sessions at about 1 KB each, and a push usually changes just one; pushing the whole list made the phone download and decode about 2.6 MB a minute (`docs/server/server.md` ("Volume pushed to the App")).
+
+- When connecting the WebSocket, the App adds `?features=sessions_delta` to the URL. If the hub has the capability (`sessions_delta` in `hello.features`), it:
+  1. On connect, sends one full `sessions` list per machine as a snapshot, **without Codex history sessions** (`source_kind: codex_history`; the App gets them from `GET /api/v1/sessions`);
+  2. After that only sends `{"type":"sessions_delta","machine_id","upsert":[Session…],"remove":[session_id…]}`: new or changed sessions (the whole object, not half of it) and the ids that are gone;
+     nothing is sent if nothing changed. Codex history sessions only appear in deltas if the App already has them (a live Codex session ends and the same id becomes history).
+- The hub tracks, per connection, every session of every machine each App holds (`client.have`); snapshots and deltas are computed and queued under the same lock, so a delta is always computed against what the App really has.
+- Reconnecting after a disconnect means a new snapshot, which fills in any missed changes.
+- App (`SessionPatch`, `AppModel.applySessions`): a snapshot replaces this machine's list but keeps the existing Codex history; a delta replaces changed ones in place, appends new ones and removes the ones that are gone;
+  while the socket is connected, the `GET /api/v1/sessions` response is older than the pushes, so only Codex history is taken from it (history no longer in it is removed, and existing entries are replaced with the copies in the response: pushes don't carry history, so seen / went offline can only be updated from here, #2463), and it doesn't overwrite pushed sessions.
+  Known issue (#2425): history the App already has keeps the old copy, so seen / went offline aren't updated in the list; the web has switched to using the copies in the response, the App is still to do.
+- Compatibility: old Apps don't send `features` and keep getting full lists (identical ones not sent); old hubs don't know `features` and keep sending full lists, and the App, seeing no `sessions_delta` in `hello.features`, handles them as full lists.
+  The mock (`scripts/mock/mock_hub.py`) supports it too, and `MOCK_WHOLE_LISTS=1` makes it act as an old hub.
+- Replay (19 minutes recorded from a real hub): session pushes 2605 KB → 79 KB per minute, the snapshot on connect 602 KB → 227 KB (`docs/operations/testing.md` ("Push replay")).
+- The web uses it too (`web/src/lib/sessions-delta.ts`, the same rules as `SessionPatch`): `wsQuery` adds `features=sessions_delta` on every connection, `store.ts` merges by `upsert` / `remove`, and `refresh()`, while connected to a delta-capable hub, only takes Codex history from `GET /api/v1/sessions`, replacing existing history with the copies in the response (pushes don't carry history, so seen / went offline can only be updated from here, #2425). Before this the web didn't send `features`, and each connection was measured receiving about 3 MB of full lists per second, slowing down the small events behind them (#1707).
+
+### Bounded Agents lists (`sessions_list`, #5929)
+
+**Choose the right collection.** Claude Code, Codex (including history), terminal-host and contributed-runtime sessions use **`GET /api/v1/sessions`** and snake_case `Session` rows, identified by `(machine_id, session_id)`. **`GET /api/v1/agents` is source/setup status**, not those sessions. Extension personal-agent conversations use **`GET /api/v1/agents/sessions`**, camelCase rows and the opaque `id` (`<source>:<sessionKey>`). The two collections are not combined or renamed.
+
+#### Opt-in parameters (both session collections)
+
+Any of `limit`, `cursor`, `since`, `summary`, `state`, `project`, `group`, or `counts` opts into the bounded API. Without them, legacy requests and response shapes remain unchanged: runtime `machine_id` filtering still returns the complete list; personal-agent `source`/`provider` filtering still returns the complete list; personal-agent `q` alone still searches messages and returns `items`.
+
+| Parameter | Contract |
+| --- | --- |
+| `limit` | Integer 1–200, default **50**. Full and delta pages both use it. A delta removal consumes one slot, just like an upsert. |
+| `cursor` | Opaque `next_cursor` from a preceding page. URL-encode it and repeat all original filters, `summary` and `since`; `limit` may change. Empty/invalid cursor is rejected, not treated as a first page. |
+| `summary` | `1`/`true` for list-row summaries, `0`/`false` for complete rows; default false. Does not change row identity or filter membership. |
+| `state` | Exact unified state: `needs_you`, `working`, `unread`, `idle`, `offline`, or `unknown`. Omit for all states. No user-specific mute/pin ordering is implied. |
+| `machine_id` | Exact runtime machine id. Personal-agent sources do not expose a machine, so this filter matches no personal-agent rows. |
+| `project` | Exact runtime `repo_root`, falling back to `workspace_cwd`, then `cwd`. This is the node's supplied path, **not** a guessed repository or a knowledge-base project id. Personal-agent rows have no project. |
+| `group` | Runtime `space_id`, falling back to `workspace_id`; personal-agent `accountId`. Machine-local space ids can overlap: use `machine_id` with `group` when expanding a particular computer's group. This does not represent personal-agent custom preference sections or to-do group ids. |
+| `source` | Runtime `source_kind` or personal-agent contribution id. |
+| `provider` | Runtime `agent` or personal-agent `provider`. Empty values on older runtime nodes stay empty; no agent name is guessed. |
+| `q` | Case-insensitive substring, at most 256 Unicode characters. Runtime title, cwd, repository, space/slot/agent names and last preview; personal-agent title/provider/account id. With an opt-in parameter this is **row search**, never remote transcript/message search. |
+| `counts` | `1`/`true` returns aggregates instead of rows. `0`/`false` selects a normal page. The same filters apply. |
+| `since` | Opaque `revision` from the completed baseline/previous delta. Returns only changed rows and removals, including state/title-only changes when `updated_at` did not advance. Keep the same filters; changing a filter requires a new first-page baseline. |
+
+Repeated recognized parameters, malformed booleans/page sizes/states and malformed tokens return HTTP **400** with `code: "invalid_query"`. Unknown parameters are ignored for compatibility. Responses retain the usual localized `error` field.
+
+#### Page and ordering
+
+```http
+GET /api/v1/sessions?summary=1&limit=50
+GET /api/v1/agents/sessions?summary=1&limit=50&source=demo
+```
+
+```json
+{
+  "sessions": [],
+  "remove": [],
+  "has_more": true,
+  "next_cursor": "<opaque cursor>",
+  "revision": "<opaque checkpoint>",
+  "total": 8000
+}
+```
+
+`total` is the number of matching sessions in the **whole collection**, not the page length or number of changes. Empty arrays are `[]`, not null. `next_cursor` is absent on the final page.
+
+- Order: newest `updated_at` first for runtime rows, newest `rankTimeMs` first for personal-agent rows, then composite identity ascending for ties. This is a latest-update timeline, not the clients' state-rank/pin sort.
+- A cursor traverses a **frozen filtered snapshot**: updates, deletions and inserts while scrolling cannot duplicate, omit or reorder rows in that snapshot. Every page returns its snapshot's same `revision` and `total`.
+- Snapshot retention is five minutes, with at most 32 active views per collection. A restart, expiry or eviction returns HTTP **409**, `code: "cursor_expired"`; restart at page one. Cursors bind filters and summary mode; a mismatched/tampered cursor returns 400.
+- The runtime collection includes Codex history. It uses the manager's already-decorated state, ownership, hidden/deleted-session rules and task metadata; it does not recompute business state in the hub.
+
+#### Exact runtime-session detail (`sessions_lookup`, #6054)
+
+`hello.features` advertises **`sessions_lookup`** independently of `sessions_list`. Only when it is advertised, a client can fetch one complete runtime row without paging or scanning unrelated sessions:
+
+```http
+GET /api/v1/sessions?summary=0&limit=50&machine_id=demo&session_id=<URL-encoded exact session id>
+```
+
+- `session_id` is an exact, opaque runtime id, not a substring or slash-separated path. It opts this runtime endpoint into the bounded API even without `limit`/`summary`; it does not apply to the personal-agent endpoint.
+- Supply exactly one nonempty `session_id` and one nonempty `machine_id`. Repetition, missing machine id or an empty session id returns **400**, `code: "invalid_query"`.
+- The `(machine_id, session_id)` tuple resolves directly in the existing transport-index map. Other row filters still apply to that one candidate. `summary=0` (the default) returns the identical complete, decorated/shown `Session` DTO used by the collection, including `background`, `subagents`, `workflows`, `queued`, ports and all session configuration. `summary=1` and `counts=1` retain their ordinary meanings for that candidate.
+- The ordinary collection envelope is unchanged: `sessions` has zero or one row, `total` is 0 or 1, `remove` is `[]`, `has_more` is false, `next_cursor` is absent, and `revision` is the current collection checkpoint. A missing, hidden or deleted session is an empty matching collection, not a 404. The existing `agents.read` scope and manager ownership restrictions apply; a foreign manager's machine still returns 403 `other_manager`.
+- Exact lookup cannot be combined with `since` or `cursor` (400 `invalid_query`). An active-chat getter takes a fresh exact baseline after coalesced `sessions_list` invalidations, rather than borrowing a list-summary delta checkpoint. Its revision is not a baseline for the whole collection.
+- Older hubs ignore unknown query keys: sending `session_id` to one can silently return an unrelated first page of 50 sessions. Clients **must gate on `sessions_lookup`**, never assume `sessions_list` implies it. If absent, retain the older detail/full-list fallback. Requests without `session_id` and unknown parameters otherwise keep their existing behavior.
+
+The direct lookup/count path does not build, scan or sort unrelated session views, even on a missing id, new filter or changed revision. Runtime index initialization remains a one-off full-collection cost; upstream full-list reports still update the index normally. `BenchmarkExactLookup` measures uncached found/missing requests against 1, 8,000 and 32,000 rows separately from initialization.
+
+#### Summary rows
+
+Runtime summaries keep the existing snake_case names and decode as a `Session` with optional detail fields absent. They contain:
+
+- Identity/ownership: `machine_id`, `session_id`, `manager`; source/runtime and hierarchy fields (`source_kind`, `source_thread_id`, `source_instance_id`, `parent_thread_id`, `parent_session_id`, `root_session_id`, `is_subagent`).
+- Display/grouping: `title`, `cwd`, `workspace_cwd`, `repo_root`, `agent`, `agent_label`, `agent_name`; space, parent-space, slot, pane, tab and workspace identifiers/names/indices; `todo {id,title}`.
+- State/freshness: `state`, `status`, `updated_at`, `state_since`, `seen_at`, `pending_interactions`, `rev`, `quiet`, `awaits_reply`, `background_working`, `background_waiting`, `starting`, `start_error`, turn-error fields.
+- Row content/progress: `last_text`, `activity`, `activity_at`, `model`, context-token/window counts; bounded `work` (phase/on/line/wait/then/wake/attempts/agent/deferred), `plan`, `goal`, and `loop` timing with its prompt omitted.
+- Routing/action safety: `capabilities`, `attached`, `can_fork`, `read_only_reason`, `started_by_persona`, `assistant`, `archived`, `space`, `origin`, `origin_ref`.
+- Additional scalar summaries: **`waiting`** (loop, running background tasks/subagents/workflows or an eligible hub wake), **`background_count`**, **`running_subagents`**, **`running_workflows`**. Counts of zero may be omitted; `waiting` is always a boolean. A summary-aware client uses these rather than inferring “none running” from missing arrays.
+
+Titles and to-do titles are capped at 256 Unicode characters; previews, error lines, work/plan/goal text at 180; activity/loop reason at 120. Summaries omit `background`, `subagents`, `workflows`, `queued`, ports and chat-only configuration. Do **not** replace an open chat's complete detail state with an incomplete row summary; fetch its existing `info`/`items` routes. A new client needs a summary-aware decoder/waiting rule, not just a query change.
+
+Personal-agent rows are already compact: their summaries retain the existing entire row (`id`, `source`, `sessionKey`, `accountId`, `provider`, `title`, `kind`, `parentSessionKey`, `canSend`, `unreadCount`, `rankTimeMs`, avatar presence/version). Their bridge contract exposes only unread counts, not runtime execution state: unreadCount > 0 maps to `unread`, otherwise `idle`; no `working`/`needs_you` state is invented.
+
+#### Counts without downloading sessions
+
+```http
+GET /api/v1/sessions?counts=1
+GET /api/v1/sessions?counts=1&machine_id=demo&state=working
+GET /api/v1/agents/sessions?counts=1&source=demo
+```
+
+```json
+{
+  "total": 8000,
+  "machine": {"demo": 8000},
+  "project": {"/demo/app": 8000},
+  "group": {"space-a": 8000},
+  "state": {"working": 2000, "needs_you": 2000, "unread": 2000, "idle": 2000},
+  "background_waiting": 120,
+  "revision": "<opaque checkpoint>"
+}
+```
+
+`background_waiting` (#6045, omitted when 0) is how many of the `working` ones only wait in the background (`Session.background_waiting`); they stay in `state.working` for older apps, and a client that shows them apart takes them out of its Working count.
+
+Each map counts the complete filtered membership by that dimension; missing attributes use the empty-string key. `limit` does not truncate counts. With a matching `cursor`, counts refer to that frozen view; without one they refer to the current collection. `since`, if supplied, is validated but does not turn counts into counts of changes. Read counts separately when a group expands, rather than deriving totals from loaded pages. The maps do not contain preference-defined custom sections, per-user pins/mutes or computed repository trees.
+
+#### Incremental recovery
+
+```http
+GET /api/v1/sessions?summary=1&limit=50&since=<URL-encoded checkpoint>
+```
+
+The page has the same envelope. `sessions` contains the latest copies of changed/new matching rows; `remove` includes deleted rows and rows leaving the filter. Multiple changes to one identity collapse to its final state. For runtime rows, each removal is a **JSON tuple encoded as a string**, e.g. `"[\"demo\",\"session/with/slashes\"]"`; decode it as `[machine_id, session_id]`, never split on `/`. Personal-agent removals are their existing opaque `id` strings.
+
+Retained deltas cover at most 128 revisions and 16,384 changed identities, evicting whole revisions. A restart or an older checkpoint returns HTTP **409**, `code: "revision_expired"`; obtain a fresh baseline, never silently treat it as a successful empty delta. Frozen delta cursors remain valid even if the underlying journal is subsequently evicted.
+
+Client sequence:
+
+1. Request the first summary page and counts; render immediately and fetch further pages only when needed. Keep page cursors distinct from the delta checkpoint.
+2. For a complete local baseline, finish all frozen pages before advancing its checkpoint. If only a window is loaded, retain `total`/counts separately; an incoming delta may contain rows outside that window and must not be interpreted as an instruction to materialize every row.
+3. After changes, fetch `since` with identical filters/summary, follow all delta pages, apply upserts/removals, and **only after the last page** advance to the returned target `revision`. Changes arriving meanwhile belong to the next delta.
+4. On 409, reset and reload; on a changed filter, obtain a new first page. A counts checkpoint alone is not a row baseline.
+
+#### Lightweight WebSocket negotiation
+
+`hello.features` advertises **`sessions_list`**. A new runtime-list client requests `?features=sessions_list` (may list other features too). When present, it takes precedence over `sessions_delta`:
+
+- On connect/reconnect the hub sends **no full `sessions` snapshot**, including no hidden Codex-history backlog. It sends `{"type":"sessions_list","revision":"<checkpoint>"}` once and again when the indexed collection changes.
+- This small event is an **invalidation hint**, not a delta payload or authoritative baseline. Coalesce bursts, then call the HTTP `since`/counts API with the client's saved checkpoint. Do not advance the checkpoint merely by receiving the event. Reconnect always receives a current hint; HTTP epoch checks cover restart recovery.
+- Existing subscribed chat items, interactions, machines and terminal streams are unchanged. Personal-agent `agents` events remain unchanged; on those events use the personal-agent collection's own HTTP checkpoint, not the runtime checkpoint.
+- Older hubs do not advertise the feature; fall back to their existing full-list/delta behavior. Existing iOS/web clients request `sessions_delta` and existing Android requests no list-delta feature: **all retain their original complete-list behavior** until explicitly migrated.
+
+#### Cost and verification
+
+The shared transport index lives in `server/internal/sessionlist`; the runtime adapter is `server/internal/hub/sessions_list.go`, the personal-agent adapter `server/internal/agents/list.go`, and its HTTP facade `server/internal/extmgr/agents.go`.
+
+Runtime indexing is lazy on the first paginated reader/negotiated socket, then updated by the manager's session-list reports and existing push hook. Personal-agent indexing updates when the existing 20-second source cache refreshes or its fallback poll runs; invalidation generations prevent late responses from resurrecting removed/stale data. Unchanged batches do not advance the revision. There is no database migration or new JSON state file.
+
+Filtered ordered views/counts are cached by revision (up to 64); warm pages and counts do not scan or sort the full collection. Unfiltered counters are maintained on changed records, so an unfiltered delta/count request does not scan or sort unrelated sessions even after a revision change. Filtered counts never build an ordered list merely to count matches. A new filter or changed revision builds one ordered view only when pages need it and reuses it. This moves work to updates/first cache misses; it does not claim that an upstream full-list report is O(1). Frozen views, query caches and the journal are bounded. Cold index initialization is a one-off cost and must be measured separately from warm request latency.
+
+`TestAgents8000Measurement` and `BenchmarkAgents8000Legacy` exercise the real runtime HTTP handler with 8,000 synthetic rows (four machines, previews and task metadata), reporting JSON bytes, request CPU, allocations, retained heap and process peak RSS. `TestPersonalAgentPagedRoutes8000` checks the extension HTTP adapter and warm source-call count. Index tests traverse all 8,000 frozen rows, filtered counts, field-only changes, removals, expired cursors/checkpoints and concurrent readers/writers. One-off before/after readings and local test output belong in the linked PR/archived acceptance record, not in this evolving contract.
+
+### Live status (`session_live`, 2026-11-05)
+
+The status line at the bottom of the screen while Claude Code works (`✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`) has a verb, this turn's elapsed time, output tokens and whether it's thinking, none of which is in the transcript.
+The web shows it for subscribed sessions, so the node reads it from the screen and pushes it.
+
+- Type `proto.SessionLive` (`server/internal/proto/live.go`): `verb` (without the ellipsis), `elapsed_s`, `tokens_down` (output tokens from `↓`; `↑` is input and doesn't count), `thinking` (the `thinking…` segment),
+  `thought_s` (`thought for 3s`), `at` (when the node read it, RFC 3339); missing fields are omitted.
+- node → hub event `session.live {session_id, live}`, where `live` is a `SessionLive` or `null`.
+  - Only read while this session is watched (a client is subscribed), it's Claude (`agent == "claude"`) in a host whose screen can be read (herdr, herdr-core (Herdr App) or Orca; the latter two read plain text and parse it the same way, #3904; Codex, botmux, runtimes and the headless assistant aren't read), and the host reports `working`:
+    the screen is read about once a second (for herdr, `pane.read --source visible --lines 60`) with a 3-second timeout per read, in the watch's own goroutine, so it doesn't slow down the 250 ms transcript push loop (`node/claudestatus.go`).
+  - Parsing: starting from the top border of the input box (the second-to-last horizontal line on screen) and going up, skip blank and indented lines (hints, to-dos, right-aligned `/goal`); the first unindented line is the status line, or there is no status line;
+    so a status line quoted in body text, tool output or a user message is never taken as the current one. Any spinner character (`· ✢ ✳ ✶ ✻ ✽`…), durations `2s` / `1m 5s` / `1h 2m 3s`, token units k / M / none; segments in the parentheses may be missing or in any order,
+    and hints like `esc to interrupt` are ignored.
+  - Sent only when different from the last one (`at` isn't compared). When work stops, the status line disappears or the watch ends (`session.unwatch`), a `live: null` follows, but only if a non-null one was sent before. A failed screen read sends nothing and logs nothing, keeping the last value.
+- hub → client `{"type":"live","machine_id","session_id","live"}`: only sent to connections subscribed to this session that declared `session_live`, either in the WebSocket URL's `?features=` (the web's `wsQuery`)
+  or in `client_hello.features`. The hub doesn't cache or replay: a newly subscribed client waits for the next change (within about a second while working). Old Apps don't declare it and don't get it; other events are unchanged.
+- `hello.features` currently doesn't list `session_live`: clients just declare it anyway, and an old hub that doesn't know the event simply doesn't send it.
+
+### New session
+
+Opening a herdr tab, running the launcher and waiting for Claude's input box takes anywhere from a few seconds to a minute (a slow `~/.zshrc`, the trust-folder dialog). The App's **Start Chat** button used to spin until Claude was ready,
+and the hub also had to wait for the small model to come up with a tab name first (about 2 seconds). Now `POST /api/v1/sessions` takes `async`:
+
+- The node only does the cheap checks (launcher name, directory exists, permission mode), records the session (`sessionState`: the chat page's history fetch returns an empty list, and the subscription waits for the transcript to appear), and returns the session right away;
+  opening the tab, running the launcher, waiting for readiness and sending `prompt` happen in the background (at most 4.5 minutes: up to 3 minutes for the shell to start claude, then up to 1 minute for the input box once claude is up, #1396).
+- While starting, the session is in the session list with `status: idle`, `starting: true` (not counted as a turn, not timed, no "done" push). If starting fails it becomes `offline` with `start_error`, kept for 10 minutes.
+- Messages sent while it's starting (`session.send`) wait on the node until it's ready, then are typed in order; the hub gives these sends, and sends to sessions that aren't running and must be resumed first, 5 minutes (90 seconds normally). If starting fails, these sends get the same error, and the App's bubble switches to "resend".
+- The App's first message isn't put in `prompt`; it's sent as a normal message once in the chat (shows up immediately, with send status), and `name_hint` is used for naming. Above the chat input box it shows "Starting Claude…" or the failure reason (`StartingNote`).
+- A node restart loses records of sessions still starting: the session is then neither in the list nor has a transcript, and the App's send fails and can be resent.
+- Codex launchers (`agent: "codex"`) don't use `async`: Codex only creates the thread and fixes the session id when it gets the first message, so the App puts the first message in `prompt` and creates synchronously,
+  and the node waits until that thread appears before returning (at most 60 seconds), returning its session. Rejection `code`s: `codex_needs_prompt` (no `prompt`, or `async` given),
+  `codex_launcher` (a shell function that runs Codex), `codex_resume` (a Codex session that cannot be resumed from the phone: something has it open, or there is no record of it; see `docs/integrations/codex.md` "Resuming from the phone"). See `docs/integrations/codex.md` ("Creating from the phone").
+
+### Sending messages
+
+Typing into someone else's terminal is the riskiest thing this App does. Before typing into a running Agent's pane, the node reads the screen once (`server/internal/node/sendsafe.go`,
+`server/internal/screen`), and in the following cases **types nothing** and returns 409:
+
+| `code` | When | Other fields |
+| --- | --- | --- |
+| `dialog_open` | A dialog holds the keyboard: permission prompt, trust folder, model picker, rewind, Claude Code's own notices… (`Esc to cancel` / `Enter to confirm` at the bottom, or numbered options with a cursor under the input box) | `delivered: "none"`, `dialog` (the dialog's first line), `notice` (true when it's just a notice closed by pressing Enter) |
+| `input_draft` | Claude's input box has unsent text from the computer, bash mode (`!`), a paste placeholder, or a long draft cut off by the pane | `delivered: "none"`, `draft` (the text in the input box), `clearable` (only when it's a single line) |
+| `open_elsewhere` | The Claude session to resume is open somewhere else: a live claude has it open in `sessions/<pid>.json` (Claude desktop, a terminal Persona doesn't drive). Another `claude --resume` would have two processes writing the session at once | `delivered: "none"`, `pid` |
+| `engine_missing` | A session is to be started or resumed, but this computer's engine (herdr) isn't running or isn't installed | `delivered: "none"`, `detail` (the engine's own error) |
+| `runtime_away` | The session belongs to an Agent runtime (DSH…) that isn't connected to the node right now ("Runtime ↔ node") | `delivered: "none"` |
+
+- Gray suggested input (Claude's predicted next line, a new session's `Try "…"`) doesn't count as a draft: telling them apart needs a colored screen read (`pane.read` with `format: ansi`) to see SGR 2 (dim);
+  in plain text the two look identical. When colors can't be read, it's always treated as a draft. The rules are ported from Ovis's `claude-input.ts` (MIT). Fixtures: `server/internal/screen/testdata`.
+- herdr 0.9.4 on macOS loses an answer over 8 KB: it writes it to its socket once, and past the socket's 8192-byte buffer the rest is gone (`herdr.ErrTruncated`).
+  A wide pane with Claude Code's status bar takes more than that in 60 colored lines, so its colored read always failed. The check then went on without colors, and every send to a box showing Claude's suggestion
+  was refused, with Clear and Send failing again (#6039). Such a read is now made of two smaller ones (`node/hosts.go` `spliceRead`): the whole screen without colors,
+  and its bottom 20 (or 10) rows with colors (herdr keeps the newest), where the box and a dialog's keys are. Dialogs are judged on the whole plain screen; box rows above the colored ones have no colors, so they count as typed.
+  The two are lined up from their last row with something on it, the colored rows reaching past the blank ones at the bottom, and compared without trailing white space (herdr's plain read drops the no-break space after an empty box's `❯`). When the colored rows don't match the plain ones (the screen moved between the reads) they are read again once, then the read fails.
+  When herdr can't send even the plain screen whole (a wide pane full of CJK text is past 8 KB in 30 plain rows), `spliceRead` fails rather than return fewer rows taken for the whole.
+  The send check then reads the most bottom rows that fit (40, 30, 24, 16, 12; `node/hosts.go` `bottomRead`), with colored rows spliced on when the reads line up, else plain (as does the after-send check,
+  `ensureSubmitted`, whenever its colored read is cut). The rows are used only when the read judged shows Claude's box or a dialog: Claude draws no box while a dialog has the keyboard, and a dialog's keys and footer end it.
+  Without either, or when a newer read shows neither, the send is refused (`not_delivered`) as before (#6308).
+  Judged on its bottom rows, a dialog is never a notice that Enter closes (its head may be above them): a send with `dismiss_notice` presses nothing there and is refused as `dialog_open`.
+  A refusal logs whether the read had colors and the box row's styles, never its text (`screen.BoxStyle`).
+- `clear_draft`: after seeing the draft in the App, the user picks **Clear and Send**, and the App resends the same message (same `client_msg_id`) with the `clearable` it received;
+  the node clears it with `ctrl+k ctrl+u` only if the input box **still has that same text**, then reads again to confirm it's empty before sending. Multi-line drafts can only be handled on the computer (those two keys clear one line at a time).
+- `client_msg_id`: the App gives each pending message a UUID, and automatic resends (no response, resending after a network drop) reuse it. **Dedup is on the hub** (`hub/send.go`, Postgres table
+  `sent_messages`, with no age-based expiry): the same id arriving while a send is in progress waits for the first one's result; already delivered returns success directly; rejected or offline (nothing typed) is forgotten and can be sent again;
+  interrupted mid-typing (the node returned `delivered: "unknown"`, or the request reached the node but no response came back: connection dropped, timeout) returns 502 + `delivered: "unknown"`,
+  and resending the same id only returns the same error, never typing it a second time. The same holds after a hub restart or node reconnect (dedup used to live only in the node process's memory, and the new process after a reconnect knew nothing;
+  on 2026-10-31 a message sent during a reconnect was observed reaching the computer while the App got "rpc: connection closed"). When the user has looked at the chat, confirmed it didn't arrive and taps resend, the App uses a new id.
+  If the App gives up and disconnects, the hub still waits for the node's result and records it (sending isn't canceled with the request). The node also remembers for 10 minutes itself (retries within the same connection).
+- Sends to the same session go one at a time (the node's `typingLocks`): when two came in at once (double tap, two devices), the second one's screen read used to find the first still in the input box (herdr's
+  `agent.prompt` pastes first and presses Enter about 300 ms later), so it was rejected as a draft and even offered **Clear and Send**, which would clear the user's own first message. When the screen read sees text typed within the last 5 seconds
+  (or `[Pasted text #1 …]` for long text), it waits for it to be taken (at most 2 seconds).
+- `dismiss_notice` (#2553): when the bottom is a notice that only says "Enter to continue" (followed by at most one `Esc to cancel`), with no options / cursor / checkboxes, it presses Enter once to close it first (up to 3 in a row), then checks and sends as usual.
+  Confirmations, permissions, selection lists and questions all still return `dialog_open` and are never pressed automatically. The assistant's `agent_send` has a parameter of the same name, and resends with it after a rejection with `notice: true`.
+- A guide Claude Code opens by itself right as a message is submitted (#5504; 2.1.318's "Teach auto mode about your environment?") takes the typed text and its Enter. The check before typing can't see it, so after the prompt's grace the node looks at the screen again: a guide at the bottom (`screen.Guide`) is declined with Esc, never Enter, and the message counts as sent only once the transcript has it.
+  Otherwise it is typed once more into the emptied box; when that isn't confirmed either, or there is no transcript to tell, the send fails with `delivered: "unknown"` instead of succeeding.
+- After an offline session is started with `--resume`, the screen is read first too: if Claude comes up sitting on a dialog, it returns `dialog_open` and doesn't type into the dialog.
+- Codex / compatible forks only check for dialogs (numbered choices like `› 1.`), not drafts: if the input box has text, the message is appended after it. Old Apps only read the `error` field, which shows them the rejection reason.
+- The path and timings are in `docs/archive/integrations/session-verify.md`.
+
+### Rewinding to a message (#2436)
+
+`POST /api/v1/sessions/{mid}/{sid}/rewind`, callable **only by full-access devices** (it puts files back and deletes the conversation after that point; answer-only devices like the watch and extension tokens get 403,
+`-` in `testdata/route_scopes.txt`). The body only accepts these fields; nothing else is passed to the node:
+
+```json
+{"prompt": "<that message, exactly as in the transcript>", "occurrence": 2, "prompts_after": 3, "restore": "conversation"}
+```
+
+- `prompt`: the user message to go back to; `occurrence`: counting back from the end, which **identical message** it is (1 = the last one); `prompts_after` (optional): how many user messages come after it;
+  `restore`: `conversation` (rewind the conversation only) or `code_and_conversation` (put the files back too). Both Claude Code's list and the App's chat count from the end, so earlier pages not yet loaded don't matter.
+- The node's `session.rewind` types `/rewind` in the session's terminal, presses ↑ to reach that message, picks the mode and presses Enter, **reading the screen before every step** (`server/internal/node/rewind.go`, `screen/rewind.go`):
+  if anything in any step differs from what's expected (the text of that row in the list, its position (`prompts_after`), the whole message quoted on the confirmation page, the option names (chosen by name, not number: when there are no code changes after the message, there are only "Restore conversation", "Summarize…", "Never mind"))
+  it presses Esc to leave the panel, changes nothing, and returns 409. When `code_and_conversation` hits "no code changes after this", it only rewinds the conversation, with `code_restored: false` in the result.
+- Success: `{prompt, restore, code_restored, input_cleared}`. Claude puts that message back in its own input box; the node clears it (`ctrl+k ctrl+u` for one line, `ctrl+c` for several),
+  and when `input_cleared: true` the App puts it in its own input box; when false (couldn't clear, e.g. the input box has other text), it only shows a note.
+- Rejections (409, `code` plus an explanation, nothing changed): `dialog_open`, `input_draft` (as in "Sending messages"), `rewind_busy` (working or waiting for an answer), `rewind_unsupported` (not a Claude session in a terminal),
+  `rewind_nothing` (Claude has no messages to rewind to), `rewind_mismatch` (the message isn't in the list, the position doesn't match, or the confirmation page shows something else), `rewind_failed` (the screen doesn't look the way the next step needs, or the panel didn't close after confirming).
+  Old nodes return 409 `node_outdated`. If the panel doesn't close after confirming, the node presses no more keys (the rewind may already have happened, and Esc can't undo it).
+- **Claude Code doesn't delete the rewound part of the transcript** (observed on 2.1.318): the file is a tree (`parentUuid`); after a rewind, the next message hangs under the message before the target, and the rewound turns are still in the file.
+  When reading the transcript, the node **follows the branch that wasn't abandoned** (`transcript/branch.go`): when one `parentUuid` has two of the user's own messages under it and the earlier one **got a reply** (assistant lines grew from it), the earlier one and every line that grew from it are the abandoned branch and produce no items
+  (item `seq` is still the line number in the file, so the abandoned lines become gaps). **An earlier message nobody replied to doesn't count as a rewind** (#3036): pressing Esc to cancel a message that hadn't been answered and sending again (the same words or different ones) makes Claude write the second as a sibling of the first,
+  but no turn was rewound; both stay, as seen in the terminal, and the `history` token doesn't change (if it did, every client would drop its local content and re-fetch, and the interrupted turn would also disappear from the chat).
+  Other forks don't count (parallel tool results, attachments hanging next to a reply, the compaction's `compact_boundary`: its `parentUuid` is null and the old chain is in `logicalParentUuid`).
+  When the node's own rewind succeeds, it marks the segment right away (`File.Rewound`) without waiting for the next message. How clients find out: `history` (see "Continuity of items") gains a trailing `.r<number of abandoned branches>`, and when it changes they drop local content and re-fetch,
+  the same mechanism as a rewritten file, so the web, iOS and Android need no changes (iOS's `ChatStore.apply`, Android's `reducer.history` and the web's `useTranscript` already handle it this way),
+  and the hub's assistant snapshots, notifications and knowledge-base archiving also read the node's items. The token is determined only by the file content and doesn't change across node restarts.
+  **A rewind done in the terminal** (`/rewind` or Esc Esc, then "Restore conversation") writes nothing either, and while the rewound prompt sits in the input box Claude writes no recap (#5396). The node sees it on the screen of a resting Claude
+  (the box holds the words of the transcript's last prompt, which was answered and whose turn ended, and the conversation above the box no longer shows that prompt) and marks the segment the same way (`File.RewoundAt`), so `history` changes within a few seconds.
+  If Claude then writes a message or a reply **under** the segment (the guess was wrong: the user had typed the same words again), the segment comes back: the node reads the file again and `history` changes once more (it then differs from what a freshly started node would compute, so clients re-fetch once more after a node restart).
+
+### Matching pending messages
+
+A message the App sends shows as a pending bubble until it appears in the transcript. Claude Code, Codex and runtimes all use their own item ids for the user's line, not
+`client_msg_id`, so all three clients used to match by text alone (when the text was rewritten, the same words were sent twice, or `/compact` turned into a notice, the only fallback was "collapse 60 seconds after delivery").
+Now the node recognizes that line and tags each of its items with `client_msg_id` (`server/internal/node/echo.go`), in both pushes (`items` events) and pages (`/items`):
+
+- **When it's recorded**: when `session.send` carries `client_msg_id`, the node records the send **before** typing it:
+  the session, the last transcript line before sending (new lines are read once before typing), the first 200 characters of the text (with `<persona-context>`, image captions and other additions stripped), the image count, and the time.
+  Claude Code writes the line as soon as it takes the message, and the watch may push it before the send returns; recorded first, that push carries the field (it used to be recorded only after delivery, so the line's one push went without it, #4855).
+  The hub is told (`session.echo`) once the send was delivered (or `delivered: "unknown"`, possibly delivered); a send that surely wasn't is forgotten.
+  Runtime sessions have no local transcript, so the "last line" is the seq the node had pushed up to, or only the time if there isn't one.
+- **How it matches**: in send order, each takes the first not-yet-claimed **user line** after its send whose text matches: text under 12 characters (whitespace removed) must be identical,
+  otherwise the first 12 characters are compared (pages truncate long text, and Claude turns images into `[Image #1]`); an image-only message matches a line with no text; a bare command (`/model`) matches
+  the one completed with arguments in the terminal (`/model opus`); `/compact` matches the "Compact context" notice it turns into. User lines include the `queued` one absorbed mid-turn,
+  and exclude ones from other sessions (`from`) and background task notifications. Lines more than 5 seconds before the send, or more than 2 hours after it, don't count (Codex only writes queued messages at the end of a turn);
+  if nothing matches within 2 hours, it stops looking.
+- **A message split into several items**: items from the same line share the part of the id before `#` (Claude's uuid, Codex's item id), and the line's text and images all carry the field.
+- **Didn't land as a user line**: apart from `/compact`, sends with no corresponding line (other commands, discarded input) aren't matched, the items carry no field, and the App falls back as before; with two identical messages
+  where the first didn't land as a user line, the second one's line gets claimed by the first (the bubble just collapses early).
+- **Node restart**: the node tells the hub what it recorded and matched (event `session.echo`), and the hub stores it with the send in `sent_messages.echo`; on reconnect, it returns only the last day's echoes;
+  when the node connects, the hub first hands back this machine's entries from the last day (`session.echoes`), then lists sessions and resumes pushing. So after a node restart (an ssh node restarts with the hub),
+  lines already matched still carry the field, and ones not yet matched before the restart keep being matched. Without a database on the hub, it's only in the node process's memory.
+- **How the App uses it**: an item with `client_msg_id` collapses the pending message with the same id (regardless of role or kind) and won't match another one by text;
+  items without it are matched by text as before (old hubs, ones the node didn't recognize). iOS `PendingMessage.tied`, Android `MessageEcho.tag`, web `lib/echo.ts`.
+
+### File preview
+
+The foundation shared by the file page and the various previews (spreadsheets, Office, media, diff), the same across all three clients (#1292):
+
+- **Type**: the node sets `mime` from a fixed extension table (docx / xlsx / pptx / ipynb / heic / m4a etc.; Go's built-in table varies by machine), then the system table if not found, then sniffs the first 512 bytes (HEIC, MP4 / MOV, PDF…). A `.key` that doesn't start as a zip is treated as text (a PEM key); only a zip is Keynote.
+- **Fetching content**: first `GET /file?stream=1`. Text still comes paged as `text`; binary only gives `size`, `mime`, `revision`, and the content is fetched from `/file/download` as needed: media hands the URL straight to `<video>` / `<audio>` (seeking via Range), and PDF / Office / spreadsheets are fetched whole and handed to the rendering library, so large files no longer go through JSON as one base64 blob. `revision` and the download's ETag are the same value.
+- **Inline and isolation**: the hub and the web share an origin, so `inline=1` only allows images, audio/video and PDF; SVG, though inline, also carries `Content-Security-Policy: sandbox`, so when opened on its own its scripts can't run as the web page. HTML isn't inlined; for preview its text is fetched and put into a sandboxed iframe (M5).
+- **Thumbnails**: images (PNG / JPEG / GIF / WebP / BMP / TIFF) are decoded and scaled by the node itself, and SVG is drawn with oksvg (shapes only); everything else goes to the system: Quick Look on a Mac (`qlmanage`: PDF, Office, iWork, HEIC, video), and on other systems `pdftoppm` for PDF and `ffmpeg` for video if installed. System tools run one at a time with a 12-second timeout per run; after one timeout (Quick Look hangs on a locked Mac) they aren't called for 5 minutes and `no_thumbnail` is returned directly, so a screenful of files doesn't wait on each one. The node keeps the latest 128 in memory.
+
+### Sending files
+
+**+** › **Files** in the App's chat input box (for Agents and for the assistant in the chat tab): the chosen file is uploaded to a temporary directory on **the computer the session runs on** (the node's
+`os.TempDir()`: usually `/tmp` on Linux, `$TMPDIR` on macOS, and also `/tmp` for an ssh node without that variable), and its absolute path is inserted at the cursor in the input box,
+**without sending automatically**. The assistant runs on its own machine (the hub machine by default), so files go there. Images still go as image attachments; for videos from the photo library, see "Sending videos" below.
+
+- `POST /api/v1/machines/{mid}/files?name=<original file name>`, the body is the file itself (`Content-Length` required) → `{path, name, size}`.
+  Limit 200 MB (`proto.MaxUploadBytes`): over that returns 413 `code: too_large` (the App checks the size right after picking and won't upload).
+- The hub forwards while reading the body: one `file.upload.chunk` per 1 MB (base64 inside one line of JSON), so the whole file never sits in memory or in a single RPC.
+  When the App cancels the upload (or disconnects), the hub sends `file.upload.abort` and the node deletes the half-written file; the node also deletes it itself if no chunk arrives for 2 minutes.
+- The node first writes a hidden `.persona-upload-*` file (0600), checks the byte count once everything has arrived, then renames it to `name-YYYYMMDD-HHMMSS.ext` (things like `.tar.gz` count as one extension),
+  adding a random `-xxxx` for a clash within the same second. `/`, `\` and control characters in the file name are replaced with `_`, and overlong names are shortened.
+- Old nodes don't know `file.upload.*`: 409 `code: node_outdated` ("personad on <machine> is too old… needs redeploying"); old hubs don't have this endpoint (404)
+  and have no `file_upload` in hello's `features`: the App asks to update the hub.
+- Paths with spaces or quotes are wrapped in single quotes by the App, and multiple paths are space-separated. When the input box isn't being edited, the path is inserted at the end (an unfocused TextField's reported selection is unreliable).
+- If a reverse proxy sits in front, watch its request body limit (some CDNs' free tiers only allow 100 MB).
+- `?dest=terminal` (paste / drag-and-drop in the web terminal, `docs/integrations/terminal.md` section 18): the node doesn't use the system temp directory but stores it in its own `uploads/terminal/<date>/<random>-<file name>`
+  (0700 / 0600, cleared at node startup after 7 days), limit 50 MB (`proto.MaxTerminalUploadBytes`; over that also returns 413 `too_large`, with `limit`). Any other `dest` returns 400;
+  old hubs / old nodes ignore the parameter and use the temp directory as before.
+- `?dest=health` (checkup reports for the health space, `docs/assistant/health.md` ("Checkup reports")): the node stores it in the health directory's `reports/` (`name-YYYYMMDD-HHMMSS.ext`, 0700 / 0600, no expiry), with the same limit as `MaxUploadBytes`. It is the health space of the computer's manager: the built-in manager's `health/` as ever, another manager's `health-<id>/` (the hub passes `health_dir` on `file.upload.begin`, which the node echoes; a node without the `health_spaces` capability gets 409 `node_outdated` instead of a report in the wrong space).
+
+- `GET /api/v1/machines/{mid}/health/reports`: the reports, newest first, `{"reports":[{name,title,path?,record_path?,size,modified_at}]}` (`proto.HealthReport`, #4998). `path` is the original, `record_path` the same-name `.md` record; both are read through `file` / `file/download`.
+- `DELETE /api/v1/machines/{mid}/health/reports/{name}`: permanently delete a report (original and record), succeeding even if already absent; `name` must name an ordinary file under `reports/`. Both endpoints require full credentials; old nodes return 409 `node_outdated` (RPC `health.reports.list` / `health.reports.delete`). They are of the computer's manager's health space: another manager than the built-in passes its `health_dir`, which the node echoes (no capability `health_spaces`, or no echo: 409 `node_outdated`), and asks a delete only after a list of that space echoed it. The node refuses any other name, `health` included (the built-in's is named by leaving `health_dir` out).
+
+- `?dest=dir&dir=<folder>`: into the folder the file browser shows; see the next section, "Changing files".
+
+### Changing files
+
+The app's file browser (the session's Files pane, the machine page's Files row) can upload into a folder (#4858); rename, move and delete come in the second batch.
+
+- **Where writes are allowed** (`node/writeguard.go`): inside the home only. A path first passes the read guard (`pathguard.go`: links followed component by component; iCloud, key folders such as `.ssh`,
+  private key names and the hub's keys are refused); the real path after following links must still be in the home (the home itself is fine); `~/.persona`, `~/.persona`, `~/Library` and the data folder `PERSONA_HOME` names (unless it is the home itself) are entirely unwritable, and so is a manager's folder anywhere (one holding a manager's `manager.json`, unless it is the home itself); nor may a client write a file named `manager.json*`.
+  `../` and links pointing outside the home are judged by where they end up. A refused write is 409 `code: read_only`. Everything outside the home stays read-only.
+- **Upload into a folder**: `POST /api/v1/machines/{mid}/files?name=<file name>&dest=dir&dir=<folder>[&cwd=][&conflict=]`; `dir` may be `~/…`, absolute,
+  or relative to `cwd` (the session's working directory). Chunks, cancel and timeouts as in "Send files" above; the cap is 2 GB (`proto.MaxDirUploadBytes`). A missing `dir` is 400; a folder that does not exist or is not a folder, or an unknown `conflict`, is 502 `code: internal` with the node's reason.
+  - The file **keeps its name** (`/`, `\`, control characters become `_`), mode 0644; the returned `path` is the folder as the app gave it + the file name. The partial `.persona-upload-*` is written in that folder and renamed when complete.
+  - Name taken: without `conflict`, begin already answers 409 `code: exists` (with `name`) and no byte is sent; the app asks "Replace / Keep Both" and sends again;
+    `conflict=keep` saves as `name 2.ext`, `name 3.ext`… (like Finder); `conflict=replace` overwrites and keeps the old file's mode, and still answers `exists` when the name is a folder.
+    A name taken while the upload runs is not overwritten: the end answers `exists` and the partial file is removed.
+  - An old node that does not know `dest=dir` (answers `unknown upload destination`, or an even older one ignores `dest`): 409 `code: node_outdated`. The hub requires begin to echo `dest`
+    and aborts without the echo, so the file never lands in a temp folder quietly. `upload_dir` in the hello `features` says the hub takes these parameters.
+- Full paired-device credentials only: extension tokens are refused (`testdata/route_scopes.txt` says `-`).
+
+### Sending videos
+
+**+** › **Photos** in the input box picks both images and videos (#981; the same in Agents, assistant chats and the new-chat input box). **Videos are sent as files**, not converted to images:
+through the same endpoint as "Sending files" above, uploaded to a temporary directory on the computer the session runs on (for the assistant, its machine). Unlike **Files**, the path isn't inserted into the input box;
+the video shows as a card above the input box (reading → compressing if needed → uploading, with a progress bar and ✕ to cancel; when done it shows size and duration, and ✕ removes it), and goes out with the next message.
+
+- What it looks like in the message: a blank line after the typed text, then one tag per video
+  `<persona-file kind="video" path="/tmp/IMG_0001-20261103-150102.MOV" name="IMG_0001.MOV" size="25270000" duration="12.4"/>`
+  (`path` is the path on that computer, `name` is the original name on the phone, `size` in bytes, `duration` in seconds). The Agent reads the path; the App parses the tag and draws a file card
+  (file name, size, duration), without showing the tag itself, and the path no longer gets a file chip; the watch shows [Video]. When only a video is sent with no text, the body is "Please look at the video".
+- Can't send while uploading (the send button is grayed out; in the BeautifulUI input box, tapping it shows "The video is still uploading. Send once it's done." and the text stays in the box). At most 4 at a time, sharing the picker's 4 slots with photos.
+- **Upload as is, or transcode**: up to 200 MB (the hub's limit) it's **uploaded as is**: no waiting for transcoding, no quality loss, and the HEVC / H.264 MOVs the iPhone records are readable on a Mac and by ffmpeg.
+  The picker uses `.current` encoding so the system doesn't transcode first for us. Only above 200 MB is it converted to **H.264 MP4** (moov first) with AVAssetExportSession,
+  picking by estimate the highest of 1080p (about 76 MB/minute) → 720p (about 54) → 540p (about 35) that is estimated to fit in 180 MB (10% headroom), checking the size again after conversion
+  and dropping a tier if it's over. iPhone originals are about 60 MB/minute at 1080p30 HEVC and 170 MB/minute at 4K30, so up to about 3 minutes at 1080p or about 1 minute at 4K goes as is.
+- **Limit**: even compressed it must stay within 200 MB, which at 540p fits about **5 minutes** (the estimate goes by bitrate and depends little on the content). Longer ones aren't uploaded, with the message
+  ""IMG_0002.MOV" is 12:34 long and still over 200 MB at 540p, so it can't be sent. Trim it in Photos first." One still in iCloud that can't be downloaded shows "Couldn't read a video".
+- Tapping the card uses the system player (a full-screen AVPlayerViewController on iOS, AVKit's player on Mac): videos sent from this phone play the local copy directly (`Caches/attached-videos`,
+  keeping 1 GB by most recently played, counted under "Other Caches" in **Settings › Storage**); ones sent from other devices are first downloaded from that computer (`/file/download`, progress shown on the card, tap again to stop),
+  and a copy is kept afterwards too. Once the temporary file on the computer is cleaned up, it can't be played ("Can't play").
+
+### Continuity of items
+
+Every batch of items (WebSocket `items` events, HTTP `/items` responses, the node's `session.items`) states its position in the transcript:
+
+- `history`: this transcript's identity (inode + crc32 of the first line + rewrite count; for a Claude session that has been rewound, add `.r<number of abandoned branches>`, see "Rewind to a message"). A change means the file was replaced / truncated and rewritten / had turns rewound; the App drops its local content and fetches again.
+- `to_seq`: the last line read in this batch (including lines with no item); `from_seq`: the line this batch continues after (only present for continuation batches: resends, live pushes, `after_seq`).
+- The App tracks `covered` (the last line it has received continuously from the start): when `from_seq <= covered`, advance `covered` to `to_seq`; when `from_seq > covered`, a batch was lost in between.
+  Fill the gap with `after_seq=covered`: web (`useTranscript`) and Android (`ContinuitySync`) first wait 1.5 seconds (the resend on subscribe may still be in flight);
+  iOS / Mac (`AppModel`) fetch at once (#4335), since `fill` re-reads `covered` before every page and the `filling` set collapses concurrent fills, so a late resend just de-duplicates.
+  After more than 8 pages, fetch the latest page instead. A reconnect subscription carries `since_seq=covered`.
+- **Pushes never silently drop one message** (#3036): when a subscriber's send queue (512 messages) fills up, the hub disconnects it (`too slow`) rather than dropping just that message. Dropping it would keep the tail of a long output (thousands of items) from reaching a page that fell behind,
+  with the Agent already stopped and no next batch to reveal the gap. After reconnecting, the client subscribes again with `since_seq=covered`, and resends continue from there (web `useTranscript`, iOS `AppModel`, Android `ContinuitySync` all do this).
+  The same applies to non-persisted pushes such as `delta` / `live` / `screen`. Subscriptions are recorded under the computer's own id; subscribing with an absorbed old id (an entry merged away in `hub.json`) still receives pushes.
+- **Sub-Agent chats use the same mechanism as sessions** (#3139): subscribing to `<session>@<agent>` is a `session.watch` for it. The node opens `<session>/subagents/agent-<id>.jsonl` and, as for the main session, reads new lines every 250 milliseconds and pushes `session.items`. The rules for `history` / `from_seq` / `to_seq` / `since_seq` are the same; `session.unwatch` (page unsubscribed, disconnected) stops it. At most 16 sub-Agent chats can be followed at once; additional watches return an error, and those pages rely on the fallback fetch below.
+- **The page's own fallback** (web `useTranscript`, `lib/stale-page.ts`): if the session list's `updated_at` (for a sub-Agent, its entry in the parent's `subagents`) is newer than the `ts` of the latest item the page has, and no items have arrived for 4 seconds, fetch once with `after_seq=covered` (at most once every 10 seconds per session, only while the page is in the foreground; if `history` changed, refetch the whole page). Fetched items merge in silently; writes that yield no items (title, mode) aren't fetched repeatedly. Only after 2 consecutive fetches find items that "should have arrived by push" (or 2 consecutive fetches fail) does a small "Not live · Reload" notice appear at the top of the chat; it disappears when pushes resume.
+- Old hubs don't carry these fields: the App keeps merging by id. New hub fields are simply extra keys to old Apps.
+
+### Turn duration from actual records
+
+A turn-end record can produce a metadata item with `role: system`, `kind: turn_duration`. It carries no display text and uses the existing HTTP history / incremental pages, WebSocket `items`, and session cache path, with no new event or top-level Envelope field. The `turn_duration` field is optional; old iOS decodes an unknown kind as `unknown` and skips its display, while decoding everything else as usual.
+
+```json
+{"id":"duration_example#0","seq":9,"ts":"2026-01-01T00:00:00Z","role":"system","kind":"turn_duration","turn_duration":{"duration_ms":12345,"source":"claude_turn_duration","parent_uuid":"reply_example"}}
+```
+
+| Source | Original record | Association fields |
+| --- | --- | --- |
+| `claude_turn_duration` | `durationMs` in a Claude Code line with `type: system`, `subtype: turn_duration` | `parent_uuid` preserves `parentUuid` as is, pointing to the UUID of the message that ends the turn (the part before `#` in the item id) |
+| `codex_task_complete` | `duration_ms` in a Codex / compatible rollout's `event_msg` with `payload.type: task_complete` | `turn_id` preserves the native turn ID as is; if user input for the same turn has already been parsed, also carries `user_item_id`, pointing to that input's normalized item id |
+
+Only explicitly recorded non-negative integer milliseconds with a valid association identifier are accepted. Missing, negative, non-integer, overflowing values or mismatched known turn IDs produce no duration item. `0` is a valid recorded value. No value is filled from timestamps, the difference between `started_at` / `completed_at`, or a timeout, and durations of compaction, thinking, tools or subtasks are never treated as whole-turn duration.
+
+Android uses the associated message to locate a user turn or background wake-up segment in loaded history, and the work row shows "Took N seconds" (milliseconds rounded down). It stays hidden if the associated message isn't loaded or the association crosses a new user turn / wake-up / recap boundary; association is retried after paging fills the gap. When a new turn has no record of its own, the status row stays blank rather than reusing the previous turn's duration. A missing field / item means no usable actual record, not zero duration; old nodes or caches may also lack this information. Folded work preserves duration metadata items; expanding folds, reconnect resends and cache restoration use the same association rules.
+
+### Folded work
+
+The tool calls and thinking of a turn are normally folded into one line in the chat ("Tools 502 · Thinking 81"). But in one long Codex session, the page for the last two turns had 1412 items and 1.08 MB,
+with only 6 actual replies: on a weak network the top of the chat page kept spinning. When a request carries `fold_work` (HTTP `fold_work=1`, `fold_work: true` when subscribing), pages read backward from the end
+(`turns` / `before_seq` / the last two turns resent on subscribe) replace each run of consecutive work (paired tool_use + tool_result, with the tool's images, and thinking)
+with one item of `kind: fold` (`transcript.FoldWork`):
+
+- `id` is `fold:` + the id of the run's first item, and `seq` / `ts` are also the first item's; `fold.through_seq` / `through_id` are the last item, `until` is the last item's time;
+  `items` is the item count, `tools` the number of tool calls, `thoughts` the number of thoughts with text (the App never shows empty thoughts anyway).
+- `fold.tasks` is an optional array of ordered task-list snapshots. It only includes successful TodoWrite / TaskCreate / TaskUpdate / TaskList results from this run,
+  and carries no raw tool input or output; it is omitted when there is no usable snapshot. Results that are missing, have `is_error: true`, have `success: false`, or have a non-null `error` are not counted;
+  a malformed list does not clear earlier tasks. Old iOS ignores this nested field; the fold's existing counts, range and expansion stay the same.
+  Each successful result keeps one snapshot and its replacement boundary, applied in the order the results appear in the transcript, so a partial update does not lose task state already loaded:
+  - `entries`: the task array. Each entry has an `id` (`todo:<index>` or `task:<tool task ID>`) and optional `subject`, `description`, `status`.
+    Status is `pending` / `in_progress` / `completed` / `unknown`; `deleted` means the task is removed.
+  - `replace: "todo"`: a full TodoWrite list; existing `todo:` entries are removed first. An empty array means clear.
+    `replace: "task"`: a full TaskList list; `task:` entries not in the new list are removed, and existing entries keep the description and status the new list doesn't provide. An empty array means clear.
+    Omitting `replace` means an incremental TaskCreate / TaskUpdate result; fields not provided keep their old values. A task with no old title shows "Task #ID", with unknown status.
+    TaskCreate also carries `fallback_status: "pending"`, used only when neither the result nor the old task has a status.
+  - `source_item_id`, `source_tool_use_id`, `source_seq`: the item ID, tool call ID and seq of the original tool call, used by "View related record" to locate it.
+    Android can rebuild progress without expanding; to view the record it first expands the containing work row, then fetches the original records by range and scrolls to it. Later real results keep updating by the original rules.
+
+  For example: `"tasks":[{"replace":"todo","entries":[{"id":"todo:0","subject":"Check the form","status":"in_progress"}],"source_item_id":"entry_tool#0","source_tool_use_id":"call_example","source_seq":3}]`.
+- `fold.images` is an optional array: the images this run of work looked at (`transcript.ViewedImages`); rules are in "Images viewed this turn" below. Omitted when there are none.
+  Old clients ignore this field.
+- `fold.latest_thinking` optionally carries the run's newest nonempty thinking item so a live work row can preview the agent's narration on first load.
+  It contains only the original `id`, `seq`, `ts`, `role`, `kind`, `text` and optional `full_size`. Text is limited to 512 Unicode characters, including an ellipsis when clipped;
+  `full_size` preserves the original byte count (including any earlier clipping). It carries no tool, image or other payload, and is omitted when there is no thought with words.
+  The original item remains inside the fold: counts, range and expansion are unchanged. Clients that do not use this preview ignore it.
+- Not folded: user messages, replies (text), notifications, recaps; a tool_use whose result is not on this page (still running) and a tool_result whose tool_use is not on this page
+  (the App has to pair them with the other half that comes later / came earlier); short runs under 3 items and under 4 KB (expanding costs another round trip; not worth it).
+- When the App expands a work row it fetches the run with `from_seq=<fold.seq>&through_seq=<fold.through_seq>` (about 1000 items per page; on `more`, continue from the last item's seq + 1),
+  merges it in and drops the fold. When a fold is merged in, local tool / thinking items within its range (by seq + block index) are replaced by it.
+- Resends via `after_seq` and live pushes are never folded: they continue from what the App already has, and may contain tool calls the App is waiting on.
+- A page like that 1412-item / 1.08 MB one becomes a dozen or so items and a few KB after folding (`TestFoldedFirstPageOfALongSession`: 1417 items, 880 KB → 13 items, 1.9 KB).
+
+### Images viewed this turn
+
+The App and web show an "Images viewed this turn" row under a turn's reply (#1543, #1540). The images come from tool calls in that turn's work, and both sources are aggregated by the same rules:
+unfolded work is read from the items themselves, folded work from `fold.images` (once a work row is expanded, the fold is replaced by the real items and the aggregate stays the same).
+
+- What counts: images carried in results (items with `kind: image` and a `tool_use_id`: images read by Read, computer_state screenshots, browser_look screenshots,
+  images returned by other MCP tools). A Read of an image file (png / jpg / jpeg / gif / webp / heic / heif / bmp / tif / tiff) whose result carries no image
+  (the image was too large to keep, or Codex's view_image, which the transcript maps to Read) also counts as one entry, with only the path. Images the user sent this turn don't count (they are in the user bubble);
+  failed Reads, non-image files and calls without a result yet don't count.
+- Order and dedup: in order of first appearance; the same path appears only once. Entries without a path are matched by mime + size + width/height (looking at an unchanged screen again counts as one image);
+  when none of these are present, by image item.
+- Each `fold.images` entry:
+
+  | Field | Description |
+  | --- | --- |
+  | `item_id` | id of the image item; fetch the image with `GET /api/v1/sessions/{mid}/{sid}/items/{item_id}/image`. Path-only entries don't have it |
+  | `tool_use_id`, `tool` | the call that viewed the image and its tool name (verbatim, e.g. `Read`, `mcp__persona__computer_state`) |
+  | `source` | `read` (Read), `screenshot` (MCP `computer_*`), `browser` (MCP `browser_*`), `mcp` (other MCP tools), `tool` (anything else) |
+  | `path` | the file Read read (`file_path`); thumbnail via `GET /api/v1/machines/{mid}/file/thumb`, full image via `file/download` |
+  | `machine` | `screenshot` / `browser`: the machine named in the call (id or name), shown as "Screenshot · <machine name>" |
+  | `mime`, `size`, `width`, `height` | image type, byte count (approximate: base64 length × 3 / 4), pixel width/height; same as the lazy-loaded `image`, used to reserve space before the image arrives |
+
+  For example: `"images":[{"item_id":"entry_tool#1","tool_use_id":"call_a","tool":"Read","source":"read","path":"/work/design.png","mime":"image/png","size":48213,"width":1280,"height":800},{"tool_use_id":"call_b","tool":"Read","source":"read","path":"/work/banner.jpg"}]`.
+
+### Terminal stream
+
+The live view of the Terminal tab (`docs/integrations/terminal.md`). The node uses `herdr terminal session observe` to mirror the grid herdr has drawn, at the pane's own size.
+Each frame is a chunk of VT bytes: a `full` frame is the whole screen (starts with `ESC[2J`); the others only redraw cells that changed, and end with the cursor position and visibility. The App just applies them in order to a `cols × rows`
+grid. The grid always equals the pane size on the computer; the phone's size is never sent back.
+
+- `epoch` identifies a stream: the node picks a new one every time it (re)opens observe, and the first frame is always `full`. The node reopens when the pane resizes, herdr is interrupted, or the deltas after the full frame exceed 256 KB.
+  Within one `epoch`, `seq` increases from 1 without gaps.
+- For each watched terminal the hub keeps "the latest full frame + the deltas after it". `terminal_subscribe` carries the `epoch` and last `seq` the App has:
+  if it is still the same stream and the kept frames connect, only the later frames are sent; otherwise replay starts from the full frame. New frames are then pushed live.
+- If the App receives a frame whose `seq` isn't contiguous (something was lost), or the `epoch` changed but the frame isn't `full`, it drops its local grid and sends `terminal_subscribe` again (without epoch).
+- On `error`: the hub has dropped this stream. On `unsupported`, fall back to polling `/screen`; otherwise subscribe again after a few seconds. After the WebSocket drops and reconnects, subscribe again (with epoch / seq to resume).
+- The first App to subscribe makes the hub send `terminal.watch`; the last one to unsubscribe (or disconnect) makes it send `terminal.unwatch`. Old Apps don't send these messages and keep polling `/screen`.
+- Pane addresses (`features` has `terminal_panes`, `docs/integrations/terminal.md` section 19): a pane with no Agent has no session id, so the `session_id` of `terminal_subscribe` / `terminal_input` / `terminal_unsubscribe`
+  can be `pane:<pane id>` (the `terminal` given by `/machines/{mid}/panes`); `GET …/sessions/{mid}/pane:…/screen` (the polling fallback) and `screen/before` accept it too. **Only `full` devices can use it**: an `answer` device subscribing (even view-only)
+  gets `error: forbidden…`, and HTTP screen reads return 403. No other `session.*` accepts this address.
+- Phone takeover (`features` has `terminal_control`, `docs/integrations/terminal.md` section 11): when the subscription carries `control`, the grid is the phone's size; the frame format is unchanged.
+  Keys and new sizes go through `terminal_input`. On leaving (unsubscribe / disconnect) the pane goes back to the computer's size, and if others are still watching it switches back to mirroring (new epoch).
+
+
+## File auto-refresh (#2439)
+
+The web's file panel and Git panel refresh automatically while open (`web/src/lib/fs-live.ts`; the same for the iOS / Mac file and Git pages, `apple/Persona/App/FsLive.swift`, #3089; `server/internal/hub/fswatch.go`, `server/internal/node/fswatch.go`):
+
+- The page sends `fs_watch` (message table above), **one per session directory, replacing the whole set**. Within a page, the file panel's and the Git panel's needs are merged in the page. When the page is hidden it sends an empty set; when it comes back it sends again and refreshes once.
+- The hub merges the sets from all pages and calls the node's `fs.watch`, **replacing the whole set**; after the node reconnects, the hub resends once. A page connection dropping, a panel closing or a page switch all release it; when the last page goes away the node stops its watch loop (no goroutine left behind). Only full-access devices can send `fs_watch`.
+- The node **polls instead of using inotify / fsnotify**: fsnotify isn't in `go.mod`, Linux inotify isn't recursive, and behavior differs across systems. It only watches the folders the page has open (one `ReadDir` every 2 seconds; the signature is name + type + size + mtime), and Git directories run `git status --porcelain=v2` every 5 seconds plus the size and mtime of the changed files listed (editing an already-modified file again leaves the `status` text unchanged, but its size and mtime change). It pushes `fs.changed` only on change; nothing is sent when nothing changed.
+- After the web receives `fs_changed` it waits 200 ms (restarting the timer if more arrive) and merges them into one refresh: it only rereads the folders that changed; Git status and open diffs refresh in place, with no loading animation.
+- The node first passes every path in `fs.watch` through `pathguard` (the same check as `fs.list`). A rejected path simply can't be read and its signature is `err`; its contents are never read.
+
+## Node handshake
+
+The manager ↔ node protocol (the `node.*`, `sessions.*`, `session.*`… RPC over ssh, Persona Link, tailcat or a member hub) carries a version and capabilities, so a device and a manager built from different commits work together. The constants live in `server/internal/nodeproto` (a pure contract package that imports nothing).
+
+- After `engine.use` (when there is a stored engine), the manager's first call is `node.info`. Besides what the node is, it answers `protocol` (the node protocol it speaks, an integer), `protocol_min` (the oldest manager protocol it still answers), `program` and `executable` (`personad` or `persona-node`, and the file it runs from: an update brings the same kind of program to that file; older nodes leave both out and run personad, [link.md](../operations/link.md) "The device's program") and `capabilities` (stable names: `sessions`, `model_configuration`, `node_update`, `engines`, `machine_uid`, `herdr_server`, `plugin_node_call`, `ultracode`, `health_spaces`). A name is never renamed or reused; a node drops one only together with a protocol bump.
+- The protocol version rises only for a change an older peer cannot follow (a method whose params or results change meaning). Additions are new capabilities, and the manager checks the capability before using them.
+- The manager drives a node when `protocol >= MinVersion`, `protocol_min <= Version` (both the manager's) and the node has every required capability (today `sessions`). Otherwise the node is **incompatible**: it stays connected and shows in the machine list, but is not configured, listed or watched, and every call except `ping`, `sessions.list`, `node.info` and `node.update.*` is refused with `node_outdated` (so it can still be updated). The machine list says why in `node_incompatible`: `node_protocol_old` (update the node) or `node_protocol_new` (the node needs a newer manager).
+- Optional features check capabilities, not builds: a model on `assistant.send` / `assistant.warm` / `session.start` / `session.send` needs `model_configuration`; `"ultracode":true` on `session.start` needs `ultracode` (a node from before the handshake has none; `false` asks for nothing and is never refused); another manager's health space (`health_dir` on `file.upload.begin` and `health.reports.*`) needs `health_spaces`; an update over the node RPC needs `node_update` (and `node_update` in `node.info` saying it can run now).
+- **Backward compatibility.** A node from before the handshake leaves the three fields out (protocol 0): the manager drives it as before and reads the old `node.info` flags (`model_configuration`, `node_update`) for what it can do. A manager from before the handshake ignores the fields, and new nodes keep sending the old flags for it.
+- **Builds.** The build string (`version`, `node_version` in the machine list) no longer decides compatibility. It is still the upgrade policy: another build sets `node_mismatch` (the **Redeploy** offer), the hub's automatic redeploy after it updates itself (`devices.update_nodes`) and a deploy's wait for the node to come back on the hub's build. `node_protocol` in the machine list is the protocol the node announced (absent: from before the handshake).
+
+## Engines
+
+Each machine's node drives one "engine", that is, a set of terminal hosts: `herdr` (the classic herdr command line; the default, so existing machines are unaffected),
+`herdr-core` (the runtime behind the Herdr desktop app, display name "Herdr App"), `orca` (the runtime of the Orca desktop app, display name "Orca", `docs/plans/plan-orca-support.md` ("Orca source")),
+and `herdr-both` (display name "herdr + Herdr App"): the node **registers both herdr and herdr-core as hosts at the same time**, and sessions from both are shown merged.
+This is for the case "use herdr locally, and have Herdr App connect remotely to the same machine". With a single choice the hosts are not used together: running them at once slows each other's refresh;
+side by side, refreshes run in parallel and events are isolated per host, so they don't slow each other down (implementation in `node/engine.go`, `refreshHosts` in `node/sessions.go`, `node/herdrevents.go`;
+trade-offs in `docs/plans/plan-orca-support.md` ("herdr-core host")).
+
+- The user picks per machine in the App (at pairing, or Settings › Machines): `PUT /api/v1/machines/{mid}/engine`. The hub stores it in the Postgres settings, not in hub.json.
+- **Host sets (#2576)**: a computer can enable several hosts side by side, any subset of `herdr`, `herdr-core`, `orca` and `paseo` (or none at all),
+  plus a **default host**: where sessions started or resumed from the phone go (the empty set has no default). Each single engine above is a set:
+  `herdr-both` is `{herdr, herdr-core}` with herdr the default.
+  - `PUT` body: `{"hosts": ["herdr", "orca"], "default": "herdr"}`. Without `default`, the first host in the order herdr, herdr-core, orca, paseo;
+    `"hosts": []` is the empty set. Older clients still send `{"engine": "herdr-core"}`, which stands for its set; a body with `hosts` is always a set.
+    An unknown host, `herdr-both` as a member, or a default that is not enabled is a 400, and nothing is written.
+  - **Storage**: the key `machine_engine_hosts` (machine id → `{hosts, default}`) is the choice. `machine_engines` (machine id → single engine) is written beside it
+    with the single engine closest to the set (the host itself when there is one, `herdr-both` for herdr + herdr-core, else the default host, herdr for the empty set),
+    so an older hub still works after a rollback. A machine with only `machine_engines` (chosen before sets) reads as the set its engine stands for and is not
+    rewritten; a machine in neither is `{herdr}`.
+  - **Machine fields**: `engine` stays that single engine (older clients read it). `engine_hosts` and `engine_default` are the set and the default host (never null;
+    `["herdr"]` when never chosen). `engine_suggested` (while online) is the set to preselect at pairing: the hosts the node reports available, herdr when none;
+    a machine that already chose is never changed by it. `engine_sets_unsupported`: the node is online but too old for sets, and the chosen set is not one it can run
+    as a single engine (herdr + Orca, say). It then runs `engine` alone, and clients say so until the node is updated.
+  - **Choosing the host for a new session**: `POST /api/v1/sessions` (`session.start`) may carry `host`, one of the enabled hosts; without it, the default host.
+    A host that is not enabled, or Herdr App (which cannot start sessions from the phone), is refused with `engine_missing` and nothing starts. When the node is
+    too old (its `node.info` has no `engine_hosts`) the hub answers `node_outdated` and does not send it: an older node would ignore `host` and start in its engine.
+    Session rows carry `host` (the host they live in: the pane's kind, `paseo` for Paseo's) and `also_open_in` (the other hosts the same session is live in,
+    `docs/integrations/engines.md` "Host sets").
+  - **`engine.use`** carries `{engine, hosts, default}`. Older nodes read only `engine`; newer ones report `engine_hosts` (the set they run) in `node.info`,
+    which is how the hub knows they take sets. The empty set is sent as `"hosts": []`, never null.
+- Every time the hub connects to a node, **the first call** is `engine.use` (before `node.info`), but only for machines with a stored choice. Machines never configured get nothing,
+  so the node keeps using herdr and old nodes never receive a method they don't know. When the user changes it and the machine is online, it is sent right away; `engine.use` calls for the same machine are queued, and each sends the value stored at send time.
+- After connecting, the node doesn't poll or subscribe to any engine's events until the engine is settled: it receives `engine.use`, or the hub skips it and calls `sessions.list` directly (never configured / old hub).
+  It waits at most 3 seconds, then starts with herdr. So a machine set to herdr-core never flashes herdr sessions on connect, and never queries herdr.
+- `engine` is the stored choice. If the node rejects `engine.use` (too old), the hub logs a line, the PUT still returns 200 and the choice stays stored; it takes effect once the node is updated.
+- `engines` comes from `node.info`; each entry is `{id, name, available, version?, note?}`. herdr is available = it answers, or its socket file exists, or `herdr` is on PATH. herdr-core is available = its socket answers `hello`
+  (a node using herdr asks herdr-core this only once, during `node.info`, and leaves it alone otherwise). `herdr-both` is available = both of the above are available (no version).
+  Orca is available = `orca-runtime.json` exists, its socket answers `status.get`,
+  and the protocol version is compatible (if incompatible, `available` is false, `note` is a one-sentence reason in Chinese for the user, and `version` is still included; also asked only once during `node.info`).
+  `version` is the version each reports; omitted if there is none. Old nodes only report the first two.
+- `herdr_running` / `herdr_running_known` in `node.info`: whether the classic herdr server answers right now, and whether the node can tell (a machine using herdr-core
+  has no such socket and sends neither). Old nodes send neither; the hub uses this to tell "not running" from "unknown" (`docs/integrations/engines.md`).
+- `builtin_programs` in `node.info`: the extension programs built into personad (`["cua", "ego", "imessage"]`, #1830 steps 5 and 6; imessage's method names are still `connector.*`). For nodes that report it, the hub calls them via `plugin.node.call {id, method, params}`;
+  old nodes don't send it, and the hub keeps using `computer.*`, `browser.*` (new nodes still answer those). See `docs/extensions/extensions.md` ("Built-in node programs").
+- `herdr.server.start` (hub → node, no params, returns `{running}`): the user tapped "Start" in the Agents list. Not bound by `herdr_autostart`;
+  if it can't start, the reason is returned the same way as `engine_missing`. Old nodes don't have this method, and the hub returns 502 rather than claiming herdr can't start.
+  If herdr isn't installed, a pinned version is installed first (waits up to 15 seconds; if not done, returns an "Installing herdr …" error, finishes installing in the background and then starts itself; `docs/integrations/engines.md` ("When herdr isn't installed")).
+- `herdr.server.status` (hub → node, no params, returns `{running, known, installing, install_error}`): `installing` means the node is installing herdr,
+  `install_error` is why the last install failed (empty string if it never failed); `GET /api/v1/machines/{mid}/herdr` passes them through as is (omitted when absent).
+- `usage.windows` (hub → node, no params, returns `{enabled, collected_at, accounts: [UsageAccount]}`, #2432): subscription quota windows the node gets from reading this machine's Codex rollouts and the files Claude's status line writes.
+  It only reads local files and never touches credentials. When `usage_windows` in `node.configure` (hub.json `machines[].usage_windows`) is false it returns `{enabled: false, accounts: []}`. Old nodes don't have this method; the hub treats them as having no data (`docs/server/usage-windows.md`).
+- Operations without a pane (new, resume session, rename) go to the set's default host (the node's `defaultHost` / `defaultKind`; classic herdr for
+  herdr + Herdr App); per-pane operations (read screen, send, keys, close) are routed by the host kind of the pane id, and each host's panes are limited
+  only by that host's capabilities. A session live in two hosts is listed once, in the host that owns it, and every per-pane operation goes there
+  (`docs/integrations/engines.md` "Host sets").
+- **`paseo` (display name "Paseo", `docs/integrations/paseo.md`) is not a terminal host**: the node registers no host and runs the Paseo bridge itself (`node/paseobridge.go`).
+  The bridge is a runtime with runtime id `paseo` ("Runtime ↔ node" below), and its sessions are this machine's sessions.
+  - **New session**: all handed to it. When the form's choice is a login-shell launcher, it carries `shell_launcher: true`.
+  - **Resuming a Claude session that isn't running**: handed over with `session.start {resume}`; the session id stays the same. After the takeover, messages go over with `session.send` as usual.
+  - **When the bridge isn't connected**, both new and resume return the error `engine_missing` and nothing is sent.
+  - **Detection**: Paseo in `engines` counts as available in two cases. One: the bridge is connected; then `version` is Paseo's version. Two: the address written in `paseo.pid` in the Paseo home responds;
+    in that case, if the bridge can't start, `note` gives the reason.
+
+## hub ↔ node RPC
+
+> Since 2026-11-04, what connects to nodes is the manager (the assistant's process, [machines.md](../server/machines.md) ("Who connects to computers")): "hub" below is the manager in production; hub calls and node events are relayed over the bus ("Computers (devices.*)" under "Bus"),
+> and the protocol the node sees is unchanged, word for word.
+
+`ssh <host> ~/.persona/bin/personad node --stdio` (on the hub machine itself a child process is started directly; it is now a child of the manager). One JSON per line on stdin/stdout.
+Both sides can send requests: `{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`;
+one-way events: `{"event":"…","params":{}}`. Ids sent by the hub start with `h`, ids sent by the node start with `n`. stderr is the node log.
+
+Cancellation (#2597): when the caller no longer waits for a request, it sends `{"event":"rpc.cancel","params":{"id":"n12"}}` and the other side cancels handling that request. Currently only the node sends it, for `mcp.call`: when the MCP process or hook disconnects (the assistant's turn was stopped), the hub's `approve` ends with it, the card is recorded as cancelled and withdrawn, and answering it afterward returns 410, so a write nobody is waiting for is never executed (such as sending an outdated message). Old versions that don't know this event ignore it, and handling runs to completion as usual. Extension and connector connections don't send this event.
+
+The ctx a handler receives **ends once the reply is sent** (same as being cancelled): work that continues after replying (`session.watch`'s transcript pushes, anything streaming) must not hang off it; use `rpc.ConnContext(ctx)` (the connection's ctx, which ends only when the connection drops). After #2645 every request's ctx was cancelled as soon as it replied, while `session.watch` still hung off the request ctx, so transcript pushes for every session (main session, sub-Agents) stopped the moment after the watch reply. Pages only got `sessions_delta` and needed a refresh to see new content (#3139).
+
+hub → node requests:
+
+| method | params → result |
+| --- | --- |
+| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}` (`system`: see Machine, read once at node start; `engine` is the engine the node currently uses, `engines` are those it found, see "Engines"; old nodes lack these two). If `claude_version` is empty on connect (the `claude --version` run failed), the hub asks again after 1, 2, 5, 10, 30 minutes and then hourly; once it gets a value it updates the machine and pushes it to the App, and stops when the connection drops (#542) |
+| `engine.use` | `{engine, hosts?, default?}` → `{engine}`: switch to this engine, or to the set in `hosts` / `default` for a node that takes sets ("Engines", "Host sets"; unknown ones error). If it equals the current one, nothing happens; otherwise it swaps the host, drops the old engine's Agents (refresh results started before the switch and returning after it are discarded), ends all terminal streams (each pushes `terminal.end` with an error saying the engine changed), swaps the event stream, and pushes one `sessions.changed`. Multiple `engine.use` calls run in order |
+| `launchers.list` | → `{launchers}` |
+| `launchers.zshrc` | `{}` → `{aliases:[{alias, env:{K:V}, args, command}]}`: lines of the form `alias x="K=V … claude [args]"` in this machine's `~/.zshrc` (`$ZDOTDIR` first); only those whose `command` is claude. `env` carries keys, which are handed to the manager only over this RPC (import, over the hub-to-node connection) and never logged; old nodes return `unknown method` |
+| `launchers.repair` | `{name, action: "upgrade_cli"}` → `{ok, unsupported?, output?}`: auto-repair from the launcher health check (`docs/server/launcher-health.md`). The node only applies fixed repairs (for Claude, it runs `claude update`) and accepts no commands; old nodes return `unknown method` |
+| `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`: same as REST `…/launchers/{name}/models`; `agent_type` is this launcher's type in the hub config (if omitted, whatever the node detects itself) |
+| `skills.list` | `{cwd?}` → `{skills: [{name, description, source}]}`: the skills the assistant gets on this machine (the user's in `~/.persona/skills/`, plus built-in ones; `docs/operations/hub-update.md`), using that directory's prepared connector list. Omitted `cwd` selects the default assistant directory if prepared, otherwise the sole prepared directory when there is exactly one; with none or several non-default directories prepared, it uses the default directory's empty connector list. For old nodes without this method, the hub assumes the Lark gateway skill is installed (old versions compiled it into the binary) |
+| `dirs.list` | `{path}` → same as REST |
+| `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`; Workspace is the same as in "Workspace board"; the node omits machine_id, and id/source_id are host-local IDs. Includes spaces with no running Agent. Each source reports errors separately; if all fail it returns an RPC error and must not pretend to be an empty success. Sources not running on this computer (`host.ErrNotRunning`: Orca not open, botmux has no daemon or is too old to have `observe`) count as having no workspaces, not an error; if only non-running sources exist, it returns an empty list |
+| `workspace.resolve` | `{path}` → `Workspace`; validates a real directory and resolves symlinks. On success source is `directory`, id/source_id/cwd are the physical path, available is true. Accepts local absolute paths or `~/`; rejects missing paths, non-directories and protected iCloud paths. Performs no host, Agent or Git operations |
+| `sessions.list` | → `{sessions}` |
+| `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, ultracode?, tab_name?, async?}` → `{session}`; `async` returns immediately and starts in the background (`node/starting.go`); Codex launchers are synchronous and must carry `prompt` (`node/codex_start.go`). `ultracode:true` is best effort once Claude is up (never a failed start); `false` is the same as leaving it out |
+| `session.ultracode` | `{session_id, ultracode?:bool, dismiss_lost?:bool}`: the independent toggle for ordinary Claude Code Agent sessions; queued while busy or while a draft / dialog is in the way (success, `ultracode_pending`); refused with `ultracode_unsupported` where it cannot be made (botmux, main chat, old CLI). `dismiss_lost:true` dismisses the resume notice. An old node's `unknown method` becomes `409 node_outdated` at HTTP `/modes`; see "Claude Code ultracode" |
+| `session.send` | `{session_id, text, images?, client_msg_id?}` (`client_msg_id`: see "Matching pending messages") |
+| `session.echoes` | `{echoes: [{session_id, client_msg_id, text, images, sent_at, after_seq, line?}]}` → `{ok}`: the hub hands back sends recorded for this machine within the last day (every time the node connects, before `sessions.list`); the node skips ones it already knows. Old nodes return unknown method and the hub ignores it |
+| `session.keys` | `{session_id, keys, text}` |
+| `session.rewind` | `{session_id, prompt, occurrence, prompts_after?, restore}` → `{prompt, restore, code_restored, input_cleared}`: drives Claude Code's `/rewind` in the terminal ("Rewind to a message"); refusals carry `code` |
+| `session.interrupt` | `{session_id}` |
+| `session.screen` | `{session_id, lines, source, format?}` → `{text, status}` (`format: "ansi"` includes colors) |
+| `panes.list` | `{}` → `{hosts:[…]}`, same as REST `/machines/{mid}/panes`: the node answers with spaces / tabs / all panes from its latest host snapshot (taking a new one only if older than 3 seconds), without starting its own polling |
+| `panes.new` | `{workspace_id, kind?}` → `{pane, terminal, tab_id}`: the host's `CreateSlot` opens a shell tab (directory is the space's own); errors if the space is gone or the host can't open tabs |
+| `panes.close` / `panes.split` / `panes.agent` / `panes.git` / `tabs.close` / `tabs.rename` | node menu actions, params as in the REST above. The pane / tab must be one the host lists (if not, take a snapshot first and check again); the directory is the pane's own. Closing an Agent's pane goes through `session.close` (asks it to exit first). `panes.agent` reuses the whole new-Agent launch flow (same launcher command, wait for the session to be ready, bind); on failure the pane is not closed |
+| `claude.auth_status` | `{name}` (launcher; empty means `claude`) → `{state: logged_in\|not_logged_in\|unknown, auth_method?, api_provider?, key_source?, version?, reason?}` (#4048): runs `claude auth status --json` with the same command and the same `--settings` used to open a chat; sends no model request. `auth_method` is Claude Code's `authMethod` (`claude.ai`, `api_key`, `api_key_helper`, `oauth_token`, `third_party`, `none`); `key_source` is only the variable name (`ANTHROPIC_API_KEY`); email, organization and keys are never returned. `reason` for `unknown`: `old_claude` (before 2.1.41 there's no `claude auth`; not run), `not_claude` (the launcher runs Codex / a runtime), `unreadable` (status can't be read: claude not found, the launcher swallowed the arguments), `timeout` (20 seconds). A name that isn't a launcher on this computer errors without running; old nodes return `unknown method` |
+| `node.doctor` / `node.doctor.fix` | `{fix?: bool, preflight?: bool}` / `{}` → the same `DoctorReport` as `personad node doctor --json` (#2429): checks run inside the node process. `node.doctor` without `fix` writes nothing; `fix` (or `node.doctor.fix`) only rewrites files Persona itself generated (`writeGeneratedConfig`) and then checks again; never the LaunchAgent (#5944). `preflight: false` leaves the `path-access` check out (the assistant's readiness passes it: it only reads `claude-version`; older nodes ignore it). The hub's GET never passes `fix` |
+| `worktree.prepare` / `worktree.create` | #2431, same as the REST above (`workspace_id`, `kind?`; create also has `branch`, `path`): the workspace must be one the host lists, and the directory is the workspace's own. Instead of `workspace_id`, `cwd` names it (#5325, the assistant's `agent_start` with `worktree`; the REST routes do not pass it): the host's space whose directory holds `cwd`, the deepest one; none holding it is an error. herdr with `worktree` uses `worktree.create`; older herdr falls back to `git worktree add` + `workspace.create`; Orca uses its runtime's `worktree.create` (#5325), after refusing a branch checked out in another worktree, which Orca would rename instead of failing. On failure it returns git's `fatal:` line |
+| `terminal.watch` / `terminal.unwatch` | `{session_id, control?: {cols, rows, takeover}}`; watch → `{cols, rows, control}`, after which the node pushes `terminal.frame`. A watch while already pushing reopens a stream (new epoch, starting from a full frame). If herdr has no observe it reports `unsupported: …`. With `control` the node takes over via `herdr terminal session control` (reply has `control: true`; old nodes lack this field); if the slot is taken and there's no `takeover`, it errors with `code: attach_busy` |
+| `git.pull` | `{cwd}` → `{status, updated}`, same safe pull as REST |
+| `git.branches` / `git.pr` / `git.stage` / `git.commit` / `git.push` / `git.switch` / `git.stash` / `git.pr_create` / `git.pr_merge` | #6121, params and answers as the REST above |
+| `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | same as REST (same param names) |
+| `fs.watch` | #2439: `{dirs: [{path, cwd}], git: [cwd]}` → `{ok}`, **replaces the whole set** of folders and Git directories the node watches (at most 32 folders and 8 Git directories; an empty set stops the watch loop). Old nodes report unknown method; the hub logs a line and the page keeps refreshing manually |
+| `file.read` | `{path, cwd, offset}` → same as REST `file` (old nodes don't know `offset`, and their reply has no `offset` / `next`) |
+| `fs.stat` | `{paths, cwd}` → `{stats}`, same as REST `stat` (old nodes report unknown method, and the phone links no paths) |
+| `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images, fold_work, from_seq, through_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}` (with `through_seq` it is the folded rows: `{items, more}`) (`from_seq` is only present in `after_seq` requests; without `lazy_images: true` the node reads image data back, for compatibility with old hubs) |
+| `session.image` | `{session_id, item_id}` → `Image{mime, data}` (the node's items don't keep image data in memory; it rereads that line at the recorded line offset) |
+| `session.item` | `{session_id, item_id}` → `Item` (full text, no images) |
+| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`; after watch the node reads new lines every 250ms and pushes `session.items` (with `history` / `from_seq` / `to_seq`); with `since_seq` it first resends everything after it, 500 items per page. The hub sends only one watch / unwatch at a time per session, and when its turn comes decides which to send, or whether to send at all, by the subscriber count at that moment (the node does nothing on a watch for a session already watched, so the two arriving out of order would leave the last subscriber without live content); a failed one is retried next time |
+| `session.close` | `{session_id}` |
+| `session.fork` | `{session_id, at_item_id}` → `{session_id}`: see HTTP `/fork`; old nodes report unknown method |
+| `session.retire` | `{session_id}` → `{closed}`: for a finished task whose Agent is stopped and can be resumed later, closes its pane (same as `session.close`); if it isn't running, `closed: false`. Working, waiting on the user or unresumable returns `code: not_retirable`; old nodes report unknown method (the assistant treats it as refused). See `docs/assistant/todos.md` ("Close the Agent of a finished task") |
+| `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}` (over the limit reports `too_large`) |
+| `file.upload.chunk` | `{upload_id, offset, data}` (data is base64; offset must continue from what was received) → `{received}`; any error voids the whole upload |
+| `file.upload.end` / `file.upload.abort` | `{upload_id}`; end checks the size and renames → `{path, name, size}` |
+| `interaction.resolve` | `{id, resolution}` |
+| `port.probe` | `{port}` → `{port, listening, http, title?}`: one GET / (Host is `localhost:<port>`) |
+| `computer.status` | `{}` → `Computer` (`enabled` filled in by the hub): probes the local cua-driver (path, version, daemon, `permissions status --json`) and the desktop session (IOConsoleUsers from `ioreg`: active / locked / away). The hub only asks when the `cua` plugin is enabled for this machine ([computer-use.md](../extensions/computer-use.md)) |
+| `computer.call` | `{session, tool, args}` → `{output?, text?, image?}`: `cua-driver call --screenshot-out-file … <tool>`, args via stdin, `session` filled into the args (element_token stays valid across calls); screenshots go separately in `image` (`{mime, data, width, height}`, converted to JPEG when smaller than PNG). Only reads and `run_script` / `run_steps` are accepted; if the daemon isn't running it first runs `open -g -b com.trycua.driver`. Not installed: error code `not_installed` |
+| `computer.install` / `computer.grant` / `computer.cancel` | `{}` → `Computer`: one background job (one at a time); its state comes back in `computer.status`'s `job`. install: the three install scripts are first downloaded to a temp directory, checked, and then `install.sh --no-modify-path` is run from disk (`CUA_DRIVER_RS_TELEMETRY_ENABLED=0`); after install, `telemetry disable`, then grant automatically. grant: `cua-driver permissions grant` (pops a system window on the Mac). cancel only stops the install ([computer-use.md](../extensions/computer-use.md) ("One-click install")) |
+| `browser.status` / `browser.install` / `browser.open` / `browser.cancel` | `{}` → `Browser`: whether ego lite is installed, first-time setup, stats, read-only probes. Install downloads the official DMG, verifies its signature (Team `JGQLC6YQYJ`) and notarization, then ditto's it into Applications, keeping quarantine. Open runs `open` on it on that Mac |
+| `browser.call` | `{session, script?, look?, full?, screenshot?, timeout_ms?}` → `{output, image?}`: `ego-browser nodejs` (script via stdin) runs the assistant's script in the task space named `session` (`task` and `page` are ready-made), or takes a snapshot for look. The last result line is marked with `@@persona-browser@@` (NUL can't be used: ego drops the whole output); screenshots go separately in `image` |
+| `plugin.node.have` / `plugin.node.put.begin` / `.chunk` / `.commit` | the plugin's package on this computer (`docs/extensions/extensions.md` ("Programs that run on computers")): `{id, version, digest}` → `{have}`; `begin {id, version, digest, size}` → `{upload_id}`, `chunk {upload_id, offset, data}` (in order, 1 MB), `commit {upload_id}`: verifies sha256 and unpacks into `~/.persona/plugins/<id>/<version>/` |
+| `plugin.node.start` / `plugin.node.stop` | `start {id, name, version, command, args?, env?, rpc, http?, keep, lease_seconds, init}` → `{id, version, state, error?}`: starts it (if identical to what is running, leaves it alone and just renews the lease; if a new version doesn't come up within 30 seconds, rolls back to the previous version and reports an error). `init` is the program's `initialize` (config, secrets sent to the computer, never written to disk). `stop {id}` |
+| `plugin.node.sync` / `plugin.node.renew` / `plugin.node.status` | `sync {programs: [{id, version, digest}], installed: [id]}` → `{programs: [state]}`: those not in `programs` are stopped and their packages deleted; those not in `installed` are deleted along with their data. `renew {ids, lease_seconds}`; `status` → `{programs}` |
+| `plugin.node.dial` | `{id, plugin}` → `{}`: connects to this plugin program's HTTP socket and opens a stream `id` (after that, bytes flow over `stream.*` events, same as `port.dial`); if the program isn't running or doesn't serve HTTP it returns `code: not_running` |
+| `plugin.node.call` | `{id, method, params?}` → the program's answer: a plugin protocol method (programs on the hub call it via `nodes.call`); if the program isn't running it returns `code: not_running` |
+| `port.dial` | `{id, port}` → `{}`: connects to this local port (the address it was bound to at scan time, otherwise 127.0.0.1 then ::1; local only) and opens a stream `id`; if nothing is listening it errors with `code: port_gone`. After that both sides pass bytes over the `stream.*` events below |
+| events `plugin.node.state` / `plugin.node.event` | node → hub: `{id, version, state, error?}` (came up, stopped on lease expiry), `{id, event, params}` (events the program sends; the hub forwards them to programs on the hub) |
+| `credential.gh_token` | `{host}` → `{token}`: runs `gh auth token --hostname <host>` non-interactively on this machine, for the GitHub connector (`github.auth.from_machine`). Only the hub can call it (the hook / MCP `node.sock` doesn't accept it); the token is never logged. gh not installed reports `code: no_gh`; not signed in (or signed in via the keychain, unreadable over ssh) reports `code: not_signed_in`; old nodes report unknown method |
+| `connector.list` | → `{connectors:[{id, status, error?, guide?, via}]}`: connectors this computer itself can provide (currently only `imessage` on Mac; other systems return an empty list). `status` is `ok` / `not_configured` (no Messages data) / `no_permission` (no Full Disk Access; `guide` gives step-by-step instructions to enable it on this Mac, worded two ways depending on whether `via` is `ssh` or a resident `launchd` node) / `error` |
+| `connector.chats` | `{id, limit?, before?, keep?}` → `{chats:[{id, name, group?, members:[{handle, name?}], services, last, preview?, from_me?, unread?}], more?, before?}`: chats, newest first. One person's chats across iMessage / SMS / RCS count as one; each group counts separately. `id` is a hash (`imessage-<12 chars>`) and contains no phone number. Read-only. `keep: contacts` (used by the Inbox and assistant) lists only chats handed to Persona (see `connector.changes`); the App's own browsing doesn't pass it |
+| `connector.older` | `{id, chat, limit?, before?, keep?}` → `{chat, messages:[{id, at, kind: message\|event, from_me?, sender?, text?, service?, attachments?:[{kind, name, mime, size}], reply_to?, edited?, unsent?, unread?, undecoded?}], more?, before?}`: a chat's latest page or the page before `before`, oldest first. Tapbacks don't count as messages; attachments are descriptions only. No permission reports `code: no_permission`; no such chat (or, with `keep: contacts`, it isn't handed to Persona) reports `code: no_chat`. Only the hub can call it; nothing is logged (no numbers or bodies); old nodes report unknown method |
+| `connector.changes` | `{id, cursor?, limit?, days?, keep?}` → `{batches:[{chat, messages}], next, more?}`: messages that came in after `cursor` (message ROWID), batched per chat, oldest first, for the hub's knowledge base and Inbox (when "Hand to Persona" is on). The first time (no `cursor`) it starts `days` (default 30) days back. `keep` defaults to `contacts`: only chats with someone from the address book among the members, or chats I've spoken in; `all` gives everything. Verification codes are masked; `next` moves past everything read (including what wasn't returned) |
+| `connector.search` | `{id, query, limit?, days?, keep?}` → `{hits:[{chat, message}]}`: messages from the last `days` (default 365) days whose text contains `query`, newest first (the assistant's `imessage_search`); `keep` and masking as above. Matching only; `query` is never spliced into SQL |
+| `codex.answer` | `{session_id, id, resolution}`: answers a Codex card the node listed (`docs/integrations/codex.md` ("Questions and approvals")); a refusal is an error with `code`, and nothing is typed |
+
+Streams (`internal/streams`, both directions): `stream.data {id, data}` (data is base64, at most 32 KB at a time), `stream.ack {id, n}` (n bytes were written out;
+at most 512 KB unacknowledged per direction, and the sender stops and waits when it reaches that), `stream.close {id, error?}` (this end's connection dropped; the other side finishes writing what it received, then closes). The hub registers the stream before sending `port.dial`, and the node replies only after it has connected and registered, so bytes never arrive before the stream does.
+
+hub → node events (handled in the order sent): `terminal.input {session_id, text}`, `terminal.resize {session_id, cols, rows}`, `terminal.scroll {session_id, lines, up, column?, row?}` (scroll wheel: herdr hands it to programs that take the mouse, such as Claude Code's full-screen rendering and Codex; otherwise it scrolls herdr's own history.
+The node splits it into `lines` one-line events, landing on the `column` / `row` cell, or the center of the screen if not given; `docs/integrations/terminal.md` section 16), `terminal.click {session_id, column, row}` (left button down + up), `terminal.keepalive {session_ids}` (every 20 s, for terminals under takeover; the node lets go after hearing nothing for 75 s).
+
+Full herdr interface (feature `herdr_client`, `docs/integrations/terminal.md` section 24): hub → node RPC `herdr.client.open {client_id, cols, rows, session_id?, focus?}` (`session attach` starts a herdr client inside a PTY; at most 4 per computer, the 5th gets `code: too_many`; unsupported returns `unsupported: …`),
+events `herdr.client.input {client_id, data | b64}`, `.resize {client_id, cols, rows}`, `.ack {client_id, bytes}` (cumulative), `.close {client_id}`, `.keepalive {client_ids}` (every 20 s; the node closes after hearing nothing for 75 s); node → hub events `herdr.client.data {client_id, data}` (base64; the node stops reading the PTY when the browser is 256 KB behind), `herdr.client.end {client_id, error}` (client exited, lease expired, browser not reading; not sent for closes the hub requested).
+
+Focus sync (feature `herdr_focus`, `docs/integrations/terminal.md` section 28): hub → node event `herdr.client.focus {client_id, session_id}` (the page is showing another pane: the node has herdr focus it; requests for the same view replace each other; if the pane isn't one the host lists or the view is gone, nothing happens); node → hub event `herdr.focus.changed {workspace_id, tab_id, pane_id, session_id?, source, client_id?}` (herdr's focus changed: `persona` = just requested on behalf of `client_id`'s view, `client` = that client was actually typed in / clicked within 1.5 s, `other` = anything else; herdr's event itself doesn't say who changed it).
+
+node → hub events: `fs.changed {dirs?, git?}` (#2439: the listing of a folder in `fs.watch` changed (names, sizes, times), or a Git directory's `git status` changed; the hub turns it into `fs_changed` for the relevant pages), `terminal.frame {session_id, epoch, seq, full, cols, rows, data}` (frames less than 30 ms apart are merged by the node into one: diff bytes are concatenated, and a full frame drops the diffs before it), `terminal.end {session_id, error, control?, taken?}` (the stream stopped and can't restart: the session isn't running, herdr keeps refusing; with `control`, the takeover ended: `taken` means someone else grabbed it, otherwise the lease expired),
+`session.items {session_id, items, history, from_seq, to_seq}`, `session.live {session_id, live}` (status line of a watched, working Claude (on hosts that can read the screen: herdr, herdr-core, Orca), sent only on change, with a trailing `null` when it ends; see "Live status"), `session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}` (pushed once when the node records a send and once when it recognizes its line; the hub stores it in `sent_messages.echo`; an already-recognized one is never overwritten by a late "still waiting"), `sessions.changed {sessions}`,
+`sessions.revs {revs}` (checked every second, only changed revs are sent; when the list itself changes, revs go with `sessions.changed`),
+`usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}` (every 10 seconds, only changed minutes, with full per-minute values;
+the first one after connecting is `full: true` with the whole last 26 hours; `docs/apple/live-activity.md` ("Usage")),
+`metrics {sample: MetricSample}` (every 10 seconds, aligned to whole 10 seconds; the manager stores it in `machine_metrics`, `docs/server/machines.md`),
+`codex.interactions {interactions}` (all open Codex / compatible forks questions and approvals on this machine, sent in full on any change; the manager adds and removes cards; old versions that don't know it keep using screen cards).
+(All of these first reach the manager connected to this computer; interactions, status, usage and monitoring belong to it, and it forwards what the App needs to the hub; see "Computer events" below.)
+
+node → manager / hub requests (`interaction.create`, `mcp.*`, `assistant.lark`, `lark.sent` answered by the manager; `notify` answered by the hub):
+- `interaction.create {interaction}` → `{resolution}` (blocks until handled / expired; on expiry returns `{"dismiss":true}`). When the manager answers from an "Always allow in this session" it kept (or one a card answered meanwhile covers) rather than from an answer to this card, the resolution has `"remembered":true` next to `allow` and `always`; only the manager sets it, an App's answer never carries it (the sent-as-user ledger records such a write as `conversation_always`)
+- `mcp.tools {}` → `{tools}`; `mcp.call {name, args, session_id}` → `{content, is_error, error_kind?, retry_after?}` (`error_kind` is the failure category: `declined` the user or `connector_gate` didn't agree, `unavailable` the connector isn't signed in / can't connect, `rate_limited` rate limited; `retry_after` is how many seconds of rate limiting remain. Included only when the hub knows; `personad tool` sets its exit code from it, #3779)
+- `lark.sent {command?, method, path, text?, session_id?, message_ref?, let_through}` → `{}`: the node's gate proxy forwarded a write and the API answered with a 2xx; the manager keeps it in the sent-as-user ledger (`docs/extensions/connectors.md` "Sent as the user"). `let_through` is `{kind: "rule", rule: {method, path, body?, action}}`, `{kind: "conversation_always"}` or `{kind: "card", interaction_id, answered_by?}`; `text` is at most 4000 characters; `message_ref` is the id the API's answer gave for the message the write made (absent when there was none, the answer could not be read or the id was longer than 200 characters: it is not cut), which the manager keeps only for a route that creates one message in a conversation (`docs/extensions/connectors.md` "Sent as the user"). The computer is the connection's, never a field; `permission_denied` for a computer the manager does not know, `invalid_params` for a read or a `let_through` that is not one of these, `no_database` without a ledger; an older manager reports an unknown method, which the node only logs
+- `assistant.view.check {session_id, message}` → `{reason?}`: the persona-view check on the trusted assistant's Stop; the devices manager passes it through to the hub. The hub decides whether to check based on the current persona_view switch and the session's identity. When reason is non-empty, the node returns decision=block the first time, and stops asking when stop_hook_active=true. Replies up to 1 MB, 4 errors of 2000 characters each; the node waits at most 5 seconds. Not applicable, an old hub, or a disconnect keep the original Stop behavior. This is not a public App / extension action interface, and it accepts no machine identity supplied by the client.
+- `notify {title, body?, level?, silent?, id?, session_id?}` → `{sent, reason?}` (`personad notify`: `machine_id` is this connection's machine; extension `actions` / `ui` / `state` are not accepted; otherwise the same as `POST /api/v1/notify`, with mute and "Needs you" preferences applied the same way; old hubs report unknown method)
+
+### Computer link (persona-link, kind link)
+
+Computers the hub can't connect into (laptops) have persona-link connect out to the hub's TLS port and open streams on that link; inside a stream is the RPC above (bytes forwarded as is to that machine's resident node).
+Since 2026-11-04, once the hub has checked the credential it hands the link and its streams as is to the manager (`devices.accept` + `GET /api/v1/bus/relay`, "Computers (devices.*)" below); the messages "the hub" sends below are sent by the manager, and close codes are passed through.
+When the manager isn't connected, `GET /api/v1/link` returns `503 assistant_offline`. Details in [link.md](../operations/link.md); only what's on the wire is listed here:
+
+- `GET /api/v1/link` (WebSocket, a credential with `role: link`, TLS only, loopback excepted). Text messages, one JSON each:
+  - persona-link → hub: `{"type":"hello","machine","version","address"}` (the first message, within 10 seconds), `{"type":"open_failed","id","error"}`;
+  - hub → persona-link: `{"type":"endpoints","endpoints":[{"url","kind"}]}` (https candidates only), `{"type":"open","id"}`,
+    `{"type":"node","online","error"}`.
+  - Close codes: 4001 replaced by a new link from the same machine, 4002 credential revoked, 4003 hello doesn't match the credential, 1001 hub shutting down. Both sides ping every 10 seconds and disconnect after 5 seconds without a pong (configurable).
+    When hub.json sets `link.ping_seconds` / `link.ping_timeout_seconds`, `endpoints` also carries `ping_ms`, `ping_timeout_ms` (milliseconds), and persona-link uses them on this link
+    (clamped to 50 milliseconds through 10 minutes; ignored unless both are positive). When not set, these two fields aren't sent, and old persona-link doesn't know them either.
+- `GET /api/v1/link/stream?id=<id from open>` (WebSocket, same credential, permessage-deflate): binary messages whose content is the RPC byte stream;
+  the hub treats it as failed if it doesn't arrive within 15 seconds. When the link drops, its streams drop with it.
+
+## hub ↔ hub (linked hubs, [mesh.md](../server/mesh.md))
+
+- `POST /api/v1/peer/pair` (`Authorization: Bearer jx_…`, the other side's link code): `{hub_id,name,version,fp,tls_port,endpoints,token,center,term}` →
+  the same fields (`token` is the link credential given back to the other side; `center` / `term` are the center and term of the code issuer's group: the side using the code joins that group). Invalid / used / expired code: 401; this hub has no TLS: 409.
+- `GET /api/v1/peer` (WebSocket, TLS only, a credential with `role: peer`, permessage-deflate): binary messages whose content is the byte stream of the JSON-line RPC from hub ↔ node above:
+  - Calls: `hello {hub_id,name,version,epoch}` (once each way), `stream.open {id}` (the stream carries one HTTP/1.1 connection to the other side's peer server),
+    `relay {to,from,ttl,method,params}` (`creds.import {tokens:[{id,name,kind,role,created_at,last_seen,hash}]}` → `{added}`: a member hands credentials to the center;
+    `creds.revoked {tokens:[{id,name,kind,role,hash}]}` (other fields unused) → `{revoked}`: tells the group's hubs about revoked credentials;
+    `pair.code {}` → a pairing code: `personad hub pair` on a member), `unpair {}`;
+  - One-way: `rec` (the hub's record: links, `center`, `term`, computers in hub.json), `stream.data` / `stream.ack` / `stream.close`.
+  - Close codes: 4011 duplicate link, 4012 unlinked, 4013 can't keep up sending, 1001 hub shutting down. Both sides ping every 10 seconds and disconnect after 5 seconds without a pong (configurable).
+- HTTP on a stream always carries `X-Persona-Peer-Ttl` (starts at 8, decremented each hop; at 0 returns `508 mesh_loop`) and is forwarded hop by hop to the target hub:
+  - App requests a member forwards to the center: as is (including `Authorization`), plus `X-Persona-Peer-Source: <lan|public> <client address> <tls|plain>` (the member's judgment of the source).
+    Can't forward: `503 center_unreachable`; forwarding failed: `502 hub_unreachable`.
+  - Node streams the center opens through a member: `GET /api/v1/peer/node`, `Upgrade: persona-node`, `X-Persona-Peer-Node: <member hub_id>/<machine id>`, `X-Persona-Peer-From: <center hub_id>`;
+    the member returns `101`, followed by the node's byte stream. A request from a hub that isn't its center gets 403; not in hub.json gets 404; can't open gets 502 (`error` is the reason).
+- Admin interface (after signing in to the admin UI, [admin.md](../operations/admin.md)): `GET /api/v1/admin/mesh`, `GET /api/v1/admin/peers`, `POST /api/v1/admin/peers/code`, `POST /api/v1/admin/peers`,
+  `POST /api/v1/admin/peers/probe`, `DELETE /api/v1/admin/peers/{hub_id}`, `POST /api/v1/admin/peers/{hub_id}/center`, `GET /api/v1/admin/routes`;
+  the same set under `/api/v1/admin/cli/…` is for the command line on the hub machine (loopback + main token).
+
+## hub → connector (kind service, [link.md](../operations/link.md) ("Passive mode"), [mesh.md](../server/mesh.md) ("kind service"))
+
+- The hub connects to `<address>` pinned to the `fp` in the pairing link (optionally via a `socks5://` proxy): `POST /api/v1/connector/pair {code,token,machine,hub_id,hub_name}` once;
+  after that `GET /api/v1/connector/info` (every 30 seconds, liveness and RTT) and `GET /api/v1/connector/stream` (WebSocket, the node's byte stream), both with `Authorization: Bearer <credential>`.
+  When hub.json sets a heartbeat (`link`), the stream request also carries `X-Persona-Ping: <interval ms> <timeout ms>`, and the connector pings on this stream accordingly; when not set it's omitted, and old connectors don't know it.
+- 401: don't dial again for 5 minutes; 429: follow `Retry-After`; 503 `node_unavailable`: show the reason and back off as usual; stream closed with 4002: needs re-pairing, stop trying; 1001: back off as usual.
+
+## Bus (service ↔ hub, `GET /api/v1/bus`)
+
+The hub is meant to become just a channel: the assistant (and later other services) is a separate process that connects out to the hub's bus and stays connected, rather than living inside the hub. The hub knows nothing of any service's business semantics.
+By default the hub starts the assistant as its own child process (`personad assistant`); the assistant can also run elsewhere (`docs/assistant/assistant.md` ("Process")).
+The channel itself is authentication, handshake, a roster, dispatch by method name, and calls in both directions; the assistant and hub call each other through it; see "Methods the assistant uses" below.
+
+**Identities and tokens**
+
+- One identity per service. Currently there is only one role, `manager` (one manager process, the assistant; ids look like `assistant`, start with a lowercase letter, at most 32 characters). The table keeps a role column so adding other roles later needs no table change; tokens for other roles are rejected at upgrade today (401).
+- Tokens start with `jb_` and can only open `/api/v1/bus`: neither device tokens nor the main token can open the bus, and `jb_` can't open App endpoints either (401). The hub stores only the sha256 (table `bus_identities`, migration 0311).
+- Only `Authorization: Bearer` is accepted, not `?token=`. Public sources need TLS (otherwise `403 tls_required`); failure counting and `429 rate_limited` are the same as for App endpoints; loopback and LAN aren't counted.
+- Creating and revoking are functions inside the hub (`createBusToken`, `revokeBusToken`, in `server/internal/hub/bustokens.go`). Every time the hub starts it creates one for the assistant and passes it via the child process's stdin;
+  when the assistant runs elsewhere, create one with `personad hub assistant-token` (`assistant.external` in `docs/operations/config.md`). There's no endpoint or UI.
+  Creating again for the same identity replaces the old token: the old one stops working immediately, and connections using it are closed with 4002.
+- Member hubs in a linked group don't forward the bus to the center: a service belongs to whichever hub it connects to.
+- The managers' roster, installation codes and revocation are described in `docs/assistant/managers.md` (`GET /i/<code>` is the install script and `GET /i/<code>/docker` the one for a container: no credential, and fetching them does not use the code up). Every manager may use every bus method and event: the hub keeps what each reports as its own (`docs/assistant/managers.md` "What the hub keeps of each manager"). An identity with role `manager` is a manager. The roster also records the location it reported at its last handshake and `last_seen` (migration 0419); a new manager exchanges a one-time installation code for a token (`POST /api/v1/bus/join`, no credentials required).
+
+**Managers (`/api/v1/managers`, answered by the hub itself)**
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/managers` | `{managers:[{id, name, online, default?, builtin?, host?, os?, arch?, deploy?, version?, since?, last_seen?, installing?, needs_update?}], default, bot_conflicts?:[{platform, managers:[id, ...]}]}`: `needs_update` is `true` for an online manager whose `manager.hello` named no `config.own` (a build from before managers read their own `manager.json`: it runs on its built-in defaults, "Handshake" below); conflicts name managers sharing an enabled Feishu bot or bound WeChat account (latest reports, including offline managers; no raw bot identities). The default manager first, installations in progress last; `builtin` is the assistant started by the hub, `installing` is the installation code's expiry time. Roster changes (creation, rename, connection, disconnection, deletion, reported bot identities) push `{"type":"managers"}` to apps that requested `managers` (`?features=` or `client_hello`'s `features`), without entering the event log (apps reread the list after reconnecting) |
+| POST | `/api/v1/managers` | `{name}` (1–40 characters) → 201 `{manager, code, expires_at, commands}`: a one-time installation code, valid for 10 minutes and one use; `commands` are the commands that install it, `{service, join, docker?}` (`docs/assistant/managers.md`, install commands) |
+| POST | `/api/v1/managers/{id}/code` | A new code for an existing manager, or for one being installed (its code still good, or expired less than 7 days ago: `installing` in the past) → `{code, expires_at, commands}`; the hub's own assistant returns `409 builtin_manager` |
+| POST | `/api/v1/managers/{id}/machines` | `{machine_id}` → `{machine_id, manager, from}`: one of the hub's own machines is carried by this manager from now on (`assistant`: back to the carrier); `400 not_movable` for a machine not in the hub's own list, `409 installing`, `404 no_manager` (removed meanwhile), `503 owners_unknown` (the hub could not read who carries which machine yet) |
+| POST | `/api/v1/managers/{id}/sources` | `{source: "mail:<account>", from?}` → `{source, manager, from}`: the source moves from `from` (default: the default manager) to this one; `503 assistant_offline` when either is not connected, `404 no_source`, `409 source_exists` / `source_kind`, `502 source_not_released` (both have it now; moving it again releases it), `502 source_in_doubt` (the import did not answer and neither did the question whether it took it), `404 no_manager` (removed meanwhile). See `docs/assistant/managers.md` "Moving a machine or a source" |
+| PATCH | `/api/v1/managers/{id}` | `{name?, default?: true}`: rename or set as default; an installation in progress returns `409 installing` |
+| DELETE | `/api/v1/managers/{id}` | Revoke (invalidate the code for an installation in progress) → `{ok}`; the default returns `409 default_manager`, the hub's own manager `409 builtin_manager`, a missing one `404 no_manager` |
+| POST | `/api/v1/bus/join` | `{code}` → `{id, name, token, hub_id}`; an incorrect, expired or used code returns `401 bad_install_code` (counted per source); plaintext from the public internet `403 tls_required`, which voids the code it carried (it expires at once). Only the latest code of a manager works: a new one voids the unused ones before it, a join uses up all of them |
+
+Editing the roster, creating codes and deleting require a full-permission device (read-only devices get 403).
+
+**Per-manager routing (ownership, `docs/assistant/managers.md` ("Ownership"))**
+
+- **Which manager receives the request**: header `X-Persona-Manager: <id>`, or query `?manager=<id>` (for WebSockets and links opened in a browser; the header wins when both are supplied). Omitted means the default manager (`default` in `GET /api/v1/managers`), except for an extension's token, which acts as the manager whose extension it is (the one that recognized the token) and only as it: routes that name no object, merged lists (its manager's only) and an extension API prefix several managers serve go to it, and naming another manager, or another manager's computer, session, pending card or conversation (in the path, the query or the body), gets `403 other_manager`; `GET /api/v1/machines`, `/interactions` and `/sessions` list its manager's only (`docs/assistant/managers.md`, "Ownership"). An id absent from the roster returns `404 no_manager`; one present but disconnected returns `503 assistant_offline`, as when the assistant was offline before.
+- **For requests tied to an object, the hub resolves ownership itself; specifying a manager does not override it**: `/machines/{mid}/…` belongs to the computer's manager, `/sessions/{mid}/{sid}/…` to the session's (a manager's own chat belongs to the one reporting it, other chats to the computer's), and `POST /interactions/{id}/resolve` to whoever reported that card. Everything else (assistant page, chats, schedules, Inbox, to-dos, knowledge base, model config, extensions and sources, usage…) uses the header / parameter above. When a list item (an Inbox item, an extension) carries `manager`, include it in requests for that item.
+- **The `manager` field**: computers (`GET /api/v1/machines`, `machines` pushes), sessions (`GET /api/v1/sessions`, `sessions` / `sessions_delta` pushes) and pending cards (`GET /api/v1/interactions`, `interaction` pushes) each carry top-level `manager` (the manager id). With one manager, responses are unchanged except for this extra field. A manager's own live updates (`ws.broadcast`, "Messages to the App" below) carry it only when they are another manager's than the assistant the hub starts.
+- **Merged lists**: without a manager specified, `GET /api/v1/inbox` (`items`), `/api/v1/todos` (`todos`), `/api/v1/extensions` (`extensions`), `/api/v1/plugins` (`plugins`) and `/api/v1/connectors` (`connectors`) query the default and other connected managers in turn, concatenate their lists (default first) and add `manager` to every item; other fields (`as_of`, `triage`, `can_install`…) come from the default manager. With a manager specified, only its list is returned. Managers that do not answer are omitted; if none answers, the default manager's response is returned unchanged (for example `503 assistant_offline`).
+- **Offline managers**: data the hub already retains stays retained with `manager`: their computers (`online: false`, `error` says the assistant is offline) and sessions (`unknown` state), plus GETs whose last response is retained, such as extension lists (`extwire.KeptRoutes`). Items get no additional fields; "Last synced…" uses that manager's `online: false` and `last_seen` from `GET /api/v1/managers`. Operations through it return `503 assistant_offline`.
+
+**Wire format**: each WebSocket text message is one line of `internal/rpc` JSON (the same as hub ↔ node), permessage-deflate, at most 64 MiB per message; both directions can call:
+
+```jsonc
+// "助手" is the name the hub records for the assistant identity ("Assistant")
+{"id":"s1","method":"manager.hello","params":{"id":"assistant","capabilities":["config.own"]}}
+{"id":"s1","result":{"name":"助手","role":"manager","managers":[{"id":"assistant","name":"助手","role":"manager","online":true}],
+                     "owner":"","owner_notes":"","assistant":{"machine_id":"server","machines":["server"]},"done_delay_ms":60000}}
+{"id":"s2","error":{"code":"stale_connection","message":"…"}}
+{"event":"managers","params":{"managers":[{"id":"assistant","name":"助手","role":"manager","online":false}]}}
+```
+
+- Both sides ping every 30 seconds and disconnect after 20 seconds without a pong. If the handshake isn't done within 40 seconds of connecting, the hub closes with 4003.
+- A new connection for an identity replaces the old one **when its handshake succeeds**; the old one is closed with 4001.
+- Before the handshake and after being replaced, every call on the connection returns `stale_connection` and events sent are dropped; the hub never calls a connection that hasn't shaken hands.
+- Close codes: 4001 replaced by a new connection for the same identity, 4002 token revoked or replaced, 4003 bad handshake or timeout, 1001 hub shutting down.
+- A dial the hub refuses: 401 with code `token_revoked` for a bus token it has no identity for (revoked or replaced; the only refusal a manager takes for "revoked", like 4002); a plain 401 for a token of another shape; 503 `store_unavailable` when it can't look tokens up (its database): no verdict on the token, try again.
+
+### Handshake
+
+`manager.hello {id,host?,os?,arch?,deploy?,version?,capabilities?,apps?,…}`. `id` must match the token, otherwise it returns `wrong_identity` and disconnects (4003).
+The roster records only `host`, `os`, `arch`, `deploy` (an assistant started by the hub reports `child`, one elsewhere reports `external`), `version`, and keeps `capabilities` while it is connected; `apps` and the machine summary aren't processed yet.
+`capabilities` (at most 32 names) are stable names of what the manager supports, never renamed or reused. `config.own`: it reads its own sections of the configuration from its `manager.json` (`docs/operations/config.md` ("manager.json")). For a manager without it, the hub logs once that it runs on its built-in defaults (the answer no longer carries them), and `GET /api/v1/managers` marks it `needs_update` while it is online.
+The answer is `{name,role,managers:[{id,name,role,online}],owner,owner_notes,assistant:{machine_id,machines,standby?},done_delay_ms,persona_view?,html_views?,models?,notify?,locale?,mutes?,legacy_config?}`:
+
+- `name`, `role`: the name and role the hub records for this identity (the hub's record wins; the role reported in hello doesn't count);
+- `legacy_config` (in the handshake's answer to a built-in manager whose hello's `deploy` is not `child`, not in `manager.updated`): the hub's `hub.json` sections the answer carried before `config.own`, raw (`assistant.owner` / `notes` / `machine` / `launcher`, `agents`, `kb`, `ai`, `hook_timeout_minutes`, `inbox.triage_ai` / `judge_ai` / `agent.machine`). The manager takes each over into its `manager.json` once, unless it has it already (`docs/assistant/managers.md` ("Configuration")).
+- `managers`: all managers the hub has tokens for; `online` is whether they're connected now;
+- The rest is what the hub knows that the manager needs (`assistantwire.Hello`): `machines` are the machines this manager owns (`docs/assistant/managers.md` ("Ownership")), `assistant.machine_id` the hub's default machine (its own machine; failing that, the first one) when this manager owns it, else this manager's first own machine (a local one first; empty with none); a machine the manager stored or its `manager.json` names that isn't among them isn't used; `models.launchers` are its own machines' configured launchers. A machine moved between managers sends both a new answer (`manager.updated`);
+  `standby`: this hub is a member of a linked group (scheduled tasks run on the center); `done_delay_ms` is hub.json notify's completion push delay (how long a task's Agent must be stopped to count as stopped), and `notify` `{done_delay_ms?,long_turn_ms?,background_hold_ms?}` are hub.json notify's push timings;
+  `persona_view` / `html_views` are hub.json's `assistant.persona_view` / `assistant.html_views` (the card switches, `docs/operations/config.md`); `models.launchers` are the launchers hub.json's `machines[].launchers` add for this manager's machines; `locale` is the user's language.
+  The user's time zone and main chat aren't here: they are the assistant's own settings, reported to the hub in the snapshot's `profile`.
+- **The manager's own sections are not in it** (since 2026-11-06): the manager reads them from its `manager.json` and lays them over the answer (`docs/operations/config.md` ("manager.json")): `assistant.owner` (`owner`), `assistant.notes` (`owner_notes`), `assistant.machine` (over `assistant.machine_id`, when the hub has that machine), `assistant.launcher`,
+  `agents`, `kb` (`{off?,text_days?,attachment_days?,extra_dirs?}`, the knowledge base, `docs/assistant/knowledge.md` ("Who manages what")), the models (`ai`, `kb.ai`, `inbox.triage_ai` / `judge_ai`, `inbox.agent.machine`) and `hook_timeout_minutes` (`notify.hook_timeout_ms`).
+  `owner` and `owner_notes` are still in the answer, empty. An older hub still fills these fields from its hub.json; a section the manager's `manager.json` has replaces them.
+- `mutes` `{spaces,sessions,allowed?}`: the hub's mutes (`GET /api/v1/mutes`) of the manager's own machines only (as `fleet.mutes`), so a manager has them before it pushes anything; left out while the hub cannot read them (they follow with `fleet.mutes` once it can) and by older hubs. `manager.updated` carries no `mutes`.
+- The assistant keeps this answer. Where it might have changed (the linked group changed center, the machine list changed), the hub coalesces for 200 milliseconds and recomputes; if it differs from what it last gave, it sends
+  `manager.updated` with the new answer as params (as above, without `name`, `role`, `managers`). On receiving it the assistant rereads its settings and its `manager.json` and reports a snapshot.
+
+The same connection can shake hands again (to update its roster info); that doesn't count as a replacement.
+
+### Roster
+
+The hub keeps each identity's current connection (the one whose handshake succeeded) in memory: id, role, name, the machine info reported at handshake, and the connect time. It is empty after a hub restart; services reconnect and shake hands again.
+When a manager comes online or goes offline, the hub sends the other online managers `managers {managers:[{id,name,role,online}]}`; the one that just connected gets the same list in its handshake answer.
+
+### Methods
+
+- Service → hub: the hub registers handler functions by method name (`handleBus` in `server/internal/hub/bus.go`; one-way events use `handleBusEvent`). Each handler's file registers it in `init`; the hub has no other method list.
+  Besides the handshake, the only built-in is `ping {}` → `{}`. An unregistered method returns `unknown_method`; params that can't be parsed return `invalid_params`; an `rpc.Error` returned by a handler reaches the service with its `code` intact.
+- hub → service: `callBus(identity, method, params)` calls this identity's current connection (if the caller gives no deadline it gives up after two minutes), and `notifyBus` sends a one-way event. If not online it returns a "not online" error; error codes the service returns are passed back as is.
+
+### Methods the assistant uses
+
+The hub side has a single implementation: `assistantLink` (`server/internal/hub/assistant_link.go`) answers the assistant's calls with the hub's own functions. Handlers registered with `handleBusCall` in the same file only encode and decode
+(parse params into that method's own type; on failure return `invalid_params`); no second copy of the logic. The hub doesn't run the assistant's code (`internal/assistant` isn't in `go list -deps ./internal/hub`);
+the two sides share only message types, method names, error codes and the assistant's route table (`server/internal/assistantwire`), plus a few small text helpers (`server/internal/textfmt`). For what the methods and params mean, see `docs/assistant/assistant.md` ("Boundary with the hub").
+The interaction-queue methods of `app.call` (`interactions.answer`…) only move data; the rules and wording of the tools that use them (`interaction_answer`) live in the assistant.
+The Inbox belongs to the assistant (2026-11-04, `docs/assistant/inbox.md` ("Who manages what")); the hub only handles its sources, and the message shapes are in `assistantwire/inbox.go`.
+Since 2026-11-04 the knowledge base belongs to the assistant (`docs/assistant/knowledge.md` ("Who manages what")): the hub only provides sources (`app.call connectors.*`), and when its own features need to read the knowledge base it asks the assistant (`kb.*`).
+Extensions can also call six public knowledge base methods through their own RPC (#1908): the hub first checks the `kb.read` / `kb.write` actually granted, then asks the assistant on their behalf.
+This does not bring back the assistant's old `app.call kb.*` tool chain. Fields, paging and permissions are in the [extensions doc](../extensions/extensions.md#知识库-rpc1908).
+The assistant uses `app.call connectors.owner {}` to get minimal metadata about the owner's own sources, `{sources:[{source,handles:[{kind,value}]}]}`; currently the hub provides the configured email addresses, and returns no account credentials.
+The assistant's dedicated one-way events `kb.changed {kind,id,what}` and `kb.forgotten {source}` are sent only by the current assistant connection; the hub turns them into `event.kb.*` only for extension subscribers granted `kb.read`, and doesn't broadcast them to the App.
+`todo.changed` and `todo.decision` ([todos.md](../assistant/todos.md) "Telling the extensions") go the same way: typed one-way events from the assistant, turned into `event.todo.*` only for subscribers granted `todos.read`, not broadcast to the App.
+
+- Assistant → hub: `device.call`, `app.call` → the result as is; `notify.request {notification}` → `{ok:true}` (a notification `id` the hub took from that manager within two hours, recorded in its database, is not delivered again); `manager.outbox {items:[{id, at, notification | message}]}` → `{done:[id…]}`: what the manager kept while the hub was away, oldest first, sent after it reported its state on the connection, each id delivered once per manager and only about its own machines, sessions and cards (an older hub answers `unknown_method`; `docs/operations/hub-restart.md` ("The manager while the hub is away")); `manager.snapshot` → `{ok,seq}` (the snapshot carries `profile`: the parts of the assistant's settings the hub's own features need; the hub keeps the last one); one-way event `ws.broadcast` (see below).
+  Added 2026-11-04: `device.call` hands the node `assistant.prepare`, `assistant.warm`, `assistant.memory`, `assistant.compact`, `assistant.handoff`, `launchers.list`, `launchers.probe` (`devices.list` gained `kind`, `data_dir`), and `assistant.start`, which the hub answered itself, was removed;
+  `app.call` gained `models.record`, `models.save`, `models.apply_picked`, `models.launchers`, `models.launcher_check`, `kb.dirs`, `connectors.signed_in`, `plugins.assistant`, `plugins.skills_need`, `settings.list`, and `models.assistant_send` was removed.
+  When `app.call` carries `timeout_ms` (how long the assistant waits this time), the hub also stops at that time (for example, one model call).
+  The same day the knowledge base moved into the assistant (`assistantwire/kb.go`): `app.call`'s `kb.status`, `kb.prompt`, `kb.dirs`, `kb.search`, `kb.list`, `kb.get`, `kb.update` were removed, and the knowledge base sources were added:
+  `connectors.archives {}` → `{archives:[{id,poll_ms?,sources?,media?}],items:[id]}`, `connectors.changes {id,cursor,limit}` → `{batches,next,more?}`,
+  `connectors.archive_media {id,ref}` → `{media:{mime,data}}`, `connectors.items {id}` → `{items}`, `connectors.doc_title {id,url}` → `{title}`; `models.json` gained an optional `max_tokens`.
+  The same day the Inbox moved into the assistant: `app.call`'s `inbox.replied`, `inbox.draft` were removed, and the Inbox sources were added: `inbox.collect {round}` (the hub reads a round right away and answers after handing it over: pull to refresh), `inbox.kick`, `inbox.config` (gained `extensions`: connectors provided by plugins),
+  `inbox.translate_fingerprint {}` → `{fingerprint}`, `inbox.mail_body {account_id,uid,mailbox,readable?}`, `inbox.reply_mail {account_id,uid,mailbox,text,send_id}` → `{already?}`, `inbox.reply {source,reply,send_id}` → `{already?}`
+  (the hub sends a given `send_id` only once, and its record does not expire: asking again returns `already`; if the last send broke halfway it returns `assistant_in_doubt` and doesn't send again), `inbox.settle`, `inbox.group_tool`, `inbox.group_fallback`, `inbox.group_append {source,append,append_id}` (asking again with the same `append_id` uses the plugin's previous answer);
+  one-way event `inbox.changed {items:[{id,source,kind,title}]}` (outside the read loop the hub sends `inbox.changed` to plugins and pushes `{"type":"inbox"}` to the App); the snapshot's `inbox: {agents:[{machine_id,session_id}]}` (the AI twin's chats: no "done" push when they finish; on `null` the hub keeps the previous one).
+  The snapshot's `todos` is the to-do report (`assistantwire.TodoReport`; to-dos belong to the assistant, `docs/assistant/todos.md` ("Who manages what")): `{links:[{machine_id,session_id,todo_id,title,task?}],quiet:[{machine_id,session_id}]}`.
+  `links` are active Agents on unfinished to-dos (`task`: a task dispatched from a chat); `quiet` are Agents of quiet tasks (unfinished or finished less than 7 days ago). From it the hub fills sessions' `todo`, `quiet` and cards' `task_title`, blocks pushes for quiet ones, and pushes the session list of whichever machine had these change; on `null` (unreadable) it keeps the previous one.
+  hub errors go back with codes, and the assistant maps the codes back to the original errors: `no_device` (no such machine), `machine_offline`, `node_closed` (the node's connection dropped), `stale_snapshot`, `model_paused` (`data` is the pause `{reason, until}`: quota exhausted `quota` or concurrency full `busy`), `model_unconfigured` (no model configured for this use), `assistant_in_doubt` (an Inbox reply broke halfway last time and may already have been sent); an `rpc.Error` from the node itself is passed as is.
+- hub → assistant, calls: `http.request` (forwarding, below), `manager.action` (the App answered one of its questions), `assistant.tools {}` → `{tools:[…]}` (the hub asks once each time it connects and remembers it, also after it disconnects),
+  `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`, `assistant.context {session_id}` → `{text,…}` (the node asks before each message),
+  `assistant.todo_handoff {todo_id,text?,new?,machine_id?,cwd?}` → `{found,title?,done_at?,text?,status?,error?}` (`POST /api/v1/sessions`, `…/messages` with `todo_id`: whether the to-do exists and whether it's done; `text` has the decisions in effect prepended; with `new`, `text` is the new Agent's first message, with the background of the project `cwd` belongs to prepended at the very front, #2820; an empty `text` comes back as is. When it can't be handed off, `status` is 404 no such to-do or 409 already done, and the hub returns `status`, `error` to the App as is), `assistant.todo_link {todo_id,machine_id,session_id,title?,cwd?,agent?,prompt?}` → `{title?}` (attach after handing off; when the session has no title, the manager takes the first line after the context block in `prompt` as the attached title; returns the to-do's title, which the new-session response's `todo` uses; a to-do that's gone or done returns an error).
+  `assistant.start {text,images?,launcher?,permission_mode?,effort?,purpose?,machine_id?,main?,untitled?}` → `{session}` (hub features opening a chat; since 2026-11-04 the Inbox's AI twin, the Lark bot and channels are all opened by the assistant itself, so the hub doesn't use it now),
+  `assistant.send_params {machine_id,session_id,params}` → `{params}` (which launcher and model a message sent to one of its chats runs on, and the background prepended to the first message of a new main chat),
+  `assistant.rename {machine_id,session_id,params}` → the node's answer (the App renames one of its chats). When these requests themselves are malformed they return `bad_request`, and the hub returns 400 to the App.
+  Knowledge base (2026-11-04): `kb.context {chat_id}` → `{context}` (the Inbox AI twin), `kb.projects {machine_id,cwd}` → `{projects:[{slug,name}]}` (triage), `kb.forget {source}` → `{chats,people}` (delete a source's data),
+  posts handed over by plugin programs: `kb.posts_put {connector,sources,posts}` → `{statuses}`, `kb.posts_comments {connector,id,count,comments}` → `{}`, `kb.posts_pending {connector,limit}` → `{posts}`, `kb.archived_chats {connector,sources,source}` → `{chats}`.
+  Inbox: `inbox.collected {epoch,seq,round,sources,mail?,names}` → `{}` (the hub hands over a round of sources it has read; the assistant answers after building the entries. Within one `epoch`, a `seq` not greater than one already used is dropped. When the stored Inbox can't be read it returns `inbox_unavailable`, and the hub keeps it to hand over next round),
+  `inbox.item {id}` → `{item,ok}`, `inbox.forget {source}` → `{deleted}`, `inbox.repo_mutes {source,set?,add?,repos?}` → `{repos}` (2026-11-04 removed `assistant.tasks`, `assistant.card_sent`, `assistant.cards_sent`: all in the assistant now).
+- hub → assistant, one-way events (`conversation.started`, `conversation.renamed` removed 2026-11-04: the assistant opens and renames chats itself): `session.user_spoke`, `session.user_stopped` (the user stopped one of the assistant's chats in the App, #3308), `session.turn_started`, `session.turn_ended`, `sessions.changed {machine_id, sessions, connected}` (the session list the node reported, with `spawn_from`: a to-do's auto-attach by project, spawn following, and herdr markers all come from it; `connected` is when this node connection started, and a change means the node reconnected, so the assistant resends all herdr markers), `interaction.resolved` (also used to record to-do decisions), `interaction.raised` (an Agent of a quiet task is asking, #1731), `todos.space_renamed {machine_id,old,new}` (a workspace was renamed via the hub),
+  `manager.updated` (handshake above), `manager.resync {}` (the hub has no snapshot from it yet or only an incomplete one, and wants a full one: at most once per 5 seconds),
+  `kb.kick {}` (a knowledge base source has something new), `kb.agent_turn {machine_id,session_id,cwd,title?,line}` (an Agent finished a turn; goes into the timeline of the project its directory belongs to). The assistant handles them one by one in arrival order; `session.turn_ended` runs separately (it asks the model and waits for task Agents to stop).
+- **Agents** (moved from the hub into the manager 2026-11-04, `docs/assistant/agent-work.md` ("Who manages what"), types in `assistantwire/agents.go`):
+  the handshake answer gained `agents` (triage limits, initial switch values; hub.json's `agents` section until 2026-11-06, since then the manager reads it from its own `manager.json` and the hub no longer sends it); the snapshot gains `work {on, sessions:[{machine_id, session_id, work}]}` (each Agent's work state for its latest turn;
+  `work.turn_at` is when that turn ended; on `null` the hub keeps the previous one), and `interactions` gains triage cards (`tool_name: persona_triage`, asked in that Agent's session; answers still go through `manager.action`).
+  The `device.call sessions.list` answer gains `muted` (session ids with pushes turned off); the projects triage looks at come from the assistant's own knowledge base (`docs/assistant/knowledge.md`); `app.call models.tab_name` was removed (the manager names tabs itself).
+  hub → assistant calls: `agents.start_params {machine_id, params, name_from?}` → `{params}` (before `POST /api/v1/sessions`: fills launcher, model and fingerprint from **Model configuration › Agents** and this time's choice, and names the tab when `name_from` isn't empty;
+  on `bad_request` the hub returns 400 to the App; when it isn't connected the hub starts with what the App gave), `agents.resume_params {machine_id, session_id, params}` → `{params}` (before resuming a session whose launcher is unknown; the hub sends no params and stamps the answer onto the message),
+  `agents.tab_name {prompt}` → `{name}` (Agents started in the background, or opened from a Lark card); one-way event `session.seen {machine_id, session_id, at}` (the user viewed a session in the App).
+  The `session.turn_started`, `session.turn_ended` triage uses were already sent. When the user answers one of its questions or cards and it doesn't accept (not connected, or returned an error other than `gone`), the hub records the answer
+  and sends `manager.action` again after its next snapshot (immediately if it wasn't connected, after 10 seconds if it returned an error), until it accepts, returns `gone` (this card / question no longer exists: answered, withdrawn, expired; no need to give it again), or the card would have expired anyway.
+  Before `agents.start_params` / `agents.resume_params` the hub waits for it to connect (up to 60 seconds after the hub starts, 10 seconds after it disconnects); if it doesn't, the hub applies **Model configuration › Agents** itself.
+  If the version it reports at handshake differs from the hub's (dev builds excepted), the hub logs a line: the two sides may disagree about who owns triage.
+- **Models** (moved from the hub into the manager 2026-11-05, `docs/assistant/model-config.md` ("Who manages models"), types in `assistantwire/models.go`):
+  `/api/v1/model-config…`, `/api/v1/launchers…` (including quota `…/quota`) and `/api/v1/machines/{mid}/launchers…` are its routes, forwarded by the hub;
+  the handshake answer gains `models` (each computer's `machines[].launchers` from hub.json; until 2026-11-06 also hub.json's `ai`, `kb_ai`, `triage_ai`, `judge_ai`, `inbox_agent_machine`, which the manager now reads from its `manager.json`);
+  removed: `app.call`'s `models.complete`, `models.json`, `models.apply`, `models.resolve`, `models.record`, `models.save`, `models.apply_picked`, `models.launchers`, `models.launcher_check`, `inbox.translate_fingerprint`,
+  and error codes `model_paused`, `model_unconfigured` (it calls the models itself); added: `app.call plugins.presets`, `plugins.voice`, `plugins.quota {name, machine, base_url, tz}` → `{report}`, `plugins.need_triage` (plugin matters, to be removed once the plugin system moves into the manager),
+  `device.call launchers.managed` (launchers added in Persona are handed to the node; new node connections also get them from the manager); hub → manager calls `models.usable {purpose}` → `{usable}`, `models.launchers {}` → `{launchers: [{name, base_url}]}` (launchers with a gateway address, without keys),
+  `models.launcher_http {name, machine?, http?}` (error codes `no_launcher`, `no_gateway`, `machine_offline`).
+- When the assistant isn't connected: forwarded endpoints return `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}` (the error text is localized; this is the zh-Hans value, "The assistant can't be reached right now, try again later"); the assistant's tools fail the same way (`is_error`, same sentence), and `assistant.context` fails too (that node message carries no live snapshot).
+  Events for it aren't sent (once connected it reports a full snapshot and asks for what it needs); only `kb.agent_turn` is queued by the hub (the latest one per Agent) and sent once it connects. The hub keeps its last snapshot, so the session list still shows titles and archives.
+  Knowledge base `kb.*` calls likewise return `assistant_offline`: the endpoint for deleting a source's data returns 503 (Inbox entries are still deleted), and the Inbox AI twin's context and triage project names are left out;
+  calls from plugins handing over posts first wait up to 30 seconds for the assistant. When the assistant is connected but the knowledge base isn't open yet (time zone unreadable, data directory held by another process), it returns `kb_unavailable`, which the hub also treats as 503.
+  The hub keeps reading Inbox sources and accumulates what it reads (merged, with a cap) to hand over together once the assistant connects. An Inbox reply that breaks in transit (connection dropped, timeout) returns `502 {"code":"assistant_in_doubt","delivered":"unknown","retryable":false}`: it may already have been sent, and sending the same one again won't send it twice (`send_id` above).
+  When the assistant is connected but the Inbox can't read what's stored (the database didn't answer), Inbox endpoints return `503 inbox_unavailable`, and until it's read the Inbox accepts and writes nothing.
+
+**Forwarding App requests**: requests the App makes to assistant endpoints are (after authentication) handed to the assistant by the hub as `http.request`, and its answer is written back as is. The assistant endpoints are `assistantwire.Routes` (a test on the assistant side guarantees it serves exactly these):
+`POST /api/v1/assistant/conversations/{id}/archive`, `…/unarchive`, `…/route`, `…/today`, `…/compact`, `…/stop`, `GET …/{id}/feed`, `GET /api/v1/assistant/reporters`, `/api/v1/assistant/tasks…`, `/api/v1/assistant/runs`, `/api/v1/assistant/routines…`,
+`/api/v1/assistant/followups…`, `/api/v1/task-plans/{id}…`, `/api/v1/task-trust`, `/api/v1/todos…` (all to-do endpoints, including `done-check`, `retry`, decisions), `GET/PUT /api/v1/agents/triage`, `GET /api/v1/agents/work/stats`, `POST /api/v1/tabs/autoname` (2026-11-04, Agents), and (since 2026-11-04) `GET/PUT /api/v1/assistant`, `POST /api/v1/assistant/warm`, `GET /api/v1/assistant/readiness`, `POST /api/v1/assistant/readiness/dismiss`,
+`GET /api/v1/assistant/memory`, `PUT/DELETE /api/v1/assistant/memory/{name}`, `POST /api/v1/assistant/conversations`, `POST /api/v1/assistant/main/new`, plus all knowledge base endpoints (since 2026-11-04, "Knowledge base API" below),
+plus all Inbox and translation endpoints (2026-11-04, `assistantwire.InboxRoutes`): `GET /api/v1/inbox`, `GET /api/v1/inbox/{id}`, `POST /api/v1/inbox/{id}/done`, `…/draft`, `…/reply` (the hub still records the receipt up front; when the assistant isn't connected it returns 503 directly without recording; a break in transit returns `assistant_in_doubt`, also unrecorded, so resending reaches the assistant), `…/doc/status`, `POST /api/v1/inbox/refresh`, `POST /api/v1/inbox/done`, `POST /api/v1/inbox/bulk`, `GET/POST /api/v1/inbox/mutes`, `DELETE /api/v1/inbox/mutes/{id}`, `GET/POST /api/v1/inbox/policies`, `PATCH/DELETE /api/v1/inbox/policies/{id}`, `POST /api/v1/translate`, `POST /api/v1/translate/mail`. `/api/v1/skills` is still the hub's own.
+
+```jsonc
+// hub → assistant
+{"id":"h3","method":"http.request","params":{"method":"POST","path":"/api/v1/assistant/conversations/c1/archive","query":"",
+  "header":{"Content-Type":["application/json"],"X-Persona-Role":["full"]},"body":"<base64>"}}
+// assistant → hub
+{"id":"h3","result":{"status":200,"header":{"Content-Type":["application/json"]},"body":"<base64>"}}
+```
+
+- `path` keeps URL percent-encoding: the hub forwards with `EscapedPath()`, and after the assistant rebuilds the request the router decodes it once. `/`, `#`, `?` in a body card key must not be decoded into path separators, fragments or queries before forwarding.
+- `header` carries no `Authorization`, `Cookie` or hop-by-hop headers; `X-Persona-Role` is the device role from the hub's authentication (one the App sends itself is replaced). Request bodies are at most 32 MiB.
+- If the assistant isn't connected, or disconnects mid-request, it returns `503 assistant_offline`; an `rpc.Error` it returns becomes `502` (with its `code`); requests with no deadline give up after 5 minutes.
+
+**Messages to the App**: the assistant sends the one-way event `ws.broadcast {message}`, where `message` is a JSON object with a string `type` (`assistant_schedule`, `assistant_feed`, `task_plan`). The hub sends it to every App WebSocket as it read it (adding the `event_seq` every message has); ones without `type` are dropped, and so is any type that is not a manager's (the managers' own, or one its extensions declare: never the hub's `interaction`, `sessions`, `machines`, `error`…), a message with a key twice or a case variant of `type` / `machine_id` / `session_id` / `conversation`, and one where any object names another manager's `machine_id`, `session_id` or `conversation` (`docs/assistant/managers.md`, "What the hub keeps of each manager"). A message from another manager than the assistant the hub starts also gets top-level `manager` (its id, over one it carried; a message with a case variant of it at the top level, such as `Manager`, is dropped, while deeper down such a key is the sender's own field and stays), so an App can tell whose a live update is (one about a conversation still goes by its conversation; one about the page itself, such as `assistant_schedule`, is the shown manager's only: `docs/assistant/managers.md`, "Clients"); the assistant's messages carry none (one it put there is taken out): a message without `manager` is the assistant's (`assistant`), and with one manager nothing changes. The Apps' decoders ignore keys they don't know (iOS `Codable`, Android `JsonCodec` with `ignoreUnknownKeys`, the web's plain objects).
+
+### Computer events (fleet.*, 2026-11-05)
+
+What computers send belongs to the manager ([machines.md](../server/machines.md) ("Who handles computer events")); the messages are in `server/internal/assistantwire/fleet.go`. The manager side is `internal/assistant/fleet*.go`, the hub side `hub/fleet_link.go`.
+
+- Manager → hub (one-way):
+  - `fleet.sessions {machine_id, sessions, muted?}`: one machine's session list, in the shape the App gets (unified status, number of "Needs you" cards, seen, work state, to-do, channel…); sent only on change, and once per machine after each handshake. The hub stores it as the machine's `sessions`, pushes it to the App (`sessions` / `sessions_delta`), and answers `GET /api/v1/sessions` with it.
+  - `fleet.interaction {interaction}`: a new card, or one shown again; `fleet.interaction_resolved {id, answered_by?}`: it ended; `fleet.interactions {interactions}`: all pending ones, once after each handshake; the hub replaces the whole set (sending `interaction_resolved` to the App for ones that disappeared). A card naming a machine, or a session on one, that is not the reporting manager's is dropped (`docs/assistant/managers.md`, "What the hub keeps of each manager"). The hub still pushes `interaction` / `interaction_resolved` events and answers `GET /api/v1/interactions`.
+  - `fleet.live {state, stats}`: the Live Activity content (`FleetState`, without the device fields) and the Dynamic Island numbers, sent only on change (numbers checked every 15 seconds).
+- Manager → hub (calls): `notify.request {notification}`; besides the assistant's `assistant`, `kind` can be `done` (a turn ended: `took_ms`, `long_ms`; devices filter by "only long ones") and `input` (a card: `interaction`, a pending one the manager reported; the hub pushes its own copy). A push about another manager's computer, session or card is refused `no_device`; `app.call phone` (`phone.tools`, `phone.call`) (connector, Cua and ego tools, gate command wording, and `assistant.lark` are answered by extensions inside the manager process and don't cross the bus), and `interactions.owner_action` of `app.call interactions` (the hub withdraws the owner action before a channel answers a card).
+- hub → manager: call `fleet.ask {interaction}` → `Resolution` (cards the hub's own features need to ask; when the hub stops waiting it cancels and the card is withdrawn); one-way `fleet.clients {elicitation}` (whether any App accepts MCP forms), `fleet.seen {machine_id, session_id}` (the App WebSocket's `seen`), `fleet.mutes {mutes}` (the hub's mutes, of the manager's own machines only: once after each handshake, on the manager's first call or event, and after each change; never sent while the hub cannot read them, so a manager keeps the last ones; an older hub's `{}` is ignored).
+- App routes the hub forwards to the manager (`http.request`; manager absent: `503 assistant_offline`): `POST /api/v1/interactions/{id}/resolve`, `GET /api/v1/interactions/history` (MCP forms only with `X-Persona-Elicitation: 1`), `POST /api/v1/sessions/{mid}/{sid}/seen`, `GET /api/v1/metrics`, `GET /api/v1/machines/{id}/metrics`, `GET /api/v1/machines/{id}/usage`, `GET /api/v1/usage`. Shapes are the same as when the hub answered them.
+
+### Computers (devices.*)
+
+Since 2026-11-04 computers are connected by the manager that carries them (currently the chief manager `assistant`, [machines.md](../server/machines.md) ("Who connects to computers")); messages are in `server/internal/devicewire`. The hub side is `hub/devices_link.go`, `devices_relay.go`; the manager side is `internal/devices`.
+
+- The handshake answer gains `devices`, for every manager with only the machines it carries (the carrier `assistant`: hub.json's, but those moved to another manager; another manager: those moved to it, [managers.md](../assistant/managers.md) ("Moving a machine or a source")): `{machines:[hub.json entries, as is], hub_id, hub_name, hub_version, endpoints?, mesh_hubs?, tailcat_derp_map_url?, link_ping_ms?, link_ping_timeout_ms?, mesh?, pending?}`.
+  `link_ping_ms`, `link_ping_timeout_ms` are the heartbeat from hub.json's `link` section (not sent when unset; the manager then uses 10 seconds / 5 seconds); the manager pings connector streams accordingly and tells Persona Link (`endpoints`, `X-Persona-Ping`).
+  `pending` are machine ids awaiting the user's confirmation (sorted); the manager tells their Persona Link (`pending` in `endpoints`, [link.md](../operations/link.md) ("Pending confirmation")). `mesh` (only to the carrier) is `{member?, center_name?, settle_until?, hubs:{hub_id:{name, reachable, rtt_ms}}, members:[{hub_id, machines:[{id, cfg, kind, avail?, rtt_ms?}]}], path_switch_ms}`. When it changes (a computer added in the admin UI, the linked group, the hub's addresses and name), the hub sends `devices.config` with the same params (coalesced over 200 milliseconds).
+- Manager → hub:
+  - Event `devices.state {machines:[{machine, config, info, connected?, connected_at?, warm_until?, derived?, paths?}], absorbed?:{entry id: machine id}, entries?:[{id, cfg, kind, avail?, rtt_ms?}]}`:
+    all machines, in the App's list order. `machine` is what the App sees (with the monitoring `system`, minus `computer`, `browser` which the hub adds; its `online` also counts the warm start after a manager restart). `connected` means the node is really connected right now and calls reach it (this is what the hub's self-update waits on and what node updates are sent to); a change in `connected_at` means the node reconnected; before `warm_until` it is a warm start. `entries` are the manager's own entries, every one it was handed (absorbed ones too), each with its entry as the manager has it (`cfg`; older managers leave it out): the hub's mesh record lists them by how each one's own manager reaches it, and the hub keeps what each manager has from them ([managers.md](../assistant/managers.md) ("What the hub keeps of each manager")). Sent only on change (coalesced over 50 milliseconds; a change to `last_seen` alone doesn't count), and in full once after each handshake.
+  - Event `devices.event {machine_id, event, params}`: the node one-way events the App needs, as is and in order (`session.items`, `terminal.frame`, `stream.data`, `sessions.revs`, `hook.event`…); `state.put`, `sessions.changed`, `codex.interactions`, `interaction.dismiss` / `cancel`, `usage`, `metrics` are handled by the manager itself and not forwarded ("Computer events" above).
+  - Call `devices.request {machine_id, method, params, request}` → the hub's answer: things the node needs the hub to answer (`notify`); `request` is a key the manager gives.
+  - Event `devices.request_end {machine_id, request}`: the node connection this request came from dropped before the hub answered, and the hub stops waiting for it (same as the node's own connection dropping: resumable cards stay, waiting for the hook to claim them from the next connection).
+  - Call `devices.connected {machine_id, connected_at}` → `{configure?:{key: value}, calls?:[{method, params}]}`: the node just connected (or the manager's connection to the hub was just established, once more for each online machine).
+    The hub returns what to add to `node.configure` (`codex`) and what to send afterward (`launchers.managed`, `session.echoes`); the manager does this before asking for the session list. The hub at the same time starts the things it does on connect.
+  - Calls `devices.connector_cred {machine_id}` → `{machine_id, fp, token, version?}` (a kind service credential, stored sealed by the hub; empty `token` means not paired), `devices.connector_paired {machine_id, fp, token, version}` → `{}` (after pairing, handed to the hub to store).
+- hub → manager:
+  - Call `devices.call {machine_id, method, params, timeout_ms?}` → the node's result: calls to the node from the App and hub features; the manager also remembers `session.watch` / `session.unwatch` and re-watches when the node changes connection.
+    `timeout_ms` is the time the hub is still willing to wait, minus a bit (a tenth, at most 500 milliseconds), so the manager's timeout answer arrives first; calls where the hub gives no deadline (plugin `nodes.call` and the like) don't get one either, and wait the same as when the hub connected to nodes itself.
+    Error codes: `no_device`, `machine_offline` (not sent), `node_closed` (after sending, the node's connection dropped, or the call was interrupted), `deadline` (after sending, time ran out); the node's own coded errors are passed as is.
+    The hub maps them back to the original errors: offline is still 503 `node_unreachable`; `node_closed`, `deadline` and the bus breaking mid-call all count as "may have been done", so the result of sending a message is `unknown` (the same one won't be sent again), not treated as unsent.
+    For other calls, a bus break mid-call shows the App 503 `assistant_offline` (the manager is gone).
+  - Event `devices.notify {machine_id, event, params}`: one-way events for the node (terminal input, bytes of forwarded ports). The manager queues per machine and writes each in order, so a computer that's slow to receive only delays itself; if one write is stuck for 30 seconds, or more than 32 MiB is queued, it reconnects that machine.
+  - Event `devices.link_rtt {id, rtt_ms}`: the round trip the hub measured from heartbeats on a Persona Link link (`id` is from `devices.accept`); the manager uses it when comparing paths.
+  - Call `devices.accept {id, kind, machine_id, token_id?, stream_id?, source?}` → `{}`: the hub holds a connection for the manager (`kind`: `link` a Persona Link link, `link_stream` a stream it opened, `node` a node stream the center requested through this member); the manager dials `GET /api/v1/bus/relay?id=<id>` to take it over, and the hub waits 10 seconds.
+  - Calls `devices.reconnect {machine_id}`, `devices.update_nodes {}` (after the hub self-updates, redeploy nodes not on this version), `devices.pair_connector {link, machine_id, address?, proxy?}` → `{address, version}` (pairing a kind service from the admin UI).
+  - Call `devices.usage_gateway_accounts {}` → `{sources, accounts}`: the account list of account-pool gateways among the quota sources, as last read by the manager (it doesn't query the gateway; no keys or addresses; #4576, `docs/server/usage-windows.md` ("Gateway account list")).
+    The extensions' `usage.gateway_accounts` (permission `usage_gateways`, `docs/extensions/extensions.md` ("Quota")) is asked of it in-process by the extension manager inside the manager; the hub doesn't call it.
+  - Routes the manager answers itself (`devicewire.Routes`) are forwarded via `http.request`: `POST /api/v1/machines/{mid}/reconnect`, `PUT …/engine`, `GET/PUT …/herdr`, `POST …/herdr/start`, `GET/PUT …/botmux`, `POST …/deploy`, `GET …/claude-dirs`, `PUT …/claude-dirs/blocked`.
+- **Relay channel** `GET /api/v1/bus/relay` (WebSocket, the manager's bus token, same authentication as `/api/v1/bus`; only the manager that carries computers can open it): `?id=` takes over a connection the hub holds; `?hub=<hub_id>&machine=<id>` asks for a node stream to that hub's computer through that hub (if the hub can't open it, it returns 502 before upgrading, with `error` as the reason).
+  The hub forwards message by message (text and binary as is), and passes one side's close code and reason to the other; the Persona Link side's heartbeat is the hub's, and without a pong it closes the manager's side with 1001 "no pong within …".
+  For `kind: node` (a member opening a node stream on behalf of the center), the manager first opens the node; once open it sends a text `open`, or if it can't, closes with the reason. Only then does the member answer the center: `101`, or 502 with the reason (waiting at most 1 minute).
+- On every handshake (the hub restarted, or the bus dropped), the manager closes on the node side what the hub had open on the node through the previous connection: forwarded streams (`port.dial`, `plugin.node.dial`) get `stream.close`, watched terminals get `terminal.unwatch`.
+  At the handshake the hub also ends streams and terminals opened through the previous connection (terminals end with `助手暂时连不上，稍后再试`, "The assistant can't be reached right now, try again later", and the App reopens them); ones still waiting for their first watch are left alone.
+- When the manager isn't connected: machines show offline (`error` `助手暂时连不上，稍后再试`), endpoints that go through it return `503 assistant_offline`, terminal streams end with the same sentence, forwarded ports close, and `/api/v1/link` returns 503.
+  In the 30 seconds after the hub starts and before the manager's first report, calls wait for it instead of failing immediately (machines are shown as the manager handed them over); `/api/v1/link` and members' `/api/v1/peer/node` wait at most 5 seconds.
+- When a single node message exceeds 60 MiB the manager doesn't forward it (a bus line is at most 64 MiB): events are dropped, calls return `too_large`.
+
+### Extensions, connectors and bots (extensions.*, 2026-11-05)
+
+All belong to the manager (`docs/extensions/extensions.md` ("Who manages what")); messages are in `server/internal/extwire`:
+
+| Direction | Method / event | What it does |
+| --- | --- | --- |
+| hub → manager, call | `extensions.accept {id}` → `{}` | the hub takes an App request on the manager's behalf (`extwire.Routes`, extension API prefixes, extension pages in the admin UI): the manager dials `/api/v1/bus/relay` with this id and answers this one HTTP request on that stream (SSE and WebSocket stay streams); who is asking is in the `X-Persona-*` headers |
+| | `extensions.authorize {hash, pattern, method, path}` → `{ok, extension, name, scopes, scope?}` | an extension token hitting a hub route: whose it is and whether this route is open to it (empty `extension`: no such token) |
+| | `extensions.hub_call {method, params}` → result | the hub's own features asking extensions: `github_login`, `settings.list`, `settings.tool` (node MCP tools, gate command wording and `assistant.lark` are asked directly inside the manager process and don't cross the bus); when the caller stops waiting it sends `rpc.cancel` (the card is withdrawn with it) |
+| hub → manager, event | `extensions.emit {event, params}` | things extensions subscribe to: `agent.finished`, `agent.needs_you` |
+| manager → hub, event | `extensions.report {features, apis, machines, screen_keep_awake, looks, bot_identities?}` | the full set: extension features, API prefixes and receipts, each machine's `computer` / `browser`, and the avatars of enabled extensions with their files (`looks`; the hub serves them together with its own avatar packs); the hub keeps it (stored in `hub.extensions_report`). `bot_identities: [{kind, id}]` lists enabled Feishu app IDs and bound, enabled WeChat account IDs (`kind`: `feishu` / `wechat`), without secrets or tokens; used for the shared-bot warning in the managers roster |
+| | `extensions.looks_gone {ids}` | an extension carrying avatars was uninstalled: the manager first sends a report without these avatars, then this; if the selected avatar is in `ids` and no other source provides it, the hub switches the selection back to the default avatar (see [extensions.md](../extensions/extensions.md) ("Avatars")) |
+| manager → hub, `app.call` (app `hub`) | `push.localized`, `push.background`, `push.mail_targets` | pushes (cards live in the assistant's interaction queue, in-process). Model configuration's `plugins.*` and `models.*` are inside the manager process and don't go through the hub |
+
+### Methods channels use (2026-11-04)
+
+The "talk to Persona" half of the Lark bot and plugin channels belongs to the assistant (`docs/extensions/channels.md` ("Who manages what")): the hub only sends and receives, hands the owner's messages and button presses to the assistant, and does whatever sending or editing the assistant asks for.
+Types are in the channel section of `assistantwire`; the hub side is `hub/assistant_channels.go`, the assistant side `assistant/channels*.go`, `feishu*.go`.
+
+- hub → assistant, calls: `channels.receive {channel, message, action}` → `{}` (one message from the owner on a plugin channel; `message` is a `channel.Message`), `feishu.message {event, action?, from?}` → `{}` (one message from the owner in the Lark DM or in a topic of a group on the list; the `event` of `im.message.receive_v1` as is; `from: "elsewhere"` marks the owner's `@bot /ai …` from a group that is not on the list, #6146):
+  the assistant dedups by message id and answers as soon as it has accepted, processing in the background (for Lark it first reads `feishu.status`; if that can't be read it returns `try_again` and doesn't accept); `feishu.card_action {event, action}` → the answer to the card callback (`{toast?, card?}`; Lark waits 3 seconds, the hub gives 2.5); `feishu.view {}` → `{target?, agents?}` (the assistant's two fields in `GET /api/v1/bots/feishu`).
+  `action` is a one-time **owner action** issued by the hub (`oa_…`, valid for 10 minutes and only in the issuing channel; a card press can answer only that card; a message can answer only the card kinds that channel accepts as text: questions in Lark, questions / plans / permissions / terminal choices in plugin channels). The assistant must include it when answering a card (`interactions.resolve`).
+  For owner messages, the hub first waits up to 60 seconds for the assistant to connect (at most 500 messages at a time), and hands them over again on a broken call, timeout or `try_again` (the assistant accepts each id only once). If it waits in vain, the hub replies to the owner itself: in Lark "Couldn't send: the assistant can't be reached right now, try again later", as a card toast "The assistant can't be reached right now, try again later", and on plugin channels via `channel.send` (`kind: note`) "Not sent: the assistant can't be reached right now, try again later" (only once per message).
+- hub → assistant, one-way events: `interaction.announced {interaction}` (a new card, except those of quiet tasks), `interaction.ended {interaction, resolution?}` (the card ended: answered ones carry the answer, withdrawn or expired ones don't; the same card arrives once with the answer and once without),
+  `session.items {machine_id, session_id, items}`, `session.delta {machine_id, session_id, text}` (new entries and in-progress text of chats the assistant follows), `feishu.owner {paired}` (bot paired / unpaired),
+  `channels.noted {channel, machine_id, session_id}` (a channel message entered a chat via the App's endpoint: voice's `voice-…`).
+- Assistant → hub, `device.call` (answered by the hub itself): `session.follow {session_id}` / `session.unfollow {session_id}` → `{}` (follow a chat: the hub watches it the way an App opening it would, and forwards new entries and text; when the assistant disconnects the hub drops them all, and the assistant follows again after reconnecting),
+  `session.send_once {session_id, text, client_msg_id, images?, …}` → `{}` (the node's `session.send` with the same send-once protection as the App: what was sent isn't sent again, and one that broke halfway last time is refused).
+- Assistant → hub, `app.call`:
+  - `feishu`: `feishu.status {}` → `{ready, enabled, features, owner?, paired_at?, public_url?, chats?, home_chat?}` (`owner` + `paired_at` identify which pairing: if they change or disappear, the assistant's chat state starts over); `feishu.post {reply_to?, card, fallback?, uuid?, chat_id?, in_thread?}` → `{message_id}` (a card replying to that message, otherwise sent into the owner's DM; a card Lark rejects is sent as rich text instead; `in_thread` makes a reply open or continue the parent's thread; `chat_id` names the chat to send into, and to fall back to when the parent was withdrawn: the hub refuses any chat but the owner's DM; `reply_to` is not checked against it),
+    `feishu.text {reply_to?, text, chat_id?, in_thread?}` → `{message_id}` (same `chat_id` / `in_thread` rules), `feishu.update_card {message_id, card}`, `feishu.react {message_id, emoji}` → `{reaction_id}`, `feishu.unreact {message_id, reaction_id}`,
+    `feishu.messages {message_id}` → `{items}` (quoted, merged-forwarded), `feishu.resource {message_id, key, kind}` → `{data, mime}` or `{mime, too_large: true}` (images over 3 MB),
+    `feishu.save {message_id, key, kind, name, machine_id}` → `{path}` (the file is saved to that computer's temp directory, up to 50 MB; content doesn't cross the bus), `feishu.user_name {open_id}` → `{name}`,
+    `feishu.configure {enabled?, features?: {id: on}}`, `feishu.test {}`. When the bot isn't on, isn't connected or isn't paired (`ready` is false), sending and editing methods return the error "the bot isn't on or isn't paired yet"; messages go only to the paired owner.
+  - `channels`: `channels.list {}` → `{channels: [channel.View]}` (each channel's transport state; without the target and plugin-channel features, which the assistant fills in), `channels.send {channel, ref, text, kind, reply_to?}` → `{message_id?}` (one segment; on failure retry with the same `ref`; with nowhere to send yet it returns error code `cannot_send`),
+    `channels.typing {channel, on}`, `channels.enable {channel, on}` (the switch for a plugin and its connector, or the Lark bot; returns `needs_triage_model` when the Inbox triage model isn't configured), `channels.unbind {channel}`. Binding isn't here: `POST /api/v1/channels/{id}/bind` is the hub's own route (credentials don't pass through the assistant).
+  - `interactions`: `interactions.resolve {interaction_id, resolution, action, channel}` → `{ok, status?}` (answers this card with the user's reply in `channel`; `action` is that reply's owner action. Missing, used, wrong-card or wrong-channel actions, and message replies to card kinds the channel does not accept, are rejected. Recorded as answered by the user; if it is no longer waiting, `ok` is false).
+- The snapshot gains `channels: {marks:[{machine_id, session_id, channels}], turns:[{machine_id, session_id, answered?}]}`: the hub fills sessions' `channels` from `marks` (pushing that machine's session list on change),
+  and from `turns` (empty `answered` means it's following now, otherwise it's the time answering finished, within the hour) it doesn't push "done" for that chat's turn; on `null` (unreadable; the snapshot counts as incomplete) it keeps the previous one.
+- The assistant's routes gain `/api/v1/channels*`, except binding `POST …/bind` (`docs/extensions/channels.md` ("Endpoints")).
+- The assistant's event queue: `session.delta` keeps only one entry per chat (new text replaces old); when the queue is full only `session.delta` and `session.items` are dropped; others wait for room and are never dropped.
+
+### The service side (`server/internal/bus`)
+
+`Dial`, `Conn` (the adapter between WebSocket and rpc lines), `Keepalive`, and `Client`: dial, handshake (`HelloMethod`, `HelloParams`, `OnHello`), answer the hub's calls and events, and reconnect when dropped:
+starting at 1 second and doubling up to 1 minute; if a connection lasted over 1 minute before dropping, counting restarts at 1 second. When the token is rejected (401, close code 4002 / 4003, handshake returns `wrong_identity`), it waits the full 1 minute every time.
+While not connected (or the handshake isn't done), `Call` and `Notify` return `ErrOffline`.
+The assistant uses `assistant.BusHub` (`server/internal/assistant/bus.go`), a wrapper around it: it keeps the handshake answer, maps the hub's error codes back, handles the hub's events in order, and reports a full snapshot on every connect.
+
+## hook / mcp ↔ node (unix socket `~/.persona/node.sock`)
+
+The client side (socket path, dialing, request / reply types, resuming) is `server/internal/nodeclient`. `personad hook`, `personad mcp` (`internal/mcpserver`), `personad ask` / `personad notify` (`internal/scriptcli`) and `personad tool` (`internal/toolcli`) use only it and the contract packages, never `internal/node`; a guard test (`nodeclient_test.go`) keeps the node, the manager and the hub out of their dependencies, so the device's own program can carry these commands. The node writes the commands into the settings it manages as `<its own binary> hook` (`hook --persona-global` in the user's own settings) and `<its own binary> mcp`, so whichever binary runs the node serves them.
+
+One question and one answer per connection, one line of JSON each:
+
+- `{"kind":"hook","input":<the stdin JSON Claude Code passes to the hook>,"pane":"…","attempt":"<the hook process's own id>","resume":<whether this is a reconnect>}`
+  → `{"output":<JSON to print to stdout, or null>}`, or `{"retry":true}` (the node is exiting; ask the next node)
+- `{"kind":"mcp.tools"}` → `{"tools":[…]}`
+- `{"kind":"mcp.call","name":"…","args":{},"session_id":"…"}` → `{"content":[…],"is_error":false}`
+- `{"kind":"ask","input":{"question","options?","timeout_seconds?","cwd?"},"pane":"…","attempt":"…","resume":…}`
+  → `{"status":"answered|denied|dismissed|timeout|unavailable|invalid","answer?","error?"}`, or `{"retry":true}` (`personad ask`; with options it gives a `question` card, without options a `permission` card, `../integrations/script-cli.md`)
+- `{"kind":"notify","input":{"title","body?","silent?","error?"},"pane":"…"}` → `{"sent":true|false,"reason?","error?"}` (`personad notify`)
+- `{"kind":"preflight"}` → the `path-access` check of `personad node doctor` as `{name, status, state, detail, hint, items}` (#5944): the node reads what a claude start reads with its own permissions. An older node answers `{"error":"unknown kind"}` and standby answers `{"away":true}`; the doctor then checks in its own process and says which of these it was. The doctor waits 23 s for the answer, longer than the node's longest run.
+
+When the node can't be reached (hub not online), the hook exits 0 immediately with no output, so the TUI handles it normally; mcp returns an error text.
+
+### Interactions survive restarts
+
+Deploys are frequent (hub restarts, node binary swaps). Questions / plans / permissions being answered on the phone used to disappear and fall back to the computer's TUI. Now:
+
+- **hook**: if the node goes away after the hook has connected but before it gets an answer (connection dropped or `retry` returned), it reconnects to `node.sock` every second and resends with the same `attempt`,
+  for up to 2 minutes (`nodeclient.ResumeWait`). If it can't reach the node at the very start, it still hands over to the TUI immediately.
+- **node**: the interaction id is deterministic: a hash of `session_id + event + tool name + tool_use_id` (without a tool_use_id, the hook's attempt is used),
+  so a reconnecting hook gets the same id. Interactions with an attempt are marked `resumable: true`, and the reconnecting one doesn't send `hook.event` again.
+- **hub**: `resumable` interactions aren't withdrawn when the node connection drops; they're kept for 3 minutes (`resumeGrace`) for the hook to reclaim. An `interaction.create` with the same id
+  reattaches to the original card (no repeat push; the App dedups by id), and if it was answered on the phone in the meantime, the returning hook gets the answer straight from the database. At startup, pending `resumable` interactions in the database
+  are reloaded (also waiting 3 minutes), and the rest are marked cancelled. Old nodes don't send `resumable`; behavior is unchanged.
+- Measured locally (fake hub + sandboxed node + real `personad hook`): killing the node during a question and starting a new node 2 seconds later, the hook got the phone's answer after 3.1 seconds, and the hub saw only one id.
+
+### When the manager is away (resident nodes)
+
+A resident node (`personad node --attach`: Persona Link, the Mac's launchd node, a service node) outlives its manager connection. While no connection is served (before the first one, and between one ending and the next), it answers `node.sock` itself, in **standby** (`server/internal/node/spool.go`). Standby only listens where nothing else answers: a `node --stdio` that serves by itself (it reached no resident node in time) keeps the socket, and standby takes it once that one is gone (it looks every 5 seconds).
+
+- `hook`: the event is kept in the spool. Two kinds are not kept: a resumed hook (the node it first reached already reported it), and the events a report-only hook does not report anyway.
+  - A hook that would wait on the phone (`PermissionRequest`, `Elicitation`, `PreToolUse` of `AskUserQuestion`) gets `{"retry":true}` while the **hold** lasts: 10 minutes after the manager was last connected for at least a minute, or after the resident node started. It then asks again with the same `attempt` and gets its card if the manager is back within `nodeclient.ResumeWait` (2 minutes); after that it goes to the terminal. So each such hook waits at most 2 minutes, and the hold only decides whether it waits at all. Connections shorter than a minute (a manager that keeps failing) don't renew the hold.
+  - Past the hold, and for every other hook, the answer is `{"output":null}`: the terminal decides, as without a manager. A `PreToolUse` of `Bash` is never held.
+- `ask`: `{"retry":true}` during the hold (the same 2 minutes per call), else `{"status":"unavailable"}`.
+- `notify`: kept → `{"sent":false,"queued":true}`. `personad notify` exits 0; with `--strict` it exits 1 because nothing was sent yet, though the notification still goes out later.
+- `ping` / `hook.decided`: `{"ok":true,"standby":true}`.
+- Anything else (`mcp.*`, `cli.call`, `launcher.env`…) gets `{"away":true}`, which `nodeclient` turns into `ErrNoNode`: callers do what they always did with no node (`personad mcp` redials a call for 15 seconds, as through a hub restart). The request says it understands that with `away_ok: true`; an `mcp.tools` / `mcp.call` without it (an older `personad mcp` that is still running) gets what a node answers when it cannot reach its manager instead: `{"tools":[],"error":…}`, or an error tool result saying the call was not run.
+- **The spool** is `~/.persona/node-spool.jsonl` (0600): one entry per line `{id, at, kind: "hook"|"notify", request, tries?}`, oldest first, at most 500 entries or 1 MiB (the oldest go first, and the node logs how many it dropped). It is the resident node's own: only its standby writes it and only its connections replay it, one at a time. A node serving by itself neither keeps nor replays. The spool survives a restart of the resident node.
+- **Replay.** Each connection of the resident node replays the spool before it handles new `hook` / `ask` / `notify` requests (they wait, at most 20 seconds, and a report-only hook at most 2, its own limit being 3), in order. It first waits for the session state from the manager, so report-only events of Persona's own sessions are told apart as they are live and a notification keeps its pane's session. When the first try of `state.load` fails (an error, or no answer in 20 seconds), the replay is **held**: new requests stop waiting at once, the spool stays untried, and the node tries `state.load` again on the same connection after 30 seconds, 1, 2 and 4 minutes, then every 4 minutes, merging what it brings under what the connection already has (live hooks get the state from then on too); the replay runs once it comes. New requests never wait past their own limits: when the replay is slower than that, they go first.
+  - A replay that runs after new hooks went ahead of it (a held replay, or a hook that waited out its limit) leaves alone what they moved on: kept hook events of a session that had a new hook since are dropped (the manager already heard newer news of it), and a pane a new hook bound is not bound back to the session it had before. A resumed hook (one asking again, such as a permission standby told to retry) does not count as new: it reports nothing itself, so its kept copy is still handed over.
+  - A hook entry gets the bookkeeping a live hook gets (turn counters with the original time, pane binding, transcript path) and a `hook.event` with `spool_id` and `spooled_at`. It never creates a card, and SessionStart's herdr restore and the assistant's view repair are not replayed.
+  - A notification goes through the usual `notify` request with `spool_id` (5 seconds at most each).
+  - An entry leaves the file once it was handed over: a hook event once written to the connection, a notification once the manager answered. When the connection ends mid-replay, the rest stays for the next one. A notification the manager refused, did not answer in 5 seconds, or could not take now stays too (the rest goes on, so hook events keep their order; once one times out or the manager says the hub is away, the other notifications are not tried in that pass). One that can never be sent (empty, not JSON) is dropped at once.
+  - **Retries on the same connection.** The kept notifications are tried again on the same connection after 30 seconds, 1, 2 and 4 minutes, then every 4 minutes while any is left; new requests do not wait for this. One is dropped after 5 failed tries (refused, or not answered in 5 seconds: about 7 minutes of refusals). "Not now" answers do not count, so they only wait: `spool_busy` (the manager still has an earlier try) and `hub_away` (the manager has no connection to the hub, or the link was down before the call went out; both codes in `server/internal/nodeproto`), and neither does a call that times out as its connection drops (the node looks for the close for a quarter of a second).
+  - Entries older than a day are dropped unsent. The day counts from when standby took the entry, not from a first refusal: what a notification or hook event says dates from then (a day-old "build finished" is no news), and a refused notification no longer waits for a reconnect to be tried again, so the age only bounds what waits for a manager or a hub that stays away.
+  - Repeats: an entry handed over twice (the node stopped between sending and removing it) is dropped by the manager by `spool_id` (`devices/spooldedupe.go`, in memory per machine). A notification's id is remembered once the hub took it, and also once it went out to the hub and the manager's link dropped before the answer: the hub may have pushed it and does not tell a repeat itself, so it is taken for sent (at most once rather than twice). A hook event written just as the connection drops can still be lost.
+
+## Runtime ↔ node (unix socket `~/.persona/runtime.sock`, or a daemon the node connects to)
+
+A **runtime** is an Agent runtime with no terminal that manages its own sessions (currently DSH, `docs/integrations/dsh.md`). It is not a "host": the host is where the terminal is opened (herdr / Herdr App / Orca,
+see "Engines"), and the node recognizes sessions from panes and transcripts; a runtime reports its own sessions and provides its own content, and coexists with the engine this machine picked. How to connect a new runtime,
+the SDK and the acceptance checklist are in `docs/integrations/runtimes.md`; this is the wire protocol (`server/internal/node/runtimes.go`).
+
+The runtime connects to the node's `~/.persona/runtime.sock` (0600, so it must be the same system user as the node) over one long-lived connection; the frame format is exactly the same as hub ↔ node (`internal/rpc`:
+one JSON per line, request / response / one-way events, both sides can send requests). The hub and App don't know runtimes exist: they see ordinary sessions, items and interaction cards.
+**Who owns the socket**: a resident node (`personad node --attach`) opens `runtime.sock` as soon as it starts, shared by every hub connection (`node/runtimehost.go`):
+the runtime doesn't have to wait for the hub, the connection doesn't drop while the hub reconnects, and the first session list on the next connection already includes its sessions. Without a resident node, when `--stdio` serves by itself, the socket
+exists only for the duration of that hub connection, as before.
+
+**Without a hub**: the runtime can still connect and hello still answers (`hub: false`), and lists are still accepted; content pushed for the phone is dropped (once the hub is back it re-watches from the phone's progress);
+`interaction.create` returns the error `code: node_gone`, and the runtime asks again with the same id once the hub is back. The node pushes `runtime.hub` once each time the hub arrives or leaves, so the runtime
+doesn't wait for a phone that can't answer (SDK: without a hub, always go to the local UI first). When the node process itself goes away (restart, binary swap), the runtime reconnects: while the socket file still exists it tries every
+second; if the file is gone it backs off up to 30 seconds.
+
+runtime → node:
+
+| Message | Description |
+| --- | --- |
+| request `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, launchers?, caps: {start, send, interrupt, rename, close, assistant?, modes?, resume?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | Must be sent first. `instance` identifies this process (the SDK uses one per runtime, unchanged across reconnects): when the same runtime id already has a live connection with a different `instance`, it returns the error `code: runtime_conflict` (another process is configured with the same id and can't connect; the SDK retries every 30 seconds and doesn't take over); when it's the same, this process reconnected and the old connection is closed. Old runtimes without `instance` behave as before (the latest connection wins). `hub` is whether the node is currently connected to a hub (old nodes don't send it; assume yes). `features` are capabilities the node supports beyond the first protocol version: `prefer_running` (when two runtimes list the same session, the one listing it as non-`offline` owns it, so a runtime can list sessions that exist only on disk as `offline`), `resume_argv` (recognizes `resume_argv` in session rows), `handover` (when sending a message returns `code: handover`, hand it to the runtime that takes over; see `session.send` below), `transcript` (recognizes `transcript` in session rows), `launchers` (recognizes hello's `launchers` and the event `runtime.launchers`), `start_params` (`session.start` carries the form's choices), `modes` (`session.modes`), `resume` (`session.start {resume}`); daemons get only `prefer_running`, `start_params`. The node drops any events sent before it. `runtime` is the id (`[A-Za-z0-9][A-Za-z0-9_.-]*`, e.g. `dsh`), and also the sessions' `space_kind`; `agent` is the Agent its sessions run, defaulting to `runtime` itself; `name` is what the App calls it (`DSH`); such sessions carry `agent_label: name`, so the App needs no release for a new runtime. `caps` declares which operations are supported; for undeclared ones the node returns `unsupported` directly. When `launcher` is non-empty and `caps.start` is set, the node's `launchers.list` gains an entry `{name: launcher, model: launcher_model, source: runtime}`, and new sessions created with it are handed to this runtime. When two runtimes report the same launcher name, only the first to connect provides it (the other logs a line); when it has the same name as a launcher in the login shell, the shell's wins and the runtime's isn't listed. `caps.assistant` (requires start and send): its launcher can run Persona's assistant, and carries `assistant: true` in `launchers.list`; how the node drives it is in `docs/integrations/runtimes.md` ("Assistant").
+`launchers` (requires `caps.start`): besides `launcher`, the new-session form also offers these entries. Each is `{name, model?, agent?, models?}`:
+  - A runtime that runs multiple Agents (Paseo) has one entry per provider.
+  - `agent` is the Agent this entry starts: with `claude` the form offers Claude Code's choices, and the App draws it as Claude.
+  - `models` are the models `launchers.models` returns and their thinking efforts.
+  - Naming rules are the same as for shell launchers; anything beyond 64 entries, or 200 models per entry, is dropped.
+
+`caps.modes`: accepts the phone switching permission mode / thinking effort (`session.modes`). `caps.resume`: can take over a Claude session it doesn't have (`session.start {resume}`). |
+| event `runtime.sessions {sessions: [Session]}` | All its sessions, pushed in full on change. Fields are a subset of `Session`: `session_id` (`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`, wider than Claude's uuid; DSH uses `session-<uuid>`), `title`, `cwd`, `status` (`working / blocked / done / idle / offline`; anything else counts as `unknown`), `agent`, `model`, `updated_at`, `last_text`, `rev` (when it changes the App fetches new content), `space_*`, `launcher`, `permission_mode` / `effort` (the modes it's using now; `session.info` reports these too), and still-running sub-Agents and background tasks `subagents` / `background` (`docs/integrations/runtimes.md` ("Sub-Agents and background tasks"): the node writes a sub-Agent's `session_id` as `<session>@<id>`; calls for this id go to the runtime owning the parent session, which also pushes content under this id; a background task's `output_file` is cleared). The node clears hub-computed fields like `machine_id`, `state`, fills in `agent` / `agent_label` / `space_kind`, and marks the source with the same fields as in "Codex sources and capabilities": `source_kind: "runtime"`, `source_instance_id` is the runtime id, `capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}` (those without `send` declared carry `read_only_reason`); the App and hub use them to toggle buttons and guard sending. It's merged into `sessions.list` and `sessions.changed` is pushed immediately. When two connections both report the same id, the one listing it as non-`offline` owns it; if equal, the newer wins (`prefer_running`). Two fields the node uses and the App never sees: `pane_id` (which pane of this machine's terminal engine the session runs in: for pi in a herdr pane, the node merges it with the engine's pane into one herdr session row; the terminal part of calls goes to the engine and the rest to the runtime, `docs/integrations/pi.md`), `resume_argv` (how a session listed as `offline` is resumed in the terminal engine: when the phone sends a message, the node opens a new tab in the engine, runs it via `personad tab-start`, waits until the runtime lists the session as running again, then sends the message; if the engine is absent it refuses; the `resume_argv` feature), `transcript` (this session's chat is a Claude transcript on this computer; the value is the Claude session id; the `transcript` feature).
+
+**Sessions with `transcript`** (runtimes that run Claude Code, such as Paseo):
+  - **What the node handles**: content comes from the transcript; `session.items` / `item` / `image`, watch, `session.info` and sub-Agents all belong to the node, the same as for Claude sessions in a terminal.
+    The row's `last_text`, `rev`, "what it's doing" and background tasks also come from the transcript.
+  - **What the runtime handles**: status, title, model, modes, sending, cards. It only pushes streaming text; items it pushes are dropped.
+  - **Listing**: the transcript's own "not running" row is no longer listed.
+  - **Only transcripts the node can find count**: when the first turn has just started and nothing is written yet, or it's in a config directory the node doesn't know, content belongs to the runtime for now.
+    Once the file appears, on the next list the node switches to the transcript: an active watch is re-subscribed, `history` changes with it, and the App refetches the whole page.
+  - **Limits**: daemons can't carry this field. When the connection drops, its sessions disappear from the list. **The list is only "what to show the App now", not ownership**: a runtime only lists its recent sessions (DSH lists the latest 80 out of thousands), and the node remembers which runtime listed each session (by runtime id, so still the same after reconnect); calls for an old session not on the list still go to it. For a session that has nothing on this machine (no Agent, no transcript), calls like `session.send` / `items` / `watch` first ask the connected runtimes with `session.items {session_id, limit: 1}`, and the one that can answer owns it (one that can't be found isn't asked again for a minute). When it belongs to a runtime that isn't connected, the error is `code: runtime_away` (`delivered: none`); it is never treated as a Claude session and resumed in a terminal |
+| event `runtime.launchers {launchers}` | replaces hello's `launchers`: providers were added or removed, or their models are only known now |
+| event `session.items {session_id, items, history, from_seq, to_seq}` | new content of a watched session, forwarded as is to the hub (same shape as node → hub `session.items`; continuity rules in "Continuity of items"). Sessions it didn't list aren't forwarded |
+| event `session.delta {session_id, text}` | the whole paragraph being generated; an empty string means this paragraph ended. Forwarded as is to the hub; the App draws it as streaming output |
+| request `interaction.create {interaction, timeout_seconds?}` → `Resolution` | three kinds: question (`question`), plan (`plan`), permission (`permission`), same shape as `Interaction` above. The node fills in `created_at` / `expires_at` (default 30 minutes, same as hooks; `timeout_seconds` can only shorten it), the session title, the directory, and `agent` / `agent_label` (the Agent the runtime runs and its name; not set for runtimes running Claude Code, so the App draws a Claude card), pushes it to the phone via the hub, and blocks until answered. When nobody answers (expired, the phone's "hand back to computer", no hub) it returns `{dismiss: true}`, and the runtime hands over to its own UI. Interactions with a `tool_use_id` are `resumable`: the `id` the runtime gives (or the one the node computes from runtime + session + kind + tool_use_id) stays the same; if the node goes away midway it returns the error `code: node_gone`, and once the runtime connects to the next node it asks again with the same id, and the hub reattaches the original card |
+| event `interaction.cancel {id}` | this interaction is gone on the runtime side (tool call cancelled): withdraw the card on the phone |
+| request `runtime.package {name}` → `{name, hash, version, files: [{path, data}]}` | auto-update (`docs/integrations/runtimes.md` ("Auto-update")): `package` in hello says what code the runtime runs (package name and hash); when the node carries a package with this name and a different hash, the reply includes `update`, and the runtime fetches the files with this request (`data` is base64), checks the hash itself and swaps them in. Packages live in personad (`internal/runtimepkg`, generated from `integrations/` at build time); daemons can't get them (no `update`, and this request returns `unsupported`); no such package returns `not_found` |
+| requests `mcp.tools {assistant?}` → `{tools: [{name, description, input_schema, shell?}]}`, `mcp.call {name, args, session_id, assistant?}` → `ToolResult` | the hub's tools (the phone's `phone_*`, `mail_*`), forwarded to the hub; without a hub `mcp.tools` is empty and `mcp.call` returns an error result. The runtime gives them to its own Agent (DSH: `docs/integrations/dsh.md` ("Phone tools")). `assistant: true` only matters for runtimes that declared `caps.assistant`: `mcp.tools` gains the assistant-only tools and the tools declared by extension command gates; `mcp.call` is handled as an assistant call only when the session belongs to this runtime and is an assistant chat (otherwise as an ordinary call). Gate-declared tools are run by the node itself; their `shell` is the word that runs them directly in a shell (command name, skill script path), which the runtime intercepts in the assistant chat's shell (`docs/integrations/runtimes.md` ("Assistant")) |
+
+node → runtime events: `runtime.hub {connected}`, sent to every runtime when the hub connects / disconnects.
+
+node → runtime requests (sent only on the connection that owns the session; all of the hub's `session.*` calls for these sessions go through here):
+
+| Request | Description |
+| --- | --- |
+| `session.items` | params and result as in hub → node `session.items` (`before_seq` / `turns` / `limit` / `after_seq` / `from_seq` + `through_seq`); images are always placeholders (`lazy`), with content fetched via `session.image`. `fold_work` is applied by the node on the result (`transcript.FoldWork`); the runtime doesn't deal with it |
+| `session.image {session_id, item_id}` → `{mime, data}`, `session.item {session_id, item_id}` → `Item` | raw image data, full text of a truncated item |
+| `session.watch {session_id, since_seq, transcript?}` / `session.unwatch` | start / stop pushing this session's new content; with `since_seq > 0`, first resend everything after it. The node remembers how far each watched session has been pushed, and re-watches from that seq when the runtime lists it after reconnecting. `transcript: true`: the node pushes content from the transcript, and the runtime only pushes streaming text |
+| `session.send {session_id, text, images, client_msg_id, assistant?, context?, mode?, memory_dir?}` | send a message (`assistant` and the following fields are only sent for assistant chats on runtimes that declared `caps.assistant`: `docs/integrations/runtimes.md` ("Assistant")). `client_msg_id` is given to the runtime for idempotency (the node itself also dedups on it for 10 minutes), and the node also uses it to recognize this message among items the runtime pushes ("Matching pending messages"); a runtime that knows which item is this message can put `client_msg_id` on the item directly, and the node forwards it as is. The runtime returning the error `code: handover` (`data.delivered: "none"`) means it doesn't take this session and has started the program that can run it (a read-only-disk companion process): the node waits for another connection to list the session as non-`offline`, or asks the other runtimes every 2 seconds whether they have it (`session.items {limit: 1}`), and whichever comes first gets the message; if none within 45 seconds, it returns `not_running` and nothing is sent |
+| `session.interrupt {session_id}`, `session.rename {session_id, title}`, `session.close {session_id}` | each allowed per `caps`; missing ones return the error `code: unsupported` (text starts with `unsupported`, same as a host lacking a capability). A rename with only `tab_name` succeeds directly (these sessions have no tabs) |
+| `session.start {cwd, prompt?, assistant?, launcher?, model?, permission_mode?, effort?, workspace_id?, resume?, shell_launcher?, open_elsewhere?}` → `{session}` | when its launcher was chosen, or when it is this machine's engine; the returned session enters the list immediately. `assistant: true`: the assistant opens a new chat with its launcher (`cwd` is the assistant directory, no `prompt`; the first message follows via `session.send`). Other fields are only included when set; see below |
+| `session.modes {session_id, permission_mode?, effort?}` | the phone switches permission mode / thinking effort (for runtimes that declared `caps.modes`; values are validated by the node first) |
+
+Fields `session.start` carries, each only when set:
+  - **The form's choices**: `launcher`, `model`, `permission_mode`, `effort`. `workspace_id` is which of its spaces to create in (its sessions' `space_id`).
+  - **`shell_launcher: true`**: `launcher` is a login-shell launcher; the runtime picks its own one with the same name, or its default if there's none.
+  - **`resume`**: the id of the Claude session to take over (`caps.resume`, this machine's engine continuing a session that isn't running). The returned session id must be the same.
+  - **`open_elsewhere: true`**: a live claude has this session open. If it isn't the runtime's own, it must refuse with the error code `open_elsewhere`, so two processes don't write at once;
+    the node replaces the refusal with a hint saying where it's open.
+
+Terminal calls (`session.keys`, `session.screen.before`, `terminal.watch`) return `unsupported` for runtime sessions, and `session.screen` returns a blank screen;
+these sessions have no `pane_id`, and the App doesn't show a terminal for them anyway.
+
+**daemon** (`docs/integrations/daemons.md`, `server/internal/node/daemons.go`): a runtime that is itself a resident service and can't reach the local socket; the node connects to it.
+
+- **How it connects**:
+  - The node connects to the daemon's WebSocket endpoint per `daemons.json` next to `runtime.sock`; the request carries `Authorization: Bearer <token>` and the subprotocol `persona-runtime.v1`, and the daemon must answer with this subprotocol.
+  - Once connected, one text message is one line as above; the protocol is exactly the same as on the local socket.
+- **What the node rewrites in between**:
+  - `runtime`, `name`, `launcher` in hello are replaced with the configured values, and `agent` too (if configured); `instance` is set by the node to `daemon:<id>` (when it reconnects the old connection is closed); `caps` keeps only start / send / interrupt / rename / close, no `assistant`.
+  - Session ids get the prefix `<id>.`, `space_id` gets `<id>:`, and interaction ids are replaced with stable hashes; the prefixes are removed when replying to the daemon.
+  - `pane_id`, `resume_argv`, `agent_label` in session rows are dropped, and `features` doesn't tell it about `resume_argv` and `handover`; when it returns `code: handover` for `session.send`, the node turns it into `not_running` and doesn't hand it to another runtime.
+- **What the daemon can't see or use**:
+  - When a call's session id lacks its prefix (the node asking "whose session is this"), the node answers `not_found` itself and doesn't send it to the daemon;
+  - `mcp.tools` returns empty, `mcp.call` returns `unsupported`.
+- **id conflicts**:
+  - A runtime on the local socket saying hello with an id from `daemons.json` gets the error `code: runtime_conflict`;
+  - when an id is already taken by a connected runtime, the hello of a daemon with the same id also gets `runtime_conflict`; the node then disconnects it and reconnects later.
+
+### Tasks and the chat feed
+
+Tasks dispatched from an assistant chat ([unified-entry.md](../assistant/unified-entry.md)). The assistant hands in a plan with `task_plan`; read-only ones and ones the user chose to remember start directly, and the rest wait for "Start" on the phone.
+
+```jsonc
+// TaskPlan
+{"id":"plan_…","conversation":"<assistant chat id>","state":"open|started|dismissed","created_at":"...","updated_at":"...",
+ "tasks":[{"title":"Fix the login crash","prompt":"The first message to the Agent","machine":"<machine id>","cwd":"/abs/path",
+           "launcher":"","model":"","permission":"acceptEdits","readonly":false,"why":"one-line reason",
+           "done_when":["PR merged into master"],"expect_minutes":30,   // optional (#3124): acceptance criteria, expected minutes; clients only display them and don't send them back on start
+           "reuse_todo":"todo_…",       // optional (#5279): the to-do the task runs on instead of a new one (task_plan's per-task `todo_id`); the apps neither send it back nor change it
+           "todo_id":"todo_…",          // only present after start
+           "error":""}]}                 // why the Agent didn't start
+
+// FeedItem: entries the hub inserts into an assistant chat, not in the transcript; clients draw them merged with the transcript by at
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review|report|notice|brief","ref":"plan_…, todo_…, a date or an Inbox entry id",
+ "body":{…}}
+// plan: ref is the plan id, no body; task: ref is the to-do id, no body
+// answered: {"question":"Use Bash","answer":"Approved · don't ask again for this kind",
+//           "items":[{"question":"Use Bash\nnpm test\nReason: run the tests","answer":"Approved · don't ask again for this kind"}]}
+//   question / answer are the one-line summary shown when collapsed (squashed to one line, cut at 120 characters); old clients and old records from before #1231 only have these two.
+//   items are the full content, drawn when expanded: each question paired with its answer, line breaks kept; multi-question cards in card order; unanswered ones say "Not answered",
+//   ignored ones "Ignored". Plan approvals carry the plan text and the denial reason / mode after approval; tool approvals carry the tool, summary and reason;
+//   screen dialogs carry the selected option and text typed into options; form fields are written "Label: value". 4000 characters per segment, 12000 per entry, at most 20; anything beyond is truncated.
+//   Password fields (Field.secret, the screen's secret, MCP form password / writeOnly, names that look like passwords / tokens) are written only as "(filled in, not saved)"; values are never stored.
+// receipt: {"title":"…","state":"done|failed|interrupted","summary":"the Agent's last reply (Markdown, cut by lines to about 600 characters, never inside a markup token)","pr":"https://github.com/…/pull/N","machine":"…"}
+//   review (#4893), optional on done receipts only: {"state":"awaiting","criteria":3}. criteria is the number of done_when entries (0 is included).
+//   Present when the latest to-do is open, has a supervision ledger and its effective state is not needs_user (waiting on the user).
+//   This names Persona's next follow-up, not the judge's verdict: superviseJudged signals review for finished work or idle for unfinished work.
+//   Reopened accepted / cancelled tasks have an ongoing effective state and qualify. The receipt is written before judgment, without waiting for a model;
+//   judgment and supervision signals follow as before. Failed / interrupted receipts omit review.
+//   Older clients ignore review; older receipts omit it. Web shows "Waiting for Persona's review" (with the criterion count when positive) only while
+//   the linked to-do is present and open, retaining the neutral stopped heading; once done it shows the existing green completion card without the hint.
+//   interrupted (#1516): the Agent's turn was interrupted by a model service error; summary is "The model service errored and was interrupted", error is the original error text; clients draw it in red with "Continue".
+//   A turn with no reply, no tool calls and no error (the model service returned 200 with empty content, #2349) is also interrupted, with error "This turn produced no output: …"
+// routed: {"text":"…"} (the note sent to the Agent when the supervisor sends work back is also a routed);
+//         "interrupted":true when the assistant stopped the Agent's turn first and then told it (agent_interrupt with then, #5112); clients that don't know it show an ordinary line to the task
+// report: ref is the to-do id; a supervised task's Agent reported to Persona (report_to_supervisor, #5112): {"kind":"question|blocked|done","text":"…","evidence":["…"],"step":2,"steps":5,"later"?:true};
+//         progress reports are not written here (only supervision.progress); clients that don't know it skip this entry. `later`: a question the Agent sent with urgent false (#6287): nobody was woken, it is in the briefing's "Can wait" queue (`docs/extensions/bots.md` ("Questions that can wait")); clients that don't know the field draw it as any question
+// notice: no ref; a one-line note the hub writes into the chat {"text":"…"} (already written in the hub's language); clients draw it as a centered line of small text, and clients that don't know it skip it.
+//         There's only one kind now: after scheduled tasks were skipped because the main chat wasn't set up, once ready, before the first run the main chat gets "Computers and models are set up; scheduled tasks are running again, this time 'Morning briefing'" (#4253)
+// review: ref is the to-do id; the supervisor did one acceptance review (#3124): {"title","verdict":"accepted|rework|needs_user|cancelled","round":1,"note":"…",
+//         "checks":[{"criterion","met","evidence"}]}; clients that don't know it skip this entry
+// message: ref is the Inbox entry id; the AI twin drafted a reply to a message related to the task:
+//         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"original words (truncated)","draft":"the draft"}; sending goes through the Inbox send endpoint
+// today: ref is the user's date for that day; {"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"pending_review":[{"id","title"}],"working":2,
+//         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5} (fields Lark didn't answer for are omitted)
+//         pending_review: this chat's open supervised tasks whose supervision state is pending_review, oldest created first (#4889).
+//         They appear only here, not in waiting, working or done, regardless of their agents' state. Omitted when empty; older clients ignore it.
+//         "failed":[{"kind":"task|routine","id","ref"?,"title","at","why"?,"skipped"?}],"failed_total":3: what hasn't succeeded since 18:00 yesterday (#4124):
+//         dispatched tasks from this chat that didn't start (kind task, id is the to-do) and failed / skipped scheduled-task runs (kind routine, id is the scheduled task, ref is that run),
+//         newest first, at most 8 entries; failed_total is the total count; why is a short one-line reason. Omitted when empty; old clients ignore it as unknown
+// brief: ref is the scheduled task's id (the morning or evening routine with `facts` on); written into the routine's own conversation when a run is sent, whether or not the Lark bot is on
+//         (`docs/extensions/bots.md` ("Morning and evening briefings")): the fixed part of that run, as it was when the run started:
+//         {"title":"the routine's name","at":"…","hours":12,"waiting_unknown"?:true,
+//          "waiting":[{"id":"<card id>","title":"what the card asks (a line, in the hub's language)","from":"who asked","link"?:"<web page>","waited_s":4800,"nudged"?:true}],
+//          "failed":[{"kind":"task|routine","id","ref"?,"title","at","why"?,"skipped"?}],"failed_total":3,       // as in today.failed: what didn't go through in the last `hours` hours, newest first, at most 8
+//          "done":[{"id":"<to-do id>","title","at"}],"done_total":12,                                           // to-dos closed in that window, newest first, at most 10 (those waiting to be verified are under accept only)
+//          "accept":[{"id":"<to-do id>","title","detail"?:"what changed","from"?,"link"?,"waited_s","asked_at":"…"}],  // to-dos waiting to be verified, the longest waiting first
+//          "later"?:[{"id":"<question id>","title":"what was asked (a line)","from"?,"link"?:"<the Agent's chat>","waited_s"}],"later_total"?:3,  // questions Agents left for a briefing (urgent false), the oldest first, at most 10; both left out when the queue is empty; the Handled button posts the id to POST /api/v1/later/{id}/handled
+//          "progress":[{"id":"<to-do id>","title","stage"?:"plan|develop|review|merge|deploy|verify"}],"progress_total":2}  // open to-dos whose Agents are working, the longest open first, at most 8
+//         waiting_unknown: the cards waiting for an answer were not read yet (the hub had just started), so `waiting` is empty for want of knowing. The Accept button posts `asked_at` to
+//         POST /api/v1/todos/{id}/accept. `accept` has a row for every deployed to-do that waits for the owner, with or without the Lark bot: the "Please verify" ask is kept whether or not a Lark card went out. A retry of a failed run adds no second item. Clients that don't know the kind skip the entry (iOS decodes it as `unknown`, Android's draw has no branch for it).
+```
+
+The live state of task cards and plan cards isn't in the feed: clients read the plan (`task_plan` push) and the to-do + the session state of its attached Agents by `ref` (status rules as in [todos.md](../assistant/todos.md)).
+Questions from a task's Agent are interactions as usual; clients draw them at the bottom of the chat by to-do.
+
+## MCP tools (`personad mcp`)
+
+`personad mcp` handles each request separately (a tool waiting on the phone doesn't block other tools). When Claude Code sends `notifications/cancelled` (this turn was stopped), it cancels that call and doesn't answer; the socket to the node hangs up with it, and the hub withdraws its card via `rpc.cancel` (#3525, #2597).
+
+| Tool | Executed by | Description |
+| --- | --- | --- |
+| `phone_*` | iPhone App | declared by the App via `register_phone` (contacts, calendar, reminders, location, health, photos, clipboard, device info, notifications…) |
+| `mail_accounts` / `mail_search` / `mail_read` | hub | read-only |
+| `mail_send` | hub (mail connector) | write: goes through `connector_gate`; by default a `permission` interaction is created before sending, and it sends only after approval on the phone. Bad params are refused directly without a card |
+| `github_search` / `github_read` / `github_diff` / `github_checks` | hub (GitHub connector) | read-only, see the next row |
+| `github_comment` / `github_review` | hub (GitHub connector) | write: goes through `connector_gate`; by default each one is confirmed on the phone. The card states repo#number "title", the full text and who will see it; approvals start with [Approve] |
+| `<connector id>_*` | hub (connector) | only for the assistant, and only for connectors whose status is `ok`. Read-only tools run directly; writes first go through `connector_gate` in the manager's manager.json, which by default creates a `permission` interaction (the card states who will see it), and run only after approval on the phone (`server/internal/connector`) |
+
+## Connector API
+
+Feature `connectors` (in the `features` of `/health` and the WebSocket hello); old hubs don't have this endpoint.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/imessage` | `{machine, status, error?, guide?:[…], via?, ai}`: status of the Messages connector (which machine it reads is chosen in Settings › Extensions › Messages; if not chosen, manager.json's `imessage.machine`), asked of that Mac on the spot (after granting permission, a refresh shows the new state). Without Full Disk Access, `guide` gives step-by-step instructions to enable it on that Mac, and `via` is how that Mac's node runs (`ssh` / `launchd`; the two are enabled differently). Not set up: 404 `not_configured` |
+| PUT | `/api/v1/imessage/settings` | `{ai: bool}`: the "Hand to Persona" switch (stored on the hub, on by default). While on, real chats go into the knowledge base and Inbox, and the assistant has `imessage_*` tools; turning it off stops immediately. Returns the shape of `GET /api/v1/imessage` (with `ai`) |
+| DELETE | `/api/v1/imessage/data` | deletes Messages data stored on the hub: Messages chats and people in the knowledge base (with indexes, references in projects and the timelines they wrote, archive cursors; projects are marked for rewrite), and Messages entries in the Inbox → `{chats, people, inbox}`. While "Hand to Persona" is on: 409 `ai_on` (turn it off first, or the next round syncs it back); messages on that Mac are unaffected |
+| GET | `/api/v1/imessage/chats?limit=&before=` | that Mac's chats, newest first (the node's `connector.chats`; fields under "hub ↔ node" below). Read-only, not stored, not given to models. No permission 403 `no_permission`, Mac offline 503 `offline`, node too old 409 `node_outdated` |
+| GET | `/api/v1/imessage/chats/{id}/messages?limit=&before=` | one page of a chat's messages, oldest first (the node's `connector.older`); an `id` that doesn't look like a chat id (`imessage-<12 hex chars>`) isn't sent to the Mac: 404 `no_chat` |
+| GET | `/api/v1/connectors?all=1` | `{"connectors":[{id, name, status, account?, via?, error?, guide?:[…], last_sync?, last_event?, capabilities:[…], hosts?:[…], enabled, archive?, inbox?}]}`: connectors registered on the hub. Without `all=1`, Lark (`lark`) and mail (`mail`) are excluded: Apps before M6 draw every list entry as a row, and these two each have their own row, so they'd appear twice; Apps that pass it draw these two as the original Lark and mail rows themselves (status still read from `/api/v1/lark/status`, `/api/v1/mail/accounts`). `guide` is a one-sentence-per-step fix when something's wrong (how to enable permission on that Mac when the Messages connector lacks it). `status` is `ok` / `not_configured` / `not_signed_in` / `no_permission` / `rate_limited` / `error` / `disabled` (the user turned it off in settings; `enabled` is false); `via` says where the sign-in comes from ("gh sign-in from <machine>"); `error` is one human-readable sentence, without secrets; `capabilities` are drawn from `status` / `tools` / `actions` / `events` / `hosts` / `inbox` / `archive` / `login`; `hosts` are the hostnames of this connector's links (the App uses them to recognize links); `archive` / `inbox` are whether "Save to knowledge base" and "Send to Inbox" are on, only present for connectors with the `archive` / `inbox` capability |
+| GET | `/api/v1/connectors/sent?before=&limit=&connector=` | the ledger of what was written as the user through the connectors' gate (`docs/extensions/connectors.md` "Sent as the user"), newest first → `{items: [{id, at, connector, action, target, text, summary, origin, let_through, message_ref?, recalled_at?}], next}`. `target`, `origin` and `let_through` are objects (their shapes are in that section); `text` is at most 4000 characters. `limit` defaults to 50, at most 200 (400 below 1); `before` is a row id (400 below 1), the rows older than it; `connector` keeps one connector's. `next` is the `before` for the page after this one, `null` on the last. The user's own full-access devices and the owner on the hub machine only (403 for an answer-only device, a pairing token or an extension's token, whatever its scopes); 503 `no_database` without a database |
+| POST | `/api/v1/connectors/{id}/login` | step-by-step sign-in (for connectors with the `login` capability, `docs/archive/extensions/plan-telegram.md`): `{"step": "", "values": {}}`; an empty `step` starts from the beginning, and later requests carry the previous `step` and the filled fields → `{step?, fields?:[{name, label, secret?, placeholder?}], hint?, error?, done?, account?, kind?, url?, user_code?, interval?}`: what to fill next, or `done`.
+When `kind` is `device_code`, this step has no fields: show `user_code` and have the user enter it at `url`; the App asks again every `interval` seconds with the same `step` (no values) until a different step or `done` comes back (GitHub's device-code sign-in).
+When `kind` is `qr`, likewise no fields and the same polling: `url` is the content to scan with another App (WeChat), and the hub attaches its QR matrix `qr: {size, rows}` (`rows` is one string of `0` / `1` per row, without the quiet zone) for the App to draw; old Apps don't know this `kind` and show only `hint`. A wrong entry (bad verification code) returns the same step with `error`, keeping the form for re-entry; other errors 502. Filled values go only to the connector, never into logs or any response; the session obtained from sign-in is stored encrypted on the hub (`connector_secrets`) |
+| GET | `/api/v1/connectors/github/auth` | where the GitHub sign-in comes from: `{source: "machine" \| "device", machine?, machines: [{id, name, state, account?, scopes?, missing?, error?}], scopes?, scopes_known, missing?: [{scope, affects}]}`. `state` is `signed_in` / `not_signed_in` / `no_gh` / `too_old` / `offline` / `error` (the hub asks gh on each online computer on the spot, then asks GitHub whose token it is and what scopes it has; the token never leaves the hub); `missing` lists scopes the token in use lacks and the features affected |
+| PUT | `/api/v1/connectors/github/auth` | `{source: "machine", machine: "<id>"}` or `{source: "device"}`: switch the sign-in source, stored in hub settings (overrides manager.json's `github.auth.from_machine`); returns the same as above. Choosing a computer forgets the device-code sign-in token |
+| POST | `/api/v1/connectors/{id}/logout` | sign out: the hub deletes the stored credentials and sign-in state. Whether the session on the other service also ends depends on the connector: Telegram ends its device session; other connectors usually just make the hub forget its own copy (such as GitHub's device-code sign-in), and authorization has to be revoked on the other service → `{"ok": true}` |
+| PUT | `/api/v1/connectors/{id}/settings` | `{"enabled"?: bool, "options"?: {…}, "archive"?: bool, "inbox"?: bool}`: `options` is the connector's own settings (for those with the `options` capability, also included in GET; GitHub's is `{ci, muted_repos, ignore_branches}`, `docs/assistant/inbox.md` ("Noise reduction")); invalid ones 400; stored on the hub and kept across restarts; after a change the Inbox collects a round right away with the new settings. `enabled` is the switch in Settings › Connectors. A disabled connector doesn't run, provides no tools, collects nothing for the Inbox and adds nothing to the knowledge base; its status is `disabled`, and sign-in and sign-out work as usual. The choice is stored in hub settings and kept across restarts; a connector whose switch was never touched is on, except ones like Telegram where the user must enter credentials, which default to off. `archive` is "Save to knowledge base": when off, the hub no longer asks it for archive changes (not a single request), while the Inbox and assistant tools work as usual; `inbox` is "Send to Inbox": when off, nothing new is collected and existing entries stay. Both default to on; changing one on a connector without that capability returns 400; the choice is stored in hub settings → this connector's entry (same as `GET`) |
+| DELETE | `/api/v1/connectors/{id}/data` | delete stored data: first turns this connector off (the switch is saved as off, or the next round syncs it back), then deletes what the hub stored for it: its chats and people in the knowledge base (with indexes, references in projects and the timelines they wrote, archive cursors), and its Inbox entries → `{chats, people, inbox}`. Separate from signing out (`/logout`); the account and messages on the connector's side are unaffected |
+| GET | `/api/v1/connectors/{id}/thread?thread=&before=&limit=` | connectors with the `threads` capability: one page of messages of an Inbox thread (the entry's `connector.thread`) → `{chat: {id, name, kind, url?, avatar?, members?, reply?, state?, author?, labels?, branch?, body?, body_format?}, messages: [{id, at, sender: {id?, name, avatar?}, mine?, event?, text?, format?, media?: [{kind, ref?, thumb?, mime?, name?, size?, duration?, width?, height?, emoji?}], reply_to?: {id, from?, text?}, edited?, url?, kind?, review?, code?, check?}], before?}`, oldest first; `before` pages back, and its absence means the start was reached; `limit` defaults to 30, at most 50. `chat.members` is a group's member count / a channel's subscriber count, given only on the first page (without `before`) and omitted when unknown (Telegram: `docs/archive/extensions/plan-telegram.md` ("Member count")). Not signed in 409; rate limited 429 (`code: rate_limited`, `error` says how much longer) |
+| GET | `/api/v1/connectors/{id}/media?ref=` | the bytes behind `avatar` / `ref` / `thumb` in a page (images, stickers, video thumbnails, avatars), `Content-Type` as is, `Cache-Control: immutable`; the hub stores them in `<hub directory>/cache/connector-media/` (at most 256 MB, oldest deleted first), and many concurrent requests for the same ref ask the connector only once |
+| POST | `/api/v1/connectors/{id}/thread/reply` | `{thread, action, text, reply_to?}`: reply in the thread using the action given by the page's `chat.reply` (params `{chat, text, reply_to}`) → `{ok, result}`. Requests from the user's own devices (full device token) run directly without `connector_gate` (#1190); other identities such as pairing tokens still go through the gate, and refusals are 403 (`code: declined`). Rate limited 429 |
+| DELETE | `/api/v1/connectors/{id}/archive` | delete stored knowledge base content: first turns off "Save to knowledge base" (saved as off, or the next round archives it back), then deletes its chats and people in the knowledge base (with indexes, references in projects and the timelines they wrote, archive cursors) → `{chats, people, inbox: 0}`. The connector keeps running; the Inbox and tools are unaffected; connectors without the `archive` capability return 409 |
+
+## Mail API
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/mail/accounts` | `{"accounts":[MailAccount]}` (no passwords) |
+| POST | `/api/v1/mail/accounts` | add an account (password / authorization code): saved only after a successful connection test → `{"account"}`; `auth:"oauth2"` always returns 400 |
+| GET | `/api/v1/mail/oauth/google/config` | Whether "Sign in with Google" can start on this hub: `{"configured": bool}` (false without `google.client_id`); the apps ask before showing the button and offer Gmail with an app password otherwise (`docs/extensions/mail.md` ("One-time setup: Google Cloud OAuth client")) |
+| POST | `/api/v1/mail/oauth/google/start` | Gmail "Sign in with Google": `{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`; the App opens `auth_url` with ASWebAuthenticationSession and waits for the `callback_scheme` callback; without `google.client_id` 400 `{"error","code":"google_not_configured"}`, the error in the client's language saying who sets it up, always containing "not configured" (older Android apps match that phrase) |
+| POST | `/api/v1/mail/oauth/google/finish` | `{"state","code"}` from the callback URL (or `{"state","error"}`) → the hub exchanges for a refresh token, verifies IMAP + Gmail API (sending uses Gmail API), then saves → `{"account"}`; signing in again with the same email = update credentials (ID unchanged); state is single-use and expires after 15 minutes |
+| GET / PUT | `/api/v1/mail/oauth/microsoft/config` | Outlook sign-in settings: `{configured, client_id?, source?: app\|config, redirect_uri}`; PUT `{client_id}` stores the client ID the user registered in Microsoft Entra (encrypted on the hub; empty string clears it; bad format returns 400) (`docs/extensions/mail.md` ("Outlook integration")) |
+| POST | `/api/v1/mail/oauth/microsoft/start` | `{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`; 400 without a client ID |
+| POST | `/api/v1/mail/oauth/microsoft/finish` | callback `{state, code}` or `{state, error, error_description}` → `{"account"}`; errors are turned into what to do next (admin consent, IMAP / SMTP AUTH disabled, authorization expired…). Signing in again with the same email = update credentials |
+| DELETE | `/api/v1/mail/accounts/{aid}` | |
+| POST | `/api/v1/mail/accounts/{aid}/test` | `{"ok":true}` / `{"error"}` |
+| GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`, role ∈ inbox/sent/drafts/trash/archive/junk/"" |
+| GET | `/api/v1/mail/messages?account_id=&mailbox=INBOX&limit=50&before_uid=&q=` | `{"messages":[MailSummary],"has_more","next_before_uid"?,"headers_only"?,"uid_validity"?}`; empty `account_id` = merge all accounts' inboxes (newest date first, no `next_before_uid`). `next_before_uid`: the next page's `before_uid` when `has_more` is true; while a page of local matching (see below) hasn't been fully scanned, `messages` can be empty with `has_more` still true. `headers_only`: the server found nothing for `q` (providers such as 163 don't support keyword search), so results come from matching subject, sender, recipients / cc on the hub, without looking at bodies (`docs/extensions/mail.md` ("Search")). `uid_validity`: the mailbox's UIDVALIDITY for a single-account list; a change means the server reassigned UIDs, so UID-based cursors must be invalidated; omitted when 0 or for a merged multi-account list |
+| GET | `/api/v1/mail/messages/{aid}/{uid}?mailbox=INBOX` | `{"message":MailMessage}` |
+| GET | `/api/v1/mail/messages/{aid}/{uid}/attachments/{attachment_id}?mailbox=INBOX` | download by account, mailbox, UID and the stable attachment ID from the details; same Bearer authentication as mail reads; supports `Range` / `If-Range`, returning `Accept-Ranges` / `Content-Range`, 206 or 416 |
+| POST | `/api/v1/mail/messages/{aid}/{uid}/flags` | `{"mailbox","seen"?,"flagged"?}` |
+| POST | `/api/v1/mail/send` | `{"account_id","to":[],"cc":[],"bcc":[],"subject","text","html"?,"in_reply_to"?,"references"?}`; `references` is a space-separated Message-ID string, but a string array is also accepted (old iOS sends this; the hub joins it with spaces) |
+
+The mail details page first reads the body and attachment list, then submits `{"mailbox":"INBOX","seen":true}` via `/flags`. The details GET uses `BODY.PEEK`, preserving old clients' behavior rather than marking messages read automatically. Attachments include a stable `id`, filename, MIME type and decoded size; IDs bind the MIME order, file metadata and decoded content, so attachments with the same name can be distinguished. Downloads also use read-only `BODY.PEEK`, with no dependency on extensions such as BINARY; the server streams decoded content into a temporary file, then returns byte ranges of the decoded content via HTTP Range. Unknown accounts, attachments or changed content return 404.
+
+```jsonc
+// MailAccount
+{"id":"acc_…","name":"Gmail","email":"me@example.com","provider":"gmail|feishu|imap","auth":"password|oauth2",
+ "username":"…","imap_host":"imap.gmail.com","imap_port":993,"smtp_host":"smtp.gmail.com","smtp_port":465,
+ "smtp_security":"tls|starttls","status":"ok|error","error":""}
+// Extra field on add: password. With provider feishu, the supplied servers are ignored; the hub tries both imap/smtp.larkoffice.com and imap/smtp.feishu.cn (993 / 465, SSL), saving the first pair that signs in successfully (docs/extensions/mail.md ("Lark mail"))
+// MailSummary
+{"account_id","mailbox","uid":123,"message_id","subject","from":{"name","email"},"to":[{"name","email"}],
+ "date","snippet","seen":false,"flagged":false,"has_attachments":false}
+// MailMessage = MailSummary + {"cc":[…],"text":"…","html":"…","attachments":[{"id","filename","mime","size"}],
+//                               "in_reply_to","references":[…]}
+```
+
+## Inbox API
+
+The hub collects Lark, mail and connector data in the background and hands it to the manager (assistant) to aggregate into entries (`docs/assistant/inbox.md` ("Who manages what"): entries in `server/internal/assistant/inbox.go`, sources in `server/internal/extmgr/inbox.go`). The hub forwards these endpoints to it; when the manager isn't connected they return `503 assistant_offline`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/inbox` | `{items:[InboxItem], as_of, triage}`: unhandled entries + entries handled in the last 3 days, newest `updated_at` first; excludes `context`. Defaults to Lark and mail only; connector entries (GitHub…) with a `connector` block require `?sources=all`. Old Apps and watches don't pass it, so they don't draw PRs as mail; Android, Mac and new watches pass it (each draws a connector entry from its `connector` block). `triage`: `{state, reason?, waiting, sources?:[{source, name, state, reason, waiting}]}`, how many new plugin-connector entries haven't entered the Inbox because they couldn't be triaged (and had no fallback) or weren't reached this round, and why; when none, `{"state":"ok","waiting":0}` (`docs/assistant/inbox.md` ("AI triage"); old hubs lack it). `as_of` is when this list was read (hub clock, RFC 3339), sent back when handling in bulk by filter (`/bulk`; old hubs lack it). Each entry may also carry event fields (phase one, [inbox.md](../assistant/inbox.md) ("Events and handling chains (phase one)"); old hubs lack them and old Apps don't recognize them): `status` (unhandled sections `action` / `working` / `fyi` / `noise`, falling back to `tier` when absent), `urgent`, `recap`, `handling`, `suggestion`, `chain` (handling chain, at most the latest 50 entries), `related` |
+| GET | `/api/v1/inbox/{id}` | one entry, with `context` (plain text of the chat / email, for AI); mail also carries `reply_target:{uid,version}` |
+| POST | `/api/v1/inbox/{id}/done` | `{done: bool, dismiss?: bool}`: mark handled / reopen; returns the entry. With `dismiss` true, this is "Ignore" (`done_by=dismissed`; old hubs treat it as handled) |
+| POST | `/api/v1/inbox/done` | `{done: bool, items:[{id, version?}]}` → `{changed:[InboxItem], unchanged:[id], skipped:[{id, reason}]}`: mark multiple entries at once (mark all handled, all seen / clear all, and their undo), one database write and one `inbox` push. `version` is the entry's `version` from the list: when marking handled, a mismatch (new messages merged in since listing) leaves it unmarked, with `reason=changed` in `skipped`; a missing entry has `reason=missing`; one already in that state goes in `unchanged` without changing `done_at` (retries or simultaneous taps on another device don't write twice). Reopening doesn't compare versions. At most 1000 entries; more returns 413; no `done` returns 400. Only recorded in Persona, not written back as read to the source (`docs/assistant/inbox.md` ("Mark all handled")); old hubs lack this endpoint (405), so the App falls back to `/{id}/done` per entry. New clients use `/bulk` below; this stays for old Apps |
+| POST | `/api/v1/inbox/bulk` | Clear all (`docs/assistant/inbox.md` ("Clear all")): `{action, items?:[{id, version?}], ids?:[id], filter?, as_of?}` → `{action, changed:[InboxItem], ids:[id], unchanged:[id], skipped:[{id, reason}], undo?:{action:"reopen", ids}}`. `action` is `done` (handled, `done_by=user`) / `dismiss` (ignored, `done_by=dismissed`) / `reopen` (reopen, for undo); clients send only `dismiss` for Clear all, keeping `done` for sections and clients before #5114. **Either** provide `items` / `ids` (`ids` is shorthand without versions; both can be supplied): handle only these, with the same rules as `/done` (version mismatch on marking: `skipped reason=changed`; missing: `missing`; already in that state: `unchanged`); **or** provide `filter` + `as_of`: handle unhandled entries selected by `filter`, using the `as_of` returned by `GET /api/v1/inbox` (or `/refresh`); entries arriving after it, or with new messages merged after it, are left alone (`skipped reason=changed`). `filter`: `{sources?: "all", source?, account?, tier?, kinds?:[]}`, where `source` is lark / mail / connector id, `account` is `feishu` or a mail account id, `tier` is action / fyi / noise / untriaged, and `kinds` is a list of `kind` values; without `sources:"all"`, connector entries are excluded as in the list. Client-side filters such as search use `ids`. `reopen` only accepts `ids`. `ids` lists what changed this time; POSTing `undo` back as is undoes it (reopens only what changed this time). One database write and one `inbox` push for the batch; only recorded in Persona, not written back as read to the source. At most 1000 entries (413); unknown `action`, supplying both or neither of `ids` and `filter`, `filter` without `as_of`, `reopen` with `filter`, or unknown `tier` all return 400. Watches (answer-only devices) can't call it (403); extensions need `inbox.write`. Old hubs lack it (404 / 405): fall back to `/done` (Clear all is recorded there as done) |
+| GET | `/api/v1/inbox/mutes` | `{mutes:[{id, source, source_name, tag, value, name, created_at}]}`: the user's mutes (`tag` is `repo` / `chat` / `sender`, `docs/assistant/inbox.md` ("Mute")). Each entry in the list carries `mutes:[{tag, value, name}]`, saying how it can be muted (old hubs lack it) |
+| POST | `/api/v1/inbox/mutes` | `{item_id, tag}` → `{mute, settled}`: mute this entry's value under `tag` (the hub reads it from the entry), settle open entries covered by it in the same source (`settled` count), and settle future arrivals; only one copy of each mute exists |
+| DELETE | `/api/v1/inbox/mutes/{id}` | unmute: future entries arrive normally; already settled entries don't return |
+| GET | `/api/v1/inbox/policies` | `{policies:[{id, source, source_name, tag, value, name, tier?, twin?, created_at, updated_at}]}`: the user's policies (`docs/assistant/inbox.md` ("Policies")): `tier` is `action` / `fyi` / `noise`, `twin` is `first` / `never`. An entry's policy is the one whose `source` and `tag` + `value` match one of its `mutes` options, `sender` before `chat` before `repo` (old hubs: 404) |
+| POST | `/api/v1/inbox/policies` | `{item_id, tag, tier?, twin?}` → `{policy, applied}`: set the policy of this entry's value under `tag` (read from the entry; nonexistent entry 404, unknown tag / tier / twin 400). A policy for the same target is updated; one left with neither `tier` nor `twin` is removed. Open triaged entries it covers get its tier at once (`applied` count) |
+| PATCH | `/api/v1/inbox/policies/{id}` | `{tier?, twin?}` → `{policy, applied}`: set both parts as given; neither removes it; unknown id 404 |
+| DELETE | `/api/v1/inbox/policies/{id}` | remove a policy: entries keep the tier it gave until new content is triaged again |
+| POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`: draft a reply in the user's voice (not sent) |
+| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}` (if the assistant connection breaks mid-send: 502 `assistant_in_doubt`, `delivered:"unknown"`; it may already have been sent, and retrying the same one won't send twice): send to the original Lark chat / as a mail reply / as a cloud-document comment (where `doc.reply` points), and mark handled (`done_by=replied`); returns the entry. For cloud documents, `changes:[{ref,field,value}]` changes statuses before commenting; `text` may be empty for status-only changes. With `client_id`, a receipt is saved, and Lark passes it through as upstream `clientId`; without it, `clientId` is computed from the entry id and text (UUIDv5), so retries after a hub restart don't duplicate it either. A Lark entry's same reply is sent only once: replies to the same entry are queued; an entry already handled by reply with the same text returns success directly without sending again. Different text is sent normally. Lark destination: DMs go into the chat; non-empty `lark.thread_kind` replies to `reply_to` within its topic; group @mentions (`kind=mention`) reply quoting `reply_to`; other groups and old data without `reply_to` still send into the chat |
+| POST | `/api/v1/inbox/{id}/suggestion` | `{version, action, text?, client_id?}`: act on the current suggestion (submitted by the manager's handling chat, [inbox.md](../assistant/inbox.md) ("AI twin: handling chats and suggestions")): `confirm` (execute as is, or after editing when `text` is supplied) / `reject` (return to the handling chat) / `instruct` (`text` required, return for a new suggestion) → this item. Confirmed replies use the same send-once path as `/reply`, but do not mark done (`handling.state=waiting`). `409 {code:"suggestion_stale", error, item}` when `version` is not current or no suggestion remains; `409 inbox_item_done`; `400`; `403` for answer-only devices except text confirmation of replies or conclusions; `502 assistant_in_doubt` as in `/reply`. Old hubs lack it (404 / 405) |
+| POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`: set this row's status in a cloud document to `value` (must be an option for that column); read the latest value before writing (if someone just changed it, fails with 409); returns the reread entry |
+| POST | `/api/v1/inbox/refresh` | collect once immediately, returning the list and `triage` (`?sources=all` as above); new plugin-connector entries enter the list after background triage finishes, without waiting for it |
+| PUT | `/api/v1/inbox/{id}/parent` | `{kind, id}` sets this entry's parent (`kind` is `inbox` / `todo` / `session`); `null` or `{}` removes it → this `InboxItem`; missing entry or parent 404, invalid parent 400, would create a cycle 409 ([inbox.md](../assistant/inbox.md)) |
+| GET | `/api/v1/inbox/tree/{kind}/{id...}` | a node's trail: `{node, item?, ancestors:[{kind, id, item?}], children:[InboxItem]}`, children ordered by start time; missing entry 404, invalid `kind` / `id` 400 |
+| POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`, preserving order; missing model outputs are empty strings. target is BCP 47 (zh-Hans, en, ja…, `docs/apple/ios.md` ("Translation")). Like the Inbox, this belongs to the assistant (forwarded through the hub), using the "Translation" use in model configuration |
+| POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?, model_fingerprint?}`: the assistant asks the hub to read this mail (HTML-only mail becomes text preserving paragraphs and links), then translates it itself; returns the Inbox's existing translation if it used the same model; body at most 12000 characters |
+
+Mail replies may carry `expected_uid` and/or `expected_version` from the details response. The version binds the account, mailbox, UID in the thread, message identifier and sender. A changed target returns HTTP 409, `code=mail_reply_target_changed`, `delivered=none`, `retryable=false`; nothing was sent this time. The App keeps the draft, loads the latest mail, and after the user confirms the new recipients makes a new request with a new `client_id`. When the network result is unknown, it checks the receipt using the original request, target and `client_id`. Omitting the validation fields preserves old behavior, so existing iOS needs no changes; persistent receipt rules are unchanged.
+
+`InboxItem`: `id`, `source` (lark / mail, or a connector id: github), `kind` (dm / mention / group / bot / mail; connectors define their own: review_requested / mention / team_mention / author / ci_failed / assign), `account` (`feishu` or a mail account id),
+`account_name`, `title` (chat name / mail subject), `sender`, `avatar`, `preview` (latest message), `count`, `started_at`, `updated_at`,
+`tier` (action / fyi / noise, empty before triage), `summary`, `reason`, `read` (seen elsewhere), `done_at`, `done_by` (user / dismissed / read / replied; dismissed means the user chose "Ignore"), `version` (what this entry currently contains; changes when new messages merge in; sent back when marking handled in bulk; old hubs lack it),
+`lark{account_id,ol_account,feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}` (`account_id`: the Lark gateway account number this chat belongs to; 0 in old records = account 1; `ol_account`: present for a non-default account, the `ol_account` to pass when opening the chat or calling Lark endpoints; `read_position`: this chat's read position in Lark, refreshed on every collection; `reply_to`: id of the last message sent by someone else; `thread_kind`: where it is, empty = in the chat, `topic` = a topic in a topic group, `thread` = a threaded reply in a regular group; these two refresh when new messages are collected and are absent in old data), `conversation{source,id,account?,start_position?,read_position?,mention_position?}` (present in the list: where to open a Lark entry in the messaging source; `source` is the connector id, `account` is the `account` to pass for a non-default account; Apps with this source use it, `docs/extensions/extension-messaging.md` ("Nine")), `mail{account_id,mailbox,uids,message_id,from,direct,thread}`,
+`translations{<target language>:{subject,preview}}` (foreign-language mail the hub translates ahead of time, `docs/apple/ios.md` ("Translation")), `doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
+(`kind=doc`, `docs/assistant/inbox.md` ("Cloud documents")); `agent.changes:[{ref,field,value}]` are status changes the AI twin proposes with its draft;
+`connector{thread,label,url,open_url,reply_to,can_reply,rule_tier}`: a connector entry (`docs/assistant/inbox.md` ("Connectors: GitHub")); the App draws only this block, without knowing the specific source:
+`label` is the row label, `url` opens inside the App, `open_url` is handed to the system (`sms:` and similar), `reply_to` says where a reply goes and who can see it, and `can_reply` false means replies aren't allowed (CI failure).
+When the list changes, WebSocket pushes `{"type":"inbox"}` (no content; the App fetches it).
+
+## Lark bot
+
+`/api/v1/bots/feishu` (read status / change credentials, toggles and features), `…/pair` (pairing code), `…/owner` (DELETE unpairs), `…/test` (test message); fields in `docs/extensions/bots.md` ("Configuration and API").
+
+## Knowledge base API
+
+The knowledge base belongs to a manager (the assistant). The hub forwards these endpoints to it as-is (the forwarding in "Bus" above); when it is not connected the hub returns `503 assistant_offline`. Returns 503 when the knowledge base is not enabled. `kind` supports `projects`, `chats`, `people`, `docs`, `meetings`, `events`, `recordings` (recordings are read-only here; writes go through "Recording sync" below).
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/kb/{kind}?tag=` | `{items,tags}`; can filter by tag |
+| GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`; for a project, can also return related online Agents |
+| PUT | `/api/v1/kb/{kind}/{id}` | body is a `kb.Update`; can update name, tags, importance, summary and project properties; returns `{id}`; fields in [knowledge.md](../assistant/knowledge.md) |
+| GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`; includes messages by default, `messages=0` excludes them |
+| GET | `/api/v1/kb/chats/{id}/context` | What the knowledge base knows about a chat: `{chat_id, chat_name, kind, summary, projects:[{name, summary}]}` (top three projects); read-only, used by the extension's `/agent`; 404 if the chat does not exist ([knowledge.md](../assistant/knowledge.md)) |
+| GET | `/api/v1/kb/chats/{id}/days/{day}` | All messages of a chat on one day: `{day, messages, prev, next}` (`prev` / `next` are the nearest earlier / later days with messages); 404 if none |
+
+### Recording sync (#3235)
+
+After transcription, recordings from the phone (including ones the watch sends back to the phone) are synced into the knowledge base's `recordings` through these endpoints ([recording.md](../apple/recording.md), [knowledge.md](../assistant/knowledge.md) ("Recordings")). Only the transcript text is sent, never audio.
+Like the other knowledge base endpoints, the hub forwards them as-is to the manager; they need a device token; 503 when the knowledge base is off or the manager is not connected.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| PUT | `/api/v1/recordings/{id}` | Upload or update a recording (idempotent, see below) |
+| DELETE | `/api/v1/recordings/{id}` | Delete: `200 {"deleted": true\|false}` (false means it did not exist); removes the files and index, leaves a tombstone |
+| GET | `/api/v1/recordings` | Reconciliation: `{"days":14,"recordings":[{"id","revision","complete","started_at"}],"deleted":["<id>"]}` |
+
+`{id}` is the recording's UUID (case-insensitive, stored lowercase). Each PUT carries the **complete state so far** and overwrites the same record in full, so replays, reordering and transcript completion never create an extra record:
+
+```jsonc
+{
+  "revision": 3,                              // required, > 0; increases monotonically per recording (suggested: this state's update time, in ms)
+  "started_at": "2026-11-05T09:00:00+08:00",  // required, RFC 3339
+  "ended_at": "2026-11-05T10:02:13+08:00",    // omitted while still recording
+  "duration": 3733.5,                         // seconds recorded so far
+  "language": "zh-CN",                        // BCP 47
+  "device": "phone",                          // phone | watch: the device that recorded
+  "title": "",                                // optional, name given by the user
+  "bookmarks": [{"at": 120.5, "label": ""}],  // at: seconds from the start
+  "segments": [{"start": 0, "end": 4.2, "text": "…"}],  // seconds from the start
+  "complete": false                           // true only when recording has ended and transcription is fully done; send the parts available before that
+}
+```
+
+- Response `200 {"id","revision","status"}`: `stored` was written (a replay of the same revision also overwrites); `stale` the stored revision is higher, nothing written; `expired` the start time is before the retention window, not stored.
+- `410`, `code: recording_deleted`: this recording was deleted (the tombstone stays until the retention window ends); the phone should stop sending it.
+- `400`: id is not a UUID, `revision` ≤ 0, missing `started_at`, unknown `device`, or too large (at most 20000 segments, 4 MB of transcript in total).
+- Segments are sorted by `start`; empty text is dropped. When `complete` goes from true back to false (re-transcribing in another language) the record is overwritten as usual, and the summary is redone once transcription completes.
+- The retention window is the assistant setting `recording_days` (default 14, 1–365): `GET /api/v1/assistant` includes the effective value, `PUT /api/v1/assistant {"recording_days": 30}` changes it, and `assistant.recording_days` in `persona_settings` can also read and change it.
+  On every pass the manager deletes recordings whose start time is past the retention window, together with their files and index.
+- Reading: `GET /api/v1/kb/recordings`, `GET /api/v1/kb/recordings/{id}` (`detail.meta` is the fields above except `segments`, plus `name` and tags; `detail.summary`; `detail.segments`); `kb-search` finds the full transcript text.
+
+## Messaging source API (`/api/v1/messaging`)
+
+Sources from the `messaging` extension point (the first is Lark): `GET /api/v1/messaging` lists sources; `/api/v1/messaging/{source}/…` handles chats, messages, sending and so on. After authentication, the hub forwards to the extension and validates responses against the schema. Specification in [extension-messaging.md](../extensions/extension-messaging.md); `/api/v1/lark` below is the legacy API from before migration, kept until Mac, Android and web finish migrating (#2138).
+
+## Lark API (Lark gateway)
+
+These routes aren't the hub's own code: #1571 (3c) removed the hub's direct connection to the Lark gateway, and `server/internal/lark` now contains only the `lark` config (the manager's manager.json). `/api/v1/lark/…` is provided by the Lark plugin's `api` contribution; `lark` is a prefix being migrated out of the hub (`migratablePrefixes`, `server/internal/extmgr/extension_api.go`), and the plugin's contribution takes precedence. The hub authenticates first, removes `Authorization` and `token`, adds `X-Persona-Device` / `X-Persona-Role`, then forwards as is to the plugin, which asks the Lark gateway ([extensions.md](../extensions/extensions.md) ("App endpoints")). Without a plugin providing them, these routes return 404. Below is the endpoint contract plugins must follow; "hub" mostly means the plugin the hub forwards to. The hub wraps plugin-declared `receipts` with send receipts.
+
+All routes below accept the query parameter `ol_account=<Lark gateway account number>`: which Lark account this request uses (invalid returns 400). Without it, the plugin's default account is used, decided by the plugin's own Lark gateway config: the hub doesn't hand manager.json's `lark.account` to the plugin; it is only used for the assistant's Inbox (`server/internal/lark/config.go`, `docs/extensions/feishu.md` ("Multiple accounts")). Media URLs for other accounts already carry it.
+
+On a Lark gateway error, the plugin returns 502 `{"error"}`; when the gateway itself lost its Lark sign-in (`AUTH_*`), it returns `{"error","code":"lark_not_logged_in"}`, which the App uses to prompt the user to sign in to Lark again in the gateway. `/raw/…` is an exception: it forwards the gateway's own response as is.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/v1/lark/accounts` | `{"accounts":[{"id","name"?,"avatar"?,"tenant"?,"user_id"?,"signed_in","primary"?,"unread","quarantined"?}],"default"}`: Lark accounts signed in on the gateway (in gateway order; `signed_in` is false for quarantined accounts) and the default account number. Old gateways without an account list return only the default account; old hubs lack this route (404), so the App shows no account switching |
+| GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`: Settings › Connectors › Lark. configured comes from the plugin's own Lark gateway config (before 3c it meant "hub.json has lark"); connected asks the gateway's `/accounts` on every request; last_event_at is the latest live event (Unix seconds) |
+| GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`: display settings of the selected Lark account; returns only these two switches and the actual user ID, no script / auto-send config |
+| POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`: key is `anti_recall` or `show_edit_history`, value/expected are booleans; full device permissions, body ≤1 KiB, unknown fields rejected; a restricted PATCH through the gateway preserves other fields. Account / old-value conflicts 409, unauthorized 403, old service without endpoint 404; expired sign-in 502 + `lark_not_logged_in`. Success returns the same structure as GET and pushes a `lark` event with `settings_changed=true`; unknown results aren't retried automatically |
+| GET | `/api/v1/lark/encryption` | native encryption status `{accountId,configured,locked,unifiedPassword}`. Requires separate native encryption authorization; no keys or credentials returned, `Cache-Control: no-store`. The plugin declares `lark_native_encryption` in its `api` `features`, and the hub merges it into its features; upstream without the native endpoint returns 426 + `lark_gateway_upgrade_required`, missing separate authorization returns 403 + `VAULT_NATIVE_NOT_AUTHORIZED` |
+| POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → same as above. Full write permission only; validates against the actual Lark account, sharing the web's password-attempt limit; the password isn't stored |
+| POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`; candidate historical cover text uses the same rules as the gateway web UI |
+| POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`. Only generates ciphertext with cover text, without sending; rejects identity mismatch, unauthorized, locked, or missing recipient public keys |
+| POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`. Requires a stable UUID, accepts only the OLK2/OLK3 wire shape, and revalidates native authorization and the actual account; upstream writes carry `expectedSenderId`. Segments are sent in order, and only the last can quote a message; each segment gets a separate dedup receipt. All native-encryption responses are `no-store`; failures never fall back to the plain-text endpoint; protocol and limits in [Encrypted messages](../extensions/lark-encryption.md) |
+| GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`; scope: `chats` (default, Lark "Messages": excludes completed / folded chats and filters by label display rules), `unread`, `done` (completed), `label:<id>`, `inbox`, `mentions`, `muted`, `p2p`, `group`, `thread`, `later` |
+| GET | `/api/v1/lark/pinned` | all pinned chats (keeps reading the pinned head of inbox + done, merges and dedups, then sorts by pin time); pagination anomalies return an error rather than treating a truncated set as success |
+| GET | `/conversations`, `/pinned` above with `account_bound=1` | additionally returns the actual selected `account_id`; an empty collection is `[]`; intermediary caching prohibited. May carry expected `account_id`; identity changes before / after the request or an expected-account mismatch return 409 `lark_account_changed` with no chat data. Not signed in still uses `lark_not_logged_in`; old calls omit the parameter and keep the original contract |
+| GET | `/api/v1/lark/conversations/{id}/pins?account_id=&cursor=&limit=` | in-chat Pin list: `{account_id,items:[{id,message_id,message?:LarkMessage,operator_name?,created_at}],next_cursor,total}`. limit defaults to 50, max 100. Preserves upstream pagination fully; repeated / missing cursors return errors. This read clears the gateway's unread Pin marker, so home-page prefetching is prohibited |
+| GET | `/api/v1/lark/conversations/{id}/pin-messages/{message}?account_id=&topic=` | locate a Pin: `{account_id,target:{message,root?,page}}`, with page in the same shape as chat / topic pagination. A regular message returns an around window; a reply returns the topic root and a reply window containing the target (at most 20×100 entries). Target not found returns 409 `lark_pin_no_position`; the client keeps the current window |
+| POST | `/api/v1/lark/conversations/{id}/pins` | `{account_id,message_id,pin_id?,remove}` → `{account_id,pinned}`. remove=true requires the corresponding pin_id; before writing, verifies message feed, capabilities, Pin ownership and actual account. An unknown result returns `lark_pin_result_unknown`, requiring a reread to confirm, not an automatic retry. All three Pin APIs are `no-store`; account switch returns 409 `lark_account_changed` without data; old gateway routes return 426 `lark_gateway_upgrade_required`, missing original messages `lark_pin_not_found` |
+| GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
+| GET | `/api/v1/lark/unread-count` | `{"count"}`: "Unread N" (excludes muted chats) |
+| GET | `/api/v1/lark/flags` | flags: `{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |
+| GET | `/api/v1/lark/conversations/{id}/labels` | `{"label_ids":[…],"labels":[{"id","name"}]}` (labels this chat belongs to / available labels) |
+| POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → gateway `PATCH settings` (isArchived / isShortcut / isFlagged / isMuted / labelIds; labelIds is the full set) |
+| POST | `/api/v1/lark/conversations/{id}/unread` | `{"unread":true}` marks unread / `false` clears unread |
+| GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`, oldest→newest; no cursor = latest page; `around=<read position+1>` opens from the first unread message; `topic=1` fetches a topic group's topic list (backward paging only) |
+| GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | messages in a topic / reply thread, same format as above; supports only backward paging with `before`, reading the latest page without a cursor; no `after`, since upstream provides no forward pagination or cursor; see [Topic pagination limits](../extensions/feishu.md#话题分页限制h06) |
+| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text","client_id"?,"mentions"?}` sends as the user, returning `{"ok":true,"message_id"?}`. `client_id` is an App-generated UUID passed as is to the gateway's `clientId` and stored with a receipt on the hub: resending the same message with the same id sends only one; missing or non-UUID values are generated by the hub. `mentions` is `[{"user_id","name"}]` (at most 100; exceeding the limit or missing `user_id` / `name` returns 400); `text` must contain literal `@name`; the hub doesn't rewrite text and passes it as is to the gateway's `mentions`; @everyone is `{"user_id":"all","name":"所有人"}` ("everyone") |
+| POST | `/api/v1/lark/messages/{id}/replies` | `{"text","thread"?,"client_id"?,"mentions"?}` replies to this message as the user, returning `{"ok":true,"message_id"?}`. `thread=false` (default) quotes it in the original chat; `thread=true` sends into its topic (a top-level message in a regular group becomes the root of a new topic; in a topic group it goes into its topic). Proxies gateway `POST /messages/{id}/replies`, passing `client_id` as is as `clientId` and saving a receipt; `mentions` as in the previous row. The target may be a root message or a reply in a topic; upstream resolves topic ownership. Empty `text` returns 400 |
+| GET | `/api/v1/lark/conversations/{id}/members?q=&limit=` | members for @mentions: `{"members":[{"user_id","name","avatar"?}]}`. Empty `q` lists members; non-empty searches names / group nicknames / pinyin; `limit` defaults to 50, at most 200; `name` prefers the group nickname, falling back to display name |
+| POST | `/api/v1/lark/conversations/{id}/images` | `{"client_id","name","mime","data"}`; data is base64, decoded size at most 7.5 MiB; image format validated; returns `{"message_id"}` |
+| POST | `/api/v1/lark/conversations/{id}/files?client_id=&name=&mime=` | raw `application/octet-stream` bytes, Content-Length required, 1 byte to 100 MiB; returns `{"message_id"}`; streamed through the hub |
+| POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`: report viewed messages (highest position, that message's badge_count, and unread message ids sent by others in between); only sent after messages actually appear on screen |
+| POST | `/api/v1/lark/conversations/{id}/read-states` | `{"message_ids":[…]}` (at most 100; more returns 400): read receipts for these messages, returning `{"states":[{"message_id","read_count","unread_count"}]}`. Messages the gateway provided no receipt for (still sending, unknown) don't appear in `states`; when old hubs lack this route, the App shows no receipts |
+| GET | `/api/v1/lark/media/{key}?size=` | images / stickers / avatars / videos / files forwarded as is (`size` returns a thumbnail when a multiple of 24 and ≤624) |
+| GET | `/api/v1/lark/messages/{id}/media/{key}` | message-scoped media (as above) |
+| GET | `/api/v1/lark/emojis` | `{"emojis":{"<lowercase key>":{"label","url"}}}`, including skin-tone variant keys; cached by the hub for a day |
+| POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | press a card callback button as the user (body passed as is to the gateway) |
+| GET / POST | `/api/v1/lark/raw/{path...}` | read-only proxy for gateway `/agent/v1/<path>`, forwarding queries and allowed read-only POSTs; not a general write endpoint |
+| GET | `/api/v1/lark/reactions/quick` | `{keys}`: quick reactions |
+| POST | `/api/v1/lark/messages/{id}/reactions` | `{key,remove?}`: add or remove a reaction, returning `{ok:true}` |
+| GET | `/api/v1/lark/users/{id}?feed_id=` | user profile, upstream JSON forwarded as is |
+| POST | `/api/v1/lark/users/{id}/chat` | open a DM, returning `{feed_id}` |
+| GET | `/api/v1/lark/messages/{id}/url-preview?url=` | link preview within a message, upstream JSON forwarded as is |
+| POST | `/api/v1/lark/documents/comments` | `{url, content, mentions?:[{user_id,name}], quote?, block_id?, client_id}`: post a new document comment as the user (#1290). Without `quote`, a whole-document comment; with `quote` (and its containing block `block_id`), a comment on that body passage. Each @mentioned person in `content` is written as `@name`, as in messages. Returns `{ok, threads, anchored?}`: `threads` is all threads read back after writing (same shape as `documents/comments`; null if unreadable, but the comment was sent); a comment on a passage also carries `anchored` (`false`: the containing block couldn't be found, so the passage is quoted in a whole-document comment instead). Body anchors use the gateway's inline comments; the plugin finds the block by `quote` in the document JSON (if the App knows `block_id`, it sends it directly). These routes exist only when the plugin declares `lark_doc_comments`; writes from the user's own device bypass the AI gate; recorded in receipts (receipt id derived from `client_id`, so retries with the same id don't send twice) |
+| POST | `/api/v1/lark/documents/comments/{thread}/replies` | `{url, content, mentions?, client_id}`: reply to this comment thread, returning `{ok, threads}` |
+| POST | `/api/v1/lark/documents/comments/{thread}/resolve` | `{url, resolved}`: mark resolved (`true`) or reopen (`false`), returning `{ok, threads}`; invalid content 400 `comment_invalid`, this document doesn't support such comments 400 `comment_unsupported` |
+| GET | `/api/v1/lark/documents/people?url=&q=` | `{members:[{user_id,name,avatar?}]}`: candidates for @mentions in comments, searched by name (same shape as group `members`) |
+| GET | `/api/v1/lark/moments/posts/{id}` | single-post content, upstream JSON forwarded as is |
+| GET | `/api/v1/lark/moments/posts/{id}/comments` | single-post comments, upstream JSON forwarded as is |
+
+The optional `client_id` for Lark sends, threaded replies and Inbox replies can be used directly for retries, with no extra request header required. The hub derives an internal receipt UUID from the operation kind and original ID, reusing Postgres `client_ops`; the same ID with the same target and params returns the original HTTP status and response body without sending again, even if the Inbox entry changed or the hub restarted. Reusing an ID with different params, target or authenticated device returns `409 {"code":"op_id_reused"}`. Recorded upstream errors are also returned as is, to avoid duplicate sends when the result is uncertain; execution not yet finished returns `202 {"state":"pending"}`, and execution left over after a restart without a result returns `202 {"state":"unknown"}`, which clients must verify. Receipts use the `client_ops` retention policy. When a request carries both `client_id` and `X-Persona-Op-Id`, the receipt derived from `client_id` wins.
+
+Threaded replies use the separate operation kind `lark_thread_reply` with the same receipt rules. Before sending, Android persistently saves the topic draft and original request; on `202` or a lost receipt it stays pending confirmation, and submits the same target, text and `client_id` again to check the original result, never generating a new ID to resend. `ok:true` means upstream accepted it; the topic list is then reread.
+
+Old clients without `client_id` keep the original behavior: the upstream client generates IDs for Lark chat sends, and the hub generates a stable ID per entry for Inbox Lark replies. HTTP response shapes are unchanged; no WebSocket events are added.
+
+```jsonc
+// LarkConversation
+{"id":"<feedId>","name","avatar":"/api/v1/lark/media/…","is_group","is_topic","unread","marked_unread","at_me","at_all","muted",
+ "pinned","flagged","done","tags":["外部"|"公开"|"会议"|"机器人"|"AI"…],"preview","preview_sender","is_mine","updated_at", // gateway tag values: External | Public | Meeting | Bot | AI
+ "read_position","mention_position"}
+// LarkMessage
+{"id","position","sender_id","sender_name","sender_avatar","sender_type":"user|bot","is_mine",
+ "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"plain-text preview","created_at",
+ "recalled","retained"?,"edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
+ "parts":[MessagePart],                       // gateway content as is (see below); media URLs rewritten to /api/v1/lark/
+ "olk"?:{…},                                 // encrypted projection: status, public cover text, authorized decrypted body, key distribution info
+ "edit_history"?:[{"edited_at","text","parts"?,"olk"?}],
+ "reply_to":{"id","sender_name","text","recalled","retained"?,"parts","olk"?},
+ "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["Example member A","Example member B"]}]}
+// MessagePart (the gateway's MessagePart; field names unchanged)
+{"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
+ "text","url","refId","metadata":{…}}   // the card's entire element tree is in metadata.body / header; rich-text block ancestors are in metadata.blocks
+```
+
+Sending attachments requires full device permissions (unavailable to answer-only devices) and uses the Lark gateway account bound to the plugin; callers can't override the account. The plugin declares `lark_attachments`, which the hub merges into hello/health features.
+`client_id` must be a UUID and stay the same across retries of the same message; message reads also preserve optional `client_id`, `local_state`, used to remove late echoes after send timeouts. `local:` and pending/failed copies don't count as send confirmation.
+
+Media rewrite rules: throughout parts JSON, `"/api/media/` → `"/api/v1/lark/media/`, `"/api/messages/` → `"/api/v1/lark/messages/`
+(including messages nested inside merged-forward cards).
+
+`retained=true` means the gateway retained the recalled original content, not that permissions are restored; display still keeps `recalled`, and this must not enable replies, reactions or card writes. Neither display switch deletes server-retained data or restricts existing message-read permissions; when settings are off / unknown, clients hide recalled originals and edit-history entry points. OLK projections in history, quotes and forwards use current authorization; when locked, only public content is shown and decrypted bodies are cleared from the phone cache.
+
+## Personal Agent source status
+
+The hub has no personal Agent sources of its own; all sources come from `agent_sources` of running extensions (`docs/extensions/extensions.md` ("Personal Agent sources")).
+With no such extension running, `GET /api/v1/agents` returns `{"sources":[]}` and `GET /api/v1/agents/sessions` returns `{"sessions":[]}`, both HTTP 200.
+With sources, `GET /api/v1/agents` has one entry per source: `{"sources":[{"source":"<contribution id>","enabled","error"?,"setup"?,"providers":[…],"accounts":[…]}]}`;
+the Lark plugin picks its own source id; keeping the same id across upgrades keeps session ids unchanged.
+`setup` explains why the source is reachable but has nothing to list yet; clients turn it into a notice when the session list is empty:
+`missing` (the backend doesn't support personal Agents, such as a gateway without agent-bridge), `disabled` (supported but not enabled, such as agent-bridge being off on the gateway),
+`no_accounts` (enabled but no accounts connected yet); these states mean the source has no sessions. Other failures (such as unreachable) go in `error`, and the session endpoint still reports errors normally (when multiple sources exist and no `source` is specified, the failing source is skipped).
+
+## Personal Agent list preferences
+
+`GET /api/v1/agents/prefs` / `PUT /api/v1/agents/prefs` (replaces the whole set), stored in the hub's settings table (key `agents.prefs`), shared by web and iOS:
+
+```json
+{"pins":["<sessionId>"],
+ "view":{"group":"date|provider|none","sort":"updated|unread|name","show":"all|unread|sendable","providers":["grok_bot"]},
+ "sections":[{"id":"s1","name":"Work"}],
+ "assign":{"<sessionId>":"s1"},
+ "updatedAt":"…"}
+```
+
+- Omitted fields = defaults (group by date, sort by latest update, show all, all sources). `pins` is ordered and deduplicated; `assign` entries pointing to missing sections are dropped.
+- Pinned sessions always appear in "Pinned" at the top, followed by custom sections, then groups from `view.group`.
+- After a successful PUT, broadcasts `{"type":"agents.prefs"}`, and other clients GET again. When an old hub lacks this endpoint (404), clients store preferences only locally.
+
+## Tags in messages (parsed by clients)
+
+| Tag | Written by | Meaning / display |
+| --- | --- | --- |
+| `<attached_images>` one path per line `</attached_images>` | hub (images sent from the phone) | images attached to the message; square thumbnails above the bubble |
+| `<persona-context kind="context\|edit\|doc\|instructions" title="…" url="…">text</persona-context>` | phone (text selected in a link card), hub (Lark /agent instructions and context) | not written by the user: all blocks gather into one "Context · N items" row beside the bubble (with one block, "Context · title"), collapsed by default; expanding shows a title list, each opening the body and link. Attributes may be in any order or omitted (`url` is often absent); only text outside the tags is user-written |
+| Rename (#3182): tags are moving from `<persona-context>` to `<persona-context>`, with attributes unchanged | | readers (hub, node, web, Android, Apple, DSH) accept both names, with mixed opening / closing tags allowed; closing tags of either name are stripped from block bodies. Attribute-free live snapshots and run instructions already write only `<persona-context>` (written and stripped by the same node, never seen by the App); blocks with attributes (hub templates, the three clients) still write `<persona-context>`, to switch once Apps that recognize the new name are widespread: old Apps only recognize `persona-context` and show an entire `<persona-context …>` block as body text |
+| `<persona-context kind="workspace" title="…" url="" machine="<machine id>" cwd="<folder>" branch="…">` | web (a workspace picked in the assistant's @ menu, #5594) | shown like the other blocks. Before the assistant gets it, the manager replaces the block (same tag, `branch` dropped) with where to dispatch by default, knowledge-base projects and recent Agents in that folder (docs/assistant/assistant.md "Workspace mentions"); a block naming an unknown computer is passed on as written |
+| `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code (cross-session messages) | a left-side "From name" card, body rendered as Markdown |
+
+### Quote and comment blocks at the start of messages (web, #2427, #2437)
+
+Web "Quote" and "Comment" use no tags or structured fields: on send they become `> ` blocks at the start of the message (`withQuoteBlock` in `web/src/lib/drafts.ts`, `web/src/lib/comments.ts`); the assistant and Agents on computers read them as text, and other clients that don't recognize them simply see `>` lines.
+At most one quote block starts a message (the quoted words; for a task card, the first line is `任务「标题」（todo id: …）`, meaning `Task “title” (todo id: …)`), followed by any number of comment blocks, separated by blank lines, and finally the user's typed text:
+
+```text
+> Quoted words                  ← quote block (optional)
+
+> Comment 1                     ← comment on selected text: number, original text (nested in another `> `), blank line, comment
+> Selected text:
+> > The selected lines
+>
+> State the source clearly here
+
+> Code comment 2                ← code comment: number, location, optional Side / Diff / Truncated, fenced code, comment
+> File: src/app.ts:12-14        ← path relative to the session directory (original path if outside it); line numbers are from the new file, with `Side: old` when only deleted lines are selected
+> Diff: staged                  ← absent for comments on files; staged | unstaged | commit <first 8 chars>; code lines carry `+`, `-`, space, and the fence uses `diff`
+> Truncated: the first 60 of 80 lines
+> ```ts
+> const a = 1;
+> ```
+>
+> Why not use a constant?
+
+The user's typed text
+```
+
+Limits: comments up to 4000 characters, attached code up to 60 lines (extra lines are counted in `Truncated` but not included); the fence has one more backtick than the longest run in the code. Numbers follow the order of comments above the input, starting at 1.
+On reading back, web only recognizes blocks after the first block whose first line is `Comment N` / `Code comment N` (`splitQuotes`), so ordinary `> ` quotes are unaffected; editing a sent message puts comments back above the input.
+
+## Messages injected by Persona
+
+The hub sends some model-facing messages into chats as "user input" (#2360, #2358). In the transcript they have `role:"user", kind:"text"`, just like the user's typed words,
+but aren't user-written: **clients don't draw them as user bubbles or show the instructions for the model inside them**. The text the model receives is unchanged (templates in `server/internal/prompts/`);
+recognition happens entirely when sending to clients: the hub recognizes the line by template (`prompts.ParseInjected`, tested against rendering) and adds `injected` to the item. Pagination (`/items`), pushes (`items` events and subscription backlog),
+and `/items/{iid}/full` all carry it. Recognition is by text, so old messages and those written by old nodes carry it too. A line the App sends with its own `client_msg_id` is never recognized as injected.
+
+```jsonc
+"injected": {
+  "kind": "task_notice|followup|system",
+  "state": "…",            // see the table below
+  "title": "Remove the extension list from README", // task name / scheduled task title / what a wake-up is waiting for; may be empty
+  "machine": "<computer name>",  // task_notice only: which computer the Agent is on (name; may be empty)
+  "todo_id": "td_…",        // task_notice only: when the hub can identify the task (still open, unique title); may be empty, in which case the client looks for a task card in the same chat by title
+  "line": "Task 'Remove the extension list from README' is done", // one human-readable sentence, displayed directly
+  "detail": "…"             // followup once / daily / interval only: the task's own instructions (what the user wrote in the scheduled task), which can be shown collapsed; empty otherwise
+}
+```
+
+| Source (template) | Start of text | `kind` | `state` | `line` |
+| --- | --- | --- | --- | --- |
+| A quiet task dispatched from the main chat has a result (`assistant/task_notice.md`) | `🔔 任务「标题」做完了（电脑）` ("Task 'title' is done (computer)"), with `（这是 Persona 的任务通知，……` ("This is a Persona task notification, …") on the second or third line | `task_notice` | `done` / `needs` / `interrupted` / `failed` | Task "x" is done / waiting for you / interrupted / couldn't start |
+| A scheduled task or follow-up is due (`assistant/task_run.md`) | `⏰ 标题（你之前安排的跟进）` / `（定时任务）` / `（定时任务，每 30 分钟）` ("title (a follow-up you scheduled)" / "(scheduled task)" / "(scheduled task, every 30 minutes)") | `followup` | `once` / `daily` / `interval` | Follow-up "x" is due / Scheduled task "x" starts running |
+| Wake an Agent that is waiting (`agents/wake.md`, Agents chats) | `⏰（Persona 叫醒你，第 N 次）` ("Persona wakes you, attempt N") | `followup` | `wake` | Persona woke it: check whether "what it's waiting for" is ready |
+| A node restart lost background tasks (`assistant/lost_tasks.md`) | `⚠️ 运行你的 node 刚重启过` ("The node running you just restarted") | `system` | `lost_tasks` | The node restarted; N background tasks stopped |
+| A supervision message in the main chat (`assistant/supervise.md`, #3124) | `📋 督办：你派出去的任务有 N 个要你处理` ("Supervision: N tasks you dispatched need your attention"), with `这是 Persona 的督办消息` ("This is a Persona supervision message") on the second line | `system` | `supervise` | Supervision: N dispatched tasks need attention |
+
+**Display** (the same on every client):
+
+- Draw a lightweight centered system notice: icon + `line`, not a right-side user bubble, without exposing the original text. Tapping `task_notice` opens the task (`todo_id`, otherwise find a task card / to-do in this chat by `title`; untappable if neither is found);
+  once / daily / interval `followup` can be opened to read `detail`; the rest aren't tappable.
+- If a card for the same task (receipt, task card) is already above it in the main chat, this line can merge into the card instead of being drawn separately; never repeat the Agent's last words (already on the card).
+- Doesn't count as user-sent: isn't treated as a turn start when matching pending bubbles (`client_msg_id` / text matching), and isn't counted in "what you said" statistics. Chat list previews, search results and copying "the user's words" use `line`, not the original text.
+- A task notification still queued for sending already uses only `任务「x」的通知` ("Notification for task 'x'") in the `queued` field of `sessions`.
+
+**When an old hub has no `injected`**, recognize by text (only lines with `role:"user", kind:"text"` and no `client_msg_id`; strip leading whitespace and `<persona-context>` snapshot blocks first):
+
+- `task_notice`: the first line matches `^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$` (task title, done / waiting for the user / interrupted by a model service error / couldn't start, optional computer), and the full text contains `这是 Persona 的任务通知` ("This is a Persona task notification").
+  Group 2 maps to `done` / `needs` / `interrupted` / `failed`; group 3 is `machine`.
+- `followup`: the first line matches `^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`: `你之前安排的跟进` ("a follow-up you scheduled") is `once`, `定时任务，每 …` ("scheduled task, every …") is `interval`, `定时任务` ("scheduled task") is `daily`;
+  `detail` is the body after the first blank line (remove the trailing instruction paragraph starting with `（知识库`, "(knowledge base"). A first line starting with `⏰（Persona 叫醒你，第` ("Persona wakes you, attempt") is `wake`; `title` is the text inside `在等「…」` ("waiting for '…'").
+- `system`: starts with `⚠️ 运行你的 node 刚重启过` ("The node running you just restarted"); the count of lines starting with `- ` is the number of stopped tasks. Supervision messages are only sent by new hubs that write them, and always carry `injected` when sent; they aren't in the shared fixtures, and clients don't need to recognize them themselves.
+- Anything unrecognized stays a user bubble (better to miss recognition than hide the user's words).
+- Shared fixtures: `spec/fixtures/injected/cases.json` (Go test `TestParseInjected` generates them from templates; `UPDATE_GOLDEN=1` rewrites them): `input.text` → `expected` (`null` means not recognized); all clients run their fallback recognition against these fixtures.
+
+Other "not user-written" messages already have their own shapes and aren't covered here: messages from another chat (`<persona-context title="来自对话「x」">`, "From chat 'x'"), background for resuming the old main chat (`<persona-context title="接上旧主对话">`, "Resume the old main chat")
+are gathered as "Context" by the tags above; background-task notifications use `kind:"notice"` + `task`; `/model`, compaction and similar notices use `kind:"notice"`.
+

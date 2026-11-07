@@ -82,12 +82,12 @@ nonisolated enum VoicePCM {
     }
 }
 
-/// Where the microphone's PCM goes (docs/voice.md 1.2 A「ready 之前的声音最多缓存 3 秒」): held, at most `seconds` of it
+/// Where the microphone's PCM goes (docs/assistant/voice.md 1.2 A「ready 之前的声音最多缓存 3 秒」): held, at most `seconds` of it
 /// (the oldest dropped), until the extension is ready, then sent as it comes; held again while the call reconnects.
 /// The audio thread pushes; the main actor opens, holds and closes it. Each piece keeps the rate it was captured at:
 /// what was held before `ready` named the extension's rate is resampled to it on the way out.
 ///
-/// Muting sends silence of the same length (docs/voice.md 1.2 K): the extension keeps hearing time pass and the upstream's
+/// Muting sends silence of the same length (docs/assistant/voice.md 1.2 K): the extension keeps hearing time pass and the upstream's
 /// turn-taking does not stall. The input level (about 20 a second, for the orb) is measured before muting and is 0
 /// while muted.
 nonisolated final class VoiceUplink: @unchecked Sendable {

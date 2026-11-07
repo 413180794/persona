@@ -1,6 +1,6 @@
 import Foundation
 
-/// Demo Mode (docs/ios.md「体验模式」): a made-up hub inside the app, for someone without one (App Review, a friend
+/// Demo Mode (docs/apple/ios.md「体验模式」): a made-up hub inside the app, for someone without one (App Review, a friend
 /// with the TestFlight link). It sits under the data layer, so no page knows: `APIClient.request` and `LiveConnection`
 /// hand the demo config's traffic to it, and it answers with the hub's JSON. The data is scripts/mock/mock_hub.py's, written
 /// to Resources/Demo.json by scripts/mock/make_demo_data.py, with times moved to now. Nothing leaves the phone: what would
@@ -106,7 +106,7 @@ final class DemoHub {
 
     private static func iso(_ d: Date) -> String { d.formatted(.iso8601) }
 
-    /// Subscription Usage (docs/usage-windows.md): a Claude and a Codex account, their windows relative to now.
+    /// Subscription Usage (docs/server/usage-windows.md): a Claude and a Codex account, their windows relative to now.
     private static func usageWindows(now: Date = .now) -> JSONValue {
         func win(_ label: String, _ mins: Int, _ used: Double, _ left: TimeInterval) -> JSONValue {
             ["label": .string(label), "window_minutes": .number(Double(mins)), "used_percent": .number(used),
@@ -192,7 +192,7 @@ final class DemoHub {
         case ["mutes"]: return mutes
         case ["assistant"]:
             var a = data["assistant"]?.object ?? [:]
-            // ?space=health lists the health space's own (docs/health.md); the plain list never holds them.
+            // ?space=health lists the health space's own (docs/assistant/health.md); the plain list never holds them.
             let space = q["space"] ?? ""
             a["conversations"] = .array(sessions.filter { $0["assistant"]?.bool == true && ($0["space"]?.string ?? "") == space })
             return .object(a)
@@ -801,7 +801,7 @@ final class DemoHub {
                 disk: (p.disk * p.diskTotal * Self.gb).rounded())
     }
 
-    // MARK: Token usage (docs/machines.md "Token usage")
+    // MARK: Token usage (docs/server/machines.md "Token usage")
 
     /// Which models and launchers a demo machine runs, and its share of the work.
     private static let usageMix: [String: (scale: Double, runs: [(model: String, launcher: String, share: Double)])] = [

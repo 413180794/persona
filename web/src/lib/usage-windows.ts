@@ -1,4 +1,4 @@
-// Subscription rate-limit windows (#2432, docs/usage-windows.md): GET /api/v1/usage/windows lists the accounts the
+// Subscription rate-limit windows (#2432, docs/server/usage-windows.md): GET /api/v1/usage/windows lists the accounts the
 // machines' agents are signed in to with how much of each window (5h, 7d …) is used. Pure helpers here (pace,
 // countdown, sample age, what the sidebar shows); the bars and the popover are views/UsageBars.tsx.
 import { useEffect, useState } from "react";

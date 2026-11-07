@@ -1,4 +1,4 @@
--- The plugin registry (docs/plugins.md, #1101): installed plugins and the switches and settings of built-in ones, their
+-- The plugin registry (docs/extensions/extensions.md, #1101): installed plugins and the switches and settings of built-in ones, their
 -- secrets sealed with the hub's secret.key (like connector_secrets), and an audit of what changed them. hub.json's
 -- plugins are never here. (Numbered 0291 to stay clear of other lanes' numbers.)
 CREATE TABLE IF NOT EXISTS plugins (

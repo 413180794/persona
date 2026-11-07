@@ -1,4 +1,4 @@
-"""Rebuild prototypes/android/flows.html from the Mermaid blocks in docs/redesign/flows.md.
+"""Rebuild prototypes/android/flows.html from the Mermaid blocks in docs/archive/redesign/flows.md.
 
 The page embeds the rendered SVGs, so it opens offline without a CDN. Rendering needs Google Chrome and the
 mermaid npm package (installed once into a cache directory):
@@ -16,7 +16,7 @@ import sys
 import tempfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-SRC = os.path.join(ROOT, "docs", "redesign", "flows.md")
+SRC = os.path.join(ROOT, "docs", "archive", "redesign", "flows.md")
 OUT = os.path.join(ROOT, "prototypes", "android", "flows.html")
 CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 CACHE = os.environ.get("MERMAID_CACHE", os.path.join(tempfile.gettempdir(), "persona-mermaid"))

@@ -1,4 +1,4 @@
-// Settings › Managers (docs/managers.md, docs/protocol.md "Managers"): the hub's roster of managers (each a whole assistant),
+// Settings › Managers (docs/assistant/managers.md, docs/protocol/protocol.md "Managers"): the hub's roster of managers (each a whole assistant),
 // making one (a one-time install code, and the install commands when the hub gives them), renaming, the default,
 // installing one elsewhere and removing one. The hub pushes {"type":"managers"} when the roster changes to a page
 // that declared the feature `managers` (CLIENT_FEATURES).

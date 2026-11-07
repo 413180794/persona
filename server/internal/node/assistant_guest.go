@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Guest conversations (the hub's assistant/guest.go, docs/assistant.md ("Guest conversations")): an assistant conversation that
+// Guest conversations (the hub's assistant/guest.go, docs/assistant/assistant.md ("Guest conversations")): an assistant conversation that
 // answers someone else for the user. It is started on Claude Code only (no other agent, runtime or the Agent SDK,
 // whose built-in tools could not be taken away), never in the warm spare, and every process it runs in (a resume,
 // a compaction, a model switch) has no built-in tools (--tools ""), only Persona's MCP server (--strict-mcp-config:
@@ -100,7 +100,7 @@ func (n *Node) guestMCPAndTools(id string, tools []string) (mcpJSON string, tool
 // assistantDirOf is where a directory the hub names relative to HOME for the assistant (".persona/assistant",
 // ".persona/health", ".persona/guest") is on this node. Under a custom PERSONA_HOME it is in that root, the data_dir the
 // hub reports the assistant's directory in (#5505); on the default layouts (~/.persona, ~/.persona) it stays at the
-// path it always had, which Claude Code knows the assistant's sessions and memory by (docs/rename.md).
+// path it always had, which Claude Code knows the assistant's sessions and memory by (docs/operations/rename.md).
 func (n *Node) assistantDirOf(rel string) string {
 	if sub, ok := compat.StateSubpath(filepath.ToSlash(rel)); ok && n.customDataDir() {
 		return filepath.Join(n.dir, filepath.FromSlash(sub))

@@ -1,4 +1,4 @@
-// Settings › Connectors › Lark bot (docs/bots.md, the app's FeishuBotView): talk to Persona from Feishu. A row on the
+// Settings › Connectors › Lark bot (docs/extensions/bots.md, the app's FeishuBotView): talk to Persona from Feishu. A row on the
 // connectors page with the bot's state; its page (a dialog) has the status and the on / off switch, the app's
 // credentials, pairing with a code sent to the bot, what the bot may do, the agents driven there, and how to make one.
 // Each change goes to the hub at once and the page shows what the hub answered; a failed one leaves it as it was.

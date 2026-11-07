@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""personactl: drive a running DEBUG Persona in the simulator through its runtime CLI (docs/runtime-cli.md).
+"""personactl: drive a running DEBUG Persona in the simulator through its runtime CLI (docs/operations/runtime-cli.md).
 
   personactl.py launch --hub http://127.0.0.1:18760 [-- <more launch args>]   terminate, launch with the channel, wait
   personactl.py ping | state
@@ -31,7 +31,7 @@
   personactl.py perf | refresh                                                 view-body counts (-perfCounts YES) | pull the hub
   personactl.py call <command> [key=value …]                                   any command the app knows
 
-A DEBUG build on a real phone, through the hub (docs/runtime-cli.md "A real phone through the hub"): --via-hub <hub url> (or
+A DEBUG build on a real phone, through the hub (docs/operations/runtime-cli.md "A real phone through the hub"): --via-hub <hub url> (or
 $PERSONACTL_VIA_HUB) sends every command to POST /api/v1/phone/runtime-cli; the hub's token comes from $PERSONACTL_HUB_TOKEN,
 the file $PERSONACTL_HUB_TOKEN_FILE, or hub.json in the selected state root on the hub's machine, and is never printed. state, settle, tree,
 find, wait, tap (accessibility activation only), scroll, type, snapshot and screenshot work that way; launch, reset and

@@ -8,7 +8,7 @@ import SwiftUI
 struct AssistantView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var widthClass
-    /// The ChatGPT-style shell (docs/ios.md「新外壳」): it owns the drawer, and pushes its pages here.
+    /// The ChatGPT-style shell (docs/apple/ios.md「新外壳」): it owns the drawer, and pushes its pages here.
     @Environment(\.shell) private var shell
     #if os(iOS)
     /// The iPad's tabs without Inbox and Settings (`RootTabs.padSidebar`): the sidebar column lists them as the shell's does.
@@ -27,9 +27,9 @@ struct AssistantView: View {
     @State private var showTodos = false
     /// An extension's main-navigation page opened from the sidebar (#2961).
     @State private var openedExtension: ExtensionNavRoute?
-    /// Health: the health space's page (docs/health.md).
+    /// Health: the health space's page (docs/assistant/health.md).
     @State private var showHealth = false
-    /// The sidebar (Chat History, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
+    /// The sidebar (Chat History, or a drag to the right anywhere on the page): docs/apple/ios.md「Persona 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
     /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; Chat History shows or hides it.
     @State private var columns = SplitColumns.shown
@@ -336,7 +336,7 @@ struct AssistantView: View {
                                                               effort: starterEffort.isEmpty ? nil : starterEffort,
                                                               main: makesMain, space: space)
                 } catch where CodedFailure.passesBySelf(error) && attempt < 3 {
-                    // The assistant restarting: a few seconds, tried again without a word (docs/onboarding.md 4.6).
+                    // The assistant restarting: a few seconds, tried again without a word (docs/assistant/onboarding.md 4.6).
                     attempt += 1
                     try await Task.sleep(for: .seconds(2 * attempt))
                 }
@@ -709,13 +709,13 @@ struct TypingIndicator: View {
 struct StarterComposer: View {
     @Environment(AppModel.self) private var model
     var disabled: Bool
-    /// The shell's composer (docs/ios.md「新外壳」): the launcher, mode and effort are in its gauge menu.
+    /// The shell's composer (docs/apple/ios.md「新外壳」): the launcher, mode and effort are in its gauge menu.
     var shell: ShellModes? = nil
     /// The field's hint; nil: Ask <Persona's name>… (Health has its own).
     var placeholder: String? = nil
-    /// Where picked files land on the assistant's machine: "health" for Health's reports/ (docs/health.md「体检报告」).
+    /// Where picked files land on the assistant's machine: "health" for Health's reports/ (docs/assistant/health.md「体检报告」).
     var uploadDest: String? = nil
-    /// The main conversation cannot answer yet (docs/onboarding.md 4.4): send goes to what is missing, the draft stays.
+    /// The main conversation cannot answer yet (docs/assistant/onboarding.md 4.4): send goes to what is missing, the draft stays.
     var gate: SendGate? = nil
     var send: (String, [ImagePayload]) -> Void
 
@@ -805,7 +805,7 @@ struct StarterComposer: View {
             }
         }
         #if os(macOS)
-        // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
+        // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/apple/mac.md「细节」).
         .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
             uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model, dest: uploadDest) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
@@ -841,7 +841,7 @@ struct BeautifulStarterComposer: View {
     @Binding var launcher: String?
     /// The field's hint; nil: Ask <Persona's name>… (Health has its own).
     var placeholder: String? = nil
-    /// Where picked files land on the assistant's machine: "health" for Health's reports/ (docs/health.md「体检报告」).
+    /// Where picked files land on the assistant's machine: "health" for Health's reports/ (docs/assistant/health.md「体检报告」).
     var uploadDest: String? = nil
     /// The main conversation cannot answer yet: send goes to what is missing, the draft stays (the card says what).
     var gate: SendGate? = nil
@@ -944,7 +944,7 @@ struct BeautifulStarterComposer: View {
             }
         }
         #if os(macOS)
-        // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
+        // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/apple/mac.md「细节」).
         .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
             uploads.start(urls, machine: model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID), model: model, dest: uploadDest) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)

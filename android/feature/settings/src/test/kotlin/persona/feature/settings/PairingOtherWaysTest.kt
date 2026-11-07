@@ -27,7 +27,7 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.*
 import java.io.File
 
-/** The connect step names no command (docs/onboarding.md 4.5): the hub's pair command waits under "Other ways". */
+/** The connect step names no command (docs/assistant/onboarding.md 4.5): the hub's pair command waits under "Other ways". */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "zh-w400dp-h900dp-xhdpi")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reads the personal build / deploy config (docs/config.md) so no script hard-codes one person's setup.
+"""Reads the personal build / deploy config (docs/operations/config.md) so no script hard-codes one person's setup.
 
 The config lives outside the repository so clean worktrees (releases) see it too:
   $PERSONA_CONFIG, else ~/.config/persona/config.json   (template: config.example.json)
@@ -27,7 +27,7 @@ def path() -> str:
 def load() -> dict:
     p = path()
     if not os.path.exists(p):
-        sys.exit(f"missing {p}\nCopy config.example.json there and fill it in (docs/config.md).")
+        sys.exit(f"missing {p}\nCopy config.example.json there and fill it in (docs/operations/config.md).")
     with open(p) as f:
         cfg = json.load(f)
     return cfg
@@ -68,7 +68,7 @@ def env(cfg: dict) -> dict:
         # Where scripts/release/publish.sh puts personad and install.sh (the site/ worker's domain), and the wrangler to run.
         "PERSONA_PUBLISH_URL": get(cfg, "publish.site_url", "").rstrip("/"),
         "PERSONA_WRANGLER": os.path.expanduser(get(cfg, "publish.wrangler", "")),
-        # Meta glasses (docs/meta-glasses.md): the project.yml include that adds the Meta Wearables SDK is on only for YES.
+        # Meta glasses (docs/apple/meta-glasses.md): the project.yml include that adds the Meta Wearables SDK is on only for YES.
         "PERSONA_META_WEARABLES": "YES" if get(cfg, "app.meta_wearables.enabled", False) is True else "NO",
     }
     # Which Xcode builds (and releases) the app; a DEVELOPER_DIR already in the environment wins. iPhone Duo needs
@@ -105,7 +105,7 @@ def provisioning_profiles(cfg: dict) -> dict[str, str]:
     return profiles
 
 
-# The app's entitlements. The CarPlay voice entitlement needs Apple's approval first (docs/carplay.md); the generated copy
+# The app's entitlements. The CarPlay voice entitlement needs Apple's approval first (docs/apple/carplay.md); the generated copy
 # sits in apple/, outside the Persona/ source folder, so XcodeGen does not pick it up as a resource.
 APP_ENTITLEMENTS = os.path.join("Persona", "Resources", "Persona.entitlements")
 CARPLAY_ENTITLEMENTS = "PersonaCarPlay.entitlements"
@@ -130,19 +130,19 @@ def xcconfig(cfg: dict):
     with open(out, "w") as f:
         f.write("// Generated from %s by scripts/persona_config.py; do not edit or commit.\n" % path())
         f.write("PERSONA_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))
-        # The App Group the app shares files with the widget extension (docs/release.md "App Group").
+        # The App Group the app shares files with the widget extension (docs/operations/release.md "App Group").
         f.write("PERSONA_APP_GROUP = %s\n" % app_group(cfg))
         f.write("DEVELOPMENT_TEAM = %s\n" % get(cfg, "app.team_id", ""))
-        # The push relay the app registers with (docs/push-relay.md); "//" starts a comment in xcconfig, hence $().
+        # The push relay the app registers with (docs/operations/push-relay.md); "//" starts a comment in xcconfig, hence $().
         f.write("PERSONA_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
-        # Which entitlements the app signs with (app_entitlements; docs/carplay.md).
+        # Which entitlements the app signs with (app_entitlements; docs/apple/carplay.md).
         f.write("PERSONA_APP_ENTITLEMENTS = %s\n" % app_entitlements(cfg))
-        # "No hub yet?" on the first screen opens this page (docs/getting-started.md published; empty: the row is hidden).
+        # "No hub yet?" on the first screen opens this page (docs/operations/getting-started.md published; empty: the row is hidden).
         f.write("PERSONA_GETTING_STARTED_URL = %s\n" % get(cfg, "publish.getting_started_url", "").replace("//", "/$()/"))
-        # Meta Wearables (docs/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
+        # Meta Wearables (docs/apple/meta-glasses.md): 0 means Developer Mode (no attestation), as Meta's docs say.
         f.write("PERSONA_META_APP_ID = %s\n" % (str(get(cfg, "app.meta_wearables.app_id", "") or "") or "0"))
         f.write("PERSONA_META_CLIENT_TOKEN = %s\n" % (get(cfg, "app.meta_wearables.client_token", "") or ""))
-        # The in-app tunnel core (docs/network.md"Connect to the hub through an in-app tunnel"): linked into device builds only when set.
+        # The in-app tunnel core (docs/operations/network.md"Connect to the hub through an in-app tunnel"): linked into device builds only when set.
         include, ldflags = tunnel_core(cfg)
         f.write("PERSONA_TUNNEL_INCLUDE = %s\n" % include)
         f.write("PERSONA_TUNNEL_LDFLAGS = %s\n" % ldflags)
@@ -160,7 +160,7 @@ def tunnel_core(cfg: dict) -> tuple[str, str]:
     d = os.path.abspath(os.path.expanduser(raw))
     missing = [n for n in ("libpersonatunnel.a", "module.modulemap") if not os.path.isfile(os.path.join(d, n))]
     if missing:
-        sys.exit(f"app.tunnel_core {d}: missing {', '.join(missing)} (docs/network.md「经 App 内隧道连 hub」)")
+        sys.exit(f"app.tunnel_core {d}: missing {', '.join(missing)} (docs/operations/network.md「经 App 内隧道连 hub」)")
     q = '"%s"' % d
     return q, f"-L{q} -lpersonatunnel -lresolv -framework Security -framework CoreFoundation"
 

@@ -6,7 +6,7 @@ import persona.core.contracts.CoreText
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Route choices made on this phone for one pairing (docs/android.md "Connection addresses"). The hub's endpoint list never
+ * Route choices made on this phone for one pairing (docs/android/android.md "Connection addresses"). The hub's endpoint list never
  * overwrites them, and they are erased together with the pairing (unpair, revocation, pairing again).
  */
 data class EndpointOverrides(

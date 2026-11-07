@@ -18,7 +18,7 @@ func (h *countingHub) Hello(ctx context.Context) (Hello, error) {
 	return h.fakeHub.Hello(ctx)
 }
 
-// A mesh member leaves its tasks to the center (docs/mesh.md), so a one-off already past stays past: the loop must
+// A mesh member leaves its tasks to the center (docs/server/mesh.md), so a one-off already past stays past: the loop must
 // still sleep, not wake every 50 ms for as long as the hub is a member.
 func TestStandbyScheduleLoopDoesNotSpinOnAPastTask(t *testing.T) {
 	f := newFakeHub().withMachine()

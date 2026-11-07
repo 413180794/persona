@@ -3,7 +3,7 @@ import XCTest
 /// The Agents list split by machine (#2108): By Repository, the default, puts each machine's repositories under its heading, and
 /// By Project its spaces; a heading folds its machine; one machine shown (the machine menu) has no heading. Against
 /// scripts/mock/mock_hub.py (PERSONA_MOCK_HUB: three machines). The working-tree level is `AgentRepoTreeTests`' and the
-/// screenshots' (`MOCK_WORKTREES=1`, docs/testing.md).
+/// screenshots' (`MOCK_WORKTREES=1`, docs/operations/testing.md).
 final class AgentsByMachineTests: XCTestCase {
     private var app: XCUIApplication!
 

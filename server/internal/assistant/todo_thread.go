@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// The chat thread a todo is bound to (#5279, docs/todos.md "Chat thread"): at most one thread per todo and one todo
+// The chat thread a todo is bound to (#5279, docs/assistant/todos.md "Chat thread"): at most one thread per todo and one todo
 // per thread. This is the binding only; nothing is posted to the thread and nothing it says comes back yet.
 
 // TodoThread is the binding as the apps and the store have it. Channel is a channel id (internal/channel: "feishu"

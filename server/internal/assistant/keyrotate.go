@@ -20,7 +20,7 @@ import (
 
 // The built-in manager's secret.key started as a copy of the hub's (managerconf.MoveFiles), so each part could open
 // the other's secrets. Once its data is in its own database (owndb.go), it rotates to a key of its own, once, at its
-// start, before anything of it reads a secret (docs/managers.md "Its own secret.key"):
+// start, before anything of it reads a secret (docs/assistant/managers.md "Its own secret.key"):
 //
 //  1. Under an advisory lock in its database (two starts at once: one rotates, the other finds it done), it keeps the
 //     key it has in secret.key.prev and writes a fresh one to secret.key.next-<its fingerprint>.

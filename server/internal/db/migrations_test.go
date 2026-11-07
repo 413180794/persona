@@ -69,7 +69,7 @@ func setTables(t *testing.T, part string) []string {
 	return out
 }
 
-// Every migration is in exactly one set and has a number of its own (docs/server.md "Migrations"), but for the frozen
+// Every migration is in exactly one set and has a number of its own (docs/server/server.md "Migrations"), but for the frozen
 // few in bothSets and sharedNumbers.
 func TestMigrationSets(t *testing.T) {
 	root, err := fs.ReadDir(migrations, "migrations")
@@ -124,7 +124,7 @@ func TestMigrationSets(t *testing.T) {
 		}
 	}
 	if !slices.Equal(both, sharedTables) {
-		t.Errorf("tables both sets make: %v, want %v: a table is one side's (docs/server.md \"Migrations\")", both, sharedTables)
+		t.Errorf("tables both sets make: %v, want %v: a table is one side's (docs/server/server.md \"Migrations\")", both, sharedTables)
 	}
 }
 

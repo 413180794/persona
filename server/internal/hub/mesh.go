@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// The hub mesh (docs/mesh.md): hubs paired with each other keep a link each (peer_link.go) and flood records of
+// The hub mesh (docs/server/mesh.md): hubs paired with each other keep a link each (peer_link.go) and flood records of
 // themselves (mesh_view.go). One hub of the group is its center (mesh_group.go): it serves every app and drives every
 // computer, directly or through the other hubs, the members, which pass the apps' requests on to it (peer_http.go) and
 // open streams to their computers' nodes for it (peer_node.go).
@@ -400,7 +400,7 @@ func (h *Hub) meshPersist(force bool) {
 	}
 }
 
-// meshHub is a hub of the group as the apps see it in hello's mesh (docs/plan-hub-mesh.md 2.6, plan-hub-center.md
+// meshHub is a hub of the group as the apps see it in hello's mesh (docs/archive/operations/plan-hub-mesh.md 2.6, plan-hub-center.md
 // 5): this hub, every hub it can reach, and the paired ones it cannot reach now. Center marks the group's center.
 type meshHub struct {
 	HubID     string   `json:"hub_id"`

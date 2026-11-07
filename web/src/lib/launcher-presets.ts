@@ -1,4 +1,4 @@
-// Settings › Model providers › Add provider (docs/onboarding.md 4.3 / 5.4, docs/extensions.md "Model providers", iOS LauncherPresetModel):
+// Settings › Model providers › Add provider (docs/assistant/onboarding.md 4.3 / 5.4, docs/extensions/extensions.md "Model providers", iOS LauncherPresetModel):
 // the providers the hub offers (GET /api/v1/launchers/presets): its built-in ones (plugin "builtin", in the request
 // language's order) and the extensions'. A launcher added from one sends only the key, the preset and maybe a name or
 // another of its models; the hub fills in the name, the address, the kind and the rest.
@@ -101,7 +101,7 @@ export function launcherNameProblem(name: string): string {
   return "";
 }
 
-/** The categories a provider added in the wizard takes over while they are still at their default (docs/onboarding.md 5.4). */
+/** The categories a provider added in the wizard takes over while they are still at their default (docs/assistant/onboarding.md 5.4). */
 export const ASSIGN_PURPOSES = ["assistant", "agent.new"] as const;
 
 /** The hub says the provider blocks this region: no key will work here, only another provider (#4482, #4526). */

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Settings › Managers (docs/managers.md): the roster with where each runs and its status, a hub without the roster, the
+// Settings › Managers (docs/assistant/managers.md): the roster with where each runs and its status, a hub without the roster, the
 // `managers` push reloading the list, New manager → the install code (with the commands when the hub gives them), and
 // Delete off for the default with why, confirmed for the rest, and the hub's refusals in plain words.
 import { act } from "react";

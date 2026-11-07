@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// Outlook "Sign in with Microsoft" (docs/mail.md "Connecting Outlook"): the same flow as Google's. The app opens
+// Outlook "Sign in with Microsoft" (docs/extensions/mail.md "Connecting Outlook"): the same flow as Google's. The app opens
 // Microsoft's sign-in page (ASWebAuthenticationSession) for a public client the user registered in Microsoft Entra
 // themselves (no client secret, PKCE), Microsoft redirects to a fixed custom scheme, and the hub exchanges the code
 // for a refresh token. IMAP and SMTP authenticate with SASL XOAUTH2. The client ID is not built in: the user enters
@@ -161,7 +161,7 @@ func (s *Service) SetMicrosoftClientID(ctx context.Context, id string) error {
 func (s *Service) StartMicrosoftOAuth(ctx context.Context, loginHint string) (*OAuthStart, error) {
 	clientID, _ := s.microsoftClient(ctx)
 	if clientID == "" {
-		return nil, userErr("还没有 Outlook 登录用的 client ID：先在 App 里填上你在 Microsoft Entra 注册的应用的 client ID（docs/mail.md「Outlook 接入方式」）")
+		return nil, userErr("还没有 Outlook 登录用的 client ID：先在 App 里填上你在 Microsoft Entra 注册的应用的 client ID（docs/extensions/mail.md「Outlook 接入方式」）")
 	}
 	verifier := randomURLSafe(48)
 	state, err := s.sealState(oauthState{Verifier: verifier, Created: s.now().Unix(), ClientID: clientID})

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Connecting… is said once on an agent's conversation in the shell (docs/shell.md「Said once」): the chat's title says
+/// Connecting… is said once on an agent's conversation in the shell (docs/apple/shell.md「Said once」): the chat's title says
 /// it, so the shell's floating pill keeps away. It showed both, the title's line and the pill just under the bar.
 /// Back on the Agents list, whose bar does not say it, the pill shows again.
 final class ShellChatLinkOnceTests: XCTestCase {

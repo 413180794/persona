@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/i18n.md). Same keys in values, values-zh and values-ja. -->
+<!-- Settings › Connectors / Channels / Model configuration / New model provider / Claude Code settings / Quota (docs/protocol/i18n.md). Same keys in values, values-zh and values-ja. -->
 <resources>
     <string name="settings_src_just_now">たった今</string>
     <plurals name="settings_src_minutes_ago">
@@ -98,7 +98,7 @@
     <string name="settings_src_lark_title">Lark</string>
     <string name="settings_src_lark_status_header">接続状態</string>
     <string name="settings_src_lark_last_event">最新のリアルタイムメッセージ</string>
-    <string name="settings_src_lark_not_configured_caption">ハブはまだLarkに接続されていません。ハブのマシンで Lark ゲートウェイを実行し、マネージャーのmanager.jsonのlarkに設定してください（docs/feishu.md）。</string>
+    <string name="settings_src_lark_not_configured_caption">ハブはまだLarkに接続されていません。ハブのマシンで Lark ゲートウェイを実行し、マネージャーのmanager.jsonのlarkに設定してください（docs/extensions/feishu.md）。</string>
     <string name="settings_src_lark_caption">Larkアカウントはハブのマシンの Lark ゲートウェイでログインします。チャットと受信トレイはこのアカウントを共有するため、再ログインは不要です。</string>
     <string name="settings_src_lark_accounts_header">アカウント</string>
     <string name="settings_src_lark_quarantined">開けません。Lark ゲートウェイで再試行するか削除してください</string>
@@ -424,5 +424,5 @@
     <string name="settings_src_mail_outlook_redirect">リダイレクト URI（登録時に入力）</string>
     <string name="settings_src_mail_outlook_copy_redirect">リダイレクト URI をコピー</string>
     <string name="settings_src_mail_outlook_copied">リダイレクト URI をコピーしました</string>
-    <string name="settings_src_mail_outlook_steps">Outlook ログインには Microsoft Entra で自分で登録したアプリを使います（無料、一度だけ。このハブは以後それを使います）：\n1. Microsoft アカウントで entra.microsoft.com を開き、「アプリの登録」→「新規登録」；\n2. サポートされているアカウントの種類は「任意の組織ディレクトリ内のアカウントと個人の Microsoft アカウント」；\n3. リダイレクト URI のプラットフォームは「パブリック クライアント/ネイティブ (モバイルとデスクトップ)」で、上のアドレスを入力；\n4. 「認証」で「パブリック クライアント フローを許可する」を「はい」に；\n5. 「API のアクセス許可」で IMAP.AccessAsUser.All と SMTP.Send（委任）を追加；\n6. 「概要」の「アプリケーション (クライアント) ID」をここに入力。\n詳しくは docs/mail.md の「Outlook 接入方式」を参照してください。</string>
+    <string name="settings_src_mail_outlook_steps">Outlook ログインには Microsoft Entra で自分で登録したアプリを使います（無料、一度だけ。このハブは以後それを使います）：\n1. Microsoft アカウントで entra.microsoft.com を開き、「アプリの登録」→「新規登録」；\n2. サポートされているアカウントの種類は「任意の組織ディレクトリ内のアカウントと個人の Microsoft アカウント」；\n3. リダイレクト URI のプラットフォームは「パブリック クライアント/ネイティブ (モバイルとデスクトップ)」で、上のアドレスを入力；\n4. 「認証」で「パブリック クライアント フローを許可する」を「はい」に；\n5. 「API のアクセス許可」で IMAP.AccessAsUser.All と SMTP.Send（委任）を追加；\n6. 「概要」の「アプリケーション (クライアント) ID」をここに入力。\n詳しくは docs/extensions/mail.md の「Outlook 接入方式」を参照してください。</string>
 </resources>

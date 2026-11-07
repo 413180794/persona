@@ -1,4 +1,4 @@
-// End-to-end acceptance of the echo example (docs/runtimes.md "Acceptance") against a real `personad node`: the template a new
+// End-to-end acceptance of the echo example (docs/integrations/runtimes.md "Acceptance") against a real `personad node`: the template a new
 // runtime copies for its own e2e (replace starting the echo runtime with starting yours).
 //
 //   PERSONAD=<personad binary> node integrations/runtime-sdk/e2e/echo.mjs

@@ -1,4 +1,4 @@
-// Package hubrelay is a manager's relay to the hub's API for its extensions (docs/managers.md "Extensions and the
+// Package hubrelay is a manager's relay to the hub's API for its extensions (docs/assistant/managers.md "Extensions and the
 // hub's API"). A manager may run anywhere and reach the hub only at its manager.json's hub, maybe across the internet
 // with a key it pins, which its extensions know nothing of. So it serves them the hub's API on its own loopback and
 // passes each request on with its own client: only the hub's API (/api/, no "." or ".." segment that would lead

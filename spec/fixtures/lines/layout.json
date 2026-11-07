@@ -7,7 +7,7 @@
       "description": "一个待处理交互放在正文外、输入框上方。",
       "source": [
         "ios/Persona/Views/Chat/ChatView.swift: mainFooter / chatScroll",
-        "docs/redesign/ux.md: 3.2 / 3.4 / 3.5"
+        "docs/archive/redesign/ux.md: 3.2 / 3.4 / 3.5"
       ],
       "derived": true,
       "verification": "view_source_order",
@@ -34,7 +34,7 @@
       "description": "多个待处理交互按输入顺序放在输入框上方。",
       "source": [
         "ios/Persona/Views/Chat/ChatView.swift: mainFooter / chatScroll",
-        "docs/redesign/ux.md: 3.2 / 3.4 / 3.5"
+        "docs/archive/redesign/ux.md: 3.2 / 3.4 / 3.5"
       ],
       "derived": true,
       "verification": "view_source_order",

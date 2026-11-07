@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Tasks from the assistant's conversation (docs/unified-entry.md): the hub's shapes decode, a task's state follows
+/// Tasks from the assistant's conversation (docs/assistant/unified-entry.md): the hub's shapes decode, a task's state follows
 /// its agents, the feed lands at the end of the exchange it happened in, and the @ of a mention is told from an address.
 @MainActor
 struct TasksTests {

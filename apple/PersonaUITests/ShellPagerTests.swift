@@ -1,6 +1,6 @@
 import XCTest
 
-/// The shell's Assistant | Agents strip (docs/ios.md「新外壳」, `ShellPager`): a drag to the left on Assistant slides to Agents, a
+/// The shell's Assistant | Agents strip (docs/apple/ios.md「新外壳」, `ShellPager`): a drag to the left on Assistant slides to Agents, a
 /// drag to the right on Agents slides back, a drag to the right on Assistant is still the drawer; pushed pages keep the
 /// system's back swipe, the list scrolls up and down without paging, and a row's own swipe (Pin…) stays the row's.
 /// Which page shows is read from the app's probe (`ShellPageProbe.swift`): the hidden page can stay in the accessibility

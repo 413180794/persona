@@ -14,7 +14,7 @@ import persona.core.contracts.api.FeishuBotStatus
 import persona.core.contracts.api.FeishuBotUpdate
 
 /**
- * Settings › Lark bot over the pairing's connection (docs/bots.md"Configuration and endpoints"). Saving credentials waits on the hub
+ * Settings › Lark bot over the pairing's connection (docs/extensions/bots.md"Configuration and endpoints"). Saving credentials waits on the hub
  * checking them with Feishu's open platform: longer than the client's usual read timeout.
  */
 class HttpFeishuBotSettings internal constructor(

@@ -40,13 +40,13 @@ const NodeDownMarker = "常驻 node 没在运行"
 // computer's name on the machine's page (devices nodeUnavailable, #4080).
 const NodeDownSelf = "本机的"
 
-// nodeMissing says the resident node is not answering at target, and how this computer runs it (docs/link.md "Installing
+// nodeMissing says the resident node is not answering at target, and how this computer runs it (docs/operations/link.md "Installing
 // the node service"): the hub shows it on the machine's page.
 func nodeMissing(goos, target string) error {
 	how := "让 personad node --attach 一直跑"
 	switch goos {
 	case "windows":
-		how = "persona-link install --personad <personad.exe 的路径> 装成登录时启动的计划任务（docs/windows.md）"
+		how = "persona-link install --personad <personad.exe 的路径> 装成登录时启动的计划任务（docs/operations/windows.md）"
 	case "darwin":
 		how = "菜单栏 App「Persona Link」里的「安装本机 node 服务」，或者 persona-link node install"
 	case "linux":
@@ -57,7 +57,7 @@ func nodeMissing(goos, target string) error {
 
 // These are settings, not measurements.
 const (
-	stagger     = 300 * time.Millisecond // between starting one candidate and the next (docs/link.md "Route selection")
+	stagger     = 300 * time.Millisecond // between starting one candidate and the next (docs/operations/link.md "Route selection")
 	dialTimeout = 8 * time.Second        // one candidate: TCP, TLS and the WebSocket handshake
 	checkPing   = 3 * time.Second        // a ping after the network changed
 	refusedWait = 5 * time.Minute        // after the hub refused the credential, unless link.json changes
@@ -146,7 +146,7 @@ func handshakeError(resp *http.Response, err error) error {
 }
 
 // Pinned is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp (Pin): what a manager on another
-// computer dials the hub's public port with (docs/managers.md).
+// computer dials the hub's public port with (docs/assistant/managers.md).
 func Pinned(fp string) *http.Client { return pinned(fp, nil) }
 
 // pinned is an HTTP/1.1 client that only talks to the hub whose TLS key hashes to fp. onConn sees each new
@@ -206,7 +206,7 @@ func UseRootsForTesting(pool *x509.CertPool) (restore func()) {
 }
 
 // systemTrusted is the HTTP/1.1 client for a hub without a pin: it sits behind an HTTPS reverse proxy whose
-// certificate comes from a public CA (docs/link.md "Hub behind a reverse proxy"). The certificate must chain to the system's
+// certificate comes from a public CA (docs/operations/link.md "Hub behind a reverse proxy"). The certificate must chain to the system's
 // CAs and name the host dialed; nothing else is accepted. onConn is pinned's.
 func systemTrusted(onConn func(net.Conn)) *http.Client {
 	d := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
@@ -1048,7 +1048,7 @@ func (l *link) localGone() bool {
 	return true
 }
 
-// forward joins stream id to the resident node: nothing else, and nowhere else (docs/link.md "Forwarding"). It returns an
+// forward joins stream id to the resident node: nothing else, and nowhere else (docs/operations/link.md "Forwarding"). It returns an
 // error only when the stream could not be opened; once bytes flow, its end is the node's or the hub's business.
 func (l *link) forward(ctx context.Context, id, target string) error {
 	node, err := net.DialTimeout("unix", target, 2*time.Second)

@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// Upstream limits (docs/model-config.md "Upstream rate limits"). A relay answering "the account's quota is used up" (HTTP 429
+// Upstream limits (docs/assistant/model-config.md "Upstream rate limits"). A relay answering "the account's quota is used up" (HTTP 429
 // account_quota_exhausted) or "the account is busy" (HTTP 503 account_concurrency_full) used to be tried again item
 // after item: 429 requests and as many log lines in 15 minutes. Now such an answer holds the connection (address +
 // key, whichever use calls it): requests are put off without being sent until the pause is over, then one goes

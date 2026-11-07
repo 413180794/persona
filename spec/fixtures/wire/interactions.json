@@ -6,7 +6,7 @@
       "server/internal/proto/proto.go: Interaction",
       "server/internal/hub/http.go: Hub.serveWS",
       "apple/Shared/Models.swift: Interaction, ScreenDialog",
-      "docs/protocol.md: 终端对话框（screen 交互）"
+      "docs/protocol/protocol.md: 终端对话框（screen 交互）"
     ],
     "derived": true,
     "decoder": "event",
@@ -69,7 +69,7 @@
       "server/internal/proto/proto.go: Interaction",
       "server/internal/hub/http.go: Hub.serveWS",
       "apple/Shared/Models.swift: Interaction, ScreenDialog",
-      "docs/protocol.md: 终端对话框（screen 交互）"
+      "docs/protocol/protocol.md: 终端对话框（screen 交互）"
     ],
     "derived": true,
     "decoder": "event",
@@ -104,7 +104,7 @@
       "server/internal/proto/proto.go: Interaction",
       "server/internal/hub/http.go: Hub.serveWS",
       "apple/Shared/Models.swift: Interaction, ScreenDialog",
-      "docs/protocol.md: 终端对话框（screen 交互）"
+      "docs/protocol/protocol.md: 终端对话框（screen 交互）"
     ],
     "derived": true,
     "decoder": "event",
@@ -143,7 +143,7 @@
       "server/internal/proto/proto.go: Interaction",
       "server/internal/hub/http.go: Hub.serveWS",
       "apple/Shared/Models.swift: Interaction, ScreenDialog",
-      "docs/protocol.md: 终端对话框（screen 交互）"
+      "docs/protocol/protocol.md: 终端对话框（screen 交互）"
     ],
     "derived": true,
     "decoder": "event",

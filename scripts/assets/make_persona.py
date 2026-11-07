@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Makes a persona package (docs/persona.md): Persona's name, face, the animated dot in the Persona tab's top bar and
+"""Makes a persona package (docs/apple/persona.md): Persona's name, face, the animated dot in the Persona tab's top bar and
 the colors, from a few pictures of a character.
 
   python3 scripts/assets/make_persona.py new --id doudou --name Doudou a.jpg b.jpg c.jpg   # generate, then build
@@ -1036,7 +1036,7 @@ def preview(out, avatar, sheets, colors):
 # MARK: check
 
 def check_package(d):
-    """The rules the hub and the app hold a package to (docs/persona.md); exits with what breaks them. A tiered one:
+    """The rules the hub and the app hold a package to (docs/apple/persona.md); exits with what breaks them. A tiered one:
     its own persona.json (the default tier's, for hubs that do not know tiers) and every tier's."""
     ensure_deps()
     errs = []
@@ -1391,7 +1391,7 @@ def install(args):
         m = re.search(r"PERSONA_HUB_SSH=(\S+)", cfg)
         host = shlex.split(m.group(1))[0] if m else ""
     if not host:
-        sys.exit("no hub: --hub HOST, or hub.machine in ~/.config/persona/config.json (docs/config.md)")
+        sys.exit("no hub: --hub HOST, or hub.machine in ~/.config/persona/config.json (docs/operations/config.md)")
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as t:
         for name in sorted(os.listdir(d)):

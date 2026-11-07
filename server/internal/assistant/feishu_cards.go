@@ -1435,7 +1435,7 @@ func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text
 		agentLabel(sess)+" · "+s.machineName(machine))
 }
 
-// --- commands (docs/bots.md "Commands"): which conversation or agent messages go to, the lists to pick one from,
+// --- commands (docs/extensions/bots.md "Commands"): which conversation or agent messages go to, the lists to pick one from,
 // starting an agent, stopping a turn ---
 
 func botHelp(l i18n.Lang, f FeishuFeatures) string {

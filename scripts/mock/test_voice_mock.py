@@ -1,4 +1,4 @@
-"""The voice mock for iOS's voice mode (voice_mock.py, docs/voice.md 6.8): /info at protocol 2, the extension in both
+"""The voice mock for iOS's voice mode (voice_mock.py, docs/assistant/voice.md 6.8): /info at protocol 2, the extension in both
 lists, and the protocol 2 script on the socket (ready → captions → run → link → ask → refused → done; interrupt →
 clear; resend), while a protocol 1 start still gets mock_hub.py's old script."""
 import base64

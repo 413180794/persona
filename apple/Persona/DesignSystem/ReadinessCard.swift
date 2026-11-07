@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// What the main conversation still needs, or why a start or a send was refused (docs/onboarding.md 4.4, 5.2): one card
+/// What the main conversation still needs, or why a start or a send was refused (docs/assistant/onboarding.md 4.4, 5.2): one card
 /// over the composer — a title, one sentence, one button for what to do, and under Details the original text (the hub's
 /// `detail`, the request id) for a failure. Later (`dismiss`) when the checklist may be put off. In the BeautifulUI
 /// style it is that library's list row in a section, the button its pill.
@@ -159,7 +159,7 @@ struct ReadinessCard: View {
     }
 }
 
-/// The send button while the main conversation cannot answer yet (docs/onboarding.md 4.4): it says what to do first
+/// The send button while the main conversation cannot answer yet (docs/assistant/onboarding.md 4.4): it says what to do first
 /// (Connect a Model First / Add a Computer First) and goes there; the draft stays in the field and nothing is queued.
 struct SendGate {
     var title: String

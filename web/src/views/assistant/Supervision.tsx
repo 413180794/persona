@@ -7,7 +7,7 @@ import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { useClamped } from "../../ui/use-clamped";
 
-// How a supervised task's review stands (#3124, docs/unified-entry.md "Supervision"): a chip and the count of criteria met
+// How a supervised task's review stands (#3124, docs/assistant/unified-entry.md "Supervision"): a chip and the count of criteria met
 // on its card, the checklist on its page, a line in the conversation for each review.
 
 const TONE: Record<ReviewTone, string> = {

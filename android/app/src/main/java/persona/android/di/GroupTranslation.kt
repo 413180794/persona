@@ -285,7 +285,7 @@ internal fun AssistantConversations.inGroup(names: GroupNames, scope: CoroutineS
         override suspend fun refresh() = source.refresh()
         override suspend fun startConversation() = names.key(source.startConversation())
         override suspend fun startConversation(launcher: String) = names.key(source.startConversation(launcher))
-        // another manager's main conversation (docs/managers.md step 4), in this group's merged ids
+        // another manager's main conversation (docs/assistant/managers.md step 4), in this group's merged ids
         override suspend fun mainConversationOf(manager: String) = names.key(source.mainConversationOf(manager))
     }
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// The unified entry's pieces in the assistant's conversation (docs/unified-entry.md): the plan card, the task card,
+// The unified entry's pieces in the assistant's conversation (docs/assistant/unified-entry.md): the plan card, the task card,
 // the lines the hub adds (answered, receipt, routed), the dock above the composer, the questions of the tasks' agents,
 // and the route chip with its @ list. They read `TasksStore` and `AppModel`, so a card follows its task live.
 
@@ -488,7 +488,7 @@ struct TaskLine: View {
 
 // MARK: - The hub's lines
 
-/// One line the hub added to the conversation (docs/protocol.md「任务和对话动态」).
+/// One line the hub added to the conversation (docs/protocol/protocol.md「任务和对话动态」).
 struct FeedLine: View {
     var item: FeedItem
     var group: String = ""
@@ -656,7 +656,7 @@ struct AnsweredLine: View {
 }
 
 /// A message about one of the conversation's tasks, with the reply the AI twin drafted from the task's progress
-/// (docs/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, Send / Edit / Later.
+/// (docs/assistant/unified-entry.md「信息和任务互相认得」): who said what, the task (live), the draft, Send / Edit / Later.
 struct MessageCard: View {
     var item: FeedItem
     var itemID: String

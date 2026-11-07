@@ -2,7 +2,7 @@ import Observation
 import PersonaKit
 import SwiftUI
 
-// Settings › Channels (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
+// Settings › Channels (docs/extensions/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
 // Feishu, voice, the chat app bots plugins contribute — as GET /api/v1/channels lists them; one channel's page (its
 // switch, binding a step at a time, where its messages go, what it does, a test message); and the source of a message
 // that came from one (its client_msg_id is `<channel>-<message id>`). Only with a hub whose features have `channels`.
@@ -21,7 +21,7 @@ extension APIClient {
         return try JSON.decoder.decode(HubChannelDetail.self, from: try await request("PUT", "/api/v1/channels/\(id)", body: body))
     }
 
-    /// One step of binding (the connectors' sign-in steps, docs/connectors.md): "" starts over.
+    /// One step of binding (the connectors' sign-in steps, docs/extensions/connectors.md): "" starts over.
     func bindChannel(_ id: String, step: String, values: [String: String]) async throws -> ConnectorPrompt {
         struct Body: Encodable { var step: String; var values: [String: String] }
         return try await post("/api/v1/channels/\(id)/bind", body: Body(step: step, values: values), timeout: 90)

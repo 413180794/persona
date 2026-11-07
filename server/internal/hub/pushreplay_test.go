@@ -59,7 +59,7 @@ func readRecording(t *testing.T, path string) []recorded {
 
 // TestPushReplay replays what an app got from a real hub, recorded with cmd/pushrec, through this hub's push logic,
 // and reports per minute: the messages and bytes an open app receives, and the Live Activity pushes a phone gets
-// while the app is closed, as recorded (the hub before) and as this code sends them (docs/testing.md "Push replay").
+// while the app is closed, as recorded (the hub before) and as this code sends them (docs/operations/testing.md "Push replay").
 // The recording holds real sessions and stays on the machine it was made on: PERSONA_PUSH_RECORDING is its path.
 func TestPushReplay(t *testing.T) {
 	path := os.Getenv("PERSONA_PUSH_RECORDING")

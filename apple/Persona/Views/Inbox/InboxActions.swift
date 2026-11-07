@@ -1,6 +1,6 @@
 import SwiftUI
 
-// What can be done with one inbox item besides reading it (docs/inbox.md): AI Draft Reply (a reply in the user's voice,
+// What can be done with one inbox item besides reading it (docs/assistant/inbox.md): AI Draft Reply (a reply in the user's voice,
 // edited and sent from here), Hand to AI (the item as <persona-context> to the assistant or an agent), Done.
 
 /// The strip under the navigation bar of an opened item: the AI's summary, its Thread (`InboxLineSection`) and the two

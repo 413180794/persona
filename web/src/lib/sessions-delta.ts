@@ -1,4 +1,4 @@
-// How a machine's session list is kept from what the hub sends (docs/protocol.md "Session deltas", the same rules as the
+// How a machine's session list is kept from what the hub sends (docs/protocol/protocol.md "Session deltas", the same rules as the
 // app's SessionPatch). An older hub sends the whole list every time; a hub with sessions_delta sends it once on
 // connect, then the sessions that changed (whole) and the ids that went, and leaves the Codex history out of both —
 // the page has that from GET /api/v1/sessions.

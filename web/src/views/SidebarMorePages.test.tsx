@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The pages put away in Settings › General › Sidebar pages wait under More (docs/web.md "The sidebar's pages"): at the end of Pages, folded,
+// The pages put away in Settings › General › Sidebar pages wait under More (docs/web/web.md "The sidebar's pages"): at the end of Pages, folded,
 // opening by itself while one of them is open; the rail and the settings list follow the same choices.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

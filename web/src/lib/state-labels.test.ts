@@ -31,7 +31,7 @@ function others(): [string, string][] {
 describe("state names", () => {
   beforeAll(() => initI18n("zh-Hans"));
 
-  it("are the docs/i18n.md glossary's", () => {
+  it("are the docs/protocol/i18n.md glossary's", () => {
     expect(STATE_LABEL).toEqual({ needs_you: "需要你", working: "工作中", unread: "完成未看", idle: "已看", offline: "未运行", unknown: "未知" });
     const names: Record<StateName, string> = {
       needs_you: "需要你", working: "工作中", unread: "完成未看", idle: "已看", offline: "未运行", unknown: "未知",

@@ -4,10 +4,10 @@ import { initI18n } from "./i18n";
 import "./styles.css";
 import { applyLook } from "./ui/look";
 
-// Theme color and text size (docs/web.md "Appearance") before anything draws.
+// Theme color and text size (docs/web/web.md "Appearance") before anything draws.
 applyLook();
 
-// The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web.md "Internationalization").
+// The language's catalog loads before the rest of the app: their modules call t() as they load (docs/web/web.md "Internationalization").
 // React and the PWA helper say no t(), so they load alongside it rather than after it.
 // An overlay's history entry a reload left behind goes before the app reads the address (lib/back-close.ts, #5134).
 const [, { StrictMode, createElement }, { createRoot }, { startPWA }] = await Promise.all([
@@ -27,7 +27,7 @@ if (target) {
   const { ScreenView } = await import("./screen/ScreenView");
   root.render(createElement(StrictMode, null, createElement(ScreenView, { target })));
 } else {
-  // Error reports (docs/web.md "Error reports") start with the app: they go out only if the hub's hello has the feature.
+  // Error reports (docs/web/web.md "Error reports") start with the app: they go out only if the hub's hello has the feature.
   const [{ ExtensionThemeProvider }, { App }] = await Promise.all([import("./ui/ExtensionThemePicker"), import("./App"), import("./lib/error-reports-start")]);
   root.render(createElement(StrictMode, null, createElement(ExtensionThemeProvider, null, createElement(App))));
 }

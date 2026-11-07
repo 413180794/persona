@@ -94,7 +94,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 
 - Validate display names separately from persisted identity during compatible renaming (2026-11-04, #1189). After `persona-link` / `Persona Link` shipped, compressed-install regressions still asserted old display names, causing full release exit 1. Update only display contracts, while verifying real `persona-link` files, legacy download names, old/new executable commands, and actual installer calls; never blindly rename compatibility identities. Script tests must discover `scripts/test`, `release`, `deploy`, `mock`, and `app` separately; rename-only subsets miss old assertions elsewhere. Preserve original failed freeze/exit code; after merge, rerun with a new build number.
 
-- Do not use computer-use to click simulators for screenshots (Mac lock screen hides windows; unlocked it steals the user's mouse). Use DEBUG launch arguments (`docs/ios.md`) to open pages directly, then capture.
+- Do not use computer-use to click simulators for screenshots (Mac lock screen hides windows; unlocked it steals the user's mouse). Use DEBUG launch arguments (`docs/apple/ios.md`) to open pages directly, then capture.
 - `xcodebuild test` launches the app without `-pairURL` and requests notification permission; subsequent screenshots are covered by that dialog. Restart the simulator after tests before screenshots.
   Live-card tests also handle dialogs first (#2024). HTTP-loaded cards do not prove the app is foreground or WebSocket-connected. Before pushing updates, wait for the mock's actual upgrade connection, not optional `client_hello`, which compatible clients may omit.
 - A fresh install (or reinstall with changed signing) launched first with `-pairURL` shows notification permission. While the dialog is open, the app remains inactive and Inbox does not refresh:
@@ -132,7 +132,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
   Add a `-tab` value with every new page. To reproduce "passes alone, fails after other tests", inspect `Library/Preferences/<bundle-id>.plist` in the app container first
   (`simctl spawn … defaults write` does not write into the app container).
 - "Push does not interrupt" must push while the finger is still down or momentum is active. Pushing after scrolling stops misses whole-screen jumps: `LiveUpdateTests` "middle row stays still" was always green,
-  while real-hub Agents lists jumped over 900 pt during scroll. Measure frame by frame with `PerfScroll` (`docs/testing.md`, "Push during scrolling").
+  while real-hub Agents lists jumped over 900 pt during scroll. Measure frame by frame with `PerfScroll` (`docs/operations/testing.md`, "Push during scrolling").
 - Mock hubs must answer like real hubs, especially unready states: with Telegram disabled, real hub cannot list its capabilities (the program has never run; capabilities are self-reported),
   but mock always advertised `login`, leaving tests/screenshots green while the real page lacked a switch, said "Configure in hub.json", and could not enable it (2026-11-03, #622).
   Before writing a mock, inspect the real path's response in every state; start tests from what users first see (disabled).
@@ -434,7 +434,7 @@ Retain strict checks for the complete target set, existing modules, artifact pat
 - cua cannot read a sheet's own window_id tree (`ax_window_unresolved`) or target it directly. Read the main window_id (sheet appears as `AXSheet`),
   get the input token, then foreground `type_text`. cua restores the previous foreground app afterward; do not send later keys to `scope: desktop`, which targets that other app.
 
-## Pixel-by-pixel comparison ("unchanged with only one group", docs/testing.md, "Multiple hubs")
+## Pixel-by-pixel comparison ("unchanged with only one group", docs/operations/testing.md, "Multiple hubs")
 
 - Two captures of the same build are not identical. Liquid Glass button/input/card edge highlights randomize each launch (stable within one launch), and the system spinner before "Working" keeps spinning;
   Reduce Motion cannot stop them. Capture the pre-change build three or four times to establish noise, exclude pixels in that noise, then magnify and inspect each remaining difference (2026-11-02, #256; procedure in testing.md, "Multiple hubs").
@@ -524,7 +524,7 @@ Use separate simulators for unit tests and screenshots; delete/recreate contamin
 ## Local port discovery probes fake model servers in tests (2026-11-04)
 
 `TestInboxTriageWaitsOutAnExhaustedQuota` occasionally reports "20 items used 21 requests". The extra request is `GET /`, `User-Agent: persona-ports`,
-from the local development node finding Agent listeners (`docs/ports.md`) and probing the `httptest` port. Count only your own API
+from the local development node finding Agent listeners (`docs/operations/ports.md`) and probing the `httptest` port. Count only your own API
 (`POST /v1/messages`); return 404 without counting other paths (`assistant/inbox_limit_test.go`). Use this pattern for similar fakes or they become flaky on node-running machines.
 `TestOpenMacLeavesAgentAlertsToTheApp` also occasionally got an extra "push" with token `/` for the same reason; fake APNs counts only `POST /3/device/…` (`hub/liveactivity_test.go`).
 `TestGateProxyReportCutsTheText` counted the same probe as a third request (2026-11-06, #6057). Its fake API (`fakeAPI`, `node/gateproxy_test.go`) has to accept any path the gate forwards, so it can't answer 404 to other paths. Instead it leaves out exactly the probe's shape: `GET /` with a User-Agent from `portProbeAgents`. That list holds today's `portProbeAgent` and the original installed-node User-Agent, which older nodes keep sending until they are replaced. When #6079 renamed the User-Agent, nodes already on the machines kept the old one, and the flake came back (#6225). Use such a filter only for a fake that must accept any path. Counting your own paths and answering 404 to the rest stays the default. Neither replaces real isolation in network-isolation or zero-connection tests: see the #2025 bullet on network-isolation listeners near the top of this file.
@@ -611,7 +611,7 @@ The test binary does not recognize `voice`, reruns the whole package recursively
 On a Linux development machine without the Android SDK or Xcode, pure-logic client changes can still be checked first:
 
 - **Android**: `:core:contracts` and `:core:domain` are pure Kotlin modules; `JAVA_HOME=<JDK 21> ./gradlew --offline :core:contracts:test :core:domain:test` runs without the SDK.
-  It needs JDK 21 (the daemon is pinned to 21, see `docs/android.md`); JDK 11 does not start. Pages and screenshots still need a machine with the SDK.
+  It needs JDK 21 (the daemon is pinned to 21, see `docs/android/android.md`); JDK 11 does not start. Pages and screenshots still need a machine with the SDK.
 - **Swift**: Foundation-only files (such as `AgentRepoTree.swift`) build with the swift.org Linux toolchain (the Debian 12 package also works on related distributions) inside a temporary SwiftPM package running Swift Testing.
   Copy the needed types verbatim from `Models.swift` and write minimal stand-ins for the rest; match the App's settings: Swift 6, `defaultIsolation(MainActor.self)`, plus the `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` upcoming features (`SWIFT_APPROACHABLE_CONCURRENCY`).
   This catches syntax, type and isolation errors and really runs the tests, but it is not an Xcode build: say "not compiled with Xcode" in the PR; Xcode 26.0 is not verified either.

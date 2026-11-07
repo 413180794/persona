@@ -57,7 +57,7 @@ func (m Methods) For(contributions ...string) Handler {
 // Empty is the answer of a call that answers nothing ({}: inbox.reply, logout, options.set…).
 type Empty = wire.Empty
 
-// ConnectorNamespace is the connectors extension point's: every call of docs/connector-protocol.md is
+// ConnectorNamespace is the connectors extension point's: every call of docs/protocol/connector-protocol.md is
 // connector.<method>, with the connector's id as the contribution.
 const ConnectorNamespace = "connector"
 
@@ -129,7 +129,7 @@ func (h *Hub) GhToken(ctx context.Context, p wire.ConnectorGhTokenParams) (strin
 	return t.Token, err
 }
 
-// ChannelNamespace is the channel extension point's (docs/channels.md "4. Contributing a channel"): the hub calls
+// ChannelNamespace is the channel extension point's (docs/extensions/channels.md "4. Contributing a channel"): the hub calls
 // channel.send, channel.typing and channel.edit; the program calls ChannelReceive and ChannelStatus.
 const ChannelNamespace = "channel"
 
@@ -148,7 +148,7 @@ func (h *Hub) ChannelStatus(ctx context.Context, p wire.ChannelStatusParams) err
 // hub does not try again.
 func CannotSend(why string) error { return &Error{Code: wire.ChannelErrorCodeCannotSend, Message: why} }
 
-// The knowledge base (docs/extensions.md "Knowledge base RPC"): the permission kb.read (kb.write for KBUpdate) in
+// The knowledge base (docs/extensions/extensions.md "Knowledge base RPC"): the permission kb.read (kb.write for KBUpdate) in
 // the manifest's permissions.hub, granted by the user. Errors carry wire.KBErrorCode* or permission_denied.
 
 // KBList is one kind's entities, a page at a time (next_offset).

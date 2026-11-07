@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Background workflows on a session (#2935, docs/protocol.md `workflows`): read leniently, and what an older hub without
+/// Background workflows on a session (#2935, docs/protocol/protocol.md `workflows`): read leniently, and what an older hub without
 /// them looks like.
 @MainActor struct WorkflowTests {
     private func session(_ extra: String = "", state: String = "working") throws -> Session {

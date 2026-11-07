@@ -30,11 +30,11 @@ fun EntryProviderScope<NavKey>.machinesEntries(
     /** Whether a launcher's row opens its page (the hub manages extensions, which may draw a section there). */
     launcherPages: Flow<Boolean> = flowOf(false),
     /**
-     * The sections extensions draw on a machine's page (`machine_section`, docs/extensions.md "UI slots"), as the page's
+     * The sections extensions draw on a machine's page (`machine_section`, docs/extensions/extensions.md "UI slots"), as the page's
      * list items after the machine's own; built by the settings module, which draws extensions' views.
      */
     extensionSections: (@Composable (String) -> (LazyListScope.() -> Unit))? = null,
-    /** "Add a computer" and "Confirm computer" (docs/onboarding.md 4.2); null in demo mode. */
+    /** "Add a computer" and "Confirm computer" (docs/assistant/onboarding.md 4.2); null in demo mode. */
     computers: ComputerPairing? = null,
 ) {
     entry<MachinesRoute> { MachinesRouteContent(null, navigator, metrics, sessions, management, launcherPages, null, computers) }

@@ -1,4 +1,4 @@
-// UI version 5's code review (docs/extensions.md "UI version 5", #3136), the logic without the looks: which words of a
+// UI version 5's code review (docs/extensions/extensions.md "UI version 5", #3136), the logic without the looks: which words of a
 // changed line changed, a change that is only whitespace drawn as unchanged, generated files and lockfiles, the lines
 // hidden between hunks and those shown of them, viewed marks kept in this browser, ```suggestion blocks in a comment,
 // a range of lines picked for a comment, and the keys of a page of diffs. Drawn by views/extensions/DiffReview.tsx.

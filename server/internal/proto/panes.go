@@ -1,6 +1,6 @@
 package proto
 
-// PanesResponse is a machine's terminal host layout for the terminal browser (docs/terminal.md "Standalone terminal"): every
+// PanesResponse is a machine's terminal host layout for the terminal browser (docs/integrations/terminal.md "Standalone terminal"): every
 // workspace, tab and pane of each host, agent or plain shell. It is read from the snapshot the node already takes;
 // ids are host-local.
 type PanesResponse struct {
@@ -38,7 +38,7 @@ type PaneTab struct {
 	Number      int    `json:"number,omitempty"`
 }
 
-// PaneItem is one pane. Terminal is what the terminal stream calls it ("pane:<pane>", docs/protocol.md "Terminal stream");
+// PaneItem is one pane. Terminal is what the terminal stream calls it ("pane:<pane>", docs/protocol/protocol.md "Terminal stream");
 // SessionID is set when an agent session of this machine runs in it (open that one instead: it shares the stream the
 // agent's own terminal panel uses).
 type PaneItem struct {

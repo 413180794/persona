@@ -1,7 +1,7 @@
 import OSLog
 import SwiftUI
 
-/// A list and the pages it opens (Agents, Inbox, Settings), laid out for the width there is (docs/ios.md「iPhone Duo」).
+/// A list and the pages it opens (Agents, Inbox, Settings), laid out for the width there is (docs/apple/ios.md「iPhone Duo」).
 ///
 /// Compact width — every iPhone, and iPhone Duo closed — is one stack with the list at its root, exactly as before.
 /// Regular width — iPhone Duo open — keeps the list as a sidebar column and opens its pages in the detail column,
@@ -164,7 +164,7 @@ struct SplitDetail: Equatable {
 
 extension EnvironmentValues {
     @Entry var splitDetail: SplitDetail?
-    /// Pushes a page by value onto the stack the view is in (an extension's `push`, docs/extensions.md「页面跳转」): its
+    /// Pushes a page by value onto the stack the view is in (an extension's `push`, docs/extensions/extensions.md「页面跳转」): its
     /// destination is registered with the list's.
     @Entry var splitPush: SplitPush?
     /// Opens the list column of the split the page is in again (iOS); nil in a single stack.

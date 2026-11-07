@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The checklist after pairing (docs/onboarding.md 4.5「配对之后：一张清单」, #4195): four rows read from the main
+/// The checklist after pairing (docs/assistant/onboarding.md 4.5「配对之后：一张清单」, #4195): four rows read from the main
 /// conversation's readiness — computer, Claude Code, model, try a message — each with its state and the button of its
 /// step. It never blocks: Later puts it off (the hub remembers, `dismissed`), and Settings says how many steps are left.
 @MainActor @Observable
@@ -28,7 +28,7 @@ final class OnboardingChecklistModel {
         ("first_message", String(localized: "Try a message")),
     ]
 
-    /// The rows for a readiness. A state this app does not know looks like a step still to do (docs/onboarding.md 5).
+    /// The rows for a readiness. A state this app does not know looks like a step still to do (docs/assistant/onboarding.md 5).
     static func rows(_ r: AssistantReadiness?) -> [Row] {
         steps.map { s in
             guard let step = r?.step(s.id) else { return Row(id: s.id, name: s.name, look: .unknown) }

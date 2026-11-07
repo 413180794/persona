@@ -71,7 +71,7 @@ private class ShotMachine : SessionFiles {
 
 /**
  * The files pane (browser, Git, a commit, a file it can't preview) in each of the app's languages, light and dark
- * (docs/i18n.md). Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
+ * (docs/protocol/i18n.md). Written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

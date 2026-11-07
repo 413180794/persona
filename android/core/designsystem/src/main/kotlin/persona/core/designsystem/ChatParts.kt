@@ -235,7 +235,7 @@ fun ChatNoteChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modi
 
 /**
  * A line the chat shows in place of a message Persona typed in for the model (a task's notice, a scheduled run…;
- * docs/protocol.md "Messages Persona injects"): centered, the look of [ChatNoteChip], an icon in [tint], one line. Tappable
+ * docs/protocol/protocol.md "Messages Persona injects"): centered, the look of [ChatNoteChip], an icon in [tint], one line. Tappable
  * (with a caret) only when [onClick] is set.
  */
 @Composable
@@ -289,7 +289,7 @@ fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier
 }
 
 /**
- * A one-line bar under a conversation's header for something the agent keeps working on (its goal, docs/agent-goal.md;
+ * A one-line bar under a conversation's header for something the agent keeps working on (its goal, docs/integrations/agent-goal.md;
  * iOS `GoalBar`): an icon and [text] in [colors]' role colour, [trailing] (a status) at the end, a tap opens the detail.
  * Every style uses a neutral backing; the icon and trailing words carry its role color.
  */

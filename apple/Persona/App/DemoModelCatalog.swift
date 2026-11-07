@@ -48,7 +48,7 @@ enum DemoModelCatalog {
                 "inherited_from": .string(binding.isEmpty ? "现有默认" : "此用途"), "status": "体验模式 · 不会调用模型",
                 "fields": kind == "api" ? ["provider", "model"] : ["provider", "model", "effort"],
                 "provider_ids": .array(providers.filter { $0["kind"]?.string == kind }.compactMap { $0["id"] })]
-            // The four categories the hub edits (docs/model-config.md); every other use is set through its category.
+            // The four categories the hub edits (docs/assistant/model-config.md); every other use is set through its category.
             if let uses = categories[id] {
                 purpose["category_id"] = .string(id)
                 purpose["uses"] = .array(uses.map { ["name": .string($0)] })

@@ -139,7 +139,7 @@ func (e *Engine) TagItems(ctx context.Context) error {
 
 // --- reading ---
 
-// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package kbwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type (
 	Entry = kbwire.Entry
 	Hit   = kbwire.Hit

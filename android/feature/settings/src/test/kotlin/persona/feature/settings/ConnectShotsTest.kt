@@ -44,7 +44,7 @@ import java.lang.reflect.Proxy
 import java.time.Instant
 
 /**
- * The connection pages of Settings in each of the app's languages (docs/i18n.md): pairing (welcome, connect, manual
+ * The connection pages of Settings in each of the app's languages (docs/protocol/i18n.md): pairing (welcome, connect, manual
  * input, confirm, a failed link), the hubs, the hub version, the candidate addresses and the engine step. Every style
  * in light, Glass in dark; written as PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */

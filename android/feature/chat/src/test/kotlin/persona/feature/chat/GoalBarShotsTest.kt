@@ -28,7 +28,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * The goal bar under the chat's header (docs/agent-goal.md): one in progress, one met, one out of budget, and the
+ * The goal bar under the chat's header (docs/integrations/agent-goal.md): one in progress, one met, one out of budget, and the
  * detail of the first. Every style, light and dark; PNGs in `build/goal-shots/`.
  */
 @RunWith(AndroidJUnit4::class)

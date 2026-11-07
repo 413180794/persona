@@ -1,4 +1,4 @@
-// The extensions' places outside their settings (docs/extensions.md "UI slots"): entries on the sidebar (nav_page), cards on
+// The extensions' places outside their settings (docs/extensions/extensions.md "UI slots"): entries on the sidebar (nav_page), cards on
 // "Overview" (overview_card), sections on a machine's page (machine_section), inbox items' pages (inbox_item: the list is
 // cached here, so opening an item asks nothing). One list for the whole web, asked for once
 // (GET /api/v1/extensions/-/ui without a placement) and again on reconnect, when an extension changes here, and when the tab
@@ -20,7 +20,7 @@ let generation = 0;
 let started = false;
 let helloVersion = ""; // the hub version the last hello named
 const listeners = new Set<() => void>();
-// Another manager's places (several managers, docs/managers.md "Clients"): its inbox items' pages and its computers'
+// Another manager's places (several managers, docs/assistant/managers.md "Clients"): its inbox items' pages and its computers'
 // sections are its own extensions'. Asked for with its name when a page first needs them, again with the default's.
 const others = new Map<string, UIPlace[]>();
 const othersAsked = new Map<string, number>(); // the generation each was last asked in

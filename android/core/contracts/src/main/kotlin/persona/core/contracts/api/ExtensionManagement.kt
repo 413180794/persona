@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * Settings › Extensions (docs/extensions.md "Hub API" "App: Settings › Extensions"): the hub's extensions, each one's switch, its
+ * Settings › Extensions (docs/extensions/extensions.md "Hub API" "App: Settings › Extensions"): the hub's extensions, each one's switch, its
  * configuration (a form drawn from its schema) and its secrets, write-only; the pages extensions draw ([ExtensionUi]); and
  * the extension markets ([ExtensionMarkets]), the only way a phone installs, upgrades or removes an extension (anything else
  * happens on the hub's machine, `personad extension`). Bound to the active pairing.
@@ -21,7 +21,7 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
     val available: Flow<Boolean>
 
     /**
-     * Whether the paired hub has extensions' UI slots (`extension_ui_slots`, docs/extensions.md "UI slots"): only then the app
+     * Whether the paired hub has extensions' UI slots (`extension_ui_slots`, docs/extensions/extensions.md "UI slots"): only then the app
      * asks for nav pages, cards and machine sections. An older hub has none.
      */
     val slotsAvailable: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(false)
@@ -61,7 +61,7 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
     /** `DELETE /api/v1/extensions/{id}/-/secrets/{name}`. */
     suspend fun clearSecret(id: String, name: String): ExtensionDetail
 
-    /** `PUT /api/v1/extensions/{id}/-/auto-upgrade`: a market extension's own auto-upgrade switch (docs/extensions.md "Auto-upgrade"). */
+    /** `PUT /api/v1/extensions/{id}/-/auto-upgrade`: a market extension's own auto-upgrade switch (docs/extensions/extensions.md "Auto-upgrade"). */
     suspend fun setAutoUpgrade(id: String, auto: Boolean): ExtensionDetail =
         throw UnsupportedOperationException("Auto-upgrades unsupported by this hub")
 

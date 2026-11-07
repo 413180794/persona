@@ -1,4 +1,4 @@
-// "Health" (docs/health.md, #2691): the health space, apart from Persona's other conversations like ChatGPT's Health. `/health`
+// "Health" (docs/assistant/health.md, #2691): the health space, apart from Persona's other conversations like ChatGPT's Health. `/health`
 // is its home (what it is, where its data comes from, suggested questions, its past conversations, its memory);
 // `/health/<id>` one of its conversations. Its conversations run in a directory of their own on the assistant's machine,
 // so the assistant's other conversations don't see them and its memory is its own (`?space=health`).
@@ -33,7 +33,7 @@ const SOURCES: { icon: IconName; title: string; body: string }[] = [
 ];
 
 /** The space's conversations, newest first, and the machine they run on (GET /api/v1/assistant?space=health). The
- *  space is the default manager's whichever manager the Persona page shows (`?space=` names none, docs/managers.md):
+ *  space is the default manager's whichever manager the Persona page shows (`?space=` names none, docs/assistant/managers.md):
  *  its machine is its own answer's, not the shown manager's. */
 function useHealthConversations() {
   const [list, setList] = useState<Session[] | null>(null);

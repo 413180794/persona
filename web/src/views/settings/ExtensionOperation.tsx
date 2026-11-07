@@ -1,4 +1,4 @@
-// An install, upgrade or uninstall in steps (docs/protocol.md "Extension install, upgrade and uninstall progress", #3277): every step with its
+// An install, upgrade or uninstall in steps (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress", #3277): every step with its
 // state, the download's bytes as a bar, where it stopped and why, and a retry. The hub pushes each change; the page
 // only draws what lib/extension-operations.ts keeps.
 import { useEffect, useState } from "react";

@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 data class AssistantSnapshot(
     val mainSession: SessionKey? = null, val conversations: List<Session> = emptyList(),
-    /** Whose conversations these are (docs/managers.md step 4): the manager the page showed when read; null: the default. */
+    /** Whose conversations these are (docs/assistant/managers.md step 4): the manager the page showed when read; null: the default. */
     val manager: String? = null,
 )
 

@@ -87,7 +87,7 @@ func RenderInboxJudge(j InboxJudge) string { return render("inbox/judge", j) }
 type InboxJudgeInput struct {
 	Summary string
 	Item    InboxItem
-	Tasks   []InboxTask // the user's tasks going on (docs/unified-entry.md), for the judge to link the item to one
+	Tasks   []InboxTask // the user's tasks going on (docs/assistant/unified-entry.md), for the judge to link the item to one
 }
 
 // InboxTask is a task the user started from the assistant's conversation: a todo and where its agents are.

@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
-// What of GitHub's notifications reaches the inbox, and how urgent it is (docs/inbox.md "Connector: GitHub"): the
+// What of GitHub's notifications reaches the inbox, and how urgent it is (docs/assistant/inbox.md "Connector: GitHub"): the
 // rules decide the tier, the model only what they cannot (a person's ordinary comment on my PR). CI failures are
 // one item per repository and branch; branches pushed by automation are left out; the user picks which CI failures
 // they want and mutes repositories (Options: Settings › Connectors › GitHub, or hub.json github.inbox).

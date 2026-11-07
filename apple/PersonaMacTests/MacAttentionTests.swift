@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// When the Mac posts a notification for an agent (it has no APNs; docs/mac.md push notifications → system notifications), following the
+/// When the Mac posts a notification for an agent (it has no APNs; docs/apple/mac.md push notifications → system notifications), following the
 /// same Settings › Notifications choices the hub uses for the phone (NotifyPrefs).
 @MainActor
 struct MacAttentionTests {

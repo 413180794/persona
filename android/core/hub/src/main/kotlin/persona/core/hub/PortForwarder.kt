@@ -21,7 +21,7 @@ import okio.ByteString
 import okio.ByteString.Companion.toByteString
 
 /**
- * A machine's port on the phone's loopback (docs/ports.md "Forwarding", iOS `PortForwarder`): the app listens on 127.0.0.1
+ * A machine's port on the phone's loopback (docs/operations/ports.md "Forwarding", iOS `PortForwarder`): the app listens on 127.0.0.1
  * and ::1 at the same port number when it is free (another one when not), and each connection the in-app browser makes
  * there becomes one WebSocket to the hub (`…/ports/{port}/connect`, the device token) carrying its bytes to the port on
  * the machine. The page loads from http://localhost:<port>/ exactly as on the machine: its absolute paths, its own

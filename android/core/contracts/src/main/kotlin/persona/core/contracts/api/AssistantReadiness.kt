@@ -5,11 +5,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** The hub feature behind GET /api/v1/assistant/readiness (docs/protocol.md "Main chat readiness"). */
+/** The hub feature behind GET /api/v1/assistant/readiness (docs/protocol/protocol.md "Main chat readiness"). */
 const val AssistantReadinessFeature = "assistant_readiness"
 
 /**
- * What the main conversation still needs (docs/onboarding.md 4.4, 5.1): the hub works it out, every client draws the same
+ * What the main conversation still needs (docs/assistant/onboarding.md 4.4, 5.1): the hub works it out, every client draws the same
  * thing from it. All fields are optional so a newer hub's additions never break reading it.
  */
 @Serializable
@@ -34,7 +34,7 @@ data class AssistantReadiness(
     /**
      * The step the card over the composer shows and the send button names: in `setup`, the first of computer / Claude
      * Code / model that is to do or a problem. A rate limit passes by itself and never blocks; "Try a message" never blocks; a step
-     * a newer hub adds counts through [next] (docs/onboarding.md 5 "General rules"). Null when nothing blocks sending.
+     * a newer hub adds counts through [next] (docs/assistant/onboarding.md 5 "General rules"). Null when nothing blocks sending.
      */
     fun blockingStep(): ReadinessStep? {
         if (mode != SETUP) return null

@@ -1,11 +1,11 @@
 name: Persona
-# Meta glasses (docs/meta-glasses.md): the Wearables SDK, its keys and the glasses' Bluetooth and network strings are
+# Meta glasses (docs/apple/meta-glasses.md): the Wearables SDK, its keys and the glasses' Bluetooth and network strings are
 # merged in only when config.json app.meta_wearables.enabled is true (PERSONA_META_WEARABLES=YES, set by env).
 include:
   - path: meta-wearables.yml
     enable: ${PERSONA_META_WEARABLES}
 # Bundle id and team come from Config.xcconfig, generated from the personal config by scripts/persona_config.py
-# (docs/config.md); this file and the Info.plists only say $(PERSONA_BUNDLE_ID).
+# (docs/operations/config.md); this file and the Info.plists only say $(PERSONA_BUNDLE_ID).
 configFiles:
   Debug: Config.xcconfig
   Release: Config.xcconfig
@@ -15,8 +15,8 @@ options:
     watchOS: "10.0"
     macOS: "26.0"
     visionOS: "26.0"
-  # The String Catalogs' source language: the Chinese text is the key (docs/ios.md「界面语言」). The Info.plists say
-  # CFBundleDevelopmentRegion en, so a language the app does not have falls back to English (docs/i18n.md).
+  # The String Catalogs' source language: the Chinese text is the key (docs/apple/ios.md「界面语言」). The Info.plists say
+  # CFBundleDevelopmentRegion en, so a language the app does not have falls back to English (docs/protocol/i18n.md).
   developmentLanguage: en
   createIntermediateGroups: true
 packages:
@@ -25,10 +25,10 @@ packages:
     from: 2.4.1
   BeautifulUI:
     path: Packages/BeautifulUI
-  # The SSH tunnel to the hub (docs/network.md「经 SSH 隧道连 hub」): the iOS and Mac apps only, not the watch.
+  # The SSH tunnel to the hub (docs/operations/network.md「经 SSH 隧道连 hub」): the iOS and Mac apps only, not the watch.
   PersonaSSH:
     path: Packages/PersonaSSH
-  # The logic that needs no UI, its tests run with `swift test` (#2095, docs/testing.md「PersonaKit」): the iOS, Mac and
+  # The logic that needs no UI, its tests run with `swift test` (#2095, docs/operations/testing.md「PersonaKit」): the iOS, Mac and
   # Vision apps, not the watch or widgets.
   PersonaKit:
     path: Packages/PersonaKit
@@ -85,13 +85,13 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
         # The app's own group first (stays the default, where the existing items are), then the one the notification
-        # service extension shares for the push key (docs/push-relay.md).
+        # service extension shares for the push key (docs/operations/push-relay.md).
         # Last, the one builds 92–103 left the Live Activity's persona in, only so the app can delete what is still
         # there (LiveActivityController.forgetKeychainLook): the extension could never read it on a phone.
         keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).look"]
         # Shared with the widget extension: the persona the Live Activity draws and a package's pictures, as files
-        # (docs/live-activity.md「形象」). group.<bundle id> unless config.json app.app_group says otherwise; registered in
-        # the developer account and put on both App IDs (docs/release.md「App Group」).
+        # (docs/apple/live-activity.md「形象」). group.<bundle id> unless config.json app.app_group says otherwise; registered in
+        # the developer account and put on both App IDs (docs/operations/release.md「App Group」).
         com.apple.security.application-groups: ["$(PERSONA_APP_GROUP)"]
     settings:
       base:
@@ -99,7 +99,7 @@ targets:
         PRODUCT_MODULE_NAME: Persona
         PRODUCT_NAME: Persona
         # The entitlements the app signs with: the CarPlay voice one is added only when config.json app.carplay_voice is
-        # on (scripts/persona_config.py xcconfig writes PERSONA_APP_ENTITLEMENTS; docs/carplay.md). XcodeGen keeps a
+        # on (scripts/persona_config.py xcconfig writes PERSONA_APP_ENTITLEMENTS; docs/apple/carplay.md). XcodeGen keeps a
         # CODE_SIGN_ENTITLEMENTS the target sets itself; the default keeps an old Config.xcconfig working.
         CODE_SIGN_ENTITLEMENTS: $(PERSONA_APP_ENTITLEMENTS:default=Persona/Resources/Persona.entitlements)
         # iPhone and iPad (2026-10-31: on iPad it ran as a phone-sized window). Wide layouts come from the size class
@@ -115,7 +115,7 @@ targets:
         # The commit stamp below reads the repository's .git, which the script sandbox does not let it see.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         # The in-app tunnel core, device builds only and only when config.json app.tunnel_core names one
-        # (scripts/persona_config.py, docs/network.md「经 App 内隧道连 hub」); empty otherwise.
+        # (scripts/persona_config.py, docs/operations/network.md「经 App 内隧道连 hub」); empty otherwise.
         "SWIFT_INCLUDE_PATHS[sdk=iphoneos*]": "$(inherited) $(PERSONA_TUNNEL_INCLUDE)"
         "OTHER_LDFLAGS[sdk=iphoneos*]": "$(inherited) $(PERSONA_TUNNEL_LDFLAGS)"
     # Which commit a build is (Settings › About › Build): stamped into the built Info.plist on every build, before signing;
@@ -151,7 +151,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
                                                 UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIBackgroundModes: [remote-notification, audio]
-        # CarPlay (docs/carplay.md): the voice conversation scene. Only CarPlay is declared; the phone window stays SwiftUI's own.
+        # CarPlay (docs/apple/carplay.md): the voice conversation scene. Only CarPlay is declared; the phone window stays SwiftUI's own.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
           UISceneConfigurations:
@@ -159,7 +159,7 @@ targets:
               - UISceneClassName: CPTemplateApplicationScene
                 UISceneConfigurationName: CarPlay
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
-        # Push relay (docs/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
+        # Push relay (docs/operations/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
         # (config.json app.push_relay; empty: none), and the keychain group it shares with PersonaNotify.
         # The groups' prefix is the team, not $(AppIdentifierPrefix): that one is only set when Xcode signs, and an
         # archive built unsigned for a cloud-signed export left it empty (scripts/release/entitlements.py, 2026-11-02).
@@ -169,9 +169,9 @@ targets:
         # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLookStore). An App
         # Group's id has no team prefix: the same in an archive built unsigned.
         PersonaAppGroup: $(PERSONA_APP_GROUP)
-        # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
+        # The Fleet activity on the lock screen / Dynamic Island (docs/apple/live-activity.md).
         NSSupportsLiveActivities: true
-        # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
+        # The hub is usually reached over plain HTTP inside a private network (docs/operations/config.md).
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSCameraUsageDescription: "Persona uses the camera to scan the pairing QR code printed by `personad hub pair`, for example when you first connect to your hub."
@@ -188,7 +188,7 @@ targets:
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
         NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone. In a voice conversation you start — on the phone or in CarPlay — your voice is streamed through your hub to the realtime speech service it is set up with, only while the conversation is open."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
-  # The native macOS app (docs/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
+  # The native macOS app (docs/apple/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
   # shell (Mac/): windows, sidebar, toolbar, menus, keyboard shortcuts, Settings, the menu bar. iOS-only parts are
   # behind `#if os(iOS)`; Mac/Compat gives the iOS-only modifiers Mac meanings.
   PersonaMac:
@@ -220,7 +220,7 @@ targets:
         keychain-access-groups: ["$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID)", "$(AppIdentifierPrefix)$(PERSONA_BUNDLE_ID).push"]
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
-        # A machine's port forwarded to this Mac's loopback for the in-app browser (docs/ports.md).
+        # A machine's port forwarded to this Mac's loopback for the in-app browser (docs/operations/ports.md).
         com.apple.security.network.server: true
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.personal-information.addressbook: true
@@ -262,7 +262,7 @@ targets:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleURLSchemes: [persona]
         ITSAppUsesNonExemptEncryption: false
-        # The push relay (docs/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
+        # The push relay (docs/operations/push-relay.md) and the keychain group of the key pushes are sealed to, like the iPhone's.
         PersonaPushRelay: $(PERSONA_PUSH_RELAY)
         PersonaGettingStartedURL: $(PERSONA_GETTING_STARTED_URL)
         PersonaPushKeychainGroup: $(DEVELOPMENT_TEAM).$(PERSONA_BUNDLE_ID).push
@@ -281,7 +281,7 @@ targets:
         NSPhotoLibraryAddUsageDescription: "Persona saves images Claude produces to your library when you ask, for example a chart it generated."
         NSMicrophoneUsageDescription: "Persona records audio when you start a recording or dictate a message, for example a meeting or a spoken note. Recordings are transcribed on your iPhone and only the text is saved to the knowledge base on your hub; the audio stays on your iPhone."
         NSSpeechRecognitionUsageDescription: "Persona turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
-  # The native visionOS app (docs/vision.md): the iOS app's logic and content views, compiled for visionOS (UIKit, so
+  # The native visionOS app (docs/apple/vision.md): the iOS app's logic and content views, compiled for visionOS (UIKit, so
   # most of it as is), inside a visionOS shell (Vision/): an ornament for the tabs, a window per conversation, the
   # Needs You ornament. iPhone-only parts (Live Activity, the watch, haptics) are behind `#if os(iOS)` / `os(visionOS)`.
   PersonaVision:
@@ -382,7 +382,7 @@ targets:
       - path: Shared/Design/IslandMetrics.swift
       # The persona's face (the app's PersonaAvatar draws it too), on the activity's leading side.
       - path: Shared/Design/PersonaFace.swift
-      # The app's String Catalog and interface language (docs/ios.md「界面语言」).
+      # The app's String Catalog and interface language (docs/apple/ios.md「界面语言」).
       - path: Shared/Localization
     entitlements:
       path: PersonaWidgets/PersonaWidgets.entitlements
@@ -412,7 +412,7 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: YES
         # Code shared with the app that must not call into it (the intents run in the app process).
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
-  # Opens pushes that came through the relay (docs/push-relay.md): decrypts the sealed payload before it is shown.
+  # Opens pushes that came through the relay (docs/operations/push-relay.md): decrypts the sealed payload before it is shown.
   PersonaNotify:
     type: app-extension
     platform: iOS
@@ -449,7 +449,7 @@ targets:
     sources:
       - path: PersonaShare
         excludes: ["*.plist", "*.entitlements"]
-      # The app's String Catalog and interface language (docs/ios.md「界面语言」).
+      # The app's String Catalog and interface language (docs/apple/ios.md「界面语言」).
       - path: Shared/Localization
     entitlements:
       path: PersonaShare/PersonaShare.entitlements
@@ -572,7 +572,7 @@ targets:
     platform: macOS
     sources:
       - path: PersonaMacTests
-      # Shared logic the Mac runs as is: the same tests, run against the Mac build (docs/mac.md「验收清单」).
+      # Shared logic the Mac runs as is: the same tests, run against the Mac build (docs/apple/mac.md「验收清单」).
       - path: PersonaTests/HeadingMenuTests.swift
       - path: PersonaTests/CalmAttentionTests.swift
       - path: PersonaTests/IntentsTests.swift
@@ -623,7 +623,7 @@ schemes:
       config: Debug
     test:
       targets: [PersonaTests, PersonaUITests]
-      # The tests' expectations and the pixel / layout baselines are the Chinese UI (docs/ios.md「界面语言」).
+      # The tests' expectations and the pixel / layout baselines are the Chinese UI (docs/apple/ios.md「界面语言」).
       language: zh-Hans
       region: CN
   PersonaWatch:

@@ -1,4 +1,4 @@
-// Several managers' installs (docs/managers.md "Clients"): an operation is its manager's. A push says whose, one this
+// Several managers' installs (docs/assistant/managers.md "Clients"): an operation is its manager's. A push says whose, one this
 // page starts is the manager it named, and every later request about it (its preview, retry, cancel) names that one;
 // the hub's list is the default's, so it leaves the others' as their pushes left them.
 import { beforeEach, describe, expect, it, vi } from "vitest";

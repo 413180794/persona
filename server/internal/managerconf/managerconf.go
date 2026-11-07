@@ -1,4 +1,4 @@
-// Package managerconf is a manager's own configuration file, manager.json (docs/config.md "manager.json"): the
+// Package managerconf is a manager's own configuration file, manager.json (docs/operations/config.md "manager.json"): the
 // sections of the configuration that only the manager uses (connectors, extensions, bots, mail sign-ins, Lark,
 // usage sources), which the built-in manager used to read and write in the hub's hub.json. A manager made in the app
 // keeps them in the manager.json of its own directory, next to its identity (id, hub, token); the built-in manager,

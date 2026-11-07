@@ -1,9 +1,9 @@
-// The web client's i18n (docs/i18n.md, docs/web.md"Internationalization"). The page runs in one language for its whole life: the
+// The web client's i18n (docs/protocol/i18n.md, docs/web/web.md"Internationalization"). The page runs in one language for its whole life: the
 // catalog loads before any other module (main.tsx), so t() works anywhere, module scope included, and picking another
 // language reloads the page.
 //
 // The languages are the directories under ./locales: each holds its namespace files and _meta.json (its own name, the language subtags it is picked for). Adding a language is adding a
-// directory; nothing here lists them (docs/i18n.md "Adding a language").
+// directory; nothing here lists them (docs/protocol/i18n.md "Adding a language").
 
 /** A language code: a directory under ./locales (zh-Hans, en, ja…). */
 export type Lang = string;
@@ -41,14 +41,14 @@ export const LANG_MATCHES: Record<string, Lang> = Object.fromEntries(
 
 const PREF_KEY = "persona.language";
 
-/** docs/i18n.md: a tag's language subtag picks the language whose _meta.json lists it (any Chinese, Traditional too,
+/** docs/protocol/i18n.md: a tag's language subtag picks the language whose _meta.json lists it (any Chinese, Traditional too,
  *  is zh-Hans); a language the client has no catalog for falls back to en. */
 export function resolveLanguage(tag: string | null | undefined): Lang {
   const primary = (tag ?? "").trim().replace(/_/g, "-").split("-")[0].toLowerCase();
   return Object.hasOwn(LANG_MATCHES, primary) ? LANG_MATCHES[primary] : FALLBACK_LANG;
 }
 
-/** The system's first preferred language, resolved. Only the first one counts (docs/i18n.md). */
+/** The system's first preferred language, resolved. Only the first one counts (docs/protocol/i18n.md). */
 export function systemLanguage(): Lang {
   if (typeof navigator === "undefined") return FALLBACK_LANG;
   return resolveLanguage(navigator.languages?.[0] ?? navigator.language);

@@ -1,6 +1,6 @@
 import { isAppLink } from "../../lib/compatibility";
-// "Linked hubs" (under "Advanced"): other hubs this one links with (docs/plan-hub-mesh.md 2.7) and which of the group is the center
-// (docs/plan-hub-center.md 2). Most people never need it: one hub, the node service on every other computer. A hub
+// "Linked hubs" (under "Advanced"): other hubs this one links with (docs/archive/operations/plan-hub-mesh.md 2.7) and which of the group is the center
+// (docs/archive/operations/plan-hub-center.md 2). Most people never need it: one hub, the node service on every other computer. A hub
 // without the API answers 501 not_implemented and this page says so.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n";

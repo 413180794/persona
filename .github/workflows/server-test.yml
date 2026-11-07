@@ -1,4 +1,4 @@
-# The server's go vet and go test on Linux (docs/testing.md). Before this they ran only by hand, so a change that broke a
+# The server's go vet and go test on Linux (docs/operations/testing.md). Before this they ran only by hand, so a change that broke a
 # package on every run reached master unnoticed (#2089). Kept out of ci.yml so the path filter below can skip it on
 # PRs that cannot affect the server: the paths are the server module, its replaced sdk/go module, and the repo files
 # server tests read (fixtures, schema examples, integrations, the test-env launcher).

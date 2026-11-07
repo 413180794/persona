@@ -1,6 +1,6 @@
 package extmgr
 
-// Plugins' programs on computers (docs/plan-extensions.md "7", #1830): the hub keeps what should run where (the
+// Plugins' programs on computers (docs/plans/plan-extensions.md "7", #1830): the hub keeps what should run where (the
 // plugin's switch, configuration and the machines picked in its node.machines field) and makes each machine so —
 // when it connects, when the plugin changes, and by renewing the leases every 10 minutes. Nothing is queued for a
 // machine that is away: it is brought in line when it is back. The node runs them (node/plugins.go).

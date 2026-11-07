@@ -13,7 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Hub groups in the app layer (docs/android.md "Multiple hubs"): ids between a group and the merged lists, and routing. */
+/** Hub groups in the app layer (docs/android/android.md "Multiple hubs"): ids between a group and the merged lists, and routing. */
 class GroupRoutingTest {
     private val primary = GroupNames(null)
     private val other = GroupNames("g0a1b2c3d")

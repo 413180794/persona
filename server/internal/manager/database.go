@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
-// A manager's own Postgres (docs/managers.md, "Database"): a Docker container and volume named after it, its port
+// A manager's own Postgres (docs/assistant/managers.md, "Database"): a Docker container and volume named after it, its port
 // published on 127.0.0.1, made by `personad manager install` (or the first `manager run`) the way `personad hub setup`
 // makes the hub's (internal/pgdocker). The password is generated here and kept only in manager.json (0600). It is
 // never the hub's Postgres: the hub doesn't touch a manager's database. --database-url gives another one instead.

@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { initI18n } from "../i18n";
 import "../styles.css";
 
-// The catalog loads before the modules that call t() as they load (docs/web.md "Internationalization"), as in main.tsx.
+// The catalog loads before the modules that call t() as they load (docs/web/web.md "Internationalization"), as in main.tsx.
 await initI18n();
 const [{ ExtensionUI }, { SHOWCASE, showcaseKind }, { Toasts }] = await Promise.all([import("../views/settings/ExtensionView"), import("./snapshots"), import("../ui/atoms")]);
 

@@ -1,4 +1,4 @@
-// Extension markets (docs/extensions.md "Extension markets"): markets the hub reads (an index persona-extensions.json on a site or a GitHub
+// Extension markets (docs/extensions/extensions.md "Extension markets"): markets the hub reads (an index persona-extensions.json on a site or a GitHub
 // repository), their catalog, and installing, upgrading and removing from it. A full-rights device may: the package is
 // pinned by the index's sha256 and nothing installs before the user has seen what it may do (the preview's
 // permissions digest). The admin UI has the same routes under /api/v1/admin/extensions/-/ (its api.ts), the same words
@@ -114,7 +114,7 @@ export function catalogQuery(q?: string, market?: string, refresh?: boolean): st
 }
 
 // A refresh waits for every market to be read again, a git market's fetch up to 3 minutes (extension/market_git.go).
-// `manager` (here and below): whose extensions (another manager's upgrade, docs/managers.md "Clients"); none: the default's.
+// `manager` (here and below): whose extensions (another manager's upgrade, docs/assistant/managers.md "Clients"); none: the default's.
 export const getCatalog = (q?: string, market?: string, refresh?: boolean, manager?: string) =>
   api<Catalog & { plugins?: CatalogItem[] }>(`${M()}/catalog${catalogQuery(q, market, refresh)}`, { ...(refresh ? { timeout: pastHub(180_000) } : {}), headers: itemHeaders(manager) }).then(catalogOf);
 /** A catalog as either kind of hub sends it (the list under `extensions`, or `plugins`). */
@@ -173,7 +173,7 @@ export const wantsGitHubToken = (m: Pick<Market, "spec" | "has_token">) => isGit
 export const isGitHubMarket = (m: Pick<Market, "spec">) => m.spec.startsWith("github:");
 
 /**
- * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md "GitHub rate limits"): a name, what it
+ * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions/extensions.md "GitHub rate limits"): a name, what it
  * is for, a year. It needs no permission at all: such a token always reads public repositories, which is what lifts the
  * hourly limit; a private market's repository is chosen on that page.
  */
@@ -260,7 +260,7 @@ export const agreeLabel = (pv: MarketPreview) => (pv.upgrade ? (pv.more_permissi
  */
 export type ExtensionsRoute =
   | { kind: "list" }
-  // manager: whose extension it is (several managers: the same id may be installed under each, docs/managers.md); none
+  // manager: whose extension it is (several managers: the same id may be installed under each, docs/assistant/managers.md); none
   // is the default's. Written `<id>@<manager>`.
   | { kind: "extension"; id: string; manager?: string }
   | { kind: "page"; id: string; ui: string; manager?: string }

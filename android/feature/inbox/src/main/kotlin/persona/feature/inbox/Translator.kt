@@ -21,7 +21,7 @@ import persona.core.domain.translate.LanguageGuess
 val LocalTranslator = staticCompositionLocalOf<Translator?> { null }
 
 /**
- * The translations the app has (docs/android.md "Translation", the iOS Translator): Feishu messages asked for while they show
+ * The translations the app has (docs/android/android.md "Translation", the iOS Translator): Feishu messages asked for while they show
  * (batched, [batch] at a time), mails by message. Kept for this run; the hub keeps its own copy, so the next is quick.
  * [transport] is the selected hub's (null while there is none).
  */

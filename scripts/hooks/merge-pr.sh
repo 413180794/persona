@@ -2,7 +2,7 @@
 # Merge a PR only after the privacy scan passes on what it changes (CLAUDE.md "Development workflow" 7):
 #   scripts/hooks/merge-pr.sh <PR number>
 # Scans the PR's commits on top of master and its title and body (the squash commit's message on master), with this
-# machine's private values (docs/testing.md "Privacy scan"), then squash-merges exactly the head it scanned and deletes the
+# machine's private values (docs/operations/testing.md "Privacy scan"), then squash-merges exactly the head it scanned and deletes the
 # branch. CI cannot do this: it does not have the values.
 set -euo pipefail
 pr="${1:?usage: scripts/hooks/merge-pr.sh <PR number>}"

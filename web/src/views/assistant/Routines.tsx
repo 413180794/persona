@@ -1,4 +1,4 @@
-// Scheduled tasks (docs/assistant.md "Scheduled tasks", the iOS app's AssistantRoutinesView): everything Persona does on its own on
+// Scheduled tasks (docs/assistant/assistant.md "Scheduled tasks", the iOS app's AssistantRoutinesView): everything Persona does on its own on
 // one page — what repeats (every day at a time, every N minutes) and the one-offs it scheduled from a conversation, each
 // with its rule in words, next and last run, what it runs with and an on/off switch; what comes next and the history
 // of runs beside them. A row opens the editor; "New" starts from a template or blank.

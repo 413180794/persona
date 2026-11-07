@@ -1,6 +1,6 @@
 # 收件箱夹具
 
-本目录固定当前 iOS 收件箱的列表行为，供 Android JUnit 和以后接入的 XCTest 共用。来源为 `docs/inbox.md`「AI 分拣」「App」、`apple/Shared/InboxModels.swift`、`apple/Persona/Views/Inbox/InboxView.swift`、`apple/Persona/App/InboxStore.swift` 和 `apple/PersonaTests/InboxTests.swift`。分拣模型、采集、发送、数据保留期限不属于本目录范围，输入视为列表已收到的数据。
+本目录固定当前 iOS 收件箱的列表行为，供 Android JUnit 和以后接入的 XCTest 共用。来源为 `docs/assistant/inbox.md`「AI 分拣」「App」、`apple/Shared/InboxModels.swift`、`apple/Persona/Views/Inbox/InboxView.swift`、`apple/Persona/App/InboxStore.swift` 和 `apple/PersonaTests/InboxTests.swift`。分拣模型、采集、发送、数据保留期限不属于本目录范围，输入视为列表已收到的数据。
 
 ## 规则与用例
 
@@ -23,7 +23,7 @@
 | 空间屏蔽可由单会话 allowed 覆盖。 | AppModel 的 `isMuted`；`apple/Shared/APIClient.swift` 的 `Pins.mutes` | `agent_mute_allow_override` |
 | 段标题件数包括交互和事项，actionCount 只数所有未处理 action 事项，不受页面筛选影响。 | InboxView 的 `sectionHeader`；InboxStore 的 `actionCount` | `waiting_agents_before_items`、`source_hides_agents`、`inbox_filter_mail_account` |
 | 筛选标签当前没有数字，因此 filter_counts 为空对象。 | InboxView 的 `chip` | `inbox_filter_feishu`、`inbox_filter_mail_kind` |
-| 有 status（第一期）时按它分段：进行中排在需要你和知悉即可之间、永远展开；进行中的事项不算需要你（actionCount 不数它）；缺 status 或值不认识时按 tier。 | `docs/inbox.md`「事件、处理链条、建议」；Android `InboxList.kt` 的 `section` | `status_sections_with_working`、`working_never_folds`、`old_hub_without_status` |
+| 有 status（第一期）时按它分段：进行中排在需要你和知悉即可之间、永远展开；进行中的事项不算需要你（actionCount 不数它）；缺 status 或值不认识时按 tier。 | `docs/assistant/inbox.md`「事件、处理链条、建议」；Android `InboxList.kt` 的 `section` | `status_sections_with_working`、`working_never_folds`、`old_hub_without_status` |
 | 本任务补充同时间按 id 升序的规则，并保留当前 iOS 的对照结果。 | `CLAUDE.md`「同一时间再按 id」；InboxView 的 `shownDone`；AppModel 的 `pendingInteractions` | `equal_times_use_id_extension`、`equal_times_reversed_input` |
 
 ## JSON 结构
@@ -65,7 +65,7 @@
 - `ios_expected` 记录探针以 input 数组作为遍历顺序时的结果；它能证明缺少 id 比较，但不保证真实字典枚举也产生这一个次序。
 - 两个同时间用例的 expected 完全一致，ios_expected 随输入顺序改变；Swift 对照检查 ios_expected，确定性规则另外检查 expected 的 id 次序与反向输入不变性。
 
-Android 的目标断言应读取 expected，以后 iOS 跟进时补上比较键。协调者需将这一差异交给实现车道，当前车道不修改 hub 或 iOS。其余用例均以现有实现的输出为 expected。`docs/inbox.md` 的「新的在前」由 hub 输出保证，不能据此给 iOS 的缓存列表额外加时间重排。
+Android 的目标断言应读取 expected，以后 iOS 跟进时补上比较键。协调者需将这一差异交给实现车道，当前车道不修改 hub 或 iOS。其余用例均以现有实现的输出为 expected。`docs/assistant/inbox.md` 的「新的在前」由 hub 输出保证，不能据此给 iOS 的缓存列表额外加时间重排。
 
 ## 对照与复跑
 

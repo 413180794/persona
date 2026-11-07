@@ -1,5 +1,5 @@
-"""The sent-as-user ledger as the hub answers it (GET /api/v1/connectors/sent, docs/connectors.md "Sent as the user",
-docs/protocol.md "Connector API"), for mock_hub.py's MOCK_SENT (docs/web.md "Settings", scripts/test/web_sent_e2e.py).
+"""The sent-as-user ledger as the hub answers it (GET /api/v1/connectors/sent, docs/extensions/connectors.md "Sent as the user",
+docs/protocol/protocol.md "Connector API"), for mock_hub.py's MOCK_SENT (docs/web/web.md "Settings", scripts/test/web_sent_e2e.py).
 
 MOCK_SENT=1        about seventy made-up rows, newest first: mail, GitHub, Lark and an extension's connector, all four ways
                    through the gate (a rule, "always allow" in the chat, the card on the phone with the assistant answering

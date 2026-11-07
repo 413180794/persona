@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// SentMessage is a message one of a connector's writes made, as the sent-as-user ledger keeps it (docs/connectors.md
+// SentMessage is a message one of a connector's writes made, as the sent-as-user ledger keeps it (docs/extensions/connectors.md
 // "Sent as the user"): what a connector needs to find the message again.
 type SentMessage struct {
 	Action string          // the tool that wrote it (Sent.Action)
@@ -29,7 +29,7 @@ var (
 	ErrRecallUnavailable = errors.New("the connector is not available to take the message back")
 )
 
-// Recaller is an Actions that can also take back a message one of its writes made (docs/connectors.md "Sent as the
+// Recaller is an Actions that can also take back a message one of its writes made (docs/extensions/connectors.md "Sent as the
 // user"). Like RefActions it is not a capability: nothing is declared and Check does not look for it, the hub finds it
 // with RecallerOf. A connector without it has nothing to recall.
 type Recaller interface {

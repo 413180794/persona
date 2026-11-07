@@ -20,7 +20,7 @@ struct TodoDetailView: View {
     @State private var titleBaseline = ""
     /// The title being saved, so one edit is not sent twice.
     @State private var savingTitle: String?
-    /// The PR its work is in, opened in the app's link sheet (docs/ios.md, links open inside the app).
+    /// The PR its work is in, opened in the app's link sheet (docs/apple/ios.md, links open inside the app).
     @State private var link: LinkTarget?
 
     private var currentTodo: TodoItem? {
@@ -165,7 +165,7 @@ struct TodoDetailView: View {
                     }
 
                     if todo.autoDone {
-                        // The hub closed it (docs/todos.md「自动完成」): say why, and how to undo it.
+                        // The hub closed it (docs/assistant/todos.md「自动完成」): say why, and how to undo it.
                         Text(todo.autoDoneReason.map { String(localized: "The agent stopped and the work looked finished, so it was marked done: \($0). If it isn't, tap “Reopen”.") }
                              ?? String(localized: "The agent stopped and the work looked finished, so it was marked done. If it isn't, tap “Reopen”."))
                             .font(Theme.Font.caption)

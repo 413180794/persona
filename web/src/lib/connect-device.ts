@@ -1,5 +1,5 @@
 // Settings › Devices › Connect a new device (#2731): a one-time pairing code from the hub (POST /api/v1/auth/pair-codes,
-// docs/protocol.md "Temporary pairing"), the page address its browser sign-in link opens, and the device that used it.
+// docs/protocol/protocol.md "Temporary pairing"), the page address its browser sign-in link opens, and the device that used it.
 
 export interface QRImage {
   size: number;

@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
-// How a new manager is installed (docs/managers.md, "Install commands"): the app shows the commands that come with its install
+// How a new manager is installed (docs/assistant/managers.md, "Install commands"): the app shows the commands that come with its install
 // code. `curl -fsSL <hub>/i/<code> | sh` gets a script from the hub that finds or downloads personad, trades the code
 // (`personad manager join … --install`) and installs the manager as a service of that computer; `docker run …` runs
 // it as a container of the hub's image. GET /i/<code> needs no credential (the code is it) and does not use the code
@@ -29,7 +29,7 @@ const installScriptPath = "/i/"
 //   - Straight from the app: the address r came to (it reached the hub from where the command runs), https when it
 //     came over TLS or through a proxy that says so, pinned when it came to the hub's own TLS port. An https
 //     public_url goes first: the address the user set up for the world (a reverse proxy, a subpath). An http one does
-//     not: every hub writes one for its host name (docs/config.md), only for the private network.
+//     not: every hub writes one for its host name (docs/operations/config.md), only for the private network.
 //   - Through a member hub (the Host is the mesh's, "peer", which no computer reaches): this hub's own addresses
 //     (ownAddress).
 func (h *Hub) managerAddress(r *http.Request) (base, fp string) {
@@ -90,7 +90,7 @@ func (h *Hub) ownAddress() (base, fp string, ok bool) {
 }
 
 // addressOf is raw (an http(s) URL of the hub's configuration) as the commands' hub address: its path kept (a reverse
-// proxy's subpath, docs/network.md), with the hub's TLS pin when it is https to the hub's own TLS port.
+// proxy's subpath, docs/operations/network.md), with the hub's TLS pin when it is https to the hub's own TLS port.
 func (h *Hub) addressOf(raw string) (base, fp string, ok bool) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" || u.User != nil || (u.Scheme != "http" && u.Scheme != "https") {
@@ -157,7 +157,7 @@ func (h *Hub) managerImage() string {
 	return h.build.Image
 }
 
-// managerDockerScript is the POSIX sh script GET /i/<code>/docker answers (docs/managers.md, "Containers"): manager id
+// managerDockerScript is the POSIX sh script GET /i/<code>/docker answers (docs/assistant/managers.md, "Containers"): manager id
 // in a container beside a Postgres container of its own, on a network of their own. Names: network persona-mgr-<id>,
 // containers persona-mgr-<id> and persona-mgr-<id>-pg, volumes persona-mgr-<id>-home and persona-mgr-<id>-data.
 //
@@ -172,7 +172,7 @@ func managerDockerScript(id, image, base, code, fp string) string {
 		fpArgs = " --fingerprint " + fp
 	}
 	return `#!/bin/sh
-# Persona: run the manager ` + id + ` in Docker, beside a Postgres of its own (docs/managers.md, "Containers").
+# Persona: run the manager ` + id + ` in Docker, beside a Postgres of its own (docs/assistant/managers.md, "Containers").
 set -eu
 N=` + q("persona-mgr-"+id) + `
 ID=` + q(id) + `
@@ -363,7 +363,7 @@ func managerInstallScript(m managerScript) string {
 	}
 	return `#!/bin/sh
 # Persona: install the manager ` + q(name) + ` (` + m.ID + `) on this computer and connect it to the hub
-# (docs/managers.md). Arguments after sh -s -- go to personad manager join: --dir <directory>, --database-url <url>.
+# (docs/assistant/managers.md). Arguments after sh -s -- go to personad manager join: --dir <directory>, --database-url <url>.
 set -eu
 HUB=` + q(m.Hub) + `
 CODE=` + q(m.Code) + `
@@ -382,7 +382,7 @@ find_personad() {
 
 BIN="$(find_personad || true)"
 if [ -z "$BIN" ]; then
-	[ -n "$DL" ] || fail "this computer has no personad, and the hub does not know where to download it: install personad first (docs/release.md), then run this again"
+	[ -n "$DL" ] || fail "this computer has no personad, and the hub does not know where to download it: install personad first (docs/operations/release.md), then run this again"
 	case "$(uname -s)" in Linux) os=linux ;; Darwin) os=darwin ;; *) fail "no build for $(uname -s)" ;; esac
 	case "$(uname -m)" in x86_64 | amd64) arch=amd64 ;; arm64 | aarch64) arch=arm64 ;; *) fail "no build for $(uname -m)" ;; esac
 	if command -v curl >/dev/null 2>&1; then fetch() { curl -fsSL "$1" -o "$2"; }
@@ -411,7 +411,7 @@ if [ -z "$BIN" ]; then
 fi
 "$BIN" manager join "$HUB" "$CODE" ` + fp + ` --install "$@"
 # A computer that runs a manager keeps its node on personad, which updates with the node: a node service (persona-link's
-# systemd unit or launchd agent) that runs the device's own program, persona-node, moves back (docs/link.md "The
+# systemd unit or launchd agent) that runs the device's own program, persona-node, moves back (docs/operations/link.md "The
 # device's program").
 # persona-link is where install.sh puts it, in the Persona Link Mac app, or on PATH.
 find_link() {
@@ -428,7 +428,7 @@ for unit in "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/personad-node.servic
 	if [ -n "$link" ]; then
 		"$link" node switch --to personad || echo "persona manager: the node service still runs persona-node; run '$link' node switch --to personad" >&2
 	else
-		echo "persona manager: the node service runs persona-node, and this computer has no persona-link to move it to personad: install Persona Link (docs/link.md), then run persona-link node switch --to personad" >&2
+		echo "persona manager: the node service runs persona-node, and this computer has no persona-link to move it to personad: install Persona Link (docs/operations/link.md), then run persona-link node switch --to personad" >&2
 	fi
 done
 `

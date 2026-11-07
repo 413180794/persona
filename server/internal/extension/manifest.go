@@ -37,7 +37,7 @@ var (
 // ValidID says whether id is a plugin id: a-z0-9_-, at most 32, not starting with - or _ (those are the hub's).
 func ValidID(id string) bool { return idPattern.MatchString(id) }
 
-// Manifest is persona-plugin.json (docs/plan-extensions.md "3").
+// Manifest is persona-plugin.json (docs/plans/plan-extensions.md "3").
 type Manifest struct {
 	ManifestVersion int    `json:"manifest_version"`
 	ID              string `json:"id"`
@@ -46,7 +46,7 @@ type Manifest struct {
 	Description     string `json:"description,omitempty"`
 	Publisher       string `json:"publisher,omitempty"`
 	Homepage        string `json:"homepage,omitempty"`
-	// Tags are what the market shows and searches (docs/extensions.md "Extension market"). Packages and indexes carry the
+	// Tags are what the market shows and searches (docs/extensions/extensions.md "Extension market"). Packages and indexes carry the
 	// manifest without them (PackagedManifest): hubs before tags read manifests strictly and would refuse it.
 	Tags             []string                   `json:"tags,omitempty"`
 	Engines          Engines                    `json:"engines,omitzero"`
@@ -55,10 +55,10 @@ type Manifest struct {
 	ActivationEvents []string                   `json:"activation_events,omitempty"`
 	Contributes      map[string]json.RawMessage `json:"contributes,omitempty"`
 	// OffByDefault are contributions ("<point>/<id>") that start switched off: at install, and at an upgrade for the
-	// ones the version before did not have (docs/extensions.md "Contribution switches"). A connector's or a bound channel's
+	// ones the version before did not have (docs/extensions/extensions.md "Contribution switches"). A connector's or a bound channel's
 	// switch is not the extension's, so they cannot be listed.
 	OffByDefault []string `json:"off_by_default,omitempty"`
-	// Depends, Exports and ExtensionPack are the extension model (docs/extensions.md "Dependencies, exports and packs", model.go).
+	// Depends, Exports and ExtensionPack are the extension model (docs/extensions/extensions.md "Dependencies, exports and packs", model.go).
 	Depends       []Dependency    `json:"depends,omitempty"`
 	Exports       *Exports        `json:"exports,omitempty"`
 	ExtensionPack []PackMember    `json:"extension_pack,omitempty"`
@@ -78,7 +78,7 @@ type Manifest struct {
 type Engines struct {
 	// Persona is a range of hub build numbers (">=202611050000 <202701010000").
 	Persona string
-	// ExtensionProtocol is "extension_protocol"; its old name "plugin_protocol" is read too (docs/extensions.md
+	// ExtensionProtocol is "extension_protocol"; its old name "plugin_protocol" is read too (docs/extensions/extensions.md
 	// "Naming and compatibility"). It is still written out as "plugin_protocol", so the manifests the hub stores stay readable to a hub
 	// rolled back to a build before #1844.
 	ExtensionProtocol int
@@ -119,7 +119,7 @@ type Runtime struct {
 	RPC string `json:"rpc,omitempty"`
 	// HTTP: the program serves HTTP on PERSONA_PLUGIN_SOCKET, and the hub relays /api/v1/plugins/<id>/… to it.
 	HTTP bool `json:"http,omitempty"`
-	// Resources are the most it may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"); the defaults
+	// Resources are the most it may use when the hub runs it in a sandbox (docs/extensions/extensions.md "Sandbox"); the defaults
 	// otherwise.
 	Resources *Resources `json:"resources,omitempty"`
 }
@@ -151,7 +151,7 @@ func (r *Resources) Limits() Resources {
 // SpeaksRPC says whether the program speaks the plugin protocol.
 func (r *Runtime) SpeaksRPC() bool { return r != nil && r.RPC != "none" }
 
-// NodeRuntime is the plugin's program that runs on computers, not on the hub (docs/plan-extensions.md "7"): on each
+// NodeRuntime is the plugin's program that runs on computers, not on the hub (docs/plans/plan-extensions.md "7"): on each
 // machine the user switched on in the configuration field Machines, started and stopped by that machine's node.
 type NodeRuntime struct {
 	// Command is one per platform ("darwin-arm64": "node/bin/x"); its platforms are the computers it runs on.
@@ -350,7 +350,7 @@ func PackagedManifest(data []byte) ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
-// Validate checks everything a manifest can be checked for on its own (docs/plan-extensions.md "Fields"). What depends on
+// Validate checks everything a manifest can be checked for on its own (docs/plans/plan-extensions.md "Fields"). What depends on
 // the hub (the platform's command, engines, ids other plugins use) is the registry's.
 func (m *Manifest) Validate() error {
 	var errs []error

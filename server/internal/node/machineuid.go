@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// The computer's own id (docs/mesh.md "Machine identity"): two hubs that both reach this computer tell it is the same one by
+// The computer's own id (docs/server/mesh.md "Machine identity"): two hubs that both reach this computer tell it is the same one by
 // it, as the ids hub.json gives machines are each hub's own names. Made on the node's first run and kept in
 // ~/.persona/machine-uid (0600). A virtual machine cloned with its home directory carries the same file: `personad node
 // reset-uid` makes a new one there.

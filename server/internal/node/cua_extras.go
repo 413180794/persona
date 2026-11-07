@@ -1,6 +1,6 @@
 package node
 
-// The plugin cua's small settings (docs/computer-use.md "d) Small settings", #1507): a sound on the Mac when the assistant
+// The plugin cua's small settings (docs/extensions/computer-use.md "d) Small settings", #1507): a sound on the Mac when the assistant
 // clicks (none, foreground clicks only, or all of them), so whoever sits at it hears it working, and whether Cua
 // Driver draws the agent's cursor.
 

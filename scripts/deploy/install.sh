@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install personad (docs/release.md "Publishing personad"). scripts/release/publish.sh serves this file as <site>/install.sh with
+# Install personad (docs/operations/release.md "Publishing personad"). scripts/release/publish.sh serves this file as <site>/install.sh with
 # PERSONA_DL filled in:
 #
 #   curl -fsSL <site>/install.sh | sh
@@ -7,8 +7,8 @@
 # Puts the binary for this system at ~/.persona/bin/personad (where the hub looks for it on every computer it reaches
 # over ssh), after checking it against the published SHA256SUMS. PERSONA_DL=<url> installs from somewhere else.
 #
-# One hub is enough for a home (docs/plan-hub-center.md section 0); every other computer gets the node service: the
-# resident node and the connector persona-link, paired with the hub (docs/link.md "Installing the node service"):
+# One hub is enough for a home (docs/archive/operations/plan-hub-center.md section 0); every other computer gets the node service: the
+# resident node and the connector persona-link, paired with the hub (docs/operations/link.md "Installing the node service"):
 #
 #   curl -fsSL <site>/install.sh | sh -s -- --node --pair '<link from personad hub pair --machine <id>>'   # this one connects to the hub
 #   curl -fsSL <site>/install.sh | sh -s -- --node --listen [:18663] [--addr <address the hub reaches this one at>]  # the hub connects here
@@ -16,10 +16,10 @@
 # --pair and --listen imply --node (PERSONA_ROLE=node, PERSONA_PAIR, PERSONA_LISTEN do the same). Without a role and with
 # a terminal it asks, and says so when it hears a hub on this LAN already (mDNS). --hub is the machine that runs the hub.
 #
-# On the machine that runs the hub it also asks who may open the hub's admin UI (docs/admin.md): with a terminal it
+# On the machine that runs the hub it also asks who may open the hub's admin UI (docs/operations/admin.md): with a terminal it
 # asks; without one, give it as `sh -s -- --admin-access lan` (or PERSONA_ADMIN_ACCESS=lan), else lan applies and a
 # line says so. --admin-cidrs a,b (PERSONA_ADMIN_CIDRS) goes with cidrs.
-# Then herdr (the default engine, docs/engines.md) if this computer has none: herdr's own installer puts it in
+# Then herdr (the default engine, docs/integrations/engines.md) if this computer has none: herdr's own installer puts it in
 # ~/.local/bin, where the node looks. PERSONA_SKIP_HERDR=1 leaves it out (Orca / Herdr App machines); a failed herdr
 # install only warns. scripts/deploy/ensure-herdr.sh does the same for deploy.sh: keep the two in step.
 set -eu
@@ -255,7 +255,7 @@ get() {
     compat_command "$2"
 }
 
-# The device's own program (docs/link.md "The device's program"): the node service on a device runs persona-node,
+# The device's own program (docs/operations/link.md "The device's program"): the node service on a device runs persona-node,
 # at $DEST/persona-node. A computer that runs a hub or a manager keeps its node on personad, which their services run
 # too and which updates with the node (hosts_hub_or_manager).
 has_node_build() { awk -v n="persona-node-$os-$arch.gz" '$2 == n || $2 == "*" n { found = 1 } END { exit !found }' "$tmp/SHA256SUMS"; }
@@ -292,7 +292,7 @@ case ":$PATH:" in
 esac
 
 # On the computer that runs the hub, PERSONA_WITH=wechat also installs personad-wechat, the WeChat bot's program, next
-# to personad (docs/wechat.md). Other computers do not need it; a hub that updates itself gets it with its next update
+# to personad (docs/extensions/wechat.md). Other computers do not need it; a hub that updates itself gets it with its next update
 # anyway. (Telegram's connector is an extension now, installed from the hub's extension market: #1704.)
 for p in wechat; do
 	case ",${PERSONA_WITH:-}," in
@@ -348,7 +348,7 @@ node_service() {
 }
 
 # install_node makes this computer the node service: the resident node and the connector, paired with the hub
-# (docs/link.md). persona-link does the work; this only picks how it pairs.
+# (docs/operations/link.md). persona-link does the work; this only picks how it pairs.
 install_node() {
 	fetch_link || fail "the node service needs Persona Link (persona-link)"
 	if [ -z "$PAIR" ] && [ -z "$LISTEN_SET" ] && (: </dev/tty) 2>/dev/null; then
@@ -377,7 +377,7 @@ ASK
 		for a in ${ADDRS:-}; do set -- "$@" --addr "$a"; done # addresses have no spaces
 	fi
 	if [ "$os" = darwin ]; then
-		# On a Mac the connector is the menu bar app (Persona Link, docs/link.md); here: the resident node and the pairing.
+		# On a Mac the connector is the menu bar app (Persona Link, docs/operations/link.md); here: the resident node and the pairing.
 		"$DEST/persona-link" node install || return 1
 		case "${1:-}" in
 		--pair) "$DEST/persona-link" pair "$PAIR" ${MACHINE:+--machine "$MACHINE"} || return 1 ;;
@@ -440,7 +440,7 @@ elif [ -f "$STATE/hub.json" ]; then
 elif [ "$ROLE" = hub ]; then
 	if ask_admin_access; then set_admin_access; else admin_access_reminder; fi
 elif (: </dev/tty) 2>/dev/null; then
-	# A hub on this LAN already: this computer only needs the node service (docs/plan-hub-center.md section 0).
+	# A hub on this LAN already: this computer only needs the node service (docs/archive/operations/plan-hub-center.md section 0).
 	found=
 	if fetch_link 2>/dev/null; then found="$("$DEST/persona-link" discover --wait 3 2>/dev/null || true)"; fi
 	if [ -n "$found" ]; then
@@ -471,7 +471,7 @@ else
 fi
 
 # The machine that runs the hub: personad hub setup does the rest (hub.json, the database, the service, the phone's
-# QR code and the admin URL, docs/onboarding.md 4.1). Running it again is safe, so an upgrade with --hub runs it too.
+# QR code and the admin URL, docs/assistant/onboarding.md 4.1). Running it again is safe, so an upgrade with --hub runs it too.
 if [ "$ROLE" = hub ]; then
 	unswitch_node
 	echo ""

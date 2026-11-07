@@ -1,5 +1,5 @@
 // Package apns sends to Apple Push Notification service with a token-based (.p8) key. The hub uses it when it has
-// its own key (~/.persona/apns.json); the push relay (personad relay, docs/push-relay.md) uses it for everyone else.
+// its own key (~/.persona/apns.json); the push relay (personad relay, docs/operations/push-relay.md) uses it for everyone else.
 package apns
 
 import (

@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Launcher health (docs/launcher-health.md): every launcher on every machine is checked now and then with the same
+// Launcher health (docs/server/launcher-health.md): every launcher on every machine is checked now and then with the same
 // one-word request "Test availability" sends (launchers.check); a failed start counts too. A launcher whose latest result is a
 // failure is not used for a new agent while another machine has a healthy one; known errors are repaired (the node
 // updates its CLI, else an agent with the configured skill), and what stays broken is blocked for the user to see.

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Who owns the app's one call (docs/voice.md 6.3, 6.5, 6.10「VoiceCalls 的所有权」): one at a time, another
+/// Who owns the app's one call (docs/assistant/voice.md 6.3, 6.5, 6.10「VoiceCalls 的所有权」): one at a time, another
 /// conversation's call ends the one before, the background and leaving the page end only the phone's.
 @MainActor
 struct VoiceCallsTests {

@@ -1,4 +1,4 @@
-// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md "Quota"), as a quota extension
+// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/integrations/launchers.md "Quota"), as a quota extension
 // read it, and how its numbers read (iOS LauncherQuotaSection / QuotaText).
 import { currentLanguage, formatDate, formatNumber, t } from "../i18n";
 

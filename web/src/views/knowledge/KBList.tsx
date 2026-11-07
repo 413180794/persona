@@ -1,5 +1,5 @@
 // The knowledge list: search, the six kinds as chips with a tag filter, the kind's entries grouped the way the app
-// groups them (docs/knowledge.md "Pages"), and search results merged by entry.
+// groups them (docs/assistant/knowledge.md "Pages"), and search results merged by entry.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, enc, errorText, isAbort } from "../../lib/api";

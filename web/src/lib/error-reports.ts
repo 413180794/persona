@@ -1,4 +1,4 @@
-// The page's own errors, sent to the hub's error reports (docs/protocol.md "Error reports", docs/web.md "Error reports").
+// The page's own errors, sent to the hub's error reports (docs/protocol/protocol.md "Error reports", docs/web/web.md "Error reports").
 // Captured: uncaught errors, unhandled rejections and what the page boundaries catch. Sent only while the hub's hello
 // `features` has `error_reports`; kept in localStorage until a 2xx (at most 50, at most 7 days); dropped as soon as a
 // hello says the feature is off. Nothing the user wrote goes in: an error's name, message and stack (with URLs cut to

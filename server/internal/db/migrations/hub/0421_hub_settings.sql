@@ -1,4 +1,4 @@
--- The hub's own settings (docs/server.md "Migrations"): until now they shared the settings table with the default
+-- The hub's own settings (docs/server/server.md "Migrations"): until now they shared the settings table with the default
 -- manager's. Copied once from it on a database the two share; the rows stay there for a build from before (a switch
 -- back), and a manager's settings table no longer has the hub's keys read from it.
 CREATE TABLE IF NOT EXISTS hub_settings (

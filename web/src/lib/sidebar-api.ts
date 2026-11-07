@@ -1,5 +1,5 @@
 import { storedValue, storeValue } from "./compatibility";
-// What the sidebar offers the keyboard shortcuts (docs/web.md "Keyboard shortcuts"): fold or open every group, switch how Agents are
+// What the sidebar offers the keyboard shortcuts (docs/web/web.md "Keyboard shortcuts"): fold or open every group, switch how Agents are
 // grouped, walk the rows. Sidebar.tsx subscribes (`onFoldAll`, `onGrouping`) and marks its list `data-sidebar-rows`; the
 // shortcuts call the rest. Kept out of Sidebar.tsx so that file only gains the few lines that listen.
 import { AGENT_GROUPINGS, agentGrouping, type AgentGrouping } from "./agent-groups";

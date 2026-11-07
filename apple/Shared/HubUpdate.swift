@@ -1,6 +1,6 @@
 import Foundation
 
-/// The hub's version and its updating itself (docs/hub-update.md, GET /api/v1/hub/update and the `hub_update` event).
+/// The hub's version and its updating itself (docs/operations/hub-update.md, GET /api/v1/hub/update and the `hub_update` event).
 nonisolated struct HubUpdateStatus: Codable, Equatable, Sendable {
     var version: String
     var build: Int64
@@ -148,7 +148,7 @@ nonisolated struct SkillsResponse: Codable, Sendable {
 
 // What the hub said it is in its hello (its build and protocol): `HubHello` (Hubs.swift), with who the hub is.
 
-/// Whether this app and the hub go together (docs/hub-update.md「兼容」).
+/// Whether this app and the hub go together (docs/operations/hub-update.md「兼容」).
 nonisolated enum HubCompat: Equatable, Sendable {
     case ok
     case hubTooOld // its protocol is older than this app needs (a hub from before protocols says none)
@@ -165,7 +165,7 @@ nonisolated enum HubCompat: Equatable, Sendable {
     }
 }
 
-/// The one quiet line over the Agents list about the hub (docs/hub-update.md「App 里」), the most pressing first.
+/// The one quiet line over the Agents list about the hub (docs/operations/hub-update.md「App 里」), the most pressing first.
 nonisolated enum HubNotice: Equatable, Sendable {
     case appTooOld
     case hubTooOld

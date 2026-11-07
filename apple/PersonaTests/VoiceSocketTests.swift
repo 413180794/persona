@@ -3,7 +3,7 @@ import Network
 import Testing
 @testable import Persona
 
-/// `HubVoiceSocket` against a loopback server that refuses the WebSocket handshake (docs/voice.md 1.3, 6.5). A call
+/// `HubVoiceSocket` against a loopback server that refuses the WebSocket handshake (docs/assistant/voice.md 1.3, 6.5). A call
 /// sends `start` the moment it opens, so the failed send, the ping and the receive all race to report the close: the
 /// hub's status must come out whichever wins, else a revoked token or a missing extension looks like a passing drop and
 /// is tried three more times.

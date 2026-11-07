@@ -1,4 +1,4 @@
-// "Extensions": what extends this hub (docs/extensions.md), installed, upgraded, rolled back, switched and uninstalled from here as
+// "Extensions": what extends this hub (docs/extensions/extensions.md), installed, upgraded, rolled back, switched and uninstalled from here as
 // `personad extension` does on the hub's machine. Installing runs a new program there, so nothing installs before the
 // page has shown what it may do (the preview) and the user agreed to exactly that (its permissions digest).
 import { t } from "../../i18n";
@@ -19,7 +19,7 @@ import { Card, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Seg
 
 const PERM_ICON: Record<string, AdminIconName> = {
   runs_code: "terminal", network: "web", hub_api: "key", launcher_keys: "gauge", secrets: "lock",
-  // its program on computers (docs/extensions.md "Programs that run on computers")
+  // its program on computers (docs/extensions/extensions.md "Programs that run on computers")
   node_runs_code: "machine", node_network: "web", node_files: "machine", node_macos_privacy: "shield", node_secrets: "lock",
   // command-line programs it installs in its own directory (#4507)
   tools: "terminal",
@@ -46,7 +46,7 @@ export function Extensions() {
   // An extension's state moves on its own (starting, running, idle).
   useVisiblePoll(reload, 15_000, Boolean(data));
 
-  // How each runs, over the last day (docs/extensions.md "Activity"); a hub from before #1857 has none (null).
+  // How each runs, over the last day (docs/extensions/extensions.md "Activity"); a hub from before #1857 has none (null).
   const [running, setRunning] = useState<Record<string, ExtensionOverview> | null>(null);
   const live = useRef(true);
   const loadRunning = useCallback(() => {

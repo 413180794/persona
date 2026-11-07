@@ -1,6 +1,6 @@
 import XCTest
 
-/// Recordings go to the knowledge base, not the composer (#3235, docs/recording.md): a made-up transcribed recording
+/// Recordings go to the knowledge base, not the composer (#3235, docs/apple/recording.md): a made-up transcribed recording
 /// shows under Knowledge › Recordings, reaches the hub's `/api/v1/recordings` by itself, and deleting it there deletes it on the
 /// hub; no composer's + menu offers a recording any more. Needs its own mock hub (PERSONA_MOCK_HUB), fresh per run:
 /// the hub keeps the delete's tombstone. TEST_RUNNER_PERSONA_SHOTS=<dir> saves the list, the recording and the + menu there

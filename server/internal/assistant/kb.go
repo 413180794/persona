@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The knowledge base is the assistant's (docs/knowledge.md "Who owns what"): the engine (internal/kb), its loop, its files
+// The knowledge base is the assistant's (docs/assistant/knowledge.md "Who owns what"): the engine (internal/kb), its loop, its files
 // under the data directory and its index rows in Postgres. Only the assistant writes them. The hub keeps the sources:
 // what its connectors deliver is read over the bus (kb_sources.go), the posts their programs hand it come over the bus
 // (kb_posts.go), and the hub's features that read the knowledge base ask here (kb_bus.go). The kb_* tools, the live
@@ -330,7 +330,7 @@ func (s *Service) kbConnected() bool {
 
 // kbLoop archives, compresses and keeps up the knowledge base, every two minutes (five seconds after a kick), from
 // when the assistant first connected until ctx ends. While it is not connected the knowledge base is closed. A mesh
-// member's waits: the center's knowledge base is the group's (docs/mesh.md), this one's stays as it was.
+// member's waits: the center's knowledge base is the group's (docs/server/mesh.md), this one's stays as it was.
 func (s *Service) kbLoop(ctx context.Context) {
 	if s.kb.dir == "" {
 		return

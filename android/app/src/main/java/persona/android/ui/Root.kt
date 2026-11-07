@@ -172,7 +172,7 @@ private fun PersonaRootContent(
                 } else key(active.identity) {
                     val displayed = LocalDeveloperTools.current?.session(active) ?: active
                     key(displayed.identity) {
-                        // Demo mode has only the default face (docs/persona.md), like iOS.
+                        // Demo mode has only the default face (docs/apple/persona.md), like iOS.
                         val demo = displayed.demo != null
                         // What the pages' connection titles open (ConnectionDetails.kt): this hub's transport and outbox.
                         val connectionDetails = remember(displayed) {
@@ -207,7 +207,7 @@ private fun PersonaRootContent(
 
 @Composable
 private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((Router) -> ResolvedRoute?)?>, shellServices: SettingsServices, shell: AppServices) {
-    // Where the selected hub's extensions draw (docs/extensions.md "UI slots"): the settings home, the settings tab's badge and
+    // Where the selected hub's extensions draw (docs/extensions/extensions.md "UI slots"): the settings home, the settings tab's badge and
     // machines' pages share one list, read while the hub is online.
     val extensionSlots = persona.feature.settings.rememberExtensionSlots(shellServices.extensions?.takeUnless { shellServices.demo }, session.connection.state)
     val services = remember(shellServices, extensionSlots) { shellServices.copy(extensionSlots = extensionSlots) }

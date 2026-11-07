@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Settings › Extensions › Channels (docs/channels.md "API" "UI"): every way of talking to Persona — its own apps, the Feishu bot,
+ * Settings › Extensions › Channels (docs/extensions/channels.md "API" "UI"): every way of talking to Persona — its own apps, the Feishu bot,
  * WeChat, /agent in Feishu, voice, the chat app bots extensions contribute — with each one's switch, its binding (a step
  * at a time), where its messages go, what it does and a test message. Bound to the active pairing's selected hub.
  */
@@ -109,7 +109,7 @@ data class HubChannel(
 @Serializable
 data class ChannelAccount(val id: String? = null, val name: String = "")
 
-/** What a channel can do (docs/channels.md "Capabilities"); taking text is a given. */
+/** What a channel can do (docs/extensions/channels.md "Capabilities"); taking text is a given. */
 @Serializable
 data class ChannelCapabilities(
     @SerialName("images_in") val imagesIn: Boolean = false,
@@ -188,7 +188,7 @@ data class ChannelDetail(
 }
 
 /**
- * Where binding stands (`connector.Prompt`, docs/connectors.md): fields to fill in ([kind] empty), a QR code to scan
+ * Where binding stands (`connector.Prompt`, docs/extensions/connectors.md): fields to fill in ([kind] empty), a QR code to scan
  * with the chat app (`qr`, drawn from [qr]), a code to enter on a page (`device_code`) or to send to the bot from the
  * chat app (`pair_code`); for those three the app asks the same [step] again every [interval] seconds until the
  * answer is another step or [done].
@@ -225,7 +225,7 @@ data class BindField(val name: String = "", val label: String = "", val secret: 
 @Serializable
 data class BindQrCode(val size: Int = 0, val rows: List<String> = emptyList())
 
-/** Which channel a message or a conversation came from (docs/channels.md "Source marks"). */
+/** Which channel a message or a conversation came from (docs/extensions/channels.md "Source marks"). */
 object ChannelSources {
     /**
      * The channel a message came from, by its `client_msg_id`: `<channel id>-<message id>`. The app's own messages

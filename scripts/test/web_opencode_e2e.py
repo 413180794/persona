@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of opencode sessions in the web app (#3070, docs/opencode.md): the sidebar lists opencode panes as
+"""End-to-end check of opencode sessions in the web app (#3070, docs/integrations/opencode.md): the sidebar lists opencode panes as
 agents (the plugin-completed ones with their titles and state, "needs you" for the one waiting on a permission, the one
 without the plugin and an agent nothing reads, each with why), and the chat opens their conversation (tool calls, the
 permission card) or says it is terminal only.

@@ -37,7 +37,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * "Quota" on a launcher's page (docs/launchers.md "Quota", iOS LauncherQuotaSection, web LauncherQuota): what its key may
+ * "Quota" on a launcher's page (docs/integrations/launchers.md "Quota", iOS LauncherQuotaSection, web LauncherQuota): what its key may
  * still spend at its gateway, titled with the gateway's name the hub sends — a budget on the key, each account / provider
  * with its windows (models folded under it), the key's own use; ↻ reads again. Nothing in it names a gateway.
  */

@@ -29,7 +29,7 @@ export async function imagePayload(file: File): Promise<{ mime: string; data: st
 }
 
 /**
- * Sends a file to machine `mid` (POST /machines/{mid}/files, docs/protocol.md "Sending files"): the chat's attachments, a new
+ * Sends a file to machine `mid` (POST /machines/{mid}/files, docs/protocol/protocol.md "Sending files"): the chat's attachments, a new
  * agent's files and the terminal's pasted ones. Resolves to the file's absolute path on that machine.
  */
 export async function sendFile(mid: string, file: File, opts: { name?: string; dest?: "terminal" | "health"; signal?: AbortSignal } = {}): Promise<string> {

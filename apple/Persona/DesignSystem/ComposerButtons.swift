@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// The composer's dictation and stop buttons, the shell's (docs/ios.md「新外壳」): every composer draws these two, so an
+// The composer's dictation and stop buttons, the shell's (docs/apple/ios.md「新外壳」): every composer draws these two, so an
 // agent's chat and the assistant's look and behave alike (#1079). Each is a size up like the shell's chrome
 // (`shellScaled`), wherever it sits.
 
@@ -73,7 +73,7 @@ extension ComposerRoundButton {
     }
 }
 
-/// Voice Chat from the composer (docs/voice.md 6.1, `Theme.Icon.voiceChannel`): in send's place a round ink button like
+/// Voice Chat from the composer (docs/assistant/voice.md 6.1, `Theme.Icon.voiceChannel`): in send's place a round ink button like
 /// send; beside stop (the agent works) a plain icon like dictation's.
 struct ComposerVoiceButton: View {
     var round: Bool

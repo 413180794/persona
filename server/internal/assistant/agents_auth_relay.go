@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The auth relay (docs/auth-relay.md): before an authorization link goes on a card, the extension whose auth_relay
+// The auth relay (docs/operations/auth-relay.md): before an authorization link goes on a card, the extension whose auth_relay
 // contribution names it is asked to complete it with the account it is signed in with (internal/extmgr, in this
 // process). Done, the agent is told and no card goes up; otherwise the card goes up as before, saying why Persona did
 // not do it. Where the link came from is checked here first: one of the user's own computers, a session known there,

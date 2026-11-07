@@ -1,4 +1,4 @@
-// Package imessage reads the Messages app's data on a Mac (docs/plan-connectors.md "5. iMessage connector"):
+// Package imessage reads the Messages app's data on a Mac (docs/plans/plan-connectors.md "5. iMessage connector"):
 // ~/Library/Messages/chat.db and the address book for names, read-only, through macOS's own /usr/bin/sqlite3
 // (personad is built without cgo). It runs in the node of the Mac the hub was told to read (imessage.machine): the
 // files are protected by macOS (Full Disk Access), and nothing here writes to them, marks anything read or sends.

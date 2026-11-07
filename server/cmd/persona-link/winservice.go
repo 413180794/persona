@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// On Windows persona-link runs from a scheduled task of the user's own (docs/windows.md "Install and start at login"): `install`
+// On Windows persona-link runs from a scheduled task of the user's own (docs/operations/windows.md "Install and start at login"): `install`
 // writes the task, registers it with schtasks and starts it; `uninstall` takes it away. The task starts at sign-in
 // in the user's session and needs no administrator: Task Scheduler refuses a standard user a task that runs without
 // a sign-in (S4U), and the node has to see the user's Orca and its agents anyway. What it runs is the supervisor
@@ -164,7 +164,7 @@ func (e *env) stopTask() {
 }
 
 // installNodeBinary puts the resident node at ~/.persona/bin/personad.exe. Unlike on Linux a given --personad replaces
-// one already there: Windows has no node update over the link yet (docs/node-update.md), so installing again is how
+// one already there: Windows has no node update over the link yet (docs/operations/node-update.md), so installing again is how
 // a Windows node is upgraded.
 func (e *env) installNodeBinary(from string) error {
 	bin := e.nodeBin()

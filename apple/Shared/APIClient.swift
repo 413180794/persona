@@ -55,7 +55,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
     var status: Int
     var message: String
     /// The response's other string fields: a refused send (409) has code (dialog_open / input_draft), delivered
-    /// (none / unknown), draft and clearable (docs/protocol.md「发消息」).
+    /// (none / unknown), draft and clearable (docs/protocol/protocol.md「发消息」).
     var fields: [String: String] = [:]
     /// The hub logs failed requests under this id (X-Request-Id): a server error shows it, to find that line.
     var requestID: String?
@@ -116,14 +116,14 @@ nonisolated struct APIClient: Sendable {
     var session: URLSession = .shared
     /// Answers every request in place of the network: unit tests' `FakeHub`. The demo config uses `local`.
     var transport: Transport?
-    /// The group of paired hubs this client talks to (docs/multi-hub.md): put on the sessions, machines,
+    /// The group of paired hubs this client talks to (docs/protocol/multi-hub.md): put on the sessions, machines,
     /// interactions and keys it returns. "" = the default group.
     var group: String = ""
     /// The Feishu account (gateway account number) the `/api/v1/lark` requests are about, sent as `ol_account`
-    /// (docs/feishu.md「多账号」). nil: the hub's own (lark.account).
+    /// (docs/extensions/feishu.md「多账号」). nil: the hub's own (lark.account).
     var larkAccount: Int?
     /// The hub has the extension routes (`features` has `extensions`, #1844): extension requests go to
-    /// /api/v1/extensions and answer with the new keys; an older hub only has /api/v1/plugins (docs/extensions.md「命名和兼容」).
+    /// /api/v1/extensions and answer with the new keys; an older hub only has /api/v1/plugins (docs/extensions/extensions.md「命名和兼容」).
     var extensionsAPI = false
     /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
     nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
@@ -178,7 +178,7 @@ nonisolated struct APIClient: Sendable {
         return q
     }
 
-    /// `opID`: the write's op id (`X-Persona-Op-Id`, docs/protocol.md「操作回执」): the hub does it once however often
+    /// `opID`: the write's op id (`X-Persona-Op-Id`, docs/protocol/protocol.md「操作回执」): the hub does it once however often
     /// it arrives. A repeat it cannot answer yet comes back `202 {"state":"pending" | "unknown"}`: thrown as an
     /// APIError with `OpReceipt.pendingCode` / `unknownCode`, so no caller takes it for done.
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
@@ -279,10 +279,10 @@ nonisolated struct APIClient: Sendable {
         var size: Int64
     }
 
-    /// Sends a file to the machine's temp directory (docs/protocol.md「发送文件」), streamed from disk; progress gets
+    /// Sends a file to the machine's temp directory (docs/protocol/protocol.md「发送文件」), streamed from disk; progress gets
     /// the bytes sent so far. Cancelling the task cancels the upload and the machine removes what it wrote.
-    /// dest "terminal": a file pasted into a terminal, kept in Persona's own directory (docs/terminal.md section 18).
-    /// dest "dir": into the folder `query` names (dir, cwd, conflict; docs/protocol.md "Changing files"), under its own name.
+    /// dest "terminal": a file pasted into a terminal, kept in Persona's own directory (docs/integrations/terminal.md section 18).
+    /// dest "dir": into the folder `query` names (dir, cwd, conflict; docs/protocol/protocol.md "Changing files"), under its own name.
     func upload(file: URL, name: String, machine: String, dest: String? = nil, query extra: [String: String] = [:],
                 progress: @escaping @Sendable (Int64) -> Void) async throws -> UploadedFile {
         if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
@@ -385,7 +385,7 @@ nonisolated struct APIClient: Sendable {
         return try await get("/api/v1/health", as: H.self).ok
     }
 
-    /// Which hub this is (`GET /api/v1/health`: `hub_id`, `hub_name`; docs/plan-hub-mesh.md 2.6).
+    /// Which hub this is (`GET /api/v1/health`: `hub_id`, `hub_name`; docs/archive/operations/plan-hub-mesh.md 2.6).
     struct Identity: Decodable, Sendable {
         var hubID: String?
         var hubName: String?
@@ -415,7 +415,7 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(State.self, from: await request("PUT", "/api/v1/machines/\(machine)/botmux", body: Body(on: on))).on
     }
 
-    /// Settings › Session Triage (docs/agent-work.md「开关」): the four switches, all off until the user turns them on. 404 on a hub
+    /// Settings › Session Triage (docs/assistant/agent-work.md「开关」): the four switches, all off until the user turns them on. 404 on a hub
     /// without the triage, 503 while its assistant is not connected.
     func agentTriage() async throws -> TriageSwitches { try await get("/api/v1/agents/triage", as: TriageSwitches.self) }
     func setAgentTriage(_ switches: TriageSwitches) async throws -> TriageSwitches {
@@ -490,7 +490,7 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(BrowserCookies.self, from: await request("DELETE", "/api/v1/machines/\(machine)/browser/cookies", query: query, timeout: 150))
     }
 
-    /// The group on what the hub returned (docs/multi-hub.md).
+    /// The group on what the hub returned (docs/protocol/multi-hub.md).
     func stamp(_ list: [Machine]) -> [Machine] { group.isEmpty ? list : list.map { var m = $0; m.group = group; return m } }
     func stamp(_ list: [Session]) -> [Session] { group.isEmpty ? list : list.map { var s = $0; s.group = group; return s } }
     func stamp(_ list: [Interaction]) -> [Interaction] { group.isEmpty ? list : list.map { var i = $0; i.group = group; return i } }
@@ -526,12 +526,12 @@ nonisolated struct APIClient: Sendable {
     /// The hub installs its own personad build on the machine and reconnects; progress comes with the machine list.
     func deploy(machine: String) async throws { try await post("/api/v1/machines/\(machine)/deploy") }
 
-    /// Every machine's latest sample and its last hour by minute (docs/machines.md).
+    /// Every machine's latest sample and its last hour by minute (docs/server/machines.md).
     func metricsOverview() async throws -> [MachineMetrics] {
         struct R: Decodable { var machines: [MachineMetrics] }
         return try await get("/api/v1/metrics", as: R.self).machines
     }
-    /// The subscription accounts and their rate-limit windows (docs/usage-windows.md); [] from a hub before them (404).
+    /// The subscription accounts and their rate-limit windows (docs/server/usage-windows.md); [] from a hub before them (404).
     func usageWindows() async throws -> [UsageAccount] {
         struct R: Decodable { var accounts: [UsageAccount]? }
         do {
@@ -546,7 +546,7 @@ nonisolated struct APIClient: Sendable {
         try Task.checkCancellation()
         return response.metrics
     }
-    /// A machine's token usage over a range (docs/machines.md "Token usage"); model / launcher nil: all ("" is the
+    /// A machine's token usage over a range (docs/server/machines.md "Token usage"); model / launcher nil: all ("" is the
     /// unknown launcher, sent as "-"). 404 from a hub before it.
     func machineUsage(_ machine: String, range: UsageRange, model: String? = nil, launcher: String? = nil) async throws -> MachineUsageSeries {
         struct R: Decodable { var usage: MachineUsageSeries }
@@ -575,7 +575,7 @@ nonisolated struct APIClient: Sendable {
         var model: String? = nil
         /// The herdr tab's name; nil: the hub makes one from the first message (else agent-<n>).
         var tabName: String? = nil
-        /// Answer at once with the session it is going to be and start it in the background (docs/protocol.md「新建会话」).
+        /// Answer at once with the session it is going to be and start it in the background (docs/protocol/protocol.md「新建会话」).
         var async: Bool? = nil
         /// What the tab name is made from when the first message is sent as a message of its own (not `prompt`).
         var nameHint: String? = nil
@@ -695,7 +695,7 @@ nonisolated struct APIClient: Sendable {
     /// launcher / model switch what a headless (assistant) conversation runs on from this message on. clientMsgID
     /// stays the same on a retry (the node types it once); clearDraft is the computer's draft the user agreed to
     /// clear first.
-    /// opID: the message's op id (the outbox passes its id, the same as clientMsgID: docs/protocol.md「操作回执」).
+    /// opID: the message's op id (the outbox passes its id, the same as clientMsgID: docs/protocol/protocol.md「操作回执」).
     func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil, model: String? = nil,
               clientMsgID: String? = nil, clearDraft: String? = nil, todoID: String? = nil, opID: UUID? = nil) async throws {
         try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher,
@@ -738,7 +738,7 @@ nonisolated struct APIClient: Sendable {
 
     /// A QR code's modules as the hub draws them: rows of "0" / "1".
     struct QRRows: Decodable, Hashable, Sendable { var size: Int; var rows: [String] }
-    /// A one-time pairing code (`jp_…`, ten minutes, traded once) for another device (docs/protocol.md「临时配对」).
+    /// A one-time pairing code (`jp_…`, ten minutes, traded once) for another device (docs/protocol/protocol.md「临时配对」).
     struct PairCode: Decodable, Hashable, Sendable {
         var token: String
         var expiresAt: Date
@@ -760,9 +760,9 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(PairCode.self, from: try await request("POST", "/api/v1/auth/pair-codes", body: Body(web: web)))
     }
 
-    /// The hub lets a signed-in device add a computer (pair-codes `add` / `machine`, docs/protocol.md「电脑的配对码」).
+    /// The hub lets a signed-in device add a computer (pair-codes `add` / `machine`, docs/protocol/protocol.md「电脑的配对码」).
     static let machinesAddFeature = "machines_add"
-    /// Machines carry `trust` / `error_code` and take confirm / reject (docs/protocol.md「电脑的信任」).
+    /// Machines carry `trust` / `error_code` and take confirm / reject (docs/protocol/protocol.md「电脑的信任」).
     static let machineTrustFeature = "machine_trust"
 
     /// A computer's pairing code (machine › Add Computer): the app code's fields without `qr`, and the computer's own.
@@ -910,7 +910,7 @@ nonisolated struct APIClient: Sendable {
         }
     }
     func assistant() async throws -> AssistantState { try await get("/api/v1/assistant") }
-    /// The health space's conversations (docs/health.md): `GET /api/v1/assistant?space=health`, the same body with the
+    /// The health space's conversations (docs/assistant/health.md): `GET /api/v1/assistant?space=health`, the same body with the
     /// health directory as `cwd`. The plain list never holds them.
     func healthConversations() async throws -> [Session] {
         let st = try await get("/api/v1/assistant", query: ["space": Session.healthSpace], as: AssistantState.self)
@@ -949,7 +949,7 @@ nonisolated struct APIClient: Sendable {
         return (try? JSON.decoder.decode(Warm.self, from: data))?.readiness
     }
 
-    /// What the main conversation still needs (docs/protocol.md「主对话就绪度」). `probe`: also try one word on it
+    /// What the main conversation still needs (docs/protocol/protocol.md「主对话就绪度」). `probe`: also try one word on it
     /// (costs a little; only for Try a Message and 「我已经在用 Claude Code」).
     func assistantReadiness(probe: Bool = false) async throws -> AssistantReadiness {
         try JSON.decoder.decode(AssistantReadiness.self, from: try await request("GET", "/api/v1/assistant/readiness",
@@ -961,9 +961,9 @@ nonisolated struct APIClient: Sendable {
         _ = try await request("POST", "/api/v1/assistant/readiness/dismiss", body: ["dismissed": dismissed])
     }
 
-    // MARK: Assistant schedule, memory (docs/assistant.md)
+    // MARK: Assistant schedule, memory (docs/assistant/assistant.md)
 
-    /// Something the assistant does on its own (docs/assistant.md「定时任务」): once (a follow-up it scheduled), every
+    /// Something the assistant does on its own (docs/assistant/assistant.md「定时任务」): once (a follow-up it scheduled), every
     /// day at a time (a morning briefing), or every N minutes (a patrol). Runs go into the conversation it came from, else into the
     /// task's own one (the first run starts it, the next ones continue it), with its own launcher / permission mode /
     /// effort (nil = the assistant's defaults); pushed when done.
@@ -986,7 +986,7 @@ nonisolated struct APIClient: Sendable {
         var permissionMode: String?
         var effort: String?
         var includesModelSettings = true
-        /// Push When Done (hubs with the task_push feature, docs/assistant.md「跑完推送」): nil or "" every run's answer is pushed,
+        /// Push When Done (hubs with the task_push feature, docs/assistant/assistant.md「跑完推送」): nil or "" every run's answer is pushed,
         /// "asked" only what a run sends with notify_user. Such a task always runs in its own conversation. Sent only when
         /// set: a hub keeps it when left out, and an older hub never gets it.
         var push: String?
@@ -1119,7 +1119,7 @@ nonisolated struct APIClient: Sendable {
         enum CodingKeys: String, CodingKey { case name, content; case updatedAt = "updated_at" }
     }
     struct MemoryBody: Decodable { var files: [MemoryFile] }
-    /// One report in the health space's reports/ (docs/health.md「体检报告」): an original, its record, or both.
+    /// One report in the health space's reports/ (docs/assistant/health.md「体检报告」): an original, its record, or both.
     struct HealthReport: Decodable, Identifiable, Hashable, Sendable {
         var name: String
         var title: String
@@ -1139,7 +1139,7 @@ nonisolated struct APIClient: Sendable {
         let escaped = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? name
         try await delete("/api/v1/machines/\(machine)/health/reports/\(escaped)")
     }
-    /// One "always allow" remembered for an assistant conversation (docs/assistant.md「Always allow in this session」). The
+    /// One "always allow" remembered for an assistant conversation (docs/assistant/assistant.md「Always allow in this session」). The
     /// hub keeps a hash of what was allowed and the tool's name, so the exact command or folder can't be shown.
     struct AlwaysGrant: Decodable, Identifiable, Hashable, Sendable {
         var keyHash: String
@@ -1162,7 +1162,7 @@ nonisolated struct APIClient: Sendable {
         let data = try await request("DELETE", alwaysPath(conversation) + "/\(hash)")
         return try JSON.decoder.decode(AlwaysRevoked.self, from: data).restartRequired ?? false
     }
-    /// `space`: nil for the assistant's own memory, `Session.healthSpace` for the health space's (docs/health.md).
+    /// `space`: nil for the assistant's own memory, `Session.healthSpace` for the health space's (docs/assistant/health.md).
     func assistantMemory(space: String? = nil) async throws -> [MemoryFile] {
         try await get("/api/v1/assistant/memory", query: ["space": space ?? ""], as: MemoryBody.self).files
     }
@@ -1179,7 +1179,7 @@ nonisolated struct APIClient: Sendable {
         var permissionMode: String?
         var effort: String?
         var main: Bool?
-        /// "health": the conversation opens in the health space (docs/health.md); never with `main`.
+        /// "health": the conversation opens in the health space (docs/assistant/health.md); never with `main`.
         var space: String?
         enum CodingKeys: String, CodingKey { case prompt, images, launcher, effort, main, space; case permissionMode = "permission_mode" }
     }
@@ -1281,7 +1281,7 @@ nonisolated struct APIClient: Sendable {
         var apnsToken: String?
         var apnsEnv: String?
         var topic: String?
-        /// Push relay (docs/push-relay.md): this phone's public key, the relay and the grant it gave.
+        /// Push relay (docs/operations/push-relay.md): this phone's public key, the relay and the grant it gave.
         var pushKey: String?
         var relayURL: String?
         var relayGrant: String?
@@ -1291,7 +1291,7 @@ nonisolated struct APIClient: Sendable {
         /// What this app understands beyond the first version's pushes: `withdraw`, a silent push naming the cards that
         /// are over, whose notifications it then removes (#4349). An older hub ignores it.
         var features: [String]?
-        /// The interface language pushes to this device use (docs/i18n.md「协议」).
+        /// The interface language pushes to this device use (docs/protocol/i18n.md「协议」).
         var locale: String? = LanguageStore.shared.launched
         enum CodingKeys: String, CodingKey {
             case name, kind, topic, locale, features
@@ -1306,7 +1306,7 @@ nonisolated struct APIClient: Sendable {
         return try await post("/api/v1/devices", body: device, as: Answer.self).push
     }
 
-    /// The way a hub's pushes reach a device (docs/push-relay.md "Which way a device is pushed").
+    /// The way a hub's pushes reach a device (docs/operations/push-relay.md "Which way a device is pushed").
     struct PushRoute: Codable, Hashable, Sendable {
         /// direct: the hub's own APNs key; relay: the relay the device registered with; none: no way.
         var route: String

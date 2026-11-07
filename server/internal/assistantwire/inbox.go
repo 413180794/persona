@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connectorwire"
 )
 
-// The inbox (docs/inbox.md) is the manager's: the items and their state (admission, triage, events, mutes, done,
+// The inbox (docs/assistant/inbox.md) is the manager's: the items and their state (admission, triage, events, mutes, done,
 // the AI twin, translations) and the /api/v1/inbox… routes, which the hub relays like Routes. The hub keeps the
 // sources: it reads them when a round is due (its poll, a connector's changed) and hands what it read over
 // (MethodInboxCollected); what the inbox does with a source (a mail body, a reply, a connector's group tools…) it asks
@@ -224,7 +224,7 @@ type InboxMailMessage struct {
 type InboxConfig struct {
 	// Rules are the user's own triage rules (setting inbox.rules, else manager.json's inbox.rules); AgentRules guide the
 	// judge linking a Needs you item to one of the user's tasks (inbox.agent_rules); what the AI twin takes on is set
-	// by inbox policies (docs/inbox.md "Policies").
+	// by inbox policies (docs/assistant/inbox.md "Policies").
 	Rules      string           `json:"rules,omitempty"`
 	AgentRules string           `json:"agent_rules,omitempty"`
 	Agent      InboxAgentConfig `json:"agent"`
@@ -238,7 +238,7 @@ type InboxConfig struct {
 	Extensions []string `json:"extensions,omitempty"`
 }
 
-// InboxAgentConfig is manager.json's inbox.agent: the AI twin (docs/inbox.md).
+// InboxAgentConfig is manager.json's inbox.agent: the AI twin (docs/assistant/inbox.md).
 type InboxAgentConfig struct {
 	Enabled bool `json:"enabled"`
 	// Machine and Launcher run the agent; default: the assistant's.

@@ -54,7 +54,7 @@ class AscCliTests(unittest.TestCase):
     def test_without_a_key_it_says_what_to_set_and_runs_nothing(self):
         result = self.run_cli("builds", "list", ASC_BIN=str(self.fake))
         self.assertEqual(result.returncode, 1)
-        for name in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH", "app_store.key_path", "docs/release.md"):
+        for name in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH", "app_store.key_path", "docs/operations/release.md"):
             self.assertIn(name, result.stderr)
         self.assertFalse(self.out.exists())
 

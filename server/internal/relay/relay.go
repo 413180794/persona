@@ -1,4 +1,4 @@
-// Package relay is the push relay (personad relay, docs/push-relay.md): it holds the app's APNs key and pushes for
+// Package relay is the push relay (personad relay, docs/operations/push-relay.md): it holds the app's APNs key and pushes for
 // hubs that have none. Phones register their device token and get a grant; a hub pushes with the grant and a payload
 // sealed to the phone's key (pushcrypto), which the relay cannot read. The relay writes the aps envelope itself, so a
 // grant cannot be used to show arbitrary text. Live Activity updates are the exception: iOS reads their content-state

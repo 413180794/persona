@@ -67,7 +67,7 @@ func serveInboxUIExtensionForTest() {
 			}}})
 }
 
-// It follows the inbox's common rules (docs/extensions.md): triage_rules, and its own fallback so no model is needed.
+// It follows the inbox's common rules (docs/extensions/extensions.md): triage_rules, and its own fallback so no model is needed.
 func inboxUIPackage(t *testing.T) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()

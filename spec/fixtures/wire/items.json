@@ -150,7 +150,7 @@
     "source": [
       "server/internal/transcript/fold.go: FoldWork",
       "apple/Shared/Models.swift: Fold",
-      "docs/protocol.md: 折叠的工作"
+      "docs/protocol/protocol.md: 折叠的工作"
     ],
     "derived": true,
     "decoder": "items",
@@ -217,7 +217,7 @@
       "server/internal/transcript/fold.go: FoldWork",
       "server/internal/proto/proto.go: FoldTaskSnapshot",
       "apple/Shared/Models.swift: Fold",
-      "docs/protocol.md: 折叠的工作"
+      "docs/protocol/protocol.md: 折叠的工作"
     ],
     "derived": true,
     "decoder": "items",

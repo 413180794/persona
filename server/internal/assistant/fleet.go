@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/transcript"
 )
 
-// What comes from the nodes is the manager's (docs/machines.md "Who handles the computers' events"). The hub did all of this until the
+// What comes from the nodes is the manager's (docs/server/machines.md "Who handles the computers' events"). The hub did all of this until the
 // manager connected the computers itself; it moved here as it was (fleet_*.go):
 //
 //   - the interactions (approval / question / plan / screen / Codex cards): made from the nodes' interaction.create
@@ -296,7 +296,7 @@ func (s *Service) nodeSessions(machine string) []proto.Session {
 
 // isAssistantSession identifies manager's headless conversations in its directory dir, or its health space's. A host
 // pane is stronger evidence than a shared working directory. Another manager's directory, left on a machine moved
-// away from it, is not this one's (docs/managers.md "Directories on a computer").
+// away from it, is not this one's (docs/assistant/managers.md "Directories on a computer").
 func isAssistantSession(sess proto.Session, dir, manager string) bool {
 	if sess.PaneID != "" || dir == "" || sess.Cwd == "" {
 		return false
@@ -914,7 +914,7 @@ func (s *Service) decorated(machine string) []proto.Session {
 			list[i].Title = t // "MMDD | type | topic", the user's own, "Persona" for the main one (titles.go)
 		}
 		if ch := via[[2]string{machine, list[i].SessionID}]; len(ch) > 0 {
-			list[i].Channels = ch // where its messages came from (docs/channels.md "Source marks")
+			list[i].Channels = ch // where its messages came from (docs/extensions/channels.md "Source marks")
 		}
 		if list[i].Assistant {
 			list[i].Archived = shown[list[i].SessionID].Archived
@@ -1048,7 +1048,7 @@ func (s *Service) markSeen(ctx context.Context, machine, session string) {
 	s.publishSessions(machine)
 }
 
-// ---- the states (docs/agent-states.md) ----
+// ---- the states (docs/protocol/agent-states.md) ----
 
 // agentState maps a host status plus Persona's own knowledge onto the unified states:
 //
@@ -1121,7 +1121,7 @@ func turnError(sess proto.Session) (text, kind string) {
 var rateLimited = regexp.MustCompile(`(?i)\b429\b|rate[ _-]?limit|too many requests|usage limit`)
 
 // turnErrorCode is what a turn's model API error says is wrong, for a card that says what to fix (Session.TurnErrorCode,
-// docs/onboarding.md 5.2); "" when it does not say.
+// docs/assistant/onboarding.md 5.2); "" when it does not say.
 func turnErrorCode(text string) string {
 	t := strings.TrimSpace(text)
 	switch {

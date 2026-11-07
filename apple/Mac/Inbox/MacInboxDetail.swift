@@ -201,7 +201,7 @@ struct MacInboxItemWindow: View {
     }
 }
 
-/// The inbox page until the window's three columns take the pieces over (docs/mac.md「三栏接口」): the filters, the
+/// The inbox page until the window's three columns take the pieces over (docs/apple/mac.md「三栏接口」): the filters, the
 /// list and the detail side by side, the list's width dragged and remembered.
 struct MacInboxPage: View {
     @AppStorage("mac.inbox.listWidth") private var listWidth: Double = Theme.Size.macInboxListIdeal

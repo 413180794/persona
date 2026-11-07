@@ -1,6 +1,6 @@
 package extmgr
 
-// How a manager's extensions reach the hub's API (docs/managers.md "Extensions and the hub's API"). A relayed manager
+// How a manager's extensions reach the hub's API (docs/assistant/managers.md "Extensions and the hub's API"). A relayed manager
 // (relayed) serves them the hub's API on its own loopback (extension/hubrelay) and passes each request on with its own
 // client and its proof that it came through it, and it hands them tokens it makes itself: of the scopes each was
 // granted, or of every scope for one that asked for the hub's full token the old way (hub_api, manager.json's

@@ -152,7 +152,7 @@ struct PendingCards: View {
         return max(Theme.Size.tapTarget, shown + room.height - room.footer - room.header - room.listFloor)
     }
 
-    /// A voice call is on in the cards' conversation (docs/voice.md 6.2).
+    /// A voice call is on in the cards' conversation (docs/assistant/voice.md 6.2).
     private var inCall: Bool {
         cards.first.map { VoiceCalls.shared.isLive(on: $0.interaction.sessionKey) } ?? false
     }

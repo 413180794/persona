@@ -6,7 +6,7 @@ import (
 )
 
 // MethodOutbox: Outbox → OutboxResult. A manager hands the hub, once it is back, the pushes and the apps' live
-// updates it made while the hub was away (docs/hub-restart.md "The manager while the hub is away"), oldest first. An
+// updates it made while the hub was away (docs/operations/hub-restart.md "The manager while the hub is away"), oldest first. An
 // older hub answers it unknown_method: the manager then sends them one by one (notify.request, ws.broadcast).
 const MethodOutbox = "manager.outbox"
 

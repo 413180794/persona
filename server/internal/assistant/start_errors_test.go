@@ -32,7 +32,7 @@ func serveJSON(t *testing.T, s *Service, method, path, lang, body string) (int, 
 }
 
 // With no machine the main conversation says why in plain words, in the request's language, with what to do; the
-// words it had are the detail (docs/onboarding.md 5.2). It used to be 502 internal "assistant machine is not
+// words it had are the detail (docs/assistant/onboarding.md 5.2). It used to be 502 internal "assistant machine is not
 // configured". The memory refuses with the same code.
 func TestMainConversationWithoutMachineSaysWhy(t *testing.T) {
 	s := newStorelessService(t, newFakeHub())

@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Topic group chats (#5279, docs/bots.md "Topic group chats"): the bot's chat with the owner is the private one, and
+// Topic group chats (#5279, docs/extensions/bots.md "Topic group chats"): the bot's chat with the owner is the private one, and
 // anyone in a group could write to a bot in it, so a group is talked to only where the owner said so. The owner opts a
 // group in (the /topics command in it, or the bot's settings), and from then on, in that group:
 //
@@ -307,7 +307,7 @@ func (h *Manager) botGroupMessage(api *feishubot.Client, set FeishuBotSettings, 
 	h.handToAssistant(api, ev, raw, "", "", since, pass, true)
 }
 
-// botAIElsewhere takes the owner's "@bot /ai …" from a group chat that is not on the list (#6146, docs/bots.md "Asking
+// botAIElsewhere takes the owner's "@bot /ai …" from a group chat that is not on the list (#6146, docs/extensions/bots.md "Asking
 // from any group"): the one thing such a group gets through. The owner's message (the caller checked), a text or
 // rich-text message (a merged forward is nothing to run), that @-mentions the bot, whose words, the leading @ of the bot
 // taken off, start with /ai. It is kept as a source (the bot may reply to it, aiSourceReply), audited, and handed to the

@@ -42,7 +42,7 @@ import java.io.File
 
 /**
  * The mail page (with an AI twin's draft, a thread of two and attachments) and writing a reply, in each of the app's
- * languages, Glass and the other styles, light and dark (docs/i18n.md). Written as PNGs to `build/i18n-shots/` (or
+ * languages, Glass and the other styles, light and dark (docs/protocol/i18n.md). Written as PNGs to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)

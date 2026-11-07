@@ -1,4 +1,4 @@
-// Where the navigation shortcuts go (docs/web.md "Keyboard shortcuts"): which panel ⌘B opens or closes, what ⌘J switches to, the
+// Where the navigation shortcuts go (docs/web/web.md "Keyboard shortcuts"): which panel ⌘B opens or closes, what ⌘J switches to, the
 // tab next to this one. Pure, so it is tested without a DOM.
 import { buildMachineTree, paneRoute, type HerdrMachine, type HerdrSpace } from "./herdr-tree";
 import type { Panel } from "./panel";

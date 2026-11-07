@@ -25,7 +25,7 @@ internal fun AssistantPendingConversation(
     /** A refused start's button ("Add computer", "Connect a model…"), and "Retry" once the step is done. */
     onRefusal: (ReadinessActionId) -> Unit = {},
     onRetry: ((OutboxMessage) -> Unit)? = null,
-    /** The empty state's line instead of 「…连上后继续发送」 (an offline manager takes nothing: docs/managers.md). */
+    /** The empty state's line instead of 「…连上后继续发送」 (an offline manager takes nothing: docs/assistant/managers.md). */
     emptyDetail: String? = null,
 ) {
     LazyColumn(modifier.fillMaxSize(),
@@ -43,7 +43,7 @@ internal fun AssistantPendingConversation(
                 UserBubble(message.text)
                 message.state.pendingStatus()?.let { PendingBadge(it) }
                 // The hub refused to start the main conversation for a missing step: a card with the reason and its
-                // button, not a bubble waiting for ever (docs/onboarding.md 4.4).
+                // button, not a bubble waiting for ever (docs/assistant/onboarding.md 4.4).
                 message.setupRefusal()?.let { code -> SetupRefusalCard(code, onRefusal, onRetry?.let { retry -> { retry(message) } }) }
             }
         }

@@ -4,7 +4,7 @@ import SwiftUI
 #if os(iOS)
 
 /// Settings › Notifications › Dynamic Island: what the compact Dynamic Island shows on each side of the camera. Kept per device on the hub
-/// (prefs.island), which fills in only the numbers this device shows (docs/live-activity.md).
+/// (prefs.island), which fills in only the numbers this device shows (docs/apple/live-activity.md).
 struct IslandSettingsView: View {
     @Binding var island: IslandPrefs
     @Environment(AppModel.self) private var model

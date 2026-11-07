@@ -5,7 +5,7 @@ import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 
 /**
- * Opens a machine's port on the phone (docs/ports.md): the hub is told first when no agent lists it (`POST …/open`),
+ * Opens a machine's port on the phone (docs/operations/ports.md): the hub is told first when no agent lists it (`POST …/open`),
  * then the phone listens for it and the page loads from the returned address, http://localhost:<phone port><path>.
  */
 interface PortOpener {

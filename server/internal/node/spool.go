@@ -26,7 +26,7 @@ import (
 // that wait on the phone, and `personad ask`, are told to retry while the manager has been away less than standbyHold,
 // so a manager restart does not drop their card to the terminal; past that they go to the terminal at once, as without
 // a manager. Everything else on the socket (MCP, launchers, CLI calls) is answered "away", which clients take for "no
-// node", exactly as before (docs/protocol.md "When the manager is away").
+// node", exactly as before (docs/protocol/protocol.md "When the manager is away").
 
 // spoolFile is the spool's name in the data dir: one JSON entry per line, oldest first.
 const spoolFile = "node-spool.jsonl"

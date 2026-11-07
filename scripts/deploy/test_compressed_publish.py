@@ -63,7 +63,7 @@ class InstallTestCase(unittest.TestCase):
 
 
 class InstallProgramTests(InstallTestCase):
-    """PERSONA_WITH=wechat: the hub's computer also gets personad-wechat (docs/wechat.md); others do not."""
+    """PERSONA_WITH=wechat: the hub's computer also gets personad-wechat (docs/extensions/wechat.md); others do not."""
 
     program = b"#!/bin/sh\nprintf '%s\\n' wechat\n"
 

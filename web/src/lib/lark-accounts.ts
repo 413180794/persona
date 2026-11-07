@@ -1,4 +1,4 @@
-// Several Feishu accounts on the hub's Lark gateway (docs/feishu.md "Multiple accounts", iOS LarkAccounts.swift). A request about
+// Several Feishu accounts on the hub's Lark gateway (docs/extensions/feishu.md "Multiple accounts", iOS LarkAccounts.swift). A request about
 // another account than the hub's own (lark.account) names it with `ol_account`; the media URLs the hub hands out for
 // such an account already carry it. The "Messages" page shows one account's chats at a time: the choice is kept per browser.
 import { t } from "../i18n";
@@ -26,7 +26,7 @@ export interface LarkAccountList {
 }
 
 /** `path` (`/lark/…`, with or without a query) naming account `ol`, and `manager` when the chat is another manager's
- * (an inbox item's stamp, docs/managers.md "Clients": the hub reads `?manager=`); unchanged for the hub's own account
+ * (an inbox item's stamp, docs/assistant/managers.md "Clients": the hub reads `?manager=`); unchanged for the hub's own account
  * (undefined) and the default manager, or for what it names already. */
 export function larkPath(path: string, ol?: number, manager?: string): string {
   const named = ol === undefined || /[?&]ol_account=/.test(path) ? path : `${path}${path.includes("?") ? "&" : "?"}ol_account=${ol}`;

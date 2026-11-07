@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Machines › Add Computer (docs/onboarding.md 4.2「你的电脑 ↔ hub」, 5.3; docs/protocol.md「电脑的配对码」「电脑的信任」, #4196): a
+// Machines › Add Computer (docs/assistant/onboarding.md 4.2「你的电脑 ↔ hub」, 5.3; docs/protocol/protocol.md「电脑的配对码」「电脑的信任」, #4196): a
 // signed-in device adds a computer with POST /api/v1/auth/pair-codes {"add"}, hands the pairing link to that computer's
 // Persona Link (a line for a Linux terminal, a link to share for a Mac, a line for Windows' PowerShell), counts the code
 // down (a new one with {"machine"} once it expires) and waits for the computer to come online. It then asks, on the
@@ -70,10 +70,10 @@ struct AddComputerFailure: Equatable {
 /// The words, kept apart from the view to test.
 enum AddComputerText {
     static let maxName = 40
-    /// How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md 6.3, decision 1).
-    static let macInstallDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md")!
-    /// How to install it on a Linux without the hub's install script (docs/link.md「Linux（headless）」).
-    static let linuxInstallDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless")!
+    /// How to build and install Persona Link on a Mac until there is a download (docs/assistant/onboarding.md 6.3, decision 1).
+    static let macInstallDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/operations/persona-link-install.md")!
+    /// How to install it on a Linux without the hub's install script (docs/operations/link.md「Linux（headless）」).
+    static let linuxInstallDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/operations/link.md#linuxheadless")!
 
     /// The name as sent: trimmed; nil when empty or too long.
     /// `AppModel.pendingToConfirm`: `preferred` while it waits, else the first one waiting that is online, else the first.
@@ -87,7 +87,7 @@ enum AddComputerText {
         return n.isEmpty || n.count > maxName ? nil : n
     }
 
-    /// Why the hub refused, by its code (docs/protocol.md「电脑的配对码」); the hub's own words for any other code.
+    /// Why the hub refused, by its code (docs/protocol/protocol.md「电脑的配对码」); the hub's own words for any other code.
     static func failure(_ error: Error) -> AddComputerFailure {
         let e = error as? APIError
         let code = e?.code
@@ -108,7 +108,7 @@ enum AddComputerText {
         return AddComputerFailure(message: message, code: code)
     }
 
-    /// A machine's `error_code` in words (docs/onboarding.md 5.3); nil for a code this app does not know (show `error`).
+    /// A machine's `error_code` in words (docs/assistant/onboarding.md 5.3); nil for a code this app does not know (show `error`).
     static func machineProblem(_ code: String?) -> String? {
         switch code {
         case "node_service_down": String(localized: "Persona's background service isn't running on this computer. Open Persona Link to install it again.")
@@ -148,7 +148,7 @@ enum AddComputerText {
         return (pairCommand(code), false)
     }
 
-    /// What Windows runs in PowerShell, in the folder with the two programs (docs/windows.md).
+    /// What Windows runs in PowerShell, in the folder with the two programs (docs/operations/windows.md).
     static func windowsCommand(_ code: APIClient.ComputerCode) -> String {
         #".\persona-link.exe install --personad .\personad.exe --pair "# + quoted(code.pairLink)
     }

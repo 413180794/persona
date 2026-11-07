@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// One health conversation (docs/health.md) runs on the machine its space's list names: a list that can't be read says
+// One health conversation (docs/assistant/health.md) runs on the machine its space's list names: a list that can't be read says
 // why with Retry instead of loading for ever, and is read again on the next hello.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

@@ -1,11 +1,11 @@
-// Persona runtime for pi (docs/pi.md): a pi extension that puts the sessions of this pi process — a terminal, an RPC
+// Persona runtime for pi (docs/integrations/pi.md): a pi extension that puts the sessions of this pi process — a terminal, an RPC
 // host, or pi-web's server — into the Persona apps through the personad node on this machine
-// (~/.persona/runtime.sock, docs/runtimes.md). It does nothing visible until a node listens.
+// (~/.persona/runtime.sock, docs/integrations/runtimes.md). It does nothing visible until a node listens.
 //
 // Configuration (optional): <agent dir>/persona.json — { "approve": ["bash"], "askUser": true, "answerFirst": "auto",
 // "autoUpdate": true }.
 //
-// Updates (docs/pi.md "Auto-update"): installed from a store (pi's settings name <store>/current/pi), this extension takes
+// Updates (docs/integrations/pi.md "Auto-update"): installed from a store (pi's settings name <store>/current/pi), this extension takes
 // the version the node carries — installs it as current and, once its sessions are idle, has each of them reload
 // (pi reads extensions afresh on reload), so the new code runs in this same process. Installed from anywhere else (a
 // checkout), it never updates itself.

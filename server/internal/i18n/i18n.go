@@ -1,4 +1,4 @@
-// Package i18n is the hub's text for people in the user's language (docs/i18n.md): pushes, task notifications,
+// Package i18n is the hub's text for people in the user's language (docs/protocol/i18n.md): pushes, task notifications,
 // injected messages, status and error text. Logs, CLI output and prompts for models are not translated here.
 //
 // Catalogs are locales/<lang>/<namespace>.json, flat "name": "text", embedded in the binary; a key is
@@ -23,7 +23,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-// Lang is an interface language: a directory under locales (docs/i18n.md "Adding a language").
+// Lang is an interface language: a directory under locales (docs/protocol/i18n.md "Adding a language").
 type Lang string
 
 // The languages the code names: the source, the fallback, and Japanese (some text treats CJK differently). Any other
@@ -107,7 +107,7 @@ func (l Lang) Name() string {
 	return metas[Default].Name
 }
 
-// Resolve maps any BCP 47 tag to a supported language (docs/i18n.md): its language subtag picks the language whose
+// Resolve maps any BCP 47 tag to a supported language (docs/protocol/i18n.md): its language subtag picks the language whose
 // _meta.json matches it (any Chinese, Traditional too, is zh-Hans), the rest is en. An empty tag is "" (unknown), so
 // callers can tell "not said" from "said English".
 func Resolve(tag string) Lang {

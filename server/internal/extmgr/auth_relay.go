@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The auth relay extension point (docs/auth-relay.md): an authorization link one of the user's Agents stopped at is
+// The auth relay extension point (docs/operations/auth-relay.md): an authorization link one of the user's Agents stopped at is
 // handed to the extension whose auth_relay contribution names its host and path, which completes it with the account
 // it is signed in with. Where the link came from is the caller's to check (the triage, assistant/agents_auth_relay.go);
 // this only finds the extension and holds what it answers to the schema. The link is never logged.

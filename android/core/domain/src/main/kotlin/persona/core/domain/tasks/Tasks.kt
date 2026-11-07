@@ -46,7 +46,7 @@ import persona.core.domain.lines.WorkItem
 import persona.core.domain.views.AssistantCardActions
 import persona.core.domain.views.AssistantViewStore
 
-// Tasks dispatched from an assistant conversation (docs/unified-entry.md; iOS TasksStore / Shared/Tasks.swift, web
+// Tasks dispatched from an assistant conversation (docs/assistant/unified-entry.md; iOS TasksStore / Shared/Tasks.swift, web
 // lib/feed.ts): the todos that are tasks, the plans, each conversation's feed, and where those go among the chat's lines.
 
 /** A day divider among the chat's lines: [date], and whether it is today, yesterday, or which year it is in. */
@@ -60,7 +60,7 @@ class DraftPlaceholderLeft(val placeholder: String) : IllegalStateException("dra
     override val message: String get() = CoreText.words(text)
 }
 
-/** Where a task is, from its todo and its agents' states (docs/todos.md "State rules"). */
+/** Where a task is, from its todo and its agents' states (docs/assistant/todos.md "State rules"). */
 enum class TaskState(val label: CoreText, val rank: Int) {
     NeedsYou(CoreText.of(Key.TaskNeedsYou), 0),
     /** An agent's turn was cut off by the model service (#1516): not done; "Continue" tells it to go on. */
@@ -103,7 +103,7 @@ data class Interruption(val reason: CoreText, val canContinue: Boolean) {
     }
 }
 
-/** What a task's lead agent says or does now (iOS TaskNow, web taskNow; docs/unified-entry.md "Task card progress", #1583). */
+/** What a task's lead agent says or does now (iOS TaskNow, web taskNow; docs/assistant/unified-entry.md "Task card progress", #1583). */
 sealed interface TaskNow {
     val text: String
 
@@ -306,7 +306,7 @@ class TasksStore(
     val later = MutableStateFlow<Set<String>>(emptySet())
     /** Conversation → when the Today card was last asked for, and the day of the card the hub gave (null while asking). */
     private val todayAsked = HashMap<String, Pair<Instant, LocalDate?>>()
-    /** This hub's assistant cards (docs/assistant-views.md): live cards, answers and registered reply blocks. */
+    /** This hub's assistant cards (docs/assistant/assistant-views.md): live cards, answers and registered reply blocks. */
     val cards = AssistantViewStore()
     val cardActions = AssistantCardActions(api, cards, reload = { load(it, whole = true) })
 

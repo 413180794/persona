@@ -1,4 +1,4 @@
-// Helpers every runtime needs to turn its own content into Persona items the way the apps expect (docs/runtimes.md
+// Helpers every runtime needs to turn its own content into Persona items the way the apps expect (docs/integrations/runtimes.md
 // "Content"): the page limits and the notes of server/internal/transcript, interaction ids that survive a node
 // restart, one-line summaries.
 
@@ -118,7 +118,7 @@ export function appToolName(name, own = {}) {
 
 /**
  * One session.items page over items a runtime has in memory (sorted by seq; several may share a seq), with the
- * paging every runtime needs (docs/protocol.md "session.items"): from the end by `turns` (a turn starts at a user's
+ * paging every runtime needs (docs/protocol/protocol.md "session.items"): from the end by `turns` (a turn starts at a user's
  * message) or `limit`, back from `before_seq`, forward from `after_seq` (at most 500 items, `more_after` when cut),
  * or the span `from_seq` … `through_seq`. Texts are cut with light(). toSeq is the session's current to_seq.
  * @param {object[]} all

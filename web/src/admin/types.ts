@@ -1,4 +1,4 @@
-// Shapes of the hub's admin API (docs/admin.md "API", docs/plan-hub-mesh.md 2.7 for peers).
+// Shapes of the hub's admin API (docs/operations/admin.md "API", docs/archive/operations/plan-hub-mesh.md 2.7 for peers).
 
 export type Access = "loopback" | "lan" | "cidrs" | "any";
 
@@ -70,7 +70,7 @@ export interface DoctorReport {
 
 export type MachineState = "active" | "pending_add" | "pending_remove";
 
-// How a hub reaches a computer (docs/plan-hub-center.md 4, 5). service: the hub dials the computer's connector; link:
+// How a hub reaches a computer (docs/archive/operations/plan-hub-center.md 4, 5). service: the hub dials the computer's connector; link:
 // the computer's persona-link dials the hub; hub: through a member hub of the group (configured on that member only).
 export type Via = "local" | "service" | "link" | "ssh" | "tailcat" | "hub";
 
@@ -181,7 +181,7 @@ export interface Peer {
   role?: Role;
 }
 
-// The group of hubs (docs/plan-hub-center.md 2, 6): exactly one center serves every client and keeps all state;
+// The group of hubs (docs/archive/operations/plan-hub-center.md 2, 6): exactly one center serves every client and keeps all state;
 // members pass requests and their computers on to it. A lone hub is its own center.
 export type Role = "center" | "member";
 
@@ -229,7 +229,7 @@ export interface PeerProbe {
   version?: string;
 }
 
-// ── extensions (docs/extensions.md "The hub's API", docs/admin.md "Extensions") ──
+// ── extensions (docs/extensions/extensions.md "The hub's API", docs/operations/admin.md "Extensions") ──
 
 export interface PermissionLine {
   key: string; // runs_code | network | hub_api | launcher_keys | secrets
@@ -279,11 +279,11 @@ export interface ExtensionPreview {
   from?: string;
   more_permissions?: boolean;
   added_permissions?: PermissionLine[];
-  /** The market it comes from, when previewed from one (docs/extensions.md "Extension markets"). */
+  /** The market it comes from, when previewed from one (docs/extensions/extensions.md "Extension markets"). */
   market?: string;
 }
 
-// ── how the extensions run (docs/extensions.md "Activity") ──
+// ── how the extensions run (docs/extensions/extensions.md "Activity") ──
 
 export type MetricsWindow = "1h" | "24h" | "7d";
 
@@ -354,12 +354,12 @@ export interface LogsPage {
   kept: number;
 }
 
-/** GET/PUT /api/v1/admin/assistant: hub.json's assistant.persona_view (docs/admin.md "Assistant cards"). */
+/** GET/PUT /api/v1/admin/assistant: hub.json's assistant.persona_view (docs/operations/admin.md "Assistant cards"). */
 export interface AssistantCards {
   persona_view: boolean;
 }
 
-// ── usage sources (docs/usage-windows.md "Account-pool gateways", docs/admin.md): account-pool gateways feeding the sidebar's usage bars ──
+// ── usage sources (docs/server/usage-windows.md "Account-pool gateways", docs/operations/admin.md): account-pool gateways feeding the sidebar's usage bars ──
 
 export type UsageSourceType = "relay" | "generic";
 

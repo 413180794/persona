@@ -8,7 +8,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Machine management, async starts and model configuration on the wire (docs/protocol.md, docs/model-config.md). */
+/** Machine management, async starts and model configuration on the wire (docs/protocol/protocol.md, docs/assistant/model-config.md). */
 class MachineManagementContractTest {
     @Test fun missingEngineFieldsMeanHerdrAndNothingDetected() {
         val m = JsonCodec.decodeFromString<Machine>("""{"id":"m1","online":true}""")

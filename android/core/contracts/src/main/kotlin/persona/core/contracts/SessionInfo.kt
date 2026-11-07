@@ -7,7 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * What the node reads from a session's transcript (GET /api/v1/sessions/{mid}/{sid}/info, docs/protocol.md):
+ * What the node reads from a session's transcript (GET /api/v1/sessions/{mid}/{sid}/info, docs/protocol/protocol.md):
  * what it runs, how far it has got and where its files are. Counts the transcript has not recorded stay zero.
  */
 @KeepGeneratedSerializer

@@ -1,4 +1,4 @@
-// What the pages show of the managers once there is more than one (docs/managers.md "Clients"): the assistant page's
+// What the pages show of the managers once there is more than one (docs/assistant/managers.md "Clients"): the assistant page's
 // switcher, the headings the machines, extensions and inbox lists group under, and what an offline manager's assistant
 // page says. With one manager none of it renders, so those pages stay as they were.
 import { useRef, useState } from "react";
@@ -101,7 +101,7 @@ export function useShownOffline(): { manager: Manager; composer: string; body: s
   };
 }
 
-/** Move to… on a computer's page: gives it to another manager (`POST /managers/{id}/machines`, docs/managers.md "Moving a
+/** Move to… on a computer's page: gives it to another manager (`POST /managers/{id}/machines`, docs/assistant/managers.md "Moving a
  *  machine or a source"); its sessions and cards follow, the machines push shows where it went. Only with more than
  *  one manager, and not for a linked hub's computer (not movable). */
 export function MoveToManager({ machineId, manager, movable = true }: { machineId: string; manager?: string; movable?: boolean }) {

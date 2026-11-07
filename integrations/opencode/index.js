@@ -1,5 +1,5 @@
-// Persona runtime for opencode (docs/opencode.md): an opencode plugin that puts the sessions of this opencode server
-// process into the Persona apps through the persona node on this machine (~/.persona/runtime.sock, docs/runtimes.md).
+// Persona runtime for opencode (docs/integrations/opencode.md): an opencode plugin that puts the sessions of this opencode server
+// process into the Persona apps through the persona node on this machine (~/.persona/runtime.sock, docs/integrations/runtimes.md).
 // It does nothing visible until a node listens. opencode loads a plugin once per project directory in the server
 // process (the shared `opencode serve` every TUI attaches to), so the host is one per process and each location only
 // hands it its context.

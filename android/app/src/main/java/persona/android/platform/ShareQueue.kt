@@ -153,7 +153,7 @@ class ShareQueue @Inject constructor(
                 prepareMain = { owner.data.messages.prepareMainConversation() },
                 upload = { machine, attachment, name, main -> upload(owner, machine, main, attachment, name) },
                 main = { body, id -> owner.data.messages.sendToMain(body, id) },
-                // A session of another hub group goes to that group (docs/android.md "Multiple hubs"); one group: the same outbox.
+                // A session of another hub group goes to that group (docs/android/android.md "Multiple hubs"); one group: the same outbox.
                 agent = { target, body, id ->
                     if (persona.core.contracts.GroupKeys.namespaceOf(target.machineId) == null && runtime.groupOf(target.machineId)?.data === owner.data)
                         owner.data.messages.send(target, body, id)

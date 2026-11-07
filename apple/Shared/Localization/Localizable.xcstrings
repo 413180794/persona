@@ -69368,24 +69368,24 @@
       },
       "extractionState": "manual"
     },
-    "Outlook sign-in uses an app you register yourself in Microsoft Entra (free; register once and this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, then App registrations → New registration.\n2. For supported account types, choose “Accounts in any organizational directory and personal Microsoft accounts”.\n3. For the redirect URI platform, choose “Public client/native (mobile & desktop)” and enter the address above.\n4. Under Authentication, set “Allow public client flows” to “Yes”.\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated permissions).\n6. Enter the “Application (client) ID” from the Overview page here.\nFor detailed steps, see docs/mail.md, “Outlook Connection”.": {
+    "Outlook sign-in uses an app you register yourself in Microsoft Entra (free; register once and this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, then App registrations → New registration.\n2. For supported account types, choose “Accounts in any organizational directory and personal Microsoft accounts”.\n3. For the redirect URI platform, choose “Public client/native (mobile & desktop)” and enter the address above.\n4. Under Authentication, set “Allow public client flows” to “Yes”.\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated permissions).\n6. Enter the “Application (client) ID” from the Overview page here.\nFor detailed steps, see docs/extensions/mail.md, “Outlook Connection”.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Outlook sign-in uses an app you register yourself in Microsoft Entra (free; register once and this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, then App registrations → New registration.\n2. For supported account types, choose “Accounts in any organizational directory and personal Microsoft accounts”.\n3. For the redirect URI platform, choose “Public client/native (mobile & desktop)” and enter the address above.\n4. Under Authentication, set “Allow public client flows” to “Yes”.\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated permissions).\n6. Enter the “Application (client) ID” from the Overview page here.\nFor detailed steps, see docs/mail.md, “Outlook 接入方式”."
+            "value": "Outlook sign-in uses an app you register yourself in Microsoft Entra (free; register once and this hub keeps using it):\n1. Open entra.microsoft.com with a Microsoft account, then App registrations → New registration.\n2. For supported account types, choose “Accounts in any organizational directory and personal Microsoft accounts”.\n3. For the redirect URI platform, choose “Public client/native (mobile & desktop)” and enter the address above.\n4. Under Authentication, set “Allow public client flows” to “Yes”.\n5. Under API permissions, add IMAP.AccessAsUser.All and SMTP.Send (delegated permissions).\n6. Enter the “Application (client) ID” from the Overview page here.\nFor detailed steps, see docs/extensions/mail.md, “Outlook 接入方式”."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "OutlookのサインインにはMicrosoft Entraで自分で登録したアプリを使います（無料。一度登録すれば、このハブでずっと使えます）：\n1. Microsoftアカウントでentra.microsoft.comを開き、「アプリの登録」→「新規登録」を選びます。\n2. サポートされているアカウントの種類で「任意の組織ディレクトリ内のアカウントと個人のMicrosoftアカウント」を選びます。\n3. リダイレクトURIのプラットフォームで「パブリック クライアント/ネイティブ(モバイルとデスクトップ)」を選び、上のアドレスを入力します。\n4. 「認証」で「パブリック クライアント フローを許可する」を「はい」にします。\n5. 「APIのアクセス許可」でIMAP.AccessAsUser.AllとSMTP.Send（委任されたアクセス許可）を追加します。\n6. 「概要」ページの「アプリケーション(クライアント) ID」をここに入力します。\n詳しい手順はdocs/mail.mdの「Outlook接入方式」をご覧ください。"
+            "value": "OutlookのサインインにはMicrosoft Entraで自分で登録したアプリを使います（無料。一度登録すれば、このハブでずっと使えます）：\n1. Microsoftアカウントでentra.microsoft.comを開き、「アプリの登録」→「新規登録」を選びます。\n2. サポートされているアカウントの種類で「任意の組織ディレクトリ内のアカウントと個人のMicrosoftアカウント」を選びます。\n3. リダイレクトURIのプラットフォームで「パブリック クライアント/ネイティブ(モバイルとデスクトップ)」を選び、上のアドレスを入力します。\n4. 「認証」で「パブリック クライアント フローを許可する」を「はい」にします。\n5. 「APIのアクセス許可」でIMAP.AccessAsUser.AllとSMTP.Send（委任されたアクセス許可）を追加します。\n6. 「概要」ページの「アプリケーション(クライアント) ID」をここに入力します。\n詳しい手順はdocs/extensions/mail.mdの「Outlook接入方式」をご覧ください。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Outlook 登录用你自己在 Microsoft Entra 注册的应用（免费，注册一次，这个 hub 以后都用它）：\n1. 用微软账号打开 entra.microsoft.com，「应用注册」→「新注册」；\n2. 支持的帐户类型选「任何组织目录中的帐户和个人 Microsoft 帐户」；\n3. 重定向 URI 平台选「公共客户端/本机(移动和桌面)」，填上面这个地址；\n4. 「身份验证」里把「允许公共客户端流」设为「是」；\n5. 「API 权限」添加 IMAP.AccessAsUser.All 和 SMTP.Send（委托的权限）；\n6. 把「概述」页的「应用程序(客户端) ID」填到这里。\n详细步骤见说明文档 docs/mail.md「Outlook 接入方式」。"
+            "value": "Outlook 登录用你自己在 Microsoft Entra 注册的应用（免费，注册一次，这个 hub 以后都用它）：\n1. 用微软账号打开 entra.microsoft.com，「应用注册」→「新注册」；\n2. 支持的帐户类型选「任何组织目录中的帐户和个人 Microsoft 帐户」；\n3. 重定向 URI 平台选「公共客户端/本机(移动和桌面)」，填上面这个地址；\n4. 「身份验证」里把「允许公共客户端流」设为「是」；\n5. 「API 权限」添加 IMAP.AccessAsUser.All 和 SMTP.Send（委托的权限）；\n6. 把「概述」页的「应用程序(客户端) ID」填到这里。\n详细步骤见说明文档 docs/extensions/mail.md「Outlook 接入方式」。"
           }
         }
       },
@@ -87948,24 +87948,24 @@
       },
       "extractionState": "manual"
     },
-    "Sign-in is set up in the manager's configuration (manager.json, see docs/config.md); this page only shows the status.": {
+    "Sign-in is set up in the manager's configuration (manager.json, see docs/operations/config.md); this page only shows the status.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign-in is set up in the manager's configuration (manager.json, see docs/config.md); this page only shows the status."
+            "value": "Sign-in is set up in the manager's configuration (manager.json, see docs/operations/config.md); this page only shows the status."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ログインはマネージャーの設定（manager.json、docs/config.mdを参照）で設定します。ここでは状態のみ表示します。"
+            "value": "ログインはマネージャーの設定（manager.json、docs/operations/config.mdを参照）で設定します。ここでは状態のみ表示します。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "登录在管理者的配置里设置（manager.json，见 docs/config.md），这里只看状态。"
+            "value": "登录在管理者的配置里设置（manager.json，见 docs/operations/config.md），这里只看状态。"
           }
         }
       },
@@ -97011,24 +97011,24 @@
       },
       "extractionState": "manual"
     },
-    "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/feishu.md).": {
+    "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/extensions/feishu.md).": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/feishu.md)."
+            "value": "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in the manager's manager.json (docs/extensions/feishu.md)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ハブはまだLarkに接続されていません。ハブのマシンでLarkゲートウェイを実行し、マネージャーのmanager.jsonのlarkに設定してください（docs/feishu.md）。"
+            "value": "ハブはまだLarkに接続されていません。ハブのマシンでLarkゲートウェイを実行し、マネージャーのmanager.jsonのlarkに設定してください（docs/extensions/feishu.md）。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在管理者的 manager.json 的 lark 里填上它（docs/feishu.md）。"
+            "value": "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在管理者的 manager.json 的 lark 里填上它（docs/extensions/feishu.md）。"
           }
         }
       },

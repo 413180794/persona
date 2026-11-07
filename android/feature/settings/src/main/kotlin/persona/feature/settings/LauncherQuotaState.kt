@@ -29,7 +29,7 @@ internal data class LauncherQuotaState(
 )
 
 /**
- * Reads a launcher's quota at its gateway (docs/launchers.md "Quota") on the machine whose page it is. Read once when the
+ * Reads a launcher's quota at its gateway (docs/integrations/launchers.md "Quota") on the machine whose page it is. Read once when the
  * page opens (the hub keeps an answer a minute); [load] with refresh reads again. A failed read keeps the last answer.
  */
 internal class LauncherQuotaModel(private val api: MachineManagement, private val machineId: String, private val name: String) {

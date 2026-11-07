@@ -337,7 +337,7 @@ internal fun AgentsScreen(
                     page.allCount == 0 && page.settings.query.isNotEmpty() -> JEmptyState(
                         stringResource(R.string.agents_empty_search_title, page.settings.query),
                         stringResource(R.string.agents_empty_search_hint), icon = PhIcons.MagnifyingGlass)
-                    // No computer at all: no session can start anywhere, so the step is adding one (docs/onboarding.md 4.5).
+                    // No computer at all: no session can start anywhere, so the step is adding one (docs/assistant/onboarding.md 4.5).
                     page.allCount == 0 && page.machines.isEmpty() && page.settings.machineFilter.isEmpty() -> JEmptyState(
                         stringResource(R.string.agents_empty_no_computer_title), stringResource(R.string.agents_empty_no_computer_hint),
                         icon = PhIcons.Desktop,
@@ -735,7 +735,7 @@ internal fun AgentSessionMenuItems(
 }
 
 private val ConnectionState.title: String @Composable get() = when (this) {
-    ConnectionState.Online -> "Agents" // i18n-ignore: the tab's name is Agents in every language (docs/i18n.md)
+    ConnectionState.Online -> "Agents" // i18n-ignore: the tab's name is Agents in every language (docs/protocol/i18n.md)
     ConnectionState.Connecting -> stringResource(R.string.agents_connection_connecting)
     ConnectionState.Updating -> stringResource(R.string.agents_connection_updating)
     ConnectionState.WaitingForNetwork -> stringResource(R.string.agents_connection_waiting)

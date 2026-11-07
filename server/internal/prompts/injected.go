@@ -11,7 +11,7 @@ import (
 // The hub types some messages into conversations as the user would, for the model: a quiet task's notice
 // (assistant/task_notice), a scheduled task's run (assistant/task_run), a wake-up (agents/wake), the background tasks
 // a node restart stopped (assistant/lost_tasks). The model reads them as they are; the apps show one line instead
-// (docs/protocol.md "Messages Persona injects"). ParseInjected reads them back off the transcript's text, so old lines are
+// (docs/protocol/protocol.md "Messages Persona injects"). ParseInjected reads them back off the transcript's text, so old lines are
 // known too; its tests render every template and parse the result, which keeps the two in step.
 
 var (

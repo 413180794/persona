@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The ledger of what was written as the user (migrations/0420_sent_as_user.sql, docs/connectors.md "Sent as the user").
+// The ledger of what was written as the user (migrations/0420_sent_as_user.sql, docs/extensions/connectors.md "Sent as the user").
 
 // SentAsUser is one write that went out through a connector's gate.
 type SentAsUser struct {

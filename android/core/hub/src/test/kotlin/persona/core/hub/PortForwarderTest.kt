@@ -17,7 +17,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** docs/ports.md "Forwarding": a connection to the phone's port is one WebSocket to the hub, bytes as they are. */
+/** docs/operations/ports.md "Forwarding": a connection to the phone's port is one WebSocket to the hub, bytes as they are. */
 class PortForwarderTest {
     private val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
 

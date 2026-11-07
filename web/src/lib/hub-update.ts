@@ -1,4 +1,4 @@
-// Settings › hub (docs/hub-update.md "In the app", the app's HubUpdateModel / HubUpdateStatus): the hub's version and channel,
+// Settings › hub (docs/operations/hub-update.md "In the app", the app's HubUpdateModel / HubUpdateStatus): the hub's version and channel,
 // checking for and installing a release, what an update waits for, auto-update, the history; and the assistant's
 // skills (GET /api/v1/skills). Pure helpers here; the page is views/settings/HubSettings.tsx.
 import { t } from "../i18n";
@@ -157,7 +157,7 @@ export function dockerSteps(s: HubUpdateStatus): { headline?: string; steps: { t
   return { steps: [{ text: t("lib-hub-update.docker_how"), copy: DOCKER_COMMAND }] };
 }
 
-/** The one quiet line over the Agents list about the hub (docs/hub-update.md "In the app", iOS / Android `HubNotice`),
+/** The one quiet line over the Agents list about the hub (docs/operations/hub-update.md "In the app", iOS / Android `HubNotice`),
  *  the most pressing first. The app's two compatibility lines (app / hub too old) don't apply: the hub serves this
  *  page itself, so the two are always the same version. */
 export type HubNotice =

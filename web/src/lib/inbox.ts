@@ -1,4 +1,4 @@
-// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, Moments (company feed) posts, and
+// The unified inbox (docs/assistant/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, Moments (company feed) posts, and
 // the connectors' threads: GitHub, Telegram…, drawn from their generic `connector` block),
 // kept in one module-level list so the sidebar's badge and the page share it. Pulled on first use, again on `inbox`
 // pushes and on (re)connect. Marking done applies at once and is sent in the background; a failure puts it back.
@@ -25,7 +25,7 @@ import { toast } from "../ui/atoms";
 import { byTime } from "./times";
 import { actedText, actOnSuggestion, statusOf, type ChainEntry, type InboxHandling, type InboxRelated, type InboxStatus, type InboxSuggestion, type SuggestionAction } from "./inbox-events";
 
-// ── wire types (docs/protocol.md "Inbox API") ─────────
+// ── wire types (docs/protocol/protocol.md "Inbox API") ─────────
 
 export interface DocOption {
   name: string;
@@ -78,7 +78,7 @@ export interface InboxAgent {
 
 export interface InboxItem {
   id: string;
-  /** The manager whose inbox it is, in the hub's merged list (docs/protocol.md "Per-manager routing"); none: the default.
+  /** The manager whose inbox it is, in the hub's merged list (docs/protocol/protocol.md "Per-manager routing"); none: the default.
    *  Two managers may list the same id (one account in both): an item is its id and its manager (itemKey). */
   manager?: string;
   source: string; // lark | mail | a connector's id (github, telegram…)
@@ -102,7 +102,7 @@ export interface InboxItem {
   version?: string;
   lark?: {
     feed_id: string; is_group: boolean; is_topic?: boolean; start_position?: string; mention_position?: string; at_all?: boolean;
-    /** The Lark gateway account the chat is in; `ol_account` only when that is not the hub's own (docs/feishu.md "Multiple accounts"). */
+    /** The Lark gateway account the chat is in; `ol_account` only when that is not the hub's own (docs/extensions/feishu.md "Multiple accounts"). */
     account_id?: number; ol_account?: number;
   };
   mail?: { account_id: string; mailbox: string; uids: number[]; message_id?: string; from?: { name?: string; email?: string }; direct?: boolean; thread?: string };
@@ -115,11 +115,11 @@ export interface InboxItem {
   agent?: InboxAgent;
   /** New foreign mail translated by the hub as it came in (for a device whose Settings › Translation asks), by target language. */
   translations?: Record<string, { subject: string; preview: string }>;
-  /** What it grew out of (docs/inbox.md "Threads of origin"): another item, a todo or an agent session ("<machine>/<session>"). */
+  /** What it grew out of (docs/assistant/inbox.md "Threads of origin"): another item, a todo or an agent session ("<machine>/<session>"). */
   parent?: InboxParent;
-  /** What it can be muted by (docs/inbox.md "Muting"): its repository, chat or sender in its source. */
+  /** What it can be muted by (docs/assistant/inbox.md "Muting"): its repository, chat or sender in its source. */
   mutes?: InboxMuteOption[];
-  // ── events (docs/inbox.md "Events, handling chain, suggestions"; lib/inbox-events.ts): absent from an older hub ──
+  // ── events (docs/assistant/inbox.md "Events, handling chain, suggestions"; lib/inbox-events.ts): absent from an older hub ──
   /** The section of an open item; absent: by `tier` as before. */
   status?: InboxStatus;
   /** Urgent: stays in "Needs you" while the AI prepares a suggestion. */
@@ -189,7 +189,7 @@ export interface InboxTree {
   children: InboxItem[];
 }
 
-/** `manager`: whose inbox the node is in (an item's, docs/managers.md "Clients"); none: the default's. */
+/** `manager`: whose inbox the node is in (an item's, docs/assistant/managers.md "Clients"); none: the default's. */
 export function fetchInboxTree(kind: InboxParentKind, id: string, manager?: string): Promise<InboxTree> {
   const path = kind === "session" ? id.split("/").map(enc).join("/") : enc(id).replace(/%3A/gi, ":");
   return api<InboxTree>(`/inbox/tree/${kind}/${path}`, { headers: itemHeaders(manager) });
@@ -580,7 +580,7 @@ export function handOffMessage(it: InboxItem, ask: string): string {
   return `${contextXML("context", title, "", text)}\n\n${ask.trim() || HANDOFF_PRESETS[0]}`;
 }
 
-// ── Feishu messages (docs/protocol.md "Lark API") ──────
+// ── Feishu messages (docs/protocol/protocol.md "Lark API") ──────
 
 export interface LarkPart {
   kind: string;
@@ -1074,7 +1074,7 @@ export function unmuteInbox(mute: Pick<InboxMute, "id" | "manager">): Promise<un
   return api(`/inbox/mutes/${enc(mute.id)}`, { method: "DELETE", headers: itemHeaders(mute.manager) });
 }
 
-/** A policy's tier (docs/inbox.md "Policies"): "" leaves the tier to triage. */
+/** A policy's tier (docs/assistant/inbox.md "Policies"): "" leaves the tier to triage. */
 export type PolicyTier = "" | "action" | "fyi" | "noise";
 /** What a policy does with the AI twin: "first" hands it over first (even when not Needs you), "never" keeps it away; "" as configured. */
 export type PolicyTwin = "" | "first" | "never";
@@ -1218,7 +1218,7 @@ type BulkOutcome = { result: BulkResult; failed: { items: InboxItem[]; error: un
  * it has no Dismiss, so Clean up all there files the items as done (done_by=user), which still clears them out of the list. */
 async function bulkRequest(action: BulkAction, targets: InboxItem[]): Promise<BulkOutcome> {
   // Each manager files its own items (the merged list stamps them; the hub sends /inbox/bulk to the manager the request
-  // names, docs/protocol.md "Per-manager routing"): one request per manager, the answers put together, each one's items
+  // names, docs/protocol/protocol.md "Per-manager routing"): one request per manager, the answers put together, each one's items
   // and skips stamped with its manager (it answers unstamped) so the same id of two managers stays apart. One manager
   // failing (offline) leaves the others' done.
   const byManager = new Map<string, InboxItem[]>();

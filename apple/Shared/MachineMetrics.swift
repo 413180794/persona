@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a machine is (docs/machines.md): OS, hardware, since when it runs. From the node's last connection.
+/// What a machine is (docs/server/machines.md): OS, hardware, since when it runs. From the node's last connection.
 nonisolated struct MachineSystem: Codable, Hashable, Sendable {
     var os: String
     var distro: String
@@ -145,7 +145,7 @@ nonisolated enum MetricLevel: Int, Comparable, Sendable {
 }
 
 /// What the dashboard calls out on a machine, worst first: CPU ≥ 75 / 90 %, memory ≥ 80 / 90 %, disk ≥ 80 / 90 %,
-/// load ≥ 1 / 2 per core (docs/machines.md「异常」).
+/// load ≥ 1 / 2 per core (docs/server/machines.md「异常」).
 nonisolated struct MetricAlert: Hashable, Sendable {
     var label: String
     var level: MetricLevel

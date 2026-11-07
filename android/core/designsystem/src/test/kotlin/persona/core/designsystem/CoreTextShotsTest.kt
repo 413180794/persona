@@ -47,7 +47,7 @@ import java.time.LocalDate
 
 /**
  * The words of the pure-JVM core modules ([CoreText], strings_core.xml) and the experience mode's data in each of the
- * app's languages, as the agents list, notifications, the widget and the inbox show them (docs/i18n.md). Written as
+ * app's languages, as the agents list, notifications, the widget and the inbox show them (docs/protocol/i18n.md). Written as
  * PNGs to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`) to look at.
  */
 @RunWith(AndroidJUnit4::class)

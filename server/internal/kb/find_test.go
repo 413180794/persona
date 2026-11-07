@@ -312,7 +312,7 @@ func TestFindConcurrent(t *testing.T) {
 
 // Every result Find gives must be locatable once opened: Find only counts lines in the files Matches reads, so a hit
 // in an entry's bookkeeping (a project's moments-judged.json, a person's handles.json) is not a result whose detail
-// says "no matches" (docs/knowledge.md "Search").
+// says "no matches" (docs/assistant/knowledge.md "Search").
 func TestFindAgreesWithMatches(t *testing.T) {
 	st, err := NewStore(t.TempDir())
 	if err != nil {

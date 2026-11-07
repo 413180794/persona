@@ -40,7 +40,7 @@ internal data class VoicePageState(
 /**
  * The voice page without the screen: reads the model from the hub's model configuration and the voices, keeps the
  * picked voice, and runs one [VoiceSession] at a time. Picking another voice starts a new conversation; starting again
- * reads the model configuration again (it applies from the next conversation, docs/model-config.md).
+ * reads the model configuration again (it applies from the next conversation, docs/assistant/model-config.md).
  */
 internal class VoicePage(
     private val extensions: VoiceExtensions,

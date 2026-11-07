@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The user's compaction on the session and the compaction boundary on a transcript item (docs/protocol.md, #1727). */
+/** The user's compaction on the session and the compaction boundary on a transcript item (docs/protocol/protocol.md, #1727). */
 class CompactionContractTest {
     @Test fun sessionCarriesTheUsersCompaction() {
         val running = JsonCodec.decodeFromString<Session>(

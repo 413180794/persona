@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The voice extension's socket contract on the app's side (docs/voice.md 3, 6.10「帧」): frames in, frames out, the
+/// The voice extension's socket contract on the app's side (docs/assistant/voice.md 3, 6.10「帧」): frames in, frames out, the
 /// address, PCM16 and what is held before `ready`. Pure: no audio, no hub.
 struct VoiceWireTests {
     private func object(_ text: String) -> [String: Any]? {

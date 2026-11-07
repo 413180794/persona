@@ -15,7 +15,7 @@ type clientMeta struct {
 	Platform string          `json:"platform"`
 	Version  string          `json:"version"`
 	Build    json.RawMessage `json:"build"`
-	// Locale: the interface language the client shows (zh-Hans / en / ja, docs/i18n.md); kept when a later hello omits it.
+	// Locale: the interface language the client shows (zh-Hans / en / ja, docs/protocol/i18n.md); kept when a later hello omits it.
 	Locale string `json:"locale"`
 	OS     struct {
 		Name    string `json:"name"`

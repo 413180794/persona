@@ -159,13 +159,13 @@ Use an invalidation revision as the task key and handle the flag after completio
   `ScrollPosition.scrollTo(point:)` initially lands correctly, later differs by a content margin (10 pt), then returns; stored `ScrollPosition` (`edge: .top`) reapplies on content changes,
   jumping to latest for a `frame` when hub steps arrive. While pinned, set `UIScrollView.contentOffset` directly (`ChatPin.Finder`), clearing stored position at start.
   `scrollTo(id:anchor:)` anchors the entire row, so an expanded card is one row and cannot pin its header. Only chats taller than the screen can be fully pinned (`MOCK_LONG_HISTORY=1`).
-- The hub continuously pushes lists, machines and steps; every push reevaluates consumers. Do not attach active controls to them (`docs/archive/lanes/live-updates.md`):
+- The hub continuously pushes lists, machines and steps; every push reevaluates consumers. Do not attach active controls to them (`docs/archive/apple/live-updates.md`):
   toolbars in data-driven views are resubmitted to UIKit each push, resetting open overflow-menu scroll position even with unchanged content. `ChatsView` handles navigation / toolbar, `AgentsList` handles the list
   (after splitting, `ChatsView.body` must read `searching`, otherwise chats opened from search retain the system navigation bar, `SearchOpenTests`);
   closure environment values in body (`.environment(\.openFile) { … }`) are new each time, reevaluating every reading row (all visible work steps per push); use once-created `ChatActions`;
   observe `model.session(key)` per session (`SessionCell`), not all-machine lists. Keep fullscreen viewers and row expansion state on the page, not lazy rows.
   Measure with `LiveUpdateTests` (`/mock/churn` continuous pushes, `-perfCounts YES` reporting body counts and main-thread time per round).
-- Badges (pending count, Inbox Needs you) change almost every push; their consumers must not contain pages or menus (2026-11-01, TestFlight 70 "it's back", `docs/archive/lanes/live-updates.md`):
+- Badges (pending count, Inbox Needs you) change almost every push; their consumers must not contain pages or menus (2026-11-01, TestFlight 70 "it's back", `docs/archive/apple/live-updates.md`):
   changing `Tab.badge` rebuilds its page even without parameters, resetting open overflow menus and reevaluating entire chats.
   Wrap every `Tab` page in `TabPage { … }.equatable()`. Changing `Menu.label` relays out and resets open menus; put counts / red dots in small self-observing views beside it
   (`WaitingBadge`), with menu hosts not reading per-push data. Mock must push `inbox` and `interaction`
@@ -173,12 +173,12 @@ Use an invalidation revision as the task key and handle the flag after completio
 - Row parameters containing closures or structures with strings / arrays (`Item`) make SwiftUI treat them as changed every time: each push reevaluates the page and all visible plus lazy-buffer rows
   (~45 in a long Persona main chat, 2026-11-01). Chat bubbles, replies, work rows and composer all use `Equatable` + `.equatable()`, comparing only messages;
   permanently mounted but hidden content (closed sidebar) must not read changing `allSessions`; use its previous value while hidden.
-  Streaming full text arrives every 80 ms: split and cache completed blocks (`StreamChunks`), redraw only the last. Measurement: `docs/testing.md` ("Persona page (long main chat)").
-- Do not sort lists by last update or let pushes touch them while scrolling (2026-11-01, TestFlight 77, `docs/archive/lanes/live-updates.md` ("Forced refresh while scrolling")).
+  Streaming full text arrives every 80 ms: split and cache completed blocks (`StreamChunks`), redraw only the last. Measurement: `docs/operations/testing.md` ("Persona page (long main chat)").
+- Do not sort lists by last update or let pushes touch them while scrolling (2026-11-01, TestFlight 77, `docs/archive/apple/live-updates.md` ("Forced refresh while scrolling")).
   Real hub pushes a machine's sessions every 2 seconds with new `updated_at`; state + last-update sorting reordered spaces on 36% of pushes and jumped the screen.
   - Sort by a time independent of each output: working sessions by work start (`Session.sortDate`, `SpaceGroup.sortDate`).
   - Hold pushes during touch, inertia, covered pages or another tab; land together 0.5 seconds after stopping, at most 5 seconds even with continuous scrolling;
-    never hold needs-you, questions, offline or errors (`docs/ios-state.md` ("Timeliness")). The list reads only an intermediary (`AgentsFeed`,
+    never hold needs-you, questions, offline or errors (`docs/apple/ios-state.md` ("Timeliness")). The list reads only an intermediary (`AgentsFeed`,
     `withObservationTracking` following the model), with an unobserved hold switch. A list `@State` snapshot would redraw at scroll start.
   - Holding must actually block pushes. These leaks still reevaluate each push:
     - Reading the model in `onChange` / `onScrollPhaseChange` counts as body observation.
@@ -287,7 +287,7 @@ Use an invalidation revision as the task key and handle the flag after completio
   while directly parameter-driven titles / placeholders change. Switching Lark chats changed title but kept old messages and draft.
   Apply item `.id` to sidebar-opened pages (`InboxDetailView(…).id(item.id)`, `ChatView(key:).id(key)`; Mac Inbox already did);
   `.task(id:)` alone do not reset drafts, quotes or read positions. Covered by `InboxSplitTests` on iPad and open iPhone Duo.
-- iPhone Duo (`docs/ios.md` ("iPhone Duo")): choose layout by width / size class, not model. Simulator folding only switches in Device Hub;
+- iPhone Duo (`docs/apple/ios.md` ("iPhone Duo")): choose layout by width / size class, not model. Simulator folding only switches in Device Hub;
   screenshots require `--display=1/3`, otherwise the inactive screen may be entirely black.
 - Do not hide tab bars on pushed pages through `.toolbar(.hidden, for: .tabBar)` or `.toolbarVisibility`: it removes the bar in the first push frame,
   simultaneously removing the underlying list navigation / search bar and flashing on chat entry (2026-10-31). Use UIKit `setTabBarHidden(_:animated:)` with appearance / disappearance
@@ -433,7 +433,7 @@ Use an invalidation revision as the task key and handle the flag after completio
   Use `ViewThatFits` to remove secondary chips progressively, finally truncating the main label (`SlotCard.header`); verify `MOCK_LONG_SLOTS=1`.
 - Do not put tens of thousands of lines into one UITextView (`MonoTextView` lays out all text, linear cost): `CodeLinesView` reuses labels only for visible rows,
   with fixed left line numbers;20k Go lines open ~0.3 s, scroll 60 fps. Split long MarkdownUI documents into lazy `MarkdownChunks`,
-  without `.textSelection(.enabled)`: measured ~40% slower opening, entering-chunk frames ~40→60 ms (`docs/ios.md` ("File viewer")).
+  without `.textSelection(.enabled)`: measured ~40% slower opening, entering-chunk frames ~40→60 ms (`docs/apple/ios.md` ("File viewer")).
   - 代码行只画可见部分，不代表全文准备已在后台（2026-11-07，#5730）：扩展代码预览曾在 `body` 的备用源和初次 `onChange` 各构造一次 `CodeDocument`，两次都复制全文和索引行。按文本和实际解析语言在后台准备，行号/高亮/Load More 属性只替换展示包装并复用文件及高亮器。
   - 取消展示任务不会中止 detached task 中的同步构造；保留最多两个最近输入的准备任务/结果，取消只阻止旧结果发布，快速返回同一输入不再重做。它是有界近期复用，不保证所有历史输入只算一次；响应发布仍检查取消、代次和最新输入，测试必须验证取消后的准备复用，不能只验证没显示旧内容。
 - Video detection is not complete transfer (2026-11-03): old binary API capped 2 MiB, while MP 4 index may be at end, so a prefix remains unplayable. Bounded full download first restored playback, later authenticated Range + `AVAssetResourceLoader` reads tail index / target keyframes and caches sparse chunks. Sparse logical file length is not downloaded bytes. Pin versions across requests with `If-Match`, not `If-Range` (which falls back to full 200 after changes). Test long video for first playback before full download, actual `seek` ranges, continued playback and close cleanup; `seek` completion / instant clock jump do not prove frames decoded—check ranges after playback resumes.
@@ -463,7 +463,7 @@ Use an invalidation revision as the task key and handle the flag after completio
   expanded layer uses `.hidden()` after fading, retaining layout measurement). Identity changes dismiss sheets / menus, so avoid automatic collapse while anything is presented
   (`ChatView.somethingPresented`, `ChatHeaderPresentationTests`).
 - Do not measure per-frame drag / animation main-thread cost under XCUITest: accessibility adds substantial SwiftUI work each frame. Script display-frame-driven execution of the same path in-app,
-  launched with `simctl launch` (`DrawerAutoDrag`, `docs/testing.md` ("Sidebar dragging")).
+  launched with `simctl launch` (`DrawerAutoDrag`, `docs/operations/testing.md` ("Sidebar dragging")).
 - System `.swipeActions` require `List`, not `ScrollView` + `LazyVStack` (2026-11-01 sidebar Archive). Preserve appearance when switching:
   `listStyle(.plain)`, `listRowInsets`, hidden separators, `listRowBackground(.clear)`, `scrollContentBackground(.hidden)`,
   defaultMinListRowHeight 0. **A standalone `Divider()` row draws vertically**; wrap in `VStack`.
@@ -484,7 +484,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 
 - Do not retain two sources and synchronize with `.onChange`. New shell initially duplicated current page in `AppModel.selectedTab` and bar position,
   sliding from `onChange(of: selectedTab)`. SwiftUI sometimes never reevaluated body (trace showed tab change with no body / onChange),
-  leaving position unchanged and sources diverged, breaking later taps (2026-11-02, `docs/shell.md`). React at the write site
+  leaving position unchanged and sources diverged, breaking later taps (2026-11-02, `docs/apple/shell.md`). React at the write site
   (`didSet` calls `tabRouter`), or retain one shared source.
 - A selected segment that turns into a Menu on a second tap becomes a different control if state disagrees with pixels (empty menu), appearing unresponsive.
   Its deciding state must be exactly what is displayed (new shell: only the page where the bar rests is a menu).
@@ -584,42 +584,42 @@ Use an invalidation revision as the task key and handle the flag after completio
   first build locally `xcodebuild build -configuration Release -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO` and run `release.sh` `strings` checks on `Release-iphoneos/Persona.app/Persona`.
 - Launch-argument defaults are `strings` (`-dev.compact YES` is "YES"). Read booleans / numbers with `bool(forKey:)` / `integer(forKey:)` / `double(forKey:)` like AppStorage,
   not `object(forKey:) as? Bool`, which silently falls back (#1473 `StoredValue` broke `-dev.compact YES`; `CompactListShots` showed cards instead of compact rows, #2147).
-- Live Activities (`docs/live-activity.md`): ActivityKit uses default JSONDecoder for `content-state`; `Date` values start 2001; pass Unix-second numbers.
+- Live Activities (`docs/apple/live-activity.md`): ActivityKit uses default JSONDecoder for `content-state`; `Date` values start 2001; pass Unix-second numbers.
   Lock / expanded height ~160 pt; overflow silently clipped. `simctl io screenshot` captures omit Dynamic Island / lock activities (use `LiveActivityShots`);
   `simctl push` does not support activity pushes, but simulator receives real APNs sandbox pushes (`TestManualLiveActivityPush`).
   Repeating symbol rotate / pulse animations do not move (pixel verified); do not design rotating gears.
   Island numbers (TPM, tokens, load) consume push budget: hub sends only displayed fields, two significant figures, at most once per minute per device.
   Sharing with another app on 18 Pro gives two width-limited 28 pt compact activities (second clipped);17 Pro and others use minimal.
   Only iOS 27 `isDynamicIslandLimitedInWidth` reports width limitation; app cannot know presentation or other apps. Compact / minimal provide no width, making `ViewThatFits` useless.
-  Screenshot both models (`scripts/app/island_peer.sh` + `LiveActivityShots`, `docs/live-activity.md` ("Sharing Dynamic Island with other apps")).
+  Screenshot both models (`scripts/app/island_peer.sh` + `LiveActivityShots`, `docs/apple/live-activity.md` ("Sharing Dynamic Island with other apps")).
 - Missing shared keychain groups (push-relay `.push` private key; avatar `.look` also used builds 92–103) silently fall back, while simulator always works:
   build 92 extension signatures had no groups (unsigned archive + ad-hoc signing without entitlements, empty `$(AppIdentifierPrefix)`), always default avatar / system blue.
-  Use `$(DEVELOPMENT_TEAM).` prefix in plist; after entitlement / signing changes run `scripts/release/entitlements.py check` on exported ipa (`docs/release.md` ("entitlements")).
-- Simulator Live Activity rendering is insufficient (2026-11-02, build 98 signing fixed but device still default, even built-in avatar; `docs/live-activity.md` ("Why build 98 still failed")):
+  Use `$(DEVELOPMENT_TEAM).` prefix in plist; after entitlement / signing changes run `scripts/release/entitlements.py check` on exported ipa (`docs/operations/release.md` ("entitlements")).
+- Simulator Live Activity rendering is insufficient (2026-11-02, build 98 signing fixed but device still default, even built-in avatar; `docs/apple/live-activity.md` ("Why build 98 still failed")):
   - Put rendered data in ContentState and oversized images in App Group files. **Live Activity extensions cannot read / write keychain on device**:
     build 103 app shared-group write / read succeeded, extension never wrote one diagnostic (simulator both work; Apple only documents its separate sandbox).
     Unchanged-content updates may not redraw; content must really change.
   - Register App Group on developer website and add to App ID; API keys cannot do it (no endpoint, `-allowProvisioningUpdates` export does not create groups).
-    Adding unregistered entitlements fails export (`docs/release.md` ("App Group")).
+    Adding unregistered entitlements fails export (`docs/operations/release.md` ("App Group")).
   - Simulator ignores activity image limits. Images cannot exceed presentation size: `UIImage(data:)` decodes 1×, 78 px becomes 78 pt. Supply display scale (`FleetFaces`). Some third-party libraries enforce 4 KB per image (not documented by Apple); keychain storage followed it and blurred images. App Group files now store each presentation at 3×, high-quality resizing from original (#349).
   - Fixtures need real complexity: solid placeholders are hundreds of bytes and hit no limits. Test real avatar packages locally, not in repo.
-  - Only extension reports reveal device reads: `category:island` logs and diagnostics opened by long-pressing Settings › Notifications › Dynamic Island preview (`docs/live-activity.md` ("Diagnostics")).
+  - Only extension reports reveal device reads: `category:island` logs and diagnostics opened by long-pressing Settings › Notifications › Dynamic Island preview (`docs/apple/live-activity.md` ("Diagnostics")).
 - Machine counts / lists exclude assistant headless sessions from Chat tab (`MachineDetailView.agents`, consistent with Agents): they run on hub machine,
   and old Server card Running counted them too.
-- Demo mode (`docs/ios.md` ("Demo mode")) lives beneath `APIClient` / `LiveConnection` (`DemoHub`), never page `if demo` branches. Missing new APIs return 404 "No such data in demo mode";
+- Demo mode (`docs/apple/ios.md` ("Demo mode")) lives beneath `APIClient` / `LiveConnection` (`DemoHub`), never page `if demo` branches. Missing new APIs return 404 "No such data in demo mode";
   add `DemoHub` responses with APIs and run `DemoModeTests` for `DemoHub miss` logs.
   Regenerate `scripts/mock/make_demo_data.py` after `scripts/mock/mock_hub.py` changes. Computer / Lark / email operations never execute for real (`DemoText.notSent`).
 - Engine options come from hub `engines`, preserving names / `note`. Clients must not filter Orca / future `engines` by fixed enums or discard detection for unknown current `engine`.
   Known `engines` allow offline configuration; unknown ones require hub `available: true`. Regenerated demo data must retain only task-specific changes, not unrelated Inbox / scheduled tasks.
-- Slow / offline networking shows no banner; title becomes spinner + Waiting for network / Connecting… / Updating… (`docs/ios.md` ("Connection status")). `.toolbar(removing: .title)`
+- Slow / offline networking shows no banner; title becomes spinner + Waiting for network / Connecting… / Updating… (`docs/apple/ios.md` ("Connection status")). `.toolbar(removing: .title)`
   also removes `.principal`. Untitled pages needing `state` use an ordinarily empty `.principal` instead; large-title pages also leave it empty normally to avoid duplicate titles.
   Slow-link detection counts only timely pongs (late pongs are slow), or title flashes each ping.
-- Avatars (`docs/persona.md`) may be third-party characters: art / generated files stay in hub `~/.persona/personas`, outside repo / app bundle.
+- Avatars (`docs/apple/persona.md`) may be third-party characters: art / generated files stay in hub `~/.persona/personas`, outside repo / app bundle.
   Avatar, theme-color and style changes rebuild the entire tree by `AppModel.look`. `@State` navigation paths disappear; settings paths belong to `AppModel.settingsPath`,
   keeping Settings › Appearance › Avatar / Theme color / Interface style / Layout `open` after selection (2026-11-01, `PersonaPickerTests` / `LookPickerTests`).
   New-shell settings sheet uses `AppModel.shellSettings`; RootView.id(look) does not rebuild already-presented sheets, leaving input-free samples stale, so content also uses `.id(model.look)` (`LookPickerTests.testShellSheetStaysOnAppearance` compares bubble pixels). Apply elsewhere for look-changing sheets / pages. DEBUG once-`open` flags (`-openAppearance` etc.) also cannot be `@State`, whose reset reroutes users back to startup page; `SettingsView.debugOpened` is static, once per launch.
 - Three appearance choices are independent (requested 2026-10-31): avatar does not change colors, theme color does not change components, style does not change primary color. Previously avatar colors overlaid styles (`StyleSpec.tinted`),
-  replacing Clay purple on avatar selection. Classify additions first: drawing belongs to style, color to theme (`docs/ios.md` ("Design language")).
+  replacing Clay purple on avatar selection. Classify additions first: drawing belongs to style, color to theme (`docs/apple/ios.md` ("Design language")).
 
 - Successful manual pairing replaces RootView's root hosting the pairing sheet; the old sheet must not dismiss, or the new engine page can be visible but untappable (XCUITest hit point−1).
   Explicit dismissal is needed only if previously paired, no engine step entered, and appearance root identity unchanged, so the original host remains.
@@ -645,7 +645,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 `get("/api/v1/connectors?all=1")` sends `/api/v1/connectors%3Fall=1`: whole-path encoding escapes ?, hub returns 404, `try?` swallows it, leaving an empty list (Settings › Connectors missing GitHub / Messages, unseen by compile / unit tests).
 Queries always use `get(_:query:)`. Found only by mock logs (`MISSING GET …%3F…`) during screenshot comparison.
 
-## Multiple hubs (docs/multi-hub.md)
+## Multiple hubs (docs/protocol/multi-hub.md)
 
 - `Session` requests always use `api(key.group)`, not selected-`group` `api` (#950): `sendPending` outbox send / retry once sent another `group`'s message to the selected hub. `api` is only for hub-level Persona / Inbox / settings pages.
 - Client fields added to wire `Session` / `Machine` / `Interaction` / `SessionKey`: synthesized `Decodable` requires JSON keys even for nonoptional properties with defaults,
@@ -672,11 +672,11 @@ Queries always use `get(_:query:)`. Found only by mock logs (`MISSING GET …%3F
 - Processing one pairing link twice (scan + system-camera link, repeated scan callbacks) caused second `pair()` to write the exchanged temporary token back and fail exchange 401.
   Already-exchanged links retain device token (`DeviceCredentialTrade.keepsDevice`).
 - Handshake 401 (`URLSessionWebSocketTask.response` status) is not unreachable: `LiveConnection.rejected` shows Pairing expired and Pair again, slowing retries to 60 seconds (public auth failures trigger address blocking).
-- Reproduce with `MOCK_PAIR_TOKEN=jp_…` fake hub, `-openWelcome YES -openPairLink <link> -openPairLinkTimes 2`; alternate-address case in `docs/testing.md` ("Temporary-code pairing").
+- Reproduce with `MOCK_PAIR_TOKEN=jp_…` fake hub, `-openWelcome YES -openPairLink <link> -openPairLinkTimes 2`; alternate-address case in `docs/operations/testing.md` ("Temporary-code pairing").
 
 ## Session cells are for display, not sending (2026-11-03, #624)
 
-`model.session(key)` cells deliberately ignore `rev`, `updated_at` and last text to reduce redraws (`docs/ios-state.md` ("Step 3")):
+`model.session(key)` cells deliberately ignore `rev`, `updated_at` and last text to reduce redraws (`docs/apple/ios-state.md` ("Step 3")):
 display is fine because those pages do not show them, but **sending** transmits stale values. Actions needing current sessions (handoff to Persona with last text, transcript fetch by `rev`)
 use `model.latest(key)` or `allSessions`, never the cell.
 
@@ -684,7 +684,7 @@ use `model.latest(key)` or `allSessions`, never the cell.
 
 `TasksStore.sessions` previously read `model.session(key)`, which ignores last text, so card text only changed with status. When Agents only run tools,
 `last_text` itself stays fixed, looking stuck. **Views showing current speech / work use `model.sessionWithLine(key)`** (ignoring only `rev` / `updated_at`),
-including `activity` here (`TaskNow`, `docs/unified-entry.md` ("Task cards")). `session(_:)` and `sameForItsPage` still ignore `activity` so chat pages do not redraw every step.
+including `activity` here (`TaskNow`, `docs/assistant/unified-entry.md` ("Task cards")). `session(_:)` and `sameForItsPage` still ignore `activity` so chat pages do not redraw every step.
 
 ## Lark drafts and outbox (2026-11-03, #688)
 
@@ -717,7 +717,7 @@ Many mock / real-hub attempts failed until replaying that turn's real items (loc
 - Diagnosis: inverted-row XCUITest coordinates are wrong and tap elsewhere (sidebar); tap top headers or use `-showFullOutput card` / `-openAllWork YES`.
   When alternating simulators, `simctl uninstall` on a shutdown simulator silently fails; `boot` first.
 
-## SSH tunnels (2026-11-03, #891, docs/network.md "Connecting to hub through SSH")
+## SSH tunnels (2026-11-03, #891, docs/operations/network.md "Connecting to hub through SSH")
 
 - **JSON launch values are swallowed**: `-key '{"a":1}'` begins with {, so UserDefaults argument domain parses it as plist and `string(forKey:)` returns nil. Base 64 structured values (`-seedSSHTunnel`).
 - **SecureField on pairing triggers Save Password?** when leaving for SSH connection, blocking later taps (UI test "Neither element nor any descendant has keyboard focus"). Tokens are one-time credentials; `.textContentType(.oneTimeCode)` prevents it.
@@ -757,7 +757,7 @@ Do this **before** `rebuild` splits by last message; only `buildRows` is too lat
 `AVAssetExportSession` is not Sendable: `Task { for await s in session.states(updateInterval:) … }` fails Swift 6 with
 "passing closure as a 'sending' parameter risks causing data races". Obtain `let states = session.states(updateInterval: 0.25)` outside Task,
 then iterate only that sequence. Use picker `preferredItemEncoding: .current`, otherwise the system first transcodes HEVC (long 4K wait);
-app chooses transcoding by size (`VideoPrep`, docs/protocol.md "Sending video").
+app chooses transcoding by size (`VideoPrep`, docs/protocol/protocol.md "Sending video").
 ## Telegram-style reply bubbles for quotes (2026-11-03, #986)
 
 - **Bubble width follows its widest piece**: a quote with `frame(maxWidth: .infinity)` inside normal `VStack` expands the bubble to full row width.
@@ -856,8 +856,8 @@ Inspect magnified corner crops and compare outside-corner pixels with the same s
 
 ## QuickLook Office files (2026-11-04, #1300)
 
-- xlsx displays stored formula values only, never calculates. Missing cached values leave totals blank. Write calculated values when generating workbooks (`personad office`, `docs/office.md` ("Formula values")).
-- QuickLook ignores docx borders only in table styles, `startOverride` numbering, and page breaks (squares). See `docs/office.md` ("Verification").
+- xlsx displays stored formula values only, never calculates. Missing cached values leave totals blank. Write calculated values when generating workbooks (`personad office`, `docs/assistant/office.md` ("Formula values")).
+- QuickLook ignores docx borders only in table styles, `startOverride` numbering, and page breaks (squares). See `docs/assistant/office.md` ("Verification").
 
 ## Ask Persona shortcut unexpectedly quits: Release stripped reflection names (2026-11-04, #990)
 
@@ -875,7 +875,7 @@ Inspect magnified corner crops and compare outside-corner pixels with the same s
 
 ## Hidden WKWebView snapshots: transparency, offsets, missing text (2026-11-04, #1295)
 
-Formulas / diagrams (`MarkdownRenderer`, `docs/ios.md` ("Formulas and diagrams")) render in invisible WKWebView then `takeSnapshot`. Several traps all looked like empty images:
+Formulas / diagrams (`MarkdownRenderer`, `docs/apple/ios.md` ("Formulas and diagrams")) render in invisible WKWebView then `takeSnapshot`. Several traps all looked like empty images:
 - **View alpha enters snapshots**: `alpha = 0.01` made nearly transparent snapshots, invisible as template images. Use alpha 1, bottom window layer and offscreen frame. Web views outside any window cannot snapshot content.
 - **Window attachment adds safe-area content inset**: page shifted ~80 pt, leaving only formula top within `getBoundingClientRect` crop. Set `scrollView.contentInsetAdjustmentBehavior = .never`.
 - **`file://` cannot load bundled fonts**: CORS with opaque file origin blocked KaTeX woff 2; text invisible during font block (Mermaid system fonts worked). Inline fonts as data URLs in CSS (`font-src data:`). KaTeX relatively positions numerator / scripts outside their own boxes; crop the union of all descendant rectangles and avoid drawing against page top-left.
@@ -1129,7 +1129,7 @@ but UIKit still had a page with only Agents Back and empty content.
   from reaching `List`, adding pill separators / shrinking compact rows (screenshots caught it despite passing tests). Custom `==` already gives SwiftUI comparison.
 - Do not evaluate computed properties twice in one body: filter `counts(base)` recalculated `base`; `TopBar` `@ViewBuilder` arguments are constructed even when hidden.
 - Generic `@Observable` `StoredValueBox<Value>` property reads instantiate runtime key paths (`swift_getKeyPath`); expensive inside every element closure. Read into locals first.
-- Use Time Profiler to locate costs (`docs/testing.md` ("Agents structural pushes")); body counts alone suggested expensive body, actually only one-fifth.
+- Use Time Profiler to locate costs (`docs/operations/testing.md` ("Agents structural pushes")); body counts alone suggested expensive body, actually only one-fifth.
 
 
 ## Internationalization (#2457)
@@ -1137,7 +1137,7 @@ but UIKit still had a page with only Agents Back and empty content.
 ### `String(localized:)` cannot switch language at runtime
 - Changing `AppleLanguages` and replacing `Bundle.main` with a `localizedString(forKey:…)`-overriding subclass changed SwiftUI `Text` but not `String(localized:)`, leaving mixed Chinese / English.
 - Foundation fixes language at process startup; Swift `String(localized:)` bypasses `Bundle.localizedString(forKey:)` (measured macOS 27). `String(localized:locale:)` `locale` controls formatting, not language lookup; only `LocalizedStringResource.locale` chooses language.
-- Save `AppleLanguages` for next launch and explain in Settings (Mac offers Reopen now). Long-lived widget extensions use `interfaceText(_:)` (`LocalizedStringResource` + App Group language) and `.environment(\.locale, …)`. See `docs/ios.md` ("Interface language").
+- Save `AppleLanguages` for next launch and explain in Settings (Mac offers Reopen now). Long-lived widget extensions use `interfaceText(_:)` (`LocalizedStringResource` + App Group language) and `.environment(\.locale, …)`. See `docs/apple/ios.md` ("Interface language").
 
 ### English development region makes missing zh-Hans plurals fall back to English
 - After `CFBundleDevelopmentRegion`=`en` for unsupported-language fallback, Chinese `7 分钟` ("7 minutes") became 7 min only for plurals.

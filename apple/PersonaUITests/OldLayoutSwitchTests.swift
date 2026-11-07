@@ -1,6 +1,6 @@
 import XCTest
 
-/// The user's flow (2026-11-02, docs/shell.md) in Old Layout: Agents → an agent's chat → back (the chevron or the edge
+/// The user's flow (2026-11-02, docs/apple/shell.md) in Old Layout: Agents → an agent's chat → back (the chevron or the edge
 /// swipe, at once or a while later) → Persona → Agents, the tab bar tapped where a finger taps it. Each tab must be the
 /// one selected and its page the one in reach.
 final class OldLayoutSwitchTests: XCTestCase {

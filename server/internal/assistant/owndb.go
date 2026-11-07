@@ -20,7 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/pgdocker"
 )
 
-// The built-in manager's own database (docs/server.md "The default manager's own database"). It used to keep its state
+// The built-in manager's own database (docs/server/server.md "The default manager's own database"). It used to keep its state
 // in the hub's database (hub.json's database_url); now it has one of its own (provisionOwn). Its data moves there once,
 // at a start, before it serves anything. What says it did is in the databases themselves: its own records the copy
 // that filled it, in the same transaction as the data ('in'); the hub's that the data left ('out'). Its manager.json

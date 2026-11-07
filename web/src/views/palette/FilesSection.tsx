@@ -1,4 +1,4 @@
-// The files section of ⌘K (docs/web.md "Command palette"): the files under the conversation's (or the open terminal pane's)
+// The files section of ⌘K (docs/web/web.md "Command palette"): the files under the conversation's (or the open terminal pane's)
 // directory, found as you type. Palette.tsx lists the rows this hook returns after its own and draws them with
 // FileResultRow; the matching and the loading are in lib/file-find.ts.
 import { forwardRef, useEffect, useMemo, useState } from "react";

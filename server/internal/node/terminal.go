@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The terminal tab's live stream (docs/terminal.md): while the hub watches a session's terminal, one
+// The terminal tab's live stream (docs/integrations/terminal.md): while the hub watches a session's terminal, one
 // `herdr terminal session observe` runs on its pane at the pane's own size and every frame goes to the hub as a
 // terminal.frame event. The stream starts over — a new epoch, beginning with a whole frame — when the pane changes
 // size, when herdr ends it (the pane moved, a live handoff) and when the diffs after the last whole frame pile up
@@ -393,7 +393,7 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		Up         bool     `json:"up"`
 		Column     *int     `json:"column"`
 		Row        *int     `json:"row"`
-		// terminal.mouse (docs/terminal.md "Mouse")
+		// terminal.mouse (docs/integrations/terminal.md "Mouse")
 		Action    string `json:"action"`
 		Button    string `json:"button"`
 		Modifiers int    `json:"modifiers"`

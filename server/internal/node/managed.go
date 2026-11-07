@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Launchers kept by the hub ("Settings › Model", docs/launchers.md): the hub sends them (keys included) on connect and on
+// Launchers kept by the hub ("Settings › Model", docs/integrations/launchers.md): the hub sends them (keys included) on connect and on
 // every change; they live only in this process's memory. A managed launcher runs as `personad launch <name> …`, which
 // asks this node over the local socket for its settings and execs claude with them: the key is never written to a
 // file, typed into a terminal or put on a command line.

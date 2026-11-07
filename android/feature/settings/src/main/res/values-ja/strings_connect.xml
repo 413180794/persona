@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The hub connection parts of Settings: pairing, hubs, hub version, candidate addresses, engine (docs/i18n.md). -->
+<!-- The hub connection parts of Settings: pairing, hubs, hub version, candidate addresses, engine (docs/protocol/i18n.md). -->
 <resources>
     <!-- Pairing -->
     <string name="settings_pairing_title">ペアリング</string>

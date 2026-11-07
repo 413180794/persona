@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// claude.auth_status (docs/onboarding.md 4.3): whether Claude Code is signed in, as the launcher runs it, without a
+// claude.auth_status (docs/assistant/onboarding.md 4.3): whether Claude Code is signed in, as the launcher runs it, without a
 // model request. `claude auth status --json` answers from what Claude Code finds where it runs: the credentials in its
 // config directory, and a key or gateway token in its environment or --settings. So it runs exactly as a start does:
 // the launcher's command in the login shell (launcherCommand: plain claude with the machine's claude_start_dir, a

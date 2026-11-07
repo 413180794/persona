@@ -1,4 +1,4 @@
-// The Paseo bridge's process (docs/paseo.md): the node runs it while the machine's engine is Paseo —
+// The Paseo bridge's process (docs/integrations/paseo.md): the node runs it while the machine's engine is Paseo —
 //   node bridge.mjs --socket <runtime.sock> --paseo-home <Paseo's home>
 // and it runs until the node stops it, or its stdin (held open by the node) ends: a node that dies leaves none behind.
 

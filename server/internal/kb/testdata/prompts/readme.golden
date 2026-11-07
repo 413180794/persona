@@ -1,6 +1,6 @@
 # Persona 知识库
 
-hub 自动维护的数据（说明见仓库 docs/knowledge.md）。可以直接读、grep；改 summary.md 也可以，下次压缩会接着用。
+hub 自动维护的数据（说明见仓库 docs/assistant/knowledge.md）。可以直接读、grep；改 summary.md 也可以，下次压缩会接着用。
 
 - chats/<id>/messages/YYYY-MM-DD.md  每个会话每天的全量文字（保留 365 天）
 - chats/<id>/attachments/            附件（保留 30 天）

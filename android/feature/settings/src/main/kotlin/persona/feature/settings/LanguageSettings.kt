@@ -25,7 +25,7 @@ internal fun LanguageRow(selected: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * Settings › Appearance › Language (docs/i18n.md): follow the phone, or one of the app's catalog languages. Choosing one restarts
+ * Settings › Appearance › Language (docs/protocol/i18n.md): follow the phone, or one of the app's catalog languages. Choosing one restarts
  * the screens in it at once; on Android 13 and later the phone's App language page shows and changes the same choice.
  */
 @Composable

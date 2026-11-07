@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Hub-wide todo list management (docs/todos.md, issue #401):
+/// Hub-wide todo list management (docs/assistant/todos.md, issue #401):
 /// The hub's todos, cached locally in StateCache, refreshed on {"type":"todos"} WS event and (re)connect.
 /// Supports 404 gracefully (older hubs without todos support: hides entrance, no error).
 @MainActor @Observable

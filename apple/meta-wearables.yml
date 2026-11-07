@@ -1,4 +1,4 @@
-# Meta glasses (Ray-Ban Meta and friends) through Meta's Wearables Device Access Toolkit (docs/meta-glasses.md).
+# Meta glasses (Ray-Ban Meta and friends) through Meta's Wearables Device Access Toolkit (docs/apple/meta-glasses.md).
 # Merged into project.yml by its `include:` (enable: ${PERSONA_META_WEARABLES}), which scripts/persona_config.py env
 # sets to YES only when config.json app.meta_wearables.enabled is true. Off by default: no package, no Info.plist keys,
 # no Bluetooth or local-network permission strings, and no menu entry, so the App Store build is unchanged.

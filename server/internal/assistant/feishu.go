@@ -23,7 +23,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The Feishu bot's chat (docs/bots.md): the owner talks to Persona in the bot's private chat — the main conversation,
+// The Feishu bot's chat (docs/extensions/bots.md): the owner talks to Persona in the bot's private chat — the main conversation,
 // another one picked with /new and /list, or an agent picked with /agents — and the answer comes back as cards;
 // what is asked shows as cards there too. The hub keeps the bot's transport (its credentials, the long connection,
 // pairing, the open platform's REST): it hands the owner's messages and presses here (feishu.message,

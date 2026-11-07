@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-// Agent filters (docs/extensions.md "Agent filters", #2428): an extension says which agent sessions on the computers are
+// Agent filters (docs/extensions/extensions.md "Agent filters", #2428): an extension says which agent sessions on the computers are
 // not the user's to see in Agents (another platform's runs, hundreds a week), by markers the session files carry. The
 // hub hands the ones that hold to every node (node.configure agent_filters), which leaves matching sessions out.
 

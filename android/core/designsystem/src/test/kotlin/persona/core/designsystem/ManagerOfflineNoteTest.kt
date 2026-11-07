@@ -12,7 +12,7 @@ import persona.core.contracts.api.HubManager
 import persona.core.contracts.api.ManagerRoster
 
 /**
- * What a conversation says where its composer was while its manager is offline (docs/managers.md "Clients"): by the
+ * What a conversation says where its composer was while its manager is offline (docs/assistant/managers.md "Clients"): by the
  * conversation's own manager, whichever one the page shows, and only for the selected group's hub.
  */
 @RunWith(AndroidJUnit4::class)

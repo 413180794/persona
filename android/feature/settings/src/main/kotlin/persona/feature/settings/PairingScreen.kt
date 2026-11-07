@@ -48,13 +48,13 @@ fun PairingScreen(
     onCredentialsSaved: () -> Unit = {},
     onBack: (() -> Unit)? = null,
     footer: @Composable () -> Unit = {},
-    /** Saves the engine of the hub's machine, the step between pairing and the checklist (docs/engines.md). */
+    /** Saves the engine of the hub's machine, the step between pairing and the checklist (docs/integrations/engines.md). */
     machines: MachineManagement? = null,
     /** Start at the connect step instead of the welcome page (adding another hub). */
     skipWelcome: Boolean = false,
     /** Where the last attempt is kept for "Connection diagnostics", which has nothing else to show before a pairing succeeds. */
     attempts: PairingAttempts? = null,
-    /** The main conversation's steps on the checklist that follows a pairing (docs/onboarding.md 4.5). */
+    /** The main conversation's steps on the checklist that follows a pairing (docs/assistant/onboarding.md 4.5). */
     mainReadiness: AssistantReadinessSource? = null,
 ) {
     val context = LocalContext.current
@@ -318,7 +318,7 @@ fun PairingScreen(
                         SettingsCaption(stringResource(R.string.settings_pairing_connect_push))
                     }
                 }
-                // The command line is for people who installed the hub themselves (docs/onboarding.md 4.5): folded away.
+                // The command line is for people who installed the hub themselves (docs/assistant/onboarding.md 4.5): folded away.
                 item {
                     JTextButton(stringResource(R.string.settings_pairing_other_ways), { otherWays = !otherWays },
                         Modifier.padding(top = Tokens.Space.m))

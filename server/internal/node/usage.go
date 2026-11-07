@@ -16,13 +16,13 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Token usage of every agent on this machine, for the Dynamic Island's TPM / today's tokens / requests (docs/live-activity.md).
+// Token usage of every agent on this machine, for the Dynamic Island's TPM / today's tokens / requests (docs/apple/live-activity.md).
 // The transcripts are the record: Claude Code writes each reply's usage on its assistant lines (main and subagent
 // files), Codex and compatible variants a token_count event per request. The meter reads only what the files gained since the last
 // scan, sums it per minute and model for the last usageWindow, and reports changed minutes to the hub as "usage".
 // A node starts with the hub connection, so a fresh meter re-reads the window from the files and sends it whole
 // ("full"): nothing is stored, and restarting either side recounts the same numbers; the manager keeps the week
-// (docs/machines.md「Token 用量」).
+// (docs/server/machines.md「Token 用量」).
 //
 // Each bucket also says which launcher ran it (the session's, as Persona started it; "" for one typed in a terminal),
 // and a reply is counted once in the window even when it is in more than one file: a fork (Claude Code's

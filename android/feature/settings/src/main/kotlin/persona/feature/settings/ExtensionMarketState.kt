@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Settings › Extensions › Extension market (docs/extensions.md "Extension market"): the words, the catalog, one extension of it (preview, then install,
+// Settings › Extensions › Extension market (docs/extensions/extensions.md "Extension market"): the words, the catalog, one extension of it (preview, then install,
 // upgrade or remove) and the markets. The pages are in ExtensionMarketScreen.kt.
 
 /** Where a catalog extension stands on this hub. */
@@ -29,7 +29,7 @@ internal enum class CatalogAction { Install, Upgrade, Uninstall }
 
 /**
  * A GitHub market read without a token: GitHub allows 60 reads an hour per address, shared by every device on the
- * same network, so offering it a read-only token is what gets the market read again (docs/extensions.md "Extension market").
+ * same network, so offering it a read-only token is what gets the market read again (docs/extensions/extensions.md "Extension market").
  */
 internal fun wantsGitHubToken(market: ExtensionMarket): Boolean = !market.hasToken && isGitHubMarket(market.spec)
 
@@ -37,7 +37,7 @@ internal fun wantsGitHubToken(market: ExtensionMarket): Boolean = !market.hasTok
 internal fun isGitHubMarket(spec: String): Boolean = spec.trim().startsWith("github:", ignoreCase = true)
 
 /**
- * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md "GitHub rate limits"): a name, what it
+ * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions/extensions.md "GitHub rate limits"): a name, what it
  * is for, a year. No permission: such a token always reads public repositories, which is what lifts the hourly limit.
  */
 internal const val GitHubTokenUrl = "https://github.com/settings/personal-access-tokens/new" +
@@ -459,7 +459,7 @@ internal data class MarketsState(
     val addError: String? = null,
     /** Why the last refresh, removal or token change did not happen. */
     val actionError: String? = null,
-    /** The auto-upgrade switch for all market extensions (docs/extensions.md "Auto-upgrade"); null: a hub without it. */
+    /** The auto-upgrade switch for all market extensions (docs/extensions/extensions.md "Auto-upgrade"); null: a hub without it. */
     val autoUpgrade: Boolean? = null,
     val savingAuto: Boolean = false,
 )

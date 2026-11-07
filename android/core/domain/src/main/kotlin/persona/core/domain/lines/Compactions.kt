@@ -6,7 +6,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * A compaction as the chat shows it (docs/assistant.md "Manual compaction"): one divider where the context was compacted, with
+ * A compaction as the chat shows it (docs/assistant/assistant.md "Manual compaction"): one divider where the context was compacted, with
  * how it came about ([trigger]: `manual`, `auto`, `idle`; null when unknown) and the context's size before it. [notes]
  * are the notices folded into it, in transcript order.
  */

@@ -10,7 +10,7 @@ import (
 )
 
 // handleKey is the knowledge base's key for the senders' identity hints (kb/handles.go): handles.key in dir, the
-// manager's own directory (the built-in manager's a copy of the data directory's, so the hashes stay the same; docs/managers.md
+// manager's own directory (the built-in manager's a copy of the data directory's, so the hashes stay the same; docs/assistant/managers.md
 // "The built-in manager's own files"), 32 random bytes made on first use, 0600, never in the database or a log. Losing it
 // only means later hints hash differently.
 func handleKey(dir string) ([]byte, error) {

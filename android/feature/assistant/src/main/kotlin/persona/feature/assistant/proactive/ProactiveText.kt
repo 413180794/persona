@@ -30,7 +30,7 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * How the page says things, in the language the page is in (docs/i18n.md): the schedule, times, runs and failures.
+ * How the page says things, in the language the page is in (docs/protocol/i18n.md): the schedule, times, runs and failures.
  * Rules read like Reminders; a clock says the part of the day the way the language does (a Chinese day-part prefix, "9:00 AM").
  */
 internal class ProactiveText(private val res: Resources, val locale: Locale) {

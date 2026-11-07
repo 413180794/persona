@@ -69,12 +69,12 @@ data class SettingsServices(
     val sent: HubSent? = null,
     /** Settings › Translation, kept on this phone; null in demo mode. */
     val translation: TranslationSettings? = null,
-    /** Settings › Session triage on the paired hub (docs/agent-work.md "Switches"); null in demo mode. */
+    /** Settings › Session triage on the paired hub (docs/assistant/agent-work.md "Switches"); null in demo mode. */
     val triage: AgentTriage? = null,
     val capsule: FloatingCapsuleSettings? = null,
     /** The last pairing attempt (recorded by the pairing page, shown in "Connection diagnostics"); null in demo mode. */
     val pairingAttempts: PairingAttempts? = null,
-    /** The main conversation's steps on "Checklist" (docs/onboarding.md 4.5); null or unavailable: the phone's items only. */
+    /** The main conversation's steps on "Checklist" (docs/assistant/onboarding.md 4.5); null or unavailable: the phone's items only. */
     val readiness: AssistantReadinessSource? = null,
     /** The desktop apps connected to the selected hub now (its `desktops` event); null in demo mode. */
     val desktops: kotlinx.coroutines.flow.StateFlow<List<persona.core.contracts.HubDesktop>>? = null,

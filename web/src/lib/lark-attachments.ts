@@ -1,4 +1,4 @@
-// Pictures and files sent into a Feishu chat (docs/lark-attachments.md, iOS LarkAttachment.swift): picked, pasted or
+// Pictures and files sent into a Feishu chat (docs/extensions/lark-attachments.md, iOS LarkAttachment.swift): picked, pasted or
 // dropped into the chat's composer, checked and previewed there, then sent one by one through the hub's own routes
 // (POST /lark/conversations/{feed}/images as JSON with the bytes in base64, …/files as the raw bytes). A quote or a
 // thread goes with them only when the hub's Feishu extension can carry it (`lark_attachment_reply`, #1035): an older
@@ -148,7 +148,7 @@ export class LarkReceiptMissing extends Error {
 
 /**
  * Sends one attachment. A picture needs its message id back; a file may come back without one (it was taken, so it
- * must not be sent again: docs/lark-attachments.md "A successful file receipt may leave out message_id").
+ * must not be sent again: docs/extensions/lark-attachments.md "A successful file receipt may leave out message_id").
  */
 export async function sendLarkAttachment(feed: string, a: LarkAttachment, clientID: string, route: LarkAttachmentRoute = {}, ol?: number,
   manager?: string): Promise<{ message_id?: string }> {
@@ -164,7 +164,7 @@ export async function sendLarkAttachment(feed: string, a: LarkAttachment, client
 }
 
 /** A file whose upload broke off halfway (timeout, dropped connection, the hub's 5xx, an unreadable receipt) may
- * already be in the chat: it is not sent again on its own (docs/lark-attachments.md). */
+ * already be in the chat: it is not sent again on its own (docs/extensions/lark-attachments.md). */
 export function fileOutcomeUnknown(e: unknown): boolean {
   if (e instanceof LarkReceiptMissing) return true;
   const status = (e as { status?: unknown })?.status;

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// The subscription windows' pure part (docs/usage-windows.md), the same cases as the web's lib/usage-windows.test.ts.
+/// The subscription windows' pure part (docs/server/usage-windows.md), the same cases as the web's lib/usage-windows.test.ts.
 struct UsageWindowsTests {
     let now = Date(timeIntervalSince1970: 1_793_000_000)
 

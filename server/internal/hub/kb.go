@@ -7,7 +7,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
-// The knowledge base is the assistant's (docs/knowledge.md"Responsibilities"): its engine, its loop, its files and its
+// The knowledge base is the assistant's (docs/assistant/knowledge.md"Responsibilities"): its engine, its loop, its files and its
 // index rows, and its kb section, in the manager's manager.json. Its sources, the connectors' posts and the kicks are
 // the manager's (internal/extmgr). What is left here is kbAsk, through which the hub's own features read the
 // knowledge base (kbProjectNames); with the knowledge base off the manager answers none.

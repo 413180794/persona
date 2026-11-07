@@ -1,4 +1,4 @@
-// Settings › Connectors (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
+// Settings › Connectors (iOS ConnectorsSection, docs/extensions/mail.md): where Persona's data comes from — the mail accounts (list, add
 // one with a password or app password, delete), Lark (the Lark gateway through the hub, feature `lark`: read-only status), and the hub's other connectors
 // (GitHub, Telegram, an extension's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
 // "This iPhone" (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
@@ -36,7 +36,7 @@ export function Connectors({ open, onOpen, onChannel }: { open: string | null; o
   // Lark (the Lark gateway through /api/v1/lark/…) only on a hub that has it (feature `lark`); "Lark bot" is the hub's own.
   const lark = useLarkOn();
   // "feishu-bot" is not a hub connector: FeishuBot reads it and opens its own dialog.
-  // `<id>@<manager>`: another manager's connector, opened from its extension's page (docs/managers.md "Clients")
+  // `<id>@<manager>`: another manager's connector, opened from its extension's page (docs/assistant/managers.md "Clients")
   if (open && open !== "feishu-bot") {
     const { id, manager } = parseOwnedSub(open);
     return <ConnectorDetail key={open} id={id} manager={manager} onBack={() => onOpen(null)} onChannel={onChannel} />;
@@ -455,7 +455,7 @@ function Feishu() {
   const [loading, setLoading] = useState(true);
   const load = () => {
     setLoading(true);
-    // the Feishu accounts on the hub's Lark gateway (docs/feishu.md "Multiple accounts"); a hub from before them has none to list
+    // the Feishu accounts on the hub's Lark gateway (docs/extensions/feishu.md "Multiple accounts"); a hub from before them has none to list
     api<LarkAccountList>("/lark/accounts").then(setAccounts).catch(() => setAccounts(null));
     api<LarkStatus>("/lark/status")
       .then((r) => (setSt(r), setError("")))

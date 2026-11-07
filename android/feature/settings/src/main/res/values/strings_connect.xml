@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings: connecting to the hub — pairing, hubs, hub version, candidate addresses, engine (docs/i18n.md).
+<!-- Settings: connecting to the hub — pairing, hubs, hub version, candidate addresses, engine (docs/protocol/i18n.md).
      English is the fallback; values-zh and values-ja hold the same keys. -->
 <resources>
     <!-- Pairing -->

@@ -9,7 +9,7 @@ import persona.core.navigation.InboxItemUiRoute
 import org.junit.Assert.*
 import org.junit.Test
 
-// docs/extensions.md "UI slots" inbox_item (#1683): an item whose connector's extension draws its page opens that page; every
+// docs/extensions/extensions.md "UI slots" inbox_item (#1683): an item whose connector's extension draws its page opens that page; every
 // other item, and every item on a hub that lists no such page, opens its own page as before.
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])

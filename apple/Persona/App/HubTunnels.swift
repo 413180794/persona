@@ -1,7 +1,7 @@
 import Foundation
 
 /// A way through to a paired hub when its own addresses do not answer: its SSH tunnel
-/// (docs/network.md「经 SSH 隧道连 hub」) or, in builds that have the in-app tunnel core for a hub whose extension
+/// (docs/operations/network.md「经 SSH 隧道连 hub」) or, in builds that have the in-app tunnel core for a hub whose extension
 /// contributes one, its in-app tunnel (「经 App 内隧道连 hub」). A hub may have both; each is tried in turn, the SSH
 /// one first.
 struct HubTunnel: Hashable {
@@ -57,7 +57,7 @@ struct HubTunnel: Hashable {
 }
 
 extension AppModel {
-    // MARK: Tunnels to the hub (docs/network.md「经 SSH 隧道连 hub」「经 App 内隧道连 hub」)
+    // MARK: Tunnels to the hub (docs/operations/network.md「经 SSH 隧道连 hub」「经 App 内隧道连 hub」)
 
     /// The group's tunnels ready to use, each paired hub's SSH one before its in-app one.
     func hubTunnels(_ group: String) -> [HubTunnel] {

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Inbox phase 1 (docs/inbox.md): the new item fields as the hub sends them (the phase's fixture, every
+/// Inbox phase 1 (docs/assistant/inbox.md): the new item fields as the hub sends them (the phase's fixture, every
 /// state), the sections they put an item in, what a row says, where a chain entry goes, and the suggestion's buttons
 /// against a hub in memory.
 @MainActor

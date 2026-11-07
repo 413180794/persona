@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// Settings › Sent as You (#5278, docs/connectors.md "Sent as the user"): what Persona wrote in the user's name through the
+// Settings › Sent as You (#5278, docs/extensions/connectors.md "Sent as the user"): what Persona wrote in the user's name through the
 // connectors, newest first, from GET /api/v1/connectors/sent. The words and rules follow the web page (web/src/lib/sent.ts,
 // views/settings/SentSettings.tsx): where a send went, how the gate let it through, who asked, paging and refreshing the
 // list, the connector chips, and the hub's refusals in plain words. The page is SentView.swift.
@@ -92,7 +92,7 @@ nonisolated struct SentItem: Decodable, Hashable, Identifiable, Sendable {
     var at: Date?
     var connector = ""
     var action = ""
-    /// Where it went; the fields depend on the connector (docs/connectors.md "Sent as the user").
+    /// Where it went; the fields depend on the connector (docs/extensions/connectors.md "Sent as the user").
     var target: [String: JSONValue] = [:]
     /// What it said, at most `SentText.textMost` characters.
     var text = ""

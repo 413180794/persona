@@ -1,6 +1,6 @@
 // One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, "Ask Persona"; then the places a
 // search found, the Agents on a project, the timeline, the profile, Moments, related entries by kind, code directories,
-// a chat's last 7 days and the folder (docs/ios.md "Information architecture", knowledge base). "Tag" in the header.
+// a chat's last 7 days and the folder (docs/apple/ios.md "Information architecture", knowledge base). "Tag" in the header.
 import { useEffect, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import { ago, sessionPreview, sessionTitle, shortPath, stateOf, tabLabel } from "../../lib/format";

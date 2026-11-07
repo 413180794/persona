@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// Machines › Add a computer (docs/onboarding.md 4.2 "Your computer <-> hub", after the web's AddComputer): pick the system, name it, and the
+// Machines › Add a computer (docs/assistant/onboarding.md 4.2 "Your computer <-> hub", after the web's AddComputer): pick the system, name it, and the
 // hub adds the computer and gives its Persona Link a pairing link (POST /api/v1/auth/pair-codes {"add"}, feature
 // machines_add). The page then says how to use the link on that system, waits for the computer to come online and asks,
 // on the same screen, whether it is yours (…/confirm | …/reject). Opened to confirm one, it starts at that question.
@@ -120,19 +120,19 @@ internal fun addErrorText(error: Throwable): UiText = when (hubCodedFailure(erro
 /** The line that pairs an installed persona-link; the hub's own when it gave one. */
 internal fun pairCommand(code: ComputerCode): String = code.command?.takeIf { it.isNotBlank() } ?: "persona-link pair ${quoted(code.pairUrl)}"
 
-/** What PowerShell runs in the folder with persona-link.exe and personad.exe (docs/windows.md). */
+/** What PowerShell runs in the folder with persona-link.exe and personad.exe (docs/operations/windows.md). */
 internal fun windowsCommand(pairUrl: String): String = ".\\persona-link.exe install --personad .\\personad.exe --pair ${quoted(pairUrl)}"
 
 // A pairing link in single quotes for sh and PowerShell; it has none of its own (it is URL-encoded).
 private fun quoted(s: String) = "'${s.replace("'", "%27")}'"
 
-/** How to build and install Persona Link on a Mac until there is a download (docs/onboarding.md decision 1). */
-internal const val PersonaLinkInstallDoc = "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md"
+/** How to build and install Persona Link on a Mac until there is a download (docs/assistant/onboarding.md decision 1). */
+internal const val PersonaLinkInstallDoc = "https://github.com/nwverse/persona/blob/master/docs/operations/persona-link-install.md"
 
-/** How to install persona-link on a headless Linux when the hub has no install script (docs/link.md). */
-internal const val LinkLinuxDoc = "https://github.com/nwverse/persona/blob/master/docs/link.md#linuxheadless"
+/** How to install persona-link on a headless Linux when the hub has no install script (docs/operations/link.md). */
+internal const val LinkLinuxDoc = "https://github.com/nwverse/persona/blob/master/docs/operations/link.md#linuxheadless"
 
-/** A computer's code lasts ten minutes, like the app's (docs/protocol.md "Computer pairing code"). */
+/** A computer's code lasts ten minutes, like the app's (docs/protocol/protocol.md "Computer pairing code"). */
 internal const val ComputerCodeLifeMs = 10 * 60_000L
 
 /**
@@ -142,7 +142,7 @@ internal const val ComputerCodeLifeMs = 10 * 60_000L
 internal fun localExpiry(expiresAt: Long, now: Long): Long =
     if (expiresAt <= now || expiresAt - now > ComputerCodeLifeMs) now + ComputerCodeLifeMs else expiresAt
 
-/** The hub caps a computer's name at 40 characters (docs/protocol.md "Computer pairing code"). */
+/** The hub caps a computer's name at 40 characters (docs/protocol/protocol.md "Computer pairing code"). */
 internal const val ComputerNameMax = 40
 
 internal class AddComputerModel(

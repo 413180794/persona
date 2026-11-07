@@ -6,7 +6,7 @@ import (
 )
 
 // mouseWire is what Mouse writes to herdr's control session, one JSON line per event (the shapes were measured against
-// herdr 0.9.5: docs/terminal.md "Mouse").
+// herdr 0.9.5: docs/integrations/terminal.md "Mouse").
 func mouseWire(t *testing.T, e MouseEvent) (string, error) {
 	t.Helper()
 	s := &Control{writes: make(chan []byte, 4), done: make(chan struct{})}

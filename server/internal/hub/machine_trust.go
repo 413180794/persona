@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A computer the user has not said is theirs yet (docs/onboarding.md 4.2 "Your computer ↔ hub", 5.3). Persona-managed keys go
+// A computer the user has not said is theirs yet (docs/assistant/onboarding.md 4.2 "Your computer ↔ hub", 5.3). Persona-managed keys go
 // to every node and the assistant falls back to the first machine, so a forwarded pairing link must not be enough to
 // get them: a computer added from a signed-in device is pending until the user confirms it, and while it is
 //   - it gets no Persona-managed keys and nothing it asks of the assistant is answered (assistant/machine_trust.go);
@@ -372,7 +372,7 @@ func (h *Hub) machineTrustRoutes(api *http.ServeMux) {
 
 // ---- what the apps see of a machine ----
 
-// Machine error codes (docs/onboarding.md 5.3): what the error is about, for a client's own words.
+// Machine error codes (docs/assistant/onboarding.md 5.3): what the error is about, for a client's own words.
 const (
 	errCodeNodeServiceDown = "node_service_down" // the computer's link is up, its resident node is not
 	errCodeLinkOffline     = "link_offline"      // it was connected and is not now

@@ -4,11 +4,11 @@ import Observation
 import UIKit
 #endif
 
-// Whether a conversation's page offers Voice Chat (docs/voice.md 6.1「显示条件」, 3.1「版本协商」), and the voice
+// Whether a conversation's page offers Voice Chat (docs/assistant/voice.md 6.1「显示条件」, 3.1「版本协商」), and the voice
 // extension's own read-only endpoints the app asks: /info, /models, /voices. Pure apart from the client calls; the Mac
 // compiles it and is told "not here"; Apple Vision Pro has the phone's call audio.
 
-/// The extension's `GET /info` (docs/voice.md 5.6): which protocol it speaks and what it still needs.
+/// The extension's `GET /info` (docs/assistant/voice.md 5.6): which protocol it speaks and what it still needs.
 nonisolated struct VoiceInfo: Decodable, Equatable, Sendable {
     var protocolVersion: Int
     var features: [String]
@@ -94,7 +94,7 @@ nonisolated enum VoiceAvailability: Equatable, Sendable {
         extensions.first { $0.kind == "voice" && $0.status == "running" && validID($0.id) }
     }
 
-    /// Extension ids are a-z, 0-9, `_` and `-` (docs/extensions.md): anything else must not become a path.
+    /// Extension ids are a-z, 0-9, `_` and `-` (docs/extensions/extensions.md): anything else must not become a path.
     static func validID(_ id: String) -> Bool {
         !id.isEmpty && id.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "_" || $0 == "-" }
     }
@@ -176,13 +176,13 @@ nonisolated struct VoiceVoices: Decodable, Equatable, Sendable {
     }
 }
 
-/// What the hub's model configuration says for the extension (the use `plugin.<id>`, docs/voice.md 5.7).
+/// What the hub's model configuration says for the extension (the use `plugin.<id>`, docs/assistant/voice.md 5.7).
 nonisolated struct VoiceModelChoice: Equatable, Sendable {
     var model: String?
     /// The use's status when it is not usable as it stands; nil when it is.
     var status: String?
 
-    /// The hub's status word for a usable model nobody has tried yet (docs/model-config.md); not a problem. Matched
+    /// The hub's status word for a usable model nobody has tried yet (docs/assistant/model-config.md); not a problem. Matched
     /// against what the hub sends, so it is never translated.
     static let unverified = "未验证" // i18n-ignore
 
@@ -253,7 +253,7 @@ extension APIClient {
     }
 }
 
-/// What each group's hub said about voice, kept 60 seconds (docs/voice.md 6.3「/info 按组缓存 60 秒」): its extensions and
+/// What each group's hub said about voice, kept 60 seconds (docs/assistant/voice.md 6.3「/info 按组缓存 60 秒」): its extensions and
 /// the voice extension's /info. Asked again after that and back in the foreground (the last answer stays until the new
 /// one comes, so the entry does not blink), and forgotten when a setting changed (the settings page calls `forget`).
 @MainActor @Observable final class VoiceSupport {

@@ -148,7 +148,7 @@ internal fun toolPath(item: Item): String? = (item.toolInput as? JsonObject)?.le
 
 internal fun toolDiff(item: Item): ToolDiff? {
     val input = item.toolInput as? JsonObject ?: return null
-    // Codex's file changes come as an Edit with the patch (docs/codex.md): no old / new strings.
+    // Codex's file changes come as an Edit with the patch (docs/integrations/codex.md): no old / new strings.
     if (item.toolName == "Edit") input.string("diff")?.let { return patchDiff(it, input.string("change")) }
     val edits = when (item.toolName) {
         "Edit" -> listOf(input)

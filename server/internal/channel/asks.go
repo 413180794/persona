@@ -17,7 +17,7 @@ import (
 // A channel without buttons (asks: text) gets what an agent asks — a question, a permission, a plan, a terminal
 // dialog — as text, and the owner's next message answers it: a number, "allow" / "deny", "approve" (in Chinese), or words. The latest one
 // asked is the one a reply answers; one answered somewhere else (the app) is let go, and the reply is then an
-// ordinary message (docs/channels.md "Questions and approvals").
+// ordinary message (docs/extensions/channels.md "Questions and approvals").
 
 // Ask is something asked in a channel as text, waiting for the owner's reply.
 type Ask struct {
@@ -142,7 +142,7 @@ func is(text string, words []string) bool {
 
 // IsApprovalWord says whether text is only a word that approves or refuses a card (yes, no, the plan's approve), in
 // any of the three languages: a voice conversation does not send it on while its conversation waits on such a card,
-// since a card is answered on the screen (docs/voice.md "Sending, the gate and 409").
+// since a card is answered on the screen (docs/assistant/voice.md "Sending, the gate and 409").
 func IsApprovalWord(text string) bool {
 	return is(text, yes) || is(text, no) || is(text, planApprove)
 }

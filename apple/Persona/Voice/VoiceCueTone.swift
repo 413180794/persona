@@ -1,6 +1,6 @@
 import Foundation
 
-/// The call's cues as sound (docs/voice.md 6.6): `Theme.VoiceCue`'s notes as PCM16 at the rate the voice plays at, for
+/// The call's cues as sound (docs/assistant/voice.md 6.6): `Theme.VoiceCue`'s notes as PCM16 at the rate the voice plays at, for
 /// `VoiceConversation.play(_:)`. Sine notes with ramped ends (no click), the quiet between them included.
 nonisolated enum VoiceCueTone {
     static func pcm(_ cue: Theme.VoiceCue, rate: Int) -> Data {

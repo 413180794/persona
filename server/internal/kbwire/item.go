@@ -2,7 +2,7 @@ package kbwire
 
 import "time"
 
-// Item is a document, meeting or calendar event as a connector hands it over (connectors.items, docs/connectors.md):
+// Item is a document, meeting or calendar event as a connector hands it over (connectors.items, docs/extensions/connectors.md):
 // the same JSON as the knowledge base's own item (kb.Item), which adds what only the store keeps.
 type Item struct {
 	Kind     string    `json:"kind"` // docs | meetings | events
@@ -29,7 +29,7 @@ type Tagging struct {
 	// LockedFields names update fields that automatic writes must preserve.
 	LockedFields []string `json:"locked_fields,omitempty"`
 	// Provenance says which extension holds a locked field and what it based the value on; a locked field without
-	// an entry is the user's (docs/knowledge.md "Extensions organizing the knowledge base").
+	// an entry is the user's (docs/assistant/knowledge.md "Extensions organizing the knowledge base").
 	Provenance map[string]Provenance `json:"provenance,omitempty"`
 }
 

@@ -43,7 +43,7 @@ import java.time.Instant
  * Settings › Hub version drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark: the
  * settings row, a newer release that auto-update holds back, an update waiting for two busy agents, a Docker hub with a
  * pinned image, and a hub that is up to date with its history. Each is checked to draw something and written as a PNG to
- * `build/hub-update-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Hub version").
+ * `build/hub-update-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android/android.md "Hub version").
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// How a supervised task stands (#3124, docs/unified-entry.md ("Supervision")) and what its agent reported (#5112): a chip and
+// How a supervised task stands (#3124, docs/assistant/unified-entry.md ("Supervision")) and what its agent reported (#5112): a chip and
 // the count of criteria met on its card and its rows, the checklist on its page, a line in the conversation for each
 // review and each report. The words and the logic are in Shared/Supervision.swift; web: views/assistant/Supervision.tsx.
 

@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Ownership (#2576, docs/engines.md "Host sets"): with several hosts enabled, the same Claude session can be live in
+// Ownership (#2576, docs/integrations/engines.md "Host sets"): with several hosts enabled, the same Claude session can be live in
 // two of them at once — resumed in herdr while its Orca pane still runs it, say. A session is listed once, in the host
 // that owns it; every send, key and interrupt goes there (they route by the listed pane), its state comes from there,
 // and its row names the other hosts it is also open in (proto.Session.AlsoOpenIn) so the apps can warn of the

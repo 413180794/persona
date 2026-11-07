@@ -1,4 +1,4 @@
-// A session's items: the newest page over HTTP, then live over the WebSocket (docs/protocol.md "Continuity of items").
+// A session's items: the newest page over HTTP, then live over the WebSocket (docs/protocol/protocol.md "Continuity of items").
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errorText, isAbort, sessionPath } from "../../lib/api";
 import { sessionLoadError } from "../../lib/session-link";

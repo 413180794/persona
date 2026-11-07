@@ -1,4 +1,4 @@
-// Settings › Extensions › Channels (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
+// Settings › Extensions › Channels (docs/extensions/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
 // Feishu, voice, and the chat app bots extensions contribute — as GET /api/v1/channels lists them; one channel's page
 // (its switch, binding a step at a time, where its messages go, what it does, a test message), and the source mark on
 // a message that came from one (its client_msg_id is `<channel>-<message id>`).
@@ -79,7 +79,7 @@ export type ChannelPrompt = ConnectorPrompt;
 
 // ── the hub's interface ──────────────────────────────────
 
-/** `manager`: whose channels (another manager's, docs/managers.md "Clients"); none: the default's. */
+/** `manager`: whose channels (another manager's, docs/assistant/managers.md "Clients"); none: the default's. */
 export async function listChannels(manager?: string): Promise<Channel[]> {
   const r = await api<{ channels?: Channel[] }>("/channels", { headers: itemHeaders(manager) });
   return r.channels ?? [];

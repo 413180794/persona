@@ -292,7 +292,7 @@ export type NavPage = { k: string; to: Route; icon: IconName; label: string; sho
 export function useNavPages() {
   const phase = connPhase(useStore((s) => s.conn), useStore((s) => s.link));
   const machines = useStore((s) => s.machines);
-  // "Terminal" (docs/terminal.md "Standalone terminals") is there where the hub can list panes
+  // "Terminal" (docs/integrations/terminal.md "Standalone terminals") is there where the hub can list panes
   const terminalPanes = useStore((s) => s.features.includes("terminal_panes"));
   const assistant = useStore((s) => s.assistant);
   const todos = useStore((s) => s.todos);
@@ -325,7 +325,7 @@ export function useNavPages() {
     settings: { k: "settings", to: { name: "settings" }, icon: "gear", label: t("sidebar.nav_settings") },
   };
   const all = NAV_PAGES.flatMap((k): NavPage[] => [
-    // the extensions' pages (docs/extensions.md "UI slots" nav_page): one entry each, right before "Settings"
+    // the extensions' pages (docs/extensions/extensions.md "UI slots" nav_page): one entry each, right before "Settings"
     ...(k === "settings"
       ? extensionPages.map((u) => {
           const key = extensionNavKey(u.extension, u.id);
@@ -335,7 +335,7 @@ export function useNavPages() {
     ...(page[k] ? [page[k]] : []),
   ]);
 
-  // as arranged in Settings › General › Sidebar pages: the list, and the pages that wait under More (docs/web.md "The sidebar's pages")
+  // as arranged in Settings › General › Sidebar pages: the list, and the pages that wait under More (docs/web/web.md "The sidebar's pages")
   const { shown: pages, more } = arrangePages(all, useSidebarPrefs());
 
   return { phase, online, total: machines.length, main, pages, more, all };
@@ -435,7 +435,7 @@ export function AgentsList({ route, onNewAgent }: { route: Route; onNewAgent: ()
   const activeKey = useActiveKey(route);
   const { nav, reg, hover, highlight } = useGlide(activeKey);
   const go = useGo();
-  // no computer and nothing to list (docs/onboarding.md 4.5): the machines page's empty state, not a bare title
+  // no computer and nothing to list (docs/assistant/onboarding.md 4.5): the machines page's empty state, not a bare title
   const bare = useStore((s) => s.loaded && s.machines.length === 0 && Object.keys(s.launches).length === 0);
   const none = useAgentSessions().length === 0 && bare;
   const adding = useAddComputer();
@@ -1349,7 +1349,7 @@ function SpaceMarks({ pinned, muted }: { pinned: boolean; muted: boolean }) {
   );
 }
 
-// The todo a space hangs on (docs/todos.md), when the hub supports both: a tag that opens it.
+// The todo a space hangs on (docs/assistant/todos.md), when the hub supports both: a tag that opens it.
 function SpaceTodoTag({ sp, onNavigate }: { sp: Space; onNavigate?: () => void }) {
   const todos = useStore((st) => st.todos);
   const todosSupported = useStore((st) => st.todosSupported);

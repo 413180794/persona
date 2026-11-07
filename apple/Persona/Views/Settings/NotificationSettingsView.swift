@@ -73,7 +73,7 @@ struct NotificationSettingsView: View {
                 Text(doneFooter)
             }
 
-            // Live Activities (Lock Screen and Dynamic Island) are an iPhone's: a Mac has neither (docs/mac.md).
+            // Live Activities (Lock Screen and Dynamic Island) are an iPhone's: a Mac has neither (docs/apple/mac.md).
             #if os(iOS)
             Section {
                 Toggle(isOn: binding(\.liveActivity)) {

@@ -1,4 +1,4 @@
-// Interconnected hubs (docs/plan-hub-mesh.md 2.6): the hub serving this page lists every computer of its group as
+// Interconnected hubs (docs/archive/operations/plan-hub-mesh.md 2.6): the hub serving this page lists every computer of its group as
 // its own. Which hub a computer belongs to is only worth saying when the list spans more than one hub: with a single
 // hub_id (or none, an older hub) the page looks exactly as before.
 import { t } from "../i18n";

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "messaging.schema.json",
   "title": "Messaging sources",
-  "description": "What a messaging source answers the apps with (docs/extension-messaging.md, #2138): conversations, messages and their parts, sends, documents and posts. The apps draw them with their own messaging components; the hub checks every answer against these before passing it on.",
+  "description": "What a messaging source answers the apps with (docs/extensions/extension-messaging.md, #2138): conversations, messages and their parts, sends, documents and posts. The apps draw them with their own messaging components; the hub checks every answer against these before passing it on.",
   "$defs": {
     "MessagingCapability": {
       "description": "What a source supports (docs \"3. Capabilities\"). The apps show only what is supported; an unknown one is ignored.",

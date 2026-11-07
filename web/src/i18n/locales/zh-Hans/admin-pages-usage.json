@@ -47,7 +47,7 @@
   "url": "地址",
   "url_invalid": "要写成 http(s)://主机[:端口]，不能带用户名和密码",
   "url_hint_relay": "网关的根地址，不带 /api/admin。",
-  "url_hint_generic": "hub 用 GET 读这个完整地址，要回一个带 accounts 列表的 JSON（格式见 docs/usage-windows.md）。",
+  "url_hint_generic": "hub 用 GET 读这个完整地址，要回一个带 accounts 列表的 JSON（格式见 docs/server/usage-windows.md）。",
   "key": "Key",
   "key_saved": "已保存，不显示；留空则不改",
   "key_retype": "地址或类型变了：要重新填 Key，已保存的 Key 不会发到新地址。",

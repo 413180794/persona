@@ -8,7 +8,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The lines Claude Code 2.1 writes for /goal (docs/agent-goal.md), in the order it writes them.
+// The lines Claude Code 2.1 writes for /goal (docs/integrations/agent-goal.md), in the order it writes them.
 func TestClaudeGoalLifecycle(t *testing.T) {
 	const cond = "finish the plan in docs/plan.md and open a PR"
 	var m Meta

@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-// Installing manifest.tools (docs/extensions.md "Command-line programs (tools)"). The layout, under the registry's directory:
+// Installing manifest.tools (docs/extensions/extensions.md "Command-line programs (tools)"). The layout, under the registry's directory:
 //
 //	tools/<id>/<name>-<spec hash>/pkg/…        what was downloaded and unpacked
 //	tools/<id>/<name>-<spec hash>/bin/<name>   the program (a link into pkg)

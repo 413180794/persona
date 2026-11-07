@@ -73,7 +73,7 @@ internal val LocalChatMarkdownCache = staticCompositionLocalOf<ChatMarkdownCache
 
 /**
  * Markdown in a conversation. A message's words pass [selectable] false: a long press on a message opens its menu (whose
- * "Select" shows the text to select from), and a SelectionContainer would take the press (docs/android.md, the old App's
+ * "Select" shows the text to select from), and a SelectionContainer would take the press (docs/android/android.md, the old App's
  * lessons). Text without that menu (thinking, a plan, a recap) stays selectable.
  */
 @Composable
@@ -85,7 +85,7 @@ internal fun ChatMarkdown(text: String, id: String = text,
 }
 
 /**
- * [text] with its card blocks (docs/assistant-views.md "Card identity", the hub's fence rules): the Markdown around them as
+ * [text] with its card blocks (docs/assistant/assistant-views.md "Card identity", the hub's fence rules): the Markdown around them as
  * Markdown, each ```persona-view as a card under its key ([viewKeys] maps its number in the text to `<item id>/<n>`;
  * none: a local one, which only draws), each ```persona-card as it always was. A card shown inside another code block
  * is an example and stays code.
@@ -366,7 +366,7 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                     // A truncated output opens in full from "Raw output" below. An edit's own result only says it worked; an
                     // answered ask_user's result repeats the ticked choices above in the model's words (iOS ToolViews).
                     call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed) && (!PersonaTools.isAskUser(call.name) || call.failed)) CodeText(result.text.orEmpty(), stringResource(R.string.chat_content_output)) }
-                    // A dev server saying where it listens (docs/ports.md).
+                    // A dev server saying where it listens (docs/operations/ports.md).
                     if (call.name == "Bash") call.result?.text?.let { PortBadges(it) }
                     call.images.forEach { ChatPicture(session, it.item, loader) }
                     ToolReaderActions(call.use.item.toolInput?.toString(), call.result?.text,

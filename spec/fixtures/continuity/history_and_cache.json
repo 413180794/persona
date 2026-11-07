@@ -7,7 +7,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: anotherHistoryStartsOver",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -401,7 +401,7 @@
       "description": "新历史从零接续时清空旧内容后直接接收这一批。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -482,7 +482,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: aLatestPageThatDoesNotReachTheCacheReplacesIt",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -813,7 +813,7 @@
       "description": "最新页从 covered 下一行开始时保留现有内容。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -933,7 +933,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: theLatestPageKeepsPushesThatOvertookIt",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1029,7 +1029,7 @@
       "description": "重新取页时不保留旧历史中位置更大的推送。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1110,7 +1110,7 @@
       "description": "重连使用连续位置而非最后一条 item 的位置。",
       "source": [
         "ios/Persona/App/AppModel.swift: subscribeMessage, didConnect",
-        "docs/protocol.md：items 的连续性"
+        "docs/protocol/protocol.md：items 的连续性"
       ],
       "input": {
         "initial": {

@@ -23,7 +23,7 @@ import (
 	"github.com/nwverse/persona/server/internal/runtimepkg"
 )
 
-// The Paseo engine (docs/paseo.md). Paseo is a daemon running coding agents through their SDKs, with no terminal:
+// The Paseo engine (docs/integrations/paseo.md). Paseo is a daemon running coding agents through their SDKs, with no terminal:
 // the node reaches it through the Paseo bridge (integrations/paseo), a runtime (runtimes.go) that speaks Paseo's
 // WebSocket protocol on one side and the runtime protocol on the other. The node carries the bridge (runtimepkg) and
 // runs it itself while the machine's engine is Paseo — nothing to install: it writes the bridge out beside the

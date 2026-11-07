@@ -1,7 +1,7 @@
 // Package connector is how a source of the user's information (GitHub, iMessage, later Feishu and mail) plugs into
 // the hub: one connector per source, and each pipe the hub has — the assistant's tools, writes behind a gate, the
 // settings page's status, realtime kicks — picks up what the connector implements, so adding a source does not
-// touch those pipes (docs/connectors.md).
+// touch those pipes (docs/extensions/connectors.md).
 //
 // A connector implements Connector, whose Manifest declares its capabilities; the hub finds each declared one's
 // interface with As. Runner, Events and Machines are how it runs, found by type assertion.
@@ -61,7 +61,7 @@ type Accounts interface {
 }
 
 // ReadTools are tools that only read, offered to the assistant without asking the user (like lark_*). Every name
-// starts with "<ID>_"; descriptions and schemas of built-in connectors are in prompts/mcp/<id>/ (docs/prompts.md).
+// starts with "<ID>_"; descriptions and schemas of built-in connectors are in prompts/mcp/<id>/ (docs/assistant/prompts.md).
 type ReadTools interface {
 	Tools() []proto.Tool
 	Call(ctx context.Context, name string, args json.RawMessage) (string, error)
@@ -95,7 +95,7 @@ type DoResult struct {
 }
 
 // RefActions is an Actions that can also say which message a write made (a comment's id, a mail's Message-ID), so that
-// the sent-as-user ledger can name it (docs/connectors.md "Sent as the user"). It is not a capability: nothing is
+// the sent-as-user ledger can name it (docs/extensions/connectors.md "Sent as the user"). It is not a capability: nothing is
 // declared and Check does not look for it, the hub finds it by type assertion (Write). A connector without it keeps
 // working, its writes just have no message ref. DoRef is Do with that id; Do's text is DoRef's.
 type RefActions interface {

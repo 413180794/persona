@@ -1,4 +1,4 @@
-// Mermaid diagrams in Markdown (docs/web.md "Markdown", #1376): Mermaid (MIT) loads the first time a diagram is
+// Mermaid diagrams in Markdown (docs/web/web.md "Markdown", #1376): Mermaid (MIT) loads the first time a diagram is
 // drawn, in strict mode (its own DOMPurify pass: no scripts, no click callbacks, no HTML in labels that runs). Renders
 // go one at a time (Mermaid keeps global state while it draws), and each diagram is kept per theme, so a conversation
 // re-rendering or scrolling back never draws it twice.

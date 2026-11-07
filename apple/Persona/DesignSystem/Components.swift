@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-/// Agent state dot (docs/agent-states.md): needs you breathes — the one dot that moves, and not with Reduce Motion;
+/// Agent state dot (docs/protocol/agent-states.md): needs you breathes — the one dot that moves, and not with Reduce Motion;
 /// working has a still ring around it (its spinner is in the work and tool rows); finished-unseen solid green, seen
 /// muted gray.
 struct StatusDot: View {

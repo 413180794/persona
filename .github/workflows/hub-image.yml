@@ -1,4 +1,4 @@
-# The hub's container image (docs/docker.md, Dockerfile): linux/amd64 + linux/arm64 to ghcr.io/<owner>/<repo>.
+# The hub's container image (docs/operations/docker.md, Dockerfile): linux/amd64 + linux/arm64 to ghcr.io/<owner>/<repo>.
 #   a tag v*          -> :<version> (v stripped), and :latest unless it is a pre-release (v1.3.0-rc1)
 #   run by hand       -> :edge and :sha-<commit>
 #   a pull request    -> built and smoke-tested with compose, not pushed
@@ -103,7 +103,7 @@ jobs:
           docker run --rm persona-hub:ci version | grep -qx '${{ steps.version.outputs.version }}'
           cd "$PERSONA_CI_COMPOSE_DIR"
           smoke_url="http://127.0.0.1:${PERSONA_CI_PORT}"
-          # No PERSONA_DB_PASSWORD: the first start makes one up (deploy/docker/compose.yaml, docs/docker.md).
+          # No PERSONA_DB_PASSWORD: the first start makes one up (deploy/docker/compose.yaml, docs/operations/docker.md).
           printf 'PERSONA_IMAGE=persona-hub:ci\nPERSONA_PORT=127.0.0.1:%s\nPERSONA_TLS_PORT=127.0.0.1:%s\nPERSONA_PUBLIC_URL=http://127.0.0.1:%s\nPUID=%s\nPGID=%s\n' \
             "$PERSONA_CI_PORT" "$PERSONA_CI_TLS_PORT" "$PERSONA_CI_PORT" "$(id -u)" "$(id -g)" > .env
           docker compose up -d
@@ -123,7 +123,7 @@ jobs:
           curl -fsSk "https://127.0.0.1:${PERSONA_CI_TLS_PORT}/api/v1/health" >/dev/null
           docker compose exec -T --user 0 hub test -s /home/persona/.persona/docker/db-password
           docker compose exec -T --user 0 hub grep -q '"first_setup": "code"' /home/persona/.persona/hub.json
-          # The admin UI (docs/admin.md): there inside the container (loopback); from the runner through the port
+          # The admin UI (docs/operations/admin.md): there inside the container (loopback); from the runner through the port
           # mapping the container sees the bridge's gateway, which is never LAN, so it is not there.
           docker compose exec -T hub wget -qO- http://127.0.0.1:18660/admin | grep -q 'Persona 管理'
           docker compose exec -T hub wget -qO- http://127.0.0.1:18660/api/v1/admin/state | grep -q '"password_set":false'

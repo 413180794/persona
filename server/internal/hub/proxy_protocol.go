@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proxyproto"
 )
 
-// ProxyProtocolConfig is security.proxy_protocol (docs/network.md "PROXY protocol"): the hub sits behind a TCP proxy
+// ProxyProtocolConfig is security.proxy_protocol (docs/operations/network.md "PROXY protocol"): the hub sits behind a TCP proxy
 // or port forward that passes each client's address on with the PROXY protocol, so that sourceOf, the admin UI's
 // scope, rate limits and logs see the client rather than the proxy (on the same machine: loopback, trusted with
 // everything). Unset, no header is read anywhere, as before.
@@ -140,6 +140,6 @@ func (h *Hub) proxyReport(peer netip.AddrPort, header proxyproto.Header, err err
 		// Once: the proxy itself got the connection from loopback, e.g. from a tunnel's client on this machine that
 		// does not pass the address on, which leaves public connections as local as without the header.
 		l.loopback = true
-		h.logf("proxy protocol: %s passed on a connection from loopback (%s); if it came from the internet, a proxy or tunnel before it does not pass the client's address on (docs/network.md「PROXY protocol」)", peer.Addr(), header.Source.Addr())
+		h.logf("proxy protocol: %s passed on a connection from loopback (%s); if it came from the internet, a proxy or tunnel before it does not pass the client's address on (docs/operations/network.md「PROXY protocol」)", peer.Addr(), header.Source.Addr())
 	}
 }

@@ -15,7 +15,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
 
-// Inbox phase 1 (docs/inbox.md"Events, handling chains, and suggestions", docs/android.md"Inbox: events, suggestions, and handling chains"): the pure parts of
+// Inbox phase 1 (docs/assistant/inbox.md"Events, handling chains, and suggestions", docs/android/android.md"Inbox: events, suggestions, and handling chains"): the pure parts of
 // how an event reads in the list and on its page. An item from an older hub has no event fields and none of this applies:
 // its row and its page are what they were.
 

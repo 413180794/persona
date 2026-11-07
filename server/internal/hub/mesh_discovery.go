@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/mdns"
 )
 
-// Finding other hubs on the LAN (docs/plan-hub-mesh.md 2.1): every hub with TLS advertises _persona-hub._tcp over
+// Finding other hubs on the LAN (docs/archive/operations/plan-hub-mesh.md 2.1): every hub with TLS advertises _persona-hub._tcp over
 // mDNS, its TXT holding only hub_id, name, TLS port, key pin and version (never a credential), and lists the hubs it
 // hears for the admin page. Nothing is paired by itself: that takes the other hub's code. Docker's bridge network does
 // not pass multicast (network_mode: host does); there the other hub is added by its address.

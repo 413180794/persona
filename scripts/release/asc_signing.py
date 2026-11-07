@@ -9,7 +9,7 @@
   with the team's distribution certificate and installs them where Xcode looks.
 
 The API key's role (App Manager) can't use cloud-managed signing, so release builds sign manually with
-the "Apple Distribution" identity in the login keychain (see docs/release.md).
+the "Apple Distribution" identity in the login keychain (see docs/operations/release.md).
 
   python3 scripts/release/asc_signing.py                 # App Store profiles
   python3 scripts/release/asc_signing.py --dev           # also development profiles for registered devices
@@ -18,7 +18,7 @@ the "Apple Distribution" identity in the login keychain (see docs/release.md).
   python3 scripts/release/asc_signing.py --only <bundle id>  # just that target (the others' profiles stay untouched)
 
 The App Group itself (group.<bundle id>, or config.json app.app_group) can't be made or put on an App ID through the
-API, only on the developer website (docs/release.md "App Group"): each profile is checked for it, and a missing one
+API, only on the developer website (docs/operations/release.md "App Group"): each profile is checked for it, and a missing one
 prints those steps.
 """
 import base64
@@ -36,7 +36,7 @@ import persona_config  # noqa: E402
 APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
 LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / Dynamic Island activity
-NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/push-relay.md)
+NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/operations/push-relay.md)
 SHARE = APP + ".share"  # the share extension sending to Persona's main conversation (#4586)
 # bundle identifier -> (App ID name, profile name, capabilities)
 PROFILES = persona_config.provisioning_profiles(CONFIG)
@@ -47,7 +47,7 @@ TARGETS = {
     NOTIFY: ("Persona Notify", PROFILES[NOTIFY], []),
     SHARE: ("Persona Share", PROFILES[SHARE], []),
 }
-# The App Group the app shares the Live Activity's persona with the widget extension through (docs/live-activity.md).
+# The App Group the app shares the Live Activity's persona with the widget extension through (docs/apple/live-activity.md).
 GROUP = persona_config.app_group(CONFIG)
 PROFILE_DIR = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
 
@@ -90,7 +90,7 @@ def certificate(kind: str) -> str:
     certs = [c for c in get_all("/v1/certificates") if c["attributes"]["certificateType"] in wanted]
     if not certs:
         sys.exit(f"No {'distribution' if kind == 'dist' else 'development'} certificate in the team: create one first "
-                 "(see docs/release.md).")
+                 "(see docs/operations/release.md).")
     return max(certs, key=lambda c: c["attributes"]["expirationDate"])["id"]
 
 
@@ -182,7 +182,7 @@ The API can't make an App Group or put one on an App ID. On developer.apple.com 
   1. Identifiers › + › App Groups: description Persona, identifier {GROUP}.
   2. Identifiers › {APP} › App Groups › Configure (Edit): tick {GROUP}, Continue, Save, Confirm.
   3. The same for {LIVE}.
-Then run this again (docs/release.md「App Group」).""")
+Then run this again (docs/operations/release.md「App Group」).""")
     if not check_only:
         print("\nDone. Release builds sign with these profiles (release.sh generates the export options from the config).")
 

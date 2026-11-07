@@ -5,13 +5,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// The application id is personal (docs/config.md): scripts/android.sh passes it from ~/.config/persona/config.json.
+// The application id is personal (docs/operations/config.md): scripts/android.sh passes it from ~/.config/persona/config.json.
 val appId = providers.gradleProperty("personaApplicationId")
     .getOrElse("com.example.persona")
 // A different label lets two builds sit side by side on one phone (with different application ids).
 val appLabel = providers.gradleProperty("personaAppLabel")
     .getOrElse("Persona")
-// Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (docs/mail.md "Android").
+// Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (docs/extensions/mail.md "Android").
 val googleOAuthScheme = providers.gradleProperty("personaGoogleOAuthScheme")
     .orNull?.takeIf { it.isNotBlank() }
     ?: System.getenv("PERSONA_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
@@ -49,7 +49,7 @@ android {
     lint {
         baseline = file("lint-baseline.xml")
     }
-    // Only the app's languages (docs/i18n.md): a library's French strings would mix into an English screen.
+    // Only the app's languages (docs/protocol/i18n.md): a library's French strings would mix into an English screen.
     androidResources {
         localeFilters += languageTags.map { it.substringBefore('-') }
     }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// What the main conversation still needs (docs/onboarding.md 4.4, 5.1, 5.2): which step the card shows, what the send
+// What the main conversation still needs (docs/assistant/onboarding.md 4.4, 5.1, 5.2): which step the card shows, what the send
 // button says, a refused start's card, a turn's model error that the user must fix.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getState } from "./store";

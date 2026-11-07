@@ -7,11 +7,11 @@ import (
 )
 
 // What a connector's program may ask of the knowledge base, besides handing it conversations (Archive): keep a
-// feed's public posts in its post archive (docs/knowledge.md "External posts"), find which posts' comments to read again,
+// feed's public posts in its post archive (docs/assistant/knowledge.md "External posts"), find which posts' comments to read again,
 // and see the conversations already archived under its names (to go on from where they are). Only for a connector
 // that declares an archive, and only while the user lets it into the knowledge base ("Add to knowledge base").
 
-// Defined in the contract package connectorwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package connectorwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type (
 	ArchivedChat = connectorwire.ArchivedChat
 	PendingPost  = connectorwire.PendingPost

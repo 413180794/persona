@@ -503,7 +503,7 @@ func (l *KeyRotationLock) Release() { l.rel() }
 // AppManager, or a name that starts with it): another manager process. One started before the key rotation may still
 // seal with the old key, so the rotation keeps that key while there is one. Not seen: a process with no connection
 // open at that moment, and one whose database_url sets another application_name (the rotation's grace covers the
-// first; docs/managers.md "Its own secret.key").
+// first; docs/assistant/managers.md "Its own secret.key").
 func (d *DB) OtherManagers(ctx context.Context) (int, error) {
 	var n int
 	err := d.pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()

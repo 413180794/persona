@@ -1,5 +1,5 @@
 // Settings › Claude Code / Codex settings (the node's whitelist of ~/.claude/settings.json and ~/.codex/config.toml keys,
-// iOS ClaudeSettingsView) and Settings › Connectors › Mail's add form (iOS MailAccountForm, docs/mail.md): the pure part.
+// iOS ClaudeSettingsView) and Settings › Connectors › Mail's add form (iOS MailAccountForm, docs/extensions/mail.md): the pure part.
 import { hasKey, t } from "../i18n";
 import type { Machine } from "./types";
 
@@ -139,7 +139,7 @@ export function valueText(v: SettingValue, key?: string): string {
   return key ? optionText(key, v) : v;
 }
 
-// ── Claude Code › blocked config directories (GET /machines/{mid}/claude-dirs, docs/claude-integration.md "Blocking config directories") ──
+// ── Claude Code › blocked config directories (GET /machines/{mid}/claude-dirs, docs/integrations/claude-integration.md "Blocking config directories") ──
 
 /** One config directory of a computer (CLAUDE_CONFIG_DIR), as the hub lists it. */
 export interface ClaudeDir {
@@ -235,7 +235,7 @@ export interface MailForm {
 
 export const EMPTY_MAIL_FORM: MailForm = { kind: "imap", email: "", password: "", imapHost: "", imapPort: "993", smtpHost: "", smtpPort: "465" };
 
-/** POST /api/v1/mail/accounts's body (docs/protocol.md "Mail API"). */
+/** POST /api/v1/mail/accounts's body (docs/protocol/protocol.md "Mail API"). */
 export interface AddMailAccount {
   name: string;
   email: string;
@@ -360,7 +360,7 @@ export function mailProviderBadge(a: MailAccount): string | null {
   return null;
 }
 
-/** GET / PUT /api/v1/mail/oauth/microsoft/config (docs/mail.md "Connecting Outlook"): whether Outlook sign-in can start,
+/** GET / PUT /api/v1/mail/oauth/microsoft/config (docs/extensions/mail.md "Connecting Outlook"): whether Outlook sign-in can start,
  *  with which client ID (not a secret) from where (app | config), and the redirect URI to register in Microsoft Entra. */
 export interface MicrosoftConfig {
   configured: boolean;

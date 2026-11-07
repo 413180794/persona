@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// terminals relays the terminal tab's live streams (docs/terminal.md). The first app to subscribe to a session's
+// terminals relays the terminal tab's live streams (docs/integrations/terminal.md). The first app to subscribe to a session's
 // terminal makes its node stream it (terminal.watch); every frame fans out to the subscribers, and the frames since the
 // latest whole one stay here, so an app that subscribes — or comes back after a dropped connection — starts from a
 // whole frame, or continues after the last frame it has when its epoch is still the stream's. The last one to leave
@@ -375,7 +375,7 @@ func (h *Hub) terminalMouse(c *client, machineID, sessionID string, e termMouse)
 }
 
 // terminalKeepalive renews the node's lease on every terminal an app drives; a node that stops hearing it lets the
-// terminal go (docs/terminal.md).
+// terminal go (docs/integrations/terminal.md).
 func (h *Hub) terminalKeepalive(ctx context.Context) {
 	tick := time.NewTicker(20 * time.Second)
 	defer tick.Stop()

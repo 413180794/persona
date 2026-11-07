@@ -46,7 +46,7 @@ import java.io.File
 /**
  * Settings › Translation drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark: off,
  * on with two chats picked, and the chat picker. Each is checked to draw something and written as a PNG to
- * `build/translation-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Translation"). The interaction tests
+ * `build/translation-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android/android.md "Translation"). The interaction tests
  * drive the page as a user would and check what is kept.
  */
 @RunWith(AndroidJUnit4::class)

@@ -9,7 +9,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-/** Settings › Model configuration over the pairing's connection (docs/model-config.md "API"); 404 and 409 mean different things here. */
+/** Settings › Model configuration over the pairing's connection (docs/assistant/model-config.md "API"); 404 and 409 mean different things here. */
 class HttpModelConfiguration internal constructor(
     private val request: suspend (String, String, RequestBody?, Long?) -> Response,
 ) : ModelConfiguration {

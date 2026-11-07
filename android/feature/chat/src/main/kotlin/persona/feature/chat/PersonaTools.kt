@@ -28,7 +28,7 @@ internal object PersonaTools {
 
     fun isPersona(name: String): Boolean = server(name) == "persona"
 
-    /** ask_user: the assistant's own question tool (docs/assistant.md), which takes AskUserQuestion's questions. */
+    /** ask_user: the assistant's own question tool (docs/assistant/assistant.md), which takes AskUserQuestion's questions. */
     fun isAskUser(name: String): Boolean = isPersona(name) && base(name) == "ask_user"
 
     /** The step's icon for a Persona tool (or a conversation / computer / phone / mail one); null for every other tool. */

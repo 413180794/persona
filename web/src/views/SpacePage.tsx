@@ -1,4 +1,4 @@
-// Space page (`/space/<machine>/<space name>`, docs/web.md "Space page", iOS SpaceView, Android #89): one space of one machine — its
+// Space page (`/space/<machine>/<space name>`, docs/web/web.md "Space page", iOS SpaceView, Android #89): one space of one machine — its
 // running agents (a row opens the chat), the todos it and its agents hang on, and what the space's ⋯ in the sidebar
 // offers (mark all seen, rename, link to a todo, pin, mute, then "New agent" / Git / copy the path). Reached from a space's
 // name on the machine page and from "Open space page" in a space's menu of the Agents list.
@@ -162,7 +162,7 @@ export function SpacePage({ mid, space, onToggleSidebar }: { mid: string; space:
             )}
           </section>
 
-          {/* the todos it hangs on (docs/todos.md): the space's own, then its agents' */}
+          {/* the todos it hangs on (docs/assistant/todos.md): the space's own, then its agents' */}
           {todosSupported !== false && (
             <section>
               <Heading

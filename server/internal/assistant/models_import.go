@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Importing ~/.zshrc aliases as managed providers (#2455, docs/launchers.md): the node's launchers.zshrc reads a
+// Importing ~/.zshrc aliases as managed providers (#2455, docs/integrations/launchers.md): the node's launchers.zshrc reads a
 // machine's `alias x="K=V … claude [args]"` lines with their env (keys included, only over this RPC); the hub merges
 // them by base URL + key into providers. The preview never carries a key or headers; importing reads them again
 // and keeps them in the hub, sealed.

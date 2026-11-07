@@ -60,7 +60,7 @@ internal class MessageMenuState {
 }
 
 /**
- * The pressable part of a message: a long press (or a right click, docs/android-design.md 3.1) opens the menu, and
+ * The pressable part of a message: a long press (or a right click, docs/android/android-design.md 3.1) opens the menu, and
  * the message dims while it is open. Taps on links and buttons inside go to them, not here.
  */
 @Composable
@@ -91,7 +91,7 @@ internal fun Modifier.messageMenu(target: MessageTarget?): Modifier {
 internal data class RewindMenu(val block: String?, val run: (MessageTarget, RewindRestore) -> Unit)
 
 /**
- * The long-press menu as an action sheet (docs/android-design.md 2.3 rule 7): "Copy", "Select" (the message as text to
+ * The long-press menu as an action sheet (docs/android/android-design.md 2.3 rule 7): "Copy", "Select" (the message as text to
  * select from), "Quote", "Share", "Hand to Persona", "Use as context", and "Edit" on your own messages. [writes] false (a read-only
  * conversation) leaves out what would change the composer: "Quote", "Use as context", "Edit".
  */
@@ -202,7 +202,7 @@ private fun messageMenuActions(target: MessageTarget, writes: Boolean, handOff: 
  * Whether the menu may touch this conversation's composer ("Quote" / "Use as context" / "Edit"): not in read-only ones (a sub-agent,
  * history). Session capabilities (a source that cannot send) also turn it off once the session carries them.
  */
-// A session that takes no messages (a source without send, docs/protocol.md "Codex sources and capabilities") offers no quote, edit or context.
+// A session that takes no messages (a source without send, docs/protocol/protocol.md "Codex sources and capabilities") offers no quote, edit or context.
 internal fun messageMenuWrites(readOnly: Boolean, session: Session?): Boolean = !readOnly && session?.canSend != false
 
 /** "Edit": the message back in the composer (after a draft already there), its photos as attachments again. */

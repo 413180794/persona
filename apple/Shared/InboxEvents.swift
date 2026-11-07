@@ -1,6 +1,6 @@
 import Foundation
 
-// Inbox phase 1 (docs/inbox.md): an inbox item grows into an event — the manager's processing conversation
+// Inbox phase 1 (docs/assistant/inbox.md): an inbox item grows into an event — the manager's processing conversation
 // (`handling`), at most one suggestion to confirm, and the chain (`chain`). Mirrors the hub's inbox item fields; every
 // one is optional, an older hub sends none and the app draws what it drew before.
 
@@ -306,7 +306,7 @@ nonisolated enum InboxSuggestionOutcome: Equatable, Sendable {
     }
 }
 
-/// Where tapping a chain entry goes (docs/inbox.md).
+/// Where tapping a chain entry goes (docs/assistant/inbox.md).
 nonisolated enum InboxChainTarget: Equatable, Sendable {
     /// The item's source page: a Feishu chat at `position`, the mail `uid`, or just as the row opens it.
     case source(position: String?, uid: UInt32?)

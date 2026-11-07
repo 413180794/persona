@@ -76,7 +76,7 @@ func LarkRules(rules []Rule, larkGate []proto.LarkRule) []proto.LarkRule {
 }
 
 // GateRules are connector_gate's rules of connector id written as HTTP calls ("<METHOD> <path>" or "*"), for a
-// plugin's command gate whose calls go to that connector's service (docs/extensions.md "Assistant"): the user's say first.
+// plugin's command gate whose calls go to that connector's service (docs/extensions/extensions.md "Assistant"): the user's say first.
 func GateRules(rules []Rule, id string) []proto.LarkRule {
 	var out []proto.LarkRule
 	for _, r := range rules {
@@ -197,7 +197,7 @@ func foldRune(r rune) rune {
 type confirmEachKey struct{}
 
 // ConfirmEach is ctx for a call whose writes the user confirms every time, whatever a rule allows (a health
-// conversation's, docs/health.md "Outbound"). Deny stays Deny.
+// conversation's, docs/assistant/health.md "Outbound"). Deny stays Deny.
 func ConfirmEach(ctx context.Context) context.Context {
 	return context.WithValue(ctx, confirmEachKey{}, true)
 }

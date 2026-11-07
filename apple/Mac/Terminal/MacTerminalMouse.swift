@@ -1,6 +1,6 @@
 import AppKit
 
-/// The pointer on a terminal the Mac drives (docs/terminal.md section 25, as the web's `lib/terminal-mouse.ts`): which
+/// The pointer on a terminal the Mac drives (docs/integrations/terminal.md section 25, as the web's `lib/terminal-mouse.ts`): which
 /// presses go to herdr as `terminal_input.mouse` (and so to a program that takes the mouse: vim, Claude Code, Codex) and
 /// which stay here (selection, the right-click menu), the button and modifier bits herdr takes, and one motion event
 /// per cell. Pure, so the decisions are tested without a window.
@@ -20,7 +20,7 @@ nonisolated enum MacTerminalMouse {
         var mods: Int
     }
 
-    /// herdr's modifier bits on a mouse event (measured: docs/terminal.md section 25).
+    /// herdr's modifier bits on a mouse event (measured: docs/integrations/terminal.md section 25).
     static let shift = 1, ctrl = 2, alt = 4
     /// herdr drops a cell past this; the hub refuses it too.
     static let maxCell = 4096

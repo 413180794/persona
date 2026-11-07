@@ -35,7 +35,7 @@ import persona.core.designsystem.*
 import java.io.File
 
 /**
- * The onboarding pages in Settings (docs/onboarding.md 4.2 / 4.3): the provider wizard's three steps and the gateway's
+ * The onboarding pages in Settings (docs/assistant/onboarding.md 4.2 / 4.3): the provider wizard's three steps and the gateway's
  * test, and "Connect a new device", in every style, light and dark. Written to `build/onboarding-shots/`.
  */
 @RunWith(AndroidJUnit4::class)

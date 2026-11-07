@@ -11,7 +11,7 @@ struct MachineDetailRoute: Hashable {
     init(id: String) { ref = MachineRef(path: id) }
 }
 
-/// What brings a machine to the top of Machines (docs/machines.md「App」), most pressing first: it is offline, a value is
+/// What brings a machine to the top of Machines (docs/server/machines.md「App」), most pressing first: it is offline, a value is
 /// too high, an agent there needs you, its personad is not the hub's build.
 enum MachineConcern: Int, Comparable {
     case pending, offline, critical, warning, needsYou, mismatch
@@ -56,7 +56,7 @@ struct AgentTally: Equatable {
     }
 }
 
-/// Machines (docs/machines.md「App」): every machine on one screen, what needs a look first. A card each: online or not,
+/// Machines (docs/server/machines.md「App」): every machine on one screen, what needs a look first. A card each: online or not,
 /// the system, its agents (Needs You / Working / Idle), CPU / memory / network now and over the last hour, what is too high,
 /// a build unlike the hub's with Redeploy. The machine list is live; the metrics refresh every 10 s while the page is
 /// on screen and the app is in front. A tap opens the machine.
@@ -86,7 +86,7 @@ struct MachinesView: View {
                 let shares = machines.compactMap { m in metrics[m.ref]?.usage.map { (name: m.name, usage: $0) } }
                 if !shares.isEmpty { TodayTokensCard(shares: shares) }
                 if model.isMultiHub {
-                    // Several groups of hubs: one block each, under its name (docs/multi-hub.md).
+                    // Several groups of hubs: one block each, under its name (docs/protocol/multi-hub.md).
                     ForEach(model.groupIDs, id: \.self) { g in
                         let mine = machines.filter { $0.group == g }
                         if !mine.isEmpty {
@@ -324,7 +324,7 @@ struct MachineCard: View {
                 // out smaller than in a card of their own.
                 .layoutPriority(1)
             } else if let line = AddComputerText.machineLine(machine) {
-                // A known error_code in words (docs/onboarding.md 5.3); the hub's own words are on its page (Details).
+                // A known error_code in words (docs/assistant/onboarding.md 5.3); the hub's own words are on its page (Details).
                 Text(line).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
             }
             if machine.isPending, model.canConfirmComputer(machine.group) {

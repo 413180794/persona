@@ -7,7 +7,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: catchUpNeverEndsTheHistory",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -382,7 +382,7 @@
       "description": "首页前的补发没有覆盖缓存最早消息时也不能写入 false。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -548,7 +548,7 @@
       "description": "没有历史分页信息时保留未知，随后首页建立明确判断。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -722,7 +722,7 @@
       "description": "覆盖现有最早消息的完整首页可以把 has_more 改为 false。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -876,7 +876,7 @@
       "description": "已加载首页后较小的一页即使覆盖最早消息也不能改历史判断。",
       "source": [
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {
@@ -1305,7 +1305,7 @@
       "source": [
         "ios/PersonaTests/ChatStoreTests.swift: olderHubsWithoutSpansWorkAsBefore",
         "ios/Shared/ChatStore.swift: apply, merge",
-        "docs/protocol.md：items 的连续性",
+        "docs/protocol/protocol.md：items 的连续性",
         "server/internal/transcript/continuity_corpus_test.go: simClient.apply"
       ],
       "input": {

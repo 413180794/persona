@@ -1,6 +1,6 @@
 import XCTest
 
-/// Settings › Sent as You (#5278, docs/connectors.md "Sent as the user"): the row after Connectors, the list with how each send
+/// Settings › Sent as You (#5278, docs/extensions/connectors.md "Sent as the user"): the row after Connectors, the list with how each send
 /// was let through (orange where the user did not decide), a row's details with the whole text, the chat that asked, Load
 /// Earlier, the connector chips, and the empty / no database / no full access / older hub / unreachable states. Against
 /// scripts/mock/mock_hub.py with MOCK_SENT=1 (scripts/mock/sent_ledger_mock.py: about seventy made-up rows, newest id 70):

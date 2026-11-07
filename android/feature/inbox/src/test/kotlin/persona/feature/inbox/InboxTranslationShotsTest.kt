@@ -43,7 +43,7 @@ import java.io.File
 /**
  * Settings › Translation in the inbox drawn on the JVM with Robolectric's native graphics, in every style, light and dark: a mail row
  * with the hub's translation (and one without), the bar above a translated mail, and the grey line under a Feishu
- * message. PNGs go to `build/translation-shots/` (or `-Dpersona.shots=<dir>`), docs/android.md "Translation".
+ * message. PNGs go to `build/translation-shots/` (or `-Dpersona.shots=<dir>`), docs/android/android.md "Translation".
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

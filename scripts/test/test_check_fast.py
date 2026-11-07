@@ -147,7 +147,7 @@ class CheckFastScriptsTests(unittest.TestCase):
         self.assertNotIn("no fast check maps to", out)
 
     def test_the_docker_doc_runs_both_the_doc_and_the_entrypoint_suites(self):
-        self.write("docs/docker.md", "changed\n")
+        self.write("docs/operations/docker.md", "changed\n")
         code, out = self.check_fast()
         self.assertEqual(0, code, out)
         self.assertIn("PASS     scripts/test/test_docker_entrypoint.py", out)

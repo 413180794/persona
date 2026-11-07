@@ -30,7 +30,7 @@ import persona.core.designsystem.icons.PhIcons
 import java.io.File
 
 /**
- * The design system's own words in each of the app's languages (docs/i18n.md): a page with its back button, the
+ * The design system's own words in each of the app's languages (docs/protocol/i18n.md): a page with its back button, the
  * Agents tree's headings and rows, a request card, the status line, a pending badge, step progress, an empty state
  * and the model picker, in every style, light and dark. Written as PNGs to `build/i18n-shots/` (or
  * `-Dpersona.shots=<dir>`) to look at.

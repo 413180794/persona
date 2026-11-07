@@ -32,7 +32,7 @@
   "not_running_open": "{name} isn't running. Turn it on first",
   "no_binding_step": "{name} has no binding step",
   "domain_label": "Domain (feishu / lark, or a private deployment's address; feishu if left empty)",
-  "credentials_hint": "In the Feishu / Lark developer console, create a custom app, turn on its bot capability, and choose to receive events over a persistent connection (docs/bots.md「在开放平台上要做的」)",
+  "credentials_hint": "In the Feishu / Lark developer console, create a custom app, turn on its bot capability, and choose to receive events over a persistent connection (docs/extensions/bots.md「在开放平台上要做的」)",
   "pair_hint": "Send these 6 digits to the bot in a private chat in Lark (valid for 10 minutes)",
   "not_bound": "{name} isn't bound",
   "not_running": "{name} isn't running"

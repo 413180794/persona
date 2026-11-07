@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mock_scenarios.py: scripts/mock/mock_hub.py whose data set can be switched while the app runs (docs/runtime-cli.md "Injecting state").
+"""mock_scenarios.py: scripts/mock/mock_hub.py whose data set can be switched while the app runs (docs/operations/runtime-cli.md "Injecting state").
 
     python3 scripts/mock/mock_scenarios.py --port 18897 --control 18896 [--scenario default]
 
@@ -42,7 +42,7 @@ SCENARIOS = {
     "tasks": {"MOCK_TASKS": "1"},  # BackgroundNoticeTests
     "offline": None,  # no hub
 }
-# The main conversation's readiness (docs/testing.md "Readiness scenarios"): readiness-zero, readiness-not_logged_in…
+# The main conversation's readiness (docs/operations/testing.md "Readiness scenarios"): readiness-zero, readiness-not_logged_in…
 sys.path.insert(0, HERE)
 import readiness_mock  # noqa: E402
 

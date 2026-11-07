@@ -191,8 +191,8 @@ export interface SourceRuntime {
 }
 
 /**
- * The most a program may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"): memory in MB, CPU in
- * percent of one core. Unset: 1024 MB, 100%.
+ * The most a program may use when the hub runs it in a sandbox (docs/extensions/extensions.md "Sandbox"): memory in
+ * MB, CPU in percent of one core. Unset: 1024 MB, 100%.
  */
 export interface Resources {
   memory_mb?: number;
@@ -205,9 +205,9 @@ export interface Resources {
 export type Command = unknown;
 
 /**
- * The extension's program on computers (docs/extensions.md "Programs running on computers"): one per platform
- * (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine,
- * x-os the programs' systems).
+ * The extension's program on computers (docs/extensions/extensions.md "Programs running on computers"): one per
+ * platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format
+ * machine, x-os the programs' systems).
  */
 export interface NodeRuntime {
   command: unknown;
@@ -367,8 +367,8 @@ export type BuiltinLook = "persona" | (string & {});
 export const BUILTIN_LOOKS = ["persona"] as const;
 
 /**
- * A text in the other languages, by code (docs/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters (the hub
- * checks).
+ * A text in the other languages, by code (docs/protocol/i18n.md): only zh-Hans, en and ja, each 1 to 40 characters
+ * (the hub checks).
  */
 export interface LookTexts {
   /** Extra keys are opaque JSON; declared properties keep their own types. */
@@ -399,7 +399,7 @@ export interface LookAvatar {
 }
 
 /**
- * An appearance's colors, #RRGGBB (docs/persona.md "Palettes", the apps' PersonaPalette).
+ * An appearance's colors, #RRGGBB (docs/apple/persona.md "Palettes", the apps' PersonaPalette).
  */
 export interface LookPalette {
   primary?: string;
@@ -441,7 +441,7 @@ export interface LookDot {
 }
 
 /**
- * A look (docs/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona package.
+ * A look (docs/extensions/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona package.
  * app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
  */
 export interface LookItem {
@@ -528,7 +528,7 @@ export interface AgentFilterItem {
 }
 
 /**
- * The connector protocol's manifest (docs/connector-protocol.md).
+ * The connector protocol's manifest (docs/protocol/connector-protocol.md).
  */
 export interface ConnectorItem {
   id: string;
@@ -831,7 +831,7 @@ export interface HubInfo {
   extension_points: Record<string, number>;
   role?: HubRole;
   timezone?: string;
-  /** The user's language (zh-Hans, en, ja; see docs/i18n.md); empty means zh-Hans. */
+  /** The user's language (zh-Hans, en, ja; see docs/protocol/i18n.md); empty means zh-Hans. */
   locale?: string;
   capabilities?: string[];
   /** The hub's API on this machine, for the token below. */
@@ -1139,7 +1139,7 @@ export interface ErrorBreadcrumb {
 }
 
 /**
- * An error or crash of the hub or a device (docs/extensions.md "Error reports"). Clients send it to POST
+ * An error or crash of the hub or a device (docs/extensions/extensions.md "Error reports"). Clients send it to POST
  * /api/v1/error-reports; the manager scrubs it and adds fingerprint, count and received_at before an extension gets
  * it.
  */

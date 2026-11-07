@@ -26,7 +26,7 @@ import persona.core.designsystem.PersonaTheme
 
 /**
  * #5306: a recalled message Keep recalled messages kept is shown in full, yet it takes no reactions, replies or card writes
- * (docs/protocol.md, `retained`), as on iOS. A live message beside it keeps them, so the checks can fail.
+ * (docs/protocol/protocol.md, `retained`), as on iOS. A live message beside it keeps them, so the checks can fail.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35], qualifiers = "zh-w400dp-h900dp-xhdpi")

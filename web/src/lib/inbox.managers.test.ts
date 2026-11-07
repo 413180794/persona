@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Several managers (docs/managers.md "Clients"): an inbox item is its id and its manager. Two managers may list the
+// Several managers (docs/assistant/managers.md "Clients"): an inbox item is its id and its manager. Two managers may list the
 // same id (one account in both): each copy keeps its own state, and every request about one names its manager — its
 // mutes, rules and Trail too, which each manager keeps on its own.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

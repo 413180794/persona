@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Several groups of hubs on one device (docs/multi-hub.md): what the merged lists and the hub-level pages show of them.
+// Several groups of hubs on one device (docs/protocol/multi-hub.md): what the merged lists and the hub-level pages show of them.
 // With one group none of this draws anything: every screen stays what it was.
 
 /// The group filter of the merged lists (Agents, the ⋯ menu): "" every group, "=<group>" one of them (the default
@@ -26,7 +26,7 @@ struct HubTag: View {
 }
 
 /// The group a hub-level page (Persona, Inbox, the hub's settings) shows, and the menu to pick another; nothing with
-/// one group. Each group has its own Persona, inbox and settings: they are not merged (docs/plan-hub-mesh.md 2.6).
+/// one group. Each group has its own Persona, inbox and settings: they are not merged (docs/archive/operations/plan-hub-mesh.md 2.6).
 struct HubSwitcher: View {
     @Environment(AppModel.self) private var model
     /// Only the group's icon and name, for a bar; the full label elsewhere.

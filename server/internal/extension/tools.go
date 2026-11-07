@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Command-line programs an extension needs (docs/extensions.md "Command-line programs (tools)", #4507): the hub installs them
+// Command-line programs an extension needs (docs/extensions/extensions.md "Command-line programs (tools)", #4507): the hub installs them
 // into the extension's own directory at install time and puts them first on its PATH, so an extension built on a
 // CLI works on a machine that does not have that CLI.
 
@@ -66,7 +66,7 @@ type ToolNPM struct {
 	Bin       string `json:"bin,omitempty"`
 }
 
-// AuthSpec is manifest.auth: the extension signs in through its auth.* methods (docs/extensions.md "Sign-in (auth)").
+// AuthSpec is manifest.auth: the extension signs in through its auth.* methods (docs/extensions/extensions.md "Sign-in (auth)").
 type AuthSpec struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`

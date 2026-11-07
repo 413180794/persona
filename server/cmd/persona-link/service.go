@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/link"
 )
 
-// On Linux persona-link runs as a systemd user service (docs/link.md "Linux (headless)"): `install` writes the unit,
+// On Linux persona-link runs as a systemd user service (docs/operations/link.md "Linux (headless)"): `install` writes the unit,
 // enables and (re)starts it and waits for the link; `uninstall` takes it away. The service runs in the user's own
 // systemd instance, so it needs no root, and runs with nobody logged in once linger is on.
 
@@ -34,7 +34,7 @@ func (e *env) unitPath() string {
 // by itself until the hub answers. Its status lines are for the menu bar app, so not for the journal; the log goes to
 // its own file, which `persona-link logs` reads whether or not the journal keeps user logs.
 func unitFile(bin, logPath string) string {
-	return `# Written by persona-link install; persona-link uninstall removes it (docs/link.md).
+	return `# Written by persona-link install; persona-link uninstall removes it (docs/operations/link.md).
 [Unit]
 Description=Persona link: keeps this computer reachable from the Persona hub
 
@@ -164,7 +164,7 @@ func install(e *env, args []string) error {
 		return fmt.Errorf("%s 上 install 还装不了后台服务：先在前台运行 persona-link run，交给这台的进程管理", e.goos)
 	}
 	if e.goos == "windows" && nodeBinAny && personad != "" && e.programOf(personad) != programPersonad {
-		return fmt.Errorf("%s is not personad: on Windows the node runs personad (docs/windows.md); give personad with --personad", personad)
+		return fmt.Errorf("%s is not personad: on Windows the node runs personad (docs/operations/windows.md); give personad with --personad", personad)
 	}
 	if pairing {
 		c, err := pair(e, pairLink, machine)

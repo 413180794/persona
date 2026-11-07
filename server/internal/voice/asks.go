@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Cards by voice (docs/voice.md "Questions and cards"). The cards waiting in the conversation the call follows — the one it is
+// Cards by voice (docs/assistant/voice.md "Questions and cards"). The cards waiting in the conversation the call follows — the one it is
 // bound to (protocol 2), else one a run waits on (protocol 1: the main conversation) — are read from the hub when the
 // hub link says one came or went (interaction, interaction_resolved, a conversation's pending count) and every
 // lookEvery:
@@ -28,7 +28,7 @@ import (
 //     is tapped on the screen (decision 5), and a spoken "approve" is not sent (send.go, on_screen);
 //   - a card answered elsewhere while it is asked is confirmed in a sentence (voice/answered); one not asked yet goes
 //     without a word.
-// Only a full device answers cards by voice (docs/voice.md "Permissions"): another extension's call keeps the turn's
+// Only a full device answers cards by voice (docs/assistant/voice.md "Permissions"): another extension's call keeps the turn's
 // "check on the phone" (voice/report needs_you). The tracker's goroutine owns all this, from the moment the call is set up
 // (arm: the tracker runs from the app's socket on, before its start is read). The conversation keeps which card the
 // model was told it asks (askCur, askTold): what the model hands over is that card's answer only once it heard the
@@ -47,7 +47,7 @@ const (
 	optionsMost    = 10
 )
 
-// The ask frame's states and who answered (docs/voice.md "Extension → App").
+// The ask frame's states and who answered (docs/assistant/voice.md "Extension → App").
 const (
 	askAsking   = "asking"
 	askAnswered = "answered"
@@ -165,7 +165,7 @@ func (k *asker) look(ctx context.Context) {
 		}
 		pending[ix.ID] = ix
 		// A question the assistant is deciding whether to answer for the user is not theirs yet (delegate,
-		// docs/assistant.md "The assistant answers questions first"): it is asked once it is left to them.
+		// docs/assistant/assistant.md "The assistant answers questions first"): it is asked once it is left to them.
 		if !k.seen[ix.ID] && !asking(ix.ID) && !ix.Delegating {
 			fresh = append(fresh, ix)
 		}
@@ -211,7 +211,7 @@ func (k *asker) look(ctx context.Context) {
 	k.next()
 }
 
-// voiceAnswerable: ix is a question voice can answer (docs/voice.md "Questions and cards"): not one with fields to fill in or a
+// voiceAnswerable: ix is a question voice can answer (docs/assistant/voice.md "Questions and cards"): not one with fields to fill in or a
 // secret to type, nor two questions alike (an answer goes by its question).
 func voiceAnswerable(ix proto.Interaction) bool {
 	return ix.Kind == proto.IxQuestion && len(ix.Questions) > 0 && len(ix.Fields) == 0 && !ix.Secret &&
@@ -368,7 +368,7 @@ func (k *asker) resolved(cur *askState, out resolveOutcome, delegation string, g
 // own reason; log is for the log.
 type resolveOutcome struct{ said, code, reason, log string }
 
-// resolveCard resolves card id with res (docs/voice.md "Questions and cards"). The hub refuses one no longer waiting with 410
+// resolveCard resolves card id with res (docs/assistant/voice.md "Questions and cards"). The hub refuses one no longer waiting with 410
 // (404: one it never had), says already of one answered before, and passes on a node's refusal of a Codex card as 409
 // with its code: prompt_changed (Codex no longer asks it) is over; another (a draft in the box, another dialog open)
 // leaves the card open again, so the card is looked for. With no answer from the hub (the connection, the deadline)

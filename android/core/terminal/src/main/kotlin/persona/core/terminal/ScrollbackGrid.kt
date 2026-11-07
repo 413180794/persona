@@ -3,7 +3,7 @@ package persona.core.terminal
 /**
  * A pane's grid fed frame by frame (whole frames reset it, diffs run on), keeping what scrolls off its top while the
  * phone drives the terminal. herdr keeps no scrollback at the phone's size and redraws the grid in place, so what
- * scrolled off is only what the phone noticed moving up between two frames ([TerminalGrid.scrolled]; docs/terminal.md
+ * scrolled off is only what the phone noticed moving up between two frames ([TerminalGrid.scrolled]; docs/integrations/terminal.md
  * section 11 "Scrollback on the phone"). At most [limit] rows are kept, the oldest go first.
  */
 class ScrollbackGrid(private val limit: Int = LIMIT) {

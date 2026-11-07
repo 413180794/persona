@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings › Appearance › Avatar (docs/persona.md): Mochi and the hub's Milk Frog package, in a
+/// Settings › Appearance › Avatar (docs/apple/persona.md): Mochi and the hub's Milk Frog package, in a
 /// grid like the styles, and the chosen one's top-bar dot in each state under it. Choosing one changes Persona's name, face and dot; the app's
 /// colors only under Theme Color › Match Avatar (`ThemeColorPicker`). The tree is rebuilt, as for a style; Appearance stays open because
 /// the settings path is AppModel's. A package is downloaded first and kept on the phone.

@@ -75,7 +75,7 @@ fun ChatComposer(
     /** /loop in the "/" list, with a line under the box saying what it will do (Claude Code only, web `hasLoop`). */
     loop: Boolean = false,
     /**
-     * What has to happen before anything can be sent ("Connect a model first", "Add a computer first": docs/onboarding.md 4.4): the send button says
+     * What has to happen before anything can be sent ("Connect a model first", "Add a computer first": docs/assistant/onboarding.md 4.4): the send button says
      * it and [onBlocked] opens that step. The box still takes typing and keeps the draft; nothing is queued.
      */
     blockedLabel: String? = null,

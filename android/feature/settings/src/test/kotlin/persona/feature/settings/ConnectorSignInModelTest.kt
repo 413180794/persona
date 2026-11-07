@@ -65,7 +65,7 @@ class ConnectorSignInModelTest {
                          BindPrompt(step = "scan", kind = "qr", url = "https://example.com/q"),
                          BindPrompt(step = "device", kind = "device_code", userCode = "ABCD-1234"),
                          BindPrompt(step = "pair", kind = "pair_code", userCode = "482913"),
-                         // An extension's device code may come with its page alone (docs/extensions.md "Sign-in").
+                         // An extension's device code may come with its page alone (docs/extensions/extensions.md "Sign-in").
                          BindPrompt(step = "device", kind = "device_code", url = "HTTPS://example.com/device"))) assertTrue("$p", BindState(p).polled)
 
         val hub = Hub(BindPrompt(step = "auth", kind = "open_url"), BindPrompt(step = "phone", fields = listOf(BindField("phone", "Phone"))))

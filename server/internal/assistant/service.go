@@ -36,7 +36,7 @@ type Options struct {
 	// models_launchers.go); "" makes one for this run only (tests).
 	SecretKey string
 	// ID is the manager this assistant is ("" and assistantwire.AssistantID: the built-in one). Its directories on a
-	// computer are named after it (identity.AssistantDirName, docs/managers.md "Directories on a computer").
+	// computer are named after it (identity.AssistantDirName, docs/assistant/managers.md "Directories on a computer").
 	ID string
 }
 
@@ -200,7 +200,7 @@ func (s *Service) hello(ctx context.Context) Hello {
 	return h
 }
 
-// lang is the user's language (the hub's hello, docs/i18n.md "Protocol"): what the assistant's own texts for people are
+// lang is the user's language (the hub's hello, docs/protocol/i18n.md "Protocol"): what the assistant's own texts for people are
 // written in when no request is in front of them (task notices, cards, records in a conversation).
 func (s *Service) lang(ctx context.Context) i18n.Lang {
 	return i18n.Lang(s.hello(ctx).Locale).Or(i18n.Default)
@@ -311,7 +311,7 @@ type startParams struct {
 	Text           string `json:"text"`
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Purpose        string `json:"purpose,omitempty"` // the model configuration's purpose; "" is the assistant's
-	Space          string `json:"space,omitempty"`   // "health" starts it in the health space (docs/health.md)
+	Space          string `json:"space,omitempty"`   // "health" starts it in the health space (docs/assistant/health.md)
 	Origin         string `json:"origin,omitempty"`  // where it comes from (origins.go); "" is the user's
 	OriginRef      string `json:"origin_ref,omitempty"`
 }

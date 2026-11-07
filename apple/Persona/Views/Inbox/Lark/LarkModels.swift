@@ -25,7 +25,7 @@ nonisolated struct LarkConversation: Codable, Identifiable, Hashable, Sendable {
     var mentionPosition: String?
     /// Client only: open the chat at this message (a flagged message) instead of the first unread.
     var focus: String?
-    /// Client only: the Feishu account the chat is in, sent as `ol_account` (docs/feishu.md「多账号」); nil: the hub's
+    /// Client only: the Feishu account the chat is in, sent as `ol_account` (docs/extensions/feishu.md「多账号」); nil: the hub's
     /// own. Kept in the caches.
     var account: Int?
     /// Client only: whose account it is, shown beside Lark while more than one is signed in.
@@ -417,7 +417,7 @@ extension APIClient {
     func larkRead(_ id: String, _ report: LarkReadReport) async throws {
         if let source = messagingSource {
             struct Body: Encodable { var position: String; var message_ids: [String]? }
-            // A source takes at most 100 ids at a time (docs/extension-messaging.md): a long read goes in turns.
+            // A source takes at most 100 ids at a time (docs/extensions/extension-messaging.md): a long read goes in turns.
             let ids = report.messageIDs ?? []
             let batches: [[String]?] = ids.isEmpty ? [report.messageIDs]
                 : stride(from: 0, to: ids.count, by: 100).map { Array(ids[$0 ..< min($0 + 100, ids.count)]) }

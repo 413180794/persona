@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Inbox events (#1680, docs/inbox.md "Event grouping"). A connector that declares group hands a conversation's new messages
+// Inbox events (#1680, docs/assistant/inbox.md "Event grouping"). A connector that declares group hands a conversation's new messages
 // over as a batch (InboxThing.Group) instead of an item. The hub asks the model which events — inbox items of that
 // conversation — the messages belong to: it reads the events (the events tool, its own) and the conversation (the
 // connector's tools, group.tool through the hub), at most groupCalls calls, and answers with a title, a summary and a tier for every
@@ -664,7 +664,7 @@ func (s *Service) putEvent(c assistantwire.InboxSource, thread string, e planned
 	return it
 }
 
-// foldNoise keeps noise one event per atom (docs/inbox.md "Events and the handling chain"): the noise a plan opens goes into the
+// foldNoise keeps noise one event per atom (docs/assistant/inbox.md "Events and the handling chain"): the noise a plan opens goes into the
 // conversation's open noise event, or into one new event for all of it; an existing noise event never takes what
 // the model sorts higher (that opens its own event instead). Under b.mu.
 func (b *inboxBook) foldNoise(connectorID, thread string, plan *groupPlan) {

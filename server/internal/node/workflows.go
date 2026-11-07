@@ -23,7 +23,7 @@ import (
 //	<session>/workflows/<run id>.json                     written when the run ends: {status, error, durationMs, agentCount, …}
 //	<session>/workflows/scripts/<name>-<run id>.js        the script: export const meta = {name, phases: [{title}, …]}
 //
-// docs/agent-states.md "Background workflows".
+// docs/protocol/agent-states.md "Background workflows".
 
 // workflowStall: a run that has written nothing for this long, with neither a notification nor a state file, is not
 // running any more (its claude went away). Longer than a subagent's 20 minutes: one agent can sit in a long tool call.

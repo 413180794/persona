@@ -1,6 +1,6 @@
-// A Feishu chat, opened at the item's first new message (docs/inbox.md: "Opening it: the Feishu chat stops at the item's first new message").
+// A Feishu chat, opened at the item's first new message (docs/assistant/inbox.md: "Opening it: the Feishu chat stops at the item's first new message").
 // Supports native Feishu messaging interactions: direct replies, quoting messages, copying, asking Persona for summary,
-// and reporting seen messages to Feishu (docs/inbox.md "Seen Feishu messages are reported read when visible", lark-read.ts). The chat's Pins
+// and reporting seen messages to Feishu (docs/assistant/inbox.md "Seen Feishu messages are reported read when visible", lark-read.ts). The chat's Pins
 // (lark-pins.ts) open over it; a Pin found in the chat replaces the window around it, a reply opens its thread.
 // Like the phone's chat (lib/lark-chat.ts, LarkExtras.tsx): pictures open in the viewer, files download, voice and video
 // play here, a card's buttons press, my messages show who read them, reactions can be put on, an avatar opens the
@@ -57,7 +57,7 @@ function useAttachmentSupport() {
 }
 
 /** Text, then each attachment, as the messages to send. False when the extension cannot route the attachments as
- * asked (a quote): nothing goes and it all stays in the box (docs/lark-attachments.md, #1035). */
+ * asked (a quote): nothing goes and it all stays in the box (docs/extensions/lark-attachments.md, #1035). */
 export function outgoingOf(text: string, attachments: LarkAttachment[], route: LarkOutgoing["route"], quote?: LarkOutgoing["quote"],
   features: string[] = getState().features, mentions?: LarkOutgoing["mentions"]): LarkOutgoing[] | false {
   if (attachments.length && !routeAllowed(route, features)) return false;
@@ -81,7 +81,7 @@ export interface LarkChatRef {
   topic?: boolean;
   /** Open at this position (the first new message) instead of the newest. */
   focus?: string;
-  /** The Feishu account the chat is in (`ol_account`, docs/feishu.md "Multiple accounts"); undefined: the hub's own. */
+  /** The Feishu account the chat is in (`ol_account`, docs/extensions/feishu.md "Multiple accounts"); undefined: the hub's own. */
   account?: number;
   /** A group: its box can @ people, my messages show how many read them. */
   group?: boolean;
@@ -207,7 +207,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   pageRef.current = page;
   // After a card button: the window around the pressed message, so its new state shows wherever the reader is (the
   // newest page merged into an older window would drop everything between with no gap shown).
-  // `around` takes a position (docs/protocol.md); a card in an opened thread is not in the window and is not read again.
+  // `around` takes a position (docs/protocol/protocol.md); a card in an opened thread is not in the window and is not read again.
   const refreshAround = useCallback(async (mid: string) => {
     const gen = windowGen.current;
     const at = pageRef.current?.messages.find((m) => m.id === mid)?.position;
@@ -437,7 +437,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     if (askingNow.current) return;
     askingNow.current = true;
     setAsking(true);
-    // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/i18n.md "Prompts")
+    // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/protocol/i18n.md "Prompts")
     const chatTitle = chat.title || "飞书会话"; // i18n-ignore
     const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : ""; // i18n-ignore: prompt
     const prompt = `读取我飞书会话「${chatTitle}」（飞书网关 feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`; // i18n-ignore: prompt
@@ -781,7 +781,7 @@ function useReadReports(
       if (!report) return;
       api(larkPath(`/lark/conversations/${enc(feed)}/read`, ol, manager), { method: "POST", json: report, token: getToken() }).catch(() => t.undo(report, previous));
     };
-    // The gate (docs/redesign/ux.md 3.5): in front, placed, nothing covering the list.
+    // The gate (docs/archive/redesign/ux.md 3.5): in front, placed, nothing covering the list.
     const look = () => {
       const t = tracker.current;
       if (!t || !placed.current || document.visibilityState !== "visible" || document.querySelector('[aria-modal="true"]')) return;

@@ -46,7 +46,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * Settings › Extensions (docs/extensions.md "App: Settings › Extensions"): every extension of the hub's (built in, from hub.json, installed on
+ * Settings › Extensions (docs/extensions/extensions.md "App: Settings › Extensions"): every extension of the hub's (built in, from hub.json, installed on
  * the hub's machine), its state, and the way to its page. Extensions are installed on the hub's machine only.
  */
 @Composable
@@ -74,7 +74,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
                     actionLabel = stringResource(R.string.settings_ext_retry), onAction = { scope.launch { model.load() } })
             }
         }
-        // "Extension market" only when the hub has markets (docs/extensions.md "Extension market"): the one way a phone installs an extension.
+        // "Extension market" only when the hub has markets (docs/extensions/extensions.md "Extension market"): the one way a phone installs an extension.
         if (state.markets && onMarket != null) item("market") {
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
                 JRow(stringResource(R.string.settings_ext_market), subtitle = stringResource(R.string.settings_ext_market_subtitle), leadingIcon = PhIcons.Cube,
@@ -86,7 +86,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
             JEmptyState(stringResource(R.string.settings_ext_empty_title), stringResource(R.string.settings_ext_empty_text), icon = PhIcons.PuzzlePiece)
         }
         if (!list.isNullOrEmpty()) {
-            // Several managers (docs/managers.md step 4): each one's extensions under its name instead of one list.
+            // Several managers (docs/assistant/managers.md step 4): each one's extensions under its name instead of one list.
             val byManager = roster?.groups(list) { it.manager }
             val rows: LazyListScope.(List<HubExtension>) -> Unit = { shown ->
                 // keyed by manager and id in every path: a built-in is listed under each manager, and the list can come
@@ -201,7 +201,7 @@ fun ExtensionPage(
     var hubConnectors by remember(connectors, extensionId, manager) { mutableStateOf<List<HubConnector>>(emptyList()) }
     LaunchedEffect(connectors, contributed) {
         if (connectors == null || contributed.isEmpty()) return@LaunchedEffect
-        // The list is every manager's (docs/managers.md): this page's are its manager's, whose requests it pins below.
+        // The list is every manager's (docs/assistant/managers.md): this page's are its manager's, whose requests it pins below.
         hubConnectors = try {
             connectors.connectors(all = true)
                 .filter { it.id in contributed && roster.ownerOrDefault(it.manager) == roster.ownerOrDefault(manager) }.distinctBy { it.id }
@@ -259,7 +259,7 @@ fun ExtensionPage(
             sandbox(detail.extension.sandbox)
             permissions(detail)
             about(detail, res)
-            // From a market: removed here too, as in the market (docs/extensions.md "Extension market"), read-only config or not.
+            // From a market: removed here too, as in the market (docs/extensions/extensions.md "Extension market"), read-only config or not.
             if (detail.fromMarket) uninstallRow(state.busy) { removing = true }
         }
     }
@@ -344,7 +344,7 @@ private fun LazyListScope.header(id: String, state: ExtensionState, res: Resourc
 }
 
 /**
- * An extension that is a way of talking to Persona (it contributes a `channel`, docs/channels.md "UI") says where that is
+ * An extension that is a way of talking to Persona (it contributes a `channel`, docs/extensions/channels.md "UI") says where that is
  * set up: binding, its switch and where its messages go are on the channel's page; this page keeps working as before.
  */
 private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (String) -> Unit) {
@@ -381,7 +381,7 @@ private fun LazyListScope.connectorInbox(list: List<HubConnector>, onOpen: ((Str
 }
 
 /**
- * A market extension's upgrades (docs/extensions.md "Auto-upgrade"): its own switch, its newer version (opening the market's
+ * A market extension's upgrades (docs/extensions/extensions.md "Auto-upgrade"): its own switch, its newer version (opening the market's
  * upgrade when it waits for the user) or what happened last.
  */
 private fun LazyListScope.upgrades(
@@ -721,7 +721,7 @@ internal fun persona.core.contracts.api.ManagerRoster?.ownerOrDefault(manager: S
 
 /**
  * While an extension's page is open, its requests (`extensions/<id>/…`, `plugins/<id>/…` on an older hub) name [manager]:
- * the same id may be installed under several managers (each one's built-ins, docs/managers.md), and the default's own
+ * the same id may be installed under several managers (each one's built-ins, docs/assistant/managers.md), and the default's own
  * keep going to it elsewhere.
  */
 @Composable

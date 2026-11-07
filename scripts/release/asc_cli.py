@@ -3,7 +3,7 @@
 
 The key comes from the same place as the rest of the release scripts: ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY_PATH
 (or ASC_KEY_PATH) and ASC_APP_ID in the environment, else app_store.key_id / issuer_id / key_path / app_id in the
-config (docs/config.md). The .p8 file stays outside the repository; nothing here prints it or the issuer id.
+config (docs/operations/config.md). The .p8 file stays outside the repository; nothing here prints it or the issuer id.
 
   python3 scripts/release/asc_cli.py check                  # offline: binary, key, app id; no request is sent
   python3 scripts/release/asc_cli.py install                # download the pinned release and verify its sha256
@@ -34,7 +34,7 @@ SHA256 = {
 RELEASES = "https://github.com/rorkai/App-Store-Connect-CLI/releases/download"
 # Credential sources asc would otherwise mix with ours (its stored profiles, an inline key).
 FOREIGN = ("ASC_PROFILE", "ASC_BYPASS_KEYCHAIN", "ASC_CONFIG_PATH", "ASC_PRIVATE_KEY", "ASC_PRIVATE_KEY_B64")
-SETUP = "See docs/release.md「用 asc 发版」."
+SETUP = "See docs/operations/release.md「用 asc 发版」."
 
 
 def target() -> str:

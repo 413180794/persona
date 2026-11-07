@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// Asking from any group (#6146, docs/bots.md "Asking from any group", docs/todos.md "Where it came from"). People who
+// Asking from any group (#6146, docs/extensions/bots.md "Asking from any group", docs/assistant/todos.md "Where it came from"). People who
 // work with many groups do not want an AI conversation in each: the owner writes "@bot /ai <what>" where the question
 // comes up, the work happens as a topic in the home topic group, and the outcome comes back as a reply to that message.
 // A topic group is not needed for it (Lark is one channel of Persona, not its shape): with no home topic group the

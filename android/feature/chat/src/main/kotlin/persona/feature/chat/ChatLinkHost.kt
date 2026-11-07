@@ -72,7 +72,7 @@ fun ChatLinkHost(
     val hubLinks by rememberUpdatedState(LocalChatHubLinks.current)
     val lark = LocalLarkFeatures.current
     var url by remember { mutableStateOf<String?>(null) }
-    /** "machine name :port" while the sheet shows one of the machine's ports (docs/ports.md "Forwarding"). */
+    /** "machine name :port" while the sheet shows one of the machine's ports (docs/operations/ports.md "Forwarding"). */
     var forwarded by remember { mutableStateOf<String?>(null) }
     val ports by rememberUpdatedState(LocalChatPorts.current)
     var unsupported by remember { mutableStateOf(false) }
@@ -86,7 +86,7 @@ fun ChatLinkHost(
                     val target = ChatLinks.webUrl(uri)
                     // A page of the hub's web app that the app shows itself opens there, not in the sheet.
                     if (target != null && hubLinks?.invoke(target) == true) { if (url != null) closeRequest++; return }
-                    // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
+                    // A link to this machine's localhost is one of its ports, opened through the hub (docs/operations/ports.md).
                     val machine = ports
                     val port = machine?.let { PortLinks.link(uri, it.hostnames) }
                     when {
@@ -138,7 +138,7 @@ fun ChatLinkHost(
         if (!isScrolling && lifecycleState.isAtLeast(Lifecycle.State.STARTED)) {
             delay(600)
             pool.warmUp()
-            // A machine's port is never preloaded: it would load the phone's own localhost (docs/ports.md). Nor is a
+            // A machine's port is never preloaded: it would load the phone's own localhost (docs/operations/ports.md). Nor is a
             // Feishu link the card shows natively: its page loads only on "Switch to web page" (its document is read ahead below).
             preloadUrls.mapNotNull { ChatLinks.webUrl(it) }
                 .filter { PortLinks.link(it, ports?.hostnames.orEmpty()) == null && larkNativeLink(it, lark) == null }
@@ -342,7 +342,7 @@ fun ChatLinkHost(
 }
 
 /**
- * The machine a conversation runs on, for its port links (docs/ports.md "Recognizing links in replies"): its id and name, the names
+ * The machine a conversation runs on, for its port links (docs/operations/ports.md "Recognizing links in replies"): its id and name, the names
  * it goes by in links, the ports its agents list (the hub allows those without asking), and how to open one.
  */
 internal data class ChatPorts(

@@ -4,7 +4,7 @@ import SwiftUI
 import AVFoundation
 #endif
 
-/// Knowledge › Record (docs/recording.md): start a recording, see this device's recordings (the watch's arrive here) with
+/// Knowledge › Record (docs/apple/recording.md): start a recording, see this device's recordings (the watch's arrive here) with
 /// where each one is (recording, transcribing, synced), open one for its transcript. The text goes to the knowledge base
 /// by itself (`RecordingSync`); nothing is added to a composer.
 struct RecordingsSection: View {

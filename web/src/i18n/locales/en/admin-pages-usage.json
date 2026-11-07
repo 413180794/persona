@@ -47,7 +47,7 @@
   "url": "Address",
   "url_invalid": "Use http(s)://host[:port], without a user name or password",
   "url_hint_relay": "The gateway's root address, without /api/admin.",
-  "url_hint_generic": "The hub sends GET to this full address and expects JSON with an accounts list (format in docs/usage-windows.md).",
+  "url_hint_generic": "The hub sends GET to this full address and expects JSON with an accounts list (format in docs/server/usage-windows.md).",
   "key": "Key",
   "key_saved": "Saved, not shown; leave empty to keep it",
   "key_retype": "The address or type changed: type the key again. A saved key is never sent to a new address.",

@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The todos (docs/todos.md): something to do, handed to one or more agents; a task the assistant hands out is a todo
+// The todos (docs/assistant/todos.md): something to do, handed to one or more agents; a task the assistant hands out is a todo
 // whose origin is the conversation (tasks.go). They are the assistant's: it keeps them (the hub's Postgres tables
 // todos, todo_spaces, todo_agents, todo_decisions, as they were) and answers the apps' /api/v1/todos… routes, which the
 // hub relays. The hub shows what the assistant reports of them (TodoReport, in the snapshot: the todo each agent works
@@ -52,20 +52,20 @@ type Todo struct {
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	// Origin: the assistant conversation that opened it as a task; PlanID: the plan it came from (#930,
-	// docs/unified-entry.md). Empty for a todo made by hand.
+	// docs/assistant/unified-entry.md). Empty for a todo made by hand.
 	Origin string `json:"origin,omitempty"`
 	PlanID string `json:"plan_id,omitempty"`
 	// StartError: a task whose agent did not start ends done with why (#1077); reopening clears it.
 	StartError string `json:"start_error,omitempty"`
 	// DoneBy is "auto" when the assistant closed the task because its judge found the work finished (#1092,
-	// docs/todos.md "Automatic completion"), with DoneReason; ReopenedAt: when the user last reopened it after it was done.
+	// docs/assistant/todos.md "Automatic completion"), with DoneReason; ReopenedAt: when the user last reopened it after it was done.
 	DoneBy     string      `json:"done_by,omitempty"`
 	DoneReason string      `json:"done_reason,omitempty"`
 	ReopenedAt *time.Time  `json:"reopened_at,omitempty"`
 	Spaces     []TodoSpace `json:"spaces"`
 	Agents     []TodoAgent `json:"agents"`
 	// Quiet: a task from the main conversation while assistant.main_tasks_quiet was on (#1731,
-	// docs/unified-entry.md "Quiet tasks"): no pushes, Live Activity or task badges for its agents; the main
+	// docs/assistant/unified-entry.md "Quiet tasks"): no pushes, Live Activity or task badges for its agents; the main
 	// conversation is told instead (quiet.go). Set when it is made, never changed.
 	Quiet bool `json:"quiet"`
 	// Supervision: the task's ledger when the main conversation handed it out and follows it up (#3124,

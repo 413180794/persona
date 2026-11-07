@@ -95,7 +95,7 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun quickReactions(): List<String> = emptyList()
     suspend fun emojis(): kotlinx.serialization.json.JsonObject? = null
 
-    /** "Muted" (docs/inbox.md "Mute"): what the user muted, in every source, newest first. */
+    /** "Muted" (docs/assistant/inbox.md "Mute"): what the user muted, in every source, newest first. */
     suspend fun inboxMutes(): List<InboxMute> = error("静音尚未接入") // i18n-ignore: developer error for a repository without the hub
     /** "Mute this repository / chat / sender": the item and the open ones of its source it covers are done at once; a failure puts them back. */
     suspend fun mute(record: InboxRecord, option: InboxMuteOption): Unit = error("静音尚未接入") // i18n-ignore: developer error
@@ -162,7 +162,7 @@ data class InboxRecord(
     val isTopic: Boolean? = null,
     /** Inbox phase 1: Recap, the processing conversation, the suggestion, the Handling chain; none from an older hub. */
     val event: persona.core.contracts.InboxEventFields = persona.core.contracts.InboxEventFields.None,
-    /** The manager whose inbox it is, in the hub's merged list (docs/protocol.md「Per-manager routing」); null: the default. */
+    /** The manager whose inbox it is, in the hub's merged list (docs/protocol/protocol.md「Per-manager routing」); null: the default. */
     val manager: String? = null,
 ) {
     /** A hub connector's item (not Feishu's, not mail): it opens as its connector's thread. */
@@ -178,7 +178,7 @@ data class InboxRecord(
 
 /**
  * An inbox item's id in the app ([InboxItem.id]): the hub's for the hub's own assistant's items (unstamped, or stamped
- * `assistant`), and the hub's id with its manager for any other manager's (docs/managers.md "Clients"), so two managers
+ * `assistant`), and the hub's id with its manager for any other manager's (docs/assistant/managers.md "Clients"), so two managers
  * reading the same source have two items, and an id never moves to the other one's copy when the lists change. Rows,
  * records and local state (drafts, queued replies) go by it; requests take the hub's id back ([hubId]) and name the
  * manager.
@@ -203,7 +203,7 @@ fun List<InboxRecord>.inboxRecord(id: String?): InboxRecord? =
     if (id == null) null else firstOrNull { it.item.id == id } ?: firstOrNull { it.hubItemId == id }
 
 /**
- * An item's `connector` block (docs/protocol.md "Inbox"): the [thread] its connector reads it as, the [label] the
+ * An item's `connector` block (docs/protocol/protocol.md "Inbox"): the [thread] its connector reads it as, the [label] the
  * connector gave it (the row's tag, its words: "Direct message", "@me", "Transfer"…), and whether and where a reply goes.
  */
 @Serializable

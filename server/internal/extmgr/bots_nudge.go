@@ -27,7 +27,7 @@ func nudgeAfterValue(raw json.RawMessage) (*int, error) {
 }
 
 // setNudgeAfter keeps nudge_after (PUT /api/v1/bots/feishu): the minutes a card waits before the assistant nudges
-// under it once, 0 off (docs/bots.md "Nudging a card nobody answered"). The range is checked by the caller.
+// under it once, 0 off (docs/extensions/bots.md "Nudging a card nobody answered"). The range is checked by the caller.
 func (h *Manager) setNudgeAfter(ctx context.Context, minutes int) {
 	b := &h.bots
 	b.mu.Lock()

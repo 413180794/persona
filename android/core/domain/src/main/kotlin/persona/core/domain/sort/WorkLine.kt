@@ -9,7 +9,7 @@ import persona.core.contracts.parseTime
 import java.time.Duration
 import java.time.Instant
 
-// A session's work state as the lists show it (docs/agent-work.md; the web's lib/work.ts): the hub triages each stopped
+// A session's work state as the lists show it (docs/assistant/agent-work.md; the web's lib/work.ts): the hub triages each stopped
 // turn into done or blocked on something named, with one line for the row.
 
 /** The hub waits it out: it wakes it (wake_at), or it wakes itself (its background tasks, a /loop). */

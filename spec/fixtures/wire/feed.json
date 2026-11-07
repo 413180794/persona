@@ -5,7 +5,7 @@
     "source": [
       "server/internal/assistant/answered.go: answeredBody, answeredItems",
       "apple/Shared/Tasks.swift: FeedItem.answeredItems",
-      "docs/protocol.md: 任务和对话动态"
+      "docs/protocol/protocol.md: 任务和对话动态"
     ],
     "derived": true,
     "decoder": "feed",

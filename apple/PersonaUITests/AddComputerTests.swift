@@ -1,6 +1,6 @@
 import XCTest
 
-/// Machines › Add Computer (#4196, docs/onboarding.md 4.2): from no computer at all to one confirmed and online, and the list's
+/// Machines › Add Computer (#4196, docs/assistant/onboarding.md 4.2): from no computer at all to one confirmed and online, and the list's
 /// pending computer and error_code. Against scripts/mock/mock_scenarios.py, which restarts the mock hub with the
 /// variables each test needs:
 ///   TEST_RUNNER_PERSONA_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_ADD_CONTROL=http://127.0.0.1:<control>

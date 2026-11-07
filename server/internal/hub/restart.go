@@ -7,7 +7,7 @@ import (
 )
 
 // A planned stop (systemctl restart, a deploy, an update: SIGTERM) that the apps should not notice
-// (docs/hub-restart.md): before anything is torn down, every app hears hub_restarting — it reconnects at once and
+// (docs/operations/hub-restart.md): before anything is torn down, every app hears hub_restarting — it reconnects at once and
 // keeps its screen as it is — and the machines as they are now are handed to the next hub (warm.go). What the stop
 // itself causes afterwards (nodes disconnecting, their questions ending) is not broadcast (stopping). The event log
 // is handed over last, once nothing more can be broadcast (saveEventLog).

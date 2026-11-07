@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// One message of a terminal stream (docs/protocol.md「终端流」).
+/// One message of a terminal stream (docs/protocol/protocol.md「终端流」).
 nonisolated enum TerminalEvent: Sendable {
     /// VT bytes for a cols × rows grid; a full one is the whole screen.
     case frame(epoch: String, seq: Int, full: Bool, cols: Int, rows: Int, data: Data)
@@ -9,7 +9,7 @@ nonisolated enum TerminalEvent: Sendable {
     case ended(String, unsupported: Bool)
     /// The WebSocket connected again: subscribe again (continuing from the last frame).
     case reconnected
-    /// How driving the terminal at the phone's size went (docs/terminal.md): active (cols × rows), busy (another
+    /// How driving the terminal at the phone's size went (docs/integrations/terminal.md): active (cols × rows), busy (another
     /// program holds it: ask before taking over), taken / lost (back to watching), unsupported (only watching).
     case control(state: String, cols: Int?, rows: Int?, why: String?)
 }
@@ -17,12 +17,12 @@ nonisolated enum TerminalEvent: Sendable {
 
 nonisolated enum ServerEvent: Sendable {
     /// features: what the hub supports beyond the first protocol (proto.Features); which hub it is and its group
-    /// (docs/plan-hub-mesh.md 2.6); its build and protocol (docs/hub-update.md).
+    /// (docs/archive/operations/plan-hub-mesh.md 2.6); its build and protocol (docs/operations/hub-update.md).
     case hello(HubHello)
     case machines([Machine])
     case sessions(machineID: String, [Session])
     /// What changed in a machine's list since the last (a hub that has `sessions_delta`, asked for on connect): the
-    /// sessions new or different, whole, and the ids gone (docs/protocol.md「会话增量」).
+    /// sessions new or different, whole, and the ids gone (docs/protocol/protocol.md「会话增量」).
     case sessionsDelta(machineID: String, upsert: [Session], remove: [String])
     /// A lightweight hint, never an authoritative row checkpoint.
     case sessionsList(revision: String)
@@ -40,7 +40,7 @@ nonisolated enum ServerEvent: Sendable {
     /// Feishu conversations with new or changed messages (the Lark gateway's realtime events, relayed by the hub); account:
     /// the Feishu account they are in when it is not the hub's own (`ol_account`).
     case lark(feedIDs: [String], settingsChanged: Bool, account: Int?)
-    /// A messaging source's changes (#2138, docs/extension-messaging.md「九」): its conversations, of `account` (nil: the
+    /// A messaging source's changes (#2138, docs/extensions/extension-messaging.md「九」): its conversations, of `account` (nil: the
     /// default one).
     case messaging(source: String, conversations: [String], settingsChanged: Bool, account: String?)
     /// Personal agent sessions (the gateway's agent-bridge, hub/agents.go) that changed: `<source>:<sessionKey>` ids, empty
@@ -50,7 +50,7 @@ nonisolated enum ServerEvent: Sendable {
     case inbox
     /// The Fleet Live Activity's content changed (hub/liveactivity.go).
     case fleet(FleetState)
-    /// The hub updating itself: checking, downloading, waiting for idle, restarting… (docs/hub-update.md).
+    /// The hub updating itself: checking, downloading, waiting for idle, restarting… (docs/operations/hub-update.md).
     case hubUpdate(HubUpdateStatus)
     /// An extension install / upgrade / removal moved on (#3307): the whole operation as it stands.
     case extensionOperation(ExtensionOperation)
@@ -58,12 +58,12 @@ nonisolated enum ServerEvent: Sendable {
     case extensionAuth(extension: String, ExtensionAuth?)
     /// The desktop apps connected to the hub now (sent on connect and whenever one comes or goes).
     case desktops([DesktopDevice])
-    /// Tasks from an assistant conversation (docs/unified-entry.md): the todos changed (pull them), a conversation's
+    /// Tasks from an assistant conversation (docs/assistant/unified-entry.md): the todos changed (pull them), a conversation's
     /// feed grew, a plan changed.
     case todos
-    /// The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/persona.md): list them again.
+    /// The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/apple/persona.md): list them again.
     case personas
-    /// The hub's roster of managers changed (docs/managers.md): Settings › Managers reads it again. Sent only to a
+    /// The hub's roster of managers changed (docs/assistant/managers.md): Settings › Managers reads it again. Sent only to a
     /// socket that asked for feature `managers` (`queryItems`).
     case managers
     case assistantFeed(FeedItem)
@@ -73,11 +73,11 @@ nonisolated enum ServerEvent: Sendable {
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
     /// Folders a Files / Git pane watches (`fs_watch`) changed on the computer, or the Git status of `cwd` did (#2439,
-    /// docs/protocol.md「文件自动刷新」).
+    /// docs/protocol/protocol.md「文件自动刷新」).
     case fsChanged(machineID: String, cwd: String, dirs: [String], git: Bool)
-    /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」 badges): nil clears it.
+    /// A plugin changed the badge on one of its main-navigation entries (docs/extensions/extensions.md「UI 插槽」 badges): nil clears it.
     case pluginBadge(plugin: String, id: String, badge: ExtensionBadge?)
-    /// An extension's data changed (`ui.invalidate`, docs/extensions.md「ui.invalidate」): its interface `id` (nil: all of
+    /// An extension's data changed (`ui.invalidate`, docs/extensions/extensions.md「ui.invalidate」): its interface `id` (nil: all of
     /// them) is drawn again where it is shown.
     case extensionInvalidate(extension: String, id: String?)
     case error(SessionKey?, String)
@@ -279,7 +279,7 @@ nonisolated enum ServerEvent: Sendable {
 }
 
 nonisolated extension ServerEvent {
-    /// The event with the group of the connection it came on (docs/multi-hub.md) on every key, session, machine and
+    /// The event with the group of the connection it came on (docs/protocol/multi-hub.md) on every key, session, machine and
     /// interaction in it. The default group's events are left as they are.
     func stamped(_ group: String) -> ServerEvent {
         guard !group.isEmpty else { return self }
@@ -330,13 +330,13 @@ final class LiveConnection {
     /// Round trip of the last answered ping.
     private(set) var rtt: TimeInterval?
     /// The hub turned the socket's credential down (401 on the handshake): a revoked device, or a pairing token past its
-    /// grace (docs/protocol.md「临时配对」). Retrying alone will not fix it; the app says Pairing Expired (ConnectionStatus) and
+    /// grace (docs/protocol/protocol.md「临时配对」). Retrying alone will not fix it; the app says Pairing Expired (ConnectionStatus) and
     /// tries again only slowly (`rejectedRetry`). Cleared once a socket opens, and by `connect` (paired again).
     private(set) var rejected = false { didSet { if rejected != oldValue { onChange?() } } }
     static let rejectedRetry: TimeInterval = 60
     /// When the next attempt starts while the hub is out of reach.
     private(set) var nextTry: Date?
-    /// The socket went while connected and is not back yet (docs/hub-restart.md): nil once it is, or after
+    /// The socket went while connected and is not back yet (docs/operations/hub-restart.md): nil once it is, or after
     /// `disconnect`.
     private(set) var drop: LinkDrop?
     /// Within the drop's grace (8 s, 30 s after the hub said it was restarting): the app keeps looking connected and
@@ -361,7 +361,7 @@ final class LiveConnection {
     @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored var prepareEvent: (@Sendable (ServerEvent) -> Void)?
     @ObservationIgnored var onConnected: (() -> Void)?
-    /// Picks where each attempt goes when a group has several hubs (HubRoute, docs/multi-hub.md「选路」): asked before
+    /// Picks where each attempt goes when a group has several hubs (HubRoute, docs/protocol/multi-hub.md「选路」): asked before
     /// every attempt; nil keeps the config given to `connect`.
     @ObservationIgnored var route: (@MainActor () async -> ServerConfig?)?
     /// The credential each attempt goes with (AppModel.currentCredential): a pairing token this device already traded
@@ -407,7 +407,7 @@ final class LiveConnection {
         open()
     }
 
-    /// The device traded the token this socket uses (`old`, its pairing token) for its own (docs/protocol.md「临时配对」):
+    /// The device traded the token this socket uses (`old`, its pairing token) for its own (docs/protocol/protocol.md「临时配对」):
     /// the same address or route goes on with `new`, at once while it is up (the hub cuts the old one's sockets after a
     /// short grace). The broadcast stream stays ours: it is the same hub. False when the socket is not on `old`.
     @discardableResult
@@ -522,7 +522,7 @@ final class LiveConnection {
 
     /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), the
     /// extensions' install steps (`extension_operation`, #3307), the managers' roster changes (`managers`,
-    /// docs/managers.md), and where to resume the broadcasts from once a hello gave a stream.
+    /// docs/assistant/managers.md), and where to resume the broadcasts from once a hello gave a stream.
     static func queryItems(_ cursor: EventCursor, sessionList: Bool = false) -> [URLQueryItem] {
         [URLQueryItem(name: "features", value: (sessionList ? "sessions_list," : "") + "sessions_delta,extension_operations,managers")] + cursor.queryItems
     }
@@ -693,7 +693,7 @@ final class LiveConnection {
             delay = backoff
             backoff = min(backoff * 2, 20)
         }
-        // A refused credential: slowly (a public address counts failed logins and blocks the address, docs/protocol.md).
+        // A refused credential: slowly (a public address counts failed logins and blocks the address, docs/protocol/protocol.md).
         if rejected { delay = max(delay, Self.rejectedRetry) }
         let wait = delay
         nextTry = .now + wait
@@ -704,7 +704,7 @@ final class LiveConnection {
         }
     }
 
-    /// client_hello (docs/protocol.md, docs/i18n.md「协议」): this connection's interface language, so the hub's
+    /// client_hello (docs/protocol/protocol.md, docs/protocol/i18n.md「协议」): this connection's interface language, so the hub's
     /// notices and errors on it, and the user's language for what it produces later, match the app. Only `locale`:
     /// features, heartbeat and platform stay as before (the URL, the legacy-iOS defaults). Old hubs ignore it.
     private func sayHello() {

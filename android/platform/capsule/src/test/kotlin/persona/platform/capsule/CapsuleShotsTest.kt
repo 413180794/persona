@@ -29,7 +29,7 @@ import persona.core.designsystem.PersonaTheme
 import java.io.File
 
 /**
- * The floating capsule in each language (docs/i18n.md): the collapsed orb, the main chat, a section's list, an empty
+ * The floating capsule in each language (docs/protocol/i18n.md): the collapsed orb, the main chat, a section's list, an empty
  * list and the completion notice, Glass light and dark. PNGs go to `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).
  * The sections' names and entries come from the app; here they are written per language.
  */

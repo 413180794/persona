@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 // Settings › Appearance (2026-11-01): laid out like Connectors, one row per thing that changes how the app looks
-// (Avatar, Theme Color, Interface Style, Light & Dark on iPhone and iPad, and Layout on an iPhone), each opening its own page; the first three are apart (docs/ios.md「设计语言」).
+// (Avatar, Theme Color, Interface Style, Light & Dark on iPhone and iPad, and Layout on an iPhone), each opening its own page; the first three are apart (docs/apple/ios.md「设计语言」).
 // The home screen icon is the Avatar's, not a row of its own (#3203). Picking anything
 // there rebuilds the whole tree (`AppModel.look`, the layout switch); the settings path lives in AppModel, so the
 // rebuilt app is back on the same page.

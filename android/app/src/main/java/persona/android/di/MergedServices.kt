@@ -16,7 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 
 /*
- * The services the pages use, over every hub group (docs/android.md "Multiple hubs"). Lists are concatenated in the
+ * The services the pages use, over every hub group (docs/android/android.md "Multiple hubs"). Lists are concatenated in the
  * registry's order with each group's machine ids as GroupKeys shows them; a call goes to the group its id names and
  * reaches that group's own services with plain ids. With one group every list is that group's own flow and every
  * call goes straight to it, so a phone paired with a single hub behaves as before groups existed.
@@ -202,7 +202,7 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         if (GroupKeys.namespaceOf(machineId) == null) null else stacks.of(machineId)?.mergedTerminal
 
     /**
-     * Terminal's pane lists and new tabs (docs/terminal.md "Standalone terminal"): each call goes to the machine's group with its plain
+     * Terminal's pane lists and new tabs (docs/integrations/terminal.md "Standalone terminal"): each call goes to the machine's group with its plain
      * id. What comes back names no machine (host-local ids, session ids, `pane:` addresses), so it needs no translating.
      */
     @OptIn(ExperimentalCoroutinesApi::class)

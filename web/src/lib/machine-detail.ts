@@ -1,4 +1,4 @@
-// Machine details (docs/machines.md "App"): the pure part of the page — ranges, the metric charts' scales, gaps, ticks and
+// Machine details (docs/server/machines.md "App"): the pure part of the page — ranges, the metric charts' scales, gaps, ticks and
 // the hover read-out, the number formats, the agents by space and the system facts. MachineDetail.tsx only draws.
 import { formatDate, t } from "../i18n";
 import { stateOf, tabLabel } from "./format";
@@ -6,7 +6,7 @@ import type { AgentState, Machine, Session } from "./types";
 import type { MachineComputer } from "./computer";
 import { stateCount } from "./state-labels";
 
-// ── wire types (GET /api/v1/machines/{id}/metrics, docs/protocol.md) ──
+// ── wire types (GET /api/v1/machines/{id}/metrics, docs/protocol/protocol.md) ──
 
 /** One step of history (the step's average). mem / swap / disk are used bytes, rx / tx bytes a second. */
 export interface DetailPoint {
@@ -37,7 +37,7 @@ export interface DetailSample {
   disk_total?: number;
 }
 
-/** Machine.system (docs/machines.md "System information"). */
+/** Machine.system (docs/server/machines.md "System information"). */
 export interface SystemInfo {
   os?: string;
   distro?: string;
@@ -62,7 +62,7 @@ export interface DetailMetrics {
 }
 
 /** What the machine list carries beyond types.ts's Machine (the detail page reads these too). */
-/** computer: only while the hub's extension cua is on, and only for a Mac (docs/computer-use.md). */
+/** computer: only while the hub's extension cua is on, and only for a Mac (docs/extensions/computer-use.md). */
 export type DetailMachine = Machine & { ssh_host?: string; node_version?: string; system?: SystemInfo; computer?: MachineComputer };
 
 // ── ranges ──
@@ -266,7 +266,7 @@ export function localOffset(at = Date.now()): number {
 
 export type Level = "normal" | "warning" | "critical";
 
-/** docs/machines.md "Anomalies": CPU ≥ 75 / 90 %, memory and disk ≥ 80 / 90 %, load ≥ 1 / 2 × cores. */
+/** docs/server/machines.md "Anomalies": CPU ≥ 75 / 90 %, memory and disk ≥ 80 / 90 %, load ≥ 1 / 2 × cores. */
 export function level(v: number | undefined, warn: number, crit: number): Level {
   if (v === undefined) return "normal";
   return v >= crit ? "critical" : v >= warn ? "warning" : "normal";

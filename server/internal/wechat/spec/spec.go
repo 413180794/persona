@@ -27,7 +27,7 @@ func Manifest() connector.Manifest {
 	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapLogin}}
 }
 
-// Channel is the channel it contributes (docs/channels.md): pictures and voice (WeChat's own transcript) come in, plain
+// Channel is the channel it contributes (docs/extensions/channels.md): pictures and voice (WeChat's own transcript) come in, plain
 // text goes out in pieces WeChat takes, what agents ask is answered in text, "typing…" while a turn goes on.
 func Channel() channel.Item {
 	return channel.Item{ID: ID, Name: Name, Kind: channel.KindIM, Connector: ID, Bind: channel.BindQR,

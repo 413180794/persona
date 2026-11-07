@@ -1,4 +1,4 @@
-// Installing the web client as an app (PWA, docs/web.md "Install as an app"): registers the service worker (src/sw.ts) and
+// Installing the web client as an app (PWA, docs/web/web.md "Install as an app"): registers the service worker (src/sw.ts) and
 // tracks what Settings › General can offer — the browser's own install prompt, a hint where there is none, or "Installed".
 import { useSyncExternalStore } from "react";
 import { BASE } from "./base";
@@ -47,7 +47,7 @@ export function startPWA() {
   matchMedia("(display-mode: standalone)").addEventListener("change", changed);
   // Service workers need a secure context; over the LAN's plain http the page stays a plain page. Not in dev: Vite's
   // modules aren't the build's.
-  // Not under a sub-path (lib/base.ts): the worker's routes and caches are the root's (docs/web.md "Sub-path").
+  // Not under a sub-path (lib/base.ts): the worker's routes and caches are the root's (docs/web/web.md "Sub-path").
   if (import.meta.env.PROD && !BASE && isSecureContext && "serviceWorker" in navigator) {
     afterLoad(() => void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {}));
   }

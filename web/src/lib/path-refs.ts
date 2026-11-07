@@ -1,4 +1,4 @@
-// Paths a message names (docs/web.md "File paths in messages"): what looks like a file on the agent's machine, so the page
+// Paths a message names (docs/web/web.md "File paths in messages"): what looks like a file on the agent's machine, so the page
 // can ask the machine which are there (lib/path-presence.ts) and link only those. The same rules as iOS's FilePaths,
 // plus a line: path:12, path:12:5, path:12-20, path#L12.
 //

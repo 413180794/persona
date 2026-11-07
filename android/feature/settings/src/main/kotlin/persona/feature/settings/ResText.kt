@@ -14,7 +14,7 @@ import persona.core.designsystem.UiText
 
 /**
  * Words a model hands its page (a failure, a notice): a string resource and its arguments, put into words in the
- * language the page is drawn in, so models stay free of `Resources` (docs/i18n.md). [count] picks the form of a
+ * language the page is drawn in, so models stay free of `Resources` (docs/protocol/i18n.md). [count] picks the form of a
  * `<plurals>` [id]. An argument that is itself a [ResText] or a [UiText] is put into words first; a list of them is one per line.
  */
 internal data class ResText(val id: Int, val args: List<Any> = emptyList(), val count: Int? = null) {

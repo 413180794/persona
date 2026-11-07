@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The channels (docs/channels.md): the ways of talking to Persona from a chat app — the Feishu bot (feishu*.go) and
+// The channels (docs/extensions/channels.md): the ways of talking to Persona from a chat app — the Feishu bot (feishu*.go) and
 // the bots plugins contribute (the channel extension point, channels_plugin.go). A message from a channel goes into the
 // conversation the channel talks to, the turn is followed and its answer sent back the same way (channels_runs.go);
 // what is asked in a conversation a channel drives goes there too. All of that is the assistant's. The hub keeps the
@@ -368,7 +368,7 @@ func (s *Service) pluginChannelNow(ctx context.Context, id string) (channel.View
 }
 
 // botLang is the language of what the bots and the channels write: the request's when the context carries one (the
-// app's request, withRequestLang), else the user's (docs/i18n.md "Protocol"), zh-Hans while no client has said one.
+// app's request, withRequestLang), else the user's (docs/protocol/i18n.md "Protocol"), zh-Hans while no client has said one.
 func (s *Service) botLang(ctx context.Context) i18n.Lang {
 	if l := i18n.From(ctx); l != "" {
 		return l

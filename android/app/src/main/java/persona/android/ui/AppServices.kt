@@ -56,7 +56,7 @@ class ShellSession(
     val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
     /** The addresses the selected group's hubs go by (their links open in the app, ShellLinks.kt); none in demo mode. */
     val hubAddresses: () -> List<String> = { emptyList() },
-    /** "Add computer" and "Confirm computer" (docs/onboarding.md 4.2); null in demo mode. */
+    /** "Add computer" and "Confirm computer" (docs/assistant/onboarding.md 4.2); null in demo mode. */
     val computers: ComputerPairing? = null,
 ) {
     val agents = object : AgentsDependencies {
@@ -93,7 +93,7 @@ class AppServices @Inject constructor(
     private val computers: ComputerPairing,
 ) {
     private val app = application as PersonaApp
-    /** Terminal, files, chat actions and machine metrics of every hub group (docs/android.md "Multiple hubs"). */
+    /** Terminal, files, chat actions and machine metrics of every hub group (docs/android/android.md "Multiple hubs"). */
     private val shell = persona.android.di.MergedShellServices(stacks)
     /** Terminal's pane lists of every hub group (feature terminal_panes). */
     val terminalPanes: TerminalPanes get() = shell.panes

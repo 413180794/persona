@@ -10,7 +10,7 @@ import (
 )
 
 // botmuxKey is where a machine's own choice is kept. hub.json's machines[].botmux is only the default now: the switch
-// "Also show botmux sessions" (the web's machine page header, iOS's Engine) answers for one machine (docs/engines.md "botmux").
+// "Also show botmux sessions" (the web's machine page header, iOS's Engine) answers for one machine (docs/integrations/engines.md "botmux").
 func botmuxKey(machine string) string { return "botmux/" + machine }
 
 // botmux is whether the machine's node lists botmux's sessions: what the user chose for this machine, else hub.json's

@@ -6,9 +6,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -70,9 +70,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -134,9 +134,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm"
       ],
       "input": {
@@ -188,9 +188,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "apple/Persona/Views/Interactions/InteractionViews.swift：AgentPermissionForm"
       ],
       "input": {
@@ -242,9 +242,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -275,9 +275,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -308,9 +308,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -341,9 +341,9 @@
       "description": "核对对话页的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Views/Interactions/InteractionViews.swift：PlanForm、PermissionForm、QuestionForm、ScreenForm",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -374,9 +374,9 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -415,9 +415,9 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -456,9 +456,9 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -496,9 +496,9 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -536,10 +536,10 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
-        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
       ],
       "input": {
         "profile": "unified",
@@ -574,10 +574,10 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
-        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
       ],
       "input": {
         "profile": "unified",
@@ -612,10 +612,10 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
-        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
       ],
       "input": {
         "profile": "unified",
@@ -650,10 +650,10 @@
       "description": "核对通知的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/App/NotificationActions.swift：categories、resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
-        "docs/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/android.md 5.8（协调者 2026-10-31 定：选项按钮和「允许」一样让 Agent 往下做，要先解锁）"
       ],
       "input": {
         "profile": "unified",
@@ -689,9 +689,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -725,9 +725,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -761,9 +761,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -803,9 +803,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -845,9 +845,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -874,9 +874,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -903,9 +903,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -932,9 +932,9 @@
       "source": [
         "ios/LiveActivity/FleetIntents.swift：authenticationPolicy",
         "ios/Persona/App/FleetActions.swift：resolution",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2",
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2",
         "ios/PersonaWidgets/FleetLiveActivity.swift：FleetActionRow、widgetURL"
       ],
       "input": {
@@ -960,9 +960,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1000,9 +1000,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1040,9 +1040,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1079,9 +1079,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1118,9 +1118,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1151,9 +1151,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1184,9 +1184,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1217,9 +1217,9 @@
       "description": "核对手表的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/PersonaWatch/PersonaWatchApp.swift：WatchInteractionView.body",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1250,9 +1250,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1278,9 +1278,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1306,9 +1306,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1333,9 +1333,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1360,9 +1360,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1387,9 +1387,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1414,9 +1414,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",
@@ -1441,9 +1441,9 @@
       "description": "核对Siri 与快捷指令的可用动作、批准模式和解锁要求。",
       "source": [
         "ios/Persona/Intents/ApproveFirstIntent.swift：resolution(for:)、perform",
-        "docs/redesign/ux.md §3.4、§5.3",
-        "docs/redesign/android.md §5.8",
-        "docs/redesign/README.md §2.3、§4.2"
+        "docs/archive/redesign/ux.md §3.4、§5.3",
+        "docs/archive/redesign/android.md §5.8",
+        "docs/archive/redesign/README.md §2.3、§4.2"
       ],
       "input": {
         "profile": "unified",

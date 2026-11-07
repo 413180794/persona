@@ -24,7 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Tasks dispatched from an assistant conversation (docs/unified-entry.md, #930). The assistant hands the user a plan
+// Tasks dispatched from an assistant conversation (docs/assistant/unified-entry.md, #930). The assistant hands the user a plan
 // (task_plan); read-only plans, tasks the user asked for in so many words (#2559) and kinds the user trusts start at
 // once, the rest wait for the user's "Start" on the plan card. A task is a todo (todos.go) whose origin is the conversation; its agents are ordinary agents
 // (the Agents page shows them as always). What the assistant adds to the conversation — the plan card, a started
@@ -1522,7 +1522,7 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 
 // snapshotTask is one task in the snapshot, in state st: its lead agent's (taskLead) last words, the step it is on
 // while it works (or has said nothing yet: an agent that only runs tools, #1583) and its running subagents, as the
-// task cards show them (docs/unified-entry.md "Progress on task cards").
+// task cards show them (docs/assistant/unified-entry.md "Progress on task cards").
 func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prompts.SnapshotTask {
 	task := prompts.SnapshotTask{ID: t.ID, Title: t.Title, State: taskStateLabel(st)}
 	last := taskLead(st, agents)
@@ -1558,7 +1558,7 @@ func reported(task *prompts.SnapshotTask, p *TaskProgress, lead proto.Session, n
 	}
 }
 
-// snapshotPlan is c's own task list as the snapshot tells it, nil when it keeps none (docs/agent-goal.md "Plan").
+// snapshotPlan is c's own task list as the snapshot tells it, nil when it keeps none (docs/integrations/agent-goal.md "Plan").
 func snapshotPlan(c proto.Session) *prompts.SnapshotAgentPlan {
 	p := c.Plan
 	if p == nil || p.Total == 0 {
@@ -1597,7 +1597,7 @@ func taskLead(st string, agents []proto.Session) proto.Session {
 	return latest
 }
 
-// taskState follows docs/todos.md "How the state is computed"(clients compute the same).
+// taskState follows docs/assistant/todos.md "How the state is computed"(clients compute the same).
 func taskState(t Todo, agents []proto.Session) string {
 	if t.DoneAt != nil && t.StartError != "" {
 		return "failed"

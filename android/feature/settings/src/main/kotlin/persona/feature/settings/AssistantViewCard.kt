@@ -47,7 +47,7 @@ import persona.core.domain.views.AssistantOpen
 import persona.core.domain.views.AssistantOpenTarget
 import persona.core.domain.views.CardOutcome
 
-// An assistant's card in its conversation (docs/assistant-views.md, #2022): the extensions' renderer with the
+// An assistant's card in its conversation (docs/assistant/assistant-views.md, #2022): the extensions' renderer with the
 // assistant's actions — reply (once per card, with the version the user saw), open in the app, push / pop its pages —
 // its answer from the hub's store, and its fallback whenever it cannot be drawn.
 

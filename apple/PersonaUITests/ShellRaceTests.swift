@@ -3,7 +3,7 @@ import XCTest
 /// The user's report (2026-11-02): after reading an agent's chat and going back, the switch's Agents did not switch to
 /// Agents. Taps are a finger's (`ShellFinger`: coordinates, not accessibility elements), at every pace: before the back
 /// animation ends, right after, a while later, from a chat that is streaming, and faster than the strip slides. After
-/// each, the strip, the switch and the app's tab must agree on the page tapped last, in time (docs/shell.md).
+/// each, the strip, the switch and the app's tab must agree on the page tapped last, in time (docs/apple/shell.md).
 final class ShellRaceTests: XCTestCase {
     private var app: XCUIApplication!
     private var finger: ShellFinger!

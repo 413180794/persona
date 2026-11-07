@@ -4,7 +4,7 @@ import persona.core.contracts.Supervision
 import persona.core.contracts.TaskReview
 import persona.core.contracts.Todo
 
-// A task the main conversation supervises (#3124, docs/unified-entry.md "Supervision"): where its review stands and how each
+// A task the main conversation supervises (#3124, docs/assistant/unified-entry.md "Supervision"): where its review stands and how each
 // criterion was found, for the task card, the todo page and the conversation's review lines.
 
 /** Where a supervised task's review stands. */

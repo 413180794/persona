@@ -35,7 +35,7 @@ const MaxText = 3500
 // Network is where it goes: iLink and WeChat's media CDN.
 var Network = []string{"*.weixin.qq.com"}
 
-// Channel is the channel it contributes (docs/channels.md): pictures and voice (WeChat's own transcript) come in, plain
+// Channel is the channel it contributes (docs/extensions/channels.md): pictures and voice (WeChat's own transcript) come in, plain
 // text goes out in pieces WeChat takes, what agents ask is answered in text, "typing…" while a turn goes on.
 func Channel() wire.ChannelItem {
 	return wire.ChannelItem{ID: ID, Name: Name, Kind: "im", Connector: ID, Bind: "qr",
@@ -281,7 +281,7 @@ func Main(b Build) {
 // without a word, so it says what it is instead.
 func CommandLine(name string, b Build, args []string, terminal bool, stdout, stderr io.Writer) (code int, done bool) {
 	usage := fmt.Sprintf("usage: %s [version [-v]]\n"+
-		"The WeChat plugin's program (docs/wechat.md): the hub starts it and talks to it over stdin / stdout, so there is\n"+
+		"The WeChat plugin's program (docs/extensions/wechat.md): the hub starts it and talks to it over stdin / stdout, so there is\n"+
 		"nothing to run by hand. To check a build, run: %s version -v", name, name)
 	if len(args) == 0 {
 		if terminal {

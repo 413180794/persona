@@ -2,7 +2,7 @@ import Foundation
 import Network
 import Observation
 
-/// What the top of the main screens says about the link to the hub, the way Telegram does it (docs/ios.md「连接状态」):
+/// What the top of the main screens says about the link to the hub, the way Telegram does it (docs/apple/ios.md「连接状态」):
 /// no banner, the title itself turns into a small spinner and Waiting for Network / Connecting… / Updating…, and quietly back.
 @Observable
 final class ConnectionStatus {
@@ -36,7 +36,7 @@ final class ConnectionStatus {
     private(set) var shown: Phase = .online {
         didSet { if shown != oldValue { onShown?(shown) } }
     }
-    /// Told of each new `shown` as it is set (the iPhone shell's floating link pill: docs/shell.md「连接状态和 toast」).
+    /// Told of each new `shown` as it is set (the iPhone shell's floating link pill: docs/apple/shell.md「连接状态和 toast」).
     @ObservationIgnored var onShown: ((Phase) -> Void)?
     private(set) var networkUp = true
     private(set) var catchingUp = false
@@ -49,7 +49,7 @@ final class ConnectionStatus {
     /// Everything is fetched again after a reconnect: messages that waited for the network can go.
     @ObservationIgnored var onCaughtUp: (() -> Void)?
 
-    /// Every group's socket (docs/multi-hub.md); one while there is one group.
+    /// Every group's socket (docs/protocol/multi-hub.md); one while there is one group.
     @ObservationIgnored var lives: () -> [LiveConnection] = { [] }
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private var due: Task<Void, Never>?
@@ -128,7 +128,7 @@ final class ConnectionStatus {
         return catchingUp ? .updating : .online
     }
 
-    /// Several groups (docs/multi-hub.md「连接状态」): connecting only while none of them is up — one group out of reach
+    /// Several groups (docs/protocol/multi-hub.md「连接状态」): connecting only while none of them is up — one group out of reach
     /// (a work hub behind a VPN) would otherwise keep every title on Connecting…; the hub list and the group chips say which
     /// one is down. One group: exactly the single-link rule.
     static func phase(network: Bool, links: [(state: LiveConnection.State, stalled: Bool)], catchingUp: Bool) -> Phase {

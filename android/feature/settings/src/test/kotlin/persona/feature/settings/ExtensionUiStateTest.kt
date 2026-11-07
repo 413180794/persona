@@ -195,7 +195,7 @@ class ExtensionUiStateTest {
         assertEquals(1, places.state.value.places?.size)
     }
 
-    // UI version 2 (docs/extensions.md "UI slots" "New items"): charts, number grids and segmented controls draw; a kind this
+    // UI version 2 (docs/extensions/extensions.md "UI slots" "New items"): charts, number grids and segmented controls draw; a kind this
     // app does not know, or one it cannot draw, is skipped and the rest of the view stays.
     @Test fun theNewItemsDrawAndUnknownOnesAreSkipped() {
         val chart = ExtensionViewItem("chart", kind = "bar", unit = "tokens", stacked = true, series = listOf(
@@ -269,7 +269,7 @@ class ExtensionUiStateTest {
         assertEquals(mapOf("range" to "1d", "note" to "备注"), api.actions.last().third)
     }
 
-    // refresh_after (docs/extensions.md "UI slots" "Refresh"): drawn again with the extension's state once the time is up (30 s at
+    // refresh_after (docs/extensions/extensions.md "UI slots" "Refresh"): drawn again with the extension's state once the time is up (30 s at
     // least) while the page runs it; stopped, nothing; run again after the time is up, drawn at once.
     @Test fun refreshAfterDrawsAgainWhileOnScreen() = runTest {
         val api = FakeUi()

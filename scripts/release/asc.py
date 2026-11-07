@@ -2,7 +2,7 @@
 """Minimal App Store Connect API client with no third-party dependencies.
 
 The ES256 JWT is signed with the system `openssl`, so this runs on a stock
-macOS Python. Credentials come from the config (docs/config.md), overridable with ASC_KEY_ID, ASC_ISSUER_ID,
+macOS Python. Credentials come from the config (docs/operations/config.md), overridable with ASC_KEY_ID, ASC_ISSUER_ID,
 ASC_KEY_PATH in the environment.
 
 The App Store Connect app id (not the bundle id) is read from the config
@@ -35,13 +35,13 @@ KEY_PATH = os.path.expanduser(os.environ.get("ASC_KEY_PATH") or STORE.get("key_p
 
 
 def app_id() -> str:
-    """App Store Connect numeric app id, from app_store.app_id in the config (docs/config.md)."""
+    """App Store Connect numeric app id, from app_store.app_id in the config (docs/operations/config.md)."""
     value = str(STORE.get("app_id", "")).strip()
     if not value.isdigit():
         sys.exit(
             f"app_store.app_id in {persona_config.path()} must be the numeric Apple ID of the App record, got {value!r}.\n"
             f"Create the record on the web first (App Store Connect › Apps › + › New App, bundle id {BUNDLE_ID}). "
-            "See docs/release.md."
+            "See docs/operations/release.md."
         )
     return value
 

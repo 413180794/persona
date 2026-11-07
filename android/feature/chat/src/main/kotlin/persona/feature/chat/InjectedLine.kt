@@ -23,7 +23,7 @@ import persona.core.domain.taskOfInjected
 private val noTodos = MutableStateFlow(emptyList<Todo>())
 
 /**
- * A message Persona typed in for the model (a task's notice, a scheduled run…; docs/protocol.md "Messages Persona injects"):
+ * A message Persona typed in for the model (a task's notice, a scheduled run…; docs/protocol/protocol.md "Messages Persona injects"):
  * one centered line, never its words. A task's notice opens the task (in the assistant's conversations); a scheduled
  * run's line shows what the task asks.
  */

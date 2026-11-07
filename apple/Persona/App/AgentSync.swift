@@ -21,7 +21,7 @@ final class AgentSync {
     /// What has been pulled, by rev ("<machine>/<session>" → rev); kept across launches, beside the chats' disk cache it
     /// describes (`StateCache`). Not in UserDefaults: it changes with nearly every push, and each write to UserDefaults
     /// draws every `@AppStorage` view in the app again; the Agents list re-laid itself out under the finger
-    /// (docs/archive/lanes/live-updates.md「滚动时被迫刷新」).
+    /// (docs/archive/apple/live-updates.md「滚动时被迫刷新」).
     private var synced: [String: Int64]
     private var queue: [SessionKey] = []
     private var running = Set<SessionKey>()
@@ -70,7 +70,7 @@ final class AgentSync {
 
     private func plan() {
         let model = AppModel.shared
-        // Each group's agents while its own socket is up (docs/multi-hub.md).
+        // Each group's agents while its own socket is up (docs/protocol/multi-hub.md).
         let up = Set(model.groupIDs.filter { model.isLive($0) })
         guard !up.isEmpty else { return }
         let cutoff = Date.now.addingTimeInterval(-Self.recentWindow)

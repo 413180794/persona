@@ -1,6 +1,6 @@
 package hub
 
-// Per-manager push switches (docs/managers.md "Clients"): a device that turned a manager's pushes off gets none of
+// Per-manager push switches (docs/assistant/managers.md "Clients"): a device that turned a manager's pushes off gets none of
 // what that manager asks for, whichever way it asks, and everything else as before.
 
 import (

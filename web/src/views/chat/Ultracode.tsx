@@ -1,4 +1,4 @@
-// Claude Code's ultracode switch in the chat and in "New agent" (#3428, docs/web.md "ultracode"): the row under the
+// Claude Code's ultracode switch in the chat and in "New agent" (#3428, docs/web/web.md "ultracode"): the row under the
 // thinking effort, the workflow mark beside the thinking chip and on agent rows, and the line above the composer after a
 // resume turned it off. The rules and the request are lib/ultracode.ts.
 import { useState } from "react";

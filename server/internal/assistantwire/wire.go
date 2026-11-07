@@ -1,5 +1,5 @@
 // Package assistantwire is what the hub and the assistant (internal/assistant, its own process) say to each other
-// over the bus (docs/protocol.md "Bus", docs/assistant.md "The boundary with the hub"): each method's and event's name, params
+// over the bus (docs/protocol/protocol.md "Bus", docs/assistant/assistant.md "The boundary with the hub"): each method's and event's name, params
 // and result, the error codes that cross it, and the routes the hub relays. Both sides import it; neither imports
 // the other.
 package assistantwire
@@ -38,7 +38,7 @@ type Hello struct {
 	KB *KBSettings `json:"kb,omitempty"`
 	// Models is what hub.json says about models (models.go).
 	Models HubModels `json:"models,omitzero"`
-	// Locale is the user's language (zh-Hans / en / ja, docs/i18n.md): the assistant answers in it. "" (an older hub)
+	// Locale is the user's language (zh-Hans / en / ja, docs/protocol/i18n.md): the assistant answers in it. "" (an older hub)
 	// is zh-Hans.
 	Locale string `json:"locale,omitempty"`
 	// Mutes are the muted spaces / agents (the hub's settings mutes) of the manager's own machines only (as
@@ -75,7 +75,7 @@ type Placement struct {
 	Machines []string `json:"machines,omitempty"`
 	// WorkMachines are configured work computers, including aliases; none may host the assistant.
 	WorkMachines []string `json:"work_machines,omitempty"`
-	// Standby: this hub is a member of a mesh group, whose center runs the scheduled tasks (docs/mesh.md).
+	// Standby: this hub is a member of a mesh group, whose center runs the scheduled tasks (docs/server/mesh.md).
 	Standby bool `json:"standby,omitempty"`
 }
 
@@ -89,13 +89,13 @@ type DeviceCall struct {
 // The machine methods the assistant calls. The node's own methods go to the machine's node as they are; the hub
 // answers the others from what it holds about the machine.
 const (
-	// The node's (docs/protocol.md "hub ↔ node").
+	// The node's (docs/protocol/protocol.md "hub ↔ node").
 	DeviceSessionItems  = "session.items"  // {session_id, turns} → {items}
 	DeviceSessionRename = "session.rename" // {session_id, title} → {ok}
 	DeviceAssistantSend = "assistant.send" // {session_id, text, resume_only?, permission_mode?, …model} → {session_id}
 	DeviceSessionSend   = "session.send"   // {session_id, text} → {}
 	DeviceSessionStart  = "session.start"  // {cwd, prompt, launcher?, model?, permission_mode?, tab_name?, workspace_id?} → {session}
-	// DeviceWorktreePrepare / DeviceWorktreeCreate: "New worktree…" (docs/terminal.md), the workspace named by a directory
+	// DeviceWorktreePrepare / DeviceWorktreeCreate: "New worktree…" (docs/integrations/terminal.md), the workspace named by a directory
 	// in it: {cwd} → WorktreePrepare; {cwd, branch, path} → WorktreeCreateResult.
 	DeviceWorktreePrepare = "worktree.prepare"
 	DeviceWorktreeCreate  = "worktree.create"
@@ -148,7 +148,7 @@ type AppCall struct {
 
 // The apps the hub runs for the assistant and their methods.
 const (
-	// AppConnectors is the hub's connectors (docs/connectors.md).
+	// AppConnectors is the hub's connectors (docs/extensions/connectors.md).
 	AppConnectors = "connectors"
 	// ConnectorsSnapshots: {tz} → {snapshots: [connectorwire.SnapshotData]}, the live states of the signed-in connectors
 	// that keep one (the chats waiting on the user, today's meetings), those that answered within a few seconds.
@@ -323,7 +323,7 @@ type SessionView struct {
 	Title    string   `json:"title,omitempty"`
 	Archived bool     `json:"archived,omitempty"`
 	Queued   []string `json:"queued,omitempty"` // messages from other conversations waiting for its turn to end
-	// Origin is who opened the conversation (docs/protocol.md "Where assistant chats come from": user, channel, inbox, task, spawned,
+	// Origin is who opened the conversation (docs/protocol/protocol.md "Where assistant chats come from": user, channel, inbox, task, spawned,
 	// lark_agent, extension) and OriginRef what of (the inbox item, the task, the conversation, the channel, the
 	// extension); both "" while it is not known.
 	Origin    string `json:"origin,omitempty"`
@@ -381,7 +381,7 @@ type ContextParams struct {
 }
 
 // ContextResult is assistant.context's answer: the <persona-context> text, and the <persona-view-errors> block of the
-// conversation's rich views that failed their check and were not reported yet (docs/assistant-views.md "Feedback next turn").
+// conversation's rich views that failed their check and were not reported yet (docs/assistant/assistant-views.md "Feedback next turn").
 // Reading it consumes nothing: the node acks Receipts once the message is delivered.
 type ContextResult struct {
 	Text       string             `json:"text"`
@@ -448,7 +448,7 @@ type MessageCard struct {
 // sides read a turn by them: the hub's session lists say an agent's turn was cut off (proto.Session.TurnError), the
 // assistant's scheduled runs and tasks act on it. "Not logged in · Please run /login" is what Claude Code answers when
 // it has no credentials (a model of its own, "<synthetic>"): the turn did not run, the user must sign in
-// (docs/onboarding.md 4.4). Its separator is in the marker, so a reply that talks about being logged out is a reply.
+// (docs/assistant/onboarding.md 4.4). Its separator is in the marker, so a reply that talks about being logged out is a reply.
 var APIErrorMarkers = []string{"API Error:", "There's an issue with the selected model", "Failed to authenticate",
 	"OAuth token has expired", "Invalid API key", "Not logged in ·"}
 
@@ -475,7 +475,7 @@ type DeviceSessions struct {
 	Connected time.Time       `json:"connected,omitzero"`
 }
 
-// ---- the todos (the assistant's, docs/todos.md) ----
+// ---- the todos (the assistant's, docs/assistant/todos.md) ----
 
 // TodoReport is what the hub shows of the todos: the todo each agent works for now (the open todos' active links: the
 // session lists' todo, the task named on its agents' cards) and the agents kept quiet (#1731: no pushes, badges or Live
@@ -564,7 +564,7 @@ const AssistantID = "assistant"
 const (
 	// CapabilityConfigOwn: the manager reads its own sections of the configuration from its manager.json (owner,
 	// notes, Agents, the knowledge base, the models, a card's wait): the hello does not carry them any more, and a
-	// manager without it runs on its built-in defaults (docs/managers.md "Configuration").
+	// manager without it runs on its built-in defaults (docs/assistant/managers.md "Configuration").
 	CapabilityConfigOwn = "config.own"
 )
 
@@ -660,7 +660,7 @@ var Routes = []string{
 	"POST /api/v1/task-plans/{id}/dismiss",
 	"GET /api/v1/task-trust",
 	"DELETE /api/v1/task-trust",
-	// The todos (the assistant's todos.go, docs/todos.md).
+	// The todos (the assistant's todos.go, docs/assistant/todos.md).
 	"GET /api/v1/todos",
 	"POST /api/v1/todos",
 	"PATCH /api/v1/todos/{id}",
@@ -693,7 +693,7 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations/{id}/compact",
 	"POST /api/v1/assistant/main/new",
 	"POST /api/v1/assistant/origins/backfill",
-	// The channels (channels.go there, docs/channels.md "API").
+	// The channels (channels.go there, docs/extensions/channels.md "API").
 	"GET /api/v1/channels",
 	"GET /api/v1/channels/{id}",
 	"PUT /api/v1/channels/{id}",
@@ -701,7 +701,7 @@ var Routes = []string{
 	"POST /api/v1/assistant/conversations/{id}/views/{key}/actions",
 	"POST /api/v1/assistant/conversations/{id}/views/{key}/html-actions",
 	"POST /api/v1/channels/{id}/test",
-	// The knowledge base (the assistant's kb_routes.go, docs/knowledge.md "App API").
+	// The knowledge base (the assistant's kb_routes.go, docs/assistant/knowledge.md "App API").
 	"GET /api/v1/kb/{kind}",
 	"GET /api/v1/kb/{kind}/{id}",
 	"PUT /api/v1/kb/{kind}/{id}",
@@ -709,13 +709,13 @@ var Routes = []string{
 	"GET /api/v1/kb/chats/{id}/context",
 	"GET /api/v1/kb/chats/{id}/days/{day}",
 	"GET /api/v1/kb-search",
-	// The phone's recordings (kb_recordings.go there, docs/protocol.md "Recording sync").
+	// The phone's recordings (kb_recordings.go there, docs/protocol/protocol.md "Recording sync").
 	"PUT /api/v1/recordings/{id}",
 	"DELETE /api/v1/recordings/{id}",
 	"GET /api/v1/recordings",
 }
 
-// ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md "The boundary with the hub") ----
+// ---- the assistant's settings, and the conversations the hub's features start (docs/assistant/assistant.md "The boundary with the hub") ----
 
 // Profile is the assistant's settings (settings `assistant`, its own) as the hub's own features need them, in every
 // snapshot: a phone's message to the main conversation is told apart, the model configuration's main chat runs on its
@@ -748,7 +748,7 @@ const (
 )
 
 // The node's methods the assistant calls for its directory, its conversations and its settings
-// (docs/protocol.md "hub ↔ node"), passed through by the hub's device.call like the others.
+// (docs/protocol/protocol.md "hub ↔ node"), passed through by the hub's device.call like the others.
 const (
 	// DeviceAssistantPrepare: {dir, claude_md, connectors, clis, plugin_skills} → {cwd, plugin_skills_need}.
 	DeviceAssistantPrepare = "assistant.prepare"
@@ -779,7 +779,7 @@ type StartParams struct {
 	Effort         string        `json:"effort,omitempty"`
 	Purpose        string        `json:"purpose,omitempty"`    // the model configuration's purpose; "" is the main chat's
 	MachineID      string        `json:"machine_id,omitempty"` // "" is the assistant's machine
-	// Space: "health" starts it in the health space (its own directory, instructions and memory, docs/health.md);
+	// Space: "health" starts it in the health space (its own directory, instructions and memory, docs/assistant/health.md);
 	// "" is the assistant's own.
 	Space string `json:"space,omitempty"`
 	// Main: it becomes the main conversation (what the old one left goes before Text).
@@ -819,7 +819,7 @@ const (
 	// counts), their command lines (name → connector id), and whether hub.json sets up lark-cli.
 	ConnectorsSignedIn = "connectors.signed_in"
 
-	// AppPlugins is the hub's plugins (docs/plugins.md "Assistant").
+	// AppPlugins is the hub's plugins (docs/extensions/extensions.md "Assistant").
 	AppPlugins = "plugins"
 	// PluginsAssistant: {machine_id} → {instructions, skills}: the plugins' parts of the assistant's instructions, and
 	// their skills for that machine (files only with those it was not sent yet).
@@ -842,7 +842,7 @@ type Setting struct {
 	Actions []string `json:"actions"`
 }
 
-// ---- the channels: the Feishu bot and the chat app bots (docs/channels.md, docs/bots.md) ----
+// ---- the channels: the Feishu bot and the chat app bots (docs/extensions/channels.md, docs/extensions/bots.md) ----
 
 // Which conversation a channel talks to, following the turn and sending its answer back, what is asked there and its
 // answer, the commands, the pushes and the sync mirror are the assistant's; the hub keeps the transport — the Feishu

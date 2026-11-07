@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/update"
 )
 
-// runRelease is `personad release …`, what scripts/release/publish.sh runs to describe a release (docs/hub-update.md "Publishing").
+// runRelease is `personad release …`, what scripts/release/publish.sh runs to describe a release (docs/operations/hub-update.md "Publishing").
 func runRelease(args []string) error {
 	if len(args) == 0 {
 		return usageError(releaseUsage())

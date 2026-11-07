@@ -84,7 +84,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * The chat's part-a pages in each of the app's languages (docs/i18n.md): work lines with tool calls, the assistant's
+ * The chat's part-a pages in each of the app's languages (docs/protocol/i18n.md): work lines with tool calls, the assistant's
  * task, plan and "Today" cards, "Session status", "Session info", "Search in session" and the image viewer's chrome, Glass light and dark (the work
  * page in every style). The demo data is English, so the English pages must show no Chinese at all. PNGs in
  * `build/i18n-shots/` (or `-Dpersona.shots=<dir>`).

@@ -6,7 +6,7 @@ import UIKit
 import AppKit
 #endif
 
-/// The personas on this phone (docs/persona.md「手机上」): which one is chosen, what the hub offers, and the packages
+/// The personas on this phone (docs/apple/persona.md「手机上」): which one is chosen, what the hub offers, and the packages
 /// downloaded, one directory per rev under Application Support/Personas/<id>/<rev>. A package is used only once all of
 /// it is there (it is downloaded beside and moved in whole), and the chosen one shows from disk at launch, before
 /// the hub answers or without it.
@@ -261,7 +261,7 @@ final class PersonaFrames: Sendable {
 }
 
 nonisolated extension APIClient {
-    /// GET /api/v1/personas: the packages on the hub that check out (docs/protocol.md「形象」).
+    /// GET /api/v1/personas: the packages on the hub that check out (docs/protocol/protocol.md「形象」).
     func personas() async throws -> [PersonaInfo] {
         struct List: Decodable { var personas: [PersonaInfo] }
         return try JSONDecoder().decode(List.self, from: try await request("GET", "/api/v1/personas")).personas

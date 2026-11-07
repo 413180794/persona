@@ -13,7 +13,7 @@ type Snapshot interface {
 	Snapshot(ctx context.Context, tz string) (SnapshotData, error)
 }
 
-// Defined in the contract package connectorwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package connectorwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type (
 	SnapshotChat    = connectorwire.SnapshotChat
 	SnapshotChats   = connectorwire.SnapshotChats

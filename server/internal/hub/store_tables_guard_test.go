@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 )
 
-// The migrations are a hub set and a manager set (docs/server.md "Migrations"): a hub's database has only the hub's
+// The migrations are a hub set and a manager set (docs/server/server.md "Migrations"): a hub's database has only the hub's
 // tables, and the default manager is to get a database of its own. So what the hub asks of its store must only touch
 // the hub's tables, and what the managers ask of theirs only the manager's. These read every interface a side
 // declares, take the methods *db.DB serves of them, and look at the SQL those methods (and the db functions they
@@ -200,7 +200,7 @@ func TestStoresTouchTheirOwnTables(t *testing.T) {
 					if !slices.Contains(side.tables, tb) {
 						t.Errorf("internal/%s asks its store for %s, which touches %s: not a table of the %s set "+
 							"(internal/db/migrations/%s). Get it over the bus from the side that owns it, or move the "+
-							"table; docs/server.md \"Migrations\"", strings.TrimPrefix(filepath.Clean(filepath.Join("hub", dir)), "hub/"),
+							"table; docs/server/server.md \"Migrations\"", strings.TrimPrefix(filepath.Clean(filepath.Join("hub", dir)), "hub/"),
 							m, tb, side.set, side.set)
 					}
 				}
@@ -286,7 +286,7 @@ func TestSettingsKeysAreOneSidesOwn(t *testing.T) {
 		for k, where := range settingKeys(t, dir) {
 			if at, ok := hub[k]; ok {
 				t.Errorf("setting %q is used by the hub (%s) and by internal/%s (%s): a key is one side's; hand the value "+
-					"over the bus instead; docs/server.md \"Migrations\"", k, at, filepath.Base(dir), where)
+					"over the bus instead; docs/server/server.md \"Migrations\"", k, at, filepath.Base(dir), where)
 			}
 		}
 	}

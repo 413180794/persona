@@ -1,6 +1,6 @@
 import XCTest
 
-/// What the screen shows is the hub's truth, soon enough (docs/ios-state.md「真实性与及时性」; the user: holding back
+/// What the screen shows is the hub's truth, soon enough (docs/apple/ios-state.md「真实性与及时性」; the user: holding back
 /// updates must not leave the screen saying something that is no longer so). The Agents list exports what it shows
 /// (`probe.agents-list`: each agent's state and last line, the questions), the mock says what it holds (`/mock/truth`)
 /// and changes one thing at a time (`/mock/bump`):
@@ -313,7 +313,7 @@ final class ScreenTruthTests: XCTestCase {
     }
 
     // Stale is visible: the hub out of reach, the title says so right after the drop's grace (8 s: a hub restart or a
-    // short drop shows nothing, docs/hub-restart.md), and says so until the link is back: within 25 s of the hub coming
+    // short drop shows nothing, docs/operations/hub-restart.md), and says so until the link is back: within 25 s of the hub coming
     // back (the reconnect backs off, 1 s doubling up to 20 s: after 14 s down the next try is at about 15–23 s).
     func testStaleShows() {
         launch()

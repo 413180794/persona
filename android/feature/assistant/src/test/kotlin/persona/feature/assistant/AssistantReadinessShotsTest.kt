@@ -41,7 +41,7 @@ import persona.core.navigation.SettingsPageRoute
 import java.io.File
 
 /**
- * The main conversation while it still misses a step (docs/onboarding.md 4.4): the card over the composer, the send
+ * The main conversation while it still misses a step (docs/assistant/onboarding.md 4.4): the card over the composer, the send
  * button naming the step, the hub's example questions, and a start the hub refused. Glass light and dark plus each
  * style in light, written to `build/onboarding-shots/` (or `-Dpersona.shots=<dir>`).
  */

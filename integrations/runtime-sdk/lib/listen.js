@@ -1,4 +1,4 @@
-// The daemon end of the runtime protocol (docs/daemons.md): instead of dialing the node's runtime.sock, a runtime that
+// The daemon end of the runtime protocol (docs/integrations/daemons.md): instead of dialing the node's runtime.sock, a runtime that
 // is a service of its own — another system user, a container, another machine — opens a WebSocket endpoint and the
 // node dials it. The handshake carries a bearer token and the subprotocol below; after it, every text message is one
 // JSON object of the same protocol. This file is the endpoint: the upgrade, the token, and a minimal RFC 6455 server

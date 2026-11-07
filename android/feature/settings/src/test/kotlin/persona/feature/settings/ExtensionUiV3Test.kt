@@ -9,7 +9,7 @@ import org.junit.Test
 import persona.core.contracts.ExtensionUiEvent
 import persona.core.contracts.api.*
 
-// UI version 3 (docs/extensions.md "Declarative UI", #1850 / #1851): push / pop, search / filter / "Load more", ui.invalidate.
+// UI version 3 (docs/extensions/extensions.md "Declarative UI", #1850 / #1851): push / pop, search / filter / "Load more", ui.invalidate.
 
 private class ListUi : ExtensionApiStub() {
     var view = ExtensionView(title = "笔记", state = "page=1",

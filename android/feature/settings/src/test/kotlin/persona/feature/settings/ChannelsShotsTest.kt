@@ -53,7 +53,7 @@ import java.time.Instant
  * Settings › Channels drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark:
  * the real settings home, the list, WeChat's page, a QR code to scan and a pairing code to send (binding a
  * step at a time). The data is the mock hub's MOCK_CHANNELS. Each is checked to draw something and written as a PNG to
- * `build/channel-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md "Channels").
+ * `build/channel-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android/android.md "Channels").
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

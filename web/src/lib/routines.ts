@@ -1,4 +1,4 @@
-// The assistant's scheduled tasks (docs/assistant.md "Scheduled tasks", docs/protocol.md `/assistant/tasks`): the wire types,
+// The assistant's scheduled tasks (docs/assistant/assistant.md "Scheduled tasks", docs/protocol/protocol.md `/assistant/tasks`): the wire types,
 // how a task is said in words (the iOS app's AssistantScheduleText), what the editor checks, and the body it saves.
 // Pure functions of their arguments (`now` passed in), so they are tested without a DOM.
 import { currentLanguage, formatDate, t } from "../i18n";
@@ -31,7 +31,7 @@ export interface Task {
   permission_mode?: string;
   effort?: string;
   /** "Push when done" (hubs with the task_push feature): "" every run's answer, "asked" only what a run sends with notify_user.
-   *  An "asked" task always runs in its own conversation (docs/assistant.md "Push when done"). */
+   *  An "asked" task always runs in its own conversation (docs/assistant/assistant.md "Push when done"). */
   push?: Push;
   created_by?: string;
   created_at?: string;

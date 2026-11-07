@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// The suggestion card's logic (docs/inbox.md): confirm / edit then confirm / reject / say a word, each one request with the
+/// The suggestion card's logic (docs/assistant/inbox.md): confirm / edit then confirm / reject / say a word, each one request with the
 /// version the card shows, so a suggestion the manager replaced meanwhile is never run: the hub answers 409
 /// `suggestion_stale` with the item as it is, the card says 「建议已更新」 and draws the new one.
 @MainActor @Observable

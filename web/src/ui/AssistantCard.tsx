@@ -1,4 +1,4 @@
-// The assistant's cards (docs/assistant-views.md), drawn with the extensions' components (views/extensions/ViewBody.tsx):
+// The assistant's cards (docs/assistant/assistant-views.md), drawn with the extensions' components (views/extensions/ViewBody.tsx):
 // a ```persona-view block in a reply (its key `<item id>/<n>`, lib/assistant-blocks.ts), a live card in the feed
 // (view_show / view_update, drawn again in place at each version), and the older ```persona-card (drawn, nothing acts).
 //
@@ -27,7 +27,7 @@ import { Icon } from "./icons";
 /** The fenced blocks drawn as cards. */
 export const CARD_LANGUAGES = ["persona-view", "persona-card"];
 
-/** The hub feature that says card answers, live cards and registered blocks are there (docs/assistant-views.md). */
+/** The hub feature that says card answers, live cards and registered blocks are there (docs/assistant/assistant-views.md). */
 export const VIEWS_FEATURE = "assistant_views";
 
 /** The assistant conversation the cards drawn below belong to (none: an agent's chat, where nothing acts). */
@@ -35,7 +35,7 @@ export const CardConversation = createContext<string>("");
 /** The text item a block is drawn from (none while it streams: drawn, nothing acts). */
 export const CardItem = createContext<{ id: string; text: string } | null>(null);
 
-/** How deep push goes (docs/assistant-views.md "Actions and multiple pages"). */
+/** How deep push goes (docs/assistant/assistant-views.md "Actions and multiple pages"). */
 const STACK_MOST = 4;
 
 export function AssistantCard({ lang, code, fallback }: { lang: string; code: string; fallback: React.ReactNode }) {

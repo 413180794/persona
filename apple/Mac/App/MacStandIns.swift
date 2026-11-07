@@ -1,11 +1,11 @@
 import Foundation
 import Observation
 
-// Mac versions of the iOS app's system integrations that have no macOS counterpart (docs/mac.md「Mac 上没有的」).
+// Mac versions of the iOS app's system integrations that have no macOS counterpart (docs/apple/mac.md「Mac 上没有的」).
 // Same names and calls as on iOS, so AppModel and the pages stay as they are.
 
 /// Live Activities / the Dynamic Island do not exist on a Mac. The hub's fleet state is kept here for the
-/// menu bar (docs/mac.md: Dynamic Island → menu bar); nothing is started or ended.
+/// menu bar (docs/apple/mac.md: Dynamic Island → menu bar); nothing is started or ended.
 @Observable final class LiveActivityController {
     static let shared = LiveActivityController()
 

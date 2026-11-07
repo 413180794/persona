@@ -14,7 +14,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * Settings › Session triage (docs/agent-work.md "Switches", the web's TriageSettings): when an agent stops, the hub can read its last
+ * Settings › Session triage (docs/assistant/agent-work.md "Switches", the web's TriageSettings): when an agent stops, the hub can read its last
  * reply, say whether it is done or what it waits for, and act on it. All off until turned on here: the triage calls a
  * model on every stopped turn, and "Continue after errors" / "Wake on schedule" run a turn of the agent on its own model. Saved on the hub, so
  * it is the same on every device.

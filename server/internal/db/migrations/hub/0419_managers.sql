@@ -1,4 +1,4 @@
--- Managers (docs/managers.md): every bus identity of role manager is a manager. The roster keeps where each one
+-- Managers (docs/assistant/managers.md): every bus identity of role manager is a manager. The roster keeps where each one
 -- said it runs on its last handshake and when it was last connected, so the apps can show an offline manager's
 -- place and "last synced". manager_install_codes are the one-time codes a new manager trades for its bus token:
 -- only their sha256 is kept, each is good for ten minutes and once.

@@ -102,7 +102,7 @@ func AssistantDir(home string) string {
 	return filepath.Join(DataDir(home), "assistant")
 }
 
-// HealthDir is the health space's directory (docs/health.md): the assistant's conversations about health run there,
+// HealthDir is the health space's directory (docs/assistant/health.md): the assistant's conversations about health run there,
 // next to its own directory, so their memory and instructions are their own.
 func HealthDir(home string) string {
 	return filepath.Join(DataDir(home), SpaceHealth)
@@ -116,7 +116,7 @@ const SpaceHealth = "health"
 const builtinManager = "assistant"
 
 // AssistantDirName is the name in the state directory of manager id's assistant directory: "assistant" for the
-// built-in manager's ("" too), "assistant-<id>" for another's (docs/managers.md "Directories on a computer").
+// built-in manager's ("" too), "assistant-<id>" for another's (docs/assistant/managers.md "Directories on a computer").
 func AssistantDirName(id string) string { return managerDirName("assistant", id) }
 
 // HealthDirName is AssistantDirName for its health space: "health", or "health-<id>".

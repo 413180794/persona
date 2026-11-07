@@ -49,7 +49,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import java.time.Instant
 
-// UI version 4's code hosting components (docs/extensions.md "UI version 4", #2951) with this app's design system: a detail
+// UI version 4's code hosting components (docs/extensions/extensions.md "UI version 4", #2951) with this app's design system: a detail
 // page's header, a breadcrumb, a file tree, a file's code, a file's diff (one column: a phone has no room for two;
 // threads under their lines, a comment box at any line, hidden lines to show), a discussion and a comment box with its
 // buttons; the diff is ExtensionCodeReviewUi.kt. What they send goes through ExtensionViewHandle.act: the action with the component's own values. Logic in

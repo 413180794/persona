@@ -20,7 +20,7 @@ import (
 //	PERSONA_LIVE_FULL_SESSION=persona-fullui-test go test -tags herdrlive -run TestLiveFullClient ./internal/herdr/
 //
 // It starts the full client for that session, checks herdr's own screen comes out and that resizing the client resizes
-// the session's layout (the finding in docs/terminal.md), then closes it and checks nothing is left running.
+// the session's layout (the finding in docs/integrations/terminal.md), then closes it and checks nothing is left running.
 func TestLiveFullClient(t *testing.T) {
 	name := os.Getenv("PERSONA_LIVE_FULL_SESSION")
 	if name == "" || name == "default" {

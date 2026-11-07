@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// A runtime that runs Claude Code through its SDK (Paseo, docs/paseo.md) has sessions whose conversation is an
+// A runtime that runs Claude Code through its SDK (Paseo, docs/integrations/paseo.md) has sessions whose conversation is an
 // ordinary Claude transcript on this machine. Its row names that transcript (runtime.sessions' transcript: the Claude
 // session id), and the node serves the session's content from it as for an agent in a terminal — items, images, the
 // watch, the session info, subagents: the same parser and the same rendering as in herdr. The runtime keeps the rest
@@ -149,7 +149,7 @@ func (n *Node) runtimeTranscriptCall(ctx context.Context, h *runtimeConn, method
 // transcriptMoved follows a session whose transcript the runtime changed (it names one now, another one, or none
 // any more: a session created from the phone has none until its first turn): what the node read of the old one goes,
 // and while the hub watches the session the watch moves to where its items come from now. The pushes from there carry
-// another history, so the apps take the conversation again from the start (docs/protocol.md "Continuity of items").
+// another history, so the apps take the conversation again from the start (docs/protocol/protocol.md "Continuity of items").
 func (n *Node) transcriptMoved(h *runtimeConn, id string) {
 	n.forgetFile(id)
 	if !n.runtimes.isWatched(id) {

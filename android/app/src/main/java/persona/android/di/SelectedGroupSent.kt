@@ -4,7 +4,7 @@ import persona.core.contracts.api.HubSent
 import persona.core.contracts.api.SentPage
 
 /**
- * Settings › Sent as you on the selected hub group (docs/android.md "Multiple hubs"): each read goes to that group's hub, and
+ * Settings › Sent as you on the selected hub group (docs/android/android.md "Multiple hubs"): each read goes to that group's hub, and
  * the rows' machine ids come back in the form the merged lists use (GroupKeys: the group's suffix on every group but the
  * primary one), so the chat a row opens is found in the group it belongs to. [selected] says which group that is, read once
  * per call: the hub it reads and the suffix it applies are the same group's.

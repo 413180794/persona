@@ -19,7 +19,7 @@ internal class ReadinessRecords(context: Context) {
     fun skipped(id: String): Boolean = decision(id) == "skipped"
 
     /**
-     * The machine whose engine pairing still has to ask about (docs/engines.md): set when pairing finds one, cleared
+     * The machine whose engine pairing still has to ask about (docs/integrations/engines.md): set when pairing finds one, cleared
      * once the hub took a choice, so a restarted app shows the step again instead of skipping it.
      */
     fun enginePending(): String? = preferences.getString("engine-pending", null)?.takeIf { it.isNotBlank() }

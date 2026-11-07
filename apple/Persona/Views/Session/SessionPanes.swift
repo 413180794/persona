@@ -123,7 +123,7 @@ private struct PaneSegment: View {
 // MARK: - Terminal
 
 /// The session's terminal at any time (not only while Claude works), live: the hub streams herdr's frames of the pane
-/// (docs/terminal.md) — colors, cursor, wide characters — or, where it cannot, the colored screen is read once a
+/// (docs/integrations/terminal.md) — colors, cursor, wide characters — or, where it cannot, the colored screen is read once a
 /// second. Long rows fold at the phone's width unless No Wrap is on (for TUI boxes). Scrolling up loads the 200 rows
 /// before, again and again, back to the start of what herdr keeps (about 1000 lines — older output lives in the chat);
 /// each page is found by the lines it must end before, so output arriving meanwhile shifts nothing. Reading history
@@ -1372,7 +1372,7 @@ struct AgentStrip: View {
     }
 }
 
-/// The one thing about the conversation's subagents the chat header's status line says (docs/plan-chat-topbar.md ③),
+/// The one thing about the conversation's subagents the chat header's status line says (docs/archive/apple/plan-chat-topbar.md ③),
 /// the first that holds: one is being read; one runs; several run. None while none runs: finished and nested ones are
 /// reached from their Agent call ("View subagent") and ⋯ › All subagents.
 nonisolated enum HeaderStatus: Equatable, Sendable {

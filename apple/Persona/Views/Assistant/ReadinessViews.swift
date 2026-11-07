@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Where a readiness button goes (docs/onboarding.md 5.1): a page of this app in a sheet, local help, or the hub's admin
+/// Where a readiness button goes (docs/assistant/onboarding.md 5.1): a page of this app in a sheet, local help, or the hub's admin
 /// page. Until adding a computer (M3) and the model wizard (M4) land, add / confirm open the machines page and
 /// connect_model the provider wizard as it is.
 enum ReadinessRoute: Identifiable, Hashable {
@@ -141,7 +141,7 @@ extension View {
     func readinessSheets(_ route: Binding<ReadinessRoute?>) -> some View { modifier(ReadinessSheets(route: route)) }
 }
 
-/// The card over a new conversation's composer (docs/onboarding.md 4.4): a refused start first (5.2), else the step
+/// The card over a new conversation's composer (docs/assistant/onboarding.md 4.4): a refused start first (5.2), else the step
 /// the readiness says is missing, else Try a Message's result. Nothing on a hub without readiness and nothing when all is well.
 struct ReadinessHomeCard: View {
     @Environment(AppModel.self) private var model
@@ -187,7 +187,7 @@ struct ReadinessHomeCard: View {
     }
 }
 
-/// A start or a send the hub refused with a code (docs/onboarding.md 5.2): the hub's words, a button for what to do, the
+/// A start or a send the hub refused with a code (docs/assistant/onboarding.md 5.2): the hub's words, a button for what to do, the
 /// original text under Details; closed with ×. A computer that is offline says so, not that the hub cannot be reached.
 struct CodedFailureCard: View {
     @Environment(AppModel.self) private var model
@@ -217,7 +217,7 @@ struct CodedFailureCard: View {
 }
 
 /// Help that opens on this device instead of going to the model: the readiness's local example questions and the
-/// install / log-in / wake buttons (docs/onboarding.md 4.4). The commands to paste are shown as they are typed.
+/// install / log-in / wake buttons (docs/assistant/onboarding.md 4.4). The commands to paste are shown as they are typed.
 struct ReadinessHelpView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

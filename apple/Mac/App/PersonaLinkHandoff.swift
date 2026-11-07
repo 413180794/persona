@@ -5,11 +5,11 @@ import Foundation
 /// Launch Services picks one of them. The link is for Persona Link on the computer joining the hub, never a pairing
 /// of this app: it goes on to Persona Link when that is installed, else the app says to install it.
 nonisolated enum PersonaLinkHandoff {
-    /// How to build and install Persona Link (no package yet, docs/onboarding.md 4.2).
-    static let installDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/persona-link-install.md")!
+    /// How to build and install Persona Link (no package yet, docs/assistant/onboarding.md 4.2).
+    static let installDoc = URL(string: "https://github.com/nwverse/persona/blob/master/docs/operations/persona-link-install.md")!
 
-    /// The executable Persona Link's bundle keeps (docs/rename.md), whatever bundle id it was built with
-    /// (`mac.link_bundle_id`, docs/config.md): how it is told apart from this app among the scheme's handlers.
+    /// The executable Persona Link's bundle keeps (docs/operations/rename.md), whatever bundle id it was built with
+    /// (`mac.link_bundle_id`, docs/operations/config.md): how it is told apart from this app among the scheme's handlers.
     static let executable = "PersonaLink"
     static let bundleName = "Persona Link.app"
 

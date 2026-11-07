@@ -1,7 +1,7 @@
 package node
 
-// Runtimes (docs/runtimes.md, wire in docs/protocol.md "Runtime ↔ node"): agent runtimes without a terminal that keep
-// their own sessions — DSH's Web plugin first (docs/dsh.md) — connect to ~/.persona/runtime.sock and hang their
+// Runtimes (docs/integrations/runtimes.md, wire in docs/protocol/protocol.md "Runtime ↔ node"): agent runtimes without a terminal that keep
+// their own sessions — DSH's Web plugin first (docs/integrations/dsh.md) — connect to ~/.persona/runtime.sock and hang their
 // sessions, status and interactions into this node. They are not hosts in the internal/host sense (where a terminal
 // lives, the machine's engine): a runtime has no panes, it reports its own sessions and content, and it runs beside
 // whichever engine the machine uses. Every runtime speaks the same protocol, so a new one needs no code here.
@@ -67,7 +67,7 @@ type runtimeHello struct {
 	// Launchers are more entries for the form, each with the agent it starts and its models: a runtime running
 	// several agents (Paseo: one per provider, runtimecontrol.go). runtime.launchers replaces them later.
 	Launchers []runtimeLauncher `json:"launchers,omitempty"`
-	// Package is the code the runtime runs when this node can keep it up to date (runtimepkg, docs/runtimes.md "Auto-update"):
+	// Package is the code the runtime runs when this node can keep it up to date (runtimepkg, docs/integrations/runtimes.md "Auto-update"):
 	// its package name and hash. A different hash than the node's gets an update offer in the reply.
 	Package *struct {
 		Name string `json:"name"`
@@ -79,7 +79,7 @@ type runtimeHello struct {
 		Interrupt bool `json:"interrupt"`
 		Rename    bool `json:"rename"`
 		Close     bool `json:"close"`
-		// Assistant: its launcher may run the Persona assistant (assistant_runtime.go; docs/runtimes.md "Assistant").
+		// Assistant: its launcher may run the Persona assistant (assistant_runtime.go; docs/integrations/runtimes.md "Assistant").
 		Assistant bool `json:"assistant"`
 		// Modes: the phone's permission mode and effort for its sessions go to it (session.modes).
 		Modes bool `json:"modes"`
@@ -344,7 +344,7 @@ func (b *runtimeRegistry) belongs(id string) (h *runtimeConn, label string, know
 }
 
 // splitRuntimeChild splits the id of a runtime session's subagent, "<parent>@<child>" (the id Claude's subagents have
-// too: docs/protocol.md "Runtime ↔ node"); false for any other id.
+// too: docs/protocol/protocol.md "Runtime ↔ node"); false for any other id.
 func splitRuntimeChild(id string) (parent, child string, ok bool) {
 	parent, child, ok = strings.Cut(id, "@")
 	return parent, child, ok && runtimeIDRe.MatchString(parent) && runtimeIDRe.MatchString(child)
@@ -813,7 +813,7 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 		if s.SpaceKind == "" {
 			s.SpaceKind = rt
 		}
-		// The source fields Codex app-server sessions use too (docs/protocol.md "Codex sources and capabilities"): the apps gate
+		// The source fields Codex app-server sessions use too (docs/protocol/protocol.md "Codex sources and capabilities"): the apps gate
 		// sending, interrupting, answering cards and every terminal control on capabilities, the hub guards sends.
 		// What a runtime declared, never more: no terminal, no attach, cards always answerable (they are its own asks).
 		s.SourceKind, s.SourceInstanceID, s.SourceThreadID, s.ParentThreadID = proto.SourceRuntime, rt, "", ""
@@ -962,7 +962,7 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 }
 
 // runtimeHealth: the card's session is in the health space (its cwd or the row's), where every write is confirmed
-// (docs/health.md "Outgoing").
+// (docs/assistant/health.md "Outgoing").
 func runtimeHealth(h *runtimeConn, ix proto.Interaction) bool {
 	if identity.SpaceOf(ix.Cwd) == identity.SpaceHealth {
 		return true

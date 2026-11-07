@@ -1,5 +1,5 @@
 // Command pushrec records what an app gets from a hub over its WebSocket, for replaying it through the hub's push
-// logic (internal/hub/pushreplay_test.go, docs/testing.md "Push replay"). Run it on the hub's machine:
+// logic (internal/hub/pushreplay_test.go, docs/operations/testing.md "Push replay"). Run it on the hub's machine:
 //
 //	go run ./cmd/pushrec 20m ~/push.jsonl
 //
@@ -75,7 +75,7 @@ func hubConfig(dir string) (addr, token string, err error) {
 		return "", "", fmt.Errorf("%s has no token: start the hub once so it writes one", path)
 	}
 	from := path
-	// The hub takes its listen address from the environment over hub.json's (Docker, docs/docker.md): so does pushrec.
+	// The hub takes its listen address from the environment over hub.json's (Docker, docs/operations/docker.md): so does pushrec.
 	if v := identity.Getenv("PERSONA_LISTEN"); v != "" {
 		cfg.Listen, from = v, "PERSONA_LISTEN"
 	}

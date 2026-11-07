@@ -1,6 +1,6 @@
 import XCTest
 
-/// The first screen without commands and the checklist after pairing (#4195, docs/onboarding.md 4.5). The checklist
+/// The first screen without commands and the checklist after pairing (#4195, docs/assistant/onboarding.md 4.5). The checklist
 /// tests run against scripts/mock/mock_hub.py with MOCK_READINESS=<scenario> (PERSONA_MOCK_HUB; PERSONA_READINESS names
 /// it for the screenshots). PERSONA_SHOTS=<dir> writes the screenshots (PERSONA_SHOTS_APPEARANCE in their names).
 final class OnboardingFirstScreenUITests: XCTestCase {

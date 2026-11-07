@@ -1,4 +1,4 @@
-// "Trail" (#2128, docs/inbox.md "Trail"): under an item's summary, what it grew out of (its parent's chain, up to a todo or
+// "Trail" (#2128, docs/assistant/inbox.md "Trail"): under an item's summary, what it grew out of (its parent's chain, up to a todo or
 // an agent session) and what grew out of it (the items right under it). Each row opens where it lives. Nothing is
 // drawn when the item has neither.
 import { useEffect, useState } from "react";
@@ -13,7 +13,7 @@ export type LineRow = { key: string; label: string; title: string; route?: Route
 const kindLabel: Record<InboxParent["kind"], string> = { inbox: t("inbox-inboxline.kind_inbox"), todo: t("inbox-inboxline.kind_todo"), session: t("inbox-inboxline.kind_session") };
 
 /** The rows of a line: the ancestors farthest first (the chain reads top down), then the children oldest first.
- *  `manager`: whose line it is (its items are that manager's: docs/managers.md "Clients"). */
+ *  `manager`: whose line it is (its items are that manager's: docs/assistant/managers.md "Clients"). */
 export function lineRows(tree: InboxTree, manager?: string): LineRow[] {
   const ups = [...tree.ancestors].reverse().map((a): LineRow => ({
     key: `up:${a.kind}:${a.id}`,

@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-// SourceDev is an extension being written, run from its own directory by `personad extension dev` (docs/extensions.md
+// SourceDev is an extension being written, run from its own directory by `personad extension dev` (docs/extensions/extensions.md
 // "Command line"): kept in memory only (never in the database, gone when the hub restarts), on, its declared permissions
 // granted (it is the owner's own code on the owner's machine), its settings and secrets those the command sent.
 const SourceDev = "dev"

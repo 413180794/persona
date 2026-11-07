@@ -20,7 +20,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 
-// Settings › Managers (docs/managers.md): the words of the list and a manager's page (the same as the web's), and the model
+// Settings › Managers (docs/assistant/managers.md): the words of the list and a manager's page (the same as the web's), and the model
 // both pages share. The pages are in ManagersScreen.kt.
 
 /** What the roster says about a manager, in the words the web uses too. */

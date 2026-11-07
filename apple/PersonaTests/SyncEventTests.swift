@@ -29,7 +29,7 @@ struct SyncEventTests {
         #expect(ids == ["lark-bridge:agent:grok_bot:a:b/"])
     }
 
-    /// A tiered look moved to another tier (docs/persona.md): the app lists the personas again.
+    /// A tiered look moved to another tier (docs/apple/persona.md): the app lists the personas again.
     @Test func decodesPersonas() throws {
         guard case .personas = try #require(ServerEvent.decode(Data(#"{"type":"personas"}"#.utf8))) else {
             Issue.record("not personas"); return

@@ -1,4 +1,4 @@
-// Package proto holds the wire types shared by hub, node and clients. See docs/protocol.md.
+// Package proto holds the wire types shared by hub, node and clients. See docs/protocol/protocol.md.
 package proto
 
 import (
@@ -17,7 +17,7 @@ import (
 
 type Machine struct {
 	ID string `json:"id"`
-	// Manager is the manager it belongs to (docs/managers.md, "Ownership"); the hub stamps it on what it sends the apps.
+	// Manager is the manager it belongs to (docs/assistant/managers.md, "Ownership"); the hub stamps it on what it sends the apps.
 	Manager string `json:"manager,omitempty"`
 	Name    string `json:"name"`
 	Kind    string `json:"kind"` // local | ssh | tailcat | link
@@ -25,7 +25,7 @@ type Machine struct {
 	SSHHost string `json:"ssh_host,omitempty"`
 	Online  bool   `json:"online"`
 	Error   string `json:"error,omitempty"`
-	// ErrorCode is what Error is about, for a client's own words (docs/onboarding.md 5.3): node_service_down,
+	// ErrorCode is what Error is about, for a client's own words (docs/assistant/onboarding.md 5.3): node_service_down,
 	// link_offline, never_connected, node_outdated; "" none of them. An unknown one shows Error.
 	ErrorCode string `json:"error_code,omitempty"`
 	// Trust: pending while the user has not confirmed the computer is theirs (POST …/confirm); "" is confirmed.
@@ -40,7 +40,7 @@ type Machine struct {
 	// NodeVersion is the machine's personad build. NodeMismatch: the hub offers to redeploy the node, because it runs
 	// another build than the hub's (deploy.sh missed it, or it was installed on its own) or because its manager cannot
 	// drive it (NodeIncompatible). Another build alone is an upgrade offer, not a fault: whether the node can be used
-	// is decided by its protocol and capabilities (docs/protocol.md "Node handshake").
+	// is decided by its protocol and capabilities (docs/protocol/protocol.md "Node handshake").
 	NodeVersion  string `json:"node_version,omitempty"`
 	NodeMismatch bool   `json:"node_mismatch,omitempty"`
 	// NodeProtocol is the node protocol the node announced (0: from before the handshake). NodeIncompatible is a
@@ -57,7 +57,7 @@ type Machine struct {
 	DeployPhase  string `json:"deploy_phase,omitempty"`
 	// System: OS and hardware, from the node's last connection (kept across hub restarts).
 	System *System `json:"system,omitempty"`
-	// Link: kind link, while the computer's persona-link is connected (docs/link.md).
+	// Link: kind link, while the computer's persona-link is connected (docs/operations/link.md).
 	Link *MachineLink `json:"link,omitempty"`
 	// Transport is how the hub reaches it now: local | ssh | tailcat | link (empty while offline); Tailcat: it can be
 	// reached over tailcat (an address is set); TailcatPath, over tailcat: direct (NAT traversal worked) | relay.
@@ -65,7 +65,7 @@ type Machine struct {
 	Tailcat     bool   `json:"tailcat,omitempty"`
 	TailcatPath string `json:"tailcat_path,omitempty"`
 	// Engine is the terminal host the machine's node drives (EngineHerdr when never chosen); Engines, what the node
-	// found on the machine (empty while offline). docs/protocol.md "Engines".
+	// found on the machine (empty while offline). docs/protocol/protocol.md "Engines".
 	Engine  string   `json:"engine"`
 	Engines []Engine `json:"engines"`
 	// EngineHosts and EngineDefault are the hosts the machine enables side by side and its default host (#2576,
@@ -81,19 +81,19 @@ type Machine struct {
 	Computer *Computer `json:"computer,omitempty"`
 	// Browser: its ego lite, while the plugin ego is on and it is a Mac (Browser).
 	Browser *Browser `json:"browser,omitempty"`
-	// Hub mesh (docs/mesh.md): the hub that connects to this machine (its owner), its name, the machine's own id
+	// Hub mesh (docs/server/mesh.md): the hub that connects to this machine (its owner), its name, the machine's own id
 	// (~/.persona/machine-uid, empty for an old node or one never reached) and how the hub the client talks to gets
 	// there. A hub without peers fills them in for its own machines too.
 	HubID      string        `json:"hub_id,omitempty"`
 	HubName    string        `json:"hub_name,omitempty"`
 	MachineUID string        `json:"machine_uid,omitempty"`
 	Route      *MachineRoute `json:"route,omitempty"`
-	// Paths: every way the center has to this computer (docs/plan-hub-center.md 5), when there is more than one or it
+	// Paths: every way the center has to this computer (docs/archive/operations/plan-hub-center.md 5), when there is more than one or it
 	// is a member hub's; the machine detail and the admin page show them.
 	Paths []MachinePath `json:"paths,omitempty"`
 }
 
-// MachineRoute is how the center reaches a machine now (docs/plan-hub-center.md 5): via one of its own ways (local |
+// MachineRoute is how the center reaches a machine now (docs/archive/operations/plan-hub-center.md 5): via one of its own ways (local |
 // service | link | ssh | tailcat, hops 0) or through a member hub (hub, hops 1); RTTMS is the node's round trip
 // when it was measured.
 type MachineRoute struct {
@@ -120,7 +120,7 @@ type MachineLink struct {
 }
 
 // Terminal engines: the terminal host(s) a machine's node drives, chosen per machine. EngineHerdrBoth runs classic
-// herdr and herdr-core side by side (docs/engines.md "Side by side"): a machine used both locally and through the Herdr
+// herdr and herdr-core side by side (docs/integrations/engines.md "Side by side"): a machine used both locally and through the Herdr
 // app's remote sessions.
 const (
 	EngineHerdr     = "herdr"      // the classic herdr CLI
@@ -128,7 +128,7 @@ const (
 	EngineHerdrBoth = "herdr-both" // classic herdr and herdr-core together
 	EngineOrca      = "orca"       // the Orca desktop app's runtime
 	// EnginePaseo is not a terminal: the Paseo daemon's agents, through its runtime (node/runtimecontrol.go,
-	// docs/paseo.md). New sessions and sessions to continue go to Paseo.
+	// docs/integrations/paseo.md). New sessions and sessions to continue go to Paseo.
 	EnginePaseo = "paseo"
 )
 
@@ -151,7 +151,7 @@ type Engine struct {
 	Note      string `json:"note,omitempty"`
 }
 
-// Computer is a Mac the assistant may operate through Cua Driver (the built-in plugin cua, docs/computer-use.md). In
+// Computer is a Mac the assistant may operate through Cua Driver (the built-in plugin cua, docs/extensions/computer-use.md). In
 // proto.Machine only while the plugin is on, and only for a Mac. Enabled: the user turned it on for this machine; the
 // rest is what the node found when last asked (computer.status), and only for an enabled one.
 type Computer struct {
@@ -167,7 +167,7 @@ type Computer struct {
 	// user is on the console). Cua Driver needs it active.
 	Desktop string `json:"desktop,omitempty"`
 	// ScreenSharing: macOS's Screen Sharing answers on 127.0.0.1:5900, so the app can show this Mac's live screen
-	// (docs/computer-use.md "Live view"). Not needed to operate it.
+	// (docs/extensions/computer-use.md "Live view"). Not needed to operate it.
 	ScreenSharing bool `json:"screen_sharing"`
 	// NoAutoLock: "Don't auto-lock while the extension is on" is on for this Mac (the hub's, from the plugin's settings).
 	NoAutoLock bool `json:"no_auto_lock,omitempty"`
@@ -186,7 +186,7 @@ type Computer struct {
 }
 
 // Browser is a Mac's ego lite, the agent browser the assistant may drive (the built-in plugin ego,
-// docs/plan-ego-browser.md). In proto.Machine only while the plugin is on, and only for a Mac; Enabled: the user turned
+// docs/plans/plan-ego-browser.md). In proto.Machine only while the plugin is on, and only for a Mac; Enabled: the user turned
 // it on for this machine. The rest is what the node found when last asked (browser.status).
 type Browser struct {
 	Enabled bool `json:"enabled"`
@@ -237,7 +237,7 @@ type BrowserCookies struct {
 	Removed  int                 `json:"removed,omitempty"`
 }
 
-// ComputerJob is one install or grant the node runs in the background (docs/computer-use.md "One-click install").
+// ComputerJob is one install or grant the node runs in the background (docs/extensions/computer-use.md "One-click install").
 type ComputerJob struct {
 	Kind  string `json:"kind"`  // install | grant | open
 	State string `json:"state"` // running | done | failed | cancelled
@@ -257,20 +257,20 @@ type ComputerResult struct {
 
 // Protocol is the app <-> hub protocol's major version: it goes up only for a change an older app cannot live with
 // (features cover everything finer). MinAppBuild is the oldest app build (CFBundleVersion) this hub works with; 0:
-// any. Both are in /api/v1/health and the WebSocket hello (docs/hub-update.md "Compatibility").
+// any. Both are in /api/v1/health and the WebSocket hello (docs/operations/hub-update.md "Compatibility").
 const (
 	Protocol    = 1
 	MinAppBuild = 0
 )
 
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
-// clients that need to know before they try (docs/protocol.md).
+// clients that need to know before they try (docs/protocol/protocol.md).
 var Features = []string{
 	nodeproto.PersonaContracts, // bidirectional pre-cutover runtime identities
-	"locale",                   // Accept-Language, client_hello.locale and a device's locale pick the language of text for people (docs/i18n.md)
+	"locale",                   // Accept-Language, client_hello.locale and a device's locale pick the language of text for people (docs/protocol/i18n.md)
 	"assistant_compact",        // POST /api/v1/assistant/conversations/{id}/compact, session.compaction
 	"assistant_main_new",       // POST /api/v1/assistant/main/new: archive the main conversation, the next message starts one
-	"assistant_readiness",      // GET /api/v1/assistant/readiness, …/readiness/dismiss, warm's readiness (docs/onboarding.md 5.1)
+	"assistant_readiness",      // GET /api/v1/assistant/readiness, …/readiness/dismiss, warm's readiness (docs/assistant/onboarding.md 5.1)
 	"android_update",           // authenticated Android release metadata and APK downloads
 	"error_codes",              // stable HTTP error codes and optional delivery information
 	"client_hello",             // client platform, version and capabilities
@@ -288,33 +288,33 @@ var Features = []string{
 	"resumable_interactions",   // hook questions survive hub / node restarts
 	"secret_prompts",           // interaction.secret
 	"request_id",               // X-Request-Id
-	"terminal_stream",          // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
+	"terminal_stream",          // WebSocket terminal_subscribe: the pane's live frames (docs/integrations/terminal.md)
 	"terminal_control",         // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
-	"terminal_scroll",          // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
-	"terminal_click",           // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
-	"terminal_mouse",           // terminal_input with mouse: press / release / drag / move, a button and modifiers at a cell (docs/terminal.md "Mouse")
-	"herdr_client",             // WebSocket herdr_open / herdr_input / herdr_resize / herdr_ack / herdr_close: herdr's own client in a PTY for the web, full devices only (docs/terminal.md "Full herdr view")
-	"herdr_focus",              // WebSocket herdr_focus (browser -> hub) and herdr_focus (hub -> browser): the full herdr view moves herdr's focus and follows it, full devices only (docs/terminal.md "Linked focus")
-	"terminal_panes",           // GET/POST /api/v1/machines/{mid}/panes, terminal ids "pane:<id>": any pane as a terminal (docs/terminal.md "Standalone terminals")
+	"terminal_scroll",          // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/integrations/terminal.md)
+	"terminal_click",           // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/integrations/terminal.md)
+	"terminal_mouse",           // terminal_input with mouse: press / release / drag / move, a button and modifiers at a cell (docs/integrations/terminal.md "Mouse")
+	"herdr_client",             // WebSocket herdr_open / herdr_input / herdr_resize / herdr_ack / herdr_close: herdr's own client in a PTY for the web, full devices only (docs/integrations/terminal.md "Full herdr view")
+	"herdr_focus",              // WebSocket herdr_focus (browser -> hub) and herdr_focus (hub -> browser): the full herdr view moves herdr's focus and follows it, full devices only (docs/integrations/terminal.md "Linked focus")
+	"terminal_panes",           // GET/POST /api/v1/machines/{mid}/panes, terminal ids "pane:<id>": any pane as a terminal (docs/integrations/terminal.md "Standalone terminals")
 	"file_download",            // GET /api/v1/machines/{mid}/file/download
 	"file_stream",              // file?stream=1 (binary described, bytes by Range), file/download?inline=1, sniffed MIME
-	"file_thumb",               // GET /api/v1/machines/{mid}/file/thumb (docs/protocol.md "File preview")
+	"file_thumb",               // GET /api/v1/machines/{mid}/file/thumb (docs/protocol/protocol.md "File preview")
 	"file_convert",             // GET /api/v1/machines/{mid}/file/convert: LibreOffice → PDF on the machine
 	"git_blob",                 // GET /api/v1/machines/{mid}/git/blob: a file at a version, for comparing
 	"git_write",                // the Git panel's writes and the branch's pull request under /api/v1/machines/{mid}/git/ (#6121)
-	"file_upload",              // POST /api/v1/machines/{mid}/files (docs/protocol.md "Sending files")
-	"machine_trust",            // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/onboarding.md 5.3)
-	"machines_add",             // POST /api/v1/auth/pair-codes with add / machine from a signed-in device: it adds a computer and pairs it (docs/onboarding.md 5.3)
-	"todo_threads",             // a to-do's chat thread: PUT/DELETE /api/v1/todos/{id}/thread, and `thread` on the to-dos GET returns (docs/todos.md "Chat thread")
+	"file_upload",              // POST /api/v1/machines/{mid}/files (docs/protocol/protocol.md "Sending files")
+	"machine_trust",            // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/assistant/onboarding.md 5.3)
+	"machines_add",             // POST /api/v1/auth/pair-codes with add / machine from a signed-in device: it adds a computer and pairs it (docs/assistant/onboarding.md 5.3)
+	"todo_threads",             // a to-do's chat thread: PUT/DELETE /api/v1/todos/{id}/thread, and `thread` on the to-dos GET returns (docs/assistant/todos.md "Chat thread")
 	"tls",                      // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",                // authenticated address discovery and capability-gated updates
-	"plugins",                  // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)
-	"plugin_manager",           // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/extensions.md)
-	"plugin_ui_slots",          // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/extensions.md "UI slots")
-	"extension_operations",     // installs, upgrades and uninstalls as operations with steps: /api/v1/extensions/-/operations, extension_operation events, async: true (docs/protocol.md "Extension install, upgrade and uninstall progress")
-	"extension_auth",           // extensions that sign in (manifest.auth): /api/v1/extensions/{id}/-/auth…, extension_auth events, the tools install step (docs/extensions.md "Sign-in (auth)")
-	"plugin_auto_upgrade",      // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/extensions.md "Auto-upgrade")
-	// The same under the new names (docs/extensions.md "Naming and compatibility", #1844): /api/v1/extensions/… answering with the
+	"plugins",                  // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions/extensions.md)
+	"plugin_manager",           // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/extensions/extensions.md)
+	"plugin_ui_slots",          // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/extensions/extensions.md "UI slots")
+	"extension_operations",     // installs, upgrades and uninstalls as operations with steps: /api/v1/extensions/-/operations, extension_operation events, async: true (docs/protocol/protocol.md "Extension install, upgrade and uninstall progress")
+	"extension_auth",           // extensions that sign in (manifest.auth): /api/v1/extensions/{id}/-/auth…, extension_auth events, the tools install step (docs/extensions/extensions.md "Sign-in (auth)")
+	"plugin_auto_upgrade",      // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/extensions/extensions.md "Auto-upgrade")
+	// The same under the new names (docs/extensions/extensions.md "Naming and compatibility", #1844): /api/v1/extensions/… answering with the
 	// keys extensions / extension / extension_name, extension_ui and extension_upgrade events. The plugin ones above
 	// stay for the apps out there (until at least 2027-05-05).
 	"extensions",               // GET /api/v1/extensions and the relay under /api/v1/extensions/{id}/
@@ -322,19 +322,19 @@ var Features = []string{
 	"extension_ui_slots",       // UI slots under /api/v1/extensions/-/ui, extension_ui events
 	"extension_auto_upgrade",   // /api/v1/extensions/-/upgrades, …/{id}/-/auto-upgrade, extension_upgrade events
 	"extension_market_spec",    // PUT /api/v1/extensions/-/markets/{id} {spec}: a market moves, keeping its id
-	"extension_ui_v3",          // UI version 3 (markdown, table, empty, loading, search, filter, more, push / pop) and extension_ui {invalidate} (docs/extensions.md "UI version 3")
-	"extension_widgets",        // widgets outside the app: GET /api/v1/extensions/-/widgets, POST …/{id}/-/widget/{ui}, PUT /api/v1/devices/{id}/widgets, extension_widget pushes (docs/extensions.md "System-level places")
-	"extension_shortcuts",      // extensions' actions in Shortcuts and Siri: GET /api/v1/extensions/-/shortcuts, POST …/{id}/-/shortcut/{sid} (docs/extensions.md "System-level places")
-	"extension_notify_actions", // notification buttons: POST /api/v1/notify actions / ui / state, aps.category and extension_notification (docs/extensions.md "System-level places")
+	"extension_ui_v3",          // UI version 3 (markdown, table, empty, loading, search, filter, more, push / pop) and extension_ui {invalidate} (docs/extensions/extensions.md "UI version 3")
+	"extension_widgets",        // widgets outside the app: GET /api/v1/extensions/-/widgets, POST …/{id}/-/widget/{ui}, PUT /api/v1/devices/{id}/widgets, extension_widget pushes (docs/extensions/extensions.md "System-level places")
+	"extension_shortcuts",      // extensions' actions in Shortcuts and Siri: GET /api/v1/extensions/-/shortcuts, POST …/{id}/-/shortcut/{sid} (docs/extensions/extensions.md "System-level places")
+	"extension_notify_actions", // notification buttons: POST /api/v1/notify actions / ui / state, aps.category and extension_notification (docs/extensions/extensions.md "System-level places")
 	"desktops",                 // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop ("Mute phone")
-	"sessions_delta",           // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md "Session deltas")
-	"connectors",               // GET /api/v1/connectors (docs/plan-connectors.md)
-	"channels",                 // GET /api/v1/channels and each channel's settings, binding, test (docs/channels.md)
-	"runtime_cli",              // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
-	"conversation_origin",      // Session.origin on assistant conversations (docs/protocol.md "Origin of assistant conversations")
-	"builtin_presets",          // the hub's own provider presets in GET /api/v1/launchers/presets; POST /api/v1/launchers with a preset takes an empty name, display_name and assign (docs/launchers.md "Built-in presets")
-	"upload_dir",               // POST /api/v1/machines/{mid}/files?dest=dir&dir=&conflict=: into a folder of the home (docs/protocol.md "Changing files")
-	"task_push",                // Task.push on /api/v1/assistant/tasks: "Push when done", every run or only what a run sends (docs/assistant.md "Push when done")
+	"sessions_delta",           // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol/protocol.md "Session deltas")
+	"connectors",               // GET /api/v1/connectors (docs/plans/plan-connectors.md)
+	"channels",                 // GET /api/v1/channels and each channel's settings, binding, test (docs/extensions/channels.md)
+	"runtime_cli",              // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/operations/runtime-cli.md)
+	"conversation_origin",      // Session.origin on assistant conversations (docs/protocol/protocol.md "Origin of assistant conversations")
+	"builtin_presets",          // the hub's own provider presets in GET /api/v1/launchers/presets; POST /api/v1/launchers with a preset takes an empty name, display_name and assign (docs/integrations/launchers.md "Built-in presets")
+	"upload_dir",               // POST /api/v1/machines/{mid}/files?dest=dir&dir=&conflict=: into a folder of the home (docs/protocol/protocol.md "Changing files")
+	"task_push",                // Task.push on /api/v1/assistant/tasks: "Push when done", every run or only what a run sends (docs/assistant/assistant.md "Push when done")
 }
 
 // Files sent from the phone (POST /api/v1/machines/{mid}/files): the hub streams the body to the node in chunks.
@@ -345,10 +345,10 @@ const (
 	// smaller: what an agent reads by path is a screenshot or a document, not a video.
 	UploadDestTerminal     = "terminal"
 	MaxTerminalUploadBytes = 50 << 20
-	// A checkup report or lab result for the health space (dest=health, docs/health.md "Checkup reports"): it lands in the
+	// A checkup report or lab result for the health space (dest=health, docs/assistant/health.md "Checkup reports"): it lands in the
 	// health directory's reports/ and stays, where the health conversations read it and the others are denied.
 	UploadDestHealth = "health"
-	// A file put into a folder the app is browsing (dest=dir&dir=…, docs/protocol.md "Changing files"): it keeps its own
+	// A file put into a folder the app is browsing (dest=dir&dir=…, docs/protocol/protocol.md "Changing files"): it keeps its own
 	// name, only folders in the home take it (node/writeguard.go), and it may be bigger.
 	UploadDestDir     = "dir"
 	MaxDirUploadBytes = 2 << 30
@@ -384,7 +384,7 @@ type UploadedFile struct {
 	Size int64  `json:"size"`
 }
 
-// HealthReport is one report in the health space's reports/ (docs/health.md"Health reports"): an original, its record, or both.
+// HealthReport is one report in the health space's reports/ (docs/assistant/health.md"Health reports"): an original, its record, or both.
 type HealthReport struct {
 	Name       string    `json:"name"`                  // the file: the key to delete it
 	Title      string    `json:"title"`                 // the name without the upload's time
@@ -402,7 +402,7 @@ type HealthReports struct {
 }
 
 type NodeInfo struct {
-	// Protocol, ProtocolMin and Capabilities are the node protocol handshake (internal/nodeproto, docs/protocol.md
+	// Protocol, ProtocolMin and Capabilities are the node protocol handshake (internal/nodeproto, docs/protocol/protocol.md
 	// "Node handshake"): the node protocol it speaks, the oldest manager protocol it answers, and what it can do.
 	// Nodes from before the handshake leave all three out (protocol 0); managers from before it ignore them.
 	Protocol           int      `json:"protocol,omitempty"`
@@ -433,10 +433,10 @@ type NodeInfo struct {
 	// engine.use (its hosts and default fields), left out by older ones — the hub then sends them only the engine.
 	EngineHosts *EngineChoice `json:"engine_hosts,omitempty"`
 	// MachineUID is the computer's own id (~/.persona/machine-uid, a UUIDv4 made on the node's first run): hubs that
-	// both reach it tell it is the same computer (docs/mesh.md). Older nodes leave it out.
+	// both reach it tell it is the same computer (docs/server/mesh.md). Older nodes leave it out.
 	MachineUID string `json:"machine_uid,omitempty"`
 	// HerdrRunning and HerdrRunningKnown: whether classic herdr's server answers on this machine now, so the Agents
-	// list can offer "Start" instead of waiting for a start to fail (docs/engines.md). An older node sets neither, and
+	// list can offer "Start" instead of waiting for a start to fail (docs/integrations/engines.md). An older node sets neither, and
 	// the hub then tells "it does not run" apart from "nobody said".
 	HerdrRunning      bool `json:"herdr_running,omitempty"`
 	HerdrRunningKnown bool `json:"herdr_running_known,omitempty"`
@@ -445,7 +445,7 @@ type NodeInfo struct {
 	BuiltinPrograms []string `json:"builtin_programs,omitempty"`
 }
 
-// System is what a machine is: OS, hardware, since when it runs (sysmon; docs/machines.md). Read once when the node
+// System is what a machine is: OS, hardware, since when it runs (sysmon; docs/server/machines.md). Read once when the node
 // starts and sent with node.info; the hub keeps the last one of every machine in Postgres.
 type System struct {
 	OS       string `json:"os"`                  // runtime.GOOS: linux | darwin
@@ -463,7 +463,7 @@ type System struct {
 	BootTime int64  `json:"boot_time,omitempty"` // Unix seconds
 }
 
-// MetricSample is one reading of a machine, every MetricEvery (sysmon; docs/machines.md "What is measured"). A nil field
+// MetricSample is one reading of a machine, every MetricEvery (sysmon; docs/server/machines.md "What is measured"). A nil field
 // was not measured (the first sample has no CPU or network rate: those need two readings).
 type MetricSample struct {
 	T         int64     `json:"t"`               // Unix seconds
@@ -513,10 +513,10 @@ type Launcher struct {
 	// Source: "zshrc" (a function in the machine's ~/.zshrc), "path" (a wrapper script on its PATH, node/pathlaunchers.go) or "persona" (managed in Settings › Models, the manager's assistant/models_launchers.go). Empty
 	// from an older node: zshrc.
 	Source string `json:"source,omitempty"`
-	// Agent is what it starts when not Claude Code: "codex" (plain codex, or an alias running it; docs/codex.md
+	// Agent is what it starts when not Claude Code: "codex" (plain codex, or an alias running it; docs/integrations/codex.md
 	// "Starting from the phone"). A Codex start needs its first message with it.
 	Agent string `json:"agent,omitempty"`
-	// Assistant: a runtime's launcher that may run the Persona assistant (docs/runtimes.md "Assistant"), whatever its agent.
+	// Assistant: a runtime's launcher that may run the Persona assistant (docs/integrations/runtimes.md "Assistant"), whatever its agent.
 	Assistant bool `json:"assistant,omitempty"`
 }
 
@@ -547,7 +547,7 @@ type LauncherCheck struct {
 }
 
 // ClaudeAuthStatus is what a node's claude.auth_status found: `claude auth status --json` run as the launcher runs
-// claude (docs/onboarding.md 4.3). It spends no tokens. Only these fields leave the machine: never the account's
+// claude (docs/assistant/onboarding.md 4.3). It spends no tokens. Only these fields leave the machine: never the account's
 // email or organization, never a key (KeySource names where a key came from, e.g. ANTHROPIC_API_KEY).
 type ClaudeAuthStatus struct {
 	State       string `json:"state"`                  // ClaudeLoggedIn, ClaudeNotLoggedIn or ClaudeAuthUnknown
@@ -570,7 +570,7 @@ const (
 	ClaudeAuthTimeout    = "timeout"
 )
 
-// LauncherRepair is what a node did for launchers.repair (docs/launcher-health.md): one of its fixed repairs.
+// LauncherRepair is what a node did for launchers.repair (docs/server/launcher-health.md): one of its fixed repairs.
 type LauncherRepair struct {
 	OK          bool   `json:"ok"`
 	Unsupported bool   `json:"unsupported,omitempty"` // this repair does not apply to the launcher's agent
@@ -748,7 +748,7 @@ const (
 	StatusInterrupted = "interrupted"
 )
 
-// Unified agent states (docs/agent-states.md).
+// Unified agent states (docs/protocol/agent-states.md).
 const (
 	StateNeedsYou = "needs_you" // waiting for the user: a question, plan, permission or any TUI dialog
 	StateWorking  = "working"
@@ -759,7 +759,7 @@ const (
 )
 
 type Session struct {
-	// Manager is the manager it belongs to (docs/managers.md, "Ownership"); the hub stamps it on what it sends the apps.
+	// Manager is the manager it belongs to (docs/assistant/managers.md, "Ownership"); the hub stamps it on what it sends the apps.
 	Manager          string               `json:"manager,omitempty"`
 	MachineID        string               `json:"machine_id"`
 	SessionID        string               `json:"session_id"`
@@ -790,13 +790,13 @@ type Session struct {
 	TabID       string `json:"tab_id,omitempty"`
 	WorkspaceID string `json:"workspace_id,omitempty"`
 	AgentName   string `json:"agent_name,omitempty"`
-	// CodexRoute: how Persona reaches a Codex in a terminal (docs/codex.md "Sessions on a daemon") — "app_server" (joined on
+	// CodexRoute: how Persona reaches a Codex in a terminal (docs/integrations/codex.md "Sessions on a daemon") — "app_server" (joined on
 	// the shared app-server: questions, approvals and messages go through its protocol) or "terminal" (its rollout and
 	// screen, keys and typing); CodexRouteNote says why when it is the terminal.
 	CodexRoute     string `json:"codex_route,omitempty"`
 	CodexRouteNote string `json:"codex_route_note,omitempty"`
 	// Agent is the coding agent in the pane: "claude" (also when empty, from older nodes) or "codex"; for a session a
-	// runtime lists (docs/runtimes.md), the agent it says it runs ("dsh").
+	// runtime lists (docs/integrations/runtimes.md), the agent it says it runs ("dsh").
 	Agent string `json:"agent,omitempty"`
 	// AgentLabel is what the apps call the agent when they do not know it themselves: a runtime's own name ("DSH").
 	// Empty for the agents the apps know (Claude Code, Codex, a compatible CLI).
@@ -828,26 +828,26 @@ type Session struct {
 	Efforts          []string `json:"efforts,omitempty"`
 	StartedByPersona bool     `json:"started_by_persona"`
 	Assistant        bool     `json:"assistant"` // runs in the assistant directory (the app's "Chat" tab)
-	// Space is the assistant's space it runs in: "health" for the health space's (docs/health.md), "" for the
+	// Space is the assistant's space it runs in: "health" for the health space's (docs/assistant/health.md), "" for the
 	// assistant's own. Set by the hub on the assistant's conversations.
 	Space string `json:"space,omitempty"`
 	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under "Archived";
 	// internal/assistant/conversations.go).
 	Archived bool `json:"archived,omitempty"`
-	// Origin is who opened an assistant conversation and OriginRef what of (docs/protocol.md"Assistant conversation origins"):
+	// Origin is who opened an assistant conversation and OriginRef what of (docs/protocol/protocol.md"Assistant conversation origins"):
 	// user, channel, inbox, task, spawned, lark_agent, extension; "" is the user's. Set by the manager's fleet from
 	// the assistant's snapshot (internal/assistant/fleet.go).
 	Origin    string `json:"origin,omitempty"`
 	OriginRef string `json:"origin_ref,omitempty"`
 	// Compaction is the last compaction the user asked for in an assistant conversation (POST …/compact), kept by the
-	// node until the next one: running, then done or failed (docs/assistant.md "Manual compaction").
+	// node until the next one: running, then done or failed (docs/assistant/assistant.md "Manual compaction").
 	Compaction *Compaction `json:"compaction,omitempty"`
 	// Channels are the channels messages came into this conversation from, newest first ("wechat", "feishu"):
-	// the conversation list draws the latest's icon (docs/channels.md"Source labels"). Set by the manager's fleet
+	// the conversation list draws the latest's icon (docs/extensions/channels.md"Source labels"). Set by the manager's fleet
 	// (internal/assistant/fleet.go).
 	Channels []string `json:"channels,omitempty"`
 	// Space / slot generalize where an agent lives in its host tool: for herdr a workspace and a tab
-	// (docs/agent-states.md). Agents sharing a space are shown together as one collaborating group.
+	// (docs/protocol/agent-states.md). Agents sharing a space are shown together as one collaborating group.
 	SpaceKind  string `json:"space_kind,omitempty"` // herdr
 	SpaceID    string `json:"space_id,omitempty"`
 	SpaceName  string `json:"space_name,omitempty"`
@@ -889,13 +889,13 @@ type Session struct {
 	Workflows []Workflow `json:"workflows,omitempty"`
 	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
 	Loop *LoopInfo `json:"loop,omitempty"`
-	// Goal is the goal the agent works toward, when one is set (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
+	// Goal is the goal the agent works toward, when one is set (Claude Code's /goal, a Codex thread goal; docs/integrations/agent-goal.md).
 	Goal *GoalInfo `json:"goal,omitempty"`
 	// Plan is the agent's own task list (Claude Code's TodoWrite, or TaskCreate / TaskUpdate), when it keeps one: how far
-	// along it is and the step in progress (docs/agent-goal.md "Plan"). Absent for Codex and for runtimes
+	// along it is and the step in progress (docs/integrations/agent-goal.md "Plan"). Absent for Codex and for runtimes
 	// whose conversation is not a Claude transcript on the node.
 	Plan *PlanInfo `json:"plan,omitempty"`
-	// Ports are the TCP ports the agent's processes listen on that answer HTTP (docs/ports.md): the dev servers
+	// Ports are the TCP ports the agent's processes listen on that answer HTTP (docs/operations/ports.md): the dev servers
 	// it started, which the apps open through the hub.
 	Ports     []Port    `json:"ports,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -906,7 +906,7 @@ type Session struct {
 	// AsksRead: the node read Asks off the reply (an empty Asks then means it asks nothing, or the user answered it);
 	// without it (an older node, a host that does not say) the hub reads the list's last words when they are whole.
 	AsksRead bool `json:"asks_read,omitempty"`
-	// AwaitsReply: the agent stopped on a question to the user nobody has answered yet (docs/agent-states.md "Awaiting your reply",
+	// AwaitsReply: the agent stopped on a question to the user nobody has answered yet (docs/protocol/agent-states.md "Awaiting your reply",
 	// #5096) — it asks (Asks, or the triage says it waits on the user) and has no card, error or background work. Set by
 	// the hub on a stopped session (Unread or Seen); an Seen one is listed as Awaiting Reply, not folded with the idle ones.
 	AwaitsReply bool `json:"awaits_reply,omitempty"`
@@ -915,15 +915,15 @@ type Session struct {
 	// (Codex: a rollout's task_complete.error, an app-server's failed turn, #2185); otherwise the hub reads it off the
 	// last words, as Claude Code writes them ("API Error: …"). The hub keeps it only while the agent is stopped: empty
 	// while it works or when the turn ended normally. The task it works for is interrupted, not done
-	// (docs/todos.md "How the state is computed", #1516).
+	// (docs/assistant/todos.md "How the state is computed", #1516).
 	TurnError string `json:"turn_error,omitempty"`
 	// TurnErrorKind is what the agent's record says of TurnError, when it says (Codex's error kinds):
 	// TurnErrorTransient (worth a "Continue") or TurnErrorUser (the user must act); empty: read off the text.
 	TurnErrorKind string `json:"turn_error_kind,omitempty"`
-	// TurnErrorCode says what is wrong when the hub can tell from TurnError (docs/onboarding.md 5.2): one of the
+	// TurnErrorCode says what is wrong when the hub can tell from TurnError (docs/assistant/onboarding.md 5.2): one of the
 	// TurnErrorCode* values, for a card that says what to fix (sign in, the key, the model). Empty: not known.
 	TurnErrorCode string `json:"turn_error_code,omitempty"`
-	// Work is where the session stands in its work (docs/agent-work.md): working, blocked on a named precondition, or
+	// Work is where the session stands in its work (docs/assistant/agent-work.md): working, blocked on a named precondition, or
 	// done, with a line saying what it waits for or what it concluded. Set by the hub; absent before the hub has
 	// triaged a stopped session's turn.
 	Work *WorkState `json:"work,omitempty"`
@@ -967,7 +967,7 @@ type Session struct {
 	// Node.js 22+, no bridge package, no claude); "" when it runs as asked.
 	RuntimeFallback string `json:"runtime_fallback,omitempty"`
 	// Chat, Topic, Dispatched: a botmux session's Feishu chat, its topic's root message and the topics it dispatched
-	// (`botmux dispatch`), for the todos to follow (docs/todos.md "Following botmux"); stripped by hub like SpawnFrom.
+	// (`botmux dispatch`), for the todos to follow (docs/assistant/todos.md "Following botmux"); stripped by hub like SpawnFrom.
 	Chat       string   `json:"chat,omitempty"`
 	Topic      string   `json:"topic,omitempty"`
 	Dispatched []string `json:"dispatched,omitempty"`
@@ -980,7 +980,7 @@ type Session struct {
 	Host string `json:"host,omitempty"`
 }
 
-// Work phases (WorkState.Phase) and what a blocked session waits on (WorkState.On), docs/agent-work.md.
+// Work phases (WorkState.Phase) and what a blocked session waits on (WorkState.On), docs/assistant/agent-work.md.
 const (
 	WorkWorking = "working"
 	WorkBlocked = "blocked"
@@ -998,7 +998,7 @@ const (
 	TurnErrorUser      = "user"      // sign-in, usage limit, context window, the model…: the user must act
 )
 
-// Session.TurnErrorCode values (docs/onboarding.md 4.6).
+// Session.TurnErrorCode values (docs/assistant/onboarding.md 4.6).
 const (
 	TurnErrorNotLoggedIn = "not_logged_in" // Claude Code on that machine is not signed in
 	TurnErrorAuthFailed  = "auth_failed"   // the key or token was refused or has expired
@@ -1006,7 +1006,7 @@ const (
 	TurnErrorRateLimited = "rate_limited"  // too many requests, or a usage limit
 )
 
-// Codes a call refuses with when the assistant's conversation cannot start on a machine (docs/onboarding.md 4.6, 5.2):
+// Codes a call refuses with when the assistant's conversation cannot start on a machine (docs/assistant/onboarding.md 4.6, 5.2):
 // rpc.Error codes the hub answers 409 with, the text in the request's language (apierr.Call).
 const (
 	CodeNoMachine       = "no_machine"       // no machine to run the main conversation on
@@ -1068,17 +1068,17 @@ type WorkArtifact struct {
 	Ref  string `json:"ref"`
 }
 
-// TodoRef is a session's link to an active todo (docs/todos.md).
+// TodoRef is a session's link to an active todo (docs/assistant/todos.md).
 type TodoRef struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 }
 
-// SourceRuntime is the source_kind of a session an agent runtime lists (docs/runtimes.md): source_instance_id names
+// SourceRuntime is the source_kind of a session an agent runtime lists (docs/integrations/runtimes.md): source_instance_id names
 // the runtime ("dsh"); its capabilities come from what the runtime declared (no terminal, never attach).
 const SourceRuntime = "runtime"
 
-// Port is a listening TCP port on a machine (docs/ports.md).
+// Port is a listening TCP port on a machine (docs/operations/ports.md).
 type Port struct {
 	Port int `json:"port"`
 	// Addr is what it is bound to: 127.0.0.1, 0.0.0.0, ::, ::1 or one of the machine's addresses.
@@ -1120,7 +1120,7 @@ type Fold struct {
 	LatestThinking *Item `json:"latest_thinking,omitempty"`
 }
 
-// FoldImage is an image a tool call of a folded run looked at (docs/protocol.md "Images looked at this turn"): one its result
+// FoldImage is an image a tool call of a folded run looked at (docs/protocol/protocol.md "Images looked at this turn"): one its result
 // carried (ItemID, fetched from GET …/items/{item id}/image), or a picture file Read opened whose result carried none
 // (only Path; the file's thumbnail is GET /machines/{mid}/file/thumb).
 type FoldImage struct {
@@ -1214,7 +1214,7 @@ type Item struct {
 	Queued    bool            `json:"queued,omitempty"` // user input typed while the agent worked, absorbed mid-turn
 	// ClientMsgID: this item came from the message an app sent with this client_msg_id (session.send): its words,
 	// its pictures, or the notice it became (/compact). Set by the node, which ties the transcript's line to the send
-	// (node/echo.go); absent for anything else and from older nodes. docs/protocol.md "Matching pending messages".
+	// (node/echo.go); absent for anything else and from older nodes. docs/protocol/protocol.md "Matching pending messages".
 	ClientMsgID string `json:"client_msg_id,omitempty"`
 	// FullSize: Text was cut for pages and pushes (it ends in a "truncated, open for the full text" line, in Chinese); the whole of it, this many
 	// bytes, comes from GET /api/v1/sessions/{mid}/{sid}/items/{item id}/full.
@@ -1226,7 +1226,7 @@ type Item struct {
 	From string `json:"from,omitempty"`
 	// Injected: this user line is a message Persona put into the conversation for the model (a task's notice, a
 	// scheduled run, a wake-up…), not something the user wrote. Set by the hub from the line's text
-	// (prompts.ParseInjected) on its way to the apps; docs/protocol.md "Messages Persona injects".
+	// (prompts.ParseInjected) on its way to the apps; docs/protocol/protocol.md "Messages Persona injects".
 	Injected *Injected `json:"injected,omitempty"`
 	Fold     *Fold     `json:"fold,omitempty"`
 	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent, or a workflow).
@@ -1330,13 +1330,13 @@ type Question struct {
 }
 
 type Interaction struct {
-	// Manager is the manager it belongs to (docs/managers.md, "Ownership"); the hub stamps it on what it sends the apps.
+	// Manager is the manager it belongs to (docs/assistant/managers.md, "Ownership"); the hub stamps it on what it sends the apps.
 	Manager         string          `json:"manager,omitempty"`
 	ID              string          `json:"id"`
 	MachineID       string          `json:"machine_id"`
 	SessionID       string          `json:"session_id"`
 	SessionTitle    string          `json:"session_title,omitempty"`
-	TaskTitle       string          `json:"task_title,omitempty"` // the task its agent works for (docs/unified-entry.md), set when sent to clients
+	TaskTitle       string          `json:"task_title,omitempty"` // the task its agent works for (docs/assistant/unified-entry.md), set when sent to clients
 	Cwd             string          `json:"cwd,omitempty"`
 	Kind            string          `json:"kind"`
 	CreatedAt       time.Time       `json:"created_at"`
@@ -1366,26 +1366,26 @@ type Interaction struct {
 	// cards, the watch, Siri) is off for such cards: they open the form.
 	Fields []Field `json:"fields,omitempty"`
 	// Resumable: a hook waits on it that reconnects when its node goes away (hub or node restart), so the hub keeps
-	// it pending through the gap instead of cancelling it (docs/protocol.md "Interactions survive restarts").
+	// it pending through the gap instead of cancelling it (docs/protocol/protocol.md "Interactions survive restarts").
 	Resumable bool `json:"resumable,omitempty"`
 	// Agent is who asks when it is not Claude Code: "codex" or "traex" (a card the node read off a Codex TUI,
-	// docs/codex.md "Questions and approvals").
+	// docs/integrations/codex.md "Questions and approvals").
 	Agent string `json:"agent,omitempty"`
 	// Reason: why the agent asks for this permission, in its words (Codex's "Reason: …").
 	Reason string `json:"reason,omitempty"`
 	// AlwaysLabel names what "always allow" does for this request ("don't ask about this command again in this session", in Chinese); a permission card offers it
 	// only when set or for Claude.
 	AlwaysLabel string `json:"always_label,omitempty"`
-	// AgentLabel is what to call Agent when the apps do not know it (a runtime's own name, "DSH"; docs/runtimes.md),
+	// AgentLabel is what to call Agent when the apps do not know it (a runtime's own name, "DSH"; docs/integrations/runtimes.md),
 	// as proto.Session.AgentLabel.
 	AgentLabel string `json:"agent_label,omitempty"`
 	// AlwaysKeys: what "Always allow in this session" grants on an assistant conversation's permission card, set by the node (a tool,
 	// a Codex command or file, a gated write's route). The hub keeps them for the conversation once answered so, and
 	// answers a later card whose keys are all kept by itself: the agent's own session rule dies with its process
-	// (docs/assistant.md "Always allow in this session"). Absent on Agents sessions' cards.
+	// (docs/assistant/assistant.md "Always allow in this session"). Absent on Agents sessions' cards.
 	AlwaysKeys []string `json:"always_keys,omitempty"`
 	// Delegating: the assistant is deciding whether it may answer this question for the user (agents.delegate,
-	// docs/assistant.md "The assistant answers questions first"); nothing was pushed yet. The card shows in the apps meanwhile, and an answer
+	// docs/assistant/assistant.md "The assistant answers questions first"); nothing was pushed yet. The card shows in the apps meanwhile, and an answer
 	// given there wins.
 	Delegating bool `json:"delegating,omitempty"`
 	// Delegate is what the assistant found when it left the question to the user: the context it filled in.
@@ -1440,13 +1440,13 @@ type Resolution struct {
 	Keys     []string          `json:"keys,omitempty"`
 	Text     string            `json:"text,omitempty"`
 	// AnsweredBy is who answered when it was not the user in the app: AnsweredByAssistant for a question the
-	// assistant answered on their behalf (docs/assistant.md). Absent when the app answered.
+	// assistant answered on their behalf (docs/assistant/assistant.md). Absent when the app answered.
 	AnsweredBy string `json:"answered_by,omitempty"`
 	// Reason is why the assistant answered so (AnsweredByAssistant): the Y of "Answered by the assistant: X, because Y".
 	Reason string `json:"reason,omitempty"`
 	// Remembered marks an allow the manager gave from an "Always allow in this session" it had kept (or that a card
 	// answered meanwhile covers), not from an answer to this card: the node's sent-as-user ledger records such a write
-	// as conversation_always, not as a card (docs/connectors.md "Sent as the user"). Only the manager sets it; an
+	// as conversation_always, not as a card (docs/extensions/connectors.md "Sent as the user"). Only the manager sets it; an
 	// answer from an app or a channel never carries it. An older manager does not send it.
 	Remembered bool `json:"remembered,omitempty"`
 	// PreKeys go in before Text (Keys after it): pick "Type something." by its number, type the answer, enter.
@@ -1524,7 +1524,7 @@ type BackgroundTask struct {
 }
 
 // Workflow is a Claude Code workflow run (the Workflow tool): a script that drives many agents in the background and
-// reports back to the session with a task notification when it ends (docs/agent-states.md "Background workflows").
+// reports back to the session with a task notification when it ends (docs/protocol/agent-states.md "Background workflows").
 type Workflow struct {
 	TaskID  string `json:"task_id"`          // the background task's id, as in Background and the task notification
 	RunID   string `json:"run_id,omitempty"` // "wf_…": its directory under <session>/subagents/workflows/
@@ -1609,7 +1609,7 @@ type WorkflowTool struct {
 	Summary string `json:"summary"`
 }
 
-// GoalInfo is a goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's /goal, whose
+// GoalInfo is a goal the agent keeps working toward until it holds (docs/integrations/agent-goal.md): Claude Code's /goal, whose
 // Stop hook checks the condition each time the agent would stop, or a Codex thread goal.
 type GoalInfo struct {
 	Objective string `json:"objective"`
@@ -1623,7 +1623,7 @@ type GoalInfo struct {
 	UpdatedAt   time.Time `json:"updated_at,omitempty"`
 }
 
-// PlanInfo is an agent's latest task list, counted (docs/agent-goal.md "Plan"): Done of Total items completed, and
+// PlanInfo is an agent's latest task list, counted (docs/integrations/agent-goal.md "Plan"): Done of Total items completed, and
 // Current, the item in progress (its activeForm, else its subject) on one line, "" when none is. At is when the
 // counts or Current last changed.
 type PlanInfo struct {
@@ -1707,12 +1707,12 @@ type LarkRule struct {
 // and credentials through Gates; an older hub's "account", "base" and "token" are unknown keys and ignored.)
 type AssistantLark struct {
 	Rules  []LarkRule `json:"rules,omitempty"`
-	CLI    *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
+	CLI    *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plans/plan-lark-cli.md)
 	Prefer string     `json:"prefer,omitempty"` // "cli", or the serving extension's own source: the primary one when both are there
-	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/extensions.md "Assistant"):
+	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/extensions/extensions.md "Assistant"):
 	// a command calling an HTTP API as the user, its credentials and the rules its calls go by.
 	Gates []CommandGate `json:"gates,omitempty"`
-	// MCPServers are the extensions' MCP servers for the assistant (mcp_servers, docs/extensions.md "MCP servers").
+	// MCPServers are the extensions' MCP servers for the assistant (mcp_servers, docs/extensions/extensions.md "MCP servers").
 	MCPServers []AssistantMCPServer `json:"mcp_servers,omitempty"`
 }
 

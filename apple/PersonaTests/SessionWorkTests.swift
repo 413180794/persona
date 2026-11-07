@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// A stopped session's work state as the lists show it (`Session.work`, docs/agent-work.md; the web's lib/work.ts).
+/// A stopped session's work state as the lists show it (`Session.work`, docs/assistant/agent-work.md; the web's lib/work.ts).
 @MainActor
 struct SessionWorkTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)

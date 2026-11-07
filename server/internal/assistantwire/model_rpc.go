@@ -2,7 +2,7 @@ package assistantwire
 
 import "encoding/json"
 
-// Model calls by extensions (#6102, docs/extensions.md "Model calls"): an extension granted the models scope calls
+// Model calls by extensions (#6102, docs/extensions/extensions.md "Model calls"): an extension granted the models scope calls
 // model.complete; the manager hands it to the assistant with the extension's id (ExtensionComplete), and the
 // assistant answers it on the extension's own purpose extension.<id> in Settings › Models (inheriting "Knowledge
 // base"'s until the user picks another). The extension never sees a key. No budget and no cap (the user's decision):

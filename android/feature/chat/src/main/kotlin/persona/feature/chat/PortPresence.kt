@@ -7,7 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * What the chat knows of the ports its links point at (docs/ports.md, iOS `PortPresence`): a port an agent on the
+ * What the chat knows of the ports its links point at (docs/operations/ports.md, iOS `PortPresence`): a port an agent on the
  * machine lists (`Session.ports`) is live; any other is asked about (`GET …/ports/{port}`) as its badge shows, and
  * remembered a minute (half that when gone). A badge whose port is known gone is gray; opening one that turned out gone
  * marks it too. Used from the main thread, with a main-thread [scope] (the chat page's).

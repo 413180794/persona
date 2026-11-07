@@ -35,7 +35,7 @@ import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-// Settings › Sent as you (#5278, docs/connectors.md "Sent as the user"): what Persona wrote in the user's name through the
+// Settings › Sent as you (#5278, docs/extensions/connectors.md "Sent as the user"): what Persona wrote in the user's name through the
 // connectors, newest first. A row has the connector, where it went, how long ago, the first lines of what it said, how the gate
 // let it through (orange where the user did not decide) and the chat that asked, which opens. A row opens a sheet with every
 // field and the whole text. Load earlier follows `next`; the chips (Lark and the connectors the loaded rows show) filter by

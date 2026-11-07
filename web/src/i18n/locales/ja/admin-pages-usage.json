@@ -47,7 +47,7 @@
   "url": "アドレス",
   "url_invalid": "http(s)://ホスト[:ポート] の形式で、ユーザー名やパスワードは含めないでください",
   "url_hint_relay": "ゲートウェイのルートアドレスです（/api/admin は付けません）。",
-  "url_hint_generic": "ハブはこの完全なアドレスに GET し、accounts 一覧を含む JSON を期待します（形式は docs/usage-windows.md）。",
+  "url_hint_generic": "ハブはこの完全なアドレスに GET し、accounts 一覧を含む JSON を期待します（形式は docs/server/usage-windows.md）。",
   "key": "キー",
   "key_saved": "保存済み（表示されません）。空欄なら変更しません",
   "key_retype": "アドレスか種類が変わりました。キーを入力し直してください。保存済みのキーは新しいアドレスには送られません。",

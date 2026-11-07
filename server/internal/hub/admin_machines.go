@@ -16,7 +16,7 @@ import (
 
 // The machines page: what hub.json lists and how each one is doing (with every path the center has to it, and the
 // computers it reaches through members). hub.json's machines are read when the hub starts, so adding or removing one
-// is written to hub.json and waits for a restart. New computers come in two ways (docs/plan-hub-center.md 4): the
+// is written to hub.json and waits for a restart. New computers come in two ways (docs/archive/operations/plan-hub-center.md 4): the
 // computer dials the hub (kind link: a persona-link pairing link), or the hub dials the computer's connector (kind
 // service: its persona://connector link pasted here). ssh is not offered any more; hub.json entries of kind ssh keep
 // working.

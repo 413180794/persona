@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of the installable web client (PWA, #1772, docs/web.md "Install as an app"): Chrome finds nothing
+"""End-to-end check of the installable web client (PWA, #1772, docs/web/web.md "Install as an app"): Chrome finds nothing
 missing to install it, the service worker takes over, keeps the shell and its assets but nothing from the API, the
 page still opens with the hub unreachable, and Settings shows the install row.
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// A Lark chat's loaded messages and where paging and read reporting stand (docs/feishu.md, docs/lessons/lark-mail.md: the read
+/// A Lark chat's loaded messages and where paging and read reporting stand (docs/extensions/feishu.md, docs/lessons/lark-mail.md: the read
 /// position and the two cursors). A value with no views and no network: `LarkChatView` asks the hub for a page and
 /// hands the answer here; what to report as read comes back out. `LarkPagerTests` checks the merging and reporting.
 struct LarkPager: Equatable {

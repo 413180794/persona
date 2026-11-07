@@ -19,7 +19,7 @@ server/internal/hub/webdist/*
 !server/internal/hub/webdist/README.md
 web/node_modules/
 web/dist/
-# A hub run from this folder: its secrets and data (docs/docker.md).
+# A hub run from this folder: its secrets and data (docs/operations/docker.md).
 deploy/docker/.env
 deploy/docker/data/
 deploy/docker/postgres/

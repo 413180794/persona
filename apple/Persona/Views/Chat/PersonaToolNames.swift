@@ -39,14 +39,14 @@ enum PersonaToolNames {
 
     private static func verbs(_ n: String) -> String? {
         switch n {
-        // Agents on the user's computers (docs/assistant.md「Agents 与飞书工具」).
+        // Agents on the user's computers (docs/assistant/assistant.md「Agents 与飞书工具」).
         case "agent_read": String(localized: "Read Agent Chat")
         case "agent_send", "send_to_agent": String(localized: "Message Agent")
         case "agents_list", "list_agents": String(localized: "List Agents")
         case "agent_start", "task_plan": String(localized: "Assign Task")
         case "interaction_answer": String(localized: "Answer for You")
         case "ask_persona": String(localized: "Hand to Persona")
-        // The knowledge base (docs/knowledge.md).
+        // The knowledge base (docs/assistant/knowledge.md).
         case "kb_get", "kb_list", "kb_search", "search_knowledge": String(localized: "Search Knowledge")
         case "kb_update": String(localized: "Update Knowledge")
         // Talking to the user.
@@ -59,7 +59,7 @@ enum PersonaToolNames {
         case "delete_routine": String(localized: "Delete Scheduled Task [Persona Tool Names 24bbfb]")
         case "inbox_draft": String(localized: "Draft Reply")
         case "persona_settings": String(localized: "Persona Settings")
-        // Live cards (docs/assistant-views.md).
+        // Live cards (docs/assistant/assistant-views.md).
         case "view_show": String(localized: "Draw Card")
         case "view_get": String(localized: "Read Card")
         case "view_update": String(localized: "Update Card")

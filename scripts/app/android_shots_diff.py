@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare two directories of screenshots pixel by pixel (./scripts/android.sh shots, docs/android.md).
+"""Compare two directories of screenshots pixel by pixel (./scripts/android.sh shots, docs/android/android.md).
 
     python3 scripts/app/android_shots_diff.py <before> <after> [--diff <directory>]
         [--tolerance <n>] [--ignore '<name glob>=x0,y0,x1,y1' ...]

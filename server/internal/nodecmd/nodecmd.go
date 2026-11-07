@@ -32,15 +32,15 @@ const Usage = `  personad hook             Claude Code hook entry (reads hook JS
   personad mcp              Claude Code MCP server (stdio)
   personad ask "question" [--options a,b,c] [--timeout 10m] [--require-remote]
                            block until the question is answered on the phone; exit 0 allowed / option chosen (printed),
-                           1 denied, 2 usage, 3 timeout, 4 phone unreachable (docs/script-cli.md)
+                           1 denied, 2 usage, 3 timeout, 4 phone unreachable (docs/integrations/script-cli.md)
   personad notify "title" [body] [--silent] [--error] [--strict]
-                           one notification to the phone; exit 0 whatever happens unless --strict (docs/script-cli.md)
+                           one notification to the phone; exit 0 whatever happens unless --strict (docs/integrations/script-cli.md)
   personad office docx|pptx|xlsx|check …
                            write a Word document or a deck from Markdown, a workbook from JSON / CSV, or say what is in
                            one (the office skill): personad office --help
   personad codex-start <file>
                            run the Codex launcher in file (written by the node, removed once read) with the first
-                           message as its last argument, no shell in between (docs/codex.md「从手机新建」)`
+                           message as its last argument, no shell in between (docs/integrations/codex.md「从手机新建」)`
 
 // SysmonUsage is `sysmon`'s line in the usage text.
 const SysmonUsage = `  personad sysmon [n]       print this machine's system info and 1 + n metric samples (n default 3, at most 8640,
@@ -62,7 +62,7 @@ func Run(ctx context.Context, stop func(), args []string, b Build) (handled bool
 		return true, runNode(ctx, rest, b)
 	case "hook":
 		nodeclient.RunHook(ctx, rest, os.Stdin, os.Stdout)
-	case "launch": // a launcher kept in Settings › Models: its settings from the local node, then claude (docs/launchers.md)
+	case "launch": // a launcher kept in Settings › Models: its settings from the local node, then claude (docs/integrations/launchers.md)
 		if len(rest) < 1 {
 			return true, UsageError("usage: " + CommandName() + " launch <launcher> [claude args…]")
 		}

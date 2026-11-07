@@ -25,7 +25,7 @@ import java.time.Instant
  * app's ShortcutText), pure so tests pin it.
  */
 object ShortcutText {
-    /** The one that has been waiting longest (docs/intents.md "Selection rules"). */
+    /** The one that has been waiting longest (docs/apple/intents.md "Selection rules"). */
     fun pending(interactions: List<Interaction>): Interaction? =
         interactions.minByOrNull { parseTime(it.createdAt) ?: Instant.MAX }
 

@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * "New model provider" (docs/launchers.md "From extension"): typed in, or - when the hub's extensions offer presets - taken from one,
+ * "New model provider" (docs/integrations/launchers.md "From extension"): typed in, or - when the hub's extensions offer presets - taken from one,
  * where only the name, the key and maybe another of its models are filled in and the hub adds the rest.
  */
 internal data class NewProviderDraft(
@@ -44,7 +44,7 @@ internal data class NewProviderDraft(
 )
 
 /**
- * Where "New model provider" is on a hub with built-in presets (docs/onboarding.md 4.3 "Three paths" B): [Pick] a provider, paste its
+ * Where "New model provider" is on a hub with built-in presets (docs/assistant/onboarding.md 4.3 "Three paths" B): [Pick] a provider, paste its
  * [Key] (tested by itself) and see what now runs on it ([Done]); a gateway typed in is the [Form]. An older hub opens on the
  * [Form] with its "Fill in" / "From extension" switch.
  */

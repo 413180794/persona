@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guards the words a new user reads while getting started (docs/onboarding.md 8.1 "Copy guard").
+"""Guards the words a new user reads while getting started (docs/assistant/onboarding.md 8.1 "Copy guard").
 
     python3 -m unittest -v test_onboarding_copy      (from scripts/test; CI runs every scripts/**/test_*.py)
 
@@ -66,7 +66,7 @@ class Scope:
 WEB = "web/src/i18n/locales/{lang}/"
 SERVER = "server/internal/i18n/locales/{lang}/"
 SCOPES = [
-    # Web: the setup card and the coded errors (docs/onboarding.md 4.4, 4.6), the login page (#3356), adding a computer
+    # Web: the setup card and the coded errors (docs/assistant/onboarding.md 4.4, 4.6), the login page (#3356), adding a computer
     # (4.2), the provider wizard (4.3), the empty states (4.5).
     Scope("web/assistant-readiness", "json", WEB + "assistant-readiness.json"),
     Scope("web/lib-readiness", "json", WEB + "lib-readiness.json"),
@@ -114,7 +114,7 @@ SCOPES = [
     Scope("apple/welcome", "swift", "apple/Persona/Views/Settings/SettingsView.swift", "struct WelcomeView", langs=("zh-Hans",)),
     Scope("apple/agents-empty", "swift", "apple/Persona/Views/Chats/ChatsView.swift", r"\bempty[A-Z]\w*\s*=", langs=("zh-Hans",)),
     Scope("apple/machines", "swift", "apple/Persona/Views/Machines/MachinesView.swift", langs=("zh-Hans",)),
-    # "Add computer" / "Confirm computer" (#4196, docs/onboarding.md 4.2): the form, the steps for each system, the errors by code.
+    # "Add computer" / "Confirm computer" (#4196, docs/assistant/onboarding.md 4.2): the form, the steps for each system, the errors by code.
     Scope("apple/add-computer", "swift", "apple/Persona/Views/Machines/AddComputerView.swift", langs=("zh-Hans",)),
     Scope("apple/inbox", "swift", "apple/Persona/Views/Inbox/InboxView.swift", langs=("zh-Hans",)),
     Scope("apple/assistant", "swift", "apple/Persona/Views/Assistant/AssistantView.swift", langs=("zh-Hans",)),
@@ -286,7 +286,7 @@ class OnboardingCopyTest(unittest.TestCase):
 
     def test_no_banned_words(self):
         bad = [v for v in violations() if (v[0], v[1]) not in ALLOW and (v[0], v[1]) not in PENDING]
-        self.assertFalse(bad, "beginner-facing words a new user cannot know (docs/onboarding.md 8.1); say it plainly, or "
+        self.assertFalse(bad, "beginner-facing words a new user cannot know (docs/assistant/onboarding.md 8.1); say it plainly, or "
                               "if it is in a 高级 / 详情 section add it to ALLOW with the reason:\n" +
                          "\n".join("  %s %s [%s] %s: %s" % (f, key, lang, sid, ", ".join(w)) for sid, key, lang, w, f in bad))
 

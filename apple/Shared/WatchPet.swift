@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the watch's Milk Frog is doing (docs/persona.md "The Milk Frog on the watch").
+/// What the watch's Milk Frog is doing (docs/apple/persona.md "The Milk Frog on the watch").
 nonisolated enum WatchPetState: String, CaseIterable, Sendable {
     case needsYou = "needs_you", working, done, idle, sleep, offline
 

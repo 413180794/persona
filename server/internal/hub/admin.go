@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/osproc"
 )
 
-// The hub admin UI (docs/admin.md): /admin and /api/v1/admin/, signed in with the administrator's password, reachable
+// The hub admin UI (docs/operations/admin.md): /admin and /api/v1/admin/, signed in with the administrator's password, reachable
 // only from admin.access. Outside that scope neither exists: page paths fall through to the web client and API paths
 // to the app's API, exactly as on a hub without an admin UI.
 
@@ -132,7 +132,7 @@ func (h *Hub) adminRoutes(mux *http.ServeMux, api, web http.Handler) http.Handle
 	h.adminDeviceRoutes(closed)
 	h.adminNetworkRoutes(closed)
 	h.adminExtensionRoutes(closed)
-	// Hub mesh (docs/plan-hub-mesh.md 2.7): /peers and /routes, from the mesh's own file.
+	// Hub mesh (docs/archive/operations/plan-hub-mesh.md 2.7): /peers and /routes, from the mesh's own file.
 	h.registerPeerAdmin(closed)
 	h.peerCLIRoutes(open) // personad hub pair --peer, personad hub peer … (peer_admin.go)
 	signedIn := jsonRouteErrors(closed)

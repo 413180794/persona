@@ -1,7 +1,7 @@
 package hub
 
 // An extension's token from the internet is taken only with its manager's proof that the request came through that
-// manager (extwire.HeaderManagerProof, docs/managers.md "Extensions and the hub's API"): a token that leaked is no use
+// manager (extwire.HeaderManagerProof, docs/assistant/managers.md "Extensions and the hub's API"): a token that leaked is no use
 // on its own. The key is made from the token of the manager's live bus connection as it connects (extwire.ProofKey)
 // and kept with that connection only, so a manager revoked, replaced or gone proves nothing, and the hub's database
 // (which has another hash of the token) forges nothing. Each proof is taken once, within extwire.ProofWindow of the
@@ -22,7 +22,7 @@ import (
 // yet), so there is no verdict on the token: not counted, and not marked as the token being nobody's.
 const codeAuthorizeUnsure = "manager_unreachable"
 
-// The answers to a manager's proof that is its own but not taken (docs/managers.md "Extensions and the hub's API").
+// The answers to a manager's proof that is its own but not taken (docs/assistant/managers.md "Extensions and the hub's API").
 const (
 	codeClockSkew     = extwire.CodeClockSkew
 	codeProofReplayed = extwire.CodeProofReplayed

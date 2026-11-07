@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 
 /**
- * Settings › Managers (docs/managers.md): the hub's managers, each a whole assistant, where each runs and whether it is
+ * Settings › Managers (docs/assistant/managers.md): the hub's managers, each a whole assistant, where each runs and whether it is
  * connected; New manager gives an install code. The list follows the hub's `managers` pushes while it is open.
  */
 @Composable

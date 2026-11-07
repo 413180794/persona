@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/orcart"
 )
 
-// "New worktree…" on Orca (docs/terminal.md): Orca makes the checkout itself (worktree.create), so the new worktree is
+// "New worktree…" on Orca (docs/integrations/terminal.md): Orca makes the checkout itself (worktree.create), so the new worktree is
 // one of Orca's, listed under the workspace it came from, in Orca's sidebar and in Persona's workspaces alike.
 
 var _ host.Worktreer = (*orcaHost)(nil)

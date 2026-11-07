@@ -33,9 +33,9 @@ final class PushRegistrar {
         }
     }
 
-    /// Registers with every group: at its first hub, the one that issued the credential (docs/plan-hub-mesh.md 2.6: the
+    /// Registers with every group: at its first hub, the one that issued the credential (docs/archive/operations/plan-hub-mesh.md 2.6: the
     /// group's other hubs pass their pushes to it, one push per device), each group sealing to a key of its own
-    /// (docs/multi-hub.md「推送」).
+    /// (docs/protocol/multi-hub.md「推送」).
     func didRegister(token: Data) {
         let hex = token.map { String(format: "%02x", $0) }.joined()
         let registry = HubStore.load()
@@ -57,7 +57,7 @@ final class PushRegistrar {
         let base = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: kind, apnsToken: hex,
                                         apnsEnv: env, topic: Bundle.main.bundleIdentifier, features: features)
         Task {
-            // A hub without the app's APNs key pushes through the relay, sealed to this group's key (docs/push-relay.md);
+            // A hub without the app's APNs key pushes through the relay, sealed to this group's key (docs/operations/push-relay.md);
             // the notification service extension opens it. The hub decides: with its own key it ignores these.
             var grant: String?
             var outcome = PushHealth.Relay.notConfigured

@@ -19,7 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Files sent from the phone to an agent (docs/protocol.md "Sending files"): the hub streams the upload in chunks
+// Files sent from the phone to an agent (docs/protocol/protocol.md "Sending files"): the hub streams the upload in chunks
 // (file.upload.begin / chunk / end; one JSON line per chunk, never the whole file), the node writes it to a hidden
 // part file in the temp directory and, once every byte is there, renames it to the original name plus a timestamp.
 // The app puts the returned absolute path in the input box.

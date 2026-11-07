@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// A botmux session's reason for waiting and its Feishu topic (attention_reason, external_url; docs/engines.md「botmux」).
+/// A botmux session's reason for waiting and its Feishu topic (attention_reason, external_url; docs/integrations/engines.md「botmux」).
 @MainActor
 struct SessionAttentionTests {
     private func session(_ json: String) throws -> Session {

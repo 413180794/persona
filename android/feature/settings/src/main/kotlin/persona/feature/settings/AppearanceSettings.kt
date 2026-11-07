@@ -133,7 +133,7 @@ private val PreviewCounts = listOf(Status.NeedsYou to 1, Status.Working to 1)
 
 /**
  * The Agents tab at 0.3 of its size (320dp wide, near a phone's width), drawn with the style's own components
- * (docs/android-design.md 2.4): a computer, one of its spaces and its sessions on the page background (the board's
+ * (docs/android/android-design.md 2.4): a computer, one of its spaces and its sessions on the page background (the board's
  * agent strips), and the app's navigation. Glass shows its ambient light; its dock is the opaque panel, there being
  * nothing here to refract.
  */
@@ -172,7 +172,7 @@ private fun StylePreview(style: AppStyle) {
 }
 
 /**
- * Settings › Appearance › Avatar (docs/persona.md): the built-in faces, the default first, then the hub's packages (a package is
+ * Settings › Appearance › Avatar (docs/apple/persona.md): the built-in faces, the default first, then the hub's packages (a package is
  * downloaded when chosen and kept on the phone), applied at once and remembered on this phone, with the chosen one
  * in each state under them. Demo mode has only the default.
  */

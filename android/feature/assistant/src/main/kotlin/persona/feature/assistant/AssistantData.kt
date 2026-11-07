@@ -229,7 +229,7 @@ data class AssistantChatOptions(
     val assistant: Boolean = true,
     val embedded: Boolean = true,
     val showTopBar: Boolean = false,
-    /** The conversation's manager is offline (docs/managers.md step 4): history only, this note where the composer was. */
+    /** The conversation's manager is offline (docs/assistant/managers.md step 4): history only, this note where the composer was. */
     val readOnlyNote: String? = null,
 )
 

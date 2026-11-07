@@ -1,4 +1,4 @@
-// A link opened in the side panel (CLAUDE.md "Links open inside the app", docs/web.md "Links"): Feishu documents in a reader
+// A link opened in the side panel (CLAUDE.md "Links open inside the app", docs/web/web.md "Links"): Feishu documents in a reader
 // (the phone's FeishuDocReader), Moments posts as the post, while the hub reads Feishu (feature `lark`); any other page belongs in a browser tab (lib/links.ts says
 // why), so one that lands here says so and opens the tab. Text selected in the reader can go to the agent:
 // "Add as context" rides along with the next message, "AI edit" asks for a change at once (<persona-context>). A document's

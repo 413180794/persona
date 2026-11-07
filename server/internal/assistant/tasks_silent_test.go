@@ -46,7 +46,7 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 		{name: "a model API error, now unknown", items: []proto.Item{prompt}, turnError: "API Error: 529 overloaded", endState: proto.StateUnknown,
 			state: "interrupted", summary: interruptedSummary, errText: "API Error: 529 overloaded",
 			notice: []string{"被模型服务出错打断了", "529 overloaded"}},
-		// Claude Code without credentials answers with a message of its own: the turn never ran (docs/onboarding.md 4.4).
+		// Claude Code without credentials answers with a message of its own: the turn never ran (docs/assistant/onboarding.md 4.4).
 		{name: "not logged in", items: []proto.Item{prompt, {Kind: proto.KindText, Role: "assistant", Text: "Not logged in · Please run /login"}},
 			lastText: "Not logged in · Please run /login",
 			state:    "interrupted", summary: interruptedSummary, errText: "Not logged in · Please run /login",

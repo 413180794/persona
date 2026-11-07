@@ -99,7 +99,7 @@ func (d *doctorReport) ipv6() []netaddr.Addr {
 	return addrs
 }
 
-// setupDoctor is the check at the end of `personad hub setup` (docs/onboarding.md 4.1): only what is wrong, none of
+// setupDoctor is the check at the end of `personad hub setup` (docs/assistant/onboarding.md 4.1): only what is wrong, none of
 // the excluded addresses or the routes and firewall, which are about reaching the hub from outside (outside: asked
 // for with --outside, then those too).
 func setupDoctor(ctx context.Context, dir string, outside bool) []string {

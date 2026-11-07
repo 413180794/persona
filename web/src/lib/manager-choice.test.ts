@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The assistant page's manager (docs/managers.md "Clients"): which requests name it, which live updates are its, the
+// The assistant page's manager (docs/assistant/managers.md "Clients"): which requests name it, which live updates are its, the
 // things merged lists showed as another manager's, and the roster's grouping that the machines, extensions and inbox
 // pages go by.
 import { afterEach, describe, expect, it } from "vitest";
@@ -270,7 +270,7 @@ describe("api", () => {
       await api("/machines");
       // picking it also reads its page again (lib/store.ts)
       expect(seen).toEqual(["GET /assistant null", "GET /assistant m-1", "POST /assistant/conversations m-1", "GET /machines null"]);
-      // the health space stays the default manager's whatever the pick (docs/health.md): its list and a new conversation
+      // the health space stays the default manager's whatever the pick (docs/assistant/health.md): its list and a new conversation
       seen.length = 0;
       const { startHealthConversation } = await import("../views/health/reports");
       await api("/assistant?space=health");

@@ -3,7 +3,7 @@ import { logText, mergeLines, metricsCharts, msText, rateText, rateTone, stepLab
 import { mockLogs, mockMetrics, mockOverview } from "./mock-metrics";
 import type { LogLine } from "./types";
 
-describe("运行情况 (docs/extensions.md)", () => {
+describe("运行情况 (docs/extensions/extensions.md)", () => {
   it("writes rates and latencies as people read them", () => {
     expect(rateText(0, 0)).toBe("—");
     expect(rateText(0, 12)).toBe("0%");

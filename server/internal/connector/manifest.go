@@ -17,7 +17,7 @@ type Capability string
 // Capabilities and the interface each stands for. The names are the ones GET /api/v1/connectors lists (except
 // CapSettle, CapGroup, CapMeta and CapFallback, which only the hub uses). CapFallback is a promise, not an interface:
 // every inbox thing carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in
-// (docs/extensions.md).
+// (docs/extensions/extensions.md).
 const (
 	CapStatus   Capability = "status"   // Accounts
 	CapTools    Capability = "tools"    // ReadTools
@@ -66,7 +66,7 @@ var capabilities = []capability{
 	{CapMachines, reflect.TypeFor[Machines](), false},
 }
 
-// Manifest is what a connector says it is and does, in one place (docs/connectors.md "2 · 1"): read whenever the
+// Manifest is what a connector says it is and does, in one place (docs/extensions/connectors.md "2 · 1"): read whenever the
 // hub needs it, so it answers from memory. A program's (connector/proc) is what the program said when it started.
 type Manifest struct {
 	Capabilities []Capability
@@ -90,14 +90,14 @@ type Manifest struct {
 	Kinds []string
 	// ArchiveSources are other names its archive may file conversations under (ChatBatch.Source), besides its id:
 	// one kind of conversation kept apart from the rest (a feed's posts the user is in, besides the chats), or ids
-	// the knowledge base had before a connector moved (docs/connector-protocol.md "Knowledge base"). Same pattern as an id.
+	// the knowledge base had before a connector moved (docs/protocol/connector-protocol.md "Knowledge base"). Same pattern as an id.
 	ArchiveSources []string
 	// MetaDescription says what its events' meta is, for the model that relates new messages to them: required with
 	// CapMeta, refused without it.
 	MetaDescription string
 	// CLI is the command on the assistant's PATH that is this connector's command line (Telegram's tg): the node
 	// writes it to run `personad tool --cli <id>`, which has the connector's <id>_cli tool read each command line and
-	// calls the tool it names, through the gate (docs/connector-protocol.md "Command line"). Empty: none.
+	// calls the tool it names, through the gate (docs/protocol/connector-protocol.md "Command line"). Empty: none.
 	CLI string
 	// Proxy: it answers for a program or a machine (connector/proc), so it implements every interface and has only
 	// what it declares. Check holds the others to "declared exactly what it implements".

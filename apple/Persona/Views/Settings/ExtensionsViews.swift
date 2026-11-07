@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Settings › Extensions: every plugin of the hub's (built in, from hub.json, installed on the hub's machine), its state, and
-/// the way to its page. Extensions are installed on the hub's side only (docs/extensions.md「安装」): with `personad plugin` on
+/// the way to its page. Extensions are installed on the hub's side only (docs/extensions/extensions.md「安装」): with `personad plugin` on
 /// its machine or in its admin UI (/admin); the footer says how.
 struct ExtensionsView: View {
     @State private var page = ExtensionsModel()
@@ -9,7 +9,7 @@ struct ExtensionsView: View {
 
     var body: some View {
         SettingsForm {
-            // Extension Market (docs/extensions.md「扩展市场」): only with a hub that has markets; first,
+            // Extension Market (docs/extensions/extensions.md「扩展市场」): only with a hub that has markets; first,
             // above the installed ones (#5017).
             if page.markets {
                 Section {
@@ -23,7 +23,7 @@ struct ExtensionsView: View {
                 }
             }
             #if os(macOS)
-            // The plugins' overview cards (docs/extensions.md「UI 插槽」): the Mac has no Overview, they lead the installed ones (their
+            // The plugins' overview cards (docs/extensions/extensions.md「UI 插槽」): the Mac has no Overview, they lead the installed ones (their
             // pages are in the sidebar). The iPhone has them on Settings itself.
             ExtensionCardsSection(link: $cardLink)
             #endif
@@ -311,7 +311,7 @@ struct ExtensionDetailView: View {
         return [ExtensionText.state(p), p.version, ExtensionText.source(p.source)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
-    /// A market plugin's upgrades (docs/extensions.md「自动升级」): its own switch, its newer version (opening the market's
+    /// A market plugin's upgrades (docs/extensions/extensions.md「自动升级」): its own switch, its newer version (opening the market's
     /// upgrade when it waits for the user) or what happened last.
     @ViewBuilder private func upgrades(_ p: HubExtension, auto: Bool) -> some View {
         Section {
@@ -346,7 +346,7 @@ struct ExtensionDetailView: View {
         }
     }
 
-    /// The pages it draws (docs/extensions.md「声明式 UI」), a row each.
+    /// The pages it draws (docs/extensions/extensions.md「声明式 UI」), a row each.
     @ViewBuilder private func pages(_ d: HubExtensionDetail) -> some View {
         // The extension's own sign-in page is for apps without the Sign In section.
         let ui = auth?.page.map { page in d.ui.filter { $0.id != page } } ?? d.ui
@@ -661,7 +661,7 @@ private struct ExtensionFieldRow: View {
     }
 }
 
-/// A list of the hub's machines (schema format machine, docs/extensions.md): a switch per machine of the systems the field
+/// A list of the hub's machines (schema format machine, docs/extensions/extensions.md): a switch per machine of the systems the field
 /// names, by its name and how it is, in effect at once (`ExtensionModel.saveNow`), the same setting as where else it
 /// shows (the Control Computer switch on a Mac's page). A value that names no machine still shows, to be turned off.
 private struct ExtensionMachineSwitches: View {

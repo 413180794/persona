@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The Feishu bot (docs/bots.md): the user talks to Persona through a Feishu / Lark custom app's bot. The hub keeps its
+// The Feishu bot (docs/extensions/bots.md): the user talks to Persona through a Feishu / Lark custom app's bot. The hub keeps its
 // transport: the app's credentials, the long connection to the open platform, pairing with its owner, sending and
 // changing messages and cards. What the chat does — where a message goes, following its turn and the answer cards,
 // what is asked there, the commands, pushes and the sync mirror — is the assistant's (internal/assistant, feishu*.go):
@@ -474,7 +474,7 @@ func (h *Manager) unpairBot(ctx context.Context) {
 var errBotOff = i18n.Err("hub-bots.bot_off")
 
 // botLang is the language of what the bots and the channels write: the request's when the context carries one, else
-// the user's (docs/i18n.md "Protocol").
+// the user's (docs/protocol/i18n.md "Protocol").
 func (h *Manager) botLang(ctx context.Context) i18n.Lang {
 	return i18n.From(ctx).Or(h.userLang())
 }

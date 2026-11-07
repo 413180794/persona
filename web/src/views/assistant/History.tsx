@@ -1,4 +1,4 @@
-// "All chats" (docs/assistant.md "Managing its own conversations", the iOS app's sidebar + ArchivedConversationsView): every conversation
+// "All chats" (docs/assistant/assistant.md "Managing its own conversations", the iOS app's sidebar + ArchivedConversationsView): every conversation
 // Persona has, the main one first, the rest newest first by day; search on the title and the last message; a row's menu
 // renames it, copies its id, archives it (the main one can't be). The archived ones are folded at the end.
 import { conversationChannel, useChannels } from "../../lib/channels";

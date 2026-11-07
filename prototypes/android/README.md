@@ -1,9 +1,9 @@
 # Persona Android 重设计 · 界面预览
 
-> **已被取代（2026-10-31）**：这批 HTML 原型 2026-10-31 获认可后，用户在真机上看了按它做出来的 App，认为仍然太丑，要求视觉和交互整体重做。现行设计见 [Android 界面风格与设计系统](../../docs/android-design.md)（玻璃、晨报、看板三套风格，原生 Compose 实现）。原型只留作历史记录，不再是设计依据。
+> **已被取代（2026-10-31）**：这批 HTML 原型 2026-10-31 获认可后，用户在真机上看了按它做出来的 App，认为仍然太丑，要求视觉和交互整体重做。现行设计见 [Android 界面风格与设计系统](../../docs/android/android-design.md)（玻璃、晨报、看板三套风格，原生 Compose 实现）。原型只留作历史记录，不再是设计依据。
 
-配合 [`docs/redesign/`](../../docs/redesign/README.md) 的方案看的可点原型。直接用浏览器打开 `index.html` 就行：纯静态，没有依赖，不请求任何外部资源，也不连 hub。
-同目录的 `flows.html` 是主要功能的流程图，由 `docs/redesign/flows.md` 生成（`python3 prototypes/android/tools/build_flows.py`，要本机的 Chrome 和 npm），页面说明里的「流程图 N」指它。改了 flows.md 要重新生成。
+配合 [`docs/archive/redesign/`](../../docs/archive/redesign/README.md) 的方案看的可点原型。直接用浏览器打开 `index.html` 就行：纯静态，没有依赖，不请求任何外部资源，也不连 hub。
+同目录的 `flows.html` 是主要功能的流程图，由 `docs/archive/redesign/flows.md` 生成（`python3 prototypes/android/tools/build_flows.py`，要本机的 Chrome 和 npm），页面说明里的「流程图 N」指它。改了 flows.md 要重新生成。
 
 ## 范围
 
@@ -49,7 +49,7 @@
   MCP 完整页的标题在窄屏折成两行、欢迎页和扫码页的断行、首页建议卡片的标题被截断、深色下品牌图标和背景糊在一起、说明文字里的命令被折开。
 - `audit=1` 对 32 个页面 × 360 / 320 宽检查按钮、标签：0 个被裁切、0 个折行、0 个伸出屏幕。用三个故意改坏的样式做过反向验证（裁切、折行、伸出各一个），都能查出来。
 - 隐私：`scripts/privacy_check.py` 的词表扫过本目录，0 命中。
-- 2026-10-31 用户认可这套原型（32 页，含第五轮的修改），作为 Android 原生界面的设计依据；记进 `docs/archive/android-p0-status.md` 的 N54。原型不代替运行验收，原生界面以模拟器截图自查和第 4 轮联合验收为准。
+- 2026-10-31 用户认可这套原型（32 页，含第五轮的修改），作为 Android 原生界面的设计依据；记进 `docs/archive/android/android-p0-status.md` 的 N54。原型不代替运行验收，原生界面以模拟器截图自查和第 4 轮联合验收为准。
 - 2026-10-30 第五轮（对照最新的设计文档）：配对步骤改名「换本机凭据」；常驻通知的渠道改叫「实时状态」（android.md 5.8）；准备清单加「锁屏测试」，诊断页加「后台断开」（hub 记录的断开时段，hub-changes.md 3.10）。改完后 32 页 × 360 / 320 宽重跑 `audit=1`，0 问题；改过的 4 页深浅色重拍看过。
 
 截图命令（换 `screen`、`theme`、`w` 即可）：

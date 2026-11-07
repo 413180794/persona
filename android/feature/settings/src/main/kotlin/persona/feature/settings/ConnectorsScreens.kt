@@ -190,7 +190,7 @@ internal fun MailAccountsPage(
 }
 
 /**
- * Settings › Connectors › Add mail account (iOS `AddMailAccountView`, docs/mail.md).
+ * Settings › Connectors › Add mail account (iOS `AddMailAccountView`, docs/extensions/mail.md).
  * Supports Gmail (Google OAuth or app password), Feishu (fixed servers), and other IMAP.
  */
 @Composable

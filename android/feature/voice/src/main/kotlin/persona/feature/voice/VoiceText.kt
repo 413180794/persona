@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalResources
 
-/** The voice page's words (docs/android.md "Voice chat"), in the language of [resources]. */
+/** The voice page's words (docs/android/android.md "Voice chat"), in the language of [resources]. */
 internal class VoiceText(private val resources: Resources) {
     private fun get(@StringRes id: Int, vararg args: Any): String = resources.getString(id, *args)
 
@@ -133,7 +133,7 @@ internal fun voicesFailure(error: Throwable, text: VoiceText): String {
 private fun reason(error: Throwable, status: Int?, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
-        // The hub refuses extensions to a device that may only read and answer (docs/extensions.md); not an expired pairing.
+        // The hub refuses extensions to a device that may only read and answer (docs/extensions/extensions.md); not an expired pairing.
         status == 403 -> text.string(R.string.voice_device_not_allowed)
         status == 401 || feedback.action == FailureAction.PairAgain -> text.resolve(feedback.text)
         status != null && status >= 500 -> text.string(R.string.voice_service_no_response)
@@ -156,7 +156,7 @@ internal sealed interface VoiceSetup {
     /** The model configuration says the voice model cannot be used as it stands: [reason] says why. */
     data class Unavailable(val reason: String) : VoiceSetup
 
-    /** The configuration could not be read: not the same as having none (docs/model-config.md "Where it takes effect"). */
+    /** The configuration could not be read: not the same as having none (docs/assistant/model-config.md "Where it takes effect"). */
     data class Failed(val message: String) : VoiceSetup
 
     /** Ready to talk with [model]; null: the extension's own default. */

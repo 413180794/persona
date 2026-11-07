@@ -2,7 +2,7 @@ package hub
 
 import "time"
 
-// MeshConfig tunes the hub mesh (docs/mesh.md). The peers themselves and the group's center are in Postgres (paired in
+// MeshConfig tunes the hub mesh (docs/server/mesh.md). The peers themselves and the group's center are in Postgres (paired in
 // the admin page or with `personad hub peer add`), not here.
 type MeshConfig struct {
 	// Discovery: advertise this hub on the LAN over mDNS and list the hubs found there (default on). Docker's bridge
@@ -12,7 +12,7 @@ type MeshConfig struct {
 	// (default 60; a broken path is left at once). Keeps a computer from flapping between two paths.
 	PathSwitchSeconds int `json:"path_switch_seconds,omitempty"`
 	// Plaintext: links to other hubs without TLS (ws://), only with the addresses listed (peer_plain.go,
-	// docs/mesh.md "Plaintext links"). Off while Allow is empty.
+	// docs/server/mesh.md "Plaintext links"). Off while Allow is empty.
 	Plaintext MeshPlaintextConfig `json:"plaintext,omitzero"`
 }
 

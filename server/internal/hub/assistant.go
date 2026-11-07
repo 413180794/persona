@@ -35,7 +35,7 @@ func (m *Machine) assistantCwdOf(id string) string {
 
 // isAssistant: s is one of the headless conversations of m's manager's assistant (its own directory or its health
 // space's). Another manager's, left on m when m moved away from it, is not: the new manager does not read it
-// (docs/managers.md "Directories on a computer").
+// (docs/assistant/managers.md "Directories on a computer").
 func (m *Machine) isAssistant(s proto.Session) bool {
 	owner := m.hub.machineOwner(m.cfg.ID)
 	return isAssistantOf(s, m.assistantCwdOf(owner), owner)
@@ -58,10 +58,10 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 }
 
 // assistantSpace is the space of an assistant conversation working in cwd: "health" for the health space's
-// (docs/health.md), "" for the assistant's own.
+// (docs/assistant/health.md), "" for the assistant's own.
 func assistantSpace(cwd string) string { return identity.SpaceOf(cwd) }
 
 // inHealth: an assistant conversation working in cwd is in the health space. What it says leaves the space only with
-// the user knowing (docs/health.md "Outbound"): its pushes say there is news, not the news, and its writes are confirmed
+// the user knowing (docs/assistant/health.md "Outbound"): its pushes say there is news, not the news, and its writes are confirmed
 // on the phone each time, whatever the gate rules allow.
 func inHealth(cwd string) bool { return cwd != "" && assistantSpace(cwd) == identity.SpaceHealth }

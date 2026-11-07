@@ -11,7 +11,7 @@ import (
 // Codex's TUI (codex-cli 0.153 / 0.163, a compatible CLI alike) read off its screen: which view has the keyboard, what its input
 // box holds, and the two dialogs Persona answers from the phone — an approval ("Would you like to run the following
 // command?") and request_user_input's question overlay ("Question 1/2"). Layouts are the ones recorded in
-// testdata/codex-*; docs/codex.md "Questions and approvals".
+// testdata/codex-*; docs/integrations/codex.md "Questions and approvals".
 
 // Views of a Codex screen.
 const (

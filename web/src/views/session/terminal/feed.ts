@@ -1,4 +1,4 @@
-// A session's terminal in the side panel, as the iOS TerminalFeed (docs/terminal.md, docs/protocol.md "Terminal stream"): the
+// A session's terminal in the side panel, as the iOS TerminalFeed (docs/integrations/terminal.md, docs/protocol/protocol.md "Terminal stream"): the
 // hub's live stream of the pane written into xterm and continued after a reconnect, or — with a hub, node or herdr
 // that cannot stream — the colored screen read once a second.
 //
@@ -359,7 +359,7 @@ export class TerminalFeed {
     const search = new SearchAddon({ highlightLimit: FIND_LIMIT });
     term.loadAddon(search);
     this.search = search;
-    // OSC 52 from the program (herdr's streams do not carry it, docs/terminal.md): a write goes to the clipboard, a read
+    // OSC 52 from the program (herdr's streams do not carry it, docs/integrations/terminal.md): a write goes to the clipboard, a read
     // is refused — a program must not read what the user copied, so it is told the clipboard is empty.
     term.loadAddon(new ClipboardAddon(undefined, { readText: () => "", writeText: (_selection: string, text: string) => this.programCopied(text) }));
     matchHerdrWidths(term);
@@ -942,7 +942,7 @@ export class TerminalFeed {
     send({ type: "terminal_input", ...this.ids(), click: cellAt(x, y, b.width, b.height, b.cols, b.rows) });
   };
 
-  // ── the mouse (#2441, lib/terminal-mouse.ts; docs/terminal.md "Mouse") ──
+  // ── the mouse (#2441, lib/terminal-mouse.ts; docs/integrations/terminal.md "Mouse") ──
   //
   // Driving, press / drag / release with the button and modifiers go to herdr as `terminal_input.mouse`, a cell at a
   // time; herdr hands them to a program that takes the mouse and drops them for one that does not. What the page keeps

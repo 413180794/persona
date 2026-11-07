@@ -104,7 +104,7 @@ fun AssistantScreen(
 ) = PersonaTheme {
     val snapshot by repository.assistant.collectAsStateWithLifecycle()
     val conversationsOf = repository as? persona.core.contracts.api.AssistantConversations
-    // Several managers (docs/managers.md step 4): the page shows one, the default to begin with.
+    // Several managers (docs/assistant/managers.md step 4): the page shows one, the default to begin with.
     val managerRoster = LocalManagerRoster.current
     val managerChoice by persona.core.contracts.api.AssistantManagerChoice.current.collectAsStateWithLifecycle()
     val managers = assistantManagers(managerRoster, managerChoice, androidx.compose.ui.platform.LocalResources.current)
@@ -185,7 +185,7 @@ fun AssistantScreen(
     val active = activeSession?.let { SessionKey(activeMachine.orEmpty(), it) }
     // "Compact context" and "New main chat" (#1727): the main conversation's menu, on hubs that offer them.
     val mainActions = if (management != null && !demo) MainActions.of(LocalHubFeatures.current) else MainActions(false, false)
-    // What the main conversation still needs (docs/onboarding.md 4.4), on hubs that work it out: asked when the tab
+    // What the main conversation still needs (docs/assistant/onboarding.md 4.4), on hubs that work it out: asked when the tab
     // shows, when a computer comes or goes and after the hub refused to start it.
     val readinessOn = management != null && !demo && AssistantReadinessFeature in LocalHubFeatures.current
     val mainReadiness = remember(management) { MainReadiness { probe -> requireNotNull(management).readiness(probe) } }
@@ -353,7 +353,7 @@ fun AssistantScreen(
         }
     }
     fun submit() {
-        // Not ready (setup): the step opens instead and the draft stays; nothing is queued (docs/onboarding.md 4.4).
+        // Not ready (setup): the step opens instead and the draft stays; nothing is queued (docs/assistant/onboarding.md 4.4).
         if (active == null && blocking != null) { blocking.primaryAction()?.let { runReadinessAction(it) }; return }
         // An offline manager takes nothing: its page is history only until it is back.
         if (managers.offline != null) return
@@ -763,7 +763,7 @@ private fun AssistantHome(
     enabled: Boolean, machines: List<Machine>, phoneToolsAvailable: Boolean?, contentPadding: PaddingValues,
     demo: Boolean, onSuggestion: (String) -> Unit,
     needsYou: NeedsYou = NeedsYou(), onNeed: ((NeedsYouLine) -> Unit)? = null, onMore: () -> Unit = {},
-    /** The main conversation still misses a step (docs/onboarding.md 4.4): the lead says so. */
+    /** The main conversation still misses a step (docs/assistant/onboarding.md 4.4): the lead says so. */
     setup: Boolean = false,
     /** The hub's example questions (readiness `suggestions`), in place of the app's own; null: the app's. */
     hubSuggestions: List<ReadinessSuggestion>? = null,

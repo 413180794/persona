@@ -7,7 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Settings › "Session triage" (docs/agent-work.md "Switches"): what the hub does on its own when an agent stops. All off until the user
+ * Settings › "Session triage" (docs/assistant/agent-work.md "Switches"): what the hub does on its own when an agent stops. All off until the user
  * turns them on: the triage calls a model on every stopped turn, and continuing / waking run a turn of the agent.
  */
 @Serializable

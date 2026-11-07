@@ -1,6 +1,6 @@
 #!/bin/bash
 # The Mac app (Debug, with MacScrollLab) streaming a long reply into the Persona conversation, with synthetic trackpad
-# swipes, its scroll trace and its window drawn every 0.1 s, against a mock hub on PORT (docs/mac.md "Scroll experiments").
+# swipes, its scroll trace and its window drawn every 0.1 s, against a mock hub on PORT (docs/apple/mac.md "Scroll experiments").
 # Snapshot mode (-macSnapshot): it reads no keychain and quits at the end, so it works while the Mac is locked.
 #   APP=<Persona.app> scripts/diag/stream-scroll/run-mac.sh <out dir> "13:150,17:900,23:-1400" [stream at s] [late ms]
 # Gestures: "<seconds after launch>:<points>", negative toward the newest. One RESULT line.

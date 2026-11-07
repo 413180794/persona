@@ -97,7 +97,7 @@ final class LiveUpdateTests: XCTestCase {
     // (the machine list, the sections it folds) and jumped, or scrolled itself, under the finger choosing a machine.
     func testListMenuHoldsStillThroughUpdates() {
         launch()
-        // The tab bar's ⋯, or in the shell the selected Agents of the top switch (docs/ios.md「新外壳」).
+        // The tab bar's ⋯, or in the shell the selected Agents of the top switch (docs/apple/ios.md「新外壳」).
         let classic = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch
         // Both pages carry the switch (the other one out of sight): the one that can be tapped.
         XCTAssertTrue(classic.waitForExistence(timeout: 15) || app.buttons["shell-agents"].firstMatch.exists, "the list's options")
@@ -262,7 +262,7 @@ final class LiveUpdateTests: XCTestCase {
     }
 
     // The Agents badge (the switch's in the shell, the tab's in the old layout) is the hub's: a question coming adds
-    // one within 2 s, its answer takes it off again (docs/ios-state.md「第 3 步」: counted in the model, published
+    // one within 2 s, its answer takes it off again (docs/apple/ios-state.md「第 3 步」: counted in the model, published
     // when the number changes).
     @MainActor func testTheAgentsBadgeIsTheHubs() {
         launch()

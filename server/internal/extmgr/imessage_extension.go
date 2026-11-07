@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/i18n"
 )
 
-// The built-in extension Messages (#1830 step 6, docs/plan-extensions.md "How iMessage uses it"): which Mac's Messages
+// The built-in extension Messages (#1830 step 6, docs/plans/plan-extensions.md "How iMessage uses it"): which Mac's Messages
 // the connector imessage reads, picked in Settings › Extensions › Messages instead of manager.json's imessage.machine. The
 // connector is the one it always was (its id, inbox, knowledge base, "Hand to Persona", "Delete data"); only where its
 // Mac comes from changed:

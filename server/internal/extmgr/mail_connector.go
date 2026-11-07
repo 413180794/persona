@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// mailConnector is mail as a connector (docs/plan-connectors.md "3. Migration"): so far what goes into the knowledge
+// mailConnector is mail as a connector (docs/plans/plan-connectors.md "3. Migration"): so far what goes into the knowledge
 // base, by one cursor per account (the newest UID archived, see Changes), its inbox, its tools and mail_send through the gate;
 // Settings › Connectors draws its row from the connectors list (?all=1, migration M3–M6).
 type mailConnector struct{ h *Manager }

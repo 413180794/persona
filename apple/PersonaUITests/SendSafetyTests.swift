@@ -1,6 +1,6 @@
 import XCTest
 
-/// Answers and sends that must not land in a terminal that changed (docs/protocol.md「发消息」「终端对话框」), against
+/// Answers and sends that must not land in a terminal that changed (docs/protocol/protocol.md「发消息」「终端对话框」), against
 /// scripts/mock/mock_hub.py started with MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft
 /// (TEST_RUNNER_PERSONA_SAFETY_HUB=http://127.0.0.1:<port>).
 final class SendSafetyTests: XCTestCase {

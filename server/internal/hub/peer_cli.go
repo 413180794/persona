@@ -18,7 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 )
 
-// The mesh from the command line on the hub's machine (docs/mesh.md "Command line"): the same peers API as the admin page,
+// The mesh from the command line on the hub's machine (docs/server/mesh.md "Command line"): the same peers API as the admin page,
 // under /api/v1/admin/cli/, over loopback with the master token (peerCLIRoutes).
 
 // PairPeer prints a code another hub pairs with this one by (`personad hub pair --peer`): the code alone on stdout, what

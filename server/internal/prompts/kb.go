@@ -150,7 +150,7 @@ type KBDigest struct {
 
 func RenderKBDigest(d KBDigest) string { return render("kb/digest", d) }
 
-// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+// Defined in the contract package kbwire (docs/server/architecture.md "Contract packages"); the old names stay.
 type (
 	KBContext = kbwire.ChatContext
 	KBProject = kbwire.ChatProject

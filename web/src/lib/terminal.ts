@@ -1,4 +1,4 @@
-// The web terminal's pure logic (docs/terminal.md, docs/protocol.md "Terminal stream"): which frames to apply in what order,
+// The web terminal's pure logic (docs/integrations/terminal.md, docs/protocol/protocol.md "Terminal stream"): which frames to apply in what order,
 // base64 → VT bytes, the link status wording and its backoff, the wheel and click geometry, paste bytes, and the xterm
 // palette from the page's color tokens. The panel (views/session/terminal/) owns the DOM and the socket.
 import { formatDate, t } from "../i18n";

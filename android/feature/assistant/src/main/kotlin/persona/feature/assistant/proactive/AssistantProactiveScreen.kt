@@ -34,7 +34,7 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * Settings › Assistant › Proactive: the assistant's scheduled tasks (once, daily, every N minutes, docs/assistant.md "Scheduled tasks") and the
+ * Settings › Assistant › Proactive: the assistant's scheduled tasks (once, daily, every N minutes, docs/assistant/assistant.md "Scheduled tasks") and the
  * history of runs. The screen keeps its own sub-pages (a task, a new one, all one-offs, all runs) and back.
  *
  * [onOpenConversation] opens an assistant conversation: the one a run started, the one a follow-up continues, or the

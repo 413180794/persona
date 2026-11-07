@@ -1,4 +1,4 @@
-// Settings › General › Appearance › Language (docs/i18n.md): Match system, or one of the three languages, each by its own name.
+// Settings › General › Appearance › Language (docs/protocol/i18n.md): Match system, or one of the three languages, each by its own name.
 import { useState } from "react";
 import { LANG_NAMES, LANGS, languagePreference, setLanguagePreference, systemLanguage, t, type LangPreference } from "../../i18n";
 import { cx } from "../../ui/atoms";

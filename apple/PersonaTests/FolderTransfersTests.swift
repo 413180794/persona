@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Persona
 
-/// Files into a folder of the file browser (docs/protocol.md "Changing files", #4858): what is sent, and the "already exists" question.
+/// Files into a folder of the file browser (docs/protocol/protocol.md "Changing files", #4858): what is sent, and the "already exists" question.
 @MainActor
 struct FolderTransfersTests {
     private func file(_ name: String = "a.txt") throws -> URL {
