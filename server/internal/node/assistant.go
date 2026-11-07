@@ -425,10 +425,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		}
 	}
 	if cwd == "" {
-		cwd = st.Cwd
-	}
-	if cwd == "" {
-		cwd = identity.AssistantDir(n.home)
+		cwd = n.storedCwd(st.Cwd)
 	}
 	// The live snapshot the message starts with, asked for while the process starts (assistant_context.go). A new
 	// Codex conversation has no id yet: it can't be the main one.
@@ -580,6 +577,25 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	commit()
 	n.notifySessions()
 	return id, nil
+}
+
+// storedCwd is where a conversation resumed without a folder runs: the folder it ran in before (the node's state, kept
+// in the hub's database), else the assistant directory. A stored folder that is gone (the data directory moved,
+// docs/persona-cutover.md) is the folder of the same name in the data directory when there is one (the assistant
+// directory, the health space, another manager's), else the assistant directory: it is never made again where it was,
+// which would start the conversation in an empty folder without its instructions and memory (#6299).
+func (n *Node) storedCwd(stored string) string {
+	if stored != "" {
+		if dirExists(stored) {
+			return stored
+		}
+		if name := filepath.Base(stored); name != "." && name != string(filepath.Separator) {
+			if moved := filepath.Join(identity.DataDir(n.home), name); dirExists(moved) {
+				return moved
+			}
+		}
+	}
+	return identity.AssistantDir(n.home)
 }
 
 func (n *Node) adoptSpareFor(cwd, launcher, mode string, options ...modelExecution) *assistantProc {

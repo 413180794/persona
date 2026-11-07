@@ -52,3 +52,10 @@ JSON baseline paths may use escaped slashes; decode paths and retain every metri
 - Grep a rename for every "create if missing" path: container / volume / unit / directory / config-file names that a deploy, setup or start step looks up and then creates. Each one needs a test with the old resource present and the new name absent.
 - Values derived from the old name break the same way: a user or database in a URL, the `<db>_test` the test helper derives. Read them from the configured URL rather than from constants.
 
+
+## A stored working folder outlives a moved data directory (2026-11-07, #6299)
+
+The node keeps each conversation's working folder in the hub's database (`node_sessions.cwd`) and resumes a conversation there when the request names none. `spawnClaude` runs `MkdirAll` on that folder. Rehearsing the cutover on a copy of a real database showed every stored row of the main conversation naming the folder inside the old data directory, so the first resume after the move would have made an empty folder at the old path and run the main conversation there, without its instructions, skills or memory, and with no error.
+
+- A stored path that is gone is looked for by its name in the current data directory, else the default; it is never created again where it was (`storedCwd`).
+- Before a cutover, scan the database for absolute paths into the directory being moved (`node_sessions`, settings, payloads) and decide for each column whether it is read again. Historical payloads can stay; a value the code acts on cannot.
