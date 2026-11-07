@@ -132,7 +132,7 @@ class QuestionCancellationUiTest {
         request = question.copy(kind = "permission")
         rule.onNodeWithContentDescription(close).assertDoesNotExist()
         request = question; blocked = "Read only"
-        rule.onNodeWithContentDescription(close).assertIsNotEnabled()
+        rule.onNodeWithContentDescription("Dismiss card on this device").assertIsNotEnabled()
         blocked = null; uncertain = setOf(question.id)
         rule.onNodeWithContentDescription(close).assertIsNotEnabled()
         uncertain = emptySet(); request = question.copy(expiresAt = "2000-01-01T00:00:00Z")

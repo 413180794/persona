@@ -2,4 +2,7 @@
 <resources>
     <string name="chat_question_close">Close question without answering</string>
     <string name="chat_question_closed">Question closed without an answer</string>
+    <string name="chat_card_discard_local">Dismiss card on this device</string>
+    <string name="chat_card_discarded_local">Card dismissed on this device. No answer or cancellation was sent; the source may still be waiting.</string>
+    <string name="chat_card_discard_failed">Could not save dismissal. The card is still open.</string>
 </resources>

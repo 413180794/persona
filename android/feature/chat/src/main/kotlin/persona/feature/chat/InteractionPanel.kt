@@ -44,6 +44,7 @@ internal fun InteractionPanel(
     blockedReason: String? = null,
     /** False for a session without a terminal (a Codex thread, an agent runtime's): no terminal to explain either. */
     terminalHelp: Boolean = true,
+    onDiscardLocal: ((Interaction) -> Unit)? = null,
 ) {
     var selected by rememberSaveable { mutableStateOf(0) }
     var full by rememberSaveable { mutableStateOf(false) }
@@ -69,13 +70,16 @@ internal fun InteractionPanel(
     val now by produceState(Instant.now(), request.expiresAt) {
         while (true) { value = Instant.now(); delay(1_000) }
     }
-    val closeQuestion: @Composable () -> Unit = {
-        if (request.kind == "question" && request.canCancel == true) {
-            val canClose = busyId == null && request.id !in uncertainIds && blockedReason == null &&
-                !linkVisible && !RequestExpiry.expired(request.expiresAt, now)
-            JIconButton(PhIcons.X, stringResource(R.string.chat_question_close), {
-                if (canClose && !RequestExpiry.expired(request.expiresAt, Instant.now())) {
-                    AnswerBuilder.build(request, AnswerAction.CancelQuestion).resolution?.let { onResolve(request, it) }
+    val closeCard: @Composable () -> Unit = {
+        val localOnly = blockedReason != null || (request.kind == "question" && request.canCancel != true)
+        if ((localOnly && onDiscardLocal != null) || (request.kind == "question" && request.canCancel == true)) {
+            val canClose = busyId == null && !linkVisible && if (localOnly) onDiscardLocal != null else
+                request.id !in uncertainIds && !RequestExpiry.expired(request.expiresAt, now)
+            JIconButton(PhIcons.X, stringResource(if (localOnly) R.string.chat_card_discard_local else R.string.chat_question_close), {
+                if (canClose) {
+                    if (localOnly) onDiscardLocal?.invoke(request)
+                    else if (!RequestExpiry.expired(request.expiresAt, Instant.now()))
+                        AnswerBuilder.build(request, AnswerAction.CancelQuestion).resolution?.let { onResolve(request, it) }
                 }
             }, enabled = canClose)
         }
@@ -93,7 +97,7 @@ internal fun InteractionPanel(
         modifier = Modifier.heightIn(max = maxHeight), position = index + 1 to requests.size,
         onPrevious = { selected = index - 1 }, onNext = { selected = index + 1 }, onList = { all = true },
         collapsed = collapsed, onCollapsedChange = onCollapsedChange, onExpand = { full = true },
-        headerActions = closeQuestion,
+        headerActions = closeCard,
     ) {
         if (!full && !all) body(false)
     }
@@ -101,7 +105,7 @@ internal fun InteractionPanel(
         Column(Modifier.fillMaxHeight().imePadding()) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 JTextButton(stringResource(R.string.chat_request_collapse_full), { full = false })
-                closeQuestion()
+                closeCard()
             }
             body(true)
         }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.encodeToString
 
 class HubInteractionCenter(
     private val transport: ChatTransport,
@@ -29,16 +30,25 @@ class HubInteractionCenter(
      * served before the hub caught up, does not bring its card back (#1688). Only a live event for the id does.
      */
     private val ended = LinkedHashSet<String>()
+    private var discarded = emptySet<String>()
 
     private val restored = scope.async {
-        lock.withLock { snapshots.restore<List<Interaction>>("interactions")?.let { mutablePending.value = it } }
+        lock.withLock {
+            // Unlike a cache, dismissal must not silently forget a failed read or write.
+            discarded = snapshots?.read("discarded-interactions")?.let { JsonCodec.decodeFromString<Set<String>>(it) }.orEmpty()
+            snapshots.restore<List<Interaction>>("interactions")?.let { list ->
+                mutablePending.value = list.filterNot { it.id in discarded }
+            }
+        }
     }
 
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             connection.events.collect { event -> restored.await(); lock.withLock {
                 when (event) {
-                    is InteractionEvent -> { ended.remove(event.interaction.id); change(event.interaction.id, event.interaction) }
+                    is InteractionEvent -> if (event.interaction.id !in discarded) {
+                        ended.remove(event.interaction.id); change(event.interaction.id, event.interaction)
+                    }
                     is InteractionResolvedEvent -> end(event.id)
                     else -> Unit
                 }
@@ -55,7 +65,7 @@ class HubInteractionCenter(
         val before = lock.withLock { revision }
         val fetched = transport.interactions()
         lock.withLock {
-            val merged = fetched.filterNot { it.id in ended }.associateBy { it.id }.toMutableMap()
+            val merged = fetched.filterNot { it.id in ended || it.id in discarded }.associateBy { it.id }.toMutableMap()
             changes.filterValues { it.first > before }.forEach { (id, change) ->
                 if (change.second == null) merged.remove(id) else merged[id] = change.second!!
             }
@@ -65,6 +75,17 @@ class HubInteractionCenter(
     }
 
     override suspend fun resolve(id: String, resolution: Resolution) { resolveOutcome(id, resolution) }
+
+    override suspend fun discardLocal(id: String) {
+        restored.await()
+        lock.withLock {
+            val disk = checkNotNull(snapshots) { "Local dismissal storage is unavailable" }
+            val next = discarded + id
+            disk.write("discarded-interactions", JsonCodec.encodeToString(next))
+            discarded = next
+            end(id)
+        }
+    }
 
     override suspend fun resolveOutcome(id: String, resolution: Resolution): ResolveOutcome {
         restored.await()

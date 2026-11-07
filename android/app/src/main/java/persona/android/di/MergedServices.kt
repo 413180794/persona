@@ -99,6 +99,8 @@ internal fun mergedInteractions(stacks: GroupStacks): InteractionCenter = object
     }
     override suspend fun resolveOutcome(id: String, resolution: Resolution) =
         stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.resolveOutcome(GroupKeys.raw(id), resolution) }
+    override suspend fun discardLocal(id: String) =
+        stacks.use(GroupKeys.namespaceOf(id)) { it.repositories.interactions.discardLocal(GroupKeys.raw(id)) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

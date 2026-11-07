@@ -2,4 +2,7 @@
 <resources>
     <string name="chat_question_close">回答せずに質問を閉じる</string>
     <string name="chat_question_closed">回答せずに質問を閉じました</string>
+    <string name="chat_card_discard_local">この端末でカードを閉じる</string>
+    <string name="chat_card_discarded_local">この端末でカードを閉じました。回答やキャンセルは送信していません。送信元は引き続き待機している場合があります。</string>
+    <string name="chat_card_discard_failed">閉じた状態を保存できませんでした。カードは開いたままです。</string>
 </resources>

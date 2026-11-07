@@ -696,7 +696,23 @@ private fun ChatPage(
                             }, terminal, { overlay = it }, linkVisible = linkVisible,
                                 collapsed = requestCollapsed, onCollapsedChange = { requestCollapsed = it },
                                 blockedReason = if (canApprove) null else approvalBlockedReason(res, session),
-                                terminalHelp = canTerminal)
+                                terminalHelp = canTerminal, onDiscardLocal = { interaction ->
+                                    if (busyId == null) {
+                                        busyId = interaction.id
+                                        scope.launch {
+                                            try {
+                                                interactions.discardLocal(interaction.id)
+                                                resolved = resolved + interaction.id
+                                                uncertain = uncertain - interaction.id
+                                                interactionFeedback = res.getString(R.string.chat_card_discarded_local)
+                                                notice = null
+                                            } catch (e: CancellationException) { throw e
+                                            } catch (_: Exception) {
+                                                notice = res.getString(R.string.chat_card_discard_failed)
+                                            } finally { busyId = null }
+                                        }
+                                    }
+                                })
                             (if (feedback == null) notice ?: snapshot.error else snapshot.error)?.let {
                                 Text(it, Modifier.padding(horizontal = Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             }

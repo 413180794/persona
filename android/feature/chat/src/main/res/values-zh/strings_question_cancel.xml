@@ -2,4 +2,7 @@
 <resources>
     <string name="chat_question_close">关闭提问，不回复</string>
     <string name="chat_question_closed">已关闭提问，未回复</string>
+    <string name="chat_card_discard_local">在此设备上丢弃卡片</string>
+    <string name="chat_card_discarded_local">已在此设备上丢弃卡片，未发送回答或取消；来源可能仍在等待。</string>
+    <string name="chat_card_discard_failed">无法保存丢弃状态，卡片仍保留。</string>
 </resources>

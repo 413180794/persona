@@ -201,6 +201,60 @@ class ChatRepositoriesTest {
         assertEquals(2, queries.count { it == ItemsQuery() })
     }
 
+    @Test fun localDiscardSurvivesReplayReconnectAndRestoredHistoryWithoutSending() = runTest {
+        val disk = ListSnapshotStore(temporary.newFolder())
+        val connection = Connection()
+        val transport = Transport()
+        val old = Interaction("old", kind = "question")
+        val permission = Interaction("permission", kind = "permission")
+        val fresh = Interaction("fresh", kind = "question", canCancel = true)
+        transport.pending = listOf(old, permission, fresh)
+        val center = HubInteractionCenter(transport, connection, backgroundScope, disk)
+        center.refresh()
+        center.discardLocal(old.id)
+        center.discardLocal(permission.id)
+        center.discardLocal(old.id)
+        assertNull(transport.resolved)
+        assertTrue(center.answered.value.isEmpty())
+        center.refresh()
+        connection.events.emit(InteractionEvent(old))
+        connection.events.emit(InteractionEvent(permission))
+        connection.state.value = ConnectionState.WaitingForNetwork
+        runCurrent()
+        connection.state.value = ConnectionState.Online
+        runCurrent()
+        assertEquals(listOf(fresh), center.pending.value)
+
+        // Even an old history snapshot left on disk cannot resurrect a discarded card.
+        disk.save("interactions", listOf(old, permission, fresh))
+        val restored = HubInteractionCenter(transport, Connection(), backgroundScope, disk)
+        transport.pendingFetch = { error("Offline") }
+        assertNotNull(runCatching { restored.refresh() }.exceptionOrNull())
+        assertEquals(listOf(fresh), restored.pending.value)
+        transport.pendingFetch = null
+        restored.refresh()
+        assertEquals(listOf(fresh), restored.pending.value)
+        val otherGroup = HubInteractionCenter(transport, Connection(), backgroundScope, ListSnapshotStore(temporary.newFolder()))
+        otherGroup.refresh()
+        assertEquals(listOf(old, permission, fresh), otherGroup.pending.value)
+        restored.resolveOutcome(fresh.id, Resolution(answers = mapOf("Format?" to "JSON")))
+        assertEquals(fresh.id, transport.resolved)
+        assertTrue(restored.pending.value.isEmpty())
+    }
+
+    @Test fun failedLocalDiscardWriteKeepsCardAndDoesNotSend() = runTest {
+        val directory = temporary.newFolder()
+        val disk = ListSnapshotStore(directory)
+        val transport = Transport().apply { pending = listOf(Interaction("old", kind = "question")) }
+        val center = HubInteractionCenter(transport, Connection(), backgroundScope, disk)
+        center.refresh()
+        assertTrue(directory.deleteRecursively())
+        assertTrue(directory.createNewFile())
+        assertNotNull(runCatching { center.discardLocal("old") }.exceptionOrNull())
+        assertEquals(transport.pending, center.pending.value)
+        assertNull(transport.resolved)
+    }
+
     @Test fun cardsThatEndedHereStayGoneFromLaterSnapshotsUntilAnEventBringsThemBack() = runTest {
         val connection = Connection()
         val transport = Transport()
