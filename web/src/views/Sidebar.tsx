@@ -80,6 +80,7 @@ import { markAllSeenLabel, stateCount } from "../lib/state-labels";
 import { PagedSessionList } from "./agents/PagedSessionList";
 import { SESSION_LIST_STYLE } from "../ui/list-metrics";
 import { runtimeIdentity, runtimeOrder, runtimeRemoval, runtimeSessions } from "../lib/runtime-list";
+import { heldSeen } from "../lib/seen-outbox";
 import { SESSIONS_LIST_FEATURE } from "../lib/session-list";
 import { personalOrder, personalSessions } from "../lib/agents";
 import { NoComputers, useAddComputer } from "./machines/AddComputerEntry";
@@ -1973,7 +1974,10 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   // a card answered here takes its red dot and "Asking you" line away at once, not at the hub's next push (#4286)
   const justAnswered = useStore((st) => lastAnsweredAt(st.answered, given.machine_id, given.session_id));
   const pending = useStore((st) => answerPending(st.answered, given.machine_id, given.session_id));
-  const s = answeredSession(given, Boolean(ix), justAnswered, pending);
+  // seen on this page and not yet recorded by the hub (lib/seen-outbox.ts): the paged list's rows come from the list
+  // itself, not the store, so the row holds it seen too
+  const seenMark = useStore((st) => st.seen[runtimeIdentity(given)]);
+  const s = heldSeen(answeredSession(given, Boolean(ix), justAnswered, pending), seenMark, Date.now());
   const st = stateOf(s);
   // Awaiting Reply (#5096): seen, but it asked you something you have not answered
   const awaiting = useStore((x) => awaitsReply(s, x.mutes));

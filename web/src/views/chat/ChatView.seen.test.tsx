@@ -1,0 +1,100 @@
+// @vitest-environment jsdom
+// An agent's chat on screen is seen (lib/store.ts viewSession): opened, it registers; closed or switched, it lets go;
+// a subagent's read-only transcript is not an agent of its own and marks nothing.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Session } from "../../lib/types";
+
+vi.hoisted(() => {
+  const g = globalThis as Record<string, unknown>;
+  g.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  g.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+  g.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } };
+});
+
+const captured = vi.hoisted(() => ({
+  session: { machine_id: "hub", session_id: "c1", title: "Conversation", cwd: "/code", status: "done", state: "unread" } as Session,
+  views: [] as string[],
+  released: [] as string[],
+}));
+
+vi.mock("./Composer", async (importOriginal) => ({ ...await importOriginal<typeof import("./Composer")>(), Composer: () => null }));
+const transcript = vi.hoisted(() => ({ items: [], loading: false, error: "", hasMore: false, streaming: "" }));
+vi.mock("./useTranscript", () => ({ useTranscript: () => transcript }));
+vi.mock("../../lib/store", async (importOriginal) => {
+  const store = await importOriginal<typeof import("../../lib/store")>();
+  return {
+    ...store,
+    getSession: () => captured.session,
+    useStore: <T,>(select: (s: ReturnType<typeof store.getState>) => T) => select({ ...store.getState(), sessions: { hub: [captured.session] } }),
+    viewSession: (mid: string, sid: string) => {
+      captured.views.push(`${mid}/${sid}`);
+      return () => captured.released.push(`${mid}/${sid}`);
+    },
+  };
+});
+vi.mock("../../lib/panel", async (importOriginal) => ({ ...await importOriginal<typeof import("../../lib/panel")>(), usePanel: () => null }));
+vi.mock("../../lib/router", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../lib/router")>(),
+  useRoute: () => ({ name: "session", mid: "hub", id: "c1" }),
+}));
+vi.mock("../assistant/Persona", () => ({ usePersona: () => ({ name: "Persona" }) }));
+vi.mock("../assistant/AssistantChat", () => ({
+  AssistantFace: () => null,
+  AssistantLauncherChip: () => null,
+  CompactionStrip: () => null,
+  useAssistantMenu: () => ({ items: [], dialogs: null }),
+}));
+vi.mock("../assistant/Tasks", () => ({
+  DayLine: () => null,
+  FeedLineView: () => null,
+  QuickResultCard: () => null,
+  RouteChip: () => null,
+  TaskDock: () => null,
+  TaskQuestions: () => null,
+}));
+
+const { ChatView } = await import("./ChatView");
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let host: HTMLDivElement;
+let root: Root;
+beforeEach(() => {
+  captured.views = [];
+  captured.released = [];
+  localStorage.clear();
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("{}", { status: 200 }))));
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+  vi.unstubAllGlobals();
+});
+
+describe("an agent's chat on screen", () => {
+  it("is viewed while it is shown, and let go when another one opens", () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1" inPage />));
+    expect(captured.views).toEqual(["hub/c1"]);
+    act(() => root.render(<ChatView mid="hub" sid="c2" inPage />));
+    expect(captured.released).toEqual(["hub/c1"]);
+    expect(captured.views).toEqual(["hub/c1", "hub/c2"]);
+  });
+
+  it("is not viewed again on every push (a state change is the store's to follow)", () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1" inPage />));
+    captured.session = { ...captured.session, state: "working", status: "working" };
+    act(() => root.render(<ChatView mid="hub" sid="c1" inPage />));
+    captured.session = { ...captured.session, state: "unread", status: "done" };
+    act(() => root.render(<ChatView mid="hub" sid="c1" inPage />));
+    expect(captured.views).toEqual(["hub/c1"]);
+  });
+
+  it("does not mark a subagent's read-only transcript", () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1@agent-1" readOnly />));
+    expect(captured.views).toEqual([]);
+  });
+});

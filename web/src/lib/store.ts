@@ -11,7 +11,8 @@ import { onRuntimeChanges, runtimeIdentity, runtimeRemoval, runtimeSessions, SES
 import { sameValue } from "./stable-lines";
 import { SESSIONS_LIST_FEATURE, type ListCounts } from "./session-list";
 import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
-import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, errorText, getToken } from "./api";
+import { dueMarks, heldRows, liveMarks, markOver, newMark, nextDue, unansweredMarks, type SeenMark, type SeenMarks } from "./seen-outbox";
+import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, errorText, getToken, sessionPath } from "./api";
 import { currentLanguage } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
@@ -61,6 +62,9 @@ export interface State {
   /** Compact list rows never overwrite a chat's complete details in sessions. */
   sessionSummaries: Session[];
   sessionCounts: ListCounts | null;
+  /** Finished agents this page marked seen that the hub has not recorded yet, by runtimeIdentity (lib/seen-outbox.ts):
+   *  the rows in `sessions` and `sessionSummaries` are held seen meanwhile, the paged list's rows by the row itself. */
+  seen: SeenMarks;
   interactions: Interaction[];
   /** Cards this page just answered, by interaction id: shown answered (with the picks) for a moment, not clickable. */
   answered: Record<string, AnsweredCard>;
@@ -91,6 +95,7 @@ let state: State = {
   sessions: {},
   sessionSummaries: [],
   sessionCounts: null,
+  seen: {},
   interactions: [],
   answered: {},
   assistant: null,
@@ -133,9 +138,48 @@ function notifySoon() {
 }
 
 function set(patch: Partial<State>) {
-  state = { ...state, ...patch };
+  state = holdSeen({ ...state, ...patch }, patch);
+  if (viewed.size && ("sessions" in patch || "sessionSummaries" in patch || "assistant" in patch)) seeViewed(false);
   if (pushing) notifySoon();
   else notify();
+}
+
+/** Rows whose seen mark still waits for the hub are shown seen, whichever way they came in (a push, a page of the
+ *  list, an HTTP answer); marks the hub's rows show recorded, or no longer about this turn, go (lib/seen-outbox.ts). */
+function holdSeen(next: State, patch: Partial<State>): State {
+  if (!Object.keys(next.seen).length || !("sessions" in patch || "sessionSummaries" in patch || "assistant" in patch || "seen" in patch)) return next;
+  const now = Date.now();
+  let marks = liveMarks(next.seen, now);
+  const over: string[] = [];
+  const settle = (rows: Session[]) => {
+    for (const s of rows) {
+      const id = runtimeIdentity(s);
+      if (marks[id] && markOver(s, marks[id], now)) over.push(id);
+    }
+  };
+  Object.values(next.sessions).forEach(settle);
+  settle(next.sessionSummaries);
+  if (over.length) {
+    const kept: Record<string, SeenMark> = { ...marks };
+    for (const id of over) delete kept[id];
+    marks = kept;
+  }
+  const sessions: Record<string, Session[]> = {};
+  let changed = false;
+  for (const [mid, rows] of Object.entries(next.sessions)) {
+    sessions[mid] = heldRows(rows, marks, now);
+    changed ||= sessions[mid] !== rows;
+  }
+  const summaries = heldRows(next.sessionSummaries, marks, now);
+  const assistant = next.assistant;
+  const conversations = assistant ? heldRows(assistant.conversations, marks, now) : undefined;
+  return {
+    ...next,
+    seen: marks,
+    ...(changed ? { sessions } : {}),
+    ...(summaries !== next.sessionSummaries ? { sessionSummaries: summaries } : {}),
+    ...(assistant && conversations && conversations !== assistant.conversations ? { assistant: { ...assistant, conversations } } : {}),
+  };
 }
 
 let listedFull = new Map<string, Session>();
@@ -185,8 +229,9 @@ export function getSession(mid: string, sid: string): Session | undefined {
     ?? rowHints.get(runtimeIdentity({ machine_id: mid, session_id: sid } as Session));
 }
 
-/** Complete snapshots replace optional fields as well: omitted task arrays must not survive from an older snapshot. */
-export function applyCompleteSessions(rows: Session[], remove: string[] = []) {
+/** Complete snapshots replace optional fields as well: omitted task arrays must not survive from an older snapshot.
+ *  `also` goes in the same update (one render for both). */
+export function applyCompleteSessions(rows: Session[], remove: string[] = [], also: Partial<State> = {}) {
   if (!rows.length && !remove.length) return;
   const by = { ...state.sessions };
   const updates = new Map<string, Map<string, Session>>();
@@ -206,12 +251,15 @@ export function applyCompleteSessions(rows: Session[], remove: string[] = []) {
     const records = machine(row.machine_id);
     if (!sameValue(records.get(row.session_id), row)) { records.set(row.session_id, row); changed = true; }
   }
-  if (!changed) return;
+  if (!changed) {
+    if (Object.keys(also).length) set(also);
+    return;
+  }
   for (const [mid, records] of updates) by[mid] = [...records.values()];
   const assistant = state.assistant;
   const full = new Map(rows.map((row) => [runtimeIdentity(row), row]));
   const gone = new Set(remove);
-  set({ sessions: by, ...(assistant ? { assistant: { ...assistant, conversations: assistant.conversations.filter((row) => !gone.has(runtimeIdentity(row))).map((row) => full.get(runtimeIdentity(row)) ?? row) } } : {}) });
+  set({ ...also, sessions: by, ...(assistant ? { assistant: { ...assistant, conversations: assistant.conversations.filter((row) => !gone.has(runtimeIdentity(row))).map((row) => full.get(runtimeIdentity(row)) ?? row) } } : {}) });
 }
 
 // Selectors may build new arrays / objects: a result shallow-equal to the last one is the last one, so
@@ -552,6 +600,8 @@ function onMessage(msg: Record<string, unknown>) {
       setAgentListMode(state.features.includes(SESSIONS_LIST_FEATURE));
       // subscriptions are per connection: chats resubscribe from what they have either way
       sessionListeners.forEach((ls) => ls.forEach((l) => l.reconnected?.()));
+      // a seen sent over the socket that went may be lost with it
+      resendSeen();
       // resumed: the hub replays every broadcast missed since the cursor, nothing needs refetching
       if (!isResumed(msg)) {
         void refresh();
@@ -672,13 +722,14 @@ export function savePins(pins: AgentPins): Promise<void> {
 }
 
 /** "Mark all as seen": every finished-unread one of these is seen now, in one update of the list (iOS AppModel.markSeen). The
- * hub pushes the sessions back as seen; the list does not wait for it. */
+ * hub pushes the sessions back as seen; the list does not wait for it, and each waits in the seen outbox until it does. */
 export function markSeen(list: Session[]) {
   const keys = new Set<string>();
   const retained = new Map(Object.values(state.sessions).flat().map((s) => [runtimeIdentity(s), s]));
   const changedAt = (s: Session) => Math.max(timeMs(s.updated_at), timeMs(s.state_since), timeMs(s.seen_at));
   const now = new Date().toISOString();
   const changed: Session[] = [];
+  const marks: Record<string, SeenMark> = {};
   for (const given of list) {
     const id = runtimeIdentity(given);
     if (keys.has(id)) continue;
@@ -687,12 +738,15 @@ export function markSeen(list: Session[]) {
     // and honor a more recent local state (for example, an agent that has started working again).
     const current = retained.get(id);
     const s = current && changedAt(current) >= changedAt(given) ? current : given;
-    if (stateOf(s) !== "unread") continue;
-    if (isOpen()) markSeenLocally(s.machine_id, s.session_id);
-    else void api(`/sessions/${encodeURIComponent(s.machine_id)}/${encodeURIComponent(s.session_id)}/seen`, { method: "POST" }).catch(() => {});
+    const mark = newMark(s, Date.now(), now);
+    if (!mark) continue;
+    marks[id] = deliverSeen(s.machine_id, s.session_id, mark);
     changed.push({ ...s, state: "idle", seen_at: now });
   }
-  applyCompleteSessions(changed);
+  if (!changed.length) return;
+  // one update of the list: the marks and the rows they hold seen together
+  applyCompleteSessions(changed, [], { seen: { ...state.seen, ...marks } });
+  scheduleSeenCheck();
 }
 
 export function putLaunch(launch: AgentLaunch) {
@@ -1016,8 +1070,111 @@ onDefaultManager((was) => {
   assistantByManager.set(defaultManager(), kept);
 });
 
+/** The user looked at this session on this page (its chat is open and the page is in front): a finished turn stops
+ *  being Unread here at once, and on the hub so every client agrees (docs/protocol/agent-states.md "Seen"). An agent
+ *  already seen is told again anyway (cheap, and the hub may not have the page's last mark): only an unread one waits
+ *  in the outbox. */
 export function markSeenLocally(mid: string, sid: string) {
-  send({ type: "seen", machine_id: mid, session_id: sid });
+  const s = getSession(mid, sid);
+  const mark = s ? newMark(s, Date.now()) : undefined;
+  if (!mark) {
+    send({ type: "seen", machine_id: mid, session_id: sid });
+    return;
+  }
+  set({ seen: { ...state.seen, [runtimeIdentity(s!)]: deliverSeen(mid, sid, mark) } });
+  scheduleSeenCheck();
+}
+
+// ── chats on screen ─────────────────────────────────────
+// The agent conversations shown on this page, by runtimeIdentity, with how many views show each (the page and a side
+// panel can show the same one). While the page is in front, one of them that turns Unread (its turn ended while the
+// user watched) is marked seen in the same update that brought it: the list never shows it green (iOS
+// AppModel.notifyTransitions, ChatView's onChange(state)). In a background tab nothing is marked; coming back is.
+const viewed = new Map<string, number>();
+
+/** The page is what the user is looking at: its tab shows (a focused window is not required: a second screen counts). */
+function pageInFront(): boolean {
+  return typeof document === "undefined" || document.visibilityState === "visible";
+}
+
+/** Marks every viewed chat that is Unread now. `always`: an opened chat, or the page coming back to the front, tells
+ *  the hub even when this page has it seen already (another device's view, an older seen the hub lost). */
+function seeViewed(always: boolean) {
+  if (!viewed.size || !pageInFront()) return;
+  for (const id of viewed.keys()) {
+    const [mid, sid] = JSON.parse(id) as [string, string];
+    const s = getSession(mid, sid);
+    if (always || (s && stateOf(s) === "unread" && !state.seen[id])) markSeenLocally(mid, sid);
+  }
+}
+
+/** A chat is on screen: it is seen now (if the page is in front) and whenever a turn ends while it stays. Returns the
+ *  release. Subagent transcripts are not their own agents: their views do not call this. */
+export function viewSession(mid: string, sid: string): () => void {
+  const id = runtimeIdentity({ machine_id: mid, session_id: sid } as Session);
+  viewed.set(id, (viewed.get(id) ?? 0) + 1);
+  if (pageInFront()) markSeenLocally(mid, sid);
+  return () => {
+    const n = (viewed.get(id) ?? 1) - 1;
+    if (n > 0) viewed.set(id, n);
+    else viewed.delete(id);
+  };
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => seeViewed(true));
+}
+
+/** Over the socket while it is open, else over HTTP, which answers. Returns the mark as it was sent. */
+function deliverSeen(mid: string, sid: string, mark: SeenMark, overHTTP = false): SeenMark {
+  const at = Date.now();
+  if (!overHTTP && isOpen()) {
+    send({ type: "seen", machine_id: mid, session_id: sid });
+    return { ...mark, sentAt: at, route: "socket", answered: false };
+  }
+  const id = runtimeIdentity({ machine_id: mid, session_id: sid } as Session);
+  void api(`${sessionPath(mid, sid)}/seen`, { method: "POST" }).then(
+    () => {
+      const m = state.seen[id];
+      if (m && m.sentAt === at) set({ seen: { ...state.seen, [id]: { ...m, answered: true } } });
+    },
+    () => {}, // waits for the socket to come back (hello)
+  );
+  return { ...mark, sentAt: at, route: "http", answered: false };
+}
+
+// A socket's seen not taken (no list showing it recorded) within SEEN_CONFIRM_MS goes again over HTTP (#1588).
+let seenTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleSeenCheck() {
+  if (seenTimer !== undefined) return;
+  const at = nextDue(state.seen, Date.now());
+  if (at === undefined) return;
+  seenTimer = setTimeout(() => {
+    seenTimer = undefined;
+    const due = dueMarks(state.seen, Date.now());
+    if (due.length) {
+      const seen = { ...state.seen };
+      for (const id of due) {
+        const [mid, sid] = JSON.parse(id) as [string, string];
+        seen[id] = deliverSeen(mid, sid, seen[id], true);
+      }
+      set({ seen });
+    }
+    scheduleSeenCheck();
+  }, Math.max(at - Date.now(), 100));
+}
+
+/** A new connection's hello: what it has not answered goes again (a socket's seen may have gone with the old one). */
+function resendSeen() {
+  const ids = unansweredMarks(state.seen, Date.now());
+  if (!ids.length) return;
+  const seen = { ...state.seen };
+  for (const id of ids) {
+    const [mid, sid] = JSON.parse(id) as [string, string];
+    seen[id] = deliverSeen(mid, sid, seen[id]);
+  }
+  set({ seen });
+  scheduleSeenCheck();
 }
 
 export function reset() {
@@ -1039,12 +1196,15 @@ export function reset() {
   rowHints.clear();
   listedFull.clear();
   runtimeSessions.reset();
+  clearTimeout(seenTimer);
+  seenTimer = undefined;
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({
     machines: [],
     sessions: {},
   sessionSummaries: [],
   sessionCounts: null,
+    seen: {},
     interactions: [],
     answered: {},
     assistant: null,

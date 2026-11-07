@@ -15,7 +15,7 @@ import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
 import { useRuntimeSession } from "../../lib/runtime-session";
 import { SessionDetailNotice } from "../../ui/SessionDetailNotice";
-import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, saveMutes, useStore } from "../../lib/store";
+import { getSession, getState, listenSession, refresh, refreshTodos, saveMutes, useStore, viewSession } from "../../lib/store";
 import { agentsWorking, buildTaskIndex, stableSubagents, STOP_LOOP_MESSAGE, subagentParent, type TaskIndex } from "../../lib/tasks";
 import { stabilizeLines, stableValue } from "../../lib/stable-lines";
 import { planProgress } from "../../lib/work-groups";
@@ -313,15 +313,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segs]);
 
-  // seen: on open, and whenever a turn ends while we look
-  useEffect(() => {
-    if (document.visibilityState === "visible" && (state === "unread" || state === "idle")) markSeenLocally(mid, sid);
-  }, [mid, sid, state]);
-  useEffect(() => {
-    const v = () => document.visibilityState === "visible" && markSeenLocally(mid, sid);
-    document.addEventListener("visibilitychange", v);
-    return () => document.removeEventListener("visibilitychange", v);
-  }, [mid, sid]);
+  // seen: on open, when the page comes back to the front, and whenever a turn ends while it is on screen (lib/store.ts
+  // viewSession); a subagent's transcript is not an agent of its own
+  useEffect(() => (readOnly ? undefined : viewSession(mid, sid)), [mid, sid, readOnly]);
 
   // what came in over the WebSocket after the chat subscribed: the agent's words among it fade in (contract §3); the
   // first page, older pages and unfolded ranges come over HTTP and do not
