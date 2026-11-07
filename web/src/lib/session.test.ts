@@ -83,9 +83,13 @@ describe("delete a conversation", () => {
     }
   });
 
-  it("leaves out running ones (the hub answers 409) and idle ones (the hub lists them again)", () => {
-    for (const status of ["working", "blocked", "idle"]) expect(sessionDeletable({ ...legacy, status })).toBe(false);
-    expect(sessionDeletable({ ...live, status: "idle" })).toBe(false);
+  it("takes idle (finished and seen) ones too, a Codex App thread the App still lists included: the hub keeps them hidden", () => {
+    expect(sessionDeletable({ ...legacy, status: "idle" })).toBe(true);
+    expect(sessionDeletable({ ...live, status: "idle" })).toBe(true);
+  });
+
+  it("leaves out running ones: the hub answers 409", () => {
+    for (const status of ["working", "blocked"]) expect(sessionDeletable({ ...legacy, status })).toBe(false);
   });
 });
 

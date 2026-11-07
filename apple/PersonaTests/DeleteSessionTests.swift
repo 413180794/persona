@@ -10,11 +10,12 @@ struct DeleteSessionTests {
 
     @Test func onlyConversationsThatAreNotRunningCanBeDeleted() throws {
         // What the hub accepts and then hides (server/internal/hub/deleted_sessions.go `stillDeleted`).
-        for status in ["offline", "done", "unknown"] {
+        // Idle (finished and seen) too; an "interrupted" from a newer hub reads as unknown.
+        for status in ["offline", "done", "idle", "unknown", "interrupted"] {
             #expect(try session(status: status).canDelete, "\(status)")
         }
-        // Running, waiting at its prompt, or asking: close it first.
-        for status in ["working", "blocked", "idle"] {
+        // Running or asking: close it first.
+        for status in ["working", "blocked"] {
             #expect(!(try session(status: status).canDelete), "\(status)")
         }
     }

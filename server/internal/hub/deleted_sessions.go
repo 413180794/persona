@@ -16,7 +16,8 @@ import (
 // sessions.deleted, by "machine/session id") and leaves out of what it sends the apps an offline session that has
 // not been used since. The transcript stays on its computer; once the session is used again (resumed, a new
 // message) it is listed again. A start that failed (start_error) goes the same way, right away instead of when the
-// node forgets it. Running sessions and the assistant's conversations (they archive) cannot be deleted.
+// node forgets it. A finished one that is still open (idle, seen) goes too. Running sessions and the assistant's
+// conversations (they archive) cannot be deleted.
 
 const deletedSessionsKey = "sessions.deleted"
 
@@ -68,11 +69,14 @@ func (h *Hub) deletedAt(machine string) map[string]time.Time {
 }
 
 // stillDeleted reports whether s stays out of the list given when it was deleted: it has not run or been used since.
-// Finished and interrupted sessions count like offline. A restart can mark an
-// unchanged transcript interrupted without the user having resumed it.
+// Finished, seen (idle) and interrupted sessions count like offline: the user asked for it to go, and only new work
+// brings it back (#6433 follow-up). Status alone is no use: being looked at turns done into idle, a Codex App thread
+// reads done / idle for days after its last turn (codex_desktop.go), and a restart can mark an unchanged transcript
+// interrupted. What counts is a turn running (working, blocked) or a newer updated_at, the session's last real exchange.
 func stillDeleted(s proto.Session, at time.Time) bool {
-	finished := s.Status == proto.StatusOffline || s.Status == proto.StatusDone || s.Status == proto.StatusUnknown || s.Status == proto.StatusInterrupted
-	return finished && !s.Starting && !s.Assistant && !s.UpdatedAt.After(at)
+	finished := s.Status == proto.StatusOffline || s.Status == proto.StatusDone || s.Status == proto.StatusIdle ||
+		s.Status == proto.StatusUnknown || s.Status == proto.StatusInterrupted
+	return finished && !s.Starting && !s.Assistant && s.PendingInteractions == 0 && !s.UpdatedAt.After(at)
 }
 
 // sessionHiddenByDeletion applies the same precedence to normal and archived lists.

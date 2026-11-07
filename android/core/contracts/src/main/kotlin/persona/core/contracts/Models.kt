@@ -439,10 +439,10 @@ data class Session(
         else -> null
     }
     /**
-     * "Delete conversation" is offered: not running (offline, finished or unknown), not still starting, not the assistant's (those
+     * "Delete conversation" is offered: not running (offline, finished, seen or unknown), not still starting, not the assistant's (those
      * archive). The hub accepts and then hides exactly these (server/internal/hub/deleted_sessions.go `stillDeleted`).
      */
-    val canDelete: Boolean get() = !assistant && !starting && status in setOf("offline", "done", "unknown")
+    val canDelete: Boolean get() = !assistant && !starting && status in setOf("offline", "done", "idle", "unknown", "interrupted")
     val updated: Instant? get() = parseTime(updatedAt)
     /** Its workflows still running, newest first. */
     val runningWorkflows: List<Workflow> get() = workflows.orEmpty().filter { it.isRunning }

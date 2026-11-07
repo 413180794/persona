@@ -29,7 +29,7 @@
 
 ## Delete chat follows what the hub keeps hidden (2026-11-07, #6433)
 
-- "Delete chat" is the agent sessions' archive (out of every list, back when used again), and its client rule drifted from the hub's: the hub widened what stays hidden (`done` / `unknown` in #1461, `interrupted` in #5974) while the web kept `status === "offline"`. Codex App threads report `done` / `idle` / `unknown` for 72 hours and have no terminal to close them from, so their rows had no way out of the sidebar. Gate on the statuses `stillDeleted` keeps out, not on what the hub merely accepts: it accepts `idle` too but lists it again, so offering that would look like a delete that did nothing.
+- "Delete chat" is the agent sessions' archive (out of every list, back when used again), and its client rule drifted from the hub's: the hub widened what stays hidden (`done` / `unknown` in #1461, `interrupted` in #5974) while the web kept `status === "offline"`. Codex App threads report `done` / `idle` / `unknown` for 72 hours and have no terminal to close them from, so their rows had no way out of the sidebar. Gate on the statuses `stillDeleted` keeps out, not on what the hub merely accepts. Since the follow-up, `idle` is kept out too: the user asked for it to go, and status alone (done → idle when seen, a Codex App thread reading done / idle for days) is not new work; only a running turn, a newer `updated_at` or a pending card brings it back.
 
 ## Neutralizing status colors without losing selection or code meaning (2026-11-07, #6183)
 

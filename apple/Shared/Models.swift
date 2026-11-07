@@ -698,9 +698,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var canApprove: Bool { !hasSource || capabilities?.approve == true }
     var canTerminal: Bool { !hasSource || capabilities?.terminal == true }
     var canAttach: Bool { hasSource && capabilities?.attach == true && attached != true }
-    /// Delete Chat (docs/protocol/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished or unknown,
+    /// Delete Chat (docs/protocol/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished (seen or not) or unknown,
     /// not still starting, and not the assistant's (those archive). What the hub hides once deleted (`stillDeleted`).
-    var canDelete: Bool { !assistant && starting != true && (status == .offline || status == .done || status == .unknown) }
+    var canDelete: Bool { !assistant && starting != true && (status == .offline || status == .done || status == .idle || status == .unknown) }
     var sourceLabel: String? {
         switch sourceKind {
         case "codex_app_server": String(localized: "Codex live")

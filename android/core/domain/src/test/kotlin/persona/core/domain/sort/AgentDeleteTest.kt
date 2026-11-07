@@ -12,8 +12,8 @@ import org.junit.Test
 class AgentDeleteTest {
     @Test fun onlyConversationsThatAreNotRunningCanBeDeleted() {
         // What the hub accepts and then hides (server/internal/hub/deleted_sessions.go stillDeleted).
-        for (status in listOf("offline", "done", "unknown")) assertTrue(status, Session("m", "s", status = status).canDelete)
-        for (status in listOf("working", "blocked", "idle")) assertFalse(status, Session("m", "s", status = status).canDelete)
+        for (status in listOf("offline", "done", "idle", "unknown", "interrupted")) assertTrue(status, Session("m", "s", status = status).canDelete)
+        for (status in listOf("working", "blocked")) assertFalse(status, Session("m", "s", status = status).canDelete)
         assertFalse(Session("m", "s", status = "offline", starting = true).canDelete)
         // The assistant's conversations archive instead.
         assertFalse(Session("m", "s", status = "offline", assistant = true).canDelete)

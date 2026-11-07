@@ -123,13 +123,13 @@ describe("a sidebar row's ⋯", () => {
     expect(keys(session({ ...live, attached: true } as Partial<Session>))).not.toContain("attach");
     expect(keys(session())).not.toContain("attach");
   });
-  it("offers 删除对话 on a finished desktop thread, which has no terminal to close it from", () => {
+  it("offers 删除对话 on a finished or seen desktop thread, which has no terminal to close it from", () => {
     const thread = { source_kind: "codex_app_server", capabilities: { read: true, send: true } } as Partial<Session>;
     for (const status of ["done", "unknown", "interrupted"]) {
       expect(items(session({ ...thread, status, state: status === "done" ? "unread" : "unknown" } as Partial<Session>))).toContain("delete");
       expect(items(session({ status, state: "idle" } as Partial<Session>))).toContain("delete");
     }
-    expect(items(session({ ...thread, status: "idle", state: "idle" } as Partial<Session>))).not.toContain("delete");
+    expect(items(session({ ...thread, status: "idle", state: "idle" } as Partial<Session>))).toContain("delete");
     expect(items(session({ status: "working", state: "working" }))).not.toContain("delete");
   });
   it("leaves the todo out where the list gives no way to link one", () => {

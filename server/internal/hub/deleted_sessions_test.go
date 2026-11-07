@@ -138,3 +138,76 @@ func TestDeletedNotesDoNotExpire(t *testing.T) {
 		t.Fatalf("old deletion lost: %v", got)
 	}
 }
+
+// A finished session still open on its computer (idle: seen, a Codex App thread the App lists for days) can be
+// deleted too: it stays out of the lists whatever its finished status reads next (done, idle, unknown), across a
+// reload, and comes back only when it works again, is used again or asks the user something.
+func TestDeleteIdleSessions(t *testing.T) {
+	h, n := conversationsHub(t)
+	now := time.Now().UTC()
+	desk := proto.Session{SessionID: "desk-0021", Cwd: "/code/app", Status: proto.StatusIdle, UpdatedAt: now.Add(-2 * time.Hour),
+		Agent: "codex", SourceKind: "codex_history", SpaceKind: "codex_app", Capabilities: &proto.SessionCapabilities{Read: true, Send: true}}
+	editSessions(n.m, func(list []proto.Session) []proto.Session {
+		return append(list,
+			proto.Session{SessionID: "seen-0020", Cwd: "/code/app", Status: proto.StatusIdle, UpdatedAt: now.Add(-time.Hour)},
+			desk,
+			proto.Session{SessionID: "open-0022", Cwd: "/code/app", Status: proto.StatusIdle, UpdatedAt: now.Add(-time.Hour)},
+		)
+	})
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/sessions/{mid}/{sid}", h.withMachine(h.deleteSession))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	for _, id := range []string{"seen-0020", "desk-0021"} {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/sessions/server/"+id, nil)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("delete %s: %d", id, res.StatusCode)
+		}
+	}
+	set := func(id string, f func(*proto.Session)) {
+		editSessions(n.m, func(list []proto.Session) []proto.Session {
+			for i := range list {
+				if list[i].SessionID == id {
+					f(&list[i])
+				}
+			}
+			return list
+		})
+	}
+	shown := func() string { return ids(h.shown("server", h.decorated(n.m))) }
+	if got := shown(); strings.Contains(got, "seen-0020") || strings.Contains(got, "desk-0021") || !strings.Contains(got, "open-0022") {
+		t.Fatalf("deleted idle sessions leave the list, the others stay: %s", got)
+	}
+	// Its finished status changing with no new work (the App marks it unread, then seen; a restart reads unknown) does
+	// not bring it back, nor does a reload of the notes.
+	for _, st := range []string{proto.StatusDone, proto.StatusUnknown, proto.StatusIdle} {
+		set("desk-0021", func(s *proto.Session) { s.Status = st })
+		if got := shown(); strings.Contains(got, "desk-0021") {
+			t.Fatalf("status %s brought it back: %s", st, got)
+		}
+	}
+	h2 := newTestHub(t)
+	h2.store = h.store
+	if got := ids(h2.shown("server", h.decorated(n.m))); strings.Contains(got, "seen-0020") || strings.Contains(got, "desk-0021") {
+		t.Fatalf("kept across a restart: %s", got)
+	}
+	// A turn running brings it back while it runs, and the turn's newer activity keeps it back.
+	set("desk-0021", func(s *proto.Session) { s.Status = proto.StatusWorking })
+	if got := shown(); !strings.Contains(got, "desk-0021") {
+		t.Fatalf("a working session is listed: %s", got)
+	}
+	set("desk-0021", func(s *proto.Session) { s.Status, s.UpdatedAt = proto.StatusDone, time.Now().UTC().Add(time.Second) })
+	if got := shown(); !strings.Contains(got, "desk-0021") {
+		t.Fatalf("used again, it stays listed: %s", got)
+	}
+	// A question waiting for the user brings it back too.
+	set("seen-0020", func(s *proto.Session) { s.PendingInteractions = 1 })
+	if got := shown(); !strings.Contains(got, "seen-0020") {
+		t.Fatalf("a session waiting for an answer is listed: %s", got)
+	}
+}
