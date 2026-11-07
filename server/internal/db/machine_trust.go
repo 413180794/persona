@@ -62,8 +62,8 @@ func (d *DB) ForgetMachineTrust(ctx context.Context, id string) error {
 func (d *DB) RevokeMachineCredentials(ctx context.Context, machine string) ([]string, error) {
 	var ids []string
 	err := pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE pair_tokens SET expires_at = now() WHERE machine_id = $1 AND used_at IS NULL AND expires_at > now()`,
-			machine); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE pair_tokens SET expires_at = `+pairEndedNow+`
+			WHERE machine_id = $1 AND used_at IS NULL AND expires_at > LEAST(now(), $2)`, machine, time.Now()); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `UPDATE device_tokens SET revoked_at = now() WHERE machine_id = $1 AND revoked_at IS NULL RETURNING id`, machine)

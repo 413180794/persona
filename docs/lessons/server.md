@@ -2,6 +2,10 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## An expiry written by one clock and checked by another (2026-11-07, #6543)
+
+Revocation ended pairing codes with `expires_at = now()` (Postgres's clock) while the hub judged them by its own `time.Now()`: with Postgres in a VM whose clock runs ahead (a macOS hub with Docker Desktop or colima), a revoked code kept working for the difference. When a time is written on one side and compared on the other, make it past by both (`LEAST(expires_at, now(), $hub_now)`, `pairEndedNow`). Checks done in SQL against the same `now()` that wrote the time (manager install codes) are not affected. Tests that compare a database-written time with `time.Now()` fail on such a machine for the same reason, while Linux CI, with Postgres on the same kernel clock, never shows it: `hub` `TestManagerJoinRefusesPublicPlaintext` still does.
+
 ## Rolling-upgrade identity contracts (#6223)
 
 - Treat a rename as an ABI change wherever a byte reaches another process, persisted state, a cryptographic domain or an operating-system registration. Use an explicit authenticated feature, an old-safe default and exact aliases; display names and build strings do not prove compatibility. Push-to-start needs a persisted registration capability, independent of the socket's XML capability.
