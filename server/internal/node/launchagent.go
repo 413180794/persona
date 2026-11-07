@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/compat"
 )
 
 // The resident node on a Mac is a launchd agent (scripts/deploy/node-launchd.sh, persona-link's nodesvc.go). A plist
@@ -30,7 +32,7 @@ const NodeLaunchdLabel = "com.persona.node"
 
 // legacyNodeLaunchdLabel is the name the installers gave the agent before the rename (#277). Both leave an agent that
 // is already installed as it is, so a Mac set up before then keeps running its node under this label.
-const legacyNodeLaunchdLabel = "com.jarvis.node"
+const legacyNodeLaunchdLabel = compat.NodeLabel
 
 // nodeLaunchdLabels are the labels the resident node's agent can have, today's first.
 var nodeLaunchdLabels = []string{NodeLaunchdLabel, legacyNodeLaunchdLabel}

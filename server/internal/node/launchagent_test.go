@@ -560,8 +560,8 @@ func TestNodeDoctorOptionsStayInsideTheNode(t *testing.T) {
 	}
 }
 
-// A Mac set up before the rename keeps its agent as com.jarvis.node (installers leave an installed one as it is); a
-// new install writes com.persona.node. The doctor looks at the one whose plist is there and, with both there, at the
+// A Mac set up before the rename keeps its installed agent label; a new install writes com.persona.node.
+// The doctor looks at the one whose plist is there and, with both there, at the
 // one launchd has loaded: that is the running node, and the one --fix has to reload.
 func TestPickNodeLaunchdLabel(t *testing.T) {
 	const fresh, legacy = NodeLaunchdLabel, legacyNodeLaunchdLabel

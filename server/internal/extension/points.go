@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/url"
 	"path"
 	"regexp"
@@ -289,7 +290,7 @@ func ParseGate(raw []byte) (*GateFile, error) {
 		return nil, errors.New("gate: no title")
 	}
 	for _, e := range append(append(append([]string(nil), g.Env...), g.Secret...), g.AllowedEnv...) {
-		if !gateEnv.MatchString(e) || strings.HasPrefix(e, "PERSONA_") || e == "PATH" {
+		if !gateEnv.MatchString(e) || compat.ReservedEnv(e) || e == "PATH" {
 			return nil, fmt.Errorf("gate env %q", e)
 		}
 	}
@@ -346,7 +347,7 @@ func checkPackagePath(p string) error {
 // assistant has already, which no connector's may hide.
 var (
 	cliName          = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
-	reservedCommands = []string{"personad", "lark-cli", "sh", "bash", "git", "gh", "curl", "python3", "node", "claude", "codex"}
+	reservedCommands = []string{"personad", compat.DaemonBinary, "lark-cli", "sh", "bash", "git", "gh", "curl", "python3", "node", "claude", "codex"}
 )
 
 // Points are the extension points this hub has, by name.
@@ -524,7 +525,7 @@ var Points = map[string]Point{
 		if err := strict(raw, &m); err != nil {
 			return "", err
 		}
-		if !idPattern.MatchString(m.ID) || m.ID == "persona" {
+		if !idPattern.MatchString(m.ID) || compat.IsMCPServer(m.ID) {
 			return m.ID, fmt.Errorf("mcp_servers id %q: a-z0-9_-, not persona or persona", m.ID)
 		}
 		if !cliName.MatchString(m.Command) || slices.Contains(reservedCommands, m.Command) || slices.Contains(mcpRunners, m.Command) {

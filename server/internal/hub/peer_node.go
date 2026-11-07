@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"net"
 	"net/http"
@@ -27,7 +28,7 @@ import (
 // tailcat, the computer's Persona Link or connector), the member answers 101 and from then on copies bytes both ways.
 // Only the member's center may ask: a member drives none of its computers itself.
 
-const nodeUpgrade = "persona-node"
+const nodeUpgrade = compat.NodeUpgrade
 
 // nodeOpenWait bounds how long a member's manager may take to open a node for the center (each of its ways in turn).
 const nodeOpenWait = time.Minute
@@ -44,9 +45,9 @@ func (h *Hub) openThroughHub(ctx context.Context, hub, mid string) (*nodePipe, e
 	}
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", nodeUpgrade)
-	req.Header.Set(hdrPeerNode, hub+"/"+mid)
-	req.Header.Set(hdrPeerFrom, h.hubID())
-	req.Header.Set(hdrPeerTTL, itoa(meshTTL))
+	compat.SetHeader(req.Header, hdrPeerNode, hub+"/"+mid)
+	compat.SetHeader(req.Header, hdrPeerFrom, h.hubID())
+	compat.SetHeader(req.Header, hdrPeerTTL, itoa(meshTTL))
 	client := &http.Client{Transport: l.transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -77,7 +78,7 @@ func (h *Hub) openThroughHub(ctx context.Context, hub, mid string) (*nodePipe, e
 // serveNodeOpen is a member opening a stream to one of its computers for its center: the manager opens it the way
 // hub.json says (devices.accept, kind node) and the hub copies bytes between the center's stream and the relay.
 func (h *Hub) serveNodeOpen(w http.ResponseWriter, r *http.Request, from, mid string) {
-	if !strings.EqualFold(r.Header.Get("Upgrade"), nodeUpgrade) {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), nodeUpgrade) && !strings.EqualFold(r.Header.Get("Upgrade"), "persona-node") {
 		writeErr(w, http.StatusBadRequest, errors.New("a node stream is an upgrade"))
 		return
 	}

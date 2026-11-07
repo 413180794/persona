@@ -1,5 +1,7 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.ProtocolCompatibility
+
 import persona.core.contracts.CoreTextException
 import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
@@ -130,7 +132,7 @@ data class PersonaManifest(
         const val FORMAT = 1
         /** Retired drawing identities remain reserved so a package cannot revive or impersonate them. */
         val RETIRED_IDS = setOf("persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob")
-        val RESERVED_IDS = RETIRED_IDS + "persona"
+        val RESERVED_IDS = RETIRED_IDS + "persona" + ProtocolCompatibility.legacyBuiltins
         private val ID = Regex("^[a-z0-9][a-z0-9-]{0,31}$")
     }
 }

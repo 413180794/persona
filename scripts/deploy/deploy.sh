@@ -11,6 +11,8 @@
 # a terminal, else keeps the default (lan) and says so.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# Normalize caller overrides before reading deployment options; never print their values.
+eval "$(python3 scripts/persona_identity.py --env)"
 # The question and its explanations live in install.sh (the public installer asks the same).
 eval "$(sed -n '/^# >>> admin access/,/^# <<< admin access/p' scripts/deploy/install.sh)"
 ADMIN_ACCESS="${PERSONA_ADMIN_ACCESS:-}"
@@ -46,7 +48,8 @@ if [ -z "${PERSONA_DEPLOY_ANY_COMMIT:-}" ]; then
     exit 2
   fi
 fi
-eval "$(python3 scripts/persona_config.py env)"
+_env=$(python3 scripts/persona_config.py env) || exit $?
+eval "$_env"; unset _env
 cd server
 # Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
 # older release never replaces it and the next release does (docs/hub-update.md "Deploying directly").
@@ -211,17 +214,23 @@ install_bin() {
     mkdir -p "$root/bin" || return 1
     # The hub's binary before it is replaced: hub-systemd.sh switches the running edge to the new one and goes back
     # to this one if it fails while taking over (docs/hub-restart.md "Blue-green switch").
-    if [ "$role" = hub ] && [ -f "$root/bin/personad" ]; then cp -p "$root/bin/personad" "$root/bin/personad.prev" || return 1; fi
+    if [ "$role" = hub ]; then
+      local previous
+      previous=$(python3 ../scripts/persona_identity.py --service hub --shell) || return 1
+      eval "$previous"
+      [ ! -f "$_PERSONA_HUB_BIN" ] || cp -p "$_PERSONA_HUB_BIN" "$root/bin/personad.prev" || return 1
+    fi
     { cp "$bin" "$root/bin/personad.new" && mv "$root/bin/personad.new" "$root/bin/personad"; } || return 1
     if ! out=$(PERSONA_HOME="$root" "$root/bin/personad" version 2>&1); then
       echo "$id: the $plat build does not run there: $out" >&2
       return 1
     fi
+    python3 ../scripts/persona_identity.py --alias-binaries "$root/bin" || return 1
     PERSONA_HOME="$root" restart_resident
   else
     keep=
-    [ "$role" = hub ] && keep='{ [ ! -f "$PERSONA_HOME/bin/personad" ] || cp -p "$PERSONA_HOME/bin/personad" "$PERSONA_HOME/bin/personad.prev"; } && '
-    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/personad.new" && chmod 755 "$PERSONA_HOME/bin/personad.new" && mv "$PERSONA_HOME/bin/personad.new" "$PERSONA_HOME/bin/personad" && "$PERSONA_HOME/bin/personad" version >/dev/null'
+    [ "$role" = hub ] && keep='{ [ ! -f "$_PERSONA_HUB_BIN" ] || cp -p "$_PERSONA_HUB_BIN" "$PERSONA_HOME/bin/personad.prev"; } && '
+    command=$keep'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/personad.new" && chmod 755 "$PERSONA_HOME/bin/personad.new" && mv "$PERSONA_HOME/bin/personad.new" "$PERSONA_HOME/bin/personad" && persona_alias_binaries "$PERSONA_HOME/bin" && "$PERSONA_HOME/bin/personad" version >/dev/null'
     if [ -n "$via" ]; then
       local vh quoted
       vh=$(field "$via" ssh); vh=${vh:-$via}
@@ -253,8 +262,9 @@ install_program() {
     root=$(state_root)
     mkdir -p "$root/bin"
     cp "$bin" "$root/bin/personad-$name.new" && mv "$root/bin/personad-$name.new" "$root/bin/personad-$name"
+    python3 ../scripts/persona_identity.py --alias-binaries "$root/bin"
   else
-    remote_state "$PERSONA_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/personad-$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/personad-$name.new\" && mv \"\$PERSONA_HOME/bin/personad-$name.new\" \"\$PERSONA_HOME/bin/personad-$name\"" < "$bin"
+    remote_state "$PERSONA_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/personad-$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/personad-$name.new\" && mv \"\$PERSONA_HOME/bin/personad-$name.new\" \"\$PERSONA_HOME/bin/personad-$name\" && persona_alias_binaries \"\$PERSONA_HOME/bin\"" < "$bin"
   fi
 }
 
@@ -312,6 +322,7 @@ for t in "${TARGETS[@]}"; do
         remote_state "$PERSONA_HUB_SSH" 'n="$PERSONA_HOME/bin/nodes/'"persona-node-$plat"'"; rm -f "$n.version"; cat > "$n.new" && mv "$n.new" "$n"' < "bin/persona-node-$plat"
         printf '%s\n' "$VERSION" | remote_state "$PERSONA_HUB_SSH" 'cat > "$PERSONA_HOME/bin/nodes/'"persona-node-$plat.version"'"'
       done
+      remote_state "$PERSONA_HUB_SSH" 'persona_alias_binaries "$PERSONA_HOME/bin/nodes"'
       hub_plat=$(machine_platform "$t") || exit 2
       install_bin "$t" "bin/personad-$hub_plat"
       install_program "$t" "$hub_plat" wechat

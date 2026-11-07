@@ -215,8 +215,8 @@ func RunManager(ctx context.Context, build update.Build, dir string) error {
 		logger.Printf("[%s] made its database %s", c.ID, db.DatabaseName(url))
 	}
 	// What it starts (extensions, tools) finds its data directory, not the hub's.
-	_ = os.Setenv("PERSONA_HOME", dir)
-	_ = os.Setenv("PERSONA_HOME", dir)
+	_ = identity.Setenv("PERSONA_HOME", dir)
+	_ = identity.Setenv("PERSONA_HOME", dir)
 	deploy := identity.Getenv("PERSONA_ASSISTANT_DEPLOY")
 	if deploy == "" {
 		deploy = "external"

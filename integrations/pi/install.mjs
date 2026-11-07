@@ -5,6 +5,7 @@
 //
 //   node integrations/pi/install.mjs [--socket <runtime.sock>]
 
+import { runtimeStorePath } from '../runtime-sdk/lib/compat.js'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { prepareSocketDirectory } from '../runtime-sdk/lib/identity.js'
@@ -13,7 +14,7 @@ import { defaultSocketPath, installCurrent, PACKAGES, packageHash, readShipped }
 const NAME = 'persona-pi-runtime'
 const i = process.argv.indexOf('--socket')
 const socket = (i > 0 && process.argv[i + 1]) || defaultSocketPath()
-const store = join(prepareSocketDirectory(socket), 'runtime-packages', NAME)
+const store = runtimeStorePath(prepareSocketDirectory(socket), NAME)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const files = readShipped(root, PACKAGES[NAME])
 const hash = packageHash(files)

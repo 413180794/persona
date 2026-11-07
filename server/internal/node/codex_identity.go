@@ -1,6 +1,7 @@
 package node
 
 import (
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 	"slices"
@@ -12,7 +13,7 @@ func (n *Node) ownedAssistantSource(id string) bool {
 	_, own := n.procs[id]
 	path := n.paths[id]
 	n.mu.Unlock()
-	if own || strings.Contains(path, "-persona-assistant") {
+	if own || compat.IsAssistantTranscript(path) {
 		return true
 	}
 	if n.state != nil {

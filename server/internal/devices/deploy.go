@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/nodeproto"
@@ -156,9 +157,9 @@ func deployScript(bin string, personaNode bool) string {
 
 // residentNodePattern is what the deploy script's pkill -f looks for (an extended regular expression): a resident node's
 // command line, as persona-link's service runs it (`<data dir>/bin/personad node --attach`, or bin/persona-node on a
-// device), or as the service of a computer not cut over to the Persona names yet still does (`.../jarvisd node --attach`).
+// device), or an older installed service whose executable still has its original name.
 // The brackets keep it from matching the remote command itself, whose text contains the pattern.
-const residentNodePattern = "([j]arvisd|[p]ersonad|[p]ersona-node) node --attach"
+const residentNodePattern = compat.ResidentNodePattern
 
 // shellQuote quotes s for a POSIX shell only (the script inside posixCommand); a remote command goes through
 // anyShellQuote.

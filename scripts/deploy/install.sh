@@ -24,6 +24,17 @@
 # install only warns. scripts/deploy/ensure-herdr.sh does the same for deploy.sh: keep the two in step.
 set -eu
 
+# Standalone compatibility adapter: preserve explicit empty canonical overrides.
+for suffix in ADMIN_ACCESS ADMIN_CIDRS ROLE PAIR MACHINE LISTEN DL HERDR_INSTALL HOME WITH SKIP_HERDR; do
+    eval 'present=${PERSONA_'"$suffix"'+x}'
+    eval 'legacy_present=${JARVIS_'"$suffix"'+x}'
+    if [ "$present" != x ] && [ "$legacy_present" = x ]; then
+        eval 'value=${JARVIS_'"$suffix"'-}'
+        export "PERSONA_$suffix=$value"
+    fi
+done
+LEGACY_ROOT="$HOME/.jarvis"
+
 # >>> admin access (scripts/deploy.sh reads this block from here: keep it POSIX sh and self-contained)
 admin_access_help() {
 	cat <<'HELP'
@@ -135,11 +146,28 @@ lexical_path() {
 DL="${PERSONA_DL:-@PERSONA_DL@}"
 HERDR_INSTALL="${PERSONA_HERDR_INSTALL:-https://herdr.dev/install.sh}"
 STATE="${PERSONA_HOME:-}"
-if [ -z "$STATE" ]; then STATE="$HOME/.persona"; fi
+if [ -z "$STATE" ]; then
+    if { [ -e "$HOME/.persona" ] || [ -L "$HOME/.persona" ]; } && { [ -e "$LEGACY_ROOT" ] || [ -L "$LEGACY_ROOT" ]; }; then
+        [ "$HOME/.persona" -ef "$LEGACY_ROOT" ] || { echo 'personad: independent state directories; set PERSONA_HOME explicitly' >&2; exit 1; }
+    fi
+    if [ -e "$LEGACY_ROOT" ] || [ -L "$LEGACY_ROOT" ]; then STATE="$LEGACY_ROOT"; else STATE="$HOME/.persona"; fi
+fi
+# The published installer embeds the same credential-free service resolver used by deploy.sh.
+IDENTITY_CODE='@PERSONA_IDENTITY@'
+identity_script="$(dirname "$0")/../persona_identity.py"
+if [ -f "$identity_script" ]; then
+    resolved=$(python3 "$identity_script" --service "${ROLE:-auto}") || exit $?
+    STATE="$resolved"
+elif [ "$IDENTITY_CODE" != '@''PERSONA_IDENTITY@' ]; then
+    command -v python3 >/dev/null 2>&1 || { echo 'personad: python3 is required to resolve existing service profiles safely' >&2; exit 1; }
+    resolved=$(python3 -c "import base64; exec(base64.b64decode('$IDENTITY_CODE'))" --service "${ROLE:-auto}") || exit $?
+    STATE="$resolved"
+fi
 case "$STATE" in '~') STATE="$HOME" ;; '~/'*) STATE="$HOME/${STATE#\~/}" ;; esac
 case "$STATE" in /*) ;; *) STATE="$HOME/$STATE" ;; esac
 STATE="$(lexical_path "$STATE")"
 DEST="$STATE/bin"
+export PERSONA_HOME="$STATE" JARVIS_HOME="$STATE"
 
 fail() {
 	echo "personad: $*" >&2
@@ -150,7 +178,29 @@ prepare_state() {
 	if [ -L "$STATE" ] && [ ! -d "$STATE" ]; then
 		fail "unavailable state symlink $STATE: restore its target before upgrading"
 	fi
-	mkdir -p "$STATE"
+    mkdir -p "$STATE"
+    case "$STATE" in
+    "$HOME/.persona") [ -e "$LEGACY_ROOT" ] || [ -L "$LEGACY_ROOT" ] || ln -s .persona "$LEGACY_ROOT" ;;
+    "$LEGACY_ROOT") [ -e "$HOME/.persona" ] || [ -L "$HOME/.persona" ] || ln -s .jarvis "$HOME/.persona" ;;
+    esac
+}
+
+compat_command() {
+    case "$1" in personad) old=jarvisd ;; persona-link) old=jarvis-link ;; personad-wechat) old=jarvisd-wechat ;; *) return ;; esac
+    [ ! -d "$DEST/$old" ] || fail "legacy command is a directory: $DEST/$old"
+    ln -sf "$1" "$DEST/$old"
+}
+
+artifact_name() {
+    current="$1"
+    case "$current" in personad-*) old="jarvisd-${current#personad-}" ;; persona-link-*) old="jarvis-link-${current#persona-link-}" ;; *) old="$current" ;; esac
+    for candidate in "$current" "$old"; do
+        if awk -v n="$candidate.gz" '$2 == n || $2 == "*" n { found=1 } END { exit !found }' "$tmp/SHA256SUMS"; then
+            printf '%s' "$candidate"
+            return
+        fi
+    done
+    fail "$current.gz is not in SHA256SUMS"
 }
 
 case "$(uname -s)" in
@@ -188,7 +238,8 @@ fetch "$DL/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $DL/SHA256S
 
 # get <name> <installed as>: downloads <name>.gz, checks it against SHA256SUMS and puts it in $DEST.
 get() {
-	archive="$1.gz"
+    source=$(artifact_name "$1") || return 1
+	archive="$source.gz"
 	fetch "$DL/$archive" "$tmp/$archive" || fail "could not download $DL/$archive"
 	want="$(awk -v n="$archive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
 	[ -n "$want" ] || fail "$archive is not in SHA256SUMS"
@@ -201,6 +252,7 @@ get() {
 	# resident node running $DEST/$2 must never find it missing or half written.
 	cp "$tmp/$1" "$DEST/.$2.new" && chmod 755 "$DEST/.$2.new" || fail "could not write $DEST/.$2.new: not installed"
 	mv -f "$DEST/.$2.new" "$DEST/$2" || fail "could not install $DEST/$2"
+    compat_command "$2"
 }
 
 # The device's own program (docs/link.md "The device's program"): the node service on a device runs persona-node,
@@ -275,7 +327,7 @@ fi
 # personad. Only the canonical command is installed.
 fetch_link() {
 	[ -z "${LINK_FETCHED:-}" ] || return 0
-	lname="persona-link-$os-$arch"
+    lname=$(artifact_name "persona-link-$os-$arch") || return 1
 	larchive="$lname.gz"
 	fetch "$DL/$larchive" "$tmp/$larchive" || { echo "personad: could not download $DL/$larchive" >&2 && return 1; }
 	lwant="$(awk -v n="$larchive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
@@ -284,6 +336,7 @@ fetch_link() {
 	gzip -dc "$tmp/$larchive" > "$tmp/$lname" && [ -s "$tmp/$lname" ] || { echo "personad: could not unpack $larchive: not installed" >&2 && return 1; }
 	cp "$tmp/$lname" "$DEST/.persona-link.new" && chmod 755 "$DEST/.persona-link.new" && mv -f "$DEST/.persona-link.new" "$DEST/persona-link" ||
 		{ echo "personad: could not install $DEST/persona-link" >&2 && return 1; }
+    compat_command persona-link
 	LINK_FETCHED=1
 	echo "persona-link $("$DEST/persona-link" version 2>/dev/null || echo unknown) installed at $DEST/persona-link"
 }

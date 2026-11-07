@@ -37,7 +37,7 @@ class PersonaServiceEnvFileTests(unittest.TestCase):
         second.write_text('PERSONA_HOME="profile with $HOME %h spaces"\nAPI_KEY=fixture-only-private-value\n')
         self.unit.write_text('[Service]\nEnvironment="PERSONA_HOME=inline"\nEnvironmentFile=' + str(first) + '\nEnvironmentFile=' + str(second) + '\n')
         self.assertEqual(self.root(), str(self.home / 'profile with $HOME %h spaces'))
-        self.assertEqual(identity.service_environment(self.home, {}, 'hub'), {'PERSONA_HOME': 'profile with $HOME %h spaces'})
+        self.assertEqual(identity.service_environment(self.home, {}, 'hub'), {'PERSONA_HOME': 'profile with $HOME %h spaces', FORMER_PREFIX + 'HOME': 'ignored'})
 
     def test_optional_files_globs_and_reset_do_not_resurrect_old_roots(self):
         files = self.home / 'environment'; files.mkdir()
@@ -53,27 +53,27 @@ class PersonaServiceEnvFileTests(unittest.TestCase):
     def test_unset_is_applied_after_files_and_can_itself_be_reset(self):
         file = self.home / 'root.env'; file.write_text('PERSONA_HOME=new\n' + FORMER_PREFIX + 'HOME=ignored\n')
         self.unit.write_text('[Service]\nUnsetEnvironment=PERSONA_HOME\nEnvironmentFile=' + str(file) + '\n')
-        self.assertEqual(self.root(), str(self.home / '.persona'))
+        self.assertEqual(self.root(), str(self.home / 'ignored'))
         self.unit.write_text(self.unit.read_text() + 'UnsetEnvironment=\nUnsetEnvironment="PERSONA_HOME=not-matching"\n')
         self.assertEqual(self.root(), str(self.home / 'new'))
         self.unit.write_text(self.unit.read_text() + 'UnsetEnvironment="PERSONA_HOME=new"\n')
-        self.assertEqual(self.root(), str(self.home / '.persona'))
+        self.assertEqual(self.root(), str(self.home / 'ignored'))
         self.assertFalse((self.home / 'ignored').exists())
 
     def test_defined_empty_home_ignores_the_former_value(self):
         file = self.home / 'root.env'; file.write_text('PERSONA_HOME=\n' + FORMER_PREFIX + 'HOME=wrong\n')
         self.unit.write_text('[Service]\nEnvironmentFile=' + str(file) + '\n')
         self.assertEqual(self.root(), str(self.home / '.persona'))
-        self.assertEqual(identity._file_environment(file), {'PERSONA_HOME': ''})
+        self.assertEqual(identity._file_environment(file), {'PERSONA_HOME': '', FORMER_PREFIX + 'HOME': 'wrong'})
         self.assertFalse((self.home / 'wrong').exists())
 
     def test_only_the_exact_canonical_key_is_read(self):
         file = self.home / 'root.env'
         file.write_text('HOME=wrong\nPERSONA=wrong\nPERSONA_HOME_EXTRA=wrong\n' + FORMER_PREFIX + 'HOME=wrong\n')
-        self.assertEqual(identity._file_environment(file), {})
+        self.assertEqual(identity._file_environment(file), {FORMER_PREFIX + 'HOME': 'wrong'})
         self.unit.write_text('[Service]\nEnvironment="HOME=wrong" "PERSONA=wrong" "PERSONA_HOME_EXTRA=wrong" "' + FORMER_PREFIX + 'HOME=wrong"\nEnvironmentFile=' + str(file) + '\n')
-        self.assertEqual(identity.service_environment(self.home, {}, 'hub'), {})
-        self.assertEqual(self.root(), str(self.home / '.persona'))
+        self.assertEqual(identity.service_environment(self.home, {}, 'hub'), {FORMER_PREFIX + 'HOME': 'wrong'})
+        self.assertEqual(self.root(), str(self.home / 'wrong'))
 
     def test_quote_escape_and_multiline_other_fields_never_become_home_assignments(self):
         file = self.home / 'root.env'
@@ -88,7 +88,7 @@ class PersonaServiceEnvFileTests(unittest.TestCase):
     def test_escaped_trailing_space_never_merges_the_following_private_field(self):
         file = self.home / 'root.env'
         file.write_text('PERSONA_HOME=profile\\ \nOTHER=opaque-fixture-value\n' + FORMER_PREFIX + 'HOME=ignored\n')
-        self.assertEqual(identity._file_environment(file), {'PERSONA_HOME': 'profile '})
+        self.assertEqual(identity._file_environment(file), {'PERSONA_HOME': 'profile ', FORMER_PREFIX + 'HOME': 'ignored'})
         self.unit.write_text('[Service]\nEnvironmentFile=' + str(file) + '\n')
         result = subprocess.run([sys.executable, str(SCRIPT), '--service', 'hub'], env=environment(self.home), capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -114,7 +114,7 @@ class PersonaServiceEnvFileTests(unittest.TestCase):
 
     def test_unset_exact_values_expand_the_same_unit_home_specifier(self):
         self.unit.write_text('[Service]\nEnvironment="PERSONA_HOME=%h/new" "' + FORMER_PREFIX + 'HOME=%h/old"\nUnsetEnvironment="PERSONA_HOME=%h/new"\n')
-        self.assertEqual(self.root(), str(self.home / '.persona'))
+        self.assertEqual(self.root(), str(self.home / 'old'))
 
     def test_optional_dangling_environment_file_is_ignored_after_glob_matching(self):
         file = self.home / 'optional.env'; file.symlink_to('not-generated.env')
@@ -138,7 +138,7 @@ class PersonaServiceEnvFileTests(unittest.TestCase):
         for encoded in (r'%h/profile\x20with\x20spaces', r'%h/profile\040with\040spaces', r'%h/profile with spaces'):
             with self.subTest(encoded=encoded):
                 self.unit.write_text('[Service]\nEnvironmentFile=' + str(file) + '\nUnsetEnvironment="PERSONA_HOME=' + encoded + '"\n')
-                self.assertEqual(self.root(), str(self.home / '.persona'))
+                self.assertEqual(self.root(), str(self.home / 'ignored'))
         self.assertEqual(identity._unit_words(r'PERSONA_HOME=%h/a\x20b'), ['PERSONA_HOME=%h/a b'])
         self.assertEqual(identity._unit_words(r'"PERSONA_HOME=literal\\x20"'), [r'PERSONA_HOME=literal\x20'])
 
@@ -149,7 +149,7 @@ class PersonaServiceEnvFileTests(unittest.TestCase):
         for encoded in (r'%h/caf\xC3\xA9', r'%h/caf\303\251', r'%h/café', r'%h/caf\U000000E9'):
             with self.subTest(encoded=encoded):
                 self.unit.write_text('[Service]\nEnvironmentFile=' + str(file) + '\nUnsetEnvironment="PERSONA_HOME=' + encoded + '"\n')
-                self.assertEqual(self.root(), str(self.home / '.persona'))
+                self.assertEqual(self.root(), str(self.home / 'ignored'))
         self.assertEqual(identity._unit_words(r'"PERSONA_HOME=caf\xC3\xA9"'), ['PERSONA_HOME=café'])
         self.assertEqual(identity._unit_words(r'"PERSONA_HOME=\xF0\x9F\x8C\x9F"'), ['PERSONA_HOME=\U0001f31f'])
         self.assertEqual(identity._unit_words(r'"PERSONA_HOME=literal\\xC3\\xA9"'), [r'PERSONA_HOME=literal\xC3\xA9'])

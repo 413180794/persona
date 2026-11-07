@@ -31,7 +31,8 @@ abstract class WireSerializer<T>(private val generated: KSerializer<T>) : KSeria
 }
 
 private fun alternatives(descriptor: SerialDescriptor, index: Int): List<String> =
-    descriptor.getElementAnnotations(index).filterIsInstance<JsonNames>().flatMap { it.names.asList() }
+    descriptor.getElementAnnotations(index).filterIsInstance<JsonNames>().flatMap { it.names.asList() } +
+        ProtocolCompatibility.fieldAliases(descriptor.getElementName(index))
 
 private fun clean(value: JsonElement, descriptor: SerialDescriptor): JsonElement {
     if (value == JsonNull) {

@@ -110,7 +110,8 @@
       "seen_at": "0001-01-01T00:00:00Z",
       "state_since": "0001-01-01T00:00:00Z",
       "updated_at": "2026-01-02T03:04:05Z",
-      "pending_interactions": 0
+      "pending_interactions": 0,
+      "started_by_jarvis": false
     },
     "expected": {
       "accepted": true,
@@ -319,7 +320,8 @@
       "seen_at": "0001-01-01T00:00:00Z",
       "state_since": "0001-01-01T00:00:00Z",
       "updated_at": "0001-01-01T00:00:00Z",
-      "pending_interactions": 0
+      "pending_interactions": 0,
+      "started_by_jarvis": false
     },
     "expected": {
       "accepted": true,

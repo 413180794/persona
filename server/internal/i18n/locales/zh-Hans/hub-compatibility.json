@@ -1,0 +1,5 @@
+{
+  "admin_session_missing": "请先登录管理后台，再继续。",
+  "header_conflict": "请求中的兼容请求头互相冲突。",
+  "service_conflict": "已安装两套独立的 hub 服务。请先选择要保留的服务，再继续。"
+}

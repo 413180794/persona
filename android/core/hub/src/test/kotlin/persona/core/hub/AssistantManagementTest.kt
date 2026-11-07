@@ -12,7 +12,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import persona.core.hub.ProtocolCompatibilityMockServer as MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 

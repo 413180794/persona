@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import persona.core.contracts.ProtocolCompatibility
+
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
 import android.graphics.Paint
@@ -85,7 +87,7 @@ enum class PersonaDesign(val id: String, @StringRes val titleRes: Int, @StringRe
 
     companion object {
         val Default = Mochi
-        fun fromId(id: String?): PersonaDesign = entries.firstOrNull { it.id == id } ?: Default
+        fun fromId(id: String?): PersonaDesign = entries.firstOrNull { it.id == ProtocolCompatibility.canonicalBuiltin(id) } ?: Default
     }
 }
 

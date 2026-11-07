@@ -4,6 +4,7 @@
 // JSON object of the same protocol. This file is the endpoint: the upgrade, the token, and a minimal RFC 6455 server
 // connection that looks to wire.js like the socket it reads lines from. No dependencies.
 
+import { LEGACY_SUBPROTOCOL } from './compat.js'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
@@ -56,13 +57,14 @@ export function upgrade(req, socket, head, { token }) {
     return null
   }
   const offered = String(req.headers['sec-websocket-protocol'] ?? '').split(',').map((s) => s.trim())
-  if (!offered.includes(SUBPROTOCOL)) {
+  const selected = offered.find((p) => p === SUBPROTOCOL || p === LEGACY_SUBPROTOCOL)
+  if (!selected) {
     refuse(socket, 400, `Subprotocol ${SUBPROTOCOL} required`)
     return null
   }
   const accept = createHash('sha1').update(key + GUID).digest('base64')
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
-    + `Sec-WebSocket-Accept: ${accept}\r\nSec-WebSocket-Protocol: ${SUBPROTOCOL}\r\n\r\n`)
+    + `Sec-WebSocket-Accept: ${accept}\r\nSec-WebSocket-Protocol: ${selected}\r\n\r\n`)
   socket.setNoDelay?.(true)
   socket.setKeepAlive?.(true, 15_000)
   return new WsConnection(socket, head)

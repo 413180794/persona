@@ -1,3 +1,4 @@
+import { focusSource } from "./compatibility";
 // Focus sync between herdr's own client (the full surface) and the page (docs/terminal.md "Focus sync"). herdr's focus is
 // one state shared by all its clients, and it does not say who moved it, so the node attributes each change and the hub
 // tells every view whether the change is its own (server/internal/hub/herdrclient.go). Pure logic here, tested without
@@ -36,7 +37,7 @@ export function parseFocus(msg: Record<string, unknown>): HerdrFocus | null {
   const pane_id = str(msg.pane_id);
   const id = str(msg.id);
   if (!pane_id || !id) return null;
-  const source: FocusSource = msg.source === "client" || msg.source === "persona" ? msg.source : "other";
+  const source: FocusSource = focusSource(msg.source);
   const session_id = str(msg.session_id);
   return {
     id,

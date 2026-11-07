@@ -1,0 +1,129 @@
+// Exact persisted keys, not a prefix rewrite: user keys and message content are never migrated.
+const STORAGE_ALIASES: Record<string, string> = Object.assign(Object.create(null), {
+  "persona.token": "jarvis.token",
+  "persona.tokenId": "jarvis.tokenId",
+  "persona.theme": "jarvis.theme",
+  "persona.agents.prefs": "jarvis.agents.prefs",
+  "persona.agentGrouping": "jarvis.agentGrouping",
+  "persona.agentFilter": "jarvis.agentFilter",
+  "persona.files.view": "jarvis.files.view",
+  "draft:persona-new": "draft:jarvis-new",
+});
+
+export function storedCredentials(store: Storage = localStorage): { token: string; tokenId: string } {
+  const token = store.getItem("persona.token");
+  const id = store.getItem("persona.tokenId");
+  const oldToken = store.getItem(STORAGE_ALIASES["persona.token"]);
+  const oldId = store.getItem(STORAGE_ALIASES["persona.tokenId"]);
+  // An orphan canonical id is not evidence it belongs to the legacy token.
+  if (token === null && id === null && oldToken !== null) {
+    store.setItem("persona.token", oldToken);
+    if (oldToken && oldId !== null) store.setItem("persona.tokenId", oldId);
+    return { token: oldToken, tokenId: oldToken ? oldId ?? "" : "" };
+  }
+  if (token && token === oldToken && id === null && oldId !== null) {
+    store.setItem("persona.tokenId", oldId);
+    return { token, tokenId: oldId };
+  }
+  return { token: token ?? "", tokenId: token ? id ?? "" : "" };
+}
+
+export function storedValue(key: string, store: Storage = localStorage): string | null {
+  if (key === "persona.token" || key === "persona.tokenId") {
+    storedCredentials(store);
+    return store.getItem(key);
+  }
+  const current = store.getItem(key);
+  if (current !== null || !STORAGE_ALIASES[key]) return current;
+  const old = store.getItem(STORAGE_ALIASES[key]);
+  if (old !== null) store.setItem(key, old);
+  return old;
+}
+
+export function storeValue(key: string, value: string, store: Storage = localStorage) {
+  store.setItem(key, value);
+  if (STORAGE_ALIASES[key]) store.setItem(STORAGE_ALIASES[key], value);
+}
+
+export function removeStoredValue(key: string, store: Storage = localStorage) {
+  store.removeItem(key);
+  if (STORAGE_ALIASES[key]) store.removeItem(STORAGE_ALIASES[key]);
+}
+
+/** Credentials are written as one logical pair; changing the token cannot inherit an unrelated token id. */
+export function storeCredentials(token: string, tokenId?: string, store: Storage = localStorage) {
+  const previous = storedCredentials(store);
+  if (!token) {
+    removeStoredValue("persona.token", store);
+    removeStoredValue("persona.tokenId", store);
+    return;
+  }
+  const knownId = tokenId ?? (previous.token === token ? store.getItem("persona.tokenId") : null);
+  if (knownId === null) removeStoredValue("persona.tokenId", store);
+  storeValue("persona.token", token, store);
+  if (knownId !== null) storeValue("persona.tokenId", knownId, store);
+}
+
+// Cross-version identities are transport contracts, never product copy.
+// Baseline: 39a706a338; the naming-only migration did not bump the protocol major.
+export const LEGACY_SCHEME = "jarvis";
+export const APP_SCHEMES = new Set(["persona", LEGACY_SCHEME]);
+export const canonicalAppURL = (url: string): string => url.replace(/^jarvis:\/\//i, "persona://");
+export const isAppLink = (url: string): boolean => APP_SCHEMES.has(/^([a-z]+):\/\//i.exec(url)?.[1]?.toLowerCase() ?? "");
+export const PERSONA_SERVERS = new Set(["persona", "jarvis"]);
+export const CLIENT_HEADERS = ["X-Persona-Client", "X-Jarvis-Client"] as const;
+export const OP_HEADERS = ["X-Persona-Op-Id", "X-Jarvis-Op-Id"] as const;
+export const CSRF_HEADERS = ["X-Persona-CSRF", "X-Jarvis-CSRF"] as const;
+export const CONTEXT_RE = /<(?:persona|jarvis)-context\b([^>]*)>([\s\S]*?)<\/(?:persona|jarvis)-context>/g;
+export const LEAD_CONTEXT_RE = /^\s*<(?:persona|jarvis)-context\b[^>]*>[\s\S]*?<\/(?:persona|jarvis)-context>/;
+export const CONTEXT_CLOSE_RE = /<\s*\/\s*(?:persona|jarvis)-context\s*>/gi;
+export const FILE_RE = /<(?:persona|jarvis)-file\b([^>]*?)\/?>(?:\s*<\/(?:persona|jarvis)-file>)?/g;
+const TOOL_ALIASES: Record<string, string> = { ask_jarvis: "ask_persona", jarvis_settings: "persona_settings" };
+export const canonicalTool = (name: string): string => TOOL_ALIASES[name] ?? name;
+export const managedProvider = (source?: string): boolean => source === "persona" || source === "jarvis";
+export const legacyBuiltins = ["jarvis", "jarvis-circuit", "jarvis-pixel", "jarvis-facet", "jarvis-blob"];
+
+/** Apply only to typed session objects; tool input and message text stay opaque. */
+export function compatibleSession<T extends { started_by_persona?: boolean }>(s: T): T {
+  if (!s || typeof s !== "object") return s;
+  const old = (s as T & { started_by_jarvis?: unknown }).started_by_jarvis;
+  return s.started_by_persona === undefined && typeof old === "boolean" ? { ...s, started_by_persona: old } : s;
+}
+
+/** Normalize REST/session-event envelopes, not arbitrary keys within messages or tool arguments. */
+export function compatibleEnvelope<T>(value: T): T {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const v = value as Record<string, unknown>;
+  if (Array.isArray(v.sessions)) return { ...v, sessions: v.sessions.map(s => compatibleSession(s)) } as T;
+  if (Array.isArray(v.upsert)) return { ...v, upsert: v.upsert.map(s => compatibleSession(s)) } as T;
+  if (Array.isArray(v.looks)) return { ...v, looks: v.looks.map(l => l.source === "builtin" ? { ...l, id: canonicalBuiltin(l.id), app_icon: canonicalBuiltin(l.app_icon) } : l), current: compatibleEnvelope(v.current) } as T;
+  if (typeof v.effective === "string") return { ...v, id: typeof v.id === "string" ? canonicalBuiltin(v.id) : v.id, effective: canonicalBuiltin(v.effective) } as T;
+  if (v.session && typeof v.session === "object") return { ...v, session: compatibleSession(v.session) } as T;
+  return value;
+}
+
+/** Old-default wire spelling, until the target explicitly advertises the new identifiers. */
+export function messageForHub(text: string, features: readonly string[] = hubFeatures): string {
+  if (features.includes("persona_contracts_v1")) return text;
+  return text.replace(/<\s*\/?\s*(?:persona|jarvis)-(?:context|file)\b[^>]*>/gi, tag =>
+    tag.replace(/(^<\s*\/?\s*)persona-(context|file)/i, "$1jarvis-$2")
+      .replace(/(\burl=["'])persona:\/\//g, "$1jarvis://"));
+}
+
+/** Only message submission endpoints contain generated attachment/context markup. */
+export function requestForHub(path: string, json: unknown, features: readonly string[] = hubFeatures): unknown {
+  if (path === "/looks/current" && json && typeof json === "object" && "id" in json && typeof json.id === "string") return { ...json, id: builtinForHub(json.id, features) };
+  if (!json || typeof json !== "object" || Array.isArray(json) || !/(?:\/messages|\/queue|\/fork|\/rewind|\/sessions|\/assistant\/(?:send|conversations))\/?$/.test(path)) return json;
+  const body = { ...json } as Record<string, unknown>;
+  for (const field of ["text", "prompt"]) if (typeof body[field] === "string") body[field] = messageForHub(body[field], features);
+  return body;
+}
+
+let hubFeatures: readonly string[] = [];
+export function setCompatibilityFeatures(features: readonly string[]) { hubFeatures = features; }
+export const assistantPath = (segment: string): boolean => segment === "persona" || segment === "j";
+export const focusSource = (source: unknown): "client" | "persona" | "other" => source === "client" ? "client" : PERSONA_SERVERS.has(String(source)) ? "persona" : "other";
+
+const BUILTIN_ALIASES: Record<string, string> = { jarvis: "persona-visor", "jarvis-circuit": "persona-circuit", "jarvis-pixel": "persona-pixel", "jarvis-facet": "persona-facet", "jarvis-blob": "persona-blob" };
+export const canonicalBuiltin = (id: string): string => BUILTIN_ALIASES[id] ?? id;
+export const builtinForHub = (id: string, features: readonly string[] = hubFeatures): string => features.includes("persona_contracts_v1") ? id : Object.entries(BUILTIN_ALIASES).find(([, value]) => value === id)?.[0] ?? id;

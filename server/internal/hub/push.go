@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"maps"
 	"net"
@@ -664,7 +665,7 @@ func (p *Pusher) ready() bool {
 // Best effort: the system throttles these and never delivers them to a force-quit app. Phones only: the phone_*
 // tools run on the iPhone (a Mac registers as a desktop, docs/mac.md).
 func (p *Pusher) wake(reason string) {
-	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason}, "", "background", "5",
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason, compat.WakeField: reason}, "", "background", "5",
 		func(d Device) bool { return d.Kind != kindMac })
 }
 
@@ -682,7 +683,7 @@ func (p *Pusher) wakeDevices(reason string, ids map[string]bool) {
 		}
 	}
 	p.mu.Unlock()
-	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason}, "", "background", "5",
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "persona_wake": reason, compat.WakeField: reason}, "", "background", "5",
 		func(d Device) bool {
 			return d.Kind != kindMac && (ids[d.DeviceID] || (d.CredentialID != "" && ids[d.CredentialID]) || (!bound && ids["legacy"] && d.CredentialID == "" && d.Kind != "watch"))
 		})

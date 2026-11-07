@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Against the real launchd of this Mac, with a throwaway agent (never com.persona.node or com.jarvis.node: launchd
+// Against the real launchd of this Mac, with a throwaway agent (never either resident-node label: launchd
 // labels do not follow HOME, so the resident node would be the one stopped):
 //
 //	go test -tags launchdlive -run TestLiveLaunchAgentFix ./internal/node/

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/url"
 	"regexp"
 	"slices"
@@ -1481,7 +1482,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			s.logf("bots: command reply: %v", err)
 		}
 	}
-	switch cmd {
+	switch compat.LegacyBotCommand(cmd) {
 	case "/help", "/帮助":
 		reply(feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.help_title"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.help_title")).Markdown(botHelp(l, f)), "")
 	case "/main", "/persona", "/主对话":

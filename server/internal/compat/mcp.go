@@ -1,0 +1,52 @@
+package compat
+
+import "strings"
+
+// EnvironmentMap mirrors only the process-owned values supplied by the caller.
+// Canonical presence wins over a legacy alias, even for an empty value.
+func EnvironmentMap(input map[string]string) map[string]string {
+	out := make(map[string]string, len(input)*2)
+	for key, value := range input {
+		out[key] = value
+	}
+	for key, value := range input {
+		current, legacy := EnvNames(key)
+		if canonical, ok := input[current]; ok {
+			value = canonical
+		}
+		out[current], out[legacy] = value, value
+	}
+	return out
+}
+
+// AddMCPAliases registers the identical built-in handler under both namespaces.
+// Extension namespaces are not cloned, and their permission scopes never change.
+func AddMCPAliases(servers map[string]any) map[string]any {
+	builtin := servers["persona"]
+	if builtin == nil {
+		return servers
+	}
+	if config, ok := builtin.(map[string]any); ok {
+		if env, ok := config["env"].(map[string]string); ok {
+			config["env"] = EnvironmentMap(env)
+		}
+	}
+	servers[MCPServer] = builtin
+	return servers
+}
+func MCPToolNames(tools []string) []string {
+	out := make([]string, 0, len(tools)*2)
+	for _, name := range tools {
+		out = append(out, "mcp__persona__"+name, "mcp__"+MCPServer+"__"+name)
+	}
+	return out
+}
+func CodexMCPAliases(args []string) []string {
+	out := append([]string(nil), args...)
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-c" && strings.HasPrefix(args[i+1], "mcp_servers.persona.") {
+			out = append(out, "-c", strings.Replace(args[i+1], "mcp_servers.persona.", "mcp_servers."+MCPServer+".", 1))
+		}
+	}
+	return out
+}

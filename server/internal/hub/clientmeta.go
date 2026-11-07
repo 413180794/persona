@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"github.com/nwverse/persona/server/internal/compat"
 	"math/rand/v2"
 
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -91,6 +92,7 @@ func (h *Hub) onClientHello(c *client, data []byte) {
 	if !i18n.Valid(i18n.Lang(msg.Locale)) {
 		msg.Locale = c.meta.Locale
 	}
+	c.canonicalContracts.Store(msg.features[compat.Feature])
 	c.meta = msg.clientMeta
 	updates, done := c.meta.updates, c.meta.done
 	c.mu.Unlock()

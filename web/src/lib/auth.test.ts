@@ -11,6 +11,7 @@ vi.mock("./api", () => ({
 }));
 
 import { setToken } from "./api";
+import { storeCredentials } from "./compatibility";
 import { deviceName, pair, pairToken, takeToken } from "./auth";
 
 describe("pairToken", () => {
@@ -40,7 +41,8 @@ describe("pair", () => {
     calls.list = [];
     stored = {};
     vi.mocked(setToken).mockClear();
-    vi.stubGlobal("localStorage", { getItem: (k: string) => stored[k] ?? null, setItem: (k: string, v: string) => void (stored[k] = v) });
+    vi.mocked(setToken).mockImplementation((token, id) => storeCredentials(token, id));
+    vi.stubGlobal("localStorage", { getItem: (k: string) => stored[k] ?? null, setItem: (k: string, v: string) => void (stored[k] = v), removeItem: (k: string) => void delete stored[k] });
     vi.stubGlobal("navigator", { userAgent: "" });
   });
   it("asks for a web device and keeps its id", async () => {
@@ -53,6 +55,7 @@ describe("pair", () => {
   });
   it("has the hub replace the device this browser had before", async () => {
     calls.good = "jp_example";
+    stored["persona.token"] = "jd_previous";
     stored["persona.tokenId"] = "dev_old";
     await pair("jp_example");
     expect(calls.list.find((c) => c.path === "/auth/tokens")?.json?.replaces).toBe("dev_old");
@@ -65,7 +68,7 @@ describe("pair", () => {
       ["/machines", "jp_example"],
       ["/auth/tokens", "jp_example"],
     ]);
-    expect(setToken).toHaveBeenCalledWith("jd_browser");
+    expect(setToken).toHaveBeenCalledWith("jd_browser", "dev1");
   });
   it("keeps a device token without trading it", async () => {
     calls.good = "jd_device";

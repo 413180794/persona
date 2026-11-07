@@ -1,0 +1,5 @@
+{
+  "admin_session_missing": "Sign in to the admin UI to continue.",
+  "header_conflict": "The request contains conflicting compatibility headers.",
+  "service_conflict": "Two independent hub services are installed. Choose the service to retain before continuing."
+}

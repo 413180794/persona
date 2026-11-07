@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"github.com/nwverse/persona/server/internal/compat"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,7 +109,7 @@ func mcpHasRequired(p string, requires []string) bool {
 func assistantMCPServers(cfg []proto.AssistantMCPServer) (servers map[string]any, allow, deny []string) {
 	servers = map[string]any{}
 	for _, s := range cfg {
-		if s.ID == "" || s.ID == "persona" || servers[s.ID] != nil {
+		if s.ID == "" || compat.IsMCPServer(s.ID) || servers[s.ID] != nil {
 			continue
 		}
 		bin := assistantMCPBin(s)

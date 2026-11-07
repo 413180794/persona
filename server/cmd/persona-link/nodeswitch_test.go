@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/update/updatetest"
 )
@@ -732,7 +733,8 @@ func TestKeepLinkWatchesNodeSwitches(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PERSONA_HOME", "")
-	t.Setenv("JARVIS_HOME", "")
+	_, legacyHome := compat.EnvNames("PERSONA_HOME")
+	t.Setenv(legacyHome, "")
 	e := newEnv()
 	_ = os.MkdirAll(e.personaDir(), 0o700)
 	_ = os.WriteFile(e.switchBackup(), []byte("[Service]\nExecStart=\""+filepath.Join(home, "gone")+"\" node --attach\n"), 0o600)

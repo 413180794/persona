@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.ProtocolCompatibility
+
 import okhttp3.HttpUrl
 import okhttp3.Response
 import persona.core.contracts.JsonCodec
@@ -28,17 +30,21 @@ class HttpPersonaPacks internal constructor(
     override suspend fun looks(): LookListing = try {
         request("/api/v1/looks").use {
             if (!it.isSuccessful) throw HubFailure.from(it)
-            JsonCodec.decodeFromString<LookListing>(it.body?.string().orEmpty())
+            JsonCodec.decodeFromString<LookListing>(it.body?.string().orEmpty()).let { listing ->
+                listing.copy(looks = listing.looks.map { look ->
+                    if (look.source == "builtin") look.copy(id = ProtocolCompatibility.canonicalBuiltin(look.id)!!, appIcon = ProtocolCompatibility.canonicalBuiltin(look.appIcon)!!) else look
+                }, current = compatibleLookCurrent(listing.current))
+            }
         }
     } catch (failure: HubFailure) {
         throw if (failure.status == 404) PersonaPacksUnsupported() else failure
     }
 
     override suspend fun choose(id: String, ifUnset: Boolean): LookCurrent = try {
-        val body = buildJsonObject { put("id", id); if (ifUnset) put("if_unset", true) }.toString()
+        val body = buildJsonObject { put("id", ProtocolCompatibility.builtinForHub(id)); if (ifUnset) put("if_unset", true) }.toString()
         send("/api/v1/looks/current", body).use {
             if (!it.isSuccessful) throw HubFailure.from(it)
-            JsonCodec.decodeFromString<LookCurrent>(it.body?.string().orEmpty())
+            compatibleLookCurrent(JsonCodec.decodeFromString<LookCurrent>(it.body?.string().orEmpty()))
         }
     } catch (failure: HubFailure) {
         throw if (failure.status == 404) PersonaPacksUnsupported() else failure

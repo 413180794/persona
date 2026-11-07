@@ -81,7 +81,8 @@ func (e *env) personaDir() string { return identity.DataDir(e.home) }
 func (e *env) configPath() string { return filepath.Join(e.personaDir(), "link.json") }
 func (e *env) logPath() string    { return filepath.Join(e.personaDir(), "link.log") }
 func (e *env) binPath() string {
-	return filepath.Join(e.personaDir(), "bin", e.exeName("persona-link"))
+	dir := filepath.Join(e.personaDir(), "bin")
+	return existingPath(filepath.Join(dir, e.exeName("persona-link")), filepath.Join(dir, e.exeName(legacyLinkBinary)))
 }
 
 // interruptible is a context that ends on Ctrl-C (logs -f).

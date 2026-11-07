@@ -1,14 +1,16 @@
+import { assistantRootName, defaultStateRoot, legacyEnvName } from './compat.js'
 import { lstatSync, mkdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, normalize } from 'node:path'
 
 export function envValue(name, env = process.env) {
-  return env[name.startsWith('PERSONA_') ? name : `PERSONA_${name}`]
+  name = name.startsWith('PERSONA_') ? name : `PERSONA_${name}`
+  return (env[name] || env[legacyEnvName(name)]) ?? env[name]
 }
 
 export function stateDir(home = homedir(), env = process.env) {
   const override = envValue('PERSONA_HOME', env)
-  if (!override) return join(home, '.persona')
+  if (!override) return defaultStateRoot(home)
   return normalize(override === '~' ? home : override.startsWith('~/') ? join(home, override.slice(2)) : isAbsolute(override) ? override : join(home, override))
 }
 
@@ -51,5 +53,5 @@ export function isAssistantDir(cwd, home = homedir(), env = process.env) {
   cwd = normalize(cwd)
   if (basename(cwd) !== 'assistant') return false
   const expected = join(stateDir(home, env), 'assistant')
-  return basename(dirname(cwd)) === '.persona' || cwd === expected || sameDirectory(cwd, expected)
+  return assistantRootName(basename(dirname(cwd))) || cwd === expected || sameDirectory(cwd, expected)
 }

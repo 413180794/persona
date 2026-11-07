@@ -26,7 +26,8 @@ func (e *env) unitPath() string {
 	if base == "" {
 		base = filepath.Join(e.home, ".config")
 	}
-	return filepath.Join(base, "systemd", "user", unitName)
+	dir := filepath.Join(base, "systemd", "user")
+	return existingPath(filepath.Join(dir, unitName), filepath.Join(dir, legacyLinkUnit))
 }
 
 // unitFile is the service. No network-online.target: a user instance has none to wait for, and persona-link retries
@@ -143,6 +144,14 @@ func install(e *env, args []string) error {
 			i = next
 		}
 	}
+	if err := e.installationConflict(false); err != nil {
+		return err
+	}
+	if withNode {
+		if err := e.installationConflict(true); err != nil {
+			return err
+		}
+	}
 	if pairing && (passive || len(addrs) > 0) {
 		return errors.New("--pair（我去连 hub）和 --listen（让 hub 来连）只能选一个")
 	}
@@ -215,12 +224,12 @@ func install(e *env, args []string) error {
 		return err
 	}
 	started := e.now()
-	for _, step := range [][]string{{"daemon-reload"}, {"enable", unitName}, {"restart", unitName}} {
+	for _, step := range [][]string{{"daemon-reload"}, {"enable", e.linkUnitName()}, {"restart", e.linkUnitName()}} {
 		if out, err := e.systemctl(step...); err != nil {
 			return fmt.Errorf("systemctl --user %s 失败：%s", strings.Join(step, " "), orErr(out, err))
 		}
 	}
-	fmt.Fprintf(e.stdout, "装好了 systemd 用户服务 %s（%s），已启动，以后跟着你的 systemd 用户实例启动。\n", unitName, unit)
+	fmt.Fprintf(e.stdout, "装好了 systemd 用户服务 %s（%s），已启动，以后跟着你的 systemd 用户实例启动。\n", e.linkUnitName(), unit)
 	if e.uid == 0 {
 		fmt.Fprintln(e.stdout, "注意：用 root 装的，它以 root 的身份跑、用 /root/.persona；常驻 node 也要在 root 下跑。")
 	}
@@ -254,6 +263,9 @@ func printInvite(e *env, inv *link.PairInvite) {
 	}
 	fmt.Fprintf(e.stdout, "把这条链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」（%s内有效，只能用一次；地址 %s，hub 连不到时在那里改）：\n%s\n",
 		duration(link.PairCodeLife), strings.Join(inv.Addrs, "、"), inv.Link)
+	if inv.LegacyLink != "" {
+		fmt.Fprintln(e.stdout, inv.LegacyLink)
+	}
 }
 
 func (e *env) userOr(fallback string) string {
@@ -385,7 +397,7 @@ func uninstall(e *env, args []string) error {
 	case e.goos != "linux":
 	case fileExists(unit):
 		if why := e.systemdMissing(); why == "" {
-			if out, err := e.systemctl("disable", "--now", unitName); err != nil {
+			if out, err := e.systemctl("disable", "--now", e.linkUnitName()); err != nil {
 				fmt.Fprintf(e.stdout, "停服务时出错：%s\n", orErr(out, err))
 			}
 		} else {
@@ -395,7 +407,7 @@ func uninstall(e *env, args []string) error {
 			return err
 		}
 		_, _ = e.systemctl("daemon-reload")
-		fmt.Fprintf(e.stdout, "停掉并删掉了 systemd 用户服务 %s。\n", unitName)
+		fmt.Fprintf(e.stdout, "停掉并删掉了 systemd 用户服务 %s。\n", e.linkUnitName())
 	default:
 		fmt.Fprintf(e.stdout, "没装 systemd 用户服务（%s 不存在）。\n", unit)
 	}

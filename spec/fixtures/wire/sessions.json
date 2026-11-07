@@ -69,7 +69,8 @@
           "updated_at": "2026-01-02T03:04:05Z",
           "rev": 120,
           "pending_interactions": 1,
-          "suggestion": "继续检查示例"
+          "suggestion": "继续检查示例",
+          "started_by_jarvis": true
         },
         {
           "machine_id": "m1",
@@ -83,7 +84,8 @@
           "seen_at": "0001-01-01T00:00:00Z",
           "state_since": "2026-01-02T03:04:05Z",
           "updated_at": "2026-01-02T03:04:05Z",
-          "pending_interactions": 0
+          "pending_interactions": 0,
+          "started_by_jarvis": false
         }
       ]
     },
@@ -168,7 +170,8 @@
           "updated_at": "2026-01-02T03:04:05Z",
           "rev": 120,
           "pending_interactions": 1,
-          "suggestion": "继续检查示例"
+          "suggestion": "继续检查示例",
+          "started_by_jarvis": true
         },
         {
           "machine_id": "m1",
@@ -182,7 +185,8 @@
           "seen_at": "0001-01-01T00:00:00Z",
           "state_since": "2026-01-02T03:04:05Z",
           "updated_at": "2026-01-02T03:04:05Z",
-          "pending_interactions": 0
+          "pending_interactions": 0,
+          "started_by_jarvis": false
         }
       ],
       "type": "sessions"

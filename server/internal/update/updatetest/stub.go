@@ -43,7 +43,9 @@ func Program(t testing.TB, name, goos, goarch string) string {
 		t.Fatal(err)
 	}
 	out := filepath.Join(t.TempDir(), name)
-	cmd := exec.Command(goBin, "build", "-trimpath", "-o", out, "./cmd/"+name)
+	// The synthetic module has no repository provenance. Ambient fake Git
+	// commands from service tests must not stamp or break this fixture build.
+	cmd := exec.Command(goBin, "build", "-buildvcs=false", "-trimpath", "-o", out, "./cmd/"+name)
 	cmd.Dir = src
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=", "GOWORK=off")
 	if goCache != "" {

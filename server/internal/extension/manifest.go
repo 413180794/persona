@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"net/url"
 	"path"
@@ -284,7 +285,7 @@ const (
 )
 
 // Builtin commands: the hub's own binary (a built-in plugin's).
-var builtinCommands = []string{"personad"}
+var builtinCommands = []string{"personad", compat.DaemonBinary}
 
 // IsBuiltinCommand says whether a runtime command names the hub's own binary.
 func IsBuiltinCommand(c string) bool { return slices.Contains(builtinCommands, c) }
@@ -627,7 +628,7 @@ func checkEnv(at string, env map[string]string) []error {
 		if !envPattern.MatchString(k) {
 			errs = append(errs, fmt.Errorf("%s: %q is not a variable name", at, k))
 		}
-		if strings.HasPrefix(k, "PERSONA_") {
+		if compat.ReservedEnv(k) {
 			errs = append(errs, fmt.Errorf("%s: %q is the hub's to set", at, k))
 		}
 		// The dynamic loader's variables reach the sandbox's own launcher (bwrap, systemd-run, sandbox-exec), which

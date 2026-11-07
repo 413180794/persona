@@ -49,9 +49,20 @@ import kotlin.math.roundToInt
 /** Where each tab's divider was left, as a share of the panes' width; kept on this phone like the style, any pairing. */
 internal class PaneSplitStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("persona-panes", Context.MODE_PRIVATE)
+    private val legacy = context.applicationContext.getSharedPreferences(persona.core.contracts.ProtocolCompatibility.LEGACY_PANE_PREFERENCES, Context.MODE_PRIVATE)
 
-    fun share(tab: AppTab): Float? = prefs.getFloat(key(tab), -1f).takeIf { it > 0f }
-    fun save(tab: AppTab, share: Float) { prefs.edit().putFloat(key(tab), share).apply() }
+    fun share(tab: AppTab): Float? {
+        val key = key(tab)
+        if (!prefs.contains(key)) {
+            val oldKey = persona.core.contracts.ProtocolCompatibility.legacyPaneKey(key)
+            if (legacy.contains(oldKey)) prefs.edit().putFloat(key, legacy.getFloat(oldKey, -1f)).apply()
+        }
+        return prefs.getFloat(key, -1f).takeIf { it > 0f }
+    }
+    fun save(tab: AppTab, share: Float) {
+        prefs.edit().putFloat(key(tab), share).apply()
+        legacy.edit().putFloat(persona.core.contracts.ProtocolCompatibility.legacyPaneKey(key(tab)), share).apply()
+    }
     private fun key(tab: AppTab) = "split.${tab.name.lowercase()}"
 }
 

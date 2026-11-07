@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"net"
 	"net/http"
@@ -369,7 +370,7 @@ func (rh *RuntimeHost) dialDaemon(ctx context.Context, c daemonConfig) (connecte
 	}
 	dctx, cancel := context.WithTimeout(ctx, daemonDialTimeout)
 	ws, resp, err := websocket.Dial(dctx, c.URL, &websocket.DialOptions{HTTPClient: daemonHTTP,
-		HTTPHeader: http.Header{"Authorization": {"Bearer " + token}}, Subprotocols: []string{DaemonSubprotocol}})
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + token}}, Subprotocols: []string{DaemonSubprotocol, compat.RuntimeProtocol}})
 	cancel()
 	if err != nil {
 		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
@@ -380,7 +381,7 @@ func (rh *RuntimeHost) dialDaemon(ctx context.Context, c daemonConfig) (connecte
 		}
 		return false, err
 	}
-	if ws.Subprotocol() != DaemonSubprotocol {
+	if ws.Subprotocol() != DaemonSubprotocol && ws.Subprotocol() != compat.RuntimeProtocol {
 		ws.Close(websocket.StatusPolicyViolation, "expected subprotocol "+DaemonSubprotocol)
 		return false, fmt.Errorf("the endpoint did not answer with subprotocol %s", DaemonSubprotocol)
 	}

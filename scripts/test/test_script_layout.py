@@ -26,10 +26,11 @@ ALIASES = {
 class ScriptLayoutTests(unittest.TestCase):
     def test_top_level_contains_only_shared_tools_and_generic_relocation_entries(self):
         files = {p.name for p in SCRIPTS.iterdir() if p.is_file()}
-        self.assertEqual(files, {"README.md", "persona_config.py", "persona_identity.py", "privacy_check.py", *ALIASES})
+        self.assertEqual(files, {"README.md", "persona_config.py", "persona_identity.py", "privacy_check.py",
+                                 "compatibility-identifiers.json", "jarvis_config.py", *ALIASES})
         directories = {p.name for p in SCRIPTS.iterdir() if p.is_dir() and p.name != "__pycache__"}
         self.assertEqual(directories, {"app", "assets", "deploy", "diag", "gen", "hooks", "i18n", "migrate", "mock", "release", "test"})
-        self.assertFalse((SCRIPTS / (('jar' + 'vis') + '_config.py')).exists())
+        self.assertEqual(os.readlink(SCRIPTS / "jarvis_config.py"), "persona_config.py")
 
     def test_compatibility_entries_preserve_arguments_environment_stdin_and_exit(self):
         for alias, target in ALIASES.items():
@@ -138,8 +139,8 @@ class ScriptLayoutTests(unittest.TestCase):
                     self.assertEqual(result.stdout.strip(), "1234567890")
 
     def test_runtime_cli_has_one_canonical_entry(self):
-        self.assertFalse((SCRIPTS / 'app' / (('jar' + 'vis') + 'ctl.py')).exists())
-        for name in ("personactl.py",):
+        self.assertEqual(os.readlink(SCRIPTS / 'app' / (('jar' + 'vis') + 'ctl.py')), 'personactl.py')
+        for name in ("personactl.py", ('jar' + 'vis') + 'ctl.py'):
             with self.subTest(entry=name):
                 result = subprocess.run([sys.executable, "-I", str(SCRIPTS / "app" / name), "--help"],
                                         capture_output=True, text=True, timeout=15)

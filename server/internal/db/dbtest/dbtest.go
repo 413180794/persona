@@ -56,7 +56,7 @@ func Main(m *testing.M) int {
 		return 1
 	}
 	defer done()
-	_ = os.Setenv(Env, own)
+	_ = identity.Setenv(Env, own)
 	return m.Run()
 }
 

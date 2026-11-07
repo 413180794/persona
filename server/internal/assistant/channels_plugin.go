@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"maps"
 	"net/http"
 	"regexp"
@@ -750,8 +751,8 @@ func stripContext(s string) string {
 
 // contextBlockRe and contextOpenRe are a <persona-context> block.
 var (
-	contextBlockRe = regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`)
-	contextOpenRe  = regexp.MustCompile(`<persona-context\b`)
+	contextBlockRe = regexp.MustCompile(`(?s)<` + compat.ContextPattern() + `\b[^>]*>.*?</` + compat.ContextPattern() + `>`)
+	contextOpenRe  = regexp.MustCompile(`<` + compat.ContextPattern() + `\b`)
 )
 
 func firstNonEmpty(s ...string) string {

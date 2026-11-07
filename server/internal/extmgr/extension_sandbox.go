@@ -395,12 +395,12 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 	runtimeSock := ""
 	if g.AgentRuntimes {
 		runtimeSock = filepath.Join(run, "runtime.sock")
-		s.Env = append(slices.Clone(s.Env), "PERSONA_RUNTIME_SOCKET="+runtimeSock)
+		s.Env = identity.Environment(s.Env, "PERSONA_RUNTIME_SOCKET="+runtimeSock)
 	}
 	hubURL := "http://" + egress.HubHost
-	s.Env = setEnv(s.Env, "PERSONA_HUB_URL", hubURL)
+	s.Env = identity.Environment(s.Env, "PERSONA_HUB_URL="+hubURL)
 	if start := s.StartEnv; start != nil {
-		s.StartEnv = func() []string { return setEnv(start(), "PERSONA_HUB_URL", hubURL) }
+		s.StartEnv = func() []string { return identity.Environment(start(), "PERSONA_HUB_URL="+hubURL) }
 	}
 	if initf := s.Init; initf != nil {
 		s.Init = func(ctx context.Context) (extension.InitializeParams, error) {

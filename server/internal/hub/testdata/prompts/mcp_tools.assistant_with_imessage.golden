@@ -1194,6 +1194,38 @@
     }
   },
   {
+    "name": "jarvis_settings",
+    "description": "Read and change Persona's own settings for the user: their inbox sorting rules, how their inbox items link to their tasks, 关于我 (what you know about them), your default launcher (model), their mail accounts, which Claude Code config directories each machine keeps out of Agents. Start with action list (what there is, what each takes); get reads one. set / add / remove put a card on the user's phone that says what changes (before → after) and nothing changes until they approve; what the card needs filled in, like a mail password, the user types there, so never ask for passwords in the conversation. Change only what the user asked for.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "list",
+            "get",
+            "set",
+            "add",
+            "remove"
+          ],
+          "description": "default list"
+        },
+        "key": {
+          "type": "string",
+          "description": "the setting, from list (inbox.rules, mail.accounts…)"
+        },
+        "value": {
+          "description": "set: the new value; add: the item (each setting's list entry says what)"
+        },
+        "id": {
+          "type": "string",
+          "description": "remove: which item (from get)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "imessage_chats",
     "description": "List the user's iMessage / SMS conversations (the Messages app on their Mac), newest first: each one's name, id, whether it is a group and who is in it, when the last message came, how many are unread and the last message. Only real conversations are listed (someone in the user's contacts, or the user has written there); one-time codes are masked. Use imessage_read with an id to read a conversation, imessage_search to find messages by what they say.",
     "input_schema": {

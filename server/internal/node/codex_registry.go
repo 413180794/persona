@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/identity"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func codexSourceID(home, raw, legacy string) string {
 	if home == legacy {
 		return raw
 	}
-	h := sha256.Sum256([]byte("persona/codex/thread/v1\x00" + home + "\x00" + raw))
+	h := sha256.Sum256([]byte(compat.CodexHashPrefix() + home + "\x00" + raw))
 	// The reserved shape cannot collide with a raw UUID and still satisfies validID.
 	return "c0de-" + hex.EncodeToString(h[:16])
 }

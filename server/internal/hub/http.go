@@ -263,7 +263,7 @@ func (h *Hub) routes() http.Handler {
 // outerLayers are what every request goes through around the routes, outermost first: the auth layer's marks
 // (authMarks: outside gzip, which may hold a response's head back), gzip, the request log, a panic's recovery.
 func (h *Hub) outerLayers(routes http.Handler) http.Handler {
-	return authMarks(gzipResponses(h.logf, logRequests(h, recoverPanics(h, routes))))
+	return authMarks(compatibilityRequests(gzipResponses(h.logf, logRequests(h, recoverPanics(h, routes)))))
 }
 
 // authMarks lets a response carry extwire.HeaderAuthRefused only when the hub's own auth layer refused the request
@@ -932,9 +932,10 @@ func startBudget(async bool) time.Duration {
 // ---- WebSocket ----
 
 type client struct {
-	cancel   context.CancelFunc
-	stopping atomic.Bool
-	dropped  atomic.Bool // closed for falling behind (dropSlow): the close runs once, not once per send that finds it full
+	canonicalContracts atomic.Bool
+	cancel             context.CancelFunc
+	stopping           atomic.Bool
+	dropped            atomic.Bool // closed for falling behind (dropSlow): the close runs once, not once per send that finds it full
 
 	hub            *Hub
 	conn           *websocket.Conn

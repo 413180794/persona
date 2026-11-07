@@ -9,7 +9,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.boolean
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import persona.core.hub.ProtocolCompatibilityMockServer as MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 

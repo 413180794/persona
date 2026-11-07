@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extwire"
 )
@@ -47,7 +48,7 @@ func exampleLooksDir(t *testing.T) string {
 func lookByID(t *testing.T, out map[string]any, id string) map[string]any {
 	t.Helper()
 	for _, l := range out["looks"].([]any) {
-		if m := l.(map[string]any); m["id"] == id {
+		if m := l.(map[string]any); m["id"] == compat.LegacyLook(id) {
 			return m
 		}
 	}

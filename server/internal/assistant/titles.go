@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"github.com/nwverse/persona/server/internal/compat"
 	"regexp"
 	"slices"
 	"strings"
@@ -378,7 +379,7 @@ func parseTitleMax(out string, max int) (kind, topic string, ok bool) {
 	return kind, topic, kind != "" && n > 0 && n <= max
 }
 
-var contextBlock = regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`)
+var contextBlock = regexp.MustCompile(`(?s)<` + compat.ContextPattern() + `\b[^>]*>.*?</` + compat.ContextPattern() + `>`)
 
 var (
 	// A whole tag block a source channel wraps text in (an at mention or font tag from a card, an older node's

@@ -1,5 +1,7 @@
 package persona.android.navigation
 
+import persona.core.contracts.ProtocolCompatibility
+
 import android.net.Uri
 import persona.core.navigation.*
 import java.net.URI
@@ -34,7 +36,7 @@ internal fun Router.open(route: NotificationRoute): ResolvedRoute? {
 /** The notification module's terminal fallback (`target=terminal`); the shell keeps the conversation below it. */
 internal fun terminalLink(link: String): ResolvedRoute? {
     val uri = try { URI(link) } catch (_: URISyntaxException) { return null }
-    if (uri.scheme != "persona" || uri.rawAuthority != "open" || !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
+    if (uri.scheme !in ProtocolCompatibility.appSchemes || uri.rawAuthority != "open" || !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
     val parameters = mutableMapOf<String, String>()
     try {
         for (part in uri.rawQuery.orEmpty().split('&').filter { it.isNotEmpty() }) {

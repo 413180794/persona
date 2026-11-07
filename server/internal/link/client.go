@@ -319,7 +319,7 @@ func race[T any](ctx context.Context, eps []Endpoint, try func(context.Context, 
 // (the apps' link; then the machine is named on the command line).
 func parsePairLink(raw string) (token string, c Config, err error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "persona" || (u.Host != "link" && u.Host != "pair") {
+	if err != nil || !pairScheme(u.Scheme) || (u.Host != "link" && u.Host != "pair") {
 		return "", c, errors.New("这不是 personad hub pair 给的配对链接（persona://link?… 或 persona://pair?…）")
 	}
 	q := u.Query()

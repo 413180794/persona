@@ -66,9 +66,10 @@ LINK_FIXTURE = ('#!/bin/sh\nif [ "$1" = version ]; then printf "link-version\\n"
 
 
 class PersonaInstallTests(unittest.TestCase):
-    def run_install(self, home, initial='fresh', extra=None, corrupt=False, link=None, node=False, answers=None):
+    def run_install(self, home, initial='fresh', extra=None, corrupt=False, link=None,
+                    node=False, answers=None, legacy_artifacts=False, script=INSTALL):
         target = {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()] + '-' + {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
-        name = 'personad-' + target
+        name = (FORMER_NAME + 'd-' if legacy_artifacts else 'personad-') + target
         with tempfile.TemporaryDirectory() as directory:
             downloads = Path(directory)
             data = gzip.compress(b'#!/bin/sh\necho "$*" >> "$HOME/personad-calls"\nif [ "$1" = version ]; then printf "fixture-version\\n"; fi\n', mtime=0)
@@ -77,8 +78,9 @@ class PersonaInstallTests(unittest.TestCase):
             sums = digest + '  ' + name + '.gz\n'
             if link is not None:  # the connector's download, a script that does what `link` says
                 link_data = gzip.compress(link.encode(), mtime=0)
-                (downloads / ('persona-link-' + target + '.gz')).write_bytes(link_data)
-                sums += hashlib.sha256(link_data).hexdigest() + '  persona-link-' + target + '.gz\n'
+                link_name = (FORMER_NAME + '-link-' if legacy_artifacts else 'persona-link-') + target + '.gz'
+                (downloads / link_name).write_bytes(link_data)
+                sums += hashlib.sha256(link_data).hexdigest() + '  ' + link_name + '\n'
             if node:  # the release has persona-node too
                 node_data = gzip.compress(NODE_FIXTURE, mtime=0)
                 (downloads / ('persona-node-' + target + '.gz')).write_bytes(node_data)
@@ -103,9 +105,9 @@ class PersonaInstallTests(unittest.TestCase):
                     env.pop(key, None)
                 env.update(extra or {})
                 if answers is not None:  # with a terminal: install.sh asks, and these answer
-                    code, out = run_with_terminal(['sh', str(INSTALL)], env, answers)
-                    return subprocess.CompletedProcess(['sh', str(INSTALL)], code, out, out)
-                return subprocess.run(['sh', str(INSTALL)], env=env, capture_output=True, text=True, timeout=20)
+                    code, out = run_with_terminal(['sh', str(script)], env, answers)
+                    return subprocess.CompletedProcess(['sh', str(script)], code, out, out)
+                return subprocess.run(['sh', str(script)], env=env, capture_output=True, text=True, timeout=20)
             finally:
                 server.shutdown()
                 server.server_close()
@@ -122,8 +124,8 @@ class PersonaInstallTests(unittest.TestCase):
                 binary = home / '.persona/bin/personad'
                 self.assertTrue(binary.is_file())
                 self.assertFalse(binary.is_symlink())
-                self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
-                self.assertFalse(os.path.lexists(binary.parent / (FORMER_NAME + 'd')))
+                self.assertTrue(os.path.samefile(home / '.persona', home / ('.' + FORMER_NAME)))
+                self.assertEqual(os.readlink(binary.parent / (FORMER_NAME + 'd')), 'personad')
             # Hub setup is safe to repeat on upgrades.
             self.assertEqual((home / 'personad-calls').read_text().count('hub setup\n'), 2)
 
@@ -140,13 +142,67 @@ class PersonaInstallTests(unittest.TestCase):
                 bin_dir = home / '.persona/bin'
                 self.assertTrue((bin_dir / 'persona-link').is_file())
                 self.assertFalse((bin_dir / 'persona-link').is_symlink())
-                self.assertFalse(os.path.lexists(bin_dir / (FORMER_NAME + '-link')))
+                self.assertEqual(os.readlink(bin_dir / (FORMER_NAME + '-link')), 'persona-link')
                 self.assertIn('persona-link link-version installed', result.stdout)
             calls = log.read_text().splitlines()
             self.assertTrue(calls)
             for call in calls:
                 invoked, shown, _ = call.split('|', 2)
                 self.assertEqual((invoked, shown), ('persona-link', ''))
+
+    def test_node_legacy_artifacts_and_custom_script_work_with_or_without_terminal(self):
+        for terminal in (False, True):
+            with self.subTest(terminal=terminal), tempfile.TemporaryDirectory() as directory:
+                home = Path(directory)
+                state = home / ('.' + FORMER_NAME)
+                state.mkdir()
+                script = home / 'custom-install.sh'
+                script.write_bytes(INSTALL.read_bytes())
+                extra = {'PERSONA_ROLE': 'node', 'PERSONA_PAIR': 'persona://link?token=fixture'}
+                answers = None
+                if terminal:
+                    extra = {'PERSONA_ROLE': '', 'PERSONA_ADMIN_ACCESS': ''}
+                    answers = [('跑 hub 吗', 'n'), ('连到你的 hub', ''), ('选哪个？[1-2', '1'), ('粘贴配对链接', '')]
+                result = self.run_install(home, link=LINK_FIXTURE, node=True, answers=answers,
+                                          legacy_artifacts=True, script=script, extra=extra)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue((state / 'bin/persona-node').is_file())
+                self.assertEqual(os.readlink(state / 'bin' / (FORMER_NAME + '-link')), 'persona-link')
+                self.assertTrue(os.path.samefile(state, home / '.persona'))
+                self.assertEqual(self.node_calls(home)[-1], 'node switch')
+                if terminal:
+                    self.assertEqual(os.readlink(state / 'bin' / (FORMER_NAME + 'd')), 'personad')
+
+    def test_publish_fixture_indexes_node_and_compatibility_artifacts(self):
+        import shutil
+        publisher = (ROOT / 'scripts/release/publish.sh').read_text()
+        start = publisher.index('for bin in "$OUT/bin"/personad-*')
+        end = publisher.index('\n\n# The manifest hubs update from:', start)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binaries = root / 'release-fixture/bin'
+            binaries.mkdir(parents=True)
+            scripts = root / 'scripts'
+            scripts.mkdir()
+            shutil.copy2(ROOT / 'scripts/persona_identity.py', scripts / 'persona_identity.py')
+            for name in ('personad-linux-amd64', 'persona-link-linux-amd64', 'persona-node-linux-amd64'):
+                (binaries / name).write_bytes(('fixture ' + name).encode())
+            command = 'set -eu\nOUT=release-fixture\nVERSION=fixture\n' + publisher[start:end]
+            result = subprocess.run(['bash', '-c', command], cwd=root,
+                                    env={'HOME': str(root), 'PATH': '/usr/bin:/bin'},
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            sums = [line.split() for line in (binaries / 'SHA256SUMS').read_text().splitlines()]
+            names = {name for digest, name in sums}
+            self.assertIn('persona-node-linux-amd64.gz', names)
+            for current, old in (('personad', FORMER_NAME + 'd'), ('persona-link', FORMER_NAME + '-link')):
+                current_file = binaries / (current + '-linux-amd64.gz')
+                old_file = binaries / (old + '-linux-amd64.gz')
+                self.assertEqual(current_file.read_bytes(), old_file.read_bytes())
+                self.assertIn(current_file.name, names)
+                self.assertIn(old_file.name, names)
+            for digest, name in sums:
+                self.assertEqual(hashlib.sha256((binaries / name).read_bytes()).hexdigest(), digest)
 
     def node_calls(self, home):
         p = home / 'link-calls'
@@ -247,7 +303,7 @@ class PersonaInstallTests(unittest.TestCase):
                 self.assertEqual((home / '.persona').resolve(), state.resolve())
                 self.assertEqual(json.loads((home / '.persona/hub.json').read_text())['token'], 'fixture-token')
 
-    def test_former_store_and_environment_are_ignored_without_modification(self):
+    def test_former_store_and_environment_are_used_without_moving_data(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             former = home / ('.' + FORMER_NAME)
@@ -257,9 +313,10 @@ class PersonaInstallTests(unittest.TestCase):
             result = self.run_install(home, extra={FORMER_PREFIX + 'HOME': str(former)})
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((home / '.persona/bin/personad').is_file())
-            self.assertFalse((home / '.persona/hub.json').exists())
+            self.assertEqual((home / '.persona/hub.json').read_text(), '{"fixture":"do-not-import"}')
             self.assertEqual(payload.read_text(), '{"fixture":"do-not-import"}')
-            self.assertEqual(list(former.iterdir()), [payload])
+            self.assertEqual(payload.read_text(), '{"fixture":"do-not-import"}')
+            self.assertTrue((former / 'bin/personad').is_file())
             self.assertFalse(former.is_symlink())
 
     def test_custom_profiles_and_current_environment_precedence(self):

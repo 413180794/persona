@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"path"
 	"regexp"
@@ -442,7 +443,7 @@ func (s *Service) healthLaunchers(ctx context.Context, machine string) ([]string
 	}
 	var out []string
 	for _, l := range list {
-		if l.Source == "" || machineSource(l.Source) || l.Source == "persona" {
+		if l.Source == "" || machineSource(l.Source) || compat.Source(l.Source) == "persona" {
 			out = append(out, l.Name)
 		}
 	}

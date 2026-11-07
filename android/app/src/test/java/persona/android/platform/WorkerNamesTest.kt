@@ -32,12 +32,24 @@ class WorkerNamesTest {
         val activity = launchers.single().parentNode.parentNode as Element
         assertEquals("activity", activity.tagName)
         assertEquals(".MainActivity", activity.getAttributeNS(namespace, "name"))
+        val strings = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(File(root, "android/app/src/main/res/values/compatibility.xml")).getElementsByTagName("string")
+        val resources = (0 until strings.length).associate { index ->
+            val element = strings.item(index) as Element
+            element.getAttribute("name") to element.textContent
+        }
         val routes = app.getElementsByTagName("data").let { nodes ->
             (0 until nodes.length).map { nodes.item(it) as Element }
-                .map { it.getAttributeNS(namespace, "scheme") to it.getAttributeNS(namespace, "host") }
+                .map {
+                    val scheme = it.getAttributeNS(namespace, "scheme")
+                    (if (scheme.startsWith("@string/")) resources.getValue(scheme.removePrefix("@string/")) else scheme) to
+                        it.getAttributeNS(namespace, "host")
+                }
                 .filter { it.first.isNotEmpty() }
         }
-        assertEquals(listOf("persona" to "pair", "persona" to "open"), routes)
+        assertEquals(persona.core.contracts.ProtocolCompatibility.appSchemes.flatMap { scheme ->
+            listOf(scheme to "pair", scheme to "open")
+        }, routes)
         assertTrue(activity.getAttributeNS(namespace, "exported").toBoolean())
     }
 

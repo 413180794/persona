@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.ProtocolCompatibility
+
 import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 import persona.core.contracts.JsonCodec
@@ -54,10 +56,10 @@ class HttpAgentCreationService(
         UUID.fromString(operationId)
         // An empty launcher follows the hub's "New Agent" model configuration (docs/model-config.md).
         require(request.machineId.isNotBlank() && request.cwd.isNotBlank())
-        val body = JsonCodec.encodeToString(request).toRequestBody("application/json".toMediaType())
+        val body = compatibleRequestBody("/api/v1/sessions", JsonCodec.encodeToString(request).toRequestBody("application/json".toMediaType()))!!
         // A lost response must be reconciled through operation(), never by posting again.
         val result = try {
-            outcome(read(request("api", "v1", "sessions").header("X-Persona-Op-Id", operationId).post(body).build(), startHttp))
+            outcome(read(request("api", "v1", "sessions").apply { ProtocolCompatibility.operationHeaders(operationId).forEach { (name, value) -> header(name, value) } }.post(body).build(), startHttp))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

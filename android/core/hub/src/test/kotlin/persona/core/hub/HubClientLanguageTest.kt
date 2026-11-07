@@ -8,7 +8,7 @@ import java.security.MessageDigest
 import java.util.Base64
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import persona.core.hub.ProtocolCompatibilityMockServer as MockWebServer
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.Assert.assertEquals

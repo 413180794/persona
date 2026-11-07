@@ -59,7 +59,7 @@ internal class StorageUsage(
             top == "chat-uploads" || top == "chat-captures" -> StorageKind.AppData
             // Held open by something else: an open PDF, a file handed to another app, an update being installed.
             top == "files-pdf" || top == "files-share" || top == "shared" -> StorageKind.AppData
-            top.startsWith("persona-update-") && top.endsWith(".apk") -> StorageKind.AppData
+            persona.core.contracts.ProtocolCompatibility.isUpdateAPK(top) -> StorageKind.AppData
             else -> StorageKind.Other
         }
     }

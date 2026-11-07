@@ -1,0 +1,3 @@
+{
+  "installation_conflict": "已存在两套安装身份（{current} 和 {legacy}）；请先选择要保留的一套，再安装。"
+}

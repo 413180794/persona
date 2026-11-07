@@ -11,6 +11,7 @@
 // `package: {name, hash}` and `onUpdate(offer)` for the runtime SDK (createRuntime's options of the same names) and
 // `log`. start returns `{stop(), busy?(), fetchPackage?(name)}` — createRuntime's stop, busy and fetchPackage.
 
+import { wirePackageName } from './compat.js'
 import { readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -32,7 +33,8 @@ const HASH_DIR = /^[0-9a-f]{64}$/
  *   to look whether the phone still holds a card, and how long at most to wait for it before switching anyway.
  */
 export function createLoader(opts) {
-  const { name, root, entry, store, context = {}, log = () => {} } = opts
+  const { root, entry, store, context = {}, log = () => {} } = opts
+  const name = wirePackageName(opts.name)
   const patterns = opts.patterns ?? PACKAGES[name]
   if (!patterns) throw new Error(`createLoader: unknown package ${name}`)
   const autoUpdate = opts.autoUpdate !== false && typeof store === 'string' && store !== ''

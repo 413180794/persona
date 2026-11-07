@@ -78,8 +78,10 @@ def standard_app(key, value):
 def config_values():
     """The config's values, and the subset that is published on purpose (PUBLIC_KEYS)."""
     out, public = set(), set()
-    paths = {os.path.join(HOME, ".config", brand, "config.json") for brand in ("persona",)}
-    paths.update(os.path.expanduser(os.environ[key]) for key in ("PERSONA_CONFIG",) if os.environ.get(key))
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+    # Scan both profiles, even when only one is selected for deployment.
+    paths = {os.path.join(base, brand, "config.json") for brand in ("persona", "jarvis")}
+    paths.update(os.path.expanduser(os.environ[key]) for key in ("PERSONA_CONFIG", "JARVIS_CONFIG") if os.environ.get(key))
     defaults = example_values()
     for path in paths:
         try:
@@ -119,9 +121,10 @@ def private_looking(span):
 
 def word_list():
     out = set()
-    for brand in ("persona",):
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+    for brand in ("persona", "jarvis"):
         try:
-            with open(os.path.join(HOME, ".config", brand, "private-words.txt")) as source:
+            with open(os.path.join(base, brand, "private-words.txt")) as source:
                 for line in source:
                     line = line.strip()
                     if line and not line.startswith("#"):

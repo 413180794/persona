@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -91,11 +92,8 @@ func (n *Node) guestOf(id string) []string {
 func (n *Node) guestMCPAndTools(id string, tools []string) (mcpJSON string, toolFlags []string) {
 	env := map[string]string{"PERSONA_ASSISTANT": "1", "PERSONA_SESSION_ID": id,
 		"PERSONA_GUEST": "1"}
-	mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"persona": map[string]any{"command": n.bin, "args": []string{"mcp"}, "env": env}}})
-	allowed := make([]string, len(tools))
-	for i, t := range tools {
-		allowed[i] = "mcp__persona__" + t
-	}
+	mcp, _ := json.Marshal(map[string]any{"mcpServers": compat.AddMCPAliases(map[string]any{"persona": map[string]any{"command": n.bin, "args": []string{"mcp"}, "env": env}})})
+	allowed := compat.MCPToolNames(tools)
 	return string(mcp), []string{"--mcp-config", string(mcp), "--strict-mcp-config", "--tools", "", "--allowedTools", strings.Join(allowed, ",")}
 }
 
@@ -104,7 +102,7 @@ func (n *Node) guestMCPAndTools(id string, tools []string) (mcpJSON string, tool
 // hub reports the assistant's directory in (#5505); on the default layouts (~/.persona, ~/.persona) it stays at the
 // path it always had, which Claude Code knows the assistant's sessions and memory by (docs/rename.md).
 func (n *Node) assistantDirOf(rel string) string {
-	if sub, ok := strings.CutPrefix(filepath.ToSlash(rel), ".persona/"); ok && n.customDataDir() {
+	if sub, ok := compat.StateSubpath(filepath.ToSlash(rel)); ok && n.customDataDir() {
 		return filepath.Join(n.dir, filepath.FromSlash(sub))
 	}
 	return filepath.Join(n.home, rel)
@@ -116,5 +114,5 @@ func (n *Node) customDataDir() bool {
 		return false
 	}
 	d := filepath.Clean(n.dir)
-	return d != filepath.Join(n.home, ".persona") && d != filepath.Join(n.home, ".persona")
+	return d != filepath.Join(n.home, ".persona") && d != filepath.Join(n.home, compat.StateDir)
 }

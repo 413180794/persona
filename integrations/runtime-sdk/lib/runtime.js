@@ -4,6 +4,7 @@
 // the "who answers first" policy. A runtime supplies a driver with what only it knows: its sessions, their pages, and
 // how to send to them; it calls back append / stream / ask / sessionsChanged as things happen.
 
+import { defaultListenPathMatches, wirePackageName } from './compat.js'
 import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -95,6 +96,7 @@ export function defaultSocketPath() {
  *   (a new version) passes the same one, so the node takes it for this process reconnecting, not for another process.
  */
 export function createRuntime(driver, options) {
+  if (options?.package) options = { ...options, package: { ...options.package, name: wirePackageName(options.package.name) } }
   if (!options?.runtime) throw new Error('createRuntime: options.runtime (the runtime id) is required')
   const listen = options.listen ? (options.listen === true ? {} : options.listen) : undefined
   const token = options.token ?? listen?.token
@@ -352,7 +354,7 @@ export function createRuntime(driver, options) {
       try {
         pathname = new URL(req.url ?? '/', 'http://localhost').pathname
       } catch {}
-      if (pathname !== path) {
+      if (!defaultListenPathMatches(pathname, path, DEFAULT_LISTEN_PATH)) {
         socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
         return
       }
@@ -862,6 +864,7 @@ export function createRuntime(driver, options) {
      * verifyPackage before using it.
      */
     async fetchPackage(name) {
+      name = wirePackageName(name)
       const p = peer
       if (!p) throw new Error('not connected to the node')
       return p.call('runtime.package', { name }, { timeoutMs: 60_000 })

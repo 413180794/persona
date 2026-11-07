@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"log"
 	"os"
@@ -300,7 +301,7 @@ func (n *Node) isAssistantSession(id string) bool {
 	if st, ok := n.state.get(id); ok && identity.IsAssistantDir(st.Cwd) {
 		return true
 	}
-	if p := n.transcriptPath(id); p != "" && (strings.Contains(filepath.Base(filepath.Dir(p)), "-persona-assistant") ||
+	if p := n.transcriptPath(id); p != "" && (compat.IsAssistantTranscript(filepath.Base(filepath.Dir(p))) ||
 		isAssistantProject(filepath.Base(filepath.Dir(p)), n.assistantProject())) {
 		return true
 	}
@@ -690,7 +691,7 @@ func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolF
 	for name, s := range extra {
 		servers[name] = s
 	}
-	mcp, _ := json.Marshal(map[string]any{"mcpServers": servers})
+	mcp, _ := json.Marshal(map[string]any{"mcpServers": compat.AddMCPAliases(servers)})
 	allow = append(allow, healthReportRules(cwd)...) // healthdeny.go
 	toolFlags = []string{"--mcp-config", string(mcp), "--allowedTools", strings.Join(append([]string{n.assistantTools()}, allow...), ",")}
 	// One --disallowedTools with a word per rule (it takes several, up to the next flag): a path may hold a comma.
@@ -789,6 +790,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		mcpConfig := map[string]any{"mcpServers": map[string]any{"persona": map[string]any{
 			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "PERSONA_SESSION_ID": id},
 		}}}
+		compat.AddMCPAliases(mcpConfig["mcpServers"].(map[string]any))
 		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
 			allowedTools: strings.Join(append([]string{n.assistantTools()}, healthReportRules(cwd)...), ","), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks}
 		var err error

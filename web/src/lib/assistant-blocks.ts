@@ -1,3 +1,4 @@
+import { APP_SCHEMES } from "./compatibility";
 // The assistant's cards in a reply's text (docs/assistant-views.md "Card identity"): where the ```persona-view blocks are and
 // what each one's key is, by the same rules as the hub (sdk/go/wire/assistantblocks.go, the shared vectors in
 // schema/extension/examples/assistant-text/fences.json): standalone CommonMark fences only (backticks or tildes, a
@@ -207,7 +208,7 @@ export function openTarget(target: string): OpenTarget | undefined {
     }
     return u.username || u.password || !u.hostname ? undefined : { kind: "web", url: u.href };
   }
-  if (scheme !== "persona" && scheme !== "persona") return undefined;
+  if (!scheme || !APP_SCHEMES.has(scheme)) return undefined;
   const m = /^[a-z]+:\/\/([^/?#]*)(\/[^?#]*)?$/i.exec(target);
   if (!m || /[@:]/.test(m[1])) return undefined;
   const host = m[1].toLowerCase();

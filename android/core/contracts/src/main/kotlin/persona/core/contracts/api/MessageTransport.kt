@@ -1,5 +1,7 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.ProtocolCompatibility
+
 import persona.core.contracts.HubScope
 import persona.core.contracts.SessionKey
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +19,7 @@ data class MessageRequest(
      */
     val opId: String = clientMessageId,
 ) {
-    val headers: Map<String, String> get() = mapOf("X-Persona-Op-Id" to opId)
+    val headers: Map<String, String> get() = ProtocolCompatibility.operationHeaders(opId)
 }
 
 sealed interface MessageTransportResult {

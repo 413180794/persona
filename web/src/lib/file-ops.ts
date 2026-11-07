@@ -1,3 +1,4 @@
+import { CLIENT_HEADERS } from "./compatibility";
 // Changing a machine's files from the Files panel (#4883, the hub / node side is #4858): upload into a folder, rename,
 // move, move to the trash and put back. Only home is writable there, and not ~/.persona, ~/.persona or ~/Library (the
 // node checks, `read_only`); a delete goes to the system's trash and can be undone, there is no permanent one.
@@ -39,7 +40,7 @@ export function uploadToDir(
     xhr.open("POST", `${BASE}/api/v1/machines/${enc(mid)}/files?${q}`);
     xhr.setRequestHeader("Authorization", `Bearer ${getToken()}`);
     xhr.setRequestHeader("Accept-Language", currentLanguage());
-    xhr.setRequestHeader("X-Persona-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
+    CLIENT_HEADERS.forEach(name => xhr.setRequestHeader(name, `${CLIENT_PLATFORM}/${CLIENT_VERSION}`));
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.upload.onprogress = (e) => opts.onProgress?.(e.loaded, e.lengthComputable ? e.total : file.size);
     xhr.onload = () => {

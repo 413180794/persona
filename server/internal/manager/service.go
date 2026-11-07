@@ -70,11 +70,11 @@ func (e *env) unitPath(id string) string {
 	if base == "" {
 		base = filepath.Join(e.home, ".config")
 	}
-	return filepath.Join(base, "systemd", "user", unitName(id))
+	return filepath.Join(base, "systemd", "user", e.compatUnit(id))
 }
 
 func (e *env) plistPath(id string) string {
-	return filepath.Join(e.home, "Library", "LaunchAgents", launchdLabel(id)+".plist")
+	return filepath.Join(e.home, "Library", "LaunchAgents", e.compatLabel(id)+".plist")
 }
 
 // binary is what the service runs: the hub machine's <data dir>/bin/personad when there is one (install.sh puts it
@@ -195,6 +195,9 @@ func cmdInstall(ctx context.Context, e *env, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := e.checkCompatibleService(c.ID); err != nil {
+		return err
+	}
 	made, err := e.ownDatabase(ctx, dir, c)
 	if err != nil {
 		return err
@@ -214,16 +217,16 @@ func cmdInstall(ctx context.Context, e *env, args []string) error {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, []byte(serviceUnit(c.ID, bin, dir)), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(e.compatUnitText(c.ID, serviceUnit(c.ID, bin, dir))), 0o644); err != nil {
 			return err
 		}
-		for _, step := range [][]string{{"daemon-reload"}, {"enable", unitName(c.ID)}, {"restart", unitName(c.ID)}} {
+		for _, step := range [][]string{{"daemon-reload"}, {"enable", e.compatUnit(c.ID)}, {"restart", e.compatUnit(c.ID)}} {
 			if out, err := e.systemctl(ctx, step...); err != nil {
 				return fmt.Errorf("systemctl --user %s 失败：%s", strings.Join(step, " "), firstLine(out+" "+err.Error()))
 			}
 		}
 		fmt.Fprintf(e.stdout, "装好了：管理者「%s」（%s）是 systemd 用户服务 %s，已经启动。\n  日志：journalctl --user -u %s -f\n",
-			c.Name, c.ID, unitName(c.ID), unitName(c.ID))
+			c.Name, c.ID, e.compatUnit(c.ID), e.compatUnit(c.ID))
 		if e.user != "" && !fileExists("/var/lib/systemd/linger/"+e.user) {
 			fmt.Fprintf(e.stdout, "  没打开 linger：你退出登录后它会停。运行 sudo loginctl enable-linger %s 让它一直运行\n", e.user)
 		}
@@ -233,16 +236,16 @@ func cmdInstall(ctx context.Context, e *env, args []string) error {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, []byte(servicePlist(c.ID, bin, dir, e.home)), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(e.compatLabelText(c.ID, servicePlist(c.ID, bin, dir, e.home))), 0o644); err != nil {
 			return err
 		}
 		domain := "gui/" + strconv.Itoa(e.uid)
-		_, _ = e.run(ctx, "launchctl", "bootout", domain+"/"+launchdLabel(c.ID))
+		_, _ = e.run(ctx, "launchctl", "bootout", domain+"/"+e.compatLabel(c.ID))
 		if out, err := e.run(ctx, "launchctl", "bootstrap", domain, path); err != nil {
 			return fmt.Errorf("launchctl bootstrap 失败：%s", firstLine(out+" "+err.Error()))
 		}
 		fmt.Fprintf(e.stdout, "装好了：管理者「%s」（%s）是 launchd 服务 %s，登录后自动运行。\n  日志：%s\n",
-			c.Name, c.ID, launchdLabel(c.ID), filepath.Join(dir, "manager.log"))
+			c.Name, c.ID, e.compatLabel(c.ID), filepath.Join(dir, "manager.log"))
 		return nil
 	}
 	return fmt.Errorf("%s 上还装不了常驻服务；%s", e.goos, manual)
@@ -298,6 +301,9 @@ func (e *env) uninstallDatabase(ctx context.Context, dir string, c *assistant.Ma
 
 // removeService stops and removes the manager's service; one that was never installed is fine.
 func (e *env) removeService(ctx context.Context, c *assistant.ManagerConfig) error {
+	if err := e.checkCompatibleService(c.ID); err != nil {
+		return err
+	}
 	switch e.goos {
 	case "linux":
 		path := e.unitPath(c.ID)
@@ -305,7 +311,7 @@ func (e *env) removeService(ctx context.Context, c *assistant.ManagerConfig) err
 			fmt.Fprintf(e.stdout, "管理者 %s 没有装成服务（没有 %s）\n", c.ID, path)
 			return nil
 		}
-		_, _ = e.systemctl(ctx, "disable", "--now", unitName(c.ID))
+		_, _ = e.systemctl(ctx, "disable", "--now", e.compatUnit(c.ID))
 		if err := os.Remove(path); err != nil {
 			return err
 		}
@@ -316,7 +322,7 @@ func (e *env) removeService(ctx context.Context, c *assistant.ManagerConfig) err
 			fmt.Fprintf(e.stdout, "管理者 %s 没有装成服务（没有 %s）\n", c.ID, path)
 			return nil
 		}
-		_, _ = e.run(ctx, "launchctl", "bootout", "gui/"+strconv.Itoa(e.uid)+"/"+launchdLabel(c.ID))
+		_, _ = e.run(ctx, "launchctl", "bootout", "gui/"+strconv.Itoa(e.uid)+"/"+e.compatLabel(c.ID))
 		if err := os.Remove(path); err != nil {
 			return err
 		}
@@ -386,16 +392,16 @@ func (e *env) serviceState(ctx context.Context, id string) string {
 		if !fileExists(e.unitPath(id)) {
 			return "没装（personad manager install）"
 		}
-		out, _ := e.systemctl(ctx, "is-active", unitName(id))
-		return unitName(id) + " " + strings.TrimSpace(out)
+		out, _ := e.systemctl(ctx, "is-active", e.compatUnit(id))
+		return e.compatUnit(id) + " " + strings.TrimSpace(out)
 	case "darwin":
 		if !fileExists(e.plistPath(id)) {
 			return "没装（personad manager install）"
 		}
-		if _, err := e.run(ctx, "launchctl", "print", "gui/"+strconv.Itoa(e.uid)+"/"+launchdLabel(id)); err != nil {
-			return launchdLabel(id) + " 没在运行"
+		if _, err := e.run(ctx, "launchctl", "print", "gui/"+strconv.Itoa(e.uid)+"/"+e.compatLabel(id)); err != nil {
+			return e.compatLabel(id) + " 没在运行"
 		}
-		return launchdLabel(id) + " 在运行"
+		return e.compatLabel(id) + " 在运行"
 	}
 	return "这台系统上不装服务"
 }

@@ -1,3 +1,4 @@
+import { CONTEXT_RE, FILE_RE, PERSONA_SERVERS, canonicalTool } from "./compatibility";
 // Items → what the chat shows (docs/ios.md "Display logic"): every user message opens a segment; the segment shows
 // the message, one work row folding the tools / thoughts / notices / intermediate replies, and the agent's last
 // words before the next message as the answer.
@@ -89,14 +90,14 @@ export function mergeItems(have: Item[], batch: Item[]): Item[] {
 }
 
 // Only the canonical persona-context tag is recognized.
-const CONTEXT_RE = /<persona-context\b([^>]*)>([\s\S]*?)<\/persona-context>/g;
+
 const ATTR_RE = /(\w+)="([^"]*)"/g;
 
 function unescapeAttr(s: string) {
   return s.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
-const FILE_RE = /<persona-file\b([^>]*?)\/?>(?:\s*<\/persona-file>)?/g;
+
 
 const VIDEO = ["mp4", "m4v", "mov", "webm", "mkv"];
 const AUDIO = ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"];
@@ -351,7 +352,7 @@ export function toolLabel(name?: string): string {
 /** The MCP server's name as shown: Persona's own server keeps its old id `persona` (allow lists and hooks match it). */
 export function mcpServerLabel(server: string): string {
   const s = server.replace(/^plugin_/, "");
-  return s === "persona" ? "Persona" : s;
+  return PERSONA_SERVERS.has(s) ? "Persona" : s;
 }
 
 /** The server part of mcp__<server>__<tool> ("mcp__<server>" alone for a server-wide request), else null. */
@@ -371,7 +372,7 @@ export function toolDisplayName(name?: string): string {
 }
 
 /** The MCP server ids that are Persona itself (`persona` today, `persona` if it is ever renamed; plugin_ dropped). */
-const PERSONA_SERVERS = new Set(["persona"]);
+
 
 /** Whether a tool is one of Persona's own MCP tools (mcp__persona__agent_read…). */
 export function isPersonaTool(name?: string): boolean {
@@ -432,7 +433,7 @@ const PERSONA_VERB_KEY: Record<string, string> = {
 export function personaToolVerb(name?: string): { verb: string; what?: string } | null {
   if (!isPersonaTool(name)) return null;
   const base = name!.slice(name!.lastIndexOf("__") + 2);
-  const key = PERSONA_VERB_KEY[base];
+  const key = PERSONA_VERB_KEY[canonicalTool(base)];
   if (key) return { verb: t(`lib-turns.${key}`) };
   const family = /^(phone|mail)_(.+)$/.exec(base);
   if (family) return { verb: t(family[1] === "phone" ? "lib-turns.persona_phone" : "lib-turns.persona_mail"), what: family[2].replace(/_/g, " ") };

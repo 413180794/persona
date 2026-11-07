@@ -1,3 +1,4 @@
+import { SNAPSHOT_RE } from '../../runtime-sdk/lib/compat.js'
 // Pure mapping from DSH session events to Persona items (docs/dsh.md "Mapping"). No I/O here: the runtime (dsh.js) pages
 // DSH and hands the events to these functions; the tests feed them recorded event shapes. The generic item helpers
 // (page limits, clipping, one-line summaries) are the runtime SDK's.
@@ -7,7 +8,6 @@ import { appToolName, clipInput, light, snippet } from '../../runtime-sdk/index.
 // The live snapshot the Persona assistant starts each message with (node/assistant_context.go; a bare <persona-context>
 // tag, <persona-context> from older nodes, unlike the phone's quoted context, which carries attributes): context for the
 // model, not shown in the chat.
-const SNAPSHOT_RE = /<persona-context>[\s\S]*?<\/persona-context>\s*/g
 
 /** Persona seq of a DSH event: DSH counts from 0, Persona treats 0 as "nothing yet". */
 export const personaSeq = (dshSeq) => dshSeq + 1

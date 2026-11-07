@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"path"
 	"slices"
@@ -30,7 +31,9 @@ const settingsKey = "assistant"
 
 // assistantRel is this manager's assistant directory on a machine, relative to its home (node assistant.prepare):
 // .persona/assistant for the built-in manager, .persona/assistant-<id> for another (identity.AssistantDirName).
-func (s *Service) assistantRel() string { return path.Join(".persona", identity.AssistantDirName(s.id)) }
+func (s *Service) assistantRel() string {
+	return path.Join(compat.StateDir, identity.AssistantDirName(s.id))
+}
 
 // settingsFresh is how long the settings read from the database are used before they are read again (the assistant
 // writes them itself; another hub sharing the database might too).

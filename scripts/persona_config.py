@@ -16,10 +16,12 @@ import shlex
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from persona_identity import config_path, environment_aliases, LEGACY_PREFIX
 
 
 def path() -> str:
-    return os.path.expanduser(os.environ.get("PERSONA_CONFIG", "~/.config/persona/config.json"))
+    return config_path()
 
 
 def load() -> dict:
@@ -73,6 +75,9 @@ def env(cfg: dict) -> dict:
     # Xcode 27 or later: built with an older one, the app does not reach under the status bar and the camera.
     if cfg.get("xcode") and not os.environ.get("DEVELOPER_DIR"):
         out["DEVELOPER_DIR"] = os.path.join(os.path.expanduser(cfg["xcode"]), "Contents", "Developer")
+    for key, default in list(out.items()):
+        if key.startswith("PERSONA_"):
+            out[LEGACY_PREFIX + key[8:]] = default
     return out
 
 
@@ -141,6 +146,10 @@ def xcconfig(cfg: dict):
         include, ldflags = tunnel_core(cfg)
         f.write("PERSONA_TUNNEL_INCLUDE = %s\n" % include)
         f.write("PERSONA_TUNNEL_LDFLAGS = %s\n" % ldflags)
+        # Existing Xcode projects can consume the generated carrier names without changing account identities.
+        for suffix in ("BUNDLE_ID", "APP_GROUP", "PUSH_RELAY", "APP_ENTITLEMENTS", "GETTING_STARTED_URL",
+                       "META_APP_ID", "META_CLIENT_TOKEN", "TUNNEL_INCLUDE", "TUNNEL_LDFLAGS"):
+            f.write(LEGACY_PREFIX + suffix + " = $(PERSONA_" + suffix + ")\n")
 
 
 def tunnel_core(cfg: dict) -> tuple[str, str]:
@@ -178,6 +187,7 @@ def main():
         generated = env(cfg)
         for k, v in generated.items():
             print(f"export {k}={shlex.quote(v)}")
+        print(environment_aliases(exclude=generated))
     elif args[:1] == ["xcconfig"]:
         xcconfig(cfg)
     elif args[:1] == ["export-options"] and len(args) >= 2:

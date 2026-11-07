@@ -73,7 +73,7 @@ class HttpChatComposerService internal constructor(
         require(message.scope == hubScope)
         if (!readyToSend.value) return MessageTransportResult.NotSent
         val body = buildJsonObject {
-            put("text", message.text)
+            put("text", persona.core.contracts.ProtocolCompatibility.messageForHub(message.text))
             put("client_msg_id", message.opId)
             message.clearDraft?.let { put("clear_draft", it) }
         }.toString().toRequestBody(jsonType)

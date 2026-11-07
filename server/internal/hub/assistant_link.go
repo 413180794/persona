@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -260,7 +261,7 @@ func (h *Hub) appTool(ctx context.Context, from, app string, params json.RawMess
 	}
 	var res string
 	var err error
-	switch app + " " + a.Name {
+	switch app + " " + compat.Tool(a.Name) {
 	case assistantwire.AppSettings + " persona_settings":
 		m := h.localMachine(a.MachineID)
 		if m == nil {

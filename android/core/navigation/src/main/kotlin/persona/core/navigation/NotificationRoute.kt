@@ -1,5 +1,7 @@
 package persona.core.navigation
 
+import persona.core.contracts.ProtocolCompatibility
+
 import android.net.Uri
 
 /** A request card outside any session (`personad ask` in a plain terminal): its machine and id, app-local only. */
@@ -34,8 +36,8 @@ data class NotificationRoute(val tab: AppTab?, val chat: ChatRoute? = null, val 
             card = requestId?.takeIf { it.isNotBlank() && machineId.isNotBlank() }?.let { RequestRef(machineId, it) })
 
         fun parse(uri: Uri): NotificationRoute? {
-            if (uri.scheme != "persona" || uri.host != "open") return null
-            val tab = when (uri.getQueryParameter("tab")) {
+            if (uri.scheme !in ProtocolCompatibility.appSchemes || uri.host != "open") return null
+            val tab = when (ProtocolCompatibility.canonicalTab(uri.getQueryParameter("tab"))) {
                 "persona" -> AppTab.Persona
                 "agents" -> AppTab.Agents
                 null -> null

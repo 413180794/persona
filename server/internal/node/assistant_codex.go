@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"os"
 	"os/exec"
@@ -157,7 +158,7 @@ func (c *codexConn) turn() string {
 // and turn.
 func codexArgs(bin, key string) []string {
 	q := func(s string) string { b, _ := json.Marshal(s); return string(b) } // a JSON string is a TOML basic string
-	return []string{
+	return compat.CodexMCPAliases([]string{
 		"-c", "mcp_servers.persona.command=" + q(bin),
 		"-c", `mcp_servers.persona.args=["mcp"]`,
 		"-c", fmt.Sprintf("mcp_servers.persona.env={PERSONA_ASSISTANT=%s,PERSONA_SESSION_ID=%s}", q("1"), q(key)),
@@ -173,7 +174,7 @@ func codexArgs(bin, key string) []string {
 		"-c", "features.memories=false",
 		// Compact at about 200K like Claude (assistant.go assistantCompactWindow), not near the model's whole window.
 		"-c", "model_auto_compact_token_limit=" + assistantCompactWindow,
-	}
+	})
 }
 
 // codexShell runs the launcher with `codex` turned into `codex <its flags> app-server <ours>`: the launcher's
@@ -857,7 +858,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 		}
 		accept := map[string]any{"action": "accept", "content": map[string]any{}, "_meta": nil}
 		// Persona's own tools run unasked; the hub asks before the ones that act for the user (mail_send, phone writes).
-		if r.ServerName == "persona" || mode == proto.ModeBypass {
+		if compat.IsMCPServer(r.ServerName) || mode == proto.ModeBypass {
 			return accept, nil
 		}
 		ix.ToolName = "mcp__" + r.ServerName

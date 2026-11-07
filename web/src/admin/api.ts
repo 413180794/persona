@@ -1,3 +1,4 @@
+import { CSRF_HEADERS } from "../lib/compatibility";
 // The admin API client (docs/admin.md "API"): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
 import { currentLanguage, t } from "../i18n";
@@ -46,7 +47,7 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(json ?? {});
-    if (csrf) headers["X-Persona-CSRF"] = csrf;
+    if (csrf) CSRF_HEADERS.forEach(name => headers[name] = csrf);
   }
   return answer<T>(await transport(`/api/v1/admin${path}`, { method, headers, body, credentials: "same-origin", cache: "no-store" }));
 }
@@ -55,7 +56,7 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
 // package, docs/admin.md "Extensions"). query carries what the body cannot.
 export async function adminUpload<T>(path: string, file: Blob, query: Record<string, string>): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream", "Accept-Language": currentLanguage() };
-  if (csrf) headers["X-Persona-CSRF"] = csrf;
+  if (csrf) CSRF_HEADERS.forEach(name => headers[name] = csrf);
   const q = new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString();
   return answer<T>(await transport(`/api/v1/admin${path}?${q}`, { method: "POST", headers, body: file, credentials: "same-origin", cache: "no-store" }));
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -449,7 +450,7 @@ func launcherSyncList(zshrc []zshrcLaunchers) []LauncherSync {
 // (the node's list) but the hidden ones, then the managed ones.
 func (s *Service) machineLaunchers(ctx context.Context, machine string) ([]proto.Launcher, error) {
 	var res struct {
-		Launchers []proto.Launcher `json:"launchers"`
+		Launchers []proto.LauncherEnvelope `json:"launchers"`
 	}
 	if err := s.call(ctx, machine, DeviceLaunchersList, map[string]any{}, &res); err != nil {
 		return nil, err
@@ -457,10 +458,12 @@ func (s *Service) machineLaunchers(ctx context.Context, machine string) ([]proto
 	hidden := s.hiddenLaunchers(ctx)
 	managed := s.storedLaunchers(ctx)
 	out := make([]proto.Launcher, 0, len(res.Launchers)+len(managed))
-	for _, l := range res.Launchers {
+	for _, envelope := range res.Launchers {
+		l := proto.Launcher(envelope)
 		if slices.Contains(hidden, l.Name) || slices.ContainsFunc(managed, func(m storedLauncher) bool { return m.Name == l.Name }) {
 			continue
 		}
+		l.Source = compat.Source(l.Source)
 		if l.Source == "" { // a runtime's launcher (node/runtimes.go) keeps its own source, e.g. "dsh"
 			l.Source = "zshrc"
 		}
@@ -1292,7 +1295,7 @@ func (s *Service) providerModels(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		found = true
-		everywhere = everywhere || v.Source == "persona" || len(v.Machines) == 0 // personad launch runs on every machine
+		everywhere = everywhere || compat.Source(v.Source) == "persona" || len(v.Machines) == 0 // personad launch runs on every machine
 		has = append(has, v.Machines...)
 	}
 	if !found {

@@ -64,6 +64,9 @@ func get(ctx context.Context, client *http.Client, url string, limit int64) ([]b
 // size and sha256, what it unpacks to its binary_sha256. A broken download is tried again (3 times in
 // all); anything that does not match is deleted and nothing is left half-written.
 func Download(ctx context.Context, client *http.Client, base string, f File, dir string) (string, error) {
+	if f.Name == "" || filepath.Base(f.Name) != f.Name || strings.ContainsAny(f.Name, `/\`) {
+		return "", errors.New("invalid artifact name")
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -77,10 +80,16 @@ func Download(ctx context.Context, client *http.Client, base string, f File, dir
 			case <-time.After(time.Duration(attempt) * 2 * time.Second):
 			}
 		}
-		if err = fetchFile(ctx, client, strings.TrimSuffix(base, "/")+"/"+f.Name, gz, f); err == nil {
+		for _, name := range artifactNames(f.Name) {
+			err = fetchFile(ctx, client, strings.TrimSuffix(base, "/")+"/"+name, gz, f)
+			if !errors.Is(err, errNotFound) {
+				break
+			}
+		}
+		if err == nil {
 			break
 		}
-		if errors.Is(err, errMismatch) {
+		if errors.Is(err, errMismatch) || errors.Is(err, errNotFound) {
 			return "", err // the file served is not the one in the manifest: trying again will not help
 		}
 	}
@@ -106,6 +115,9 @@ func fetchFile(ctx context.Context, client *http.Client, url, path string, f Fil
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return errNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s: HTTP %d", url, resp.StatusCode)
 	}

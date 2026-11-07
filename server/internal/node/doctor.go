@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"maps"
 	"net"
@@ -74,7 +75,7 @@ type DoctorOptions struct {
 	// ClaudeVersion asks claude's version ("" when unknown).
 	ClaudeVersion func(context.Context) string
 	// LaunchAgent is the resident node's launchd agent on a Mac (NodeLaunchAgentPath; pickNodeLaunchdLabel says which
-	// when a Mac set up before the rename has com.jarvis.node); "" elsewhere, and the launchd-process-type check is
+	// when a Mac keeps its previously installed label); "" elsewhere, and the launchd-process-type check is
 	// left out.
 	LaunchAgent string
 	// LaunchdTarget is that agent as launchctl names it (gui/<uid>/com.persona.node, or the older label).
@@ -195,7 +196,7 @@ func generatedFiles(bin string) ([]generatedFile, error) {
 			out = append(out, generatedFile{Group: kind + "-hooks", Rel: filepath.Join(kind+"-hooks", rel), Content: files[rel]})
 		}
 	}
-	mcp, err := marshalJSON(map[string]any{"mcpServers": map[string]any{"persona": map[string]any{"command": bin, "args": []string{"mcp"}}}})
+	mcp, err := marshalJSON(map[string]any{"mcpServers": compat.AddMCPAliases(map[string]any{"persona": map[string]any{"command": bin, "args": []string{"mcp"}}})})
 	if err != nil {
 		return nil, err
 	}

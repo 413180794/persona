@@ -8,6 +8,10 @@
 // difference is only an upgrade hint.
 package nodeproto
 
+// PersonaContracts is the optional bidirectional naming capability. It does not
+// change the node protocol floor or become a required capability.
+const PersonaContracts = "persona_contracts_v1"
+
 // Version is the node protocol this code speaks. Raise it only for a change an older peer cannot follow (a method
 // whose params or results changed meaning); additions go in as capabilities instead.
 //
@@ -71,4 +75,4 @@ const (
 )
 
 // Announced is what a node built from this code announces.
-var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode, HealthSpaces}
+var Announced = []string{PersonaContracts, Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode, HealthSpaces}

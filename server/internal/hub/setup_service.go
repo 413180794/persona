@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/identity"
 	"html"
 	"io"
 	"os"
@@ -64,32 +65,14 @@ func (e *setupEnv) ownSocketActive(ctx context.Context) bool {
 	if e.goos != "linux" {
 		return false
 	}
-	_, err := e.run(ctx, nil, "systemctl", "--user", "is-active", "--quiet", "personad.socket")
+	_, err := e.run(ctx, nil, "systemctl", "--user", "is-active", "--quiet", e.compatibleHubName("personad.socket"))
 	return err == nil
 }
 
 // hubBinary is <root>/bin/personad, where the units run it from and self-update replaces it; copied from this
 // executable when it is not there yet (personad run from somewhere else), with personad next to it.
 func (e *setupEnv) hubBinary() (string, error) {
-	bin := filepath.Join(e.root, "bin", "personad")
-	if fi, err := os.Stat(bin); err == nil && !fi.IsDir() {
-		return bin, nil
-	}
-	exe, err := e.exe()
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
-		return "", err
-	}
-	if err := copyFile(exe, bin, 0o755); err != nil {
-		return "", err
-	}
-	alias := filepath.Join(e.root, "bin", "personad")
-	if _, err := os.Lstat(alias); os.IsNotExist(err) {
-		_ = os.Symlink("personad", alias)
-	}
-	return bin, nil
+	return e.compatibleHubBinary()
 }
 
 // binaryStamp is where setup notes which <root>/bin/personad the service was last (re)started with.
@@ -196,6 +179,9 @@ func (e *setupEnv) unitDir() string {
 }
 
 func (e *setupEnv) systemctl(ctx context.Context, args ...string) error {
+	for i, name := range args {
+		args[i] = e.compatibleHubName(name)
+	}
 	out, err := e.run(ctx, nil, "systemctl", append([]string{"--user"}, args...)...)
 	if err != nil {
 		if line := setupFirstLine(string(out)); line != "" {
@@ -206,6 +192,10 @@ func (e *setupEnv) systemctl(ctx context.Context, args ...string) error {
 }
 
 func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) error {
+	units, unitErr := e.compatibleHubUnits()
+	if unitErr != nil {
+		return unitErr
+	}
 	if _, err := e.lookPath("systemctl"); err != nil || e.systemctl(ctx, "show-environment") != nil {
 		return e.fail("service", "这台电脑没有 systemd 用户服务（systemctl --user 用不了）",
 			"加 --no-service 重跑，自己让 "+bin+" hub 一直运行（例如 tmux、nohup）")
@@ -214,18 +204,29 @@ func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return e.fail("service", "建不了 "+dir+"："+err.Error(), "检查这个目录的权限")
 	}
-	useSocket := os.Getenv("PERSONA_HUB_SOCKET") != "0"
+	socketChoice, explicitSocket := identity.LookupEnv("PERSONA_HUB_SOCKET")
+	useSocket := socketChoice != "0"
+	if units.legacy && !explicitSocket {
+		_, err := os.Stat(filepath.Join(dir, units.socket))
+		useSocket = err == nil
+	}
 	listens := []string{cfg.Listen}
 	if cfg.Public.TLSListen != "" {
 		listens = append(listens, cfg.Public.TLSListen)
 	}
-	servicePath, socketPath := filepath.Join(dir, "personad.service"), filepath.Join(dir, "personad.socket")
+	servicePath, socketPath := filepath.Join(dir, units.service+".service"), filepath.Join(dir, units.socket)
 	serviceBefore, _ := os.ReadFile(servicePath)
 	socketBefore, _ := os.ReadFile(socketPath)
-	service := hubServiceUnit(e.root, useSocket)
+	service := compatibleUnitText(hubServiceUnit(e.root, useSocket), units)
+	if units.legacy && len(serviceBefore) > 0 {
+		service = string(serviceBefore)
+	}
 	socket := ""
 	if useSocket {
-		socket = hubSocketUnit(listens)
+		socket = compatibleUnitText(hubSocketUnit(listens), units)
+		if units.legacy && sameSocketAddresses(string(socketBefore), listens) {
+			socket = string(socketBefore)
+		}
 	}
 	if err := os.WriteFile(servicePath, []byte(service), 0o644); err != nil {
 		return e.fail("service", "写不了 "+servicePath+"："+err.Error(), "检查这个目录的权限")
@@ -242,7 +243,7 @@ func (e *setupEnv) systemdService(ctx context.Context, cfg *Config, bin string) 
 	socketChanged := string(socketBefore) != socket
 	steps := [][]string{{"daemon-reload"}, {"enable", "personad"}}
 	serviceActive := e.systemctl(ctx, "is-active", "--quiet", "personad") == nil
-	socketActive := e.systemctl(ctx, "is-active", "--quiet", "personad.socket") == nil
+	socketActive := e.systemctl(ctx, "is-active", "--quiet", e.compatibleHubName("personad.socket")) == nil
 	what := "装好了常驻服务（systemd 用户服务 personad，端口归 personad.socket）并启动"
 	switch {
 	case useSocket && (!socketActive || socketChanged):

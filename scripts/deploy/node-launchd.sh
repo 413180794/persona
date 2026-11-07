@@ -10,20 +10,12 @@
 # the node starts runs in the login session and can read the login keychain. Set up for tailcat
 # (`personad node tailcat init`), the resident node is also how the hub reaches the machine when ssh cannot.
 set -euo pipefail
-ROOT="${PERSONA_HOME-}"
-if [ -z "$ROOT" ]; then
-  ROOT="$HOME/.persona"
+if [ -z "${_PERSONA_NODE_UNIT:-}" ]; then
+  _env=$(python3 "$(dirname "${BASH_SOURCE[0]}")/../persona_identity.py" --shell --service node) || exit $?
+  eval "$_env"; unset _env
 fi
-case "$ROOT" in '~') ROOT="$HOME" ;; '~/'*) ROOT="$HOME/${ROOT#\~/}" ;; esac
-case "$ROOT" in /*) ;; *) ROOT="$HOME/$ROOT" ;; esac
-rest="$ROOT"; ROOT=
-while [ -n "$rest" ]; do
-  part="${rest%%/*}"
-  if [ "$rest" = "$part" ]; then rest=; else rest="${rest#*/}"; fi
-  case "$part" in '' | .) ;; ..) ROOT="${ROOT%/*}" ;; *) ROOT="$ROOT/$part" ;; esac
-done
-ROOT="${ROOT:-/}"
-BIN="$ROOT/bin/personad"
+ROOT="$_PERSONA_STATE_DIR"
+BIN="$_PERSONA_NODE_BIN"
 xml_escape() {
   # Not ${value//&/...}: bash 3.2 (macOS /bin/bash) and 5.2 (patsub_replacement) read & and \ in the replacement differently.
   printf '%s' "$1" | LC_ALL=C sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
@@ -35,21 +27,27 @@ systemd_quote() {
 }
 
 if [ "$(uname -s)" = Linux ]; then
-  UNIT=personad-node.service
-  UNIT_FILE="$HOME/.config/systemd/user/$UNIT"
+  UNIT="$_PERSONA_NODE_UNIT.service"
+  UNIT_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$UNIT"
   case "${1:-install}" in
     install)
       [ -x "$BIN" ] || { echo "no $BIN: deploy this machine first (scripts/deploy/deploy.sh)" >&2; exit 1; }
       mkdir -p "$(dirname "$UNIT_FILE")" "$ROOT"
-      cat > "$UNIT_FILE" <<UN
+      TARGET_FILE="$UNIT_FILE"
+      if [ -f "$UNIT_FILE" ]; then
+        TARGET_FILE="$UNIT_FILE.d/90-persona-compat.conf"
+        mkdir -p "$(dirname "$TARGET_FILE")"
+      fi
+      cat > "$TARGET_FILE" <<UN
 [Unit]
 Description=Persona resident node (docs/server.md)
 After=network-online.target
 
 [Service]
+ExecStart=
 ExecStart=$(systemd_quote "${BIN//\$/\$\$}") node --attach
 Environment=$(systemd_quote "PERSONA_HOME=$ROOT")
-Environment=$(systemd_quote "PERSONA_HOME=$ROOT")
+Environment=$(systemd_quote "$_PERSONA_LEGACY_HOME_KEY=$ROOT")
 # The same PATH as the hub's unit (hub-systemd.sh): the node finds herdr, claude and the rest where a hub-started one did.
 Environment=PATH=%h/.local/bin:%h/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
 Restart=always
@@ -74,7 +72,8 @@ UN
       fi ;;
     uninstall)
       systemctl --user disable --now "$UNIT" 2>/dev/null || true
-      rm -f "$UNIT_FILE" "$ROOT/node-attach.sock"
+      rm -f "$UNIT_FILE" "$UNIT_FILE.d/90-persona-compat.conf" "$ROOT/node-attach.sock"
+      rmdir "$UNIT_FILE.d" 2>/dev/null || true
       systemctl --user daemon-reload 2>/dev/null || true
       echo "removed $UNIT" ;;
     *) echo "usage: $0 [install|restart|restart-idle|uninstall]" >&2; exit 2 ;;
@@ -82,7 +81,7 @@ UN
   exit 0
 fi
 
-LABEL=com.persona.node
+LABEL="$_PERSONA_NODE_LABEL"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 # ProcessType Interactive: without it launchd throttles the node and the claude it starts like a background job, and
 # claude may not start in time (#5944). It grants no privacy (TCC) permission. `personad node doctor --fix` adds it to
@@ -92,7 +91,7 @@ case "${1:-install}" in
   install)
     [ -x "$BIN" ] || { echo "no $BIN: deploy this machine first (scripts/deploy/deploy.sh)" >&2; exit 1; }
     mkdir -p "$HOME/Library/LaunchAgents" "$ROOT"
-    cat > "$PLIST" <<PL
+    cat > "$PLIST.new" <<PL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -100,7 +99,7 @@ case "${1:-install}" in
   <key>ProgramArguments</key><array><string>$(xml_escape "$BIN")</string><string>node</string><string>--attach</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>PERSONA_HOME</key><string>$(xml_escape "$ROOT")</string>
-    <key>PERSONA_HOME</key><string>$(xml_escape "$ROOT")</string>
+    <key>$_PERSONA_LEGACY_HOME_KEY</key><string>$(xml_escape "$ROOT")</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -109,6 +108,23 @@ case "${1:-install}" in
   <key>StandardErrorPath</key><string>$(xml_escape "$ROOT/node-attach.log")</string>
 </dict></plist>
 PL
+    python3 - "$PLIST" <<'PY'
+import os, plistlib, sys
+path = sys.argv[1]
+with open(path + '.new', 'rb') as source:
+    updated = plistlib.load(source)
+if os.path.exists(path):
+    with open(path, 'rb') as source:
+        original = plistlib.load(source)
+    values = original.get('EnvironmentVariables', {})
+    values.update(updated['EnvironmentVariables'])
+    original.update(updated)
+    original['EnvironmentVariables'] = values
+    updated = original
+with open(path + '.new', 'wb') as target:
+    plistlib.dump(updated, target)
+os.replace(path + '.new', path)
+PY
     launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
     launchctl bootstrap "$DOMAIN" "$PLIST"
     echo "installed $LABEL" ;;

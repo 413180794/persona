@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"github.com/nwverse/persona/server/internal/compat"
 	"regexp"
 	"strings"
 	"testing"
@@ -94,7 +95,7 @@ func TestHealthSpaceStart(t *testing.T) {
 	}
 	p := f.prepared[len(f.prepared)-1]
 	md, _ := p["claude_md"].(string)
-	if p["dir"] != ".persona/health" || !strings.Contains(md, "# Persona 健康") || strings.Contains(md, "kb_search") {
+	if p["dir"] != compat.StateDir+"/health" || !strings.Contains(md, "# Persona 健康") || strings.Contains(md, "kb_search") {
 		t.Fatalf("assistant.prepare: dir %v, CLAUDE.md %q", p["dir"], md)
 	}
 	if _, err := s.Start(ctx, StartParams{Text: "x", Space: SpaceHealth, Main: true}); err == nil {
@@ -107,7 +108,7 @@ func TestHealthSpaceStart(t *testing.T) {
 	if _, err := s.Start(ctx, StartParams{Text: "今天的会"}); err != nil {
 		t.Fatal(err)
 	}
-	if p := f.prepared[len(f.prepared)-1]; p["dir"] != ".persona/assistant" {
+	if p := f.prepared[len(f.prepared)-1]; p["dir"] != compat.StateDir+"/assistant" {
 		t.Fatalf("assistant's dir %v", p["dir"])
 	}
 }

@@ -1,0 +1,3 @@
+{
+  "installation_conflict": "both installation identities exist ({current} and {legacy}); choose one before installing"
+}

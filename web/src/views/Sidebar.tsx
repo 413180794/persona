@@ -1,3 +1,4 @@
+import { storedValue, storeValue } from "../lib/compatibility";
 // Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
 // is the first entry (the app opens on the assistant); a new conversation and a new agent are the "+" of their sections (#1239).
 import { BASE } from "../lib/base";
@@ -592,7 +593,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   const todosSupported = useStore((s) => s.todosSupported);
   const todosLoaded = useStore((s) => s.todosLoaded);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
-  const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("persona.agentGrouping")));
+  const [grouping, setGrouping] = useState(() => agentGrouping(storedValue("persona.agentGrouping")));
   // the switch-grouping shortcut (lib/sidebar-api.ts)
   useEffect(() => onGrouping(setGrouping), []);
   const availableGroupings = useMemo(() => {
@@ -602,7 +603,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   // a hub without todos shows by machine, a by-todo choice kept for when it has them
   const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
   const chooseGrouping = (g: AgentGrouping) => {
-    localStorage.setItem("persona.agentGrouping", g);
+    storeValue("persona.agentGrouping", g);
     setGrouping(g);
     hover(null);
   };
@@ -613,7 +614,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   const listMenu = useMenu();
   const listLabel = byUpdate ? t("sidebar.list_menu_sorted", { sort: AGENT_SORTS[1].label }) : t("sidebar.list_menu");
   // the quick filter ("All" / "Needs you" / "Unread" / "Working"), stacked on any grouping; what it showed when chosen stays (`kept`)
-  const [filter, setFilter] = useState(() => agentFilter(localStorage.getItem("persona.agentFilter")));
+  const [filter, setFilter] = useState(() => agentFilter(storedValue("persona.agentFilter")));
   const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
   // "botmux" beside the filters (#2786): botmux sessions shown or hidden in this browser
   const [botmuxHidden, setBotmuxHidden] = useState(() => botmuxAndFilter(filter, localStorage.getItem(BOTMUX_HIDDEN_KEY) === "1", "filter").hidden);
@@ -679,7 +680,7 @@ function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, 
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
     if (botmuxAndFilter(f, botmuxHidden, "filter").hidden !== botmuxHidden) saveBotmuxHidden(false);
-    localStorage.setItem("persona.agentFilter", f);
+    storeValue("persona.agentFilter", f);
     setFilter(f);
     setKept(matchingKeys(live, f, mutes));
     hover(null);

@@ -10,13 +10,14 @@
 // (pi reads extensions afresh on reload), so the new code runs in this same process. Installed from anywhere else (a
 // checkout), it never updates itself.
 
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import { envValue } from '../runtime-sdk/lib/identity.js'
 import { selfPackage } from '../runtime-sdk/index.js'
+import { piConfigPath, sharedPiGlobals } from './lib/compat.js'
 import { createPiHost, piWebOf } from './lib/pi.js'
 
 const SELF = selfPackage(import.meta.url, 'persona-pi-runtime')
@@ -24,8 +25,7 @@ const SELF = selfPackage(import.meta.url, 'persona-pi-runtime')
 function config() {
   const dir = process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent')
   try {
-    const current = join(dir, 'persona.json')
-    return JSON.parse(readFileSync(existsSync(current) ? current : join(dir, 'persona.json'), 'utf8'))
+    return JSON.parse(readFileSync(piConfigPath(dir), 'utf8'))
   } catch {
     return {}
   }
@@ -34,6 +34,7 @@ function config() {
 // One host per process and version: pi loads this module once and calls the factory once per session; a reload
 // that brings a new version loads it again, and that version's host takes the process over from the one before.
 function host() {
+  sharedPiGlobals()
   const slot = (globalThis.__personaPi ??= {})
   if (slot.host && slot.hash === SELF.hash) {
     if (slot.host.retired) slot.host.revive() // a switch that brought this same version back
@@ -44,7 +45,7 @@ function host() {
     try {
       globalThis.__personaPiHost.stop()
     } catch {}
-    delete globalThis.__personaPiHost
+    globalThis.__personaPiHost = undefined
   }
   const c = config()
   const web = piWebOf()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"regexp"
 	"sort"
@@ -1584,8 +1585,8 @@ func (s *Service) TodoLink(ctx context.Context, p TodoLinkParams) (TodoLinkResul
 
 // contextLeadRe and contextCloseRe are where a prompt's context block starts and ends (contextOpenRe: channels_plugin.go).
 var (
-	contextLeadRe  = regexp.MustCompile(`^<persona-context\b`)
-	contextCloseRe = regexp.MustCompile(`</persona-context>`)
+	contextLeadRe  = regexp.MustCompile(`^<` + compat.ContextPattern() + `\b`)
+	contextCloseRe = regexp.MustCompile(`</` + compat.ContextPattern() + `>`)
 )
 
 // cleanPromptTitle is a title for an agent from the prompt it was started with: its first line past a

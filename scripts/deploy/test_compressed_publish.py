@@ -185,9 +185,9 @@ class InstallNodeServiceTests(unittest.TestCase):
     def assert_canonical_connector_command(self):
         bin_dir = self.home / ".persona/bin"
         former = 'jar' + 'vis'
-        self.assertFalse(os.path.lexists(bin_dir / (former + '-link')))
-        self.assertFalse(os.path.lexists(bin_dir / (former + 'd')))
-        self.assertFalse(os.path.lexists(self.home / ('.' + former)))
+        self.assertEqual(os.readlink(bin_dir / (former + '-link')), 'persona-link')
+        self.assertEqual(os.readlink(bin_dir / (former + 'd')), 'personad')
+        self.assertTrue(os.path.samefile(self.home / ('.' + former), self.home / '.persona'))
         self.assertFalse((bin_dir / "persona-link").is_symlink())
         for name in ("persona-link",):
             with self.subTest(command=name):

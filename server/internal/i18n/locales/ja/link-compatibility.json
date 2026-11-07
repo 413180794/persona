@@ -1,0 +1,3 @@
+{
+  "installation_conflict": "2つのインストール識別子（{current} と {legacy}）が存在します。インストール前に保持するものを選択してください。"
+}

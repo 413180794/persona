@@ -1,3 +1,4 @@
+import { canonicalAppURL } from "./compatibility";
 // An extension's declarative UI (docs/extensions.md "Declarative UI"): the extension sends a View (a few fixed kinds of items), the
 // web draws it with its own design system, and buttons go back to the extension. No extension code runs here, no extension
 // colors, sizes or icons: a tone becomes one of the theme's role colors. The checks match server/internal/extension/ui.go
@@ -480,7 +481,7 @@ export function tableRows(item: UIItem): string[][] {
  * docs/extensions.md "Inbox items" says); undefined for any other link.
  */
 export function inboxSourceItem(url: string): string | undefined {
-  const m = /^persona:\/\/inbox\/([^/?#]+)\/source$/.exec(url);
+  const m = /^persona:\/\/inbox\/([^/?#]+)\/source$/.exec(canonicalAppURL(url));
   if (!m) return undefined;
   try {
     return decodeURIComponent(m[1]);
@@ -495,7 +496,7 @@ export function inboxSourceItem(url: string): string | undefined {
  * itself (one starting with "-") or one with a "/".
  */
 export function extensionSettingsHref(url: string): string | undefined {
-  const m = /^persona:\/\/settings\/extensions\/([^/?#]+)$/.exec(url);
+  const m = /^persona:\/\/settings\/extensions\/([^/?#]+)$/.exec(canonicalAppURL(url));
   if (!m) return undefined;
   let id: string;
   try {

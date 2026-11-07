@@ -32,7 +32,8 @@ const (
 )
 
 func (e *env) personadBin() string {
-	return filepath.Join(e.personaDir(), "bin", e.exeName(programPersonad))
+	dir := filepath.Join(e.personaDir(), "bin")
+	return existingPath(filepath.Join(dir, e.exeName(programPersonad)), filepath.Join(dir, e.exeName(legacyNodeBinary)))
 }
 func (e *env) personaNodeBin() string {
 	return filepath.Join(e.personaDir(), "bin", e.exeName(programPersonaNode))
@@ -66,10 +67,16 @@ func (e *env) programOf(path string) string {
 	if json.Unmarshal([]byte(strings.TrimSpace(out)), &check) != nil {
 		return ""
 	}
-	if check.Program == "" {
+	return nodeProgramName(check.Program)
+}
+
+// Older nodes omit their program or report the exact legacy daemon identifier.
+// Unknown identifiers stay unknown; a filename is never a program assertion.
+func nodeProgramName(program string) string {
+	if program == "" || program == legacyNodeBinary {
 		return programPersonad
 	}
-	return check.Program
+	return program
 }
 
 // hostsHubOrManager: this computer runs a hub or a manager too (their files are in its data directory). Their services
@@ -154,14 +161,14 @@ func (e *env) retarget(content, from, to string) (string, bool) {
 func (e *env) restartNodeService(file string) error {
 	switch e.goos {
 	case "linux":
-		for _, step := range [][]string{{"daemon-reload"}, {"restart", nodeUnitName}} {
+		for _, step := range [][]string{{"daemon-reload"}, {"restart", e.residentUnitName()}} {
 			if out, err := e.systemctl(step...); err != nil {
 				return fmt.Errorf("systemctl --user %s: %s", strings.Join(step, " "), orErr(out, err))
 			}
 		}
 	case "darwin":
 		domain := "gui/" + strconv.Itoa(e.uid)
-		_, _ = e.command("launchctl", "bootout", domain+"/"+nodeLabel)
+		_, _ = e.command("launchctl", "bootout", domain+"/"+e.residentLabel())
 		// bootstrap right after bootout often fails for a moment (the old job is still going away): try again.
 		var out string
 		var err error
@@ -221,10 +228,7 @@ func pingNode(sock string) (string, error) {
 	if json.Unmarshal(line, &pong) != nil || !pong.OK {
 		return "", fmt.Errorf("not a node's answer: %q", strings.TrimSpace(string(line)))
 	}
-	if pong.Program == "" {
-		return programPersonad, nil // a node from before the program was said
-	}
-	return pong.Program, nil
+	return nodeProgramName(pong.Program), nil
 }
 
 // switchWait is how long node switch waits for the node to answer after a restart (launchd and systemd restart a node

@@ -3,6 +3,7 @@ package hub
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"slices"
 	"strings"
@@ -261,6 +262,7 @@ func (h *Hub) snapshotSessions(c *client, m *Machine) {
 // queue puts b on the client's way out; a client 512 messages behind is dropped (it would miss this one for good
 // now that nothing is sent twice) and resyncs when it reconnects.
 func (c *client) queue(b []byte) {
+	b = compat.ProjectJSON(b, c.canonicalContracts.Load() || c.urlFeatures[compat.Feature])
 	select {
 	case c.out <- b:
 	default:

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/mdns"
 )
 
@@ -27,7 +28,22 @@ func (h *Hub) runDiscovery(ctx context.Context) {
 		adv = &mdns.Service{Instance: h.hubID(), Type: meshService, Host: "persona-" + shortID(h.hubID()), Port: port,
 			TXT: map[string]string{"hub_id": h.hubID(), "name": clip(h.hubName(), 60), "tls": strconv.Itoa(port), "fp": fp, "v": clip(h.version, 60)}}
 	}
-	err := mdns.Run(ctx, mdns.Options{Advertise: adv, Browse: meshService, Found: h.discovered,
+	// Both services carry the same hub identity and pin. Discovery is not trust
+	// or automatic pairing; found results are deduplicated by the existing hub id.
+	var legacyAdv *mdns.Service
+	if adv != nil {
+		copy := *adv
+		copy.Type = compat.DiscoveryService
+		legacyAdv = &copy
+	}
+	discovery := &compatibleDiscovery{publish: h.discovered}
+	go func() {
+		if err := mdns.Run(ctx, mdns.Options{Advertise: legacyAdv, Browse: compat.DiscoveryService, Found: discovery.found(compat.DiscoveryService),
+			Logf: func(format string, args ...any) { h.logf("mdns: "+format, args...) }}); err != nil && ctx.Err() == nil {
+			h.logf("mesh: compatibility discovery off: %v", err)
+		}
+	}()
+	err := mdns.Run(ctx, mdns.Options{Advertise: adv, Browse: meshService, Found: discovery.found(meshService),
 		Logf: func(format string, args ...any) { h.logf("mdns: "+format, args...) }})
 	if err != nil && ctx.Err() == nil {
 		h.logf("mesh: LAN discovery off: %v", err)

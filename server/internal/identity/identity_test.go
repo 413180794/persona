@@ -6,13 +6,18 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/compat"
 )
 
 func cleanRootEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("PERSONA_HOME", "")
-	if err := os.Unsetenv("PERSONA_HOME"); err != nil {
-		t.Fatal(err)
+	current, legacy := compat.EnvNames("PERSONA_HOME")
+	for _, key := range []string{current, legacy} {
+		t.Setenv(key, "")
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -33,14 +38,15 @@ func TestEnvironment(t *testing.T) {
 	if value, ok := LookupEnv("PERSONA_HOME"); value != "" || !ok {
 		t.Fatal("explicit empty values must remain present")
 	}
+	_, legacySession := compat.EnvNames("PERSONA_SESSION_ID")
 	base := []string{"PERSONA_SESSION_ID=wrong", "PERSONA_SESSION_ID=older", "PATH=first", "PATH=second", "invalid"}
 	for _, updates := range [][]string{{"PERSONA_SESSION_ID=right"}, {"PERSONA_SESSION_ID=obsolete", "PERSONA_SESSION_ID=right", "invalid"}} {
-		want := []string{"PERSONA_SESSION_ID=right", "PATH=second"}
+		want := []string{"PERSONA_SESSION_ID=right", "PATH=second", legacySession + "=right"}
 		if got := Environment(base, updates...); !reflect.DeepEqual(got, want) {
 			t.Fatalf("environment: %v", got)
 		}
 	}
-	if got := Environment(base, "PERSONA_SESSION_ID=", "NEW=value=with=equals"); !reflect.DeepEqual(got, []string{"PERSONA_SESSION_ID=", "PATH=second", "NEW=value=with=equals"}) {
+	if got := Environment(base, "PERSONA_SESSION_ID=", "NEW=value=with=equals"); !reflect.DeepEqual(got, []string{"PERSONA_SESSION_ID=", "PATH=second", legacySession + "=", "NEW=value=with=equals"}) {
 		t.Fatalf("empty values or new keys lost: %v", got)
 	}
 	t.Setenv("PERSONA_PERSONA_ID", "avatar")
@@ -121,9 +127,9 @@ func TestStateDirectory(t *testing.T) {
 				t.Fatal("state was overwritten", err)
 			}
 			entries, err := os.ReadDir(home)
-			wantEntries := 1
+			wantEntries := 2 // one store plus its compatibility symlink
 			if scenario == "external" || scenario == "relative-external" {
-				wantEntries = 2
+				wantEntries = 3
 			}
 			if err != nil || len(entries) != wantEntries {
 				t.Fatal("initialization created another state directory", err)
@@ -183,7 +189,12 @@ func TestConcurrentFirstRun(t *testing.T) {
 	}
 	wg.Wait()
 	entries, err := os.ReadDir(home)
-	if err != nil || len(entries) != 1 || entries[0].Name() != ".persona" || !entries[0].IsDir() {
-		t.Fatal("concurrent initialization did not create exactly one real state directory", err)
+	if err != nil || len(entries) != 2 {
+		t.Fatal("concurrent initialization did not create one store and its alias", err)
+	}
+	a, aerr := os.Stat(filepath.Join(home, ".persona"))
+	b, berr := os.Stat(filepath.Join(home, compat.StateDir))
+	if aerr != nil || berr != nil || !os.SameFile(a, b) {
+		t.Fatal("concurrent initialization split state", aerr, berr)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/identity"
 	"io/fs"
 	"os"
@@ -98,15 +99,20 @@ var (
 // Load is the package this personad offers under name: the override directory's when OverrideEnv is set, else the
 // embedded one. nil without an error: this build carries no such package (built without go generate).
 func Load(name string) (*Package, error) {
+	requested := name
+	name = compat.RuntimePackage(name)
 	if !NameRe.MatchString(name) {
 		return nil, fmt.Errorf("bad package name %q", name)
 	}
 	if dir := identity.Getenv(OverrideEnv); dir != "" {
 		root := filepath.Join(dir, name)
 		if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
+			root = filepath.Join(dir, compat.LegacyRuntimePackage(name))
+			if _, err := os.Stat(root); errors.Is(err, fs.ErrNotExist) {
+				return nil, nil
+			}
 		}
-		return read(os.DirFS(root), name)
+		return read(os.DirFS(root), requested)
 	}
 	embeddedOnce.Do(func() {
 		embeddedPkgs = map[string]*Package{}
@@ -135,7 +141,12 @@ func Load(name string) (*Package, error) {
 	if embeddedErr != nil {
 		return nil, embeddedErr
 	}
-	return embeddedPkgs[name], nil
+	if pkg := embeddedPkgs[name]; pkg != nil {
+		copy := *pkg
+		copy.Name = requested
+		return &copy, nil
+	}
+	return nil, nil
 }
 
 // read takes every regular file under fsys as the package's.

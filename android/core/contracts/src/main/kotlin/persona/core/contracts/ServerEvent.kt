@@ -262,7 +262,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
                 require(it.conversation.isNotEmpty() && it.key.isNotEmpty()) { "A block names its conversation and key" }
             }
             "personas" -> input.json.decodeFromJsonElement<PersonasEvent>(obj)
-            "look" -> input.json.decodeFromJsonElement<LookEvent>(obj)
+            "look" -> input.json.decodeFromJsonElement<LookEvent>(obj).let {
+                it.copy(id = ProtocolCompatibility.canonicalBuiltin(it.id)!!, effective = ProtocolCompatibility.canonicalBuiltin(it.effective)!!)
+            }
             "desktops" -> input.json.decodeFromJsonElement<DesktopsEvent>(obj)
             "terminal" -> input.json.decodeFromJsonElement<TerminalEvent>(obj).also { event ->
                 if (!event.streamEnded && (event.epoch == null || event.seq == null || event.frameBytes == null)) {

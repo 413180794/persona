@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extwire"
 )
@@ -63,7 +64,7 @@ func TestRemovedAndUnknownLookChoicesFallBack(t *testing.T) {
 			mux := h.routes()
 			_, out := call(t, mux, "GET", "/api/v1/looks", h.cfg.Token, "")
 			cur := out["current"].(map[string]any)
-			if cur["id"] != id || cur["effective"] != "persona" || cur["updated_at"] != at.Format(time.RFC3339) {
+			if cur["id"] != compat.LegacyLook(id) || cur["effective"] != "persona" || cur["updated_at"] != at.Format(time.RFC3339) {
 				t.Fatalf("saved choice: %v", cur)
 			}
 			t.Logf("GET /api/v1/looks: saved=%s, effective=%s", cur["id"], cur["effective"])

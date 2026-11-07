@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"slices"
 	"strings"
 	"sync"
@@ -25,7 +26,7 @@ import (
 const guestsKey = "assistant.guests"
 
 // guestDir is where guest conversations run, next to the assistant's directory.
-const guestDir = ".persona/guest"
+var guestDir = compat.StateDir + "/guest"
 
 // maxGuestTools bounds guest.tools.
 const maxGuestTools = 8

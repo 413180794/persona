@@ -285,11 +285,12 @@ var ErrNoAddress = errors.New("找不到 hub 能连的本机地址（只有回�
 
 // PairInvite is what `persona-link pair --listen` hands the person: the link for the hub's admin page and what is in it.
 type PairInvite struct {
-	Link    string    `json:"link"`
-	Addrs   []string  `json:"addrs"`
-	FP      string    `json:"fp"`
-	Listen  string    `json:"listen"`
-	Expires time.Time `json:"expires"`
+	Link       string    `json:"link"`
+	LegacyLink string    `json:"legacy_link,omitempty"` // same invitation for baseline hubs
+	Addrs      []string  `json:"addrs"`
+	FP         string    `json:"fp"`
+	Listen     string    `json:"listen"`
+	Expires    time.Time `json:"expires"`
 }
 
 // PairListen switches the link.json at path to passive mode, listening on listen (the one it had, else DefaultListen,
@@ -346,7 +347,8 @@ func PairListen(path, listen string, addrs []string, now time.Time) (*PairInvite
 	if err != nil {
 		return nil, err
 	}
-	return &PairInvite{Link: ConnectorLink(out, fp, code), Addrs: out, FP: fp, Listen: listen, Expires: expires}, nil
+	invite := ConnectorLink(out, fp, code)
+	return &PairInvite{Link: invite, LegacyLink: LegacyPairLink(invite), Addrs: out, FP: fp, Listen: listen, Expires: expires}, nil
 }
 
 // ConnectorLink is the pairing link of passive mode: persona://connector?addr=…[&addr=…]&fp=…&code=…, addresses best first.
@@ -363,7 +365,7 @@ func ConnectorLink(addrs []string, fp, code string) string {
 // ParseConnectorLink reads a link ConnectorLink made: the addresses (host:port, best first), the pin and the code.
 func ParseConnectorLink(raw string) (addrs []string, fp, code string, err error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "persona" || u.Host != "connector" {
+	if err != nil || !pairScheme(u.Scheme) || u.Host != "connector" {
 		return nil, "", "", errors.New("这不是 persona-link pair --listen 给的链接（persona://connector?…）")
 	}
 	q := u.Query()

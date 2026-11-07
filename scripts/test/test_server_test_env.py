@@ -110,7 +110,7 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                 self.assertEqual(Path(child["HOME"]), Path(child["HOME"]).resolve())
                 self.assertEqual({key for key in child if key.startswith(("PERSONA_"))},
                                  {"PERSONA_TEST_DATABASE_URL"})
-                self.assertFalse(any(key.startswith(('jar' + 'vis').upper() + '_') for key in child))
+                self.assertEqual(child['JARVIS_TEST_DATABASE_URL'], child['PERSONA_TEST_DATABASE_URL'])
                 self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).path, "/persona_test")
                 self.assertFalse(any(key.startswith("PG") for key in child))
                 self.assertFalse(any(str(profile) in value for value in child.values()))
@@ -257,7 +257,7 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                     self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).path, "/persona_test")
                     self.assertEqual(urlsplit(child["PERSONA_TEST_DATABASE_URL"]).netloc, "user:synthetic@localhost")
                     self.assertFalse(any(key.startswith("PG") for key in child))
-                    self.assertFalse(any(key.startswith(('jar' + 'vis').upper() + '_') for key in child))
+                    self.assertEqual(child['JARVIS_TEST_DATABASE_URL'], child['PERSONA_TEST_DATABASE_URL'])
                     self.assertNotEqual(child["HOME"], str(remote))
                     self.assertFalse(Path(child["HOME"]).exists())
                     self.assertFalse(any(str(profile) in value for value in child.values()))

@@ -1,3 +1,4 @@
+import { isAppLink } from "../../lib/compatibility";
 // "Linked hubs" (under "Advanced"): other hubs this one links with (docs/plan-hub-mesh.md 2.7) and which of the group is the center
 // (docs/plan-hub-center.md 2). Most people never need it: one hub, the node service on every other computer. A hub
 // without the API answers 501 not_implemented and this page says so.
@@ -394,7 +395,7 @@ function AddPeer({ target, onClose, onJoined }: { target: DiscoveredHub | true |
           <Button tone="quiet" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button tone="primary" busy={busy} disabled={!ok || !/^persona:\/\//.test(code.trim())} onClick={join}>
+          <Button tone="primary" busy={busy} disabled={!ok || !isAppLink(code.trim())} onClick={join}>
             {t("admin-pages-peers.link")}
           </Button>
         </>

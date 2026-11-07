@@ -90,7 +90,7 @@ data class PendingPhoneConfirmation(val token: String, val summary: String)
 
 class PhoneConfirmationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != "persona.phone.confirm") return
+        if (intent.action !in persona.core.contracts.ProtocolCompatibility.phoneConfirmationActions) return
         val token = intent.getStringExtra("token") ?: return
         val allowed = intent.getBooleanExtra("allowed", false)
         if (!allowed) { PhoneConfirmations.callbacks[token]?.invoke(false); return }

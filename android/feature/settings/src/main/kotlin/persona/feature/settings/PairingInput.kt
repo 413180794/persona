@@ -1,5 +1,7 @@
 package persona.feature.settings
 
+import persona.core.contracts.ProtocolCompatibility
+
 import androidx.annotation.StringRes
 import persona.core.contracts.api.*
 import persona.core.domain.Pairing
@@ -13,7 +15,7 @@ import javax.net.ssl.SSLException
 object PairingInput {
     fun parse(link: String): PairingRequest {
         val uri = runCatching { URI(link.trim()) }.getOrNull()
-        if (uri?.scheme != Pairing.scheme || uri?.rawAuthority != "pair") invalid()
+        if (uri?.scheme !in ProtocolCompatibility.appSchemes || uri?.rawAuthority != "pair") invalid()
         val parsed = Pairing.parse(link) ?: invalid()
         val keys = uri.rawQuery.orEmpty().split('&').map { it.substringBefore('=') }
         if (keys.filter { it != "alt" }.groupingBy { it }.eachCount().any { it.value > 1 }) invalid()

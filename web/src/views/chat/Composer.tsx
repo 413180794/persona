@@ -1,3 +1,4 @@
+import { storedValue } from "../../lib/compatibility";
 // Beautiful UI's Prompt Bar, wired to a session: multi-line input, / commands, @ files and sessions, image attachments
 // (paste, drop, pick; click one to mark it up), files uploaded to the session's machine, send — and stop while the
 // agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
@@ -124,7 +125,7 @@ export function Composer({
   /** You typed in the box (not a send putting words back). */
   onEdit?: () => void;
 }) {
-  const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
+  const [draft, setDraft] = useState(() => storedValue(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
   // "Quote" and comments (lib/comments.ts): bars above the input, sent as `> ` blocks in front of the message (lib/drafts.ts)
   const quotes = useQuotes(draftKey).list;
@@ -201,7 +202,7 @@ export function Composer({
 
   // a different conversation: its own draft
   useEffect(() => {
-    setDraft(localStorage.getItem(`draft:${draftKey}`) ?? "");
+    setDraft(storedValue(`draft:${draftKey}`) ?? "");
     releaseAttachments(attsNow.current);
     setAtts([]);
     // not on a touch screen alone: there the focus brings the keyboard up over the conversation just opened

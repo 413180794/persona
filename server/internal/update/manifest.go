@@ -40,12 +40,8 @@ var ProgramNames = []string{"personad-wechat"}
 // program names the program a download belongs to ("personad-wechat-linux-amd64.gz" -> "personad-wechat"), "" for
 // personad's own.
 func program(gz string) string {
-	for _, p := range ProgramNames {
-		if strings.HasPrefix(gz, p+"-") {
-			return p
-		}
-	}
-	return ""
+	prog, _ := artifactIdentity(gz)
+	return prog
 }
 
 // ancestorBytes is how much of each commit id Ancestors keeps: 6 bytes, 12 hex digits. A few KB for a thousand
@@ -127,13 +123,14 @@ func ParseManifest(b []byte) (*Manifest, error) {
 	if m.Build <= 0 || m.Version == "" || len(m.Files) == 0 {
 		return nil, fmt.Errorf("latest.json is missing its version, build or files")
 	}
+	compatiblePrograms(&m)
 	return &m, nil
 }
 
 // BuildManifest describes the downloads in dir: every personad-<os>-<arch>.gz there, and every program's
 // <program>-<os>-<arch>.gz, with its hashes and the hash of what it unpacks to.
 func BuildManifest(dir string, m Manifest) (*Manifest, error) {
-	gzs, err := filepath.Glob(filepath.Join(dir, "personad-*-*.gz"))
+	gzs, err := manifestArtifacts(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -144,21 +141,23 @@ func BuildManifest(dir string, m Manifest) (*Manifest, error) {
 			return nil, err
 		}
 		base := filepath.Base(p)
-		if prog := program(base); prog != "" {
+		prog, platform := artifactIdentity(base)
+		if prog != "" {
 			if m.Programs == nil {
 				m.Programs = map[string]map[string]File{}
 			}
 			if m.Programs[prog] == nil {
 				m.Programs[prog] = map[string]File{}
 			}
-			m.Programs[prog][strings.TrimSuffix(strings.TrimPrefix(base, prog+"-"), ".gz")] = f
+			m.Programs[prog][platform] = f
 			continue
 		}
-		m.Files[strings.TrimSuffix(strings.TrimPrefix(base, "personad-"), ".gz")] = f
+		m.Files[platform] = f
 	}
 	if len(m.Files) == 0 {
 		return nil, fmt.Errorf("no personad-*.gz in %s", dir)
 	}
+	compatiblePrograms(&m)
 	return &m, nil
 }
 

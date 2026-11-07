@@ -1,3 +1,4 @@
+import { assistantSearchPaths } from './compat.js'
 // Persistent stdio JSON-RPC client for `agy acp`.
 import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
@@ -28,7 +29,7 @@ export class AgyAcpClient extends EventEmitter {
 
   async _start() {
     const home = process.env.HOME || '/root'
-    const extraPath = [`${home}/.persona/assistant/.bin`, `${home}/.persona/assistant/.bin`, `${home}/.local/bin`].join(':')
+    const extraPath = assistantSearchPaths(home).join(':')
     const child = spawn(this.bin, this.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PATH: `${extraPath}:${process.env.PATH || ''}` },

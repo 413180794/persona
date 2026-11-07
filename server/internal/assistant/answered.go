@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"github.com/nwverse/persona/server/internal/compat"
 	"regexp"
 	"sort"
 	"strings"
@@ -273,7 +274,7 @@ func toolDisplayName(name string) string {
 	if i := strings.LastIndex(rest, "__"); i > 0 {
 		server, tool = rest[:i], strings.ReplaceAll(rest[i+2:], "_", " ")
 	}
-	if server = strings.TrimPrefix(server, "plugin_"); server == "persona" {
+	if server = strings.TrimPrefix(server, "plugin_"); compat.IsMCPServer(server) {
 		server = "Persona"
 	}
 	if server == "" {

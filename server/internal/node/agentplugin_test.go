@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"github.com/nwverse/persona/server/internal/compat"
 	"os"
 	"path/filepath"
 	"slices"
@@ -69,7 +70,7 @@ func TestAgentPlugin(t *testing.T) {
 // The assistant is allowed Persona's tools and its own copy of the office skill's script, at its exact path.
 func TestAssistantAllowsTheOfficeScript(t *testing.T) {
 	n, home := testNode(t)
-	want := "mcp__persona,Bash(sh " + filepath.Join(identity.AssistantDir(home), ".claude", "skills", "persona-office", "scripts", "office.sh") + " *)"
+	want := assistantAllowedTools + ",mcp__" + compat.MCPServer + ",Bash(sh " + filepath.Join(identity.AssistantDir(home), ".claude", "skills", "persona-office", "scripts", "office.sh") + " *)"
 	if got := n.assistantTools(); got != want {
 		t.Fatalf("%s\nwant %s", got, want)
 	}

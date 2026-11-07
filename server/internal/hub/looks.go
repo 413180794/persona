@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"slices"
 	"strconv"
@@ -254,6 +255,7 @@ func lookCurrentOf(c *lookChoice, looks []lookView) lookCurrent {
 
 // chooseLook stores the choice and tells the apps.
 func (h *Hub) chooseLook(ctx context.Context, id string, looks []lookView) (lookCurrent, error) {
+	id = compat.Looks(id)
 	c := &lookChoice{ID: id, UpdatedAt: time.Now().UTC().Truncate(time.Second)}
 	if err := h.store.PutSetting(ctx, lookKey, c); err != nil {
 		return lookCurrent{}, err
@@ -322,6 +324,7 @@ func (h *Hub) lookRoutes(api *http.ServeMux) {
 				return
 			}
 		}
+		body.ID = compat.Looks(body.ID)
 		if !slices.ContainsFunc(looks, func(v lookView) bool { return v.ID == body.ID }) {
 			writeErr(w, http.StatusNotFound, fmt.Errorf("no look %q", body.ID))
 			return

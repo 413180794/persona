@@ -21,6 +21,9 @@ func pairListen(e *env, listen string, addrs []string) error {
 	}
 	fmt.Fprintln(e.stdout, inv.Link)
 	w := e.stderr
+	// Keep stdout a single canonical URL for pipes; baseline hubs can use the
+	// alternate spelling on stderr. Both redeem the same one-time code.
+	fmt.Fprintln(w, inv.LegacyLink)
 	fmt.Fprintf(w, "这台电脑改成「让 hub 来连」（被动模式）：监听 %s，连接器指纹 %s。\n", inv.Listen, inv.FP)
 	fmt.Fprintf(w, "把上面的链接粘贴到 hub 管理界面「电脑 › 添加电脑 › hub 来连」：%s内有效，只能用一次。\n", duration(link.PairCodeLife))
 	fmt.Fprintf(w, "链接里给 hub 的地址（按顺序试）：%s；hub 连不到这些地址时在那里改，或者这里用 --addr 指定。\n", strings.Join(inv.Addrs, "、"))

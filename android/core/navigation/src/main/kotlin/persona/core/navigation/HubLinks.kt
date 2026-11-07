@@ -49,7 +49,7 @@ object HubLinks {
         return route(parts, query(link.rawQuery))
     }
 
-    private fun route(p: List<String>, query: Map<String, String>): HubPage? = when (p.firstOrNull()) {
+    private fun route(p: List<String>, query: Map<String, String>): HubPage? = when (persona.core.contracts.ProtocolCompatibility.canonicalAssistantPath(p.firstOrNull())) {
         null -> HubPage.Conversation(null)
         "s" -> if (p.size == 3) HubPage.Agent(p[1], p[2], at(query)) else null
         "t" -> when (p.size) {

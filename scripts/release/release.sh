@@ -11,7 +11,8 @@
 # App Store" profiles (create them first with scripts/release/asc_signing.py): the App Manager API key can't cloud-sign.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-eval "$(python3 scripts/persona_config.py env)"
+_env=$(python3 scripts/persona_config.py env) || exit $?
+eval "$_env"; unset _env
 python3 scripts/persona_config.py xcconfig
 echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/config.md)"
 # No private values in what is about to ship from this tree (CLAUDE.md).

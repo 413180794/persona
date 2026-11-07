@@ -2,7 +2,30 @@
 # The hub image's entrypoint (docs/docker.md): run personad as the persona user with the uid / gid the data volume's
 # files should have (PUID / PGID, as NAS images do: the files stay yours in the NAS's file manager).
 set -eu
-DATA="$HOME/.persona"
+# This entry point also accepts deployments configured before the naming cutover.
+for suffix in HOME PUBLIC_URL ADMIN_ACCESS ADMIN_CIDRS; do
+  eval 'current=${PERSONA_'"$suffix"'+x}'
+  eval 'legacy=${JARVIS_'"$suffix"'+x}'
+  if [ "$current" != x ] && [ "$legacy" = x ]; then
+    eval 'value=${JARVIS_'"$suffix"'-}'
+    export "PERSONA_$suffix=$value"
+  fi
+done
+DATA="${PERSONA_HOME:-$HOME/.persona}"
+# An older compose file mounts only the former image home. Prefer that mounted store,
+# not the empty canonical directory built into this image.
+if [ -z "${PERSONA_HOME:-}" ] && grep -q ' /home/jarvis/.jarvis ' /proc/mounts 2>/dev/null; then
+  DATA=/home/jarvis/.jarvis
+  PERSONA_HOME="$DATA"
+fi
+if [ -z "${PERSONA_HOME:-}" ] && { [ -e "$HOME/.jarvis" ] || [ -L "$HOME/.jarvis" ]; }; then
+  if { [ -e "$DATA" ] || [ -L "$DATA" ]; } && [ ! "$DATA" -ef "$HOME/.jarvis" ]; then
+    echo 'independent state directories; set PERSONA_HOME explicitly' >&2; exit 1
+  fi
+  DATA="$HOME/.jarvis"
+fi
+[ ! -L "$DATA" ] || [ -d "$DATA" ] || { echo 'state symlink target unavailable; restore it before upgrading' >&2; exit 1; }
+export PERSONA_HOME="$DATA" JARVIS_HOME="$DATA"
 # TLS port inside the container: compose publishes it as PERSONA_TLS_PORT (18662 unless set).
 TLS_PORT=18662
 
@@ -14,7 +37,7 @@ TLS_PORT=18662
 #   admin.first_setup  "code": in a container any private address counts as LAN, so the first password takes the code
 #   machines  none: the image has no herdr or claude, every computer is added
 seed_config() {
-  for f in "$DATA/hub.json" "$HOME/.persona/hub.json"; do
+  for f in "$DATA/hub.json"; do
     if [ -e "$f" ] || [ -L "$f" ]; then return 0; fi
   done
   mkdir -p "$DATA"

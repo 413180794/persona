@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -29,41 +30,74 @@ type foundHub struct {
 }
 
 // browseHubs listens for hubs for d (tests replace it).
-var browseHubs = func(ctx context.Context, d time.Duration) ([]foundHub, error) {
+var browseHubs = browseCompatibleHubs
+
+var runMDNS = mdns.Run
+
+func browseCompatibleHubs(ctx context.Context, d time.Duration) ([]foundHub, error) {
 	ctx, cancel := context.WithTimeout(ctx, d)
 	defer cancel()
 	var mu sync.Mutex
-	hubs := map[string]foundHub{}
-	err := mdns.Run(ctx, mdns.Options{Browse: hubService, QueryEvery: time.Second, Found: func(e mdns.Entry) {
-		id := e.TXT["hub_id"]
-		if id == "" {
-			return
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		if e.TTL == 0 {
-			delete(hubs, id)
-			return
-		}
-		port := e.Port
-		if p, err := strconv.Atoi(e.TXT["tls"]); err == nil && p > 0 {
-			port = p
-		}
-		h := foundHub{HubID: id, Name: clip(e.TXT["name"], 60), Version: clip(e.TXT["v"], 60)}
-		for _, a := range e.Addrs {
-			if a.Is6() && a.Zone() != "" {
-				continue // link-local: only usable with its interface
-			}
-			h.Addresses = append(h.Addresses, "https://"+net.JoinHostPort(a.Unmap().String(), strconv.Itoa(port)))
-		}
-		slices.SortStableFunc(h.Addresses, func(a, b string) int { return addressRank(a) - addressRank(b) })
-		hubs[id] = h
-	}})
-	if err != nil {
-		return nil, err
+	hubs := map[string]map[string]foundHub{}
+	results := make(chan error, 2)
+	for _, service := range []string{hubService, legacyHubService} {
+		go func() {
+			results <- runMDNS(ctx, mdns.Options{Browse: service, QueryEvery: time.Second, Found: func(e mdns.Entry) {
+				id := e.TXT["hub_id"]
+				if id == "" {
+					return
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if e.TTL == 0 {
+					delete(hubs[service], id)
+					return
+				}
+				port := e.Port
+				if p, err := strconv.Atoi(e.TXT["tls"]); err == nil && p > 0 {
+					port = p
+				}
+				h := foundHub{HubID: id, Name: clip(e.TXT["name"], 60), Version: clip(e.TXT["v"], 60)}
+				for _, a := range e.Addrs {
+					if a.Is6() && a.Zone() != "" {
+						continue // link-local: only usable with its interface
+					}
+					h.Addresses = append(h.Addresses, "https://"+net.JoinHostPort(a.Unmap().String(), strconv.Itoa(port)))
+				}
+				slices.SortStableFunc(h.Addresses, func(a, b string) int { return addressRank(a) - addressRank(b) })
+				if hubs[service] == nil {
+					hubs[service] = map[string]foundHub{}
+				}
+				hubs[service][id] = h
+			}})
+		}()
 	}
-	out := make([]foundHub, 0, len(hubs))
-	for _, h := range hubs {
+	// One unavailable service browser must not hide the other one's results.
+	var errs []error
+	for range 2 {
+		if err := <-results; err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) == 2 {
+		return nil, errors.Join(errs...)
+	}
+	merged := map[string]foundHub{}
+	// Prefer canonical metadata, but keep addresses heard through either name.
+	for _, service := range []string{legacyHubService, hubService} {
+		for id, h := range hubs[service] {
+			old := merged[id]
+			for _, addr := range old.Addresses {
+				if !slices.Contains(h.Addresses, addr) {
+					h.Addresses = append(h.Addresses, addr)
+				}
+			}
+			slices.SortStableFunc(h.Addresses, func(a, b string) int { return addressRank(a) - addressRank(b) })
+			merged[id] = h
+		}
+	}
+	out := make([]foundHub, 0, len(merged))
+	for _, h := range merged {
 		out = append(out, h)
 	}
 	slices.SortFunc(out, func(a, b foundHub) int {

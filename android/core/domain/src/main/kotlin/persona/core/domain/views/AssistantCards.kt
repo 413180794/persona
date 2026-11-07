@@ -1,5 +1,7 @@
 package persona.core.domain.views
 
+import persona.core.contracts.ProtocolCompatibility
+
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -210,7 +212,7 @@ object AssistantOpen {
         if (uri.isOpaque || uri.rawUserInfo != null || uri.host.isNullOrEmpty()) return null
         val scheme = uri.scheme ?: return null
         if (scheme == "https") return AssistantOpenTarget.Web(value)
-        if (scheme != "persona" || uri.rawQuery != null || uri.rawFragment != null || uri.port != -1) return null
+        if (scheme !in ProtocolCompatibility.appSchemes || uri.rawQuery != null || uri.rawFragment != null || uri.port != -1) return null
         val host = uri.host
         val parts = uri.rawPath.orEmpty().removePrefix("/").split('/')
         val decoded = parts.map { part ->

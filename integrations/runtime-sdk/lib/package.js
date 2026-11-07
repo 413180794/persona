@@ -2,6 +2,7 @@
 // personad's (server/internal/runtimepkg). The loader (loader.js) hashes the copy it ships with, keeps the versions the
 // node sends in a store and checks every one before it runs it.
 
+import { addPackageAliases, wirePackageName } from './compat.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, sep } from 'node:path'
@@ -12,12 +13,12 @@ import { fileURLToPath } from 'node:url'
  * Must stay the same as personad's runtimepkg.Packages: a file one side counts and the other does not makes every
  * hello look like another version.
  */
-export const PACKAGES = {
+export const PACKAGES = addPackageAliases({
   'persona-dsh-runtime': ['dsh/package.json', 'dsh/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
   'persona-pi-runtime': ['pi/package.json', 'pi/index.js', 'pi/companion.mjs', 'pi/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
   'persona-paseo-runtime': ['paseo/package.json', 'paseo/bridge.mjs', 'paseo/lib/*.js', 'runtime-sdk/package.json', 'runtime-sdk/index.js', 'runtime-sdk/lib/*.js'],
   'persona-agent-sdk-runtime': ['agent-sdk/package.json', 'agent-sdk/dist/bridge.mjs'],
-}
+})
 
 /** A package name, as personad takes it. */
 export const NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/
@@ -199,6 +200,7 @@ export function installCurrent(store, hash, files) {
  * @returns {{ name: string, root: string, hash: string, store?: string }}
  */
 export function selfPackage(url, name, depth = 1) {
+  name = wirePackageName(name)
   let root = dirname(fileURLToPath(url))
   for (let i = 0; i < depth; i++) root = dirname(root)
   try {

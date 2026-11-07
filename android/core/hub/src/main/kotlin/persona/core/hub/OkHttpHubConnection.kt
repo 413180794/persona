@@ -358,7 +358,7 @@ class OkHttpHubConnection(
         val owner = ownerOf(selected)
         val request = Request.Builder().url(url).apply {
             headers.forEach { (name, value) -> header(name, value) }
-        }.header("Authorization", "Bearer ${owner.token}").method(method, body).build()
+        }.header("Authorization", "Bearer ${owner.token}").method(method, compatibleRequestBody(path, body)).build()
         val client = readTimeoutSeconds?.let { http.client.newBuilder().readTimeout(it, java.util.concurrent.TimeUnit.SECONDS).build() } ?: http.client
         val response = client.newCall(request).awaitResponse(buffered)
         if (!response.isSuccessful) {
@@ -753,7 +753,7 @@ class OkHttpHubConnection(
         // The language the app shows (docs/i18n.md "Protocol"): this socket's notices, and the user's language.
         put("locale", persona.core.contracts.ClientLanguage.tag)
         putJsonArray("features") {
-            (setOf("endpoints", "ws_notify", "app_ping", "elicitation") + config.clientFeatures).forEach { add(it) }
+            (setOf("endpoints", "ws_notify", "app_ping", "elicitation", ProtocolCompatibility.CAPABILITY) + config.clientFeatures).forEach { add(it) }
         }
         if ("heartbeat" in features) {
             putJsonObject("heartbeat") {
@@ -766,7 +766,7 @@ class OkHttpHubConnection(
     /** The socket's URL; with the stream and last broadcast seen, so the hub replays what was missed (#1574). */
     internal fun socketUrl(base: HttpUrl, resumeFrom: Pair<String, Long>?): HttpUrl =
         base.hubUrl("/api/v1/ws").newBuilder().apply {
-            addQueryParameter("features", "sessions_list,extension_ui_stream_v1")
+            addQueryParameter("features", "sessions_list,extension_ui_stream_v1,${ProtocolCompatibility.CAPABILITY}")
             resumeFrom?.let { (stream, seq) ->
                 addQueryParameter("event_stream", stream)
                 addQueryParameter("event_seq", seq.toString())

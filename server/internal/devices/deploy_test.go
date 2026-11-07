@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -71,7 +72,7 @@ func testDeployScript(t *testing.T, shell, bin string) {
 	re := regexp.MustCompile(pattern)
 	personad := filepath.Join(home, ".persona", "bin", "personad")
 	for _, node := range []string{personad + " node --attach", filepath.Join(home, ".persona", "bin", "persona-node") + " node --attach",
-		filepath.Join(home, ".jarvis", "bin", "jarvisd") + " node --attach"} {
+		filepath.Join(home, compat.StateDir, "bin", compat.DaemonBinary) + " node --attach"} {
 		if !re.MatchString(node) {
 			t.Errorf("pkill -f %q does not find the resident node %q", pattern, node)
 		}

@@ -7,7 +7,7 @@ import Testing
 @MainActor struct PersonaSelectionTests {
     private nonisolated static let packID = "nwverse"
 
-    nonisolated static let removed = ["persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob", "spark", "halo", "jarvis-visor", "jarvis-circuit", "unknown"]
+    nonisolated static let removed = ["persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob", "spark", "halo"] + CompatibilityLookFixtures.retiredAliases + ["unknown"]
 
     private final class Icons: AppIconSetting {
         var supportsAlternateIcons = true

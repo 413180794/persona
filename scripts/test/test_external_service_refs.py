@@ -16,6 +16,8 @@ import re
 import subprocess
 import unittest
 
+from compatibility_identifiers import registered_external_ref
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -35,13 +37,14 @@ ALLOWED_IN_FILE = {
 }
 
 
-def hits(text, path=""):
+def hits(text, path="", registry=None):
     """Return (line number, finding) for every external repository reference in text."""
     found = []
     for number, line in enumerate(text.splitlines(), 1):
         for match in REPO_REF.finditer(line):
             name = match.group(1).rstrip(".").lower()
-            if name not in ALLOWED_REPOS and (path, name) not in ALLOWED_IN_FILE:
+            if (name not in ALLOWED_REPOS and (path, name) not in ALLOWED_IN_FILE
+                    and not registered_external_ref(path, match.group(0), registry)):
                 found.append((number, match.group(0)))
         for pattern in (PATH_PLACEHOLDER,):
             found += [(number, match.group(0)) for match in pattern.finditer(line)]

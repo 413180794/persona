@@ -3,6 +3,7 @@ package voice
 import (
 	"context"
 	"encoding/json"
+	"github.com/nwverse/persona/server/internal/compat"
 	"path"
 	"regexp"
 	"slices"
@@ -318,7 +319,7 @@ func permissionKind(tool string) string {
 
 // contextBlock is a block the apps and Persona put in a message for the model (<persona-context>…): not what the
 // user said.
-var contextBlock = regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`)
+var contextBlock = regexp.MustCompile(`(?s)<` + compat.ContextPattern() + `\b[^>]*>.*?</` + compat.ContextPattern() + `>`)
 
 // recentOf is the user's and the agent's words in items (the last turns), made speakable and cut; tool calls in a
 // row are one line of their names (docs/voice.md 4.5: "used Bash").

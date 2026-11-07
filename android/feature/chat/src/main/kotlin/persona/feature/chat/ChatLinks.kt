@@ -1,5 +1,7 @@
 package persona.feature.chat
 
+import persona.core.contracts.ProtocolCompatibility
+
 import android.content.res.Resources
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -93,7 +95,7 @@ internal object ChatLinks {
         val scheme = url.trim().substringBefore(':', "").lowercase()
         return when {
             scheme == "http" || scheme == "https" -> ChatLinkKind.Web
-            scheme == "persona" -> ChatLinkKind.App
+            scheme in ProtocolCompatibility.appSchemes -> ChatLinkKind.App
             scheme.isEmpty() || scheme in refused || !scheme.all { it.isLetterOrDigit() || it == '+' || it == '-' || it == '.' } ->
                 ChatLinkKind.Refused
             else -> ChatLinkKind.External
@@ -102,13 +104,13 @@ internal object ChatLinks {
 
     fun appLink(url: String): ChatAppLink? {
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
-        if (!uri.scheme.equals("persona", ignoreCase = true)) return null
+        if (uri.scheme?.lowercase() !in ProtocolCompatibility.appSchemes) return null
         val path = uri.rawPath.orEmpty().split('/').filter { it.isNotEmpty() }.map { URLDecoder.decode(it, "UTF-8") }
         return when (uri.host?.lowercase()) {
             "session" -> if (path.size >= 2 && path[0].isNotBlank() && path[1].isNotBlank()) ChatAppLink.Session(path[0], path[1]) else null
             "assistant" -> ChatAppLink.Tab("persona")
             "inbox" -> ChatAppLink.Tab("inbox")
-            "tab" -> path.firstOrNull()?.lowercase()?.let { if (it == "assistant") "persona" else it }
+            "tab" -> ProtocolCompatibility.canonicalTab(path.firstOrNull()?.lowercase())?.let { if (it == "assistant") "persona" else it }
                 ?.takeIf { it in setOf("persona", "agents", "inbox") }?.let { ChatAppLink.Tab(it) }
             else -> null // pair, open and anything else: not from a tapped link
         }
@@ -120,7 +122,7 @@ internal object ChatLinks {
      */
     fun allowedIntent(dataScheme: String?, targetPackage: String?, ownPackage: String): Boolean {
         val scheme = dataScheme?.lowercase()
-        if (scheme != null && (scheme == "persona" || scheme == "intent" || scheme in refused)) return false
+        if (scheme != null && (scheme in ProtocolCompatibility.appSchemes || scheme == "intent" || scheme in refused)) return false
         return targetPackage != ownPackage
     }
 

@@ -1,0 +1,965 @@
+{
+  "version": 1,
+  "files": {
+    "apple/PersonaTests/CompatibilityLookFixtures.swift": {
+      "reason": "Test-only negative fixture preserving exact retired look-selection inputs.",
+      "tokens": ["jarvis-circuit", "jarvis-visor"],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "Dockerfile": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        "jarvis",
+        "jarvis-entrypoint",
+        "jarvisd",
+        "jarvisd-"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/app/src/main/res/values/compatibility.xml": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/app/src/test/java/persona/android/ui/ProtocolCompatibilityPanesTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis-panes",
+        "split.jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/contracts/src/main/kotlin/persona/core/contracts/ProtocolCompatibility.kt": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "1jarvis",
+        "1jarvis-",
+        "X-Jarvis-Client",
+        "X-Jarvis-Op-Id",
+        "ask_jarvis",
+        "jarvis",
+        "jarvis-blob",
+        "jarvis-circuit",
+        "jarvis-context",
+        "jarvis-facet",
+        "jarvis-file",
+        "jarvis-panes",
+        "jarvis-pixel",
+        "jarvis-update-",
+        "jarvis.phone.confirm",
+        "jarvis_settings",
+        "split.jarvis",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/contracts/src/test/kotlin/persona/core/contracts/ProtocolCompatibilityTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "X-Jarvis-Op-Id",
+        "ask_jarvis",
+        "jarvis",
+        "jarvis-circuit",
+        "jarvis-context",
+        "jarvis-file",
+        "jarvis_settings",
+        "mcp__jarvis__agent_read",
+        "my-jarvis-art",
+        "plugin_jarvis",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/domain/src/test/kotlin/persona/core/domain/ProtocolCompatibilityTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "jarvis-context",
+        "jarvis-file",
+        "mcp__jarvis__ask_jarvis",
+        "mcp__jarvis__jarvis_settings",
+        "mcp__plugin_jarvis__ask_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/hub/src/test/kotlin/persona/core/hub/ProtocolCompatibilityMockServer.kt": {
+      "reason": "Baseline regression fixture or generated carrier asserting an exact versioned contract.",
+      "tokens": [
+        "jarvis-ports"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/hub/src/test/kotlin/persona/core/hub/ProtocolCompatibilityMockServerTest.kt": {
+      "reason": "Exact discovery-request regression fixtures; ordinary requests remain visible.",
+      "tokens": [
+        "jarvis-ports"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/hub/src/test/kotlin/persona/core/hub/ProtocolCompatibilityTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "X-Jarvis-Client",
+        "X-Jarvis-Op-Id",
+        "jarvis-context",
+        "jarvis-file",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/core/navigation/src/testDebug/kotlin/persona/core/navigation/ProtocolCompatibilityTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/feature/settings/src/test/kotlin/persona/feature/settings/ProtocolCompatibilityStorageTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis-update-123.apk"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/feature/settings/src/test/kotlin/persona/feature/settings/ProtocolCompatibilityTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "android/platform/phonetools/src/test/kotlin/persona/platform/phonetools/ProtocolCompatibilityConfirmationsTest.kt": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis-phone",
+        "jarvis.phone.confirm"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "deploy/docker/compose.yaml": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        "-jarvis",
+        ".jarvis",
+        "JARVIS_ADMIN_ACCESS",
+        "JARVIS_ADMIN_CIDRS",
+        "JARVIS_DATABASE_URL",
+        "JARVIS_DB_PASSWORD",
+        "JARVIS_IMAGE",
+        "JARVIS_PORT",
+        "JARVIS_POSTGRES_IMAGE",
+        "JARVIS_PUBLIC_URL",
+        "JARVIS_REGISTRY_TOKEN",
+        "JARVIS_TLS_PORT",
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "deploy/docker/entrypoint.sh": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_",
+        "JARVIS_HOME",
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "deploy/docker/jarvisd.sh": {
+      "reason": "Exact symlink entrypoint retained for an existing deployment command.",
+      "tokens": [],
+      "path_tokens": [
+        "jarvisd.sh"
+      ],
+      "external_refs": [],
+      "symlink_target": "personad.sh"
+    },
+    "deploy/docker/personad.sh": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_DATABASE_URL",
+        "JARVIS_DB_PASSWORD_FILE",
+        "JARVIS_HOME",
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/docker.md": {
+      "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
+      "tokens": [
+        "jarvis",
+        "jarvis_manager"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/extensions.md": {
+      "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
+      "tokens": [
+        "JARVIS_HOME",
+        "JARVIS_LOCAL_NODE"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/lessons/rename.md": {
+      "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
+      "tokens": [
+        "jarvis-postgres"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/managers.md": {
+      "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
+      "tokens": [
+        "jarvis",
+        "jarvis-pgdata",
+        "jarvis-postgres",
+        "jarvis_manager"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/persona-cutover.md": {
+      "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
+      "tokens": [
+        "jarvis_manager"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/rolling-upgrade-compatibility.md": {
+      "reason": "User-authorized Chinese compatibility matrix naming exact historical protocol and storage contracts.",
+      "tokens": [
+        ".jarvis",
+        ".jarvis.invalid",
+        "JARVIS_",
+        "JARVIS_PI_HOST",
+        "JarvisActivityAttributes",
+        "X-Jarvis-CSRF",
+        "X-Jarvis-Client",
+        "X-Jarvis-Op-Id",
+        "X-Jarvis-Peer-",
+        "__jarvisPi",
+        "__jarvisPiAskUser",
+        "__jarvisPiHost",
+        "_jarvis-hub._tcp",
+        "ask_jarvis",
+        "com.jarvis.",
+        "jarvis",
+        "jarvis-",
+        "jarvis-allow",
+        "jarvis-circuit",
+        "jarvis-context",
+        "jarvis-file",
+        "jarvis-host",
+        "jarvis-link",
+        "jarvis-link-",
+        "jarvis-new",
+        "jarvis-node",
+        "jarvis-panes",
+        "jarvis-pgdata",
+        "jarvis-postgres",
+        "jarvis-reload",
+        "jarvis-runtime.v1",
+        "jarvis-update-",
+        "jarvis.agentFilter",
+        "jarvis.agentGrouping",
+        "jarvis.agents.prefs",
+        "jarvis.apk",
+        "jarvis.files.view",
+        "jarvis.json",
+        "jarvis.phone.confirm",
+        "jarvis.push",
+        "jarvis.theme",
+        "jarvis.token",
+        "jarvis.tokenId",
+        "jarvisRecording",
+        "jarvisRecordingReceipt",
+        "jarvis_admin",
+        "jarvis_group",
+        "jarvis_settings",
+        "jarvis_wake",
+        "jarvisd",
+        "jarvisd-",
+        "jarvisd-wechat",
+        "jarvisd-wechat-",
+        "mcp__jarvis__",
+        "plugin_jarvis",
+        "split.jarvis",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "docs/server.md": {
+      "reason": "Published upgrade, storage identity or compatibility documentation retained for existing installations.",
+      "tokens": [
+        "jarvis",
+        "jarvis-pgdata",
+        "jarvis-postgres",
+        "jarvis_test"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "integrations/antigravity/lib/compat.js": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        ".jarvis",
+        "jarvisd",
+        "options.jarvisdBin"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "integrations/pi/lib/compat.js": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "__jarvis",
+        "env.JARVIS_PI_HOST",
+        "jarvis-allow",
+        "jarvis-host",
+        "jarvis-reload",
+        "jarvis.json"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "integrations/runtime-sdk/lib/compat.js": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_",
+        "jarvis",
+        "jarvis-agent-sdk-runtime",
+        "jarvis-context",
+        "jarvis-dsh-runtime",
+        "jarvis-paseo-runtime",
+        "jarvis-pi-runtime",
+        "jarvis-runtime.v1"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "integrations/runtime-sdk/test/compat.test.js": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_ASSISTANT",
+        "JARVIS_HOME",
+        "JARVIS_PI_HOST",
+        "JARVIS_SESSION_ID",
+        "__jarvisPi",
+        "__jarvisPiAskUser",
+        "__jarvisPiHost",
+        "globalThis.__jarvisPi",
+        "globalThis.__jarvisPi.hash",
+        "globalThis.__jarvisPiAskUser",
+        "jarvis",
+        "jarvis-",
+        "jarvis-allow",
+        "jarvis-host",
+        "jarvis-pi-runtime",
+        "jarvis-reload",
+        "jarvis-runtime.v1",
+        "jarvis.json",
+        "jarvisd"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/app/jarvisctl.py": {
+      "reason": "Exact symlink entrypoint retained for existing debug CLI callers.",
+      "tokens": [],
+      "path_tokens": [
+        "jarvisctl.py"
+      ],
+      "external_refs": [],
+      "symlink_target": "personactl.py"
+    },
+    "scripts/deploy/db.sh": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        "jarvis",
+        "jarvis-pgdata",
+        "jarvis-postgres"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/deploy/install.sh": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_",
+        "JARVIS_HOME",
+        "jarvis-link",
+        "jarvis-link-",
+        "jarvisd",
+        "jarvisd-",
+        "jarvisd-wechat"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/deploy/test_db_sh.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "jarvis-pgdata",
+        "jarvis-postgres",
+        "jarvis_test",
+        "test_a_hub_set_up_before_the_rename_keeps_its_jarvis_postgres"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/jarvis_config.py": {
+      "reason": "Exact symlink entrypoint retained for existing configuration callers.",
+      "tokens": [],
+      "path_tokens": [
+        "jarvis_config.py"
+      ],
+      "external_refs": [],
+      "symlink_target": "persona_config.py"
+    },
+    "scripts/persona_identity.py": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_",
+        "com.jarvis.hub",
+        "com.jarvis.link",
+        "com.jarvis.node",
+        "jarvis",
+        "jarvis-link",
+        "jarvis-link-",
+        "jarvis-pgdata",
+        "jarvis-postgres",
+        "jarvisd",
+        "jarvisd-",
+        "jarvisd-node"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/privacy_check.py": {
+      "reason": "Installation, upgrade or privacy input adapter retaining an existing deployment identity.",
+      "tokens": [
+        "JARVIS_CONFIG",
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/compatibility_identifiers.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "j://"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/rolling_compat_fixtures.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        ".jarvis",
+        "JARVIS_",
+        "X-Jarvis-Client",
+        "X-Jarvis-Op-Id",
+        "jarvis-context",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/server_test_env.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_",
+        "JARVIS_HOME",
+        "JARVIS_TEST_DATABASE_URL",
+        "jarvis",
+        "jarvis_test"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/test_docker_entrypoint.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "-jarvis",
+        "JARVIS_DB_PASSWORD",
+        "JARVIS_IMAGE",
+        "JARVIS_TLS_PORT"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/test_hub_switch_deploy.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_HUB_EDGE"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/test_persona_script_identity.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/test_script_layout.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis_config.py"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "scripts/test/test_server_test_env.py": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_TEST_DATABASE_URL",
+        "jarvis",
+        "jarvis_test"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "sdk/go/ext/compat.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "JARVIS_EXTENSION_",
+        "JARVIS_HUB_",
+        "JARVIS_PLUGIN_"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "sdk/go/ext/compat_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_EXTENSION_",
+        "JARVIS_HUB_",
+        "JARVIS_HUB_TOKEN",
+        "JARVIS_HUB_URL",
+        "JARVIS_PLUGIN_",
+        "JARVIS_PLUGIN_CONFIG",
+        "JARVIS_PLUGIN_ID",
+        "JARVIS_PLUGIN_SECRETS"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "sdk/go/wire/compat.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvis",
+        "jarvis-circuit"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "sdk/go/wire/compat_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "Jarvis",
+        "jarvis",
+        "jarvis-circuit",
+        "jarvis-circuit-extra",
+        "jarvis-visor",
+        "jarvis.png"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "sdk/ts/src/compat.test.ts": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_EXTENSION_ID",
+        "JARVIS_HUB_TOKEN",
+        "JARVIS_HUB_URL",
+        "JARVIS_PLUGIN_ID",
+        "process.env.JARVIS_HUB_TOKEN",
+        "process.env.JARVIS_HUB_URL",
+        "process.env.JARVIS_PLUGIN_ID"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "sdk/ts/src/compat.ts": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "JARVIS_EXTENSION_",
+        "JARVIS_HUB_",
+        "JARVIS_PLUGIN_"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/cmd/persona-link/compat.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "--jarvisd",
+        "_jarvis-hub._tcp",
+        "com.jarvis.node",
+        "jarvis-link",
+        "jarvis-link-service.exe",
+        "jarvis-link-task.xml",
+        "jarvis-link.service",
+        "jarvisd",
+        "jarvisd-node.service"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/cmd/persona-link/compat_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "--jarvisd"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/assistant/owndb_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "jarvis_manager"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/compat/legacy.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "--jarvis-assistant",
+        "--jarvis-health",
+        "-jarvis-assistant",
+        ".jarvis",
+        ".jarvis-update.lock",
+        ".jarvis.invalid",
+        "JARVIS_",
+        "JarvisActivityAttributes",
+        "X-Jarvis-",
+        "_jarvis-hub._tcp",
+        "ask_jarvis",
+        "com.jarvis.hub",
+        "com.jarvis.manager.",
+        "com.jarvis.node",
+        "jarvis",
+        "jarvis-",
+        "jarvis-agent-sdk-runtime",
+        "jarvis-blob",
+        "jarvis-circuit",
+        "jarvis-context",
+        "jarvis-dsh-runtime",
+        "jarvis-facet",
+        "jarvis-link",
+        "jarvis-manager-",
+        "jarvis-node",
+        "jarvis-paseo-runtime",
+        "jarvis-pgdata",
+        "jarvis-pi-runtime",
+        "jarvis-pixel",
+        "jarvis-ports",
+        "jarvis-postgres",
+        "jarvis-runtime.v1",
+        "jarvis_admin",
+        "jarvis_admin_tls",
+        "jarvis_settings",
+        "jarvis_wake",
+        "jarvisd",
+        "jarvisd.socket",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/compat/legacy_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_GUEST",
+        "JARVIS_SESSION_ID",
+        "Jarvis",
+        "X-Jarvis-Op-Id",
+        "com.jarvis.node",
+        "jarvis",
+        "jarvis-agent-sdk-runtime",
+        "jarvis-context",
+        "jarvis-dsh-runtime",
+        "jarvis-file",
+        "jarvis-paseo-runtime",
+        "jarvis-pi-runtime",
+        "jarvis-ports",
+        "jarvis-user-package",
+        "mcp__jarvis__lark_agent_reply"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/compat/projection.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvis",
+        "jarvis-blob",
+        "jarvis-circuit",
+        "jarvis-facet",
+        "jarvis-pixel"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/compatprobe/fixture.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/hub/compatibility_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JarvisActivityAttributes",
+        "X-Jarvis-Op-Id",
+        "jarvis",
+        "jarvis-circuit"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/hub/testdata/prompts/mcp_tools.assistant.golden": {
+      "reason": "Generated tool-list golden for the exact builtin settings alias, with unchanged schema and approval gate.",
+      "tokens": ["jarvis_settings"],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/hub/testdata/prompts/mcp_tools.assistant_with_github.golden": {
+      "reason": "Generated tool-list golden for the exact builtin settings alias, with unchanged schema and approval gate.",
+      "tokens": ["jarvis_settings"],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/hub/testdata/prompts/mcp_tools.assistant_with_imessage.golden": {
+      "reason": "Generated tool-list golden for the exact builtin settings alias, with unchanged schema and approval gate.",
+      "tokens": ["jarvis_settings"],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/link/compat.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/link/compat_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "connector.jarvis.invalid",
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/node/pathguard_unix_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "JARVIS_HOME"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/pgdocker/pgdocker.go": {
+      "reason": "Existing storage identity or generated protocol carrier required across upgrades.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/pgdocker/pgdocker_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/proto/compatibility.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvis",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/proto/compatibility_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/pushcrypto/compatibility_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "jarvis_wake"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/update/compat.go": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvisd",
+        "jarvisd-wechat"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "server/internal/update/compat_test.go": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvisd",
+        "jarvisd-linux-amd64.gz",
+        "jarvisd-wechat-linux-amd64.gz"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "spec/fixtures/wire/compatibility.json": {
+      "reason": "Baseline regression fixture or generated carrier asserting an exact versioned contract.",
+      "tokens": [
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "spec/fixtures/wire/sessions.json": {
+      "reason": "Baseline regression fixture or generated carrier asserting an exact versioned contract.",
+      "tokens": [
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "web/public/compatibility-bootstrap.js": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        "jarvis.theme"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "web/src/lib/compatibility.live.test.ts": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "jarvis-context",
+        "jarvis-file",
+        "mcp__jarvis__agent_read",
+        "row.started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "web/src/lib/compatibility.storage.test.ts": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "jarvis",
+        "jarvis-new",
+        "jarvis.agentFilter",
+        "jarvis.agentGrouping",
+        "jarvis.agents.prefs",
+        "jarvis.files.view",
+        "jarvis.theme",
+        "jarvis.token",
+        "jarvis.tokenId",
+        "jarvis.user-defined",
+        "user-jarvis-project"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "web/src/lib/compatibility.test.ts": {
+      "reason": "Baseline regression fixture or exact compatibility assertion for a persisted contract.",
+      "tokens": [
+        "X-Jarvis-Client",
+        "X-Jarvis-Op-Id",
+        "jarvis",
+        "jarvis-circuit",
+        "jarvis-context",
+        "jarvis-file",
+        "mcp__jarvis__ask_jarvis",
+        "mcp__plugin_jarvis__ask_jarvis",
+        "my-jarvis-art",
+        "plugin_jarvis",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    },
+    "web/src/lib/compatibility.ts": {
+      "reason": "Dedicated adapter for a versioned runtime, protocol or persisted identity.",
+      "tokens": [
+        ".started_by_jarvis",
+        "1jarvis",
+        "1jarvis-",
+        "X-Jarvis-CSRF",
+        "X-Jarvis-Client",
+        "X-Jarvis-Op-Id",
+        "ask_jarvis",
+        "jarvis",
+        "jarvis-blob",
+        "jarvis-circuit",
+        "jarvis-facet",
+        "jarvis-new",
+        "jarvis-pixel",
+        "jarvis.agentFilter",
+        "jarvis.agentGrouping",
+        "jarvis.agents.prefs",
+        "jarvis.files.view",
+        "jarvis.theme",
+        "jarvis.token",
+        "jarvis.tokenId",
+        "jarvis_settings",
+        "started_by_jarvis"
+      ],
+      "path_tokens": [],
+      "external_refs": []
+    }
+  }
+}

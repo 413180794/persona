@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"github.com/nwverse/persona/server/internal/compat"
 	"strings"
 	"testing"
 
@@ -51,7 +52,7 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 	if _, err := s.prepare(ctx, "server"); err != nil {
 		t.Fatal(err)
 	}
-	if got := bare.prepared[0]["claude_md"]; got != s.claudeMD(ctx, "server", true) || bare.prepared[0]["dir"] != ".persona/assistant" {
+	if got := bare.prepared[0]["claude_md"]; got != s.claudeMD(ctx, "server", true) || bare.prepared[0]["dir"] != compat.StateDir+"/assistant" {
 		t.Fatalf("assistant.prepare: %v", bare.prepared[0])
 	}
 }

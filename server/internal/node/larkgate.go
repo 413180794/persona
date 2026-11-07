@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"os"
 	"path"
 	"path/filepath"
@@ -819,7 +820,7 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 		}
 		slices.Sort(keys)
 		for _, k := range keys {
-			if held[k] || !envName.MatchString(k) || strings.HasPrefix(k, "PERSONA_") || k == "PATH" {
+			if held[k] || !envName.MatchString(k) || compat.ReservedEnv(k) || k == "PATH" {
 				continue
 			}
 			v := g.Env[k]

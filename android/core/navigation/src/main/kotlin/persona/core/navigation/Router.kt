@@ -1,5 +1,7 @@
 package persona.core.navigation
 
+import persona.core.contracts.ProtocolCompatibility
+
 import androidx.navigation3.runtime.NavKey
 import java.net.URI
 import java.net.URLDecoder
@@ -80,7 +82,7 @@ class Router(
     private fun deepLink(url: String): ResolvedRoute? {
         val uri = try { URI(url) } catch (_: IllegalArgumentException) { return null }
             catch (_: java.net.URISyntaxException) { return null }
-        if (uri.scheme != "persona" || uri.rawAuthority !in setOf("open", "pair") ||
+        if (uri.scheme !in ProtocolCompatibility.appSchemes || uri.rawAuthority !in setOf("open", "pair") ||
             !uri.rawPath.isNullOrEmpty() || uri.rawFragment != null) return null
         if (uri.host == "pair") {
             // PairingInput remains responsible for validating credentials and transport policy.
@@ -117,7 +119,7 @@ class Router(
             "settings" -> SettingsPageRoute(SettingsPage.entries.firstOrNull {
                 it.name.equals(parameters["page"], ignoreCase = true)
             } ?: return null)
-            "tab" -> tabRoot(AppTab.entries.firstOrNull { it.name.equals(parameters["tab"], ignoreCase = true) } ?: return null)
+            "tab" -> tabRoot(AppTab.entries.firstOrNull { it.name.equals(ProtocolCompatibility.canonicalTab(parameters["tab"]), ignoreCase = true) } ?: return null)
             else -> return null
         }
         val resolved = resolve(key) ?: return null

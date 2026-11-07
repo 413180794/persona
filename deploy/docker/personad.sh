@@ -5,8 +5,14 @@
 # The database's password (docs/docker.md): .env's PERSONA_DB_PASSWORD when set (compose puts it into
 # PERSONA_DATABASE_URL); otherwise the one the postgres service made up on its first start, in the data folder. Read
 # here rather than in the entrypoint, so `docker compose exec hub personad …` gets it too.
-PASSWORD_FILE="${PERSONA_DB_PASSWORD_FILE:-$HOME/.persona/docker/db-password}"
-url="${PERSONA_DATABASE_URL:-}"
+if [ -z "${PERSONA_HOME+x}${JARVIS_HOME+x}" ] && grep -q ' /home/jarvis/.jarvis ' /proc/mounts 2>/dev/null; then
+  PERSONA_HOME=/home/jarvis/.jarvis
+fi
+PERSONA_HOME="${PERSONA_HOME-${JARVIS_HOME:-$HOME/.persona}}"
+export PERSONA_HOME JARVIS_HOME="$PERSONA_HOME"
+PASSWORD_FILE="${PERSONA_DB_PASSWORD_FILE-${JARVIS_DB_PASSWORD_FILE:-$PERSONA_HOME/docker/db-password}}"
+url="${PERSONA_DATABASE_URL-${JARVIS_DATABASE_URL:-}}"
+export PERSONA_DATABASE_URL="$url" JARVIS_DATABASE_URL="$url"
 rest="${url#*://}"
 user="${rest%%@*}"
 # A URL with a user and no password (postgres://persona:@…, or postgres://persona@…): .env did not set one.
@@ -22,7 +28,8 @@ if [ -n "$url" ] && [ "$rest" != "$url" ] && [ "$user" != "$rest" ]; then
         "reach the database. Set PERSONA_DB_PASSWORD in .env to the database's password (docs/docker.md)" >&2 ;;
       *)
         PERSONA_DATABASE_URL="${url%%://*}://${user%%:*}:$password@${rest#*@}"
-        export PERSONA_DATABASE_URL ;;
+        export PERSONA_DATABASE_URL
+        export JARVIS_DATABASE_URL="$PERSONA_DATABASE_URL" ;;
       esac
     elif [ -e "$PASSWORD_FILE" ]; then
       echo "warning: no database password: PERSONA_DB_PASSWORD is not set in .env and $PASSWORD_FILE cannot be" \

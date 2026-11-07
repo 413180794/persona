@@ -122,6 +122,7 @@ func Validate(def string, v any) error {
 		}
 		return ValidateJSON(def, raw)
 	}
+	v = compatibilityValue(def, v)
 	loadOnce.Do(loadSchemas)
 	if loadErr != nil {
 		return loadErr

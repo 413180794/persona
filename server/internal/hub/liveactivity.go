@@ -666,7 +666,7 @@ func (la *liveActivities) send(d Device, r db.LiveActivity, payload map[string]a
 
 func (la *liveActivities) sendStart(d Device, r db.LiveActivity, payload map[string]any) {
 	la.h.logf("live activity: push-start on %s", d.Name)
-	la.h.push.sendLiveActivity(d, r.PushToStartToken, payload, "10", func() {
+	la.h.push.sendLiveActivity(d, r.PushToStartToken, compatibleStartPayload(d, payload), "10", func() {
 		la.update(r.DeviceID, func(v *db.LiveActivity) {
 			if v.PushToStartToken == r.PushToStartToken {
 				v.PushToStartToken = ""

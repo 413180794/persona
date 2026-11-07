@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- An OS routing identity, not a visible or translated product name. -->
+    <string name="compatibility_legacy_scheme" translatable="false">jarvis</string>
+</resources>

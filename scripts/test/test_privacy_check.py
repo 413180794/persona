@@ -144,7 +144,7 @@ class BannedNameTests(unittest.TestCase):
 
 
 class LoopbackTests(unittest.TestCase):
-    def test_persona_config_words_are_scanned_without_former_config_reads(self):
+    def test_both_config_and_private_word_profiles_are_scanned(self):
         with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
             home = Path(temp)
             directory = home / '.config/persona'
@@ -159,8 +159,8 @@ class LoopbackTests(unittest.TestCase):
                 words, _ = pc.terms()
             self.assertIn('persona-private-label', words)
             self.assertIn('persona-private-word', words)
-            self.assertNotIn('former-private-label', words)
-            self.assertNotIn('former-private-word', words)
+            self.assertIn('former-private-label', words)
+            self.assertIn('former-private-word', words)
 
     def test_loopback_values(self):
         for value in ["127.0.0.1", "127.1.2.3", "::1", "[::1]", "0:0:0:0:0:0:0:1",

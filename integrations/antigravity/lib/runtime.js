@@ -1,3 +1,5 @@
+import { daemonBinary, mcpServers } from './compat.js'
+import { contextWrapped } from '../../runtime-sdk/lib/compat.js'
 // Antigravity (agy) runtime for Persona (docs/runtimes.md).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -23,14 +25,7 @@ import {
 export function createAgyRuntime(options = {}) {
   const home = options.home || homedir()
   const agyDir = options.agyDir || process.env.ANTIGRAVITY_CLI_CONFIG_DIR || join(home, '.gemini', 'antigravity-cli')
-  const personadBin =
-    [
-      options.personadBin,
-      join(home, '.persona', 'bin', 'personad'),
-      join(home, '.persona', 'bin', 'personad'),
-      join(home, '.persona', 'bin', 'personad'),
-      join(home, '.persona', 'bin', 'personad'),
-    ].find((p) => p && existsSync(p)) || join(home, '.persona', 'bin', 'personad')
+  const personadBin = daemonBinary(home, options)
   const agyBin = options.agyBin || join(home, '.local', 'bin', 'agy')
   const log = options.log || ((m) => console.error(m))
   const listDays = options.listDays ?? 14
@@ -347,22 +342,7 @@ export function createAgyRuntime(options = {}) {
 
   function mcpServersFor(pid, isAsst) {
     if (!existsSync(personadBin)) return []
-    const env = [
-      { name: 'PERSONA_SESSION_ID', value: pid },
-      { name: 'PERSONA_SESSION_ID', value: pid },
-    ]
-    if (isAsst) {
-      env.push({ name: 'PERSONA_ASSISTANT', value: '1' })
-      env.push({ name: 'PERSONA_ASSISTANT', value: '1' })
-    }
-    return [
-      {
-        name: 'persona',
-        command: personadBin,
-        args: ['mcp'],
-        env,
-      },
-    ]
+    return mcpServers(personadBin, pid, isAsst)
   }
 
   async function applySessionOptions(rawId, { model, permission_mode, effort }) {
@@ -447,7 +427,7 @@ export function createAgyRuntime(options = {}) {
     if (typeof params.context === 'string' && params.context.trim()) {
       const ctx = params.context.trim()
       const wrapped =
-        ctx.startsWith('<persona-context>')
+        contextWrapped(ctx)
           ? ctx
           : `<persona-context>\n${ctx}\n</persona-context>`
       fullText = `${wrapped}\n\n${fullText}`

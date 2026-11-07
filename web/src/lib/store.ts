@@ -1,3 +1,4 @@
+import { compatibleEnvelope, setCompatibilityFeatures } from "./compatibility";
 // App-wide state: what the hub pushes over the WebSocket (machines, sessions, interactions), plus the assistant.
 // Views read it with useStore(selector); per-session item streams go to listeners (ChatView subscribes).
 
@@ -381,13 +382,14 @@ export function send(msg: Record<string, unknown>) {
 }
 
 export function connect() {
+  setCompatibilityFeatures([]);
   stopped = false;
   clearTimeout(retryTimer);
   ws?.close();
   socketChanged(false);
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   socketToken = getToken();
-  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(socketToken, cursor, [SESSIONS_LIST_FEATURE, SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE, "extension_ui_stream_v1"])}`);
+  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(socketToken, cursor, [SESSIONS_LIST_FEATURE, SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE, "extension_ui_stream_v1", "persona_contracts_v1"])}`);
   ws = sock;
   restartNotice = false;
   // an attempt does not move offline back to connecting: the pill stays on one phase while the hub is down instead of
@@ -406,7 +408,7 @@ export function connect() {
     lastMessage = Date.now();
     let msg: Record<string, unknown>;
     try {
-      msg = JSON.parse(ev.data);
+      msg = compatibleEnvelope(JSON.parse(ev.data));
     } catch {
       return;
     }
@@ -426,6 +428,7 @@ export function connect() {
   sock.onclose = (ev) => {
     if (ws !== sock) return;
     ws = null;
+    setCompatibilityFeatures([]);
     socketChanged(false);
     if (stopped) return;
     const now = Date.now();
@@ -476,6 +479,7 @@ function networkUp(): boolean {
 setOfflineProbe(() => (!networkUp() ? "network" : state.conn !== "online" || drop ? "hub" : null));
 
 export function disconnect() {
+  setCompatibilityFeatures([]);
   stopped = true;
   // a reconnect scheduled after a drop would otherwise fire connect(), which clears stopped (signed out: an empty token)
   clearTimeout(retryTimer);
@@ -527,6 +531,7 @@ function onMessage(msg: Record<string, unknown>) {
   cursor = msg.type === "hello" ? afterHello(cursor, msg) : afterEvent(cursor, msg);
   switch (msg.type) {
     case "hello": {
+      setCompatibilityFeatures(Array.isArray(msg.features) ? msg.features as string[] : []);
       const mesh = (msg.mesh as { hubs?: MeshHub[] } | undefined)?.hubs;
       set({
         conn: "online",

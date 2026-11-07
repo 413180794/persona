@@ -175,7 +175,7 @@ func subcommandHelp(sub string) string {
 
 // flagValue reads `--name value` or `--name=value` at args[i]; ok says it was that flag, next is where to go on.
 func flagValue(args []string, i int, name string) (value string, next int, ok bool, err error) {
-	a := args[i]
+	a := compatibleFlag(args[i], name)
 	if v, found := strings.CutPrefix(a, name+"="); found {
 		return v, i, true, nil
 	}
@@ -191,7 +191,7 @@ func flagValue(args []string, i int, name string) (value string, next int, ok bo
 // optionalValue reads `--name`, `--name value` or `--name=value` at args[i], the value being optional: the next
 // argument is taken unless it is another flag.
 func optionalValue(args []string, i int, name string) (value string, next int, ok bool) {
-	a := args[i]
+	a := compatibleFlag(args[i], name)
 	if v, found := strings.CutPrefix(a, name+"="); found {
 		return v, i, true
 	}

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/compat"
 )
 
 func explicitRoot(home string) string {
@@ -27,7 +29,16 @@ func DataDir(home string) string {
 	if root := explicitRoot(home); root != "" {
 		return root
 	}
-	return filepath.Join(home, ".persona")
+	current, legacy := filepath.Join(home, ".persona"), filepath.Join(home, compat.StateDir)
+	if _, err := os.Lstat(legacy); err == nil {
+		if a, err := os.Stat(current); err == nil {
+			if b, err := os.Stat(legacy); err == nil && os.SameFile(a, b) {
+				return current
+			}
+		}
+		return legacy
+	}
+	return current
 }
 
 func HomeDir() string {
@@ -39,17 +50,46 @@ func HomeDir() string {
 // symlinks are accepted, but unavailable targets are never repaired or replaced.
 func PrepareHome(home string) (string, error) {
 	root := DataDir(home)
+	currentPath, legacyPath := filepath.Join(home, ".persona"), filepath.Join(home, compat.StateDir)
+	if root == currentPath || root == legacyPath {
+		a, aerr := os.Stat(currentPath)
+		b, berr := os.Stat(legacyPath)
+		if aerr == nil && berr == nil && !os.SameFile(a, b) {
+			return "", fmt.Errorf("independent state directories exist; select an explicit shared root without moving either directory")
+		}
+	}
 	if st, err := os.Lstat(root); err == nil && st.Mode()&os.ModeSymlink != 0 {
 		target, err := os.Stat(root)
 		if err != nil || !target.IsDir() {
 			return "", fmt.Errorf("state directory %s has an unavailable directory symlink target", root)
 		}
-		return root, nil
+		// Keep the existing target; install only the missing compatibility alias.
 	} else if err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return "", err
+	}
+	current, legacy := filepath.Join(home, ".persona"), filepath.Join(home, compat.StateDir)
+	if root == current || root == legacy {
+		alias := legacy
+		if root == legacy {
+			alias = current
+		}
+		if _, err := os.Lstat(alias); os.IsNotExist(err) {
+			if err := os.Symlink(filepath.Base(root), alias); err != nil && !os.IsExist(err) {
+				return "", err
+			}
+			// Another process can initialize the alias concurrently. Never accept
+			// an alias pointing at another store after losing that race.
+			a, aerr := os.Stat(root)
+			b, berr := os.Stat(alias)
+			if aerr != nil || berr != nil || !os.SameFile(a, b) {
+				return "", fmt.Errorf("state directories changed during initialization")
+			}
+		} else if err != nil {
+			return "", err
+		}
 	}
 	return root, nil
 }
@@ -130,7 +170,7 @@ func isStateDir(path, name string) bool {
 	if filepath.Base(path) != name {
 		return false
 	}
-	if filepath.Base(filepath.Dir(path)) == ".persona" {
+	if compat.IsStateDir(filepath.Base(filepath.Dir(path))) {
 		return true
 	}
 	expected := filepath.Join(HomeDir(), name)

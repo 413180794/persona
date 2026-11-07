@@ -1,3 +1,4 @@
+import { mcpToolNames } from '../../runtime-sdk/lib/compat.js'
 // The DSH runtime (docs/dsh.md): DSH's sessions in Persona through the runtime SDK (docs/runtimes.md). Only what is
 // DSH's own lives here — listing and paging through sessionController, mapping its session events (map.js), and
 // putting its approval / question waterfalls in front of the phone; the SDK does the connection, watching, batching,
@@ -307,11 +308,11 @@ export function createDshRuntime(deps, options = {}) {
   // ---- the hub's tools for DSH's agents (phone_*, mail_*: docs/dsh.md "Phone tools") ----
 
   /** The DSH tool for one of the hub's tools: called through the node (mcp.call), its text as the result. */
-  function toolDefinition(t, assistantOnly) {
+  function toolDefinition(t, assistantOnly, name) {
     const schema = t.input_schema && typeof t.input_schema === 'object' && !Array.isArray(t.input_schema)
       ? t.input_schema : { type: 'object', properties: {} }
     return {
-      name: `mcp__persona__${t.name}`,
+      name,
       description: typeof t.description === 'string' ? t.description : t.name,
       parameters: schema,
       output: {
@@ -352,8 +353,10 @@ export function createDshRuntime(deps, options = {}) {
         const assistantOnly = !plain.has(t.name)
         try {
           const when = assistantOnly ? (c) => isAssistant(String(c?.agent?.session?.id ?? c?.agent?.id ?? '')) : undefined
-          const dispose = deps.registerTool(toolDefinition(t, assistantOnly), when ? { when } : undefined)
-          if (typeof dispose === 'function') tools.disposers.push(dispose)
+          for (const name of mcpToolNames(t.name)) {
+            const dispose = deps.registerTool(toolDefinition(t, assistantOnly, name), when ? { when } : undefined)
+            if (typeof dispose === 'function') tools.disposers.push(dispose)
+          }
         } catch (err) {
           log(`persona: tool ${t.name}: ${err.message}`)
         }

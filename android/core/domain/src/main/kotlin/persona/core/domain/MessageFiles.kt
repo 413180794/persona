@@ -1,5 +1,7 @@
 package persona.core.domain
 
+import persona.core.contracts.ProtocolCompatibility
+
 /**
  * One `<persona-file kind="video" path="…" name="…" size="…" duration="…"/>` tag of a message (docs/protocol.md "Sending video",
  * iOS `AttachedFile`, web `parseUserText`): a file the phone uploaded to the session's machine. [kind] is `video`,
@@ -14,7 +16,7 @@ data class AttachedFile(val kind: String, val path: String, val name: String, va
     }
 }
 
-private val fileTag = Regex("\\s*<persona-file\\b([^>]*?)/?>(?:\\s*</persona-file>)?\\s*")
+private val fileTag = ProtocolCompatibility.fileTag
 private val fileAttribute = Regex("(\\w+)=\"([^\"]*)\"")
 
 /**
@@ -22,7 +24,7 @@ private val fileAttribute = Regex("(\\w+)=\"([^\"]*)\"")
  * whole trimmed). A tag without a path is dropped, not drawn.
  */
 fun parseAttachedFiles(text: String): Pair<List<AttachedFile>, String> {
-    if (!text.contains("<persona-file")) return emptyList<AttachedFile>() to text
+    if (!ProtocolCompatibility.hasFileTag(text)) return emptyList<AttachedFile>() to text
     val files = fileTag.findAll(text).mapNotNull { match ->
         val a = fileAttribute.findAll(match.groupValues[1]).associate { it.groupValues[1] to decodeXmlEntities(it.groupValues[2]) }
         val path = a["path"]?.takeIf(String::isNotEmpty) ?: return@mapNotNull null

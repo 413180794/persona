@@ -1,3 +1,4 @@
+import { storedValue, storeValue, removeStoredValue } from "./compatibility";
 // Changes to a composer's draft from outside it: the message menu's "Quote" / "Edit", a queued message pulled back, an
 // edited image put in for the next message (iOS: ChatView.bindMenu, AppModel.editQueued, ImageViewer's attach).
 // The composer for that draft key listens; with none mounted, text goes to the stored draft (it is read on mount).
@@ -280,8 +281,8 @@ export function onDraftEvent(key: string, l: Listener): () => void {
 }
 
 export function storeDraft(key: string, text: string) {
-  if (text) localStorage.setItem(`draft:${key}`, text);
-  else localStorage.removeItem(`draft:${key}`);
+  if (text) storeValue(`draft:${key}`, text);
+  else removeStoredValue(`draft:${key}`);
   tellRows();
 }
 
@@ -289,7 +290,7 @@ export function storeDraft(key: string, text: string) {
  *  bar. Nothing while its box is mounted (you are in it; typing there does not re-render the list), or for `null`. */
 export function useLeftDraft(key: string | null): { text: string; quoted: boolean } {
   const away = () => key !== null && !listeners.get(key)?.size;
-  const read = () => (away() ? (localStorage.getItem(`draft:${key}`) ?? "") : "");
+  const read = () => (away() ? (storedValue(`draft:${key}`) ?? "") : "");
   const hasQuotes = () => away() && getQuotes(key!).list.length > 0;
   const text = useSyncExternalStore(subscribeRows, read, read);
   const quoted = useSyncExternalStore(subscribeRows, hasQuotes, hasQuotes);
@@ -312,7 +313,7 @@ export function sendDraft(key: string, e: DraftEvent): boolean {
   // above the input (any it had are replaced) and only the words into the draft.
   const split = e.type === "replace" ? splitQuotes(e.text) : null;
   if (e.type === "replace") setQuotes(key, split ? parseQuotes(split.quotes) : []);
-  const next = split ? split.rest : applyDraft(localStorage.getItem(`draft:${key}`) ?? "", e);
+  const next = split ? split.rest : applyDraft(storedValue(`draft:${key}`) ?? "", e);
   storeDraft(key, next);
   return true;
 }

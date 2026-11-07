@@ -1,5 +1,7 @@
 package persona.core.domain
 
+import persona.core.contracts.ProtocolCompatibility
+
 import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 
@@ -15,11 +17,11 @@ data class MessageContext(val kind: String, val title: String, val url: String?,
 }
 
 // The canonical context tag used by the hub, nodes and apps.
-private val contextBlock = Regex("<persona-context\\b([^>]*)>([\\s\\S]*?)</persona-context>\\s*")
+private val contextBlock = ProtocolCompatibility.contextBlock
 private val contextAttribute = Regex("([\\w-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
 
 /** Whether [text] has a context block's opening tag. */
-fun hasContextTag(text: String): Boolean = text.contains("<persona-context")
+fun hasContextTag(text: String): Boolean = ProtocolCompatibility.hasContextTag(text)
 
 /**
  * The context blocks of [text] in order, and the text outside all of them (trimmed): what the user actually wrote,

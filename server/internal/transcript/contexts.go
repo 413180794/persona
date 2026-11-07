@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"html"
 	"regexp"
 	"sort"
@@ -14,7 +15,7 @@ import (
 // user wrote and fold the blocks into one row (docs/lark-agent.md "How the app shows it").
 
 // contextBlockRe is one attributed block (the bare snapshot, ContextRe, is dropped before this).
-var contextBlockRe = regexp.MustCompile(`(?s)(<persona-context\b[^>]*>)(.*?)(</persona-context>)`)
+var contextBlockRe = regexp.MustCompile(`(?s)(<` + compat.ContextPattern() + `\b[^>]*>)(.*?)(</` + compat.ContextPattern() + `>)`)
 
 // legacyLarkAgentRe is a Feishu /agent prompt as hub wrote it before the instructions moved into a block: an intro line,
 // then a request heading (what was asked), a context heading (blocks, plus a loose line or two), and a how-to heading (the rules).
@@ -109,13 +110,13 @@ func lightContexts(s string, limit int) (string, bool) {
 // injectedBlockRes are the blocks Persona and Claude Code put into a user message around what the user wrote: the
 // <persona-context> snapshot and attributed blocks, the <persona-view-errors> feedback, <system-reminder>s.
 var injectedBlockRes = []*regexp.Regexp{
-	regexp.MustCompile(`(?s)<persona-context\b[^>]*>.*?</persona-context>`),
+	regexp.MustCompile(`(?s)<` + compat.ContextPattern() + `\b[^>]*>.*?</` + compat.ContextPattern() + `>`),
 	regexp.MustCompile(`(?s)<persona-view-errors\b[^>]*>.*?</persona-view-errors>`),
 	regexp.MustCompile(`(?s)<system-reminder\b[^>]*>.*?</system-reminder>`),
 }
 
 // injectedOpenRe is one of those blocks left open: a message clipped inside it (Meta.FirstUser is) ends there.
-var injectedOpenRe = regexp.MustCompile(`<(?:persona-context|persona-view-errors|system-reminder)\b`)
+var injectedOpenRe = regexp.MustCompile(`<(?:` + compat.ContextPattern() + `|persona-view-errors|system-reminder)\b`)
 
 // StripInjected is what the user wrote in a message, for a line that shows it (a title, a notification): without the
 // injected blocks, a block cut off by a clip, and the paste wrappers (what was pasted stays). "" when nothing is left.
@@ -134,7 +135,7 @@ func StripInjected(s string) string {
 }
 
 // injectedNames are the injected blocks' tag names, for an opening tag a clip cut inside its name.
-var injectedNames = []string{"persona-context", "persona-view-errors", "system-reminder"}
+var injectedNames = append(compat.ContextNames(), "persona-view-errors", "system-reminder")
 
 // cutPartialTag drops an opening tag clipped before its name ended ("…<persona-con…"), which injectedOpenRe cannot
 // tell from text: what follows the last "<" is a start of one of the names, behind which a clip's "…" ends the text
@@ -159,7 +160,7 @@ func cutPartialTag(s string) string {
 }
 
 // blockTitleRe is an attributed block's whole opening tag with its title.
-var blockTitleRe = regexp.MustCompile(`<persona-context\b[^>]*?\stitle="([^"]*)"[^>]*>`)
+var blockTitleRe = regexp.MustCompile(`<` + compat.ContextPattern() + `\b[^>]*?\stitle="([^"]*)"[^>]*>`)
 
 // Title is a message (or a title someone made of one) as a title or a preview line: what the user wrote, else the
 // title of the first attributed block ("Continuing the old main chat" for a main conversation handed over), else "" (the caller

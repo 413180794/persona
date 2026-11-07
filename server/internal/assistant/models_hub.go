@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ func (s *Service) launcherHTTP(ctx context.Context, name, machine string, r *quo
 	if view == nil {
 		return nil, &rpc.Error{Code: assistantwire.CodeNoLauncher, Message: "no such launcher"}
 	}
-	if view.Source == "persona" {
+	if compat.Source(view.Source) == "persona" {
 		for _, l := range s.storedLaunchers(ctx) {
 			if l.Name != name {
 				continue

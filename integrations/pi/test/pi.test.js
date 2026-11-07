@@ -1,3 +1,4 @@
+import { wirePackageName } from '../../runtime-sdk/lib/compat.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readlinkSync, rmSync } from 'node:fs'
@@ -465,7 +466,7 @@ test('the companion gives sessions that ran in herdr a resume command, and never
 
 // ---- updates from the node (docs/pi.md "Auto-update") ----
 
-const PKG = 'persona-pi-runtime'
+const PKG = wirePackageName('persona-pi-runtime')
 /** The package a node carries: what runtime.package answers. */
 function offerOf(text) {
   const files = [{ path: 'pi/index.js', data: Buffer.from(text) }, { path: 'runtime-sdk/index.js', data: Buffer.from('export {}') }]

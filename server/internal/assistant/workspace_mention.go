@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"github.com/nwverse/persona/server/internal/compat"
 	"html"
 	"path"
 	"regexp"
@@ -20,7 +21,7 @@ import (
 
 // leadingContextRe is one attributed context block at the start of what is left of a message: the clients put the
 // picked contexts in front, so a block further on (one quoted inside another's text) is never taken for a mention.
-var leadingContextRe = regexp.MustCompile(`(?s)^\s*<persona-context\b([^>]*)>(.*?)</persona-context>`)
+var leadingContextRe = regexp.MustCompile(`(?s)^\s*<` + compat.ContextPattern() + `\b([^>]*)>(.*?)</` + compat.ContextPattern() + `>`)
 
 // contextAttrRe is one name="value" on a context tag.
 var contextAttrRe = regexp.MustCompile(`([a-z_]+)="([^"]*)"`)

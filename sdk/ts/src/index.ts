@@ -1,3 +1,4 @@
+import { extensionEnv, hubEnv } from './compat.js';
 // Persona extension SDK for TypeScript (docs/extensions.md "Writing an extension: SDK, templates and CLI"): an extension program's side of
 // the process protocol, for Bun. Build the program with `bun build --compile` into one executable per platform:
 // the package holds only that, and the hub needs no runtime.
@@ -385,7 +386,7 @@ export function connect(prog: Program, write: Write) {
 /** What the hub gives a program in its environment, under the names of any hub. */
 export function env() {
   const get = (name: string) =>
-    process.env[`PERSONA_EXTENSION_${name}`] || process.env[`PERSONA_PLUGIN_${name}`] || "";
+    extensionEnv(name);
   const json = (s: string) => {
     try {
       return s ? JSON.parse(s) : undefined;
@@ -401,8 +402,8 @@ export function env() {
     /** For a program that does not speak the protocol (rpc: none); otherwise initialize has it. */
     config: json(get("CONFIG")),
     secrets: json(get("SECRETS")) as Record<string, string> | undefined,
-    hubURL: process.env.PERSONA_HUB_URL || "",
-    hubToken: process.env.PERSONA_HUB_TOKEN || "",
+    hubURL: hubEnv("URL"),
+    hubToken: hubEnv("TOKEN"),
   };
 }
 

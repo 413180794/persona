@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -158,7 +159,7 @@ func (h *Hub) setupPeerHTTP(l *peerLink) {
 	l.proxy = &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.URL.Scheme, pr.Out.URL.Host, pr.Out.Host = "http", "peer", "peer"
-			pr.Out.Header.Set(hdrPeerTTL, itoa(meshTTLOf(pr.In.Context())-1))
+			compat.SetHeader(pr.Out.Header, hdrPeerTTL, itoa(meshTTLOf(pr.In.Context())-1))
 			// The member's judgment of the source is the one that counts: never what a client wrote there.
 			pr.Out.Header.Del("X-Forwarded-For")
 		},
@@ -183,17 +184,17 @@ func meshTTLOf(ctx context.Context) int {
 // servePeerHTTP serves a request another hub passed on. It only ever comes over a link (the streams' listener is no
 // socket), so its headers are that hub's word.
 func (h *Hub) servePeerHTTP(w http.ResponseWriter, r *http.Request) {
-	ttl := atoi(r.Header.Get(hdrPeerTTL))
+	ttl := atoi(compat.Header(r.Header, hdrPeerTTL))
 	if ttl <= 0 {
 		writeCode(w, http.StatusLoopDetected, "mesh_loop", i18n.T(h.requestLang(r), "hub-peer_http.loop"), nil)
 		return
 	}
 	r = r.WithContext(context.WithValue(r.Context(), meshTTLKey{}, ttl))
-	if target := r.Header.Get(hdrPeerNode); target != "" {
+	if target := compat.Header(r.Header, hdrPeerNode); target != "" {
 		// A node stream starts at the hub in hdrPeerFrom and goes away from it. One that arrives there either bounced back
 		// while the routes change, and its opener tries again, or is a client's, passed on by a member from before
 		// memberForward dropped these. The two look the same, and neither should open.
-		if r.Header.Get(hdrPeerFrom) == h.hubID() {
+		if compat.Header(r.Header, hdrPeerFrom) == h.hubID() {
 			writeCode(w, http.StatusLoopDetected, "mesh_loop", i18n.T(h.requestLang(r), "hub-peer_http.loop"), nil)
 			return
 		}
@@ -204,10 +205,10 @@ func (h *Hub) servePeerHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		h.serveNodeOpen(w, r, r.Header.Get(hdrPeerFrom), mid)
+		h.serveNodeOpen(w, r, compat.Header(r.Header, hdrPeerFrom), mid)
 		return
 	}
-	fs, ok := parseForwardedSource(r.Header.Get(hdrPeerSource))
+	fs, ok := parseForwardedSource(compat.Header(r.Header, hdrPeerSource))
 	if !ok || !strings.HasPrefix(r.URL.Path, "/api/") {
 		writeErr(w, http.StatusBadRequest, errors.New("not a request another hub may pass on"))
 		return
@@ -221,8 +222,8 @@ func (h *Hub) servePeerHTTP(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, errors.New("not serving yet"))
 		return
 	}
-	r.Header.Del(hdrPeerSource)
-	r.Header.Del(hdrPeerTTL)
+	compat.DelHeader(r.Header, hdrPeerSource)
+	compat.DelHeader(r.Header, hdrPeerTTL)
 	r.RemoteAddr = net.JoinHostPort(fs.ip.String(), "0")
 	if fs.tls {
 		r.TLS = &tls.ConnectionState{HandshakeComplete: true} // it reached the member over TLS
@@ -319,9 +320,9 @@ func (h *Hub) memberForward(next http.Handler) http.Handler {
 		}
 		r2 := r.Clone(r.Context())
 		// A hub's word, never a client's: with these the center would open a node stream without asking for a credential.
-		r2.Header.Del(hdrPeerNode)
-		r2.Header.Del(hdrPeerFrom)
-		r2.Header.Set(hdrPeerSource, kind+" "+ip.Unmap().String()+" "+tlsWord)
+		compat.DelHeader(r2.Header, hdrPeerNode)
+		compat.DelHeader(r2.Header, hdrPeerFrom)
+		compat.SetHeader(r2.Header, hdrPeerSource, kind+" "+ip.Unmap().String()+" "+tlsWord)
 		cw := &codeWriter{ResponseWriter: w}
 		done := h.trackProxied(r2)
 		defer done()

@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"github.com/nwverse/persona/server/internal/compat"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -37,7 +38,7 @@ func (n *Node) agentOfficeScript() string {
 
 // assistantTools are the assistant's --allowedTools: Persona's tools, and its copy of the office skill's script.
 func (n *Node) assistantTools() string {
-	return assistantAllowedTools + "," + officeRule(n.assistantOfficeScript())
+	return assistantAllowedTools + ",mcp__" + compat.MCPServer + "," + officeRule(n.assistantOfficeScript())
 }
 
 func (n *Node) assistantOfficeScript() string {

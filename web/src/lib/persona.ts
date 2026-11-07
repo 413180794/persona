@@ -1,3 +1,4 @@
+import { legacyBuiltins } from "./compatibility";
 // Persona's look (avatar, docs/persona.md, docs/extensions.md "Avatar"): its name, its face and the animated dot, from a
 // package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or the default dumpling (MochiFace).
 // The choice is the user's, kept on the hub (PUT /looks/current) so
@@ -11,10 +12,10 @@ import { stateName } from "./state-labels";
 export const BUILTIN_PERSONA = "persona";
 /** Retired bundled IDs stay reserved so a package cannot hijack an existing user's selection. */
 export const RETIRED_PERSONAS = ["persona-visor", "persona-circuit", "persona-pixel", "persona-facet", "persona-blob"] as const;
-const RESERVED: readonly string[] = [BUILTIN_PERSONA, ...RETIRED_PERSONAS];
+const RESERVED: readonly string[] = [BUILTIN_PERSONA, ...RETIRED_PERSONAS, ...legacyBuiltins];
 
 export function isRetiredPersona(id: string): boolean {
-  return (RETIRED_PERSONAS as readonly string[]).includes(id);
+  return (RETIRED_PERSONAS as readonly string[]).includes(id) || legacyBuiltins.includes(id);
 }
 
 /** A retired selection always becomes the default, including before the hub is reachable. */

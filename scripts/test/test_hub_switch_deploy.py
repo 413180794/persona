@@ -54,7 +54,10 @@ class HubSwitchOnDeploy(unittest.TestCase):
         self.assertEqual(self.run_script().returncode, 0)
         self.assertIn('Environment="PERSONA_HUB_EDGE=0"', self.unit(), 'a deploy without it dropped the setting')
         self.assertEqual(self.run_script(PERSONA_HUB_EDGE='1').returncode, 0)
-        self.assertNotIn('PERSONA_HUB_EDGE', self.unit())
+        from test_persona_script_identity import identity
+        unit = self.home / '.config/systemd/user/personad.service'
+        effective = identity._unit_environment(unit, str(self.home), ('PERSONA_HUB_EDGE', 'JARVIS_HUB_EDGE'))
+        self.assertEqual(identity.env_value('HUB_EDGE', effective), '1')
 
     def calls(self) -> list:
         p = self.home / 'calls'

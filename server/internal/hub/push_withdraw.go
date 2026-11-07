@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"github.com/nwverse/persona/server/internal/compat"
 	"slices"
 	"sync"
 	"time"
@@ -152,7 +153,7 @@ func (p *Pusher) flushWithdraw(device string) {
 func hasFeature(d Device, feature string) bool { return slices.Contains(d.Features, feature) }
 
 // knownFeatures are the features a device may register with; anything else is dropped.
-var knownFeatures = map[string]bool{featureWithdraw: true}
+var knownFeatures = map[string]bool{featureWithdraw: true, compat.Feature: true}
 
 func cleanFeatures(in []string) []string {
 	var out []string

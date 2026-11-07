@@ -97,12 +97,12 @@ func gather(e *env) report {
 		}
 	}
 	if e.goos == "linux" {
-		s := &serviceState{Manager: "systemd", Unit: unitName, File: e.unitPath(), Linger: e.lingering()}
+		s := &serviceState{Manager: "systemd", Unit: e.linkUnitName(), File: e.unitPath(), Linger: e.lingering()}
 		s.Installed = fileExists(s.File)
 		if s.Missing = e.systemdMissing(); s.Missing == "" {
 			// Both exit non-zero for inactive and disabled; the word printed is the answer.
-			s.Active, _ = e.systemctl("is-active", unitName)
-			s.Enabled, _ = e.systemctl("is-enabled", unitName)
+			s.Active, _ = e.systemctl("is-active", s.Unit)
+			s.Enabled, _ = e.systemctl("is-enabled", s.Unit)
 			s.Active, s.Enabled = firstLine(s.Active), firstLine(s.Enabled)
 		}
 		r.Service = s

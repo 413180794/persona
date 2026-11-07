@@ -1,3 +1,4 @@
+import { canonicalAppURL } from "../lib/compatibility";
 // Pure helpers behind the admin pages, kept apart so they can be tested without a browser.
 import { formatDate, formatLocale, t } from "../i18n";
 import type { UIItem } from "../lib/extension-ui";
@@ -270,7 +271,7 @@ export interface ConnectorLink {
 // parseConnectorLink reads what `persona-link pair --listen` prints: persona://connector?addr=<host:port>&…&fp=…&code=…
 // (the hub checks it again). null when it is not one or misses the key fingerprint or the code.
 export function parseConnectorLink(raw: string): ConnectorLink | null {
-  const m = /^persona:\/\/connector\/?\?(.*)$/is.exec(raw.trim());
+  const m = /^persona:\/\/connector\/?\?(.*)$/is.exec(canonicalAppURL(raw.trim()));
   if (!m) return null;
   const q = new URLSearchParams(m[1]);
   const fp = q.get("fp")?.trim() ?? "";

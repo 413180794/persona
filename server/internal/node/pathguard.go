@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"io/fs"
 	"os"
@@ -282,7 +283,7 @@ func (n *Node) inDataDirs(p string) []string {
 	var rels []string
 	parts := strings.Split(p, "/")
 	for i, part := range parts {
-		if part == ".persona" {
+		if compat.IsStateDir(part) {
 			rels = append(rels, strings.Join(parts[i+1:], "/"))
 		}
 	}

@@ -5,6 +5,7 @@
 // the entries on the current branch (pi's sessions are trees: editing an earlier message branches off); history names
 // the branch, so moving to another one makes the app reload the page instead of splicing two branches together.
 
+import { customTypeMatches } from './compat.js'
 import { appToolName, clipInput, snippet } from '../../runtime-sdk/index.js'
 
 // pi's tools under the names the apps draw: the SDK's common ones, plus pi's own (toolInput renames the arguments).
@@ -24,14 +25,14 @@ export const ALLOW_ENTRY = 'persona-allow'
 
 /** Whether a session's entries hold "Always allow" for tool (pi's own name). */
 export function alwaysAllowed(entries, tool) {
-  return entries.some((e) => e?.type === 'custom' && e.customType === ALLOW_ENTRY && e.data?.tool === tool)
+  return entries.some((e) => e?.type === 'custom' && customTypeMatches(e.customType, ALLOW_ENTRY) && e.data?.tool === tool)
 }
 
 /** The host a session's entries last recorded, undefined when none did. */
 export function lastHost(entries) {
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i]
-    if (e?.type === 'custom' && e.customType === HOST_ENTRY && typeof e.data?.host === 'string') return e.data.host
+    if (e?.type === 'custom' && customTypeMatches(e.customType, HOST_ENTRY) && typeof e.data?.host === 'string') return e.data.host
   }
   return undefined
 }

@@ -9,6 +9,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from persona_identity import LEGACY_PREFIX
 
 
 class DemoDataTests(unittest.TestCase):
@@ -17,7 +19,7 @@ class DemoDataTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="persona-demo-test-") as home:
             out = Path(home) / "Demo.json"
             env = {k: v for k, v in os.environ.items()
-                   if not k.startswith(("PERSONA_", "JARVIS_", "CLAUDE_", "CODEX_", "ANTHROPIC_", "PG", "XDG_", "MOCK_"))
+                   if not k.startswith(("PERSONA_", LEGACY_PREFIX, "CLAUDE_", "CODEX_", "ANTHROPIC_", "PG", "XDG_", "MOCK_"))
                    and not re.search(r"token|secret|password|api.?key", k, re.I)
                    and k not in ("BASH_ENV", "ENV", "ZDOTDIR")}
             env.update(HOME=home, PERSONA_DEMO_OUTPUT=str(out))

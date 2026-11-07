@@ -1,3 +1,4 @@
+import { SNAPSHOT_RE, SNAPSHOT_END_RE } from '../../runtime-sdk/lib/compat.js'
 // Mapping between Antigravity CLI (agy) transcripts / ACP updates and Persona runtime items.
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -35,7 +36,6 @@ export function toAgyId(personaId) {
 }
 
 const USER_REQ_RE = /<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/
-const PERSONA_CTX_RE = /<persona-context>[\s\S]*?<\/persona-context>\s*/g
 
 export function cleanUserText(raw) {
   if (typeof raw !== 'string') return ''
@@ -44,7 +44,7 @@ export function cleanUserText(raw) {
   let prev
   do {
     prev = body
-    body = body.replace(PERSONA_CTX_RE, '').replace(/^\s*<\/persona-context>\s*/i, '')
+    body = body.replace(SNAPSHOT_RE, '').replace(SNAPSHOT_END_RE, '')
   } while (body !== prev)
   return body.trim()
 }

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"hash"
 	"net"
 	"os"
@@ -438,7 +439,7 @@ func (ph *pluginHost) run(s proto.PluginNodeStart, sum string) (*pluginRun, erro
 		spec.Name = id
 	}
 	for k, v := range s.Env {
-		if strings.HasPrefix(k, "PERSONA_") {
+		if compat.ReservedEnv(k) {
 			continue // the hub checked the manifest; this only keeps a node from being told otherwise
 		}
 		spec.Env = append(spec.Env, k+"="+v)

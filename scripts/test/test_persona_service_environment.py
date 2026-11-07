@@ -33,7 +33,7 @@ class PersonaServiceEnvironmentTests(unittest.TestCase):
                         path = commands / name
                         path.write_text(body)
                         path.chmod(0o755)
-                    env = {k: v for k, v in os.environ.items() if not k.startswith(('PERSONA_'))}
+                    env = {k: v for k, v in os.environ.items() if not k.startswith(('PERSONA_', FORMER_PREFIX))}
                     env.update({'HOME': str(home), 'PATH': str(commands) + ':' + os.environ['PATH']})
                     if custom:
                         env['PERSONA_HOME'] = str(state)
@@ -44,14 +44,14 @@ class PersonaServiceEnvironmentTests(unittest.TestCase):
                         with open(home / 'Library/LaunchAgents/com.persona.node.plist', 'rb') as file:
                             configuration = plistlib.load(file)
                         self.assertEqual(configuration['ProgramArguments'][0], str(binary))
-                        self.assertEqual(configuration['EnvironmentVariables'], {'PERSONA_HOME': str(state)})
+                        self.assertEqual(configuration['EnvironmentVariables'], {'PERSONA_HOME': str(state), FORMER_PREFIX + 'HOME': str(state)})
                         self.assertEqual(configuration['StandardErrorPath'], str(state / 'node-attach.log'))
                         # Not throttled like a background job (#5944).
                         self.assertEqual(configuration['ProcessType'], 'Interactive')
                     else:
                         configuration = (home / '.config/systemd/user/personad-node.service').read_text()
                         self.assertIn('Environment="PERSONA_HOME=' + str(state).replace('%', '%%') + '"', configuration)
-                        self.assertNotIn(FORMER_PREFIX + 'HOME', configuration)
+                        self.assertIn('Environment="' + FORMER_PREFIX + 'HOME=' + str(state).replace('%', '%%') + '"', configuration)
                         self.assertIn('ExecStart="' + str(binary).replace('$', '$$').replace('%', '%%') + '" node --attach', configuration)
                     self.assertFalse((home / 'ignored-former-profile').exists())
                     self.assertFalse((home / '.config/systemd/user' / (FORMER_NAME + 'd-node.service')).exists())

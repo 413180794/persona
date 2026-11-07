@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net"
 	"net/http"
 	"os"
@@ -384,6 +385,8 @@ func (u *updater) rollback(p update.Pending, reason string) {
 func (u *updater) updateNodes(ctx context.Context, staged string) {
 	if staged != "" {
 		files, _ := filepath.Glob(filepath.Join(staged, "personad-*"))
+		legacy, _ := filepath.Glob(filepath.Join(staged, compat.DaemonBinary+"-*"))
+		files = append(files, legacy...)
 		for _, f := range files {
 			if strings.HasSuffix(f, ".gz") || strings.HasSuffix(f, ".part") {
 				continue
@@ -634,6 +637,9 @@ func (u *updater) install(ctx context.Context, auto bool) {
 			err := os.MkdirAll(nodes, 0o755)
 			if err == nil {
 				err = copyInto(bin, filepath.Join(nodes, "personad-"+plat))
+				if err == nil {
+					err = copyInto(bin, filepath.Join(nodes, compat.DaemonBinary+"-"+plat))
+				}
 			}
 			if err != nil {
 				fail(fmt.Errorf("the node binary for the hub's own platform: %w", err))

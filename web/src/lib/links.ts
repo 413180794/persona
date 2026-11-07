@@ -1,3 +1,4 @@
+import { APP_SCHEMES, assistantPath } from "./compatibility";
 // Where a link opens (CLAUDE.md "Links open inside the app", docs/web.md "Links"). In a browser the browser is the app:
 // ordinary pages open in a new tab (most sites refuse to be framed and the page cannot tell it was refused, so a
 // framed panel would just be blank), Feishu documents and Moments posts open in the side panel's reader (the same links
@@ -133,7 +134,7 @@ function hubPage(u: URL, origin: string | string[], base: string): LinkRoute | n
     return null;
   }
   if (p[0] === "s" && p[1] && p[2] && p.length === 3) return { kind: "agent", mid: p[1], sid: p[2] };
-  if (p[0] === "persona" && p[1] && p[1] !== "new" && p.length === 2) return { kind: "conversation", sid: p[1] };
+  if (assistantPath(p[0]) && p[1] && p[1] !== "new" && p.length === 2) return { kind: "conversation", sid: p[1] };
   if (p[0] === "todos" && p.length <= 2) {
     const id = p[1] || u.searchParams.get("id");
     if (id) return { kind: "task", id };
@@ -149,7 +150,7 @@ export function linkRoute(url: string, lark = larkOn(), origin: string | string[
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
-  if (scheme === "persona:") {
+  if (APP_SCHEMES.has(scheme.slice(0, -1))) {
     // persona://session/<mid>/<sid>: the host is "session"
     try {
       const parts = `${u.host}${u.pathname}`.split("/").filter(Boolean).map(decodeURIComponent);

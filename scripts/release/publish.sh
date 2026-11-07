@@ -22,7 +22,8 @@
 # uploading to TestFlight.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-eval "$(python3 scripts/persona_config.py env)"
+_env=$(python3 scripts/persona_config.py env) || exit $?
+eval "$_env"; unset _env
 [ -n "$PERSONA_PUBLISH_URL" ] || { echo "publish.site_url is not set in the config (docs/config.md)" >&2; exit 2; }
 WRANGLER="${PERSONA_WRANGLER:-}"
 DL_BUCKET="${PERSONA_DL_BUCKET:-persona-dl}" # the r2_buckets binding DL in site/wrangler.jsonc
@@ -153,7 +154,7 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
   done
 done
 cleanup
-sed "s|@PERSONA_DL@|$PERSONA_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"
+python3 scripts/persona_identity.py --render-installer scripts/deploy/install.sh "$OUT/install.sh" "$PERSONA_PUBLISH_URL/dl"
 
 # Anyone can download these: no private values in them (CLAUDE.md), and no copied skill (only the built-in ones
 # assistantskills.Redistributable lists; a copied skill lives in the user's ~/.persona/skills or comes with its
@@ -181,7 +182,9 @@ curl -fsSL "$PERSONA_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/nu
 for bin in "$OUT/bin"/personad-* "$OUT/bin"/persona-link-* "$OUT/bin"/persona-node-*; do
   gzip -n -9 -c "$bin" > "$bin.gz"
 done
-(cd "$OUT/bin" && shasum -a 256 personad-*.gz persona-link-*.gz persona-node-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
+python3 scripts/persona_identity.py --artifact-aliases "$OUT/bin"
+# Include the device node and compatibility copies in the same verified download index.
+(cd "$OUT/bin" && shasum -a 256 *.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
 # The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
 # call: it guards against a broken download over HTTPS, docs/hub-update.md "Security").

@@ -1,3 +1,5 @@
+import { wirePackageName } from '../../runtime-sdk/lib/compat.js'
+import { customTypeMatches, legacyCustomType, LEGACY_RELOAD, piHostKind } from './compat.js'
 // The pi runtime (docs/pi.md): the sessions of one pi process — a pi in a terminal, `pi --mode rpc`, or pi-web's
 // server, which hosts many — in Persona through the runtime SDK (docs/runtimes.md). pi loads the extension once per
 // session, but there is one runtime connection per process: index.js registers each session's API with the host made
@@ -55,7 +57,7 @@ export function createPiHost(deps, options = {}) {
   let disk = { at: 0, rows: [], paths: new Map() }
   const hosts = new Map() // session file -> { mtime, host }: where each session on disk last ran
   let started = false
-  const update = options.update?.store ? options.update : undefined
+  const update = options.update?.store ? { ...options.update, name: wirePackageName(options.update.name) } : undefined
   let want = '' // a version installed for this process to switch to
   const bad = new Set() // versions that did not take here (the reload brought the same code back)
   let installing = false
@@ -154,10 +156,10 @@ export function createPiHost(deps, options = {}) {
       if (c?.mtime === mtime) return c.host
       let host
       for (const line of readFileSync(path, 'utf8').split('\n')) {
-        if (!line.includes(`"${HOST_ENTRY}"`)) continue
+        if (![HOST_ENTRY, legacyCustomType(HOST_ENTRY)].some((type) => line.includes(`"${type}"`))) continue
         try {
           const e = JSON.parse(line)
-          if (e.type === 'custom' && e.customType === HOST_ENTRY && typeof e.data?.host === 'string') host = e.data.host
+          if (e.type === 'custom' && customTypeMatches(e.customType, HOST_ENTRY) && typeof e.data?.host === 'string') host = e.data.host
         } catch {}
       }
       hosts.set(path, { mtime, host })
@@ -313,7 +315,7 @@ export function createPiHost(deps, options = {}) {
     let commandReady = false
     if (typeof pi.registerCommand === 'function' && typeof pi.sendUserMessage === 'function') {
       try {
-        pi.registerCommand(RELOAD_COMMAND, {
+        for (const name of [RELOAD_COMMAND, LEGACY_RELOAD]) pi.registerCommand(name, {
           description: 'Persona: load the new version of its extension (run by the extension itself)',
           handler: async (_args, ctx) => ctx.reload(),
         })
@@ -388,7 +390,10 @@ export function createPiHost(deps, options = {}) {
   function stampHost(pi, ctx) {
     const host = web ? 'pi-web' : ctx.mode === 'tui' ? (deps.paneId ? 'herdr' : 'terminal') : undefined
     if (!host || typeof pi.appendEntry !== 'function') return // RPC and one-shot runs: some program's, not a place
-    if (lastHost(ctx.sessionManager.getEntries()) !== host) pi.appendEntry(HOST_ENTRY, { host })
+    if (lastHost(ctx.sessionManager.getEntries()) !== host) {
+      pi.appendEntry(legacyCustomType(HOST_ENTRY), { host })
+      pi.appendEntry(HOST_ENTRY, { host })
+    }
   }
 
   /**
@@ -412,6 +417,7 @@ export function createPiHost(deps, options = {}) {
       }, { signal: ctx.signal })
       if (res?.allow === true) {
         if (res.always === true && typeof s.pi.appendEntry === 'function' && !alwaysAllowed(ctx.sessionManager.getEntries(), name)) {
+          s.pi.appendEntry(legacyCustomType(ALLOW_ENTRY), { tool: name })
           s.pi.appendEntry(ALLOW_ENTRY, { tool: name })
         }
         return { out: undefined }
@@ -576,7 +582,7 @@ export function createPiHost(deps, options = {}) {
  * undefined when this process is not pi-web's server.
  */
 export function piWebOf(argv = process.argv, env = process.env) {
-  const hostKind = env.PERSONA_PI_HOST
+  const hostKind = piHostKind(env)
   const isWeb = hostKind === 'web' || (hostKind !== 'cli' && argv.some((a) => a.includes('pi-web')) && argv.includes('start'))
   if (!isWeb) return undefined
   const i = argv.indexOf('-p')

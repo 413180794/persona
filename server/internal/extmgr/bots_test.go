@@ -15,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/compat"
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -242,7 +243,7 @@ func (f *fakeOpenAPI) total() int {
 func TestFakeOpenAPIRecordsOnlyTheBotsCalls(t *testing.T) {
 	f := newFakeOpenAPI(t)
 	req, _ := http.NewRequest("GET", f.srv.URL+"/", nil)
-	req.Header.Set("User-Agent", "jarvis-ports")
+	req.Header.Set("User-Agent", compat.PortProbeAgent)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

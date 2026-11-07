@@ -1,5 +1,7 @@
 package persona.core.domain
 
+import persona.core.contracts.ProtocolCompatibility
+
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -20,13 +22,13 @@ data class Pairing(
          * Whether [text] is a full app link (`persona://`) rather than a plain hub address.
          * The `//` is required so a bare host named after the scheme (`persona:18660`) stays an address.
          */
-        fun isLink(text: String): Boolean = text.trim().startsWith("$scheme://")
+        fun isLink(text: String): Boolean = ProtocolCompatibility.isAppLink(text)
 
         /** `persona://pair?url=…&token=…`, with optional public-route metadata. */
         fun parse(text: String): Pairing? {
             val link = text.trim().substringBefore('#')
             if (!isLink(link)) return null
-            val authority = link.removePrefix("$scheme://").substringBefore('/').substringBefore('?')
+            val authority = link.substringAfter("://").substringBefore('/').substringBefore('?')
             if (decode(authority.substringAfterLast('@').substringBefore(':')) != "pair") return null
             val query = link.substringAfter('?', "").split('&').map {
                 it.substringBefore('=') to decode(it.substringAfter('=', ""))

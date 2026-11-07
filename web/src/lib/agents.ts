@@ -1,3 +1,4 @@
+import { storedValue, storeValue } from "./compatibility";
 // "Personal agents": the Lark gateway's paired personal agents through the hub's /api/v1/agents (docs/protocol.md). A session id is
 // "<source>:<sessionKey>" and bridge keys contain "/", so the whole id is percent-encoded in paths.
 import { useSyncExternalStore } from "react";
@@ -405,7 +406,7 @@ export function normalizePrefs(x: Partial<AgentPrefs> | null | undefined): Agent
 const PREFS_LS = "persona.agents.prefs";
 const readLocal = (): AgentPrefs => {
   try {
-    return normalizePrefs(JSON.parse(localStorage.getItem(PREFS_LS) ?? "null"));
+    return normalizePrefs(JSON.parse(storedValue(PREFS_LS) ?? "null"));
   } catch {
     return emptyPrefs();
   }
@@ -416,7 +417,7 @@ const prefListeners = new Set<() => void>();
 const emitPrefs = (p: AgentPrefs) => {
   prefs = p;
   try {
-    localStorage.setItem(PREFS_LS, JSON.stringify(p));
+    storeValue(PREFS_LS, JSON.stringify(p));
   } catch {
     /* private mode */
   }

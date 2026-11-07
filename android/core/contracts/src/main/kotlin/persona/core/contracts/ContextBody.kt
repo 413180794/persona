@@ -4,7 +4,7 @@ package persona.core.contracts
  * What a reader may take as the end of a `<persona-context>` block: any case, spaces
  * around the slash and before `>`. The same pattern as the hub's `prompts.ContextBody` and the web's `contextBody`.
  */
-val contextClosingTag = Regex("<(\\s*/\\s*persona-context\\s*>)", RegexOption.IGNORE_CASE)
+val contextClosingTag = ProtocolCompatibility.contextClosingTag
 
 /**
  * [text] made safe to go inside a context block: nothing left in it closes the block, so what follows cannot sit

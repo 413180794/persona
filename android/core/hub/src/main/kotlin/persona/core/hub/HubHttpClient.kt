@@ -1,5 +1,7 @@
 package persona.core.hub
 
+import persona.core.contracts.ProtocolCompatibility
+
 import persona.core.contracts.Endpoint
 import persona.core.contracts.Health
 import persona.core.contracts.JsonCodec
@@ -223,8 +225,11 @@ class HubHttpClient(
                     throw HubFailure(HubError.Protocol, retryable = false)
                 }
                 // The language the app shows, so the hub answers in it (docs/i18n.md); also on WebSocket upgrades.
-                val builder = request.newBuilder().header("X-Persona-Client", "android/$version")
-                    .header("Accept-Language", persona.core.contracts.ClientLanguage.tag)
+                val builder = request.newBuilder().header("Accept-Language", persona.core.contracts.ClientLanguage.tag)
+                ProtocolCompatibility.clientHeaders.forEach { builder.header(it, "android/$version") }
+                ProtocolCompatibility.operationHeaders.firstNotNullOfOrNull { request.header(it) }?.let { id ->
+                    ProtocolCompatibility.operationHeaders.forEach { builder.header(it, id) }
+                }
                 // The manager the assistant page shows (docs/managers.md): its requests name it; none for the default.
                 // A thing a merged list showed as another manager's (an inbox item, an extension) names that one. A
                 // request pinned to one (`?manager=`) keeps it: the default's (empty) goes without either.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net"
 	"os"
 	"path/filepath"
@@ -44,7 +45,7 @@ func TestGuestProcessFlags(t *testing.T) {
 
 	mcpJSON, flags := n.claudeAssistantMCPAndTools("guest-1", t.TempDir())
 	got := servers(mcpJSON)
-	if len(got) != 1 || got["persona"] == nil {
+	if len(got) != 2 || got["persona"] == nil || got[compat.MCPServer] == nil {
 		t.Fatalf("servers = %v, want Persona's alone", got)
 	}
 	env, _ := got["persona"]["env"].(map[string]any)
@@ -54,7 +55,7 @@ func TestGuestProcessFlags(t *testing.T) {
 	if v, ok := flagValue(flags, "--tools"); !ok || v != "" {
 		t.Fatalf("--tools = %q (%v), want no built-in tools: %q", v, ok, flags)
 	}
-	if v, _ := flagValue(flags, "--allowedTools"); v != "mcp__persona__lark_agent_reply" {
+	if v, _ := flagValue(flags, "--allowedTools"); v != strings.Join(compat.MCPToolNames([]string{"lark_agent_reply"}), ",") {
 		t.Fatalf("--allowedTools = %q, want only the guest's tool", v)
 	}
 	if !slices.Contains(flags, "--strict-mcp-config") || slices.Contains(flags, "--disallowedTools") {
@@ -112,7 +113,7 @@ func TestGuestConversationStarts(t *testing.T) {
 			line = string(raw)
 		}
 	}
-	for _, want := range []string{"[--tools] []", "[--strict-mcp-config]", "[--allowedTools] [mcp__persona__lark_agent_reply]"} {
+	for _, want := range []string{"[--tools] []", "[--strict-mcp-config]", "[--allowedTools] [" + strings.Join(compat.MCPToolNames([]string{"lark_agent_reply"}), ",") + "]"} {
 		if !strings.Contains(line, want) {
 			t.Fatalf("the guest's process has no %s: %s", want, line)
 		}

@@ -1,3 +1,4 @@
+import { managedProvider, storedCredentials } from "../lib/compatibility";
 // Settings (docs/web.md): appearance, where the assistant runs, "Models" (every launcher: rc-file and PATH ones synced, the
 // built-in claude, Persona ones kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's Settings.
 import { BASE, stripBase } from "../lib/base";
@@ -5,7 +6,6 @@ import { href } from "../lib/router";
 import { useScrollMemory } from "../lib/scroll-memory";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, handleUnauthorized, setToken } from "../lib/api";
-import { TOKEN_ID_KEY } from "../lib/auth";
 import { splitDevices } from "../lib/devices";
 import { ago } from "../lib/format";
 import { install, useInstall, type InstallState } from "../lib/pwa";
@@ -364,9 +364,8 @@ function About() {
   const logout = async () => {
     // signing out on purpose: a request that gets a 401 meanwhile must not show "this browser was signed out"
     handleUnauthorized(() => {});
-    const id = localStorage.getItem(TOKEN_ID_KEY);
+    const id = storedCredentials().tokenId;
     if (id) await api(`/auth/tokens/${enc(id)}`, { method: "DELETE" }).catch(() => {});
-    localStorage.removeItem(TOKEN_ID_KEY);
     setToken("");
     reset();
     location.href = BASE + "/";
@@ -461,12 +460,12 @@ function Models() {
     if (!list || !q) return list ?? [];
     return list.filter((l) => [l.name, l.model, l.small_model, l.base_url, ...(l.machines ?? []).map(name)].some((v) => v?.toLowerCase().includes(q)));
   }, [list, query, machines, sync]);
-  const managed = shown.filter((l) => l.source === "persona");
+  const managed = shown.filter((l) => managedProvider(l.source));
   const builtin = builtinRows(shown);
   const rc = rcGroups(shown);
   // a wrapper script on PATH or a runtime's launcher (agy, omp): a computer's, but not from an rc file
-  const onPath = shown.filter((l) => l.source !== "persona" && l.source !== "builtin" && l.source !== "zshrc" && !l.hidden);
-  const hidden = shown.filter((l) => l.source !== "persona" && l.source !== "builtin" && l.hidden);
+  const onPath = shown.filter((l) => !managedProvider(l.source) && l.source !== "builtin" && l.source !== "zshrc" && !l.hidden);
+  const hidden = shown.filter((l) => !managedProvider(l.source) && l.source !== "builtin" && l.hidden);
   // the machines that did not answer this time, named on the entries they gave before
   const staleMark = (ids?: string[]) =>
     ids?.length ? <Pill tone="orange">{t("settings.stale", { machines: formatList(ids.map(name), { type: "conjunction", style: "narrow" }) })}</Pill> : null;
@@ -476,7 +475,7 @@ function Models() {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           {l.display_name ? <span className="truncate text-[13px] font-medium text-ink">{l.display_name}</span> : <span className="truncate font-mono text-[13px] font-medium text-ink">{l.name}</span>}
-          {l.source === "persona" && <Pill tone="accent">Persona</Pill>}
+          {managedProvider(l.source) && <Pill tone="accent">Persona</Pill>}
           {l.source === "agy" && <Pill>Antigravity Runtime</Pill>}
           {l.kind === "api" && <Pill>{t("settings.direct_api")}</Pill>}
           {staleMark(l.stale)}
@@ -629,7 +628,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
     return out;
   }, [l]);
 
-  const testOn = l?.source === "persona" ? [""] : (l?.machines ?? []).filter((id) => machines.find((m) => m.id === id)?.online !== false);
+  const testOn = managedProvider(l?.source) ? [""] : (l?.machines ?? []).filter((id) => machines.find((m) => m.id === id)?.online !== false);
   const running = Object.values(checks).some((c) => c === null);
   const check = async () => {
     if (!l) return;
@@ -652,7 +651,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
     if (!l) return;
     try {
       await api(enLauncher(l.name), { method: "DELETE" });
-      toast(l.source === "persona" ? t("settings.deleted", { name: l.name }) : t("settings.hid", { name: l.name }), "ok");
+      toast(managedProvider(l.source) ? t("settings.deleted", { name: l.name }) : t("settings.hid", { name: l.name }), "ok");
       onChanged();
       onClose();
     } catch (e) {
@@ -686,21 +685,21 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
               </Button>
             ) : (
               <span className="relative">
-                <Button tone="quiet" icon={l.source === "persona" ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
-                  {l.source === "persona" ? t("settings.delete_provider") : t("settings.hide_in_persona")}
+                <Button tone="quiet" icon={managedProvider(l.source) ? "x" : undefined} onClick={() => setConfirm((c) => !c)} className="text-red enabled:hover:text-red">
+                  {managedProvider(l.source) ? t("settings.delete_provider") : t("settings.hide_in_persona")}
                 </Button>
                 {/* the confirmation comes up right at the button (like the app), not as another dialog */}
                 {confirm && (
                   <span className="absolute bottom-full left-0 mb-1.5 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
                     <Button tone="danger" onClick={() => void remove()}>
-                      {l.source === "persona" ? t("settings.confirm_delete") : t("settings.confirm_hide")}
+                      {managedProvider(l.source) ? t("settings.confirm_delete") : t("settings.confirm_hide")}
                     </Button>
                   </span>
                 )}
               </span>
             )}
             <span className="flex-1" />
-            {l.source === "persona" && (
+            {managedProvider(l.source) && (
               <Button tone="secondary" onClick={() => onEdit(l)}>
                 {t("settings.edit")}
               </Button>
@@ -717,7 +716,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
       {l && (
         <div className="flex max-h-[62vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Pill tone={l.source === "persona" ? "accent" : undefined}>{l.source === "persona" ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function", { file: rcFilesOf(l).join(" / ") })}</Pill>
+            <Pill tone={managedProvider(l.source) ? "accent" : undefined}>{managedProvider(l.source) ? t("settings.managed") : l.source === "agy" ? "Antigravity Runtime (agy acp)" : l.source === "path" ? t("settings.path_script") : t("settings.zshrc_function", { file: rcFilesOf(l).join(" / ") })}</Pill>
             {(l.machines ?? []).map((id) => (
               <Pill key={id} tone={l.stale?.includes(id) ? "orange" : undefined}>{l.stale?.includes(id) ? `${mname(id)} · ${t("settings.stale_mark")}` : mname(id)}</Pill>
             ))}
@@ -725,7 +724,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
           </div>
 
           {/* how much is left comes before trying it, as in the app */}
-          {l.kind !== "api" && (l.source === "persona" || l.source === "zshrc" || l.source === "path") && <LauncherQuota name={l.name} />}
+          {l.kind !== "api" && (managedProvider(l.source) || l.source === "zshrc" || l.source === "path") && <LauncherQuota name={l.name} />}
 
           {Object.keys(checks).length > 0 && (
             <KV title={t("settings.availability")}>
@@ -750,7 +749,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
             </KV>
           )}
 
-          {l.source === "persona" && (
+          {managedProvider(l.source) && (
             <KV title={t("settings.config")}>
               <KVRow k={t("settings.access")} v={l.kind === "api" ? t("settings.direct_api") : l.agent === "codex" ? "Codex" : l.agent === "agy" ? "Antigravity (agy)" : t("settings.launcher")} />
               {l.kind === "api" && <KVRow k={t("settings.protocol")} v={l.api === "responses" ? "Responses" : "Messages"} />}
@@ -778,7 +777,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
             </KV>
           )}
 
-          {hasExtensions && <LauncherExtensionSections launcher={l.name} machine={l.source === "persona" ? undefined : testOn[0] || undefined} />}
+          {hasExtensions && <LauncherExtensionSections launcher={l.name} machine={managedProvider(l.source) ? undefined : testOn[0] || undefined} />}
 
           {groups.map((g) => (
             <DetailBlock key={g.ids.join()} d={g.d} place={groups.length > 1 ? formatList(g.ids.map(mname), { type: "conjunction", style: "narrow" }) : undefined} />

@@ -33,7 +33,7 @@ FORMER_PREFIX = FORMER_NAME.upper() + '_'
 
 class PersonaScriptIdentityTests(unittest.TestCase):
     def test_environment_uses_only_the_current_prefix_including_explicit_empty(self):
-        for values, expected in (({}, ''), ({FORMER_PREFIX + 'HOME': 'old'}, ''),
+        for values, expected in (({}, ''), ({FORMER_PREFIX + 'HOME': 'old'}, 'old'),
                                  ({'PERSONA_HOME': 'new', FORMER_PREFIX + 'HOME': 'old'}, 'new'),
                                  ({'PERSONA_HOME': '', FORMER_PREFIX + 'HOME': 'old'}, '')):
             self.assertEqual(identity.env_value('PERSONA_HOME', values), expected)
@@ -52,7 +52,7 @@ class PersonaScriptIdentityTests(unittest.TestCase):
             (home / 'hop').symlink_to(custom, target_is_directory=True)
             self.assertEqual(identity.data_dir(home, {'PERSONA_HOME': 'hop/../second'}), str(home / 'second'))
 
-    def test_default_query_is_pure_and_initialization_ignores_former_store(self):
+    def test_default_query_is_pure_and_initialization_preserves_one_store(self):
         for initial in ('fresh', 'former', 'current', 'independent'):
             with self.subTest(initial=initial), tempfile.TemporaryDirectory() as directory:
                 home = Path(directory)
@@ -64,20 +64,22 @@ class PersonaScriptIdentityTests(unittest.TestCase):
                     current.mkdir()
                     (current / 'new.fixture').write_text('new-data')
                 before = sorted(p.name for p in home.iterdir())
-                self.assertEqual(identity.data_dir(home, {}), str(current))
-                self.assertEqual(sorted(p.name for p in home.iterdir()), before)
-                self.assertEqual(identity.prepare_dir(home, {}), str(current))
-                self.assertEqual(identity.prepare_dir(home, {}), str(current))
-                self.assertFalse(current.is_symlink())
-                self.assertFalse((current / 'old.fixture').exists())
-                if initial in ('former', 'independent'):
+                if initial == 'independent':
+                    with self.assertRaisesRegex(OSError, 'independent'):
+                        identity.prepare_dir(home, {})
+                    self.assertEqual(sorted(p.name for p in home.iterdir()), before)
                     self.assertFalse(os.path.samefile(former, current))
-                    self.assertEqual(list(former.iterdir()), [former / 'old.fixture'])
-                    self.assertEqual((former / 'old.fixture').read_text(), 'old-data')
-                else:
-                    self.assertFalse(os.path.lexists(former))
-                if initial in ('current', 'independent'):
-                    self.assertEqual((current / 'new.fixture').read_text(), 'new-data')
+                    continue
+                expected = former if initial == 'former' else current
+                self.assertEqual(identity.data_dir(home, {}), str(expected))
+                self.assertEqual(sorted(p.name for p in home.iterdir()), before)
+                identity.prepare_dir(home, {})
+                identity.prepare_dir(home, {})
+                self.assertTrue(os.path.samefile(former, current))
+                if initial == 'former':
+                    self.assertEqual((current / 'old.fixture').read_text(), 'old-data')
+                if initial == 'current':
+                    self.assertEqual((former / 'new.fixture').read_text(), 'new-data')
 
     def test_dangling_canonical_root_is_not_repaired(self):
         for target in ('./missing', './.persona/.'):
@@ -115,14 +117,13 @@ class PersonaScriptIdentityTests(unittest.TestCase):
                 self.assertFalse((external / 'missing').exists())
                 self.assertFalse((external / '.persona').exists())
 
-    def test_initialization_never_attempts_to_create_an_alias(self):
+    def test_initialization_creates_only_an_alias_to_the_same_store(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
-            with patch.object(identity.os, 'symlink', side_effect=AssertionError('alias creation is forbidden')) as symlink:
-                self.assertEqual(identity.prepare_dir(home, {}), str(home / '.persona'))
-                self.assertEqual(identity.prepare_dir(home, {}), str(home / '.persona'))
-                symlink.assert_not_called()
-            self.assertFalse(os.path.lexists(home / ('.' + FORMER_NAME)))
+            identity.prepare_dir(home, {})
+            identity.prepare_dir(home, {})
+            self.assertEqual(os.readlink(home / ('.' + FORMER_NAME)), '.persona')
+            self.assertTrue(os.path.samefile(home / '.persona', home / ('.' + FORMER_NAME)))
 
     def test_service_root_survives_an_ssh_environment_without_prefixes(self):
         for name in ('personad.service', 'personad-node.service', 'persona-link.service'):
@@ -164,22 +165,19 @@ class PersonaScriptIdentityTests(unittest.TestCase):
             self.assertEqual(identity.data_dir(home, identity.service_environment(home, {}, 'node')), str(current))
             self.assertEqual(identity.data_dir(home, identity.service_environment(home, {}, 'link')), str(home / 'other-link'))
 
-    def test_former_service_units_and_environment_keys_are_not_read(self):
+    def test_former_service_definitions_fail_closed_on_missing_required_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             units = home / '.config/systemd/user'
             units.mkdir(parents=True)
             for suffix in ('d.service', 'd-node.service', '-link.service'):
                 (units / (FORMER_NAME + suffix)).write_text('[Service]\nEnvironmentFile=/unread/former.env\n')
-            agents = home / 'Library/LaunchAgents'
-            agents.mkdir(parents=True)
-            for role in ('node', 'link'):
-                (agents / ('com.' + FORMER_NAME + '.' + role + '.plist')).write_text('not a valid plist')
             for role in ('auto', 'hub', 'node', 'link'):
-                self.assertEqual(identity.data_dir(home, identity.service_environment(home, {}, role)), str(home / '.persona'))
-            (units / 'personad.service').write_text('[Service]\nEnvironment="' + FORMER_PREFIX + 'HOME=do-not-use"\n')
-            self.assertEqual(identity.service_environment(home, {}, 'hub'), {})
-            self.assertFalse((home / 'do-not-use').exists())
+                with self.assertRaises(FileNotFoundError):
+                    identity.service_environment(home, {}, role)
+            (units / (FORMER_NAME + 'd.service')).write_text('[Service]\nEnvironment="' + FORMER_PREFIX + 'HOME=old-profile"\n')
+            self.assertEqual(identity.data_dir(home, identity.service_environment(home, {}, 'hub')), str(home / 'old-profile'))
+            self.assertFalse((home / 'old-profile').exists())
 
     def test_launchd_services_choose_the_matching_role(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -292,7 +290,7 @@ class PersonaScriptIdentityTests(unittest.TestCase):
             unit.write_text('[Service]\nEnvironment="PERSONA_HOME=' + str(root) + '"\n')
             result = subprocess.run(['bash', str(ROOT / 'scripts/deploy/link-systemd.sh'), 'status'], env=environment(home), capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout, f'{root}|unset|status')
+            self.assertEqual(result.stdout, f'{root}|{root}|status')
 
     def test_cli_keeps_explicit_token_sources_and_accepts_current_bundle_variable(self):
         spec = importlib.util.spec_from_file_location('runtime_ctl_under_test', ROOT / 'scripts/app/personactl.py')
@@ -328,12 +326,13 @@ class PersonaDeploymentScriptTests(unittest.TestCase):
         (self.repo / 'server').mkdir(); (self.repo / 'web').mkdir()
         shutil.copytree(ROOT / 'scripts', self.repo / 'scripts', ignore=shutil.ignore_patterns('__pycache__'))
         (self.repo / 'web/package.json').write_text('{}')
+        (self.repo / 'web/package-lock.json').write_text('{}')
         (self.repo / 'web/node_modules').mkdir()
         self.local = self.base / 'developer'; self.local.mkdir()
         self.remote = self.base / 'remote'; self.remote.mkdir()
         self.state = self.remote / 'deployed profile with $ " %'
         self.state.mkdir()
-        (self.state / 'hub.json').write_text(json.dumps({'database_url': 'postgres://fixture@localhost/persona?sslmode=disable'}))
+        (self.state / 'hub.json').write_text(json.dumps({'database_url': 'postgres://persona@localhost/persona?sslmode=disable'}))
         unit = self.remote / '.config/systemd/user/personad.service'; unit.parent.mkdir(parents=True)
         unit.write_text('[Service]\nEnvironment=' + shlex.quote('PERSONA_HOME=' + str(self.state)) + '\n')
         (unit.parent / 'personad-node.service').write_text(unit.read_text())
@@ -345,7 +344,7 @@ while args and args[0].startswith('-'):
     key = args.pop(0)
     if key == '-o': args.pop(0)
 args.pop(0)
-env = {key:value for key,value in os.environ.items() if not key.startswith(('PERSONA_'))}
+env = {key:value for key,value in os.environ.items() if not key.startswith(('PERSONA_', 'JARVIS_'))}
 env['HOME'] = env['FIXTURE_REMOTE_HOME']
 result = subprocess.run(['bash', '-c', ' '.join(args)], env=env)
 sys.exit(result.returncode)
@@ -363,7 +362,7 @@ sys.exit(2)
         executable(self.commands / 'hostname', '#!/bin/sh\nprintf "fixture-local\\n"\n')
         executable(self.commands / 'scutil', '#!/bin/sh\nexit 1\n')
         executable(self.commands / 'systemctl', '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HOME/systemctl.fixture"\n')
-        executable(self.commands / 'docker', '#!/bin/sh\ncase "$1" in ps) printf "persona-postgres\\n";; exec) case "$3" in psql) printf "1\\n";; esac;; esac\n')
+        executable(self.commands / 'docker', '#!/bin/sh\ncase "$1" in ps) printf "persona-postgres\\n";; inspect) printf "POSTGRES_USER=persona\\n";; exec) case "$3" in psql) printf "1\\n";; esac;; esac\n')
         config = self.base / 'config.json'
         config.write_text(json.dumps({'hub': {'machine': 'hub-fixture'}, 'machines': [
             {'id': 'hub-fixture', 'ssh': 'hub.example.test', 'os': 'linux', 'hostnames': ['fixture-remote']},
@@ -385,8 +384,8 @@ sys.exit(2)
         for name in ('personad', 'personad-wechat', 'nodes/personad-linux-amd64', 'nodes/personad-linux-arm64',
                      'nodes/personad-darwin-amd64', 'nodes/personad-darwin-arm64'):
             self.assertTrue((self.state / 'bin' / name).is_file(), name)
-        self.assertFalse(os.path.lexists(self.state / 'bin' / (FORMER_NAME + 'd')))
-        self.assertFalse(os.path.lexists(self.state / 'bin' / (FORMER_NAME + 'd-wechat')))
+        self.assertEqual(os.readlink(self.state / 'bin' / (FORMER_NAME + 'd')), 'personad')
+        self.assertEqual(os.readlink(self.state / 'bin' / (FORMER_NAME + 'd-wechat')), 'personad-wechat')
         self.assertEqual((self.state / 'web/index.html').read_text(), 'Persona fixture web')
         self.assertEqual(identity.data_dir(self.remote, identity.service_environment(self.remote, {})), str(self.state))
         self.assertFalse((self.remote / '.persona').exists())
@@ -405,7 +404,7 @@ sys.exit(2)
         self.run_script('scripts/deploy/deploy.sh', 'via-fixture')
         self.assertEqual((self.state / 'bin/personad').read_text(), '#!/bin/sh\nprintf "fixture-binary\\n"\n')
         self.assertFalse((self.state / 'bin/personad').is_symlink())
-        self.assertFalse(os.path.lexists(self.state / 'bin' / (FORMER_NAME + 'd')))
+        self.assertEqual(os.readlink(self.state / 'bin' / (FORMER_NAME + 'd')), 'personad')
 
     def test_web_only_deploy_keeps_the_selected_remote_profile(self):
         self.run_script('scripts/deploy/deploy.sh', 'web')

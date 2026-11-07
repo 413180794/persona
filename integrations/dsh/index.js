@@ -7,6 +7,7 @@
 // the one the node sent when it carries another (docs/runtimes.md "Auto-update") — and is swapped without DSH's plugin
 // manager. config.autoUpdate: take the node's versions (default: yes, except as a daemon with config.listen).
 
+import { runtimeStorePath } from '../runtime-sdk/lib/compat.js'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { prepareSocketDirectory } from '../runtime-sdk/lib/identity.js'
@@ -32,7 +33,7 @@ export function apply(ctx, config = {}) {
     let store
     if (autoUpdate) {
       try {
-        store = join(prepareSocketDirectory(socket), 'runtime-packages', name)
+        store = runtimeStorePath(prepareSocketDirectory(socket), name)
       } catch (err) {
         log(`Persona runtime cache unavailable: ${err.message}`)
       }

@@ -26,7 +26,7 @@ type Environment struct {
 func Env() Environment {
 	e := Environment{
 		ID: getenv("ID"), Dir: getenv("DIR"), Data: getenv("DATA"), Socket: getenv("SOCKET"),
-		HubURL: first("PERSONA_HUB_URL", "PERSONA_HUB_URL"), HubToken: first("PERSONA_HUB_TOKEN", "PERSONA_HUB_TOKEN"),
+		HubURL: hubEnv("URL"), HubToken: hubEnv("TOKEN"),
 	}
 	if c := getenv("CONFIG"); c != "" {
 		e.Config = json.RawMessage(c)
@@ -38,7 +38,7 @@ func Env() Environment {
 }
 
 func getenv(name string) string {
-	return first("PERSONA_EXTENSION_"+name, "PERSONA_PLUGIN_"+name, "PERSONA_PLUGIN_"+name)
+	return extensionEnv(name)
 }
 
 func first(names ...string) string {

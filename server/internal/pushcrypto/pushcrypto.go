@@ -9,10 +9,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+
+	"github.com/nwverse/persona/server/internal/compat"
 )
 
 // Info binds a sealed payload to this use; both sides pass the same bytes.
-const Info = "persona push v1"
+const Info = compat.PushInfo
+const cutoverInfo = "persona push v1"
 
 // EncLen is the encapsulated key's length (an uncompressed P-256 point) at the start of a sealed payload; MinSealed is
 // the shortest a sealed payload can be (that plus the AES-GCM tag, for an empty plaintext).
@@ -43,7 +46,7 @@ func Seal(pub *ecdh.PublicKey, plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return hpke.Seal(pk, hpke.HKDFSHA256(), hpke.AES256GCM(), []byte(Info), plaintext)
+	return hpke.Seal(pk, hpke.HKDFSHA256(), hpke.AES256GCM(), []byte(compat.PushInfo), plaintext)
 }
 
 // Open is Seal's inverse (tests, and the relay's end-to-end script).
@@ -52,5 +55,10 @@ func Open(priv *ecdh.PrivateKey, sealed []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return hpke.Open(k, hpke.HKDFSHA256(), hpke.AES256GCM(), []byte(Info), sealed)
+	plain, err := hpke.Open(k, hpke.HKDFSHA256(), hpke.AES256GCM(), []byte(compat.PushInfo), sealed)
+	if err == nil {
+		return plain, nil
+	}
+	// Already-produced cutover envelopes remain readable, without changing keys.
+	return hpke.Open(k, hpke.HKDFSHA256(), hpke.AES256GCM(), []byte(cutoverInfo), sealed)
 }

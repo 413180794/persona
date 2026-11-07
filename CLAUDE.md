@@ -311,6 +311,7 @@ Every number, color and icon in the UI comes from the design system; pages conta
 
 | Doc | Contents |
 | --- | --- |
+| `docs/rolling-upgrade-compatibility.md` | Requested Chinese contract matrix for bidirectional rolling upgrades: exact aliases, capability negotiation, stable cryptographic and persistence identities, isolated binary/client verification and remaining native boundaries |
 | `docs/ios.md` | The iOS / watchOS app: information architecture, design language, phone data tools |
 | `docs/ios-state.md` | App state and redraws: how a push reaches the screen, the cost of one push, root causes, staged fixes; standards and probes for accuracy / timeliness (`ScreenProbe`) |
 | `docs/intents.md` | Siri / Shortcuts (App Intents): ask Claude, status, approve the first pending request |

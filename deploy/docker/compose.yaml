@@ -1,58 +1,45 @@
-# The hub and its database on one machine, e.g. a NAS (docs/docker.md). Next to this file: a .env (copy
-# .env.example; PERSONA_IMAGE is the one line it must have), and the data folders it creates (data/: hub.json, keys,
-# the knowledge base, the database's generated password; postgres/).
-#
-#   docker compose up -d
-#   docker compose exec hub personad hub pair          # pair the app
-#   docker compose exec hub personad hub tailcat-key   # the key computers behind NAT allow in (docs/server.md)
-#   docker compose pull && docker compose up -d       # upgrade
-name: persona
+# Rolling-upgrade adapter: keep the project and database identities of existing deployments.
+# Both environment spellings address the same containers and the same host directories.
+name: ${PERSONA_COMPOSE_PROJECT:-jarvis}
 
 services:
   hub:
-    image: ${PERSONA_IMAGE:?set PERSONA_IMAGE in .env}
+    image: ${PERSONA_IMAGE-${JARVIS_IMAGE:?set PERSONA_IMAGE in .env}}
     restart: unless-stopped
-    # Reaps what personad's children leave behind (ssh's ProxyCommand / ProxyJump processes when ssh is killed).
     init: true
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      # Unset: the data folder's owner (1000 when Docker made the folder itself).
       PUID: ${PUID:-}
       PGID: ${PGID:-}
       TZ: ${TZ:-UTC}
-      # What the app connects to and pairs with: how phones reach this machine (a LAN address, a VPN, a reverse proxy).
-      # Unset: the hub says so when it starts, and the admin page can fill it in.
-      PERSONA_PUBLIC_URL: ${PERSONA_PUBLIC_URL:-}
-      # PERSONA_DB_PASSWORD unset: the password the postgres service made up on its first start (data/docker/), which
-      # the image's personad puts in here.
-      PERSONA_DATABASE_URL: postgres://persona:${PERSONA_DB_PASSWORD:-}@postgres:5432/persona?sslmode=disable
-      # Who may open the hub's admin UI (<hub address>/admin, docs/admin.md): loopback | lan | cidrs | any. Unset: the
-      # entrypoint says so and hub.json's admin.access applies (lan unless set there).
-      PERSONA_ADMIN_ACCESS: ${PERSONA_ADMIN_ACCESS:-}
-      PERSONA_ADMIN_CIDRS: ${PERSONA_ADMIN_CIDRS:-}
-      # The image above, so the hub can say when a newer one is out (and a read token if the image is private).
-      PERSONA_IMAGE: ${PERSONA_IMAGE}
-      PERSONA_REGISTRY_TOKEN: ${PERSONA_REGISTRY_TOKEN:-}
+      PERSONA_PUBLIC_URL: ${PERSONA_PUBLIC_URL-${JARVIS_PUBLIC_URL:-}}
+      JARVIS_PUBLIC_URL: ${PERSONA_PUBLIC_URL-${JARVIS_PUBLIC_URL:-}}
+      PERSONA_DATABASE_URL: postgres://${PERSONA_DB_USER:-jarvis}:${PERSONA_DB_PASSWORD-${JARVIS_DB_PASSWORD:-}}@postgres:5432/${PERSONA_DB_NAME:-jarvis}?sslmode=disable
+      JARVIS_DATABASE_URL: postgres://${PERSONA_DB_USER:-jarvis}:${PERSONA_DB_PASSWORD-${JARVIS_DB_PASSWORD:-}}@postgres:5432/${PERSONA_DB_NAME:-jarvis}?sslmode=disable
+      PERSONA_ADMIN_ACCESS: ${PERSONA_ADMIN_ACCESS-${JARVIS_ADMIN_ACCESS:-}}
+      JARVIS_ADMIN_ACCESS: ${PERSONA_ADMIN_ACCESS-${JARVIS_ADMIN_ACCESS:-}}
+      PERSONA_ADMIN_CIDRS: ${PERSONA_ADMIN_CIDRS-${JARVIS_ADMIN_CIDRS:-}}
+      JARVIS_ADMIN_CIDRS: ${PERSONA_ADMIN_CIDRS-${JARVIS_ADMIN_CIDRS:-}}
+      PERSONA_IMAGE: ${PERSONA_IMAGE-${JARVIS_IMAGE:-}}
+      JARVIS_IMAGE: ${PERSONA_IMAGE-${JARVIS_IMAGE:-}}
+      PERSONA_REGISTRY_TOKEN: ${PERSONA_REGISTRY_TOKEN-${JARVIS_REGISTRY_TOKEN:-}}
+      JARVIS_REGISTRY_TOKEN: ${PERSONA_REGISTRY_TOKEN-${JARVIS_REGISTRY_TOKEN:-}}
     ports:
-      - "${PERSONA_PORT:-18660}:18660"
-      # TLS (hub.json's public.tls_listen, on for a first start in this image): Persona Link and computers that pair
-      # only talk TLS. The hub tells apps port 18662: publish it on that port (a host address in front is fine,
-      # e.g. <NAS LAN address>:18662).
-      - "${PERSONA_TLS_PORT:-18662}:18662"
+      - "${PERSONA_PORT-${JARVIS_PORT:-18660}}:18660"
+      - "${PERSONA_TLS_PORT-${JARVIS_TLS_PORT:-18662}}:18662"
     volumes:
+      # A single host store is visible at either image generation's state root.
       - ./data:/home/persona/.persona
-      # Machines reached over ssh (not needed with tailcat): your keys, ssh config and known_hosts, read only.
+      - ./data:/home/jarvis/.jarvis
+      # Optional SSH keys must be mounted at the home used by the selected image.
       # - ~/.ssh:/home/persona/.ssh:ro
+      # - ~/.ssh:/home/jarvis/.ssh:ro
 
   postgres:
-    # Where Docker Hub is out of reach, the same image through a mirror or a local registry.
-    image: ${PERSONA_POSTGRES_IMAGE:-postgres:18-alpine}
+    image: ${PERSONA_POSTGRES_IMAGE-${JARVIS_POSTGRES_IMAGE:-postgres:18-alpine}}
     restart: unless-stopped
-    # .env without PERSONA_DB_PASSWORD: a random one, made on the first start (no database yet) and kept in
-    # data/docker/db-password for the hub (only the first start, which creates the database, uses it). With one, the
-    # image's own entrypoint as is.
     entrypoint:
       - /bin/sh
       - -c
@@ -61,13 +48,10 @@ services:
         if [ -z "$${POSTGRES_PASSWORD:-}" ]; then
           f=/run/persona/db-password
           if [ ! -s "$$f" ] && [ -s "$${PGDATA:-/var/lib/postgresql/data}/PG_VERSION" ]; then
-            # The database exists already (postgres/ restored without data/, data/ deleted, a fresh .env): it has a
-            # password, and a made-up one would not be it.
-            echo "the database already exists and its password is neither in .env (PERSONA_DB_PASSWORD) nor in" \
-              "data/docker/db-password: put it in .env's PERSONA_DB_PASSWORD (docs/docker.md)" >&2
+            echo "the database already exists but its password is missing: restore PERSONA_DB_PASSWORD or data/docker/db-password" >&2
           elif [ ! -s "$$f" ]; then
             (umask 077 && tr -dc 0-9a-f < /dev/urandom | head -c 48 > "$$f.new" && mv "$$f.new" "$$f")
-            echo "first start: made up the database password, kept in data/docker/db-password" >&2
+            echo "first start: generated data/docker/db-password" >&2
           fi
           if [ -s "$$f" ]; then
             POSTGRES_PASSWORD="$$(cat "$$f")"
@@ -78,17 +62,17 @@ services:
       - postgres-entrypoint
     command: ["postgres"]
     environment:
-      POSTGRES_USER: persona
-      POSTGRES_DB: persona
-      POSTGRES_PASSWORD: ${PERSONA_DB_PASSWORD:-}
+      # These are persistent database identities, not product display names.
+      # Installations explicitly migrated to another role/database must configure them.
+      POSTGRES_USER: ${PERSONA_DB_USER:-jarvis}
+      POSTGRES_DB: ${PERSONA_DB_NAME:-jarvis}
+      POSTGRES_PASSWORD: ${PERSONA_DB_PASSWORD-${JARVIS_DB_PASSWORD:-}}
       TZ: ${TZ:-UTC}
     volumes:
-      # postgres 18 keeps its data under /var/lib/postgresql/<major>/docker: mount the parent.
       - ./postgres:/var/lib/postgresql
-      # Only the generated password's folder of the hub's data, not its keys.
       - ./data/docker:/run/persona
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "persona", "-d", "persona"]
+      test: ["CMD", "pg_isready", "-U", "${PERSONA_DB_USER:-jarvis}", "-d", "${PERSONA_DB_NAME:-jarvis}"]
       interval: 5s
       timeout: 5s
       retries: 30

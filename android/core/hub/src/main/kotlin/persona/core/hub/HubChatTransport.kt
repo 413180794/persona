@@ -136,7 +136,7 @@ class HubChatTransport internal constructor(
     override suspend fun resolveOutcome(id: String, resolution: Resolution): ResolveOutcome {
         val path = api("interactions", id, "resolve")
         val body = JsonCodec.encodeToString(resolution)
-        val headers = mapOf(OP_ID_HEADER to newOpId())
+        val headers = ProtocolCompatibility.operationHeaders(newOpId())
         val deadline = clockMillis() + resolveRetryMillis
         while (true) {
             try {

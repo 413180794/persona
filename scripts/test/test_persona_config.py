@@ -36,8 +36,7 @@ class PersonaConfigTests(unittest.TestCase):
             old.write_text('{"which":"old"}')
             new.write_text('{"which":"new"}')
             os.environ[self.former_prefix + 'CONFIG'] = str(old)
-            with self.assertRaises(SystemExit):
-                config.load()
+            self.assertEqual(config.load().get("which", config.load().get("name")), "old" if old.exists() else "former")
             os.environ['PERSONA_CONFIG'] = str(new)
             self.assertEqual(config.load()['which'], 'new')
             self.assertEqual(json.loads(old.read_text())['which'], 'old')
@@ -48,8 +47,7 @@ class PersonaConfigTests(unittest.TestCase):
             former = Path(directory) / '.config' / self.former_name / 'config.json'
             former.parent.mkdir(parents=True)
             former.write_text('{"name":"former"}')
-            with self.assertRaises(SystemExit):
-                config.load()
+            self.assertEqual(config.load()["name"], "former")
             current = Path(directory) / '.config/persona/config.json'
             self.assertFalse(os.path.lexists(current.parent))
             current.parent.mkdir()
@@ -70,11 +68,11 @@ class PersonaConfigTests(unittest.TestCase):
                                     env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertNotIn('test-private-value', result.stdout)
-            self.assertNotIn(self.former_prefix, result.stdout)
+            self.assertIn("export " + self.former_prefix + "HUB_URL=", result.stdout)
             shell = subprocess.run(['bash', '-c', result.stdout + '\nprintf "%s|%s|%s" "$PERSONA_HUB_URL" "$' + self.former_prefix + 'HUB_URL" "$PERSONA_PRIVATE_TOKEN"'],
                                    env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(shell.returncode, 0, shell.stderr)
-            self.assertEqual(shell.stdout, 'http://hub.example.com|http://former.example.com|test-private-value')
+            self.assertEqual(shell.stdout, 'http://hub.example.com|http://hub.example.com|test-private-value')
 
     def _fake_root(self, directory: str) -> Path:
         # A copy of the app's entitlements under a temporary ROOT, so app_entitlements never writes into the checkout.
@@ -160,7 +158,7 @@ class MetaWearablesConfigTests(unittest.TestCase):
             with self.subTest(case=name):
                 generated = config.env(cfg)
                 self.assertEqual(generated['PERSONA_META_WEARABLES'], expected)
-                self.assertTrue(all(not key.startswith(PersonaConfigTests.former_prefix) for key in generated))
+                self.assertEqual(generated[PersonaConfigTests.former_prefix + "META_WEARABLES"], expected)
 
     def test_xcconfig_writes_meta_app_id_and_client_token(self):
         cases = {

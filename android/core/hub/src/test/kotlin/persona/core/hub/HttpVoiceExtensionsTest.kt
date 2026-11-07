@@ -11,7 +11,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
+import persona.core.hub.ProtocolCompatibilityMockServer as MockWebServer
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.junit.Assert.*

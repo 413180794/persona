@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/dialogwire"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 )
 
 type Machine struct {
@@ -265,53 +266,54 @@ const (
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
 // clients that need to know before they try (docs/protocol.md).
 var Features = []string{
-	"locale",                 // Accept-Language, client_hello.locale and a device's locale pick the language of text for people (docs/i18n.md)
-	"assistant_compact",      // POST /api/v1/assistant/conversations/{id}/compact, session.compaction
-	"assistant_main_new",     // POST /api/v1/assistant/main/new: archive the main conversation, the next message starts one
-	"assistant_readiness",    // GET /api/v1/assistant/readiness, …/readiness/dismiss, warm's readiness (docs/onboarding.md 5.1)
-	"android_update",         // authenticated Android release metadata and APK downloads
-	"error_codes",            // stable HTTP error codes and optional delivery information
-	"client_hello",           // client platform, version and capabilities
-	"heartbeat",              // per-connection heartbeat negotiation
-	"app_ping",               // application ping/pong with a string id
-	"ws_notify",              // notification alerts for capable connected clients
-	"elicitation",            // MCP forms and URLs for opted-in clients
-	"lock_test",              // scheduled device notification tests with durable receipts
-	"ultracode",              // session-only Claude Code workflow switch, queued changes and resume-loss notices
-	"model_configuration",    // unified per-purpose models and provider selection
-	"client_msg_id",          // session.send dedupes retries
-	"client_ops",             // durable operation receipts and read-only status queries
-	"send_refusals",          // 409 dialog_open / input_draft, clear_draft
-	"screen_dialog",          // interaction.dialog, Resolution.option, 409 prompt_changed
-	"resumable_interactions", // hook questions survive hub / node restarts
-	"secret_prompts",         // interaction.secret
-	"request_id",             // X-Request-Id
-	"terminal_stream",        // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
-	"terminal_control",       // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
-	"terminal_scroll",        // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
-	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
-	"terminal_mouse",         // terminal_input with mouse: press / release / drag / move, a button and modifiers at a cell (docs/terminal.md "Mouse")
-	"herdr_client",           // WebSocket herdr_open / herdr_input / herdr_resize / herdr_ack / herdr_close: herdr's own client in a PTY for the web, full devices only (docs/terminal.md "Full herdr view")
-	"herdr_focus",            // WebSocket herdr_focus (browser -> hub) and herdr_focus (hub -> browser): the full herdr view moves herdr's focus and follows it, full devices only (docs/terminal.md "Linked focus")
-	"terminal_panes",         // GET/POST /api/v1/machines/{mid}/panes, terminal ids "pane:<id>": any pane as a terminal (docs/terminal.md "Standalone terminals")
-	"file_download",          // GET /api/v1/machines/{mid}/file/download
-	"file_stream",            // file?stream=1 (binary described, bytes by Range), file/download?inline=1, sniffed MIME
-	"file_thumb",             // GET /api/v1/machines/{mid}/file/thumb (docs/protocol.md "File preview")
-	"file_convert",           // GET /api/v1/machines/{mid}/file/convert: LibreOffice → PDF on the machine
-	"git_blob",               // GET /api/v1/machines/{mid}/git/blob: a file at a version, for comparing
-	"git_write",              // the Git panel's writes and the branch's pull request under /api/v1/machines/{mid}/git/ (#6121)
-	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md "Sending files")
-	"machine_trust",          // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/onboarding.md 5.3)
-	"machines_add",           // POST /api/v1/auth/pair-codes with add / machine from a signed-in device: it adds a computer and pairs it (docs/onboarding.md 5.3)
-	"todo_threads",           // a to-do's chat thread: PUT/DELETE /api/v1/todos/{id}/thread, and `thread` on the to-dos GET returns (docs/todos.md "Chat thread")
-	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
-	"endpoints",              // authenticated address discovery and capability-gated updates
-	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)
-	"plugin_manager",         // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/extensions.md)
-	"plugin_ui_slots",        // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/extensions.md "UI slots")
-	"extension_operations",   // installs, upgrades and uninstalls as operations with steps: /api/v1/extensions/-/operations, extension_operation events, async: true (docs/protocol.md "Extension install, upgrade and uninstall progress")
-	"extension_auth",         // extensions that sign in (manifest.auth): /api/v1/extensions/{id}/-/auth…, extension_auth events, the tools install step (docs/extensions.md "Sign-in (auth)")
-	"plugin_auto_upgrade",    // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/extensions.md "Auto-upgrade")
+	nodeproto.PersonaContracts, // bidirectional pre-cutover runtime identities
+	"locale",                   // Accept-Language, client_hello.locale and a device's locale pick the language of text for people (docs/i18n.md)
+	"assistant_compact",        // POST /api/v1/assistant/conversations/{id}/compact, session.compaction
+	"assistant_main_new",       // POST /api/v1/assistant/main/new: archive the main conversation, the next message starts one
+	"assistant_readiness",      // GET /api/v1/assistant/readiness, …/readiness/dismiss, warm's readiness (docs/onboarding.md 5.1)
+	"android_update",           // authenticated Android release metadata and APK downloads
+	"error_codes",              // stable HTTP error codes and optional delivery information
+	"client_hello",             // client platform, version and capabilities
+	"heartbeat",                // per-connection heartbeat negotiation
+	"app_ping",                 // application ping/pong with a string id
+	"ws_notify",                // notification alerts for capable connected clients
+	"elicitation",              // MCP forms and URLs for opted-in clients
+	"lock_test",                // scheduled device notification tests with durable receipts
+	"ultracode",                // session-only Claude Code workflow switch, queued changes and resume-loss notices
+	"model_configuration",      // unified per-purpose models and provider selection
+	"client_msg_id",            // session.send dedupes retries
+	"client_ops",               // durable operation receipts and read-only status queries
+	"send_refusals",            // 409 dialog_open / input_draft, clear_draft
+	"screen_dialog",            // interaction.dialog, Resolution.option, 409 prompt_changed
+	"resumable_interactions",   // hook questions survive hub / node restarts
+	"secret_prompts",           // interaction.secret
+	"request_id",               // X-Request-Id
+	"terminal_stream",          // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
+	"terminal_control",         // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
+	"terminal_scroll",          // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
+	"terminal_click",           // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
+	"terminal_mouse",           // terminal_input with mouse: press / release / drag / move, a button and modifiers at a cell (docs/terminal.md "Mouse")
+	"herdr_client",             // WebSocket herdr_open / herdr_input / herdr_resize / herdr_ack / herdr_close: herdr's own client in a PTY for the web, full devices only (docs/terminal.md "Full herdr view")
+	"herdr_focus",              // WebSocket herdr_focus (browser -> hub) and herdr_focus (hub -> browser): the full herdr view moves herdr's focus and follows it, full devices only (docs/terminal.md "Linked focus")
+	"terminal_panes",           // GET/POST /api/v1/machines/{mid}/panes, terminal ids "pane:<id>": any pane as a terminal (docs/terminal.md "Standalone terminals")
+	"file_download",            // GET /api/v1/machines/{mid}/file/download
+	"file_stream",              // file?stream=1 (binary described, bytes by Range), file/download?inline=1, sniffed MIME
+	"file_thumb",               // GET /api/v1/machines/{mid}/file/thumb (docs/protocol.md "File preview")
+	"file_convert",             // GET /api/v1/machines/{mid}/file/convert: LibreOffice → PDF on the machine
+	"git_blob",                 // GET /api/v1/machines/{mid}/git/blob: a file at a version, for comparing
+	"git_write",                // the Git panel's writes and the branch's pull request under /api/v1/machines/{mid}/git/ (#6121)
+	"file_upload",              // POST /api/v1/machines/{mid}/files (docs/protocol.md "Sending files")
+	"machine_trust",            // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/onboarding.md 5.3)
+	"machines_add",             // POST /api/v1/auth/pair-codes with add / machine from a signed-in device: it adds a computer and pairs it (docs/onboarding.md 5.3)
+	"todo_threads",             // a to-do's chat thread: PUT/DELETE /api/v1/todos/{id}/thread, and `thread` on the to-dos GET returns (docs/todos.md "Chat thread")
+	"tls",                      // optional TLS listener and SPKI pin (hub-changes.md 1.1)
+	"endpoints",                // authenticated address discovery and capability-gated updates
+	"plugins",                  // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)
+	"plugin_manager",           // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/extensions.md)
+	"plugin_ui_slots",          // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/extensions.md "UI slots")
+	"extension_operations",     // installs, upgrades and uninstalls as operations with steps: /api/v1/extensions/-/operations, extension_operation events, async: true (docs/protocol.md "Extension install, upgrade and uninstall progress")
+	"extension_auth",           // extensions that sign in (manifest.auth): /api/v1/extensions/{id}/-/auth…, extension_auth events, the tools install step (docs/extensions.md "Sign-in (auth)")
+	"plugin_auto_upgrade",      // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/extensions.md "Auto-upgrade")
 	// The same under the new names (docs/extensions.md "Naming and compatibility", #1844): /api/v1/extensions/… answering with the
 	// keys extensions / extension / extension_name, extension_ui and extension_upgrade events. The plugin ones above
 	// stay for the apps out there (until at least 2027-05-05).

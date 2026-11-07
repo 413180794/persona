@@ -1,3 +1,4 @@
+import { storedCredentials } from "./compatibility";
 import { api, setToken } from "./api";
 import { formatDate, t } from "../i18n";
 
@@ -45,18 +46,20 @@ export async function pair(input: string): Promise<void> {
   const t = pairToken(input);
   await api("/machines", { token: t });
   let use = t;
+  let tokenId: string | undefined;
   if (!t.startsWith("jd_")) {
     try {
-      const replaces = localStorage.getItem(TOKEN_ID_KEY) ?? "";
+      const replaces = storedCredentials().tokenId;
       const json = { name: deviceName(), kind: "web", ...(replaces ? { replaces } : {}) };
       const r = await api<{ token: string; id: string }>("/auth/tokens", { method: "POST", json, token: t });
       use = r.token;
-      localStorage.setItem(TOKEN_ID_KEY, r.id);
+      tokenId = r.id;
     } catch {
       // an old hub without device tokens: keep the pairing token
     }
   }
-  setToken(use);
+  if (tokenId === undefined) setToken(use);
+  else setToken(use, tokenId);
 }
 
 // takeToken finds a token in a link (`?token=…`, or `#token=…`, which never reaches the server) and returns it with

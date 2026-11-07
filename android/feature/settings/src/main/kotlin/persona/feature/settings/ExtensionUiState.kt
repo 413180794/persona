@@ -53,7 +53,7 @@ internal object ExtensionViewText {
      */
     fun inboxSource(url: String?): String? {
         val uri = runCatching { java.net.URI(url ?: return null) }.getOrNull() ?: return null
-        if (!uri.scheme.equals("persona", ignoreCase = true) || uri.rawAuthority != "inbox" || uri.rawQuery != null || uri.rawFragment != null) return null
+        if (uri.scheme?.lowercase() !in persona.core.contracts.ProtocolCompatibility.appSchemes || uri.rawAuthority != "inbox" || uri.rawQuery != null || uri.rawFragment != null) return null
         val segments = uri.rawPath?.removePrefix("/")?.split("/") ?: return null
         if (segments.size != 2 || segments[1] != "source") return null
         return runCatching { java.net.URLDecoder.decode(segments[0].replace("+", "%2B"), "UTF-8") }.getOrNull()?.takeIf { it.isNotBlank() }

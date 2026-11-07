@@ -3,6 +3,7 @@ package extension
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"regexp"
 	"slices"
 	"strconv"
@@ -83,6 +84,7 @@ var RetiredLookIDs = []string{"persona-visor", "persona-circuit", "persona-pixel
 
 // ReservedLookID excludes both the current built-in drawing and retired choices from downloadable packages.
 func ReservedLookID(id string) bool {
+	id = compat.Looks(id)
 	return slices.Contains(BuiltinLooks, id) || slices.Contains(RetiredLookIDs, id)
 }
 
@@ -141,7 +143,13 @@ func (l LookItem) check() error {
 	if utf8.RuneCountInString(l.Subtitle) > 40 {
 		return fmt.Errorf("look %s: subtitle: at most 40 characters", l.ID)
 	}
-	if !slices.Contains(BuiltinLooks, l.AppIconFallback) {
+	fallback := compat.Looks(l.AppIconFallback)
+	// Installed pre-cutover packages retain their bytes. A retired fallback
+	// alias is accepted for reading, but is drawn with the current default.
+	if fallback != l.AppIconFallback && slices.Contains(RetiredLookIDs, fallback) {
+		fallback = DefaultLook
+	}
+	if !slices.Contains(BuiltinLooks, fallback) {
 		return fmt.Errorf("look %s: app_icon_fallback %q: one of the built-in looks (%s)", l.ID, l.AppIconFallback, strings.Join(BuiltinLooks, ", "))
 	}
 	if len(l.Avatar.Sizes) == 0 {

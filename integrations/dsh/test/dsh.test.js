@@ -1,3 +1,4 @@
+import { mcpToolNames } from '../../runtime-sdk/lib/compat.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { startFakeNode, until } from '../../runtime-sdk/testing/fake-node.js'
@@ -395,7 +396,7 @@ test('the hub\'s tools become DSH tools; a call goes through the node with the c
   ] })
   rt.start()
   await n.ready
-  await until('registered', () => registered.size === 2)
+  await until('registered', () => registered.size === 2 * mcpToolNames('example').length)
   const def = registered.get('mcp__persona__phone_calendar_events')
   assert.equal(def.description, 'Calendar')
   assert.deepEqual(def.parameters.properties.day, { type: 'string' })
@@ -407,13 +408,13 @@ test('the hub\'s tools become DSH tools; a call goes through the node with the c
 
   // The same tools: nothing re-registered; a changed list replaces them; the hub away keeps them.
   await rt.refreshTools()
-  assert.equal(registered.size, 2)
+  assert.equal(registered.size, 2 * mcpToolNames('example').length)
   n.tools = [{ name: 'phone_reminders', description: 'Reminders', input_schema: { type: 'object' } }]
   await rt.refreshTools()
-  assert.deepEqual([...registered.keys()], ['mcp__persona__phone_reminders'])
+  assert.deepEqual([...registered.keys()], mcpToolNames('phone_reminders'))
   n.setHub(false)
   await new Promise((r) => setTimeout(r, 50))
-  assert.equal(registered.size, 1)
+  assert.equal(registered.size, mcpToolNames('example').length)
   rt.stop()
   assert.equal(registered.size, 0, 'stopping takes them off')
 })
@@ -498,7 +499,7 @@ test('the assistant\'s own tools are only for its conversations, called as the a
   // The fake node lists the same tools whatever is asked: make it answer as a hub does.
   n.peer.onRequest = ((orig) => async (m, p) => (m === 'mcp.tools' ? { tools: p?.assistant ? withAssistant : plainTools } : orig(m, p)))(n.peer.onRequest)
   await rt.refreshTools()
-  await until('registered', () => registered.size === 2)
+  await until('registered', () => registered.size === 2 * mcpToolNames('example').length)
   const ask = registered.get('mcp__persona__ask_user')
   assert.equal(typeof ask.opts?.when, 'function')
   assert.equal(ask.opts.when({ agent: { session: { id: 'session-asst' } } }), true)

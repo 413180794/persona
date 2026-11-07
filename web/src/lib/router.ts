@@ -1,3 +1,4 @@
+import { assistantPath } from "./compatibility";
 // A tiny history router: the hub serves index.html for every path that isn't a file.
 import { useSyncExternalStore } from "react";
 import { takeOverlayEntry } from "./back-close";
@@ -57,7 +58,7 @@ export function parse(path: string, search = ""): Route {
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2], ...(view && { view }) };
   if (p[0] === "t" && p[1] && p[2] && p[3]) return { name: "tab", mid: p[1], space: p[2], slot: p[3], sid: p[4] || undefined, ...(view && { view }) };
   if (!p.length) return { name: "persona" };
-  if (p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "persona", sid: p[1] };
+  if (assistantPath(p[0])) return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "persona", sid: p[1] };
   if (p[0] === "workspace-board") return { name: "workspace-board" };
   if (p[0] === "overview") return { name: "home" };
   if (p[0] === "history") return p[1] ? { name: "history", origin: p[1] } : { name: "history" };

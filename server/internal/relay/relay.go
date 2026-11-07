@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"log"
 	"net"
@@ -53,7 +54,7 @@ type Sender interface {
 
 const (
 	maxBody    = 8 << 10
-	grantAAD   = "persona relay grant v1"
+	grantAAD   = compat.GrantAAD
 	pushPerMin = 120
 	pushBurst  = 30
 	regPerMin  = 20
@@ -118,6 +119,9 @@ func (s *Server) open(tok string) (grant, error) {
 		return grant{}, errors.New("bad grant")
 	}
 	plain, err := s.aead.Open(nil, raw[:n], raw[n:], []byte(grantAAD))
+	if err != nil {
+		plain, err = s.aead.Open(nil, raw[:n], raw[n:], []byte("persona relay grant v1"))
+	}
 	if err != nil {
 		return grant{}, errors.New("bad grant")
 	}

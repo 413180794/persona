@@ -27,6 +27,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/rpc"
 	wechat "github.com/nwverse/persona/server/internal/wechat/spec"
 )
@@ -766,7 +767,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 				if err != nil {
 					return s, err
 				}
-				s.StartEnv = start
+				s.StartEnv = func() []string { return identity.Environment(start()) }
 			}
 		}
 		return s, nil
@@ -833,7 +834,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			if err != nil {
 				return s, err
 			}
-			s.StartEnv = start
+			s.StartEnv = func() []string { return identity.Environment(start()) }
 		}
 		if !s.RPC { // no initialize to carry them
 			secrets, err := ps.reg.Secrets(ctx, id)
@@ -1097,7 +1098,7 @@ func (ps *extensions) hubEnv() []string {
 	}
 	// A plugin granted it is configured or accepted by whoever runs the hub, so it gets the hub's own credential to
 	// call its API with (the knowledge base, the agents, …): like a node, it is part of the hub.
-	return []string{"PERSONA_HUB_URL=" + hubLocalURL(ps.h.cfg.Listen), "PERSONA_HUB_TOKEN=" + ps.h.cfg.Token}
+	return identity.Environment(nil, "PERSONA_HUB_URL="+hubLocalURL(ps.h.cfg.Listen), "PERSONA_HUB_TOKEN="+ps.h.cfg.Token)
 }
 
 // hubStartEnv is the hub's address and p's new token of the hub's API at each start of its program (all: of every

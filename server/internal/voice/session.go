@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"io"
 	"net/http"
 	"slices"
@@ -994,6 +995,7 @@ func (c *conversation) sendUp(gen int, frames ...any) bool {
 // minutes; answering at once had the model speak twice and left the answer to be said out of turn). What writes
 // (ask_persona, send_to_agent) waits for the user-speech gate, as it was at the call.
 func (c *conversation) runTool(gen int, e event) {
+	e.name = compat.Tool(e.name)
 	if !slices.Contains(c.toolSet(), e.name) {
 		c.pl.logf("a call of %s, a tool this session did not declare: ignored", e.name)
 		return

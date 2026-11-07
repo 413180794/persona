@@ -220,7 +220,7 @@ func CheckAssistantOpen(target string) error {
 	if u.Scheme == "https" {
 		return nil
 	}
-	if u.Scheme != "persona" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+	if !assistantURLScheme(u.Scheme) || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
 		return errors.New("open: use https or a persona session, task, kb or file link")
 	}
 	parts := strings.Split(strings.TrimPrefix(u.EscapedPath(), "/"), "/")

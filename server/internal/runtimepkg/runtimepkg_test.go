@@ -118,7 +118,7 @@ func TestPackagesMatchTheLoader(t *testing.T) {
 	if err != nil {
 		t.Skipf("no integrations checkout beside server/: %v", err)
 	}
-	block := regexp.MustCompile(`(?s)export const PACKAGES = \{(.*?)\n\}`).FindSubmatch(src)
+	block := regexp.MustCompile(`(?s)export const PACKAGES = (?:addPackageAliases\()?\{(.*?)\n\}`).FindSubmatch(src)
 	if block == nil {
 		t.Fatal("PACKAGES not found in package.js")
 	}

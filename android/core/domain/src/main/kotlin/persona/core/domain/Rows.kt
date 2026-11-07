@@ -1,5 +1,7 @@
 package persona.core.domain
 
+import persona.core.contracts.ProtocolCompatibility
+
 import persona.core.contracts.CoreText.Key
 import persona.core.contracts.CoreText
 import kotlinx.serialization.json.JsonObject
@@ -67,7 +69,7 @@ fun toolVerb(name: String?): CoreText =
  */
 fun namedToolVerb(name: String): CoreText? {
     val n = toolBaseName(name)
-    if (isPersonaTool(name)) personaToolVerb(n)?.let { return CoreText.of(it) }
+    if (isPersonaTool(name)) personaToolVerb(ProtocolCompatibility.canonicalTool(n))?.let { return CoreText.of(it) }
     genericToolVerb(n)?.let { return CoreText.of(it) }
     return if (isPersonaTool(name)) CoreText.of(Key.ToolPersonaCall, n.replace('_', ' ')) else null
 }
@@ -81,7 +83,7 @@ fun toolServer(name: String): String? {
 }
 
 /** Persona's MCP server, also exposed by the `plugin_persona` runtime plugin. */
-fun isPersonaTool(name: String): Boolean = toolServer(name)?.removePrefix("plugin_") == "persona"
+fun isPersonaTool(name: String): Boolean = toolServer(name)?.removePrefix("plugin_") in ProtocolCompatibility.personaServers
 
 private fun genericToolVerb(n: String): Key? {
     if (n.startsWith("phone_")) return Key.ToolPhone

@@ -1,6 +1,7 @@
 package nodeupdate
 
 import (
+	"github.com/nwverse/persona/server/internal/compat"
 	"os"
 	"path/filepath"
 
@@ -10,7 +11,7 @@ import (
 // lockDir locks a file inside the directory: Windows cannot lock a directory handle. The file stays (removing it
 // would let a third updater lock a new file while a second holds the old one).
 func lockDir(dir string) (func(), error) {
-	f, err := os.OpenFile(filepath.Join(dir, ".persona-update.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, compat.NodeUpdateLock), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
+import { CONTEXT_CLOSE_RE as CLOSE_RE } from "./compatibility";
 // What a reader may take as the end of a block (the hub's closingTag in todo_decisions.go): either name, any case,
 // spaces around the slash and before `>`.
-const CLOSE_RE = /<\s*\/\s*persona-context\s*>/gi;
+
 
 /** A text to go inside a `<persona-context>` block, with nothing left in it that closes the block: closing tags are
  * removed, and one that the removal itself puts together (`</persona-</persona-context>context>`) has its `<` written

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"sort"
 	"strings"
 	"sync"
@@ -38,7 +39,15 @@ func (s *Service) Tools(ctx context.Context) []proto.Tool {
 	if s.hello(ctx).PersonaView {
 		names = append(names, "view_show", "view_update", "view_get")
 	}
-	return toolsNamed(names)
+	tools := toolsNamed(names)
+	for _, tool := range tools {
+		if tool.Name == "persona_settings" {
+			alias := tool
+			alias.Name = compat.SettingsTool
+			tools = append(tools, alias)
+		}
+	}
+	return tools
 }
 
 // toolsNamed are the MCP tools of these names, as prompts/mcp has them.
@@ -53,6 +62,7 @@ func toolsNamed(names []string) []proto.Tool {
 
 // Tool runs one of the assistant's MCP tools for the conversation call.SessionID on machine call.MachineID.
 func (s *Service) Tool(ctx context.Context, call ToolCall) proto.ToolResult {
+	call.Name = compat.Tool(call.Name)
 	args := call.Arguments
 	if len(args) == 0 {
 		args = json.RawMessage(`{}`)
@@ -71,7 +81,7 @@ func (s *Service) Tool(ctx context.Context, call ToolCall) proto.ToolResult {
 // appTool runs a tool that is app's (app.call app.tool).
 func (s *Service) appTool(ctx context.Context, app string, call ToolCall, args json.RawMessage) proto.ToolResult {
 	var res proto.ToolResult
-	if err := s.appCall(ctx, app, AppTool, map[string]any{"name": call.Name, "arguments": args, "machine_id": call.MachineID,
+	if err := s.appCall(ctx, app, AppTool, map[string]any{"name": compat.LegacyTool(call.Name), "arguments": args, "machine_id": call.MachineID,
 		"session_id": call.SessionID}, &res); err != nil {
 		return proto.TextResult(err.Error(), true)
 	}

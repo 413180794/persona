@@ -1,3 +1,4 @@
+import { storeValue } from "../lib/compatibility";
 // The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). `/` (and the old `/persona`) is the main
 // conversation, `/persona/<id>` one of them, `/persona/new` a new one-off conversation. With no main conversation yet, the first
 // message on `/` starts it.
@@ -147,7 +148,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
   };
 
   const fill = (text: string) => {
-    localStorage.setItem("draft:persona-new", text);
+    storeValue("draft:persona-new", text);
     setSeed((x) => x + 1);
   };
 

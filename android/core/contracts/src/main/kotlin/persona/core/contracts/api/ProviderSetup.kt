@@ -1,5 +1,7 @@
 package persona.core.contracts.api
 
+import persona.core.contracts.ProtocolCompatibility
+
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.SerialName
@@ -95,7 +97,7 @@ data class HubLauncher(
     /** The detail's: each machine's function body, keys masked. */
     @SerialName("definitions") val definitions: Map<String, String> = emptyMap(),
 ) {
-    val managed: Boolean get() = source == "persona"
+    val managed: Boolean get() = ProtocolCompatibility.managedProvider(source)
     val pathScript: Boolean get() = source == "path"
     val isApi: Boolean get() = kind == "api"
 }

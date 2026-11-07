@@ -1,3 +1,4 @@
+import { storedValue, storeValue } from "./compatibility";
 // What the sidebar offers the keyboard shortcuts (docs/web.md "Keyboard shortcuts"): fold or open every group, switch how Agents are
 // grouped, walk the rows. Sidebar.tsx subscribes (`onFoldAll`, `onGrouping`) and marks its list `data-sidebar-rows`; the
 // shortcuts call the rest. Kept out of Sidebar.tsx so that file only gains the few lines that listen.
@@ -56,8 +57,8 @@ export function nextGrouping(current: AgentGrouping, offered: readonly AgentGrou
 
 /** Switches the sidebar to its next grouping (kept in this browser, as the menu's choice is); returns it. */
 export function cycleGrouping(offered?: readonly AgentGrouping[]): AgentGrouping {
-  const next = nextGrouping(agentGrouping(localStorage.getItem(GROUPING_KEY)), offered);
-  localStorage.setItem(GROUPING_KEY, next);
+  const next = nextGrouping(agentGrouping(storedValue(GROUPING_KEY)), offered);
+  storeValue(GROUPING_KEY, next);
   groupingListeners.forEach((f) => f(next));
   return next;
 }

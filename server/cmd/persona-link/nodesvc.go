@@ -28,9 +28,13 @@ const (
 
 func (e *env) nodeLog() string { return filepath.Join(e.personaDir(), "node-attach.log") }
 
-func (e *env) nodeUnitPath() string { return filepath.Join(filepath.Dir(e.unitPath()), nodeUnitName) }
+func (e *env) nodeUnitPath() string {
+	dir := filepath.Dir(e.unitPath())
+	return existingPath(filepath.Join(dir, nodeUnitName), filepath.Join(dir, legacyNodeUnit))
+}
 func (e *env) nodePlistPath() string {
-	return filepath.Join(e.home, "Library", "LaunchAgents", nodeLabel+".plist")
+	dir := filepath.Join(e.home, "Library", "LaunchAgents")
+	return existingPath(filepath.Join(dir, nodeLabel+".plist"), filepath.Join(dir, legacyNodeLabel+".plist"))
 }
 
 // nodeServiceFile is where this computer's resident node service is described; "" where there is none to write.
@@ -91,6 +95,9 @@ func nodePlist(bin, logPath string) string {
 // then the service, started. One there already stays as it is (node switch moves one that runs personad over).
 // fromAny: from may be either program (--node-bin; it is asked which), else it is personad (--personad).
 func nodeInstall(e *env, from string, fromAny ...bool) error {
+	if err := e.installationConflict(true); err != nil {
+		return err
+	}
 	if e.goos == "windows" {
 		return errors.New(windowsNodeHint)
 	}
@@ -152,7 +159,7 @@ func nodeInstall(e *env, from string, fromAny ...bool) error {
 		if err := os.WriteFile(file, []byte(nodeUnitFile(bin, e.nodeLog())), 0o644); err != nil {
 			return err
 		}
-		for _, step := range [][]string{{"daemon-reload"}, {"enable", "--now", nodeUnitName}} {
+		for _, step := range [][]string{{"daemon-reload"}, {"enable", "--now", e.residentUnitName()}} {
 			if out, err := e.systemctl(step...); err != nil {
 				return fmt.Errorf("systemctl --user %s 失败：%s", strings.Join(step, " "), orErr(out, err))
 			}
@@ -162,7 +169,7 @@ func nodeInstall(e *env, from string, fromAny ...bool) error {
 			return err
 		}
 		domain := "gui/" + strconv.Itoa(e.uid)
-		_, _ = e.command("launchctl", "bootout", domain+"/"+nodeLabel)
+		_, _ = e.command("launchctl", "bootout", domain+"/"+e.residentLabel())
 		if out, err := e.command("launchctl", "bootstrap", domain, file); err != nil {
 			return fmt.Errorf("launchctl bootstrap 失败：%s", orErr(out, err))
 		}
@@ -203,12 +210,12 @@ func nodeStatus(e *env) nodeState {
 	switch e.goos {
 	case "linux":
 		if e.systemdMissing() == "" {
-			out, _ := e.systemctl("is-active", nodeUnitName)
+			out, _ := e.systemctl("is-active", e.residentUnitName())
 			st.Running = firstLine(out)
 		}
 	case "darwin":
 		// Read-only: whether launchd has it. Not by connecting to the node's socket, which would take the node from the hub.
-		if _, err := e.command("launchctl", "print", "gui/"+strconv.Itoa(e.uid)+"/"+nodeLabel); err == nil {
+		if _, err := e.command("launchctl", "print", "gui/"+strconv.Itoa(e.uid)+"/"+e.residentLabel()); err == nil {
 			st.Running = "loaded"
 		} else {
 			st.Running = "not loaded"
@@ -296,10 +303,10 @@ func nodeCmd(e *env, args []string) error {
 			switch e.goos {
 			case "linux":
 				if e.systemdMissing() == "" {
-					_, _ = e.systemctl("disable", "--now", nodeUnitName)
+					_, _ = e.systemctl("disable", "--now", e.residentUnitName())
 				}
 			case "darwin":
-				_, _ = e.command("launchctl", "bootout", "gui/"+strconv.Itoa(e.uid)+"/"+nodeLabel)
+				_, _ = e.command("launchctl", "bootout", "gui/"+strconv.Itoa(e.uid)+"/"+e.residentLabel())
 			}
 			if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err

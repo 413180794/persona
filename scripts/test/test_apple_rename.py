@@ -133,7 +133,10 @@ class AppleRenameTests(unittest.TestCase):
         command = ROOT / 'scripts/app/personactl.py'
         self.assertTrue(command.is_file())
         self.assertFalse(command.is_symlink())
-        self.assertFalse((command.parent / (FORMER_NAME.lower() + 'ctl.py')).exists())
+        alias = command.parent / (FORMER_NAME.lower() + 'ctl.py')
+        self.assertTrue(alias.is_symlink())
+        self.assertEqual(alias.readlink().as_posix(), command.name)
+        self.assertEqual(alias.resolve(), command.resolve())
 
     def test_menu_bar_package_uses_canonical_process_name(self):
         package = (APPLE / 'PersonaLink/Package.swift').read_text()

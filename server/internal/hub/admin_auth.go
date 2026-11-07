@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/compat"
 	"net/http"
 	"strings"
 	"time"
@@ -151,7 +152,7 @@ func (h *Hub) adminSession(w http.ResponseWriter, r *http.Request) (*db.AdminSes
 }
 
 func (h *Hub) currentAdminSession(r *http.Request) (*db.AdminSession, error) {
-	c, err := r.Cookie(adminCookieName(r))
+	c, err := compatibleAdminCookie(r)
 	if err != nil || c.Value == "" || len(c.Value) > 128 {
 		return nil, nil
 	}
@@ -172,16 +173,20 @@ func (h *Hub) startAdminSession(w http.ResponseWriter, r *http.Request, store ad
 	if err := store.CreateAdminSession(r.Context(), s); err != nil {
 		return nil, err
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: adminCookieName(r), Value: value, Path: adminCookiePath, MaxAge: hours * 3600,
-		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode,
-	})
+	for _, name := range compat.AdminCookieNames(r.TLS != nil) {
+		http.SetCookie(w, &http.Cookie{
+			Name: name, Value: value, Path: adminCookiePath, MaxAge: hours * 3600,
+			HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode,
+		})
+	}
 	return &s, nil
 }
 
 func clearAdminCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: adminCookieName(r), Value: "", Path: adminCookiePath, MaxAge: -1,
-		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
+	for _, name := range compat.AdminCookieNames(r.TLS != nil) {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: adminCookiePath, MaxAge: -1,
+			HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
+	}
 }
 
 func (h *Hub) adminSessionHours() int {
@@ -389,7 +394,8 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 	open.HandleFunc("POST /api/v1/admin/logout", withStore(func(w http.ResponseWriter, r *http.Request, store adminStore) {
 		// The browser forgets the cookie either way; when the row could not be deleted, say so,
 		// because a copy of the cookie still signs in until the session expires.
-		if c, err := r.Cookie(adminCookieName(r)); err == nil && c.Value != "" {
+		c, err := compatibleAdminCookie(r)
+		if err == nil && c.Value != "" {
 			if err := store.DeleteAdminSession(r.Context(), sha256Hex(c.Value)); err != nil {
 				h.logf("admin: sign-out from %s could not end the session: %v", maskedSource(r), err)
 				clearAdminCookie(w, r)
@@ -444,7 +450,11 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		c, _ := r.Cookie(adminCookieName(r))
+		c, cookieErr := compatibleAdminCookie(r)
+		if cookieErr != nil || c == nil {
+			writeErr(w, http.StatusUnauthorized, i18n.Err("hub-compatibility.admin_session_missing"))
+			return
+		}
 		if err := store.SetAdminPasswordSignOut(r.Context(), next, sha256Hex(c.Value)); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return

@@ -10,7 +10,7 @@ import sys
 import tempfile
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-RUNTIME_PREFIXES = ("PERSONA_", "PG")
+RUNTIME_PREFIXES = ("PERSONA_", "JARVIS_", "PG")
 # Test-only inputs may configure TLS and connection behavior, never a second target or external credential source.
 DATABASE_QUERY_KEYS = {
     "sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword", "sslsni", "sslnegotiation",
@@ -60,7 +60,7 @@ def clean_environment(environment):
     cleaned = {key: value for key, value in environment.items()
                if not key.startswith(RUNTIME_PREFIXES) and key not in PROFILE_VARIABLES}
     roots = [Path(value).expanduser().resolve() for key, value in environment.items()
-             if key in {"PERSONA_HOME"} and value]
+             if key in {"PERSONA_HOME", "JARVIS_HOME"} and value]
     if roots and "PATH" in cleaned:
         entries = []
         for entry in cleaned["PATH"].split(os.pathsep):
@@ -96,7 +96,7 @@ def run_tests(config_file, command, environment=None):
         temporary = home / "tmp"
         temporary.mkdir()
         environment.update(HOME=str(home), TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary),
-                           PERSONA_TEST_DATABASE_URL=database)
+                           GOTMPDIR=str(temporary), PERSONA_TEST_DATABASE_URL=database, JARVIS_TEST_DATABASE_URL=database)
         return subprocess.run(command, env=environment).returncode
 
 

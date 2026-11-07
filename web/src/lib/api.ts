@@ -1,3 +1,4 @@
+import { storedCredentials, storeCredentials, CLIENT_HEADERS, OP_HEADERS, compatibleEnvelope, requestForHub } from "./compatibility";
 // REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
 
 import { MANAGER_HEADER, managerHeaderFor } from "./manager-choice";
@@ -6,7 +7,6 @@ import { requestCrumb } from "./error-reports";
 import { currentLanguage, t } from "../i18n";
 import type { Item } from "./types";
 
-const TOKEN_KEY = "persona.token";
 let ownerToken: string | undefined;
 let ownerGeneration = 0;
 /** Opaque in-memory auth partition; never expose credentials in tree keys or persisted drafts. */
@@ -17,12 +17,11 @@ export function credentialOwner(): string {
 }
 
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? "";
+  return storedCredentials().token;
 }
 
-export function setToken(token: string) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+export function setToken(token: string, tokenId?: string) {
+  storeCredentials(token, tokenId);
   credentialOwner();
 }
 
@@ -58,7 +57,7 @@ export const CLIENT_PLATFORM = "web";
 export const CLIENT_VERSION = "1";
 /** What this page can render beyond the basics (client_hello `features`). */
 /** `managers`: the hub pushes {"type":"managers"} when its roster changes (Settings › Managers, lib/managers.ts). */
-export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth", "managers", "extension_ui_stream_v1"];
+export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth", "managers", "extension_ui_stream_v1", "persona_contracts_v1"];
 
 // A read the hub has not answered by then fails instead of loading forever (#4492): a restarting hub, a stuck node or a
 // half-dead network. Longer than the hub's own cut-offs for asking a computer (30–40 s), so when the hub has an error
@@ -108,14 +107,16 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown; to
   headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
   // the hub writes its error and status text in the interface language (docs/i18n.md "Protocol")
   if (!headers.has("Accept-Language")) headers.set("Accept-Language", currentLanguage());
-  headers.set("X-Persona-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
+  CLIENT_HEADERS.forEach(name => headers.set(name, `${CLIENT_PLATFORM}/${CLIENT_VERSION}`));
+  const op = OP_HEADERS.map(name => headers.get(name)).find(Boolean);
+  if (op) OP_HEADERS.forEach(name => headers.set(name, op));
   // the manager the assistant page shows, on the assistant's requests (lib/manager-choice.ts); none for the default
   const manager = managerHeaderFor(path);
   if (manager && !headers.has(MANAGER_HEADER)) headers.set(MANAGER_HEADER, manager);
   let body = init.body;
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");
-    body = JSON.stringify(init.json);
+    body = JSON.stringify(requestForHub(path, init.json));
   }
   const method = init.method ?? "GET";
   let res: Response;
@@ -142,7 +143,7 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown; to
     const msg = typeof data.error === "string" && data.error ? data.error : `HTTP ${res.status}`;
     throw new ApiError(res.status, msg, data, isJson, res.headers?.get("X-Request-Id") ?? undefined);
   }
-  return data as T;
+  return compatibleEnvelope(data) as T;
 }
 
 export const enc = encodeURIComponent;

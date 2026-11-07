@@ -74,6 +74,17 @@ COPY --from=build /out/personad-wechat /opt/persona/nodes/
 RUN for p in wechat; do [ "$(/opt/persona/nodes/personad-$p version -v)" = "$(/opt/persona/personad version -v)" ] || exit 1; done
 COPY deploy/docker/personad.sh /usr/local/bin/personad
 COPY deploy/docker/entrypoint.sh /usr/local/bin/persona-entrypoint
+# Command and artifact aliases share the exact binaries; never create another state store.
+RUN ln -s personad /usr/local/bin/jarvisd \
+ && ln -s persona-entrypoint /usr/local/bin/jarvis-entrypoint \
+ && ln -s /opt/persona /opt/jarvis \
+ && ln -s personad /opt/persona/jarvisd \
+ && for binary in /opt/persona/nodes/personad-*; do \
+      name="${binary##*/}"; ln -s "$name" "/opt/persona/nodes/jarvisd-${name#personad-}"; \
+    done \
+ && mkdir -p /home/jarvis \
+ && chown persona:persona /home/jarvis \
+ && ln -s /home/jarvis/.ssh /home/persona/.ssh
 # ~/.persona is the data volume (hub.json, keys, the knowledge base): the node builds live outside it. No local node:
 # this machine has no herdr or claude for the hub to drive.
 ENV HOME=/home/persona \

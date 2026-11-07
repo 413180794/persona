@@ -30,9 +30,14 @@ const (
 	taskStopTimeout = 10 * time.Second
 )
 
-func (e *env) taskFile() string       { return filepath.Join(e.personaDir(), "persona-link-task.xml") }
-func (e *env) serviceExePath() string { return filepath.Join(e.personaDir(), "bin", serviceExe) }
-func (e *env) serviceLog() string     { return filepath.Join(e.personaDir(), "link-service.log") }
+func (e *env) taskFile() string {
+	return existingPath(filepath.Join(e.personaDir(), "persona-link-task.xml"), filepath.Join(e.personaDir(), legacyTaskFile))
+}
+func (e *env) serviceExePath() string {
+	dir := filepath.Join(e.personaDir(), "bin")
+	return existingPath(filepath.Join(dir, serviceExe), filepath.Join(dir, legacyServiceExe))
+}
+func (e *env) serviceLog() string { return filepath.Join(e.personaDir(), "link-service.log") }
 
 // exeName is a program's file name on this computer.
 func (e *env) exeName(name string) string {
