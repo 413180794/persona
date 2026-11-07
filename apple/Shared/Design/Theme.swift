@@ -70,6 +70,17 @@ nonisolated enum Theme {
     static var cautionText: Color { spec.extensionColors?.cautionText ?? Role.cautionTextColor }
     /// What the AI wrote or suggests (✦ summaries, AI actions): not the accent, which means "tap me".
     static var ai: Color { spec.extensionColors?.ai ?? Role.aiColor }
+    /// A soft ground in the AI color, behind what is the AI's and lit (a workflow's current phase, its mark, the
+    /// watch's workflow chip and Pick tag), as a state's `StatusTone.tint`. Stronger on the watch's black.
+    static var aiTint: Color { ai.opacity(aiTintStrength) }
+    #if os(watchOS)
+    private static let aiTintStrength = 0.2
+    #else
+    private static let aiTintStrength = 0.14
+    #endif
+    /// The AI color at half strength: a mark of the AI's that is at work but not the lit one (a workflow phase with
+    /// agents running that the run has moved past), apart from a ring (not started) and the full dot (lit).
+    static var aiMuted: Color { ai.opacity(0.5) }
 
     enum Role {
         static let danger = PersonaPalette.Pair(light: 0xD93A3A, dark: 0xFF5F57)

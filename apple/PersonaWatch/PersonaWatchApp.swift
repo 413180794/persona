@@ -451,12 +451,15 @@ struct WatchRootView: View {
                     openedPet = model.petStatus != nil
                 }
                 // `-openWatchItem question|plan|permission|screen|session`: open the first request of that kind, or the
-                // first running session (screenshots). `running` and `inbox` are handled by `runningFirst` / `inboxFirst`.
+                // first running session (screenshots); `session:<session id>` that one. `running` and `inbox` are handled
+                // by `runningFirst` / `inboxFirst`.
                 .task {
                     guard let want = UserDefaults.standard.string(forKey: "openWatchItem") else { return }
                     for _ in 0..<20 where model.lastUpdate == nil { try? await Task.sleep(for: .milliseconds(500)) }
                     if want == "session" {
                         openedSession = model.sessions.first
+                    } else if want.hasPrefix("session:") {
+                        openedSession = model.sessions.first { "session:" + $0.sessionID == want }
                     } else if want != "running", want != "inbox" {
                         openedInteraction = model.interactions.first { $0.kind.rawValue == want }
                     }
@@ -564,7 +567,7 @@ struct WatchInteractionView: View {
                                     if recommended {
                                         Text(LocalizedStringResource("watch.recommended", defaultValue: "Pick", comment: "Tag on the recommended answer, beside it on one watch button: as short as possible")).font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
                                             .padding(.horizontal, 5).padding(.vertical, 1)
-                                            .background(Theme.ai.opacity(0.2), in: .capsule)
+                                            .background(Theme.aiTint, in: .capsule)
                                             .fixedSize()
                                     }
                                     Spacer(minLength: 0)
@@ -979,20 +982,25 @@ private extension Error {
 }
 
 /// A workflow its agent runs in the background (#2935), on the watch: a small chip 「workflow 169/185」, not expanded.
+/// Its count rolls when it changes (#3436, `numericText` is watchOS 10); nothing else moves, no clock.
 struct WatchWorkflowChip: View {
     var run: WorkflowRun
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let text = "workflow" + (run.progress.map { " \($0.done)/\($0.started)" } ?? "")
         HStack(spacing: Theme.Space.xs) {
             Image(systemName: Theme.Icon.workflow)
+            // Rolls when either number changes: a new agent (169/185 → 169/186) as well as one coming back.
             Text(text).lineLimit(1)
+                .contentTransition(.numericText(value: Double((run.progress?.done ?? 0) + (run.progress?.started ?? 0))))
+                .animation(reduceMotion ? nil : Theme.Motion.state, value: text)
         }
         .font(.caption2.weight(.semibold))
         .foregroundStyle(Theme.ai)
         .padding(.horizontal, Theme.Space.s)
         .padding(.vertical, Theme.Space.xxs)
-        .background(Theme.ai.opacity(0.2), in: .capsule)
+        .background(Theme.aiTint, in: .capsule)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "Background \(text)"))
     }

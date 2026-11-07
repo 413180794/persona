@@ -419,19 +419,68 @@ struct MetricChart: View, Equatable {
     }
 }
 
-/// A bar for a share (disk, memory): the used part in its color, the rest a faint track.
+/// A bar for a share (disk, memory): the used part in its color, the rest a faint track. Or a bar in parts (a workflow's
+/// agents done, running, failed and stopped, #3436): each part in its color after the one before it. The parts move by
+/// transform (scaled from their start), never by their frames; whoever draws it says whether a change animates.
 struct MeterBar: View {
-    var fraction: Double
-    var color: Color
+    /// One part of the bar: its share of the whole (0…1) and its color.
+    struct Part: Equatable {
+        var share: Double
+        var color: Color
+    }
+
+    var parts: [Part]
+    /// How thick it is; nil: `Theme.Size.dotXS`, following the text size (a machine's meters).
+    var thickness: CGFloat?
+
+    init(fraction: Double, color: Color) {
+        parts = [Part(share: fraction, color: color)]
+        thickness = nil
+    }
+
+    init(parts: [Part], thickness: CGFloat) {
+        self.parts = parts
+        self.thickness = thickness
+    }
 
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.primary.opacity(0.08))
-                Capsule().fill(color).frame(width: max(4, g.size.width * min(max(fraction, 0), 1)))
+                if thickness == nil, let one = parts.first, parts.count == 1 {
+                    // A machine's meter: a share drawn at least a sliver wide, its own capsule.
+                    Capsule().fill(one.color).frame(width: max(4, g.size.width * Self.clamped(one.share)))
+                } else {
+                    ForEach(parts.indices, id: \.self) { i in
+                        Rectangle().fill(parts[i].color)
+                            .scaleEffect(x: Self.clamped(parts[i].share), y: 1, anchor: .leading)
+                            .offset(x: g.size.width * Self.start(of: i, in: parts))
+                    }
+                }
             }
+            .clipShape(.capsule)
         }
-        .scaledFrame(height: Theme.Size.dotXS)
+        .modifier(MeterThickness(thickness: thickness))
         .accessibilityHidden(true)
+    }
+
+    private static func clamped(_ v: Double) -> Double { min(max(v, 0), 1) }
+
+    /// Where part `i` starts: the shares before it, at most the whole bar.
+    private static func start(of i: Int, in parts: [Part]) -> Double {
+        min(parts[..<i].reduce(0) { $0 + clamped($1.share) }, 1)
+    }
+}
+
+/// A meter's thickness: a given one as it is (a bar is a line, it does not scale), else the dot's, scaled with the text.
+private struct MeterThickness: ViewModifier {
+    var thickness: CGFloat?
+
+    func body(content: Content) -> some View {
+        if let thickness {
+            content.frame(height: thickness)
+        } else {
+            content.scaledFrame(height: Theme.Size.dotXS)
+        }
     }
 }

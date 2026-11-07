@@ -42,10 +42,9 @@ import Testing
         #expect(run.phaseLabel == "Verify 2/2")
         #expect(run.progress?.done == 169 && run.progress?.started == 185)
         #expect(run.runningAgents == 16)
-        #expect(run.line == "后台 workflow「parity-audit」 · Verify 2/2 · 169/185")
-        // The agent without an id is left out; running ones first, then the latest started.
+        #expect(run.line == "后台 workflow「parity-audit」 · Verify 2/2 · 169/185+") // "+": more may start while it runs
+        // The agent without an id is left out; the rest in the order they started (#3436: never reordered).
         #expect(run.agents?.map(\.id) == ["a1", "a2"])
-        #expect(run.sortedAgents.map(\.id) == ["a2", "a1"])
         #expect(run.agents?.first?.sessionID == "s1@a1")
         #expect(run.elapsed(now: Date(timeIntervalSince1970: 1793883600 + 840)) == 840)
         let killed = runs[1]

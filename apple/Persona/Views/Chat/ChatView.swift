@@ -302,11 +302,35 @@ struct ChatView: View {
     @ViewBuilder private var workflowBar: some View {
         if hasWorkflows, let session {
             WorkflowSection(runs: session.shownWorkflows(), maxHeight: pageHeight > 0 ? pageHeight * Theme.Size.workflowShare : nil) { a in
-                guard let sid = a.sessionID else { return }
-                view(Subagent(id: a.id, sessionID: sid, type: "workflow", description: a.label, running: a.running,
-                              background: true, startedAt: a.startedAt, updatedAt: a.updatedAt, lastText: a.lastText))
+                openWorkflowAgent(a)
             }
         }
+    }
+
+    /// The folds holding the Workflow call of a run the hub lists (`WorkflowRun.foldsHoldingCalls`), on the main
+    /// agent's chat. Nothing to look through for a chat without runs.
+    private var workflowFolds: [Item] {
+        guard viewing == nil, let runs = session?.workflows, !runs.isEmpty else { return [] }
+        return WorkflowRun.foldsHoldingCalls(store.items, runs: runs)
+    }
+
+    /// Fetches them; one that did not come (the hub restarting, the phone offline, not connected yet) is asked for again
+    /// after a wait that doubles (`WorkflowCallCard.fetchFolds`). A fold that came is gone from the items; one that comes
+    /// back (the chat loaded afresh, another chat and back) is fetched again.
+    private func unfoldWorkflowCalls(_ folds: [Item]) async {
+        let key = shownKey
+        await WorkflowCallCard.fetchFolds(folds) { [model] f in
+            try? await model.unfold(key, f)
+            // Came: it gave its place to its work. Still there: it failed, or there was no hub to ask.
+            return !model.chat(key).items.contains { $0.id == f.id }
+        }
+    }
+
+    /// One of a workflow's agents, opened here like a subagent (its `session_id` reads as one).
+    private func openWorkflowAgent(_ a: WorkflowAgent) {
+        guard let sid = a.sessionID else { return }
+        view(Subagent(id: a.id, sessionID: sid, type: "workflow", description: a.label, running: a.running,
+                      background: true, startedAt: a.startedAt, updatedAt: a.updatedAt, lastText: a.lastText))
     }
 
     #if os(macOS)
@@ -559,6 +583,8 @@ struct ChatView: View {
         // is the same type every time, so nothing below loses its identity or state.
         AnyView(chatPresentation)
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
+        // A Workflow call the hub folded into a turn's work (#3436): that fold is fetched, so the run's card comes out.
+        .task(id: workflowFolds.map(\.id)) { await unfoldWorkflowCalls(workflowFolds) }
         .task(id: key) {
             guard style == .assistant else { return }
             TasksStore.shared.load(key.sessionID)
@@ -762,7 +788,7 @@ struct ChatView: View {
                                        first: items.first?.id, live: frozen == nil ? liveTurnID : frozen?.live, open: openWork,
                                        runs: openRuns, frozen: frozen, feed: feed.map(\.id),
                                        streaming: style == .assistant && (frozen.map { !$0.text.isEmpty } ?? liveShown),
-                                       quietAgents: quietSubagents)
+                                       quietAgents: quietSubagents, workflowCalls: workflowCalls)
         if scratch.linesKey == key { return scratch.lines }
         var blocks = store.blocks
         if frozen != nil {
@@ -795,18 +821,25 @@ struct ChatView: View {
     private func foldsIntoRun(_ call: ToolCall) -> Bool {
         if SubagentCard.isAgent(call) { return false } // its card is a line of its own
         guard let id = call.use.toolUseID else { return true }
+        if WorkflowCallCard.staysOut(call, listed: workflowCalls) { return false } // its run's card (#3436)
         return !store.tasks.started.contains(id) && store.tasks.notes[id] == nil
     }
 
     /// A subagent still at work keeps its card in view under its folded work line; done, it folds with the line.
-    /// A foreground one only while its line runs (with no result after that, it was cut off).
+    /// A foreground one only while its line runs (with no result after that, it was cut off). A Workflow call's card
+    /// stays in view while the hub lists its run, running or ended (#3436): its end (the chip, a failed run's error)
+    /// shows where it was being watched, and the card folds itself to its head.
     private func showsFolded(_ call: ToolCall, live: Bool) -> Bool {
+        if WorkflowCallCard.isWorkflow(call) { return WorkflowCallCard.staysOut(call, listed: workflowCalls) }
         guard SubagentCard.isAgent(call), let id = call.use.toolUseID else { return false }
         guard live || store.tasks.started.contains(id) else { return false }
         return SubagentCardStatus.of(call, tasks: store.tasks, agent: subagentsByCall[id]) == .running
     }
     /// The background subagents the hub says stopped: a card's state that is not in the chat's items (`LinesKey`).
     private var quietSubagents: Set<String> { Set(subagentsByCall.filter { !$0.value.running }.keys) }
+    /// The Workflow calls whose run the hub lists (#3436): drawn as their run's card, out of the chips and the fold
+    /// (`LinesKey`). The same while a run only makes progress or ends.
+    private var workflowCalls: Set<String> { Set((session?.workflows ?? []).compactMap(\.toolUseID)) }
 
     static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] { ChatLines.foldAPIErrors(lines) }
 
@@ -1009,6 +1042,7 @@ struct ChatView: View {
             openSubagent: { toolUseID in
                 if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
             },
+            openWorkflowAgent: { openWorkflowAgent($0) },
             openFold: openFold,
             jumpToCall: { jumpToCall($0) },
             openQuote: { jumpToQuoted($0) })
@@ -1184,7 +1218,10 @@ struct ChatView: View {
                 .unfolding(stepUnfolding(group, item: item))
         case .agentOut(_, let call):
             // A card of its own (no rail on the timeline: the line above is shut).
-            SubagentCard(call: call).background { if !WorkCardSlice.timeline { WorkCardSlice(top: true, bottom: true) } }
+            Group {
+                if WorkflowCallCard.isWorkflow(call) { WorkflowCallCard(call: call) } else { SubagentCard(call: call) }
+            }
+            .background { if !WorkCardSlice.timeline { WorkCardSlice(top: true, bottom: true) } }
         case .toolRun(let id, let calls, let open, let first):
             ToolRunRow(calls: calls, open: open, first: first) { toggleRun(id, calls: calls) }
                 .equatable()
@@ -1682,6 +1719,8 @@ struct ChatView: View {
         }
         .environment(\.openSubagent, actions.openSubagent)
         .environment(\.subagentsByCall, subagentsByCall)
+        .environment(\.workflowChat, key)
+        .environment(\.chatActions, actions)
         .environment(\.openFold, actions.openFold)
         .environment(\.taskIndex, store.tasks)
         .environment(\.jumpToCall, actions.jumpToCall)
@@ -4875,6 +4914,9 @@ struct WorkStepView: View, Equatable {
             switch item {
             case .step(.call(let c)) where SubagentCard.isAgent(c):
                 SubagentCard(call: c)
+            case .step(.call(let c)) where WorkflowCallCard.isWorkflow(c):
+                // Its run's card (#3436): the card reads the run itself, this view is not drawn again by pushes.
+                WorkflowCallCard(call: c)
             case .step(.call(let c)):
                 ToolCallRow(call: c, autoExpand: false, grouped: true)
             case .step(.thought(let t)) where t.task != nil && t.wake != true:
@@ -4922,6 +4964,7 @@ struct WorkStepView: View, Equatable {
         var loadImage: (String) async -> ImagePayload? = { _ in nil }
         var loadFullText: (String) async throws -> String = { _ in "" }
         var openSubagent: (String) -> Void = { _ in }
+        var openWorkflowAgent: (WorkflowAgent) -> Void = { _ in }
         var openFold: (Item) async throws -> Void = { _ in }
         var jumpToCall: (String) -> Void = { _ in }
         var openQuote: (ContextRef) -> Bool = { _ in false }
@@ -4947,6 +4990,7 @@ struct WorkStepView: View, Equatable {
         return try await load(id)
     }
     private(set) lazy var openSubagent: (String) -> Void = { [weak self] in self?.handlers.openSubagent($0) }
+    private(set) lazy var openWorkflowAgent: (WorkflowAgent) -> Void = { [weak self] in self?.handlers.openWorkflowAgent($0) }
     private(set) lazy var openFold: (Item) async throws -> Void = { @MainActor [weak self] item in
         guard let open = self?.handlers.openFold else { return }
         try await open(item)
@@ -5450,6 +5494,8 @@ final class ChatScratch {
         var streaming = false
         /// The subagents the hub says stopped: their cards fold with their work lines (`ChatLines.showsFolded`).
         var quietAgents: Set<String> = []
+        /// The Workflow calls whose run the hub lists: their cards stay out of the fold and the chips (#3436).
+        var workflowCalls: Set<String> = []
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
     var sentHere: [(id: UUID, text: String)] = []

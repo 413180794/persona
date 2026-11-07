@@ -693,31 +693,106 @@ if os.environ.get("MOCK_STALE_DONE") == "1":
 
 # MOCK_WORKFLOW=1 (#2935): the PR review agent ended its turn while a multi-agent workflow (Claude Code's Workflow tool) runs
 # in the background (shaped after a real run: parity-audit, phases Audit / Verify, 169 of 185 done, 16 running): the hub
-# counts it as working; the running one is also in `background` (kind workflow) for older apps. A killed one beside it.
+# counts it as working; the running one is also in `background` (kind workflow) for older apps. A killed one beside it
+# (one of its agents failed). #3436: both carry what a newer hub sends (tool_use_id, phase_stats, agents_failed, each
+# agent's status / model / latest_tool), the review chat has the Workflow calls that launched them (each drawn as its
+# run's card), and GET /mock/workflow?step=0..4 moves parity-audit on, pushed as the hub would: 1 an Audit agent comes
+# back (169→170), 2 a new Verify agent starts (185→186), 3 Audit is all back (one failed), 4 it completed; 5 (for the
+# Mac's idle CPU with a busy card) all 60 listed agents running.
+WF_REVIEW_STEP = {"n": 0}
+_WF_AREAS = ("chat-rich", "inbox", "todo-dock", "watch", "island", "settings", "onboarding", "machines", "files", "git",
+             "terminal", "mail", "lark", "voice", "widgets")
+
+
+def wf_review_agent(aid, label, phase, state, start_min, end_min=None, tool=None, text=None):
+    a = {"id": aid, "session_id": f"{REVIEW}@{aid}", "label": label, "phase": phase, "running": state == "running",
+         "status": state, "started_at": ago(minutes=start_min), "model": "claude-sonnet-4-5"}
+    if state != "running":
+        a["ended_at"] = ago(minutes=end_min if end_min is not None else max(start_min - 2, 0))
+    a["updated_at"] = a.get("ended_at") or ago(minutes=0)
+    if tool:
+        a["latest_tool"] = {"name": tool[0], "summary": tool[1]}
+    if text:
+        a["last_text"] = text
+    return a
+
+
+def wf_review_runs(step):
+    """parity-audit at a step (see MOCK_WORKFLOW=1 above), and the killed docs-sweep."""
+    # the hub lists the newest 60: Audit #126–180, then Verify's
+    audit = []
+    for n in range(126, 181):
+        back = step != 5 and (n < 170 or (step >= 1 and n == 170) or step >= 3)
+        state = ("failed" if n == 175 else "done") if back else "running"
+        area = _WF_AREAS[n % len(_WF_AREAS)]
+        audit.append(wf_review_agent("a%03d" % n, "audit:%s-%03d" % (area, n), "Audit", "done" if step == 4 and state == "running" else state,
+                                     14 - (n - 126) * 0.2, max(13 - (n - 126) * 0.2, 0) if back else None,
+                                     tool=("Read", "读 %s 的三端实现" % area),
+                                     text="%s 三端一致。" % area if state == "done" else None))
+    verify_labels = ["verify:chat-rich", "verify:inbox-bulk", "verify:todo-dock", "verify:watch", "verify:island"] + (
+        ["verify:copy"] if step >= 2 else [])
+    verify = [wf_review_agent("v%d" % (i + 1), label, "Verify", "done" if step == 4 else "running", 3 - i * 0.4,
+                              0 if step == 4 else None, tool=("Grep", "在核对 %s 的发现" % label.split(":")[1]))
+              for i, label in enumerate(verify_labels)]
+    agents = (audit + verify)[-60:]
+    a_started = 180
+    a_done = 125 if step == 5 else 179 if step >= 3 else 170 if step >= 1 else 169
+    a_failed = 1 if step in (3, 4) else 0
+    a_running = 0 if step in (3, 4) else a_started - a_done
+    v_started = len(verify_labels)
+    v_done = v_started if step == 4 else 0
+    v_running = 0 if step == 4 else v_started
+    ended = step == 4
+    parity = {"task_id": "wdp5zxh37", "run_id": "wf_c1d9daf8-cd2", "name": "parity-audit", "summary": "各端功能对齐审计",
+              "status": "completed" if ended else "running", "running": not ended, "phases": ["Audit", "Verify"],
+              "phase": "Verify", "phase_index": 2, "phase_count": 2,
+              "phase_stats": [{"title": "Audit", "started": a_started, "done": a_done, "running": a_running, **({"failed": a_failed} if a_failed else {})},
+                              {"title": "Verify", "started": v_started, "done": v_done, "running": v_running}],
+              "tool_use_id": "toolu_wf_parity", "agents_started": a_started + v_started, "agents_done": a_done + v_done,
+              "agents_running": a_running + v_running, **({"agents_failed": a_failed} if a_failed else {}),
+              "tokens": 3120000, "calls": 1420, "started_at": ago(minutes=14), "updated_at": ago(minutes=0),
+              **({"ended_at": ago(minutes=0)} if ended else {}), "agents": agents}
+    docs = {"task_id": "wk1lled00", "run_id": "wf_0a1b2c3d-4e5", "name": "docs-sweep", "summary": "文档里过时的说法扫一遍", "status": "killed",
+            "running": False, "phases": ["Scan", "Fix"], "phase": "Scan", "phase_index": 1, "phase_count": 2,
+            "phase_stats": [{"title": "Scan", "started": 3, "done": 2, "running": 0, "failed": 1},
+                            {"title": "Fix", "started": 1, "done": 0, "running": 0}],
+            "tool_use_id": "toolu_wf_docs", "agents_started": 4, "agents_done": 2, "agents_running": 0, "agents_failed": 1,
+            "started_at": ago(minutes=50), "ended_at": ago(minutes=40), "error": "Error: Workflow aborted",
+            "agents": [wf_review_agent("d1", "scan:ios", "Scan", "done", 50, 46, tool=("Grep", "找 docs/ios.md 里的旧说法")),
+                       wf_review_agent("d2", "scan:web", "Scan", "done", 49.5, 45, tool=("Grep", "找 docs/web.md 里的旧说法")),
+                       wf_review_agent("d3", "scan:android", "Scan", "failed", 49, 44, tool=("Read", "读 docs/android.md")),
+                       wf_review_agent("d4", "fix:ios", "Fix", "stopped", 44, 40, tool=("Edit", "改 docs/ios.md"))]}
+    return [parity, docs]
+
+
+def set_wf_review_step(step):
+    """GET /mock/workflow?step=n with MOCK_WORKFLOW=1: parity-audit at that step, pushed as the hub would."""
+    WF_REVIEW_STEP["n"] = max(0, min(5, step))
+    for s in SESSIONS:
+        if s["session_id"] == REVIEW:
+            runs = wf_review_runs(WF_REVIEW_STEP["n"])
+            s.update(workflows=runs, rev=(s.get("rev") or 0) + 1, updated_at=ago(minutes=0),
+                     state="working" if runs[0]["running"] else "unread",
+                     background=[{"id": w["task_id"], "kind": "workflow", "description": w["name"], "run_id": w["run_id"],
+                                  "started_at": w["started_at"]} for w in runs if w["running"]])
+            if runs[0]["running"]:
+                s["background_working"] = True
+            else:
+                s.pop("background_working", None)
+            push_machine(s["machine_id"])
+            return {"step": WF_REVIEW_STEP["n"], "counts": "%d/%d" % (runs[0]["agents_done"], runs[0]["agents_started"])}
+    return {"error": "MOCK_WORKFLOW=1 is off"}
+
+
 if os.environ.get("MOCK_WORKFLOW") == "1":
-    _wf_agents = [{"id": "a%03d" % i, "session_id": f"{REVIEW}@a%03d" % i, "label": label, "phase": phase, "running": running,
-                   "started_at": ago(minutes=m), "updated_at": ago(minutes=max(m - 2, 0)), **({"last_text": last} if last else {})}
-                  for i, (label, phase, running, m, last) in enumerate((
-                      ("audit:chat-rich", "Audit", False, 14, "对话页的富文本三端一致。"),
-                      ("audit:inbox", "Audit", False, 13, "收件箱少了批量已读：记一条。"),
-                      ("verify:inbox-bulk", "Verify", False, 6, "确认：Android 没有批量已读。"),
-                      ("verify:todo-dock", "Verify", True, 3, "在读 TaskViews.swift 的任务坞"),
-                      ("verify:watch", "Verify", True, 2, "在对比手表的 Agent 列表"),
-                      ("verify:island", "Verify", True, 1, None)))]
+    _wf_runs = wf_review_runs(0)
     for _s in SESSIONS:
         if _s["session_id"] == REVIEW:
             _s.update(status="done", state="working", state_since=ago(minutes=14), seen_at=None,
-                      last_text="审计交给 workflow 在后台跑了，跑完我再汇总。",
+                      last_text="审计交给 workflow 在后台跑了，跑完我再汇总。", background_working=True,
                       background=[{"id": "wdp5zxh37", "kind": "workflow", "description": "parity-audit", "run_id": "wf_c1d9daf8-cd2",
                                    "started_at": ago(minutes=14)}],
-                      workflows=[
-                          {"task_id": "wdp5zxh37", "run_id": "wf_c1d9daf8-cd2", "name": "parity-audit", "summary": "各端功能对齐审计",
-                           "status": "running", "running": True, "phases": ["Audit", "Verify"], "phase": "Verify", "phase_index": 2,
-                           "agents_started": 185, "agents_done": 169, "agents_running": 16, "started_at": ago(minutes=14),
-                           "updated_at": ago(minutes=0), "agents": _wf_agents},
-                          {"task_id": "wk1lled00", "run_id": "wf_0a1b2c3d-4e5", "name": "docs-sweep", "status": "killed", "running": False,
-                           "phases": ["Scan", "Fix"], "phase": "Scan", "phase_index": 1, "agents_started": 4, "agents_done": 2, "agents_running": 0,
-                           "started_at": ago(minutes=50), "ended_at": ago(minutes=40), "error": "Error: Workflow aborted"}])
+                      workflows=_wf_runs)
 
 # MOCK_BG_WAITING=1 (#6045): two agents whose turns ended with background commands. One only waits (a loop on the PR's
 # checks): Waiting in the background, apart from Working. The other's background build works: Working, as before.
@@ -2597,6 +2672,23 @@ if os.environ.get("MOCK_REWIND"):
         it("user", "text", 60, text="继续"), it("assistant", "text", 55, text="把 `fetchAll` 改成了 `loadAll`。"),
         it("user", "text", 40, text="把 tmp 也改了"), it("assistant", "text", 35, text="`tmp` 已经改成 `cached`。"),
         it("user", "text", 20, text="继续"), it("assistant", "text", 15, text="CI 绿了，可以合。")]
+# MOCK_WORKFLOW=1 (#3436): the Workflow calls that launched the review agent's runs, each drawn as its run's card (the
+# parity-audit one in a turn the hub folds: the app fetches that fold for the card), and each agent's own conversation.
+if os.environ.get("MOCK_WORKFLOW") == "1":
+    ITEMS[REVIEW] = (_REVIEW_BEFORE + [it("user", "text", 100, text="看一下 PR #42"),
+                                       it("assistant", "text", 95, text="PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。")]
+                     + [it("user", "text", 50, text="把文档里过时的说法扫一遍")]
+                     + wf_call("toolu_wf_docs", "docs-sweep", 50)
+                     + [it("assistant", "text", 50, text="文档扫描放到后台了。")]
+                     + [it("user", "text", 15, text="各端的功能对齐审计一遍，每条发现再核对一次")]
+                     + tool("Grep", {"pattern": "struct .*View", "path": "apple/Persona/Views"}, "ChatView.swift:12\nInboxView.swift:8", 15)
+                     + tool("Read", {"file_path": "/Users/me/code/persona/docs/web.md"}, "1\t# Web", 15)
+                     + wf_call("toolu_wf_parity", "parity-audit", 14)
+                     + [it("assistant", "text", 14, text="审计交给 workflow 在后台跑了，跑完我再汇总。")])
+    for _w in wf_review_runs(0) + wf_review_runs(4)[:1]:
+        for _a in _w["agents"]:
+            ITEMS[_a["session_id"]] = [it("user", "text", 14, text="%s：审这一块，列出问题" % _a["label"]),
+                                       it("assistant", "text", 13, text=_a.get("last_text") or "这一块看完了，没有发现问题。")]
 ITEMS[CODEX_LIVE] = (
     [it("user", "text", 12, text="把三个环境的部署变量合到一个 env 文件里")]
     + tool("Bash", {"command": "ls deploy/env"}, "dev.env\nprod.env\nstaging.env", 8)
@@ -12216,6 +12308,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({k: SESSION_CLOSE[k] for k in ("fail", "attempts", "closed")})
         if p == "/mock/workflow" and MOCK_WORKFLOW_CARDS:  # MOCK_WORKFLOW_CARDS: the small run at ?step=0..3
             return self.send_json(set_wf_step(int(q.get("step", ["0"])[0] or 0)))
+        if p == "/mock/workflow" and os.environ.get("MOCK_WORKFLOW") == "1":  # MOCK_WORKFLOW=1: parity-audit at ?step=0..4
+            return self.send_json(set_wf_review_step(int(q.get("step", ["0"])[0] or 0)))
         if p == "/mock/session_state":
             body, status = set_session_state(q)
             return self.send_json(body, status)

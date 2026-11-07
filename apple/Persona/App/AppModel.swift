@@ -79,6 +79,10 @@ final class AppModel {
             sessionIndex = index
             for (key, cell) in sessionCells where !Session.sameForItsPage(cell.value, index[key]) { cell.value = index[key] }
             for (key, cell) in sessionLineCells where !Session.sameApartFromTicks(cell.value, index[key]) { cell.value = index[key] }
+            for (key, cell) in workflowCells {
+                let run = index[key.session]?.workflows?.first { $0.toolUseID == key.call }
+                if cell.value != run { cell.value = run }
+            }
             // Only the spaces a view watches (`siblings(of:)`): working out every space's tabs sorted each one on every
             // push, with no chat open to show them (#343).
             if !spaceCells.isEmpty {
@@ -115,6 +119,9 @@ final class AppModel {
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
     /// The same for views that show a session's last line and step (`sessionWithLine(_:)`, the task cards).
     @ObservationIgnored private var sessionLineCells: [SessionKey: SessionCell] = [:]
+    /// One observable cell per workflow run a chat's card shows (`workflow(_:call:)`), by the Workflow call that
+    /// launched it: a push about the run draws only its card again (the step it is in is `Equatable` on its item).
+    @ObservationIgnored private var workflowCells: [WorkflowCallKey: WorkflowCell] = [:]
     /// One observable cell per space a view has asked about (`siblings(of:)`), with its live agents, one per pane,
     /// worked out at each update of the lists: the open chat and its tab strip are drawn again when one of their space's
     /// tabs changes as they show it. They read `allSessions` through `siblings(of:)`, so every push about any agent on
@@ -688,6 +695,17 @@ final class AppModel {
     /// One session as the hub last sent it, all of it, without watching it: for an action when it is tapped (Hand to
     /// Persona sends its last line), not for a view.
     func latest(_ key: SessionKey) -> Session? { sessionIndex[key] }
+
+    /// The workflow run the Workflow call `call` of session `key` launched, as the hub lists it now (nil: none, an older
+    /// hub or a run over a day old), for that call's card in the chat (#3436): drawn again when that run changes, not
+    /// with the rest of the session nor its other runs.
+    func workflow(_ key: SessionKey, call: String) -> WorkflowRun? {
+        let k = WorkflowCallKey(session: key, call: call)
+        if let cell = workflowCells[k] { return cell.value }
+        let cell = WorkflowCell(sessionIndex[key]?.workflows?.first { $0.toolUseID == call })
+        workflowCells[k] = cell
+        return cell.value
+    }
 
     /// A session this app just started, until the hub's next list for its machine (which replaces it) has it: its
     /// chat opened with no title (「对话 · 对话」) and no machine until then.
@@ -2727,6 +2745,18 @@ enum Haptics {
 @Observable final class SessionCell {
     var value: Session?
     init(_ value: Session?) { self.value = value }
+}
+
+/// A workflow run as `AppModel.workflow(_:call:)` hands it out.
+@Observable final class WorkflowCell {
+    var value: WorkflowRun?
+    init(_ value: WorkflowRun?) { self.value = value }
+}
+
+/// Which Workflow call of which session a `WorkflowCell` follows.
+nonisolated struct WorkflowCallKey: Hashable, Sendable {
+    var session: SessionKey
+    var call: String
 }
 
 /// A space's live agents as `AppModel.siblings(of:)` hands them out.

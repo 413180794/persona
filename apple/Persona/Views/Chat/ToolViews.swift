@@ -35,6 +35,7 @@ enum ToolPresentation {
         case "ToolSearch": return "wrench.and.screwdriver"
         case "Skill": return "sparkles"
         case "Monitor": return "waveform.path.ecg"
+        case "Workflow": return Theme.Icon.workflow
         default: return name.hasPrefix("mcp__") ? "puzzlepiece.extension" : Theme.Icon.unknownTool
         }
     }
@@ -74,6 +75,7 @@ enum ToolPresentation {
         case "ToolSearch": return String(localized: "Load Tools")
         case "Skill": return String(localized: "Use Skill")
         case "Monitor": return String(localized: "Monitor [Tool Views 22be42]")
+        case "Workflow": return String(localized: "Run Workflow [Tool Views]")
         default: return n
         }
     }
@@ -100,6 +102,8 @@ enum ToolPresentation {
         case "WebSearch": return s("query") ?? ""
         case "Task", "Agent": return s("description") ?? ""
         case "Monitor": return s("description") ?? firstLine(s("command") ?? "")
+        // The node's name for its run: its `name`, the name in its script's meta, else its script file's (#3436).
+        case "Workflow": return s("name") ?? workflowName(script: s("script")) ?? s("scriptPath").map(workflowScriptName) ?? ""
         case "Skill": return s("skill") ?? s("command") ?? ""
         case "conversations_list": return s("query") ?? ""
         case "conversation_rename": return [s("kind"), s("topic")].compactMap { $0 }.joined(separator: " | ")
@@ -118,6 +122,22 @@ enum ToolPresentation {
             if n.hasPrefix("phone_") || n.hasPrefix("mail_") { return n.split(separator: "_").dropFirst().joined(separator: " ") }
             return i.object?.values.compactMap(\.string).first.map(firstLine) ?? ""
         }
+    }
+
+    /// The `name: '…'` a workflow script's meta gives it (the node reads it the same way, `wfNameRe`).
+    static func workflowName(script: String?) -> String? {
+        guard let script, let m = script.firstMatch(of: #/\bname:\s*['"`]([^'"`\n]+)['"`]/#) else { return nil }
+        return String(m.1)
+    }
+
+    /// A workflow's name from its script file, as the node has it (`scriptName`): the file's name without ".js" and
+    /// the run id Claude Code adds ("…/parity-audit-wf_c1d9daf8.js" is "parity-audit"), so the call's row says what
+    /// the rows, the header and the notifications call the run.
+    nonisolated static func workflowScriptName(_ path: String) -> String {
+        var base = path.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? path
+        if base.hasSuffix(".js") { base.removeLast(3) }
+        if let r = base.range(of: "-wf_"), r.lowerBound > base.startIndex { base = String(base[..<r.lowerBound]) }
+        return base
     }
 
     static func firstLine(_ s: String) -> String {
