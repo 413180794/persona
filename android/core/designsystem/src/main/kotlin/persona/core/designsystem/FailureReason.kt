@@ -34,6 +34,10 @@ fun hubMessage(error: Throwable): String? {
     return failure.message.takeIf { failure.status != null && it.isNotBlank() }
 }
 
+/** The node's own words under a summary the hub said in the app's language (#5514), for matching a known failure. */
+fun hubOriginal(error: Throwable): String? =
+    generateSequence(error) { it.cause }.take(16).filterIsInstance<HubFailure>().firstOrNull()?.original
+
 /** What "Copy details" copies for a report: the hub's message, its HTTP status and error code, or the exception as it came. */
 fun failureDetail(error: Throwable): String {
     val failure = generateSequence(error) { it.cause }.take(16).filterIsInstance<HubFailure>().firstOrNull()

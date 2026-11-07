@@ -200,4 +200,10 @@ class HerdrNoticeTest {
         assertEquals(AgentText(R.string.agents_herdr_why_timeout), HerdrFailure.says("Request Timed Out"))
         assertEquals(AgentText.raw("something else"), HerdrFailure.says(" something else "))
     }
+
+    @Test fun theNodesOwnWordsAreReadUnderALocalizedSummary() {
+        fun failure(original: String) = persona.core.hub.HubFailure(persona.core.hub.HubError.Server, "示例摘要", 502, "internal", original = original)
+        assertEquals(AgentText(R.string.agents_herdr_why_old_node), HerdrFailure.of(failure("unknown method herdr.server.start")).text)
+        assertEquals("words it does not know stay the hub's", AgentText.raw("示例摘要"), HerdrFailure.of(failure("something else")).text)
+    }
 }

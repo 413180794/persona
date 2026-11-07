@@ -26,4 +26,14 @@ class HubFailureResponseTest {
     @Test fun anUnauthorizedCredentialStillEndsThePairing() {
         assertEquals(HubError.PairingExpired, HubFailure.from(response(401, """{"error":"bad","code":"invalid_token"}""")).kind)
     }
+
+    /** #5514 moved a node's own words to `detail` when the hub localized `error` (#5702). */
+    @Test fun aLocalizedFailureKeepsTheNodesOwnWords() {
+        val failure = HubFailure.from(response(502, """{"error":"示例摘要","code":"internal","detail":"unknown method node.doctor"}"""))
+        assertEquals("示例摘要", failure.message)
+        assertEquals("unknown method node.doctor", failure.original)
+        val structured = HubFailure.from(response(502, """{"error":"示例摘要","code":"internal","detail":{"kind":"x"}}"""))
+        assertEquals("a structured detail is not the node's words", "示例摘要", structured.message)
+        assertNull(structured.original)
+    }
 }

@@ -31,6 +31,8 @@ class HubFailure(
     val detail: String? = null,
     /** The hub's whole error body (at most 64 KB), for a caller that reads more of it (a card's 409 carries the card). */
     val body: String? = null,
+    /** The node's own words when the hub said [message] in the app's language instead (`detail` of its body, #5514). */
+    val original: String? = null,
 ) : IOException(message, cause), persona.core.contracts.api.HubCodedFailure {
     companion object {
         fun from(error: Throwable): HubFailure {
@@ -77,7 +79,7 @@ class HubFailure(
                 retryable = !terminal && (body?.retryable ?: (response.code >= 500 || response.code in setOf(408, 429))),
                 delivered = body?.delivered,
                 retryAfterSeconds = response.header("Retry-After")?.toLongOrNull()?.coerceAtLeast(0),
-                field = body?.field, detail = body?.message, body = raw,
+                field = body?.field, detail = body?.message, body = raw, original = body?.detail,
             )
         }
     }

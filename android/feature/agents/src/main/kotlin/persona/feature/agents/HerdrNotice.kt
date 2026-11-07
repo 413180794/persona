@@ -24,6 +24,7 @@ import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 import persona.core.designsystem.failureDetail
 import persona.core.designsystem.hubMessage
+import persona.core.designsystem.hubOriginal
 import persona.core.contracts.Machine
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HerdrState
@@ -52,8 +53,11 @@ internal fun Machine.herdrStopped(state: HerdrState?): Boolean =
  */
 internal data class HerdrFailure(val text: AgentText, val detail: String) {
     companion object {
-        fun of(error: Throwable): HerdrFailure =
-            HerdrFailure(hubMessage(error)?.let(::says) ?: AgentText(R.string.agents_text_raw, failureReasonText(error)), failureDetail(error))
+        /** The node's own words are read first when the hub localized its summary (#5514); words it does not know show the summary. */
+        fun of(error: Throwable): HerdrFailure = HerdrFailure(
+            hubOriginal(error)?.let(::says)?.takeUnless { it.id == R.string.agents_text_raw }
+                ?: hubMessage(error)?.let(::says) ?: AgentText(R.string.agents_text_raw, failureReasonText(error)),
+            failureDetail(error))
 
         /** The node's and the hub's known failures of herdr.server.start (server/internal/node/herdrstart.go) in words. */
         fun says(message: String): AgentText {

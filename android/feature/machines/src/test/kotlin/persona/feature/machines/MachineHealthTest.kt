@@ -42,6 +42,7 @@ class MachineHealthTest {
 
     @Test fun unavailableSelfChecksSayWhy() {
         assertEquals(DoctorUnavailable.OldNode, DoctorUnavailable.of(502, "unknown method node.doctor", true))
+        assertEquals("a localized summary (#5702)", DoctorUnavailable.OldNode, DoctorUnavailable.of(502, "示例摘要", true, "unknown method node.doctor"))
         assertEquals(DoctorUnavailable.OldHub, DoctorUnavailable.of(404, "HTTP 404", false))
         assertNull("an unknown machine is JSON", DoctorUnavailable.of(404, "unknown machine", true))
         assertEquals(DoctorUnavailable.Offline, DoctorUnavailable.of(503, "machine is offline", true))
@@ -111,6 +112,16 @@ class MachineHealthTest {
         val api = object : Api() {
             override suspend fun doctor(machineId: String): DoctorReport =
                 throw persona.core.hub.HubFailure(persona.core.hub.HubError.Server, "unknown method node.doctor", 502, body = "{}")
+        }
+        val model = MachineHealthViewModel(api)
+        model.open("m", online = true)
+        assertEquals(DoctorLoad.Unavailable(DoctorUnavailable.OldNode), model.state.value.doctor)
+    }
+
+    @Test fun anOldNodeIsKnownUnderALocalizedSummary() = runTest {
+        val api = object : Api() {
+            override suspend fun doctor(machineId: String): DoctorReport = throw persona.core.hub.HubFailure(persona.core.hub.HubError.Server,
+                "示例摘要", 502, "internal", body = "{}", original = "unknown method node.doctor")
         }
         val model = MachineHealthViewModel(api)
         model.open("m", online = true)

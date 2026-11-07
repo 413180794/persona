@@ -9,6 +9,7 @@ import persona.core.contracts.api.UsageAccount
 import persona.core.designsystem.UiText
 import persona.core.designsystem.failureReasonText
 import persona.core.designsystem.hubAnswer
+import persona.core.designsystem.hubOriginal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -85,7 +86,7 @@ internal class MachineHealthViewModel(private val management: MachineManagement)
             catch (error: Exception) {
                 if (mine != seq) return@launch
                 val answer = hubAnswer(error)
-                val why = DoctorUnavailable.of(answer?.status, answer?.message ?: error.message, answer?.json ?: true)
+                val why = DoctorUnavailable.of(answer?.status, answer?.message ?: error.message, answer?.json ?: true, hubOriginal(error))
                 mutable.update { it.copy(doctor = why?.let(DoctorLoad::Unavailable) ?: DoctorLoad.Failed(failureReasonText(error))) }
             } finally { if (mine == seq) mutable.update { it.copy(checking = false) } }
         }

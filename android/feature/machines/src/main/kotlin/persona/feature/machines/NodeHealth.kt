@@ -108,9 +108,9 @@ internal enum class DoctorUnavailable(@StringRes val text: Int) {
     Offline(R.string.machines_health_went_offline), Forbidden(R.string.machines_health_forbidden);
 
     companion object {
-        /** An old node answers "unknown method"; an old hub has no such route (a plain 404, not the JSON of "unknown machine"). */
-        fun of(status: Int?, message: String?, json: Boolean): DoctorUnavailable? = when {
-            message?.contains("unknown method", ignoreCase = true) == true -> OldNode
+        /** An old node answers "unknown method" (in [detail] when the hub localized [message]); an old hub has no such route (a plain 404, not the JSON of "unknown machine"). */
+        fun of(status: Int?, message: String?, json: Boolean, detail: String? = null): DoctorUnavailable? = when {
+            listOf(message, detail).any { it?.contains("unknown method", ignoreCase = true) == true } -> OldNode
             status == 404 && !json -> OldHub
             status == 503 -> Offline
             status == 403 -> Forbidden

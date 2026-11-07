@@ -355,6 +355,8 @@ data class ErrorBody(
     val draft: String? = null, val clearable: String? = null,
     /** The input the hub refused (an extension setting's dotted path, `invalid_config`) and why, without the path. */
     val field: String? = null, val message: String? = null,
+    /** What the node said when the hub put [error] in the app's language (#5514); a structured detail reads as absent. */
+    val detail: String? = null,
 )
 
 object MachineSystemSerializer : WireSerializer<MachineSystem>(MachineSystem.generatedSerializer())
