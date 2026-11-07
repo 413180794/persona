@@ -8,10 +8,6 @@ import (
 // A resident node replays what it took while its manager was away (node/spool.go), each entry with a spool_id. It
 // removes an entry once sent, so a repeat comes only from a node stopped between the two: the manager drops it.
 
-// spoolBusy is the error code for a replayed notification whose last try is still with the hub (the node keeps it
-// for later without counting a try).
-const spoolBusy = "spool_busy"
-
 // spoolSeenMost bounds the ids remembered per machine (the node's spool holds at most 500).
 const spoolSeenMost = 2048
 

@@ -49,6 +49,16 @@ const (
 	HealthSpaces = "health_spaces"
 )
 
+// Error codes in the manager's answers to a resident node's replayed notifications (a notify with spool_id,
+// docs/protocol.md "When the manager is away"). Both mean "not now, through no fault of the notification": the node
+// keeps it without counting a try, and only its age limits it.
+const (
+	// ErrSpoolBusy: the manager is still handing an earlier try of it to the hub.
+	ErrSpoolBusy = "spool_busy"
+	// ErrHubAway: the manager has no connection to the hub right now.
+	ErrHubAway = "hub_away"
+)
+
 // Required are the capabilities a manager built from this code cannot drive a node without.
 var Required = []string{Sessions}
 

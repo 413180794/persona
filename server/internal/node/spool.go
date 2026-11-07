@@ -15,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/nodeclient"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -41,19 +42,22 @@ var (
 // standbyAway is what standby says it cannot do.
 const standbyAway = "the manager is not connected to this computer"
 
-// spoolBusy is the manager's answer to a notification whose last try it still has (devices/spooldedupe.go).
-const spoolBusy = "spool_busy"
+// spoolTriesMost: a notification refused (or not answered) this often is dropped: it would hold the spool forever.
+// Only real refusals count, not "not now" (nodeproto.ErrSpoolBusy, ErrHubAway); with the retries on the same
+// connection (replayRetryAfter) this is about 7 minutes of them.
+const spoolTriesMost = 5
 
-// spoolTriesMost: a notification the manager refused this often is dropped (it would hold the spool forever).
-const spoolTriesMost = 3
-
-// replayNotifyTimeout bounds one replayed notification, replayStateWait the wait for the session state: new hooks
-// wait for the replay.
 var (
+	// replayNotifyTimeout bounds one replayed notification.
 	replayNotifyTimeout = 5 * time.Second
-	replayStateWait     = 2 * time.Second
 	// replayGateMost is the longest a new hook / ask / notify waits for the replay.
 	replayGateMost = 20 * time.Second
+	// replayRetryAfter are the waits before a connection tries again what the manager did not take: the session state
+	// (reloadState, node.go) and the notifications its replay kept (retryNotifications). The last one repeats.
+	replayRetryAfter = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute}
+	// replayGoneGrace: after a notification timed out, how long the replay looks whether the connection went with it
+	// (then no try is counted).
+	replayGoneGrace = 250 * time.Millisecond
 )
 
 // standbyHold is how long after the manager went away hooks that wait on the phone are told to retry.
@@ -245,16 +249,16 @@ func newStandby(sp *spool, logf func(string, ...any)) *standby {
 // want makes standby answer node.sock from now on (as soon as nothing else does).
 func (s *standby) want() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.wanted = true
 	if s.healthy.IsZero() {
 		s.healthy = s.now() // the resident node starting: its manager is likely on its way
 	}
-	s.tryListenLocked()
 	if !s.looping {
 		s.looping = true
 		go s.loop()
 	}
+	s.mu.Unlock()
+	s.tryListen()
 }
 
 // managerSeen: a manager connection was served for a while, until at; the hold counts from there.
@@ -286,8 +290,8 @@ func (s *standby) loop() {
 		if s.ln != nil && !s.ownsPathLocked() {
 			s.closeLocked() // a node serving by itself took the path: let it be, and take it back when it is gone
 		}
-		s.tryListenLocked()
 		s.mu.Unlock()
+		s.tryListen()
 	}
 }
 
@@ -303,14 +307,23 @@ func (s *standby) ownsPathLocked() bool {
 	return err == nil && s.lnFile != nil && os.SameFile(fi, s.lnFile)
 }
 
-// tryListenLocked listens on node.sock unless standby already does or something else answers there.
-func (s *standby) tryListenLocked() {
-	if !s.wanted || s.ln != nil {
+// tryListen listens on node.sock unless standby already does or something else answers there. It asks outside mu (a
+// ping takes up to 1.3 s, and holding, managerSeen and unwant wait for mu) and looks again under it.
+func (s *standby) tryListen() {
+	s.mu.Lock()
+	skip := !s.wanted || s.ln != nil
+	s.mu.Unlock()
+	if skip {
 		return
 	}
 	path := nodeclient.SocketPath()
 	if answers(path) {
 		return // a live node serves it
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.wanted || s.ln != nil {
+		return // unwanted meanwhile (a connection's Node takes the socket), or another try listened first
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		s.logf("standby: %v", err)
@@ -458,83 +471,275 @@ func (s *standby) keep(kind string, req sockRequest) error {
 	return err
 }
 
-// replaySpool hands the manager what standby took, in order, then opens the gate for new hooks (n.replayed). It
-// waits for the session state first (takesReport needs it: an empty state took every session for one Persona does not
-// report for). An entry goes from the file once it was sent; one that could not be sent stays, and the replay stops
-// there, for the next connection. One the manager got twice (the node stopped between sending and removing) it drops
-// by spool_id.
-func (n *Node) replaySpool(ctx context.Context, sp *spool) {
-	defer close(n.replayed)
+// replaySpool hands the manager what standby took, in order, then opens the gate for new hooks (n.replayed).
+//
+// It waits for the session state first (takesReport needs it: an empty state takes every session for one Persona does
+// not report for, and a notification's pane for no session). When the first try of the state fails, the replay is held
+// until a later try brings it (reloadState), and the gate opens at once: new hooks never wait for the hold. A replay
+// that runs after new hooks went ahead of it leaves what they moved on alone (replayAhead).
+//
+// An entry goes from the file once it was sent; a hook event that could not be sent stops the replay (the connection is
+// gone), and the rest stays for the next one. A notification the manager refused, did not answer, or could not take
+// now stays too; retry says whether one is left for retryNotifications on this connection. One the manager got twice
+// (the node stopped between sending and removing) it drops by spool_id.
+func (n *Node) replaySpool(ctx context.Context, sp *spool) (retry bool) {
+	var once sync.Once
+	openGate := func() { once.Do(func() { close(n.replayed) }) }
+	defer openGate()
+	defer n.ahead.finish() // before the gate opens: hooks after it are not ahead
 	if len(sp.load()) == 0 {
-		return
+		return false
 	}
-	select { // not for long: new hooks wait meanwhile, and a report-only one gives up after 3 s
+	select {
 	case <-n.stateReady:
-	case <-time.After(replayStateWait):
+	case <-n.stateMissed:
+		n.logger.Printf("spool: the session state did not come from the manager; %d kept until it does", len(sp.load()))
+		openGate()
+		select {
+		case <-n.stateReady:
+		case <-ctx.Done():
+			return false
+		}
 	case <-ctx.Done():
-		return
+		return false
 	}
 	sp.replayMu.Lock() // the last connection's replay may still be on its last entry
 	defer sp.replayMu.Unlock()
-	sent, stale := 0, 0
-	slow := false // a notification timed out: the others wait for the next connection, not the gate
+	sent, stale, ahead := 0, 0, 0
+	later := false // a notification timed out, or the hub is away: the others wait for the retries, not the gate
 	defer func() {
-		if sent+stale > 0 {
-			n.logger.Printf("spool: replayed %d taken while the manager was away (%d too old, dropped)", sent, stale)
+		if sent+stale+ahead > 0 {
+			n.logger.Printf("spool: replayed %d taken while the manager was away (%d too old, %d behind new hooks: dropped)", sent, stale, ahead)
 		}
 	}()
 	for _, e := range sp.load() {
 		if ctx.Err() != nil {
-			return
+			return false
 		}
-		if time.Since(e.At) > spoolMaxAge {
+		switch {
+		case time.Since(e.At) > spoolMaxAge:
 			stale++
-		} else {
-			var err error
-			switch e.Kind {
-			case "hook":
-				err = n.replayHook(e)
-			case "notify":
-				if slow {
-					continue // the manager is not answering notifications this time: kept, untried, for the next
-				}
-				cctx, cancel := context.WithTimeout(ctx, replayNotifyTimeout)
-				rep, cerr := n.notifyCall(cctx, e.Request, e.ID)
-				timedOut := cctx.Err() != nil && ctx.Err() == nil
-				cancel()
-				if cerr == nil && rep.Error != "" { // refused before the manager was asked (an empty one): never sendable
-					cerr = &rpc.Error{Message: rep.Error}
-				}
-				var refused *rpc.Error
-				switch {
-				case cerr == nil:
-				case errors.Is(cerr, rpc.ErrClosed):
-					return // the connection is gone: it and the rest stay for the next one, no try counted
-				case errors.As(cerr, &refused) && refused.Code == spoolBusy:
-					continue // the manager still has the last try: kept, not counted
-				case errors.As(cerr, &refused) || timedOut:
-					err = cerr
-					slow = timedOut
-				default:
-					return // the connection is gone: it and the rest stay for the next one, no try counted
-				}
-			}
-			if err != nil {
-				if ctx.Err() != nil || e.Kind == "hook" {
-					return // the connection is gone (a hook.event write fails only then): all kept for the next one
-				}
-				// The manager refused or did not answer a notification: it is kept (dropped after a few tries) and
-				// the rest goes on, so the hook events after it keep their order.
-				drop, ferr := sp.failed(e.ID)
-				n.logger.Printf("spool: notification %s not handed over (%v); dropped: %v %v", e.ID, err, drop, ferr)
-				continue
+		case e.Kind == "hook" && n.ahead.behind(e):
+			ahead++ // its session had a new hook since: older news than what the manager heard
+		case e.Kind == "hook":
+			if err := n.replayHook(e); err != nil {
+				return false // a hook.event write fails only when the connection is gone: all kept for the next one
 			}
 			sent++
+		case e.Kind == "notify":
+			if later {
+				retry = true // kept, untried, for the retries
+				continue
+			}
+			switch r := n.replayNotify(ctx, sp, e); r {
+			case notifyGone:
+				return false // it and the rest stay for the next connection, no try counted
+			case notifySent:
+				sent++
+			default:
+				// Kept (the rest goes on, so the hook events after it keep their order), or dropped.
+				retry = retry || r != notifyDropped
+				later = later || r == notifyTimedOut || r == notifyHubAway
+				continue
+			}
 		}
 		if err := sp.remove(e.ID); err != nil {
 			n.logger.Printf("spool: %v", err)
 		}
 	}
+	return retry
+}
+
+// replayAhead is what live hooks did on a connection before its replay was done: hooks go first when the replay is
+// held for the session state, or when one waited out replayGateMost. The replay then drops the kept events of a
+// session that had a new hook (the manager heard newer news of it), and binds no pane a new hook bound to the session
+// it had before.
+type replayAhead struct {
+	mu       sync.Mutex
+	done     bool
+	sessions map[string]bool
+	panes    map[string]bool
+}
+
+// note records a live hook that passed the gate (serveSock), unless the replay is done. A resumed hook is not news: it
+// asks again for an event reported already, or kept by standby (which told it to retry), whose kept copy the replay
+// still has to hand over. A report-only hook binds no pane, so its pane is not taken.
+func (a *replayAhead) note(req sockRequest) {
+	var in hookInput
+	if req.Resume || json.Unmarshal(req.Input, &in) != nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.done {
+		return
+	}
+	if validID(in.SessionID) {
+		if a.sessions == nil {
+			a.sessions = map[string]bool{}
+		}
+		a.sessions[in.SessionID] = true
+	}
+	if req.Pane != "" && !req.ReportOnly {
+		if a.panes == nil {
+			a.panes = map[string]bool{}
+		}
+		a.panes[req.Pane] = true
+	}
+}
+
+// behind: a kept hook event of a session that had a live hook since.
+func (a *replayAhead) behind(e spoolEntry) bool {
+	var in hookInput
+	if json.Unmarshal(e.Request.Input, &in) != nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.sessions[in.SessionID]
+}
+
+// paneTaken: a live hook bound pane since.
+func (a *replayAhead) paneTaken(pane string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.panes[pane]
+}
+
+func (a *replayAhead) finish() {
+	a.mu.Lock()
+	a.done, a.sessions, a.panes = true, nil, nil
+	a.mu.Unlock()
+}
+
+// What became of one replayed notification.
+type notifyOutcome int
+
+const (
+	notifySent     notifyOutcome = iota // handed over: it leaves the spool
+	notifyGone                          // the connection is gone: kept, no try counted
+	notifyBusy                          // the manager still has an earlier try (nodeproto.ErrSpoolBusy): kept, no try counted
+	notifyHubAway                       // the manager cannot reach the hub now (nodeproto.ErrHubAway): kept, no try counted
+	notifyRefused                       // refused: kept, a try counted
+	notifyTimedOut                      // not answered in replayNotifyTimeout: kept, a try counted
+	notifyDropped                       // refused for good, or once too often: gone from the spool
+)
+
+// replayNotify hands the manager one kept notification. It counts a failed try (sp.failed) when it was refused or not
+// answered, and drops one that can never be sent; it does not remove a sent one.
+func (n *Node) replayNotify(ctx context.Context, sp *spool, e spoolEntry) notifyOutcome {
+	cctx, cancel := context.WithTimeout(ctx, replayNotifyTimeout)
+	rep, err := n.notifyCall(cctx, e.Request, e.ID)
+	timedOut := cctx.Err() != nil && ctx.Err() == nil
+	cancel()
+	if err == nil && rep.Error != "" { // refused before the manager was asked (empty, not JSON): never sendable
+		n.logger.Printf("spool: notification %s dropped: %s", e.ID, rep.Error)
+		if rerr := sp.remove(e.ID); rerr != nil {
+			n.logger.Printf("spool: %v", rerr)
+		}
+		return notifyDropped
+	}
+	var refused *rpc.Error
+	var r notifyOutcome
+	switch {
+	case err == nil:
+		return notifySent
+	case errors.Is(err, rpc.ErrClosed):
+		return notifyGone
+	case errors.As(err, &refused) && refused.Code == nodeproto.ErrSpoolBusy:
+		return notifyBusy
+	case errors.As(err, &refused) && refused.Code == nodeproto.ErrHubAway:
+		return notifyHubAway
+	case errors.As(err, &refused):
+		r = notifyRefused
+	case timedOut && !n.peerGone(ctx):
+		r = notifyTimedOut
+	default:
+		return notifyGone // the connection went (maybe right at the deadline)
+	}
+	drop, ferr := sp.failed(e.ID)
+	n.logger.Printf("spool: notification %s not handed over (%v); dropped: %v %v", e.ID, err, drop, ferr)
+	if drop {
+		return notifyDropped
+	}
+	return r
+}
+
+// peerGone says whether the connection ended, waiting replayGoneGrace for a close that came with a timeout.
+func (n *Node) peerGone(ctx context.Context) bool {
+	t := time.NewTimer(replayGoneGrace)
+	defer t.Stop()
+	select {
+	case <-n.peer.Done():
+		return true
+	case <-ctx.Done():
+		return true
+	case <-t.C:
+		return false
+	}
+}
+
+// retryWait is the wait before try i+2 of something this connection tries again (replayRetryAfter).
+func retryWait(i int) time.Duration { return replayRetryAfter[min(i, len(replayRetryAfter)-1)] }
+
+// sleepCtx waits d, false when ctx ends first.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// retryNotifications tries again, on this connection, the notifications its replay kept: after each wait of
+// replayRetryAfter (the last one repeating), until none is left or the connection ends. Refusals count, so one goes
+// after spoolTriesMost of them; "not now" answers (the manager still sending it, or away from the hub) do not, and
+// only the age limit (spoolMaxAge, from when standby took it) bounds those. New hooks do not wait for this: the gate
+// opened with the replay.
+func (n *Node) retryNotifications(ctx context.Context, sp *spool) {
+	for i := 0; ; i++ {
+		if !sleepCtx(ctx, retryWait(i)) || !n.retryNotificationsOnce(ctx, sp) {
+			return
+		}
+	}
+}
+
+// retryNotificationsOnce is one round of retryNotifications; it says whether one is left to try again.
+func (n *Node) retryNotificationsOnce(ctx context.Context, sp *spool) (again bool) {
+	sp.replayMu.Lock()
+	defer sp.replayMu.Unlock()
+	for _, e := range sp.load() {
+		if e.Kind != "notify" {
+			continue // a hook entry left by a connection that dropped: the next connection's replay has it
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+		if time.Since(e.At) > spoolMaxAge {
+			n.logger.Printf("spool: notification %s too old, dropped unsent", e.ID)
+			if err := sp.remove(e.ID); err != nil {
+				n.logger.Printf("spool: %v", err)
+			}
+			continue
+		}
+		switch n.replayNotify(ctx, sp, e) {
+		case notifyGone:
+			return false
+		case notifySent:
+			n.logger.Printf("spool: notification %s handed over on a retry", e.ID)
+			if err := sp.remove(e.ID); err != nil {
+				n.logger.Printf("spool: %v", err)
+			}
+		case notifyBusy, notifyRefused:
+			again = true
+		case notifyTimedOut, notifyHubAway:
+			return true // the manager cannot take any now: the rest waits for the next round, untried
+		}
+	}
+	return again
 }
 
 // replayHook is what handleHook does with an event before it asks the phone (bookkeeping and the report), for a hook
@@ -550,7 +755,7 @@ func (n *Node) replayHook(e spoolEntry) error {
 	}
 	stopSig := n.recordHookTurn(req, in, e.At)
 	if !req.ReportOnly {
-		if paneKindOK(n, req.Pane) {
+		if paneKindOK(n, req.Pane) && !n.ahead.paneTaken(req.Pane) {
 			n.bindPane(req.Pane, in.SessionID)
 		}
 	}

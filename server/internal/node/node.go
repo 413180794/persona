@@ -157,10 +157,14 @@ type Node struct {
 	// replayed is closed once what standby took while no manager was connected went to this one (spool.go): new
 	// hooks wait for it, so the manager hears them after the older ones. nil (tests' Nodes): nothing waits.
 	replayed chan struct{}
+	// ahead: the sessions and panes of live hooks that went before the replay (spool.go).
+	ahead replayAhead
 	// spool is the resident node's (Attach), nil elsewhere: a node that serves by itself neither keeps nor replays.
 	spool *spool
-	// stateReady is closed once the session state came from the manager (loadState).
-	stateReady chan struct{}
+	// stateReady is closed once the session state came from the manager (loadState, or a later try, reloadState);
+	// stateMissed once the first try failed.
+	stateReady  chan struct{}
+	stateMissed chan struct{}
 
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
@@ -306,18 +310,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	if n.keeper != nil { // before the state loads: a conversation taken over has lost no background task
 		adopted = n.keeper.adopt(n)
 	}
-	n.stateReady = make(chan struct{})
-	// Before anything lists or takes a hook: nothing is written or cached on a guess about a session not loaded yet.
-	n.state.beginLoad()
-	go func() {
-		n.loadState(ctx)
-		close(n.stateReady)
-		n.resumeAssistants(adopted)
-	}()
-	if n.spool != nil { // a resident node's connection: what its standby took goes first (spool.go)
-		n.replayed = make(chan struct{})
-		go n.replaySpool(ctx, n.spool)
-	}
+	n.startState(ctx, adopted)
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
 		n.logger.Printf("hook socket: %v", err)
@@ -344,9 +337,43 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	return n.peer.Serve(ctx, r)
 }
 
-// loadState pulls this machine's session state from the hub (Postgres) and uploads a legacy sessions.json once. Loaded
-// or not, it ends the loading (stateFile.loading): what is not there by then is not Persona's.
-func (n *Node) loadState(ctx context.Context) {
+// startState loads the session state for this connection and, on a resident node's, replays what its standby took
+// (spool.go): the replay waits for the state, and new hooks for the replay (serveSock). A first try that fails is
+// tried again on this connection (reloadState).
+func (n *Node) startState(ctx context.Context, adopted []*assistantProc) {
+	n.stateReady, n.stateMissed = make(chan struct{}), make(chan struct{})
+	// Before anything lists or takes a hook: nothing is written or cached on a guess about a session not loaded yet.
+	n.state.beginLoad()
+	go func() {
+		ok := n.loadState(ctx)
+		if ok {
+			close(n.stateReady)
+		} else {
+			close(n.stateMissed)
+		}
+		n.resumeAssistants(adopted)
+		if !ok && n.reloadState(ctx) {
+			n.ultracodeStateReloaded() // stored observations read in again; what was seen meanwhile of Persona's sessions written
+			close(n.stateReady)
+		}
+	}()
+	if n.spool != nil {
+		n.replayed = make(chan struct{})
+		go func() {
+			if n.replaySpool(ctx, n.spool) { // notifications the manager did not take: again on this connection
+				n.retryNotifications(ctx, n.spool)
+			}
+		}()
+	}
+}
+
+// stateLoadTimeout bounds one try of state.load.
+const stateLoadTimeout = 20 * time.Second
+
+// loadState pulls this machine's session state from the hub (Postgres) and uploads a legacy sessions.json once. It
+// says whether the state came. Loaded or not, it ends the loading (stateFile.loading): what is not there by then is not
+// Persona's, until a later try on this connection brings it (reloadState).
+func (n *Node) loadState(ctx context.Context) bool {
 	defer n.ultracodeStateLoaded()
 	n.state.mu.Lock()
 	n.state.persist = func(id string, v sessionState) {
@@ -361,14 +388,35 @@ func (n *Node) loadState(ctx context.Context) {
 		n.state.merge(legacy)
 		_ = os.Rename(legacyPath, legacyPath+".migrated")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	return n.fetchState(ctx)
+}
+
+// reloadState tries state.load again after a first try failed, after each wait of replayRetryAfter (the last one
+// repeating), until the state comes or the connection ends: a manager whose database failed once must not leave the
+// whole connection on an empty state (report-only events of Persona's own sessions taken for others) and the spool
+// held until the next one. It says whether the state came.
+func (n *Node) reloadState(ctx context.Context) bool {
+	for i := 0; ; i++ {
+		if !sleepCtx(ctx, retryWait(i)) {
+			return false
+		}
+		if n.fetchState(ctx) {
+			n.logger.Printf("load state from hub: loaded on try %d", i+2)
+			return true
+		}
+	}
+}
+
+// fetchState is one try of state.load: what it brings is merged under what this connection already has.
+func (n *Node) fetchState(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, stateLoadTimeout)
 	defer cancel()
 	var res struct {
 		Sessions map[string]sessionState `json:"sessions"`
 	}
 	if err := n.peer.Call(ctx, "state.load", map[string]any{}, &res); err != nil {
 		n.logger.Printf("load state from hub: %v", err)
-		return
+		return false
 	}
 	n.state.merge(res.Sessions)
 	go n.recoverAssistantTasks(func(id, text string) error {
@@ -386,6 +434,7 @@ func (n *Node) loadState(ctx context.Context) {
 		}
 	}
 	n.mu.Unlock()
+	return true
 }
 
 // writeClaudeConfig writes the files the sessions Persona starts load (hooks, MCP, skills; generatedFiles).

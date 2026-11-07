@@ -148,6 +148,9 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 			case <-ctx.Done():
 				return
 			}
+			if req.Kind == "hook" {
+				n.ahead.note(req) // before the replay is done: it leaves what this one moved on alone (spool.go)
+			}
 		}
 	}
 

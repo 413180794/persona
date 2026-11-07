@@ -552,6 +552,13 @@ and add that directory to image workflow PR paths.
   so store them in a process-level table keyed by node directory (`pluginHosts` in `node/plugins.go`), sending events to the newest connection peer.
 - Change event destinations only when a real peer exists: every `plugin.node.*` request accesses the table; peerless calls (tests, local commands) mustn't clear the destination and lose events.
 
+## "Ready" is not "loaded": the spool replay waited 2 s for a state that takes up to 20 s, or never comes (2026-11-06, #5889)
+
+- `Node.stateReady` used to close when `loadState` was done, also when `state.load` failed or timed out (20 s), and nothing tried the load again on that connection. The resident node's spool replay waited only 2 s for it and then replayed anyway, so after a manager restart with a slow or failing database, report-only hook events of sessions Persona started were reported as sessions it does not know.
+- A signal that something finished is not a signal that it worked: `stateReady` now closes only when the state came, `stateMissed` when the first try failed. What depends on it is held, not run on an empty default, and the thing is tried again on the same connection; the callers waiting on the dependent (live hooks behind the replay's gate) keep their own bound, so a hold never becomes theirs.
+- Holding creates its own problem: whatever waited behind the hold is older than what went ahead. A late replay must not undo newer news (a session's old Stop after its new prompt, a pane bound back to the session it had); the node drops what live hooks moved on (`replayAhead`). But not everything that goes ahead is news: a resumed hook is a kept event asking again, and counting it would drop its own kept copy. And a late load must redo what the empty one decided (ultracode observations read in against nothing were written over the stored ones).
+- A retry that only happens on the next connection is no retry on a stable connection, and a retry needs "not now" told apart from "no": the manager answered every failure as an uncoded error, so a hub that was away used up a notification's tries. It now answers `hub_away` (`internal/nodeproto`), which waits without counting. Only when the call never left: `rpc.ErrDropped` means it went out and the hub may have pushed it, so the manager takes it for sent rather than risk a second push.
+
 ## Single-value channels can't have two waiters (2026-11-05, #2277)
 
 - Extension host (`extension/host`) used `go func() { ch.exited <- cmd.Wait() }()` to put one value in a capacity-1 channel. `runOnce` consumed it in the main loop, then deferred `end()` waited forever:

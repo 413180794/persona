@@ -232,6 +232,22 @@ func (n *Node) ultracodeStateLoaded() {
 	}
 }
 
+// ultracodeStateReloaded: the session state came on a later try (reloadState) after the first one failed and ended the
+// loading, so every session's ultracode state was read in against an empty state (no stored observation). It is read
+// in again, by the same rule as at a first load (ultracodeLocked): a stored observation wins over what was seen
+// meanwhile without a process boundary of its own, which otherwise the next write would put over it (its Since,
+// LostAt and LostDismissed lost). What stands is written.
+func (n *Node) ultracodeStateReloaded() {
+	n.mu.Lock()
+	for _, m := range n.modes {
+		if m.Ultracode != nil {
+			m.Ultracode.hydrated = false
+		}
+	}
+	n.mu.Unlock()
+	n.ultracodeStateLoaded()
+}
+
 func (u *ultracodeState) observe(m quickMeta) {
 	if m.ultracode != nil && !m.ultracodeAt.Before(u.Since) && m.ultracodeAt.After(u.At) {
 		u.Value, u.At = m.ultracode, m.ultracodeAt

@@ -630,10 +630,19 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			case dup:
 				return map[string]any{"sent": true, "duplicate": true}, nil
 			case busy: // the last try is still with the hub: this one is not sent, nor taken for sent
-				return nil, &rpc.Error{Code: spoolBusy, Message: "this notification is still being sent"}
+				return nil, &rpc.Error{Code: nodeproto.ErrSpoolBusy, Message: "this notification is still being sent"}
 			}
 			out, err := m.passOn(ctx, method, params)
-			m.spooled.end(id, err == nil) // remembered only once the hub took it: a failed one is tried again
+			// Remembered once the hub took it, and also once it went out to the hub and the link dropped before the
+			// answer (rpc.ErrDropped): the hub may have pushed it, and it does not tell a repeat itself, so a try
+			// again would push it twice (at most once). Anything else failed is tried again.
+			dropped := errors.Is(err, rpc.ErrDropped)
+			m.spooled.end(id, err == nil || dropped)
+			if err != nil && !dropped && ctx.Err() == nil && (!m.d.busUp() || errors.Is(err, rpc.ErrClosed)) {
+				// It never reached the hub: this manager has no connection to it now. The node keeps it, counting no
+				// try.
+				return nil, &rpc.Error{Code: nodeproto.ErrHubAway, Message: "the manager cannot reach the hub now"}
+			}
 			return out, err
 		}
 	}

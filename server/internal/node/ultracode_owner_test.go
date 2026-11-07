@@ -412,6 +412,54 @@ func TestUltracodeStateLoadsFromTheHub(t *testing.T) {
 	})
 }
 
+// A first state.load that fails ends the loading on an empty state, so a listed session's ultracode state is read in
+// with nothing stored. When a later try on the same connection brings the session's record (startState, reloadState),
+// its stored observation is read in again: what is written next is the stored one, its Since, LostAt and
+// LostDismissed kept, not the empty one read in before.
+func TestUltracodeStoredObservationSurvivesALateLoad(t *testing.T) {
+	defer func(d []time.Duration) { replayRetryAfter = d }(replayRetryAfter)
+	replayRetryAfter = []time.Duration{10 * time.Millisecond}
+	old := time.Date(2026, 1, 1, 8, 0, 0, 0, time.UTC)
+	boundary := old.Add(time.Hour)
+	recent := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)
+	n, f, home := herdrNode(t)
+	n.logger = log.New(io.Discard, "", 0)
+	cwd := mkdir(t, filepath.Join(home, "project"))
+	n.paths[sidA] = writeTranscript(t, home, cwd, sidA, time.Now(),
+		`{"type":"user","timestamp":"`+recent+`","cwd":"`+cwd+`","message":{"role":"user","content":"hi"}}`,
+		`{"type":"system","subtype":"turn_duration","timestamp":"`+recent+`","durationMs":1000}`)
+	h := withLoadHub(t, n)
+	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", cwd, ""))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wait := func(ch chan struct{}, what string) {
+		t.Helper()
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+	n.startState(ctx, nil)
+	h.answer <- func() (any, error) { return nil, errors.New("database is restarting") }
+	wait(n.stateMissed, "the first try to fail")
+	cachedSessions(n) // read in against the empty state
+	rec := ultracodeRecord{Since: boundary, Value: ultraBool(false), At: boundary, LostAt: &boundary, LostDismissed: true}
+	stored := sessionState{Pane: "w1:p1", Launcher: "work_claude", Cwd: cwd, Model: "opus", ModelFingerprint: "fp",
+		StartedAt: old.Add(-time.Hour), Ultracode: &rec}
+	h.answer <- func() (any, error) { return map[string]any{"sessions": map[string]sessionState{sidA: stored}}, nil }
+	wait(n.stateReady, "the state on a later try")
+	n.persistUltracode(sidA)
+	got := h.putsOf(t, n, sidA)
+	if len(got) == 0 {
+		t.Fatal("nothing written")
+	}
+	last := got[len(got)-1].Ultracode
+	if last == nil || !last.Since.Equal(boundary) || last.LostAt == nil || !last.LostAt.Equal(boundary) || !last.LostDismissed {
+		t.Fatalf("written over the stored observation: %+v", last)
+	}
+}
+
 // Records a node of #3782 wrote for the user's sessions (only an observation, no launcher, directory or start time)
 // are dropped when loaded: the session is not Persona's, and nothing of the old observation comes back with each
 // restart (a resume notice could never be dismissed for good: nothing writes it again). A branch of Persona's own (no
