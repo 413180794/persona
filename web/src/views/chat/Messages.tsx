@@ -17,6 +17,7 @@ import { QuoteStack } from "./Quote";
 import { Markdown } from "../../ui/Markdown";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
+import { FoldedReport, isHandbackText } from "./FoldedReport";
 import { t } from "../../i18n";
 
 export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string; sid: string }) {
@@ -64,14 +65,23 @@ function MergedPart({ text, mid, sid }: { text: string; mid: string; sid: string
 
 // Its words are Markdown like an answer: agents write Markdown, and the hub turns a teammate's JSON status notes into it.
 // A single line break stays one, as in the message it was (iOS: markdownSoftBreakMode(.lineBreak)).
+// A subagent's report that a node from before #6381 handed on as a peer's message (Claude Code's hand-back frame at its
+// start) starts folded like the other reports; another session's own message is shown as it was.
 export function PeerMessage({ msg }: { msg: UserMessage }) {
+  const words = <Markdown text={keepLineBreaks(msg.text)} small />;
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-card bg-inset px-3.5 py-2.5 shadow-hairline sm:mr-[12%]" title={clock(msg.ts)}>
       <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap text-ink-3">
         <Icon name="loop" size={12} />
         {t("chat-messages.from", { name: msg.from ?? "" })}
       </span>
-      <Markdown text={keepLineBreaks(msg.text)} small />
+      {isHandbackText(msg.text) ? (
+        <FoldedReport id={`peer:${msg.id}`} text={msg.text} className="text-[13px] leading-relaxed">
+          {words}
+        </FoldedReport>
+      ) : (
+        words
+      )}
     </div>
   );
 }

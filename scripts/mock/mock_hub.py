@@ -7080,6 +7080,42 @@ if os.environ.get("MOCK_SUBAGENT_CARDS") == "1":
     mock_subagent_cards()
 
 
+# MOCK_SUBAGENT_REPORTS=1: long subagent reports start folded (#6381): a background subagent's report in its card and in
+# its notice, and a hand-back that an older node handed on as a message from "general-purpose" (Claude Code's frame
+# first, the report indented under it). The launch receipt is Claude Code 2.1.319's ("the agentId below" before the id)
+# and the notice names only the task, so the card finds it by the receipt's id. Synthetic text.
+SUBREP = "a1f3c2d4-0000-4000-8000-0000000c1e06"
+
+
+def mock_subagent_reports():
+    report = ("## 回归：搜索全量 · 结论\n\n全量 120 个用例里 118 个通过，2 个失败都在价格筛选。\n\n"
+              "- **原因：** 测试数据里两件商品没有价格，筛选把它们排除了。\n- **改动：** 补了测试数据的价格，没动业务代码。\n"
+              "- **验证：** 重新跑了 `price_filter_test` 的 14 个用例，全部通过。\n\n下一步：把测试数据的检查加进 CI。")
+    _r = [it("user", "text", 40, text="把搜索的全量回归交给子 Agent 在后台跑，跑完告诉我结论")]
+    _r += tool("Agent", {"description": "回归：搜索全量", "subagent_type": "general-purpose", "prompt": "跑搜索和筛选的全量回归，失败的查清原因", "run_in_background": True},
+               "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, "
+               "including the agentId below, into a user-facing reply.)\nagentId: srfull (internal ID - do not mention to user.)", 39)
+    _use = _r[-2]["tool_use_id"]
+    _r.append(it("assistant", "text", 38, text="在后台跑了，跑完把结论告诉你。"))
+    _r.append(it("system", "notice", 20, text="子 Agent 完成 · 回归：搜索全量", wake=True,
+                 task={"kind": "agent", "status": "completed", "title": "回归：搜索全量", "task_id": "srfull", "detail": report}))
+    _r.append(it("assistant", "text", 19, text="搜索全量回归跑完了：118 个通过，2 个失败是测试数据缺价格，已经补上。"))
+    framed = ("[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, "
+              "NOT a message from the user. The report follows:\n" + "\n".join("  " + l for l in report.replace("搜索全量", "价格筛选").split("\n")))
+    _r.append(it("user", "text", 10, text=framed, **{"from": "general-purpose"}))
+    _r.append(it("assistant", "text", 9, text="价格筛选的子 Agent 也交回了结论，和上面一致。"))
+    ITEMS[SUBREP] = _r
+    ITEMS[SUBREP + "@srfull"] = [it("user", "text", 39, text="跑搜索和筛选的全量回归，失败的查清原因"), it("assistant", "text", 21, text="跑完了。")]
+    SESSIONS.append(sess("macbook", SUBREP, "子 Agent 的报告", "/Users/me/code/shop-web", "done", "done", "shop-web", 16, "agents", 3, 0,
+                         "搜索全量回归跑完了。", subagents=[{"id": "srfull", "session_id": SUBREP + "@srfull", "type": "general-purpose",
+                                                        "description": "回归：搜索全量", "tool_use_id": _use, "running": False, "background": True,
+                                                        "started_at": ago(minutes=39), "steps": 6, "updated_at": ago(minutes=20)}]))
+
+
+if os.environ.get("MOCK_SUBAGENT_REPORTS") == "1":
+    mock_subagent_reports()
+
+
 # MOCK_SUBAGENT_PARALLEL=1: three subagents launched together in the live exchange (#5602, the grid): one done, one
 # still running (its latest call is what its card says it does), one that failed.
 SUBPAR = "a1f3c2d4-0000-4000-8000-0000000c1e05"

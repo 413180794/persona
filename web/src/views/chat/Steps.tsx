@@ -10,6 +10,8 @@ import { taskLabel, taskPill, taskSubject, wakeSummary, type Tone } from "../../
 import type { Item } from "../../lib/types";
 import { Collapse, copyText, cx } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { Markdown } from "../../ui/Markdown";
+import { FoldedReport } from "./FoldedReport";
 import { useChatContext } from "./chat-context";
 import { ChatImageViewer } from "./ImageViewer";
 import { t } from "../../i18n";
@@ -168,7 +170,11 @@ export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: st
         {task.kind === "shell" ? (
           <Mono text={`$ ${task.detail || task.title || ""}`} />
         ) : task.kind === "agent" ? (
-          task.detail && <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2">{task.detail}</p>
+          task.detail && (
+            <FoldedReport id={`notice:${item.id}`} text={task.detail} className="text-[12px] leading-relaxed">
+              <Markdown text={task.detail} small mid={mid} cwd={getSession(mid, sid)?.cwd} />
+            </FoldedReport>
+          )
         ) : (
           task.detail && <Mono text={task.detail} />
         )}

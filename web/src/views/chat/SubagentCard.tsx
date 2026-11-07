@@ -18,6 +18,8 @@ import { useExpanded } from "./expanded";
 import { useTranscript } from "./useTranscript";
 import { t } from "../../i18n";
 import { ScrollFold } from "./fold-scroll";
+import { Markdown } from "../../ui/Markdown";
+import { FoldedReport } from "./FoldedReport";
 
 const STATUS: Record<AgentStatus, string> = {
   running: t("chat-subagentcard.status_running"),
@@ -116,7 +118,9 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
             {summary && (
               <div className="flex flex-col gap-0.5" data-subagent-summary>
                 {!running && <span className="text-[12px] text-ink-3">{t("chat-subagentcard.result")}</span>}
-                <p className="whitespace-pre-wrap text-ink">{summary}</p>
+                <FoldedReport id={`task:${use.id}`} text={summary}>
+                  <Markdown text={summary} small mid={mid} />
+                </FoldedReport>
               </div>
             )}
             {meta && open && <RecentSteps mid={mid} agent={meta} running={running} />}

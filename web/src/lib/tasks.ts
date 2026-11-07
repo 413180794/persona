@@ -19,7 +19,8 @@ export interface TaskIndex {
   startedAt: Map<string, string>;
 }
 
-const LAUNCHED = /(?:running in background with ID|agentId|Monitor started \(task|moved to the background \(ID):?\s*([A-Za-z0-9_-]+)/;
+// agentId takes its colon: Claude Code 2.1.319's receipt says "including the agentId below" before the id line.
+const LAUNCHED = /(?:running in background with ID:?|agentId:|Monitor started \(task:?|moved to the background \(ID:?)\s*([A-Za-z0-9_-]+)/;
 
 export function emptyTaskIndex(): TaskIndex {
   return { notes: new Map(), calls: new Map(), started: new Set(), descriptions: new Map(), startedAt: new Map() };

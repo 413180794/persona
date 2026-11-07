@@ -18,6 +18,19 @@ describe("buildTaskIndex", () => {
     expect(taskPill(items[2].task!, x.startedAt.get("call1"), items[2].ts)).toEqual({ text: "已完成 · 5 分", tone: "green" });
   });
 
+  it("reads the agent's id from a 2.1.319 receipt, not the word before it", () => {
+    const receipt =
+      "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: a1b2c3 (internal ID - do not mention to user.)\nThe agent is working in the background.";
+    const items: Item[] = [
+      { id: "t1#0", seq: 1, role: "assistant", kind: "tool_use", tool_use_id: "call1", tool_name: "Agent", tool_input: { description: "Check the tests", prompt: "p" } },
+      { id: "r1#0", seq: 2, role: "user", kind: "tool_result", tool_use_id: "call1", text: receipt },
+      { id: "n1#0", seq: 3, role: "system", kind: "notice", text: "子 Agent 完成 · Check the tests", task: { kind: "agent", status: "completed", title: "Check the tests", task_id: "a1b2c3", detail: "## Summary" } },
+    ];
+    const x = buildTaskIndex(items);
+    expect(x.calls.get("n1#0")).toBe("call1");
+    expect(x.notes.get("call1")?.map((n) => n.detail)).toEqual(["## Summary"]);
+  });
+
   it("badges a call still running, with its events", () => {
     expect(taskBadge([]).text).toBe("后台 · 运行中");
     expect(taskBadge([{ kind: "monitor", status: "event" }, { kind: "monitor", status: "event" }]).text).toBe("后台 · 2 个事件");
