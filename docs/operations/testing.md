@@ -13,11 +13,65 @@ python3 -B scripts/test/test_sim_boot.py                               # sim-boo
 n=0 failed=""; for f in $(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort); do n=$((n + 1)); (cd "$(dirname "$f")" && python3 -B -m unittest -q "$(basename "$f" .py)") || failed="$failed $f"; done; echo "$n suites, failed:${failed:- none}"; [ -z "$failed" ]   # all Python tests in scripts/, like CI; any failure exits nonzero
 ```
 
-Every PR's CI "Scripts tests" (`.github/workflows/scripts-tests.yml`, job `scripts/ unittest suites`) runs each `scripts/` `test_*.py` from its own directory on Linux; any failure turns it red (#3011). A Linux round takes about 90 seconds; Mac-only tests skip themselves. New tests at `scripts/<subdirectory>/test_*.py` are included automatically.
+## Hosted CI
 
-CI runs server `go vet ./...` and `go test -count=1 ./...` on Linux (`.github/workflows/server-test.yml`), only when a PR touches paths the server reads
-(`server/`, `sdk/go/`, `spec/fixtures/`, `schema/extension/`, `integrations/`, etc.; list in the workflow). New pushes on the same branch cancel old running jobs.
-If server tests start reading other repository files, add their paths. CI has no Postgres; database tests skip without `PERSONA_TEST_DATABASE_URL`, still relying on `scripts/test/test-server.sh` on the hub machine.
+`.github/workflows/ci.yml` runs on every PR, merge-queue group, and manual dispatch. It checks repository privacy and path safety, then
+uses `scripts/ci/paths.py` to call independent reusable platform workflows. Filters live in that one tested file, not duplicated native
+workflow filters: this makes dependencies and results visible to the final **CI required** job, which always reports and rejects failed,
+cancelled, missing or unexpectedly skipped selected jobs. Unselected platforms are deliberately skipped. Require **CI required** only;
+remove older individual conditional required checks when branch protection is available. A workflow change must have a real green hosted
+PR run before merging. Use `python3 scripts/ci/paths.py --base origin/master` to inspect local selection; dispatch runs all platforms.
+
+All PR code runs with `contents: read`, without persisted checkout credentials, private config or new secrets. Forks use `pull_request`,
+never privileged execution. The issue-link metadata workflow alone uses `pull_request_target`: it never checks out PR code and only reads
+metadata through the API. Image publishing has `packages: write` only in the non-PR job. One concurrency group per PR cancels stale runs.
+
+| Platform / reusable workflow | Local entry | Checks | Hosted runner | Planning duration (warm / cold) |
+| --- | --- | --- | --- | --- |
+| Server / `.github/workflows/server-test.yml` | `scripts/ci/server.sh` | gofmt, vet, complete Go tests against disposable Postgres 18, build, Windows cross-build/vet, extension schema/examples/SDK bundle, Go SDK tests; hub route/architecture, prompts and hub i18n guards are Go tests | ubuntu-latest | 8–15 / 15–30 min |
+| Web / `.github/workflows/web-test.yml` | `scripts/ci/web.sh` | npm ci, scoped ESLint, TypeScript, complete Vitest, production build and privacy | ubuntu-latest | 2–4 / 4–7 min |
+| Android / `.github/workflows/android-test.yml` | `scripts/ci/android.sh` | i18n/token checker tests, translations/literals, token ratchet, all-module lint and unit-test variants, debug APK | ubuntu-latest | 8–15 / 15–30 min |
+| Apple / `.github/workflows/apple-test.yml` | `scripts/ci/apple.sh` | synthetic project configuration, unsigned iOS/macOS builds, package and offline app unit tests including design-system guards; no distribution signing | macos-26, Xcode 26.0.1 (Swift 6.2) | 20–35 / 35–60 min |
+| Scripts/docs / `.github/workflows/scripts-tests.yml` | `scripts/ci/scripts.sh` | every Python script test, doc/code paths and index, layout/shell/Python compatibility, privacy-rule regression, catalog/translation/token checks, actionlint, issue-link logic, website worker | ubuntu-latest | 2–4 / 4–7 min |
+| Runtimes / `.github/workflows/runtimes-test.yml` | `scripts/ci/runtimes.sh` | TypeScript SDK typecheck/test/portability, Agent SDK build, every runtime integration's npm tests | ubuntu-latest | 2–4 / 4–7 min |
+| Container / `.github/workflows/hub-image.yml` | `scripts/ci/hub-image.sh` | amd64 build; isolated Compose Postgres, HTTP/TLS health, pairing, web, admin isolation, file ownership/0600; non-PR publish remains amd64+arm64 | ubuntu-latest | 8–15 / 15–30 min |
+
+These are estimates, not measured success claims; use job timestamps and each script's PASS/FAIL/TIMEOUT durations for an actual run.
+Private-repository billed-minute planning uses Linux 1× and macOS 10×, rounded per job. With caches, plain docs-only work costs roughly
+4–6 Linux minutes; server-only 20–36 including image smoke; web-only 14–25 including image smoke; Android-only 20–36 including server
+compatibility tests; Apple-only **212–371** including server compatibility tests and guards; a cross-platform CI change roughly
+**232–409** warm or **410–710** cold. Prompt/protocol documentation selects server checks because Go tests read those inputs.
+Cancellation reduces wasted old runs, not already-used minutes.
+Public-repository standard hosted runners do not consume private Actions minutes. Billing multipliers/plans may change; check the account
+before budgeting. Apple is selected only by Apple inputs (Apple files, shared schema/spec, simulator/localization/Apple CI infrastructure),
+never by a plain docs/web/server edit. Go/npm/Gradle/SPM download/build caches are used; Gradle PR caches are read-only and no credentials
+are stored. The initial SPM/runtime download makes a cold Apple run materially slower.
+
+Local prerequisites: Go from `server/go.mod`, Node from `web/.nvmrc`, Python 3.9+ (CI uses 3.11), Docker/Compose for server/image,
+`pip install -r scripts/ci/requirements.txt` and `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` for scripts, Bun 1.4.2 for
+TypeScript SDK. Android needs JDK 21 and SDK `platforms;android-37.0` / `build-tools;37.0.0` plus GNU timeout; Apple needs macOS 26,
+Xcode 26.0.1, XcodeGen and rsync. Local scripts fail on missing required tools rather than claim success. They do not deploy or publish.
+
+Deliberate boundaries: web `compatibility.live.test.ts` needs an isolated live hub/token and explicitly skips its one probe without them.
+The offline web tests still run completely. Apple explicitly excludes five fixture/watchdog-dependent iOS cases (`OldHubCompatibilityIntegrationTests`,
+`NotificationServiceTests/opensWhatTheRelayDelivered`, `VideoFileTests/nativeVideoPlaysSeeksAndCleansUp`,
+`VideoFileResourceTests/realHTTPReadsMiddleTailAndRejectsChangedRevision`, `AssistantHTMLSecurityTests/aRealInfiniteLoopCanBeDiscardedWithoutBlockingANewCard`)
+and five `ExtensionStreamSnapshotTests` Mac cases needing a live extension/hub pair. Apple result parsing rejects any unexpected skip and
+requires the four design-system suites; UI suites, visionOS, Persona Link and SSH-package integration remain outside this lane.
+Full simulator screenshots, device/instrumentation/UI suites, real Agent/phone integrations, release entitlements,
+production signing and publication are not PR gates. They need devices, explicit lab inputs or secrets; retain the manual checks below.
+Platform-gated and explicitly opt-in tests still report their own skips; they are not evidence of device/live integration coverage.
+On Linux, `test_hub_restart_mac.py` skips its three Mac-only cases; `test_persona_cutover.py` has six optional database/container cases
+without dedicated cutover inputs. The complete Python suite remains discovered and runs; no failing suite is excluded. CI's
+Postgres does run ordinary database tests (unlike the old database-free workflow). Specialized offline cutover fixtures requiring extra
+container/migration inputs are not supplied. Private-value scanning of commits and PR metadata remains in `scripts/hooks/merge-pr.sh` on
+the merge machine; CI runs the generic privacy rules without those values. No baseline is raised to make a gate green.
+
+`hub image` uses only public dependencies and GHCR's existing `GITHUB_TOKEN`; no private registry or machine service is required. Its
+repository enablement is a separate setting: enable only after confirming the hosted build/smoke result. Do not dispatch publication just
+to test PR CI. Runner migration removes workflow label variables; after green CI, delete unused repository variables and unregister
+repository runners if present. Do not uninstall machine services or delete their files; organization-provided runners require their owner.
+
 
 A test binary never touches the developer's real `~/.persona`: the packages that start Persona processes (`internal/hub`, `internal/assistant`) run through `testhome.Main` in their `TestMain`, with `HOME` set to an empty directory and `PERSONA_HOME` unset, and the run fails if anything created `<HOME>/.persona`. A test that needs state sets `PERSONA_HOME` (`t.Setenv`) to a directory of its own, as the two assistant-process tests in `internal/hub` do. A test started by hand with `go test` used to rewrite the real hub's assistant `manager.json` and `secret.key` (the next run's assistant then never came up); `scripts/test/test-server.sh` runs with a throw-away `HOME` already.
 
@@ -64,7 +118,7 @@ Not covered:
 
 **PersonaKit** (`apple/Packages/PersonaKit`, #2095): non-UI App logic moves into this package. Tests run with `swift test` on Mac: about 10 seconds cold,
 2 seconds after one file change (the same tests through `PersonaTests` took about 140 seconds cold, 45 after one file change, building the whole App and starting a simulator). Run `swift test` before merging package changes;
-it isn't in `PersonaTests` and has no CI job. iOS / Mac / visionOS Apps depend on it, watch/widgets do not.
+it isn't in `PersonaTests`; the Apple CI script runs its SwiftPM tests separately. iOS / Mac / visionOS Apps depend on it, watch/widgets do not.
 
 - Currently included: `Notebook`, `HTMLResources`, `ChatFollow`, `PathRefs` (with `PathRef`, `PathLinkURL`, `PathMarkdown`); batch 2 `DocumentText` (with `TextCompare`), `TableParsing` (`ZipArchive`, `XLSXReader`, `DelimitedParser`, `TableSheet`), `MathMarkdown`, `Links`; pure functions extracted from views: `ConversationTitle`, `DirectoryPath`, `StreamChunks`, `MarkdownHTML`, `APIErrorInfo`, `ZoomMath`, `LarkChangeGate` (views now just call them); batch 3 `AgentSyncPacing` (`AgentSync` fetch timing; `AgentSync.heldUntil` / `workingGap` delegate to it), `ConnectorPrompt` (with `cannotDrawNote`).
   Don't move `OpRetry`, `BrowserCookies`, `MachineMetrics` yet: `Shared/APIClient.swift` uses them, so moving would make the watch depend on this package (watchOS 10); assess separately. `Links` and `ConversationTitle` were in `apple/Shared`, but unused by watch/widgets, so moving them didn't add a watch dependency.

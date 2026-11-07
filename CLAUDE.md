@@ -98,13 +98,19 @@ People and Agents follow the same steps, each with their own GitHub account. Tem
    (preferred over a rebase; never force-push). Giving up: comment `Abandon:` with how far you got.
 6. **Open one PR per issue**, in English, with `Fixes #N` / `Closes #N` (or `Refs #N` to link without closing) in the body.
    `.github/workflows/pr-needs-issue.yml` closes PRs that link no issue and reopens them once the link is added.
-7. **Merge after CI passes**: run the checks in "Build and verify", look at screenshots for UI changes, wait for the PR's CI to pass,
-   then `scripts/hooks/merge-pr.sh <number>` (scans the PR with this machine's private values, which CI does not have, then squash-merges
+7. **Merge after CI passes**: run the checks in "Build and verify", look at screenshots for UI changes, and require the PR's `CI required`
+   check to pass (`docs/operations/testing.md`, "Hosted CI"). It aggregates the path-selected platform workflows; do not require their
+   conditional job names individually. CI changes must be verified by a green hosted run of that PR, not just local checks.
+   Then `scripts/hooks/merge-pr.sh <number>` (scans the PR with this machine's private values, which CI does not have, then squash-merges
    and deletes the branch). Make sure the issue is closed.
 
 ## Build and verify
 
-- Server: `scripts/test/test-server.sh` (real Postgres on the hub machine). Deploy: `scripts/deploy/deploy.sh [machine id…]`.
+- Portable CI: `scripts/ci/server.sh`, `scripts/ci/web.sh`, `scripts/ci/android.sh`, `scripts/ci/apple.sh`, `scripts/ci/scripts.sh`;
+  runtime/SDK checks: `scripts/ci/runtimes.sh`. Same scripts locally and on hosted runners, no private config or signing secrets.
+  Dependencies, path filters, coverage and cost: `docs/operations/testing.md` ("Hosted CI"). Repository guards run on every PR.
+- Server: `scripts/test/test-server.sh` (real Postgres on the hub machine); portable CI creates its own disposable Postgres 18 container.
+  Deploy: `scripts/deploy/deploy.sh [machine id…]`.
 - iOS: `scripts/app/sim.sh [-openSession <machine>/<session>]` builds, installs on your simulator and pairs it. Before xcodegen / Xcode,
   run `python3 scripts/persona_config.py xcconfig`; before a manual `xcodebuild`, `eval "$(python3 scripts/persona_config.py env)"` or an
   old Xcode reports errors that look like someone else's breakage.

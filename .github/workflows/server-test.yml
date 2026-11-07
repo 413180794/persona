@@ -1,37 +1,14 @@
-# The server's go vet and go test on Linux (docs/operations/testing.md). Before this they ran only by hand, so a change that broke a
-# package on every run reached master unnoticed (#2089). Kept out of ci.yml so the path filter below can skip it on
-# PRs that cannot affect the server: the paths are the server module, its replaced sdk/go module, and the repo files
-# server tests read (fixtures, schema examples, integrations, the test-env launcher).
-# No Postgres here: those tests skip without PERSONA_TEST_DATABASE_URL; scripts/test/test-server.sh runs them on the hub.
-name: server test
-
+name: Server CI
 on:
-  pull_request:
-    paths:
-      - server/**
-      - sdk/go/**
-      - spec/fixtures/**
-      - schema/extension/**
-      - integrations/**
-      - scripts/test/server_test_env.py
-      - .github/workflows/server-test.yml
+  workflow_call:
   workflow_dispatch:
-
 permissions:
   contents: read
-
-concurrency:
-  group: server-test-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  server-test:
-    name: Server vet and tests (Linux)
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: server
+  server:
+    name: Server lint, tests and builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,8 +16,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
-          cache-dependency-path: server/go.sum
-      - name: go vet
-        run: go vet ./...
-      - name: go test
-        run: go test -count=1 ./...
+          cache-dependency-path: |
+            server/go.sum
+            sdk/go/go.sum
+      - name: Server checks
+        run: scripts/ci/server.sh

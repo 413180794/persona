@@ -1,96 +1,79 @@
 name: CI
 on:
   pull_request:
+  merge_group:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: privacy-workflow-ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  check:
-    name: Privacy and workflow checks
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+  changes:
+    name: Repository guards and path selection
+    runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      server: ${{ steps.paths.outputs.server }}
+      web: ${{ steps.paths.outputs.web }}
+      android: ${{ steps.paths.outputs.android }}
+      apple: ${{ steps.paths.outputs.apple }}
+      runtimes: ${{ steps.paths.outputs.runtimes }}
+      scripts: ${{ steps.paths.outputs.scripts }}
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - name: Privacy check
-        run: python3 scripts/privacy_check.py
-      - name: No references into external service repositories
-        run: python3 -B scripts/test/test_external_service_refs.py
-      - name: No two tracked paths differ only by case (#6239)
-        run: python3 -B scripts/test/test_path_case.py
-      - name: Issue-link workflow tests
-        run: node scripts/test/pr_needs_issue_test.mjs
-      - name: Android translations (docs/protocol/i18n.md)
-        run: |
-          (cd scripts/app && python3 test_android_i18n_check.py)
-          python3 scripts/app/android_i18n_check.py
-  extension-schema:
-    # schema/extension is the one truth of the extension protocol and views: the generated Go / TS / Swift / Kotlin
-    # types match it and the examples hold to it (#1849).
-    name: Extension schema
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: sdk/go/go.mod
-      - name: Generated types and examples
-        run: python3 scripts/test/test_extension_schema.py
-      - name: The SDK bundle personad writes new extensions from
-        run: python3 scripts/test/test_sdk_bundle.py
-      - name: Go wire types round-trip the examples
-        working-directory: sdk/go
-        run: go test ./...
-  windows-build:
-    # The server is built and tested on macOS and Linux; nothing else notices when a change breaks the Windows node
-    # (docs/operations/windows.md). Cross-compiled here: vet type-checks the tests too.
-    name: Server builds for Windows
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: server/go.mod
-          cache-dependency-path: server/go.sum
-      - name: GOOS=windows build and vet
-        working-directory: server
+      - name: Repository guards
         env:
-          GOOS: windows
-          GOARCH: amd64
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: scripts/ci/guards.sh
+      - id: paths
+        name: Select platforms
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          go build ./...
-          go vet ./...
-  web-test:
-    # The web package's vitest suite (docs/operations/testing.md). The privacy job never ran it, so a broken test or a Node
-    # version mismatch (#2745) reached master unnoticed. web/.nvmrc is the version both CI and local nvm use.
-    name: Web tests
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: web
+          if [ "$EVENT_NAME" = pull_request ] || [ "$EVENT_NAME" = merge_group ]; then
+            python3 scripts/ci/paths.py
+          else
+            python3 scripts/ci/paths.py --all
+          fi
+  server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    uses: ./.github/workflows/server-test.yml
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    uses: ./.github/workflows/web-test.yml
+  android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    uses: ./.github/workflows/android-test.yml
+  apple:
+    needs: changes
+    if: needs.changes.outputs.apple == 'true'
+    uses: ./.github/workflows/apple-test.yml
+  runtimes:
+    needs: changes
+    if: needs.changes.outputs.runtimes == 'true'
+    uses: ./.github/workflows/runtimes-test.yml
+  scripts:
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    uses: ./.github/workflows/scripts-tests.yml
+  required:
+    name: CI required
+    needs: [changes, server, web, android, apple, runtimes, scripts]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: web/.nvmrc
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Type check
-        run: npm run typecheck
-      - name: Unit tests
-        run: npm test
+      - name: Verify selected platform results
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci/required.py

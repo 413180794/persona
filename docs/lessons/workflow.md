@@ -57,6 +57,18 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
 - Static web help text, form placeholders, mocks and example machine IDs in tests must also avoid personal config values (2026-11-03, #627): even a common machine-type word, if it matches the local config, makes the repo-wide privacy scan block the release. Use explicit example identifiers for IDs, example.com for domains, describe machine types in prose; do not change the sensitive-word list or add exemptions for the page.
 - Older versions of `gh pr checks` do not support `--fail-fast` (2026-11-02, #341): check `--help` first and use the supported `--watch` / `--interval`; exit code 1 from a bad argument is not a CI failure; look at the specific check's conclusion.
 
+## Hosted CI path aggregation
+
+- Native workflow-level PR path filters leave individually required checks pending when no run is created. Keep one always-triggered
+  orchestrator, put filters in a tested selector, call platform workflows through `workflow_call`, and require only its final aggregate.
+  The aggregate must verify that every selected workflow succeeded; accepting all `skipped` results can hide an upstream guard failure.
+  Use `--no-renames` when selecting paths so moving a file away from a platform still tests its former consumer. macOS costs require
+  path-selection tests proving docs-only edits cannot launch it. A migration is not verified until its PR actually runs on hosted runners.
+- Isolating Python suite HOME must unset inherited XDG profile variables, not set them to the outer temporary HOME: fixtures replace HOME
+  again and expect XDG defaults to follow it. Otherwise privacy fixtures read the wrong config and service installers write to another
+  fixture's directory. Reuse the server test environment cleaner, retain only Go build caches, disable VCS stamping for synthetic Go
+  helpers, and allocate free mesh-mock ports instead of colliding with another developer's running mock.
+
 ## Screenshots and screen recordings in PRs
 
 - No third-party image hosts, nothing in the repo: since `gh` 2.99, `gh pr create`, `gh pr comment`, `gh issue comment` and others have `--attach` (repeatable, at most 50 at a time),

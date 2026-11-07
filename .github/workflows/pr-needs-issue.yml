@@ -23,7 +23,7 @@ concurrency:
 jobs:
   check:
     if: github.event.pull_request.user.type != 'Bot'
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       pull-requests: write

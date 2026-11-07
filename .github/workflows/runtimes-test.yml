@@ -1,0 +1,27 @@
+name: Runtime and SDK CI
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  runtimes:
+    name: Runtime integrations and TypeScript SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            sdk/ts/package-lock.json
+            integrations/agent-sdk/package-lock.json
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Runtime and SDK checks
+        run: scripts/ci/runtimes.sh

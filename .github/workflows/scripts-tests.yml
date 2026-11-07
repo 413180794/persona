@@ -1,50 +1,35 @@
-name: Scripts tests
-# Every scripts/**/test_*.py suite (stdlib unittest) on Linux (#3011): they guard publishing, bundle privacy, the
-# privacy scan itself and doc paths, and nothing ran most of them before. Each suite runs from its own directory,
-# the way it imports its neighbours. The few ci.yml also runs are run again here: they take seconds, and one list
-# with no exclusions cannot drift.
+name: Scripts and docs CI
 on:
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: scripts-tests-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  unittest:
-    name: scripts/ unittest suites
-    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 10
+  scripts:
+    name: Scripts, docs and repository guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      # test_persona_migration_edges builds a Go helper from server/internal/identity; without Go it skips those cases.
       - uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
-          cache: false
+          cache-dependency-path: |
+            server/go.sum
+            sdk/go/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scripts/ci/requirements.txt
       - name: Install script validation dependencies
-        run: python3 -m pip install Pillow==12.0.0 PyYAML==6.0.3
-      - name: Run every suite
-        run: |
-          failed=""
-          count=0
-          for f in $(find scripts -name 'test_*.py' -not -path '*/node_modules/*' | sort); do
-            count=$((count + 1))
-            echo "::group::$f"
-            if ! (cd "$(dirname "$f")" && python3 -B -m unittest -v "$(basename "$f" .py)"); then
-              failed="$failed $f"
-            fi
-            echo "::endgroup::"
-          done
-          echo "$count suites"
-          [ "$count" -gt 0 ] || { echo "::error::no scripts/**/test_*.py found"; exit 1; }
-          if [ -n "$failed" ]; then
-            for f in $failed; do echo "::error file=$f::unittest suite failed"; done
-            exit 1
-          fi
+        run: python3 -m pip install -r scripts/ci/requirements.txt
+      - name: Install workflow validator
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Scripts and docs checks
+        run: scripts/ci/scripts.sh

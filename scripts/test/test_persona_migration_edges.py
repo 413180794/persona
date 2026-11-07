@@ -107,7 +107,7 @@ class PersonaMigrationEdgesTests(unittest.TestCase):
             (source / name).write_text(text.replace('package identity', 'package main', 1))
         (source / 'main.go').write_text(GO_MAIN)
         helper = self.base / 'go-helper'
-        result = self.run_command([self.go, 'build', '-o', str(helper), '.'],
+        result = self.run_command([self.go, 'build', '-buildvcs=false', '-o', str(helper), '.'],
                                   self.clean_env(GO111MODULE='on', GOWORK='off'),
                                   timeout=120, cwd=source)
         self.assertEqual(result.returncode, 0, result.stderr)

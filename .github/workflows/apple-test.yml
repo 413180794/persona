@@ -1,0 +1,30 @@
+name: Apple CI
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apple:
+    name: Apple builds and unit tests (Xcode 26.0)
+    runs-on: macos-26
+    timeout-minutes: 75
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
+      CI_SPM_CACHE: ${{ github.workspace }}/.ci-cache/spm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install project generation tools
+        run: brew install xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: .ci-cache/spm
+          key: spm-${{ runner.os }}-${{ runner.arch }}-xcode-26.0-${{ hashFiles('apple/**/Package.resolved', 'apple/**/Package.swift', 'apple/project.yml') }}
+          restore-keys: spm-${{ runner.os }}-${{ runner.arch }}-xcode-26.0-
+      - name: Apple checks
+        run: scripts/ci/apple.sh
