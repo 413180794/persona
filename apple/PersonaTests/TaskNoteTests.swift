@@ -53,6 +53,24 @@ struct TaskNoteTests {
         #expect(TaskNoteText.label(note("monitor", "ended")) == "Monitor 结束")
     }
 
+    /// Claude Code 2.1.319's receipt opens with "including the agentId below": the id is the one after "agentId:", so
+    /// the subagent's notice finds its call (#6381).
+    @Test func aSubagentsIdIsTheOneAfterAgentIdColon() {
+        let receipt = "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, "
+            + "including the agentId below, into a user-facing reply.)\nagentId: a0123456789abcdef (internal ID - do not mention to user. "
+            + "Use SendMessage with to: 'a0123456789abcdef' to continue this agent.)\nThe agent is working in the background."
+        let items = [use(1, "a", "Agent", description: "回归"), result(2, "a", receipt),
+                     notice(3, note("agent", "completed", task: "a0123456789abcdef", detail: "42 passed."))]
+        let x = TaskIndex.build(items)
+        #expect(x.started == ["a"])
+        #expect(x.calls == ["3#0": "a"])
+        #expect(x.notes["a"]?.first?.detail == "42 passed.")
+        // "agentId" with no colon names nothing.
+        let none = TaskIndex.build([use(1, "b", "Agent"), result(2, "b", "Async agent launched successfully, see the agentId below."),
+                                    notice(3, note("agent", "completed", task: "below"))])
+        #expect(none.calls.isEmpty)
+    }
+
     /// A finished task's notice never closes its turn as "interrupted", whatever its command says.
     @Test func aNoticeAboutAnInterruptIsNotTheInterrupt() {
         var n = notice(3, note("shell", "completed", title: "检查中断恢复"))

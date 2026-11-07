@@ -197,7 +197,9 @@ nonisolated struct TaskIndex: Equatable, Sendable {
     var asked: Set<String> = []
     var answered: Set<String> = []
 
-    nonisolated(unsafe) private static let launched = /(?:running in background with ID|agentId|Monitor started \(task|moved to the background \(ID):?\s*([A-Za-z0-9_-]+)/
+    /// A subagent's id only after "agentId:", as the node reads it: Claude Code 2.1.319's receipt opens with "including the
+    /// agentId below", and "below" taken for the id left its notice without its card (#6381).
+    nonisolated(unsafe) private static let launched = /(?:(?:running in background with ID|Monitor started \(task|moved to the background \(ID):?|agentId:)\s*([A-Za-z0-9_-]+)/
 
     static func build(_ items: [Item]) -> TaskIndex {
         var x = TaskIndex()

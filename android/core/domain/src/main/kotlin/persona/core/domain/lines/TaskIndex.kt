@@ -70,7 +70,9 @@ data class TaskIndex(
     }
 
     companion object {
-        private val launched = Regex("(?:running in background with ID|agentId|Monitor started \\(task|moved to the background \\(ID):?\\s*([A-Za-z0-9_-]+)")
+        /** A subagent's id only after "agentId:", as the node reads it: Claude Code 2.1.319's receipt opens with "including
+         *  the agentId below", and "below" taken for the id left its notice without its call (#6381). */
+        private val launched = Regex("(?:(?:running in background with ID|Monitor started \\(task|moved to the background \\(ID):?|agentId:)\\s*([A-Za-z0-9_-]+)")
 
         fun build(items: List<LineItem>): TaskIndex {
             val notes = mutableMapOf<String, MutableList<TaskNote>>()
