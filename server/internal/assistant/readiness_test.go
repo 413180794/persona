@@ -124,8 +124,8 @@ func TestReadinessFullButUnverified(t *testing.T) {
 	cl, m, first := readinessStep(t, r, StepClaude), readinessStep(t, r, StepModel), readinessStep(t, r, StepFirstMessage)
 	if r.Mode != ReadinessFull || !r.Ready || nextOf(r) != StepModel || r.Machine == nil || r.Machine.ID != "server" ||
 		cl.State != StepOK || cl.Version != "2.1.308" ||
-		m.State != StepUnknown || m.Code != "model_unverified" || m.Action.ID != "test_assistant" ||
-		first.State != StepTodo || first.Code != "never_tried" {
+		m.State != StepUnknown || m.Code != "model_unverified" || m.Action != nil || // the try is the first message's (#6317)
+		first.State != StepTodo || first.Code != "never_tried" || first.Action == nil || first.Action.ID != "test_assistant" {
 		t.Fatalf("readiness = %+v", r)
 	}
 	if len(f.checked) != 0 {
@@ -428,9 +428,22 @@ func TestReadinessKeyStatusUnverified(t *testing.T) {
 	f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeLoggedIn, AuthMethod: "api_key", KeySource: "ANTHROPIC_API_KEY"}}
 	r := getReadiness(t, s, "", "")
 	m := readinessStep(t, r, StepModel)
-	if r.Mode != ReadinessFull || m.State != StepUnknown || m.Code != "model_unverified" || m.Action.ID != "test_assistant" ||
+	if r.Mode != ReadinessFull || m.State != StepUnknown || m.Code != "model_unverified" ||
 		m.Detail != "server 上的 Claude Code 用的是配好的账号或 Key，还没试过。发一句试试它能不能用。" {
 		t.Fatalf("readiness = %+v", r)
+	}
+	// One button for the try, on the first message's step, where clients show how it went (#6317).
+	if first := readinessStep(t, r, StepFirstMessage); m.Action != nil || first.State != StepTodo || first.Action == nil || first.Action.ID != "test_assistant" {
+		t.Fatalf("the try's button: model %+v, first message %+v", m.Action, first)
+	}
+	// A main conversation replaced since counts as answered: the model step keeps the try then.
+	f3 := newFakeHub().withMachine()
+	f3.doctor = map[string]string{"server": "2.1.308，支持 --plugin-dir"}
+	f3.settings = &Settings{Main: "m1", Former: []FormerMain{{MachineID: "server", SessionID: "m0"}}}
+	f3.auth = f.auth
+	r3 := getReadiness(t, newServiceOn(t, f3, &memStore{}), "", "")
+	if m3, first3 := readinessStep(t, r3, StepModel), readinessStep(t, r3, StepFirstMessage); first3.State != StepOK || m3.Action == nil || m3.Action.ID != "test_assistant" {
+		t.Fatalf("first message ok: model %+v, first message %+v", m3, first3)
 	}
 	// An unknown status (an old Claude Code, a launcher that drops the arguments) is no evidence either way.
 	f2, s2, _ := readyMachine(t)

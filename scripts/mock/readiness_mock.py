@@ -180,6 +180,9 @@ def readiness(sc, machine, lang, launcher="claude", dismissed=False, probe=None)
             first = step(lang, "first_message", "problem", model_code, name, "", "test_assistant")
         else:
             first = step(lang, "first_message", "todo", "never_tried", name, "", "test_assistant")
+        # one button for the try, on the first message's step where the try shows how it went (#6317)
+        if (model.get("action") or {}).get("id") == "test_assistant" and (first.get("action") or {}).get("id") == "test_assistant":
+            del model["action"]
         steps += [st, model, first]
     for st in steps:
         if st["id"] != "first_message" and blocks(st):

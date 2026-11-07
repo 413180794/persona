@@ -29,9 +29,6 @@
         "title": "Model entry not found"
       },
       {
-        "action": {
-          "id": "test_assistant"
-        },
         "code": "model_unverified",
         "detail": "Send a message to check that the model answers.",
         "id": "model",
@@ -95,9 +92,6 @@
         "title": "モデルの入口が見つかりません"
       },
       {
-        "action": {
-          "id": "test_assistant"
-        },
         "code": "model_unverified",
         "detail": "メッセージを送って、モデルが答えるか確認してください。",
         "id": "model",
@@ -185,9 +179,6 @@
         "title": "找不到模型入口"
       },
       {
-        "action": {
-          "id": "test_assistant"
-        },
         "code": "model_unverified",
         "detail": "发一句试试，确认模型能回答。",
         "id": "model",

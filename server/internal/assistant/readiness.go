@@ -352,8 +352,14 @@ func (s *Service) readiness(ctx context.Context, probe bool, wait time.Duration)
 		main, hasMain := s.readinessMain(ctx, d.ID, v.Main)
 		auth, _ := s.claudeAuthStatus(ctx, d.ID, launcher, time.Until(deadline))
 		model, modelOK := s.readinessModel(ctx, lang, d, launcher, rec, main, hasMain, auth)
-		out.Steps = append(out.Steps, s.readinessClaude(ctx, lang, d, launcher, rec, modelOK, time.Until(deadline)), model)
-		out.Steps = append(out.Steps, s.readinessFirst(ctx, lang, d, rec, v, main, hasMain))
+		first := s.readinessFirst(ctx, lang, d, rec, v, main, hasMain)
+		// One button for the try: the first message's step offers it, and every client shows the try's spinner and
+		// answer there, so an unverified model step that would offer the same leaves it to that step (#6317). Once the
+		// first message is ok, the model step keeps its own.
+		if model.Action != nil && model.Action.ID == "test_assistant" && first.Action != nil && first.Action.ID == "test_assistant" {
+			model.Action = nil
+		}
+		out.Steps = append(out.Steps, s.readinessClaude(ctx, lang, d, launcher, rec, modelOK, time.Until(deadline)), model, first)
 	}
 
 	out.Mode = ReadinessFull

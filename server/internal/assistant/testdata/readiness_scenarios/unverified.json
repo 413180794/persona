@@ -22,9 +22,6 @@
         "version": "2.1.320"
       },
       {
-        "action": {
-          "id": "test_assistant"
-        },
         "code": "model_unverified",
         "detail": "Send a message to check that the model answers.",
         "id": "model",
@@ -94,9 +91,6 @@
         "version": "2.1.320"
       },
       {
-        "action": {
-          "id": "test_assistant"
-        },
         "code": "model_unverified",
         "detail": "メッセージを送って、モデルが答えるか確認してください。",
         "id": "model",
@@ -166,9 +160,6 @@
         "version": "2.1.320"
       },
       {
-        "action": {
-          "id": "test_assistant"
-        },
         "code": "model_unverified",
         "detail": "发一句试试，确认模型能回答。",
         "id": "model",
