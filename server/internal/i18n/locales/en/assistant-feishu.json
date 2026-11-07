@@ -89,6 +89,7 @@
   "thread_unbound": "This topic isn't tied to a to-do, so your message was not passed on. Send \"/ai\" and a line about what you want done to open one, or tie the topic to a to-do in the app.",
   "thread_done": "The to-do tied to this topic is already done, so your reply was not passed on. Reopen it in the app to go on.",
   "thread_question": "Reply in the Lark topic",
+  "chat_question": "Reply in the Lark chat",
   "thread_recorded_not_sent": "Noted on the to-do, but not passed to anyone: {error}",
   "thread_post_sep": "; ",
   "thread_post_decisions_one": "New decision: {list}",
@@ -116,8 +117,8 @@
   "elsewhere_root": "From another group chat: {text}",
   "elsewhere_root_quote": "Replying to: {quote}",
   "elsewhere_root_hint": "When the to-do is done or accepted, a short outcome is posted under that message, after a notice here. Send /noreply in this topic to stop that.",
+  "elsewhere_root_hint_chat": "When the to-do is done or accepted, a short outcome is posted under that message, after a notice here. Reply to this message with /noreply to stop that.",
   "elsewhere_no_topic": "Couldn't open a topic in the home group chat: the message posted there is not in a topic. Is it a topic-style group chat? Send /topics home in the one you want.",
-  "elsewhere_no_home": "No group chat is on as the home topic group yet. Send /topics home in a topic-style group chat of yours, then ask again.",
   "elsewhere_needs_text": "Say what you want after /ai, for example: /ai check the release notes.",
   "elsewhere_failed": "Couldn't open a to-do for this: {error}",
   "source_report_failed": "Couldn't get this done.",
@@ -129,5 +130,6 @@
   "source_noreply_done": "Done: the outcome won't be posted where it was asked.",
   "source_noreply_choice": "Don't report back to where it was asked",
   "source_report_unreachable": "Couldn't post the outcome where it was asked: {error}",
-  "source_report_notice": "Will be posted under the original message in {minutes} minutes: {text} (send /noreply to cancel)"
+  "source_report_notice": "Will be posted under the original message in {minutes} minutes: {text} (send /noreply to cancel)",
+  "source_report_notice_chat": "Will be posted under the original message in {minutes} minutes: {text} (reply to this with /noreply to cancel)"
 }

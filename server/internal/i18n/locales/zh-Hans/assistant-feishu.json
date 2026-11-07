@@ -89,6 +89,7 @@
   "thread_unbound": "这个话题还没有绑定待办，你的消息没有转出去。发「/ai」加一句想做的事就能建一个待办，也可以先在 App 里把话题绑到一个待办上。",
   "thread_done": "这个话题绑定的待办已经完成，你的回复没有转出去。要继续的话，先在 App 里重新打开它。",
   "thread_question": "在飞书话题里的回复",
+  "chat_question": "在飞书聊天里的回复",
   "thread_recorded_not_sent": "已记在待办上，但没有交给任何人：{error}",
   "thread_post_sep": "；",
   "thread_post_decisions_one": "新决策：{list}",
@@ -116,8 +117,8 @@
   "elsewhere_root": "来自另一个群：{text}",
   "elsewhere_root_quote": "回复的是：{quote}",
   "elsewhere_root_hint": "待办做完或验收后，会先在这里预告，再把一句简短的结论回复到那条消息下面。在这个话题里发 /noreply 可以取消。",
+  "elsewhere_root_hint_chat": "待办做完或验收后，会先在这里预告，再把一句简短的结论回复到那条消息下面。回复这条消息并发 /noreply 可以取消。",
   "elsewhere_no_topic": "没能在主话题群里开新话题：发到那里的消息不在话题里。它是话题群吗？请在想用的群里发 /topics home。",
-  "elsewhere_no_home": "还没有群被设为主话题群。请在你的话题群里发 /topics home，再重新提问。",
   "elsewhere_needs_text": "/ai 后面请写上要做什么，例如：/ai 查一下发版说明。",
   "elsewhere_failed": "没能为这件事开待办：{error}",
   "source_report_failed": "没能完成。",
@@ -129,5 +130,6 @@
   "source_noreply_done": "好的：结论不会回复到提问的地方。",
   "source_noreply_choice": "不要回复到提问的地方",
   "source_report_unreachable": "结论没能回到提问的地方：{error}",
-  "source_report_notice": "将在 {minutes} 分钟后回复到原消息下：{text}（发 /noreply 取消）"
+  "source_report_notice": "将在 {minutes} 分钟后回复到原消息下：{text}（发 /noreply 取消）",
+  "source_report_notice_chat": "将在 {minutes} 分钟后回复到原消息下：{text}（回复这条并发 /noreply 取消）"
 }

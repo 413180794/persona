@@ -15,6 +15,10 @@ type TodoSource struct {
 	Channel   string `json:"channel"`
 	ChatID    string `json:"chat_id"`
 	MessageID string `json:"message_id"`
+	// Anchor: for a todo bound to no topic (a request taken in the owner's private chat with the bot, for want of a home
+	// topic group), the id of the bot's first message there. The report's notice is shown under it, and a "/noreply" said as
+	// a reply to anything under it stops the report. "" for a todo that has a topic.
+	Anchor string `json:"anchor,omitempty"`
 	// NoReport: the owner said not to report back. ReportedAt: when the outcome was claimed to be told (RFC 3339), "" until
 	// then. ReportText is what will be told and ReportDueAt when (RFC 3339): the topic is shown the text and the time first,
 	// so the owner can stop it; both "" until planned. Attempts counts the claims made, a retry being another claim.

@@ -130,13 +130,19 @@ func (s *Service) openTarget(ctx context.Context, st FeishuStatus) (target botTa
 // turns out to be taken (db.ErrThreadTaken) leaves no to-do behind. The first words are not a decision: the to-do is made
 // of them. ev is the message the run answers under in the topic: the owner's own, or the one the bot opened it with
 // (openFromElsewhere). quote, when not empty, is the text of a message the words reply to: it follows them in the notes
-// and in the hand-over, as context. src, when given, is where the request came from, recorded on the to-do. fail says why
-// no to-do was made, in the bot's language, "" when one was; what goes wrong after the to-do exists is said in the topic.
+// and in the hand-over, as context. src, when given, is where the request came from, recorded on the to-do. A nil topic
+// is a to-do bound to no topic (a request taken in the owner's private chat, openInOwnerChat): ev is then a message of that
+// chat, and what is said goes there. fail says why no to-do was made, in the bot's language, "" when one was; what goes
+// wrong after the to-do exists is said in the topic (or the private chat).
 func (s *Service) openTodoIn(ctx context.Context, ev feishubot.MessageEvent, st FeishuStatus, content feishubot.Content, text, quote string,
 	topic *feishuTopic, src *TodoSource) (todo Todo, fail string) {
 	msg := ev.Message
 	l := s.botLang(ctx)
 	to := topic.target()
+	where := "private chat" // for the log
+	if topic != nil {
+		where = "topic " + topic.Thread
+	}
 	say := func(key string, args ...i18n.Args) {
 		s.botNoteTo(ctx, to, msg.MessageID, i18n.T(l, "assistant-feishu."+key, args...))
 	}
@@ -164,12 +170,14 @@ func (s *Service) openTodoIn(ctx context.Context, ev feishubot.MessageEvent, st 
 	}
 	todo, err := s.createTodo(ctx, title, clip(words, openNotesMax), origin, "")
 	if err != nil {
-		s.logf("bots: topic %s: open a to-do: %v", topic.Thread, err)
+		s.logf("bots: %s: open a to-do: %v", where, err)
 		return Todo{}, failed("thread_open_failed", err)
 	}
-	th, err := cleanThread(TodoThread{Channel: channel.Feishu, ChatID: topic.Chat, ThreadID: topic.Thread, Title: title})
-	if err == nil {
-		_, err = s.bindThread(ctx, todo.ID, th, nil)
+	if topic != nil {
+		var th TodoThread
+		if th, err = cleanThread(TodoThread{Channel: channel.Feishu, ChatID: topic.Chat, ThreadID: topic.Thread, Title: title}); err == nil {
+			_, err = s.bindThread(ctx, todo.ID, th, nil)
+		}
 	}
 	if err == nil && src != nil {
 		if err = s.setTodoSource(ctx, todo.ID, *src); err == nil {
@@ -181,7 +189,7 @@ func (s *Service) openTodoIn(ctx context.Context, ev feishubot.MessageEvent, st 
 		if rerr := s.removeTodo(context.WithoutCancel(ctx), todo.ID); rerr != nil {
 			s.logf("todo %s: take back: %v", todo.ID, rerr)
 		}
-		s.logf("bots: topic %s: bind: %v", topic.Thread, err)
+		s.logf("bots: %s: bind: %v", where, err)
 		return Todo{}, failed("thread_open_failed", err)
 	}
 	if retitle {
@@ -192,7 +200,7 @@ func (s *Service) openTodoIn(ctx context.Context, ev feishubot.MessageEvent, st 
 	if _, err := s.appendFeed(ctx, origin, feedTask, todo.ID, nil); err != nil {
 		s.logf("task %s: feed: %v", todo.ID, err)
 	}
-	s.logf("bots: topic %s opened todo %s", topic.Thread, todo.ID)
+	s.logf("bots: %s opened todo %s", where, todo.ID)
 
 	line := i18n.T(l, "assistant-feishu.thread_open_done", i18n.Args{"title": title})
 	if link := todoLink(strings.TrimRight(st.PublicURL, "/"), todo.ID); isWebLink(link) {
@@ -200,9 +208,9 @@ func (s *Service) openTodoIn(ctx context.Context, ev feishubot.MessageEvent, st 
 	}
 	s.botNoteTo(ctx, to, msg.MessageID, line)
 
-	content.Text = prompts.RenderTodoThreadOpen(prompts.TodoThreadOpen{Title: contextText(clip(oneLine(title), 80)), TodoID: todo.ID, Text: text, Quote: quote})
+	content.Text = prompts.RenderTodoThreadOpen(prompts.TodoThreadOpen{Title: contextText(clip(oneLine(title), 80)), TodoID: todo.ID, Text: text, Quote: quote, NoTopic: topic == nil})
 	if err := s.botSendIn(ctx, &ev, content, target, topic); err != nil {
-		s.logf("bots: topic %s: todo %s to the main conversation: %v", topic.Thread, todo.ID, err)
+		s.logf("bots: %s: todo %s to the main conversation: %v", where, todo.ID, err)
 		say("thread_open_not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)})
 	}
 	if cur, ok := s.todoNow(todo.ID); ok {

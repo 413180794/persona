@@ -342,8 +342,9 @@ func (s *Service) sourceReportNow(id string) {
 		s.sourceReportSoon(id, due.Sub(now))
 		return
 	}
-	if t.Thread == nil {
+	if t.Thread == nil && t.Source.Anchor == "" {
 		// Unbound from its topic since the notice: "/noreply" has nowhere to be said any more, so the report is cancelled.
+		// (A todo with an anchor was shown the notice in the owner's private chat, which it still is.)
 		s.logf("todo %s: not reporting back: it is no longer bound to the topic that was shown the notice", id)
 		return
 	}
@@ -365,7 +366,7 @@ func (s *Service) sourceReportNow(id string) {
 	}
 	// It will not go (the chat refuses, the original is gone) or it has used its tries: the claim stays, so it is not tried
 	// again, and the topic is told.
-	s.tellTopic(ctx, t, st, "source_report_unreachable", i18n.Args{"error": clip(oneLine(err.Error()), 200)}, "sx:"+id)
+	s.tellOwner(ctx, t, st, "source_report_unreachable", i18n.Args{"error": clip(oneLine(err.Error()), 200)}, "sx:"+id)
 }
 
 // permanentReportError says whether a failed report can never go: the hub refuses the chat or the message, or Feishu gave a
@@ -380,17 +381,22 @@ func permanentReportError(err error) bool {
 }
 
 // showSourceReport plans the report of todo t and shows its topic the text and the time, in one line it can stop with
-// "/noreply". The line comes first: without a topic to show (the todo was unbound, or nothing of it is known to reply
-// under, or the bot may not write there) nothing is planned.
+// "/noreply" (a todo with no topic, taken in the owner's private chat: shows it there, under its first message, and the
+// line says to reply to it with "/noreply"). The line comes first: without a place to show it (the todo was unbound, or
+// nothing of it is known to reply under, or the bot may not write there) nothing is planned.
 func (s *Service) showSourceReport(ctx context.Context, t Todo, st FeishuStatus, now time.Time) {
 	th := t.Thread
-	if th == nil || th.Channel != channel.Feishu || !slices.Contains(st.Chats, th.ChatID) {
+	if t.Source.Anchor == "" && (th == nil || th.Channel != channel.Feishu || !slices.Contains(st.Chats, th.ChatID)) {
 		s.logf("todo %s: not reporting back: no topic to show the report in first", t.ID)
 		return
 	}
 	text := s.sourceReportText(ctx, t)
 	due := now.Add(sourceReportDelay)
-	if !s.tellTopic(ctx, t, st, "source_report_notice", i18n.Args{"minutes": int(sourceReportDelay / time.Minute), "text": text}, "sn:"+t.ID+due.UTC().Format(time.RFC3339Nano)) {
+	key := "source_report_notice"
+	if t.Source.Anchor != "" {
+		key = "source_report_notice_chat"
+	}
+	if !s.tellOwner(ctx, t, st, key, i18n.Args{"minutes": int(sourceReportDelay / time.Minute), "text": text}, "sn:"+t.ID+due.UTC().Format(time.RFC3339Nano)) {
 		return
 	}
 	planned, err := s.planSourceReport(ctx, t.ID, text, due)
@@ -403,10 +409,21 @@ func (s *Service) showSourceReport(ctx context.Context, t Todo, st FeishuStatus,
 	}
 }
 
-// tellTopic writes a line of the language file into the topic todo t is bound to, as a reply under the latest message
-// known there (the bot's lines to a topic, feishu_thread_posts.go); key makes the same line, sent again, land once. false
-// when it could not be written.
-func (s *Service) tellTopic(ctx context.Context, t Todo, st FeishuStatus, key string, args i18n.Args, uuid string) bool {
+// tellOwner writes a line of the language file where todo t is worked on: into the topic it is bound to, as a reply under the
+// latest message known there (the bot's lines to a topic, feishu_thread_posts.go), or, for a todo that has no topic (its
+// source has an anchor), into the owner's private chat as a reply under the anchor. key makes the same line, sent again,
+// land once. false when it could not be written.
+func (s *Service) tellOwner(ctx context.Context, t Todo, st FeishuStatus, key string, args i18n.Args, uuid string) bool {
+	if t.Source != nil && t.Source.Anchor != "" {
+		text := i18n.T(s.botLang(ctx), "assistant-feishu."+key, args)
+		// no_detour: with the anchor gone the line is lost rather than posted as a message of its own, which could not be
+		// replied to with "/noreply" (as in a topic, where nothing is planned then).
+		if err := s.appCall(ctx, AppFeishu, FeishuText, map[string]any{"reply_to": t.Source.Anchor, "text": text, "no_detour": true, "uuid": reportKey(uuid, t.ID)}, nil); err != nil {
+			s.logf("todo %s: tell the private chat: %v", t.ID, err)
+			return false
+		}
+		return true
+	}
 	th := t.Thread
 	if th == nil || th.Channel != channel.Feishu || !slices.Contains(st.Chats, th.ChatID) {
 		return false
@@ -519,10 +536,52 @@ func noReplyCommand(text string) bool {
 // from. Decided by the text alone (noReplyCommand), recorded as a decision of the todo (the user's, from the topic) so
 // that its history shows it, and not passed to any Agent. A todo that has told its source already cannot take it back.
 func (s *Service) threadNoReply(ctx context.Context, ev feishubot.MessageEvent, t Todo, topic *feishuTopic) {
+	s.stopReportOf(ctx, ev.Message.MessageID, t, topic.target(), "thread_question", db.DecisionThread)
+}
+
+// chatNoReply answers "/noreply" said in the owner's private chat as a reply to the first message of a to-do that has no
+// topic (TodoSource.Anchor), or to anything the bot said under it: the run's answer, the notice before the report. It
+// says whether it took the message; one that is no reply to such a message is nothing of its business and goes on as it
+// was. Recorded as a decision of the todo, not passed to any Agent, like the topic's.
+func (s *Service) chatNoReply(ctx context.Context, ev feishubot.MessageEvent) bool {
 	msg := ev.Message
+	if msg.RootID == "" && msg.ParentID == "" {
+		return false
+	}
+	if s.ensureTodosLoaded(ctx) != nil {
+		return false
+	}
+	t, ok := s.todoOfAnchor(msg.RootID, msg.ParentID)
+	if !ok {
+		return false
+	}
+	s.stopReportOf(ctx, msg.MessageID, t, feishuTarget{}, "chat_question", db.DecisionManual)
+	return true
+}
+
+// todoOfAnchor is the to-do whose first message in the owner's private chat is one of ids ("" is none).
+func (s *Service) todoOfAnchor(ids ...string) (Todo, bool) {
+	s.todos.mu.RLock()
+	defer s.todos.mu.RUnlock()
+	for _, t := range s.todos.todos {
+		if t.Source == nil || t.Source.Anchor == "" {
+			continue
+		}
+		for _, id := range ids {
+			if id != "" && id == t.Source.Anchor {
+				return copyTodoLocked(t), true
+			}
+		}
+	}
+	return Todo{}, false
+}
+
+// stopReportOf is "don't report back" for todo t, said in message messageID: the answer goes to `to`, and the decision
+// that records it is the user's, of the kind source, with the question the language file calls questionKey.
+func (s *Service) stopReportOf(ctx context.Context, messageID string, t Todo, to feishuTarget, questionKey, source string) {
 	l := s.botLang(ctx)
 	say := func(key string, args ...i18n.Args) {
-		s.botNoteTo(ctx, topic.target(), msg.MessageID, i18n.T(l, "assistant-feishu."+key, args...))
+		s.botNoteTo(ctx, to, messageID, i18n.T(l, "assistant-feishu."+key, args...))
 	}
 	switch {
 	case t.Source == nil:
@@ -545,8 +604,8 @@ func (s *Service) threadNoReply(ctx context.Context, ev feishubot.MessageEvent, 
 	if store := s.todoDB(); store != nil {
 		at := decisionNow()
 		inserted, err := s.insertDecision(ctx, store, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: t.ID,
-			Question: i18n.T(l, "assistant-feishu.thread_question"), Choice: i18n.T(l, "assistant-feishu.source_noreply_choice"),
-			Source: db.DecisionThread, SourceMessage: "feishu-" + msg.MessageID, CreatedAt: at})
+			Question: i18n.T(l, "assistant-feishu."+questionKey), Choice: i18n.T(l, "assistant-feishu.source_noreply_choice"),
+			Source: source, SourceMessage: "feishu-" + messageID, CreatedAt: at})
 		switch {
 		case err != nil:
 			s.logf("todo %s: record don't report back: %v", t.ID, err)

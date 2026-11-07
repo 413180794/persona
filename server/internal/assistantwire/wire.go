@@ -983,7 +983,7 @@ type FeishuMessage struct {
 }
 
 // FeishuFromElsewhere is FeishuMessage.From of a message the hub took from a group chat that is not opted in: the owner's
-// "@bot /ai …" and nothing else. The assistant opens a to-do for it in the home topic group (assistant/feishu_elsewhere.go).
+// "@bot /ai …" and nothing else. The assistant opens a to-do for it in the home topic group, or in the owner's private chat when there is none (assistant/feishu_elsewhere.go).
 const FeishuFromElsewhere = "elsewhere"
 
 // FeishuAction is feishu.card_action's params: card.action.trigger's event as Feishu sent it (the owner's press), and

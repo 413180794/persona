@@ -36,6 +36,7 @@ type askEnv struct {
 	thread   string                    // the topic the home group gives a new message ("" for none)
 	readable map[string]map[string]any // messages the bot can read back, by id
 	roots    int
+	dmRoots  int // new messages the bot sent into the owner's private chat
 	clock    *fakeClock
 }
 
@@ -78,6 +79,10 @@ func newAskEnv(t *testing.T, database *db.DB) *askEnv {
 		if m["chat_id"] == askHome && m["reply_to"] == nil { // a new message in the home group: it opens a topic
 			e.roots++
 			return map[string]any{"message_id": fmt.Sprintf("om_root%d", e.roots)}, nil
+		}
+		if m["chat_id"] == nil && m["reply_to"] == nil { // a new message in the owner's private chat
+			e.dmRoots++
+			return map[string]any{"message_id": fmt.Sprintf("om_dm%d", e.dmRoots)}, nil
 		}
 		return map[string]any{}, nil
 	})
@@ -134,6 +139,17 @@ func textsTo(f *fakeHub, chat string) []map[string]any {
 	var out []map[string]any
 	for _, p := range f.appParams(AppFeishu, FeishuText) {
 		if p["chat_id"] == chat {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// textsToDM are the texts the bot wrote into the owner's private chat (feishu.text with no chat_id).
+func textsToDM(f *fakeHub) []map[string]any {
+	var out []map[string]any
+	for _, p := range f.appParams(AppFeishu, FeishuText) {
+		if p["chat_id"] == nil {
 			out = append(out, p)
 		}
 	}
@@ -232,6 +248,9 @@ func TestElsewhereOpensATopicAndATodo(t *testing.T) {
 		}
 		if got := textsTo(e.f, askSrc); len(got) != 0 {
 			t.Fatalf("the group it was asked in was written to: %v", got)
+		}
+		if got := textsToDM(e.f); len(got) != 0 || todo.Source.Anchor != "" {
+			t.Fatalf("a home group is not bypassed: the private chat was written to (%v) or the source is anchored (%+v)", got, todo.Source)
 		}
 		// The topic's later messages come back to the to-do as any topic's do, and the topic is where the bot posts.
 		if e.s.topicMessage(context.Background(), askHome, "omt_home") != "om_root1" {
@@ -372,35 +391,100 @@ func TestElsewhereReplyCarriesTheQuotedText(t *testing.T) {
 	})
 }
 
-// 5. No home group: one hint in the group the request came from, once ever for that group (also after a restart, and
-// another group is told too); nothing is posted anywhere and no to-do is made.
-func TestElsewhereNoHomeGroupHintsOncePerGroup(t *testing.T) {
-	database := todoTestDB(t)
-	e := newAskEnv(t, database)
-	e.home = ""
-	e.ask(ownerAsk("om_n1", "/ai 查一下"))
-	e.ask(ownerAsk("om_n2", "/ai 再查一下"))
-	got := textsTo(e.f, askSrc)
-	if len(got) != 1 || got[0]["text"] != e.said("elsewhere_no_home") || got[0]["reply_to"] != "om_n1" || got[0]["in_thread"] != nil {
-		t.Fatalf("hints %v", got)
-	}
-	if todoCount(e.s) != 0 || len(textsTo(e.f, askHome)) != 0 || len(e.f.appParams(AppFeishu, FeishuText)) != 1 || len(reactions(e.f)) != 0 {
-		t.Fatalf("%d todos, texts %v, reactions %v", todoCount(e.s), e.f.appParams(AppFeishu, FeishuText), reactions(e.f))
-	}
-	// Another group is told once too.
-	ev := ownerAsk("om_n3", "/ai 查一下")
-	ev.Message.ChatID = "oc_src2"
-	e.ask(ev)
-	if got := textsTo(e.f, "oc_src2"); len(got) != 1 {
-		t.Fatalf("another group: %v", got)
-	}
-	// A restart does not tell the first one again.
-	e2 := newAskEnv(t, database)
-	e2.home = ""
-	e2.ask(ownerAsk("om_n4", "/ai 又查一下"))
-	if got := e2.f.appParams(AppFeishu, FeishuText); len(got) != 0 {
-		t.Fatalf("told again after a restart: %v", got)
-	}
+// 5. No home topic group: the request is not turned away. Its first message goes into the owner's private chat with the
+// bot, and the to-do is made as for a topic but bound to none: supervised, handed to the main conversation, the run
+// answering under that first message, the source recorded with that message as its anchor; the original message gets the
+// emoji and its group is told nothing.
+func TestElsewhereWithNoHomeGroupIsTakenInThePrivateChat(t *testing.T) {
+	forStores(t, func(t *testing.T, e *askEnv, database *db.DB) {
+		e.home = ""
+		e.publicURL = "https://hub.example.com/"
+		e.ask(ownerAsk("om_nh1", "/ai 修登录崩溃"))
+
+		todo := onlyTodo(e.s)
+		if todo.ID == "" {
+			t.Fatalf("%d todos, want 1", todoCount(e.s))
+		}
+		if todo.Title != "修登录崩溃" || todo.Notes != "修登录崩溃" || todo.Origin != "mask" || todo.DoneAt != nil || todo.Thread != nil {
+			t.Fatalf("todo %+v", todo)
+		}
+		if want := (TodoSource{Channel: channel.Feishu, ChatID: askSrc, MessageID: "om_nh1", Anchor: "om_dm1"}); todo.Source == nil || *todo.Source != want {
+			t.Fatalf("source %+v, want %+v", todo.Source, want)
+		}
+		if todo.Supervision == nil || todo.Supervision.Supervisor != "mask" {
+			t.Fatalf("supervision %+v", todo.Supervision)
+		}
+		if database != nil {
+			if all, err := database.ListTodoSources(context.Background()); err != nil || all[todo.ID].Anchor != "om_dm1" || all[todo.ID].MessageID != "om_nh1" {
+				t.Fatalf("stored sources %+v %v", all, err)
+			}
+		}
+		// The first message is a new one in the private chat, with the words, where it came from and how to stop the
+		// report; no topic is opened anywhere, and the group it was asked in is not written to.
+		dm := textsToDM(e.f)
+		if len(dm) < 2 || dm[0]["reply_to"] != nil {
+			t.Fatalf("private chat texts %v", dm)
+		}
+		root, _ := dm[0]["text"].(string)
+		if !strings.HasPrefix(root, e.said("elsewhere_root", i18n.Args{"text": "修登录崩溃"})) || !strings.Contains(root, e.said("elsewhere_root_hint_chat")) || !strings.Contains(root, "/noreply") {
+			t.Fatalf("the first message %q", root)
+		}
+		if got := textsTo(e.f, askHome); len(got) != 0 || e.roots != 0 {
+			t.Fatalf("something went to the home group: %v", got)
+		}
+		if got := textsTo(e.f, askSrc); len(got) != 0 {
+			t.Fatalf("the group it was asked in was written to: %v", got)
+		}
+		// Told it is open, as a plain reply under the first message; the main conversation gets the words, and is told
+		// there is no topic; the run answers under the first message in the private chat.
+		want := e.said("thread_open_done", i18n.Args{"title": todo.Title}) + "\nhttps://hub.example.com/todos?id=" + todo.ID
+		if dm[1]["text"] != want || dm[1]["reply_to"] != "om_dm1" || dm[1]["in_thread"] != nil {
+			t.Fatalf("the second message %v, want %q under om_dm1", dm[1], want)
+		}
+		h := onlyHandoff(t, e.f)
+		if h.machine != "server" || h.session != "mask" || !strings.Contains(h.text, "修登录崩溃") || !strings.Contains(h.text, todo.ID) || !strings.Contains(h.text, "没有绑话题") {
+			t.Fatalf("handed over %+v", h)
+		}
+		runs := e.s.channelRuns(channel.Feishu)
+		if len(runs) != 1 || runs[0].ReplyTo != "om_dm1" || runs[0].Ext["chat"] != "" || runs[0].Ext["thread"] != "" {
+			t.Fatalf("runs %+v", runs)
+		}
+		// The original message is marked taken, and so is the first message by the run.
+		if got := reactions(e.f); !contains(got, "om_nh1") || !contains(got, "om_dm1") {
+			t.Fatalf("reactions %v", got)
+		}
+	})
+}
+
+// No home group and the request cannot be taken: it is answered under the message in its group, as with a home group, and
+// nothing is left in the private chat.
+func TestElsewhereWithNoHomeGroupFailuresLeaveNothing(t *testing.T) {
+	t.Run("no main conversation", func(t *testing.T) {
+		e := newAskEnv(t, nil)
+		e.home = ""
+		setSettings(t, e.s, func(v *Settings) { v.Main = "" })
+		e.ask(ownerAsk("om_nf1", "/ai 查一下"))
+		got := textsTo(e.f, askSrc)
+		if len(got) != 1 || !strings.Contains(got[0]["text"].(string), e.said("elsewhere_failed", i18n.Args{"error": ""})) || len(textsToDM(e.f)) != 0 || todoCount(e.s) != 0 || len(reactions(e.f)) != 0 {
+			t.Fatalf("texts %v, %d todos", e.f.appParams(AppFeishu, FeishuText), todoCount(e.s))
+		}
+	})
+	t.Run("the first message cannot be sent", func(t *testing.T) {
+		e := newAskEnv(t, nil)
+		e.home = ""
+		e.f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+			var m map[string]any
+			_ = json.Unmarshal(p, &m)
+			if m["chat_id"] == nil && m["reply_to"] == nil {
+				return nil, errors.New("network down")
+			}
+			return map[string]any{}, nil
+		})
+		e.ask(ownerAsk("om_nf2", "/ai 查一下"))
+		if todoCount(e.s) != 0 || len(reactions(e.f)) != 0 || len(textsTo(e.f, askSrc)) != 1 {
+			t.Fatalf("%d todos, reactions %v, texts %v", todoCount(e.s), reactions(e.f), e.f.appParams(AppFeishu, FeishuText))
+		}
+	})
 }
 
 // "/ai" alone has nothing to name a to-do by: asked for under the message, nothing is posted.
@@ -500,7 +584,7 @@ func TestOpenFromElsewhereIsIdentityAgnostic(t *testing.T) {
 		"no chat":                            {Channel: channel.Feishu, MessageID: "m", Text: "x"},
 		"no message":                         {Channel: channel.Feishu, ChatID: "c", Text: "x"},
 	} {
-		if _, err := e.s.openFromElsewhere(context.Background(), src); err == nil || errors.Is(err, errNoHome) || errors.Is(err, errNoWords) {
+		if _, err := e.s.openFromElsewhere(context.Background(), src); err == nil || errors.Is(err, errNoWords) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
@@ -1468,5 +1552,248 @@ func TestSourceReportClaimFollowsThePlanInTheStore(t *testing.T) {
 	e.clock.advance(sourceReportSweepWait)
 	if got := reportsTo(e.f, askSrc, "om_pl1"); len(got) != 1 || got[0]["text"] != "别处重排的结论" {
 		t.Fatalf("reports %v, want the store's text once", got)
+	}
+}
+
+// ---- no home topic group: the report back and "don't report back" go through the private chat ----
+
+// dmNotices are the notice lines written into the private chat as plain replies under message (the only line the bot writes
+// there that tells how to stop a report is the notice).
+func (e *askEnv) dmNotices(under string) []string {
+	var out []string
+	for _, p := range textsToDM(e.f) {
+		if txt, _ := p["text"].(string); p["reply_to"] == under && p["in_thread"] == nil && strings.Contains(txt, "/noreply") {
+			out = append(out, txt)
+		}
+	}
+	return out
+}
+
+// 6. The safety valve is not lost without a topic: the closed to-do shows the owner, in the private chat and under the
+// first message, what will be told and when (the text the store keeps), and tells the original message once when the
+// time has come, as it does for a to-do with a topic.
+func TestNoHomeReportIsShownInThePrivateChatThenTold(t *testing.T) {
+	forStores(t, func(t *testing.T, e *askEnv, database *db.DB) {
+		e.home = ""
+		e.ask(ownerAsk("om_nr1", "/ai 修登录崩溃"))
+		id := onlyTodo(e.s).ID
+		e.outcome(id, "已修好，登录不再崩溃。\nhttps://example.com/pr/1")
+		e.closeDone(id)
+		want := e.said("source_report_done") // nothing recorded: just done
+		if database != nil {
+			want = "已修好，登录不再崩溃。" // the outcome's sentence, not its links
+		}
+		notice := e.said("source_report_notice_chat", i18n.Args{"minutes": int(sourceReportDelay / time.Minute), "text": want})
+		var shown []map[string]any
+		for _, p := range textsToDM(e.f) {
+			if p["text"] == notice {
+				shown = append(shown, p)
+			}
+		}
+		if len(shown) != 1 || shown[0]["reply_to"] != "om_dm1" || shown[0]["in_thread"] != nil || len(textsTo(e.f, askHome)) != 0 {
+			t.Fatalf("the notice: %v, want one saying %q under om_dm1 in the private chat", shown, notice)
+		}
+		if todo := onlyTodo(e.s); todo.Source.ReportText != want || todo.Source.ReportDueAt == "" || todo.Source.ReportedAt != "" {
+			t.Fatalf("plan %+v", todo.Source)
+		}
+		e.clock.advance(sourceReportDelay - time.Second)
+		if got := reportsTo(e.f, askSrc, "om_nr1"); len(got) != 0 {
+			t.Fatalf("told before the time: %v", got)
+		}
+		e.clock.advance(2 * time.Second)
+		got := reportsTo(e.f, askSrc, "om_nr1")
+		if len(got) != 1 || got[0]["text"] != want || got[0]["chat_id"] != askSrc || got[0]["in_thread"] != nil {
+			t.Fatalf("reports %v, want one saying %q", got, want)
+		}
+		if todo := onlyTodo(e.s); todo.Source.ReportedAt == "" {
+			t.Fatalf("not marked as told: %+v", todo.Source)
+		}
+		// Reopened and done again: nothing more is told.
+		e.must("PATCH", "/api/v1/todos/"+id, `{"done":false}`)
+		e.closeDone(id)
+		e.clock.advance(time.Hour)
+		if got := reportsTo(e.f, askSrc, "om_nr1"); len(got) != 1 {
+			t.Fatalf("told %d times", len(got))
+		}
+	})
+}
+
+// dmReply is the owner's message in the private chat, a reply: root is the message the chain started with, parent the one it
+// answers.
+func dmReply(id, text, root, parent string) feishubot.MessageEvent {
+	var ev feishubot.MessageEvent
+	ev.Message.MessageID, ev.Message.ChatType, ev.Message.MessageType = id, "p2p", "text"
+	ev.Message.RootID, ev.Message.ParentID = root, parent
+	c, _ := json.Marshal(map[string]string{"text": text})
+	ev.Message.Content = string(c)
+	ev.Sender.SenderType, ev.Sender.SenderID.OpenID = "user", "ou_owner"
+	return ev
+}
+
+// 7. "Don't report back" for a to-do with no topic: said in the private chat as a reply to the first message, to the notice
+// or to something under them. It turns the report off, is recorded as the user's decision, goes to no Agent, and is
+// answered under the message.
+func TestNoHomeNoReplyInThePrivateChat(t *testing.T) {
+	for name, ev := range map[string]feishubot.MessageEvent{
+		"a reply to the first message":     dmReply("om_c1", "/noreply", "om_dm1", "om_dm1"),
+		"a reply to the notice":            dmReply("om_c1", "／NoReply", "om_dm1", "om_notice"),
+		"a reply under an answer":          dmReply("om_c1", "  /noreply  ", "om_dm1", "om_answer"),
+		"a reply whose root is the anchor": dmReply("om_c1", "/noreply", "om_dm1", ""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			database := todoTestDB(t)
+			e := newAskEnv(t, database)
+			e.home = ""
+			e.ask(ownerAsk("om_nn1", "/ai 修登录崩溃"))
+			id := onlyTodo(e.s).ID
+			e.closeDone(id)
+			if len(e.dmNotices("om_dm1")) != 1 {
+				t.Fatalf("notices %q", e.dmNotices("om_dm1"))
+			}
+			handed := len(handoffs(e.f))
+			e.deliver(ev)
+			note := textsToDM(e.f)
+			last := note[len(note)-1]
+			if last["text"] != e.said("source_noreply_done") || last["reply_to"] != "om_c1" || last["in_thread"] != nil {
+				t.Fatalf("answer %v", last)
+			}
+			if n := len(handoffs(e.f)); n != handed {
+				t.Fatalf("the command was passed on: %d messages sent (was %d)", n, handed)
+			}
+			if todo := onlyTodo(e.s); todo.Source == nil || !todo.Source.NoReport {
+				t.Fatalf("source %+v", todo.Source)
+			}
+			if all, _ := database.ListTodoSources(context.Background()); !all[id].NoReport {
+				t.Fatalf("stored %+v", all[id])
+			}
+			var found bool
+			for _, d := range decisionsOf(t, database, id) {
+				if d.Source == db.DecisionManual && d.Question == e.said("chat_question") && d.Choice == e.said("source_noreply_choice") && d.SourceMessage == "feishu-om_c1" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("no decision recorded: %+v", decisionsOf(t, database, id))
+			}
+			e.clock.advance(time.Hour)
+			if got := reportsTo(e.f, askSrc, "om_nn1"); len(got) != 0 {
+				t.Fatalf("reported although stopped: %v", got)
+			}
+		})
+	}
+}
+
+// A "/noreply" that is no reply to a to-do's first message, or a reply to some other message, is nobody's "don't report
+// back": it goes on as any message of the chat, and the report is left as it was.
+func TestNoHomeNoReplyNeedsAReplyToTheTodo(t *testing.T) {
+	e := newAskEnv(t, nil)
+	e.home = ""
+	e.ask(ownerAsk("om_nn2", "/ai 修登录崩溃"))
+	id := onlyTodo(e.s).ID
+	e.closeDone(id)
+	for i, ev := range []feishubot.MessageEvent{
+		dmReply("om_c2", "/noreply", "", ""),
+		dmReply("om_c3", "/noreply", "om_other", "om_other"),
+	} {
+		handed := len(handoffs(e.f))
+		e.deliver(ev)
+		if n := len(handoffs(e.f)); n != handed+1 {
+			t.Fatalf("%d: %d messages sent on (was %d), want the message to go on as any other", i, n, handed)
+		}
+		if todo := onlyTodo(e.s); todo.Source.NoReport {
+			t.Fatalf("%d: the report was turned off: %+v", i, todo.Source)
+		}
+	}
+	e.clock.advance(sourceReportDelay + time.Second)
+	if got := reportsTo(e.f, askSrc, "om_nn2"); len(got) != 1 {
+		t.Fatalf("reports %v", got)
+	}
+}
+
+// The notice is the owner's way to stop the report: where it cannot be shown (the first message in the private chat is gone,
+// so the line would land as a message of its own that nothing can be replied to), nothing is planned and nothing is told.
+func TestNoHomeNoticeThatCannotBeShownPlansNothing(t *testing.T) {
+	e := newAskEnv(t, nil)
+	e.home = ""
+	e.ask(ownerAsk("om_ng1", "/ai 修登录崩溃"))
+	id := onlyTodo(e.s).ID
+	e.f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+		var m map[string]any
+		_ = json.Unmarshal(p, &m)
+		if m["chat_id"] == nil && m["no_detour"] == true { // the first message was withdrawn
+			return nil, &feishubot.APIError{Code: 230011, Msg: "withdrawn"}
+		}
+		return map[string]any{}, nil
+	})
+	e.closeDone(id)
+	e.clock.advance(time.Hour)
+	if got := reportsTo(e.f, askSrc, "om_ng1"); len(got) != 0 || onlyTodo(e.s).Source.ReportDueAt != "" {
+		t.Fatalf("told or planned without a notice: %v %+v", got, onlyTodo(e.s).Source)
+	}
+	if len(e.dmNotices("om_dm1")) == 0 {
+		t.Fatal("the notice was never tried: the test does not cover what it says") // the fake hub records the refused tries too
+	}
+}
+
+// A planned report of a to-do with no topic survives a restart (the anchor is read back from the store), is told once, and
+// "/noreply" still works afterwards.
+func TestNoHomePlanSurvivesARestart(t *testing.T) {
+	database := todoTestDB(t)
+	e := newAskEnv(t, database)
+	e.home = ""
+	e.ask(ownerAsk("om_ns1", "/ai 修登录崩溃"))
+	id := onlyTodo(e.s).ID
+	e.outcome(id, "已修好")
+	e.closeDone(id)
+	if len(e.dmNotices("om_dm1")) != 1 {
+		t.Fatalf("notices %q", e.dmNotices("om_dm1"))
+	}
+	e2 := newAskEnv(t, database)
+	e2.home = ""
+	if err := e2.s.ensureTodosLoaded(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := onlyTodo(e2.s).Source; got == nil || got.Anchor != "om_dm1" {
+		t.Fatalf("source after the restart %+v", got)
+	}
+	e2.clock.advance(sourceReportDelay + time.Second)
+	if got := reportsTo(e2.f, askSrc, "om_ns1"); len(got) != 1 || got[0]["text"] != "已修好" {
+		t.Fatalf("reports %v", got)
+	}
+	if len(e2.dmNotices("om_dm1")) != 0 {
+		t.Fatalf("a second notice: %q", e2.dmNotices("om_dm1"))
+	}
+	// Told: "don't report back" says so.
+	e2.deliver(dmReply("om_c9", "/noreply", "om_dm1", "om_dm1"))
+	if got := textsToDM(e2.f); len(got) == 0 || got[len(got)-1]["text"] != e2.said("source_noreply_told") {
+		t.Fatalf("answer %v", got)
+	}
+}
+
+// A report that can never go is told to the owner where the notice was shown: for a to-do with no topic, the private chat.
+func TestNoHomeUnreachableReportIsToldInThePrivateChat(t *testing.T) {
+	e := newAskEnv(t, nil)
+	e.home = ""
+	e.ask(ownerAsk("om_nu1", "/ai 修登录崩溃"))
+	id := onlyTodo(e.s).ID
+	e.f.answerApp(AppFeishu, FeishuText, func(p json.RawMessage) (any, error) {
+		var m map[string]any
+		_ = json.Unmarshal(p, &m)
+		if m["chat_id"] == askSrc {
+			return nil, &rpc.Error{Code: CodeChatDenied, Message: "chat denied"}
+		}
+		return map[string]any{}, nil
+	})
+	e.closeDone(id)
+	e.clock.advance(sourceReportDelay + time.Second)
+	e.clock.advance(time.Hour)
+	var told bool
+	for _, p := range textsToDM(e.f) {
+		if txt, _ := p["text"].(string); p["reply_to"] == "om_dm1" && strings.HasPrefix(txt, e.said("source_report_unreachable", i18n.Args{"error": ""})) {
+			told = true
+		}
+	}
+	if !told || len(reportsTo(e.f, askSrc, "om_nu1")) != 1 || len(textsTo(e.f, askHome)) != 0 {
+		t.Fatalf("the owner was not told in the private chat: %v", e.f.appParams(AppFeishu, FeishuText))
 	}
 }

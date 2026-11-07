@@ -18,6 +18,8 @@ import (
 // Asking from any group (#6146, docs/bots.md "Asking from any group", docs/todos.md "Where it came from"). People who
 // work with many groups do not want an AI conversation in each: the owner writes "@bot /ai <what>" where the question
 // comes up, the work happens as a topic in the home topic group, and the outcome comes back as a reply to that message.
+// A topic group is not needed for it (Lark is one channel of Persona, not its shape): with no home topic group the
+// request is taken the same way in the owner's private chat with the bot, as a to-do bound to no topic.
 //
 // openFromElsewhere is the one way in: it takes a Source (the chat and message a request was made in, its words, the
 // message it replied to) and does not care who received it. The bot's gate (feishuElsewhere, below) is the first caller;
@@ -37,12 +39,8 @@ type Source struct {
 	Quote     string
 }
 
-var (
-	// errNoHome: no group chat is on as the home topic group, so there is nowhere to open the topic.
-	errNoHome = errors.New("no home topic group")
-	// errNoWords: the request has no words to name a to-do by.
-	errNoWords = errors.New("no words")
-)
+// errNoWords: the request has no words to name a to-do by.
+var errNoWords = errors.New("no words")
 
 const (
 	// elsewhereQuoteMax and elsewhereRootMax bound the quoted message and the topic's first message, in runes.
@@ -51,14 +49,14 @@ const (
 	// topicLookupTries and topicLookupWait: a message just sent into the home group may not show its topic at once.
 	topicLookupTries = 4
 	topicLookupWait  = 700 * time.Millisecond
-	// noHomeKeep bounds the group chats remembered as told there is no home group.
-	noHomeKeep = 200
 )
 
 // openFromElsewhere opens a new topic in the home topic group for the request in src, then does what a topic the owner
 // started does (openTodoIn): a to-do made of the words, bound to the topic, handed to the main conversation, with src
-// recorded on it so the outcome can be told there. The error says why not; errNoHome and errNoWords are the ones the
-// caller answers in its own words, every other error's text is fit to show.
+// recorded on it so the outcome can be told there. With no home topic group the request is not turned away: its first
+// message goes into the owner's private chat with the bot instead and the to-do is bound to no topic (openInOwnerChat).
+// The error says why not; errNoWords is the one the caller answers in its own words, every other error's text is fit to
+// show.
 func (s *Service) openFromElsewhere(ctx context.Context, src Source) (Todo, error) {
 	l := s.botLang(ctx)
 	if !slices.Contains(sourceChannels, src.Channel) || src.ChatID == "" || src.MessageID == "" {
@@ -78,21 +76,26 @@ func (s *Service) openFromElsewhere(ctx context.Context, src Source) (Todo, erro
 	if !st.Ready || st.Owner == "" {
 		return Todo{}, errors.New(i18n.T(l, "assistant-feishu.elsewhere_not_ready"))
 	}
-	home := st.HomeChat
-	if home == "" || !slices.Contains(st.Chats, home) {
-		return Todo{}, errNoHome
-	}
 	if _, _, why := s.openTarget(ctx, st); why != "" {
 		return Todo{}, errors.New(why) // before anything is posted: no stray topic when there is no one to take it
 	}
 
+	home := st.HomeChat
+	hasHome := home != "" && slices.Contains(st.Chats, home)
 	quote := clip(oneLine(src.Quote), elsewhereQuoteMax)
 	root := []string{i18n.T(l, "assistant-feishu.elsewhere_root", i18n.Args{"text": clip(text, elsewhereRootMax)})}
 	if quote != "" {
 		root = append(root, i18n.T(l, "assistant-feishu.elsewhere_root_quote", i18n.Args{"quote": quote}))
 	}
-	root = append(root, i18n.T(l, "assistant-feishu.elsewhere_root_hint"))
+	hint := "elsewhere_root_hint"
+	if !hasHome {
+		hint = "elsewhere_root_hint_chat"
+	}
+	root = append(root, i18n.T(l, "assistant-feishu."+hint))
 	rootText := strings.Join(root, "\n")
+	if !hasHome {
+		return s.openInOwnerChat(ctx, st, src, text, quote, rootText)
+	}
 
 	var posted struct {
 		MessageID string `json:"message_id"`
@@ -125,6 +128,40 @@ func (s *Service) openFromElsewhere(ctx context.Context, src Source) (Todo, erro
 		&TodoSource{Channel: src.Channel, ChatID: src.ChatID, MessageID: src.MessageID})
 	if fail != "" {
 		s.botNoteTo(ctx, topic.target(), posted.MessageID, fail) // the topic was opened: it says why nothing came of it
+		return Todo{}, errors.New(fail)
+	}
+	return todo, nil
+}
+
+// openInOwnerChat is openFromElsewhere with no home topic group to open a topic in: the request's first message (rootText)
+// goes into the owner's private chat with the bot, and the to-do made of it is bound to no topic. Everything else is as
+// with a topic (openTodoIn): the to-do, its supervision, the hand-over to the main conversation, the run answering under
+// the first message, and src recorded so the outcome is told where it was asked. The first message is the to-do's
+// anchor (TodoSource.Anchor): the report's notice is shown under it and "/noreply" said as a reply to anything under it
+// stops the report (chatNoReply, todo_source.go).
+func (s *Service) openInOwnerChat(ctx context.Context, st FeishuStatus, src Source, text, quote, rootText string) (Todo, error) {
+	l := s.botLang(ctx)
+	var posted struct {
+		MessageID string `json:"message_id"`
+	}
+	// No chat id: the owner's private chat. The key makes the same request, made again, land once.
+	err := s.appCall(ctx, AppFeishu, FeishuText, map[string]any{"text": rootText, "uuid": rootKey(src)}, &posted)
+	if err != nil || posted.MessageID == "" {
+		if err == nil {
+			err = errors.New("no message id")
+		}
+		return Todo{}, errors.New(i18n.T(l, "assistant-feishu.thread_open_failed", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
+	}
+	// The run that answers goes under the bot's own first message, in the private chat.
+	var ev feishubot.MessageEvent
+	ev.Message.MessageID, ev.Message.ChatType, ev.Message.MessageType = posted.MessageID, "p2p", "text"
+	c, _ := json.Marshal(map[string]string{"text": rootText})
+	ev.Message.Content = string(c)
+	ev.Sender.SenderType = "app"
+	todo, fail := s.openTodoIn(ctx, ev, st, feishubot.Content{Text: text}, text, quote, nil,
+		&TodoSource{Channel: src.Channel, ChatID: src.ChatID, MessageID: src.MessageID, Anchor: posted.MessageID})
+	if fail != "" {
+		s.botNoteTo(ctx, feishuTarget{}, posted.MessageID, fail) // the first message was posted: it says why nothing came of it
 		return Todo{}, errors.New(fail)
 	}
 	return todo, nil
@@ -168,9 +205,10 @@ func (s *Service) topicOfMessage(ctx context.Context, id string) (string, error)
 }
 
 // feishuElsewhere takes the owner's "@bot /ai …" from a group chat that is not opted in (FeishuFromElsewhere): the hub
-// handed it over after its own checks, and this is the second line of them. It opens the request in the home topic group
-// (openFromElsewhere) and puts an emoji on the message so the owner sees it was taken; what keeps it from opening is
-// answered under the message, in that group, and nowhere else. Anything that is not the owner's "/ai" is dropped.
+// handed it over after its own checks, and this is the second line of them. It opens the request in the home topic group,
+// or in the owner's private chat when there is none (openFromElsewhere), and puts an emoji on the message so the owner
+// sees it was taken; what keeps it from opening is answered under the message, in that group, and nowhere else. Anything
+// that is not the owner's "/ai" is dropped.
 func (s *Service) feishuElsewhere(ev feishubot.MessageEvent, st FeishuStatus) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -207,11 +245,6 @@ func (s *Service) feishuElsewhere(ev feishubot.MessageEvent, st FeishuStatus) {
 	}
 	_, err := s.openFromElsewhere(ctx, src)
 	switch {
-	case errors.Is(err, errNoHome):
-		if s.noHomeHintDue(ctx, msg.ChatID) {
-			say("elsewhere_no_home")
-		}
-		return
 	case errors.Is(err, errNoWords):
 		say("elsewhere_needs_text")
 		return
@@ -242,34 +275,4 @@ func (s *Service) elsewhereQuote(ctx context.Context, id string) string {
 		return ""
 	}
 	return clip(oneLine(c.Text), elsewhereQuoteMax)
-}
-
-// noHomeHintDue says whether the group chat is to be told, now, that there is no home topic group: once ever (kept with
-// the chat's state, so a restart does not tell it again).
-func (s *Service) noHomeHintDue(ctx context.Context, chatID string) bool {
-	b := &s.fbot
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	s.loadBotLocked(ctx)
-	if !b.loaded {
-		return false // the state cannot be read: better silent than told again and again
-	}
-	if _, ok := b.st.NoHome[chatID]; ok {
-		return false
-	}
-	if b.st.NoHome == nil {
-		b.st.NoHome = map[string]time.Time{}
-	}
-	b.st.NoHome[chatID] = b.clock()
-	for len(b.st.NoHome) > noHomeKeep { // the oldest are told again if they ask again
-		oldest := ""
-		for k, at := range b.st.NoHome {
-			if oldest == "" || at.Before(b.st.NoHome[oldest]) {
-				oldest = k
-			}
-		}
-		delete(b.st.NoHome, oldest)
-	}
-	s.saveBotStateLocked()
-	return true
 }

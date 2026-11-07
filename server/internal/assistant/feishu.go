@@ -80,9 +80,6 @@ type botState struct {
 	// first sweep with them on lets the cards already due go (feishu_nudge.go). Kept here so a restart while they are
 	// off does not nudge the backlog.
 	NudgeOffAt time.Time `json:"nudge_off_at,omitzero"`
-	// NoHome are the group chats told, once, that there is no home topic group to open a request in (chat -> when,
-	// feishu_elsewhere.go). Kept so a restart does not tell them again.
-	NoHome map[string]time.Time `json:"no_home,omitempty"`
 }
 
 // The bot's messages a reply is routed by: each turn binds several (its progress card or agent message, each answer
@@ -888,6 +885,9 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus, acti
 		// the hub does not hand any over yet, and this is the second line when it does (feishu_thread.go).
 		s.threadMessage(ctx, ev, st, content)
 		return
+	}
+	if !content.Forward && len(content.Media) == 0 && noReplyCommand(content.Text) && s.chatNoReply(ctx, ev) {
+		return // "don't report back" for a to-do taken in this chat with no topic to say it in (todo_source.go)
 	}
 	if _, _, isCommand := parseBotCommand(content.Text); isCommand && !content.Forward && len(content.Media) == 0 {
 		handled, rest := s.botCommand(ctx, st.Features, msg.MessageID, content.Text, msg.RootID, msg.ParentID)
