@@ -43,8 +43,9 @@ const (
 	portProbeWait = 3 * time.Second
 	maxPortTitle  = 60 // characters
 	// portProbeAgent is the User-Agent of the probe's GET /: a server can tell it from its real clients (the tests'
-	// servers do, as a node on the machine probes them too). Never rename it: installed nodes keep sending
-	// "persona-ports", and what recognizes the probe has to match them.
+	// servers do, as a node on the machine probes them too). A node installed before the Persona-only rename (#6079)
+	// sends "jarvis-ports" until it is replaced, so what recognizes the probe has to accept both (the tests'
+	// portProbeAgents). Renaming it again leaves every installed node's probe unrecognized the same way.
 	portProbeAgent = "persona-ports"
 )
 

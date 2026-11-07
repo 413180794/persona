@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,10 @@ type apiSeen struct {
 	Method, Path, Query, Auth, Origin, Host, Account, Cookie, Other, Body string
 }
 
+// portProbeAgents are the User-Agents of the port probe of any node a machine may run: today's, and that of a node
+// installed before the Persona-only rename (#6079), which keeps sending it until it is replaced.
+var portProbeAgents = []string{portProbeAgent, "jarvis-ports"}
+
 type fakeAPI struct {
 	*httptest.Server
 	mu   sync.Mutex
@@ -47,7 +52,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	t.Helper()
 	a := &fakeAPI{}
 	a.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/" && r.Header.Get("User-Agent") == portProbeAgent {
+		if r.Method == http.MethodGet && r.URL.Path == "/" && slices.Contains(portProbeAgents, r.Header.Get("User-Agent")) {
 			// A Persona node on the machine running these tests (the tests run under its agents) finds this server
 			// among an agent's ports and probes it (ports.go): that GET / is not a request the gate passed on. Only
 			// the probe's whole shape is left out, never a request the gate forwards.
@@ -82,6 +87,12 @@ func TestFakeAPIIgnoresPortProbes(t *testing.T) {
 	api := newFakeAPI(t)
 	if got := probePort(context.Background(), portOf(t, api.URL), "127.0.0.1"); !got.http {
 		t.Fatalf("the probe did not reach the API: %+v", got)
+	}
+	// A node installed before the rename probes the same way under its old name.
+	for _, agent := range portProbeAgents {
+		if code, _ := send(t, "GET", api.URL+"/", "", "User-Agent", agent); code != http.StatusOK {
+			t.Fatalf("the probe as %s: %d", agent, code)
+		}
 	}
 	if seen := api.requests(); len(seen) != 0 {
 		t.Fatalf("a port probe counted as the gate's request: %+v", seen)
