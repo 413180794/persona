@@ -168,15 +168,15 @@ def out_machine(m):
 def out_machines():
     """MACHINES as GET /api/v1/machines and the machines push serve them."""
     if not reshaped():
-        return MACHINES
-    return [out_machine(m) for m in MACHINES if kept(m["id"])]
+        return [stamp_machine(m) for m in MACHINES] if _stamps() else MACHINES
+    return [stamp_machine(out_machine(m)) for m in MACHINES if kept(m["id"])]
 
 
 def out_by_machine(rows):
     """Sessions or interactions of the machines served only (each row has machine_id)."""
     if not reshaped():
-        return rows
-    return [x for x in rows if kept(x.get("machine_id"))]
+        return [stamp_row(x) for x in rows] if _stamps() else rows
+    return [stamp_row(x) for x in rows if kept(x.get("machine_id"))]
 
 
 def endpoint(host, port, scheme, kind):
@@ -1793,7 +1793,7 @@ def sorted_todos():
 def push_todos():
     for send, _ in list(LIVE):
         try:
-            send({"type": "todos"})
+            send(from_default({"type": "todos"}))
         except Exception:
             pass
 
@@ -1849,13 +1849,18 @@ RECORDING_DAYS = int(os.environ.get("MOCK_RECORDING_DAYS", "14"))
 
 # The managers' roster (docs/managers.md): the hub's own assistant (the default), one on another computer, one offline,
 # one still installing. MOCK_MANAGER_COMMANDS=1 adds the install commands to a new code's answer; MOCK_MANAGERS=0 is a
-# hub from before the roster (404).
+# hub from before the roster (404); MOCK_MANAGERS=1 only the hub's own (one manager: no switcher, no grouping).
 def _managers_seed():
+    if os.environ.get("MOCK_MANAGERS") == "1":
+        return [{"id": "assistant", "name": "助手", "online": True, "builtin": True, "host": "server", "os": "linux", "arch": "amd64",
+                 "deploy": "child", "version": "1.0.0", "since": ago(hours=5)}]
     return [
         {"id": "assistant", "name": "助手", "online": True, "builtin": True, "host": "server", "os": "linux", "arch": "amd64",
          "deploy": "child", "version": "1.0.0", "since": ago(hours=5)},
         {"id": "m-3fa21c", "name": "工作", "online": True, "host": "MacBook", "os": "darwin", "arch": "arm64",
-         "deploy": "service", "version": "1.0.0", "since": ago(minutes=42)},
+         "deploy": "service", "version": "1.0.0", "since": ago(minutes=42),
+         # MOCK_MANAGER_OUTDATED=1: it reads no manager.json of its own (no config.own): the hub marks it while online
+         **({"needs_update": True} if os.environ.get("MOCK_MANAGER_OUTDATED") == "1" else {})},
         {"id": "m-8b04d2", "name": "家里", "online": False, "host": "NAS", "os": "linux", "arch": "amd64",
          "deploy": "docker", "version": "0.9.8", "last_seen": ago(hours=3)},
         {"id": "m-c1e9f0", "name": "测试", "online": False,
@@ -1869,6 +1874,156 @@ def _managers_seed():
 
 
 MANAGERS = {"list": _managers_seed(), "default": "assistant"}
+
+
+# What belongs to the other managers (docs/protocol.md「Per-manager routing」): the hub's merged lists stamp every item
+# with `manager`, and computers, sessions and cards carry their computer's, with one manager too (MOCK_MANAGERS=1: all
+# the hub's own). 工作 has the MacBook, an inbox item and the second extension; 家里 (offline) a mail and the third
+# extension, and with MOCK_MANAGER_NAS=1 the NAS. A hub from before the roster (MOCK_MANAGERS=0) stamps nothing.
+# A computer of an offline manager is offline with the hub's words for it (devices_link.go offlineLocal): so 家里 has
+# none by default, and the computers the other screenshots count stay as they were.
+MANAGED_MACHINES = {"macbook": "m-3fa21c", **({"nas": "m-8b04d2"} if os.environ.get("MOCK_MANAGER_NAS") == "1" else {})}
+# With the NAS 家里's, the agent it had: the hub keeps an offline manager's sessions, in state unknown (stamp_row).
+NAS_BACKUP = "0b4c0e5a-0000-4000-8000-000000000001"
+if "nas" in MANAGED_MACHINES and any(m["id"] == "nas" for m in MACHINES) and not any(x["machine_id"] == "nas" for x in SESSIONS):
+    SESSIONS.append(sess("nas", NAS_BACKUP, "备份脚本", "/home/me/code/backup", "idle", "idle", "backup", 1, "1", 1, 200,
+                         "备份改成增量了。", seen_at=ago(minutes=190)))
+# hub-assistant_link.offline (zh-Hans): what the hub puts in an offline manager's computers' error
+MANAGER_OFFLINE_ERROR = "助手暂时连不上，稍后再试"
+MANAGED_INBOX = {"lark:f3:300": "m-3fa21c", "mail:acc1:t3:503": "m-8b04d2"}
+# extensions / plugins / connectors of the other managers: by position among the ones not built in. The built-ins
+# (source "builtin": cua, ego, imessage, voice…) are every manager's own, as each one's extmgr adds them (extensions.go
+# AddBuiltin), so the merged list has them once per installed manager.
+MANAGED_LIST_AT = {1: "m-3fa21c", 2: "m-8b04d2"}
+
+
+def _stamps():
+    """Whether the hub stamps `manager`: every hub with a roster does, one manager or several."""
+    return os.environ.get("MOCK_MANAGERS") != "0"
+
+
+def from_default(msg):
+    """A live update the mock's assistant (the default manager) sends: the hub stamps `manager` on another manager's
+    than the assistant it starts (ws.broadcast, docs/protocol.md「Messages to the App」)."""
+    d = MANAGERS["default"]
+    return dict(msg, manager=d) if _stamps() and d != "assistant" else msg
+
+
+def _manager_known(mid):
+    return any(m["id"] == mid for m in MANAGERS["list"])
+
+
+def stamp_managers(path, obj):
+    """The merged lists' `manager` on each item, as the hub adds it; the default manager's items too."""
+    if not _stamps() or not isinstance(obj, dict): return obj
+    dflt = MANAGERS["default"]
+    if path == "/api/v1/inbox" and isinstance(obj.get("items"), list):
+        obj = dict(obj, items=[dict(x, manager=MANAGED_INBOX.get(x.get("id"), dflt) if _manager_known(MANAGED_INBOX.get(x.get("id"), dflt)) else dflt)
+                               if isinstance(x, dict) else x for x in obj["items"]])
+    for key in ("extensions", "plugins", "connectors"):
+        if path == "/api/v1/" + key and isinstance(obj.get(key), list):
+            obj = dict(obj, **{key: merged_by_manager(obj[key])})
+    return obj
+
+
+def merged_by_manager(items):
+    """A merged list as the hub writes it (ownership.go mergeList): the default's answer first, then each other installed
+    manager's (by id; an offline one's kept answer too), every item stamped. Each answer has the built-ins and that
+    manager's own ones."""
+    dflt = MANAGERS["default"]
+    installed = sorted(m["id"] for m in MANAGERS["list"] if not m.get("installing"))
+    order = [dflt] + [m for m in installed if m != dflt]
+    builtin = lambda x: isinstance(x, dict) and x.get("source") == "builtin"
+    owner, rest = {}, [x for x in items if not builtin(x)]
+    for i, x in enumerate(rest):
+        mid = MANAGED_LIST_AT.get(i, dflt)
+        owner[id(x)] = mid if mid in order else dflt
+    out = []
+    for mid in order:
+        for x in items:
+            if not isinstance(x, dict):
+                if mid == dflt: out.append(x)
+            elif builtin(x) or owner.get(id(x)) == mid:
+                out.append(dict(x, manager=mid))
+    return out
+
+
+def machine_manager(mid):
+    """Who a computer belongs to: the manager it was moved to (POST /api/v1/managers/{id}/machines), else the carrier,
+    the assistant the hub starts (ownership.go entryOwner: not the default)."""
+    owner = MANAGED_MACHINES.get(mid, "assistant")
+    return owner if _manager_known(owner) else "assistant"
+
+
+def stamp_row(x):
+    """A session or a card: its computer's manager (the hub's `manager` on them). A session on a computer of an offline
+    manager is in state unknown, as the hub marks them (offlineLocal → markUnknownLocked); its cards stay."""
+    if not _stamps() or not isinstance(x, dict): return x
+    owner = machine_manager(x.get("machine_id"))
+    x = dict(x, manager=owner)
+    if "state" in x and "session_id" in x and not next((m for m in MANAGERS["list"] if m["id"] == owner), {}).get("online", True):
+        x["state"] = "unknown"
+    return x
+
+
+def stamp_machine(m):
+    if not _stamps(): return m
+    owner = machine_manager(m.get("id"))
+    m = dict(m, manager=owner)
+    if not next((x for x in MANAGERS["list"] if x["id"] == owner), {}).get("online", True):
+        # its manager is gone: offline, with the hub's words (no error_code), until the manager reports it again
+        m.update(online=False, error=MANAGER_OFFLINE_ERROR)
+        m.pop("error_code", None)
+    return m
+
+
+def assistant_for_manager(h):
+    """X-Persona-Manager on the assistant's routes: 工作 has no main conversation yet, an offline one answers 503
+    assistant_offline as the hub does; the default (or none) is the mock's assistant as before. None: not handled."""
+    mid = h.headers.get("X-Persona-Manager") or (parse_qs(urlparse(h.path).query).get("manager") or [""])[0]
+    if not mid or mid == MANAGERS["default"]: return None
+    m = next((x for x in MANAGERS["list"] if x["id"] == mid), None)
+    if not m: return ({"error": "no manager %r" % mid, "code": "no_manager"}, 404)
+    if not m.get("online"): return ({"error": "管理者「%s」离线" % m["name"], "code": "assistant_offline"}, 503)
+    st = assistant_state("", False)
+    notes = MANAGER_NOTES.get(mid, "")
+    st = {k: v for k, v in st.items() if k not in ("main", "notes")}
+    return (dict(st, conversations=[], tasks=[], notes=notes, notes_effective=notes), 200)
+
+
+# Each other manager's own 说明 (设置 › 助手 with its X-Persona-Manager): a whole assistant has its own.
+MANAGER_NOTES = {"m-3fa21c": "这是「工作」管理者：只管工作电脑上的事和工作邮箱。"}
+
+
+def manager_moves_route(h, method, p, raw):
+    """POST /api/v1/managers/{id}/machines {machine_id} and …/sources {source, from?} (docs/managers.md「Moving a
+    machine or a source」): the computer or the mail account goes to manager id; machines are pushed again. raw is the
+    request's body, read as JSON only once the path is one of these (other POSTs carry files, images…)."""
+    parts = p.split("/")
+    if method != "POST" or len(parts) != 6 or parts[5] not in ("machines", "sources") or not p.startswith("/api/v1/managers/"):
+        return False
+    try:
+        body = json.loads(raw or b"{}")
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return h.send_json({"error": "the body is a JSON object"}, 400) or True
+    m = next((x for x in MANAGERS["list"] if x["id"] == parts[4]), None)
+    if not m: return h.send_json({"error": "no manager %r" % parts[4], "code": "no_manager"}, 404) or True
+    if m.get("installing"): return h.send_json({"error": "this manager is not installed yet", "code": "installing"}, 409) or True
+    if parts[5] == "machines":
+        mid = body.get("machine_id") or ""
+        if not any(x["id"] == mid for x in MACHINES): return h.send_json({"error": "no machine %r" % mid, "code": "not_movable"}, 400) or True
+        was = machine_manager(mid)
+        if m["id"] == "assistant": MANAGED_MACHINES.pop(mid, None)  # back to the carrier
+        else: MANAGED_MACHINES[mid] = m["id"]
+        for send, _ in list(LIVE):
+            try: send({"type": "machines", "machines": out_machines()})
+            except Exception: pass
+        return h.send_json({"machine_id": mid, "manager": m["id"], "from": was}) or True
+    src = body.get("source") or ""
+    if not src.startswith("mail:"): return h.send_json({"error": "only mail accounts move so far", "code": "not_movable"}, 400) or True
+    return h.send_json({"source": src, "manager": m["id"], "from": body.get("from") or MANAGERS["default"]}) or True
 
 
 def _managers_changed():
@@ -1951,7 +2106,13 @@ def managers_route(h, method, p):
             return h.send_json({"error": "the hub runs this manager itself", "code": "builtin_manager"}, 409) or True
         if m["id"] == dflt:
             return h.send_json({"error": "make another manager the default first", "code": "default_manager"}, 409) or True
-        ms.remove(m); _managers_changed()
+        ms.remove(m)
+        # its computers go back to the hub's own manager (step 3); its sources were in its own database
+        for mid in [k for k, v in MANAGED_MACHINES.items() if v == m["id"]]: MANAGED_MACHINES.pop(mid)
+        _managers_changed()
+        for send, _ in list(LIVE):
+            try: send({"type": "machines", "machines": out_machines()})
+            except Exception: pass
         return h.send_json({"ok": True}) or True
     return h.send_json({"error": "method"}, 405) or True
 
@@ -2695,7 +2856,7 @@ def retry_task(h, tid):
             if pt.get("todo_id") == tid:
                 pt["error"] = err
         for send, _ in list(LIVE):
-            try: send({"type": "task_plan", "plan": plan})
+            try: send(from_default({"type": "task_plan", "plan": plan}))
             except Exception: pass
 
     t.update(done_at=None, start_error="", reopened_at=ago(), updated_at=ago())
@@ -3803,6 +3964,7 @@ def scrolling_screen(cols, rows, typed="", tick=0):
 
 
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60,
+         "muted_managers": [],
          "island": {"preset": "a", "left": "", "right": "", "machine": ""},
          # quiet hours (#5806): never set until a client sets them; MOCK_QUIET_HOURS=1 starts with 23:00–07:00 on
          "quiet": {"enabled": True, "start": "23:00", "end": "07:00"} if os.environ.get("MOCK_QUIET_HOURS") else {"enabled": False, "start": "", "end": ""}}  # one device is enough
@@ -11280,6 +11442,8 @@ class H(BaseHTTPRequestHandler):
 
     def send_json(self, obj, status=200, headers=None):
         global LOST_RECEIPT
+        if self.command == "GET" and 200 <= status < 300:
+            obj = stamp_managers(urlparse(self.path).path, obj)
         if 200 <= status < 300 and self.command in ("POST", "PUT", "PATCH", "DELETE") and self.path.startswith("/api/v1/"):
             with FAULT_LOCK:
                 if LOST_RECEIPT:
@@ -11629,6 +11793,9 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p == "/api/v1/pins": return self.send_json(PINS)
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": TREE_MUTED, "allowed": []})
+        if p.startswith("/api/v1/assistant") and (other := assistant_for_manager(self)) is not None:
+            if p == "/api/v1/assistant" or other[1] != 200: return self.send_json(*other)
+            if p in ("/api/v1/assistant/tasks", "/api/v1/assistant/runs"): return self.send_json({"tasks": [], "runs": []})
         if p == "/api/v1/assistant":
             q = parse_qs(urlparse(self.path).query)
             return self.send_json(assistant_state(q.get("space", [""])[0], q.get("archived", [""])[0] == "1"))
@@ -12138,6 +12305,7 @@ class H(BaseHTTPRequestHandler):
         if file_ops_route(self, p, self.last_body): return
         if looks_route(self, self.command, p, self.last_body): return
         if recordings_route(self, self.command, p): return
+        if manager_moves_route(self, self.command, p, self.last_body): return
         if managers_route(self, self.command, p): return
         if providers_route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
@@ -13087,6 +13255,12 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.last_body or b"{}")
             PINS.update(spaces=list(body.get("spaces") or []), sessions=list(body.get("sessions") or []))
             return self.send_json(PINS)
+        if p == "/api/v1/assistant" and self.command == "PUT" and (other := assistant_for_manager(self)) is not None:
+            if other[1] != 200: return self.send_json(*other)
+            body = json.loads(self.last_body or b"{}")
+            mid = self.headers.get("X-Persona-Manager") or (parse_qs(urlparse(self.path).query).get("manager") or [""])[0]
+            if body.get("notes") is not None: MANAGER_NOTES[mid] = body["notes"]
+            return self.send_json(assistant_for_manager(self)[0])
         if p == "/api/v1/assistant" and self.command == "PUT":  # Settings › Assistant: only the fields sent change
             body = json.loads(self.last_body or b"{}")
             if body.get("machine_id"):
@@ -13248,6 +13422,8 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # Settings › Notifications
             body = json.loads(self.last_body or b"{}")
             PREFS.update({k: v for k, v in body.items() if k in ("input", "done", "live_activity", "lock_details")})
+            if isinstance(body.get("muted_managers"), list):  # 设置 › 管理者 › 推送通知
+                PREFS["muted_managers"] = [x for x in dict.fromkeys(body["muted_managers"]) if isinstance(x, str) and x]
             PREFS["island"].update({k: v for k, v in (body.get("island") or {}).items() if k in ("preset", "left", "right", "machine")})
             if isinstance(body.get("quiet"), dict):
                 PREFS["quiet"] = {k: body["quiet"].get(k, "") for k in ("enabled", "start", "end", "tz")}
@@ -13866,6 +14042,9 @@ def features():
 
 
 MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_EXTENSIONS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
+MOCK_HELP.append("MOCK_MANAGER_NAS=1  （默认的三个管理者）NAS 归离线的「家里」：像 hub 一样显示成离线，error 是 hub 的「助手暂时连不上，稍后再试」；它的一个 agent（备份脚本）状态 unknown")
+MOCK_HELP.append("MOCK_MANAGER_OUTDATED=1  设置 › 管理者：「工作」带 needs_update（它还不读自己的 manager.json，hub 在它在线时这样标）")
+MOCK_HELP.append("MOCK_MANAGERS=1  只有 hub 自己的管理者（没有切换、不分组，电脑、会话、卡片和合并的列表照样带 manager）；默认三个装好的（一个离线）：电脑、收件箱、扩展带 manager，会话和卡片跟它的电脑走；默认管理者换成别的时，模拟助手发的实时消息带它的 manager；助手页按 X-Persona-Manager 切换（工作：还没有主对话、有自己的说明，PUT 改它的；家里：503 assistant_offline；不认识的 404 no_manager）；POST /api/v1/managers/{id}/machines、…/sources 移电脑 / 邮箱，删掉的管理者的电脑回到 hub 自己的")
 MOCK_HELP.append("MOCK_MANAGER_EXPIRED=1  设置 › 管理者：多一个安装码过期了还没装的（码已过期，可以拿新的安装码），和一个过期超过 7 天的（像 hub 一样不在名册里）")
 MOCK_HELP.append("MOCK_MANAGER_COMMANDS=1  设置 › 管理者：新建 / 换个地方装的回答带安装命令（commands.service / docker）；MOCK_MANAGERS=0 是还没有名册的旧 hub（/api/v1/managers 404）")
 MOCK_HELP.append("MOCK_SENT=1|empty|nodb|forbidden|old  Settings > Sent as you (#5278, scripts/mock/sent_ledger_mock.py): 1 is about 70 made-up rows (four ways through the gate, one text of 4000 characters), empty has none, nodb is 503 no_database, forbidden 403, old a hub from before the ledger (404 with no code)")

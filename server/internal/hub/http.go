@@ -215,6 +215,8 @@ func (h *Hub) routes() http.Handler {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
+		// only the roster's managers: a removed one's id would hold one of the 64 places for good (notify.go)
+		prefs.MutedManagers = h.rosterManagers(r.Context(), prefs.MutedManagers)
 		raw, _ := json.Marshal(prefs)
 		prefs = devicePrefs(raw) // normalizes an unknown "done"
 		if err := h.push.setPrefsBy(r.PathValue("id"), principalOf(r.Context()).ID, prefs); err != nil {
@@ -845,7 +847,7 @@ type client struct {
 	deviceSessionID int64      // immutable after registration in Hub.clients
 }
 
-// sendJSON queues v without ever waiting: notifyWS calls it under h.mu, so a client too slow to take it is dropped
+// sendJSON queues v without ever waiting: notifyWSFrom calls it under h.mu, so a client too slow to take it is dropped
 // in the background (queue), not by a close that waits on its stuck connection.
 func (c *client) sendJSON(v any) {
 	b, err := json.Marshal(v)

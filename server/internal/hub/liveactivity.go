@@ -513,7 +513,8 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 	if fleetEmpty(st) && !st.Assistant {
 		return time.Time{} // ended by tick after fleetEndAfter, unless something comes back first
 	}
-	stats := la.h.fleetStats()
+	// whose agents the activity counts (one manager's: fleetLiveOf): a device that muted it gets no start alert
+	_, stats, from := la.h.fleetLiveOf()
 	for _, r := range rows {
 		d, ok := la.h.push.device(r.DeviceID)
 		if !ok {
@@ -550,9 +551,11 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 			la.mu.Unlock()
 			if !already {
 				la.markSent(r.DeviceID, dst, now, true)
-				// "Phone Muted" while a desktop is online, or the device's quiet hours (quiethours.go): the activity still
-				// starts, without its alert (desktops.go).
-				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline() || la.h.push.inQuiet(prefs)
+				// "Phone Muted" while a desktop is online, the device's quiet hours (quiethours.go), or the device turned off
+				// the pushes of the manager whose agents it counts (NotifyPrefs.MutedManagers): the activity still starts,
+				// without its alert (desktops.go).
+				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline() ||
+					la.h.push.inQuiet(prefs) || prefs.mutes(from)
 				la.sendStart(d, r, startPayloadIn(la.h.userLang(), dst, now, quiet))
 			}
 		}

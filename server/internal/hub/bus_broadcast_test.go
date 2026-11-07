@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -407,7 +408,8 @@ func TestACardShownAfterAMoveIsTakenBack(t *testing.T) {
 	}
 }
 
-// exactJSON: one JSON object, no key twice in an object, no case variant of a checked key, at any depth.
+// exactJSON: one JSON object, no key twice in an object, no case variant of a checked key at any depth or of the stamp
+// at the top level.
 func TestExactJSON(t *testing.T) {
 	for raw, ok := range map[string]bool{
 		`{"type":"inbox","a":{"b":[1,{"c":2}]},"d":[]}`: true,
@@ -418,11 +420,70 @@ func TestExactJSON(t *testing.T) {
 		`{"type":"inbox","TYPE":"x"}`:                   false,
 		`{"type":"inbox","a":{"Session_Id":"x"}}`:       false,
 		`{"type":"inbox","a":[[{"CONVERSATION":1}]]}`:   false,
-		`{"type":`: false,
-		``:         false,
+		`{"type":"inbox","Manager":"x"}`:                false,
+		`{"type":"inbox","a":{"Manager":"x"}}`:          true, // the sender's own field, below the stamp
+		`{"type":`:                                      false,
+		``:                                              false,
 	} {
 		if err := exactJSON([]byte(raw)); (err == nil) != ok {
 			t.Errorf("%s: %v", raw, err)
 		}
+	}
+}
+
+// What a manager tells the apps says whose it is: another manager's message carries top-level "manager" (its id, over
+// one it put there itself), from ws.broadcast and from its outbox alike; the assistant's carries none, as it never did.
+func TestABroadcastSaysWhoseItIs(t *testing.T) {
+	h, a, b := pathsHub(t, quiet, quiet)
+	app := wsApp(t, h)
+	got := broadcastsTo(t, app, b,
+		`{"type":"inbox","machine_id":"mb","note":"b-own"}`,
+		`{"type":"assistant_schedule","manager":"assistant","note":"b-claims-a"}`)
+	if err := b.call(t, assistantwire.MethodOutbox, assistantwire.Outbox{Items: []assistantwire.OutboxItem{
+		{ID: "o1", At: time.Now(), Message: json.RawMessage(`{"type":"todos","note":"b-outbox"}`)}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got = append(got, broadcastsTo(t, app, a,
+		`{"type":"assistant_feed","conversation":"s3","note":"a-own"}`,
+		`{"type":"inbox","manager":"m-0b0b0b","note":"a-claims-b"}`)...)
+	whose := map[string]string{}
+	for _, m := range got {
+		var note, manager string
+		_ = json.Unmarshal(m["note"], &note)
+		if raw, ok := m["manager"]; ok {
+			_ = json.Unmarshal(raw, &manager)
+			if manager == "" {
+				manager = "(" + string(raw) + ")"
+			}
+		}
+		whose[note] = manager
+	}
+	want := map[string]string{"b-own": "m-0b0b0b", "b-claims-a": "m-0b0b0b", "b-outbox": "m-0b0b0b", "a-own": "", "a-claims-b": ""}
+	if !reflect.DeepEqual(whose, want) {
+		t.Fatalf("whose each message is: %v, want %v", whose, want)
+	}
+	// A case variant of the stamp beside it, from either: dropped, as for the keys the hub reads.
+	got = broadcastsTo(t, app, b, `{"type":"inbox","Manager":"assistant","note":"FORGED 1"}`, `{"type":"inbox","MANAGER":"x","note":"FORGED 2"}`)
+	got = append(got, broadcastsTo(t, app, a, `{"type":"inbox","Manager":"m-0b0b0b","note":"FORGED 3"}`)...)
+	if marked(got, "FORGED") {
+		t.Fatalf("a case variant of manager reached the apps: %v", got)
+	}
+	// Below the top level it is the sender's own field (an extension event carrying a contact record): the message goes
+	// out whole, the stamp beside it.
+	var nested map[string]json.RawMessage
+	for _, m := range broadcastsTo(t, app, b, `{"type":"inbox","item":{"name":"Ann","Manager":"Bo"},"note":"nested"}`) {
+		if string(m["note"]) == `"nested"` {
+			nested = m
+		}
+	}
+	if nested == nil {
+		t.Fatal("a nested Manager field dropped the message")
+	}
+	var stamp string
+	var item map[string]string
+	_ = json.Unmarshal(nested["manager"], &stamp)
+	_ = json.Unmarshal(nested["item"], &item)
+	if stamp != "m-0b0b0b" || item["Manager"] != "Bo" {
+		t.Fatalf("stamp %q, item %v", stamp, item)
 	}
 }

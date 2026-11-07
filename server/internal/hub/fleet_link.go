@@ -318,18 +318,24 @@ func (h *Hub) pendingInteraction(id string) (proto.Interaction, bool) {
 // fleetLive is the Live Activity's content and numbers as the manager told them last.
 // The Live Activity is one per phone: it shows the default manager's, else the assistant's (manager_state.go).
 func (h *Hub) fleetLive() (FleetState, FleetStats) {
+	st, stats, _ := h.fleetLiveOf()
+	return st, stats
+}
+
+// fleetLiveOf is fleetLive with the manager whose it is: the activity counts that manager's computers' agents only.
+func (h *Hub) fleetLiveOf() (FleetState, FleetStats, string) {
 	def := h.defaultOwner(context.Background())
 	f := &h.reported
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	live := f.live
+	live, from := f.live, assistantwire.AssistantID
 	if l := f.lives[def]; l != nil && def != assistantwire.AssistantID {
-		live = l
+		live, from = l, def
 	}
 	if live == nil {
-		return FleetState{}, FleetStats{}
+		return FleetState{}, FleetStats{}, from
 	}
-	return live.State, live.Stats
+	return live.State, live.Stats, from
 }
 
 // waitInteraction asks the user on the phone for one of the hub's own features (a mail send, Cua's apps, ego's
@@ -567,7 +573,8 @@ func (h *Hub) deliverPush(n assistantwire.Notification) error {
 // deliverPushFrom delivers what manager from asks (notify.request): an assistant's push, an agent's finished turn, a
 // card. Only the center has apps and devices. Only about its own (ownership.go): a card's push is for a card it
 // reported that is pending, and the hub pushes its own copy of it; any other push names a machine and session of its
-// own, or none. What the extensions are told of it (agent.finished, agent.needs_you) goes to from's only.
+// own, or none. What the extensions are told of it (agent.finished, agent.needs_you) goes to from's only, and the
+// devices that muted from (NotifyPrefs.MutedManagers) get none of it.
 func (h *Hub) deliverPushFrom(from string, n assistantwire.Notification) error {
 	switch n.Kind {
 	case assistantwire.NotifyInput:
@@ -593,7 +600,7 @@ func (h *Hub) deliverPushFrom(from string, n assistantwire.Notification) error {
 		h.notifyDone(from, "done", n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body,
 			pushWants{Kind: "done", Took: time.Duration(n.TookMS) * time.Millisecond, Long: time.Duration(n.LongMS) * time.Millisecond})
 	case assistantwire.NotifyReply:
-		h.notifyReply(n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body)
+		h.notifyReply(from, n.DeviceID, n.Subtitle, n.SessionID, n.Title, n.Body)
 	default:
 		return fmt.Errorf("unknown notification kind %q", n.Kind)
 	}

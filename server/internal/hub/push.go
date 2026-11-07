@@ -210,6 +210,14 @@ func (p *Pusher) sendLocalizedQuiet(build localized, collapseID string, wants fu
 
 // sendLocalizedQuietTo is sendLocalizedQuiet that tells sent each device the push goes to (nil: nobody).
 func (p *Pusher) sendLocalizedQuietTo(build localized, collapseID string, wants func(NotifyPrefs) bool, rule quietRule, sent func(Device)) {
+	p.sendFrom("", build, collapseID, wants, rule, sent)
+}
+
+// sendFrom is sendLocalizedQuietTo for a push manager asked for (notify.request, its extensions' pushes, a computer's
+// personad notify): none to a device that turned that manager's pushes off (NotifyPrefs.MutedManagers), whatever else
+// it takes. "" is the hub's own push. wants keeps its meaning: nil (asked for explicitly) still goes past Phone Muted
+// and to an open desktop.
+func (p *Pusher) sendFrom(manager string, build localized, collapseID string, wants func(NotifyPrefs) bool, rule quietRule, sent func(Device)) {
 	if p == nil {
 		return
 	}
@@ -224,7 +232,7 @@ func (p *Pusher) sendLocalizedQuietTo(build localized, collapseID string, wants 
 			return false
 		}
 		prefs := devicePrefs(d.Prefs)
-		if rule == quietSkip && p.inQuiet(prefs) {
+		if prefs.mutes(manager) || rule == quietSkip && p.inQuiet(prefs) {
 			return false
 		}
 		if !byPrefs(prefs) {

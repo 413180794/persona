@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -34,7 +35,7 @@ func TestDevicePrefsStorageFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusInternalServerError || h.push.prefs("device") != defaultPrefs() {
+	if resp.StatusCode != http.StatusInternalServerError || !reflect.DeepEqual(h.push.prefs("device"), defaultPrefs()) {
 		t.Fatalf("failed write = %d, prefs = %+v", resp.StatusCode, h.push.prefs("device"))
 	}
 }

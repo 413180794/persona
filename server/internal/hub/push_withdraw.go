@@ -55,11 +55,11 @@ func newWithdrawals() withdrawals {
 }
 
 // sendCard pushes a card (sendLocalizedQuiet) and notes which devices that understand withdrawals it went to.
-func (p *Pusher) sendCard(build localized, id string, wants func(NotifyPrefs) bool, rule quietRule) {
+func (p *Pusher) sendCard(manager string, build localized, id string, wants func(NotifyPrefs) bool, rule quietRule) {
 	if p == nil {
 		return
 	}
-	p.sendLocalizedQuietTo(build, id, wants, rule, func(d Device) {
+	p.sendFrom(manager, build, id, wants, rule, func(d Device) {
 		if hasFeature(d, featureWithdraw) {
 			p.cardPushedTo(id, d.DeviceID)
 		}

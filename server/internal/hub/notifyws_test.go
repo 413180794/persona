@@ -15,6 +15,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -123,7 +124,7 @@ func TestWSNotifyInteractionAndAssistant(t *testing.T) {
 	// That it holds back the conversation's own finished push is the manager's (assistant TestFinishedPush…).
 }
 
-// A phone that stopped reading is dropped without waiting for its socket to close: notifyWS sends under h.mu, and a
+// A phone that stopped reading is dropped without waiting for its socket to close: notifyWSFrom sends under h.mu, and a
 // close that waited on the stuck connection (5 s for the close frame, 5 s more for the reply) held every machine's
 // events and every app's pushes with it.
 func TestWSNotifyDropsASlowClientWithoutHoldingTheHub(t *testing.T) {
@@ -246,7 +247,8 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	if k := got(); k != "" {
 		t.Fatalf("muted while a desktop is online, still got %q", k)
 	}
-	h.notifyWS(kindAlert, notifyPayload(notifyRequest{Title: "t", Level: levelActive}, "", ""), pushWants{Kind: "input"}.fn())
+	alert := notifyPayload(notifyRequest{Title: "t", Level: levelActive}, "", "")
+	h.notifyWSFrom("", kindAlert, func(i18n.Lang) map[string]any { return alert }, pushWants{Kind: "input"}.fn(), quietNone)
 	if k := got(); k != "" {
 		t.Fatalf("muted while a desktop is online, still got %q", k)
 	}

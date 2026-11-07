@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // POST /api/v1/notify lets an extension with the notify scope (or any full credential) alert the user's devices, at the level it
@@ -196,8 +197,10 @@ func (h *Hub) machineNameFor(in notifyRequest) string {
 
 // deliverNotify sends a validated notification to the devices that take them: the reply is {"sent":true}, or
 // {"sent":false,"reason":"muted"}. An error is the caller's (a payload too large for APNs). machine is the subtitle:
-// the machine's name, "" for none.
-func (h *Hub) deliverNotify(in notifyRequest, machine, extID string) (map[string]any, error) {
+// the machine's name, "" for none. manager is whose it is (an extension's manager, a computer's for its
+// `personad notify` or for a request naming that computer): devices that turned that manager's pushes off skip it;
+// "" (no extension and no computer of this hub named) is the hub's own, which no device mutes.
+func (h *Hub) deliverNotify(in notifyRequest, machine, extID, manager string) (map[string]any, error) {
 	if in.SessionID != "" && h.muted(in.MachineID, in.SessionID) {
 		return map[string]any{"sent": false, "reason": "muted"}, nil
 	}
@@ -211,13 +214,15 @@ func (h *Hub) deliverNotify(in notifyRequest, machine, extID string) (map[string
 	}
 	// Something that needs you: devices that turned off "Needs you" (prefs.input) get none of these either.
 	wants := pushWants{Kind: "input"}.fn()
-	h.push.send(payload, collapse, wants)
-	h.notifyWS(kindAlert, payload, wants)
+	build := func(i18n.Lang) map[string]any { return payload }
+	h.push.sendFrom(manager, build, collapse, wants, quietNone, nil)
+	h.notifyWSFrom(manager, kindAlert, build, wants, quietNone)
 	return map[string]any{"sent": true}, nil
 }
 
 // scriptNotify is a node's `personad notify` (node/scriptcli.go): the machine is the node's own, the session the one
-// that runs in the caller's pane when a hook told the node. It carries no extension and no actions.
+// that runs in the caller's pane when a hook told the node. It carries no extension and no actions, and is the
+// machine's manager's (machineOwner): a device that muted that manager gets none.
 func (m *Machine) scriptNotify(params json.RawMessage) (any, error) {
 	var in notifyRequest
 	if err := json.Unmarshal(params, &in); err != nil {
@@ -231,7 +236,7 @@ func (m *Machine) scriptNotify(params json.RawMessage) (any, error) {
 		return nil, err
 	}
 	in.Body = fitBody(in, m.cfg.Name)
-	return m.hub.deliverNotify(in, m.cfg.Name, "")
+	return m.hub.deliverNotify(in, m.cfg.Name, "", m.hub.machineOwner(m.cfg.ID))
 }
 
 // fitBody is in's body cut (ending in …) so that its push fits notifyPayloadMost. The node cuts a script's texts by
@@ -284,7 +289,17 @@ func (h *Hub) notifyRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusForbidden, codeOtherManager, errOtherManager)
 			return
 		}
-		res, err := h.deliverNotify(in, h.machineNameFor(in), extensionOf(p))
+		// Whose it is, for the devices that muted a manager: an extension's is its manager's; any other credential's that
+		// names a computer of this hub is that computer's manager's, as `personad notify` there (scriptNotify); else
+		// (no machine, or an id this hub has no computer for) the hub's own, as before.
+		manager := ""
+		switch {
+		case p.Role == roleExtension:
+			manager = p.Manager
+		case h.machineByID(in.MachineID) != nil:
+			manager = h.machineOwner(in.MachineID)
+		}
+		res, err := h.deliverNotify(in, h.machineNameFor(in), extensionOf(p), manager)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return

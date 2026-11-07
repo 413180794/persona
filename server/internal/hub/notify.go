@@ -1,8 +1,14 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"slices"
+	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
 )
 
 // When a "finished" push is worth sending (docs/server.md "Pushes"). Borrowed from Ovis (github.com/devswha/ovis,
@@ -68,6 +74,51 @@ type NotifyPrefs struct {
 	Look *FleetLook `json:"look,omitempty"`
 	// Quiet: this device's quiet hours (quiethours.go): no "Agent finished", and "Needs you" without sound, inside the window.
 	Quiet QuietHours `json:"quiet"`
+	// MutedManagers: the managers (their ids, docs/managers.md) whose pushes this device does not want (Settings ›
+	// Managers › one › Notifications). A push a manager asks for (notify.request, its extensions' pushes, a computer's
+	// `personad notify`) skips this device; the hub's own (pairing, a computer joining, updates) and the Live Activity
+	// are no manager's and still come.
+	MutedManagers []string `json:"muted_managers"`
+}
+
+// maxMutedManagers bounds what a device may store: far more managers than anyone runs. A write keeps only the
+// roster's managers (rosterManagers), so a removed manager's id does not take a place a new mute needs.
+const maxMutedManagers = 64
+
+// rosterManagers is ids (trimmed) without those the roster does not have, from one read of the roster bounded like a
+// device row write; when the roster can't answer (its database not answering) every id stays.
+func (h *Hub) rosterManagers(ctx context.Context, ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" && len(id) <= 64 {
+			out = append(out, id)
+		}
+	}
+	known := map[string]bool{assistantwire.AssistantID: true}
+	if s := h.managerStore(); s != nil && len(out) > 0 {
+		timeout := deviceStoreTimeout
+		if h.push != nil && h.push.storeTimeout > 0 {
+			timeout = h.push.storeTimeout
+		}
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		idents, err := s.BusIdentities(ctx)
+		if err != nil {
+			return out
+		}
+		for _, b := range idents {
+			if b.Role == bus.RoleManager {
+				known[b.ID] = true
+			}
+		}
+	}
+	// connected now: as rosterHas, a manager on the bus is the roster's even before the read sees it
+	return slices.DeleteFunc(out, func(id string) bool { return !known[id] && h.busConnOf(id) == nil })
+}
+
+// mutes says whether this device turned off the pushes of manager ("": the hub's own, never muted).
+func (p NotifyPrefs) mutes(manager string) bool {
+	return manager != "" && slices.Contains(p.MutedManagers, manager)
 }
 
 // TranslatePrefs mirrors Settings › Translation on a device.
@@ -128,7 +179,7 @@ const (
 )
 
 func defaultPrefs() NotifyPrefs {
-	return NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}
+	return NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}
 }
 
 // devicePrefs decodes what is stored for a device; anything missing or unknown is the default.
@@ -150,6 +201,13 @@ func devicePrefs(raw json.RawMessage) NotifyPrefs {
 	if p.Quiet.validate() != nil { // stored before a check, or by hand: off
 		p.Quiet = QuietHours{}
 	}
+	muted := make([]string, 0, len(p.MutedManagers))
+	for _, id := range p.MutedManagers {
+		if id = strings.TrimSpace(id); id != "" && len(id) <= 64 && !slices.Contains(muted, id) && len(muted) < maxMutedManagers {
+			muted = append(muted, id)
+		}
+	}
+	p.MutedManagers = muted // never null: the apps read a list, and its presence says the hub has the switch
 	if l := p.Look; l != nil && (l.Design == "" || len(l.Design) > 32 || len(l.Package) > 160) {
 		p.Look = nil // every push carries it, inside the activity's 4 KB
 	}

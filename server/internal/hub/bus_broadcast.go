@@ -25,6 +25,10 @@ import (
 //     regardless of case. A message with a key twice in one object, or with a key that differs only by case from one
 //     the hub checks, is dropped, and what the apps get is the message as the hub read it (marshalled again), not the
 //     bytes the manager sent.
+//   - whose it is: a message from any manager but the assistant the hub starts gets top-level "manager" (its id,
+//     replacing one it carried), so an app showing one manager's assistant page leaves the others' live updates out.
+//     The assistant's go without it, as they always did (one it carried is taken out): no "manager" is the
+//     assistant's (docs/protocol.md).
 
 // managerMessageTypes are the types the managers send the apps (internal/assistant Service.event, internal/extmgr
 // Manager.broadcast and broadcastExtension).
@@ -54,8 +58,14 @@ var hubMessageTypes = map[string]bool{
 	"extension_ui_stream": true, // reserved targeted transport; never a manager broadcast
 }
 
-// checkedKeys are the keys the hub reads to place a message: a key that differs from one only by case is refused.
+// checkedKeys are the keys the hub reads to place a message: a key that differs from one only by case is refused, at
+// any depth (ownRefs reads them at any depth).
 var checkedKeys = []string{"type", "machine_id", "session_id", "conversation"}
+
+// stampKeys are the keys the hub sets on the message itself: a key that differs from one only by case is refused at the
+// top level (a "Manager" beside the hub's stamp would read as the sender's to a lenient decoder); deeper down they are
+// the sender's own fields (a contact record's "Manager"), which the hub neither reads nor sets.
+var stampKeys = []string{ManagerQuery}
 
 // relayBroadcast is relayBroadcastFrom the assistant the hub starts.
 func (h *Hub) relayBroadcast(message json.RawMessage) error {
@@ -82,6 +92,11 @@ func (h *Hub) relayBroadcastFrom(from string, message json.RawMessage) error {
 	}
 	if err := h.ownRefs(from, m); err != nil {
 		return fmt.Errorf("%q: %w: dropped", clip(typ, 64), err)
+	}
+	if from == assistantwire.AssistantID {
+		delete(m, ManagerQuery) // the hub says whose a message is, not the message
+	} else {
+		m[ManagerQuery] = from
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -166,7 +181,8 @@ func (h *Hub) ownRefs(from string, v any) error {
 }
 
 // exactJSON refuses a JSON object the apps could read otherwise than the hub: one value and nothing after it, no key
-// twice in an object, no key that differs only by case from one the hub checks (checkedKeys), at any depth.
+// twice in an object, no key that differs only by case from one the hub checks (checkedKeys) at any depth, or from one
+// it sets (stampKeys) at the top level.
 func exactJSON(b []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
@@ -205,7 +221,11 @@ func exactJSON(b []byte) error {
 			if top.keys[k] {
 				return fmt.Errorf("key %q twice in an object", clip(k, 64))
 			}
-			for _, c := range checkedKeys {
+			checked := checkedKeys
+			if n == 1 {
+				checked = append(slices.Clip(checked), stampKeys...)
+			}
+			for _, c := range checked {
 				if k != c && strings.EqualFold(k, c) {
 					return fmt.Errorf("key %q is %q in another case", clip(k, 64), c)
 				}

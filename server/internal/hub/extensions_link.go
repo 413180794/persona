@@ -579,7 +579,8 @@ func (h *Hub) extAppCall(ctx context.Context, from string, p assistantwire.AppCa
 				return nil, true, err
 			}
 		}
-		h.push.sendLocalized(func(l i18n.Lang) map[string]any { return a.Payloads[string(l)] }, a.CollapseID, nil)
+		// the manager's extension's: not to the devices that turned that manager's pushes off
+		h.push.sendFrom(from, func(l i18n.Lang) map[string]any { return a.Payloads[string(l)] }, a.CollapseID, nil, quietNone, nil)
 		out = map[string]any{}
 	case extwire.HubPushBackground:
 		if err := h.pushPayloadAllowed(from, a.Payload); err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -21,14 +22,14 @@ func TestNotifyConfigDefaults(t *testing.T) {
 }
 
 func TestDevicePrefs(t *testing.T) {
-	if p := devicePrefs(nil); p != (NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
+	if p := devicePrefs(nil); !reflect.DeepEqual(p, NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}) {
 		t.Fatalf("default %+v", p)
 	}
-	if p := devicePrefs(json.RawMessage(`{"input":false,"done":"always","live_activity":false,"lock_details":true}`)); p != (NotifyPrefs{Input: false, Done: DoneAlways, LockDetails: true, Island: IslandPrefs{Preset: "a"}}) {
+	if p := devicePrefs(json.RawMessage(`{"input":false,"done":"always","live_activity":false,"lock_details":true}`)); !reflect.DeepEqual(p, NotifyPrefs{Input: false, Done: DoneAlways, LockDetails: true, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}) {
 		t.Fatalf("stored %+v", p)
 	}
 	// Only what was stored changes; nonsense falls back.
-	if p := devicePrefs(json.RawMessage(`{"done":"sometimes"}`)); p != defaultPrefs() {
+	if p := devicePrefs(json.RawMessage(`{"done":"sometimes"}`)); !reflect.DeepEqual(p, defaultPrefs()) {
 		t.Fatalf("unknown done %+v", p)
 	}
 	long := time.Minute
@@ -55,10 +56,10 @@ func TestPusherPrefsSurviveRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.register(Device{DeviceID: "d1", APNSToken: "tok"})
-	if got := p.prefs("d1"); got != (NotifyPrefs{Input: false, Done: DoneOff, Island: IslandPrefs{Preset: "a"}}) {
+	if got := p.prefs("d1"); !reflect.DeepEqual(got, NotifyPrefs{Input: false, Done: DoneOff, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}) {
 		t.Fatalf("%+v", got)
 	}
-	if got := p.prefs("unknown"); got != defaultPrefs() {
+	if got := p.prefs("unknown"); !reflect.DeepEqual(got, defaultPrefs()) {
 		t.Fatalf("unknown device %+v", got)
 	}
 }
@@ -80,7 +81,7 @@ func TestDevicePrefsAPI(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&p)
 		return p
 	}
-	if p := do("GET", ""); p != defaultPrefs() {
+	if p := do("GET", ""); !reflect.DeepEqual(p, defaultPrefs()) {
 		t.Fatalf("default %+v", p)
 	}
 	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/devices/phone-1/prefs", nil)
@@ -99,13 +100,13 @@ func TestDevicePrefsAPI(t *testing.T) {
 		t.Fatalf("timings %+v", timings)
 	}
 	// A partial update keeps the other field.
-	if p := do("PUT", `{"done":"always"}`); p != (NotifyPrefs{Input: true, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
+	if p := do("PUT", `{"done":"always"}`); !reflect.DeepEqual(p, NotifyPrefs{Input: true, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}) {
 		t.Fatalf("put %+v", p)
 	}
-	if p := do("PUT", `{"input":false}`); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
+	if p := do("PUT", `{"input":false}`); !reflect.DeepEqual(p, NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}) {
 		t.Fatalf("put input %+v", p)
 	}
-	if p := do("GET", ""); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
+	if p := do("GET", ""); !reflect.DeepEqual(p, NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}, MutedManagers: []string{}}) {
 		t.Fatalf("get after put %+v", p)
 	}
 	// The island is merged field by field like the rest.
