@@ -32,15 +32,22 @@ export function sessionHost(s: Session): string {
   return HOST_KINDS.includes(kind) ? kind : "herdr";
 }
 
-/** Where an agent was opened (#2526): "feishu" for a botmux session (a Feishu group's topic), "terminal" for a herdr
- *  pane; undefined for the rest (Orca, runtimes, apps), which carry no source tag. */
-export type SessionSource = "feishu" | "terminal";
+/** Where an agent was opened (#2526): "feishu" for a botmux session (a Feishu group's topic), "terminal" for a pane of a
+ *  terminal engine (herdr, the Herdr App's and Orca's terminals), "desktop" for a desktop app's own chat (a Codex App
+ *  thread, an Orca native chat, a Paseo agent); undefined for the rest (other runtimes, history no host lists), which
+ *  carry no mark. */
+export type SessionSource = "feishu" | "terminal" | "desktop";
 
 export function sessionSource(s: Session): SessionSource | undefined {
+  if (s.space_kind === "codex_app" || s.host === "paseo" || (s.source_kind === "runtime" && s.source_instance_id === "orca")) return "desktop";
   const host = sessionHost(s);
   if (host === "botmux") return "feishu";
-  if (host === "herdr" || host === "herdr-core") return "terminal";
-  return undefined;
+  return host ? "terminal" : undefined;
+}
+
+/** A source's name: its mark's tooltip and what a screen reader says for it. */
+export function sourceName(source: SessionSource): string {
+  return t(`lib-agent-groups.source_${source}`);
 }
 
 /** The hosts a list's sessions run in, so a row names its host only when there is more than one. */

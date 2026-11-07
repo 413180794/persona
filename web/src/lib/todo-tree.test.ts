@@ -83,14 +83,20 @@ describe("项目 › 待办 › Agent 三层树 (#2526)", () => {
   });
 });
 
-describe("来源：飞书群 / 终端 (#2526)", () => {
-  it("botmux 是飞书群，herdr 是终端，其余没有", () => {
+describe("来源：飞书群 / 终端 / 桌面端 (#2526)", () => {
+  it("botmux 是飞书群，终端引擎的窗格是终端，桌面 App 自己的对话是桌面端，其余没有", () => {
     expect(sessionSource(s("b", "idle", "/", { pane_id: "botmux:abc" }))).toBe("feishu");
     expect(sessionSource(s("h", "idle", "/", { pane_id: "w1:p1" }))).toBe("terminal");
-    expect(sessionSource(s("o", "idle", "/", { pane_id: "orca:1" }))).toBeUndefined();
+    expect(sessionSource(s("c", "idle", "/", { pane_id: "herdr-core:7" }))).toBe("terminal");
+    expect(sessionSource(s("o", "idle", "/", { pane_id: "orca:1" }))).toBe("terminal");
+    expect(sessionSource(s("x", "idle", "/", { space_kind: "codex_app", source_kind: "codex_history" }))).toBe("desktop");
+    expect(sessionSource(s("p", "idle", "/", { host: "paseo", source_kind: "runtime", source_instance_id: "paseo" }))).toBe("desktop");
+    expect(sessionSource(s("q", "idle", "/", { source_kind: "runtime", source_instance_id: "orca", space_kind: "orca" }))).toBe("desktop");
+    expect(sessionSource(s("d", "idle", "/", { source_kind: "runtime", source_instance_id: "dsh" }))).toBeUndefined();
     expect(sessionSource(s("n", "idle", "/"))).toBeUndefined();
     expect(matchesFilter(s("b", "idle", "/", { pane_id: "botmux:abc" }), "feishu", noMutes)).toBe(true);
     expect(matchesFilter(s("h", "idle", "/", { pane_id: "w1:p1" }), "feishu", noMutes)).toBe(false);
+    expect(matchesFilter(s("x", "idle", "/", { space_kind: "codex_app" }), "terminal", noMutes)).toBe(false);
   });
 });
 

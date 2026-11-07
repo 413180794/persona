@@ -71,6 +71,8 @@ const P: Record<string, React.ReactNode> = {
   shield: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
   key: <g><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></g>,
   terminal: <g><rect x="2" y="4" width="20" height="16" rx="2.5" /><path d="m6 9 3 3-3 3M12 15h5" /></g>,
+  // a desktop app's window, terminal's frame with a title bar: an agent in an app's own chat (the sidebar's source marks)
+  appWindow: <g><rect x="2" y="4" width="20" height="16" rx="2.5" /><path d="M2 9h20M5.5 6.5h.01M8.5 6.5h.01" /></g>,
   inbox: <g><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></g>,
   clock: <g><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></g>,
   book: <g><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></g>,

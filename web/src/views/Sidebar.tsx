@@ -7,7 +7,7 @@ import { t } from "../i18n";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, BOTMUX_HIDDEN_KEY, botmuxAndFilter, filterCounts, isBotmux, isSpaceMuted, matchingKeys, shownFilters, unreadOf, withoutBotmux, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { AGENT_SORT_KEY, AGENT_SORTS, agentSort, machineTreeByUpdate, projectsByUpdate, repoMachinesByUpdate, todoTreeByUpdate, type AgentSort } from "../lib/agent-sort";
-import { agentGrouping, AGENT_GROUPINGS, type AgentGrouping, awaitsReply, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
+import { agentGrouping, AGENT_GROUPINGS, type AgentGrouping, awaitsReply, buildAgentGroups, buildSpaces, hostsOf, isQuiet, sessionHost, sessionSource, sourceName, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { keyedRefs } from "../lib/keyed-refs";
 import { buildMachineTree, paneRoute, resolveTab, tabRowKeys, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
@@ -48,6 +48,7 @@ import { runningWorkflows, workflowLine, workflowShortLine } from "../lib/workfl
 import { ultracodeOn } from "../lib/ultracode";
 import { Rolling } from "../ui/Rolling";
 import { AppMark } from "../ui/AppMark";
+import { BrandMark } from "../ui/BrandMark";
 import { Icon, type IconName } from "../ui/icons";
 import { HerdrNotices } from "./agents/HerdrNotices";
 import { HubNoticeLine } from "./agents/HubNoticeRow";
@@ -1916,13 +1917,17 @@ const NavRow = memo(function NavRow({ k, reg, hover, active, to, go, icon, label
   );
 }, sameProps);
 
-/** Where the agent was opened (#2526): "Lark group" (botmux; a click opens its Feishu topic) or "Terminal" (herdr), each on its
- *  own tint. Nothing for other hosts. At the row's end, so the title starts where an untagged one does (#3043). */
+const SOURCE_ICON = { terminal: { name: "terminal", tone: "text-source-terminal" }, desktop: { name: "appWindow", tone: "text-source-desktop" } } as const;
+
+/** Where the agent was opened (#2526), as a mark: a terminal or a desktop app's window in its own color, Lark's mark for a
+ *  Lark group (a click opens its Feishu topic). Nothing for other sources. Its name is the tooltip and what a screen reader
+ *  reads. At the row's end, so the title starts where an unmarked one does (#3043). */
 export function SourceTag({ s, className }: { s: Session; className?: string }) {
   const source = sessionSource(s);
   if (!source) return null;
-  const label = t(`lib-agent-groups.source_${source}`);
-  const cls = cx("shrink-0 rounded-[4px] px-1 text-[10.5px] font-medium leading-4 whitespace-nowrap", className, source === "feishu" ? "bg-source-feishu-tint text-source-feishu" : "bg-source-terminal-tint text-source-terminal");
+  const label = sourceName(source);
+  const mark = source === "feishu" ? <BrandMark brand="lark" size={16} fit="badge" /> : <Icon name={SOURCE_ICON[source].name} size={14} className={SOURCE_ICON[source].tone} />;
+  const cls = cx("flex size-4 shrink-0 items-center justify-center", className);
   if (source === "feishu" && s.external_url) {
     // a link inside the row's link: opened by hand, so the row does not navigate too
     const open = (e: React.SyntheticEvent) => {
@@ -1930,13 +1935,14 @@ export function SourceTag({ s, className }: { s: Session; className?: string }) 
       e.stopPropagation();
       window.open(s.external_url, "_blank", "noopener");
     };
+    const title = t("lib-agent-groups.open_feishu_topic");
     return (
-      <span role="link" tabIndex={0} title={t("lib-agent-groups.open_feishu_topic")} aria-label={t("lib-agent-groups.open_feishu_topic")} onClick={open} onKeyDown={(e) => e.key === "Enter" && open(e)} className={cx(cls, "cursor-pointer hover:underline")}>
-        {label}
+      <span data-source={source} role="link" tabIndex={0} title={`${label} · ${title}`} aria-label={`${label} · ${title}`} onClick={open} onKeyDown={(e) => e.key === "Enter" && open(e)} className={cx(cls, "cursor-pointer rounded-[4px] hover:bg-hover-2")}>
+        {mark}
       </span>
     );
   }
-  return <span className={cls}>{label}</span>;
+  return <span data-source={source} role="img" title={label} aria-label={label} className={cls}>{mark}</span>;
 }
 
 /** A row's line under its title (rowLine, or draftLine): the red lead, then the words. */
@@ -2001,6 +2007,9 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   // ultracode on (#3428): the workflow mark in the AI colour right after the title; a row without it is drawn as before.
   // Not on an offline row: the node keeps the last value it saw after the process is gone, and a resume starts it off.
   const ultra = showState && st !== "offline" && ultracodeOn(s);
+  // where it was opened, marked at the row's end: not on a tab with several panes (endRoom), where a herdr tab is a
+  // terminal by definition, each pane's row under it says so, and the mark's room is the title's
+  const source = showState && !s.assistant && !endRoom ? sessionSource(s) : undefined;
   const link = (
     <a
       ref={(el) => {
@@ -2015,7 +2024,8 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
-      title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n${t("sidebar.todo_tag", { title: s.todo.title })}` : ""}${preview ? `\n${preview}` : ""}`}
+      // its mark's name is in the row's tooltip too: the mark steps aside while the row is hovered
+      title={`${sessionTitle(s)}${source ? `\n${sourceName(source)}` : ""}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n${t("sidebar.todo_tag", { title: s.todo.title })}` : ""}${preview ? `\n${preview}` : ""}`}
       // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there; the open row
       // keeps its ⋯ too, so it has room for it
       className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", active && CURRENT_ROW, // room for "N agents" and the ⋯ beside it (instead of the ⋯'s own)
@@ -2079,9 +2089,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
           <Icon name="todo" size={10} stroke={2} />
         </span>
       )}
-      {/* not on a tab with several panes (endRoom): a herdr tab is "Terminal" by definition, each pane's row under it says so,
-          and the tag's room is the title's */}
-      {showState && !s.assistant && !endRoom && <SourceTag s={s} className={aside} />}
+      {source && <SourceTag s={s} className={aside} />}
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
       {tail && <span className={cx("max-w-[72px] shrink-0 truncate text-[11px] text-ink-3", aside)}>{tail}</span>}
       {!tail && (st === "offline" || !showState) && <span className={cx("shrink-0 text-[11px] text-ink-3", aside)}>{ago(s.updated_at)}</span>}

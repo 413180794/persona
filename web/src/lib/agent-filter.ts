@@ -19,7 +19,7 @@ export const AGENT_FILTERS: { key: AgentFilter; label: string; state?: AgentStat
   { key: "working", label: stateName("working"), state: "working" },
   // working only on background commands that wait (#6045): its own chip, out of "Working"
   { key: "bg_waiting", label: stateName("bg_waiting"), state: "working" },
-  // where the agent was opened (#2526): a botmux session (its Feishu group) or a herdr pane
+  // where the agent was opened (#2526): a botmux session (its Feishu group) or a terminal engine's pane
   { key: "feishu", label: t("lib-agent-filter.feishu") },
   { key: "terminal", label: t("lib-agent-filter.terminal") },
 ];

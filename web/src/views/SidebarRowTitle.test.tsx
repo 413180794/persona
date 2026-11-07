@@ -1,5 +1,5 @@
 // An agent row behind a prefix keeps room for its title: the prefix gives way first, and a tab with several panes
-// (endRoom) leaves its "Terminal" tag to its pane rows.
+// (endRoom) leaves its terminal mark to its pane rows.
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Session } from "../lib/types";
@@ -32,8 +32,8 @@ describe("an agent row's title behind a prefix", () => {
     expect(html).not.toContain("--row-title-min");
   });
 
-  it("a tab with several panes leaves 终端 to the rows of its panes", () => {
-    expect(renderToStaticMarkup(<SessionRow {...props} prefix="release" />)).toContain(">终端<");
-    expect(renderToStaticMarkup(<SessionRow {...props} prefix="release" endRoom />)).not.toContain(">终端<");
+  it("a tab with several panes leaves its 终端 mark to the rows of its panes", () => {
+    expect(renderToStaticMarkup(<SessionRow {...props} prefix="release" />)).toContain('data-source="terminal"');
+    expect(renderToStaticMarkup(<SessionRow {...props} prefix="release" endRoom />)).not.toContain("data-source=");
   });
 });

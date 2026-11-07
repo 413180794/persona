@@ -40,6 +40,45 @@ describe("an agent's row", () => {
   });
 });
 
+describe("where an agent was opened, as a mark at its row's end (#2526)", () => {
+  const render = (patch: Partial<Session>, extra = {}) => renderToStaticMarkup(<SessionRow {...rowProps} s={{ ...session, ...patch }} active={false} {...extra} />);
+  const mark = (html: string) => html.match(/<span data-source="[^"]*"[^>]*>.*?<\/span>/)?.[0];
+  it("draws a terminal pane's as the terminal icon, named but without words", () => {
+    const html = render({ pane_id: "w1:p1" });
+    expect(mark(html)).toMatch(/aria-label="终端"/);
+    expect(mark(html)).toMatch(/title="终端"/);
+    expect(mark(html)).toContain("text-source-terminal");
+    expect(mark(html)).toContain("<svg");
+    expect(mark(html)).not.toMatch(/>终端</); // no visible word any more
+    expect(link(html)).toMatch(/title="整理文档\n终端/); // the row's tooltip names it too: the mark hides while hovered
+  });
+  it("draws a desktop app's own chat as a window, in its own color", () => {
+    for (const patch of [{ space_kind: "codex_app", source_kind: "codex_history" }, { host: "paseo", source_kind: "runtime", source_instance_id: "paseo" }]) {
+      const html = render(patch);
+      expect(mark(html)).toMatch(/aria-label="桌面端"/);
+      expect(mark(html)).toContain("text-source-desktop");
+      expect(mark(html)).not.toContain("text-source-terminal");
+    }
+  });
+  it("draws Lark's mark for a Lark group, a link to its topic when it has one", () => {
+    expect(mark(render({ pane_id: "botmux:oc_1/t1" }))).toMatch(/^<span data-source="feishu" role="img"[^>]*aria-label="飞书群"/);
+    const linked = mark(render({ pane_id: "botmux:oc_1/t1", external_url: "https://example.com/topic" }));
+    expect(linked).toMatch(/^<span data-source="feishu" role="link" tabindex="0"[^>]*aria-label="飞书群 · 在飞书里打开这个话题"/);
+    expect(linked).toContain("<img");
+  });
+  it("draws none for other sources, Persona's conversations and a tab with several panes", () => {
+    expect(mark(render({}))).toBeUndefined();
+    expect(mark(render({ source_kind: "runtime", source_instance_id: "dsh" }))).toBeUndefined();
+    expect(mark(render({ pane_id: "w1:p1", assistant: true }))).toBeUndefined();
+    expect(mark(render({ pane_id: "w1:p1" }, { endRoom: true }))).toBeUndefined();
+    expect(link(render({ pane_id: "w1:p1" }, { endRoom: true }))).not.toMatch(/\n终端/);
+  });
+  it("steps aside for the hover ⋯ like the rest of the row's end, and stays on the open row", () => {
+    expect(mark(render({ pane_id: "w1:p1" }))).toContain("group-hover/row:invisible");
+    expect(mark(renderToStaticMarkup(<SessionRow {...rowProps} s={{ ...session, pane_id: "w1:p1" }} active />))).not.toContain("invisible");
+  });
+});
+
 describe("an agent's row with 「Agent 行显示详情」 (#2430)", () => {
   const detailed: Session = { ...session, model: "claude-opus-5-5", context_tokens: 78000, context_window: 200000 };
   const render = (s: Session, extra = {}) => renderToStaticMarkup(<SessionRow {...rowProps} s={s} active={false} {...extra} />);

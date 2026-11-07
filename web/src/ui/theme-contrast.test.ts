@@ -8,7 +8,7 @@ import { contrast } from "./extension-theme";
 // (#2804); the same backgrounds extension themes are checked against (extension-theme.ts).
 const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 const BACKGROUNDS = ["page", "canvas", "surface", "inset", "hover", "hover-2", "field"];
-const TEXT = ["ink", "ink-2", "ink-3", "accent-ink", "attention", "green", "orange", "red", "ai"];
+const TEXT = ["ink", "ink-2", "ink-3", "accent-ink", "attention", "green", "orange", "red", "ai", "source-terminal", "source-desktop"];
 
 function tokens(scheme: "light" | "dark"): Record<string, string> {
   const block = (scheme === "light" ? /:root\s*\{([^}]+)\}/ : /\.dark\s*\{([^}]+)\}/).exec(css)?.[1] ?? "";

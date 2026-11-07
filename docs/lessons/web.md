@@ -1,5 +1,11 @@
 # Lessons: web UI and interactions
 
+## A word turned into an icon at a row's end (2026-11-07, sidebar source marks)
+
+- Everything at a sidebar row's end steps aside while the row is hovered (`group-hover/row:invisible`, for the ⋯). An icon's own `title` therefore never shows to a mouse user: the pointer that would hover the icon has already hidden it. Put the icon's name into the row's own tooltip as well, and keep `role=img` + `aria-label` on the icon for screen readers.
+- A source can only be told from fields the row already carries: there is no single "kind" field. Terminal engines put a pane ref in `pane_id` (`orca:` / `herdr-core:` prefixes, herdr bare); desktop apps' own chats have no pane and say so elsewhere (`space_kind: codex_app`, `host: paseo`, the `orca` runtime's `source_instance_id`). Test each with the fields a real node sends; the mock hub has none of the desktop ones.
+- In Playwright, `scroll_into_view_if_needed` did not scroll the sidebar's own `overflow-y-auto` list when the row was in the last few pixels of the window; `hover()` then fell outside it and `:hover` stayed false. Scroll with `page.mouse.wheel` over the list, then assert `el.matches(':hover')` before checking a hover state.
+
 ## Native extension delta boundaries (#5956)
 
 - Keep the generated native wire tree canonical until display. `readView` is intentionally a lossy legacy display reader; reducing its output loses field presence, required empty collections and unsupported native nodes. Validate/stage complete operations before committing, and never turn an invalid `before` into append.

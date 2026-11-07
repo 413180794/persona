@@ -37,11 +37,10 @@
      workflow run (#3434). */
   --ai: #5b4fd6;
   --ai-tint: #efedfb;
-  /* where an agent was opened (#2526): a Feishu group's topic (botmux) or a terminal pane (herdr) */
-  --source-feishu: #1d5fd6;
-  --source-feishu-tint: #e6eefc;
+  /* where an agent was opened (#2526), the color of its mark at the row's end: a terminal pane or a desktop app's own chat
+     (a Lark group's mark is Lark's own) */
   --source-terminal: #6a46c2;
-  --source-terminal-tint: #efe9fb;
+  --source-desktop: #0b7285;
   --tooltip-bg: #25272b;
   --tooltip-fg: #f6f7f8;
   --tooltip-muted: #a5a8ad;
@@ -89,10 +88,8 @@
   --danger-fill: #bd3038;
   --ai: #9c94ff;
   --ai-tint: #9c94ff24;
-  --source-feishu: #82aaff;
-  --source-feishu-tint: #4d7cff2e;
   --source-terminal: #bea3ff;
-  --source-terminal-tint: #9a7bff2e;
+  --source-desktop: #6fd3e3;
   --tooltip-bg: #111214;
   --tooltip-fg: #f2f3f4;
   --tooltip-muted: #a5a8ad;
@@ -137,10 +134,8 @@
   --color-danger-fill: var(--danger-fill);
   --color-ai: var(--ai);
   --color-ai-tint: var(--ai-tint);
-  --color-source-feishu: var(--source-feishu);
-  --color-source-feishu-tint: var(--source-feishu-tint);
   --color-source-terminal: var(--source-terminal);
-  --color-source-terminal-tint: var(--source-terminal-tint);
+  --color-source-desktop: var(--source-desktop);
   --color-tooltip-bg: var(--tooltip-bg);
   --color-tooltip-fg: var(--tooltip-fg);
   --color-tooltip-muted: var(--tooltip-muted);
