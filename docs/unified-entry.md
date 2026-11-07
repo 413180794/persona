@@ -211,8 +211,9 @@ Hub-inserted chat entries do not enter Claude's transcript (that would trigger a
 | `receipt` | Task finishes / fails to start / is interrupted by a model-service error (`interrupted`, #1516) | To-do ID; summary, changed-file count, tests, PR; interrupted receipts include original error `error` |
 | `routed` | You speak directly to a task | To-do ID; original text |
 | `message` | AI twin drafts a reply to an Inbox message related to a task | Inbox item ID; task, source, chat, sender, original message, draft |
-| `today` | First opening of this chat that day (App calls `POST …/today`) | Date; tasks completed overnight, waiting tasks, working count, remaining Lark meetings today, chats mentioning me, other unread counts, unsuccessful items since yesterday at 18:00 (failed-start tasks, failed / skipped scheduled tasks, #4124) |
+| `today` | First opening of this chat that day (App calls `POST …/today`) | Date; tasks completed overnight, waiting tasks, open supervised tasks awaiting review (`pending_review`, excluded from waiting / working / done), working count, remaining Lark meetings today, chats mentioning me, other unread counts, unsuccessful items since yesterday at 18:00 (failed-start tasks, failed / skipped scheduled tasks, #4124) |
 
+- The web Today card shows **Waiting for your review** when `pending_review` is nonempty (#4889): the task title for one item, or the count for several. **View** opens the first task, ordered by creation time like waiting tasks. The field is omitted when empty; older clients, including the unchanged iOS and Android Today cards, ignore it. Supervision state `needs_user` keeps its existing behavior.
 - `GET /api/v1/assistant/conversations/{id}/feed?since=`; WebSocket `assistant_feed` pushes new entries. The App merges them with the transcript by time.
 - Live plan-card / task-card state is not stored in the feed. Cards read current plan / to-do / session state by `ref`, updating in place.
 

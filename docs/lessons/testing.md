@@ -2,6 +2,8 @@
 
 Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUDE.md`, "Lessons"; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or start a section if none fits.
 
+- Go `-overlay` paths must match the source paths used by the build (#4889). When a checkout is reached through a symlink, mapping only its resolved path can leave the original file in use. Map both the logical and resolved paths, then confirm the mutation actually makes the regression test fail before treating it as evidence.
+
 - GitHub's GFM Markdown API inserts breaks between separate badge source lines (#6182). Put a badge group on one source line to keep it horizontal. When a private repository is unavailable to the browser, label API-rendered screenshots as previews, use GitHub styles, and resolve `<picture>` sources and badges from the verified branch assets.
 
 - Regenerate README assets before checking them (#6182). A committed Android 11 badge looked correct while the generator had no API 30 mapping and regenerated it as API 30. Compare every emitted badge and icon with its committed SVG, not only localized banners, and check HTML image/link paths as well as Markdown links.

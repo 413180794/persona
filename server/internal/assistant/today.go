@@ -20,6 +20,8 @@ type todayBody struct {
 	Date string `json:"date"` // the user's day, 2006-01-02
 	// Done: tasks of this conversation that finished since yesterday evening.
 	Done []todayTask `json:"done,omitempty"`
+	// PendingReview: open supervised tasks awaiting review, separate from Waiting / Working.
+	PendingReview []todayTask `json:"pending_review,omitempty"`
 	// Waiting / Working: the conversation's tasks waiting for the user, and going on.
 	Waiting []todayTask `json:"waiting,omitempty"`
 	Working int         `json:"working,omitempty"`
@@ -124,6 +126,10 @@ func (s *Service) ensureToday(ctx context.Context, conversation string) (FeedIte
 		}
 		slices.SortFunc(mine, func(a, b Todo) int { return a.CreatedAt.Compare(b.CreatedAt) })
 		for _, t := range mine {
+			if t.Supervision.state(t) == reviewPending {
+				body.PendingReview = append(body.PendingReview, todayTask{ID: t.ID, Title: t.Title})
+				continue
+			}
 			switch taskState(t, s.taskAgents(ctx, t)) {
 			case "needs_you", "interrupted":
 				body.Waiting = append(body.Waiting, todayTask{ID: t.ID, Title: t.Title})

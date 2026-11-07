@@ -53,6 +53,7 @@ export interface TodayBody {
   date: string;
   done?: { id: string; title: string }[];
   waiting?: { id: string; title: string }[];
+  pending_review?: { id: string; title: string }[];
   working?: number;
   meetings?: { start: string; end: string; title: string }[];
   at_me?: { name: string; unread?: number; preview?: string }[];

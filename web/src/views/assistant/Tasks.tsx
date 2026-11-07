@@ -847,6 +847,8 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
     rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? t("assistant-tasks.today_done_single", { title: body.done[0].title }) : t("assistant-tasks.today_done_n", { count: body.done.length }), detail: body.done.length > 1 ? body.done.map((d) => d.title).join(t("assistant-tasks.list_separator")) : undefined, action: t("assistant-tasks.look"), run: () => openTask(body.done![0].id) });
   if (body.waiting?.length)
     rows.push({ icon: "hand", tint: "bg-field text-attention", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), lines: waitingText ? waitingText.split("\n") : undefined, action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
+  if (body.pending_review?.length)
+    rows.push({ icon: "hand", tint: "bg-field text-attention", title: body.pending_review.length === 1 ? t("assistant-tasks.today_pending_review_single", { title: body.pending_review[0].title }) : t("assistant-tasks.today_pending_review_n", { count: body.pending_review.length }), action: t("assistant-tasks.go_look"), run: () => openTask(body.pending_review![0].id) });
   if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: t("assistant-tasks.today_working", { count: body.working }), action: t("assistant-tasks.all"), run: () => setBoard(true) });
   for (const m of (body.meetings ?? []).slice(0, 3)) {
     const at = formatDate(m.start, { hour: "2-digit", minute: "2-digit" });

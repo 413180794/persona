@@ -59,6 +59,8 @@
   "today_done_single": "已完成：{title}",
   "today_done_n_other": "已完成 {count} 个任务",
   "today_waiting_single": "需要你：{title}",
+  "today_pending_review_single": "等你验收：{title}",
+  "today_pending_review_n_other": "{count} 件等你验收",
   "today_waiting_n_other": "{count} 件需要你",
   "go_look": "去看",
   "today_working_other": "{count} 个任务工作中",

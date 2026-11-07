@@ -59,6 +59,8 @@
   "today_done_single": "完了：{title}",
   "today_done_n_other": "{count}件のタスクが完了",
   "today_waiting_single": "要対応：{title}",
+  "today_pending_review_single": "検収待ち：{title}",
+  "today_pending_review_n_other": "検収待ち{count}件",
   "today_waiting_n_other": "要対応{count}件",
   "go_look": "確認",
   "today_working_other": "{count}件のタスクが作業中",

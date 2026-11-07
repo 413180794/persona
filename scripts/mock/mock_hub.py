@@ -2762,6 +2762,14 @@ if MOCK_TASKS:
                                                              "evidence": ["https://github.com/example/weather/pull/42"]}),
             _feed("feed_r2", 3, "routed", "todo_task_tests", {"text": "用协议注入，先改网络层那 6 个文件", "interrupted": True}),
         ]
+    # MOCK_TASKS_PENDING_REVIEW=1: the Today card lists the stopped release-notes task waiting for review (#4889).
+    if os.environ.get("MOCK_TASKS_PENDING_REVIEW") == "1":
+        for _t in TODOS_INIT + TODOS:
+            if _t["id"] == "todo_task_release":
+                _t.update(done_at=None, supervision={"supervisor": ASK1, "state": "pending_review", "round": 0,
+                          "done_when": ["List this week's merged changes"], "reviews": [], "updated_at": ago(minutes=20)})
+        next(i for i in TASK_FEED[ASK1] if i["kind"] == "today")["body"]["pending_review"] = [
+            {"id": "todo_task_release", "title": "整理发布说明"}]
     # MOCK_TASKS_NOTICE=1: the line the hub writes when a routine runs again once the computer and model are ready
     # (#4253, kind notice, drawn by the clients since #4305), last in the conversation.
     if os.environ.get("MOCK_TASKS_NOTICE") == "1":

@@ -2373,8 +2373,10 @@ Tasks dispatched from an assistant chat ([unified-entry.md](unified-entry.md)). 
 //         "checks":[{"criterion","met","evidence"}]}; clients that don't know it skip this entry
 // message: ref is the Inbox entry id; the AI twin drafted a reply to a message related to the task:
 //         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"original words (truncated)","draft":"the draft"}; sending goes through the Inbox send endpoint
-// today: ref is the user's date for that day; {"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
+// today: ref is the user's date for that day; {"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"pending_review":[{"id","title"}],"working":2,
 //         "meetings":[{"start","end","title"}],"at_me":[{"name","unread","preview"}],"unread":5} (fields Lark didn't answer for are omitted)
+//         pending_review: this chat's open supervised tasks whose supervision state is pending_review, oldest created first (#4889).
+//         They appear only here, not in waiting, working or done, regardless of their agents' state. Omitted when empty; older clients ignore it.
 //         "failed":[{"kind":"task|routine","id","ref"?,"title","at","why"?,"skipped"?}],"failed_total":3: what hasn't succeeded since 18:00 yesterday (#4124):
 //         dispatched tasks from this chat that didn't start (kind task, id is the to-do) and failed / skipped scheduled-task runs (kind routine, id is the scheduled task, ref is that run),
 //         newest first, at most 8 entries; failed_total is the total count; why is a short one-line reason. Omitted when empty; old clients ignore it as unknown
