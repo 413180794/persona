@@ -54,3 +54,38 @@ nonisolated enum WatchText {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+/// A message on the watch's session page, read once when the page loads: what its bubble draws, not the hub's item.
+/// The page kept a whole page of items and read every one on each reload, enough for watchOS to kill the app in the
+/// background (#6256).
+nonisolated struct WatchMessage: Identifiable, Equatable, Sendable {
+    /// How many the page shows, the newest.
+    static let limit = 6
+
+    var id: String
+    var ts: Date?
+    var role: String
+    /// The words as the watch shows them (`WatchText.shown`).
+    var text: String
+    var from: String?
+    var clientMsgID: String?
+    /// Persona's message for the model (`Injected.of`): drawn as its line.
+    var injected: Injected?
+    /// Sent from a card's button (`AssistantActionSource`).
+    var fromCard: Bool
+
+    /// The newest messages of a page that have words to show, oldest first; the agent's work is left out.
+    static func latest(_ page: [Item]) -> [WatchMessage] {
+        var out: [WatchMessage] = []
+        for item in page.reversed() where item.kind == .text {
+            let raw = item.text ?? ""
+            let text = WatchText.shown(raw)
+            guard !text.isEmpty else { continue }
+            out.append(WatchMessage(id: item.id, ts: item.ts, role: item.role, text: text, from: item.from,
+                                    clientMsgID: item.clientMsgID, injected: Injected.of(item),
+                                    fromCard: item.role == "user" && AssistantActionSource.parse(raw) != nil))
+            if out.count == limit { break }
+        }
+        return out.reversed()
+    }
+}

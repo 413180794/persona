@@ -40,10 +40,9 @@ struct WatchAssistantFeedTests {
         var state = WatchAssistantFeed()
         let creation = try item(view(1))
         state.receive(.init(items: [creation]), conversation: "conversation")
-        var before = try JSON.decoder.decode(Item.self, from: Data(#"{"id":"before","seq":1,"role":"assistant","kind":"text","text":"之前"}"#.utf8))
-        before.ts = Date(timeIntervalSince1970: 90)
+        let before = WatchMessage(id: "before", ts: Date(timeIntervalSince1970: 90), role: "assistant", text: "之前", fromCard: false)
         var after = before
-        after.id = creation.id; after.seq = 2; after.ts = Date(timeIntervalSince1970: 110)
+        after.id = creation.id; after.ts = Date(timeIntervalSince1970: 110)
         #expect(state.lines([after, before]).map(\.id) == ["message:before", "view:feed_progress", "message:feed_progress"])
     }
     @Test func HTMLStillShowsOnlyThePlainTextFallback() throws {

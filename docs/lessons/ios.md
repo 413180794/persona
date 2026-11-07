@@ -540,6 +540,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 - Segment-queue callbacks reaching main are delayed. At stop, do not count only main-registered segments: stop `engine`, synchronously collect all finalized segments, then write final total; stopping exactly at a boundary still needs a separate end message.
 - watchOS Picker in compact VStack can flatten to a thin line, missed by compile / accessibility-existence checks. Use single-line toggle buttons for a few recording languages and inspect watch screenshots.
 - Recording and composer dictation share microphone ownership; failed / late stop callbacks must not close another user's audio session. Recording deletion retains tombstones against late watch transfers resurrecting items.
+- The watch app keeps running in the background while it records (`UIBackgroundModes: audio`, 2026-11-02), and the phone's summaries still arrive over WatchConnectivity then, so a page keyed on `model.lastUpdate` or a session's `rev` reloads in the background too. watchOS kills a background app over its CPU budget (`CAROUSEL 0xc51bad01`, #6256): gate page reloads on `scenePhase == .active`, and keep only what the page draws (`WatchMessage`, the newest few) instead of the hub's whole `Item` page, whose synthesized `Hashable` hashes nested tool input on every assignment.
 
 ## System capabilities and page conventions
 

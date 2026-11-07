@@ -3,13 +3,13 @@ import Foundation
 /// The watch reads live cards as text, retaining their creation positions and only newer view versions.
 nonisolated struct WatchAssistantFeed {
     enum Line: Identifiable, Sendable {
-        case message(Item)
+        case message(WatchMessage)
         case view(FeedItem)
         var id: String {
-            switch self { case .message(let item): "message:" + item.id; case .view(let item): "view:" + item.id }
+            switch self { case .message(let message): "message:" + message.id; case .view(let item): "view:" + item.id }
         }
         var at: Date {
-            switch self { case .message(let item): item.ts ?? .distantPast; case .view(let item): item.at }
+            switch self { case .message(let message): message.ts ?? .distantPast; case .view(let item): item.at }
         }
     }
     private(set) var items: [String: FeedItem] = [:]
@@ -35,7 +35,7 @@ nonisolated struct WatchAssistantFeed {
               view.id == id, view.conversation == item.conversation else { return AssistantCardText.mark }
         return WatchText.shown(view.view.fallback ?? AssistantCardText.mark)
     }
-    func lines(_ messages: [Item]) -> [Line] {
+    func lines(_ messages: [WatchMessage]) -> [Line] {
         (messages.map(Line.message) + items.values.map(Line.view)).sorted {
             if $0.at != $1.at { return $0.at < $1.at }
             return $0.id < $1.id

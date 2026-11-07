@@ -684,9 +684,10 @@ struct WatchInteractionView: View {
 
 struct WatchSessionView: View {
     @Environment(WatchModel.self) private var model
+    @Environment(\.scenePhase) private var phase
     var session: Session
     @State private var reply = ""
-    @State private var items: [Item] = []
+    @State private var messages: [WatchMessage] = []
     @State private var liveCards = WatchAssistantFeed()
     @State private var loadingCards = false
     /// The hub's channels, to say which a message came in from (asked once; nothing from a hub without them).
@@ -696,8 +697,16 @@ struct WatchSessionView: View {
     /// a new rev (the transcript grew) reloads the messages.
     private var current: Session { model.sessions.first { $0.key == session.key } ?? session }
 
+    /// What reloads the page: a new rev (or refresh) while the app is in front, and coming back to the front.
+    private struct Reload: Hashable {
+        var rev: Int64? = nil
+        var tick: Date? = nil
+        var active: Bool
+    }
+
     var body: some View {
         let session = current
+        let active = phase == .active
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
                 HStack(spacing: Theme.Space.sm) {
@@ -705,10 +714,10 @@ struct WatchSessionView: View {
                     Text(session.stateLabel).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
                 if let run = session.leadWorkflow { WatchWorkflowChip(run: run) }
-                ForEach(liveCards.lines(items).suffix(6)) { line in
+                ForEach(liveCards.lines(messages).suffix(WatchMessage.limit)) { line in
                     switch line {
                     case .message(let it):
-                    if let n = Injected.of(it) {
+                    if let n = it.injected {
                         // Persona's message for the model (a task's notice, a scheduled run…): its line, centered, never
                         // its words (docs/protocol.md「Persona 注入的消息」).
                         Label { Text(n.line) } icon: { Image(systemName: InjectedLook.icon(n)).foregroundStyle(InjectedLook.tint(n)) }
@@ -722,7 +731,7 @@ struct WatchSessionView: View {
                         // user sent wears the phone's bubble (`Theme.userBubble`, #2647); another session's message
                         // (`from`) stays quiet like a reply.
                         let own = it.role == "user" && it.from == nil
-                        Text(WatchText.shown(it.text ?? ""))
+                        Text(it.text)
                             .font(.footnote)
                             .lineLimit(8)
                             .foregroundStyle(own ? Theme.userBubbleText : .primary)
@@ -731,7 +740,7 @@ struct WatchSessionView: View {
                             .padding(it.role == "user" ? .leading : .trailing, 14)
                             .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                         // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.
-                        if it.role == "user", AssistantActionSource.parse(it.text ?? "") != nil {
+                        if it.fromCard {
                             Text("From a card").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
@@ -772,10 +781,14 @@ struct WatchSessionView: View {
         .task {
             try? await model.api(session.group)?.post("/api/v1/sessions/\(session.machineID)/\(session.sessionID)/seen")
         }
-        .task(id: session.rev) { await load() }
+        // Only while the app is in front: the phone's summaries reach the watch in the background too (while it
+        // records), and reloading for each of them there ran into watchOS's background CPU limit (#6256).
+        .task(id: Reload(rev: session.rev, active: active)) { if active { await load() } }
         // The model refreshes every 8 s while the app is active; a session without a rev (older hub) still reloads.
-        .task(id: session.rev == nil ? model.lastUpdate : nil) { if session.rev == nil { await load() } }
-        .task(id: model.lastUpdate) { if session.assistant { await loadCards() } }
+        .task(id: Reload(tick: session.rev == nil ? model.lastUpdate : nil, active: active)) {
+            if active, session.rev == nil { await load() }
+        }
+        .task(id: Reload(tick: model.lastUpdate, active: active)) { if active, session.assistant { await loadCards() } }
     }
 
     private func loadCards() async {
@@ -793,9 +806,10 @@ struct WatchSessionView: View {
     }
 
     private func load() async {
-        guard let api = model.api(session.group), let res = try? await api.items(session.key, beforeSeq: nil, turns: 2) else { return }
-        items = res.items.filter { $0.kind == .text && !WatchText.shown($0.text ?? "").isEmpty }
-        if channels == nil, items.contains(where: { $0.role == "user" && ChannelSource.possible($0.clientMsgID) }) {
+        guard let api = model.api(session.group), let res = try? await api.items(session.key, beforeSeq: nil, turns: 2),
+              !Task.isCancelled else { return }
+        messages = WatchMessage.latest(res.items)
+        if channels == nil, messages.contains(where: { $0.role == "user" && ChannelSource.possible($0.clientMsgID) }) {
             channels = (try? await api.channels()) ?? []
         }
     }
