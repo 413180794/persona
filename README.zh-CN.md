@@ -2,16 +2,16 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-dark.zh-CN.svg">
-  <img src="docs/assets/readme/banner-light.zh-CN.svg" alt="Persona：你的 superagent，一个入口解决所有问题。" width="100%">
+  <img src="docs/assets/readme/banner-light.zh-CN.svg" alt="Persona：你的 SuperAgent，一个入口解决所有问题。" width="100%">
 </picture>
 
 [English](README.md) · 简体中文
 
-### 一个 superagent，搞定你的所有事。<br>懂你的上下文，指挥你的 Agent，走到哪儿跟到哪儿。
+### 一个 SuperAgent，搞定你的所有事。<br>懂你的上下文，指挥你的 Agent，走到哪儿跟到哪儿。
 
-[![agent: Claude Code](docs/assets/readme/badge-claude-code.svg)](docs/claude-integration.md) [![agent: Codex](docs/assets/readme/badge-codex.svg)](docs/codex.md) [![engine: herdr](docs/assets/readme/badge-herdr.svg)](docs/engines.md) [![engine: Orca](docs/assets/readme/badge-orca.svg)](docs/engines.md)
-
-iPhone · Apple Watch · Mac · Vision Pro · Android · 网页
+[![client: iPhone](docs/assets/readme/badge-iphone.svg)](docs/ios.md) [![client: Apple Watch](docs/assets/readme/badge-apple-watch.svg)](docs/ios.md) [![client: Mac](docs/assets/readme/badge-mac.svg)](docs/mac.md) [![client: Vision Pro](docs/assets/readme/badge-vision-pro.svg)](docs/vision.md) [![client: Android](docs/assets/readme/badge-android.svg)](docs/android.md) [![client: Web](docs/assets/readme/badge-web.svg)](docs/web.md)<br>
+[![agent: Claude Code](docs/assets/readme/badge-claude-code.svg)](docs/claude-integration.md) [![agent: Codex](docs/assets/readme/badge-codex.svg)](docs/codex.md)<br>
+[![engine: herdr](docs/assets/readme/badge-herdr.svg)](docs/engines.md) [![engine: Orca](docs/assets/readme/badge-orca.svg)](docs/engines.md)
 
 [体验 Demo](#开始使用) · [主要功能](#主要功能) · [怎么工作](#怎么工作) · [文档](#文档)
 
@@ -28,7 +28,7 @@ iPhone · Apple Watch · Mac · Vision Pro · Android · 网页
 
 ## 主要功能
 
-- **superagent，一个入口解决所有问题**。在一个对话里说一句，Persona 带上你的上下文，拆好活，交给 Agent 去做。[助手](docs/assistant.md)
+- **SuperAgent，一个入口解决所有问题**。在一个对话里说一句，Persona 带上你的上下文，拆好活，交给 Agent 去做。[助手](docs/assistant.md)
 - **手机和电脑无缝衔接**。Claude Code、Codex 一直跑在你自己的电脑上。手机上实时看、回答、审批，回到桌前接着用同一个会话。[引擎](docs/engines.md)
 - **完整的扩展系统**。工具、Agent 运行时、数据源、渠道、语音都能以扩展接入，有 SDK，也有扩展市场。[扩展](docs/extensions.md)
 - **灵动岛、Siri 和快捷指令**。锁屏上一眼看清所有 Agent；用语音、快捷指令或手表提问、审批、派活。[实时活动](docs/live-activity.md) · [Siri](docs/siri.md)

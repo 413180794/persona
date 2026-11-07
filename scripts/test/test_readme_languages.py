@@ -51,13 +51,25 @@ class ReadmeLanguageTests(unittest.TestCase):
                     if not suffix:
                         self.assertNotIn(".zh-CN.", name)
 
-    def test_agent_and_engine_badges_sit_on_one_line(self):
+    def test_badges_form_one_row_per_kind(self):
+        kinds = list(dict.fromkeys(kind for _, kind, _ in ASSETS.BADGES))  # client, agent, engine
         for lang in READMES:
             lines = [ln for ln in read(lang).splitlines() if "docs/assets/readme/badge-" in ln]
             with self.subTest(lang=lang):
-                self.assertEqual(1, len(lines), "keep the badges on one source line so comment-style renderers keep them in a row")
-                found = re.findall(r"badge-([a-z-]+)\.svg", lines[0])
-                self.assertEqual([name for name, _, _ in ASSETS.BADGES], found)
+                self.assertEqual(len(kinds), len(lines), "one source line per row: clients, agents, engines")
+                for kind, line in zip(kinds, lines):
+                    found = re.findall(r"\[!\[([a-z]+): [^\]]+\]\(docs/assets/readme/badge-([a-z-]+)\.svg\)", line)
+                    self.assertEqual([(kind, name) for name, k, _ in ASSETS.BADGES if k == kind], found)
+                for line in lines[:-1]:
+                    self.assertTrue(line.endswith("<br>"), "end each row but the last with <br>")
+
+    def test_superagent_is_spelled_superagent(self):
+        for lang in READMES:
+            with self.subTest(lang=lang):
+                spellings = set(re.findall(r"(?i)super[ -]?agent", read(lang)))
+                self.assertEqual({"SuperAgent"}, spellings)
+        for lang in ASSETS.LANGS:
+            self.assertIn("SuperAgent", ASSETS.TAGLINE[lang][0])
 
     def test_local_links_and_pictures_exist(self):
         for lang in READMES:

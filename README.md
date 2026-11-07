@@ -2,16 +2,16 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-dark.svg">
-  <img src="docs/assets/readme/banner-light.svg" alt="Persona: your superagent. One place for every task." width="100%">
+  <img src="docs/assets/readme/banner-light.svg" alt="Persona: your SuperAgent. One place for every task." width="100%">
 </picture>
 
 English · [简体中文](README.zh-CN.md)
 
-### One superagent for everything you do.<br>It knows your world, runs your Agents, and goes wherever you go.
+### One SuperAgent for everything you do.<br>It knows your world, runs your Agents, and goes wherever you go.
 
-[![agent: Claude Code](docs/assets/readme/badge-claude-code.svg)](docs/claude-integration.md) [![agent: Codex](docs/assets/readme/badge-codex.svg)](docs/codex.md) [![engine: herdr](docs/assets/readme/badge-herdr.svg)](docs/engines.md) [![engine: Orca](docs/assets/readme/badge-orca.svg)](docs/engines.md)
-
-iPhone · Apple Watch · Mac · Vision Pro · Android · Web
+[![client: iPhone](docs/assets/readme/badge-iphone.svg)](docs/ios.md) [![client: Apple Watch](docs/assets/readme/badge-apple-watch.svg)](docs/ios.md) [![client: Mac](docs/assets/readme/badge-mac.svg)](docs/mac.md) [![client: Vision Pro](docs/assets/readme/badge-vision-pro.svg)](docs/vision.md) [![client: Android](docs/assets/readme/badge-android.svg)](docs/android.md) [![client: Web](docs/assets/readme/badge-web.svg)](docs/web.md)<br>
+[![agent: Claude Code](docs/assets/readme/badge-claude-code.svg)](docs/claude-integration.md) [![agent: Codex](docs/assets/readme/badge-codex.svg)](docs/codex.md)<br>
+[![engine: herdr](docs/assets/readme/badge-herdr.svg)](docs/engines.md) [![engine: Orca](docs/assets/readme/badge-orca.svg)](docs/engines.md)
 
 [Try the demo](#get-started) · [Features](#features) · [How it works](#how-it-works) · [Docs](#docs)
 
@@ -28,7 +28,7 @@ iPhone · Apple Watch · Mac · Vision Pro · Android · Web
 
 ## Features
 
-- **A superagent, one entry for everything.** Ask in one chat. Persona pulls in your context, breaks the work down and hands it to Agents. [Assistant](docs/assistant.md)
+- **A SuperAgent, one entry for everything.** Ask in one chat. Persona pulls in your context, breaks the work down and hands it to Agents. [Assistant](docs/assistant.md)
 - **Phone and computer, one session.** Claude Code and Codex keep running on your computers. Watch them live, answer and approve from your phone, then carry on at your desk. [Engines](docs/engines.md)
 - **Extensions for everything.** Tools, Agent runtimes, data sources, channels and voice plug in, with an SDK and a market. [Extensions](docs/extensions.md)
 - **Dynamic Island, Siri and Shortcuts.** Every Agent at a glance on the Lock Screen; ask, approve or start work by voice, a shortcut or your watch. [Live Activities](docs/live-activity.md) · [Siri](docs/siri.md)

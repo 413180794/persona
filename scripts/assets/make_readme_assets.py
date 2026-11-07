@@ -59,8 +59,8 @@ def app_icon(theme, px=320):
 LANGS = {"en": "", "zh-CN": ".zh-CN"}
 
 TAGLINE = {  # (text, font family, size, letter spacing)
-    "en": ("Your superagent. One place for every task.", SERIF, 30, 0),
-    "zh-CN": ("你的 superagent，一个入口解决所有问题。", SERIF_CJK, 32, 1),
+    "en": ("Your SuperAgent. One place for every task.", SERIF, 30, 0),
+    "zh-CN": ("你的 SuperAgent，一个入口解决所有问题。", SERIF_CJK, 32, 1),
 }
 
 
@@ -100,8 +100,15 @@ def banner(theme, lang="en"):
 
 # ---------------------------------------------------------------- badges
 
-# What Persona drives, in the order the README lists them: (file name, kind, product).
+# The README's three badge rows, in order: where you use Persona, the Agents it drives, the engines they run in.
+# (file name, kind, product); the README puts each kind on its own line.
 BADGES = [
+    ("iphone", "client", "iPhone"),
+    ("apple-watch", "client", "Apple Watch"),
+    ("mac", "client", "Mac"),
+    ("vision-pro", "client", "Vision Pro"),
+    ("android", "client", "Android"),
+    ("web", "client", "Web"),
     ("claude-code", "agent", "Claude Code"),
     ("codex", "agent", "Codex"),
     ("herdr", "engine", "herdr"),
@@ -113,6 +120,7 @@ VERDANA = {  # advance widths at 11px, shields.io's metric for Verdana
     "7": 7.0, "8": 7.0, "9": 7.0, "C": 7.7, "G": 8.5, "O": 8.7, "S": 7.6, "A": 7.5, "a": 6.7, "b": 6.9, "c": 5.8,
     "d": 6.9, "e": 6.6, "g": 6.9, "h": 7.0, "i": 3.0, "l": 3.0, "n": 7.0, "o": 6.7, "r": 4.7, "s": 5.8, "t": 4.3,
     "u": 7.0, "w": 9.0, "x": 6.6, "I": 4.6, "P": 7.4, "E": 7.0, "D": 8.5, "L": 6.1,
+    "f": 3.9, "k": 6.5, "m": 10.7, "p": 6.9, "v": 6.5, "y": 6.5, "M": 8.6, "V": 7.5, "W": 10.3,
 }
 
 
