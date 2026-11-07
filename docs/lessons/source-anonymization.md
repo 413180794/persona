@@ -23,3 +23,9 @@ A hex string may be a public cryptographic test vector, and a token-shaped strin
 Raw SQLite bytes can concatenate a reserved example address with the next field or record header and resemble a different email. Deserialize the database, inspect complete cells, and regenerate it in an isolated directory. Compare every decoded cell and run `integrity_check`; different physical database hashes do not imply different logical content, and a binary-path exemption alone proves nothing.
 
 Transcript anonymization must preserve byte lengths when parser snapshots include full-size counters or truncated text. Keep replacement filenames the same UTF-8 byte length and extension, preserve JSON newline escapes, and replace corresponding input and golden strings together. Compare decoded structures and actual parser output, including incremental and paging behavior. Do not use the golden-update flag to hide a changed counter, truncation boundary, or silently dropped record.
+
+## Inspect metadata provenance, not only known-pattern matches
+
+A zero regex count does not establish the provenance of an opaque XMP creator or export identifier. Inspect author/source fields as well as decoding their packets. When unnecessary PNG text metadata has no established public provenance, remove it rather than infer that an asset identifier cannot link to a private account.
+
+Strip `tEXt`, `zTXt`, and `iTXt` chunks without re-encoding the image. Validate chunk checksums and compare every retained chunk byte-for-byte, including `IDAT`, color profiles, gamma and pixel density; also compare decoded RGBA pixels. This keeps the icon's appearance unchanged. Update current assets through the source PR and remove the same metadata from all matching historical blobs before claiming synchronized clean-history publication.
