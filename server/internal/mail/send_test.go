@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"io"
 	"math/big"
+	"mime"
 	"net"
 	"net/mail"
 	"strconv"
@@ -103,6 +104,34 @@ func TestRenderMessageChineseSubject(t *testing.T) {
 	}
 	if text != req.Text {
 		t.Errorf("text = %q, want %q", text, req.Text)
+	}
+}
+
+// Text-only sends must name their charset; the default is US-ASCII.
+func TestRenderMessageTextOnlyDeclaresUTF8(t *testing.T) {
+	raw, err := RenderMessage(SendRequest{
+		To: []Address{{Email: "li@example.com"}}, Subject: "x", Text: "你好",
+	}, Address{Email: "me@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := gomail.CreateReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ct := r.Header.Get("Content-Type")
+	mt, params, err := mime.ParseMediaType(ct)
+	if err != nil || mt != "text/plain" || !strings.EqualFold(params["charset"], "utf-8") {
+		t.Fatalf("Content-Type = %q, want text/plain; charset=utf-8", ct)
+	}
+	p, err := r.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := io.ReadAll(p.Body)
+	if err != nil || string(b) != "你好" {
+		t.Fatalf("body = %q %v, want 你好", b, err)
 	}
 }
 

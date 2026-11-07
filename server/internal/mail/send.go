@@ -78,6 +78,8 @@ func RenderMessage(req SendRequest, from Address) ([]byte, error) {
 			return nil, err
 		}
 	} else {
+		// CreateSingleInlineWriter sets no Content-Type; without one the body is US-ASCII (RFC 2045 §5.2).
+		h.SetContentType("text/plain", map[string]string{"charset": "utf-8"})
 		sw, err := gomail.CreateSingleInlineWriter(&buf, h)
 		if err != nil {
 			return nil, err
