@@ -21,6 +21,10 @@ interface InboxAssistantTransport {
     val scope: String
     suspend fun inbox(): JsonObject
     suspend fun larkConversations(cursor: String? = null): JsonObject = throw UnsupportedOperationException("Conversation metadata unavailable")
+    suspend fun larkConversationsForAccount(account: Int?, cursor: String? = null): JsonObject {
+        require(account == null) { "Account-specific conversation metadata unavailable" }
+        return larkConversations(cursor)
+    }
     suspend fun setDone(itemId: String, done: Boolean): JsonObject
     /**
      * Many items done (or back) in one request (`POST /api/v1/inbox/done`): each with the version it was listed at,

@@ -159,6 +159,8 @@ data class InboxRecord(
     val mutes: List<InboxMuteOption> = emptyList(),
     /** A Feishu chat's kind (`lark.is_group` / `is_topic`); null for one listed or cached before the hub said. */
     val isGroup: Boolean? = null,
+    /** The source conversation name, never the AI event title. */
+    val groupName: String? = null,
     val isTopic: Boolean? = null,
     /** Inbox phase 1: Recap, the processing conversation, the suggestion, the Handling chain; none from an older hub. */
     val event: persona.core.contracts.InboxEventFields = persona.core.contracts.InboxEventFields.None,

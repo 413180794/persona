@@ -58,9 +58,11 @@ class HttpInboxAssistantTransport private constructor(
     // Connectors' items too (`sources=all`): each opens as its connector's thread (#2726); without it the hub lists
     // Feishu and mail only.
     override suspend fun inbox() = json(url("api", "v1", "inbox").newBuilder().addQueryParameter("sources", "all").build())
-    override suspend fun larkConversations(cursor: String?) = json(
+    override suspend fun larkConversations(cursor: String?) = larkConversationsForAccount(null, cursor)
+    override suspend fun larkConversationsForAccount(account: Int?, cursor: String?) = json(
         url("api", "v1", "lark", "conversations").newBuilder().apply {
             addQueryParameter("scope", "chats")
+            account?.let { addQueryParameter("ol_account", it.toString()) }
             cursor?.let { addQueryParameter("cursor", it) }
         }.build(),
     )

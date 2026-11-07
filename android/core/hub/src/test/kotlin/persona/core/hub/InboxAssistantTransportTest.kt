@@ -11,6 +11,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class InboxAssistantTransportTest {
+    @Test fun conversationNamesUseTheCorrectAccountAndCursor() = runBlocking {
+        MockWebServer().use { server ->
+            val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("{}"))
+            transport.larkConversationsForAccount(2, "next page")
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals("/api/v1/lark/conversations", request.requestUrl?.encodedPath)
+            assertEquals("chats", request.requestUrl?.queryParameter("scope"))
+            assertEquals("2", request.requestUrl?.queryParameter("ol_account"))
+            assertEquals("next page", request.requestUrl?.queryParameter("cursor"))
+            server.enqueue(MockResponse().setBody("{}"))
+            transport.larkConversations()
+            assertNull(server.takeRequest().requestUrl?.queryParameter("ol_account"))
+        }
+    }
+
     @Test fun bulkPostsTheActionAndAnOldHubGetsDoneTheOldWay() = runBlocking {
         MockWebServer().use { server ->
             val transport = HttpInboxAssistantTransport("scope", server.url("/").toString(), "test-token", OkHttpClient())

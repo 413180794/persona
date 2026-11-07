@@ -63,6 +63,7 @@ class RealInboxRepository(
     private val outbox = MutableStateFlow<List<InboxPendingReply>>(emptyList())
     private val versions = mutableMapOf<String, String>()
     private val refreshLock = Mutex()
+    private val groupNames = InboxGroupNames()
     // The items last written to the list snapshot, so an unchanged list is not written again.
     private var savedItems: Pair<String, JsonArray>? = null
     private val sendLock = Mutex()
@@ -211,6 +212,8 @@ class RealInboxRepository(
             // New items waiting for triage (#1773); an older hub sends no `triage`.
             val triage = InboxTriage.decode(body["triage"])
             val mute = if (hubPreferences == null) transport.mutes() else null
+            if (!owns(transport)) return@withLock
+            groupNames.refresh(data, transport)
             if (!owns(transport)) return@withLock
             val records = listed(data, transport)
             val newVersions = records.zip(data).associate { (record, item) -> record.item.id to (item.obj("agent")?.toString().orEmpty()) }
@@ -1030,6 +1033,7 @@ class RealInboxRepository(
             source = data.string("source"),
             atAll = lark?.flag("at_all") == true,
             isGroup = lark?.let { it.flag("is_group") },
+            groupName = groupNames.name(data, transport.scope),
             isTopic = lark?.let { it.flag("is_topic") },
             read = data.flag("read"),
             mail = mail?.let {

@@ -355,12 +355,13 @@ internal fun inboxByManager(
 }
 
 @Composable
-private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navigator: Navigator,
+internal fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navigator: Navigator,
     composers: ReplyComposers, position: GroupPosition, done: Boolean, busy: Boolean, onlineSince: Long?, onDone: () -> Unit,
     onHandOff: () -> Unit,
     onMute: (InboxMuteOption) -> Unit = {},
 ) {
     val item = record.item
+    val groupEvent = record.feedId != null && record.isGroup != false && item.kind in setOf("group", "mention", "bot")
     val pages = LocalInboxItemPages.current
     val translated = rememberItemTranslation(record)
     var menu by remember { mutableStateOf(false) }
@@ -380,7 +381,9 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
         start = if (busy) null else SwipeAction(doneLabel, PhIcons.Check, Status.Unread, onDone),
         end = SwipeAction(handOffLabel, PhIcons.Robot, Status.Working, onHandOff),
     ) {
-        MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = translated?.subject?.ifBlank { null } ?: item.title,
+        MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = if (groupEvent) record.groupName ?: stringResource(R.string.inbox_kind_group)
+                else translated?.subject?.ifBlank { null } ?: item.title,
+            heading = item.title.takeIf { groupEvent },
             titleIcon = translated?.let { PhIcons.Translate }, titleIconLabel = translated?.let { stringResource(R.string.inbox_translated) },
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
             position = position, avatar = rememberLarkAvatar(record.avatar.takeIf { record.doc == null }, onlineSince), avatarIcon = record.doc?.let { docIcon(it.type) },
@@ -388,7 +391,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             source = when { record.isConnector -> MessageSource.Other; record.feedId != null || record.source == "lark" -> MessageSource.Lark; else -> MessageSource.Mail },
             sourceLabel = if (record.isConnector) record.sourceLabel
                 else stringResource(if (record.feedId != null || record.source == "lark") R.string.inbox_source_lark else R.string.inbox_source_mail),
-            group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
+            group = record.groupName.takeIf { groupEvent },
             time = item.updatedAt?.let { displayTime(it, currentLocale) },
             preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null }
                 ?: record.doc?.let { listOf(docTypeName(res, it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,

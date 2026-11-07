@@ -67,6 +67,8 @@ fun MessageItem(
     /** A small mark after the title (the translate icon on a translated mail); none draws the title as always. */
     titleIcon: PhIcon? = null,
     titleIconLabel: String? = null,
+    /** An event heading above the sender and source conversation. Other message rows keep their layout. */
+    heading: String? = null,
     extra: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
@@ -82,13 +84,13 @@ fun MessageItem(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(group ?: sender, style = type.headline, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(heading ?: group ?: sender, style = type.headline, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     sourceLabel?.let { Spacer(Modifier.width(6.dp)); Text(it, style = type.caption, color = palette.ink3, maxLines = 1) }
                     if (unread > 0) { Spacer(Modifier.width(6.dp)); JBadge(unread) }
                     Spacer(Modifier.weight(1f))
                     time?.let { Spacer(Modifier.width(8.dp)); Text(it, style = type.micro, color = palette.ink3, maxLines = 1) }
                 }
-                if (group != null) Text(sender, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
+                if (group != null || heading != null) Text(sender, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
                 if (titleIcon == null) Text(title, style = if (prominent) type.bodyStrong else type.body, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
