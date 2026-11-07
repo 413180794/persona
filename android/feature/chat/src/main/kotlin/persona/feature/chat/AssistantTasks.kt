@@ -301,8 +301,8 @@ private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
             }
         }
     }
-    if (editing) PlanEditSheet(plan, host, onDismiss = { editing = false }) { edits ->
-        editing = false
+    // The sheet closes when the started plan comes back; a failed start leaves it open with its edits (#5312).
+    if (editing) PlanEditSheet(plan, host, onDismiss = { editing = false }, starting = plan.id in busy) { edits ->
         host.tasks.startPlan(plan, remember, host.onError, edits)
     }
 }

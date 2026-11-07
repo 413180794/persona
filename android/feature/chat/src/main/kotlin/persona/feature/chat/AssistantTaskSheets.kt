@@ -260,7 +260,7 @@ private fun agentSubtitle(session: Session, host: AssistantTaskHost): String =
 /** "Edit" (iOS PlanEditSheet): each task's title, computer, folder, model, permission and first message before it starts. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun PlanEditSheet(plan: TaskPlan, host: AssistantTaskHost, onDismiss: () -> Unit, onStart: (List<PlanTask>) -> Unit) {
+internal fun PlanEditSheet(plan: TaskPlan, host: AssistantTaskHost, onDismiss: () -> Unit, starting: Boolean = false, onStart: (List<PlanTask>) -> Unit) {
     var tasks by remember(plan.id) { mutableStateOf(plan.tasks) }
     fun edit(index: Int, change: (PlanTask) -> PlanTask) { tasks = tasks.mapIndexed { i, t -> if (i == index) change(t) else t } }
     // Edits are asked about before a drag, the scrim or back drops them (iOS .sheetCancel(unsaved:)).
@@ -300,7 +300,7 @@ internal fun PlanEditSheet(plan: TaskPlan, host: AssistantTaskHost, onDismiss: (
         }
         Spacer(Modifier.height(Tokens.Space.m))
         JButton(stringResource(R.string.chat_tasks_plan_start), { onStart(tasks) }, Modifier.fillMaxWidth(),
-            enabled = tasks.all { it.title.isNotBlank() && it.prompt.isNotBlank() })
+            enabled = tasks.all { it.title.isNotBlank() && it.prompt.isNotBlank() }, loading = starting)
     }
 }
 
