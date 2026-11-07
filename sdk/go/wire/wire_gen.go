@@ -4355,8 +4355,9 @@ func (v UIStreamSnapshot) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UIStreamDelta: atomic batch, at most 256 operations. Empty batch is explicit and keeps the version. Validate
-// against a staged whole tree before committing. Ordering/equality are reducer checks.
+// UIStreamDelta: atomic batch, at most 256 operations. An explicit empty batch keeps the version for a non-event
+// no-op or advances exactly one revision as an accepted or ambiguous callback fence. Validate against a staged whole
+// tree before committing. Ordering/equality are reducer checks.
 type UIStreamDelta struct {
 	Protocol    int                 `json:"protocol"`
 	Session     string              `json:"session"`

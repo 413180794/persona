@@ -93,7 +93,7 @@ func apiPackage(t *testing.T) string {
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/feed"}, "http": true},
 		"activation_events": ["on_startup"],
 		"contributes": {
-			"api": [{"id": "feed", "prefix": "examplefeed", "features": ["example_feed"], "events": ["examplefeed"],
+			"api": [{"id": "feed", "prefix": "examplefeed", "features": ["example_feed", "extension_ui_stream_v1"], "events": ["examplefeed"],
 			         "receipts": [{"method": "POST", "path": "/rooms/*/send", "kind": "examplefeed_send"}]},
 			        {"id": "lark", "prefix": "lark"}, {"id": "mine", "prefix": "machines"}],
 			"assistant": [{"id": "feed", "skills": ["skills/example-feed"], "instructions": "assistant.md", "gate": "gate.json"}],
@@ -106,6 +106,26 @@ func apiPackage(t *testing.T) string {
 // the report the hub shows them from (the receipts it declared with them: the hub keeps those), its declared events
 // pushed to the apps; a prefix being moved out of the hub is the plugin's, the hub's own are not; its skills and
 // instructions reach the assistant.
+func TestUIStreamFeatureReport(t *testing.T) {
+	if got := (&Manager{}).features(); slices.Contains(got, extwire.FeatureUIStream) {
+		t.Fatal("uninitialized manager advertises stream support")
+	}
+	h, _ := extensionTestHub(t)
+	if got := h.report().Features; featureCount(got, extwire.FeatureUIStream) != 1 {
+		t.Fatalf("empty initialized registry must report transport support once: %v", got)
+	}
+}
+
+func featureCount(features []string, feature string) int {
+	count := 0
+	for _, candidate := range features {
+		if candidate == feature {
+			count++
+		}
+	}
+	return count
+}
+
 func TestExtensionAPI(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	mux := h.routes()
@@ -156,6 +176,9 @@ func TestExtensionAPI(t *testing.T) {
 	// A send it declared a receipt for is kept by the hub, which relays it (hub/extensions_link.go): the report
 	// says which; the send itself reaches the plugin.
 	rep := h.report()
+	if featureCount(rep.Features, extwire.FeatureUIStream) != 1 {
+		t.Fatalf("extension-declared feature duplicates manager transport: %v", rep.Features)
+	}
 	var feed *extwire.APIPrefix
 	for i := range rep.APIs {
 		if rep.APIs[i].Prefix == "examplefeed" {
@@ -235,6 +258,9 @@ func TestExtensionAPI(t *testing.T) {
 	}
 	if slices.Contains(h.features(), "example_feed") || len(h.extensions.extensionSkills()) != 0 {
 		t.Fatal("switched off, it adds nothing")
+	}
+	if featureCount(h.report().Features, extwire.FeatureUIStream) != 1 {
+		t.Fatal("disabling an extension removed manager-owned transport support")
 	}
 	if lk, _ := h.assistantLark(context.Background()); len(lk.Gates) != 0 || len(lk.MCPServers) != 0 {
 		t.Fatalf("switched off, its gate or MCP server stays: %+v", lk)

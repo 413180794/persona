@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extwire"
 )
 
 // The api extension point (docs/extensions.md "App API"): a plugin serves a part of the app's API under
@@ -75,12 +76,15 @@ func (h *Manager) extensionAPIs(next http.Handler, mux *http.ServeMux) http.Hand
 	})
 }
 
-// features are the features of the plugins serving part of the API (the hub adds its own: extwire.Report).
+// features includes manager-owned transports and the running extensions' API features.
 func (h *Manager) features() []string {
 	var out []string
 	if h.extensions == nil {
 		return out
 	}
+	// Transport support is independent of installed pages or source activation.
+	// Client opt-in, native context and authorization remain separate gates.
+	out = append(out, extwire.FeatureUIStream)
 	if len(h.extensions.messagingSources()) > 0 && !slices.Contains(out, messagingFeature) {
 		out = append(out, messagingFeature)
 	}

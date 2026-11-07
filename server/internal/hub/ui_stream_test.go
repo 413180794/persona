@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -92,6 +93,9 @@ func TestUIStreamRealSDKManagerMainAppSocket(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("manager start timeout")
 	}
+	eventually(t, 3*time.Second, "manager stream capability report", func() bool {
+		return slices.Contains(h.extReport().Features, extwire.FeatureUIStream)
+	})
 	openSocket := func() *websocket.Conn {
 		t.Helper()
 		url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/v1/ws?token=" + h.cfg.Token + "&features=" + extwire.FeatureUIStream
@@ -100,6 +104,25 @@ func TestUIStreamRealSDKManagerMainAppSocket(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = ws.CloseNow() })
+		helloCtx, helloCancel := context.WithTimeout(t.Context(), 4*time.Second)
+		defer helloCancel()
+		for {
+			_, frame, err := ws.Read(helloCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var hello struct {
+				Type     string   `json:"type"`
+				Features []string `json:"features"`
+			}
+			if json.Unmarshal(frame, &hello) != nil || hello.Type != "hello" {
+				continue
+			}
+			if !slices.Contains(hello.Features, extwire.FeatureUIStream) {
+				t.Fatalf("authenticated hello omitted manager stream support: %s", frame)
+			}
+			break
+		}
 		return ws
 	}
 	ws := openSocket()
@@ -191,6 +214,30 @@ func TestUIStreamRealSDKManagerMainAppSocket(t *testing.T) {
 	resumed := read(replacement)
 	if string(resumed["kind"]) != `"snapshot"` {
 		t.Fatalf("resume must begin with snapshot: %s", resumed)
+	}
+}
+
+func TestUIStreamRequiresClientOptInAndAuthenticatedConnection(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		optIn      bool
+		role       string
+		connection string
+	}{
+		{"no opt-in", false, roleFull, "synthetic-connection"},
+		{"restricted role", true, "restricted", "synthetic-connection"},
+		{"no connection identity", true, roleFull, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &Hub{}
+			c := &client{role: tc.role, uiConnection: tc.connection,
+				urlFeatures: map[string]bool{extwire.FeatureUIStream: tc.optIn},
+				uiManagers:  make(map[string]bool), uiRequests: make(chan struct{}, 1)}
+			h.forwardUIStream(t.Context(), c, []byte(`{"type":"extension_ui_stream","manager":"synthetic-manager","request":{"request":"open"}}`))
+			if len(c.uiManagers) != 0 || len(c.uiRequests) != 0 {
+				t.Fatal("capability advertisement bypassed the client/authentication gate")
+			}
+		})
 	}
 }
 
