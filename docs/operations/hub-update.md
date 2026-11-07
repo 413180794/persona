@@ -34,7 +34,7 @@ The worker passes its Python interpreter through to every script suite.
 The SSH publisher uses Paramiko 4.0.0 in the same private environment.
 
 Build with `update_url=file://<remote_root>/releases/hub` for a private source.
-SSH uploads only the Hub platform and atomically promotes its manifest. The
+By default, SSH uploads only the Hub platform and atomically promotes its manifest. The
 existing updater reads that local source with the same checksums, binary version,
 ancestry, idle checks, edge handover, confirmation and rollback as HTTPS sources.
 An authenticated update check also evaluates the existing automatic-update policy;
@@ -67,8 +67,33 @@ confirmation, so disabling upgrades cannot strand them.
 The manager receives this policy in `devices.config`. An old external manager that
 does not understand it must be updated separately before relying on that gate;
 the built-in manager changes together with the Hub. Existing package containment
-must remain intact during a Hub-only rollout. This publisher refuses to recreate
-or operate on `bin/nodes` and never writes Android artifacts.
+must remain intact during a Hub-only rollout. The publisher rejects unmanaged
+`bin/nodes` contents and never writes Android artifacts.
+
+Set `publish_nodes: true` in both private worker and SSH publisher configs to
+continuously publish matching `personad` packages for `linux-amd64` and
+`darwin-arm64`. This is package publication only: the publisher never requests
+computer deployment and `auto_update_nodes` remains false. Users choose when
+to update each computer in the client.
+
+Both binaries are built from the same fixed clean commit with the same version,
+release channel and build flags, after the full validation gates. The standard
+release manifest binds compressed and executable SHA-256 hashes to that source
+and build; the Linux descriptor must equal the Hub descriptor. Before promoting
+the Hub manifest, publication verifies both archives, executable platforms, Go
+main package, clean VCS commit and hashes, and runs the Linux self-check. Go
+`-trimpath` omits linker flags from build info, so foreign runtime version values
+are established by this controlled build manifest rather than a `.version` file.
+An old Hub-only cache does not satisfy an enabled node publication requirement.
+
+Verified executables and version sidecars are staged under the immutable
+`releases/nodes/<version>/` directory. Once the matching Hub is healthy and
+confirmed, `bin/nodes` atomically points there. Subsequent publications accept
+only a managed pointer with matching metadata, sidecars and executable hashes;
+they never restore quarantined packages. The pointer remains available for
+explicit client updates. Existing computer versions must stay unchanged during
+publication. `GET /api/v1/machines` can report package capability, but a previous
+missing-package result may remain cached for ten minutes.
 
 A Hub-only edge switch may proceed while sessions on proven resident nodes or remote herdr/herdr-core hosts run:
 their processes belong to the terminal host and survive the transport reconnect.

@@ -96,5 +96,48 @@ class WorkerRecoveryTests(unittest.TestCase):
             self.assertGreater(result['retry_after'],0)
 
 
+class NodeCacheTests(unittest.TestCase):
+    def test_hub_only_cache_does_not_satisfy_node_publication(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from hub_release import cache_ready
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'latest.json').write_text(json.dumps({'version': 'fixture'}))
+            self.assertTrue(cache_ready(root, False))
+            self.assertFalse(cache_ready(root, True))
+
+    def test_enabling_nodes_revisits_successful_hub_only_release(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import hub_release
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / 'state'
+            state.mkdir()
+            sha, build = 'a' * 40, '202611070001'
+            attempt = state / f'{build}-{sha[:12]}'
+            attempt.mkdir()
+            (attempt / 'latest.json').write_text('{}')
+            (state / 'last.json').write_text(json.dumps({'sha': sha, 'build': build,
+                'result': 'success', 'evidence': str(attempt)}))
+            config = root / 'config.json'
+            config.write_text(json.dumps({'checkout': directory, 'state_dir': str(state),
+                'repository': 'example/project', 'update_url': 'file:///fixture',
+                'publish_command': ['publisher'], 'publish_nodes': True}))
+            calls = []
+            with patch('sys.argv', ['worker', '--config', str(config)]), \
+                    patch.object(hub_release, 'output', lambda args, cwd: sha if args[1] == 'rev-parse' else ''), \
+                    patch.object(hub_release, 'run', lambda args, cwd, **kwargs: calls.append(args)):
+                hub_release.main()
+            builds = [args for args in calls if 'scripts/release/build_hub_release.py' in args]
+            self.assertEqual(len(builds), 1)
+            self.assertIn('--publish-nodes', builds[0])
+            self.assertTrue(any(args[0] == 'publisher' for args in calls))
+
+
 if __name__ == '__main__':
     unittest.main()

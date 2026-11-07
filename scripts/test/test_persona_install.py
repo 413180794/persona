@@ -191,7 +191,8 @@ class PersonaInstallTests(unittest.TestCase):
             scripts = root / 'scripts'
             scripts.mkdir()
             shutil.copy2(ROOT / 'scripts/persona_identity.py', scripts / 'persona_identity.py')
-            for name in ('personad-linux-amd64', 'persona-link-linux-amd64', 'persona-node-linux-amd64'):
+            for name in ('personad-linux-amd64', 'persona-link-linux-amd64', 'persona-node-linux-amd64',
+                         'persona-hub-linux-amd64', 'persona-manager-linux-amd64'):
                 (binaries / name).write_bytes(('fixture ' + name).encode())
             command = 'set -eu\nOUT=release-fixture\nVERSION=fixture\n' + publisher[start:end]
             result = subprocess.run(['bash', '-c', command], cwd=root,

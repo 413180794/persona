@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a committed checkout and build a single-platform Hub release."""
+"""Validate a committed checkout and build a Hub release with optional matching node platforms."""
 import argparse
 import gzip
 import json
@@ -16,11 +16,37 @@ def run(args, cwd, env=None):
     subprocess.run(args, cwd=cwd, env=env, check=True)
 
 
+def package_release(binary, bin_dir, out, platforms, version, build, sha, root):
+    # A retry may leave old content-addressed files in out; only this build's
+    # canonical platform names belong in the manifest generator input.
+    with tempfile.TemporaryDirectory(prefix='.packages-', dir=out) as directory:
+        packages = Path(directory)
+        for platform in platforms:
+            with (bin_dir / ('personad-' + platform)).open('rb') as src, \
+                    gzip.open(packages / ('personad-' + platform + '.gz'), 'wb') as dest:
+                shutil.copyfileobj(src, dest)
+        run([str(binary), 'release', 'manifest', '--dir', str(packages), '--version', version,
+             '--build', build, '--commit', sha, '--out', str(packages / 'manifest.json')], root)
+        manifest = json.loads((packages / 'manifest.json').read_text())
+        for platform, artifact in manifest['files'].items():
+            name = f'personad-{platform}-{artifact["sha256"]}.gz'
+            os.replace(packages / artifact['name'], out / name)
+            artifact['name'] = name
+        return manifest
+
+
+def write_json(path, value):
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(value, indent=2) + '\n')
+    os.replace(temporary, path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--build', required=True)
     parser.add_argument('--update-url', required=True)
+    parser.add_argument('--publish-nodes', action='store_true')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     out = args.out.resolve()
@@ -62,18 +88,19 @@ def main():
         env = dict(os.environ, GOOS='linux', GOARCH='amd64', CGO_ENABLED='0')
         run(['go', 'build', '-tags', 'public', '-trimpath', '-ldflags', flags,
              '-o', str(binary), './cmd/personad'], root / 'server', env)
+        platforms = ['linux-amd64']
+        if args.publish_nodes:
+            darwin = bin_dir / 'personad-darwin-arm64'
+            run(['go', 'build', '-tags', 'public', '-trimpath', '-ldflags', flags,
+                 '-o', str(darwin), './cmd/personad'], root / 'server',
+                dict(os.environ, GOOS='darwin', GOARCH='arm64', CGO_ENABLED='0'))
+            platforms.append('darwin-arm64')
         run(['python3', 'scripts/release/check_bundle_privacy.py', '--whole-short', str(bin_dir)], root)
-        with binary.open('rb') as src, gzip.open(out / 'personad-linux-amd64.gz', 'wb') as dest:
-            shutil.copyfileobj(src, dest)
-        run([str(binary), 'release', 'manifest', '--dir', str(out), '--version', version,
-             '--build', args.build, '--commit', sha, '--out', str(out / 'manifest.json')], root)
-        manifest = json.loads((out / 'manifest.json').read_text())
-        artifact = manifest['files']['linux-amd64']
-        name = f'personad-linux-amd64-{artifact["sha256"]}.gz'
-        (out / artifact['name']).rename(out / name)
-        artifact['name'] = name
-        (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-        os.replace(out / 'manifest.json', out / 'latest.json')
+        manifest = package_release(binary, bin_dir, out, platforms, version, args.build, sha, root)
+        if args.publish_nodes:
+            write_json(out / 'node-manifest.json', manifest)
+        manifest['files'] = {'linux-amd64': manifest['files']['linux-amd64']}
+        write_json(out / 'latest.json', manifest)
     finally:
         for child in webdist.iterdir():
             if child.name != 'README.md':

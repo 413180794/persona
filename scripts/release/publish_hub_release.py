@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deliver a verified release over SSH; never write node or Android artifacts."""
+"""Deliver a verified release over SSH; optionally publish matching node packages without touching Android artifacts."""
 import argparse
 import json
 from pathlib import Path
@@ -7,6 +7,9 @@ import subprocess
 import sys
 import time
 import socket
+import uuid
+
+from node_artifacts import node_manifest
 from urllib.parse import urlsplit
 
 import paramiko
@@ -34,8 +37,11 @@ def main():
     cfg = json.loads(args.config.read_text())
     credentials = credential_fields(json.loads(subprocess.check_output(cfg['credentials_command'])))
     manifest = json.loads((args.artifact_dir / 'latest.json').read_text())
+    packages = node_manifest(args.artifact_dir, manifest) if cfg.get('publish_nodes', False) else None
+    if cfg.get('publish_nodes', False) and packages is None:
+        raise ValueError('Matching node packages are required by this publisher')
     remote_root = cfg['remote_root']
-    staged = f'{remote_root}/releases/hub/.upload-{manifest["build"]}'
+    staged = f'{remote_root}/releases/hub/.upload-{manifest["build"]}-{uuid.uuid4().hex}'
     client = paramiko.SSHClient()
     client.load_system_host_keys()
     sock = None
@@ -77,13 +83,22 @@ def main():
                     sftp.stat(directory)
                 except FileNotFoundError:
                     sftp.mkdir(directory, mode=0o700)
-            for name in ['latest.json', manifest['files']['linux-amd64']['name']]:
+            names = ['latest.json', manifest['files']['linux-amd64']['name']]
+            if packages:
+                names += ['node-manifest.json'] + [a['name'] for a in packages['files'].values()]
+            for name in dict.fromkeys(names):
                 if Path(name).name != name:
                     raise ValueError('Invalid artifact name')
                 sftp.put(str(args.artifact_dir / name), f'{staged}/{name}')
-        script = Path(__file__).with_name('promote_hub_release.py').read_text()
-        payload = {'root': remote_root, 'staged': staged, 'timeout': cfg.get('timeout',1200)}
-        script += '\npromote(' + repr(payload) + ')\n'
+        sources = {name: Path(__file__).with_name(name + '.py').read_text()
+                   for name in ['node_artifacts', 'promote_hub_release']}
+        payload = {'root': remote_root, 'staged': staged, 'timeout': cfg.get('timeout',1200),
+                   'publish_nodes': cfg.get('publish_nodes', False)}
+        script = "import sys, types\n"
+        for name, source in sources.items():
+            script += f"module = types.ModuleType({name!r}); sys.modules[{name!r}] = module\n"
+            script += f"exec({source!r}, module.__dict__)\n"
+        script += 'module.promote(' + repr(payload) + ')\n'
         stdin, stdout, stderr = client.exec_command('python3 -', timeout=1500)
         stdin.write(script)
         stdin.flush()

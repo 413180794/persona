@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remote Hub-only publication: invoked over authenticated SSH by the publisher."""
+"""Remote Hub publication with optional matching node packages: invoked over authenticated SSH by the publisher."""
 import base64
 import fcntl
 import gzip
@@ -7,10 +7,13 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 import time
 import urllib.request
+
+from node_artifacts import activate_nodes, managed_nodes, node_manifest, prepare_nodes, prune_nodes
 
 
 def digest(path):
@@ -55,21 +58,24 @@ def nodes(root):
 def promote(payload):
     root, staged = Path(payload['root']), Path(payload['staged'])
     releases = root / 'releases/hub'
-    cfg = json.loads((root / 'hub.json').read_text())
-    if cfg.get('auto_update_nodes', False) is not False:
-        raise RuntimeError('Hub-only policy must be disabled explicitly or by default')
-    if (root / 'bin/nodes').exists():
-        raise RuntimeError('Node package containment must remain intact')
-    state = api(root, 'hub/update')
-    if not state['auto'] or not state['can_update']:
-        raise RuntimeError('Bootstrap self-update source and enable automatic updates first')
-    before = nodes(root)
-    if any(m['deploying'] for m in before.values()):
-        raise RuntimeError('Node deployment in progress')
     releases.mkdir(parents=True, exist_ok=True)
     with (releases / '.publish.lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        cfg = json.loads((root / 'hub.json').read_text())
+        if cfg.get('auto_update_nodes', False) is not False:
+            raise RuntimeError('Hub-only policy must be disabled explicitly or by default')
+        if not managed_nodes(root):
+            raise RuntimeError('Unmanaged node packages must remain isolated')
+        state = api(root, 'hub/update')
+        if not state['auto'] or not state['can_update']:
+            raise RuntimeError('Bootstrap self-update source and enable automatic updates first')
+        before = nodes(root)
+        if any(m['deploying'] for m in before.values()):
+            raise RuntimeError('Node deployment in progress')
         manifest = json.loads((staged / 'latest.json').read_text())
+        packages = node_manifest(staged, manifest) if payload.get('publish_nodes', False) else None
+        if payload.get('publish_nodes', False) and packages is None:
+            raise ValueError('Matching node packages are required by this publisher')
         latest_state = state.get('latest') or {}
         if latest_state.get('build') == manifest['build'] and latest_state.get('bad'):
             raise RuntimeError('This Hub build already rolled back; publish a corrected commit')
@@ -89,14 +95,22 @@ def promote(payload):
         destination = releases / name
         if destination.exists() and digest(destination) != artifact['sha256']:
             raise ValueError('Immutable artifact changed')
-        os.replace(source, destination)
+        if not destination.exists():
+            temporary = releases / ('.' + name + '.next')
+            with source.open('rb') as reader, temporary.open('wb') as writer:
+                shutil.copyfileobj(reader, writer)
+                writer.flush()
+                os.fsync(writer.fileno())
+            if digest(temporary) != artifact['sha256']:
+                raise ValueError('Copied Hub artifact checksum mismatch')
+            os.replace(temporary, destination)
+        prepared = prepare_nodes(root, staged, packages) if packages else None
         os.replace(staged / 'latest.json', latest)
         descriptor = os.open(releases, os.O_RDONLY)
         try:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        staged.rmdir()
         print(json.dumps({'phase': 'published', 'commit': manifest['commit'],
                           'build': manifest['build'], 'binary_sha256': artifact['binary_sha256']}), flush=True)
         checked = api(root, 'hub/update/check', 'POST')
@@ -122,8 +136,6 @@ def promote(payload):
                     raise RuntimeError('Node inventory changed during Hub-only update')
                 if digest(root / 'bin/personad') != artifact['binary_sha256']:
                     raise RuntimeError('Installed binary checksum mismatch')
-                if (root / 'bin/nodes').exists():
-                    raise RuntimeError('Node package directory was recreated')
                 # Keep the newest three immutable downloads; a file already open by
                 # an updater remains readable, and rollback uses bin/personad.prev.
                 artifacts = sorted(releases.glob('personad-linux-amd64-*.gz'), key=lambda p: p.stat().st_mtime)
@@ -135,9 +147,20 @@ def promote(payload):
                 match = re.search(r'pid (\d+)', slot)
                 if not match or digest(Path('/proc') / match[1] / 'exe') != artifact['binary_sha256']:
                     raise RuntimeError('Serving process checksum mismatch')
+                if packages:
+                    activate_nodes(root, prepared, packages, health)
+                    prune_nodes(root)
+                elif not managed_nodes(root):
+                    raise RuntimeError('Unmanaged node packages were created')
                 history = api(root, 'hub/update/history')
                 print(json.dumps({'phase':'confirmed', 'health': health, 'nodes':after,
                                   'history':history, 'slot':slot.strip(), 'sha256':artifact['binary_sha256']}), flush=True)
+                shutil.rmtree(staged)
+                for abandoned in releases.glob('.upload-*'):
+                    if (re.fullmatch(r'\.upload-[0-9]{12}-[0-9a-f]{32}', abandoned.name)
+                            and abandoned.is_dir() and not abandoned.is_symlink()
+                            and time.time() - abandoned.stat().st_mtime > 86400):
+                        shutil.rmtree(abandoned)
                 return
             time.sleep(5)
         raise TimeoutError('Published release not confirmed; leave updater/rollback in control')

@@ -11,6 +11,8 @@ import time
 import shutil
 import sys
 
+from node_artifacts import node_manifest
+
 
 def run(args, cwd, **kwargs):
     return subprocess.run(args, cwd=cwd, check=True, **kwargs)
@@ -24,6 +26,15 @@ def atomic_json(path, value):
     temp = path.with_suffix('.tmp')
     temp.write_text(json.dumps(value, indent=2) + '\n')
     os.replace(temp, path)
+
+
+def cache_ready(attempt, publish_nodes):
+    latest = Path(attempt) / 'latest.json'
+    if not latest.exists():
+        return False
+    if not publish_nodes:
+        return True
+    return node_manifest(attempt, json.loads(latest.read_text())) is not None
 
 
 def main():
@@ -45,22 +56,30 @@ def main():
         record = state / 'last.json'
         previous = json.loads(record.read_text()) if record.exists() else {}
         same = previous.get('sha') == sha
-        if same and not args.retry:
-            if previous['result'] == 'success' or time.time() < previous.get('retry_after', 0):
+        requirements_match = previous.get('publish_nodes', False) == cfg.get('publish_nodes', False)
+        if same and not args.retry and requirements_match:
+            success_ready = (previous.get('result') == 'success' and
+                             (not cfg.get('publish_nodes', False) or
+                              cache_ready(previous.get('evidence', ''), True)))
+            if success_ready or time.time() < previous.get('retry_after', 0):
                 print(f'{sha}: {previous["result"]}; no new attempt needed')
                 return
         if output(['git', 'status', '--porcelain', '--untracked-files=no'], checkout):
             raise RuntimeError('Release checkout has tracked changes')
         run(['git', 'checkout', '--detach', sha], checkout)
         now = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
-        if same:
+        missing_required_cache = (same and cfg.get('publish_nodes', False) and
+                                  previous.get('evidence') and
+                                  (Path(previous['evidence']) / 'latest.json').exists() and
+                                  not cache_ready(previous['evidence'], True))
+        if same and requirements_match and not missing_required_cache:
             build = previous['build']
         else:
             last = dt.datetime.strptime(previous.get('build', '200001010000'), '%Y%m%d%H%M').replace(tzinfo=dt.timezone.utc)
             build = max(now, last + dt.timedelta(minutes=1)).strftime('%Y%m%d%H%M')
         attempt = state / f'{build}-{sha[:12]}'
         attempt.mkdir(exist_ok=True)
-        result = {'sha': sha, 'build': build, 'result': 'pending', 'evidence': str(attempt)}
+        result = {'sha': sha, 'build': build, 'result': 'pending', 'evidence': str(attempt), 'publish_nodes': cfg.get('publish_nodes', False)}
         atomic_json(record, result)
 
         def status(value, description):
@@ -71,10 +90,12 @@ def main():
         try:
             status('pending', 'Validating and publishing Hub-only release')
             with (attempt / 'validation.log').open('a') as log:
-                if not (attempt / 'latest.json').exists():
-                    run([sys.executable, 'scripts/release/build_hub_release.py', '--out', str(attempt),
-                     '--build', build, '--update-url', cfg['update_url']], checkout,
-                    stdout=log, stderr=subprocess.STDOUT)
+                if not cache_ready(attempt, cfg.get('publish_nodes', False)):
+                    command = [sys.executable, 'scripts/release/build_hub_release.py', '--out', str(attempt),
+                               '--build', build, '--update-url', cfg['update_url']]
+                    if cfg.get('publish_nodes', False):
+                        command.append('--publish-nodes')
+                    run(command, checkout, stdout=log, stderr=subprocess.STDOUT)
             # A force-push or branch replacement must never publish an orphan.
             run(['git', 'fetch', 'origin', 'master'], checkout)
             run(['git', 'merge-base', '--is-ancestor', sha, 'origin/master'], checkout)
