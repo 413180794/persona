@@ -5,10 +5,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -230,6 +232,30 @@ func TestIsAssignmentMatchesShellNames(t *testing.T) {
 	} {
 		if got := isAssignment(w); got != want {
 			t.Errorf("isAssignment(%q) = %v, want %v", w, got, want)
+		}
+	}
+}
+
+// Every assistant process learns its conversation's space from its trusted directory, so a command meant for the
+// health space alone need not trust its working directory, which a `cd` changes (#6003).
+func TestAssistantProcessKnowsItsSpace(t *testing.T) {
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
+	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: olCfg()}
+	state := filepath.Join(t.TempDir(), ".persona")
+	for dir, want := range map[string]string{
+		filepath.Join(state, identity.SpaceHealth):                "health",
+		filepath.Join(state, identity.HealthDirName("m-1a2b")):    "health", // another manager's health space
+		filepath.Join(state, identity.AssistantDirName("")):       "main",
+		filepath.Join(state, identity.AssistantDirName("m-1a2b")): "main",
+		filepath.Join(t.TempDir(), identity.SpaceHealth):          "main", // named health, not in the state directory
+	} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		env, release := n.assistantLarkEnv(dir, "")
+		release()
+		if !slices.Contains(env, "PERSONA_SPACE="+want) {
+			t.Fatalf("%s: want PERSONA_SPACE=%s in %v", dir, want, env)
 		}
 	}
 }

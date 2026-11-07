@@ -75,6 +75,7 @@ The `conversation*` tools in a chat only see chats in the same space (`server/in
 - Scheduled follow-ups and scheduled tasks created in a health chat (`schedule_followup`, `schedule_routine`) record their space (`Task.space`); when one fires and needs a new chat, it opens in the Health space.
 - When the calling chat's space cannot be determined (the assistant's machine cannot list it for the moment), it is treated as the main space: it can only reach main-space chats, and health chats can never be listed or read. The worst case is a health chat temporarily seeing the main space's list; health content is never exposed elsewhere the other way round.
 - `list_followups` lists only this space's scheduled tasks; editing with `schedule_routine` and an id, or deleting with `delete_routine` / `cancel_followup`, treats tasks in another space as not found.
+- Extensions' skills and gated commands reach both spaces (there is no per-space contribution). Every assistant process carries its space in `PERSONA_SPACE` (`health` / `main`, #6003, `docs/extensions.md` "Assistant"), so a command meant for health data alone can refuse in the main space; a `cd` into the health directory does not change it.
 - All other tools (phone tools, reminders, mail, Lark, Agents…) exist in both spaces: health information can be sent to whoever the user wants; the rules are under "Outbound" below.
 
 ## Outbound (#3194)

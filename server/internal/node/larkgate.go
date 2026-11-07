@@ -742,6 +742,18 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 	return cfg
 }
 
+// spaceMain is PERSONA_SPACE outside the health space: the assistant's main conversations and the ones beside them.
+const spaceMain = "main"
+
+// assistantSpace is the space of the conversation an assistant process runs in, from its trusted directory (as
+// healthdeny.go and the gate decide it): identity.SpaceHealth or spaceMain.
+func assistantSpace(cwd string) string {
+	if cwd != "" && identity.SpaceOf(cwd) == identity.SpaceHealth {
+		return identity.SpaceHealth
+	}
+	return spaceMain
+}
+
 // assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.persona/skills, linked, the
 // built-in ones and the plugins', assistantskills) and gives its process what its gated commands need: each gate's
 // command on PATH (a wrapper running the skill's script, when the skill is there) and its env. A gate with Auth keeps
@@ -749,6 +761,10 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 // nor what Auth puts on the requests is given (gateproxy.go, #1317); release takes the addresses back once the
 // process is gone. session is the conversation the process was started for: the proxy tells the manager of the writes
 // that went out under it. Without a config from the hub the commands say their API is not reachable.
+//
+// The process also learns its conversation's space, PERSONA_SPACE (assistantSpace): every gated command reaches every
+// space, and one meant for the health space alone checks this instead of its working directory, which a `cd` in front
+// of the command changes without a confirmation (#6003).
 func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func()) {
 	var released []func()
 	release = func() {
@@ -762,7 +778,8 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 	}
 	bin := n.assistantBin(cwd)
 	_ = os.MkdirAll(bin, 0o755)
-	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "PERSONA_ASSISTANT_BIN=" + bin}
+	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "PERSONA_ASSISTANT_BIN=" + bin,
+		"PERSONA_SPACE=" + assistantSpace(cwd)}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cfg := n.assistantLark(ctx)
