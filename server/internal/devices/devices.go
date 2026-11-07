@@ -223,6 +223,8 @@ func (d *Devices) Run(ctx context.Context) error {
 // Configure takes the hub's handover: hello's devices section, devices.config. Entries new to it start connecting;
 // those gone stop.
 func (d *Devices) Configure(cfg devicewire.Config) {
+	d.ownMu.Lock()
+	cfg = d.withOwnList(cfg) // a manager that keeps its own list: that one (ownlist.go)
 	d.mu.Lock()
 	first, early := !d.got, d.early
 	wasMember := d.cfg.Mesh != nil && d.cfg.Mesh.Member
@@ -234,7 +236,8 @@ func (d *Devices) Configure(cfg devicewire.Config) {
 		d.cfgChanged = nil
 	}
 	d.mu.Unlock()
-	d.keepOwnList() // in manager.json, for a start without the hub (ownlist.go)
+	d.keepOwnListLocked() // in manager.json, for a start without the hub (ownlist.go)
+	d.ownMu.Unlock()
 	if first {
 		close(d.gotCh) // Run starts them, if it is not running yet
 	}
@@ -301,9 +304,9 @@ func (d *Devices) PendingMachineIDs(context.Context) ([]string, error) {
 // startMachines makes a machine for every hub.json entry it has none for and starts its run loop; an entry no
 // longer there stops.
 func (d *Devices) startMachines(ctx context.Context) {
-	cfg := d.config()
 	var started, replaced []*Machine
 	d.mu.Lock()
+	cfg := d.cfg // read with the machines it is laid over: an edit meanwhile is never undone by an older list
 	seen := map[string]bool{}
 	var keep []*Machine
 	for _, raw := range cfg.Machines {
@@ -349,15 +352,15 @@ func (d *Devices) startMachines(ctx context.Context) {
 	d.entries = keep
 	d.mu.Unlock()
 	for _, m := range gone {
-		d.logf("[%s] no longer in hub.json: let go", m.cfg.ID)
+		d.logf("[%s] no longer in the list: let go", m.cfg.ID)
 		m.stop()
-		m.closeLink("no longer in hub.json") // acceptLink refuses it when it comes back
+		m.closeLink("no longer in the list") // acceptLink refuses it when it comes back
 		d.forgetMachine(m.cfg.ID)
 	}
 	for _, m := range replaced {
-		d.logf("[%s] its entry in hub.json changed: connected again with it", m.cfg.ID)
+		d.logf("[%s] its entry changed: connected again with it", m.cfg.ID)
 		m.stop()
-		m.closeLink("its entry in hub.json changed") // Persona Link comes back to the new machine
+		m.closeLink("its entry changed") // Persona Link comes back to the new machine
 	}
 	if len(started) > 0 || len(gone) > 0 {
 		d.fleetRegroup()

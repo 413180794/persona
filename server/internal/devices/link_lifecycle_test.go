@@ -104,7 +104,7 @@ func TestLinkEndsWhenItsEntryIsReplaced(t *testing.T) {
 	if d.cfgMachine("lap") == old {
 		t.Fatal("the changed entry kept its machine")
 	}
-	wantLinkEnded(t, c, l, "its entry in hub.json changed")
+	wantLinkEnded(t, c, l, "its entry changed")
 	if _, l2 := dialTestLink(t, d, "lap"); l2.m != d.cfgMachine("lap") {
 		t.Fatal("the link that came back is not the new machine's")
 	}
@@ -116,5 +116,5 @@ func TestLinkEndsWhenItsEntryIsRemoved(t *testing.T) {
 	d.Configure(devicewire.Config{HubID: "hub-test", HubName: "test", Machines: []json.RawMessage{linkEntry("Laptop")}})
 	c, l := dialTestLink(t, d, "lap")
 	d.Configure(devicewire.Config{HubID: "hub-test", HubName: "test"})
-	wantLinkEnded(t, c, l, "no longer in hub.json")
+	wantLinkEnded(t, c, l, "no longer in the list")
 }

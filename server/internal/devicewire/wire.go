@@ -66,7 +66,39 @@ const (
 	// EventLinkRTT LinkRTT: a Persona Link's round trip, as the hub's heartbeat on it measured it (its paths are
 	// compared by it).
 	EventLinkRTT = "devices.link_rtt"
+	// MethodMachinesPut MachinePut → {}, MethodMachinesRemove MachineRef → MachineRemoved, MethodMachinesGet
+	// MachineRef → MachineEntry: the hub's edits of a manager's own list of computers, and an entry as the manager
+	// has it (its secrets too: a move hands it to the new manager), for a manager the hub handed MachinesOwn
+	// (assistantwire.CapabilityMachinesOwn; docs/assistant/managers.md "Each manager's computers"). Another manager
+	// refuses them CodeNotOwnList; get on a machine it does not have: CodeNoDevice.
+	MethodMachinesPut    = "devices.machines.put"
+	MethodMachinesRemove = "devices.machines.remove"
+	MethodMachinesGet    = "devices.machines.get"
 )
+
+// CodeNotOwnList: the manager does not keep its own list of computers (the hub did not hand it MachinesOwn, or its
+// list was not taken over as its own): the hub edits hub.json for it instead.
+const CodeNotOwnList = "not_own_list"
+
+// MachinePut is devices.machines.put's params: an entry, added, or put in place of the one with its id.
+type MachinePut struct {
+	Entry json.RawMessage `json:"entry"`
+}
+
+// MachineRef names one machine.
+type MachineRef struct {
+	MachineID string `json:"machine_id"`
+}
+
+// MachineRemoved is devices.machines.remove's answer: whether the list had it.
+type MachineRemoved struct {
+	Removed bool `json:"removed"`
+}
+
+// MachineEntry is devices.machines.get's answer.
+type MachineEntry struct {
+	Entry json.RawMessage `json:"entry"`
+}
 
 // LinkRTT is devices.link_rtt's params: the relay's id (devices.accept's) and the round trip.
 type LinkRTT struct {
@@ -104,6 +136,9 @@ type Config struct {
 	AutoUpdateNodes bool `json:"auto_update_nodes,omitempty"`
 	// Machines are hub.json's machines (and those the admin page added since), each the JSON hub.json has.
 	Machines []json.RawMessage `json:"machines"`
+	// MachinesOwn: the manager's own list (its manager.json) is the list, and the hub relays its edits
+	// (devices.machines.*). Machines is then taken over only the first time, as the manager's own.
+	MachinesOwn bool `json:"machines_own,omitempty"`
 	// HubID, HubName, HubVersion: the hub's; a node of another build than HubVersion is flagged (and redeployed).
 	HubID      string `json:"hub_id"`
 	HubName    string `json:"hub_name"`

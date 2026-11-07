@@ -44,6 +44,29 @@ func (d *Devices) Request(ctx context.Context, method string, params json.RawMes
 			return nil, true, err
 		}
 		return map[string]any{}, true, d.Reconnect(p.MachineID)
+	case devicewire.MethodMachinesPut:
+		var p devicewire.MachinePut
+		if err := decode(&p); err != nil {
+			return nil, true, err
+		}
+		return map[string]any{}, true, d.putMachine(ctx, p.Entry)
+	case devicewire.MethodMachinesRemove:
+		var p devicewire.MachineRef
+		if err := decode(&p); err != nil {
+			return nil, true, err
+		}
+		removed, err := d.removeMachine(ctx, p.MachineID)
+		return devicewire.MachineRemoved{Removed: removed}, true, err
+	case devicewire.MethodMachinesGet:
+		var p devicewire.MachineRef
+		if err := decode(&p); err != nil {
+			return nil, true, err
+		}
+		entry, err := d.machineEntry(p.MachineID)
+		if err != nil {
+			return nil, true, err
+		}
+		return devicewire.MachineEntry{Entry: entry}, true, nil
 	case devicewire.MethodUpdateNodes:
 		go d.updateNodes(context.WithoutCancel(ctx))
 		return map[string]any{}, true, nil

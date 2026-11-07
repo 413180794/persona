@@ -32,6 +32,9 @@ type MachinesFromHub struct {
 	TailcatDERPMapURL string `json:"tailcat_derp_map_url,omitempty"`
 	// HubID is the hub that handed it over: a manager that joined another hub since does not read it.
 	HubID string `json:"hub_id,omitempty"`
+	// Own: the list was taken over as the manager's own (the hub handed MachinesOwn): it is the list from then on, and
+	// the hub edits it (PutMachine, RemoveMachine); a hand-over is no longer written over it.
+	Own bool `json:"own,omitempty"`
 }
 
 // OwnMachines is the list file keeps and its record; ok false: none taken over yet, no file, or another hub's (the
@@ -64,26 +67,15 @@ func OwnMachines(file string) (list []json.RawMessage, from MachinesFromHub, ok 
 	return list, from, true, nil
 }
 
-// machineList reads a list of entries: an array (null: none) of objects, each with an id of its own.
+// machineList reads a list of entries: an array (null: none) of objects, each with an id of its own (readable's).
 func machineList(raw json.RawMessage) ([]json.RawMessage, error) {
 	var list []json.RawMessage
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	out := make([]json.RawMessage, 0, len(list))
-	for i, e := range list {
-		var head struct {
-			ID string `json:"id"`
-		}
-		if b := bytes.TrimSpace(e); len(b) == 0 || b[0] != '{' || json.Unmarshal(e, &head) != nil || head.ID == "" {
-			return nil, fmt.Errorf("entry %d is not a machine with an id", i)
-		}
-		if seen[head.ID] {
-			return nil, fmt.Errorf("machine %q is listed twice", head.ID)
-		}
-		seen[head.ID] = true
-		out = append(out, e)
+	out, bad := readable(list)
+	if bad != nil {
+		return nil, bad
 	}
 	return out, nil
 }
@@ -139,8 +131,10 @@ func readable(list []json.RawMessage) ([]json.RawMessage, error) {
 			ID string `json:"id"`
 		}
 		b := bytes.TrimSpace(e)
+		var keys map[string]json.RawMessage
 		switch {
-		case len(b) == 0 || b[0] != '{' || !json.Valid(b) || json.Unmarshal(b, &head) != nil || head.ID == "":
+		case len(b) == 0 || b[0] != '{' || !json.Valid(b) || json.Unmarshal(b, &keys) != nil ||
+			json.Unmarshal(keys["id"], &head.ID) != nil || strings.TrimSpace(head.ID) != head.ID || head.ID == "":
 			bad = append(bad, fmt.Sprintf("entry %d is not a machine with an id", i))
 		case seen[head.ID]:
 			bad = append(bad, fmt.Sprintf("machine %q is listed twice", head.ID))
@@ -169,4 +163,114 @@ func compactList(list []json.RawMessage) (json.RawMessage, error) {
 	}
 	b.WriteByte(']')
 	return b.Bytes(), nil
+}
+
+// ErrNotOwnList: the list has not been taken over as the manager's own (MachinesFromHub.Own), so there is none to
+// edit.
+var ErrNotOwnList = errors.New("no list of computers taken over as this manager's own")
+
+// EntryOf is entry's id, an error when it is no entry a list keeps (readable's rule: an object with a lowercase "id"
+// of its own, not padded).
+func EntryOf(entry json.RawMessage) (string, error) {
+	ok, bad := readable([]json.RawMessage{entry})
+	if bad != nil || len(ok) != 1 {
+		return "", errors.New("not a machine with an id")
+	}
+	return entryID(ok[0]), nil
+}
+
+// PutMachine puts entry in file's list: added at the end, or in place of the one with its id; out is the list then.
+// The list must have been taken over as the manager's own, and read.
+func PutMachine(file string, entry json.RawMessage) (out []json.RawMessage, err error) {
+	ok, bad := readable([]json.RawMessage{entry})
+	if bad != nil || len(ok) != 1 {
+		return nil, errors.New("not a machine with an id")
+	}
+	entry = ok[0]
+	id := entryID(entry)
+	err = editIf(file, func(o *Object) (bool, error) {
+		list, err := takenOverList(o)
+		if err != nil {
+			return false, err
+		}
+		defer func() { out = list }()
+		put := false
+		for i, e := range list {
+			if entryID(e) == id {
+				list[i], put = entry, true
+			}
+		}
+		if !put {
+			list = append(list, entry)
+		}
+		raw, err := compactList(list)
+		if err != nil {
+			return false, err
+		}
+		old, _ := o.Get(MachinesKey)
+		if sameJSON(old, raw) {
+			return false, nil
+		}
+		o.SetRaw(MachinesKey, raw)
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RemoveMachine takes the machine with id out of file's list; out is the list then, removed: it had it.
+func RemoveMachine(file, id string) (out []json.RawMessage, removed bool, err error) {
+	err = editIf(file, func(o *Object) (bool, error) {
+		list, err := takenOverList(o)
+		if err != nil {
+			return false, err
+		}
+		out = make([]json.RawMessage, 0, len(list))
+		for _, e := range list {
+			if entryID(e) == id {
+				removed = true
+				continue
+			}
+			out = append(out, e)
+		}
+		if !removed {
+			return false, nil
+		}
+		raw, err := compactList(out)
+		if err != nil {
+			return false, err
+		}
+		o.SetRaw(MachinesKey, raw)
+		return true, nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return out, removed, nil
+}
+
+// takenOverList is o's list, an error when it was not taken over as the manager's own or does not read (an edit would
+// lose it).
+func takenOverList(o *Object) ([]json.RawMessage, error) {
+	var from MachinesFromHub
+	if raw, ok := o.Get(MachinesFromHubKey); !ok || json.Unmarshal(raw, &from) != nil || !from.Own {
+		return nil, ErrNotOwnList
+	}
+	raw, _ := o.Get(MachinesKey)
+	list, err := machineList(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", MachinesKey, err)
+	}
+	return list, nil
+}
+
+// entryID is an entry's id ("" when it has none).
+func entryID(e json.RawMessage) string {
+	var head struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(e, &head)
+	return head.ID
 }

@@ -568,6 +568,10 @@ const (
 	CapabilityConfigOwn = "config.own"
 	// CapabilityAgentSessionArchives: the manager owns recoverable Codex/Claude archives.
 	CapabilityAgentSessionArchives = "agent_session_archives"
+	// CapabilityMachinesOwn: the manager keeps its own list of computers in its manager.json and takes the hub's edits
+	// of it (devicewire MethodMachinesPut / Remove / Get) once the hub hands it MachinesOwn
+	// (docs/assistant/managers.md "Each manager's computers").
+	CapabilityMachinesOwn = "machines.own"
 )
 
 // The methods and events, by direction. The assistant's handshake is manager.hello {id, host, os, arch, deploy,

@@ -2,6 +2,7 @@ package managerconf
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,5 +109,49 @@ func TestKeepMachinesThroughALink(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(vol); !strings.Contains(string(b), `"box"`) {
 		t.Fatalf("not written where the link leads:\n%s", b)
+	}
+}
+
+// The hub's edits of a manager's own list: put adds or replaces by id, remove takes one out; only a list taken over
+// as the manager's own and readable is edited, and each edit gives the list back.
+func TestPutAndRemoveMachine(t *testing.T) {
+	file := filepath.Join(t.TempDir(), File)
+	if _, err := PutMachine(file, json.RawMessage(`{"id":"box"}`)); !errors.Is(err, ErrNotOwnList) {
+		t.Fatalf("put into a list never taken over: %v", err)
+	}
+	box := []json.RawMessage{json.RawMessage(`{"id":"box","name":"Box"}`)}
+	if _, _, _, err := KeepMachines(file, box, MachinesFromHub{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PutMachine(file, json.RawMessage(`{"id":"lap"}`)); !errors.Is(err, ErrNotOwnList) {
+		t.Fatalf("put into a list not taken over as its own: %v", err)
+	}
+	if _, _, _, err := KeepMachines(file, box, MachinesFromHub{Own: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PutMachine(file, json.RawMessage(`{"id":"lap","name":"Lap"}`)); err != nil {
+		t.Fatal(err)
+	}
+	list, err := PutMachine(file, json.RawMessage(`{"id":"box","name":"Box 2"}`))
+	if err != nil || len(list) != 2 || !strings.Contains(string(list[0]), `"Box 2"`) || entryID(list[1]) != "lap" {
+		t.Fatalf("after the puts: %s %v", list, err)
+	}
+	for _, bad := range []string{`{"name":"no id"}`, `{"id":" "}`, `{"id":" box"}`, `{"ID":"caps"}`} {
+		if _, err := PutMachine(file, json.RawMessage(bad)); err == nil {
+			t.Fatalf("put: %s", bad)
+		}
+	}
+	if list, removed, err := RemoveMachine(file, "box"); !removed || err != nil || len(list) != 1 || entryID(list[0]) != "lap" {
+		t.Fatalf("remove: %s %v %v", list, removed, err)
+	}
+	if list, removed, err := RemoveMachine(file, "box"); removed || err != nil || len(list) != 1 {
+		t.Fatalf("remove again: %s %v %v", list, removed, err)
+	}
+	_ = Edit(file, func(o *Object) error { o.SetRaw(MachinesKey, json.RawMessage(`{"id":"x"}`)); return nil })
+	if _, err := PutMachine(file, json.RawMessage(`{"id":"lap"}`)); err == nil {
+		t.Fatal("put into a list that does not read")
+	}
+	if _, _, err := RemoveMachine(file, "lap"); err == nil {
+		t.Fatal("removed from a list that does not read")
 	}
 }
