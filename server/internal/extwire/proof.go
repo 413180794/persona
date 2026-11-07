@@ -29,6 +29,21 @@ const (
 	CodeClockSkew     = "clock_skew"     // 403: its time is out of ProofWindow
 	CodeProofReplayed = "proof_replayed" // 403: its nonce was taken already
 	CodeProofBusy     = "proof_busy"     // 429: the manager has too many nonces kept just now
+	// CodeManagerOffline (503): the manager is not on the hub's bus (the relay's own answer while it is not, and the
+	// hub's to a proof that names a manager of its roster with no live connection).
+	CodeManagerOffline = "manager_offline"
+)
+
+// HeaderAuthRefused is on a response the hub's own auth layer wrote refusing an extension's token as nobody's
+// (RefusedToken, a 401) or its manager as not on the bus (RefusedManagerOffline, a 503 manager_offline). The hub
+// takes it off every other response (a manager's or an extension's passed on), so a relay can tell the hub's refusal
+// from a 401 that came from further on.
+const HeaderAuthRefused = "X-Persona-Auth-Refused"
+
+// The values of HeaderAuthRefused.
+const (
+	RefusedToken          = "token"
+	RefusedManagerOffline = CodeManagerOffline
 )
 
 // ProofWindow is how far a proof's time may be from the hub's clock, either way.

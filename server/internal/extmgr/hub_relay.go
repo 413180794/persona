@@ -72,8 +72,9 @@ func (ps *extensions) startHubRelay() (string, error) {
 			_, ok := ps.h.extTokens.lookup(tok)
 			return ok && strings.HasPrefix(tok, extTokenPrefix)
 		},
-		Ready: ps.h.opts.Connected, // off the bus, the hub could not tell whose its extensions' tokens are
-		Logf:  ps.logf})
+		Ready:      ps.h.opts.Connected, // off the bus, the hub could not tell whose its extensions' tokens are
+		Connection: ps.h.opts.Connection,
+		Logf:       ps.logf})
 	if err != nil {
 		return "", err
 	}

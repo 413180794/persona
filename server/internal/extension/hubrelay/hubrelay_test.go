@@ -169,3 +169,102 @@ func TestReplayedIsSentAgainWithANewProof(t *testing.T) {
 		t.Fatalf("a POST was sent %d times", len(proofs))
 	}
 }
+
+// When the hub's auth layer refuses a token the relay knows (401, or 503 manager_offline, saying so in
+// extwire.HeaderAuthRefused), the relay holds its extensions' requests, answering 503 itself, until the manager's bus
+// connection is another one, or suspendMost passed; any other answer holds nothing, a 401 from further on included.
+func TestARefusalHoldsUntilTheNextConnection(t *testing.T) {
+	var mu sync.Mutex
+	hits := 0
+	answer := func(w http.ResponseWriter) {} // what the hub says now
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		a := answer
+		mu.Unlock()
+		a(w)
+	}))
+	defer hub.Close()
+	say := func(status int, code string) {
+		mu.Lock()
+		defer mu.Unlock()
+		answer = func(w http.ResponseWriter) {
+			if status != 200 {
+				switch { // the hub's auth layer says it is its own refusal
+				case status == 401 && code == "invalid_token":
+					w.Header().Set(extwire.HeaderAuthRefused, extwire.RefusedToken)
+				case status == 503 && code == extwire.CodeManagerOffline:
+					w.Header().Set(extwire.HeaderAuthRefused, extwire.RefusedManagerOffline)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"code":"` + code + `","error":"x"}`))
+			}
+		}
+	}
+	hitsNow := func() int { mu.Lock(); defer mu.Unlock(); return hits }
+	var state sync.Mutex
+	conn, now, known := 1, time.Now(), true
+	h, err := Handler(Options{Hub: hub.URL, Manager: "work", ProofKey: "k",
+		Knows:      func(tok string) bool { state.Lock(); defer state.Unlock(); return tok == "pext_x" && known },
+		Connection: func() any { state.Lock(); defer state.Unlock(); return conn },
+		Now:        func() time.Time { state.Lock(); defer state.Unlock(); return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay := httptest.NewServer(h)
+	defer relay.Close()
+	set := func(f func()) { state.Lock(); f(); state.Unlock() }
+	expect := func(what string, want, wantHits int) {
+		t.Helper()
+		if code, _ := relayDo(t, relay.URL, "GET", ""); code != want || hitsNow() != wantHits {
+			t.Fatalf("%s: %d with %d requests at the hub, want %d with %d", what, code, hitsNow(), want, wantHits)
+		}
+	}
+
+	for _, c := range []struct {
+		status int
+		code   string
+	}{{401, "invalid_token"}, {503, extwire.CodeManagerOffline}} {
+		say(c.status, c.code)
+		base := hitsNow()
+		expect("the hub refuses", c.status, base+1)
+		say(200, "")
+		expect("held on that connection", http.StatusServiceUnavailable, base+1)
+		expect("still held", http.StatusServiceUnavailable, base+1)
+		set(func() { conn++ })
+		expect("another connection", 200, base+2)
+	}
+
+	// Past suspendMost, it tries again.
+	say(401, "invalid_token")
+	base := hitsNow()
+	expect("refused once more", 401, base+1)
+	say(200, "")
+	expect("held", http.StatusServiceUnavailable, base+1)
+	set(func() { now = now.Add(suspendMost) })
+	expect("tried again", 200, base+2)
+
+	// Another 503, a 403, a 401 of a token that went meanwhile (its extension stopped), or a 401 without the hub's
+	// word hold nothing.
+	for _, c := range []struct {
+		status int
+		code   string
+		goes   bool // the token goes while the hub answers
+	}{{503, "store_unavailable", false}, {403, "permission_denied", false}, {401, "invalid_token", true},
+		{401, "unauthorized", false}, // a route's own 401, passed on: no HeaderAuthRefused
+	} {
+		say(c.status, c.code)
+		if c.goes {
+			mu.Lock()
+			refuse := answer
+			answer = func(w http.ResponseWriter) { set(func() { known = false }); refuse(w) }
+			mu.Unlock()
+		}
+		base := hitsNow()
+		expect(fmt.Sprintf("%d %s", c.status, c.code), c.status, base+1)
+		set(func() { known = true })
+		say(200, "")
+		expect(fmt.Sprintf("after %d %s", c.status, c.code), 200, base+2)
+	}
+}

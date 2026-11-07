@@ -149,6 +149,7 @@ func (h *Hub) securityError(w http.ResponseWriter, r *http.Request, status int, 
 		codeClockSkew:             "the manager's clock is more than a minute off the hub's: set its clock right",
 		codeProofReplayed:         "this request was sent before",
 		codeProofBusy:             "too many requests from this manager's extensions just now",
+		codeManagerOffline:        "the manager is not connected to the hub right now: try again shortly",
 	}[code]
 	if message == "" {
 		message = "invalid token"

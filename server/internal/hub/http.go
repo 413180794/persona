@@ -297,6 +297,16 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			r = r.Clone(r.Context())
 			r.Header.Del(extwire.HeaderManagerProof)
 		}
+		// A proof that names a manager of the roster with no live bus connection here (the hub restarted, and the
+		// manager has not noticed its connection is gone): nobody can tell whose the token is, nor check the proof
+		// without that connection's key. A 503 says nothing of the token (32 random bytes: nothing to guess) and is
+		// not counted, so the manager's extensions don't lock out its address until it is back.
+		if ext && public && h.proofOfAManagerAway(r.Context(), proof) {
+			retryAfter(w, 5*time.Second)
+			authRefused(w, r, extwire.RefusedManagerOffline)
+			h.securityError(w, r, http.StatusServiceUnavailable, codeManagerOffline, 0)
+			return
+		}
 		var p principal
 		var ok bool
 		if ext {
@@ -308,6 +318,9 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			failures := 0
 			if limited {
 				failures = failed.fail(authSourceKey(r), time.Now(), h.cfg.Security)
+			}
+			if ext { // nobody knows it: a manager's relay holds its extensions' requests till its next bus connection
+				authRefused(w, r, extwire.RefusedToken)
 			}
 			h.securityError(w, r, http.StatusUnauthorized, "", failures)
 			return
@@ -386,9 +399,32 @@ type statusWriter struct {
 	status          int
 	securityFailure bool
 	lang            i18n.Lang
+	// refusal is whether the hub's auth layer refused the request (authRefused): only then may the response carry
+	// extwire.HeaderAuthRefused.
+	refusal *authRefusal
 }
 
-func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
+func (s *statusWriter) WriteHeader(code int) {
+	s.status = code
+	if s.refusal == nil || !s.refusal.refused.Load() {
+		s.Header().Del(extwire.HeaderAuthRefused) // a manager's or an extension's, passed on: never the hub's word
+	}
+	s.ResponseWriter.WriteHeader(code)
+}
+
+// authRefusal is a request's mark that the hub's own auth layer refused it (logRequests puts it in the context).
+type authRefusal struct{ refused atomic.Bool }
+
+type authRefusalKey struct{}
+
+// authRefused says on the response that the hub's auth layer refuses the request (extwire.HeaderAuthRefused, what:
+// RefusedToken or RefusedManagerOffline). Set by nothing else: the response writer takes the header off any other.
+func authRefused(w http.ResponseWriter, r *http.Request, what string) {
+	if m, ok := r.Context().Value(authRefusalKey{}).(*authRefusal); ok {
+		m.refused.Store(true)
+	}
+	w.Header().Set(extwire.HeaderAuthRefused, what)
+}
 
 // Lang is the request's language: apierr writes an i18n.Message error in it.
 func (s *statusWriter) Lang() i18n.Lang { return s.lang }
@@ -409,7 +445,9 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 		// the language of this response's text for people: its Accept-Language, else the user's (locale.go)
 		lang := i18n.FromRequest(r).Or(h.userLang())
 		r = r.WithContext(i18n.With(r.Context(), lang))
-		sw := &statusWriter{ResponseWriter: w, status: 200, lang: lang}
+		refusal := &authRefusal{}
+		r = r.WithContext(context.WithValue(r.Context(), authRefusalKey{}, refusal))
+		sw := &statusWriter{ResponseWriter: w, status: 200, lang: lang, refusal: refusal}
 		next.ServeHTTP(sw, r)
 		// Auth and ingress refusals are logged by securityError (masked, rate limited), WebSocket ones included.
 		if !sw.securityFailure && (sw.status >= 400 || (!longLived(r.URL.Path) && time.Since(start) > 2*time.Second)) {

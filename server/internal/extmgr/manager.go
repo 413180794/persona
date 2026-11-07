@@ -79,8 +79,10 @@ type Options struct {
 	AssistantEvent func(event string, params json.RawMessage)
 	// DialRelay opens the hub's relay channel with query.
 	DialRelay func(ctx context.Context, query string) (*websocket.Conn, error)
-	// Connected says whether the bus is up now (nil: always).
-	Connected func() bool
+	// Connected says whether the bus is up now (nil: always), and Connection which connection it is: a comparable
+	// value, another one for each connection whose handshake went through (nil: none known; hub_relay.go).
+	Connected  func() bool
+	Connection func() any
 	// Ask shows a card on the phones and waits for its answer, in the assistant's interaction queue (its askHub);
 	// ctx ending withdraws the card. nil: the hub is asked (tests).
 	Ask func(ctx context.Context, ix proto.Interaction) (proto.Resolution, error)

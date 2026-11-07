@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,14 +32,32 @@ import (
 // proofTestHub: A (the assistant) owns ma and knows the extension token aTok, B ("m-0b0b0b") owns mb and knows bTok;
 // the hub's API as from the internet (over TLS) is front, which keeps the proofs it saw.
 type proofTestHub struct {
-	h            *Hub
-	routes       http.Handler
-	a, b         *guardManager
-	aTok, bTok   string
-	front        *httptest.Server
+	h          *Hub
+	routes     http.Handler
+	a, b       *guardManager
+	aTok, bTok string
+	front      *httptest.Server
+	busURL     string // the hub's bus, as a manager on this machine dials it
+	// bRoute is B's answer to a route the hub passes on to it (http.request); nil: 200 {}.
+	bRoute       atomic.Pointer[assistantwire.HTTPResponse]
 	mu           sync.Mutex
 	proofs       []string
 	logs, relayL syncBuffer
+}
+
+// proofAnswers answers the hub as a manager that knows the extension token tok (opening every route: the scope is not
+// what is tested here).
+func proofAnswers(tok string) func(string, json.RawMessage) (any, error) {
+	return func(method string, params json.RawMessage) (any, error) {
+		var a extwire.Authorize
+		if method != extwire.MethodAuthorize {
+			return map[string]any{}, nil
+		}
+		if json.Unmarshal(params, &a) == nil && a.Hash == hashToken(tok) {
+			return extwire.Authorized{OK: true, Extension: "x", Name: "X"}, nil
+		}
+		return extwire.Authorized{}, nil
+	}
 }
 
 func newProofTestHub(t *testing.T) *proofTestHub {
@@ -47,21 +66,18 @@ func newProofTestHub(t *testing.T) *proofTestHub {
 	h.logger.SetOutput(&f.logs)
 	h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"}}
 	h.cfg.Security.AuthFailures = 1000 // the tests refuse many from one address (TestBadProofsCountAgainstTheSource)
-	knows := func(tok string) func(string, json.RawMessage) (any, error) {
-		return func(method string, params json.RawMessage) (any, error) {
-			var a extwire.Authorize
-			if method != extwire.MethodAuthorize {
-				return map[string]any{}, nil
+	f.busURL = srv.URL
+	f.a = connectGuardManager(t, h, srv.URL, assistantwire.AssistantID, proofAnswers(f.aTok))
+	bAnswers := proofAnswers(f.bTok)
+	f.b = connectGuardManager(t, h, srv.URL, "m-0b0b0b", func(method string, params json.RawMessage) (any, error) {
+		if method == assistantwire.MethodHTTP {
+			if res := f.bRoute.Load(); res != nil {
+				return res, nil
 			}
-			if json.Unmarshal(params, &a) == nil && a.Hash == hashToken(tok) {
-				// opens every route: the scope is not what is tested here
-				return extwire.Authorized{OK: true, Extension: "x", Name: "X"}, nil
-			}
-			return extwire.Authorized{}, nil
+			return assistantwire.HTTPResponse{Status: 200, Body: []byte(`{}`)}, nil
 		}
-	}
-	f.a = connectGuardManager(t, h, srv.URL, assistantwire.AssistantID, knows(f.aTok))
-	f.b = connectGuardManager(t, h, srv.URL, "m-0b0b0b", knows(f.bTok))
+		return bAnswers(method, params)
+	})
 	if _, err := h.moveMachine(context.Background(), "mb", "m-0b0b0b"); err != nil {
 		t.Fatal(err)
 	}
@@ -403,5 +419,220 @@ func TestAnAddressLockedOutLocksOutItsExtensionsToo(t *testing.T) {
 	good := extwire.SignProof(extwire.ProofKey(f.b.token), "m-0b0b0b", "GET", "/api/v1/machines", f.bTok, time.Now())
 	if code, body := proofDo(t, f.front.URL, "/api/v1/machines", f.bTok, good); code != http.StatusTooManyRequests {
 		t.Fatalf("an extension's token from a locked-out address: %d %s", code, body)
+	}
+}
+
+// A proof that names a manager of the roster with no live bus connection (the hub restarted; the manager has not
+// noticed yet) gets 503 manager_offline, not counted: nobody can tell whose the token is. A proof naming no manager of
+// the roster, and a proof that fails against a connected manager's key, are counted as before.
+func TestAProofOfAManagerAwayIsNotCounted(t *testing.T) {
+	f := newProofTestHub(t)
+	f.h.cfg.Security.AuthFailures = 3
+	const path = "/api/v1/machines"
+	key := extwire.ProofKey(f.b.token)
+	f.h.busHangUp("m-0b0b0b", websocket.StatusGoingAway, "test: the hub lost it")
+	eventually(t, 5*time.Second, "B off the bus", func() bool { return f.h.busConnOf("m-0b0b0b") == nil })
+	for i := 0; i < 6; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, f.front.URL+path, nil)
+		req.Header.Set("Authorization", "Bearer "+f.bTok)
+		req.Header.Set(extwire.HeaderManagerProof, extwire.SignProof(key, "m-0b0b0b", "GET", path, f.bTok, time.Now()))
+		res, err := (&http.Client{Transport: &http.Transport{Proxy: nil}}).Do(req)
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			Code string `json:"code"`
+		}
+		_ = json.NewDecoder(res.Body).Decode(&body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusServiceUnavailable || body.Code != codeManagerOffline || res.Header.Get("Retry-After") == "" {
+			t.Fatalf("B away, call %d: %d %q %v", i, res.StatusCode, body.Code, res.Header)
+		}
+	}
+	if retry := f.h.devtok.extFailures.retry("198.51.100.7", time.Now(), f.h.cfg.Security); retry > 0 {
+		t.Fatalf("B's address was counted against while B was away (retry in %s)", retry)
+	}
+	// Counted as ever: a proof naming no manager of the roster, or one failing against a connected manager's key.
+	for _, c := range []struct{ what, tok, proof string }{
+		{"no such manager", f.bTok, extwire.SignProof(key, "m-0c0c0c", "GET", path, f.bTok, time.Now())},
+		{"not the connected manager's key", f.aTok, extwire.SignProof(key, assistantwire.AssistantID, "GET", path, f.aTok, time.Now())},
+		{"malformed", f.bTok, "v1,m=m-0b0b0b,t=1,n=x,s=y"},
+	} {
+		if code, body := proofDo(t, f.front.URL, path, c.tok, c.proof); code == http.StatusServiceUnavailable || code == 200 {
+			t.Fatalf("%s: %d %s", c.what, code, body)
+		}
+	}
+	if code, body := proofDo(t, f.front.URL, path, f.bTok, ""); code != http.StatusTooManyRequests {
+		t.Fatalf("after three counted failures: %d %s", code, body)
+	}
+}
+
+// The reviewer's scenario: the hub loses a remote manager's bus without the manager noticing (a crash, a half-open
+// connection) while its extensions keep calling through its relay. Nothing gets 429, the address is not counted
+// against, and once the manager is on the bus again its extensions' calls go through.
+func TestExtensionsOfAManagerTheHubLostDoNotLockItOut(t *testing.T) {
+	f := newProofTestHub(t)
+	f.h.cfg.Security.AuthFailures = 0 // the default: 10 in a minute
+	var state sync.Mutex
+	conn := 1 // the manager's bus connection as it sees it: still the first one
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	relay, err := hubrelay.Start(ctx, hubrelay.Options{Hub: f.front.URL, Manager: "m-0b0b0b", ProofKey: extwire.ProofKey(f.b.token),
+		Knows:      func(tok string) bool { return tok == f.bTok },
+		Ready:      func() bool { return true }, // the manager has not noticed
+		Connection: func() any { state.Lock(); defer state.Unlock(); return conn },
+		Logf:       log.New(&f.relayL, "", 0).Printf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, body := proofDo(t, relay, "/api/v1/machines", f.bTok, ""); code != 200 {
+		t.Fatalf("before: %d %s", code, body)
+	}
+	f.mu.Lock()
+	before := len(f.proofs)
+	f.mu.Unlock()
+	f.h.busHangUp("m-0b0b0b", websocket.StatusGoingAway, "test: the hub lost it")
+	eventually(t, 5*time.Second, "B off the hub's bus", func() bool { return f.h.busConnOf("m-0b0b0b") == nil })
+	var codes []int
+	for i := 0; i < 15; i++ {
+		code, _ := proofDo(t, relay, "/api/v1/machines", f.bTok, "")
+		codes = append(codes, code)
+		if code == http.StatusTooManyRequests {
+			t.Fatalf("429 while the hub had lost the manager: %v", codes)
+		}
+	}
+	f.mu.Lock()
+	reached := len(f.proofs) - before
+	f.mu.Unlock()
+	if codes[0] != http.StatusServiceUnavailable || reached != 1 {
+		t.Fatalf("while the hub had lost B: %v, %d reached the hub (want 503s, and one)", codes, reached)
+	}
+	for _, l := range []*authLimiter{&f.h.devtok.failures, &f.h.devtok.extFailures} {
+		if retry := l.retry("198.51.100.7", time.Now(), f.h.cfg.Security); retry > 0 {
+			t.Fatalf("B's address was counted against (retry in %s)", retry)
+		}
+	}
+	// B notices, connects again with its token: its extensions go through again.
+	f.b = connectGuardManagerWith(t, f.busURL, "m-0b0b0b", f.b.token, proofAnswers(f.bTok))
+	state.Lock()
+	conn++
+	state.Unlock()
+	if code, body := proofDo(t, relay, "/api/v1/machines", f.bTok, ""); code != 200 {
+		t.Fatalf("B back on the bus: %d %s", code, body)
+	}
+}
+
+// A 401 that comes from further on (a manager's route whose own upstream refused it), passed on by the hub, is not the
+// hub refusing the token: the hub takes extwire.HeaderAuthRefused off it, even should the manager set it, and the
+// relay holds nothing. The hub's own refusal says so.
+func TestARoutesOwn401HoldsNothing(t *testing.T) {
+	f := newProofTestHub(t)
+	var state sync.Mutex
+	conn := 1
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	relay, err := hubrelay.Start(ctx, hubrelay.Options{Hub: f.front.URL, Manager: "m-0b0b0b", ProofKey: extwire.ProofKey(f.b.token),
+		Knows:      func(tok string) bool { return tok == f.bTok },
+		Connection: func() any { state.Lock(); defer state.Unlock(); return conn }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.bRoute.Store(&assistantwire.HTTPResponse{Status: http.StatusUnauthorized,
+		Header: map[string][]string{"Content-Type": {"application/json"}, extwire.HeaderAuthRefused: {extwire.RefusedToken}},
+		Body:   []byte(`{"code":"invalid_token","error":"the upstream refused its token"}`)})
+	get := func() (int, http.Header) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, relay+"/api/v1/assistant", nil)
+		req.Header.Set("Authorization", "Bearer "+f.bTok)
+		res, err := (&http.Client{Transport: &http.Transport{Proxy: nil}}).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode, res.Header
+	}
+	f.mu.Lock()
+	before := len(f.proofs)
+	f.mu.Unlock()
+	for i := 0; i < 3; i++ {
+		code, hd := get()
+		if code != http.StatusUnauthorized || hd.Get(extwire.HeaderAuthRefused) != "" {
+			t.Fatalf("B's route's own 401, call %d: %d %v", i, code, hd)
+		}
+	}
+	f.mu.Lock()
+	reached := len(f.proofs) - before
+	f.mu.Unlock()
+	if reached != 3 {
+		t.Fatalf("a route's 401 held the relay: %d of 3 reached the hub", reached)
+	}
+	// The hub's own refusal of a token does say so.
+	w := securityRequest(f.routes, "GET", "/api/v1/assistant", extTokenPrefix+"nobodys", "", "127.0.0.1:1", false)
+	if w.Code != 401 || w.Header().Get(extwire.HeaderAuthRefused) != extwire.RefusedToken {
+		t.Fatalf("the hub's own refusal: %d %v", w.Code, w.Header())
+	}
+}
+
+// Whether a manager off the bus is in the roster is asked of the database once in a while, not on each uncounted
+// request naming it: the answer is kept for rosterSeenFor.
+func TestTheRosterIsAskedOnceInAWhile(t *testing.T) {
+	f := newProofTestHub(t)
+	const path = "/api/v1/machines"
+	key := extwire.ProofKey(f.b.token)
+	f.h.busHangUp("m-0b0b0b", websocket.StatusGoingAway, "test: the hub lost it")
+	eventually(t, 5*time.Second, "B off the bus", func() bool { return f.h.busConnOf("m-0b0b0b") == nil })
+	call := func() int {
+		t.Helper()
+		code, _ := proofDo(t, f.front.URL, path, f.bTok, extwire.SignProof(key, "m-0b0b0b", "GET", path, f.bTok, time.Now()))
+		return code
+	}
+	if code := call(); code != http.StatusServiceUnavailable {
+		t.Fatalf("B away: %d", code)
+	}
+	// B leaves the roster: the kept answer still holds, for a few seconds.
+	if _, err := f.h.managerStore().DeleteBusIdentity(context.Background(), "m-0b0b0b"); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(); code != http.StatusServiceUnavailable {
+		t.Fatalf("within rosterSeenFor, the kept answer: %d", code)
+	}
+	// Once it is stale the roster is asked again: B is not in it, so the token is nobody's.
+	f.h.extRoster.mu.Lock()
+	for id, a := range f.h.extRoster.seen {
+		a.until = time.Now().Add(-time.Second)
+		f.h.extRoster.seen[id] = a
+	}
+	f.h.extRoster.mu.Unlock()
+	if code := call(); code != http.StatusUnauthorized {
+		t.Fatalf("after rosterSeenFor, asked again: %d", code)
+	}
+}
+
+func TestRosterSeen(t *testing.T) {
+	var c rosterSeen
+	now := time.Now()
+	if _, ok := c.get("m-1", now); ok {
+		t.Fatal("an answer never kept")
+	}
+	c.put("m-1", true, now)
+	c.put("m-2", false, now)
+	if has, ok := c.get("m-1", now.Add(rosterSeenFor-time.Millisecond)); !ok || !has {
+		t.Fatal("m-1 kept as in the roster")
+	}
+	if has, ok := c.get("m-2", now); !ok || has {
+		t.Fatal("m-2 kept as not in the roster")
+	}
+	if _, ok := c.get("m-1", now.Add(rosterSeenFor)); ok {
+		t.Fatal("kept past rosterSeenFor")
+	}
+	for i := 0; i < rosterSeenMost+10; i++ {
+		c.put(fmt.Sprintf("m-x%d", i), true, now)
+	}
+	if len(c.seen) > rosterSeenMost {
+		t.Fatalf("%d kept, most %d", len(c.seen), rosterSeenMost)
 	}
 }

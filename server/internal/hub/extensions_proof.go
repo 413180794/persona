@@ -9,10 +9,12 @@ package hub
 // ProofWindow could be taken once more after it (capturing one means breaking the TLS it came over).
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
@@ -21,6 +23,8 @@ const (
 	codeClockSkew     = extwire.CodeClockSkew
 	codeProofReplayed = extwire.CodeProofReplayed
 	codeProofBusy     = extwire.CodeProofBusy
+	// codeManagerOffline: a proof that names a manager of the roster with no live bus connection (proofOfAManagerAway).
+	codeManagerOffline = extwire.CodeManagerOffline
 )
 
 // proofNoncesMost bounds the nonces kept of each manager: past it that manager's proofs are refused (proofBusy) rather
@@ -100,6 +104,69 @@ func (h *Hub) busProofKey(manager string) string {
 		return c.proofKey
 	}
 	return ""
+}
+
+// proofOfAManagerAway says whether proof (a request's extwire.HeaderManagerProof, as it came) names a manager of the
+// roster that has no live bus connection now. Only its shape is read: without that connection there is no key to check
+// it with. A proof naming no manager of the roster, or one that is connected, is not this (it is checked, and counted
+// when it fails, as before).
+func (h *Hub) proofOfAManagerAway(ctx context.Context, proof string) bool {
+	if proof == "" {
+		return false
+	}
+	p, err := extwire.ParseProof(proof)
+	if err != nil || h.busProofKey(p.Manager) != "" {
+		return false
+	}
+	if p.Manager == assistantwire.AssistantID || h.busConnOf(p.Manager) != nil {
+		return true // the roster's own shortcut (rosterHas)
+	}
+	// Such a proof is not counted, so the roster is asked once in a while for it, not on each request.
+	now := time.Now()
+	if has, ok := h.extRoster.get(p.Manager, now); ok {
+		return has
+	}
+	has, sure := h.rosterHas(ctx, p.Manager)
+	if sure {
+		h.extRoster.put(p.Manager, has, now)
+	}
+	return has && sure
+}
+
+// rosterSeenFor is how long rosterSeen keeps an answer, and rosterSeenMost how many it keeps.
+const (
+	rosterSeenFor  = 5 * time.Second
+	rosterSeenMost = 1024
+)
+
+// rosterSeen are the roster's answers lately to whether a manager off the bus is in it (proofOfAManagerAway).
+type rosterSeen struct {
+	mu   sync.Mutex
+	seen map[string]rosterAnswer
+}
+
+type rosterAnswer struct {
+	has   bool
+	until time.Time
+}
+
+func (c *rosterSeen) get(id string, now time.Time) (has, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	a, ok := c.seen[id]
+	if !ok || !now.Before(a.until) {
+		return false, false
+	}
+	return a.has, true
+}
+
+func (c *rosterSeen) put(id string, has bool, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.seen == nil || len(c.seen) >= rosterSeenMost {
+		c.seen = map[string]rosterAnswer{} // (each answer is good for seconds: starting over loses nothing)
+	}
+	c.seen[id] = rosterAnswer{has: has, until: now.Add(rosterSeenFor)}
 }
 
 // extensionProof is what proof (r's extwire.HeaderManagerProof) is worth for r with the extension's token tok of

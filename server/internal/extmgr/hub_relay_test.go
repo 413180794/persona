@@ -7,6 +7,7 @@ package extmgr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,9 @@ import (
 // its pin, trusts it), saying what came.
 type fakeHub struct {
 	srv  *httptest.Server
-	away atomic.Bool // the manager is off its bus (Options.Connected)
+	away atomic.Bool  // the manager is off its bus (Options.Connected)
+	conn atomic.Int64 // its bus connection (Options.Connection)
+	lost atomic.Bool  // the hub does not know the manager (it answers 401)
 	mu   sync.Mutex
 	seen []http.Header // each request's headers, with its path and query as X-Test-Path / X-Test-Query
 }
@@ -50,6 +53,11 @@ func newFakeHub(t *testing.T) *fakeHub {
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		f.saw(r)
+		if f.lost.Load() { // the hub's auth layer refusing the token as nobody's, as it says so
+			w.Header().Set(extwire.HeaderAuthRefused, extwire.RefusedToken)
+			writeErrCode(w, http.StatusUnauthorized, "unauthorized", errors.New("invalid token"))
+			return
+		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	f.srv = httptest.NewTLSServer(mux)
@@ -88,6 +96,7 @@ func otherManager(t *testing.T, f *fakeHub, logs *syncLog, cfgs ...ExtensionConf
 	h.opts.ManagerID, h.opts.HubURL, h.opts.HubClient = "work", f.srv.URL, f.srv.Client()
 	h.opts.HubProofKey = extwire.ProofKey(otherBusToken)
 	h.opts.Connected = func() bool { return !f.away.Load() }
+	h.opts.Connection = func() any { return f.conn.Load() }
 	if logs != nil {
 		logf := h.opts.Logf
 		h.opts.Logf = func(format string, args ...any) {
@@ -223,7 +232,24 @@ func TestAnotherManagersExtensionReachesTheHubThroughIt(t *testing.T) {
 		t.Fatalf("a request reached the hub while the manager was off the bus: %v", f.last())
 	}
 
+	// A hub that does not know the manager (it restarted; the connection is half open): after its 401 the manager
+	// holds its extensions' requests until its next bus connection.
+	f.lost.Store(true)
+	if code := relayDo(t, "GET", relay+"/api/v1/kb-search", map[string]string{"Authorization": "Bearer " + tok}); code != http.StatusUnauthorized {
+		t.Fatalf("the hub lost the manager: %d", code)
+	}
+	f.lost.Store(false)
+	held := f.count()
+	if code := relayDo(t, "GET", relay+"/api/v1/kb-search", map[string]string{"Authorization": "Bearer " + tok}); code != http.StatusServiceUnavailable || f.count() != held {
+		t.Fatalf("held until the next connection: %d (%d requests at the hub, was %d)", code, f.count(), held)
+	}
+	f.conn.Add(1)
+	if code := relayDo(t, "GET", relay+"/api/v1/kb-search", map[string]string{"Authorization": "Bearer " + tok}); code != 200 {
+		t.Fatalf("on the next connection: %d", code)
+	}
+
 	// Nothing else gets through to the hub.
+	before = f.count()
 	for _, c := range []struct {
 		path, auth string
 		want       int

@@ -39,10 +39,15 @@ type guardManager struct {
 
 func connectGuardManager(t *testing.T, h *Hub, url, id string, answer func(method string, params json.RawMessage) (any, error)) *guardManager {
 	t.Helper()
-	f := &guardManager{id: id}
+	return connectGuardManagerWith(t, url, id, busToken(t, h, id, id), answer)
+}
+
+// connectGuardManagerWith is connectGuardManager with a bus token the manager has (connecting again with it).
+func connectGuardManagerWith(t *testing.T, url, id, token string, answer func(method string, params json.RawMessage) (any, error)) *guardManager {
+	t.Helper()
+	f := &guardManager{id: id, token: token}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	f.token = busToken(t, h, id, id)
 	ws, err := bus.Dial(ctx, url, f.token, nil)
 	if err != nil {
 		t.Fatal(err)

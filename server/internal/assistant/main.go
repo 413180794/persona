@@ -327,8 +327,14 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 			return bus.DialAt(ctx, hub, token, httpClient, devicewire.RelayPath, query)
 		},
 		Connected: func() bool { return bh.Client().Peer() != nil },
-		Lang:      func() i18n.Lang { return svc.lang(context.Background()) },
-		Timezone:  func() string { return svc.userTZ() }})
+		Connection: func() any {
+			if p := bh.Client().Peer(); p != nil {
+				return p
+			}
+			return nil
+		},
+		Lang:     func() i18n.Lang { return svc.lang(context.Background()) },
+		Timezone: func() string { return svc.userTZ() }})
 	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
 		ConfigFile: o.ConfigFile, Outbox: database,

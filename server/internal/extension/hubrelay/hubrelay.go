@@ -10,6 +10,7 @@ package hubrelay
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -40,7 +41,13 @@ type Options struct {
 	// itself and sends nothing on: the hub could not ask the manager whose a token is, and would count every call
 	// against the manager's address.
 	Ready func() bool
-	Logf  func(format string, args ...any)
+	// Connection is the manager's bus connection now: a comparable value that is another one for each connection
+	// whose handshake went through (nil: none known). When the hub's auth layer refuses a token the relay knows (401,
+	// or 503 manager_offline, with extwire.HeaderAuthRefused), it does not know the manager on that connection (the hub restarted, the connection is half
+	// open and the manager has not noticed yet): the relay then answers 503 itself until Connection is another one,
+	// or for suspendMost at most (a refusal that was not about the connection).
+	Connection func() any
+	Logf       func(format string, args ...any)
 	// Now is the clock (tests); nil: time.Now.
 	Now func() time.Time
 }
@@ -63,6 +70,10 @@ func Handler(o Options) (http.Handler, error) {
 	if o.Ready == nil {
 		o.Ready = func() bool { return true }
 	}
+	if o.Connection == nil {
+		o.Connection = func() any { return nil }
+	}
+	held := &suspension{}
 	var transport http.RoundTripper = http.DefaultTransport
 	if o.Transport != nil {
 		transport = o.Transport
@@ -83,6 +94,11 @@ func Handler(o Options) (http.Handler, error) {
 		FlushInterval: -1, // streams (a chat's feed, events) as they come
 		ModifyResponse: func(res *http.Response) error {
 			skew.check(res, o)
+			// (A token the relay no longer knows went meanwhile, with its extension: that refusal is no news.)
+			if refused(res) && o.Knows(tokenOf(res.Request)) && held.hold(o.Connection(), o.Now()) {
+				o.Logf("the hub's API: the hub does not know this manager on its bus connection now: its extensions' " +
+					"requests wait for the next connection")
+			}
 			return nil
 		},
 		ErrorLog: log.New(io.Discard, "", 0),
@@ -104,9 +120,9 @@ func Handler(o Options) (http.Handler, error) {
 			apierr.WriteCode(w, http.StatusUnauthorized, "unauthorized", errors.New("not a token of this manager's extensions"))
 			return
 		}
-		if !o.Ready() {
+		if !o.Ready() || held.held(o.Connection(), o.Now()) {
 			w.Header().Set("Retry-After", "5")
-			apierr.WriteCode(w, http.StatusServiceUnavailable, "manager_offline",
+			apierr.WriteCode(w, http.StatusServiceUnavailable, extwire.CodeManagerOffline,
 				errors.New("the manager is not connected to the hub right now: try again shortly"))
 			return
 		}
@@ -145,13 +161,67 @@ func (s signer) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil || res.StatusCode != http.StatusForbidden || !replayable(req) {
 		return res, err
 	}
-	head, _ := io.ReadAll(io.LimitReader(res.Body, 4<<10))
-	if !strings.Contains(string(head), `"`+extwire.CodeProofReplayed+`"`) {
-		res.Body = readCloser{io.MultiReader(bytes.NewReader(head), res.Body), res.Body}
+	if codeOf(res) != extwire.CodeProofReplayed {
 		return res, nil
 	}
 	_ = res.Body.Close()
 	return s.next.RoundTrip(s.signed(req))
+}
+
+// codeOf is the code of the hub's JSON error in res ("" for none), leaving res's body as it was for whoever reads it.
+func codeOf(res *http.Response) string {
+	head, _ := io.ReadAll(io.LimitReader(res.Body, 4<<10))
+	res.Body = readCloser{io.MultiReader(bytes.NewReader(head), res.Body), res.Body}
+	var e struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(head, &e)
+	return e.Code
+}
+
+// refused says whether res is the hub's auth layer refusing the token it was sent with as nobody's (401), or saying
+// its manager is not on its bus (503 manager_offline): extwire.HeaderAuthRefused, which the hub puts on those and takes
+// off any other response. A 401 from further on (a manager's or an extension's route whose own upstream refused it)
+// holds nothing.
+func refused(res *http.Response) bool {
+	switch v := res.Header.Get(extwire.HeaderAuthRefused); res.StatusCode {
+	case http.StatusUnauthorized:
+		return v == extwire.RefusedToken
+	case http.StatusServiceUnavailable:
+		return v == extwire.RefusedManagerOffline
+	}
+	return false
+}
+
+// suspendMost bounds how long the relay holds its extensions' requests after the hub refused one: past it, it tries
+// again (one request a minute at most reaches a hub that still does not know the manager).
+const suspendMost = time.Minute
+
+// suspension is the relay holding its extensions' requests: since the hub refused one on connection conn.
+type suspension struct {
+	mu    sync.Mutex
+	on    bool
+	conn  any
+	until time.Time
+}
+
+// hold holds the requests on connection conn, and says whether they were not held already.
+func (s *suspension) hold(conn any, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	was := s.on && conn == s.conn && now.Before(s.until)
+	s.on, s.conn, s.until = true, conn, now.Add(suspendMost)
+	return !was
+}
+
+// held says whether requests are held now, on connection conn: not once it is another one, nor past until.
+func (s *suspension) held(conn any, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.on && (conn != s.conn || !now.Before(s.until)) {
+		s.on = false
+	}
+	return s.on
 }
 
 // signed is req with a new proof (a copy: a RoundTripper leaves its request as it came).
