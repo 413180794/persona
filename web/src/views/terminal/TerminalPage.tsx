@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { usePanes, type Listing } from "../../lib/terminal-panes";
 import { machineWithHub } from "../../lib/mesh";
+import { composing } from "../../lib/send-history";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
 import { terminalTarget } from "../../lib/session-view";
@@ -134,7 +135,7 @@ export function TerminalPage({ route, onToggleSidebar }: { route: TerminalRoute;
             value={query}
             onChange={setQuery}
             onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
+              if (composing(e.nativeEvent)) return;
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
                 if (flat.length) setActive((a) => (Math.min(a, flat.length - 1) + (e.key === "ArrowDown" ? 1 : flat.length - 1)) % flat.length);

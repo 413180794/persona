@@ -8,6 +8,7 @@ import { collapseMounted } from "../lib/disclosure";
 import { FeedbackGate, offlineNow } from "../lib/feedback";
 import { useCloseOnBack } from "../lib/back-close";
 import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
+import { composing } from "../lib/send-history";
 import { keyboardFrame } from "../lib/viewport";
 import { prefersReducedMotion } from "./stream/motion";
 import { accelLabel, activation, edge, enabled, keyIntent, renameCommit, rowLabel, type MenuItem } from "./menu-model";
@@ -461,7 +462,7 @@ export function Menu({
     };
     const key = (e: KeyboardEvent) => {
       const { levels: ls, actives: act, subs: open, renaming: renamed } = live.current;
-      if (e.isComposing || renamed) return; // an input in the menu takes its own keys
+      if (composing(e) || renamed) return; // an input in the menu takes its own keys
       const t = e.target as HTMLElement | null;
       const typing = Boolean(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable));
       // a field elsewhere on the page keeps its letters and its Backspace
@@ -746,7 +747,7 @@ function RenameRow({ item, busy, onCommit, onCancel, refCb }: { item: MenuItem; 
         onChange={(e) => setText(e.target.value)}
         onFocus={(e) => e.currentTarget.select()}
         onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
+          if (composing(e.nativeEvent)) return;
           if (e.key === "Enter") {
             e.preventDefault();
             e.stopPropagation();

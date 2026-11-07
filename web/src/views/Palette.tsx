@@ -10,6 +10,7 @@ import { appCommands, commandKeys, contextCommands, filterCommands, inboxHits, o
 import { isDone, itemRoute, useInbox, type InboxItem } from "../lib/inbox";
 import { useNavPages } from "./Sidebar";
 import { href, navigate, type Route } from "../lib/router";
+import { composing } from "../lib/send-history";
 import { useAgentSessions } from "../lib/sessions";
 import { chordParts, handlerOf, runShortcut, SCOPE_LABEL, useBindings } from "../lib/shortcuts";
 import { useStore } from "../lib/store";
@@ -281,7 +282,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
+              if (composing(e.nativeEvent)) return;
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
                 if (shown.length) setActive((a) => (a + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
