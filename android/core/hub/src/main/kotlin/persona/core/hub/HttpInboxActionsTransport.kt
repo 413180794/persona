@@ -38,7 +38,7 @@ class HttpInboxActionsTransport(
 
     private suspend fun call(client: OkHttpClient, url: HttpUrl, body: String?): String {
         if (!isCurrent()) throw CancellationException("Pairing changed")
-        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").apply {
+        val request = Request.Builder().url(url.withRequestManager()).header("Authorization", "Bearer $token").apply {
             if (body != null) post(body.toRequestBody("application/json".toMediaType()))
         }.build()
         return client.newCall(request).awaitResponse().use { response ->

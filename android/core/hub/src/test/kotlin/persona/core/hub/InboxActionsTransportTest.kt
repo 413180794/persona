@@ -42,4 +42,17 @@ class InboxActionsTransportTest {
                 4, server.requestCount)
         }
     }
+
+    /** A draft or a context asked for another manager's item names it on the request (RequestManager, docs/managers.md). */
+    @Test fun anItemsManagerIsNamedOnTheRequest() = runBlocking {
+        MockWebServer().use { server ->
+            val transport = HttpInboxActionsTransport(OkHttpClient(), { server.url("/").toString().toHttpUrl() }, "fixture-token", { true })
+            server.enqueue(MockResponse().setBody("""{"text":"好的"}"""))
+            kotlinx.coroutines.withContext(persona.core.contracts.api.RequestManager("m-3")) { transport.draft("x", "") }
+            assertEquals("/api/v1/inbox/x/draft?manager=m-3", server.takeRequest().path)
+            server.enqueue(MockResponse().setBody("""{"context":"c"}"""))
+            assertEquals("c", transport.context("x"))
+            assertEquals("/api/v1/inbox/x", server.takeRequest().path)
+        }
+    }
 }

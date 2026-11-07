@@ -14,6 +14,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.core.contracts.*
+import persona.core.contracts.api.HubManager
+import persona.core.contracts.api.ManagerRoster
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.*
@@ -31,6 +33,9 @@ internal fun MachinesScreen(
     canAdd: Boolean = false,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+    val roster = LocalManagerRoster.current
+    val managerGroup = LocalManagerGroup.current
+    var choosingManager by remember(machineId) { mutableStateOf(false) }
     val machines by model.sessions.machines.collectAsStateWithLifecycle()
     val sessions by model.sessions.sessions.collectAsStateWithLifecycle()
     val machine = machines.firstOrNull { it.id == machineId }
@@ -67,6 +72,10 @@ internal fun MachinesScreen(
     if (addComputerHelp) ReadinessHelpDialog(ReadinessHelp.AddComputer, null, onDismiss = { addComputerHelp = false }, onAction = {})
     val addComputer = { if (adds && canAdd) navigator.navigate(AddComputerRoute()) else addComputerHelp = true }
     val confirmComputer: (String) -> Unit = { id -> navigator.navigate(AddComputerRoute(confirm = id)) }
+    if (choosingManager && actions != null && machineId != null) roster?.let { r ->
+        val current = r.ownerOf(machines.firstOrNull { it.id == machineId }?.manager)
+        MoveToManagerSheet(r, current, onMove = { m -> actions.moveTo(machineId, m.id, m.shownName) }, onDismiss = { choosingManager = false })
+    }
     JListPage(
         title = if (machineId == null) stringResource(R.string.machines_title) else machine?.displayName ?: stringResource(R.string.machines_title_detail),
         summary = if (machineId == null) stringResource(R.string.machines_summary, online, ids.size, attention) else null,
@@ -89,13 +98,20 @@ internal fun MachinesScreen(
                         JButton(stringResource(ReadinessActionId.AddComputer.label), addComputer, kind = JButtonKind.Secondary)
                     }) else null)
             }
-            items(ids, key = { it }, contentType = { "machine" }) { id ->
+            val card: @Composable (String) -> Unit = { id ->
                 val info = machines.firstOrNull { it.id == id }
                 val metric = metrics[id] ?: MachineMetrics(id, info?.online ?: false, info?.system)
                 MachineCard(info, metric, machineSessions(sessions, id), state.now, state.dashboard?.step ?: 60, deploy = deployLine,
                     onConfirm = if (adds) confirmComputer else null) {
                     navigator.navigate(MachineDetailRoute(id))
                 }
+            }
+            // Several managers (docs/managers.md step 4): the computers under the manager they belong to.
+            val byManager = roster?.groups(ids) { id -> machines.firstOrNull { it.id == id }?.manager }
+            if (byManager == null) items(ids, key = { it }, contentType = { "machine" }) { card(it) }
+            else byManager.forEach { group ->
+                item("manager-${group.id}", contentType = "manager") { JManagerHeader(group, count = group.items.size) }
+                items(group.items, key = { "${group.id}:$it" }, contentType = { "machine" }) { card(it) }
             }
         } else {
             val metric = state.history?.metrics ?: MachineMetrics(machineId, machine?.online ?: false, machine?.system)
@@ -107,9 +123,14 @@ internal fun MachinesScreen(
                     onConfirm = if (adds) confirmComputer else null)
             }
             if (machine == null && machines.isNotEmpty()) item("gone") { JNotice(stringResource(R.string.machines_gone)) }
+            // Move to… with several managers, for this hub's own computers (a linked hub's is that hub's to give).
+            val owner = machine?.takeIf { roster?.isMulti == true && movable(it, managerGroup) }?.let { roster?.ownerOf(it.manager) }
             if (machine != null && actions != null) machineControls(machine, acting.reconnecting,
+                // Reconnect goes through its manager: not while that one is offline
+                canReconnect = offlineManagerOf(roster, machine, managerGroup) == null,
                 onEngine = { navigator.navigate(EngineRoute(machine.id)) }, onReconnect = { actions.reconnect(machine.id) },
-                botmux = acting.botmux, botmuxSaving = acting.botmuxSaving, onBotmux = { actions.setBotmux(machine.id, it) })
+                botmux = acting.botmux, botmuxSaving = acting.botmuxSaving, onBotmux = { actions.setBotmux(machine.id, it) },
+                move = owner?.let { id -> MachineMoveRow(roster?.manager(id)?.shownName ?: id, acting.moving) { choosingManager = true } })
             // As iOS: what the computer can do and its browser come before the monitoring.
             if (machine != null && health != null) {
                 machineHealth(machine, healthState, allChecks, { allChecks = !allChecks }, { health.check(machine.id) }, { confirmFix = true },
@@ -248,14 +269,20 @@ private fun MachineCard(
                 Modifier.padding(top = Tokens.Space.s), kind = JButtonKind.Secondary, size = JButtonSize.Small)
         } else if (!metrics.online) {
             Text(stringResource(R.string.machines_last_seen, MetricFormat.lastSeen(machine?.lastSeen, locale) ?: stringResource(R.string.machines_unknown)), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-            // A known error_code in plain words; else why and what to do as read from the hub's error, its own words
-            // after in a quieter colour; else the hub's error alone (#4463).
-            val coded = machineErrorText(machine?.errorCode)
-            val plain = if (coded == null && machine != null) connectionFailureText(machine) else null
-            (coded ?: plain)?.let { Text(stringResource(it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
-            // A computer being redeployed drops on purpose: its error is not news (the deploy line says what is going on).
-            if (coded == null && machine?.deploying != true) machine?.error?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = PersonaTheme.type.caption, color = if (plain != null) PersonaTheme.palette.ink3 else PersonaTheme.palette.ink2)
+            // Its manager is offline (several managers): that is why, in our words, not the hub's for an unreachable assistant.
+            val goneWith = offlineManagerOf(LocalManagerRoster.current, machine, LocalManagerGroup.current)
+            if (goneWith != null) {
+                Text(stringResource(R.string.machines_manager_offline, goneWith.shownName), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
+            } else {
+                // A known error_code in plain words; else why and what to do as read from the hub's error, its own words
+                // after in a quieter colour; else the hub's error alone (#4463).
+                val coded = machineErrorText(machine?.errorCode)
+                val plain = if (coded == null && machine != null) connectionFailureText(machine) else null
+                (coded ?: plain)?.let { Text(stringResource(it), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2) }
+                // A computer being redeployed drops on purpose: its error is not news (the deploy line says what is going on).
+                if (coded == null && machine?.deploying != true) machine?.error?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = PersonaTheme.type.caption, color = if (plain != null) PersonaTheme.palette.ink3 else PersonaTheme.palette.ink2)
+                }
             }
         } else {
             Text(stringResource(R.string.machines_card_sessions, sessions.size, sessions.count { it.agentState == AgentState.Working },
@@ -316,4 +343,22 @@ private fun CoreBars(cores: List<Double>) {
             }
         }
     }
+}
+
+/**
+ * Whether a computer can be given to another manager here: one of the selected group's ([group]) and not a computer
+ * only a linked member hub has (`kind` `hub`): the hub refuses those (`400 not_movable`).
+ */
+internal fun movable(machine: Machine, group: String?): Boolean =
+    machine.kind != "hub" && persona.core.contracts.GroupKeys.namespaceOf(machine.id) == group
+
+/**
+ * The manager an offline [machine] is offline with (several managers only): its own, when that one isn't connected. The
+ * hub then shows it offline with its words for an unreachable assistant; the card names the manager instead.
+ */
+internal fun offlineManagerOf(roster: ManagerRoster?, machine: Machine?, group: String?): HubManager? {
+    if (roster == null || !roster.isMulti || machine == null || machine.online) return null
+    // the roster is the selected group's hub's: another group's computer (its own hub's "assistant") is not its
+    if (persona.core.contracts.GroupKeys.namespaceOf(machine.id) != group) return null
+    return roster.manager(roster.ownerOf(machine.manager))?.takeIf { !it.online && !it.isInstalling }
 }

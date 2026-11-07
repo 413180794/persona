@@ -8,6 +8,7 @@ import persona.core.contracts.api.ClaudeDirsState
 import persona.core.contracts.api.LauncherQuotaAnswer
 import persona.core.contracts.api.HerdrState
 import persona.core.contracts.api.MachineManagement
+import persona.core.contracts.api.MachineMove
 import persona.core.contracts.MachineBrowser
 import persona.core.contracts.api.DoctorReport
 import persona.core.contracts.api.UsageAccount
@@ -127,6 +128,13 @@ class HttpMachineManagement internal constructor(
 
     private fun settings(body: JsonObject): List<ClaudeSetting> =
         (body["settings"] as? JsonArray).orEmpty().map { JsonCodec.decodeFromJsonElement<ClaudeSetting>(it) }
+
+    override suspend fun moveToManager(machineId: String, manager: String): MachineMove {
+        require(machineId.isNotBlank() && manager.isNotBlank())
+        val answer = call(api("managers", manager, "machines"), "POST", buildJsonObject { put("machine_id", machineId) })
+        return try { JsonCodec.decodeFromJsonElement(MachineMove.serializer(), answer) }
+        catch (error: kotlinx.serialization.SerializationException) { throw HubFailure(HubError.Protocol, cause = error) }
+    }
 
     private suspend fun call(path: String, method: String, body: JsonObject? = null, timeout: Long? = null): JsonObject =
         request(path, method, body?.toString()?.toRequestBody("application/json; charset=utf-8".toMediaType()), timeout).use {

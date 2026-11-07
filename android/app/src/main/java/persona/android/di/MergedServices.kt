@@ -178,6 +178,7 @@ internal fun mergedMachineManagement(
     override suspend fun setBrowser(machineId: String, enabled: Boolean) = routes.on(machineId) { it.setBrowser(machineId, enabled) }
     override suspend fun browserJob(machineId: String, action: String) = routes.on(machineId) { it.browserJob(machineId, action) }
     override suspend fun usageWindows() = selected?.invoke()?.usageWindows().orEmpty()
+    override suspend fun moveToManager(machineId: String, manager: String) = routes.on(machineId) { it.moveToManager(machineId, manager) }
 }
 
 /** Runs a call on the machine management of the group [machineId] names, in that group's lifetime (GroupStacks.use). */

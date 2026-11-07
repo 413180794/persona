@@ -61,6 +61,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     val pending = remember { mutableStateMapOf<String, Boolean>() }
+    val roster = LocalManagerRoster.current
     val records = snapshot.records.associateBy { it.item.id }
     val interactions = snapshot.interactions.associateBy { it.id }
     val items = orderHubInbox(snapshot.records.map { record ->
@@ -272,8 +273,12 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                     else -> JEmptyState(stringResource(R.string.inbox_empty_filtered_title), stringResource(R.string.inbox_empty_filtered_text), icon = PhIcons.CheckCircle)
                 }
             }
-            groups.forEach { group ->
-                item("section:${group.id}", contentType = "section") {
+            // Several managers (docs/managers.md step 4): each one's inbox under its name, its sections inside.
+            val byManager = inboxByManager(roster, groups) { row ->
+                if (row.type == InboxRowType.Interaction) interactions[row.id]?.manager else records[row.id]?.manager
+            }
+            val sections: (String, List<InboxGroup>) -> Unit = { prefix, shownGroups -> shownGroups.forEach { group ->
+                item("section:$prefix${group.id}", contentType = "section") {
                     JSectionHeader(
                         title = if (group.id == "working") group.title.text() else inboxGroupTitle(group),
                         count = group.count,
@@ -290,7 +295,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                         }) else null,
                     )
                 }
-                itemsIndexed(group.visibleRows, key = { _, row -> "${row.type}:${row.id}" }, contentType = { _, row -> row.type }) { index, row ->
+                itemsIndexed(group.visibleRows, key = { _, row -> "$prefix${row.type}:${row.id}" }, contentType = { _, row -> row.type }) { index, row ->
                     val position = GroupPosition.of(index, group.visibleRows.size)
                     if (row.type == InboxRowType.Interaction) {
                         interactions[row.id]?.let { interaction ->
@@ -305,6 +310,11 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                             onMute = { option -> mute(record, option) })
                     }
                 }
+            } }
+            if (byManager == null) sections("", groups)
+            else byManager.forEach { (manager, shownGroups) ->
+                item("manager:${manager.id}", contentType = "manager") { JManagerHeader(manager, count = manager.items.size) }
+                sections("${manager.id}:", shownGroups)
             }
         }
     }
@@ -318,6 +328,22 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                 draft = draft,
                 onDone = { composeDraft = null },
             )
+        }
+    }
+}
+
+/**
+ * The inbox's sections split by the manager each row belongs to ([managerOf]; no stamp is the default's), the default
+ * manager first, then the roster's order; a manager with no rows is left out. Null with one manager.
+ */
+internal fun inboxByManager(
+    roster: persona.core.contracts.api.ManagerRoster?, groups: List<InboxGroup>, managerOf: (InboxRow) -> String?,
+): List<Pair<persona.core.contracts.api.ManagerGroup<InboxRow>, List<InboxGroup>>>? {
+    val byManager = roster?.groups(groups.flatMap { it.rows }.distinct(), managerOf) ?: return null
+    return byManager.map { manager ->
+        val mine = manager.items.toSet()
+        manager to groups.mapNotNull { group ->
+            group.rows.filter { it in mine }.takeIf { it.isNotEmpty() }?.let { rows -> group.copy(rows = rows, visibleRows = group.visibleRows.filter { it in mine }) }
         }
     }
 }

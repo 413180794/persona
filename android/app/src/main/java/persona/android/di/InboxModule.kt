@@ -77,6 +77,8 @@ class InboxDataOwner @Inject constructor(
                 override val current: StateFlow<InboxAssistantTransport?> = MutableStateFlow(transport)
             }
             val snapshots = ListSnapshotStore(File(data.noBackupDirectory, "lists"))
+            // Persona of this group, made below: "Hand to AI" of another manager's item goes to that manager's main conversation.
+            var persona: AssistantConversations? = null
             val realInbox = RealInboxRepository(connection, data.inboxReplies, sessions, interactions, data.coroutineScope,
                 snapshots = snapshots, hubPreferences = preferences, hubConnection = runtime,
                 mainConversationSender = data.messages.inGroup(names, data.coroutineScope), actions = actions,
@@ -102,7 +104,8 @@ class InboxDataOwner @Inject constructor(
                 download = media::download,
                 // "Hand to AI" to an Agent uses the same outbox as the Agents tab, and its targets come from the merged list:
                 // the app-wide sender takes the session to its own group (by the merged id's suffix).
-                messageSender = runtime.messages)
+                messageSender = runtime.messages,
+                mainConversationOf = { manager -> checkNotNull(persona) { "managers unavailable" }.mainConversationOf(manager) })
             val lark = socket.route.map { route -> route?.let {
                 HttpLarkConversationTransport(transport, it.endpoint.url, data.credentials.deviceToken,
                     socket.http.client) { isCurrent() && socket.route.value == route }
@@ -117,7 +120,8 @@ class InboxDataOwner @Inject constructor(
             // as the pages show them, so a card just answered here stops saying "Needs you" on the Persona tab too (#4525).
             val assistant = RealAssistantRepository(connection, stack.repositories.shownRepository, data.coroutineScope, snapshots,
                 stack.repositories.preferences ?: preferences.takeIf { names.plain })
-            Repositories(data, wrapped, assistant.inGroup(names, data.coroutineScope), mail,
+            persona = assistant.inGroup(names, data.coroutineScope)
+            Repositories(data, wrapped, checkNotNull(persona), mail,
                 ReplyComposers(wrapped, data.coroutineScope), reading, names)
         }?.await()
     }.stateIn(app.scope, SharingStarted.Eagerly, null)

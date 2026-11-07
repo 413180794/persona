@@ -71,6 +71,8 @@ data class Machine(
     @SerialName("trust") val trust: String? = null,
     /** What kind of trouble [error] is: node_service_down | link_offline | never_connected | node_outdated. */
     @SerialName("error_code") val errorCode: String? = null,
+    /** The manager it belongs to (docs/managers.md「Ownership」); null from an older hub: the default manager. */
+    @SerialName("manager") val manager: String? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
     val pending: Boolean get() = trust == "pending"
@@ -305,6 +307,8 @@ data class Session(
     @SerialName("assistant") val assistant: Boolean = false,
     /** An assistant conversation put away (POST /api/v1/assistant/conversations/{id}/archive): kept, not listed. */
     @SerialName("archived") val archived: Boolean = false,
+    /** The manager it belongs to (docs/managers.md「Ownership」); null from an older hub: the default manager. */
+    @SerialName("manager") val manager: String? = null,
     /**
      * Who opened an assistant conversation (docs/protocol.md "Origin of assistant conversations", #3264): user, channel, inbox, task, spawned,
      * lark_agent, extension, or one this app doesn't know yet; null is the user's (older hubs never say).
@@ -641,6 +645,8 @@ data class Interaction(
     val reason: String? = null,
     /** Filled in before approving (adding a mail account's password); the hub refuses allow without the required ones. */
     val fields: List<InteractionField>? = null,
+    /** The manager that reported it (docs/managers.md「Ownership」); null from an older hub: the default manager. */
+    @SerialName("manager") val manager: String? = null,
 ) {
     val sessionKey: SessionKey get() = SessionKey(machineId, sessionId)
 

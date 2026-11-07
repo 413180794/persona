@@ -1,5 +1,6 @@
 package persona.core.hub
 
+
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.ExtensionCatalog
@@ -71,8 +72,8 @@ class HttpExtensionManagement internal constructor(
         val body = parse(call(path(), "GET")) as? JsonObject ?: throw HubFailure(HubError.Protocol)
         val list = body[if (legacy) "plugins" else "extensions"] as? JsonArray ?: throw HubFailure(HubError.Protocol)
         fun flag(name: String) = (body[name] as? JsonPrimitive)?.booleanOrNull == true
-        return ExtensionListing(decode { JsonCodec.decodeFromJsonElement(ListSerializer(HubExtension.serializer()), list) },
-            canInstall = flag("can_install"), markets = flag("markets"))
+        val extensions = decode { JsonCodec.decodeFromJsonElement(ListSerializer(HubExtension.serializer()), list) }
+        return ExtensionListing(extensions, canInstall = flag("can_install"), markets = flag("markets"))
     }
 
     override suspend fun extension(id: String) = detail(call(path(id, "-", ""), "GET"))

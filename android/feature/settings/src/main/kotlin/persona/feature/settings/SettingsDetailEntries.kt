@@ -37,7 +37,8 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     }
     entry<ExtensionRoute> { route ->
         ExtensionPage(services.extensions.takeUnless { demo }, route.extensionId, onBack = navigator::back, startSignIn = route.signIn,
-            onPage = { page -> navigator.navigate(ExtensionUiRoute(page.extension.ifBlank { route.extensionId }, page.id, page.title.ifBlank { page.id })) },
+            manager = route.manager,
+            onPage = { page -> navigator.navigate(ExtensionUiRoute(page.extension.ifBlank { route.extensionId }, page.id, page.title.ifBlank { page.id }, manager = route.manager)) },
             onChannel = { navigator.navigate(ChannelRoute(it)) }, machines = services.sessions.machines,
             onUpgrade = { market, id -> navigator.navigate(ExtensionCatalogRoute(market, id)) },
             connectors = services.connectors.takeUnless { demo }, onConnector = { navigator.navigate(ConnectorRoute(it)) })
@@ -47,7 +48,8 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     }
     entry<ExtensionUiRoute> { route ->
         ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back,
-            initialState = route.state, depth = route.depth, onPush = navigator::navigate)
+            initialState = route.state, depth = route.depth, onPush = { navigator.navigate(it.copy(manager = it.manager ?: route.manager)) },
+            manager = route.manager)
     }
     entry<ExtensionMarketRoute> {
         ExtensionMarketPage(services.extensions.takeUnless { demo }, onBack = navigator::back,
@@ -59,7 +61,9 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     }
     entry<ExtensionMarketsRoute> { ExtensionMarketsPage(services.extensions.takeUnless { demo }, onBack = navigator::back) }
     entry<persona.core.navigation.ManagerRoute> { route ->
-        ManagerPage(services.managers.takeUnless { demo }, route.managerId, onBack = navigator::back)
+        val machines by services.sessions.machines.collectAsState()
+        ManagerPage(services.managers.takeUnless { demo }, route.managerId, onBack = navigator::back,
+            devices = services.bound().deviceSettings.takeUnless { demo }, machines = machines)
     }
     entry<ChannelRoute> { route ->
         ChannelPage(services.channels.takeUnless { demo }, route.channelId, onBack = navigator::back, onOpen = navigator::navigate)

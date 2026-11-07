@@ -114,6 +114,8 @@ data class HubConnector(
     val enabled: Boolean? = null,
     val archive: Boolean? = null,
     val inbox: Boolean? = null,
+    /** Whose it is (several managers: the hub's merged list stamps each one, docs/managers.md); null: the default's. */
+    val manager: String? = null,
 )
 
 /** What deleting a connector's data removed (`DELETE /api/v1/connectors/{id}/data`, `…/archive`). */

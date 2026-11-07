@@ -200,4 +200,10 @@
     <plurals name="machines_usage_age_minutes"><item quantity="one">%d minute ago</item><item quantity="other">%d minutes ago</item></plurals>
     <plurals name="machines_usage_age_hours"><item quantity="one">%d hour ago</item><item quantity="other">%d hours ago</item></plurals>
     <plurals name="machines_usage_age_days"><item quantity="one">%d day ago</item><item quantity="other">%d days ago</item></plurals>
+    <string name="machines_move">Move to…</string>
+    <string name="machines_move_title">Move to which manager</string>
+    <string name="machines_move_offline">%1$s · Offline</string>
+    <string name="machines_notice_moved">Moved to “%1$s”</string>
+    <string name="machines_notice_move_failed">Couldn\'t move it: %1$s</string>
+    <string name="machines_manager_offline">Its manager “%1$s” is offline. It comes back online once the manager is back.</string>
 </resources>

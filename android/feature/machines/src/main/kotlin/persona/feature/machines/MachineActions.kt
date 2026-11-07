@@ -30,6 +30,9 @@ internal sealed interface MachineNotice {
     data class DeployFailed(val reason: UiText) : MachineNotice
     /** "Also show botmux sessions" was not saved; the switch is back where it was. */
     data class BotmuxFailed(val reason: UiText) : MachineNotice
+    /** Move to…: the computer is [name]'s now (docs/managers.md). */
+    data class Moved(val name: String) : MachineNotice
+    data class MoveFailed(val reason: UiText) : MachineNotice
 
     fun text(resources: Resources): String = when (this) {
         Connected -> resources.getString(R.string.machines_notice_connected)
@@ -38,6 +41,8 @@ internal sealed interface MachineNotice {
         is ReconnectFailed -> resources.getString(R.string.machines_notice_reconnect_failed, reason.resolve(resources))
         is DeployFailed -> resources.getString(R.string.machines_notice_deploy_failed, reason.resolve(resources))
         is BotmuxFailed -> resources.getString(R.string.machines_notice_botmux_failed, reason.resolve(resources))
+        is Moved -> resources.getString(R.string.machines_notice_moved, name)
+        is MoveFailed -> resources.getString(R.string.machines_notice_move_failed, reason.resolve(resources))
     }
 }
 
@@ -63,6 +68,8 @@ internal data class MachineActionsState(
     /** "Also show botmux sessions" (#2575); null until the hub answered, and on an older hub without the route: no switch. */
     val botmux: Boolean? = null,
     val botmuxSaving: Boolean = false,
+    /** Move to… was sent and not answered yet. */
+    val moving: Boolean = false,
 )
 
 /**
@@ -154,6 +161,21 @@ internal class MachineActionsViewModel(
                     MachineNotice.NotYet(sessions.machines.value.firstOrNull { it.id == machineId }?.let(::notYetReason))
                 })
             } finally { mutable.update { it.copy(reconnecting = false) } }
+        }
+    }
+
+    /** Move to… [manager] (named [name] in the notice): the hub's `machines` push then shows the new stamp; read now too. */
+    fun moveTo(machineId: String, manager: String, name: String) {
+        if (state.value.moving) return
+        mutable.update { it.copy(moving = true) }
+        viewModelScope.launch {
+            try {
+                management.moveToManager(machineId, manager)
+                noticeChannel.trySend(MachineNotice.Moved(name))
+                try { sessions.refresh() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { noticeChannel.trySend(MachineNotice.MoveFailed(failureReasonText(error))) }
+            finally { mutable.update { it.copy(moving = false) } }
         }
     }
 

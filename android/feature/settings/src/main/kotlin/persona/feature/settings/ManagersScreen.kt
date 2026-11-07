@@ -18,6 +18,10 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.pluralStringResource
+import persona.core.contracts.Machine
+import persona.core.contracts.api.DeviceSettings
 import persona.core.contracts.api.HubManager
 import persona.core.contracts.api.HubManagers
 import persona.core.designsystem.*
@@ -103,6 +107,7 @@ private fun androidx.compose.foundation.layout.RowScope.ManagerSummary(manager: 
             Text(manager.name.ifBlank { manager.id }, Modifier.weight(1f, fill = false), style = PersonaTheme.type.body, color = palette.ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (manager.isDefault) JTag(stringResource(R.string.settings_managers_default))
+            if (manager.needsUpdate) JTag(stringResource(R.string.settings_managers_needs_update), Tone.Caution)
         }
         JStateLabel(ManagerText.statusLine(res, manager, now), ManagerText.status(manager))
         if (where) ManagerText.where(res, manager)?.let {
@@ -119,7 +124,13 @@ private enum class ManagerAsk { Rename, Move, Delete }
  * (New installation code while installing) and Delete (Cancel installation), each only where the hub would take it.
  */
 @Composable
-internal fun ManagerPage(managers: HubManagers?, managerId: String, onBack: () -> Unit, ticking: Boolean = true) {
+internal fun ManagerPage(
+    managers: HubManagers?, managerId: String, onBack: () -> Unit, ticking: Boolean = true,
+    /** This device's prefs, for 推送通知; null: no switch. */
+    devices: DeviceSettings? = null,
+    /** The hub's computers: deleting says how many of them go back to the hub's own manager. */
+    machines: List<Machine> = emptyList(),
+) {
     if (managers == null) {
         JListPage(title = stringResource(R.string.settings_managers_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_managers_demo)) } }
         return
@@ -130,6 +141,9 @@ internal fun ManagerPage(managers: HubManagers?, managerId: String, onBack: () -
     var asking by remember { mutableStateOf<ManagerAsk?>(null) }
     LaunchedEffect(model) { model.load() }
     LaunchedEffect(model) { managers.changes.collect { model.load() } }
+    val pushModel = remember(devices) { devices?.let(::ManagerPushModel) }
+    val push = pushModel?.state?.collectAsState()?.value
+    LaunchedEffect(pushModel) { pushModel?.load() }
     val manager = state.manager(managerId)
     val now = rememberNow(ticking = ticking && (state.code != null || manager?.isInstalling == true))
     ManagerContent(state, managerId, now, onBack, onRetry = { scope.launch { model.load() } },
@@ -137,7 +151,8 @@ internal fun ManagerPage(managers: HubManagers?, managerId: String, onBack: () -
         onDefault = { scope.launch { model.makeDefault(managerId) } },
         // An installing manager's new code moves nothing: no warning.
         onMove = { if (manager?.isInstalling == true) scope.launch { model.newCode(managerId) } else asking = ManagerAsk.Move },
-        onDelete = { asking = ManagerAsk.Delete })
+        onDelete = { asking = ManagerAsk.Delete },
+        push = push, onPush = pushModel?.let { m -> { on: Boolean -> scope.launch { m.set(managerId, on) }; Unit } })
     val name = manager?.name?.ifBlank { manager.id }.orEmpty()
     when (asking) {
         ManagerAsk.Rename -> NameDialog(
@@ -150,19 +165,9 @@ internal fun ManagerPage(managers: HubManagers?, managerId: String, onBack: () -
             text = stringResource(R.string.settings_managers_move_confirm), confirmEnabled = !state.busy,
             confirm = stringResource(R.string.settings_managers_move) to { asking = null; scope.launch { model.newCode(managerId) }; Unit },
         )
-        ManagerAsk.Delete -> {
-            val installing = manager?.isInstalling == true
-            JDialog(
-                onDismiss = { asking = null },
-                title = stringResource(if (installing) R.string.settings_managers_cancel_install else R.string.settings_managers_delete),
-                text = stringResource(if (installing) R.string.settings_managers_cancel_install_confirm else R.string.settings_managers_delete_confirm, name),
-                destructive = true, confirmEnabled = !state.busy,
-                dismiss = stringResource(R.string.settings_managers_keep) to { asking = null },
-                confirm = stringResource(if (installing) R.string.settings_managers_cancel_install else R.string.settings_managers_delete) to {
-                    scope.launch { if (model.delete(managerId)) { asking = null; onBack() } else asking = null }; Unit
-                },
-            )
-        }
+        ManagerAsk.Delete -> ManagerDeleteDialog(name, installing = manager?.isInstalling == true,
+            machines = machines.count { it.manager == managerId }, busy = state.busy, onDismiss = { asking = null },
+            onConfirm = { scope.launch { if (model.delete(managerId)) { asking = null; onBack() } else asking = null } })
         null -> Unit
     }
     ManagerCodeSheetHost(state, now, model)
@@ -173,6 +178,8 @@ internal fun ManagerPage(managers: HubManagers?, managerId: String, onBack: () -
 internal fun ManagerContent(
     state: ManagersState, managerId: String, now: Instant, onBack: () -> Unit, onRetry: () -> Unit,
     onRename: () -> Unit, onDefault: () -> Unit, onMove: () -> Unit, onDelete: () -> Unit,
+    /** 推送通知 for this device; null (or a hub without `muted_managers`): no switch. */
+    push: ManagerPushState? = null, onPush: ((Boolean) -> Unit)? = null,
 ) {
     val res = LocalResources.current
     val manager = state.manager(managerId)
@@ -193,7 +200,11 @@ internal fun ManagerContent(
         }
         if (manager == null) return@JListPage
         item("header") {
-            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) { JRow { ManagerSummary(manager, now, where = false) } }
+            Column {
+                JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) { JRow { ManagerSummary(manager, now, where = false) } }
+                // the hub marks one that reads no settings of its own yet: update personad where it runs
+                if (manager.needsUpdate) ManagerNote(stringResource(R.string.settings_managers_needs_update_note))
+            }
         }
         val facts = listOfNotNull(
             ManagerText.where(res, manager)?.let { res.getString(R.string.settings_managers_row_where) to it },
@@ -208,6 +219,18 @@ internal fun ManagerContent(
             }
         }
         val installing = manager.isInstalling
+        // 推送通知 (the web's row under where it runs): an installed manager, on a hub that keeps the list.
+        val pushes = push?.pushes(manager.id)
+        if (!installing && pushes != null && onPush != null) item("push") {
+            Column(Modifier.padding(top = Tokens.Space.l)) {
+                JGroupItem(GroupPosition.Single) {
+                    JRow(stringResource(R.string.settings_managers_push), onClick = { onPush(!pushes) }, chevron = false, role = Role.Switch,
+                        enabled = !push.busy, trailing = { JSwitch(pushes, null, enabled = !push.busy) })
+                }
+                ManagerNote(stringResource(R.string.settings_managers_push_note))
+                push.failure?.let { JInlineStatus(it.text(), Modifier.padding(top = Tokens.Space.xs), tone = InlineTone.Failed) }
+            }
+        }
         val actions = buildList<@Composable () -> Unit> {
             if (!installing) add { JRow(stringResource(R.string.settings_managers_rename), leadingIcon = PhIcons.PencilSimple, enabled = !state.busy, onClick = onRename, chevron = false) }
             if (!installing && !manager.isDefault) add { JRow(stringResource(R.string.settings_managers_make_default), leadingIcon = PhIcons.Star, enabled = !state.busy, onClick = onDefault, chevron = false) }
@@ -229,6 +252,31 @@ internal fun ManagerContent(
         }
         state.failure?.let { failure -> item("failure") { JInlineStatus(failure.text(), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
     }
+}
+
+/**
+ * Delete (or Cancel install for one still installing): what goes with it, as on the web. Its [machines] computers go
+ * back to the hub's own manager (said only when it has some), and its sources, kept in its own database, are deleted
+ * with it unless moved first (in the caution colour). Neither is said of one still installing: it has nothing yet.
+ */
+@Composable
+internal fun ManagerDeleteDialog(name: String, installing: Boolean, machines: Int, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val palette = PersonaTheme.palette
+    val action = stringResource(if (installing) R.string.settings_managers_cancel_install else R.string.settings_managers_delete)
+    JDialog(
+        onDismiss = onDismiss, title = action,
+        text = stringResource(if (installing) R.string.settings_managers_cancel_install_confirm else R.string.settings_managers_delete_confirm, name),
+        destructive = true, confirmEnabled = !busy,
+        dismiss = stringResource(R.string.settings_managers_keep) to onDismiss,
+        confirm = action to onConfirm,
+        content = if (installing) null else ({
+            Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                if (machines > 0) Text(pluralStringResource(R.plurals.settings_managers_delete_machines, machines, machines),
+                    style = PersonaTheme.type.callout, color = palette.ink2)
+                Text(stringResource(R.string.settings_managers_delete_sources), style = PersonaTheme.type.callout, color = palette.cautionText)
+            }
+        }),
+    )
 }
 
 /** New manager / Rename: a name, 1 to 40 characters; the hub's refusal shows under the field. */

@@ -25,6 +25,8 @@ internal fun AssistantPendingConversation(
     /** A refused start's button ("Add computer", "Connect a model…"), and "Retry" once the step is done. */
     onRefusal: (ReadinessActionId) -> Unit = {},
     onRetry: ((OutboxMessage) -> Unit)? = null,
+    /** The empty state's line instead of 「…连上后继续发送」 (an offline manager takes nothing: docs/managers.md). */
+    emptyDetail: String? = null,
 ) {
     LazyColumn(modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = pagePadding, end = pagePadding,
@@ -33,7 +35,7 @@ internal fun AssistantPendingConversation(
         if (demo) item { AssistantDemoNotice() }
         item { StatusLine(assistantStatus(session, messages)) }
         if (messages.isEmpty()) item {
-            JEmptyState(stringResource(R.string.assistant_pending_empty_title), stringResource(R.string.assistant_pending_empty_detail))
+            JEmptyState(stringResource(R.string.assistant_pending_empty_title), emptyDetail ?: stringResource(R.string.assistant_pending_empty_detail))
         }
         items(messages, key = { it.clientMessageId }) { message ->
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End,

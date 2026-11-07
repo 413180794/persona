@@ -38,6 +38,8 @@ data class HubExtension(
     val nodes: List<ExtensionNodeState>? = null,
     /** Its sign-in (manifest `auth`, #4507), as the hub last saw it; null when it does not sign in, or an older hub. */
     val auth: ExtensionAuth? = null,
+    /** The manager whose extension it is, in a hub's merged list (docs/protocol.md「Per-manager routing」); null: the default. */
+    val manager: String? = null,
     /** The command-line programs this version runs with (manifest `tools`, #4507). */
     val tools: List<ExtensionToolView>? = null,
 ) {

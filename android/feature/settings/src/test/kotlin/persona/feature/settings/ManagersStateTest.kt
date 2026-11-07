@@ -47,8 +47,11 @@ internal class FakeManagers(list: List<HubManager> = ManagersSample) : HubManage
         list += m
         return ManagerCode("mi_0123456789abcdef0123456789abcdef", "2026-11-05T06:10:00Z", m, commands)
     }
+    /** Ids the hub no longer has (a never-installed one whose code ran out): their new code is 404 no_manager. */
+    var gone = emptySet<String>()
     override suspend fun newCode(id: String): ManagerCode {
         calls += "code $id"; fail?.let { throw it }
+        if (id in gone) throw HubFailure(HubError.Server, "no such manager", 404, "no_manager")
         return ManagerCode("mi_fedcba9876543210fedcba9876543210", "2026-11-05T06:10:00Z", commands = commands)
     }
     override suspend fun rename(id: String, name: String): HubManager {
@@ -64,6 +67,21 @@ internal class FakeManagers(list: List<HubManager> = ManagersSample) : HubManage
     override suspend fun delete(id: String) {
         calls += "delete $id"; fail?.let { throw it }
         list.removeAll { it.id == id }
+    }
+}
+
+/** This device's prefs as a hub keeps them: only `muted_managers` matters to 推送通知. */
+internal class FakeDevices(var muted: List<String>? = emptyList()) : DeviceSettings {
+    var fail: Exception? = null
+    val saved = mutableListOf<List<String>>()
+    override suspend fun devices() = PairedDevices(emptyList(), null)
+    override suspend fun revoke(credentialId: String) = Unit
+    override suspend fun preferences() = DeviceNotificationPreferences(mutedManagers = muted)
+    override suspend fun savePreferences(preferences: DeviceNotificationPreferences) = preferences
+    override suspend fun saveMutedManagers(ids: List<String>): List<String> {
+        saved += ids
+        fail?.let { throw it }
+        return ids.also { muted = it }
     }
 }
 
@@ -187,5 +205,72 @@ class ManagersStateTest {
         model.load()
         assertEquals("读取失败：连不上 hub", model.state.value.error?.resolve(res))
         assertFalse(model.state.value.unsupported)
+    }
+
+    @Test fun thePushSwitchMovesAtOnceAndGoesBackWhenRefused() = runBlocking {
+        val devices = FakeDevices(listOf("m-8b04d2"))
+        val model = ManagerPushModel(devices)
+        assertNull(model.state.value.pushes(work.id))
+        model.load()
+        assertEquals(true, model.state.value.pushes(work.id))
+        assertEquals(false, model.state.value.pushes(home.id))
+        // Off: the whole list goes, this one added.
+        assertTrue(model.set(work.id, false))
+        assertEquals(listOf("m-8b04d2", "m-3fa21c"), devices.saved.last())
+        assertEquals(false, model.state.value.pushes(work.id))
+        // Already where it is: nothing sent.
+        assertFalse(model.set(work.id, false))
+        assertEquals(1, devices.saved.size)
+        // Refused: back where it was, and why.
+        devices.fail = refused(500)
+        assertFalse(model.set(home.id, true))
+        assertEquals(listOf("m-3fa21c"), devices.saved.last())
+        assertEquals(false, model.state.value.pushes(home.id))
+        assertTrue(model.state.value.failure!!.resolve(res).startsWith("推送通知没改成"))
+        assertFalse(model.state.value.busy)
+    }
+
+    @Test fun aHubWithoutTheListHasNoSwitch() = runBlocking {
+        val model = ManagerPushModel(FakeDevices(muted = null))
+        model.load()
+        assertNull(model.state.value.pushes(work.id))
+        assertFalse(model.set(work.id, false))
+    }
+
+    /** A never-installed one whose code ran out is gone from the roster: New install code makes it again, same name. */
+    @Test fun aNeverInstalledOnesNewCodeMakesItAgain() = runBlocking {
+        val api = FakeManagers()
+        val model = ManagersModel(api)
+        model.load()
+        // Still installing (测试 m-c1e9f0), its code ran out and the hub dropped it.
+        api.gone = setOf("m-c1e9f0"); api.list.removeAll { it.id == "m-c1e9f0" }
+        // The page still has it from the last read.
+        assertTrue(model.newCode("m-c1e9f0"))
+        assertEquals(listOf("code m-c1e9f0", "create 测试"), api.calls.takeLast(2))
+        val sheet = model.state.value.code!!
+        assertEquals("m-new", sheet.managerId)
+        assertEquals("测试", sheet.name)
+        assertTrue(sheet.fresh)
+        // The list is read again: the new one is there.
+        assertEquals("测试", model.state.value.manager("m-new")?.name)
+
+        // Just made in the app, its code sheet still open after it ran out: the sheet's New install code does the same.
+        api.gone = setOf("m-new"); api.list.removeAll { it.id == "m-new" }; model.load()
+        assertNull(model.state.value.manager("m-new"))
+        assertTrue(model.newCode("m-new"))
+        assertEquals(listOf("code m-new", "create 测试"), api.calls.takeLast(2))
+    }
+
+    @Test fun anInstalledOnesNoManagerStaysAnError() = runBlocking {
+        val api = FakeManagers()
+        val model = ManagersModel(api)
+        model.load()
+        // Install elsewhere for 工作 (installed): the hub has no such manager any more, that is all.
+        api.gone = setOf("m-3fa21c")
+        assertFalse(model.newCode("m-3fa21c"))
+        assertEquals("code m-3fa21c", api.calls.last())
+        assertTrue(api.calls.none { it.startsWith("create") })
+        assertEquals("这个管理者已经不在了", model.state.value.failure?.resolve(res))
+        assertNull(model.state.value.code)
     }
 }

@@ -136,7 +136,14 @@ private fun ChatPage(
         s.machineId == key.machineId && s.workflows.orEmpty().any { w -> w.agents.orEmpty().any { it.sessionId == key.sessionId } }
     }
     val workflowAgent = workflowParent?.workflows.orEmpty().firstNotNullOfOrNull { w -> w.agents.orEmpty().firstOrNull { it.sessionId == key.sessionId } }
-    val readOnly = historyReadOnly || child != null || workflowAgent != null || key.sessionId.contains('@')
+    // Its manager offline (several managers): history only, its 最后同步于 where the composer was, wherever the
+    // conversation was opened (the assistant page says so itself through historyReadOnly).
+    val ownerOffline = persona.core.designsystem.managerOfflineNote(res, persona.core.designsystem.LocalManagerRoster.current,
+        persona.core.designsystem.LocalManagerGroup.current, key.machineId, sessionList.firstOrNull { it.key == key }?.manager)
+    val historyOnly = historyReadOnly || ownerOffline != null
+    val footer: (@Composable () -> Unit)? = historyFooter
+        ?: ownerOffline?.let { note -> @Composable { persona.core.designsystem.JNotice(note, status = persona.core.designsystem.Status.Offline) } }
+    val readOnly = historyOnly || child != null || workflowAgent != null || key.sessionId.contains('@')
     var lastSession by remember(key) { mutableStateOf<Session?>(null) }
     var detailInfo by remember(key) { mutableStateOf<SessionInfo?>(null) }
     val row = sessionList.firstOrNull { it.key == key }
@@ -693,9 +700,9 @@ private fun ChatPage(
                             (if (feedback == null) notice ?: snapshot.error else snapshot.error)?.let {
                                 Text(it, Modifier.padding(horizontal = Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             }
-                            if (!historyReadOnly && !readOnly) ChatStartingNote(session)
+                            if (!historyOnly && !readOnly) ChatStartingNote(session)
                             // The host's own word on it: why it waits for you, or what stopped it, with a retry.
-                            if (!historyReadOnly && !readOnly) ChatHostNote(session, hostRetried, canRetry = canSend,
+                            if (!historyOnly && !readOnly) ChatHostNote(session, hostRetried, canRetry = canSend,
                                 retryEnabled = !sending && submittedDraft == null,
                                 onRetry = { reason ->
                                     // Hidden first (a failure can come back before this returns), back if it was not taken.
@@ -703,7 +710,7 @@ private fun ChatPage(
                                     hostRetried = reason
                                     if (!send(continueText, onFailed = { if (hostRetried == reason) hostRetried = null })) hostRetried = before
                                 })
-                            if (historyReadOnly) historyFooter?.invoke()
+                            if (historyOnly) footer?.invoke()
                             else if (readOnly) Text(stringResource(R.string.chat_screen_subagent_read_only), Modifier.padding(Tokens.Space.m), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
                             else {
                                 // What waits in the agent's queue sits right above the composer, while the composer shows (Agents only, as iOS).

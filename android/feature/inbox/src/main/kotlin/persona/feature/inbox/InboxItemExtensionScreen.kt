@@ -56,7 +56,7 @@ fun InboxItemExtensionScreen(
     body: LazyListScope.() -> Unit,
 ) {
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
-    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val record = inbox.records.inboxRecord(route.itemId)
     val feedback = LocalAppFeedback.current
     val scope = rememberCoroutineScope()
     val composers = rememberReplyComposers(repository)

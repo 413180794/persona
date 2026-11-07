@@ -107,7 +107,7 @@ internal fun docKindLabel(res: Resources, doc: InboxDocRef?): String =
 @Composable
 fun InboxItemDetailScreen(repository: InboxRepository, route: InboxItemDetailRoute, navigator: Navigator) {
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
-    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val record = inbox.records.inboxRecord(route.itemId)
     val open = LocalLarkLinkOpener.current
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }

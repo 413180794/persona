@@ -45,13 +45,17 @@ internal fun showsDeploy(machine: Machine?): Boolean = machine != null && (machi
 internal fun LazyListScope.machineControls(
     machine: Machine,
     reconnecting: Boolean,
+    /** False while the manager it goes through is offline (several managers): no Reconnect row then, as on the web. */
+    canReconnect: Boolean = true,
     onEngine: () -> Unit,
     onReconnect: () -> Unit,
     botmux: Boolean? = null,
     botmuxSaving: Boolean = false,
     onBotmux: (Boolean) -> Unit = {},
+    /** Move to… with several managers (the manager it is with now as the value); null: no row, as with one manager. */
+    move: MachineMoveRow? = null,
 ) {
-    val rows = if (botmux != null) 3 else 2
+    val rows = 1 + (if (botmux != null) 1 else 0) + (if (move != null) 1 else 0) + (if (canReconnect) 1 else 0)
     item("controls-title") { JSectionHeader(stringResource(R.string.machines_controls_title)) }
     item("engine") {
         JGroupItem(GroupPosition.of(0, rows)) {
@@ -63,7 +67,13 @@ internal fun LazyListScope.machineControls(
             JSwitchRow(stringResource(R.string.machines_botmux), botmux, onBotmux, leadingIcon = PhIcons.Stack, enabled = !botmuxSaving)
         }
     }
-    item("reconnect") {
+    if (move != null) item("move") {
+        JGroupItem(GroupPosition.of(if (botmux != null) 2 else 1, rows)) {
+            JRow(stringResource(R.string.machines_move), leadingIcon = PhIcons.Robot, value = move.current, enabled = !move.busy,
+                onClick = move.onClick, trailing = if (move.busy) ({ JSpinner() }) else null)
+        }
+    }
+    if (canReconnect) item("reconnect") {
         JGroupItem(GroupPosition.of(rows - 1, rows)) {
             JRow(stringResource(if (reconnecting) R.string.machines_reconnecting else R.string.machines_reconnect), leadingIcon = PhIcons.ArrowClockwise, enabled = !reconnecting,
                 onClick = onReconnect, chevron = false, trailing = if (reconnecting) ({ JSpinner() }) else null)
@@ -76,6 +86,21 @@ internal fun LazyListScope.machineControls(
                 else stringResource(R.string.machines_ssh_note, machine.sshHost?.takeIf { it.isNotBlank() } ?: machine.id))
         }
     }
+}
+
+/** The Move to… row: the manager it is with now, and whether a move is on its way. */
+internal data class MachineMoveRow(val current: String, val busy: Boolean, val onClick: () -> Unit)
+
+/**
+ * "Move to which manager": the installed managers, the default first, the one it is with checked and not offered again, an offline
+ * one marked Offline (it takes the computer once it is back).
+ */
+@Composable
+internal fun MoveToManagerSheet(roster: persona.core.contracts.api.ManagerRoster, current: String, onMove: (persona.core.contracts.api.HubManager) -> Unit, onDismiss: () -> Unit) {
+    JActionSheet(roster.installed.map { m ->
+        val name = m.name.ifBlank { m.id }
+        JAction(if (m.online) name else stringResource(R.string.machines_move_offline, name), checked = m.id == current, enabled = m.id != current) { onMove(m) }
+    }, onDismiss, title = stringResource(R.string.machines_move_title))
 }
 
 /**

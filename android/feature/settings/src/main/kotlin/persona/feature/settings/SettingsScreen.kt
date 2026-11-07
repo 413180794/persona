@@ -70,6 +70,7 @@ private fun SettingsContent(
     var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
     var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var extension by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    var extensionManager by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var channel by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var manager by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     // Model providers's own steps when they open in place: one provider, adding one, importing from ~/.zshrc.
@@ -200,10 +201,11 @@ private fun SettingsContent(
                 onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } },
                 providers = services.providers.takeUnless { services.demo })
         "plugins" -> extension?.let { id -> ExtensionPage(services.extensions.takeUnless { services.demo }, id, onBack = { extension = null },
+                manager = extensionManager,
                 machines = services.sessions.machines,
                 onUpgrade = onNavigate?.let { navigate -> { market, ext -> navigate(persona.core.navigation.ExtensionCatalogRoute(market, ext)) } }) }
             ?: ExtensionsPage(services.extensions.takeUnless { services.demo }, back,
-                onExtension = { id -> onNavigate?.invoke(persona.core.navigation.ExtensionRoute(id)) ?: run { extension = id } },
+                onExtension = { id, manager -> onNavigate?.invoke(persona.core.navigation.ExtensionRoute(id, manager = manager)) ?: run { extension = id; extensionManager = manager } },
                 onMarket = onNavigate?.let { navigate -> { navigate(persona.core.navigation.ExtensionMarketRoute) } })
         "channels" -> channel?.let { id -> ChannelPage(channelService, id, onBack = { channel = null }, onOpen = onNavigate) }
             ?: ChannelsPage(channelService, back,
@@ -239,7 +241,8 @@ private fun SettingsContent(
         }
         "devices" -> DevicesPage(deviceController, paired && services.deviceSettings != null, back, deviceFeedback,
             connect = services.deviceSettings.takeUnless { services.demo })
-        "managers" -> manager?.let { id -> ManagerPage(services.managers.takeUnless { services.demo }, id, onBack = { manager = null }) }
+        "managers" -> manager?.let { id -> ManagerPage(services.managers.takeUnless { services.demo }, id, onBack = { manager = null },
+            devices = services.deviceSettings.takeUnless { services.demo }, machines = machines) }
             ?: ManagersPage(services.managers.takeUnless { services.demo }, back,
                 onManager = { id -> onNavigate?.invoke(persona.core.navigation.ManagerRoute(id)) ?: run { manager = id } })
         "sent" -> SentAsYouPage(services.sent.takeUnless { services.demo }, back,

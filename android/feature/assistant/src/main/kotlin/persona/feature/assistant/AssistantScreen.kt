@@ -103,6 +103,11 @@ fun AssistantScreen(
         (repository as? persona.core.contracts.api.AssistantConversations)?.let { conversations -> { launcher -> conversations.startConversation(launcher) } },
 ) = PersonaTheme {
     val snapshot by repository.assistant.collectAsStateWithLifecycle()
+    val conversationsOf = repository as? persona.core.contracts.api.AssistantConversations
+    // Several managers (docs/managers.md step 4): the page shows one, the default to begin with.
+    val managerRoster = LocalManagerRoster.current
+    val managerChoice by persona.core.contracts.api.AssistantManagerChoice.current.collectAsStateWithLifecycle()
+    val managers = assistantManagers(managerRoster, managerChoice, androidx.compose.ui.platform.LocalResources.current)
     val outbox by (mainConversationSender?.outbox ?: messageSender.outbox).collectAsStateWithLifecycle()
     val mainMessages = outbox.filter { it.mainTarget || it.session == PendingMainConversation }
     val scope = rememberCoroutineScope()
@@ -251,6 +256,12 @@ fun AssistantScreen(
         clearConversation()
         scope.launch { drawerOpen = false }
     }
+    // Another manager: its own conversations, so none of this one's stays open.
+    fun chooseManager(id: String) {
+        if (id == managerChoice.shown) return
+        clearConversation()
+        persona.core.contracts.api.AssistantManagerChoice.pick(id)
+    }
     fun refusal(error: Exception): String =
         if (error is AssistantRefused) error.message.orEmpty() else persona.core.designsystem.operationFeedback(error).text.resolve(resources)
     fun compactMain() {
@@ -344,12 +355,17 @@ fun AssistantScreen(
     fun submit() {
         // Not ready (setup): the step opens instead and the draft stays; nothing is queued (docs/onboarding.md 4.4).
         if (active == null && blocking != null) { blocking.primaryAction()?.let { runReadinessAction(it) }; return }
+        // An offline manager takes nothing: its page is history only until it is back.
+        if (managers.offline != null) return
         if (sending || !draftReady || !composer.hasContent || !composer.ready) return
         val sentDraft = composer.draft
         val text = composer.message()
         // A launcher picked on the new-conversation page: a conversation of its own on it, then the message to it.
         val launcher = starterLauncher.takeIf { active == null }
         val startWith = startConversationWith
+        // The manager this is written for (null: the default's main queue): it goes there even if the page moves on.
+        val forManager = managerChoice.manager
+        val shownSnapshot = snapshot
         sending = true
         val submitted = text.trim()
         openedMain = true
@@ -362,7 +378,11 @@ fun AssistantScreen(
                 // Started once: a retry after the message failed sends to the same new conversation, while the
                 // launcher is still the one that started it.
                 val target = if (launcher != null && startWith != null)
-                    starterTarget(launcher, starterStarted, startWith).also { starterStarted = it }.session else active
+                    starterTarget(launcher, starterStarted, startWith).also { starterStarted = it }.session
+                    // Another manager's main conversation: this phone's main queue is the default manager's.
+                    else active ?: forManager?.let { id ->
+                        managerMainTarget(id, shownSnapshot) { m -> conversationsOf?.mainConversationOf(m) ?: error("managers unavailable") }
+                    }
                 sendAssistantMessage(mainConversationSender, messageSender, target, submitted, requireNotNull(pendingClientId))
                 // Clear only after the outbox commit; retries keep their original operation id.
                 composer.clearIfUnchanged(sentDraft)
@@ -374,6 +394,9 @@ fun AssistantScreen(
                     starterStarted = null
                     assistantAttempt { repository.refresh() }
                     openConversation(target)
+                } else if (forManager != null && target != null) {
+                    // Its main conversation, if the page still shows that manager.
+                    if (persona.core.contracts.api.AssistantManagerChoice.current.value.manager == forManager) openConversation(target)
                 } else if (active == null) viewingMainQueue = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -500,16 +523,20 @@ fun AssistantScreen(
                         if (wide) sidebarVisible = !sidebarVisible else drawerOpen = true
                     })
                 }) {
-                    JTopBar(
-                        title = LocalPersonaName.current, subtitle = connectionLabel,
-                        titleBusy = !connectionLabel.isNullOrBlank(), onTitleClick = { menu = true },
-                        actions = {
-                            JIconButton(PhIcons.NotePencil, stringResource(R.string.assistant_new_conversation), ::startNewConversation, enabled = !sending)
-                            JIconButton(PhIcons.UserCircle, stringResource(R.string.assistant_profile), {
-                                if (management != null) settingsOpen = true else info = AssistantInfo.Settings
-                            })
-                        },
-                    )
+                    Column {
+                        JTopBar(
+                            title = LocalPersonaName.current, subtitle = connectionLabel,
+                            titleBusy = !connectionLabel.isNullOrBlank(), onTitleClick = { menu = true },
+                            actions = {
+                                JIconButton(PhIcons.NotePencil, stringResource(R.string.assistant_new_conversation), ::startNewConversation,
+                                    enabled = !sending && managers.offline == null)
+                                JIconButton(PhIcons.UserCircle, stringResource(R.string.assistant_profile), {
+                                    if (management != null) settingsOpen = true else info = AssistantInfo.Settings
+                                })
+                            },
+                        )
+                        if (!demo) JManagerSwitcher(managerRoster, managerChoice.shown, ::chooseManager)
+                    }
                 }
             },
             bottomBar = if (hasComposer || snackbar.currentSnackbarData != null) ({
@@ -540,7 +567,8 @@ fun AssistantScreen(
                             onSend = ::submit, onCommand = { composer.insert(it, composer.focused) },
                             onNotice = { message ->
                                 if (feedback?.notice(message) != true) scope.launch { snackbar.showSnackbar(message) }
-                            }, enabled = draftReady && !sending, placeholder = stringResource(R.string.assistant_composer_placeholder, LocalPersonaName.current),
+                            }, enabled = draftReady && !sending && managers.offline == null,
+                            placeholder = managers.offline ?: stringResource(R.string.assistant_composer_placeholder, LocalPersonaName.current),
                             blockedLabel = blocking?.takeIf { active == null }?.let { stringResource(blockedSendLabel(it)) },
                             onBlocked = { blocking?.primaryAction()?.let { runReadinessAction(it) } },
                             // A new conversation's launcher, for it alone (iOS StarterComposer, web StarterLauncherChip).
@@ -567,7 +595,7 @@ fun AssistantScreen(
                     if (demo) AssistantDemoNotice()
                     Box(Modifier.weight(1f)) {
                         CompositionLocalProvider(LocalChromeInsets provides if (demo) host else host.copy(top = padding.calculateTopPadding())) {
-                            if (assistantChatContent != null) assistantChatContent(active, AssistantChatOptions())
+                            if (assistantChatContent != null) assistantChatContent(active, AssistantChatOptions(readOnlyNote = managers.offline))
                             else chatContent?.invoke(active)
                         }
                         // A compaction of the main conversation: under the bar, over the conversation.
@@ -581,7 +609,7 @@ fun AssistantScreen(
             } else if (viewingMainQueue || (active != null && !hasChat)) {
                 val visible = if (active != null) outbox.filter { it.session == active } else mainMessages
                 AssistantPendingConversation(visible, snapshot.conversations.firstOrNull { it.key == active },
-                    Modifier.fillMaxSize(), contentPadding = padding, demo = demo,
+                    Modifier.fillMaxSize(), contentPadding = padding, demo = demo, emptyDetail = managers.offlineEmpty,
                     onRefusal = { action -> runReadinessAction(action) },
                     onRetry = { message -> scope.launch {
                         // Asked again first: a step still missing opens instead of sending into the same refusal.

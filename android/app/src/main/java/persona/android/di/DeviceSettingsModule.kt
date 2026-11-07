@@ -69,6 +69,8 @@ class WiredDeviceSettings @Inject constructor(
                                 checked { http.savePreferences(preferences) }.also { mutablePreferences.value = it }
                             override suspend fun saveTranslation(prefs: HubTranslatePrefs) = checked { http.saveTranslatePrefs(prefs) }
                             override suspend fun pairCode() = checked { http.pairCode() }
+                            override suspend fun saveMutedManagers(ids: List<String>) = checked { http.saveMutedManagers(ids) }
+                                .also { saved -> mutablePreferences.update { it?.copy(mutedManagers = saved) } }
                         }
                     }
                     mutableBinding.value = SettingsBinding(data.scope.path, adapter, address)

@@ -162,6 +162,8 @@ data class InboxRecord(
     val isTopic: Boolean? = null,
     /** Inbox phase 1: Recap, the processing conversation, the suggestion, the Handling chain; none from an older hub. */
     val event: persona.core.contracts.InboxEventFields = persona.core.contracts.InboxEventFields.None,
+    /** The manager whose inbox it is, in the hub's merged list (docs/protocol.md「Per-manager routing」); null: the default. */
+    val manager: String? = null,
 ) {
     /** A hub connector's item (not Feishu's, not mail): it opens as its connector's thread. */
     val isConnector: Boolean get() = connector != null && !isLark && !isMail && moment == null
@@ -169,7 +171,36 @@ data class InboxRecord(
     val isLark: Boolean get() = feedId != null || source == "lark"
     /** A mail item: only these open the mail page; the kind says it too in records cached without their source. */
     val isMail: Boolean get() = mail != null || source == "mail" || (source.isEmpty() && item.kind == "mail")
+
+    /** The item's id on the hub (its requests name it there; [InboxItemKey]). */
+    val hubItemId: String get() = InboxItemKey.hubId(item.id)
 }
+
+/**
+ * An inbox item's id in the app ([InboxItem.id]): the hub's for the hub's own assistant's items (unstamped, or stamped
+ * `assistant`), and the hub's id with its manager for any other manager's (docs/managers.md "Clients"), so two managers
+ * reading the same source have two items, and an id never moves to the other one's copy when the lists change. Rows,
+ * records and local state (drafts, queued replies) go by it; requests take the hub's id back ([hubId]) and name the
+ * manager.
+ */
+object InboxItemKey {
+    private const val SEPARATOR = '\u001F'
+
+    fun of(hubId: String, manager: String): String = "$hubId$SEPARATOR$manager"
+
+    fun hubId(key: String): String = key.substringBefore(SEPARATOR)
+
+    /** The app's id of the item [hubId] of [manager] (null: unstamped). */
+    fun appId(hubId: String, manager: String?): String =
+        if (manager.isNullOrBlank() || manager == persona.core.contracts.api.ManagerRoster.ASSISTANT_MANAGER) hubId else of(hubId, manager)
+}
+
+/**
+ * The record with the app's id [id]; else, for an id that came from outside the lists (a notification, a link, an
+ * extension's `persona://inbox/<id>`), the first with that id on the hub.
+ */
+fun List<InboxRecord>.inboxRecord(id: String?): InboxRecord? =
+    if (id == null) null else firstOrNull { it.item.id == id } ?: firstOrNull { it.hubItemId == id }
 
 /**
  * An item's `connector` block (docs/protocol.md "Inbox"): the [thread] its connector reads it as, the [label] the

@@ -62,7 +62,7 @@ class ExtensionOfficialMarketShotsTest {
         }
         rule.setContent {
             PersonaTheme(style = style, darkTheme = dark, reduceMotion = true) {
-                Box(Modifier.testTag("shot").fillMaxSize().background(PersonaTheme.palette.background)) { ExtensionsPage(api, {}, {}, onMarket = {}) }
+                Box(Modifier.testTag("shot").fillMaxSize().background(PersonaTheme.palette.background)) { ExtensionsPage(api, {}, { _, _ -> }, onMarket = {}) }
             }
         }
         rule.waitUntil { rule.onAllNodesWithText("示例笔记").fetchSemanticsNodes().isNotEmpty() }

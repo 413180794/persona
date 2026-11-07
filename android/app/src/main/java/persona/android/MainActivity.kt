@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var shell: AppServices
     @Inject lateinit var platformPairing: PlatformPairing
     @Inject lateinit var translator: persona.feature.inbox.Translator
+    @Inject lateinit var managerRoster: persona.android.di.ManagerRosterSource
 
     /** A destination from a notification, deep link or share; resolved once session metadata allows. */
     private val openNavigation = mutableStateOf<((Router) -> ResolvedRoute?)?>(null)
@@ -98,6 +99,7 @@ class MainActivity : ComponentActivity() {
         val app = application as PersonaApp
         lifecycleScope.launch { shell.restoreDemo() }
         persona.android.platform.GlassFrameMonitor.attach(this) { !shell.automation }
+        managerRoster.start()
         setContent {
             val scheme by app.appearance.scheme.collectAsStateWithLifecycle()
             // A debug capture's pin, else Settings › Appearance › Light/Dark (null: the system's).
@@ -116,12 +118,17 @@ class MainActivity : ComponentActivity() {
                 app.hub.flatMapLatest { it?.connection?.serverFeatures ?: flowOf(emptySet()) }.distinctUntilChanged()
             }.collectAsStateWithLifecycle(emptySet())
             val lark = remember(features) { LarkFeatures.of(features) }
+            // The selected hub's managers: pages group by them when there are several (docs/managers.md step 4).
+            val managers by managerRoster.roster.collectAsStateWithLifecycle()
+            val managerGroup by managerRoster.group.collectAsStateWithLifecycle()
             AppearanceOverride(forced) { CompositionLocalProvider(
                 LocalDeveloperTools provides launchAdapter?.tools,
                 persona.core.designsystem.LocalLanguageHost provides this@MainActivity,
                 persona.core.designsystem.LocalChannels provides channels,
                 persona.core.designsystem.LocalLarkFeatures provides lark,
                 persona.core.designsystem.LocalHubFeatures provides features,
+                persona.core.designsystem.LocalManagerRoster provides managers,
+                persona.core.designsystem.LocalManagerGroup provides managerGroup,
                 persona.feature.inbox.LocalTranslator provides translator,
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,

@@ -155,10 +155,11 @@ internal object ExtensionViewText {
      * The page a push opens on top of [uiId]'s ([depth] pages up): the push's UI of the same extension (this one when
      * empty), its state and title; none past [MaxDepth].
      */
-    fun pushed(extensionId: String, uiId: String, title: String, depth: Int, push: ExtensionViewPush): persona.core.navigation.ExtensionUiRoute? {
+    fun pushed(extensionId: String, uiId: String, title: String, depth: Int, push: ExtensionViewPush, manager: String? = null): persona.core.navigation.ExtensionUiRoute? {
         if (depth + 1 >= MaxDepth) return null
+        // the page it opens is the same manager's extension (several managers: the same id is under each)
         return persona.core.navigation.ExtensionUiRoute(extensionId, push.ui?.takeIf { it.isNotBlank() } ?: uiId,
-            push.title?.takeIf { it.isNotBlank() } ?: title, push.state, depth + 1)
+            push.title?.takeIf { it.isNotBlank() } ?: title, push.state, depth + 1, manager)
     }
 
     /**
@@ -167,7 +168,8 @@ internal object ExtensionViewText {
      */
     fun opened(place: ExtensionUiPlace, push: ExtensionViewPush): persona.core.navigation.ExtensionUiRoute =
         persona.core.navigation.ExtensionUiRoute(place.extension, push.ui?.takeIf { it.isNotBlank() } ?: place.id,
-            push.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.id }, push.state)
+            push.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.id }, push.state,
+            manager = place.manager?.takeIf { it.isNotBlank() && it != persona.core.contracts.api.AssistantManagerChoice.current.value.defaultId })
 
     /** Whether an `extension_ui` event asks to draw [extension]'s UI [ui] again (`ui.invalidate`, all of it when no id). */
     fun invalidates(event: persona.core.contracts.ExtensionUiEvent, extension: String, ui: String): Boolean =

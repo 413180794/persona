@@ -50,6 +50,11 @@ class ExtensionUiV3Test {
         assertEquals("detail", ExtensionViewText.pushed("notes", "list", "笔记", 0, ExtensionViewPush(ui = "detail"))!!.uiId)
         assertEquals("笔记", ExtensionViewText.pushed("notes", "list", "笔记", 0, ExtensionViewPush())!!.title)
         assertNull(ExtensionViewText.pushed("notes", "list", "笔记", ExtensionViewText.MaxDepth - 1, ExtensionViewPush()))
+        // another manager's extension (several managers): the page it opens is the same manager's, and a place's too
+        assertEquals("m-3", ExtensionViewText.pushed("notes", "list", "笔记", 0, ExtensionViewPush(ui = "detail"), "m-3")!!.manager)
+        assertNull(ExtensionViewText.pushed("notes", "list", "笔记", 0, ExtensionViewPush(ui = "detail"))!!.manager)
+        assertEquals("m-3", ExtensionViewText.opened(ExtensionUiPlace("notes", "card", manager = "m-3"), ExtensionViewPush()).manager)
+        assertNull(ExtensionViewText.opened(ExtensionUiPlace("notes", "card", manager = "assistant"), ExtensionViewPush()).manager)
         // From a card, a machine's section or a launcher's: a whole page of its own.
         val place = ExtensionUiPlace("notes", "today", "今天", "overview_card")
         assertEquals(persona.core.navigation.ExtensionUiRoute("notes", "today", "今天", "x", 0), ExtensionViewText.opened(place, ExtensionViewPush("x")))

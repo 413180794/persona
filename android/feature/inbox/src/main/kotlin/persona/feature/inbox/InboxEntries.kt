@@ -32,6 +32,7 @@ fun EntryProviderScope<NavKey>.inboxEntries(
     }
     entry<MailRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        PinItemManager(source, route.itemId)
         val pairedMail by source.mailTransport.collectAsStateWithLifecycle()
         LarkLinkHost(source) {
             val opener = LocalLarkLinkOpener.current
@@ -41,24 +42,28 @@ fun EntryProviderScope<NavKey>.inboxEntries(
     }
     entry<LarkRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        PinItemManager(source, route.itemId)
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
             LarkScreen(source, route, navigator)
         }
     }
     entry<InboxItemDetailRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        PinItemManager(source, route.itemId)
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
             LarkLinkHost(source) { InboxItemDetailScreen(source, route, navigator) }
         }
     }
     entry<InboxEventRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        PinItemManager(source, route.itemId)
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
             LarkLinkHost(source) { InboxEventScreen(source, route, navigator) }
         }
     }
     entry<ConnectorThreadRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        PinItemManager(source, route.itemId)
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
             LarkLinkHost(source) {
                 if (connectors == null) InboxItemDetailScreen(source, InboxItemDetailRoute(route.itemId), navigator)
@@ -68,6 +73,7 @@ fun EntryProviderScope<NavKey>.inboxEntries(
     }
     entry<LarkMomentRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        PinItemManager(source, route.itemId)
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
             LarkMomentsScreen(source, route, navigator)
         }
@@ -89,3 +95,28 @@ data class InboxItemDetailRoute(val itemId: String) : NavKey
 data class ConnectorThreadRoute(val itemId: String) : NavKey
 
 val LocalMailTransport = staticCompositionLocalOf<persona.core.contracts.api.MailTransport?> { null }
+
+/** What an inbox item's pages read besides the item itself (its Lark chat, its mail, its connector's thread). */
+internal val ItemDetailPrefixes = listOf(
+    listOf("lark", "conversations"), listOf("lark", "messages"), listOf("lark", "users"), listOf("lark", "moments"),
+    listOf("lark", "media"), listOf("lark", "pinned"), listOf("lark", "documents"), listOf("lark", "raw"),
+    listOf("mail", "messages"), listOf("connectors"),
+)
+
+/**
+ * While an inbox item's page is open, what it reads besides the item goes to the item's manager (the merged list's
+ * stamp, docs/managers.md "Clients"); the default's, or one manager, sends none.
+ */
+@androidx.compose.runtime.Composable
+internal fun PinItemManager(source: InboxRepository, itemId: String?) {
+    val snapshot by source.snapshot.collectAsStateWithLifecycle()
+    val record = snapshot.records.inboxRecord(itemId)
+    val manager = record?.manager
+    // the item itself too (its mail page reads it), by its id on the hub (InboxItemKey)
+    val hubId = record?.hubItemId
+    androidx.compose.runtime.DisposableEffect(manager, hubId) {
+        val release = persona.core.contracts.api.AssistantManagerChoice.pin(
+            ItemDetailPrefixes + listOfNotNull(hubId?.let { listOf("inbox", it) }), manager)
+        onDispose { release() }
+    }
+}

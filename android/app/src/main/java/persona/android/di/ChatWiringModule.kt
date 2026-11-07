@@ -76,7 +76,10 @@ object ChatWiringModule {
                 ChatDestination(ChatRoute(key.machineId, key.sessionId,
                     kind = if (options.assistant) ConversationKind.Assistant else ConversationKind.Agent), navigator,
                     renderStyle = if (options.assistant) ChatRenderStyle.Assistant else ChatRenderStyle.Agent,
-                    embedded = options.embedded, showTopBar = options.showTopBar)
+                    embedded = options.embedded, showTopBar = options.showTopBar,
+                    // The conversation's manager is offline: history only, its 最后同步于 where the composer was.
+                    historyReadOnly = options.readOnlyNote != null,
+                    historyFooter = options.readOnlyNote?.let { note -> { persona.core.designsystem.JNotice(note, status = persona.core.designsystem.Status.Offline) } })
             }
             CompositionLocalProvider(LocalAssistantHost provides host) { key(active.scope.path) { content() } }
         }

@@ -351,7 +351,7 @@ class OkHttpHubConnection(
         if (expectedRoute != null && selected !== expectedRoute) throw HubFailure(HubError.NoNetwork)
         require(path.startsWith("/api/") && !path.contains('#')) { "Expected an API path" }
         val base = selected.endpoint.baseUrl()
-        val url = base.hubUrl(path)
+        val url = base.hubUrl(path).withRequestManager()
         require(base.hubPath(url)?.startsWith("/api/") == true) { "Expected an API path" }
         val owner = ownerOf(selected)
         val request = Request.Builder().url(url).apply {

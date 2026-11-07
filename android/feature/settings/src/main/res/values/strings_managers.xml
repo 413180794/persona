@@ -51,4 +51,14 @@
         <item quantity="one">Installing · code expires in %1$d minute</item>
         <item quantity="other">Installing · code expires in %1$d minutes</item>
     </plurals>
+    <string name="settings_managers_push">Push notifications</string>
+    <string name="settings_managers_push_note">When off, this device no longer gets this manager\'s notifications</string>
+    <string name="settings_managers_push_failed">Push notifications not changed: %1$s</string>
+    <plurals name="settings_managers_delete_machines">
+        <item quantity="one">Its %1$d computer goes back to the hub\'s own manager.</item>
+        <item quantity="other">Its %1$d computers go back to the hub\'s own manager.</item>
+    </plurals>
+    <string name="settings_managers_delete_sources">Its sources (mail accounts, for example) are kept in its own database: unless you move them to another manager first, they are deleted with it.</string>
+    <string name="settings_managers_needs_update">Needs update</string>
+    <string name="settings_managers_needs_update_note">Its personad is older and doesn\'t read settings of its own (manager.json) yet, so it runs on built-in defaults. Update personad on the computer it runs on.</string>
 </resources>

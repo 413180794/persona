@@ -2,6 +2,7 @@ package persona.feature.settings
 
 import android.content.res.Resources
 import androidx.annotation.StringRes
+import persona.core.contracts.api.DeviceSettings
 import persona.core.contracts.api.HubManager
 import persona.core.contracts.api.HubManagers
 import persona.core.contracts.api.ManagerCode
@@ -121,7 +122,11 @@ internal object ManagerText {
 }
 
 /** An install code on screen, for [managerId] (named [name]). */
-internal data class ManagerCodeSheet(val managerId: String, val name: String, val code: ManagerCode)
+internal data class ManagerCodeSheet(
+    val managerId: String, val name: String, val code: ManagerCode,
+    /** Never installed (just made, or still installing): its code is all there is of it. */
+    val fresh: Boolean = false,
+)
 
 internal data class ManagersState(
     val roster: ManagerRoster? = null,
@@ -169,7 +174,7 @@ internal class ManagersModel(private val api: HubManagers) {
         return change {
             val made = api.create(name.trim())
             val manager = made.manager
-            mutable.update { it.copy(code = ManagerCodeSheet(manager?.id.orEmpty(), manager?.name ?: name.trim(), made)) }
+            mutable.update { it.copy(code = ManagerCodeSheet(manager?.id.orEmpty(), manager?.name ?: name.trim(), made, fresh = true)) }
             // The hub pushes the change too; reading now does not wait on it.
             load()
         }
@@ -177,9 +182,18 @@ internal class ManagersModel(private val api: HubManagers) {
 
     /** Install elsewhere / New installation code: a new code, on the sheet. */
     suspend fun newCode(id: String): Boolean = change {
-        val code = api.newCode(id)
-        val name = state.value.manager(id)?.name ?: state.value.code?.takeIf { it.managerId == id }?.name.orEmpty()
-        mutable.update { it.copy(code = ManagerCodeSheet(id, name, code)) }
+        val sheet = state.value.code?.takeIf { it.managerId == id }
+        val name = state.value.manager(id)?.name ?: sheet?.name.orEmpty()
+        // One never installed whose code ran out drops out of the hub's roster (404 no_manager): it is made again
+        // under the same name, and the new one's code shows (its new id from then on). An installed one's 404 stays.
+        val fresh = state.value.manager(id)?.isInstalling ?: (sheet?.fresh == true)
+        val next = try { ManagerCodeSheet(id, name, api.newCode(id), fresh) }
+        catch (failure: Exception) {
+            if (!fresh || name.isBlank() || hubCodedFailure(failure)?.let { it.status == 404 && it.code == "no_manager" } != true) throw failure
+            val made = api.create(name)
+            ManagerCodeSheet(made.manager?.id.orEmpty(), made.manager?.name ?: name, made, fresh = true)
+        }
+        mutable.update { it.copy(code = next) }
         load()
     }
 
@@ -214,5 +228,50 @@ internal class ManagersModel(private val api: HubManagers) {
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { it.copy(failure = ManagerText.failure(error)) }; false }
         finally { mutable.update { it.copy(busy = false) } }
+    }
+}
+
+/**
+ * 设置 › 管理者 › one › 推送通知: whether this device gets a manager's pushes (the hub's `muted_managers` of this
+ * device's prefs). [muted] null: not read yet, or a hub without the list (no switch then).
+ */
+internal data class ManagerPushState(
+    val muted: Set<String>? = null,
+    /** A change is on its way. */
+    val busy: Boolean = false,
+    /** Why the last change did not go (the switch is back where it was). */
+    val failure: ResText? = null,
+) {
+    fun pushes(id: String): Boolean? = muted?.let { id !in it }
+}
+
+/** The 推送通知 switch: read from the device's prefs, written as `{"muted_managers": [...]}` alone, shown at once. */
+internal class ManagerPushModel(private val devices: DeviceSettings) {
+    private val mutable = MutableStateFlow(ManagerPushState())
+    val state = mutable.asStateFlow()
+
+    suspend fun load() {
+        try {
+            val muted = devices.preferences().mutedManagers
+            mutable.update { it.copy(muted = muted?.toSet()) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* No switch until the prefs read: the rest of the page does not depend on it. */ }
+    }
+
+    /** Turns [id]'s pushes [on] or off: the switch moves now and goes back if the hub refuses. */
+    suspend fun set(id: String, on: Boolean): Boolean {
+        val before = state.value.muted ?: return false
+        if (state.value.busy || (id !in before) == on) return false
+        val wanted = if (on) before - id else before + id
+        mutable.update { it.copy(muted = wanted, busy = true, failure = null) }
+        return try {
+            val saved = devices.saveMutedManagers(wanted.toList())
+            mutable.update { it.copy(muted = saved.toSet()) }
+            true
+        } catch (cancelled: CancellationException) { mutable.update { it.copy(muted = before) }; throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(muted = before, failure = ManagerText.failure(error, R.string.settings_managers_push_failed)) }
+            false
+        } finally { mutable.update { it.copy(busy = false) } }
     }
 }

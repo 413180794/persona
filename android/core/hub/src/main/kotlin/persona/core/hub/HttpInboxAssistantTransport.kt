@@ -144,6 +144,14 @@ class HttpInboxAssistantTransport private constructor(
         buildJsonObject { put("prompt", ""); put("main", main) })
     override suspend fun createConversation(main: Boolean, launcher: String) = json(url("api", "v1", "assistant", "conversations"),
         buildJsonObject { put("prompt", ""); put("main", main); put("launcher", launcher) })
+    // `?manager=` names the manager for this request alone: the hub client sends no header over it (an empty one is
+    // the default, dropped before it goes).
+    override suspend fun assistantOf(manager: String?) = json(url("api", "v1", "assistant").pinned(manager))
+    override suspend fun createConversationOf(manager: String?, main: Boolean, launcher: String?) =
+        json(url("api", "v1", "assistant", "conversations").pinned(manager), buildJsonObject {
+            put("prompt", ""); put("main", main); launcher?.let { put("launcher", it) }
+        })
+    private fun HttpUrl.pinned(manager: String?) = newBuilder().addQueryParameter(ManagerQuery, manager.orEmpty()).build()
     override suspend fun pins() = json(url("api", "v1", "pins"))
     override suspend fun mutes() = json(url("api", "v1", "mutes"))
 

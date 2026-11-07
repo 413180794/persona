@@ -50,7 +50,7 @@ import kotlinx.serialization.json.contentOrNull
  * the hub's machine), its state, and the way to its page. Extensions are installed on the hub's machine only.
  */
 @Composable
-internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit, onExtension: (String) -> Unit, onMarket: (() -> Unit)? = null) {
+internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit, onExtension: (String, String?) -> Unit, onMarket: (() -> Unit)? = null) {
     if (extensions == null) {
         JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
@@ -65,6 +65,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
     // Signed in or out somewhere else: " · Not signed in" follows.
     LaunchedEffect(model) { model.watchAuth() }
     val list = state.extensions
+    val roster = LocalManagerRoster.current
     val detail = LocalDetailKey.current
     JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack, refreshing = state.loading && list != null, onRefresh = { scope.launch { model.load() } }) {
         state.error?.let { error ->
@@ -85,14 +86,29 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
             JEmptyState(stringResource(R.string.settings_ext_empty_title), stringResource(R.string.settings_ext_empty_text), icon = PhIcons.PuzzlePiece)
         }
         if (!list.isNullOrEmpty()) {
-            item("top") { JSectionHeader(stringResource(R.string.settings_ext_list_header), count = list.size) }
-            // The hub merges every manager's list (docs/managers.md), and each manager has the built-ins, so an id can come twice.
-            itemsIndexed(list, key = { index, it -> "plugin-$index-${it.id}" }) { index, extension ->
-                JGroupItem(GroupPosition.of(index, list.size)) {
-                    JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.listLine(res, extension), leadingIcon = PhIcons.PuzzlePiece,
-                        trailing = { ExtensionStateMark(extension) }, chevron = true,
-                        selected = (detail as? ExtensionRoute)?.extensionId == extension.id, onClick = { onExtension(extension.id) })
+            // Several managers (docs/managers.md step 4): each one's extensions under its name instead of one list.
+            val byManager = roster?.groups(list) { it.manager }
+            val rows: LazyListScope.(List<HubExtension>) -> Unit = { shown ->
+                // keyed by manager and id in every path: a built-in is listed under each manager, and the list can come
+                // before the roster; a pair that still repeats (a hub that stamps nothing) takes its place too
+                val repeated = shown.groupingBy { it.manager.orEmpty() to it.id }.eachCount().filterValues { it > 1 }.keys
+                itemsIndexed(shown, key = { index, it ->
+                    "plugin-${it.manager.orEmpty()}-${it.id}" + if ((it.manager.orEmpty() to it.id) in repeated) "-$index" else ""
+                }) { index, extension ->
+                    JGroupItem(GroupPosition.of(index, shown.size)) {
+                        JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.listLine(res, extension), leadingIcon = PhIcons.PuzzlePiece,
+                            trailing = { ExtensionStateMark(extension) }, chevron = true,
+                            selected = (detail as? ExtensionRoute)?.let { it.extensionId == extension.id && roster.ownerOrDefault(it.manager) == roster.ownerOrDefault(extension.manager) } == true,
+                            onClick = { onExtension(extension.id, extension.manager?.takeIf { it != roster?.defaultManagerId }) })
+                    }
                 }
+            }
+            if (byManager == null) {
+                item("top") { JSectionHeader(stringResource(R.string.settings_ext_list_header), count = list.size) }
+                rows(list)
+            } else byManager.forEach { group ->
+                item("manager-${group.id}") { JManagerHeader(group, count = group.items.size) }
+                rows(group.items)
             }
             item("footer") {
                 SettingsCaption(stringResource(if (state.markets && onMarket != null) R.string.settings_ext_list_footer_market
@@ -133,7 +149,10 @@ fun ExtensionPage(
     onUpgrade: ((String, String) -> Unit)? = null,
     /** Just installed and not signed in (`next: auth`, #4507): its sign-in starts once the page knows it. */
     startSignIn: Boolean = false,
+    /** Whose extension it is (several managers); null: the default's. Its requests name it while the page is open. */
+    manager: String? = null,
 ) {
+    PinnedExtension(extensionId, manager)
     if (extensions == null) {
         JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
@@ -177,11 +196,16 @@ fun ExtensionPage(
         if (!auth.signedIn && detail.extension.enabled != false) signIn.start()
     }
     val contributed = detail?.takeIf { it.extension.enabled ?: true }?.extension?.contributes.orEmpty()["connectors"].orEmpty()
-    var hubConnectors by remember(connectors, extensionId) { mutableStateOf<List<HubConnector>>(emptyList()) }
+    val roster = LocalManagerRoster.current
+    PinnedExtension(contributed.map { listOf("connectors", it) }, manager)
+    var hubConnectors by remember(connectors, extensionId, manager) { mutableStateOf<List<HubConnector>>(emptyList()) }
     LaunchedEffect(connectors, contributed) {
         if (connectors == null || contributed.isEmpty()) return@LaunchedEffect
-        // The first of an id is the default manager's, the one this page's requests go to (the list is every manager's).
-        hubConnectors = try { connectors.connectors(all = true).filter { it.id in contributed }.distinctBy { it.id } }
+        // The list is every manager's (docs/managers.md): this page's are its manager's, whose requests it pins below.
+        hubConnectors = try {
+            connectors.connectors(all = true)
+                .filter { it.id in contributed && roster.ownerOrDefault(it.manager) == roster.ownerOrDefault(manager) }.distinctBy { it.id }
+        }
         catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() } // the connector's page says what is wrong
     }
     val hasForm = detail != null && !detail.readOnly && detail.form.isNotEmpty()
@@ -688,5 +712,27 @@ private fun ExtensionSecretSheet(
             if (secret.set) JButton(stringResource(R.string.settings_ext_clear), { scope.launch { if (clear()) onDismiss() } }, Modifier.fillMaxWidth(),
                 kind = JButtonKind.Destructive, enabled = !busy)
         }
+    }
+}
+
+/** The manager an extension stamped [manager] belongs to: its stamp, else the roster's default (none: the hub's own). */
+internal fun persona.core.contracts.api.ManagerRoster?.ownerOrDefault(manager: String?): String =
+    manager?.takeIf { it.isNotBlank() } ?: this?.defaultManagerId ?: persona.core.contracts.api.ManagerRoster.ASSISTANT_MANAGER
+
+/**
+ * While an extension's page is open, its requests (`extensions/<id>/…`, `plugins/<id>/…` on an older hub) name [manager]:
+ * the same id may be installed under several managers (each one's built-ins, docs/managers.md), and the default's own
+ * keep going to it elsewhere.
+ */
+@Composable
+internal fun PinnedExtension(extensionId: String, manager: String?) =
+    PinnedExtension(listOf(listOf("extensions", extensionId), listOf("plugins", extensionId)), manager)
+
+/** Requests under each of [prefixes] (segments under /api/v1) name [manager] while this is shown. */
+@Composable
+internal fun PinnedExtension(prefixes: List<List<String>>, manager: String?) {
+    DisposableEffect(prefixes, manager) {
+        val release = persona.core.contracts.api.AssistantManagerChoice.pin(prefixes, manager)
+        onDispose { release() }
     }
 }

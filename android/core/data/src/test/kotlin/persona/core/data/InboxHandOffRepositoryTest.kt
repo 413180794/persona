@@ -153,10 +153,64 @@ class InboxHandOffRepositoryTest {
         }
     }
 
+    /** Another manager's item handed to Persona with no Agent: its own manager's main conversation, not this phone's main queue. */
+    @Test fun anotherManagersItemGoesToItsOwnMainConversation() = runTest {
+        val directory = Files.createTempDirectory("inbox-handoff-manager").toFile()
+        try {
+            persona.core.contracts.api.AssistantManagerChoice.choose("hub", null, "assistant")
+            val main = RecordingMain()
+            val agents = RecordingSender()
+            val asked = mutableListOf<String>()
+            val items = buildJsonArray {
+                add(buildJsonObject { put("id", "mine"); put("kind", "mail"); put("title", "t"); put("manager", "assistant") })
+                add(buildJsonObject { put("id", "theirs"); put("kind", "mail"); put("title", "t"); put("manager", "m-2") })
+            }
+            val repository = repository(ItemsTransport(items), directory, backgroundScope, main = main, agents = agents,
+                mainOf = { manager -> asked += manager; SessionKey("lab", "main-$manager") })
+            repository.refresh()
+            repository.handOff(InboxHandOffRequest("mine", "a", operationId = "op-1"))
+            repository.handOff(InboxHandOffRequest("theirs", "b", operationId = "op-2"))
+            assertEquals(listOf("op-1" to "a"), main.sent)
+            assertEquals(listOf("m-2"), asked)
+            assertEquals(listOf(Triple(SessionKey("lab", "main-m-2"), "b", "op-2")), agents.sent)
+        } finally {
+            persona.core.contracts.api.AssistantManagerChoice.reset()
+            directory.deleteRecursively()
+        }
+    }
+
+    /** Summarize / Draft reply on another manager's item asks that manager's Persona too, by the item's id on the hub. */
+    @Test fun askingPersonaGoesToTheItemsManager() = runTest {
+        val directory = Files.createTempDirectory("inbox-ask-manager").toFile()
+        try {
+            persona.core.contracts.api.AssistantManagerChoice.choose("hub", null, "assistant")
+            val main = RecordingMain()
+            val agents = RecordingSender()
+            val items = buildJsonArray {
+                add(buildJsonObject { put("id", "mine"); put("kind", "mail"); put("title", "t"); put("preview", "p"); put("manager", "assistant") })
+                add(buildJsonObject { put("id", "theirs"); put("kind", "mail"); put("title", "t"); put("preview", "p"); put("manager", "m-2") })
+            }
+            val repository = repository(ItemsTransport(items), directory, backgroundScope, main = main, agents = agents,
+                mainOf = { manager -> SessionKey("lab", "main-$manager") })
+            repository.refresh()
+            val theirs = repository.snapshot.value.records.first { it.manager == "m-2" }.item.id
+            repository.askPersona(InboxPersonaRequest("mine", InboxAiAction.Summarize, operationId = "op-1"))
+            repository.askPersona(InboxPersonaRequest(theirs, InboxAiAction.Summarize, operationId = "op-2"))
+            assertEquals(listOf("op-1"), main.sent.map { it.first })
+            assertEquals(listOf(SessionKey("lab", "main-m-2")), agents.sent.map { it.first })
+            val text = agents.sent.single().second
+            assertTrue(text, text.contains("item_id=\"theirs\"") && !text.contains("\u001F"))
+        } finally {
+            persona.core.contracts.api.AssistantManagerChoice.reset()
+            directory.deleteRecursively()
+        }
+    }
+
     private fun repository(
         transport: ItemsTransport, directory: java.io.File, owner: CoroutineScope,
         machines: MutableStateFlow<List<Machine>> = MutableStateFlow(emptyList()),
         main: MainConversationSender? = null, agents: MessageSender? = null, actions: InboxActionsTransport? = null,
+        mainOf: (suspend (String) -> SessionKey)? = null,
     ) = RealInboxRepository(
         object : InboxAssistantConnection { override val current = MutableStateFlow<InboxAssistantTransport?>(transport) },
         InboxReplyJournal(directory, "hub/generation"),
@@ -169,7 +223,7 @@ class InboxHandOffRepositoryTest {
             override val pending = MutableStateFlow<List<Interaction>>(emptyList())
             override suspend fun refresh() = Unit
             override suspend fun resolve(id: String, resolution: Resolution) = Unit
-        }, owner, mainConversationSender = main, actions = actions, messageSender = agents,
+        }, owner, mainConversationSender = main, actions = actions, messageSender = agents, mainConversationOf = mainOf,
     ) { _, _ -> error("unused") }
 
     private class RecordingMain : MainConversationSender {

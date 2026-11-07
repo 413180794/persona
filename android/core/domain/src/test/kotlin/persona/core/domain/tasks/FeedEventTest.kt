@@ -60,4 +60,24 @@ class FeedEventTest {
         store.load("c1") // loaded once: later loads only ask for what came after
         assertEquals(listOf(null, "2026-11-04T10:00:00Z"), api.asked)
     }
+
+    /**
+     * Another manager's live updates (the hub stamps `manager` on them, docs/protocol.md) reach their conversation
+     * whichever manager the assistant page shows: its conversation may be open elsewhere (docs/managers.md).
+     */
+    @Test fun anotherManagersLiveUpdatesReachTheirConversation() = runBlocking {
+        val api = Api(emptyList())
+        val connection = Connection()
+        val store = TasksStore(api, connection, CoroutineScope(Dispatchers.Unconfined))
+        try {
+            persona.core.contracts.api.AssistantManagerChoice.choose("hub", null, "assistant")
+            val feed = ServerEvent.decode(
+                """{"type":"assistant_feed","manager":"m-2","conversation":"c9","item":{"id":"b1","conversation":"c9","at":"2026-11-05T08:00:00Z","kind":"note","ref":"x"}}""")
+            val plan = ServerEvent.decode("""{"type":"task_plan","manager":"m-2","plan":{"id":"p9","conversation":"c9","tasks":[]}}""")
+            connection.events.emit(requireNotNull(feed))
+            connection.events.emit(requireNotNull(plan))
+            assertEquals(listOf("b1"), store.feeds.value["c9"]?.map { it.id })
+            assertEquals(setOf("p9"), store.plans.value.keys)
+        } finally { persona.core.contracts.api.AssistantManagerChoice.reset() }
+    }
 }

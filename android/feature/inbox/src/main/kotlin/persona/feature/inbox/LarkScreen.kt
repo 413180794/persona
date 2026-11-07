@@ -100,7 +100,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     val flow = remember(repository, route.feedId, target.around) { repository.conversation(route.feedId, target.around) }
     val conversation by flow.collectAsStateWithLifecycle(LarkConversation(loading = true))
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
-    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val record = inbox.records.inboxRecord(route.itemId)
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     val scope = rememberCoroutineScope()
     val composers = rememberReplyComposers(repository)

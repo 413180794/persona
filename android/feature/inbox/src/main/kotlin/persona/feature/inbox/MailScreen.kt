@@ -54,7 +54,7 @@ private fun MailDetail(
     val scope = rememberCoroutineScope()
     val res = LocalResources.current
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
-    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val record = inbox.records.inboxRecord(route.itemId)
     var reference by remember { mutableStateOf<MailReference?>(null) }
     var loadedTarget by remember { mutableStateOf<MailReplyTarget?>(null) }
     var replyTarget by remember { mutableStateOf<MailReplyTarget?>(null) }
@@ -153,7 +153,7 @@ private fun MailDetail(
         if (selected != null && message?.uid != selected) message = null
         error = null
         try {
-            val item = transport.item(route.itemId)
+            val item = transport.item(InboxItemKey.hubId(route.itemId))
             val ref = requireNotNull(item.mail)
             reference = ref
             loadedTarget = item.replyTarget

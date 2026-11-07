@@ -29,7 +29,7 @@ class HttpHubManagersTest {
         server.enqueue(MockResponse().setBody("""{"managers":[
             {"id":"assistant","name":"助手","online":true,"default":true,"builtin":true,"host":"server","os":"linux","arch":"amd64",
              "deploy":"child","version":"1.0.0","since":"2026-11-05T01:00:00Z","future":[1]},
-            {"id":"m-8b04d2","name":"家里","online":false,"host":"NAS","os":"linux","deploy":"docker","last_seen":"2026-11-04T22:00:00Z"},
+            {"id":"m-8b04d2","name":"家里","online":false,"host":"NAS","os":"linux","deploy":"docker","last_seen":"2026-11-04T22:00:00Z","needs_update":true},
             {"id":"m-c1e9f0","name":"测试","online":false,"installing":"2026-11-05T06:07:00Z"}],"default":"assistant"}"""))
         val roster = api.roster()
         assertEquals("/api/v1/managers", server.takeRequest().path)
@@ -40,6 +40,7 @@ class HttpHubManagersTest {
         assertEquals("child", own.deploy)
         assertEquals("2026-11-05T01:00:00Z", own.since)
         assertEquals("2026-11-04T22:00:00Z", roster.managers[1].lastSeen)
+        assertTrue(roster.managers[1].needsUpdate && !own.needsUpdate)
         assertTrue(roster.managers[2].isInstalling)
         assertNull(roster.managers[2].host)
     } }

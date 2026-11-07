@@ -189,4 +189,10 @@
     <plurals name="machines_usage_age_minutes"><item quantity="other">%d 分钟前</item></plurals>
     <plurals name="machines_usage_age_hours"><item quantity="other">%d 小时前</item></plurals>
     <plurals name="machines_usage_age_days"><item quantity="other">%d 天前</item></plurals>
+    <string name="machines_move">移到…</string>
+    <string name="machines_move_title">移到哪个管理者</string>
+    <string name="machines_move_offline">%1$s · 离线</string>
+    <string name="machines_notice_moved">已移到「%1$s」</string>
+    <string name="machines_notice_move_failed">没移成：%1$s</string>
+    <string name="machines_manager_offline">它的管理者「%1$s」离线，管理者回来后这台电脑会恢复在线。</string>
 </resources>

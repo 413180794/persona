@@ -147,7 +147,7 @@ class ExtensionUpgradeShotsTest {
             PersonaTheme(style = AppStyle.Glass, darkTheme = false, reduceMotion = true) {
                 CompositionLocalProvider(LocalDetailKey provides if (open) ExtensionRoute("example-cua") else null) {
                     Row(Modifier.fillMaxSize().background(PersonaTheme.palette.background)) {
-                        Box(Modifier.weight(1f).testTag("list")) { ExtensionsPage(api, onBack = {}, onExtension = {}) }
+                        Box(Modifier.weight(1f).testTag("list")) { ExtensionsPage(api, onBack = {}, onExtension = { _, _ -> }) }
                         if (open) Box(Modifier.weight(1f).testTag("detail")) {
                             ExtensionPage(api, "example-cua", onBack = { open = false }, machines = flowOf(machines))
                         }

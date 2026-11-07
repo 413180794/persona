@@ -9,7 +9,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.decodeFromJsonElement
 
-/** Use the immutable transport for the same pairing as the outbox, never a mutable connection. */
+/**
+ * Use the immutable transport for the same pairing as the outbox, never a mutable connection. This phone's main queue
+ * is the default manager's (docs/managers.md step 4): its lookups name the default whatever the assistant page shows,
+ * so a message waiting in it never goes to another manager's main conversation.
+ */
 class AssistantMainConversationResolver(private val transport: InboxAssistantTransport) : MainConversationResolver {
     private val lock = Mutex()
 
@@ -17,11 +21,11 @@ class AssistantMainConversationResolver(private val transport: InboxAssistantTra
 
     override suspend fun createMainConversation(): SessionKey = lock.withLock {
         // Another entry point or device may have installed the main pointer since the first lookup.
-        lookup() ?: JsonCodec.decodeFromJsonElement<Session>(transport.createConversation(true).getValue("session")).key
+        lookup() ?: JsonCodec.decodeFromJsonElement<Session>(transport.createConversationOf(null, true).getValue("session")).key
     }
 
     private suspend fun lookup(): SessionKey? {
-        val config = transport.assistant()
+        val config = transport.assistantOf(null)
         val machine = config.string("machine_id")
         val main = config.string("main")
         return if (machine.isNotBlank() && main.isNotBlank()) SessionKey(machine, main) else null

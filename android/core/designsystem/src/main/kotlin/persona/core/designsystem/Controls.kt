@@ -420,16 +420,19 @@ fun JChip(
     icon: PhIcon? = null,
     status: Status? = null,
     count: Int? = null,
+    /** Greyed text (not selected): what it stands for is not reachable now, like an offline manager. */
+    muted: Boolean = false,
     onLongClick: (() -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
     val shape = RoundedCornerShape(PersonaTheme.shapes.chip)
-    val (fill, ink, border) = when (style) {
+    val (fill, plainInk, border) = when (style) {
         AppStyle.Glass -> Triple(if (selected) palette.action else palette.surfaceStrong, if (selected) palette.onAction else palette.ink, if (selected) Color.Transparent else palette.strokeBottom)
         AppStyle.Brief -> Triple(if (selected) palette.action else palette.surface, if (selected) palette.onAction else palette.ink, Color.Transparent)
         AppStyle.Board -> Triple(if (selected) palette.statusSurface else palette.surface, palette.ink, if (selected) palette.accent else palette.line)
     }
+    val ink = if (muted && (!selected || style == AppStyle.Board)) palette.ink3 else plainInk
     Row(
         modifier.heightIn(min = if (onClick != null) 36.dp else 28.dp).clip(shape).background(fill).border(1.dp, border, shape)
             .then(when {

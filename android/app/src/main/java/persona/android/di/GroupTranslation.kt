@@ -217,6 +217,8 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
         override suspend fun setBrowser(machineId: String, enabled: Boolean) = source.setBrowser(names.rawMachine(machineId), enabled)
         override suspend fun browserJob(machineId: String, action: String) = source.browserJob(names.rawMachine(machineId), action)
         override suspend fun usageWindows() = source.usageWindows()
+        override suspend fun moveToManager(machineId: String, manager: String) =
+            source.moveToManager(names.rawMachine(machineId), manager).let { it.copy(machineId = names.machineId(it.machineId)) }
     }
 }
 
@@ -276,12 +278,14 @@ internal fun AssistantConversations.inGroup(names: GroupNames, scope: CoroutineS
     val source = this
     return object : AssistantConversations {
         override val assistant = source.assistant.mapIn(scope) { snapshot ->
-            AssistantSnapshot(snapshot.mainSession?.let(names::key), snapshot.conversations.map(names::session))
+            AssistantSnapshot(snapshot.mainSession?.let(names::key), snapshot.conversations.map(names::session), snapshot.manager)
         }
         override val pinned = source.pinned.mapIn(scope) { keys -> keys.mapTo(LinkedHashSet(), names::key) }
         override suspend fun refresh() = source.refresh()
         override suspend fun startConversation() = names.key(source.startConversation())
         override suspend fun startConversation(launcher: String) = names.key(source.startConversation(launcher))
+        // another manager's main conversation (docs/managers.md step 4), in this group's merged ids
+        override suspend fun mainConversationOf(manager: String) = names.key(source.mainConversationOf(manager))
     }
 }
 

@@ -34,7 +34,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId: String, title: String, onBack: () -> Unit,
-                    initialState: String? = null, depth: Int = 0, onPush: (ExtensionUiRoute) -> Unit = {}) {
+                    initialState: String? = null, depth: Int = 0, onPush: (ExtensionUiRoute) -> Unit = {}, manager: String? = null) {
+    PinnedExtension(extensionId, manager)
     if (extensions == null) {
         JListPage(title = title, onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
         return
@@ -45,7 +46,7 @@ fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId:
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val handle = rememberExtensionView(model, onPush = { push ->
-        ExtensionViewText.pushed(extensionId, uiId, title, depth, push)?.let { model.covered(); onPush(it) }
+        ExtensionViewText.pushed(extensionId, uiId, title, depth, push, manager)?.let { model.covered(); onPush(it) }
     }, onPop = onBack)
     LaunchedEffect(model) { model.load() }
     // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md "UI slots" "Refresh"),

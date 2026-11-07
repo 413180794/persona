@@ -79,7 +79,7 @@ import persona.core.navigation.Navigator
 @Composable
 internal fun ConnectorThreadScreen(repository: InboxRepository, connectors: ConnectorsManagement, route: ConnectorThreadRoute, navigator: Navigator) {
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
-    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val record = inbox.records.inboxRecord(route.itemId)
     val ref = record?.connector
     if (record == null || ref == null || ref.thread.isBlank()) {
         InboxItemDetailScreen(repository, InboxItemDetailRoute(route.itemId), navigator)

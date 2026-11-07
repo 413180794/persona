@@ -29,7 +29,7 @@ class ExtensionsDuplicateIdsTest {
                 HubExtension("example-voice", "Example voice", "voice", "disabled", source = "builtin"),
             ))
         }
-        rule.setContent { PersonaTheme(reduceMotion = true) { ExtensionsPage(api, onBack = {}, onExtension = {}) } }
+        rule.setContent { PersonaTheme(reduceMotion = true) { ExtensionsPage(api, onBack = {}, onExtension = { _, _ -> }) } }
         rule.waitUntil(5_000) { rule.onAllNodesWithText("Example notes").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(2, rule.onAllNodesWithText("Example voice").fetchSemanticsNodes().size)
     }

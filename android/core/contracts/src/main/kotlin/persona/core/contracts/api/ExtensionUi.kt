@@ -62,6 +62,12 @@ data class ExtensionUiPlace(
     val badge: ExtensionViewBadge? = null,
     /** An `inbox_item`'s: the connector whose inbox items it draws (`lark`), the items' `source`. */
     val connector: String? = null,
+    /**
+     * Whose extension draws it, when the place says (docs/managers.md); null: the default's. `GET /api/v1/extensions/-/ui`
+     * is the default manager's alone (not a merged list), so its places carry none today; a page they open keeps one if
+     * they ever do.
+     */
+    val manager: String? = null,
 )
 
 /**

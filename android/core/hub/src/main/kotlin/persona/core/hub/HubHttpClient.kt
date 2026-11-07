@@ -90,6 +90,54 @@ fun systemTrustManager(): X509TrustManager {
     return factory.trustManagers.filterIsInstance<X509TrustManager>().first()
 }
 
+/** Names the manager a request is for (docs/protocol.md「Per-manager routing」); omitted: the default manager. */
+const val ManagerHeader = "X-Persona-Manager"
+
+/** The same as a query (WebSockets, links, one request pinned to a manager); empty: the default, sent as nothing. */
+const val ManagerQuery = "manager"
+
+/**
+ * [this] naming the manager the calling coroutine's request is for (persona.core.contracts.api.RequestManager, an inbox
+ * item's): on the request itself, so it holds wherever the request goes later; "" (the default's) is taken off again by
+ * the client, together with any stamp a list noted for the path. Unchanged outside one, or when it names one already.
+ */
+internal suspend fun HttpUrl.withRequestManager(): HttpUrl {
+    val named = kotlinx.coroutines.currentCoroutineContext()[persona.core.contracts.api.RequestManager]?.id
+    return if (named == null || queryParameter(ManagerQuery) != null) this else newBuilder().addQueryParameter(ManagerQuery, named).build()
+}
+
+/**
+ * `…/api/v1/assistant[/…]`, under whatever sub-path the hub sits at: the assistant page's requests. The health
+ * space's (`?space=`, docs/health.md) are not: that page is the default manager's and has no switcher.
+ */
+internal fun isAssistantPath(url: HttpUrl): Boolean {
+    if (url.queryParameter("space") != null) return false
+    val api = apiSegments(url) ?: return false
+    // One conversation's routes are not the page's: the hub sends them to the conversation's manager (byConversation),
+    // which naming the page's pick would override.
+    return api.firstOrNull() == "assistant" && !(api.size > 2 && api[1] == "conversations")
+}
+
+/** The segments after `api/v1`, under whatever sub-path the hub sits at; null for another path. */
+private fun apiSegments(url: HttpUrl): List<String>? {
+    val segments = url.pathSegments
+    for (i in 0 until segments.size - 1) {
+        if (segments[i] == "api" && segments[i + 1] == "v1") return segments.subList(i + 2, segments.size)
+    }
+    return null
+}
+
+/**
+ * The `X-Persona-Manager` a request to [url] carries, if any (docs/protocol.md「Per-manager routing」): the assistant
+ * page's pick on its routes; else a pin or a list's stamp (an inbox item, an extension's page, a conversation the page
+ * listed) of [hubId]'s hub.
+ */
+internal fun managerHeaderFor(url: HttpUrl, hubId: String?): String? {
+    val choice = persona.core.contracts.api.AssistantManagerChoice
+    if (isAssistantPath(url)) choice.header(hubId)?.let { return it }
+    return apiSegments(url)?.let { choice.itemHeader(it, hubId) }
+}
+
 /** How TLS pins are keyed: the host as OkHttp hands it to the hostname verifier, and the port. */
 internal fun tlsKey(host: String, port: Int) = "${host.lowercase()}:$port"
 
@@ -177,13 +225,21 @@ class HubHttpClient(
                 // The language the app shows, so the hub answers in it (docs/i18n.md); also on WebSocket upgrades.
                 val builder = request.newBuilder().header("X-Persona-Client", "android/$version")
                     .header("Accept-Language", persona.core.contracts.ClientLanguage.tag)
-                if (!request.url.isHttps) {
+                // The manager the assistant page shows (docs/managers.md): its requests name it; none for the default.
+                // A thing a merged list showed as another manager's (an inbox item, an extension) names that one. A
+                // request pinned to one (`?manager=`) keeps it: the default's (empty) goes without either.
+                var url = request.url
+                val pinned = url.queryParameter(ManagerQuery)
+                if (pinned != null) {
+                    if (pinned.isEmpty()) url = url.newBuilder().removeAllQueryParameters(ManagerQuery).build().also(builder::url)
+                } else if (request.header(ManagerHeader) == null) managerHeaderFor(url, hubId)?.let { builder.header(ManagerHeader, it) }
+                if (!url.isHttps) {
                     // WebSocket upgrades skip network interceptors. Freeze the checked DNS
                     // result into the URL so the upgrade cannot resolve to a different peer.
-                    val peer = dns.lookup(request.url.host).firstOrNull(localAddressPolicy::allows)
+                    val peer = dns.lookup(url.host).firstOrNull(localAddressPolicy::allows)
                         ?: throw HubFailure(HubError.TlsRequired, retryable = false)
-                    val authority = request.url.toString().substringAfter("://").substringBefore('/')
-                    builder.url(request.url.newBuilder().host(peer.hostAddress!!).build()).header("Host", authority)
+                    val authority = url.toString().substringAfter("://").substringBefore('/')
+                    builder.url(url.newBuilder().host(peer.hostAddress!!).build()).header("Host", authority)
                 }
                 chain.proceed(builder.build())
             }

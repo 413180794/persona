@@ -53,6 +53,14 @@ interface InboxAssistantTransport {
     /** A conversation that runs on [launcher] (POST /api/v1/assistant/conversations `launcher`), not the default one. */
     suspend fun createConversation(main: Boolean, launcher: String): JsonObject =
         throw UnsupportedOperationException("Picking a launcher unavailable")
+    /**
+     * [assistant] of one manager (null: the default) whatever the assistant page shows meanwhile (docs/managers.md
+     * step 4): what a message was written for is where it goes.
+     */
+    suspend fun assistantOf(manager: String?): JsonObject = assistant()
+    /** [createConversation] for one manager (null: the default), as [assistantOf]. */
+    suspend fun createConversationOf(manager: String?, main: Boolean, launcher: String? = null): JsonObject =
+        if (launcher == null) createConversation(main) else createConversation(main, launcher)
     suspend fun pins(): JsonObject
     suspend fun mutes(): JsonObject
     suspend fun media(ref: String): ByteArray
@@ -114,6 +122,11 @@ interface InboxAssistantConnection {
 }
 
 interface AssistantConversations : AssistantRepository {
+    /**
+     * Manager [manager]'s main conversation, made if it has none (docs/managers.md step 4): a message written while it
+     * was on the page goes there even if the page moved on since. Fails rather than answer another manager's.
+     */
+    suspend fun mainConversationOf(manager: String): SessionKey = throw UnsupportedOperationException("Managers unavailable")
     val pinned: StateFlow<Set<SessionKey>>
     suspend fun startConversation(): SessionKey
     /** A new conversation that runs on [launcher], for it alone (iOS StarterComposer's model menu): the default stays. */

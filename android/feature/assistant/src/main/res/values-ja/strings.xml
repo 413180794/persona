@@ -125,4 +125,6 @@
     <string name="assistant_suggest_local_detail">説明を開く</string>
     <string name="assistant_suggest_needs_calendar">スマホのカレンダーを使います</string>
     <string name="assistant_refused_retry">再試行</string>
+    <string name="assistant_manager_offline">%1$s · %2$s</string>
+    <string name="assistant_manager_offline_empty">%1$sはオフラインです。履歴は見られますが、今はメッセージを送れません。</string>
 </resources>

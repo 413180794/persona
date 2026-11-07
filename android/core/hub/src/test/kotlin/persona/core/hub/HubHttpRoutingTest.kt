@@ -246,6 +246,37 @@ class HubHttpRoutingTest {
 
     private fun message() = MessageRequest(pairing, session, "hello", "stable-id", null)
 
+    /**
+     * The manager a request is made for (docs/managers.md "Clients"): named on the request itself (`?manager=`), so it
+     * holds wherever the request goes later; the default's ("") names none, over what a list noted for the path too.
+     */
+    @Test fun aRequestNamesTheManagerItWasMadeFor() = runBlocking {
+        val certificate = HeldCertificate.Builder().commonName("example.com").build()
+        val requests = Channel<RecordedRequest>(Channel.UNLIMITED)
+        server(certificate, requests).use { hub ->
+            connection(certificate, listOf(endpoint(hub))) {}.use { connection ->
+                try {
+                    connection.updateNetwork(HubNetwork("lan"))
+                    withTimeout(5000) { connection.route.first { it != null } }
+                    val inbox = HttpInboxAssistantTransport("scope", connection)
+                    AssistantManagerChoice.choose("test-hub", null, "assistant")
+                    AssistantManagerChoice.noteItem(listOf("inbox", "x"), "m-1")
+                    suspend fun sent(manager: String?): Pair<String, String?> {
+                        if (manager == null) inbox.setDone("x", true)
+                        else withContext(RequestManager(manager)) { inbox.setDone("x", true) }
+                        val r = withTimeout(5000) { requests.receive() }
+                        return r.path!! to r.getHeader(ManagerHeader)
+                    }
+                    assertEquals("/api/v1/inbox/x/done" to "m-1", sent(null)) // the list's stamp, as before
+                    assertEquals("/api/v1/inbox/x/done?manager=m-3" to null, sent("m-3"))
+                    assertEquals("/api/v1/inbox/x/done" to null, sent("")) // the default's: none at all
+                } finally {
+                    AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems()
+                }
+            }
+        }
+    }
+
     private fun connection(certificate: HeldCertificate, endpoints: List<Endpoint>, onReady: suspend () -> Unit) =
         OkHttpHubConnection(HubConnectionConfig("test-hub", fingerprint(certificate), "test-token", endpoints, "test"),
             HubNetwork("offline", available = false), onReady = { onReady() })

@@ -38,6 +38,11 @@ class RealInboxRepository(
     private val sendThread: (suspend (String, ReplyRequest) -> JsonObject)? = null,
     /** The ordinary sessions' outbox (the one Agents uses): "Hand to AI" to an Agent queues its message there. */
     private val messageSender: MessageSender? = null,
+    /**
+     * Manager's main conversation, in [messageSender]'s ids (docs/managers.md "Clients"): "Hand to AI" with no Agent of
+     * another manager's item goes there, through [messageSender]; null: the default's main queue for every item.
+     */
+    private val mainConversationOf: (suspend (String) -> persona.core.contracts.SessionKey)? = null,
     /** How long a burst of hub inbox events is collected before the one refresh it causes. */
     private val refreshWindowMillis: Long = 1_000,
     // Last, so existing callers that pass it as a trailing lambda keep compiling.
@@ -71,7 +76,7 @@ class RealInboxRepository(
         if (restoredScope == transport.scope) return
         quietly { snapshots.restore<JsonObject>("${transport.scope}:inbox")?.let { data ->
             savedItems = transport.scope to JsonArray(data.array("items"))
-            val records = data.array("items").map { record(it.jsonObject, transport) }
+            val records = listed(data.array("items").map { it.jsonObject }, transport)
             if (owns(transport)) current.update { it.copy(records = records, loading = false) }
         } }
         restoredScope = transport.scope
@@ -141,7 +146,8 @@ class RealInboxRepository(
             combine(sessions.sessions, interactions.pending) { agents, waiting ->
                 agents.map { AgentSession(it) } to waiting.map {
                     InboxInteraction(it.id, it.machineId, it.sessionId, it.createdAt,
-                        agents.firstOrNull { agent -> agent.key == it.sessionKey }?.displayTitle.orEmpty(), it.summary, it.headline.shown)
+                        agents.firstOrNull { agent -> agent.key == it.sessionKey }?.displayTitle.orEmpty(), it.summary, it.headline.shown,
+                        manager = it.manager)
                 }
             }.collect { (agents, waiting) -> current.update { it.copy(sessions = agents, interactions = waiting) } }
         }
@@ -206,8 +212,8 @@ class RealInboxRepository(
             val triage = InboxTriage.decode(body["triage"])
             val mute = if (hubPreferences == null) transport.mutes() else null
             if (!owns(transport)) return@withLock
-            val records = data.map { record(it, transport) }
-            val newVersions = data.associate { it.string("id") to (it.obj("agent")?.toString().orEmpty()) }
+            val records = listed(data, transport)
+            val newVersions = records.zip(data).associate { (record, item) -> record.item.id to (item.obj("agent")?.toString().orEmpty()) }
             val saved = journal.update(transport.scope) { document ->
                 document.copy(drafts = document.drafts.filter { (key, draft) ->
                     !key.startsWith("inbox:") || draft.version == null || newVersions[key.removePrefix("inbox:")] == draft.version
@@ -239,7 +245,8 @@ class RealInboxRepository(
         val cached = snapshots.restore<JsonObject>(key)?.optional("context")
         if (!online() || actions == null) return cached
         return try {
-            actions.context(itemId).takeIf { it.isNotBlank() }?.also { context ->
+            val record = recordOf(itemId)
+            asItem(record) { actions.context(record?.hubItemId ?: itemId) }.takeIf { it.isNotBlank() }?.also { context ->
                 if (!owns(transport)) throw CancellationException("Pairing changed")
                 snapshots.save(key, buildJsonObject { put("context", context) })
             } ?: cached
@@ -249,13 +256,14 @@ class RealInboxRepository(
 
     override suspend fun setDone(itemId: String, done: Boolean) = refreshLock.withLock {
         val transport = requireTransport()
-        val old = current.value.records.firstOrNull { it.item.id == itemId }
+        val old = recordOf(itemId)
+        val shown = old?.item?.id ?: itemId
         current.update { it.copy(records = it.records.map { record ->
-            if (record.item.id == itemId) record.copy(item = record.item.copy(doneAt = if (done) Instant.now().toString() else null)) else record
+            if (record.item.id == shown) record.copy(item = record.item.copy(doneAt = if (done) Instant.now().toString() else null)) else record
         }) }
         try {
-            val result = transport.setDone(itemId, done)
-            if (owns(transport)) replaceRecord(record(result.obj("item") ?: result, transport))
+            val result = asItem(old) { transport.setDone(old?.hubItemId ?: itemId, done) }
+            if (owns(transport)) replaceRecord(record(result.obj("item") ?: result, transport, old))
         } catch (e: Exception) {
             if (owns(transport) && old != null) replaceRecord(old)
             throw e
@@ -275,7 +283,7 @@ class RealInboxRepository(
             current.update { it.copy(records = it.records.map { r -> if (r.item.id in ids) r.copy(item = r.item.copy(doneAt = doneAt)) else r }) }
             old
         }
-        try { transport.muteInbox(record.item.id, option.tag) }
+        try { asItem(record) { transport.muteInbox(record.hubItemId, option.tag) } }
         catch (e: Exception) {
             if (owns(transport)) refreshLock.withLock { covered.forEach(::replaceRecord) }
             throw e
@@ -299,10 +307,10 @@ class RealInboxRepository(
                 if (record.item.id in ids) record.copy(item = record.item.copy(doneAt = doneAt)) else record
             }) }
             try {
-                val data = transport.bulk(items, action)
-                val result = InboxBulkResult.from(data)
+                val outcome = bulkByManager(transport, items, action, old)
+                val result = outcome.result
                 if (owns(transport)) {
-                    data.array("changed").forEach { replaceRecord(record(it.jsonObject, transport)) }
+                    outcome.changed.forEach(::replaceRecord)
                     // Already so (another device filed it) keeps what was just shown; gone from the hub leaves the list;
                     // one that took new messages since, or that the hub failed to write, goes back to how it was, until the refresh.
                     val gone = result.missing.toSet()
@@ -318,6 +326,50 @@ class RealInboxRepository(
         // The hub's own state (when, by whom) for what this request did not move itself.
         if (result.changedSince.isNotEmpty() || result.unchanged.isNotEmpty() || result.missing.isNotEmpty() || result.failed.isNotEmpty()) quietly { refresh() }
         return result
+    }
+
+    /** What the managers answered to a bulk action, in the app's ids, and the items it changed as the hub has them now. */
+    private class BulkOutcome(val result: InboxBulkResult, val changed: List<InboxRecord>)
+
+    /**
+     * Each manager files its own items (the merged list stamps them; the hub sends `/inbox/bulk` to the manager the
+     * request names, docs/protocol.md "Per-manager routing"): one request per manager, naming it on the request, the
+     * answers put together. A manager that fails (offline) leaves the others' done: its own items are `failed`, put
+     * back and said so; only when every manager fails does the whole action fail.
+     */
+    private suspend fun bulkByManager(
+        transport: InboxAssistantTransport, items: List<InboxDoneTarget>, action: InboxBulkAction, old: List<InboxRecord>,
+    ): BulkOutcome {
+        val byId = old.associateBy { it.item.id }
+        val default = AssistantManagerChoice.current.value.defaultId
+        val groups = items.groupBy { byId[it.id]?.manager?.takeIf { m -> m.isNotBlank() && m != default } }
+        val answers = mutableListOf<InboxBulkResult>()
+        val changed = mutableListOf<InboxRecord>()
+        val failed = mutableListOf<String>()
+        var problem: Exception? = null
+        for ((manager, list) in groups) {
+            // within one manager each hub id is one item: the app's id back from it
+            val keyOf = list.associate { InboxItemKey.hubId(it.id) to it.id }
+            val key = { id: String -> keyOf[id] ?: id }
+            try {
+                val data = withContext(persona.core.contracts.api.RequestManager(manager.orEmpty())) {
+                    transport.bulk(list.map { it.copy(id = InboxItemKey.hubId(it.id)) }, action)
+                }
+                val r = InboxBulkResult.from(data)
+                answers += InboxBulkResult(r.changed.map(key), r.unchanged.map(key), r.changedSince.map(key), r.missing.map(key), r.failed.map(key))
+                data.array("changed").forEach { e ->
+                    (e as? JsonObject)?.let { obj -> changed += record(obj, transport, byId[key(obj.string("id"))]) }
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                problem = problem ?: e
+                failed += list.map { it.id }
+            }
+        }
+        if (answers.isEmpty()) throw problem ?: IllegalStateException("nothing asked")
+        val result = InboxBulkResult(answers.flatMap { it.changed }, answers.flatMap { it.unchanged }, answers.flatMap { it.changedSince },
+            answers.flatMap { it.missing }, answers.flatMap { it.failed } + failed)
+        return BulkOutcome(result, changed)
     }
 
     override suspend fun readDraft(target: ReplyTarget): ReplyDraft? {
@@ -346,24 +398,28 @@ class RealInboxRepository(
 
     override suspend fun draftReply(itemId: String, instruction: String): String {
         val transport = requireTransport()
-        val text = checkNotNull(actions) { CoreText.of(Key.InboxCannotDraft).shown }.draft(itemId, instruction)
+        val actions = checkNotNull(actions) { CoreText.of(Key.InboxCannotDraft).shown }
+        val record = recordOf(itemId)
+        val text = asItem(record) { actions.draft(record?.hubItemId ?: itemId, instruction) }
         if (!owns(transport)) throw CancellationException("Pairing changed")
         return text
     }
 
     override suspend fun actOnSuggestion(request: SuggestionRequest): SuggestionOutcome {
         val transport = requireTransport()
+        val old = recordOf(request.itemId)
         val (item, outcome) = try {
-            transport.suggestion(request.itemId, request.version, request.action.wire, request.text, request.clientId) to SuggestionOutcome.Done
+            asItem(old) { transport.suggestion(old?.hubItemId ?: request.itemId, request.version, request.action.wire, request.text, request.clientId) } to
+                SuggestionOutcome.Done
         } catch (e: InboxSuggestionStale) {
             e.item to SuggestionOutcome.Stale
         }
         if (!owns(transport)) throw CancellationException("Pairing changed")
         // The hub answers with the item as it now is (a new suggestion, Waiting for reply, or filed): the page redraws from it.
-        (item?.obj("item") ?: item)?.takeIf { it.optional("id") == request.itemId }?.let { data ->
+        (item?.obj("item") ?: item)?.takeIf { it.optional("id") == (old?.hubItemId ?: request.itemId) }?.let { data ->
             refreshLock.withLock {
                 versions[request.itemId] = data.obj("agent")?.toString().orEmpty()
-                replaceRecord(record(data, transport))
+                replaceRecord(record(data, transport, old))
             }
         }
         return outcome
@@ -375,8 +431,15 @@ class RealInboxRepository(
         val machine = request.machineId
         val session = request.sessionId
         // Both outboxes commit before returning and deduplicate by the operation ID, so a retry is not queued twice.
-        if (machine.isNullOrBlank() || session.isNullOrBlank()) checkNotNull(mainConversationSender) { "main chat sender not wired" }
-            .sendToMain(request.text, request.operationId)
+        // Persona is the item's own manager's (a merged list's stamp): another manager's item goes to its main
+        // conversation, the default's to the main queue as before.
+        val owner = recordOf(request.itemId)?.manager
+            ?.takeIf { it.isNotBlank() && it != AssistantManagerChoice.current.value.defaultId }
+        if (machine.isNullOrBlank() || session.isNullOrBlank()) {
+            val main = owner?.let { checkNotNull(mainConversationOf) { "managers unavailable" }(it) }
+            if (main == null) checkNotNull(mainConversationSender) { "main chat sender not wired" }.sendToMain(request.text, request.operationId)
+            else checkNotNull(messageSender) { "agent message sender not wired" }.send(main, request.text, request.operationId)
+        }
         else checkNotNull(messageSender) { "agent message sender not wired" }
             .send(persona.core.contracts.SessionKey(machine, session), request.text, request.operationId)
     }
@@ -391,7 +454,7 @@ class RealInboxRepository(
         if (previous?.state == "sent") return@withLock
         val feed = previous?.feedId ?: when (actualTarget) {
             is ReplyTarget.Lark -> actualTarget.feedId.takeUnless { it.startsWith("thread:") }
-            is ReplyTarget.Inbox -> current.value.records.firstOrNull { it.item.id == actualTarget.itemId }?.feedId
+            is ReplyTarget.Inbox -> recordOf(actualTarget.itemId)?.feedId
         }
         // Reconcile before retrying, under the same lock as sending. Text is never evidence of delivery.
         if (previous != null && online()) {
@@ -419,12 +482,18 @@ class RealInboxRepository(
         if (!online()) throw IOException("sends once connected")
         try {
             val mailTarget = request.mailTarget
+            // the item replied to; a chat's send, the one record of that chat (two managers' copies of one chat: the
+            // page's pin decides)
+            val replied = when (actualTarget) {
+                is ReplyTarget.Inbox -> recordOf(actualTarget.itemId)
+                is ReplyTarget.Lark -> current.value.records.filter { it.feedId == actualTarget.feedId }.singleOrNull()
+            }
             val response = if (actualTarget is ReplyTarget.Lark && actualTarget.feedId.startsWith("thread:"))
                 checkNotNull(sendThread)(actualTarget.feedId.removePrefix("thread:"), request)
             else if (mailTarget != null && actualTarget is ReplyTarget.Inbox)
-                transport.replyMail(actualTarget.itemId, request.text, request.clientId, mailTarget)
-            else transport.reply((actualTarget as? ReplyTarget.Inbox)?.itemId,
-                (actualTarget as? ReplyTarget.Lark)?.feedId, request.text, request.clientId)
+                asItem(replied) { transport.replyMail(InboxItemKey.hubId(actualTarget.itemId), request.text, request.clientId, mailTarget) }
+            else asItem(replied) { transport.reply((actualTarget as? ReplyTarget.Inbox)?.itemId?.let(InboxItemKey::hubId),
+                (actualTarget as? ReplyTarget.Lark)?.feedId, request.text, request.clientId) }
             val result = response.obj("message") ?: response
             if (response.string("state") in setOf("pending", "unknown") || result.string("state") in setOf("pending", "unknown")) {
                 val uncertain = journal.update(transport.scope) { it.transition(request.clientId, "unknown") }
@@ -438,9 +507,9 @@ class RealInboxRepository(
                 publishLocal(accepted)
                 if (actualTarget is ReplyTarget.Inbox) {
                     val item = response.obj("item") ?: response
-                    if (item.optional("id") != null) replaceRecord(record(item, transport))
+                    if (item.optional("id") != null) replaceRecord(record(item, transport, replied))
                     else current.update { it.copy(records = it.records.map { record ->
-                        if (record.item.id == actualTarget.itemId) record.copy(item = record.item.copy(doneAt = Instant.now().toString())) else record
+                        if (record.item.id == (replied?.item?.id ?: actualTarget.itemId)) record.copy(item = record.item.copy(doneAt = Instant.now().toString())) else record
                     }) }
                 }
             }
@@ -859,9 +928,11 @@ class RealInboxRepository(
         scope.coroutineContext.ensureActive()
         require(request.itemId.isNotBlank() && request.operationId.isNotBlank())
         val sender = checkNotNull(mainConversationSender) { "main chat sender not wired" }
+        val record = recordOf(request.itemId)
+        // Another manager's item is its Persona's to look at, as Hand to AI does (handOff): its main conversation.
+        val owner = record?.manager?.takeIf { it.isNotBlank() && it != AssistantManagerChoice.current.value.defaultId }
         val text = sender.outbox.value.firstOrNull { it.clientMessageId == request.operationId }?.text
             ?: personaRequests.getOrPut(request.operationId) {
-                val record = current.value.records.firstOrNull { it.item.id == request.itemId }
                 require(record != null || !request.context.isNullOrBlank()) { CoreText.of(Key.InboxItemNotLoaded).shown }
                 val messages = synchronized(windowsLock) { record?.feedId?.let { windows[it]?.state?.value?.messages } }.orEmpty()
                 val loaded = messages.joinToString("\n") { message ->
@@ -881,7 +952,9 @@ class RealInboxRepository(
                 }
                 inboxPersonaText(request, record, loaded.ifBlank { record?.item?.preview.orEmpty() })
             }
-        sender.sendToMain(text, request.operationId)
+        if (owner == null) sender.sendToMain(text, request.operationId)
+        else checkNotNull(messageSender) { "agent message sender not wired" }
+            .send(checkNotNull(mainConversationOf) { "managers unavailable" }(owner), text, request.operationId)
     }
     private fun requireTransport() = requireNotNull(connection.current.value) { CoreText.of(Key.PairHubFirst).shown }
     private fun owns(transport: InboxAssistantTransport) = connection.current.value === transport
@@ -911,13 +984,44 @@ class RealInboxRepository(
         }
         return record.copy(localStatus = status, localDelivery = pending?.outboxState?.delivery, aiDraft = draft?.ai == true)
     }
-    private fun record(data: JsonObject, transport: InboxAssistantTransport): InboxRecord {
+    /**
+     * The hub's merged list as records: every one an id of its own (InboxItemKey), and the manager each is stamped with
+     * noted for the requests made for it elsewhere (its mail page; docs/protocol.md "Per-manager routing"). An id two
+     * managers have is not noted: the repository names the manager on each of its requests ([asItem]).
+     */
+    private fun listed(data: List<JsonObject>, transport: InboxAssistantTransport): List<InboxRecord> {
+        val records = data.map { record(it, transport) }.map { it.copy(item = it.item.copy(id = InboxItemKey.appId(it.item.id, it.manager))) }
+        val repeated = records.groupBy { it.hubItemId }.filterValues { it.size > 1 }.keys
+        records.filter { it.hubItemId !in repeated }.forEach { AssistantManagerChoice.noteItem(listOf("inbox", it.hubItemId), it.manager) }
+        return records
+    }
+
+    /** The record shown with [itemId] (the app's id, InboxItemKey; or the hub's, from outside the lists). */
+    private fun recordOf(itemId: String): InboxRecord? = current.value.records.inboxRecord(itemId)
+
+    /**
+     * Runs requests for [record]'s item, naming its manager on each of them where they are made (RequestManager): the
+     * default's names none, and so overrides what a list noted for an id another manager has too. With no record known
+     * nothing is named: what the page pinned (its chat's manager) still decides.
+     */
+    private suspend fun <T> asItem(record: InboxRecord?, block: suspend () -> T): T {
+        if (record == null) return block()
+        val default = AssistantManagerChoice.current.value.defaultId
+        val manager = record.manager?.takeIf { it.isNotBlank() && it != default } ?: ""
+        return withContext(persona.core.contracts.api.RequestManager(manager)) { block() }
+    }
+
+    /**
+     * One item as the hub has it. An answer about one item comes from its manager alone, unstamped (only the merged
+     * list stamps): it keeps the manager and the id [previous] had, so its group and its next requests stay its own.
+     */
+    private fun record(data: JsonObject, transport: InboxAssistantTransport, previous: InboxRecord? = null): InboxRecord {
         val lark = data.obj("lark")
         val agent = data.obj("agent")
         val mail = data.obj("mail")
         val moment = data.obj("moment")
         val event = persona.core.contracts.inboxEventFields(data)
-        return InboxRecord(
+        val fresh = InboxRecord(
             InboxItem(data.string("id"), data.string("account"), data.string("kind"), data.string("title"),
                 data.optional("sender"), data.string("preview"), data.optional("summary"), data.optional("tier"),
                 data.optional("updated_at"), data.optional("done_at"), data.optional("version"),
@@ -961,7 +1065,10 @@ class RealInboxRepository(
             },
             mutes = persona.feature.inbox.inboxMuteOptions(data),
             event = event,
+            manager = data.optional("manager"),
         )
+        if (previous == null || data.string("id") != previous.hubItemId) return fresh
+        return fresh.copy(item = fresh.item.copy(id = previous.item.id), manager = fresh.manager ?: previous.manager)
     }
 
     override suspend fun momentsPost(postId: String): persona.core.contracts.LarkMomentsPost {

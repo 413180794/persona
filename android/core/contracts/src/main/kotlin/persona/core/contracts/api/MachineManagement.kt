@@ -91,7 +91,21 @@ interface MachineManagement {
 
     /** `GET /api/v1/usage/windows` of the selected hub: the subscription accounts and their windows (#2432). */
     suspend fun usageWindows(): List<UsageAccount> = emptyList()
+
+    /**
+     * Move to…: `POST /api/v1/managers/{manager}/machines {"machine_id"}` gives the computer to another manager
+     * (docs/managers.md "Moving a machine or a source"); the hub's `machines` push then shows its new stamp.
+     */
+    suspend fun moveToManager(machineId: String, manager: String): MachineMove = throw UnsupportedOperationException("managers")
 }
+
+/** What `POST /api/v1/managers/{id}/machines` answers: the computer, the manager that has it now and the one before. */
+@Serializable
+data class MachineMove(
+    @SerialName("machine_id") val machineId: String = "",
+    val manager: String = "",
+    val from: String = "",
+)
 
 /** One Claude Code config directory of a machine (Settings › Claude Code › "Hidden config directories", docs/claude-integration.md). */
 @Serializable

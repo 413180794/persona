@@ -22,6 +22,22 @@ class HttpMachineManagementTest {
         }
     }
 
+    /** 移到…: the computer goes to another manager (docs/managers.md "Moving a machine or a source"). */
+    @Test fun movingAComputerToAnotherManager() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"machine_id":"desk/name","manager":"m-3","from":"assistant"}"""))
+        assertEquals(MachineMove("desk/name", "m-3", "assistant"), machines.moveToManager("desk/name", "m-3"))
+        server.takeRequest().let {
+            assertEquals("/api/v1/managers/m-3/machines", it.path)
+            assertEquals("POST", it.method)
+            assertEquals("desk/name", JsonCodec.parseToJsonElement(it.body.readUtf8()).jsonObject.getValue("machine_id").jsonPrimitive.content)
+        }
+        // A linked hub's computer is not this hub's to give: the hub's code comes back.
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"not one of this hub's machines","code":"not_movable"}"""))
+        val refused = runCatching { machines.moveToManager("member-pc", "m-3") }.exceptionOrNull() as HubFailure
+        assertEquals(400, refused.status)
+        assertEquals("not_movable", refused.code)
+    }
+
     @Test fun herdrStatusUsesTheDedicatedGet() = withHub { server, machines ->
         server.enqueue(MockResponse().setBody("""{"autostart":true,"running":false,"known":true}"""))
         assertEquals(HerdrState(true, false, true), machines.herdr("desk"))

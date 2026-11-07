@@ -18,6 +18,7 @@ import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.PendingStatus
 import persona.core.designsystem.Status
 import persona.core.designsystem.StatusLineState
+import persona.core.designsystem.shownName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -184,6 +185,14 @@ internal fun Session.conversationStatus(): Status = when (agentState) {
     AgentState.Unknown -> Status.Unknown
 }
 
+/**
+ * Where a home-composer message written while [manager] (not the default) was on the page goes: that manager's main
+ * conversation, from the snapshot only when the snapshot is that manager's, else asked of it alone ([resolve]). Never
+ * the default's queue or another manager's; if it cannot be found the call fails and the words stay in the composer.
+ */
+internal suspend fun managerMainTarget(manager: String, snapshot: AssistantSnapshot, resolve: suspend (String) -> SessionKey): SessionKey =
+    snapshot.mainSession?.takeIf { snapshot.manager == manager } ?: resolve(manager)
+
 /** Null targets always enter the durable main queue before any network request. */
 internal suspend fun sendAssistantMessage(
     main: MainConversationSender?, sender: MessageSender, session: SessionKey?, text: String, id: String,
@@ -220,7 +229,33 @@ data class AssistantChatOptions(
     val assistant: Boolean = true,
     val embedded: Boolean = true,
     val showTopBar: Boolean = false,
+    /** The conversation's manager is offline (docs/managers.md step 4): history only, this note where the composer was. */
+    val readOnlyNote: String? = null,
 )
+
+/**
+ * The managers as the assistant page sees them: [other] when it shows one that is not the default (its main
+ * conversation is reached directly, not through this phone's main queue), [offline] the composer's words while the
+ * shown one is offline (「工作 · 最后同步于 3 分钟前」), null while it can take messages. With one manager
+ * both are off and the page is as before.
+ */
+internal data class AssistantManagers(
+    val other: Boolean = false, val offline: String? = null,
+    /** The empty conversation's line while it is offline: 「家里离线，能看历史，暂时不能发消息。」 */
+    val offlineEmpty: String? = null,
+)
+
+internal fun assistantManagers(
+    roster: persona.core.contracts.api.ManagerRoster?, choice: persona.core.contracts.api.AssistantManagerChoice.Choice,
+    res: android.content.res.Resources, now: java.time.Instant = java.time.Instant.now(),
+): AssistantManagers {
+    if (roster == null || !roster.isMulti) return AssistantManagers()
+    val shown = roster.manager(choice.shown)
+    val offline = shown?.let { persona.core.designsystem.managerOfflineText(res, it, now) }
+        ?.let { res.getString(R.string.assistant_manager_offline, shown.shownName, it) }
+    return AssistantManagers(other = choice.manager != null, offline = offline,
+        offlineEmpty = offline?.let { res.getString(R.string.assistant_manager_offline_empty, shown.shownName) })
+}
 
 /** Cancellation must reach the owning screen instead of turning into an error message. */
 internal suspend inline fun <T> assistantAttempt(block: () -> T): Result<T> = try {

@@ -571,6 +571,193 @@ class InboxRepositoryTest {
         }
     }
 
+    /** A merged list (several managers): each item keeps its manager, and its own requests will name it. */
+    @Test fun anotherManagersItemsKeepTheirManager() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-managers-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, manager: String?) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", id)
+                if (manager != null) put("manager", manager)
+            }
+            AssistantManagerChoice.choose("hub", null, "assistant")
+            val transport = FakeTransport().apply { items = JsonArray(listOf(item("a", null), item("b", "m-3"), item("c", "assistant"))) }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            // another manager's item has an app id of its own (InboxItemKey); the hub's id is kept for its requests
+            assertEquals(mapOf("a" to null, InboxItemKey.of("b", "m-3") to "m-3", "c" to "assistant"),
+                repository.snapshot.value.records.associate { it.item.id to it.manager })
+            assertEquals(listOf("a", "b", "c"), repository.snapshot.value.records.map { it.hubItemId })
+            assertEquals("m-3", AssistantManagerChoice.itemHeader(listOf("inbox", "b", "done")))
+            assertNull(AssistantManagerChoice.itemHeader(listOf("inbox", "a", "done")))
+            assertNull(AssistantManagerChoice.itemHeader(listOf("inbox", "c")))
+        } finally {
+            AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems()
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    /** Bulk actions over several managers' items: one request per manager, each naming its own, the answers put together. */
+    @Test fun bulkGoesToEachItemsManager() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-managers-bulk-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, manager: String?, done: Boolean = false) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", id); put("version", "v$id")
+                if (manager != null) put("manager", manager)
+                if (done) { put("done_at", "2026-11-04T08:00:00Z"); put("done_by", "user") }
+            }
+            AssistantManagerChoice.choose("hub", null, "assistant")
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(item("a", null), item("b", "m-3"), item("c", "assistant"), item("d", "m-3")))
+                // each manager answers about its own items alone, unstamped (only the merged list stamps)
+                onBulk = { asked, _ -> buildJsonObject { put("changed", JsonArray(asked.map { item(it.id, null, done = true) })) } }
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            transport.items = JsonArray(listOf("a", "b", "c", "d").map { item(it, null, done = true) })
+
+            val targets = repository.snapshot.value.records.map { InboxDoneTarget(it.item.id, "v${it.hubItemId}") }
+            val result = repository.bulk(targets, InboxBulkAction.Done)
+            // named on the request itself, by the hub's ids ("" the default's: no manager, whatever a list noted)
+            assertEquals(setOf(listOf("a", "c") to "", listOf("b", "d") to "m-3"), transport.bulkManagers.toSet())
+            assertEquals(2, transport.bulkManagers.size)
+            assertEquals(targets.map { it.id }.toSet(), result.changed.toSet())
+            assertTrue(repository.snapshot.value.records.all { it.item.isDone })
+            // they keep their stamps and ids: their groups, and where Undo goes
+            assertEquals(mapOf("a" to null, "b" to "m-3", "c" to "assistant", "d" to "m-3"),
+                repository.snapshot.value.records.associate { it.hubItemId to it.manager })
+            assertEquals(targets.map { it.id }, repository.snapshot.value.records.map { it.item.id })
+        } finally {
+            AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems()
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    /** One manager failing leaves the others' done: its own items go back and are the result's `failed`. */
+    @Test fun bulkKeepsWhatTheOtherManagersDid() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-managers-bulk-partial-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, manager: String?, done: Boolean = false) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", id); put("version", "v$id")
+                if (manager != null) put("manager", manager)
+                if (done) { put("done_at", "2026-11-04T08:00:00Z"); put("done_by", "user") }
+            }
+            AssistantManagerChoice.choose("hub", null, "assistant")
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(item("a", "assistant"), item("b", "m-3")))
+                onBulk = { asked, _ ->
+                    if (asked.any { it.id == "b" }) throw IOException("503 assistant offline")
+                    buildJsonObject { put("changed", JsonArray(asked.map { item(it.id, null, done = true) })) }
+                }
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            transport.onInbox = { throw IOException("offline") } // what bulk() itself made of it stays shown
+
+            val b = InboxItemKey.of("b", "m-3")
+            val result = repository.bulk(listOf(InboxDoneTarget("a", "va"), InboxDoneTarget(b, "vb")), InboxBulkAction.Done)
+            assertEquals(listOf("a"), result.changed)
+            assertEquals(listOf(b), result.failed)
+            val shown = repository.snapshot.value.records.associate { it.item.id to (it.item.isDone to it.manager) }
+            assertEquals(mapOf("a" to (true to "assistant"), b to (false to "m-3")), shown)
+            // every manager failing fails the whole action, and everything goes back
+            transport.onBulk = { _, _ -> throw IOException("offline") }
+            assertThrows(IOException::class.java) { runBlocking { repository.bulk(listOf(InboxDoneTarget(b, "vb")), InboxBulkAction.Done) } }
+            assertFalse(repository.snapshot.value.records.first { it.item.id == b }.item.isDone)
+        } finally {
+            AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems()
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    /**
+     * Two managers with an item of the same id (the same source read by both): two records with ids of their own, each
+     * one's requests going to its own manager by the hub's id, and an unstamped answer keeping the record's id and stamp.
+     */
+    @Test fun theSameIdUnderTwoManagersIsTwoItems() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-managers-same-id-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, manager: String?, title: String, done: Boolean = false) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", title)
+                if (manager != null) put("manager", manager)
+                if (done) { put("done_at", "2026-11-04T08:00:00Z"); put("done_by", "user") }
+            }
+            AssistantManagerChoice.choose("hub", null, "assistant")
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(item("x", "assistant", "mine"), item("x", "m-3", "theirs")))
+                onSetDone = { id, done -> buildJsonObject { put("item", item(id, null, "theirs", done)) } }
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            val records = repository.snapshot.value.records
+            assertEquals(2, records.map { it.item.id }.toSet().size)
+            assertEquals(listOf("x", "x"), records.map { it.hubItemId })
+            val theirs = records.first { it.manager == "m-3" }
+            assertEquals(InboxItemKey.of("x", "m-3"), theirs.item.id)
+            // the ids don't depend on the list's order: the other manager's copy listed first keeps its own
+            transport.items = JsonArray(listOf(item("x", "m-3", "theirs"), item("x", "assistant", "mine")))
+            repository.refresh()
+            assertEquals(listOf(theirs.item.id, "x"), repository.snapshot.value.records.map { it.item.id })
+            transport.items = JsonArray(listOf(item("x", "assistant", "mine"), item("x", "m-3", "theirs")))
+            repository.refresh()
+
+            transport.onInbox = { throw IOException("offline") }
+            repository.setDone(theirs.item.id, true)
+            assertEquals(listOf("x" to "m-3"), transport.doneCalls)
+            val after = repository.snapshot.value.records
+            assertEquals(listOf(false, true), after.map { it.item.isDone })
+            assertEquals(listOf("assistant", "m-3"), after.map { it.manager })
+            assertEquals(theirs.item.id, after[1].item.id)
+            // the default's one names no manager on its request
+            repository.setDone("x", true)
+            assertEquals("x" to "", transport.doneCalls.last())
+        } finally {
+            AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems()
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
+    /**
+     * A chat's send (ReplyTarget.Lark) names the manager of the one item of that chat; with none known it names nothing,
+     * so the chat page's pin still decides (an empty manager would send it to the default).
+     */
+    @Test fun aChatSendNamesItsItemsManagerOrNothing() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-managers-lark-send-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            AssistantManagerChoice.choose("hub", null, "assistant")
+            val named = mutableListOf<String?>()
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(buildJsonObject {
+                    put("id", "lark:f1"); put("source", "lark"); put("kind", "dm"); put("title", "f1"); put("manager", "m-3")
+                    putJsonObject("lark") { put("feed_id", "f1") }
+                }))
+                onReply = { named += currentCoroutineContext()[RequestManager]?.id; buildJsonObject { put("message_id", "om_1") } }
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            repository.reply(ReplyTarget.Lark("f1"), ReplyRequest("你好", "c1"))
+            repository.reply(ReplyTarget.Lark("f2"), ReplyRequest("你好", "c2"))
+            assertEquals(listOf("m-3", null), named)
+        } finally {
+            AssistantManagerChoice.reset(); AssistantManagerChoice.forgetItems()
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun bulkPutsBackWhatTheHubFailedToWrite() = runBlocking {
         val directory = Files.createTempDirectory("inbox-bulk-failed-test").toFile()
         val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -958,12 +1145,21 @@ class InboxRepositoryTest {
         val inboxCalls = java.util.concurrent.atomic.AtomicInteger()
         var onInbox: suspend () -> Unit = {}
         override suspend fun inbox(): JsonObject { inboxCalls.incrementAndGet(); onInbox(); return buildJsonObject { put("items", items) } }
-        override suspend fun setDone(itemId: String, done: Boolean) = JsonObject(emptyMap())
+        /** Each single-item done request: the item id it named and the manager its request named (RequestManager). */
+        val doneCalls = mutableListOf<Pair<String, String?>>()
+        var onSetDone: suspend (String, Boolean) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }
+        override suspend fun setDone(itemId: String, done: Boolean): JsonObject {
+            doneCalls += itemId to currentCoroutineContext()[RequestManager]?.id
+            return onSetDone(itemId, done)
+        }
         val bulk = mutableListOf<Pair<List<InboxDoneTarget>, Boolean>>()
         var onBulk: suspend (List<InboxDoneTarget>, Boolean) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }
         override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): JsonObject { bulk += items to done; return onBulk(items, done) }
         val actions = mutableListOf<InboxBulkAction>()
+        /** Each bulk request: the ids it named and the manager its request named (RequestManager). */
+        val bulkManagers = mutableListOf<Pair<List<String>, String?>>()
         override suspend fun bulk(items: List<InboxDoneTarget>, action: InboxBulkAction): JsonObject {
+            bulkManagers += items.map { it.id } to currentCoroutineContext()[RequestManager]?.id
             actions += action
             return setDone(items, action != InboxBulkAction.Reopen)
         }

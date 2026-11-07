@@ -124,7 +124,7 @@ class ExtensionLanguagesShotsTest {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
                 Box(Modifier.testTag("shot").width(400.dp).height(2200.dp).background(PersonaTheme.palette.background)) {
                     when (page) {
-                        Page.List -> ExtensionsPage(api, onBack = {}, onExtension = {}, onMarket = {})
+                        Page.List -> ExtensionsPage(api, onBack = {}, onExtension = { _, _ -> }, onMarket = {})
                         Page.Detail -> ExtensionPage(api, "example-notes", onBack = {}, onPage = {})
                         Page.Market -> ExtensionMarketPage(api, onBack = {}, onExtension = {}, onMarkets = {})
                         Page.Catalog -> ExtensionCatalogPage(api, marketA.id, "example-gateway", onBack = {}, onInstalled = {})

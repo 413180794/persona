@@ -79,4 +79,29 @@ class HttpDeviceSettingsTest {
             assertNull(api.preferences().translate)
         }
     }
+
+    @Test fun mutedManagersAreReadAndWrittenAlone() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpDeviceSettings(server.url("/").toString(), "example-token", "phone", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long","muted_managers":["m-2"]}"""))
+            assertEquals(listOf("m-2"), api.preferences().mutedManagers)
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long","muted_managers":["m-2","m-3"]}"""))
+            assertEquals(listOf("m-2", "m-3"), api.saveMutedManagers(listOf("m-2", "m-3", "m-2")))
+            val put = server.takeRequest()
+            assertEquals("PUT", put.method)
+            assertEquals("/api/v1/devices/phone/prefs", put.path)
+            val body = JsonCodec.parseToJsonElement(put.body.readUtf8()).jsonObject
+            // A partial update: only the list, so the other switches stay as they are.
+            assertEquals(setOf("muted_managers"), body.keys)
+            assertEquals(listOf("m-2", "m-3"), (body.getValue("muted_managers") as kotlinx.serialization.json.JsonArray).map { it.jsonPrimitive.content })
+            // 推送通知 changes nothing else: the whole-prefs save leaves the list out.
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long","muted_managers":[]}"""))
+            api.savePreferences(persona.core.contracts.api.DeviceNotificationPreferences(mutedManagers = listOf("m-9")))
+            assertFalse("muted_managers" in JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject.keys)
+            // An older hub: no list.
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long"}"""))
+            assertNull(api.preferences().mutedManagers)
+        }
+    }
 }

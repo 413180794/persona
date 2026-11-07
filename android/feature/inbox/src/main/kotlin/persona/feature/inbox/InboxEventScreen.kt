@@ -37,7 +37,7 @@ import persona.core.navigation.Navigator
 @Composable
 fun InboxEventScreen(repository: InboxRepository, route: InboxEventRoute, navigator: Navigator) {
     val inbox by repository.snapshot.collectAsStateWithLifecycle()
-    val record = inbox.records.firstOrNull { it.item.id == route.itemId }
+    val record = inbox.records.inboxRecord(route.itemId)
     val pages = LocalInboxItemPages.current
     val feedback = LocalAppFeedback.current
     val res = LocalResources.current

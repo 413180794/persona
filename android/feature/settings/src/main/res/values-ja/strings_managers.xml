@@ -50,4 +50,13 @@
     <plurals name="settings_managers_installing">
         <item quantity="other">インストール中 · コードはあと%1$d分で期限切れ</item>
     </plurals>
+    <string name="settings_managers_push">プッシュ通知</string>
+    <string name="settings_managers_push_note">オフにすると、このデバイスはこのマネージャーからのプッシュ通知を受け取りません</string>
+    <string name="settings_managers_push_failed">プッシュ通知を変更できませんでした：%1$s</string>
+    <plurals name="settings_managers_delete_machines">
+        <item quantity="other">この管理者の %1$d 台のコンピュータは hub 自身の管理者に戻ります。</item>
+    </plurals>
+    <string name="settings_managers_delete_sources">ソース（メールアカウントなど）はこの管理者自身のデータベースにあります。先に別の管理者へ移さないと、一緒に削除されます。</string>
+    <string name="settings_managers_needs_update">要更新</string>
+    <string name="settings_managers_needs_update_note">この管理者の personad は古く、自分の設定（manager.json）をまだ読まないため、組み込みの既定値で動いています。動いているコンピューターで personad を更新してください。</string>
 </resources>

@@ -55,7 +55,7 @@ data class InboxItemPages(
         stack.filter { it in provisional }.mapNotNull { key ->
             val itemId = when (key) { is LarkRoute -> key.itemId; is MailRoute -> key.itemId; is LarkMomentRoute -> key.itemId
                 is InboxItemDetailRoute -> key.itemId; is ConnectorThreadRoute -> key.itemId; else -> null }
-            records.firstOrNull { it.item.id == itemId }?.let(::route)?.let { key to it }
+            records.inboxRecord(itemId)?.let(::route)?.let { key to it }
         }
 
     companion object {
@@ -84,7 +84,7 @@ fun inboxOpenPage(record: InboxRecord, pages: InboxItemPages): NavKey = pages.ro
  * Where an extension's `persona://inbox/<id>/source` goes: item [itemId]'s own page, what opening it did before extensions
  * drew items (for Feishu, the chat at the item's first message). Null when the item is not in [records].
  */
-fun inboxSourcePage(itemId: String, records: List<InboxRecord>): NavKey? = records.firstOrNull { it.item.id == itemId }?.let(::inboxItemPage)
+fun inboxSourcePage(itemId: String, records: List<InboxRecord>): NavKey? = records.inboxRecord(itemId)?.let(::inboxItemPage)
 
 /**
  * On an item's own page opened because its extension's page broke: the one line saying so, with "Retry" (the extension's page

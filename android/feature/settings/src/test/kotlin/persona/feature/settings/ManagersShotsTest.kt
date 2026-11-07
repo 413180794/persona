@@ -61,6 +61,8 @@ class ManagersShotsTest {
     @get:Rule val rule = createComposeRule()
 
     private val loaded = ManagersState(roster = ManagerRoster(ManagersSample, "assistant"))
+    // 工作 on a build that reads no manager.json of its own: the hub marks it needs_update
+    private val outdated = ManagersState(roster = ManagerRoster(ManagersSample.map { if (it.id == "m-3fa21c") it.copy(needsUpdate = true) else it }, "assistant"))
     private val commands = ManagerCommands(
         service = "curl -fsSL http://<hub 地址>/i/mi_0123456789abcdef0123456789abcdef | sh",
         docker = "docker run -d --name persona-m-new --restart unless-stopped -e PERSONA_INSTALL=http://<hub 地址>/i/mi_0123456789abcdef0123456789abcdef ghcr.io/example/personad:latest manager",
@@ -80,7 +82,7 @@ class ManagersShotsTest {
         File(out(), "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private enum class Shot(val tall: Boolean = true) { Settings, List, Detail, Builtin, Installing, Code, Expired, Unsupported }
+    private enum class Shot(val tall: Boolean = true) { Settings, List, Detail, Builtin, Installing, Code, Expired, Unsupported, Push, PushOffline, Outdated, OutdatedDetail }
 
     @Test fun drawsTheManagersPagesInEveryStyle() {
         var style by mutableStateOf(AppStyle.Glass)
@@ -107,6 +109,14 @@ class ManagersShotsTest {
                             ManagerCodeBody(sheet, ManagersNow, busy = false, failure = null, onNewCode = {}, onDone = {})
                         }
                         Shot.Unsupported -> ManagersContent(ManagersState(unsupported = true), ManagersNow, {}, {}, {}, {})
+                        // 推送通知: on for one on a Mac, off (muted) for the offline one, whose last change was refused.
+                        Shot.Push -> ManagerContent(loaded, "m-3fa21c", ManagersNow, {}, {}, {}, {}, {}, {},
+                            push = ManagerPushState(muted = setOf("m-8b04d2")), onPush = {})
+                        Shot.PushOffline -> ManagerContent(loaded, "m-8b04d2", ManagersNow, {}, {}, {}, {}, {}, {},
+                            push = ManagerPushState(muted = setOf("m-8b04d2"), failure = ResText.of(R.string.settings_managers_push_failed, "网络断开了")), onPush = {})
+                        Shot.Outdated -> ManagersContent(outdated, ManagersNow, {}, {}, {}, {})
+                        Shot.OutdatedDetail -> ManagerContent(outdated, "m-3fa21c", ManagersNow, {}, {}, {}, {}, {}, {},
+                            push = ManagerPushState(muted = emptySet()), onPush = {})
                     }
                 }
             }
@@ -175,6 +185,34 @@ class ManagersShotsTest {
         rule.onNode(hasText("完成") and hasClickAction()).performClick()
         rule.waitForIdle()
         assertTrue(rule.onAllNodes(hasText("mi_fedcba9876543210fedcba9876543210")).fetchSemanticsNodes().isEmpty())
+    }
+
+    /** A manager the hub marks needs_update says so in the list and on its page; the others don't. */
+    @Test fun anOutdatedManagerSaysSo() {
+        val fake = FakeManagers(ManagersSample.map { if (it.id == "m-3fa21c") it.copy(needsUpdate = true) else it })
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                Box(Modifier.width(400.dp).height(1500.dp)) { ManagerPage(fake, "m-3fa21c", onBack = {}, ticking = false) }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("需要更新").assertIsDisplayed()
+        rule.onNodeWithText("请在它所在的电脑上更新 personad", substring = true).assertIsDisplayed()
+    }
+
+    /** 推送通知 reads the device's prefs, and turning it off sends the list with this manager in it. */
+    @Test fun thePushSwitchWritesTheMutedList() {
+        val devices = FakeDevices()
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                Box(Modifier.width(400.dp).height(1500.dp)) { ManagerPage(FakeManagers(), "m-3fa21c", onBack = {}, ticking = false, devices = devices) }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("关掉后，这台设备不再收到这个管理者的推送").assertIsDisplayed()
+        rule.onNode(hasText("推送通知") and hasClickAction()).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(listOf("m-3fa21c")), devices.saved)
     }
 
     /** The hub's own manager offers neither Install elsewhere nor Delete, and says why. */

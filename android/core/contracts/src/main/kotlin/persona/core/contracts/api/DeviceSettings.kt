@@ -35,6 +35,8 @@ data class DeviceNotificationPreferences(
     val translate: HubTranslatePrefs? = null,
     /** "Silence phone": no "Needs you" / "Done" pushes while a desktop app is connected; null from a hub without it. */
     val muteWhileDesktop: Boolean? = null,
+    /** The managers whose pushes this device does not get (设置 › 管理者 › 推送通知); null from a hub without them. */
+    val mutedManagers: List<String>? = null,
 )
 
 /** Bound to one pairing; preferenceDeviceId is the ID used by notification registration. */
@@ -49,6 +51,12 @@ interface DeviceSettings {
      * a one-time code for another app (its QR rows) and the browser sign-in link.
      */
     suspend fun pairCode(): AppPairCode = throw UnsupportedOperationException("pair-codes")
+
+    /**
+     * 设置 › 管理者 › 推送通知: `PUT /api/v1/devices/{id}/prefs {"muted_managers": [...]}` (only that field: the others
+     * stay as they are); the hub's list as it is now.
+     */
+    suspend fun saveMutedManagers(ids: List<String>): List<String> = throw UnsupportedOperationException("muted_managers")
 }
 
 /** A QR code the hub drew: [rows] of `0` / `1`, no quiet zone. */

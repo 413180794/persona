@@ -59,6 +59,8 @@ data class InboxInteraction(
     val sessionTitle: String = "",
     val summary: String? = null,
     val title: String = "",
+    /** The manager that reported the card (docs/managers.md); null: the default manager. */
+    val manager: String? = null,
 ) {
     val sessionKey: String get() = "$machineId/$sessionId"
 }

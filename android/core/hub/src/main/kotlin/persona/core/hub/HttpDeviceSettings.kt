@@ -91,6 +91,14 @@ class HttpDeviceSettings(
             data.text("web_url")?.takeIf(String::isNotBlank), qr(data["web_qr"]), loopbackOnly(base.host))
     }
 
+    override suspend fun saveMutedManagers(ids: List<String>): List<String> {
+        require(preferenceDeviceId.isNotBlank())
+        val answer = request("devices", preferenceDeviceId, "prefs", method = "PUT", body = buildJsonObject {
+            put("muted_managers", JsonArray(ids.distinct().map(::JsonPrimitive)))
+        })
+        return mutedManagers(answer) ?: throw HubFailure(HubError.Protocol)
+    }
+
     /** Tells the hub this device's Settings › Translation (only that field: the rest of its prefs stay as they are). */
     suspend fun saveTranslatePrefs(prefs: HubTranslatePrefs): HubTranslatePrefs? {
         require(preferenceDeviceId.isNotBlank())
@@ -112,10 +120,18 @@ class HttpDeviceSettings(
         doneDelaySeconds = data["done_delay_seconds"]?.jsonPrimitive?.intOrNull,
         liveActivity = data["live_activity"]?.jsonPrimitive?.booleanOrNull ?: true,
         muteWhileDesktop = data["mute_while_desktop"]?.jsonPrimitive?.booleanOrNull,
+        mutedManagers = mutedManagers(data),
         translate = (data["translate"] as? JsonObject)?.let {
             runCatching { JsonCodec.decodeFromJsonElement(HubTranslatePrefs.serializer(), it) }.getOrNull()
         },
     )
+
+    /** `muted_managers` (always a list from a hub that has it); null from an older hub. */
+    private fun mutedManagers(data: JsonObject): List<String>? = when (val value = data["muted_managers"]) {
+        is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }
+        JsonNull -> emptyList()
+        else -> null
+    }
 
     private fun JsonObject.text(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
 

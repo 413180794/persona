@@ -14,14 +14,22 @@ import kotlinx.serialization.Serializable
  * One extension of Settings › Extensions (docs/extensions.md "App: Settings › Extensions"), by the hub's extension id; [signIn] opens it with
  * its sign-in started (just installed and not signed in, #4507).
  */
-@Serializable @SerialName("persona.core.navigation.PluginRoute") data class ExtensionRoute(val extensionId: String, val signIn: Boolean = false) : NavKey
+@Serializable @SerialName("persona.core.navigation.PluginRoute") data class ExtensionRoute(
+    val extensionId: String, val signIn: Boolean = false,
+    /** Whose extension it is (several managers: the same id may be under each, docs/managers.md); null: the default's. */
+    val manager: String? = null,
+) : NavKey
 
 /**
  * A page an extension draws (its `extension_page` UI, docs/extensions.md "Declarative UI"), opened from the extension's page.
  * A page the extension pushed on another (UI version 3) is first drawn with its [state], [depth] pages up.
  */
 @Serializable @SerialName("persona.core.navigation.PluginUiRoute")
-data class ExtensionUiRoute(val extensionId: String, val uiId: String, val title: String, val state: String? = null, val depth: Int = 0) : NavKey
+data class ExtensionUiRoute(
+    val extensionId: String, val uiId: String, val title: String, val state: String? = null, val depth: Int = 0,
+    /** Whose extension it is, as on [ExtensionRoute]. */
+    val manager: String? = null,
+) : NavKey
 
 /** Settings › Extensions › Extension market: what the hub's extension markets offer (docs/extensions.md "Extension market"). */
 @Serializable @SerialName("persona.core.navigation.PluginMarketRoute") data object ExtensionMarketRoute : NavKey
