@@ -94,8 +94,11 @@ func Handler(o Options) (http.Handler, error) {
 		FlushInterval: -1, // streams (a chat's feed, events) as they come
 		ModifyResponse: func(res *http.Response) error {
 			skew.check(res, o)
-			// (A token the relay no longer knows went meanwhile, with its extension: that refusal is no news.)
-			if refused(res) && o.Knows(tokenOf(res.Request)) && held.hold(o.Connection(), o.Now()) {
+			// (A token the relay no longer knows went meanwhile, with its extension: that refusal is no news. Nor is one
+			// of a request sent on another connection than the manager's now: it came back after a reconnect.)
+			sentOn, _ := res.Request.Context().Value(connKey{}).(connAt)
+			if refused(res) && o.Knows(tokenOf(res.Request)) && sentOn.conn == o.Connection() &&
+				held.hold(sentOn.conn, o.Now()) {
 				o.Logf("the hub's API: the hub does not know this manager on its bus connection now: its extensions' " +
 					"requests wait for the next connection")
 			}
@@ -120,13 +123,14 @@ func Handler(o Options) (http.Handler, error) {
 			apierr.WriteCode(w, http.StatusUnauthorized, "unauthorized", errors.New("not a token of this manager's extensions"))
 			return
 		}
-		if !o.Ready() || held.held(o.Connection(), o.Now()) {
+		conn := o.Connection()
+		if !o.Ready() || held.held(conn, o.Now()) {
 			w.Header().Set("Retry-After", "5")
 			apierr.WriteCode(w, http.StatusServiceUnavailable, extwire.CodeManagerOffline,
 				errors.New("the manager is not connected to the hub right now: try again shortly"))
 			return
 		}
-		proxy.ServeHTTP(w, r)
+		proxy.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), connKey{}, connAt{conn})))
 	}), nil
 }
 
@@ -192,6 +196,11 @@ func refused(res *http.Response) bool {
 	}
 	return false
 }
+
+// connKey is the manager's bus connection a request was sent on (connAt), in its context.
+type connKey struct{}
+
+type connAt struct{ conn any }
 
 // suspendMost bounds how long the relay holds its extensions' requests after the hub refused one: past it, it tries
 // again (one request a minute at most reaches a hub that still does not know the manager).

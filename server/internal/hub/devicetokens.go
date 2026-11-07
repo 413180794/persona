@@ -118,7 +118,7 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 		return principal{Role: roleFull}, true
 	}
 	if strings.HasPrefix(tok, extTokenPrefix) { // the manager made it and says whose it is (extensions_link.go)
-		p, ok, _, _ := h.authorizeExtension(ctx, tok, nil)
+		p, ok, _, _, _ := h.authorizeExtension(ctx, tok, nil)
 		return p, ok
 	}
 	if h.store == nil {

@@ -493,6 +493,7 @@ func (h *Hub) busEnded(c *busConn) {
 	}
 	h.bus.mu.Unlock()
 	if current {
+		h.extLost.lost(c.ident.ID, time.Now()) // its extensions may still call for a while (extensions_proof.go)
 		h.logf("bus: [%s] disconnected", c.ident.ID)
 		if c.ident.Role == bus.RoleManager {
 			go h.devicesGone(c.ident.ID) // its machines (devices_link.go)

@@ -27,6 +27,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension/hubrelay"
 	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // proofTestHub: A (the assistant) owns ma and knows the extension token aTok, B ("m-0b0b0b") owns mb and knows bTok;
@@ -541,7 +542,8 @@ func TestARoutesOwn401HoldsNothing(t *testing.T) {
 	}
 	f.bRoute.Store(&assistantwire.HTTPResponse{Status: http.StatusUnauthorized,
 		Header: map[string][]string{"Content-Type": {"application/json"}, extwire.HeaderAuthRefused: {extwire.RefusedToken}},
-		Body:   []byte(`{"code":"invalid_token","error":"the upstream refused its token"}`)})
+		// big enough for the hub to gzip it (the relay's client asks for gzip): the head leaves late, through gzip
+		Body: []byte(`{"code":"invalid_token","error":"the upstream refused its token","detail":"` + strings.Repeat("x", 2*gzipMinSize) + `"}`)})
 	get := func() (int, http.Header) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -634,5 +636,151 @@ func TestRosterSeen(t *testing.T) {
 	}
 	if len(c.seen) > rosterSeenMost {
 		t.Fatalf("%d kept, most %d", len(c.seen), rosterSeenMost)
+	}
+}
+
+// A proof naming a manager of the roster off the bus is answered 503 without counting only within lostWindow of the
+// hub's start or of that manager's connection ending here: outside it, the answer would tell anyone, for free, which
+// managers are in the roster and off the bus, so it is counted as ever.
+func TestAProofOfAManagerAwayOnlyRightAfterItWasLost(t *testing.T) {
+	f := newProofTestHub(t)
+	const path = "/api/v1/machines"
+	key := extwire.ProofKey(f.b.token)
+	call := func(manager, tok string) int {
+		t.Helper()
+		code, _ := proofDo(t, f.front.URL, path, tok, extwire.SignProof(key, manager, "GET", path, tok, time.Now()))
+		return code
+	}
+	f.h.busHangUp("m-0b0b0b", websocket.StatusGoingAway, "test: the hub lost it")
+	eventually(t, 5*time.Second, "B off the bus", func() bool { return f.h.busConnOf("m-0b0b0b") == nil })
+	if code := call("m-0b0b0b", f.bTok); code != http.StatusServiceUnavailable {
+		t.Fatalf("right after B's connection ended: %d", code)
+	}
+	f.h.extLost.mu.Lock()
+	f.h.extLost.ended["m-0b0b0b"] = time.Now().Add(-lostWindow - time.Second)
+	f.h.extLost.mu.Unlock()
+	if code := call("m-0b0b0b", f.bTok); code != http.StatusUnauthorized {
+		t.Fatalf("past lostWindow: %d, want a counted 401", code)
+	}
+	// A manager of the roster that never connected to this hub: counted, unless the hub itself just started.
+	_ = busToken(t, f.h, "m-0c0c0c", "m-0c0c0c")
+	cTok := extTokenPrefix + "of-c"
+	if code := call("m-0c0c0c", cTok); code != http.StatusUnauthorized {
+		t.Fatalf("a manager this hub never lost: %d", code)
+	}
+	f.h.extLost.mu.Lock()
+	f.h.extLost.started = time.Now()
+	f.h.extLost.mu.Unlock()
+	if code := call("m-0c0c0c", cTok); code != http.StatusServiceUnavailable {
+		t.Fatalf("right after the hub started: %d", code)
+	}
+}
+
+// Revoking a manager drops what was kept of it in the roster at once: a proof naming it is counted right away.
+func TestRevokingAManagerForgetsItsRosterAnswer(t *testing.T) {
+	f := newProofTestHub(t)
+	const path = "/api/v1/machines"
+	key := extwire.ProofKey(f.b.token)
+	call := func() int {
+		t.Helper()
+		code, _ := proofDo(t, f.front.URL, path, f.bTok, extwire.SignProof(key, "m-0b0b0b", "GET", path, f.bTok, time.Now()))
+		return code
+	}
+	f.h.busHangUp("m-0b0b0b", websocket.StatusGoingAway, "test: the hub lost it")
+	eventually(t, 5*time.Second, "B off the bus", func() bool { return f.h.busConnOf("m-0b0b0b") == nil })
+	if code := call(); code != http.StatusServiceUnavailable {
+		t.Fatalf("B away: %d", code)
+	}
+	if _, err := f.h.revokeBusToken(context.Background(), "m-0b0b0b"); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(); code != http.StatusUnauthorized {
+		t.Fatalf("right after B was revoked: %d, want a counted 401", code)
+	}
+}
+
+// A manager that does not answer whose a token is (it timed out, it is not ready yet) gives no verdict: the hub answers
+// 503 without counting it or marking the token as nobody's (which would hold that manager's extensions). From the
+// internet only when a manager's proof vouches for the request; otherwise counted as ever, and still not marked.
+func TestAManagerThatDoesNotAnswerGivesNoVerdict(t *testing.T) {
+	f := newProofTestHub(t)
+	f.h.cfg.Security.AuthFailures = 3
+	var silent atomic.Bool
+	silent.Store(true)
+	connectGuardManager(t, f.h, f.busURL, "m-0c0c0c", func(method string, params json.RawMessage) (any, error) {
+		if method == extwire.MethodAuthorize && silent.Load() {
+			return nil, &rpc.Error{Code: "assistant_offline", Message: "not ready yet"}
+		}
+		return proofAnswers("")(method, params)
+	})
+	const path = "/api/v1/machines"
+	unknown := extTokenPrefix + "nobodys-" + randomToken()
+	w := securityRequest(f.routes, "GET", path, unknown, "", "127.0.0.1:1", false)
+	if w.Code != http.StatusServiceUnavailable || w.Header().Get(extwire.HeaderAuthRefused) != "" || !strings.Contains(w.Body.String(), codeAuthorizeUnsure) {
+		t.Fatalf("from this machine, C silent: %d %v %s", w.Code, w.Header(), w.Body.String())
+	}
+	// From the internet, vouched for by B's proof: the same, not counted.
+	key := extwire.ProofKey(f.b.token)
+	for i := 0; i < 4; i++ {
+		code, body := proofDo(t, f.front.URL, path, unknown, extwire.SignProof(key, "m-0b0b0b", "GET", path, unknown, time.Now()))
+		if code != http.StatusServiceUnavailable || !strings.Contains(body, codeAuthorizeUnsure) {
+			t.Fatalf("vouched, C silent, %d: %d %s", i, code, body)
+		}
+	}
+	// Without a proof that vouches: counted, and not marked.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, f.front.URL+path, nil)
+	req.Header.Set("Authorization", "Bearer "+unknown)
+	res, err := (&http.Client{Transport: &http.Transport{Proxy: nil}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized || res.Header.Get(extwire.HeaderAuthRefused) != "" {
+		t.Fatalf("unvouched, C silent: %d %v", res.StatusCode, res.Header)
+	}
+	// Every manager answering "not mine": the token is nobody's, and the hub says so.
+	silent.Store(false)
+	w = securityRequest(f.routes, "GET", path, unknown, "", "127.0.0.1:1", false)
+	if w.Code != http.StatusUnauthorized || w.Header().Get(extwire.HeaderAuthRefused) != extwire.RefusedToken {
+		t.Fatalf("every manager answered: %d %v", w.Code, w.Header())
+	}
+}
+
+// The hub takes extwire.HeaderAuthRefused off a response as its head leaves, with gzip holding it back too: a header
+// set after the status (which gzip lets through) is taken off; the auth layer's own stays.
+func TestAuthRefusedIsTakenOffAsTheHeadLeaves(t *testing.T) {
+	big := strings.Repeat("x", 2*gzipMinSize)
+	for _, c := range []struct {
+		name   string
+		marked bool
+	}{{"passed on", false}, {"the auth layer's own", true}} {
+		t.Run(c.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if c.marked {
+					authRefused(w, r, extwire.RefusedToken)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Header().Set(extwire.HeaderAuthRefused, extwire.RefusedToken) // after the status: gzip still holds the head
+				_, _ = w.Write([]byte(`{"code":"invalid_token","detail":"` + big + `"}`))
+			})
+			srv := httptest.NewServer(newTestHub(t).outerLayers(handler))
+			defer srv.Close()
+			req, _ := http.NewRequest("GET", srv.URL+"/api/v1/x", nil)
+			req.Header.Set("Accept-Encoding", "gzip")
+			res, err := (&http.Client{Transport: &http.Transport{Proxy: nil, DisableCompression: true}}).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			if res.Header.Get("Content-Encoding") != "gzip" {
+				t.Fatalf("not gzipped: %v", res.Header)
+			}
+			if got := res.Header.Get(extwire.HeaderAuthRefused) != ""; got != c.marked {
+				t.Fatalf("header there %v, want %v: %v", got, c.marked, res.Header)
+			}
+		})
 	}
 }

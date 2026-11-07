@@ -75,6 +75,7 @@ func (h *Hub) revokeBusToken(ctx context.Context, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	h.extRoster.forget(id) // not in the roster any more, from now on (extensions_proof.go)
 	h.busHangUp(id, bus.CloseRevoked, "its token was revoked")
 	return ok, nil
 }

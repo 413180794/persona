@@ -290,3 +290,45 @@ func TestARefusalHoldsUntilTheNextConnection(t *testing.T) {
 		expect(fmt.Sprintf("after %d %s", c.status, c.code), 200, base+2)
 	}
 }
+
+// A refusal that comes back after the manager reconnected is about the connection the request went on, not the new
+// one: it holds nothing.
+func TestARefusalFromBeforeAReconnectHoldsNothing(t *testing.T) {
+	var state sync.Mutex
+	conn := 1
+	var mu sync.Mutex
+	hits, reconnect := 0, true
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		again := reconnect
+		reconnect = false
+		mu.Unlock()
+		if again { // the manager reconnects while the hub answers the old connection's request
+			state.Lock()
+			conn++
+			state.Unlock()
+			w.Header().Set(extwire.HeaderAuthRefused, extwire.RefusedToken)
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	defer hub.Close()
+	h, err := Handler(Options{Hub: hub.URL, Manager: "work", ProofKey: "k", Knows: func(tok string) bool { return tok == "pext_x" },
+		Connection: func() any { state.Lock(); defer state.Unlock(); return conn }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay := httptest.NewServer(h)
+	defer relay.Close()
+	if code, _ := relayDo(t, relay.URL, "GET", ""); code != http.StatusUnauthorized {
+		t.Fatalf("the old connection's refusal: %d", code)
+	}
+	if code, _ := relayDo(t, relay.URL, "GET", ""); code != 200 {
+		t.Fatalf("on the new connection: %d (held)", code)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if hits != 2 {
+		t.Fatalf("%d requests at the hub", hits)
+	}
+}

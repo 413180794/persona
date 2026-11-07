@@ -513,7 +513,10 @@ const roleExtension = "extension"
 
 // authorizeExtension asks the manager whose token tok is and whether it opens r's route on the hub's mux: the
 // principal (ok false: no such token), and when it does not open the route, the scope it lacks (opens false).
-func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Request) (p principal, ok, opens bool, scope string) {
+//
+// sure (when ok is false): every manager asked answered that the token is not its own. A manager that timed out or
+// is not ready yet gave no verdict, and neither then does this; one not on the bus is not asked (listManagers).
+func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Request) (p principal, ok, opens bool, scope string, sure bool) {
 	pattern, method, path := "", "", ""
 	if h.apiMux != nil && r != nil {
 		_, pattern = h.apiMux.Handler(r)
@@ -526,20 +529,25 @@ func (h *Hub) authorizeExtension(ctx context.Context, tok string, r *http.Reques
 	// The token is one manager's extension's: each is asked, the default first, until one knows it.
 	var a extwire.Authorized
 	manager := ""
+	sure = true
 	for _, id := range h.listManagers(ctx) {
 		a = extwire.Authorized{}
-		if err := h.callBus(ctx, id, extwire.MethodAuthorize, extwire.Authorize{Hash: hashToken(tok), Pattern: pattern,
-			Method: method, Path: path}, &a); err == nil && a.Extension != "" {
+		err := h.callBus(ctx, id, extwire.MethodAuthorize, extwire.Authorize{Hash: hashToken(tok), Pattern: pattern,
+			Method: method, Path: path}, &a)
+		if err == nil && a.Extension != "" {
 			manager = id
 			break
 		}
+		if err != nil && !errors.Is(err, errBusOffline) { // (the default manager, listed first, may be off the bus)
+			sure = false
+		}
 	}
 	if a.Extension == "" {
-		return principal{}, false, false, ""
+		return principal{}, false, false, "", sure
 	}
 	p = principal{ID: "extension:" + a.Extension, Name: a.Name, Role: roleExtension, Extension: a.Extension, Scopes: a.Scopes,
 		Manager: manager}
-	return p, true, a.OK, a.Scope
+	return p, true, a.OK, a.Scope, true
 }
 
 // answerOnly says whether the request comes from an answer-only device (a watch).

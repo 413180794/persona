@@ -37,6 +37,8 @@ type Hub struct {
 	// the bus that proofs name (extensions_proof.go).
 	extProofs proofNonces
 	extRoster rosterSeen
+	// extLost are when this hub started and when managers' bus connections ended here lately (extensions_proof.go).
+	extLost busLosses
 	// tests: replaces os.Hostname
 	hostname func() (string, error)
 
@@ -206,7 +208,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, calls: map[string]chan proto.ToolResult{},
 		slot: slot,
 	}
-	h.teeErrors() // the log's error lines become reports while an extension takes them (error_reports.go)
+	h.extLost.started = time.Now() // managers' extensions may call before their managers are back (extensions_proof.go)
+	h.teeErrors()                  // the log's error lines become reports while an extension takes them (error_reports.go)
 	h.builtinLooks = builtinPersonaFS()
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)

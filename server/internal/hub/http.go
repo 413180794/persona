@@ -257,8 +257,62 @@ func (h *Hub) routes() http.Handler {
 	h.managerInstallRoutes(mux) // GET /i/<code>: the install script (managers_install.go)
 	mux.Handle("/api/", appAPI)
 	mux.Handle("/", h.adminRoutes(mux, appAPI, webApp(filepath.Join(h.cfg.dir, "web"))))
-	return gzipResponses(h.logf, logRequests(h, recoverPanics(h, jsonRouteErrors(mux))))
+	return h.outerLayers(jsonRouteErrors(mux))
 }
+
+// outerLayers are what every request goes through around the routes, outermost first: the auth layer's marks
+// (authMarks: outside gzip, which may hold a response's head back), gzip, the request log, a panic's recovery.
+func (h *Hub) outerLayers(routes http.Handler) http.Handler {
+	return authMarks(gzipResponses(h.logf, logRequests(h, recoverPanics(h, routes))))
+}
+
+// authMarks lets a response carry extwire.HeaderAuthRefused only when the hub's own auth layer refused the request
+// (authRefused): off any other, a manager's or an extension's passed on included. Outermost, so the header is taken
+// off as the head of the response actually leaves, not when a handler says its status: a writer in between (gzip)
+// may hold the head back, and a header set meanwhile would go out with it.
+func authMarks(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mark := &authRefusal{}
+		next.ServeHTTP(&markedWriter{ResponseWriter: w, mark: mark},
+			r.WithContext(context.WithValue(r.Context(), authRefusalKey{}, mark)))
+	})
+}
+
+// markedWriter is authMarks' writer: it takes extwire.HeaderAuthRefused off the head as it leaves, unless the request
+// was marked.
+type markedWriter struct {
+	http.ResponseWriter
+	mark *authRefusal
+	sent bool // the final head is out
+}
+
+func (m *markedWriter) head(final bool) {
+	if m.sent {
+		return
+	}
+	if !m.mark.refused.Load() {
+		m.ResponseWriter.Header().Del(extwire.HeaderAuthRefused) // a manager's or an extension's: never the hub's word
+	}
+	m.sent = final
+}
+
+func (m *markedWriter) WriteHeader(code int) {
+	m.head(code >= 200) // (an informational answer goes, and the final head is still to come)
+	m.ResponseWriter.WriteHeader(code)
+}
+
+func (m *markedWriter) Write(p []byte) (int, error) {
+	m.head(true)
+	return m.ResponseWriter.Write(p)
+}
+
+func (m *markedWriter) FlushError() error {
+	m.head(true)
+	return http.NewResponseController(m.ResponseWriter).Flush()
+}
+
+// Unwrap lets the handlers reach the underlying writer's Hijacker and deadlines.
+func (m *markedWriter) Unwrap() http.ResponseWriter { return m.ResponseWriter }
 
 func (h *Hub) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -308,18 +362,26 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			return
 		}
 		var p principal
-		var ok bool
+		var ok, sure bool
 		if ext {
-			p, ok, p.extOpens, p.extScope = h.authorizeExtension(r.Context(), tok, r)
+			p, ok, p.extOpens, p.extScope, sure = h.authorizeExtension(r.Context(), tok, r)
 		} else {
 			p, ok = h.authenticate(r.Context(), tok)
+		}
+		if !ok && ext && !sure && (!public || h.proofVouches(r, proof, tok)) {
+			// A manager did not answer (timed out, not ready yet): no verdict on the token, so neither counted nor
+			// said to be nobody's (that would hold its manager's extensions). From the internet only for a request
+			// its manager's proof vouches for: anything else is counted as ever.
+			retryAfter(w, 5*time.Second)
+			h.securityError(w, r, http.StatusServiceUnavailable, codeAuthorizeUnsure, 0)
+			return
 		}
 		if !ok {
 			failures := 0
 			if limited {
 				failures = failed.fail(authSourceKey(r), time.Now(), h.cfg.Security)
 			}
-			if ext { // nobody knows it: a manager's relay holds its extensions' requests till its next bus connection
+			if ext && sure { // nobody's: a manager's relay holds its extensions' requests till its next bus connection
 				authRefused(w, r, extwire.RefusedToken)
 			}
 			h.securityError(w, r, http.StatusUnauthorized, "", failures)
@@ -399,20 +461,11 @@ type statusWriter struct {
 	status          int
 	securityFailure bool
 	lang            i18n.Lang
-	// refusal is whether the hub's auth layer refused the request (authRefused): only then may the response carry
-	// extwire.HeaderAuthRefused.
-	refusal *authRefusal
 }
 
-func (s *statusWriter) WriteHeader(code int) {
-	s.status = code
-	if s.refusal == nil || !s.refusal.refused.Load() {
-		s.Header().Del(extwire.HeaderAuthRefused) // a manager's or an extension's, passed on: never the hub's word
-	}
-	s.ResponseWriter.WriteHeader(code)
-}
+func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
 
-// authRefusal is a request's mark that the hub's own auth layer refused it (logRequests puts it in the context).
+// authRefusal is a request's mark that the hub's own auth layer refused it (authMarks puts it in the context).
 type authRefusal struct{ refused atomic.Bool }
 
 type authRefusalKey struct{}
@@ -445,9 +498,7 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 		// the language of this response's text for people: its Accept-Language, else the user's (locale.go)
 		lang := i18n.FromRequest(r).Or(h.userLang())
 		r = r.WithContext(i18n.With(r.Context(), lang))
-		refusal := &authRefusal{}
-		r = r.WithContext(context.WithValue(r.Context(), authRefusalKey{}, refusal))
-		sw := &statusWriter{ResponseWriter: w, status: 200, lang: lang, refusal: refusal}
+		sw := &statusWriter{ResponseWriter: w, status: 200, lang: lang}
 		next.ServeHTTP(sw, r)
 		// Auth and ingress refusals are logged by securityError (masked, rate limited), WebSocket ones included.
 		if !sw.securityFailure && (sw.status >= 400 || (!longLived(r.URL.Path) && time.Since(start) > 2*time.Second)) {

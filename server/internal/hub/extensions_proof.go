@@ -18,6 +18,10 @@ import (
 	"github.com/nwverse/persona/server/internal/extwire"
 )
 
+// codeAuthorizeUnsure (503): a manager did not answer whose an extension's token is (it timed out, or is not ready
+// yet), so there is no verdict on the token: not counted, and not marked as the token being nobody's.
+const codeAuthorizeUnsure = "manager_unreachable"
+
 // The answers to a manager's proof that is its own but not taken (docs/managers.md "Extensions and the hub's API").
 const (
 	codeClockSkew     = extwire.CodeClockSkew
@@ -118,11 +122,16 @@ func (h *Hub) proofOfAManagerAway(ctx context.Context, proof string) bool {
 	if err != nil || h.busProofKey(p.Manager) != "" {
 		return false
 	}
+	// Only while the hub may have lost it unawares: an answer that is not counted tells whoever asks that the manager
+	// is in the roster and off the bus, so outside that window it is counted as ever.
+	now := time.Now()
+	if !h.extLost.recently(p.Manager, now) {
+		return false
+	}
 	if p.Manager == assistantwire.AssistantID || h.busConnOf(p.Manager) != nil {
 		return true // the roster's own shortcut (rosterHas)
 	}
 	// Such a proof is not counted, so the roster is asked once in a while for it, not on each request.
-	now := time.Now()
 	if has, ok := h.extRoster.get(p.Manager, now); ok {
 		return has
 	}
@@ -131,6 +140,59 @@ func (h *Hub) proofOfAManagerAway(ctx context.Context, proof string) bool {
 		h.extRoster.put(p.Manager, has, now)
 	}
 	return has && sure
+}
+
+// lostWindow is how long after this hub started, or after a manager's bus connection ended here, a proof naming that
+// manager off the bus is answered 503 without counting (proofOfAManagerAway): about how long a manager takes to notice
+// a hub that restarted, or a connection gone half open, and come back. Past it the proof is counted as any other.
+const lostWindow = 2 * time.Minute
+
+// busLosses are when this hub started, and when each manager's bus connection ended here lately.
+type busLosses struct {
+	mu      sync.Mutex
+	started time.Time            // zero: not known (tests)
+	ended   map[string]time.Time // manager id → when its current connection ended
+}
+
+// lost records that manager id's current bus connection ended at now.
+func (l *busLosses) lost(id string, now time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.ended == nil {
+		l.ended = map[string]time.Time{}
+	}
+	for k, at := range l.ended {
+		if now.Sub(at) >= lostWindow {
+			delete(l.ended, k)
+		}
+	}
+	l.ended[id] = now
+}
+
+// recently says whether now is within lostWindow of this hub's start or of the end of id's last connection here.
+func (l *busLosses) recently(id string, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.started.IsZero() && now.Sub(l.started) < lostWindow {
+		return true
+	}
+	at, ok := l.ended[id]
+	return ok && now.Sub(at) < lostWindow
+}
+
+// proofVouches says whether proof is a fresh one the manager it names signed with the key of its live bus connection
+// for r with tok: whoever sent r came through that manager's relay. Its nonce is not taken (the request is not let
+// through on it).
+func (h *Hub) proofVouches(r *http.Request, proof, tok string) bool {
+	p, err := extwire.ParseProof(proof)
+	if proof == "" || err != nil {
+		return false
+	}
+	uri := r.RequestURI
+	if uri == "" {
+		uri = r.URL.RequestURI()
+	}
+	return p.Valid(h.busProofKey(p.Manager), r.Method, uri, tok) && p.Fresh(time.Now())
 }
 
 // rosterSeenFor is how long rosterSeen keeps an answer, and rosterSeenMost how many it keeps.
@@ -158,6 +220,13 @@ func (c *rosterSeen) get(id string, now time.Time) (has, ok bool) {
 		return false, false
 	}
 	return a.has, true
+}
+
+// forget drops what was kept of id (it left the roster).
+func (c *rosterSeen) forget(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.seen, id)
 }
 
 func (c *rosterSeen) put(id string, has bool, now time.Time) {
