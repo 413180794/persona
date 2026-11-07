@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 const testClientID = "1234-abcd.apps.googleusercontent.com"
@@ -93,6 +95,52 @@ func TestGoogleOAuthNotConfigured(t *testing.T) {
 	s.SetGoogleClientID("")
 	if _, err := s.StartGoogleOAuth(""); err == nil || statusFor(err) != http.StatusBadRequest {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// #2442: the apps learn before the tap whether Google sign-in can start, and start on a hub without a client says, in
+// the client's language, who sets it up (google.client_id) and what works meanwhile (an app password).
+func TestGoogleOAuthConfig(t *testing.T) {
+	s, _ := newOAuthService(t)
+	code, body := doJSON(t, s, "GET", "/api/v1/mail/oauth/google/config", "")
+	if code != 200 || string(body["configured"]) != "true" {
+		t.Fatalf("configured hub: %d %v", code, body)
+	}
+
+	s.SetGoogleClientID("  ")
+	code, body = doJSON(t, s, "GET", "/api/v1/mail/oauth/google/config", "")
+	if code != 200 || string(body["configured"]) != "false" {
+		t.Fatalf("hub without a client: %d %v", code, body)
+	}
+	// Android apps that do not read google/config fall back to the app-password form when the start error contains
+	// "not configured", so every language's text keeps that phrase.
+	for _, c := range []struct {
+		accept string
+		ctx    i18n.Lang
+		want   string
+	}{
+		{accept: "zh-Hans", want: "应用专用密码"},
+		{accept: "ja", want: "アプリパスワード"},
+		{accept: "en", want: "app password"},
+		{want: "app password"},
+		{accept: "en", ctx: i18n.Ja, want: "アプリパスワード"}, // the signed-in user's language wins
+	} {
+		r := httptest.NewRequest("POST", "/api/v1/mail/oauth/google/start", nil)
+		if c.accept != "" {
+			r.Header.Set("Accept-Language", c.accept)
+		}
+		if c.ctx != "" {
+			r = r.WithContext(i18n.With(r.Context(), c.ctx))
+		}
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		var got struct{ Error, Code string }
+		_ = json.Unmarshal(w.Body.Bytes(), &got)
+		if w.Code != http.StatusBadRequest || got.Code != "google_not_configured" ||
+			!strings.Contains(got.Error, "not configured") || !strings.Contains(got.Error, "google.client_id") ||
+			!strings.Contains(got.Error, c.want) {
+			t.Fatalf("start without a client, %q/%q: %d %s", c.accept, c.ctx, w.Code, w.Body)
+		}
 	}
 }
 

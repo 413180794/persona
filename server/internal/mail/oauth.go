@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/emersion/go-sasl"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Gmail "Sign in with Google": the app opens Google's consent page in the system browser
@@ -126,10 +128,35 @@ func randomURLSafe(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// GoogleConfig says whether "Sign in with Google" can start on this hub (GET /mail/oauth/google/config). There is no
+// shared client: each hub has its own iOS OAuth client (google.client_id), so the apps ask before offering the button
+// and add Gmail with an app password on a hub without one (#2442).
+type GoogleConfig struct {
+	Configured bool `json:"configured"`
+}
+
+func (s *Service) GoogleConfig() GoogleConfig {
+	return GoogleConfig{Configured: s.googleClientID != ""}
+}
+
+// errGoogleNotConfigured says who sets Google sign-in up and what works meanwhile, in the client's language (English
+// without one). Every language's text keeps "not configured": Android apps that do not read google/config match that
+// phrase to fall back to the app-password form.
+var errGoogleNotConfigured = i18n.ErrEnglish("mail-oauth.google_not_configured")
+
+// googleNotConfiguredText is errGoogleNotConfigured in r's language: the signed-in user's, else Accept-Language.
+func googleNotConfiguredText(r *http.Request) string {
+	l := i18n.From(r.Context())
+	if l == "" {
+		l = i18n.FromRequest(r)
+	}
+	return i18n.Localize(errGoogleNotConfigured, l)
+}
+
 // StartGoogleOAuth begins a "Sign in with Google" flow. loginHint preselects an account.
 func (s *Service) StartGoogleOAuth(loginHint string) (*OAuthStart, error) {
 	if s.googleClientID == "" {
-		return nil, errors.New("Google sign-in is not configured: set google.client_id in the manager's manager.json (docs/mail.md)")
+		return nil, errGoogleNotConfigured
 	}
 	verifier := randomURLSafe(48)
 	state, err := s.sealState(oauthState{Verifier: verifier, Created: s.now().Unix()})

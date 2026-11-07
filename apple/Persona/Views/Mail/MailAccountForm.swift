@@ -24,14 +24,23 @@ struct MailAccountForm: Equatable {
     var imapPort = "993"
     var smtpHost = ""
     var smtpPort = "465"
+    /// Gmail on a hub without Google sign-in (no google.client_id, #2442): added with an app password instead.
+    var gmailAppPassword = false
 
     var canSave: Bool { !email.isEmpty && !password.isEmpty }
 
-    /// The account to add with a password; nil for Gmail and Outlook, which sign in with Google / Microsoft.
+    /// The account to add with a password; nil for Outlook and for Gmail on a hub that can sign in with Google.
     var request: APIClient.AddAccount? {
         var req = APIClient.AddAccount(name: email, email: email, auth: "password")
         switch kind {
-        case .gmail, .outlook:
+        case .gmail:
+            guard gmailAppPassword else { return nil }
+            // Google's servers spelled out: a Google Workspace address has its own domain, which no preset knows.
+            req.provider = "gmail"
+            req.password = password
+            req.imapHost = "imap.gmail.com"; req.imapPort = 993
+            req.smtpHost = "smtp.gmail.com"; req.smtpPort = 465; req.smtpSecurity = "tls"
+        case .outlook:
             return nil
         case .feishu:
             req.provider = "feishu"

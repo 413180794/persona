@@ -67,6 +67,16 @@ extension APIClient {
         enum CodingKeys: String, CodingKey { case authURL = "auth_url", callbackScheme = "callback_scheme", state }
     }
     struct GoogleFinish: Encodable { var state: String; var code: String?; var error: String? }
+    /// Whether this hub can start "Sign in with Google" (google.client_id in the manager's manager.json). An older hub has no
+    /// such route (404): nil, and the page offers the button as before.
+    struct GoogleConfig: Decodable { var configured: Bool }
+    func googleConfig() async throws -> GoogleConfig? {
+        do {
+            return try await get("/api/v1/mail/oauth/google/config", as: GoogleConfig.self)
+        } catch let e as APIError where e.status == 404 {
+            return nil
+        }
+    }
     /// Begins Gmail's "Sign in with Google": the hub builds the consent URL (PKCE) for the app to open.
     func googleSignInStart() async throws -> GoogleStart {
         try await post("/api/v1/mail/oauth/google/start", as: GoogleStart.self)
@@ -571,7 +581,22 @@ struct AddMailAccountView: View {
                 Picker("Type", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.title).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
-                if form.kind == .gmail {
+                if form.kind == .gmail && form.gmailAppPassword {
+                    // #2442: this hub has no Google OAuth client, so there is nothing to sign in with: say who sets it
+                    // up, and add the account with an app password meanwhile. The banner shows three lines at most:
+                    // the rest is in the footer.
+                    Section {
+                        NoticeBanner(text: String(localized: "Google sign-in isn't set up on this hub: an admin adds google.client_id to manager.json."))
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets())
+                    }
+                    Section {
+                        TextField(String(localized: "Gmail address"), text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        SecretField(String(localized: "App password"), filled: String(localized: "Filled in. Tap Connect."), text: $form.password, identifier: "mail.password")
+                    } footer: {
+                        Text("Once google.client_id is in the manager's manager.json and the hub restarts, “Sign In with Google” appears here (a one-time setup). Until then, add the account with an app password: turn on 2-Step Verification for the Google account, then create a 16-character password under Google Account › Security › App passwords and enter it here (not your Google password).")
+                    }
+                } else if form.kind == .gmail {
                     Section {
                         Button { Task { await signInWithGoogle() } } label: {
                             AccountSignInLabel(mark: Theme.Brand.google, title: saving ? String(localized: "Connecting to Gmail…") : String(localized: "Sign In with Google"), busy: saving)
@@ -627,9 +652,11 @@ struct AddMailAccountView: View {
             .themedPage()
             .navigationTitle("Add Mail Account")
             .navigationBarTitleDisplayMode(.inline)
+            // Ask before offering "Sign in with Google" (#2442); an older hub or a failed read keeps the button.
+            .task { form.gmailAppPassword = (try? await model.api?.googleConfig())?.configured == false }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                if form.kind != .gmail && form.kind != .outlook {
+                if form.request != nil {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("Connect [V N C Page a55741]") } }
                             .disabled(saving || form.email.isEmpty || form.password.isEmpty)

@@ -239,7 +239,7 @@ export const EMPTY_MAIL_FORM: MailForm = { kind: "imap", email: "", password: ""
 export interface AddMailAccount {
   name: string;
   email: string;
-  provider: "feishu" | "imap";
+  provider: "gmail" | "feishu" | "imap";
   auth: "password";
   password: string;
   imap_host?: string;
@@ -262,14 +262,18 @@ export function signsInOnPhone(k: MailKind): k is "gmail" | "outlook" {
   return k === "gmail" || k === "outlook";
 }
 
-/** What is wrong with the form, field by field (empty = can be sent). Gmail and Outlook are never sent from here. */
-export function mailErrors(f: MailForm): Partial<Record<keyof MailForm, string>> {
+/** What is wrong with the form, field by field (empty = can be sent). Outlook is never sent from here, nor is Gmail
+ *  unless the hub has no Google sign-in (`gmailAppPassword`: then it goes in with an app password). */
+export function mailErrors(f: MailForm, gmailAppPassword = false): Partial<Record<keyof MailForm, string>> {
   const e: Partial<Record<keyof MailForm, string>> = {};
-  if (f.kind === "gmail") return { kind: t("lib-agent-settings.mail_gmail_phone_only") };
+  if (f.kind === "gmail" && !gmailAppPassword) return { kind: t("lib-agent-settings.mail_gmail_phone_only") };
   if (f.kind === "outlook") return { kind: t("lib-agent-settings.mail_outlook_phone_only") };
   if (!f.email.trim()) e.email = t("lib-agent-settings.mail_email_empty");
   else if (!EMAIL.test(f.email.trim())) e.email = t("lib-agent-settings.mail_email_invalid");
-  if (!f.password) e.password = f.kind === "feishu" ? t("lib-agent-settings.mail_password_feishu") : t("lib-agent-settings.mail_password_empty");
+  if (!f.password)
+    e.password = t(
+      f.kind === "feishu" ? "lib-agent-settings.mail_password_feishu" : f.kind === "gmail" ? "lib-agent-settings.mail_password_gmail" : "lib-agent-settings.mail_password_empty",
+    );
   if (f.kind === "imap") {
     if (f.imapHost.trim() && !port(f.imapPort)) e.imapPort = t("lib-agent-settings.mail_port_invalid");
     if (f.smtpHost.trim() && !port(f.smtpPort)) e.smtpPort = t("lib-agent-settings.mail_port_invalid");
@@ -277,12 +281,14 @@ export function mailErrors(f: MailForm): Partial<Record<keyof MailForm, string>>
   return e;
 }
 
-/** The request for a password account; null for Gmail and Outlook (Google / Microsoft sign-in, on the phone). Servers left empty are guessed
- * by the hub from the domain; Lark's are fixed by the hub. SMTP on 587 is STARTTLS, anything else TLS. */
-export function mailRequest(f: MailForm): AddMailAccount | null {
-  if (signsInOnPhone(f.kind)) return null;
+/** The request for a password account; null for Outlook, and for Gmail on a hub that signs in with Google (both on the
+ * phone). Servers left empty are guessed by the hub from the domain; Lark's are fixed by the hub; Gmail's are spelled
+ * out, since a Google Workspace address has a domain no preset knows. SMTP on 587 is STARTTLS, anything else TLS. */
+export function mailRequest(f: MailForm, gmailAppPassword = false): AddMailAccount | null {
+  if (f.kind === "outlook" || (f.kind === "gmail" && !gmailAppPassword)) return null;
   const email = f.email.trim();
   const req: AddMailAccount = { name: email, email, provider: f.kind, auth: "password", password: f.password };
+  if (f.kind === "gmail") return { ...req, imap_host: "imap.gmail.com", imap_port: 993, smtp_host: "smtp.gmail.com", smtp_port: 465, smtp_security: "tls" };
   if (f.kind === "imap") {
     if (f.imapHost.trim()) {
       req.imap_host = f.imapHost.trim();

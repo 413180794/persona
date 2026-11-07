@@ -186,6 +186,25 @@ describe("mail account form", () => {
     expect(mailRequest({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "pw", smtpHost: "smtp.example.com", smtpPort: "465" })?.smtp_security).toBe("tls");
   });
 
+  // #2442: a hub without google.client_id cannot sign in with Google, so Gmail is added here with an app password.
+  it("adds Gmail with an app password on a hub without Google sign-in", () => {
+    const gmail = { ...EMPTY_MAIL_FORM, kind: "gmail" as const };
+    expect(mailErrors(gmail, true)).toEqual({ email: "填邮箱地址", password: "填 Gmail 的应用专用密码" });
+    expect(mailErrors({ ...gmail, email: "me@mail.test", password: "abcd efgh ijkl mnop" }, true)).toEqual({});
+    expect(mailRequest({ ...gmail, email: " me@mail.test ", password: "abcd efgh ijkl mnop" }, true)).toEqual({
+      name: "me@mail.test",
+      email: "me@mail.test",
+      provider: "gmail",
+      auth: "password",
+      password: "abcd efgh ijkl mnop",
+      imap_host: "imap.gmail.com",
+      imap_port: 993,
+      smtp_host: "smtp.gmail.com",
+      smtp_port: 465,
+      smtp_security: "tls",
+    });
+  });
+
   it("describe accounts", () => {
     expect(mailAccountLine({ id: "a", email: "me@example.com", status: "error", error: "auth failed" })).toBe("auth failed");
     expect(mailAccountLine({ id: "a", email: "me@example.com", auth: "oauth2", provider: "gmail" })).toBe("Gmail · Google 账号登录");

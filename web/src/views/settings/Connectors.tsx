@@ -2,7 +2,8 @@
 // one with a password or app password, delete), Lark (the Lark gateway through the hub, feature `lark`: read-only status), and the hub's other connectors
 // (GitHub, Telegram, an extension's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
 // "This iPhone" (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
-// phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone;
+// phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone,
+// unless the hub has no such client (GET /mail/oauth/google/config): then Gmail goes in here with an app password.
 // Outlook too (Microsoft calls back to a custom scheme only the app catches), though its client ID can be set up here.
 import { useEffect, useId, useState } from "react";
 import { clientIDError, EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailCodeGuide, mailErrors, mailProviderBadge, mailRequest, mailSummary, signsInOnPhone, type MailAccount, type MailForm, type MicrosoftConfig } from "../../lib/agent-settings";
@@ -149,16 +150,23 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const errorId = useId(); // field k's error line is `${errorId}-${k}`
+  // false: this hub has no Google OAuth client, so Gmail goes in with an app password. An older hub (no such route)
+  // or a failed read: as before, Gmail on the phone.
+  const [googleSignIn, setGoogleSignIn] = useState(true);
   useEffect(() => {
     if (open) {
       setF(EMPTY_MAIL_FORM);
       setTried(false);
       setError("");
+      api<{ configured: boolean }>("/mail/oauth/google/config")
+        .then((r) => setGoogleSignIn(r.configured !== false))
+        .catch(() => setGoogleSignIn(true));
     }
   }, [open]);
 
-  const errors = mailErrors(f);
-  const req = mailRequest(f);
+  const gmailAppPassword = f.kind === "gmail" && !googleSignIn;
+  const errors = mailErrors(f, gmailAppPassword);
+  const req = mailRequest(f, gmailAppPassword);
   const guide = mailCodeGuide(f);
   const shown = tried ? errors : {};
   const set = (k: keyof MailForm) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -208,7 +216,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
           <Button tone="quiet" onClick={onClose} disabled={busy}>
             {t("common.cancel")}
           </Button>
-          {!signsInOnPhone(f.kind) && (
+          {(!signsInOnPhone(f.kind) || gmailAppPassword) && (
             <Button tone="primary" busy={busy} onClick={() => void save()}>
               {busy ? t("settings-connectors.connecting") : t("settings-connectors.connect")}
             </Button>
@@ -236,11 +244,11 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
           ))}
         </div>
 
-        {f.kind === "gmail" ? (
-          <PhoneOnly title={t("settings-connectors.gmail_title")} body={t("settings-connectors.gmail_body")} />
+        {f.kind === "gmail" && !gmailAppPassword ? (
+          <Note title={t("settings-connectors.gmail_title")} body={t("settings-connectors.gmail_body")} />
         ) : f.kind === "outlook" ? (
           <>
-            <PhoneOnly title={t("settings-connectors.outlook_title")} body={t("settings-connectors.outlook_body")} />
+            <Note title={t("settings-connectors.outlook_title")} body={t("settings-connectors.outlook_body")} />
             <OutlookClient />
           </>
         ) : (
@@ -251,8 +259,9 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
               void save();
             }}
           >
-            {field("email", t("settings-connectors.email"), { placeholder: "me@example.com", type: "email", auto: "email" })}
-            {field("password", f.kind === "feishu" ? t("settings-connectors.password_lark") : t("settings-connectors.password"), { type: "password", auto: "new-password" })}
+            {gmailAppPassword && <Note title={t("settings-connectors.gmail_not_configured_title")} body={t("settings-connectors.gmail_not_configured_body")} />}
+            {field("email", gmailAppPassword ? t("settings-connectors.gmail_address") : t("settings-connectors.email"), { placeholder: "me@example.com", type: "email", auto: "email" })}
+            {field("password", t(f.kind === "feishu" ? "settings-connectors.password_lark" : gmailAppPassword ? "settings-connectors.gmail_app_password" : "settings-connectors.password"), { type: "password", auto: "new-password" })}
             {guide ? (
               <div className="flex flex-col items-start gap-1.5 text-[11.5px] leading-relaxed text-ink-3">
                 <p>{t(guide.provider === "qq" ? "settings-connectors.qq_code_steps" : "settings-connectors.netease_code_steps")}</p>
@@ -262,9 +271,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
               </div>
             ) : (
               <p className="text-[11.5px] leading-relaxed text-ink-3">
-                {f.kind === "feishu"
-                  ? t("settings-connectors.lark_hint")
-                  : t("settings-connectors.imap_hint")}
+                {t(f.kind === "feishu" ? "settings-connectors.lark_hint" : gmailAppPassword ? "settings-connectors.gmail_app_password_hint" : "settings-connectors.imap_hint")}
               </p>
             )}
             {f.kind === "imap" && (
@@ -290,7 +297,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
 }
 
 /** Gmail's and Outlook's note in "Add mail account": they sign in on the provider's page, which returns to the phone app. */
-function PhoneOnly({ title, body }: { title: string; body: string }) {
+function Note({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex gap-3 rounded-[10px] bg-inset px-3.5 py-3 shadow-hairline">
       <Icon name="info" size={15} className="mt-0.5 shrink-0 text-ink-3" />

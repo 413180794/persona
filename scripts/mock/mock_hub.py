@@ -6191,7 +6191,7 @@ if NO_SOURCES:
 # The mail's write paths: flags, sending, adding / testing / deleting accounts, Google sign-in's start. Nothing is sent
 # anywhere: what the app posted is in GET /mock/mail. MOCK_MAIL=1 adds whole mails for the reader (an HTML one with a
 # tracking pixel, a script and an attachment; a two-mail thread) and a Gmail account whose authorization ran out and a
-# Feishu one; MOCK_GOOGLE=1 makes google/start answer (with a made-up URL).
+# Feishu one; MOCK_GOOGLE=1 makes google/config say configured and google/start answer (with a made-up URL).
 # MOCK_OUTLOOK=1: an Outlook account signed in with Microsoft (the web's Outlook badge and line, #2968).
 if os.environ.get("MOCK_OUTLOOK"):
     MAIL_ACCOUNTS.append({"id": "acc4", "name": "me@outlook.example", "email": "me@outlook.example", "provider": "outlook", "auth": "oauth2",
@@ -6283,9 +6283,12 @@ def mail_area(h, method, p, q):
             h.send_json({"error": "at least one recipient is required"}, 400); return True
         MAIL_LOG["sent"].append(body)
         h.send_json({"ok": True}); return True
+    if p == "/api/v1/mail/oauth/google/config":
+        h.send_json({"configured": bool(os.environ.get("MOCK_GOOGLE"))}); return True
     if p == "/api/v1/mail/oauth/google/start" and method == "POST":
         if not os.environ.get("MOCK_GOOGLE"):
-            h.send_json({"error": "Google sign-in is not configured"}, 400); return True
+            h.send_json({"error": "Google sign-in is not configured on this hub: an admin adds google.client_id to the manager's manager.json and restarts the hub. Until then, add Gmail with an app password.",
+                         "code": "google_not_configured"}, 400); return True
         h.send_json({"auth_url": "https://accounts.example.com/o/oauth2/auth?state=mock", "callback_scheme": "com.example.mock", "state": "mock"})
         return True
     # Outlook's "Sign in with Microsoft": no client ID until the app saves one (MOCK_OUTLOOK_CLIENT=1: already there).

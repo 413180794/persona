@@ -208,6 +208,7 @@ final class DemoHub {
         case ["todos"]: return ["todos": .array(todos)]
         case ["mail", "accounts"]: return ["accounts": data["mail_accounts"] ?? .array([])]
         case ["mail", "messages"]: return ["messages": .array([]), "has_more": false]
+        case ["mail", "oauth", "google", "config"]: return ["configured": true] // the page as on a set-up hub
         case ["lark", "unread-count"]: return ["count": 4]
         case ["lark", "status"]: return ["configured": true, "connected": true, "name": "我", "last_event_at": .number((Date.now.timeIntervalSince1970 - 95).rounded(.down))] // i18n-ignore
         case ["lark", "conversations"]: return ["conversations": data["lark_conversations"] ?? .array([]), "next_cursor": "", "account_id": "demo-lark-account"]

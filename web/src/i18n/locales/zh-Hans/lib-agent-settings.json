@@ -29,6 +29,7 @@
   "mail_email_invalid": "邮箱地址的格式不对",
   "mail_password_feishu": "填飞书邮箱的第三方客户端登录密码",
   "mail_password_empty": "填密码或授权码",
+  "mail_password_gmail": "填 Gmail 的应用专用密码",
   "mail_port_invalid": "端口是 1–65535 的数字",
   "mail_unreachable": "连不上",
   "mail_line_gmail": "Gmail · Google 账号登录",

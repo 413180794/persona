@@ -1,0 +1,3 @@
+{
+  "google_not_configured": "Google sign-in is not configured on this hub: an admin adds google.client_id to the manager's manager.json and restarts the hub (a one-time setup). Until then, add Gmail with an app password."
+}

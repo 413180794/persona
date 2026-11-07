@@ -43,4 +43,16 @@ import Testing
         f.imapHost = "imap.example.com"
         #expect(f.codeGuide == nil, "servers typed: they may not be QQ's")
     }
+
+    /// On a hub without google.client_id, Gmail is added with an app password, Google's servers spelled out so a Google
+    /// Workspace address (its own domain) works too (#2442).
+    @Test func gmailWithAppPasswordOnHubWithoutGoogleSignIn() {
+        let req = MailAccountForm(kind: .gmail, email: "me@mail.test", password: "abcd efgh ijkl mnop", gmailAppPassword: true).request
+        #expect(req?.provider == "gmail")
+        #expect(req?.auth == "password")
+        #expect(req?.password == "abcd efgh ijkl mnop")
+        #expect(req?.imapHost == "imap.gmail.com" && req?.imapPort == 993)
+        #expect(req?.smtpHost == "smtp.gmail.com" && req?.smtpPort == 465 && req?.smtpSecurity == "tls")
+        #expect(MailAccountForm(kind: .outlook, email: "me@mail.test", password: "p", gmailAppPassword: true).request == nil)
+    }
 }

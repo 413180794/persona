@@ -29,6 +29,7 @@
   "mail_email_invalid": "メールアドレスの形式が正しくありません",
   "mail_password_feishu": "Lark メールのサードパーティクライアント用パスワードを入力してください",
   "mail_password_empty": "パスワードかアプリパスワードを入力してください",
+  "mail_password_gmail": "Gmail のアプリパスワードを入力してください",
   "mail_port_invalid": "ポートは1〜65535の数字です",
   "mail_unreachable": "接続できません",
   "mail_line_gmail": "Gmail · Google アカウントでログイン",

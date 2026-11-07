@@ -32,6 +32,7 @@
   "mail_email_invalid": "That email address doesn't look right",
   "mail_password_feishu": "Enter the third-party client password for Lark Mail",
   "mail_password_empty": "Enter a password or app password",
+  "mail_password_gmail": "Enter the Gmail app password",
   "mail_port_invalid": "Port must be a number from 1 to 65535",
   "mail_unreachable": "Can't connect",
   "mail_line_gmail": "Gmail · Google sign-in",

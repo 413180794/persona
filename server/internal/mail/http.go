@@ -16,6 +16,7 @@ func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/mail/accounts", s.handleListAccounts)
 	mux.HandleFunc("POST /api/v1/mail/accounts", s.handleAddAccount)
+	mux.HandleFunc("GET /api/v1/mail/oauth/google/config", s.handleGoogleConfig)
 	mux.HandleFunc("POST /api/v1/mail/oauth/google/start", s.handleGoogleStart)
 	mux.HandleFunc("POST /api/v1/mail/oauth/google/finish", s.handleGoogleFinish)
 	mux.HandleFunc("GET /api/v1/mail/oauth/microsoft/config", s.handleMicrosoftConfig)
@@ -176,6 +177,10 @@ func (s *Service) handleGoogleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start, err := s.StartGoogleOAuth(req.LoginHint)
+	if errors.Is(err, errGoogleNotConfigured) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": googleNotConfiguredText(r), "code": "google_not_configured"})
+		return
+	}
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -194,6 +199,10 @@ func (s *Service) handleGoogleFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"account": account})
+}
+
+func (s *Service) handleGoogleConfig(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.GoogleConfig())
 }
 
 func (s *Service) handleMicrosoftConfig(w http.ResponseWriter, r *http.Request) {

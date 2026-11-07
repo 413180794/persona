@@ -271,6 +271,7 @@ Except `demo`, only `mbp`, no Agents or other assistant chats (new-user state). 
 (`no_machine`, `machine_pending`, `claude_missing`, `launcher_missing`, `node_unreachable`, `node_outdated`, `assistant_offline`) for each error card;
 `MOCK_BUILTIN_PRESETS=1` only adds built-in providers and `builtin_presets`. In these cases, `MOCK_PROVIDERS=1` Test Connection returns Anthropic's region-block message and `code: "region_blocked"` for keys containing `region` (#4482, text from hub). Like hub, at most 3 pending computers (fourth 429 `too_many_pending`).
 `MOCK_INBOX_SOURCES=none` leaves no Inbox sources (no items/mail accounts, Lark unconfigured, GitHub signed out); combine `zero` for zero-computer/zero-source empty states (#4485, #4480). `mock_scenarios.py` names them `readiness-<scenario>` for live switching.
+Gmail sign-in (#2442): `GET /api/v1/mail/oauth/google/config` says `configured: false` and `google/start` answers 400 `google_not_configured` (text contains "not configured"), so the add-Gmail page offers the app-password form; `MOCK_GOOGLE=1` says `configured: true` and `start` answers with a made-up URL, so the page shows Sign In with Google.
 
 iOS add-computer (`AddComputerTests`, #4196): `python3 scripts/mock/mock_scenarios.py --port <port> --control <control port>`,
 `TEST_RUNNER_PERSONA_ADD_HUB=http://127.0.0.1:<port> TEST_RUNNER_PERSONA_ADD_CONTROL=http://127.0.0.1:<control port>`. Tests switch `MOCK_READINESS=zero` / `MOCK_ADD_COMPUTER=seed`,
