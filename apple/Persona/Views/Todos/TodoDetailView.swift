@@ -22,6 +22,7 @@ struct TodoDetailView: View {
     @State private var savingTitle: String?
     /// The PR its work is in, opened in the app's link sheet (docs/apple/ios.md, links open inside the app).
     @State private var link: LinkTarget?
+    @State private var decisions = TodoDecisionsModel()
 
     private var currentTodo: TodoItem? {
         store.todo(id: todoID)
@@ -57,6 +58,20 @@ struct TodoDetailView: View {
             if let todo = currentTodo {
                 TodoHandoffSheet(todo: todo)
             }
+        }
+        .sheet(item: $decisions.form) { form in
+            TodoDecisionSheet(supersedes: form.supersedes) { question, choice, reason in
+                await decisions.add(question: question, choice: choice, reason: reason, supersedes: form.supersedes)
+            }
+        }
+        // The hub moves the todo's updated_at when a decision is written, here or anywhere (an answered card too).
+        .tabActiveTask(id: "\(todoID) \(currentTodo?.updatedAt?.timeIntervalSince1970 ?? 0)") {
+            decisions.select(todoID)
+            #if DEBUG
+            // `-showDecisionHistory YES`: the revised ones are shown from the start, for screenshots.
+            if UserDefaults.standard.bool(forKey: "showDecisionHistory"), decisions.all == nil { decisions.showAll = true }
+            #endif
+            await decisions.load()
         }
         #if os(macOS)
         .macLinkPanel($link)
@@ -140,7 +155,7 @@ struct TodoDetailView: View {
         let activeAgents = todo.agents.filter { $0.releasedAt == nil }
         let releasedAgents = todo.agents.filter { $0.releasedAt != nil }
 
-        return List {
+        return ScrollViewReader { proxy in List {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     TextField(String(localized: "To-do title"), text: $text.title)
@@ -230,7 +245,12 @@ struct TodoDetailView: View {
                     }
                 }
                 .padding(.vertical, Theme.Space.xs)
+                #if DEBUG
+                .id(Self.notesRow)
+                #endif
             }
+
+            TodoDecisionsSection(todo: todo, lookup: lookup, decisions: decisions)
 
             TodoSpacesSection(todo: todo, sessions: sessions, machineName: machineName, hubGroup: model.hub?.group,
                               machineOnline: { model.machine(model.hubRef($0), inFront: inFront)?.online ?? false })
@@ -270,7 +290,19 @@ struct TodoDetailView: View {
         .safeAreaInset(edge: .bottom) {
             bottomBar(todo)
         }
+        #if DEBUG
+        // `-showDecisionHistory YES` also scrolls the notes to the top once the decisions are read, so the whole
+        // Decisions section under them is in the screenshot.
+        .onChange(of: decisions.all != nil) { _, read in
+            if read, UserDefaults.standard.bool(forKey: "showDecisionHistory") { proxy.scrollTo(Self.notesRow, anchor: .top) }
+        }
+        #endif
+        }
     }
+
+    #if DEBUG
+    private static let notesRow = "todo.notes"
+    #endif
 
     /// How far the hub says the work got (`stage`, #2776) and the PR its work is in (`pr_url`, #2768), when it has
     /// either; a hub that sends neither draws nothing here.

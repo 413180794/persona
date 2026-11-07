@@ -9808,6 +9808,52 @@
       },
       "extractionState": "manual"
     },
+    "Add [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记一条"
+          }
+        }
+      }
+    },
+    "Added by hand": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added by hand"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手動で記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动记的"
+          }
+        }
+      }
+    },
     "Addresses That Go Direct": {
       "extractionState": "manual",
       "localizations": {
@@ -10103,6 +10149,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "到系统设置里允许 Persona 发通知。"
+          }
+        }
+      }
+    },
+    "Answered in a question from “%@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answered in a question from “%1$@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」の質問で回答"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「%1$@」的提问里答的"
+          }
+        }
+      }
+    },
+    "Answered in an agent's question": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answered in an agent's question"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントの質問で回答"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Agent 的提问里答的"
           }
         }
       }
@@ -18662,6 +18754,52 @@
         }
       }
     },
+    "Choice [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选了什么"
+          }
+        }
+      }
+    },
+    "Chose: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chose: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选了：%1$@"
+          }
+        }
+      }
+    },
     "CI Failures": {
       "localizations": {
         "en": {
@@ -18753,6 +18891,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Couldn't load decisions: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load decisions: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決定事項を読み込めませんでした：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "决策没加载出来：%1$@"
+          }
+        }
+      }
     },
     "Couldn't reach the push relay (%@).": {
       "comment": "%@: the network's error",
@@ -32475,6 +32636,29 @@
       },
       "extractionState": "manual"
     },
+    "Current Only": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current Only"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効なもののみ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只看生效的"
+          }
+        }
+      }
+    },
     "Current setting, not in the list: %@": {
       "localizations": {
         "en": {
@@ -32704,6 +32888,75 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Decision revised": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decision revised"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已改判"
+          }
+        }
+      }
+    },
+    "Decisions made on this to-do go here. Your answers to an agent's questions are recorded automatically, and so are the outcome, decisions and pitfalls when a task is finished; you can add your own. The current ones go along when you hand it to an agent.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decisions made on this to-do go here. Your answers to an agent's questions are recorded automatically, and so are the outcome, decisions and pitfalls when a task is finished; you can add your own. The current ones go along when you hand it to an agent."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このToDoで決めたことをここに記録します。エージェントの質問への回答は自動で記録され、タスクが完了すると結論・決めたこと・つまずいた点も記録されます。手動でも追加できます。エージェントに任せるときは有効なものが一緒に送られます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这件事上拍过的板记在这里：Agent 提问时你的回答会自动记一条，任务做完时会记下结论、做过的决定和踩过的坑，也可以手动记。交给 Agent 时会带上生效的这些。"
+          }
+        }
+      }
+    },
+    "Decisions · %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decisions · %1$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決定事項 · %1$lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "决策 · %1$lld"
+          }
+        }
+      }
     },
     "Did not start · %@": {
       "extractionState": "manual",
@@ -40002,6 +40255,29 @@
       },
       "extractionState": "manual"
     },
+    "Full History (%lld Revised)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full History (%1$lld Revised)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全履歴（変更済み%1$lld件）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看全历史（%1$lld 条已改判）"
+          }
+        }
+      }
+    },
     "Function in %@": {
       "localizations": {
         "en": {
@@ -42258,6 +42534,29 @@
         }
       }
     },
+    "Loading decisions…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading decisions…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決定事項を読み込み中…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载决策…"
+          }
+        }
+      }
+    },
     "Manual": {
       "extractionState": "manual",
       "localizations": {
@@ -42323,6 +42622,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "全部标为已看"
+          }
+        }
+      }
+    },
+    "Marked as revised": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marked as revised"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更として記録しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已标为改判"
           }
         }
       }
@@ -42442,6 +42764,29 @@
       },
       "extractionState": "manual"
     },
+    "Noted by an agent while it worked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noted by an agent while it worked"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントが作業中に記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 干活时记的"
+          }
+        }
+      }
+    },
     "Nothing going on [Watch Pet]": {
       "extractionState": "manual",
       "localizations": {
@@ -42534,6 +42879,167 @@
         }
       }
     },
+    "Question [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Question"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "質問"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "问题"
+          }
+        }
+      }
+    },
+    "Reason (Optional)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reason (Optional)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "理由（任意）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原因（选填）"
+          }
+        }
+      }
+    },
+    "Reason: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reason: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "理由：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原因：%1$@"
+          }
+        }
+      }
+    },
+    "Record [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记下"
+          }
+        }
+      }
+    },
+    "Record a Decision": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record a Decision"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決定事項を記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记一条决策"
+          }
+        }
+      }
+    },
+    "Recorded [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记下"
+          }
+        }
+      }
+    },
+    "Recorded when the agent finished": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded when the agent finished"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントの完了時に記録"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 做完时记的"
+          }
+        }
+      }
+    },
     "Requests to the gateway go direct, whatever proxy this computer has. Everything else, like web pages and the commands it runs, goes the way this computer does.": {
       "extractionState": "manual",
       "localizations": {
@@ -42553,6 +43059,121 @@
           "stringUnit": {
             "state": "translated",
             "value": "不管这台电脑设了什么代理，发往网关的请求都直连；其他请求（比如网页和它运行的命令）照这台电脑的设置走。"
+          }
+        }
+      }
+    },
+    "Revise [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revise"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改判"
+          }
+        }
+      }
+    },
+    "Revised [Todo Decisions]": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revised"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已被改判"
+          }
+        }
+      }
+    },
+    "Revises “%@ → %@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revises “%1$@ → %2$@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@ → %2$@」を変更"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改判了「%1$@ → %2$@」"
+          }
+        }
+      }
+    },
+    "Revises “%@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revises “%1$@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」を変更"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改判了「%1$@」"
+          }
+        }
+      }
+    },
+    "Revision undone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revision undone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を取り消しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已撤销改判"
           }
         }
       }
@@ -42625,6 +43246,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Said in the Lark topic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Said in the Lark topic"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lark のトピックで返信"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在飞书话题里回的"
+          }
+        }
+      }
     },
     "Script on PATH": {
       "localizations": {
@@ -74249,6 +74893,29 @@
       },
       "extractionState": "manual"
     },
+    "The earlier choice “%@” stays, struck through; only the new one goes to agents.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The earlier choice “%1$@” stays, struck through; only the new one goes to agents."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以前の選択「%1$@」は取り消し線付きで残り、エージェントには新しいものだけが送られます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原来选的「%1$@」会保留、划掉，交给 Agent 时只带新的这条。"
+          }
+        }
+      }
+    },
     "The gateway, web pages and the commands the agent runs all go through this proxy.": {
       "extractionState": "manual",
       "localizations": {
@@ -74410,6 +75077,29 @@
       },
       "extractionState": "manual"
     },
+    "Undo Revision": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo Revision"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変更を取り消す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销改判"
+          }
+        }
+      }
+    },
     "Unknown [State Names]": {
       "extractionState": "manual",
       "localizations": {
@@ -74498,6 +75188,75 @@
           "stringUnit": {
             "state": "translated",
             "value": "待唤醒"
+          }
+        }
+      }
+    },
+    "What needs deciding…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What needs deciding…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決める内容…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要定的是什么…"
+          }
+        }
+      }
+    },
+    "What was decided…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What was decided…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "決まった方針…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定下来的方案…"
+          }
+        }
+      }
+    },
+    "Why, and what was ruled out…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why, and what was ruled out…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "理由や却下した案…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为什么这么定、否了什么…"
           }
         }
       }

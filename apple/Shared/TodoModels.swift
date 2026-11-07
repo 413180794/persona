@@ -147,9 +147,13 @@ nonisolated enum TodosLogic {
 
     /// Each path component follows encodeURIComponent, including slashes inside a project name.
     static func spacePath(todoID: String, machineID: String, space: String) -> String {
+        "/api/v1/todos/\(pathComponent(todoID))/spaces/\(pathComponent(machineID))/\(pathComponent(space))"
+    }
+
+    /// One segment of a todo route, as `encodeURIComponent` encodes it.
+    static func pathComponent(_ value: String) -> String {
         let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
-        func encoded(_ value: String) -> String { value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value }
-        return "/api/v1/todos/\(encoded(todoID))/spaces/\(encoded(machineID))/\(encoded(space))"
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     static func agentSource(_ agent: TodoItem.Agent, lookup: SessionLookup? = nil) -> String? {

@@ -1799,6 +1799,83 @@ def push_todos():
             pass
 
 
+# ---------- a to-do's decisions (#1618, docs/assistant/todos.md "Decision records") ----------
+def todo_decision(did, tid, question, choice, reason="", source="manual", machine="", session="", message="",
+                  supersedes="", at=None):
+    return {"id": did, "todo_id": tid, "question": question, "choice": choice, "reason": reason, "source": source,
+            "source_machine": machine, "source_session": session, "source_message": message,
+            "supersedes_id": supersedes, "superseded_by": "", "created_at": at or ago()}
+
+
+def _decisions_of(tid):
+    return [d for d in TODO_DECISIONS if d["todo_id"] == tid]
+
+
+def _mark_superseded(tid):
+    """superseded_by: the newest decision that revises it, as the hub derives it."""
+    mine = _decisions_of(tid)
+    for d in mine:
+        later_ones = [x["id"] for x in mine if x["supersedes_id"] == d["id"]]
+        d["superseded_by"] = later_ones[-1] if later_ones else ""
+
+
+# `MOCK_TODO_DECISIONS=1`: the weather to-do has one answered in an agent's question card, one revised and the one that
+# revised it (oldest first, as the hub keeps them). Without it every to-do has none, as on a hub where nobody wrote any.
+TODO_DECISIONS = [
+    todo_decision("dec_size_small", "todo_weather", "小组件先做哪种尺寸？", "小号", at=ago(minutes=110)),
+    todo_decision("dec_tests", "todo_weather", "网络层测试用哪个框架？", "Swift Testing", "新代码统一用它，XCTest 只留旧用例",
+                  source="card", machine="macbook", session=TESTS, message="int_tests_framework", at=ago(minutes=40)),
+    todo_decision("dec_size_medium", "todo_weather", "小组件先做哪种尺寸？", "中号，小号放到 1.4", "中号放得下三天预报",
+                  supersedes="dec_size_small", at=ago(minutes=20)),
+] if os.environ.get("MOCK_TODO_DECISIONS") else []
+_mark_superseded("todo_weather")
+TODO_DECISIONS_INIT = copy.deepcopy(TODO_DECISIONS)
+
+
+def _decision_written(t):
+    t["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    push_todos()
+
+
+def todo_decisions_route(command, tid, did, query, body):
+    """GET / POST /api/v1/todos/{id}/decisions and PATCH …/decisions/{did}, as server/internal/assistant/todo_decisions.go
+    answers them. A hub from before decisions (`MOCK_LEGACY_HUB`) has no such route: its route-level 404."""
+    if os.environ.get("MOCK_LEGACY_HUB"):
+        return {"error": "Not Found", "code": "not_found", "retryable": False}, 404
+    t = next((x for x in TODOS if x["id"] == tid), None)
+    if not t: return {"error": "todo not found", "code": "not_found", "retryable": False}, 404
+    mine = _decisions_of(tid)
+    if command == "GET" and did is None:
+        every = query.get("all", [""])[0] in ("1", "true")
+        return {"decisions": [copy.deepcopy(d) for d in mine if every or not d["superseded_by"]]}, 200
+    earlier_only = {"error": "a decision can only supersede an earlier decision of the same todo", "code": "bad_request",
+                    "retryable": False}
+    if command == "POST" and did is None:
+        question, choice = (body.get("question") or "").strip(), (body.get("choice") or "").strip()
+        if not question or not choice:
+            return {"error": "question and choice cannot be empty", "code": "bad_request", "retryable": False}, 400
+        old = body.get("supersedes_id") or ""
+        if old and not any(d["id"] == old for d in mine): return earlier_only, 400
+        d = todo_decision("dec_" + uuid.uuid4().hex[:8], tid, question, choice, (body.get("reason") or "").strip(),
+                          supersedes=old, at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+        TODO_DECISIONS.append(d)
+        _mark_superseded(tid)
+        _decision_written(t)
+        return {"decision": copy.deepcopy(d)}, 200
+    if command == "PATCH" and did is not None:
+        if "supersedes_id" not in body:
+            return {"error": "supersedes_id is required", "code": "bad_request", "retryable": False}, 400
+        d = next((x for x in mine if x["id"] == did), None)
+        if not d: return {"error": "decision not found", "code": "not_found", "retryable": False}, 404
+        old = body["supersedes_id"] or ""
+        if old and not any(x["id"] == old for x in mine[:mine.index(d)]): return earlier_only, 400
+        d["supersedes_id"] = old
+        _mark_superseded(tid)
+        _decision_written(t)
+        return {"decision": copy.deepcopy(d)}, 200
+    return {"error": "Method Not Allowed", "code": "method_not_allowed", "retryable": False}, 405
+
+
 def is_read_only(h):
     auth = h.headers.get("Authorization", "")
     token_str = auth.replace("Bearer ", "").strip()
@@ -12021,6 +12098,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/sessions": return self.send_json(*paged_sessions(q))
         if tasks_area(self, "GET", p, None): return
         if p == "/api/v1/todos": return self.send_json({"todos": sorted_todos()})
+        if p.startswith("/api/v1/todos/") and p.endswith("/decisions") and p.count("/") == 5:
+            return self.send_json(*todo_decisions_route("GET", unquote(p.split("/")[4]), None, q, {}))
         if p.startswith("/api/v1/todos/") and p.count("/") == 4:
             tid = p.split("/")[4]
             t = next((x for x in TODOS if x["id"] == tid), None)
@@ -12095,6 +12174,7 @@ class H(BaseHTTPRequestHandler):
             BUMPED["asks"].clear()
             BUMPED.pop("blocked", None)
             TODOS[:] = copy.deepcopy(TODOS_INIT)
+            TODO_DECISIONS[:] = copy.deepcopy(TODO_DECISIONS_INIT)
             codex = {x["id"] for x in CODEX_INTERACTIONS}
             INTERACTIONS[:] = [x for x in INTERACTIONS if x["id"] not in codex] + copy.deepcopy(CODEX_INTERACTIONS)
             RESOLVED[:] = [r for r in RESOLVED if r["id"] not in codex]
@@ -12818,6 +12898,12 @@ class H(BaseHTTPRequestHandler):
             TODOS.insert(0, new_todo)
             push_todos()
             return self.send_json({"todo": new_todo})
+        if p.startswith("/api/v1/todos/") and p.split("/")[5:6] == ["decisions"] and p.count("/") in (5, 6):
+            if is_read_only(self) and not os.environ.get("MOCK_LEGACY_HUB"):
+                return self.send_json({"error": "只读角色不能修改待办"}, 403)
+            parts = p.split("/")
+            did = unquote(parts[6]) if len(parts) == 7 else None
+            return self.send_json(*todo_decisions_route(self.command, unquote(parts[4]), did, {}, json.loads(self.last_body or b"{}")))
         if p.startswith("/api/v1/todos/") and "/spaces/" in p:
             if os.environ.get("MOCK_LEGACY_HUB") or os.environ.get("MOCK_NO_SPACES"):
                 return self.send_json({"error": "Not Found", "code": "not_found", "retryable": False}, 404)

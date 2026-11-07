@@ -326,8 +326,9 @@ The costliest long-task mistake is an Agent forgetting a decision already made: 
 - **Supersession**: a new decision can **Replace** an earlier one (`supersedes_id`), keeping the old one struck through; only unsuperseded decisions are effective. PATCH can mark/undo later corrections. Only earlier decisions in the same to-do can be replaced, preventing cycles.
 - **Hand to Agent**: when `POST /api/v1/sessions` `prompt` or `POST …/messages` `text` carries `todo_id` (all clients' handoff does), hub asks assistant (`assistant.todo_handoff`); assistant prepends effective decisions as `<persona-context kind="context" title="待办 · <title> · 已定的决策">` ("To-do · <title> · Established decisions", prompt `server/internal/prompts/todo/decisions.md`), no client change needed; send unchanged without decisions. On read failure (database error), still send and only log.
 - Recording/superseding updates to-do `updated_at` and broadcasts `{"type":"todos"}` so clients refetch decisions.
+- iOS / Mac (`apple/Persona/Views/Todos/TodoDecisionsSection.swift`, model `TodoDecisionsModel`, wire `apple/Shared/TodoDecisions.swift`): the same Decisions section in to-do details, under the notes: **Add** records one, **Revise** records one that replaces it, the row's ⋯ marks it as replacing an earlier one or undoes that, **Full History** shows the replaced ones struck through. Read again whenever the to-do's `updated_at` changes; hidden on a hub without the route (route-level 404).
 
-Not yet: Android / iOS decision lists.
+Not yet: the Android decision list.
 
 ## Chat thread
 

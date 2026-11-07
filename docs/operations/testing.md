@@ -394,6 +394,11 @@ shots `/tmp/persona-ask-user-*` (`TEST_RUNNER_SHOT_SUFFIX` distinguishes appeara
 To-do details No Agent currently (#1110): `MOCK_TODO_OFFLINE=1` adds backup project on disconnected NAS to Weather App 1.3 release, session unknown;
 `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openTodoDetail YES`; backup says No Agent currently, weather doesn't.
 
+To-do details Decisions (#1618): the mock always serves `GET/POST /api/v1/todos/{id}/decisions` and `PATCH …/decisions/{did}` as the hub does (every to-do empty: the empty state).
+`MOCK_TODO_DECISIONS=1` gives Weather App 1.3 release a decision answered in an Agent's question, one revised and the one that revised it; `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openTodoDetail YES -showDecisionHistory YES`
+opens it with the revised one shown struck through; `-openSession studio/a1f3c2d4-0000-4000-8000-000000000003 -openTodoDetail YES` opens the blog to-do (none recorded).
+Record / Revise / the row's ⋯ write into the mock (the to-do's `updated_at` moves, `todos` is pushed); `MOCK_LEGACY_HUB=1` answers the route-level 404 and the section is hidden. `python3 -I scripts/mock/test_todo_decisions_mock.py` checks the routes.
+
 Port forwarding (`PortForwardTests`, `docs/operations/ports.md`): `:<port>` badges in chat header/replies include page titles; stopped gray. Open loads mock's page through
 `…/ports/{port}/connect` (`GET /mock/ports` records connections); gray says No longer listening:
 `MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`, `TEST_RUNNER_PERSONA_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`;
