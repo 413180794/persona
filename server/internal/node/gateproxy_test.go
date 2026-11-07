@@ -2,6 +2,7 @@ package node
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -507,6 +508,13 @@ func (h *ledgerHub) reportList(t *testing.T, want int) []proto.LarkSent {
 	return append([]proto.LarkSent(nil), h.got...)
 }
 
+// reportsNow is the reports taken so far, without waiting for more.
+func (h *ledgerHub) reportsNow() []proto.LarkSent {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]proto.LarkSent(nil), h.got...)
+}
+
 // reports is reportList by path (the last report of a path stands for it).
 func (h *ledgerHub) reports(t *testing.T, want int) map[string]proto.LarkSent {
 	t.Helper()
@@ -894,5 +902,399 @@ func TestGateReportRememberedAlwaysIsNotACard(t *testing.T) {
 	defer h.mu.Unlock()
 	if r := h.larkSent[0]; r.SessionID != "s1" || r.LetThrough != (proto.LarkLetThrough{Kind: proto.LarkThroughAlways}) {
 		t.Fatalf("told %+v", r)
+	}
+}
+
+// reply is what a fake API answers one path with.
+type reply struct {
+	status int
+	header map[string]string
+	body   []byte
+}
+
+// replyingAPI answers each path (without the gate's /api/v1 prefix) with its reply: 200 and JSON when it names none.
+func replyingAPI(t *testing.T, answers map[string]reply) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		a, ok := answers[strings.TrimPrefix(r.URL.Path, "/api/v1")]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		for k, v := range a.header {
+			w.Header().Set(k, v)
+		}
+		if a.status != 0 {
+			w.WriteHeader(a.status)
+		}
+		_, _ = w.Write(a.body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// rawSend is send that keeps the answer as it came: the status, the headers and the body's bytes, nothing decoded.
+// The request says it takes gzip, as many clients do, so the API's gzip answer reaches it compressed.
+func rawSend(t *testing.T, url, body string) (*http.Response, []byte) {
+	t.Helper()
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
+	res, err := (&http.Client{Transport: &http.Transport{DisableCompression: true}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res, b
+}
+
+func gzipped(t *testing.T, s string) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	zw := gzip.NewWriter(&b)
+	_, _ = zw.Write([]byte(s))
+	_ = zw.Close()
+	return b.Bytes()
+}
+
+// The id the API's answer gave for the message a write made goes to the manager with the report, in the shapes a
+// gateway's receipt and the Open Platform's answer have. An answer that has none, or cannot be read (not JSON, not
+// JSON by its Content-Type, cut off, compressed in a way the proxy does not read, over the copy's limit), is told all the
+// same, with no id; the command got its answer unchanged in every case.
+func TestGateProxyTellsTheMessageIDTheAPIGave(t *testing.T) {
+	pad := strings.Repeat("a", gateReplyMax)
+	answers := map[string]reply{}
+	wants := map[string]string{}
+	add := func(name string, a reply, ref string) {
+		answers["/conversations/"+name+"/messages"] = a
+		wants["/conversations/"+name+"/messages"] = ref
+	}
+	json200 := func(s string) reply { return reply{body: []byte(s)} }
+	add("open-platform", json200(`{"code":0,"msg":"success","data":{"chat_id":"oc_1","message_id":"om_1"}}`), "om_1")
+	add("gateway", json200(`{"messageId":"om_2","clientId":"c1"}`), "om_2")
+	add("receipt", json200(`{"ok":true,"message_id":"om_3"}`), "om_3")
+	add("data-camel", json200(`{"data":{"messageId":"om_4"}}`), "om_4")
+	add("both", json200(`{"message_id":"top","data":{"message_id":"inner"}}`), "inner")
+	add("opaque", json200(`{"message_id":"x:123/45"}`), "x:123/45")
+	add("created", reply{status: http.StatusCreated, body: []byte(`{"messageId":"om_5"}`)}, "om_5")
+	add("vendor-json", reply{header: map[string]string{"Content-Type": "application/vnd.api+json"}, body: []byte(`{"message_id":"om_6"}`)}, "om_6")
+	add("exactly the most", json200(`{"message_id":"`+strings.Repeat("长", proto.MessageRefMost)+`"}`), strings.Repeat("长", proto.MessageRefMost))
+	add("over the most is none, not cut", json200(`{"message_id":"`+strings.Repeat("长", proto.MessageRefMost+1)+`"}`), "")
+	add("padded to the most", json200(`{"message_id":" `+strings.Repeat("a", proto.MessageRefMost)+` "}`), strings.Repeat("a", proto.MessageRefMost))
+	add("gzip", reply{header: map[string]string{"Content-Encoding": "gzip"}, body: gzipped(t, `{"data":{"message_id":"om_7"}}`)}, "om_7")
+	add("none", json200(`{"ok":true}`), "")
+	add("empty-id", json200(`{"data":{"message_id":" "},"message_id":""}`), "")
+	add("number", json200(`{"message_id":5}`), "")
+	add("array", json200(`["om_x"]`), "")
+	add("null", json200(`null`), "")
+	add("cut-off", json200(`{"message_id":"om_8"`), "")
+	add("not-json", reply{header: map[string]string{"Content-Type": "text/plain"}, body: []byte(`{"message_id":"om_9"}`)}, "")
+	add("no-content", reply{status: http.StatusNoContent}, "")
+	add("brotli", reply{header: map[string]string{"Content-Encoding": "br"}, body: []byte(`{"message_id":"om_10"}`)}, "")
+	add("broken-gzip", reply{header: map[string]string{"Content-Encoding": "gzip"}, body: []byte(`{"message_id":"om_11"}`)}, "")
+	add("too-long", json200(`{"message_id":"om_12","pad":"`+pad+`"}`), "")
+	// Whole JSON in the first gateReplyMax bytes and more after it (blanks): over the limit all the same, not read.
+	add("too-long-by-blanks", json200(`{"message_id":"om_14"}`+strings.Repeat(" ", gateReplyMax)), "")
+	add("gzip-too-long", reply{header: map[string]string{"Content-Encoding": "gzip"}, body: gzipped(t, `{"message_id":"om_13","pad":"`+pad+`"}`)}, "")
+	api := replyingAPI(t, answers)
+
+	n, hub, _ := ledgerNode(t, api.URL, proto.LarkRule{Method: "POST", Path: "/conversations/**", Action: "allow"})
+	base, release, err := n.gates().open("ex", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	for path, a := range answers {
+		res, got := rawSend(t, base+"/api/v1"+path, `{"text":"hi"}`)
+		wantStatus := a.status
+		if wantStatus == 0 {
+			wantStatus = http.StatusOK
+		}
+		if res.StatusCode != wantStatus || !bytes.Equal(got, a.body) {
+			t.Errorf("%s: the command got %d with %d bytes, want %d with the API's %d bytes", path, res.StatusCode, len(got), wantStatus, len(a.body))
+		}
+	}
+	reports := hub.reports(t, len(answers))
+	for path, ref := range wants {
+		if r, ok := reports[path]; !ok || r.MessageRef != ref || r.Text != "hi" {
+			t.Errorf("%s: told %+v, want message_ref %q", path, r, ref)
+		}
+	}
+}
+
+// What the proxy keeps of an answer is a copy: the command gets the bytes the API sent, headers and status included, as
+// they come: an answer that is still being written reaches the command before it is finished (streams go as they come),
+// and the id is read from the copy of all of it, however the API split it. An answer longer than the copy's limit passes
+// whole.
+func TestGateProxyWatchesTheAnswerWithoutChangingIt(t *testing.T) {
+	release := make(chan struct{})
+	var once sync.Once
+	letGo := func() { once.Do(func() { close(release) }) }
+	defer letGo()
+	big := `{"message_id":"om_big","pad":"` + strings.Repeat("b", 3*gateReplyMax) + `"}`
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost { // not the gate's: a Persona node on this machine probes the ports tests listen on (ports.go)
+			return
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Answer", "as sent")
+		switch strings.TrimPrefix(r.URL.Path, "/api/v1") {
+		case "/conversations/stream/messages":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"data":{"messa`))
+			w.(http.Flusher).Flush()
+			<-release
+			_, _ = w.Write([]byte(`ge_id":"om_s"}}`))
+		case "/conversations/big/messages":
+			_, _ = w.Write([]byte(big))
+		}
+	}))
+	t.Cleanup(api.Close)
+	n, hub, _ := ledgerNode(t, api.URL, proto.LarkRule{Method: "POST", Path: "/conversations/**", Action: "allow"})
+	base, rel, err := n.gates().open("ex", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rel()
+
+	// A proxy that held the answer back would leave the command waiting for the API, which waits for the test: the
+	// deadline turns that into a failure.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", base+"/api/v1/conversations/stream/messages", strings.NewReader(`{"text":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	first := make([]byte, len(`{"data":{"messa`))
+	if _, err := io.ReadFull(res.Body, first); err != nil || string(first) != `{"data":{"messa` { // the API is still writing
+		t.Fatalf("the first part of the answer: %q %v", first, err)
+	}
+	if res.StatusCode != http.StatusCreated || res.Header.Get("X-Answer") != "as sent" {
+		t.Fatalf("status %d, X-Answer %q", res.StatusCode, res.Header.Get("X-Answer"))
+	}
+	if told := len(hub.reportsNow()); told != 0 {
+		t.Fatalf("%d reports while the answer was still coming", told)
+	}
+	letGo()
+	rest, _ := io.ReadAll(res.Body)
+	if string(rest) != `ge_id":"om_s"}}` {
+		t.Fatalf("the rest of the answer: %q", rest)
+	}
+
+	if _, got := rawSend(t, base+"/api/v1/conversations/big/messages", `{"text":"hi"}`); string(got) != big {
+		t.Fatalf("an answer over the copy's limit: %d bytes, want %d", len(got), len(big))
+	}
+	reports := hub.reports(t, 2)
+	if r := reports["/conversations/stream/messages"]; r.MessageRef != "om_s" {
+		t.Errorf("the answer written in two parts: told %+v", r)
+	}
+	if r := reports["/conversations/big/messages"]; r.MessageRef != "" || r.Text != "hi" {
+		t.Errorf("the answer over the limit: told %+v", r)
+	}
+}
+
+// A command that does not ask for gzip gets an answer the proxy's own transport decompressed, and the id is read from
+// that all the same.
+func TestGateProxyReadsAnAnswerItsTransportDecompressed(t *testing.T) {
+	api := replyingAPI(t, map[string]reply{"/conversations/c1/messages": {header: map[string]string{"Content-Encoding": "gzip"},
+		body: gzipped(t, `{"data":{"message_id":"om_z"}}`)}})
+	n, hub, _ := ledgerNode(t, api.URL, proto.LarkRule{Method: "POST", Path: "/conversations/**", Action: "allow"})
+	base, release, err := n.gates().open("ex", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	req, _ := http.NewRequest("POST", base+"/api/v1/conversations/c1/messages", strings.NewReader(`{"text":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := (&http.Client{Transport: &http.Transport{DisableCompression: true}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if got, _ := io.ReadAll(res.Body); string(got) != `{"data":{"message_id":"om_z"}}` || res.Header.Get("Content-Encoding") != "" {
+		t.Fatalf("the command got %q (Content-Encoding %q)", got, res.Header.Get("Content-Encoding"))
+	}
+	if r := hub.reports(t, 1)["/conversations/c1/messages"]; r.MessageRef != "om_z" {
+		t.Fatalf("told %+v", r)
+	}
+}
+
+// gunzipCapped and readCapped read at most most+1 bytes: an answer gzipped from a few kilobytes into many megabytes (a
+// bomb) is refused after the cap, not inflated.
+func TestGunzipCapped(t *testing.T) {
+	const most = 1 << 10
+	for _, c := range []struct {
+		name string
+		in   []byte
+		ok   bool
+	}{
+		{"a small answer", gzipped(t, `{"message_id":"om_1"}`), true},
+		{"exactly the most", gzipped(t, strings.Repeat("a", most)), true},
+		{"one byte over", gzipped(t, strings.Repeat("a", most+1)), false},
+		{"a bomb", gzipped(t, strings.Repeat("\x00", 8<<20)), false},
+		{"not gzip", []byte(`{"message_id":"om_2"}`), false},
+		{"cut off", gzipped(t, strings.Repeat("a", most))[:20], false},
+	} {
+		if got, ok := gunzipCapped(c.in, most); ok != c.ok || (ok && len(got) == 0) || len(got) > most {
+			t.Errorf("%s: %d bytes, %v, want %v", c.name, len(got), ok, c.ok)
+		}
+	}
+}
+
+// endless is a reader that never ends: it fails once it has served far more than anyone should read, so a read without a
+// limit ends in a failure of the test and not a hang.
+type endless struct{ served, giveUp int }
+
+func (e *endless) Read(p []byte) (int, error) {
+	if e.served >= e.giveUp {
+		return 0, errors.New("read far past the limit")
+	}
+	n := min(len(p), e.giveUp-e.served)
+	clear(p[:n])
+	e.served += n
+	return n, nil
+}
+
+func TestReadCappedReadsOneByteOverAtMost(t *testing.T) {
+	const most = 1 << 10
+	e := &endless{giveUp: 8 << 20}
+	if got, ok := readCapped(e, most); ok || got != nil || e.served > most+1 {
+		t.Fatalf("an endless reader: %d bytes, %v, after %d bytes served (at most %d may be)", len(got), ok, e.served, most+1)
+	}
+	if got, ok := readCapped(strings.NewReader(strings.Repeat("a", most)), most); !ok || len(got) != most {
+		t.Fatalf("exactly the most: %d bytes, %v", len(got), ok)
+	}
+}
+
+// hangup is a client that took the first part of an answer and went away: its later writes fail.
+type hangup struct {
+	*httptest.ResponseRecorder
+	took   chan struct{} // closed once the first part was taken
+	writes int
+}
+
+func (h *hangup) Write(b []byte) (int, error) {
+	if h.writes++; h.writes > 1 {
+		return 0, errors.New("the client went away")
+	}
+	n, err := h.ResponseRecorder.Write(b)
+	close(h.took)
+	return n, err
+}
+
+// A command that goes away while the API is still writing its answer ends the proxy's copy of it there: the write is
+// told to the manager all the same, with what it said, and with no id (the copy is of what the command got, which was
+// half an answer), and nothing panics.
+func TestGateProxyReportsAWriteWhoseCommandWentAway(t *testing.T) {
+	var apiWrote sync.WaitGroup
+	apiWrote.Add(1)
+	took := make(chan struct{})
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost { // not the gate's: a Persona node on this machine probes the ports tests listen on (ports.go)
+			return
+		}
+		defer apiWrote.Done()
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"message_id":"om_x"`))
+		w.(http.Flusher).Flush()
+		select { // the command takes that and goes: the rest is for nobody
+		case <-took:
+		case <-time.After(5 * time.Second):
+		}
+		_, _ = w.Write([]byte(`}}`))
+	}))
+	t.Cleanup(api.Close)
+	n, hub, _ := ledgerNode(t, api.URL, proto.LarkRule{Method: "POST", Path: "/conversations/**", Action: "allow"})
+	p := n.gates()
+	base, release, err := p.open("ex", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	key := strings.TrimPrefix(base[strings.LastIndex(base, "/"):], "/")
+
+	// The proxy's own handler, driven with a writer that fails: this is the proxy's view of a command that went away,
+	// whatever the network says first.
+	w := &hangup{ResponseRecorder: httptest.NewRecorder(), took: took}
+	req := httptest.NewRequest("POST", "/"+key+"/api/v1/conversations/c1/messages", strings.NewReader(`{"text":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("the proxy panicked: %v", r)
+			}
+		}()
+		p.ServeHTTP(w, req)
+	}()
+	apiWrote.Wait()
+	if w.writes != 2 || w.Body.String() != `{"data":{"message_id":"om_x"` {
+		t.Fatalf("the command got %q after %d write(s)", w.Body.String(), w.writes)
+	}
+	got := hub.reportList(t, 1)
+	if r := got[0]; r.Path != "/conversations/c1/messages" || r.Text != "hi" || r.MessageRef != "" {
+		t.Fatalf("told %+v: the write, with what it said and no id", got)
+	}
+}
+
+// The same on a real connection: the command reads the first part of the answer and closes it while the API goes on.
+func TestGateProxyReportsAWriteWhoseCommandClosedTheConnection(t *testing.T) {
+	woke := make(chan string, 1) // what ended the API's wait: the proxy letting go of its request, or the timeout
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost { // not the gate's: a Persona node on this machine probes the ports tests listen on (ports.go)
+			return
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"message_id":"om_y"`))
+		w.(http.Flusher).Flush()
+		select {
+		case <-r.Context().Done():
+			woke <- "the proxy let go of the request"
+		case <-time.After(5 * time.Second):
+			woke <- "the timeout"
+		}
+	}))
+	t.Cleanup(api.Close)
+	n, hub, _ := ledgerNode(t, api.URL, proto.LarkRule{Method: "POST", Path: "/conversations/**", Action: "allow"})
+	base, release, err := n.gates().open("ex", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", base+"/api/v1/conversations/c2/messages", strings.NewReader(`{"text":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := (&http.Client{Transport: &http.Transport{DisableCompression: true}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := make([]byte, len(`{"data":{"message_id":"om_y"`))
+	if _, err := io.ReadFull(res.Body, first); err != nil || string(first) != `{"data":{"message_id":"om_y"` {
+		t.Fatalf("the first part of the answer: %q %v", first, err)
+	}
+	res.Body.Close() // the command goes away with the answer unfinished
+	select {
+	case why := <-woke: // at once if the proxy cancels what it asked the API (its timer is 5 s)
+		if why != "the proxy let go of the request" {
+			t.Fatalf("the API's wait ended by %s: the proxy went on with an answer nobody takes", why)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the API's wait never ended")
+	}
+	got := hub.reportList(t, 1)
+	if r := got[0]; r.Path != "/conversations/c2/messages" || r.Text != "hi" || r.SessionID != "s1" || r.MessageRef != "" {
+		t.Fatalf("told %+v", got)
 	}
 }

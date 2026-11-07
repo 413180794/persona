@@ -3088,6 +3088,11 @@ type ConnectorCallParams struct {
 // ConnectorCallResult: tools.call and actions.do.
 type ConnectorCallResult struct {
 	Text string `json:"text,omitempty"`
+	// actions.do only (tools.call ignores it): the id, on the other side, of the message the write made, when the
+	// service gave one (a comment's id, a mail's Message-ID, a chat message's id). The hub trims it and keeps it as the
+	// sent-as-user ledger row's message_ref; one longer than 200 characters is dropped (the row has none), not cut.
+	// Leave it out when there is none.
+	MessageRef string `json:"message_ref,omitempty"`
 }
 
 // ConnectorAction: A write as the card names it: visible says who will see it.
@@ -3671,7 +3676,8 @@ type ConnectorSentRecordParams struct {
 	// The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check;
 	// cut to 200 characters.
 	MachineID string `json:"machine_id,omitempty"`
-	// The sent message's id on the other side, when the service gave one; cut to 200 characters.
+	// The sent message's id on the other side, when the service gave one. The hub trims it; one longer than 200
+	// characters is dropped (the row has none), not cut.
 	MessageRef string `json:"message_ref,omitempty"`
 	// The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
 	Setting string `json:"setting,omitempty"`

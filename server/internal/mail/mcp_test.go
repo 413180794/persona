@@ -1,9 +1,12 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	netmail "net/mail"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +186,63 @@ func TestMCPSendNeedsApproval(t *testing.T) {
 	}
 	if !sent {
 		t.Error("approved send did not reach the SMTP transport")
+	}
+}
+
+// A send says the Message-ID it went out with: the one in the header of the message the transport was handed, without
+// the angle brackets, and a new one for each message. CallRef gives it with mail_send's answer, and nothing for a
+// mail that was declined or did not go, or for another tool.
+func TestSendSaysTheMessageID(t *testing.T) {
+	s := newServiceWithAccount(t, newTestIMAP(t))
+	ctx := context.Background()
+	var raws [][]byte
+	var fail error
+	s.sendMail = func(_ context.Context, _ *MailAccount, _ string, _ []string, raw []byte) error {
+		if fail == nil {
+			raws = append(raws, raw)
+		}
+		return fail
+	}
+	headerID := func(raw []byte) string {
+		t.Helper()
+		m, err := netmail.ReadMessage(bytes.NewReader(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		id := m.Header.Get("Message-Id")
+		if !strings.HasPrefix(id, "<") || !strings.HasSuffix(id, ">") {
+			t.Fatalf("Message-Id %q", id)
+		}
+		return strings.TrimSuffix(strings.TrimPrefix(id, "<"), ">")
+	}
+	req := SendRequest{AccountID: "acc_test", To: []Address{{Email: "friend@example.com"}}, Subject: "Hi", Text: "Hello"}
+
+	id1, err := s.SendMessage(ctx, req)
+	if err != nil || id1 == "" || len(raws) != 1 || id1 != headerID(raws[0]) || strings.ContainsAny(id1, "<> ") {
+		t.Fatalf("SendMessage: %q %v, %d message(s)", id1, err, len(raws))
+	}
+	if id2, err := s.SendMessage(ctx, req); err != nil || id2 == id1 || id2 != headerID(raws[1]) {
+		t.Fatalf("the second: %q %v (the first was %q)", id2, err, id1)
+	}
+	if err := s.Send(ctx, req); err != nil || len(raws) != 3 {
+		t.Fatalf("Send: %v, %d message(s)", err, len(raws))
+	}
+
+	args := json.RawMessage(`{"account_id":"acc_test","to":[{"email":"friend@example.com"}],"subject":"Hi","text":"Hello"}`)
+	yes := func(context.Context, string, json.RawMessage) bool { return true }
+	res, id := s.CallRef(ctx, ToolSend, args, yes)
+	if res.IsError || id == "" || id != headerID(raws[3]) || res.Content[0].Text != "Mail sent to friend@example.com." {
+		t.Fatalf("CallRef: %+v %q", res, id)
+	}
+	if res, id := s.CallRef(ctx, ToolSend, args, func(context.Context, string, json.RawMessage) bool { return false }); !res.IsError || id != "" || len(raws) != 4 {
+		t.Fatalf("declined: %+v %q, %d message(s)", res, id, len(raws))
+	}
+	fail = errors.New("smtp: refused")
+	if res, id := s.CallRef(ctx, ToolSend, args, yes); !res.IsError || id != "" {
+		t.Fatalf("a send that failed: %+v %q", res, id)
+	}
+	if res, id := s.CallRef(ctx, ToolAccounts, nil, nil); res.IsError || id != "" {
+		t.Fatalf("another tool: %+v %q", res, id)
 	}
 }
 

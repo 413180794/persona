@@ -2,6 +2,7 @@ package node
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -36,6 +37,11 @@ import (
 // "Sent as the user", #5278): the gate decides before the command runs and cannot know whether it sent. What does not
 // pass here is not in the ledger: lark-cli carries its own credentials, and a gate without Auth puts them in the
 // command's environment.
+//
+// The report also carries the id the API's answer gave for the message the write made (LarkSent.MessageRef), so that a
+// row can name it (docs/connectors.md "Sent as the user"). The proxy only watches the answer on its way to the
+// command: it keeps a copy of its first gateReplyMax bytes and reads the id from the copy once the answer has been
+// passed on. What the command gets is what the API sent, as it came and when it came.
 
 const (
 	// gateGrantFor: how long a call larkCheck let through may take to be sent.
@@ -46,6 +52,9 @@ const (
 	gateGrantsMax = 256
 	// gateTextMost: the most of a write's words (characters) told to the manager for the ledger.
 	gateTextMost = 4000
+	// gateReplyMax: the most of an answer's body copied to read the message id from; an answer longer than that (or,
+	// compressed, longer once read) is not read and the write is told with no id.
+	gateReplyMax = 256 << 10
 	// gateReportsMax: reports to the manager in flight at once. A flood of allowed writes does not pile up goroutines
 	// behind a slow manager: one over the limit waits up to gateReportWait for a place, then is logged and not told.
 	gateReportsMax = 32
@@ -275,12 +284,15 @@ func (p *gateProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		session, through = firstNonEmpty(gr.session, session), gr.through
 	}
 	sw := &statusWriter{ResponseWriter: w}
+	if !larkRead(c) {
+		sw.reply = &replyCopy{}
+	}
 	// Told once the answer has been passed on, also when ReverseProxy gives up on its body halfway (it panics with
 	// http.ErrAbortHandler then): the API had taken the write by the time it answered 2xx. A client that went away
 	// before the API answered leaves no 2xx, and whether the API executed the call is not known: nothing is told.
 	defer func() {
 		if sw.status/100 == 2 && !larkRead(c) {
-			p.reportSent(n, proto.LarkSent{Command: command, Method: c.Method, Path: c.Path, SessionID: session, LetThrough: through}, body, isJSON)
+			p.reportSent(n, proto.LarkSent{Command: command, Method: c.Method, Path: c.Path, SessionID: session, LetThrough: through}, body, isJSON, sw.reply)
 		}
 	}()
 	rp := &httputil.ReverseProxy{
@@ -309,34 +321,134 @@ func (p *gateProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rp.ServeHTTP(sw, r)
 }
 
-// statusWriter keeps the status the API answered with, which ReverseProxy writes through it. Unwrap lets the
-// response controller reach the real writer for flushing (streams go as they come) and upgrades.
+// statusWriter keeps the status the API answered with, which ReverseProxy writes through it, and, for a write (reply is
+// set), a copy of the start of a JSON answer. Unwrap lets the response controller reach the real writer for flushing
+// (streams go as they come) and upgrades.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
+	reply  *replyCopy
 }
 
 func (s *statusWriter) WriteHeader(code int) {
 	if code >= 200 && s.status == 0 { // not an informational 1xx before the answer
-		s.status = code
+		s.answered(code)
 	}
 	s.ResponseWriter.WriteHeader(code)
 }
 
 func (s *statusWriter) Write(b []byte) (int, error) {
 	if s.status == 0 {
-		s.status = http.StatusOK
+		s.answered(http.StatusOK)
 	}
-	return s.ResponseWriter.Write(b)
+	n, err := s.ResponseWriter.Write(b)
+	s.reply.add(b[:n]) // only what the command got, after it got it
+	return n, err
 }
 
 func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
+// answered notes the status the API answered with, and starts copying the body when it is a 2xx JSON one of a write.
+func (s *statusWriter) answered(code int) {
+	s.status = code
+	if s.reply != nil && code/100 == 2 && gateJSON(s.Header().Get("Content-Type")) {
+		s.reply.on = true
+		s.reply.encoding = strings.ToLower(strings.TrimSpace(s.Header().Get("Content-Encoding")))
+	}
+}
+
+// gateJSON says whether a Content-Type is JSON's (the gate reads a request's body by the same words).
+func gateJSON(contentType string) bool {
+	mt, _, _ := mime.ParseMediaType(contentType)
+	return mt == "application/json" || strings.HasSuffix(mt, "+json")
+}
+
+// replyCopy is the start of an answer's body, as it went to the command: at most gateReplyMax bytes, and whether there
+// was more. Nothing is kept for an answer that is not a 2xx JSON one.
+type replyCopy struct {
+	on       bool
+	encoding string // the answer's Content-Encoding
+	buf      []byte
+	over     bool
+}
+
+func (r *replyCopy) add(b []byte) {
+	if r == nil || !r.on || len(b) == 0 {
+		return
+	}
+	room := gateReplyMax - len(r.buf)
+	if len(b) > room {
+		b, r.over = b[:max(room, 0)], true
+	}
+	r.buf = append(r.buf, b...)
+}
+
+// messageRef is the id of the message the API's answer says the write made: the first non-empty string among
+// data.message_id, data.messageId, message_id and messageId (a gateway's receipt names it one way, the Open Platform's
+// answer another), as the API wrote it (proto.CleanMessageRef: one longer than proto.MessageRefMost characters is none,
+// never a cut one). It is empty when the answer has none, is not JSON, was longer than gateReplyMax (compressed or not),
+// or is compressed in a way other than gzip: the write is told all the same, only without an id. The copy is dropped once
+// it is read.
+func (r *replyCopy) messageRef() string {
+	if r == nil {
+		return ""
+	}
+	body := r.buf
+	r.buf = nil
+	if !r.on || r.over || len(body) == 0 {
+		return ""
+	}
+	switch r.encoding {
+	case "", "identity":
+	case "gzip", "x-gzip":
+		var ok bool
+		if body, ok = gunzipCapped(body, gateReplyMax); !ok {
+			return ""
+		}
+	default:
+		return ""
+	}
+	var answer map[string]any
+	if json.Unmarshal(body, &answer) != nil {
+		return ""
+	}
+	data, _ := answer["data"].(map[string]any)
+	for _, from := range []map[string]any{data, answer} {
+		for _, key := range []string{"message_id", "messageId"} {
+			if id, _ := from[key].(string); strings.TrimSpace(id) != "" {
+				return proto.CleanMessageRef(id)
+			}
+		}
+	}
+	return ""
+}
+
+// gunzipCapped is b gunzipped, which may be at most most bytes; false when it is not gzip or has more. It reads most+1
+// bytes at the most, so a small stream that inflates to gigabytes costs no more than an answer of most bytes.
+func gunzipCapped(b []byte, most int) ([]byte, bool) {
+	zr, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, false
+	}
+	return readCapped(zr, most)
+}
+
+// readCapped is all of r, which may be at most most bytes; false when it has more or fails. It reads most+1 bytes at
+// the most.
+func readCapped(r io.Reader, most int) ([]byte, bool) {
+	body, err := io.ReadAll(io.LimitReader(r, int64(most)+1))
+	if err != nil || len(body) > most {
+		return nil, false
+	}
+	return body, true
+}
+
 // reportSent tells the manager of a write the API took. It runs once the API's answer has gone to the command and does
-// not wait for the manager's: the words it said come from the body when it was JSON (proto.WrittenText), and a report
-// that fails is only logged, the write is done all the same. At most gateReportsMax are in flight, the one over waiting
-// up to gateReportWait for a place; a node without a hub has nobody to tell.
-func (p *gateProxy) reportSent(n *Node, s proto.LarkSent, body []byte, isJSON bool) {
+// not wait for the manager's: the words it said come from the body when it was JSON (proto.WrittenText), the id of the
+// message from the copy of the answer's start (replyCopy), and a report that fails is only logged, the write is done all
+// the same. At most gateReportsMax are in flight, the one over waiting up to gateReportWait for a place; a node without
+// a hub has nobody to tell.
+func (p *gateProxy) reportSent(n *Node, s proto.LarkSent, body []byte, isJSON bool, reply *replyCopy) {
 	peer := n.peer
 	if peer == nil {
 		return
@@ -354,6 +466,8 @@ func (p *gateProxy) reportSent(n *Node, s proto.LarkSent, body []byte, isJSON bo
 		if isJSON {
 			s.Text = proto.WrittenText(body, gateTextMost)
 		}
+		s.MessageRef = reply.messageRef()
+		body = nil // the call below can take a while: the request body is let go of, as messageRef let go of the copy of the answer
 		ctx, cancel := context.WithTimeout(context.Background(), gateReportFor)
 		defer cancel()
 		if err := peer.Call(ctx, proto.MethodLarkSent, s, nil); err != nil { // never the words it said

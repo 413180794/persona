@@ -187,7 +187,8 @@
       "description": "tools.call and actions.do.",
       "type": "object",
       "properties": {
-        "text": {"type": "string"}
+        "text": {"type": "string"},
+        "message_ref": {"type": "string", "description": "actions.do only (tools.call ignores it): the id, on the other side, of the message the write made, when the service gave one (a comment's id, a mail's Message-ID, a chat message's id). The hub trims it and keeps it as the sent-as-user ledger row's message_ref; one longer than 200 characters is dropped (the row has none), not cut. Leave it out when there is none."}
       }
     },
     "ConnectorAction": {
@@ -866,7 +867,7 @@
         "summary": {"type": "string", "description": "One line saying what it was: the first line is kept, cut to 300 characters. Without it the hub makes one from the connector and the target."},
         "session_id": {"type": "string", "description": "The Persona conversation that asked for the send, when one did. The extension's own word, which the hub cannot check; cut to 200 characters."},
         "machine_id": {"type": "string", "description": "The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check; cut to 200 characters."},
-        "message_ref": {"type": "string", "description": "The sent message's id on the other side, when the service gave one; cut to 200 characters."},
+        "message_ref": {"type": "string", "description": "The sent message's id on the other side, when the service gave one. The hub trims it; one longer than 200 characters is dropped (the row has none), not cut."},
         "setting": {"type": "string", "description": "The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters."}
       },
       "required": ["contribution", "target", "text"]

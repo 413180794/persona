@@ -142,9 +142,17 @@ func parseReferences(refs, inReplyTo string) []string {
 // Send composes and delivers a message over SMTP, then appends it to the
 // provider's Sent mailbox when the provider does not do that itself.
 func (s *Service) Send(ctx context.Context, req SendRequest) error {
+	_, err := s.SendMessage(ctx, req)
+	return err
+}
+
+// SendMessage is Send that also says the Message-ID of the message handed to the transport, as its header has it but
+// without the angle brackets (the form MailSummary.MessageID has). It is empty when the message did not go. Whether the
+// provider keeps that Message-ID on the message it delivers has not been verified.
+func (s *Service) SendMessage(ctx context.Context, req SendRequest) (string, error) {
 	a, err := s.account(req.AccountID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	from := Address{Name: a.Name, Email: a.Email}
 	if a.Name == "" || a.Name == a.Email {
@@ -152,7 +160,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) error {
 	}
 	raw, err := RenderMessage(req, from)
 	if err != nil {
-		return err
+		return "", err
 	}
 	var rcpts []string
 	for _, list := range [][]Address{req.To, req.Cc, req.Bcc} {
@@ -163,24 +171,35 @@ func (s *Service) Send(ctx context.Context, req SendRequest) error {
 
 	if s.sendMail != nil {
 		if err := s.sendMail(ctx, a, a.Email, rcpts, raw); err != nil {
-			return err
+			return "", err
 		}
 	} else if a.Auth == AuthOAuth2 && a.Provider == ProviderGmail {
 		if err := s.gmailAPISend(ctx, a, req.Bcc, raw); err != nil {
-			return err
+			return "", err
 		}
 	} else if err := s.smtpSend(ctx, a, a.Email, rcpts, raw); err != nil {
 		if a.Provider == ProviderOutlook {
-			return outlookHint(fmt.Errorf("smtp: %w", err))
+			return "", outlookHint(fmt.Errorf("smtp: %w", err))
 		}
-		return err
+		return "", err
 	}
 
 	// Gmail and Exchange file what they send in Sent themselves.
 	if a.Provider != ProviderGmail && a.Provider != ProviderOutlook {
 		s.appendToSent(ctx, a, raw)
 	}
-	return nil
+	return messageIDOf(raw), nil
+}
+
+// messageIDOf is the Message-ID of a rendered message, as its header has it but without the angle brackets: read back
+// from the message handed to the transport, so it is the one Persona wrote, not a promise about what a provider makes
+// of it. Empty when the header is missing.
+func messageIDOf(raw []byte) string {
+	m, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		return ""
+	}
+	return trimMsgID(m.Header.Get("Message-Id"))
 }
 
 // smtpSend delivers raw over SMTP with the account's security settings.

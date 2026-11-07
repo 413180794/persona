@@ -417,7 +417,7 @@ The hub's write gate (`docs/connectors.md` "Sent as the user") sees only the wri
 | `target` | Where it went (required): an object of short values (a chat, a thread, recipients…), else `invalid_params`. Strings are cut to 200 characters; a value that is not a string, a number, a boolean or a list of up to 10 strings is dropped, and so is a string that is empty once cleaned. At most 20 keys are kept, in key order, each name cut to 64 characters |
 | `summary?` | One line saying what it was: the first line is kept, cut to 300 characters. Without it the row says `<connector>: <target fields>` (also its first line) |
 | `session_id?`, `machine_id?` | The Persona conversation that asked for the send and the computer it ran on, when there was one. **The extension's own word**: the hub cannot check them, so they say who the extension claims asked, not who did. Cut to 200 characters each |
-| `message_ref?` | The sent message's id on the other side, cut to 200 characters |
+| `message_ref?` | The sent message's id on the other side, trimmed; one longer than 200 characters is dropped (the row has none), not cut. A write that goes through the hub's gate (`actions.do`) says it in its answer instead (`docs/connector-protocol.md`) |
 | `setting?` | The name of the extension's setting that let it send without asking, when there is one (cut to 200 characters) |
 
   It answers `{}`. The hub writes the row itself: `connector` is `contribution`, `action` is `sent.record`, `origin` is `{extension: <id>}` plus `machine_id` and `session_id` when given (the program cannot claim another origin), and `let_through` is `{kind: "auto", setting?}`: no rule and no card were involved. Other fields in the params are ignored.
@@ -2442,8 +2442,158 @@ Inbox, knowledge base `github-*` sessions, switches, options and mutes; uninstal
   the extension answers source choice and token scopes (`connector.auth.get`), no app changes needed.
 - **Settings**: app-edited Inbox settings (`options.*`) remain on the hub by id, passed back after every extension start; unedited settings initially use the hub's own copy (including manager.json `github.inbox`).
   manager.json `github.proxy` and `github.auth.host` migrate on first takeover into extension `proxy` and `host` (once only, never overwriting user input, `github.migrated_to_extension`).
-- Hub code reading the GitHub account (avatar tiers) uses connector status, not concrete types.
+- Hub code reading the GitHub account (avatar tiers) should use connector status, not concrete types. Today it reads only the hub's own connector (#6077).
 - Still undone: remove the hub's own GitHub connector (separate issue after a period of real-hub validation).
+
+### Validating the takeover on a real hub (#6062)
+
+Before the hub's own GitHub connector is removed, run this on a real hub, against the latest personad and the latest `github` extension. Record both versions. Every case passing means the separate removal issue can start. The known bugs referenced below (#6077, #6107) must be fixed first and their checks run again. Where a case says "record", write down what happened; if it differs from what is expected, file an issue.
+
+The cases run in order, and each starts from the state the one before leaves. Where a case changes something the next ones rely on, it ends with a step putting it back.
+
+**Setup**
+
+- **An isolated hub**, not the one you use every day, with its own `HOME`, database and port.
+  - Write its `hub.json` by hand: a `database_url` of a database of its own, a `listen` port of its own, and a `public_url` with that port. Pairing codes carry `public_url`, whose default points at port 18660, the everyday hub's. Don't run `personad hub setup` where the everyday hub's database container is reachable: setup always uses the same container name, and an existing one becomes the new hub's database too.
+  - Don't install it as a service beside the everyday hub; run it by hand.
+  - Run the isolated hub, and every `personad` command for it (`hub pair`, `extension …`), as a separate user, or in a clean environment: `env -i HOME=<dir> PATH=… PERSONA_HOME=<dir>/.persona`. The state directory comes from `PERSONA_HOME` (or `JARVIS_HOME`) before `HOME`, and `PERSONA_DATABASE_URL` overrides the `database_url` in `hub.json`. The command line reads `hub.json` from the state directory and takes the port from its `listen` (default 18660; `PERSONA_LISTEN` overrides it). With the everyday environment, each `disable`, `uninstall` or `rollback` below would act on the everyday hub.
+  - Give it `"machines": []` (or `PERSONA_LOCAL_NODE=0`; the old `JARVIS_LOCAL_NODE` works too). Otherwise it runs a node on its own machine, which drives the herdr found through `HERDR_SOCKET_PATH`, possibly the one you work in. The assistant then runs on the first computer you add, which needs Claude Code and a model for case 4's assistant checks.
+- **Clients.** Pair one app with it, and keep the web app open to see what clients see.
+- **A computer with `gh auth login` done**, added to the isolated hub, for the computer sign-in source. Use a computer (or a user account on it) the everyday hub does not use: pairing it with another hub takes it away from the everyday one, and a user's computer has only one node. Use `--insecure-storage` where the keychain can't be read over SSH; see the `github` entry in `docs/config.md`.
+- **Two GitHub accounts and an organization team.** The second account requests reviews, mentions, assigns and comments, since a user's own actions bring nothing. The team, which the test account is in, is for `team_mention`. Use a few repositories, one of them with a workflow you can make fail.
+- **A proxy you can watch**, set as manager.json `github.proxy`, and `github.auth.host` set to `github.com`. Marketplace reads and downloads go through it too. The extension's `host` defaults to `github.com` as well, so of the two moved values only `proxy` shows whether the move happened.
+- **A test marketplace you own**, for the upgrade cases: the official index lists only the latest version, and you can't publish to it. Use a copy of the extensions repository with your own signing key, registered with `personad extension market add`. Put its key id (or the `ed25519:…` line of its `market.pub`) in manager.json `trusted_extension_markets` and restart the hub, so its extensions run without the sandbox like the official marketplace's. The hub reads that list only at start.
+  - An index keeps one entry per id, so publish one version at a time, each higher than the last. Six are used, all newer than the official marketplace's latest. Cases 8 and 9 use A and B, with the same permissions as the version installed; C, asking for one more permission; and D, with exactly C's permissions, tools, events and surfaces (anything else asks for consent again), but whose program exits at once. Case 11 uses E, working again, and F.
+  - The hub reads a marketplace about every 6 hours. After each publish, run `personad extension market refresh <id>`, except where case 11 says not to.
+- **Versions and the sandbox.** Record the extension's version and `sandbox` from `personad extension show github` in every case. A release on the official marketplace during cases 2 to 7 upgrades it when idle, which explains a restart you didn't cause. Installs from `file:` or `https://…`, and a marketplace that is no longer there, default to the sandbox, which limits where the program may connect and can block `proxy` (see "Sandbox"). To compare a `file:` install with a marketplace one, run `personad extension sandbox github off`.
+
+**Where to look**
+
+| What | Where |
+| --- | --- |
+| Which connector holds the id | The manager's log: the hub's log while the manager runs inside the hub, otherwise its own service's journal or `manager.log` (`docs/managers.md`). It shows `connector github: a plugin takes it over` and `connector github: back to the hub's own`. Also `personad extension list` / `show github`. When the hub restarts the extension for a change (its settings, the move itself too, a secret, the sandbox, an upgrade or a rollback), the log shows the pair, and the hub's own runs for those few moments: check for duplicates around them. Enabling shows only the takeover. A crashed program restarted within its backoff shows neither. |
+| Sign-in and its source | **Settings › Connectors › GitHub**, `GET /api/v1/connectors/github/auth`; the `connector_secrets` row for `github`; the setting `github_auth` |
+| The one-time move | The extension's settings (`proxy`, `host`), the setting `github.migrated_to_extension`, the log line `github: manager.json's github.proxy / auth.host moved …` |
+| Who changed what | `personad extension audit github`: the extension's rows, and the connector's `connector_*` rows |
+| What arrived | Inbox items with source `github` (count them per thread), knowledge base chats `github-*` |
+
+**Cases**
+
+1. **Baseline, before installing.**
+   - Sign the hub's own connector in.
+   - Let a few items arrive, and make sure some PRs are archived in the knowledge base.
+   - Then, in the app, change some of its Inbox settings (ignored branches, for example). Mute one repository you won't use in case 4, and switch the knowledge-base feed off. Leave the repositories used in case 4 unmuted, and the CI-failure setting so that case 4's failing run is let in.
+   - Write down the counts. Everything below is compared with them.
+2. **Install.**
+   - Install from the official marketplace: `market:<marketplace id>/github`, with the official marketplace's id from `personad extension market list` (`search` lists the test marketplace's `github` too, without saying which is which). Or use the app's market page.
+   - The preview describes its permissions: the computer's gh login, and network access to GitHub's hosts, including where CI logs are stored.
+   - Check:
+     - it runs, not sandboxed;
+     - the log shows the takeover;
+     - Settings › Connectors › GitHub shows the same account, with no new sign-in;
+     - the audit shows the install.
+3. **What the takeover carries over.**
+   - **Sign-in.** It stays the same, with nothing asked. Switch the source both ways in the app (device code, a computer's gh login). The extension follows: `connector.auth.set` after every start, `connector.credentials.gh_token` for gh, and token scopes in the auth view.
+   - **Settings.** Inbox settings edited before the takeover show unchanged on the extension's side. Unedited ones come from the hub's copy, but only when nothing was ever edited in the app. To see that, run case 2 separately on a fresh isolated hub that has manager.json `github.inbox` set and no settings edited in the app: the extension starts with that copy.
+   - **Mutes and switches.** Items from the muted repository still arrive filed as done (count the open ones), and the knowledge-base feed stays off. Then switch it back on for the cases below.
+   - **Knowledge base.** New writes go to the existing `github-*` chats, with no second chat for a PR that already had one.
+   - **The one-time move.**
+     - Right after the install, `proxy` and `host` are in the extension's settings and the marker is set. The extension's GitHub requests go through the proxy; the hub's own connector still checks the computers' gh logins, and marketplace reads use the proxy too.
+     - Change `proxy` by hand and restart the hub: the move does not run again.
+     - A value already in the extension's settings is never overwritten. To see this:
+       1. Remove the `github.migrated_to_extension` row from the `settings` table of the manager's database (for the built-in manager, the isolated hub's database).
+       2. Set `personad extension config github proxy=<another proxy>`. The change restarts the extension, and that start runs the move again: the value stays, and the marker is set again.
+       3. Set `proxy` back to the watched proxy.
+4. **Sync.**
+   - From the second account and the team, make one of each kind: `review_requested`, `mention`, `team_mention`, `assign`, `author` (a comment or review on the test account's PR), and `ci_failed` (a failing run the test account started). Each arrives once, in the expected tier.
+   - A thread that had an item before the takeover updates that item; it gets no second one.
+   - Closing or merging a PR settles its item.
+   - Related PRs and issues are archived into the knowledge base.
+   - The **GitHub** page (the extension's `nav_page`) works on the web, iOS and Android: lists, diff, comments, CI logs. A comment, review or merge is previewed and sent only after confirming.
+   - The assistant's GitHub tools read PRs, diffs and checks. A comment or review asks on the phone first.
+   - The avatar tiers find the account. Install a tiered look, use an account that is on its board, leave `personas.github_login` unset (it skips the connector), and read `login` in the `persona_tiers` setting. Today the tiers read only the hub's own connector (#6077), so expect them to lose the account while the extension holds the id; record it.
+5. **Roll back by disabling.**
+   - Run `personad extension disable github`. The log shows the hub's own back.
+   - What the hub's own connector has carries back as the extension last had it: sign-in, source, its Inbox settings, mutes, switches and feeds. Changes made while the extension ran are kept.
+   - The extension's own settings (`triage_rules`, its `inbox` repositories and kinds, `proxy`, `host`) mean nothing to the hub's own, which goes on with manager.json's `github.proxy`. Don't count them as lost.
+   - Events from before, during and after the switch arrive once each: nothing is lost or duplicated.
+   - The knowledge base goes on in the same chats.
+   - Enable it again: it takes over again with no sign-in, its own settings are as they were, and the move does not run again.
+6. **Roll back by uninstalling.** Run `personad extension uninstall github`.
+   - The same checks as disabling.
+   - What the hub keeps by id stays: the `connector_secrets` row, the connector's settings, switches and feeds, `github_auth`, the mutes and the knowledge base.
+   - What is the extension's own goes: its settings (the moved `proxy` and `host` among them), and its package and data directories. Case 9 checks the rest, once case 8 has made it.
+   - Install it again from the official marketplace: it takes over with no sign-in. The marker is still set, so `proxy` and `host` do not come back by themselves (#6107). On a network that reaches GitHub only through the proxy, a reinstalled extension can't sync until `proxy` is set again.
+   - Before going on, set `proxy` again with `personad extension config github proxy=…`.
+7. **When it does not start.**
+   - A package without this platform's program, or with an `engines` this hub does not meet, is refused at the preview (try it as an upgrade) and never installed. Check that the installed extension is untouched.
+   - Make an installed version fail to start. The problem shows at the next start of the hub (or of the manager running as its own service), not before:
+     - remove its directory under the isolated hub's `~/.persona/extensions/installed/github/` and restart: `package_missing`;
+     - or run a build of the current source numbered below the extension's `engines.persona` (`-X main.build=…`). An unnumbered development build only warns about `engines`, so "the latest personad" here means a numbered build.
+   - Either way the hub's own connector takes the id back and keeps working.
+   - Before going on, put the directory back (move it aside rather than deleting it), or return to the latest build, and restart. Installing over the same id is refused, and an upgrade needs a newer version; uninstalling and installing again would lose the extension's own settings.
+   - Kill the running program a few times. Record what happens. Expected: the extension restarts with its backoff, and the hub's own does not come back while it stays enabled.
+8. **Upgrade**, from your test marketplace, in this order. Auto-upgrade reads only the marketplace an extension came from.
+   1. Publish A, and run `personad extension upgrade github market:<test market id>/github`. The extension now comes from the test marketplace. Settings are kept, the takeover stays, nothing asks for a sign-in, the move does not run again, and the log shows the usual brief flip.
+   2. Publish B and refresh. With auto-upgrade on, it upgrades only when idle (no calls running, the assistant not working), with the same checks. The hub looks once a minute (the first time two minutes after it starts), so allow a few minutes.
+   3. Publish C and refresh. It waits for you: `personad extension upgrades` shows it waiting. Confirm with `personad extension upgrade github market:<test market id>/github`, or in the app. Then do case 9's first part before step 4.
+   4. Publish D and refresh. Once it goes in, it rolls back to C within about 30 seconds and records D as skipped; C takes the id again.
+9. **Downgrade.**
+   - Run this before case 8's last step, while the last upgrade succeeded: an automatic rollback leaves no version to go back to. So after step 3, run `personad extension rollback github`: it goes back to B, with the takeover and the extension's settings kept. A rollback also takes back the permissions granted to C, so C now waits for you again rather than coming back by itself. Confirm C once more as in step 3, then go on with step 4.
+   - To go further back, once case 8 is done:
+     1. Turn its auto-upgrade switch off and record a sandbox choice (`personad extension sandbox github off`). Then uninstall it (`--keep-data` keeps only its data directory). The hub's own comes back. Its sandbox choice, upgrade notes and the skipped version D go; its auto-upgrade switch stays off.
+     2. Install an older package with `file:`, and run `personad extension sandbox github off`.
+     3. It starts with only what the hub keeps by id, as in case 6: its own settings, `proxy` and `host` are gone.
+     4. Set `proxy` again.
+   - A `file:` or `https://…` install or upgrade defaults to the sandbox (record it). With `proxy` set, GitHub requests may then fail. Such an install stays out of auto-upgrade, and has no auto-upgrade switch.
+10. **Restarts.**
+    - Restart the hub, and the manager too where it runs as a service of its own. The extension starts and takes over again; nothing moves twice.
+    - The inbox goes on without gaps or duplicates.
+11. **Offline hub, or no marketplace.** Each part that installs the extension starts by uninstalling the one left installed before it: installing over the same id is refused.
+    - **A marketplace that can't be read.** Use the test marketplace, not the official one: the official one and GitHub's API are reached the same way, through `github.proxy`, so cutting one cuts both.
+      1. Publish E and install it from the test marketplace: the index now offers E, not the broken D. Set `proxy` again (#6107), and turn its auto-upgrade on (`personad extension auto-upgrade on github`): case 9 left it off.
+      2. Publish F without refreshing (a refresh would let auto-upgrade install F), and make the marketplace unreadable: make its repository private, if it was added without a token.
+      3. Run `personad extension market refresh <test market id>`: it fails with the error.
+      4. `personad extension market list` shows the error. About 15 minutes later the hub's own read logs `plugin market <id>: … (trying again later)`. The installed extension keeps running, and no upgrade happens.
+      5. Make the marketplace readable again afterwards.
+    - **The official marketplace removed.**
+      1. Install the extension from the official marketplace, and set `proxy` again (#6107).
+      2. Remove the marketplace. An extension installed from it stops counting as a trusted marketplace's, and starts in the sandbox from its next start, unless a sandbox choice is recorded for it.
+      3. `show github` reports the sandbox at once, but the running program changes only at its next start. Restart, then record whether it still syncs.
+      4. A removed official marketplace is not added back by itself: add `github:nwverse/persona-extensions` again by hand.
+    - **A package.**
+      1. Install it from a package: `file:`, made with `personad extension pack`, or a release asset checked against its sha256.
+      2. Switch the sandbox off and set `proxy` again.
+      3. It takes over as after case 6's reinstall, and stays out of auto-upgrade.
+    - **No network.** Cut the hub's network, the proxy included, and restart it. The installed extension starts from its package, and marketplace reads fail and back off. Bring the network back: sync catches up, with no gaps or duplicates.
+    - **No extension.** A hub that never installs the extension keeps the hub's own connector, as before.
+    - GitHub itself still has to be reachable (directly or through `github.proxy`) for either connector to sync.
+12. **More than one manager.**
+    - Add a second manager: make one in the app, and run `personad manager join <hub> <code>` (or `install`) with its own directory and database, as `docs/managers.md` describes. Sign its own GitHub connector in, from the app with that manager chosen.
+    - The extension and its takeover belong to the manager it was installed on. On the second manager, Settings › Connectors › GitHub still shows its own connector, signed in as before, and its log has no takeover.
+    - The command line always acts on the default manager. Reach another one from the app, or through the API with `X-Persona-Manager` (`docs/managers.md`).
+    - Record anything that differs.
+
+**If the hub's own connector were removed instead.** In this option, upgrading a hub installs the official extension once, by itself, behind a marker; there is no hub connector left to fall back to. The cases change as follows:
+
+| Case | Without the hub's own connector |
+| --- | --- |
+| Install | Nothing for the user to do. The first start of the new personad installs `github` from the official marketplace, once, behind a marker, and must say so when the install fails, and retry. That install needs the marketplace: network access to it, through `github.proxy` where set, and a valid signature. An install today needs the owner's consent to its permissions (the preview's digest); installing by itself grants `gh_login` and network access unasked, so which hubs get it (all, or only those with GitHub signed in) must be decided. |
+| Takeover | The same carry-overs, done once by the automatic install. What rests on the hub's own connector today must first move to the manager or the extension: `GET` / `PUT /api/v1/connectors/github/auth` and its scope check, the check of each computer's gh login, the gh token behind `connector.credentials.gh_token`, manager.json's `github` section (read by the move and the marketplace client), the copy of the `github.inbox` defaults, and the avatar tiers' account (#6077). |
+| Sync | The same checks. |
+| Disable, uninstall | Disabling turns GitHub off, with no fallback. Uninstalling also deletes the sign-in (`connector_secrets`) and the connector's switch, options and feeds: today they stay only because the hub's own connector needs them. `github_auth`, mutes, inbox items and the knowledge base stay. Reinstalling then needs a new sign-in, and #6107 matters more. |
+| Does not start, crashes | GitHub is down until a fixed version is installed or the last one is rolled back. Nothing takes the id meanwhile. |
+| Upgrade, downgrade | The same as today, through the marketplace. A rolled-back upgrade still works, but going further back means uninstalling, which loses everything above. |
+| Restarts | No brief flip to a hub connector. Between the extension's stop and start no connector holds the id. |
+| Offline hub, no marketplace | The main difference. A hub that reaches GitHub but not the official marketplace (the owner removed it, its index or signature fails, its host is blocked) gets no GitHub at all, where today it keeps the hub's own connector. Its only ways in are a package installed by hand (`file:`, out of auto-upgrade and in the sandbox) or another marketplace that lists `github`. A hub that is offline at upgrade time gets GitHub once the network is back and the install is retried; with no network, neither option syncs. |
+| More than one manager | Each manager would install it on its own; which managers get it must be decided. |
+
+**If a copy of the extension were bundled instead**, as a built-in plugin in `server/plugins/` like the WeChat plugin and its program `personad-wechat`:
+- No marketplace is needed, so a hub that can't reach the official marketplace keeps GitHub. It upgrades and downgrades with personad, with no auto-install and no permission prompts.
+- The cost is the same code in two repositories, kept in step by hand.
+- A hub that already has the marketplace `github` gets the built-in instead: the built-in is registered first, and the installed row with the same id is ignored (its settings unread) until the built-in's first write replaces it; its package and data directories stay behind. `Registry.Yields` is the existing switch for the opposite, an installed copy winning.
+- A built-in's connector starts switched off unless the user's switch was recorded, so the move must keep GitHub on.
+- The program must join the released programs (`update.ProgramNames`) and every install path (`install.sh`, the Docker image).
 
 ## Built-in extension: WeChat (`wechat`)
 

@@ -29,6 +29,10 @@ type LarkSent struct {
 	// started for one.
 	SessionID  string         `json:"session_id,omitempty"`
 	LetThrough LarkLetThrough `json:"let_through"`
+	// MessageRef is the id the API's answer gave for the message the write made, as it said it (CleanMessageRef);
+	// empty when the answer had none, could not be read or had one longer than MessageRefMost. It is the answer's word
+	// for whatever the write was, so the manager keeps it only for a route that creates one message.
+	MessageRef string `json:"message_ref,omitempty"`
 }
 
 // LarkLetThrough is how the gate let a write through.

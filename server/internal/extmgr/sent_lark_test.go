@@ -120,7 +120,7 @@ func TestRecordNodeSentTrustsTheConnectionOnly(t *testing.T) {
 	}
 
 	forged := map[string]any{"machine_id": "stranger", "origin": map[string]any{"machine_id": "stranger", "extension": "x"},
-		"connector": "github", "action": "other", "message_ref": "m1", "summary": "forged"}
+		"connector": "github", "action": "other", "summary": "forged"}
 	if _, err := h.RecordNodeSent(ctx, "box", larkSentParams(t, s, forged)); err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +199,49 @@ func TestGatePathIDs(t *testing.T) {
 			if got[k] != v {
 				t.Errorf("%s: %v, want %v", path, got, want)
 			}
+		}
+	}
+}
+
+// The id the API's answer gave is the row's message_ref only for a route that creates one message in a conversation its
+// path names (the text send and the attachments'): another write's answer may carry the id of a message that is not the
+// one it wrote, and a wrong ref is worse than none. The id is the node's word as the API said it, trimmed, with no NUL,
+// and none at all when it is over 200 characters (not cut: a cut id points at nothing); a report without one (an older
+// node, or an answer that had none) is a row all the same.
+func TestRecordNodeSentKeepsTheMessageRefOfACreationRoute(t *testing.T) {
+	h, st := larkSentManager(t)
+	ctx := context.Background()
+	always := proto.LarkLetThrough{Kind: proto.LarkThroughAlways}
+	for _, c := range []struct{ name, method, path, ref, want string }{
+		{"a text send", "POST", "/conversations/oc_1/messages", "om_1", "om_1"},
+		{"an id of the API's own form", "POST", "/conversations/oc_1/messages", "x:123/45", "x:123/45"},
+		{"an image", "POST", "/conversations/oc_1/images", "om_2", "om_2"},
+		{"a file", "POST", "/conversations/oc_1/files", "om_3", "om_3"},
+		{"an attachment", "POST", "/conversations/oc_1/attachments", "om_4", "om_4"},
+		{"trimmed and without NUL", "POST", "/conversations/oc_1/messages", " om_\x005 \n", "om_5"},
+		{"exactly 200 characters", "POST", "/conversations/oc_1/messages", strings.Repeat("长", 200), strings.Repeat("长", 200)},
+		{"over 200 characters is none, not cut", "POST", "/conversations/oc_1/messages", strings.Repeat("长", 201), ""},
+		{"an answer with none", "POST", "/conversations/oc_1/messages", "", ""},
+		{"a reply", "POST", "/messages/om_1/replies", "om_new", ""},
+		{"a forward", "POST", "/messages/om_1/forward", "om_new", ""},
+		{"a reaction", "POST", "/messages/om_1/reactions", "om_1", ""},
+		{"a read position", "POST", "/conversations/oc_1/read-position", "om_77", ""},
+		{"a conversation's settings", "POST", "/conversations/oc_1/settings", "om_77", ""},
+		{"an edit", "PUT", "/conversations/oc_1/messages", "om_8", ""},
+		{"no conversation", "POST", "/conversations//messages", "om_9", ""},
+		{"a wildcard conversation", "POST", "/conversations/*/messages", "om_9", ""},
+		{"a deeper path", "POST", "/conversations/oc_1/messages/om_1", "om_9", ""},
+		{"a new conversation", "POST", "/conversations", "oc_new", ""},
+		{"another collection's messages", "POST", "/threads/oc_1/messages", "om_9", ""},
+		{"another collection's files", "POST", "/documents/d1/files", "om_9", ""},
+	} {
+		before := len(st.all())
+		if _, err := h.RecordNodeSent(ctx, "box", larkSentParams(t, proto.LarkSent{Method: c.method, Path: c.path, Text: "hi", MessageRef: c.ref, LetThrough: always}, nil)); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		rows := st.all()
+		if len(rows) != before+1 || rows[before].MessageRef != c.want || rows[before].Text != "hi" {
+			t.Errorf("%s: %+v, want message_ref %q", c.name, rows[before:], c.want)
 		}
 	}
 }

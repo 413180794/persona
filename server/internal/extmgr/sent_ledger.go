@@ -81,7 +81,8 @@ func (h *Manager) recordSent(ctx context.Context, s connector.Sent) {
 // and how the gate let it through.
 func sentRow(s connector.Sent, trace *sentTrace) db.SentAsUser {
 	target, brief := sentTarget(s.Action, s.Args)
-	row := db.SentAsUser{At: s.At, Connector: s.Connector, Action: s.Action, Target: mustJSON(target), Text: cleanText(s.Text)}
+	row := db.SentAsUser{At: s.At, Connector: s.Connector, Action: s.Action, Target: mustJSON(target), Text: cleanText(s.Text),
+		MessageRef: proto.CleanMessageRef(s.MessageRef)}
 	row.Summary = sentSummary(s, brief)
 	origin := map[string]any{}
 	if trace != nil {
@@ -128,6 +129,10 @@ func sentSummary(s connector.Sent, brief string) string {
 func cleanText(s string) string {
 	return strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "")
 }
+
+// shortValue is a short value as a row keeps it: trimmed, cleaned for Postgres and cut to sentValueMost characters. A
+// message ref is not cut but kept whole or not at all (proto.CleanMessageRef).
+func shortValue(s string) string { return cutRunes(strings.TrimSpace(cleanText(s)), sentValueMost) }
 
 func cutRunes(s string, n int) string {
 	if r := []rune(s); len(r) > n {
@@ -346,16 +351,15 @@ func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw js
 	if st == nil {
 		return nil, &rpc.Error{Code: "no_database", Message: "sent.record: no database, there is no ledger"}
 	}
-	field := func(s string) string { return cutRunes(strings.TrimSpace(cleanText(s)), sentValueMost) }
 	origin := map[string]any{"extension": id}
-	if v := field(p.MachineID); v != "" {
+	if v := shortValue(p.MachineID); v != "" {
 		origin["machine_id"] = v
 	}
-	if v := field(p.SessionID); v != "" {
+	if v := shortValue(p.SessionID); v != "" {
 		origin["session_id"] = v
 	}
 	through := map[string]any{"kind": connector.ThroughAuto}
-	if v := field(p.Setting); v != "" {
+	if v := shortValue(p.Setting); v != "" {
 		through["setting"] = v
 	}
 	summary := strings.TrimSpace(cleanText(p.Summary))
@@ -365,7 +369,7 @@ func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw js
 	summary, _, _ = strings.Cut(summary, "\n") // the given line or the made one: a value in the target may have several
 	row := db.SentAsUser{At: time.Now(), Connector: p.Contribution, Action: sentRecordAction, Target: mustJSON(target),
 		Text: cutRunes(cleanText(*p.Text), connector.SentTextMost), Summary: cutRunes(strings.TrimSpace(summary), sentSummaryMost),
-		Origin: mustJSON(origin), LetThrough: mustJSON(through), MessageRef: field(p.MessageRef)}
+		Origin: mustJSON(origin), LetThrough: mustJSON(through), MessageRef: proto.CleanMessageRef(p.MessageRef)}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	if _, err := st.RecordSentAsUser(ctx, row); err != nil {
@@ -407,7 +411,8 @@ func recordedTarget(fields map[string]any) (map[string]any, string, error) {
 // this is where such a write gets its row. machineID is the connection the request came in on, a computer of this
 // manager's (permission_denied for any other): the row's origin.machine_id is that, whatever the params say, and so
 // are the rest of the row's words but the ones the node can alone know: the call (the gated command, method and path, a
-// write only), what it said, the conversation it ran for and how the gate let it through. The node being the user's own, its word is
+// write only), what it said, the conversation it ran for, how the gate let it through and the id the API's answer gave
+// for the message (kept only for a route that creates one, createsMessage). The node being the user's own, its word is
 // taken for those, cut and cleaned like the other sources'. A failed write is the node's to log, as the send already
 // happened and stays so.
 func (h *Manager) RecordNodeSent(ctx context.Context, machineID string, raw json.RawMessage) (any, error) {
@@ -446,6 +451,9 @@ func (h *Manager) RecordNodeSent(ctx context.Context, machineID string, raw json
 	row := db.SentAsUser{At: time.Now(), Connector: connector.Lark, Action: action, Target: mustJSON(target),
 		Text: cutRunes(cleanText(p.Text), connector.SentTextMost), Summary: cutRunes(action, sentSummaryMost),
 		Origin: mustJSON(origin), LetThrough: mustJSON(through)}
+	if createsMessage(method, path) { // the answer's id is the message's only when the route made one
+		row.MessageRef = proto.CleanMessageRef(p.MessageRef)
+	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	if _, err := st.RecordSentAsUser(ctx, row); err != nil {
@@ -495,6 +503,22 @@ func nodeLetThrough(t proto.LarkLetThrough) (map[string]any, error) {
 		return nil, fmt.Errorf("let_through: kind %q is not rule, conversation_always or card", t.Kind)
 	}
 	return through, nil
+}
+
+// nodeCreationRoutes are the routes of a gated API that create one message in the conversation their path names: the
+// text send, and the attachments' own (images and files, docs/lark-attachments.md; the messaging extension point's
+// attachments, docs/extension-messaging.md "6"). Their answer is the receipt of that message.
+var nodeCreationRoutes = []string{"messages", "images", "files", "attachments"}
+
+// createsMessage says whether a write forwarded by the node's gate proxy is one of nodeCreationRoutes: POST
+// /conversations/<id>/<route>, an id in it. Anything else leaves the row's message_ref empty, even when its answer has
+// an id: a reply (/messages/<id>/replies) and a forward are not known to answer with the new message's id, a reaction or
+// a read position answers with the id of a message that is someone else's, and a wrong ref (the one a recall would act
+// on) is worse than none.
+func createsMessage(method, path string) bool {
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	return method == http.MethodPost && len(segs) == 3 && segs[0] == "conversations" && segs[1] != "" && segs[1] != "*" &&
+		slices.Contains(nodeCreationRoutes, segs[2])
 }
 
 // gatePathIDs are the ids a gated call's path names in the way REST paths do: the segment after "conversations" is the

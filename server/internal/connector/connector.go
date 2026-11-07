@@ -82,8 +82,34 @@ type Actions interface {
 	// send). It works offline: what it cannot look up it lists as given. An error refuses a call that could not run
 	// before the user is asked.
 	Describe(ctx context.Context, name string, args json.RawMessage) (Action, string, error)
-	// Do runs it (the gate let it through), refusing arguments it cannot use as Describe does.
+	// Do runs it (the gate let it through), refusing arguments it cannot use as Describe does. A connector that knows
+	// the id of the message it wrote also implements RefActions.
 	Do(ctx context.Context, name string, args json.RawMessage) (string, error)
+}
+
+// DoResult is what a write answered: Text for the model, and MessageRef, the id of the message it wrote on the other
+// side, when the connector knows one ("" when it does not).
+type DoResult struct {
+	Text       string
+	MessageRef string
+}
+
+// RefActions is an Actions that can also say which message a write made (a comment's id, a mail's Message-ID), so that
+// the sent-as-user ledger can name it (docs/connectors.md "Sent as the user"). It is not a capability: nothing is
+// declared and Check does not look for it, the hub finds it by type assertion (Write). A connector without it keeps
+// working, its writes just have no message ref. DoRef is Do with that id; Do's text is DoRef's.
+type RefActions interface {
+	Actions
+	DoRef(ctx context.Context, name string, args json.RawMessage) (DoResult, error)
+}
+
+// Write runs the write name of a once the gate let it through: DoRef when the connector has one, else Do.
+func Write(ctx context.Context, a Actions, name string, args json.RawMessage) (DoResult, error) {
+	if r, ok := a.(RefActions); ok {
+		return r.DoRef(ctx, name, args)
+	}
+	text, err := a.Do(ctx, name, args)
+	return DoResult{Text: text}, err
 }
 
 // Options is a connector with settings of its own the user changes in the app (GitHub's: which CI failures, muted

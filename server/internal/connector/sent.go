@@ -35,7 +35,11 @@ type Sent struct {
 	Args      json.RawMessage // what the action was given
 	Text      string          // what it wrote: the arguments' body / text / message…, cut to SentTextMost characters
 	Result    string          // what it answered
-	Through   LetThrough
+	// MessageRef is the written message's id on the other side, when the connector said (RefActions): "" when it did
+	// not know one. The ledger keeps it as it is, only trimmed and clean, and not at all when it is longer than
+	// proto.MessageRefMost characters (proto.CleanMessageRef).
+	MessageRef string
+	Through    LetThrough
 }
 
 // SentTextMost is the most of a write's text that Sent keeps, in characters.

@@ -184,6 +184,9 @@ type (
 	}
 	CallResult struct {
 		Text string `json:"text,omitempty"`
+		// MessageRef is actions.do's: the id of the message the write made on the other side
+		// (connector.DoResult.MessageRef), when the connector knows one.
+		MessageRef string `json:"message_ref,omitempty"`
 	}
 	// DescribeResult is what the card says about a write (connector.Actions.Describe).
 	DescribeResult struct {
@@ -750,8 +753,8 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 			return nil, errors.New("actions.do without a request_id")
 		}
 		return s.once.do(p.RequestID, func() (CallResult, error) {
-			text, err := a.Do(ctx, p.Name, p.Args)
-			return CallResult{Text: text}, err
+			done, err := connector.Write(ctx, a, p.Name, p.Args)
+			return CallResult{Text: done.Text, MessageRef: done.MessageRef}, err
 		})
 	}
 	return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method " + method}

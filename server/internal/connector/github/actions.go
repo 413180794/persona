@@ -106,21 +106,35 @@ func (c *Connector) Describe(ctx context.Context, name string, args json.RawMess
 
 // Do posts it (only once the gate let it through).
 func (c *Connector) Do(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	done, err := c.DoRef(ctx, name, args)
+	return done.Text, err
+}
+
+var _ connector.RefActions = (*Connector)(nil)
+
+// DoRef is Do with the id GitHub gave what it posted (connector.RefActions): the comment's id for github_comment, the
+// review's for github_review, as GitHub's answer has it, in decimal. A comment and a review are different resources
+// with numberings of their own, so the id alone does not say which: the action does.
+func (c *Connector) DoRef(ctx context.Context, name string, args json.RawMessage) (connector.DoResult, error) {
 	a, err := parseWrite(name, args)
 	if err != nil {
-		return "", err
+		return connector.DoResult{}, err
 	}
+	// The id is read after the post went out and must never turn it into a failure (the model would post it again), so
+	// it is taken as it comes and read below, whatever it is.
 	var out struct {
-		HTMLURL string `json:"html_url"`
+		ID      json.RawMessage `json:"id"`
+		HTMLURL string          `json:"html_url"`
 	}
+	var text string
 	switch name {
 	case "github_comment":
 		body, _ := json.Marshal(map[string]string{"body": a.Body})
 		if _, _, err := c.request(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/issues/%d/comments", a.Repo, a.Number), nil, body, &out); err != nil {
-			return "", err
+			return connector.DoResult{}, err
 		}
 		c.forget(a.Repo, a.Number)
-		return "Commented on " + a.ref() + ": " + out.HTMLURL, nil
+		text = "Commented on " + a.ref() + ": " + out.HTMLURL
 	case "github_review":
 		req := map[string]string{"event": a.Event}
 		if a.Body != "" {
@@ -128,10 +142,22 @@ func (c *Connector) Do(ctx context.Context, name string, args json.RawMessage) (
 		}
 		body, _ := json.Marshal(req)
 		if _, _, err := c.request(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/pulls/%d/reviews", a.Repo, a.Number), nil, body, &out); err != nil {
-			return "", err
+			return connector.DoResult{}, err
 		}
 		c.forget(a.Repo, a.Number)
-		return "Review (" + a.Event + ") submitted on " + a.ref() + ": " + out.HTMLURL, nil
+		text = "Review (" + a.Event + ") submitted on " + a.ref() + ": " + out.HTMLURL
+	default:
+		return connector.DoResult{}, fmt.Errorf("unknown tool %s", name)
 	}
-	return "", fmt.Errorf("unknown tool %s", name)
+	return connector.DoResult{Text: text, MessageRef: wholeID(out.ID)}, nil
+}
+
+// wholeID is an id GitHub answered as a positive whole number, in decimal; "" for anything else (none, a string, a
+// fraction, an object, one past int64): no message ref, not an error.
+func wholeID(raw json.RawMessage) string {
+	n, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil || n <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(n, 10)
 }

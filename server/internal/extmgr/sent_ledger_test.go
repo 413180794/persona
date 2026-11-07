@@ -12,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -156,6 +157,105 @@ func TestSentLedgerRecordsWhatWentOut(t *testing.T) {
 	rows = st.all()
 	if len(rows) != 4 || rows[3].Text != "from the thread page" || string(rows[3].Origin) != `{}` {
 		t.Fatalf("the pairing token's reply: %+v", rows)
+	}
+}
+
+// refThreads is threadsConnector that says which message each write made (connector.RefActions).
+type refThreads struct {
+	*threadsConnector
+	ref string
+}
+
+func (c *refThreads) DoRef(ctx context.Context, name string, args json.RawMessage) (connector.DoResult, error) {
+	text, err := c.threadsConnector.Do(ctx, name, args)
+	return connector.DoResult{Text: text, MessageRef: c.ref}, err
+}
+
+// The id a connector gives for what it wrote is the row's message_ref, kept as the service wrote it but trimmed, with
+// no NUL (Postgres refuses a row that has one); one over 200 characters is not cut (a cut id points at nothing) but
+// left empty. A connector that gives none leaves it empty, and the row is written all the same.
+func TestSentLedgerKeepsTheMessageRef(t *testing.T) {
+	h := newTestManager(t)
+	st := newSentLedgerStore()
+	h.store = st
+	h.connectors = h.newConnectors([]connector.Rule{{Connector: "*", Action: "*", Decision: connector.Allow}})
+	c := &refThreads{threadsConnector: newThreadsConnector()}
+	if err := h.addConnector(c); err != nil {
+		t.Fatal(err)
+	}
+	send := func(ref string) db.SentAsUser {
+		t.Helper()
+		c.ref = ref
+		before := len(st.all())
+		if r := h.callConnector(context.Background(), asker{}, "example_send", json.RawMessage(`{"chat":"u1","text":"hi"}`)); r.IsError {
+			t.Fatalf("send: %+v", r)
+		}
+		rows := st.all()
+		if len(rows) != before+1 {
+			t.Fatalf("%d rows after %d", len(rows), before)
+		}
+		return rows[before]
+	}
+	for _, tc := range []struct{ name, ref, want string }{
+		{"a plain id", "41", "41"},
+		{"an id of the service's own form", "x:123/45", "x:123/45"},
+		{"trimmed and without NUL", " om_\x00a1 \n", "om_a1"},
+		{"exactly 200 characters", strings.Repeat("长", 200), strings.Repeat("长", 200)},
+		{"over 200 characters is none, not cut", strings.Repeat("长", 201), ""},
+		{"none", "", ""},
+	} {
+		if row := send(tc.ref); row.MessageRef != tc.want || row.Text != "hi" {
+			t.Errorf("%s: message_ref %q, want %q", tc.name, row.MessageRef, tc.want)
+		}
+	}
+
+	// A connector without RefActions: the row is there, with no id.
+	h2 := newTestManager(t)
+	st2 := newSentLedgerStore()
+	h2.store = st2
+	h2.connectors = h2.newConnectors([]connector.Rule{{Connector: "*", Action: "*", Decision: connector.Allow}})
+	if err := h2.addConnector(newThreadsConnector()); err != nil {
+		t.Fatal(err)
+	}
+	if r := h2.callConnector(context.Background(), asker{}, "example_send", json.RawMessage(`{"chat":"u1","text":"hi"}`)); r.IsError {
+		t.Fatalf("send: %+v", r)
+	}
+	if rows := st2.all(); len(rows) != 1 || rows[0].MessageRef != "" || rows[0].Text != "hi" {
+		t.Fatalf("without RefActions: %+v", rows)
+	}
+}
+
+// sendingMail is replyMail whose mail_send goes out with a Message-ID.
+type sendingMail struct {
+	replyMail
+	id string
+}
+
+func (m *sendingMail) CallRef(_ context.Context, _ string, args json.RawMessage, _ func(context.Context, string, json.RawMessage) bool) (proto.ToolResult, string) {
+	var req mail.SendRequest
+	_ = json.Unmarshal(args, &req)
+	m.sent = append(m.sent, req)
+	return proto.TextResult("Mail sent to "+req.To[0].Email+".", false), m.id
+}
+
+// A mail the gate let through is a row with the Message-ID it went out with, and the model is told what it always was.
+func TestSentLedgerKeepsAMailsMessageID(t *testing.T) {
+	h := newTestManager(t)
+	st := newSentLedgerStore()
+	h.store = st
+	m := &sendingMail{id: "1A2B.3C4D@hub.example.com"}
+	h.mail = m
+	h.connectors = h.newConnectors([]connector.Rule{{Connector: "mail", Action: "mail_send", Decision: connector.Allow}})
+	h.registerConnectors()
+	args := json.RawMessage(`{"account_id":"acc1","to":[{"email":"someone@example.com"}],"subject":"季度汇报","text":"附件已更新"}`)
+	r := h.callConnector(context.Background(), asker{machine: "box"}, "mail_send", args)
+	if r.IsError || r.Content[0].Text != "Mail sent to someone@example.com." || len(m.sent) != 1 {
+		t.Fatalf("send: %+v, sent %v", r, m.sent)
+	}
+	rows := st.all()
+	if len(rows) != 1 || rows[0].Connector != "mail" || rows[0].Action != "mail_send" || rows[0].MessageRef != "1A2B.3C4D@hub.example.com" ||
+		objectOf(t, rows[0].Target)["subject"] != "季度汇报" {
+		t.Fatalf("rows %+v", rows)
 	}
 }
 

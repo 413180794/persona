@@ -155,3 +155,51 @@ func TestSentText(t *testing.T) {
 		}
 	}
 }
+
+// refWriter is a writer that also says which message it wrote (RefActions); its Do is the text alone, as a connector
+// without the interface would answer.
+type refWriter struct {
+	writer
+	ref string
+	err error
+}
+
+func (w refWriter) DoRef(ctx context.Context, name string, args json.RawMessage) (DoResult, error) {
+	text, _ := w.writer.Do(ctx, name, args)
+	return DoResult{Text: text, MessageRef: w.ref}, w.err
+}
+
+// A connector that says which message it wrote has that id told with the write, and the model still gets the same
+// text. One that does not (its Do alone) is told as before, with no id; a write that failed, or one the user sent by
+// their own hand, is not told at all.
+func TestSentCarriesTheMessageRef(t *testing.T) {
+	ctx := context.Background()
+	allow := []Rule{{Connector: "*", Action: "*", Decision: Allow}}
+	told := func(c Connector) (proto.ToolResult, []Sent) {
+		r := NewRegistry(allow)
+		if err := r.Add(c); err != nil {
+			t.Fatal(err)
+		}
+		var got []Sent
+		r.SetSent(func(_ context.Context, s Sent) { got = append(got, s) })
+		return r.Call(ctx, c.ID()+"_comment", json.RawMessage(`{"text":"hi"}`), nil), got
+	}
+
+	res, got := told(refWriter{writer: writer{&fake{id: "example", status: Status{State: StateOK}}}, ref: "c-17"})
+	if res.IsError || res.Content[0].Text != "done" || len(got) != 1 || got[0].MessageRef != "c-17" || got[0].Result != "done" {
+		t.Fatalf("a connector with RefActions: %+v, told %+v", res, got)
+	}
+	if res, got = told(writer{&fake{id: "example", status: Status{State: StateOK}}}); res.IsError || len(got) != 1 || got[0].MessageRef != "" {
+		t.Fatalf("a connector without it: %+v, told %+v", res, got)
+	}
+	if res, got = told(refWriter{writer: writer{&fake{id: "example", status: Status{State: StateOK}}}, ref: "c-18", err: errors.New("no")}); !res.IsError || len(got) != 0 {
+		t.Fatalf("a failed write: %+v, told %+v", res, got)
+	}
+
+	r := NewRegistry(allow)
+	_ = r.Add(refWriter{writer: writer{&fake{id: "example", status: Status{State: StateOK}}}, ref: "c-19"})
+	r.SetSent(func(context.Context, Sent) { t.Error("the user's own write was told") })
+	if res := r.Run(ctx, "example_comment", json.RawMessage(`{"text":"hi"}`)); res.IsError || res.Content[0].Text != "done" {
+		t.Fatalf("the user's own write: %+v", res)
+	}
+}

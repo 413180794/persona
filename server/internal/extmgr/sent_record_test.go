@@ -204,7 +204,7 @@ func TestSentRecordWithoutADatabase(t *testing.T) {
 
 // What the hub keeps of the params: 20 keys of the target in key order, each name cut to 64 characters, the summary's
 // first line cut to 300, the fields the extension names itself to 200, the text to 4000; text must be there (it may be
-// empty).
+// empty). A message_ref is kept whole or not at all: over 200 characters it is empty, not cut.
 func TestSentRecordLimits(t *testing.T) {
 	h := newTestManager(t)
 	st := newSentLedgerStore()
@@ -265,10 +265,16 @@ func TestSentRecordLimits(t *testing.T) {
 	row = record(map[string]any{"target": map[string]any{}, "session_id": long, "machine_id": long, "setting": long, "message_ref": long})
 	origin, through := objectOf(t, row.Origin), objectOf(t, row.LetThrough)
 	for what, got := range map[string]string{"session_id": fmt.Sprint(origin["session_id"]), "machine_id": fmt.Sprint(origin["machine_id"]),
-		"setting": fmt.Sprint(through["setting"]), "message_ref": row.MessageRef} {
+		"setting": fmt.Sprint(through["setting"])} {
 		if runes(got) != 200 {
 			t.Errorf("%s of 300 characters: %d kept", what, runes(got))
 		}
+	}
+	if row.MessageRef != "" {
+		t.Errorf("a message_ref of 300 characters: %d kept, want none (it is not cut)", runes(row.MessageRef))
+	}
+	if row = record(map[string]any{"target": map[string]any{}, "message_ref": strings.Repeat("好", 200)}); runes(row.MessageRef) != 200 {
+		t.Errorf("a message_ref of 200 characters: %d kept", runes(row.MessageRef))
 	}
 
 	// The text may be empty but must be there.

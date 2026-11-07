@@ -234,7 +234,18 @@ func (mailConnector) Describe(_ context.Context, name string, args json.RawMessa
 
 // Do sends it (the gate let it through).
 func (c mailConnector) Do(ctx context.Context, name string, args json.RawMessage) (string, error) {
-	return toolText(c.h.mail.Call(ctx, name, args, nil))
+	done, err := c.DoRef(ctx, name, args)
+	return done.Text, err
+}
+
+var _ connector.RefActions = mailConnector{}
+
+// DoRef is Do with the Message-ID written into the header of the mail handed to the transport, without the angle
+// brackets (connector.RefActions); whether a provider keeps it as written has not been verified.
+func (c mailConnector) DoRef(ctx context.Context, name string, args json.RawMessage) (connector.DoResult, error) {
+	res, messageID := c.h.mail.CallRef(ctx, name, args, nil)
+	text, err := toolText(res)
+	return connector.DoResult{Text: text, MessageRef: messageID}, err
 }
 
 // toolText is a tool result as text, its error as an error (connector.ReadTools / Actions return them that way).

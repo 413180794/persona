@@ -47,6 +47,24 @@ func TestWritesRunOnce(t *testing.T) {
 	}
 }
 
+// The same request id again answers what the first run did, the message ref it said included.
+func TestWritesReplayTheMessageRef(t *testing.T) {
+	var w writes
+	runs := 0
+	run := func() (CallResult, error) {
+		runs++
+		return CallResult{Text: "sent", MessageRef: "msg-7"}, nil
+	}
+	for range 2 {
+		if res, err := w.do("r1", run); err != nil || res.Text != "sent" || res.MessageRef != "msg-7" {
+			t.Fatalf("%+v %v", res, err)
+		}
+	}
+	if runs != 1 {
+		t.Fatalf("%d runs", runs)
+	}
+}
+
 // A write still running keeps its request id however many other writes finish meanwhile: the same id again waits
 // for it and answers what it did, instead of running the action a second time.
 func TestWritesKeepRunningWrite(t *testing.T) {

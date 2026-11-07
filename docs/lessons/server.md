@@ -788,3 +788,7 @@ A verified download or unpacked binary is still temporary until its final rename
 ## Database passwords need URI userinfo encoding (#6160)
 
 Query escaping turns spaces into plus signs, but URI userinfo decoding keeps a plus literal. Build credentials with `url.UserPassword`, and check the generated database URL with the actual driver's parser. Comparing a provisioning result against the same URL helper cannot detect this password change.
+
+## Reading an answer a reverse proxy passes on (#5278)
+
+When a `httputil.ReverseProxy` has to read what it forwards (the sent-as-user ledger wants the id in a write's answer), copy the bytes as they go to the client, after each `Write`, and read the copy once the handler is done: buffering the answer first would delay a stream and change what the client gets. Which bytes the copy holds depends on the request: a client that sent `Accept-Encoding` itself gets the API's compressed answer verbatim (and the answer's `Content-Encoding` says so), while a client that sent none gets the plain body, because the transport asked for gzip on its own and unpacked it. Read `Content-Encoding` from the answer's headers when the copy starts, not from the request, and bound both the copy and what a gzip copy unpacks to. Test both clients, a chunked answer that is still being written, an answer over the limit and a body that cannot be read: the command must get the same bytes in every case, and an unreadable answer must still be reported.

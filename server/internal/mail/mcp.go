@@ -142,23 +142,39 @@ func (s *Service) Call(ctx context.Context, name string, args json.RawMessage, a
 		return proto.TextResult(b.String(), false)
 
 	case ToolSend:
-		var req SendRequest
-		summary, err := SendSummary(args)
-		if err == nil {
-			err = json.Unmarshal(args, &req)
-		}
-		if err != nil {
-			return proto.TextResult(err.Error(), true)
-		}
-		if approve != nil && !approve(ctx, summary, args) {
-			return proto.TextResult("The user declined to send this email.", true)
-		}
-		if err := s.Send(ctx, req); err != nil {
-			return proto.TextResult(err.Error(), true)
-		}
-		return proto.TextResult("Mail sent to "+formatAddresses(req.To)+".", false)
+		res, _ := s.callSend(ctx, args, approve)
+		return res
 	}
 	return proto.TextResult("unknown tool "+name, true)
+}
+
+// CallRef is Call that also says the Message-ID of the mail mail_send handed to the transport (SendMessage, without the
+// angle brackets): empty for any other tool, and when nothing was sent.
+func (s *Service) CallRef(ctx context.Context, name string, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) (proto.ToolResult, string) {
+	if name == ToolSend {
+		return s.callSend(ctx, args, approve)
+	}
+	return s.Call(ctx, name, args, approve), ""
+}
+
+// callSend is mail_send.
+func (s *Service) callSend(ctx context.Context, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) (proto.ToolResult, string) {
+	var req SendRequest
+	summary, err := SendSummary(args)
+	if err == nil {
+		err = json.Unmarshal(args, &req)
+	}
+	if err != nil {
+		return proto.TextResult(err.Error(), true), ""
+	}
+	if approve != nil && !approve(ctx, summary, args) {
+		return proto.TextResult("The user declined to send this email.", true), ""
+	}
+	messageID, err := s.SendMessage(ctx, req)
+	if err != nil {
+		return proto.TextResult(err.Error(), true), ""
+	}
+	return proto.TextResult("Mail sent to "+formatAddresses(req.To)+".", false), messageID
 }
 
 // SendSummary is mail_send's arguments as the approval card says them, or why they are not mail_send's.

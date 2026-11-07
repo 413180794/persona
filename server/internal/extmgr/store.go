@@ -43,6 +43,8 @@ type Mail interface {
 	Handler() http.Handler
 	Tools() []proto.Tool
 	Call(ctx context.Context, name string, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) proto.ToolResult
+	// CallRef is Call that also says the Message-ID of the mail mail_send handed to the transport ("" for anything else).
+	CallRef(ctx context.Context, name string, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) (proto.ToolResult, string)
 	ListAccounts() ([]mail.MailAccount, error)
 	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
 	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)

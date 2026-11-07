@@ -344,16 +344,17 @@ func (r *Registry) call(ctx context.Context, name string, args json.RawMessage, 
 		}
 		through = how
 	}
-	text, err := a.Do(ctx, name, args)
+	done, err := Write(ctx, a, name, args)
 	if gated && err == nil {
 		r.mu.RLock()
 		sent := r.sent
 		r.mu.RUnlock()
 		if sent != nil {
-			sent(ctx, Sent{At: time.Now(), Connector: c.ID(), Action: name, Args: args, Text: writtenText(args), Result: text, Through: through})
+			sent(ctx, Sent{At: time.Now(), Connector: c.ID(), Action: name, Args: args, Text: writtenText(args), Result: done.Text,
+				MessageRef: done.MessageRef, Through: through})
 		}
 	}
-	return result(text, err)
+	return result(done.Text, err)
 }
 
 // result is a tool's answer, or its error: a program's error with code rate_limited (serve.CodeRateLimited) is a

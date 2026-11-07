@@ -855,11 +855,18 @@ func (c *Conn) Describe(ctx context.Context, name string, args json.RawMessage) 
 // Do sends the write once, with an id of its own: the program runs one id at most once, and Do never sends it again
 // (a run that timed out may have happened; only the user asks again).
 func (c *Conn) Do(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	done, err := c.DoRef(ctx, name, args)
+	return done.Text, err
+}
+
+// DoRef is Do with the message_ref the program answered, when it did (connector.RefActions): a program that does not
+// know the field answers the text alone, and the ref is empty.
+func (c *Conn) DoRef(ctx context.Context, name string, args json.RawMessage) (connector.DoResult, error) {
 	var id [16]byte
 	_, _ = rand.Read(id[:])
 	var out serve.CallResult
 	err := c.call(ctx, serve.MDo, serve.DoParams{Name: name, Args: args, RequestID: hex.EncodeToString(id[:])}, &out)
-	return out.Text, err
+	return connector.DoResult{Text: out.Text, MessageRef: out.MessageRef}, err
 }
 
 func (c *Conn) Thread(ctx context.Context, thread, before string, limit int) (connector.ThreadPage, error) {
@@ -916,6 +923,7 @@ var (
 	_ connector.Inbox        = (*Conn)(nil)
 	_ connector.ReadTools    = (*Conn)(nil)
 	_ connector.Actions      = (*Conn)(nil)
+	_ connector.RefActions   = (*Conn)(nil)
 	_ connector.Threads      = (*Conn)(nil)
 	_ connector.Events       = (*Conn)(nil)
 	_ connector.Runner       = (*Conn)(nil)

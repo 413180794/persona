@@ -49,6 +49,8 @@ func TestMain(m *testing.M) {
 				return &flakySettingsProgram{settingsProgram: &settingsProgram{}}, nil
 			case "chatty":
 				return &chattyProgram{}, nil
+			case "refs":
+				return refProgram{&exampleProgram{secrets: s}}, nil
 			}
 			return &exampleProgram{secrets: s, exitSoon: os.Getenv("PERSONA_PROC_EXIT") == "1"}, nil
 		})
@@ -171,6 +173,14 @@ func (*exampleProgram) Watch(ctx context.Context, changed func(connector.Scope))
 	changed(connector.ScopeChats)
 	<-ctx.Done()
 	return nil
+}
+
+// refProgram is exampleProgram that also says which message each write made (connector.RefActions).
+type refProgram struct{ *exampleProgram }
+
+func (p refProgram) DoRef(ctx context.Context, name string, args json.RawMessage) (connector.DoResult, error) {
+	text, err := p.exampleProgram.Do(ctx, name, args)
+	return connector.DoResult{Text: text, MessageRef: fmt.Sprintf("msg-%d", p.sent)}, err
 }
 
 // slowProgram is exampleProgram hanging (longer than the tests' callTimeout) on its second and later tools list, or
@@ -799,5 +809,45 @@ func TestChangedEventsKeepEveryScope(t *testing.T) {
 	}
 	if seen[connector.ScopeChats] != 1 {
 		t.Fatalf("Watch passed on %v: the chats changes are one change", seen)
+	}
+}
+
+// A program that says which message a write made has it reach the hub with the write's answer, over the pipe and as a
+// plugin; one that does not (an older program, which answers the text alone) leaves it empty, and its write runs and
+// answers as before.
+func TestWriteSaysWhichMessageItMade(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  []string
+		refs [2]string
+	}{
+		{"a program with refs", []string{"PERSONA_PROC_KIND=refs"}, [2]string{"msg-1", "msg-2"}},
+		{"a program without", nil, [2]string{"", ""}},
+	} {
+		for _, way := range []string{"pipe", "plugin"} {
+			t.Run(tc.name+" over the "+way, func(t *testing.T) {
+				sec := &memSecrets{}
+				c := New(program(t, sec, tc.env...))
+				if way == "plugin" {
+					c = linked(t, sec, tc.env...)
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go c.Run(ctx)
+				waitUntil(t, "the program's status", func() bool { return c.Status(ctx).State == connector.StateNotSignedIn })
+				args := json.RawMessage(`{"text":"示例回复"}`)
+				for i, ref := range tc.refs {
+					wantText := fmt.Sprintf(`sent #%d: {"text":"示例回复"}`, i+1)
+					done, err := connector.Write(ctx, c, "example_send", args)
+					if err != nil || done.Text != wantText || done.MessageRef != ref {
+						t.Fatalf("write %d: %+v %v, want %q with ref %q", i+1, done, err, wantText, ref)
+					}
+				}
+				// Do is still the text alone.
+				if out, err := c.Do(ctx, "example_send", args); err != nil || out != `sent #3: {"text":"示例回复"}` {
+					t.Fatalf("Do: %q %v", out, err)
+				}
+			})
+		}
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/connector"
 )
 
 func fakeWrites(t *testing.T) (*Connector, *[]string) {
@@ -85,5 +87,105 @@ func TestBadWritesPostNothing(t *testing.T) {
 	}
 	if len(*posted) != 0 {
 		t.Fatalf("posted %v", *posted)
+	}
+}
+
+// A comment's id and a review's id are what the write says it made, in decimal and whole (they pass 2^31), and the
+// text the model gets is what it always was. An answer without an id leaves the id empty; a failed write has none.
+func TestWritesSayWhichMessageTheyMade(t *testing.T) {
+	answers := map[string]string{
+		"/repos/example-org/example-repo/issues/12/comments": `{"id":3000000001,"node_id":"IC_x","html_url":"https://github.com/example-org/example-repo/issues/12#issuecomment-3000000001"}`,
+		"/repos/example-org/example-repo/pulls/12/reviews":   `{"id":80123,"node_id":"PRR_x","html_url":"https://github.com/example-org/example-repo/pull/12#pullrequestreview-80123"}`,
+		"/repos/example-org/example-repo/issues/13/comments": `{"html_url":"https://github.com/example-org/example-repo/issues/13#issuecomment-1"}`,
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := answers[r.URL.Path]; ok && r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+	c := New(Config{Auth: AuthConfig{FromMachine: "mac"}}, "Mac", (&machine{tokens: []string{oldToken}}).fetch)
+	c.api = srv.URL
+	ctx := context.Background()
+
+	for _, tc := range []struct{ name, tool, args, ref, text string }{
+		{"a comment", "github_comment", `{"repo":"example-org/example-repo","number":12,"body":"ok"}`, "3000000001",
+			"Commented on example-org/example-repo#12: https://github.com/example-org/example-repo/issues/12#issuecomment-3000000001"},
+		{"a review", "github_review", `{"repo":"example-org/example-repo","number":12,"event":"APPROVE"}`, "80123",
+			"Review (APPROVE) submitted on example-org/example-repo#12: https://github.com/example-org/example-repo/pull/12#pullrequestreview-80123"},
+		{"an answer without an id", "github_comment", `{"repo":"example-org/example-repo","number":13,"body":"ok"}`, "",
+			"Commented on example-org/example-repo#13: https://github.com/example-org/example-repo/issues/13#issuecomment-1"},
+	} {
+		done, err := connector.Write(ctx, c, tc.tool, json.RawMessage(tc.args))
+		if err != nil || done.MessageRef != tc.ref || done.Text != tc.text {
+			t.Errorf("%s: %+v %v, want ref %q and text %q", tc.name, done, err, tc.ref, tc.text)
+		}
+		if text, err := c.Do(ctx, tc.tool, json.RawMessage(tc.args)); err != nil || text != tc.text {
+			t.Errorf("%s: Do answered %q %v", tc.name, text, err)
+		}
+	}
+	for _, tc := range []struct{ name, tool, args string }{
+		{"GitHub refuses", "github_comment", `{"repo":"example-org/example-repo","number":99,"body":"ok"}`},
+		{"arguments it cannot use", "github_comment", `{"repo":"../x","number":12,"body":"ok"}`},
+		{"a tool it has not", "github_merge", `{"repo":"example-org/example-repo","number":12}`},
+	} {
+		if done, err := connector.Write(ctx, c, tc.tool, json.RawMessage(tc.args)); err == nil || done != (connector.DoResult{}) {
+			t.Errorf("%s: %+v %v", tc.name, done, err)
+		}
+	}
+}
+
+// The id is read after the post went out, so whatever GitHub puts in it must never turn the post into a failure (the
+// model would post it again): the write succeeds with the same text, and the message ref is empty unless the id is a
+// positive whole number.
+func TestAnUnreadableIDNeverFailsAPost(t *testing.T) {
+	var mu sync.Mutex
+	posts := 0
+	id := ""
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		posts++
+		answer := `{"id":` + id + `,"html_url":"https://github.com/example-org/example-repo/issues/12#issuecomment-1"}`
+		mu.Unlock()
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(answer))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(Config{Auth: AuthConfig{FromMachine: "mac"}}, "Mac", (&machine{tokens: []string{oldToken}}).fetch)
+	c.api = srv.URL
+	ctx := context.Background()
+	args := json.RawMessage(`{"repo":"example-org/example-repo","number":12,"body":"ok"}`)
+	text := "Commented on example-org/example-repo#12: https://github.com/example-org/example-repo/issues/12#issuecomment-1"
+
+	for _, tc := range []struct{ name, id, ref string }{
+		{"a whole number", `1234567`, "1234567"},
+		{"a string", `"abc"`, ""},
+		{"a string of digits", `"123"`, ""},
+		{"a fraction", `1.5`, ""},
+		{"an exponent", `1e3`, ""},
+		{"an object", `{"x":1}`, ""},
+		{"a list", `[1]`, ""},
+		{"null", `null`, ""},
+		{"a boolean", `true`, ""},
+		{"negative", `-3`, ""},
+		{"zero", `0`, ""},
+		{"past int64", `99999999999999999999`, ""},
+	} {
+		mu.Lock()
+		id, posts = tc.id, 0
+		mu.Unlock()
+		done, err := connector.Write(ctx, c, "github_comment", args)
+		if err != nil || done.Text != text || done.MessageRef != tc.ref {
+			t.Errorf("%s: %+v %v, want the usual text and ref %q", tc.name, done, err, tc.ref)
+		}
+		mu.Lock()
+		n := posts
+		mu.Unlock()
+		if n != 1 {
+			t.Errorf("%s: %d posts", tc.name, n)
+		}
 	}
 }
