@@ -100,6 +100,7 @@ type fakeOpenAPI struct {
 	rejectReply       int            // business code for /reply, e.g. 230011 parent withdrawn
 	readCode          map[string]int // message id -> business code GET /messages/:id answers instead of its items
 	readFail          map[string]int // message id -> how many more GETs answer HTTP 500 (the client reads again)
+	botInfoFail       bool           // GET /bot/v3/info answers a business error
 }
 
 func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
@@ -116,6 +117,8 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 		switch {
 		case p == "/open-apis/auth/v3/tenant_access_token/internal":
 			reply(map[string]any{"code": 0, "tenant_access_token": "t-1", "expire": 7200})
+		case p == "/open-apis/bot/v3/info" && f.failsBotInfo():
+			reply(map[string]any{"code": 99991, "msg": "bot info is down"})
 		case p == "/open-apis/bot/v3/info":
 			reply(map[string]any{"code": 0, "bot": map[string]any{"app_name": "Persona", "open_id": "ou_bot"}})
 		case p == "/callback/ws/endpoint":
@@ -165,6 +168,12 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 	}))
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+func (f *fakeOpenAPI) failsBotInfo() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.botInfoFail
 }
 
 // find waits for a call whose text contains every one of want.

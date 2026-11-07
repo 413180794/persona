@@ -111,6 +111,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		if set.Owner != nil {
 			st.Owner, st.PairedAt = set.Owner.OpenID, set.Owner.At
 			st.Chats = botSendChats(set)
+			st.HomeChat = set.homeChat()
 		}
 		if h.cfg != nil {
 			st.PublicURL = h.cfg.PublicURL
@@ -144,13 +145,25 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		}
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuText:
-		chatID, err := botSendChat(set, a.ChatID)
+		noDetour := a.NoDetour
+		// A reply under the owner's "/ai" in a group that is not opted in (#6146) is the one send open to such a group.
+		chatID, found, err := aiSourceReply(set, a.ChatID, a.ReplyTo, a.Text, h.bots.clock().UTC())
 		if err != nil {
 			return nil, err
 		}
-		parent, err := h.checkReplyParent(ctx, api, set, a.ReplyTo)
-		if err != nil {
-			return nil, err
+		parent := chatID
+		if found {
+			if !h.useAISourceReply(a.ReplyTo) {
+				return nil, errBotSourceReply
+			}
+			noDetour = true // its original gone: the reply is lost, not sent into a chat the bot may not write in
+		} else {
+			if chatID, err = botSendChat(set, a.ChatID); err != nil {
+				return nil, err
+			}
+			if parent, err = h.checkReplyParent(ctx, api, set, a.ReplyTo); err != nil {
+				return nil, err
+			}
 		}
 		// With no parent the key is unused: replyOrSend sends with its own fresh one-shot key.
 		// The caller's key, when it names one, in place of the reply's own (parent, purpose, content): two lines with
@@ -159,8 +172,8 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		if k := callerKey(a.UUID, feishuMaxUUID); k != "" {
 			replyUUID = k
 		}
-		id, _, err := h.replyOrSendOpt(ctx, api, chatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), replyUUID, a.InThread, a.NoDetour)
-		if err == nil {
+		id, _, err := h.replyOrSendOpt(ctx, api, chatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), replyUUID, a.InThread, noDetour)
+		if err == nil && !found {
 			h.rememberMessageChat(id, firstNonEmpty(parent, chatID))
 		}
 		return map[string]any{"message_id": id}, err
@@ -185,9 +198,15 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 	case assistantwire.FeishuCotComplete:
 		return map[string]any{}, feishuCoded(api.CotComplete(ctx, a.CotID, a.MessageID, a.Reason))
 	case assistantwire.FeishuReact:
+		if err := h.checkReactTarget(ctx, api, set, a.MessageID); err != nil {
+			return nil, err
+		}
 		id, err := api.React(ctx, a.MessageID, a.Emoji)
 		return map[string]any{"reaction_id": id}, err
 	case assistantwire.FeishuUnreact:
+		if err := h.checkReactTarget(ctx, api, set, a.MessageID); err != nil {
+			return nil, err
+		}
 		return map[string]any{}, api.Unreact(ctx, a.MessageID, a.ReactionID)
 	case assistantwire.FeishuMessages:
 		items, err := api.Message(ctx, a.MessageID)
@@ -267,4 +286,18 @@ func feishuCoded(err error) error {
 	}
 	data, _ := json.Marshal(map[string]int{"code": code})
 	return &rpc.Error{Code: assistantwire.CodeFeishuAPI, Message: err.Error(), Data: data}
+}
+
+// checkReactTarget refuses an emoji (or taking one away) on a message of a chat the bot may not use: the owner's private
+// chat, the groups opted in, and the messages the owner's "@bot /ai" was taken from (aiSource, which carries its chat) are
+// the only places it reacts. Where a message is is found as for a reply's parent (checkReplyParent).
+func (h *Manager) checkReactTarget(ctx context.Context, api *feishubot.Client, set FeishuBotSettings, messageID string) error {
+	if messageID == "" {
+		return errors.New("feishu: a reaction needs a message")
+	}
+	if set.aiSource(messageID, h.bots.clock().UTC()) != nil {
+		return nil
+	}
+	_, err := h.checkReplyParent(ctx, api, set, messageID)
+	return err
 }

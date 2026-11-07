@@ -51,6 +51,11 @@ type FeishuBotSettings struct {
 	// TopicChats are the group chats the owner opted in (bots_topics.go): their messages reach the assistant, and the
 	// bot may send into them. The owner's own list: it goes when the owner does.
 	TopicChats []BotChat `json:"topic_chats,omitempty"`
+	// AISources are the messages the hub took as the owner's "@bot /ai …" in a group chat that is not opted in (#6146,
+	// bots_topics.go): the only messages of such a group the bot may reply to, and so the only place it writes in one.
+	// Kept across restarts (a to-do may be done weeks later, and its answer goes under the message); the oldest are
+	// dropped past botAISourcesKeep. Like the topic chats, the owner's: it goes when the owner does.
+	AISources []BotAISource `json:"ai_sources,omitempty"`
 	// NudgeAfter is how many minutes a card the bot sent may wait unanswered before the assistant nudges under it once
 	// (#6084, assistant/feishu_nudge.go): 0 is off, nil (never set) is assistantwire.NudgeAfterDefault.
 	NudgeAfter *int `json:"nudge_after,omitempty"`
@@ -184,6 +189,7 @@ func (h *Manager) restartBot() {
 	b := &h.bots
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.info = feishubot.BotInfo{} // the bot may be another app now: its own id is read again
 	if b.stop != nil {
 		b.stop()
 		b.stop, b.conn = nil, nil
@@ -249,6 +255,7 @@ func (s FeishuBotSettings) nudgeAfter() int {
 // copy is the settings with nothing shared: the owner is changed in place under h.bots.mu.
 func (s FeishuBotSettings) copy() FeishuBotSettings {
 	s.TopicChats = slices.Clone(s.TopicChats)
+	s.AISources = slices.Clone(s.AISources)
 	if s.NudgeAfter != nil {
 		n := *s.NudgeAfter
 		s.NudgeAfter = &n
@@ -321,7 +328,7 @@ func (h *Manager) botView(ctx context.Context) feishuBotView {
 		v.Pairing = &botPairView{Code: p.Code, ExpiresAt: p.Expires.Unix()}
 	}
 	for _, c := range s.TopicChats {
-		v.TopicChats = append(v.TopicChats, botChatView{ChatID: c.ChatID, Name: c.Name, AddedAt: c.At.Unix()})
+		v.TopicChats = append(v.TopicChats, botChatView{ChatID: c.ChatID, Name: c.Name, AddedAt: c.At.Unix(), Home: c.ChatID == s.homeChat()})
 	}
 	b.mu.Unlock()
 	if chat, err := h.feishuChatView(ctx); err == nil {
@@ -343,9 +350,12 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 			Domain    *string         `json:"domain"`
 			Features  json.RawMessage `json:"features"`
 			// TopicChats replaces the list of group chats the owner opted in; absent leaves it, [] clears it.
+			// An entry may carry home: true (the home topic group, "/topics home"); when no entry says anything about home,
+			// the one the list has stays.
 			TopicChats *[]struct {
 				ChatID string `json:"chat_id"`
 				Name   string `json:"name"`
+				Home   *bool  `json:"home"`
 			} `json:"topic_chats"`
 			// NudgeAfter is minutes before the one nudge under an unanswered card; 0 turns nudges off, absent leaves it.
 			// Read as raw JSON so that anything but a whole number in range gets the same answer (nudgeAfterValue).
@@ -372,10 +382,14 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 			fs = &f
 		}
 		var topics []BotChat
+		keepHome := true // no entry says anything about home: the list's own stays
 		if in.TopicChats != nil {
 			topics = []BotChat{}
 			for _, c := range *in.TopicChats {
-				topics = append(topics, BotChat{ChatID: c.ChatID, Name: c.Name})
+				if c.Home != nil {
+					keepHome = false
+				}
+				topics = append(topics, BotChat{ChatID: c.ChatID, Name: c.Name, Home: c.Home != nil && *c.Home})
 			}
 			// Everything is checked before anything is written: a list sent with a change that makes it impossible
 			// (a new App ID unpairs the owner) must not leave the rest of the request applied.
@@ -395,7 +409,7 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 			return
 		}
 		if topics != nil {
-			if err := h.setTopicChats(r.Context(), topics); err != nil {
+			if err := h.setTopicChats(r.Context(), topics, keepHome); err != nil {
 				writeErr(w, http.StatusBadRequest, err)
 				return
 			}
@@ -448,7 +462,7 @@ func (h *Manager) unpairBot(ctx context.Context) {
 	b.mu.Lock()
 	h.loadBotsLocked(ctx)
 	had := b.set.Owner != nil
-	b.set.Owner, b.set.Pairing, b.set.TopicChats = nil, nil, nil // the topic chats were the owner's
+	b.set.Owner, b.set.Pairing, b.set.TopicChats, b.set.AISources = nil, nil, nil, nil // the topic chats and the /ai sources were the owner's
 	h.saveBotSettingsLocked()
 	b.mu.Unlock()
 	if had {
@@ -550,7 +564,7 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 			records = append(records, botRecord{auditBotCredentials, d})
 		}
 		if next.AppID != cur.AppID {
-			cur.Owner, cur.Pairing, cur.TopicChats = nil, nil, nil
+			cur.Owner, cur.Pairing, cur.TopicChats, cur.AISources = nil, nil, nil, nil
 		}
 		cur.AppID, cur.SecretEnc, cur.Domain = next.AppID, next.SecretEnc, next.Domain
 	}

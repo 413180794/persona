@@ -43,6 +43,9 @@ func RenderTodoThreadReply(r TodoThreadReply) string { return render("todo/threa
 // block.
 type TodoThreadOpen struct {
 	Title, TodoID, Text string
+	// Quote is the text of a message the owner's request replied to in another chat (#6146): someone else's words, shown
+	// apart from Text, as background and escaped (ctx), never as the user's own. "" for none.
+	Quote string
 }
 
 // RenderTodoThreadOpen is the hand-over; the words go in as a quotation, each line after "> ", so that a many-line

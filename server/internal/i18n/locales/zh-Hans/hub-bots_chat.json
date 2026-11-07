@@ -13,5 +13,8 @@
   "topics_already": "这个群已经开启了。发 /topics off 可以关掉。",
   "topics_not_on": "这个群没有开启。",
   "topics_full": "已开启的群太多了，先关掉一个。",
+  "topics_home": "已设为主话题群：从别的群发来的请求，会在这里开新话题。",
+  "topics_on_home": "已开启，并设为主话题群：从别的群发来的请求，会在这里开新话题。只认你本人的消息。",
+  "topics_home_already": "这个群已经是主话题群了。",
   "chat_not_enabled": "这个群没有为机器人开启，先在群里发 /topics。"
 }

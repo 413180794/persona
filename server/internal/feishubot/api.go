@@ -328,6 +328,7 @@ type Item struct {
 	ChatID         string `json:"chat_id"`
 	ParentID       string `json:"parent_id"`
 	UpperMessageID string `json:"upper_message_id"`
+	ThreadID       string `json:"thread_id"` // the topic it is in, empty outside one
 	MsgType        string `json:"msg_type"`
 	CreateTime     string `json:"create_time"` // Unix milliseconds
 	Deleted        bool   `json:"deleted"`

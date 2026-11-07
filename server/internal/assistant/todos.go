@@ -79,6 +79,9 @@ type Todo struct {
 	Delivery *TodoDelivery `json:"delivery,omitempty"`
 	// Thread: the chat thread the todo is bound to (#5279, todo_thread.go); nil while it has none.
 	Thread *TodoThread `json:"thread,omitempty"`
+	// Source: where the todo was asked for when that is another chat (#6146, todo_source.go): the outcome is told
+	// there once; nil for any other todo.
+	Source *TodoSource `json:"source,omitempty"`
 }
 
 // todoStore is what the todos keep in the database (internal/db). A Store without it (the unit tests' memStore) keeps
@@ -108,6 +111,13 @@ type todoStore interface {
 	ListTodoThreads(ctx context.Context) (map[string]db.TodoThread, error)
 	SetTodoThread(ctx context.Context, todoID string, th db.TodoThread, at time.Time) error
 	ClearTodoThread(ctx context.Context, todoID string, at time.Time) (bool, error)
+	ListTodoSources(ctx context.Context) (map[string]db.TodoSource, error)
+	SetTodoSource(ctx context.Context, todoID string, src db.TodoSource) error
+	StopTodoSourceReport(ctx context.Context, todoID string, at time.Time) (bool, error)
+	PlanTodoSourceReport(ctx context.Context, todoID, text string, due time.Time) (bool, error)
+	ClaimTodoSourceReport(ctx context.Context, todoID string, now time.Time, maxAttempts int) (int, string, bool, error)
+	ReleaseTodoSourceReport(ctx context.Context, todoID string) error
+	ClearTodoSourcePlan(ctx context.Context, todoID string) (bool, error)
 }
 
 // The database keeps them: a Store that is it but lacked one of these would keep them in memory only.
@@ -142,6 +152,11 @@ type todoBook struct {
 	linked   map[[2]string]string  // the links the marks were last synced for: todo id and title, by agent
 
 	titling sync.WaitGroup // the model naming tasks' todos (todo_titles.go)
+
+	// reporting are the todos whose report back to their source is waiting for the outcome (todo_source.go).
+	reportMu  sync.Mutex
+	reporting map[string]bool
+	runMu     sync.Mutex // one report step at a time (sourceReportNow)
 }
 
 // spaceKey computes the unified space key string ("machineID/space").
@@ -183,6 +198,7 @@ func (s *Service) ensureTodosLoaded(ctx context.Context) error {
 		// The links as read are the ones the marks go by from now on: one that goes away later syncs its machine
 		// again (syncLinkedTodoTokens), even before any of the links changed.
 		s.syncLinkedTodoTokens()
+		s.sweepSourceReports() // a todo that closed while the assistant was away still tells where it came from
 	}
 	return err
 }
@@ -293,6 +309,15 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 	for id, th := range threads {
 		if t, ok := tmap[id]; ok {
 			t.Thread = &th
+		}
+	}
+	sources, err := st.ListTodoSources(ctx)
+	if err != nil {
+		return err
+	}
+	for id, src := range sources {
+		if t, ok := tmap[id]; ok {
+			t.Source = &src
 		}
 	}
 	for id, st := range s.todoStages(ctx) {
@@ -430,6 +455,10 @@ func copyTodoLocked(t *Todo) Todo {
 	if t.Thread != nil {
 		th := *t.Thread
 		out.Thread = &th
+	}
+	if t.Source != nil {
+		src := *t.Source
+		out.Source = &src
 	}
 	return out
 }
@@ -1033,6 +1062,7 @@ func (s *Service) setTodoRow(id string, row db.TodoRow, guard func(*Todo) bool) 
 	t.Title = row.Title
 	t.Notes = row.Notes
 	becameDone := t.DoneAt == nil && row.DoneAt != nil
+	reopened := t.DoneAt != nil && row.DoneAt == nil
 	t.DoneAt = row.DoneAt
 	t.StartError = row.StartError
 	t.DoneBy, t.DoneReason, t.ReopenedAt = row.DoneBy, row.DoneReason, row.ReopenedAt
@@ -1054,8 +1084,12 @@ func (s *Service) setTodoRow(id string, row db.TodoRow, guard func(*Todo) bool) 
 	out := formatTodo(copyTodoLocked(t))
 	closing := threadClosing(becameDone, t.StartError, t.DoneReason)
 	s.todos.mu.Unlock()
+	if reopened {
+		s.dropSourcePlan(id) // what was planned to be told may not be what it comes to now (todo_source.go)
+	}
 	if closing != nil {
 		s.threadPost(id, *closing) // after the lock: it looks the todo up again
+		s.sourceReportSoon(id, sourceReportWait)
 	}
 	return out, doneKeys, true
 }
@@ -1365,6 +1399,7 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 	}
 	if closing != nil {
 		s.threadPost(id, *closing)
+		s.sourceReportSoon(id, threadPostSettle) // no outcome is coming for a start that failed
 	}
 	if len(failKeys) > 0 {
 		s.retireTodoWork(failKeys...)

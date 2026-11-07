@@ -80,6 +80,9 @@ type botState struct {
 	// first sweep with them on lets the cards already due go (feishu_nudge.go). Kept here so a restart while they are
 	// off does not nudge the backlog.
 	NudgeOffAt time.Time `json:"nudge_off_at,omitzero"`
+	// NoHome are the group chats told, once, that there is no home topic group to open a request in (chat -> when,
+	// feishu_elsewhere.go). Kept so a restart does not tell them again.
+	NoHome map[string]time.Time `json:"no_home,omitempty"`
 }
 
 // The bot's messages a reply is routed by: each turn binds several (its progress card or agent message, each answer
@@ -136,6 +139,9 @@ type feishuBook struct {
 	recalled map[string]time.Time
 	// hinted are the topics told lately that they are tied to no open to-do (threadHint), by chat and thread.
 	hinted map[string]time.Time
+	// lookupWait is how long the topic of a message just sent waits between two reads of it (0: topicLookupWait;
+	// tests change it).
+	lookupWait time.Duration
 }
 
 // feishuRecalledKeep is how long a recall is remembered: a message waits at most feishuTurnWait for the one before
@@ -854,6 +860,10 @@ func (s *Service) FeishuMessage(ctx context.Context, p FeishuMessage) error {
 	go func() {
 		defer turn.pass()
 		turn.waitTurn()
+		if p.From == FeishuFromElsewhere {
+			s.feishuElsewhere(ev, st) // the owner's "@bot /ai …" from a group that is not opted in (feishu_elsewhere.go)
+			return
+		}
 		s.feishuMessage(ev, st, p.Action)
 	}()
 	return nil

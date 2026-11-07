@@ -346,6 +346,7 @@ func (s *Service) accepted(ctx context.Context, id, card string) bool {
 	s.boardChanged() // it no longer waits
 	s.setTaskStage(ctx, id, "verify", "")
 	s.threadPost(id, threadEvent{kind: threadTodoAccepted}) // and the todo's chat thread
+	s.sourceReportSoon(id, sourceReportWait)                // and where the request came from (todo_source.go)
 	if t, ok := s.todoNow(id); ok {
 		for _, mid := range cp.Messages {
 			if err := s.botUpdateCard(ctx, mid, s.acceptCard(ctx, t, cp, false)); err != nil {

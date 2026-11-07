@@ -893,11 +893,15 @@ const (
 	// of its parent and content. no_detour? makes a reply whose parent was withdrawn or deleted fail (feishubot.MessageGone
 	// tells why) in place of going into the chat as a message of its own.
 	// chat_id? names another chat to send into (and to fall back to when the parent was withdrawn) and in_thread? puts
-	// a reply in the parent's thread; the hub refuses any chat but the owner's private chat, and with neither field
-	// the call is what it always was.
+	// a reply in the parent's thread; the hub refuses any chat but the owner's private chat and the group chats the
+	// owner opted in, and with neither field the call is what it always was.
 	FeishuPost = "feishu.post"
 	// FeishuText: {reply_to?, text, chat_id?, in_thread?, uuid?, no_detour?} → {message_id}: plain text as a reply,
 	// else into the owner's chat; chat_id, in_thread, uuid (cut to 50 characters here) and no_detour are FeishuPost's.
+	// One more place is open to it (#6146): a reply to a message the hub took as the owner's "@bot /ai …" in a group that
+	// is not opted in (FeishuFromElsewhere), which lands under that message and nowhere else in the group (at most
+	// 2000 characters, never a detour into the chat); a send into that group, or a reply to any other message in it,
+	// is refused as ever.
 	FeishuText = "feishu.text"
 	// FeishuUpdateCard: {message_id, card} → {}.
 	FeishuUpdateCard = "feishu.update_card"
@@ -971,7 +975,15 @@ type ChannelReceive struct {
 type FeishuMessage struct {
 	Event  json.RawMessage `json:"event"`
 	Action string          `json:"action,omitempty"`
+	// From says where the hub took the message from when it is not the owner's private chat or a topic of a group the
+	// owner opted in: FeishuFromElsewhere is the owner's "@bot /ai …" in a group that is not opted in (#6146), the only
+	// thing the hub lets through from one. "" for the usual two.
+	From string `json:"from,omitempty"`
 }
+
+// FeishuFromElsewhere is FeishuMessage.From of a message the hub took from a group chat that is not opted in: the owner's
+// "@bot /ai …" and nothing else. The assistant opens a to-do for it in the home topic group (assistant/feishu_elsewhere.go).
+const FeishuFromElsewhere = "elsewhere"
 
 // FeishuAction is feishu.card_action's params: card.action.trigger's event as Feishu sent it (the owner's press), and
 // the owner's action for the card it presses (InteractionsResolve).
@@ -1038,6 +1050,9 @@ type FeishuStatus struct {
 	// the owner's private chat and the group chats the owner opted in. A thread the assistant posts into is checked
 	// against it before the call, so nothing goes to a chat an agent made up.
 	Chats []string `json:"chats,omitempty"`
+	// HomeChat is the home topic group (#6146): the opted-in group the owner marked with "/topics home", else the first
+	// one opted in; "" while none is. It is one of Chats. Where a request from a group that is not opted in opens its topic.
+	HomeChat string `json:"home_chat,omitempty"`
 	// NudgeAfter is the bot's setting nudge_after (#6084): minutes a card waits unanswered before the one nudge under it,
 	// 0 off. nil (a status from before the setting) is NudgeAfterDefault.
 	NudgeAfter *int `json:"nudge_after,omitempty"`

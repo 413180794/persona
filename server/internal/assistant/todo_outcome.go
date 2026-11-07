@@ -121,6 +121,7 @@ func (s *Service) goRecordTaskOutcome(t Todo, doneAt time.Time) {
 	go func() {
 		defer s.tasks.outcomeRuns.Done()
 		s.recordTaskOutcome(t, doneAt)
+		s.sourceReportNow(t.ID) // the outcome is as written as it will be: tell where the request came from (todo_source.go)
 	}()
 }
 

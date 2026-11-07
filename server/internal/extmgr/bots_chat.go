@@ -278,18 +278,19 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 	}
 	// The owner wrote it (the hub checked the sender): what it answers, it answers once, like a card's press — but
 	// only a question: the bot takes no typed answer to a plan, a permission or a terminal (#4675).
-	h.handToAssistant(api, ev, raw, h.issueMessageAction(channel.Feishu, proto.IxQuestion), since, pass, false)
+	h.handToAssistant(api, ev, raw, h.issueMessageAction(channel.Feishu, proto.IxQuestion), "", since, pass, false)
 }
 
 // handToAssistant hands the owner's message to the assistant; one it cannot take is answered that it could not be
 // sent (in the topic, for a message that came in one). pass releases the next message's wait once this one is handed
-// over, whatever came of it.
-func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEvent, raw json.RawMessage, action string, since time.Time, pass func(), inThread bool) {
+// over, whatever came of it. from is FeishuMessage.From: assistantwire.FeishuFromElsewhere for the owner's "/ai" from a
+// group that is not opted in, whose note goes under that message and nowhere else.
+func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEvent, raw json.RawMessage, action, from string, since time.Time, pass func(), inThread bool) {
 	msg := ev.Message
 	if inThread {
 		h.rememberHandedGroup(msg.MessageID) // before the handover: a recall during it still counts
 	}
-	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw, Action: action}, since)
+	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw, Action: action, From: from}, since)
 	pass() // handed over (or not): the next one need not wait for the note below
 	if err == nil {
 		return
@@ -300,6 +301,15 @@ func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEve
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	text := i18n.T(h.userLang(), "hub-bots_chat.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)})
+	if from != "" {
+		// Under the owner's "/ai" message, and only there: were it gone, the note is lost rather than written into a
+		// group that is not the bot's to write in (replyOrSendOpt, no_detour).
+		content := feishubot.TextContent(text)
+		if _, _, err := h.replyOrSendOpt(ctx, api, msg.ChatID, msg.MessageID, feishubot.TypeText, content, feishuReplyUUIDIn(msg.MessageID, "n", text, false), false, true); err != nil {
+			h.logf("bots: note: %v", err)
+		}
+		return
+	}
 	h.botNoteIn(ctx, api, msg.ChatID, msg.MessageID, text, inThread)
 }
 

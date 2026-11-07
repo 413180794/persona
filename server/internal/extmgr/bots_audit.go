@@ -21,6 +21,10 @@ const (
 	// {chat_id}: a group chat the owner opted in, or took out again (the /topics command, or the app's list).
 	auditBotTopicChatAdded   = "bot_topic_chat_added"
 	auditBotTopicChatRemoved = "bot_topic_chat_removed"
+	// {chat_id}: the group chat that is the home topic group now (/topics home, or the app's list).
+	auditBotTopicHome = "bot_topic_home"
+	// {chat_id}: the owner's "@bot /ai …" was taken from a group chat that is not opted in (#6146). Never the words.
+	auditBotAITaken = "bot_ai_taken"
 )
 
 // botRecord is an audit record of the bot's, written once its lock is let go.
