@@ -7,6 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
+import { itemHeaders } from "./manager-choice";
 
 // ── settings ─────────────────────────────────────────────
 
@@ -290,11 +291,12 @@ export function useTranslations(): number {
 const mails = new Map<string, Promise<MailTranslation>>();
 
 /** One mail's subject and body, translated by the hub from the message it reads itself; asked once per mail and target. */
-export function translateMail(account: string, uid: number, mailbox: string, target: string): Promise<MailTranslation> {
-  const k = [account, mailbox, uid, target].join("\u0000");
+export function translateMail(account: string, uid: number, mailbox: string, target: string, manager?: string): Promise<MailTranslation> {
+  const k = [manager ?? "", account, mailbox, uid, target].join("\u0000");
   let p = mails.get(k);
   if (!p) {
-    p = api<MailTranslation>("/translate/mail", { method: "POST", json: { account_id: account, uid, mailbox, target } });
+    // the mail is the manager's that reads it (an inbox item's, docs/managers.md "Clients")
+    p = api<MailTranslation>("/translate/mail", { method: "POST", json: { account_id: account, uid, mailbox, target }, headers: itemHeaders(manager) });
     mails.set(k, p);
     p.catch(() => mails.delete(k)); // a failure can be asked again next time
   }

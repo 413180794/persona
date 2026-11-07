@@ -45,5 +45,6 @@
   "no_sources_title": "まだメッセージの取り込み元がありません",
   "no_sources_hint": "メールや Lark をつなぐと新しいメッセージがここに届き、AI が対応が必要なものと確認だけでよいものに分けます。",
   "no_sources_connect": "{name}をつなぐ",
-  "rules_list": "ルール"
+  "rules_list": "ルール",
+  "mutes_offline": "オフラインです。戻るとここにミュートが表示されます。"
 }

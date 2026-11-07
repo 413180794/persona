@@ -4,6 +4,7 @@
 // permissions digest). The admin UI has the same routes under /api/v1/admin/extensions/-/ (its api.ts), the same words
 // (here).
 import { api, enc, pastHub } from "./api";
+import { itemHeaders } from "./manager-choice";
 import { extRoot, listOf } from "./extension-api";
 import { changed, type HubExtensionDetail, type ExtensionPermission } from "./extensions";
 import { previewConsent, type DependencyState, type PackMember } from "./extension-model";
@@ -113,8 +114,9 @@ export function catalogQuery(q?: string, market?: string, refresh?: boolean): st
 }
 
 // A refresh waits for every market to be read again, a git market's fetch up to 3 minutes (extension/market_git.go).
-export const getCatalog = (q?: string, market?: string, refresh?: boolean) =>
-  api<Catalog & { plugins?: CatalogItem[] }>(`${M()}/catalog${catalogQuery(q, market, refresh)}`, refresh ? { timeout: pastHub(180_000) } : {}).then(catalogOf);
+// `manager` (here and below): whose extensions (another manager's upgrade, docs/managers.md "Clients"); none: the default's.
+export const getCatalog = (q?: string, market?: string, refresh?: boolean, manager?: string) =>
+  api<Catalog & { plugins?: CatalogItem[] }>(`${M()}/catalog${catalogQuery(q, market, refresh)}`, { ...(refresh ? { timeout: pastHub(180_000) } : {}), headers: itemHeaders(manager) }).then(catalogOf);
 /** A catalog as either kind of hub sends it (the list under `extensions`, or `plugins`). */
 export const catalogOf = (c: Catalog & { plugins?: CatalogItem[] }): Catalog => {
   const markets = (c.markets ?? []).map(marketView);
@@ -123,10 +125,10 @@ export const catalogOf = (c: Catalog & { plugins?: CatalogItem[] }): Catalog => 
   return { markets, extensions, ...(c.platform ? { platform: c.platform } : {}) };
 };
 /** Both keys: a hub from before #1844 reads `plugin`, a newer one `extension` (or `plugin`). */
-export const previewFromMarket = (market: string, extension: string) =>
-  api<MarketPreview>(`${M()}/catalog/preview`, { method: "POST", json: { market, extension, plugin: extension } });
-export const installPreview = (pv: MarketPreview) =>
-  api<HubExtensionDetail>(`${M()}/install`, { method: "POST", json: previewConsent(pv) }).then(changed);
+export const previewFromMarket = (market: string, extension: string, manager?: string) =>
+  api<MarketPreview>(`${M()}/catalog/preview`, { method: "POST", json: { market, extension, plugin: extension }, headers: itemHeaders(manager) });
+export const installPreview = (pv: MarketPreview, manager?: string) =>
+  api<HubExtensionDetail>(`${M()}/install`, { method: "POST", json: previewConsent(pv), headers: itemHeaders(manager) }).then(changed);
 export const upgradePreview = (id: string, pv: MarketPreview) =>
   api<HubExtensionDetail>(`${extRoot()}/${enc(id)}/-/upgrade`, { method: "POST", json: previewConsent(pv) }).then(changed);
 export interface ExtensionRemovalResult {
@@ -258,22 +260,26 @@ export const agreeLabel = (pv: MarketPreview) => (pv.upgrade ? (pv.more_permissi
  */
 export type ExtensionsRoute =
   | { kind: "list" }
-  | { kind: "extension"; id: string }
-  | { kind: "page"; id: string; ui: string }
+  // manager: whose extension it is (several managers: the same id may be installed under each, docs/managers.md); none
+  // is the default's. Written `<id>@<manager>`.
+  | { kind: "extension"; id: string; manager?: string }
+  | { kind: "page"; id: string; ui: string; manager?: string }
   | { kind: "catalog" }
-  | { kind: "item"; market: string; id: string }
+  // manager: whose copy an upgrade is for (another manager's extension page opened it); none: the default's
+  | { kind: "item"; market: string; id: string; manager?: string }
   | { kind: "markets" };
 
 export function extensionsRoute(sub: string | null | undefined): ExtensionsRoute {
   if (!sub) return { kind: "list" };
   if (sub === "-market") return { kind: "catalog" };
   if (sub === "-markets") return { kind: "markets" };
-  const item = /^-market\/([^/]+)\/([^/]+)$/.exec(sub);
-  if (item) return { kind: "item", market: item[1], id: item[2] };
-  const page = /^([^/-][^/]*)\/ui\/([^/]+)$/.exec(sub);
-  if (page) return { kind: "page", id: page[1], ui: page[2] };
+  const item = /^-market\/([^/]+)\/([^/@]+)(?:@([^/]+))?$/.exec(sub);
+  if (item) return { kind: "item", market: item[1], id: item[2], ...(item[3] ? { manager: item[3] } : {}) };
+  const page = /^([^/@-][^/@]*)(?:@([^/]+))?\/ui\/([^/]+)$/.exec(sub);
+  if (page) return { kind: "page", id: page[1], ui: page[3], ...(page[2] ? { manager: page[2] } : {}) };
   if (sub.startsWith("-") || sub.includes("/")) return { kind: "list" };
-  return { kind: "extension", id: sub };
+  const [id, manager] = sub.split("@", 2);
+  return { kind: "extension", id, ...(manager ? { manager } : {}) };
 }
 
 export function routeSub(r: ExtensionsRoute): string | null {
@@ -281,13 +287,13 @@ export function routeSub(r: ExtensionsRoute): string | null {
     case "list":
       return null;
     case "extension":
-      return r.id;
+      return r.manager ? `${r.id}@${r.manager}` : r.id;
     case "page":
-      return `${r.id}/ui/${r.ui}`;
+      return `${r.id}${r.manager ? `@${r.manager}` : ""}/ui/${r.ui}`;
     case "catalog":
       return "-market";
     case "item":
-      return `-market/${r.market}/${r.id}`;
+      return `-market/${r.market}/${r.id}${r.manager ? `@${r.manager}` : ""}`;
     case "markets":
       return "-markets";
   }

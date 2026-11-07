@@ -72,6 +72,9 @@ describe("市场的规矩", () => {
       [null, { kind: "list" }],
       ["example-notes", { kind: "extension", id: "example-notes" }],
       ["example-gateway/ui/home", { kind: "page", id: "example-gateway", ui: "home" }],
+      // another manager's (several managers: the same id under each)
+      ["voice@m-3fa21c", { kind: "extension", id: "voice", manager: "m-3fa21c" }],
+      ["example-gateway@m-3fa21c/ui/home", { kind: "page", id: "example-gateway", ui: "home", manager: "m-3fa21c" }],
       ["-market", { kind: "catalog" }],
       ["-market/3f2a/example-cal", { kind: "item", market: "3f2a", id: "example-cal" }],
       ["-markets", { kind: "markets" }],

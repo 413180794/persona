@@ -62,6 +62,8 @@
   "bulk_undone_none": "Nothing to move back",
   "bulk_fresh_one": "{head}; {count} has new messages and stays in the inbox",
   "bulk_fresh_other": "{head}; {count} have new messages and stay in the inbox",
+  "bulk_partly_one": "{head}. {count} item wasn't changed: {error}",
+  "bulk_partly_other": "{head}. {count} items weren't changed: {error}",
   "scope_search": "Search \"{query}\"",
   "scope_count_one": "{scope} · {count} item",
   "scope_count_other": "{scope} · {count} items",

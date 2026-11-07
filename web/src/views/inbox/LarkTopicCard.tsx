@@ -8,6 +8,7 @@ import { api, enc, errorText } from "../../lib/api";
 import { clock } from "../../lib/format";
 import { cardText, emojiLabel, mergeMessages, type LarkMessage, type LarkPage, type LarkPart } from "../../lib/inbox";
 import { larkPath } from "../../lib/lark-accounts";
+import { useItemManager } from "../../lib/manager-choice";
 import { LarkTopicReplies, SHOWN, topicReplyCount, type TopicPreview } from "../../lib/lark-topic-replies";
 import { t } from "../../i18n";
 import { Button, cx, Dialog, Loading } from "../../ui/atoms";
@@ -22,8 +23,9 @@ const THREAD_PAGE = 60;
 
 /** One queue of reply reads for the chat shown, on its account; closed when the chat changes or the page goes. */
 export function useTopicReplies(feed: string, account: number | undefined): LarkTopicReplies {
+  const manager = useItemManager();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const queue = useMemo(() => newQueue(account), [feed, account]);
+  const queue = useMemo(() => newQueue(account, manager), [feed, account, manager]);
   useEffect(() => {
     queue.open();
     return () => queue.close();
@@ -31,9 +33,9 @@ export function useTopicReplies(feed: string, account: number | undefined): Lark
   return queue;
 }
 
-function newQueue(account: number | undefined) {
+function newQueue(account: number | undefined, manager: string | undefined) {
   return new LarkTopicReplies(async (id, limit) => {
-    const r = await api<LarkPage>(larkPath(`/lark/messages/${enc(id)}/thread?limit=${limit}`, account));
+    const r = await api<LarkPage>(larkPath(`/lark/messages/${enc(id)}/thread?limit=${limit}`, account, manager));
     return mergeMessages([], r.messages ?? []);
   });
 }
@@ -266,16 +268,17 @@ export function LarkTopicDialog({
   const [more, setMore] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const base = `/lark/messages/${enc(topic.id)}/thread?limit=${THREAD_PAGE}`;
+  const manager = useItemManager();
 
   useEffect(() => {
     let live = true;
-    api<LarkPage>(larkPath(base, account))
+    api<LarkPage>(larkPath(base, account, manager))
       .then((r) => live && setPage({ ...r, messages: mergeMessages([], r.messages ?? []) }))
       .catch((e) => live && setError(errorText(e)));
     return () => {
       live = false;
     };
-  }, [base, account]);
+  }, [base, account, manager]);
 
   // Opened at the newest reply.
   const placed = useRef(false);
@@ -289,7 +292,7 @@ export function LarkTopicDialog({
     if (!page?.older_cursor) return;
     setMore(true);
     try {
-      const r = await api<LarkPage>(larkPath(`${base}&before=${enc(page.older_cursor)}`, account));
+      const r = await api<LarkPage>(larkPath(`${base}&before=${enc(page.older_cursor)}`, account, manager));
       setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []), has_older: r.has_older, older_cursor: r.older_cursor });
     } catch (e) {
       setError(errorText(e));

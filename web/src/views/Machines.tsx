@@ -10,6 +10,7 @@ import { hubLabel, routeText } from "../lib/mesh";
 import { machineDeployment } from "../lib/machine-deploy";
 import { classifyConnection } from "../lib/node-health";
 import { href, navigate, onLinkClick, type Route } from "../lib/router";
+import { groupByManager, offlineManagerOf, useRoster } from "../lib/managers";
 import { useStore } from "../lib/store";
 import { documentPage, visiblePoll } from "../lib/visible-poll";
 import type { Machine, MachineMetrics, MetricPoint, Session } from "../lib/types";
@@ -19,11 +20,15 @@ import { Empty } from "./assistant/parts";
 import { AddComputer, type PendingComputer } from "./machines/AddComputer";
 import { HelpDialog } from "./assistant/Readiness";
 import { MachineDeploy } from "./machines/MachineDeploy";
+import { ManagerHeading } from "./ManagerParts";
 import { t } from "../i18n";
 import { addTokens, formatTokens, hitRate, percentText, totalTokens, type UsageTokens } from "../lib/tokens";
 
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
+  // with several managers, each one's computers under its name (docs/managers.md "Clients"); one: as before
+  const roster = useRoster();
+  const groups = groupByManager(machines, roster, (m) => m.manager);
   const loaded = useStore((s) => s.loaded);
   const canAdd = useStore((s) => canAddComputer(s.features));
   const [adding, setAdding] = useState<{ again: PendingComputer | null } | null>(null);
@@ -105,21 +110,25 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               </Empty>
             </div>
           )}
-          {machines.map((m, i) => (
-            <MachineCard
-              key={m.id}
-              m={m}
-              index={i}
-              metrics={metrics?.find((x) => x.machine_id === m.id)}
-              hub={hubLabel(m, machines)}
-              route={routeText(m, machines)}
-              canAdd={canAdd}
-              answering={answering === m.id}
-              onReconnect={reconnect}
-              onAnswer={answer}
-              onAddAgain={addAgain}
-            />
-          ))}
+          {(groups ?? [{ manager: null, items: machines }]).map((g) => [
+            g.manager && <ManagerHeading key={`h:${g.manager.id}`} manager={g.manager} count={g.items.length} className="pt-1 md:col-span-2" />,
+            ...g.items.map((m) => (
+              <MachineCard
+                key={m.id}
+                m={m}
+                index={machines.indexOf(m)}
+                metrics={metrics?.find((x) => x.machine_id === m.id)}
+                hub={hubLabel(m, machines)}
+                route={routeText(m, machines)}
+                canAdd={canAdd}
+                answering={answering === m.id}
+                onReconnect={reconnect}
+                onAnswer={answer}
+                onAddAgain={addAgain}
+                managerOffline={offlineManagerOf(roster, m)?.name}
+              />
+            )),
+          ])}
         </div>
       </div>
       <AddComputer open={!!adding} again={adding?.again} onClose={() => setAdding(null)} />
@@ -139,12 +148,14 @@ type CardProps = {
   onReconnect: (id: string) => void;
   onAnswer: (m: { id: string; name: string }, what: "confirm" | "reject") => Promise<void>;
   onAddAgain: (again: PendingComputer) => void;
+  /** Its manager's name when that manager is offline (several managers): why it is offline, and no Reconnect. */
+  managerOffline?: string;
 };
 
 // One computer's card. It is memoized and reads only its own computer's agents from the store: a sessions push about
 // another computer leaves its props and its counts as they were, so it (and its Stat, Spark, MachineDeploy) does not
 // render again. Nor does a machines push that only moved last_seen on (sameCard).
-const MachineCard = memo(function MachineCard({ m, index, metrics: mm, hub, route, canAdd, answering, onReconnect, onAnswer, onAddAgain }: CardProps) {
+const MachineCard = memo(function MachineCard({ m, index, metrics: mm, hub, route, canAdd, answering, onReconnect, onAnswer, onAddAgain, managerOffline }: CardProps) {
   const [agents, working] = useStore((s) => (m.online ? agentCounts(s.sessions[m.id]) : NO_AGENTS));
   const l = mm?.latest;
   const memPct = l?.mem_used && l.mem_total ? (l.mem_used / l.mem_total) * 100 : undefined;
@@ -154,7 +165,7 @@ const MachineCard = memo(function MachineCard({ m, index, metrics: mm, hub, rout
   const pending = isPending(m);
   // why it is offline: the hub's error_code in our words, else from the error text, and what to do
   const coded = pending ? "" : machineErrorText(m.error_code);
-  const connFailure = expectedDisconnect || pending || coded ? null : classifyConnection(m);
+  const connFailure = expectedDisconnect || pending || coded || managerOffline ? null : classifyConnection(m);
   return (
     <section onClick={(e) => openFromCard(e, detail)} className="cursor-pointer overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${index * 60}ms both` }}>
       <div className="flex items-start gap-3 px-4 pt-3.5">
@@ -177,7 +188,7 @@ const MachineCard = memo(function MachineCard({ m, index, metrics: mm, hub, rout
           </div>
           <p className="truncate text-[11.5px] text-ink-3">{[m.system?.name || m.os, m.system?.model, m.system?.cpu].filter(Boolean).join(" · ") || m.hostname}</p>
         </a>
-        {!m.online && !expectedDisconnect && !pending && (
+        {!m.online && !expectedDisconnect && !pending && !managerOffline && (
           <Button tone="secondary" icon="retry" onClick={() => onReconnect(m.id)}>
             {t("machines.reconnect")}
           </Button>
@@ -213,7 +224,13 @@ const MachineCard = memo(function MachineCard({ m, index, metrics: mm, hub, rout
         </div>
       )}
       {m.online && !pending && (coded || m.error) && <p className="mx-4 mt-2 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{coded || m.error}</p>}
-      {!m.online && coded && !expectedDisconnect && (
+      {/* its manager is offline: say so, not the hub's words for an unreachable assistant */}
+      {!m.online && managerOffline && (
+        <p className="mx-4 mt-2 break-words rounded-[8px] bg-field px-2.5 py-1.5 text-[12px] text-ink-2" data-error-code="manager_offline" title={m.error}>
+          {t("settings-managers.machine_offline", { name: managerOffline })}
+        </p>
+      )}
+      {!m.online && coded && !expectedDisconnect && !managerOffline && (
         <p className="mx-4 mt-2 break-words rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red" data-error-code={m.error_code} title={m.error}>
           {coded}
         </p>

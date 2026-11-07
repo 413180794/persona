@@ -6,6 +6,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { fitPick, releaseLarkAttachments, stageLarkAttachment, type LarkAttachment } from "../../lib/lark-attachments";
 import { chatMembers, loadDraft, saveDraft, withEveryone } from "../../lib/lark-chat";
+import { useItemManager } from "../../lib/manager-choice";
 import { mentionsIn, type LarkPerson } from "../../lib/lark-people";
 import { PHONE, useMedia } from "../../lib/viewport";
 import { t } from "../../i18n";
@@ -132,9 +133,10 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   });
 
   const everyone = t("inbox-larkthread.everyone");
+  const manager = useItemManager();
   const find = useCallback(
-    (q: string, signal: AbortSignal) => chatMembers(feed ?? "", q, account, signal).then((people) => withEveryone(people, q, everyone)),
-    [feed, account, everyone],
+    (q: string, signal: AbortSignal) => chatMembers(feed ?? "", q, account, signal, manager).then((people) => withEveryone(people, q, everyone)),
+    [feed, account, manager, everyone],
   );
   const people = useLarkPeoplePicker({
     text,

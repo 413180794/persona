@@ -6,6 +6,7 @@ import { api, enc } from "./api";
 import type { PromptQR } from "./connectors";
 import { extIdOf, extRoot } from "./extension-api";
 import type { AuthPrompt as WireAuthPrompt, AuthState } from "./extension-wire";
+import { messageManager } from "./manager-choice";
 import { onHubEvent } from "./store";
 import { t } from "../i18n";
 
@@ -45,12 +46,13 @@ export const authStep = (id: string, step: string, values: Record<string, string
   api<AuthPrompt>(`${base(id)}/step`, { method: "POST", json: { step, values } });
 export const authLogout = (id: string) => api<ExtensionAuth>(`${base(id)}/logout`, { method: "POST", json: {} });
 
-/** Calls l with each extension_auth the hub pushes (extension id, its new state). */
-export function onAuthChange(l: (id: string, auth: ExtensionAuth) => void): () => void {
+/** Calls l with each extension_auth the hub pushes (extension id, its new state, and the manager whose extension it is:
+ *  the same id may be installed under several managers, docs/managers.md "Clients"). */
+export function onAuthChange(l: (id: string, auth: ExtensionAuth, manager: string) => void): () => void {
   return onHubEvent("extension_auth", (msg) => {
     const id = extIdOf(msg as { extension?: unknown; plugin?: unknown });
     const auth = (msg as { auth?: unknown }).auth;
-    if (id && auth && typeof auth === "object") l(id, auth as ExtensionAuth);
+    if (id && auth && typeof auth === "object") l(id, auth as ExtensionAuth, messageManager(msg));
   });
 }
 

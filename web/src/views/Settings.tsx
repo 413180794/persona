@@ -37,6 +37,7 @@ import { ChannelList, ChannelPage } from "./settings/Channels";
 import { ConnectDevice } from "./settings/ConnectDevice";
 import { settingsTarget } from "../lib/channels";
 import { routeSub } from "../lib/extension-market";
+import { ownedSub, parseOwnedSub } from "../lib/manager-choice";
 import { HubSettings } from "./settings/HubSettings";
 import { ManagersSettings } from "./settings/ManagersSettings";
 import { SentSettings } from "./settings/SentSettings";
@@ -216,16 +217,16 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             {tab === "assistant" && <AssistantSettings />}
             {(tab === "claude" || tab === "codex" || tab === "agy" || tab === "omp") && <AgentSettings key={tab} agent={tab} />}
             {tab === "channels" && (sub ? (
-              <ChannelPage key={sub} id={sub} onBack={() => pick("channels")} onSettings={(url) => {
+              <ChannelPage key={sub} {...parseOwnedSub(sub)} onBack={() => pick("channels")} onSettings={(url) => {
                 const target = settingsTarget(url);
                 if (target && TABS.includes(target.tab as Tab)) pick(target.tab as Tab, target.sub);
               }} />
             ) : (
               <ChannelList onOpen={(id) => pick("channels", id)} onMarketItem={(market, id) => pick("extensions", routeSub({ kind: "item", market, id }))} />
             ))}
-            {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("channels", id)} />}
+            {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id, manager) => pick("channels", ownedSub(id, manager))} />}
             {tab === "sent" && <SentSettings />}
-            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onChannel={(id) => pick("channels", id)} onConnector={(id) => pick("connectors", id)} />}
+            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onChannel={(id, manager) => pick("channels", ownedSub(id, manager))} onConnector={(id, manager) => pick("connectors", ownedSub(id, manager))} />}
             {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
             {tab === "shortcuts" && <ShortcutSettings />}
             {tab === "devices" && <Devices />}

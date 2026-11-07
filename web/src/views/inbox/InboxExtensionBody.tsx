@@ -74,6 +74,7 @@ export function InboxExtensionBody({ item, place, own, onOwn }: { item: InboxIte
           extension={place.extension}
           ui={place.id}
           context={context}
+          manager={item.manager}
           bare
           title={place.title}
           revision={item.version}

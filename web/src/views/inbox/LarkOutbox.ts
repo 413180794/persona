@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { errorText } from "../../lib/api";
 import { nextLarkPosition, replyLarkMessage, sendLarkMessage, type LarkMention, type LarkMessage } from "../../lib/inbox";
 import { fileOutcomeUnknown, releaseLarkAttachments, sendLarkAttachment, type LarkAttachment, type LarkAttachmentRoute } from "../../lib/lark-attachments";
+import { useItemManager } from "../../lib/manager-choice";
 import { t } from "../../i18n";
 import { toast } from "../../ui/atoms";
 
@@ -47,10 +48,10 @@ export function localMessage(o: LarkOutgoing, position: string): LarkMessage {
 }
 
 /** Sends `o` the way it is routed. */
-export function deliver(feed: string, o: LarkOutgoing, ol?: number): Promise<{ message_id?: string }> {
-  if (o.attachment) return sendLarkAttachment(feed, o.attachment, o.clientID, o.route, ol);
-  if (o.route.replyTo) return replyLarkMessage(o.route.replyTo, o.text ?? "", Boolean(o.route.thread), o.clientID, ol, o.mentions);
-  return sendLarkMessage(feed, o.text ?? "", o.clientID, ol, o.mentions);
+export function deliver(feed: string, o: LarkOutgoing, ol?: number, manager?: string): Promise<{ message_id?: string }> {
+  if (o.attachment) return sendLarkAttachment(feed, o.attachment, o.clientID, o.route, ol, manager);
+  if (o.route.replyTo) return replyLarkMessage(o.route.replyTo, o.text ?? "", Boolean(o.route.thread), o.clientID, ol, o.mentions, manager);
+  return sendLarkMessage(feed, o.text ?? "", o.clientID, ol, o.mentions, manager);
 }
 
 type Update = (fn: (messages: LarkMessage[]) => LarkMessage[]) => void;
@@ -61,6 +62,8 @@ type Update = (fn: (messages: LarkMessage[]) => LarkMessage[]) => void;
  */
 export function useLarkOutbox(feed: string, ol: number | undefined, update: Update, current: () => LarkMessage[],
   newest?: () => Promise<LarkMessage[]>) {
+  // the chat's manager (LarkThread provides it): a send queued here goes to it even after the page moved on
+  const manager = useItemManager();
   const pending = useRef(new Map<string, LarkOutgoing>());
   // previews of pictures sent: their local messages still show them until the hub's copy comes
   const sent = useRef<LarkAttachment[]>([]);
@@ -90,7 +93,7 @@ export function useLarkOutbox(feed: string, ol: number | undefined, update: Upda
 
   const run = useCallback(async (o: LarkOutgoing) => {
     try {
-      const r = await deliver(feed, o, ol);
+      const r = await deliver(feed, o, ol, manager);
       // a file taken without a message id stays as it is: sent, nothing to send again
       const id = r.message_id;
       updateRef.current((list) => (id && list.some((m) => m.id === id)
@@ -106,7 +109,7 @@ export function useLarkOutbox(feed: string, ol: number | undefined, update: Upda
       mark(o.clientID, { sending: false, failed: true, local_state: unknown ? "unknown" : "failed" });
       toast(t("inbox-larkthread.send_failed", { error: errorText(e) }), "error");
     }
-  }, [feed, ol, mark]);
+  }, [feed, ol, manager, mark]);
 
   /** Draws them at once and sends them in order, after whatever is still going out. */
   const send = useCallback((outs: LarkOutgoing[]) => {

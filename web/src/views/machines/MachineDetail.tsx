@@ -2,6 +2,8 @@
 // computer is (online, system, which hub when there are several), its agents by herdr space (a row opens the chat),
 // its values now, CPU / memory / network / load over 1, 6 or 24 hours (hover a chart to read a moment, all follow) and
 // each core now (Linux), the system, the launchers. Its engine (which one the agents come from) follows the agents. A Mac the hub's extension cua is on for gets "Computer control" after that, and "Browser" (ego lite, it
+import { MoveToManager } from "../ManagerParts";
+import { offlineManagerOf, useRoster } from "../../lib/managers";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
 import { ago } from "../../lib/format";
@@ -161,7 +163,12 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
     toast(err ? t("machines-machinedetail.not_connected_error", { error: err }) : t("machines-machinedetail.not_connected"), "error");
   };
 
-  const connFailure = m && !expectedDisconnect ? classifyConnection(m) : null;
+  // its manager offline (several managers): that is why, and Reconnect would go through it
+  const roster = useRoster();
+  const goneWith = m ? offlineManagerOf(roster, m) : null;
+  // a linked hub's computer is that hub's to give (`not_movable`): in a mesh every computer names its hub
+  const selfHub = useStore((s) => s.mesh.find((x) => x.self)?.hub_id);
+  const connFailure = m && !expectedDisconnect && !goneWith ? classifyConnection(m) : null;
   const groups = useMemo(() => (online ? agentsBySpace(sessions) : []), [online, sessions]);
   const agentCount = groups.reduce((n, g) => n + g.sessions.length, 0);
   const hub = hubLabel(m, machines);
@@ -226,7 +233,9 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
             </p>
             {route && <p className="mt-0.5 truncate text-[11.5px] text-ink-3" title={t("machines-machinedetail.route_hint")}>{t("machines-machinedetail.route", { route })}</p>}
           </div>
-          {!online && !expectedDisconnect && (
+          {/* with several managers: give it to another one (a linked hub's computer is its own hub's) */}
+          <MoveToManager machineId={m.id} manager={m.manager} movable={m.kind !== "hub" && (!m.hub_id || !selfHub || m.hub_id === selfHub)} />
+          {!online && !expectedDisconnect && !goneWith && (
             <Button tone="secondary" icon="retry" busy={reconnecting} onClick={() => void reconnect()}>
               {reconnecting ? t("machines-machinedetail.connecting") : t("machines.reconnect")}
             </Button>
@@ -236,7 +245,9 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           <div className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red" data-offline-box>
             {/* The plain reason and next step lead when the error text says why; the raw error then goes last, small and
                 grey, for whoever debugs it. Without a known reason the raw text (or the generic line) stays first. */}
-            {connFailure ? (
+            {goneWith ? (
+              <p className="break-words font-medium" data-error-code="manager_offline" title={m.error}>{t("settings-managers.machine_offline", { name: goneWith.name })}</p>
+            ) : connFailure ? (
               <p className="break-words font-medium" data-failure={connFailure.kind}>{t("node-health.failure_line", { title: connFailure.title, next: connFailure.next })}</p>
             ) : (
               <p className="break-words">{m.error || t("machines-machinedetail.unreachable")}</p>

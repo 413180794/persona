@@ -8,10 +8,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Call = { path: string; method: string; json?: unknown; resolve: (v: unknown) => void; reject: (e: unknown) => void };
 const calls: Call[] = [];
+// this device's prefs (the Notifications switch): answered at once, apart from the roster's calls
+const prefsCalls: { method: string; json?: unknown }[] = [];
+let prefsAnswer: (json: unknown) => unknown = () => ({ input: true, done: "long", muted_managers: [] });
 vi.mock("../../lib/api", async (orig) => ({
   ...(await orig<typeof import("../../lib/api")>()),
-  api: (path: string, init?: { method?: string; json?: unknown }) =>
-    new Promise((resolve, reject) => calls.push({ path, method: init?.method ?? "GET", json: init?.json, resolve, reject })),
+  api: (path: string, init?: { method?: string; json?: unknown }) => {
+    if (path.startsWith("/devices/")) {
+      prefsCalls.push({ method: init?.method ?? "GET", json: init?.json });
+      try {
+        return Promise.resolve(prefsAnswer(init?.json));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    }
+    return new Promise((resolve, reject) => calls.push({ path, method: init?.method ?? "GET", json: init?.json, resolve, reject }));
+  },
 }));
 const listeners = new Map<string, (m: unknown) => void>();
 vi.mock("../../lib/store", async (orig) => ({
@@ -39,6 +51,8 @@ let host: HTMLDivElement;
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
+  prefsCalls.length = 0;
+  prefsAnswer = () => ({ input: true, done: "long", muted_managers: [] });
   listeners.clear();
   host = document.createElement("div");
   document.body.append(host);
@@ -213,6 +227,33 @@ describe("设置 › 管理者", () => {
     expect(text()).toContain("取消安装「测试」？安装码会作废。");
   });
 
+  it("makes a never-installed manager again under the same name when its expired code is gone from the hub (404 no_manager)", async () => {
+    await render();
+    await answer(0, ROSTER);
+    await click(row("测试"));
+    await click(button("新的安装码"));
+    expect(calls[1]).toMatchObject({ path: "/managers/m-3/code", method: "POST" });
+    await refuse(1, new ApiError(404, "no manager", { error: "no manager", code: "no_manager" }));
+    expect(calls[2]).toMatchObject({ path: "/managers", method: "POST", json: { name: "测试" } });
+    await answer(2, { manager: { id: "m-4", name: "测试", online: false, installing: soon(10) }, code: "mi_new", expires_at: soon(10) });
+    expect(text()).toContain("安装「测试」");
+    expect(text()).toContain("mi_new");
+    // the code dialog's own New install code now goes to the new one
+    expect(calls.some((c) => c.path === "/managers" && c.method === "GET" && calls.indexOf(c) > 2)).toBe(true);
+  });
+
+  it("reports a 404 as usual when an installed manager is installed elsewhere, without making it again", async () => {
+    await render();
+    await answer(0, ROSTER);
+    await click(row("工作"));
+    await click(button("换个地方装"));
+    await click([...document.body.querySelectorAll("button")].filter((b) => b.textContent?.trim() === "换个地方装").at(-1));
+    expect(calls[1]).toMatchObject({ path: "/managers/m-1/code", method: "POST" });
+    await refuse(1, new ApiError(404, "no manager", { error: "no manager", code: "no_manager" }));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    expect(text()).toContain("这个管理者已经不在了");
+  });
+
   it("改名、设为默认", async () => {
     await render();
     await answer(0, ROSTER);
@@ -224,5 +265,45 @@ describe("设置 › 管理者", () => {
     await type("家");
     await click(button("保存"));
     expect(calls.at(-1)).toMatchObject({ path: "/managers/m-2", method: "PATCH", json: { name: "家" } });
+  });
+
+  it("has one push switch per manager: turning it off sends only muted_managers, and a refusal puts it back", async () => {
+    await render();
+    await answer(0, ROSTER);
+    await click(row("工作"));
+    const sw = () => document.body.querySelector<HTMLButtonElement>('[role="switch"][aria-label="推送通知"]');
+    expect(sw()?.getAttribute("aria-checked")).toBe("true");
+    expect(text()).toContain("关掉后，这台设备不再收到这个管理者的推送");
+    prefsAnswer = (json) => ({ input: true, done: "long", ...(json as object) });
+    await click(sw()!);
+    expect(prefsCalls.at(-1)).toEqual({ method: "PUT", json: { muted_managers: ["m-1"] } });
+    expect(sw()?.getAttribute("aria-checked")).toBe("false");
+    prefsAnswer = () => {
+      throw new ApiError(500, "boom", { error: "boom" });
+    };
+    await click(sw()!);
+    expect(sw()?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("marks a manager that needs an update in the list and its details, which say to update it where it runs", async () => {
+    await render();
+    await answer(0, { ...ROSTER, managers: ROSTER.managers.map((m) => (m.id === "m-1" ? { ...m, needs_update: true } : m)) });
+    expect(row("工作")?.textContent).toContain("需要更新");
+    expect(row("助手")?.textContent).not.toContain("需要更新");
+    await click(row("工作"));
+    expect(text()).toContain("请在它所在的电脑上更新 personad");
+    await click(button("完成"));
+    await click(row("助手"));
+    const dialog = [...document.body.querySelectorAll('[role="dialog"]')].at(-1);
+    expect(dialog?.textContent).toContain("助手");
+    expect(dialog?.textContent).not.toContain("需要更新");
+  });
+
+  it("shows no push switch with a hub whose prefs have no muted_managers", async () => {
+    prefsAnswer = () => ({ input: true, done: "long" });
+    await render();
+    await answer(0, ROSTER);
+    await click(row("工作"));
+    expect(document.body.querySelector('[aria-label="推送通知"]')).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 // an agent session) and what grew out of it (the items right under it). Each row opens where it lives. Nothing is
 // drawn when the item has neither.
 import { useEffect, useState } from "react";
-import { fetchInboxTree, parentRoute, type InboxItem, type InboxParent, type InboxTree } from "../../lib/inbox";
+import { fetchInboxTree, itemRoute, parentRoute, type InboxItem, type InboxParent, type InboxTree } from "../../lib/inbox";
 import { navigate, type Route } from "../../lib/router";
 import { t } from "../../i18n";
 import { cx } from "../../ui/atoms";
@@ -12,16 +12,17 @@ export type LineRow = { key: string; label: string; title: string; route?: Route
 
 const kindLabel: Record<InboxParent["kind"], string> = { inbox: t("inbox-inboxline.kind_inbox"), todo: t("inbox-inboxline.kind_todo"), session: t("inbox-inboxline.kind_session") };
 
-/** The rows of a line: the ancestors farthest first (the chain reads top down), then the children oldest first. */
-export function lineRows(tree: InboxTree): LineRow[] {
+/** The rows of a line: the ancestors farthest first (the chain reads top down), then the children oldest first.
+ *  `manager`: whose line it is (its items are that manager's: docs/managers.md "Clients"). */
+export function lineRows(tree: InboxTree, manager?: string): LineRow[] {
   const ups = [...tree.ancestors].reverse().map((a): LineRow => ({
     key: `up:${a.kind}:${a.id}`,
     label: kindLabel[a.kind],
     title: a.item?.title || (a.kind === "inbox" ? t("inbox-inboxline.gone") : a.id),
-    route: a.kind === "inbox" && !a.item ? undefined : parentRoute(a),
+    route: a.kind === "inbox" && !a.item ? undefined : parentRoute(a, manager),
     up: true,
   }));
-  const downs = tree.children.map((c): LineRow => ({ key: `down:${c.id}`, label: t("inbox-inboxline.next"), title: c.title, route: { name: "inbox", id: c.id }, up: false }));
+  const downs = tree.children.map((c): LineRow => ({ key: `down:${c.id}`, label: t("inbox-inboxline.next"), title: c.title, route: itemRoute({ id: c.id, manager }), up: false }));
   return [...ups, ...downs];
 }
 
@@ -59,12 +60,13 @@ export function InboxLine({ item }: { item: InboxItem }) {
   useEffect(() => {
     let live = true;
     setRows([]);
-    fetchInboxTree("inbox", item.id)
-      .then((tree) => live && setRows(lineRows(tree)))
+    // the item's manager's line (its tree is in that manager's inbox)
+    fetchInboxTree("inbox", item.id, item.manager)
+      .then((tree) => live && setRows(lineRows(tree, item.manager)))
       .catch(() => {}); // an older hub without the route: no line
     return () => {
       live = false;
     };
-  }, [item.id, parentKey]);
+  }, [item.id, item.manager, parentKey]);
   return <LineList rows={rows} />;
 }

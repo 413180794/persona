@@ -1,0 +1,252 @@
+// Which manager the assistant page shows (docs/managers.md "Clients"): with several managers, each a whole assistant,
+// the page's switcher picks one; it starts on the default and is not kept across loads. The assistant's requests name
+// the chosen one (`X-Persona-Manager`, docs/protocol.md "Per-manager routing"); with the default chosen none is sent,
+// so a hub with one manager gets the same requests as before. Live updates of another manager's assistant (they carry
+// `manager`; none means the hub's own, `assistant`) are left out. No imports from api.ts: it reads this.
+import { createContext, useContext, useSyncExternalStore } from "react";
+
+export const MANAGER_HEADER = "X-Persona-Manager";
+/** The id of the assistant the hub runs itself: what a message without `manager` comes from. */
+export const BUILTIN_MANAGER = "assistant";
+
+let chosen: string | null = null;
+let rosterDefault = BUILTIN_MANAGER;
+// Whether rosterDefault is the roster's (read once, or the hub has none to read): until then it is a placeholder, and
+// what goes by the default (the pages without a switcher, an item's requests) waits for it or is evaluated again.
+let defaultSettled = false;
+const listeners = new Set<() => void>();
+const defaultListeners = new Set<(was: { id: string; settled: boolean }) => void>();
+
+const emit = () => listeners.forEach((l) => l());
+
+/** The manager picked on the assistant page; null: the default one. */
+export function chosenManager(): string | null {
+  return chosen;
+}
+
+/** The roster's default manager: whose an item without `manager` is. */
+export function defaultManager(): string {
+  return rosterDefault;
+}
+
+/** The manager the assistant page shows: the chosen one, else the roster's default. */
+export function shownManager(): string {
+  return chosen ?? rosterDefault;
+}
+
+/** Pick the manager the assistant page shows; the default (or null) goes back to sending no header. */
+export function chooseManager(id: string | null) {
+  const next = id === null || id === rosterDefault ? null : id;
+  if (next === chosen) return;
+  chosen = next;
+  emit();
+}
+
+/** The roster's default changed (GET /managers `default`): picking it means no header. */
+export function setRosterDefault(id: string) {
+  const was = { id: rosterDefault, settled: defaultSettled };
+  defaultSettled = true;
+  if (!id || id === rosterDefault) {
+    if (!was.settled) defaultListeners.forEach((l) => l(was));
+    return;
+  }
+  const shown = shownManager();
+  rosterDefault = id;
+  chosen = shown === id ? null : chosen;
+  emit();
+  defaultListeners.forEach((l) => l(was));
+}
+
+/** The hub has no roster (from before it), or it could not be read: the default stays the hub's own assistant, and
+ *  what waited for the roster goes on. A roster read later still moves it (setRosterDefault). */
+export function settleRosterDefault() {
+  if (defaultSettled) return;
+  defaultSettled = true;
+  defaultListeners.forEach((l) => l({ id: rosterDefault, settled: false }));
+}
+
+/** Whether the roster's default is known (see settleRosterDefault); before, defaultManager() is a placeholder. */
+export function defaultKnown(): boolean {
+  return defaultSettled;
+}
+
+/** Called when the default becomes known or moves, with what it was: what was read, filtered or cached under the old
+ *  one (or the placeholder) is evaluated again. */
+export function onDefaultManager(l: (was: { id: string; settled: boolean }) => void): () => void {
+  defaultListeners.add(l);
+  return () => void defaultListeners.delete(l);
+}
+
+const defaultSnapshot = () => (defaultSettled ? rosterDefault : "");
+const subscribeDefault = (l: () => void) => onDefaultManager(() => l());
+
+/** The roster's default once known, "" before; re-renders when it becomes known or moves. A view about one manager's
+ *  thing waits for it, so nothing it asks goes by the placeholder. */
+export function useKnownDefault(): string {
+  return useSyncExternalStore(subscribeDefault, defaultSnapshot, defaultSnapshot);
+}
+
+// The things a merged list showed with their manager (an inbox item), and the conversations each manager's page listed,
+// by their path: requests for one name its manager, as the hub asks ("When a list item carries manager, include it").
+// Every stamp is kept; whether it needs a header is decided when asked, against the default then (the roster may move
+// it meanwhile).
+const itemManagers = new Map<string, string>();
+
+/** A merged list showed the thing at path (e.g. `/inbox/x`) as manager's (none: forget it). */
+export function noteItemManager(path: string, manager: string | undefined) {
+  if (manager) itemManagers.set(path, manager);
+  else itemManagers.delete(path);
+}
+
+/** The manager a page noted for conversation id (noteConversation), undefined when none (the default's, or unknown). */
+export function conversationManager(id: string): string | undefined {
+  const m = itemManagers.get(`/assistant/conversations/${encodeURIComponent(id)}`);
+  return m && m !== rosterDefault ? m : undefined;
+}
+
+/** A manager's page listed conversation id (or this page started it there): its requests go to that manager. A
+ *  conversation of the default (undefined: the page asked the default, whichever that turns out to be) is not noted: with
+ *  no header the hub sends it to the conversation's own manager, so a placeholder default from before the roster
+ *  loaded is never sent. */
+export function noteConversation(id: string, manager: string | undefined) {
+  if (id) noteItemManager(`/assistant/conversations/${encodeURIComponent(id)}`, manager);
+}
+
+// Pins: while a view about one manager's thing is open (an extension's details or pages), the requests under its
+// prefix name that manager; the latest pin of a prefix wins, and each pin goes with its own view (released by the pin
+// itself, so two views of the same manager don't take each other's). Views about an inbox item don't pin: they name the
+// item's manager on each request they make (ItemManager below), which a request deferred past the view still carries.
+type Pin = { manager: string };
+const pins = new Map<string, Pin[]>();
+
+/** Requests under prefix (e.g. `/extensions/voice`) go to manager until the returned function is called. */
+export function pinManager(prefix: string, manager: string | undefined): () => void {
+  if (!manager) return () => {};
+  const pin: Pin = { manager };
+  pins.set(prefix, [...(pins.get(prefix) ?? []), pin]);
+  return () => {
+    const left = (pins.get(prefix) ?? []).filter((x) => x !== pin);
+    if (left.length) pins.set(prefix, left);
+    else pins.delete(prefix);
+  };
+}
+
+/** pinManager for several prefixes at once; the returned function releases them all. */
+export function pinManagerAt(prefixes: string[], manager: string | undefined): () => void {
+  const offs = prefixes.map((p) => pinManager(p, manager));
+  return () => offs.forEach((off) => off());
+}
+
+/** The manager of the inbox item a view shows (its merged list's stamp; none: the default's). Its chat, mail and
+ *  connector thread are that manager's: every request the view makes names it (itemHeaders / withManager). */
+export const ItemManager = createContext<string | undefined>(undefined);
+
+export function useItemManager(): string | undefined {
+  return useContext(ItemManager);
+}
+
+/** The header naming manager on a request about one of its things; none for the default's, or none known. */
+export function itemHeaders(manager: string | undefined): Record<string, string> | undefined {
+  return manager && manager !== rosterDefault ? { [MANAGER_HEADER]: manager } : undefined;
+}
+
+/** url (an /api/v1 path or a full /api/ URL) with `manager=` for another manager's thing, as an <img> or a link
+ *  can't send a header (the hub reads the query too); as it is for the default's, and for anything not the hub's (a
+ *  picture's https: or blob: URL). */
+export function withManager(url: string, manager: string | undefined): string {
+  if (!manager || manager === rosterDefault || !url.startsWith("/") || url.startsWith("//") || /[?&]manager=/.test(url)) return url;
+  const hash = url.indexOf("#");
+  const [head, tail] = hash < 0 ? [url, ""] : [url.slice(0, hash), url.slice(hash)];
+  return `${head}${head.includes("?") ? "&" : "?"}manager=${encodeURIComponent(manager)}${tail}`;
+}
+
+/** The manager a pin or a noted stamp gives path, or the one under it; undefined when none or when it is the default. */
+function itemManager(path: string): string | undefined {
+  const bare = path.split("?")[0];
+  for (let p = bare; p.length > 1; p = p.slice(0, p.lastIndexOf("/"))) {
+    const m = pins.get(p)?.at(-1)?.manager ?? itemManagers.get(p);
+    if (m) return m === rosterDefault ? undefined : m;
+  }
+  return undefined;
+}
+
+const CONVERSATION = /^\/assistant\/conversations\/[^/?]+/;
+
+/** The header value for a request to path (under /api/v1), or undefined.
+ *  - One conversation's routes name its manager when a page listed it, else none: the hub then sends them to the
+ *    conversation's manager itself (ownership.go byConversation), and naming the page's pick would override that.
+ *  - The assistant's other routes name the manager the assistant page shows, but not the health space's (`?space=`,
+ *    docs/health.md: that page has no switcher and stays the default manager's).
+ *  - Anything else: a pin or a thing a merged list showed as another manager's names that one. */
+export function managerHeaderFor(path: string): string | undefined {
+  if (CONVERSATION.test(path)) return itemManager(path);
+  if (chosen && /^\/assistant(?=$|[/?])/.test(path) && !/[?&]space=/.test(path)) return chosen;
+  return itemManager(path);
+}
+
+/** The manager a hub message is from: its `manager`, else the hub's own assistant (docs/protocol.md). */
+export function messageManager(msg: Record<string, unknown>): string {
+  return typeof msg.manager === "string" && msg.manager ? msg.manager : BUILTIN_MANAGER;
+}
+
+/** Whether a hub message is the default manager's, whose settings the pages without a switcher show. */
+export function fromDefaultManager(msg: Record<string, unknown>): boolean {
+  return messageManager(msg) === rosterDefault;
+}
+
+/** Whether a hub message is the shown manager's: one without `manager` is the hub's own assistant's. */
+export function fromShownManager(msg: Record<string, unknown>): boolean {
+  return messageManager(msg) === shownManager();
+}
+
+/** The header naming owner (a thing's `manager`; none: the default's) on a request that would otherwise go by the
+ *  assistant page's pick: none when nothing was picked and the thing is the default's (it names none, or names the
+ *  default: a hub with one manager stamps every item `assistant`), so one manager sees no change. */
+export function ownerHeaders(owner: string | undefined): Record<string, string> | undefined {
+  if ((!owner || owner === rosterDefault) && !chosen) return undefined;
+  return { [MANAGER_HEADER]: owner || rosterDefault };
+}
+
+/** owner when it is another manager than the default, else undefined: what a page notes for a conversation it started
+ *  there (noteConversation) and the item routes carry (`@manager`). */
+export function otherManager(owner: string | undefined): string | undefined {
+  return owner && owner !== rosterDefault ? owner : undefined;
+}
+
+/** A settings page's route for a thing of manager: `<id>@<manager>` for another manager than the default's (the same id
+ *  may be under several: each one's built-ins), the id alone for the default's. */
+export function ownedSub(id: string, manager: string | undefined): string {
+  const m = otherManager(manager);
+  return m ? `${id}@${m}` : id;
+}
+
+/** What ownedSub wrote: the id, and the manager when it names one. */
+export function parseOwnedSub(sub: string): { id: string; manager?: string } {
+  const at = sub.indexOf("@");
+  return at > 0 && at < sub.length - 1 ? { id: sub.slice(0, at), manager: sub.slice(at + 1) } : { id: sub };
+}
+
+/** Whether a and b (two things' `manager`; none: the default's) are the same manager's. */
+export function sameManager(a: string | undefined, b: string | undefined): boolean {
+  return (a || rosterDefault) === (b || rosterDefault);
+}
+
+export function onManagerChoice(l: () => void): () => void {
+  listeners.add(l);
+  return () => void listeners.delete(l);
+}
+
+/** The shown manager's id, re-rendering when it changes. */
+export function useShownManager(): string {
+  return useSyncExternalStore(onManagerChoice, shownManager, shownManager);
+}
+
+/** Tests: back to the default, the hub's own assistant, not known yet. */
+export function resetManagerChoice() {
+  chosen = null;
+  itemManagers.clear();
+  pins.clear();
+  rosterDefault = BUILTIN_MANAGER;
+  defaultSettled = false;
+  emit();
+}

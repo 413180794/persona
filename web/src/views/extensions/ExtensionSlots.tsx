@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import { uiIcon, type UIIcon, type UIPlace, type UITone } from "../../lib/extension-ui";
 import { useExtensionPlace, useExtensionSlot } from "../../lib/extension-slots";
 import { href, navigate, onLinkClick, type Route } from "../../lib/router";
+import { useKnownDefault } from "../../lib/manager-choice";
+import { useStore } from "../../lib/store";
 import { t } from "../../i18n";
 import { cx, EASE, IconButton } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -103,19 +105,25 @@ function OverviewCard({ place, i }: { place: UIPlace; i: number }) {
   );
 }
 
-/** The extensions' sections on a machine's page (machine_section), after its own; the extension is told which machine. */
+/** The extensions' sections on a machine's page (machine_section), after its own; the extension is told which machine.
+ *  A computer of another manager than the default gets that manager's extensions' sections, asked with its name
+ *  (docs/managers.md "Clients"). */
 export function MachineExtensionSections({ mid, heading }: { mid: string; heading: (title: string, right?: React.ReactNode) => React.ReactNode }) {
-  const sections = useExtensionSlot("machine_section");
+  const manager = useStore((s) => s.machines.find((m) => m.id === mid)?.manager);
+  const known = useKnownDefault();
+  const sections = useExtensionSlot("machine_section", manager);
+  // whether the computer is another manager's goes by the roster's default: nothing is drawn before it is known
+  if (manager && !known) return null;
   return (
     <>
       {sections.map((s) => (
-        <MachineSection key={`${s.extension}/${s.id}`} place={s} mid={mid} heading={heading} />
+        <MachineSection key={`${manager ?? ""}/${s.extension}/${s.id}`} place={s} mid={mid} manager={manager} heading={heading} />
       ))}
     </>
   );
 }
 
-function MachineSection({ place, mid, heading }: { place: UIPlace; mid: string; heading: (title: string, right?: React.ReactNode) => React.ReactNode }) {
+function MachineSection({ place, mid, manager, heading }: { place: UIPlace; mid: string; manager?: string; heading: (title: string, right?: React.ReactNode) => React.ReactNode }) {
   const [gone, setGone] = useState(false);
   const context = useMemo(() => ({ machine: mid }), [mid]);
   if (gone) return null;
@@ -130,7 +138,7 @@ function MachineSection({ place, mid, heading }: { place: UIPlace; mid: string; 
           </span>
         ),
       )}
-      <ExtensionUI extension={place.extension} ui={place.id} context={context} bare title={place.title} pages="open" onMissing={() => setGone(true)} />
+      <ExtensionUI extension={place.extension} ui={place.id} context={context} manager={manager} bare title={place.title} pages="open" onMissing={() => setGone(true)} />
     </section>
   );
 }

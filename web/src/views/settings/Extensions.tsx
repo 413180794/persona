@@ -3,12 +3,14 @@
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
 // contributes, what it may do and where it came from. An extension written in hub.json is only looked at here. Installing,
 // upgrading and removing are done on the hub's side (`personad extension` on its machine, or its admin UI at /admin).
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { errorText } from "../../lib/api";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { enc, errorText } from "../../lib/api";
+import { defaultManager, pinManagerAt, useKnownDefault } from "../../lib/manager-choice";
+import { groupByManager, multiManager, useRoster } from "../../lib/managers";
 import { isResumed } from "../../lib/reconnect";
 import { onHubEvent, useStore } from "../../lib/store";
 import { EXTENSIONS_CHANGED } from "../../lib/extension-prompts";
-import { operations, operationsListed, watchOperations } from "../../lib/extension-operations";
+import { operations, operationsListed, opOf, watchOperations } from "../../lib/extension-operations";
 import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market";
 import { ago } from "../../lib/format";
 import { composing } from "../../lib/send-history";
@@ -29,6 +31,7 @@ import { getAuth, listAuthNote, onAuthChange, shownPages, signInAsked, takeSignI
 import { AuthGroup } from "./ExtensionAuth";
 import { dependencyText, dependentError, type Contribution, type Dependent } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
+import { ManagerHeading } from "../ManagerParts";
 import { formatList, t } from "../../i18n";
 
 /**
@@ -38,30 +41,50 @@ import { formatList, t } from "../../i18n";
 export function Extensions({ open, onOpen, onChannel, onConnector }: {
   open: string | null;
   onOpen: (id: string | null) => void;
-  onChannel?: (id: string) => void;
-  onConnector?: (id: string) => void;
+  /** `manager`: another manager's channel / connector (its extension's page links to its own); none: the default's. */
+  onChannel?: (id: string, manager?: string) => void;
+  onConnector?: (id: string, manager?: string) => void;
 }) {
   const r = extensionsRoute(open);
   const go = (to: Parameters<typeof routeSub>[0]) => onOpen(routeSub(to));
   switch (r.kind) {
     case "extension":
       return (
-        <ExtensionDetail
-          key={r.id}
-          id={r.id}
-          onBack={() => onOpen(null)}
-          onPage={(ui) => go({ kind: "page", id: r.id, ui })}
-          onUpgrade={(market, id) => go({ kind: "item", market, id })}
-          onChannel={onChannel}
-          onConnector={onConnector}
-        />
+        <OwnedExtension id={r.id} manager={r.manager}>
+          {(manager) => (
+            <ExtensionDetail
+              key={`${r.id}@${manager ?? ""}`}
+              id={r.id}
+              manager={manager}
+              onBack={() => onOpen(null)}
+              onPage={(ui) => go({ kind: "page", id: r.id, ui, manager })}
+              onUpgrade={(market, id) => go({ kind: "item", market, id, manager })}
+              onChannel={onChannel}
+              onConnector={onConnector}
+            />
+          )}
+        </OwnedExtension>
       );
     case "page":
-      return <ExtensionPage key={open} id={r.id} ui={r.ui} onBack={() => go({ kind: "extension", id: r.id })} />;
+      return (
+        <OwnedExtension id={r.id} manager={r.manager}>
+          {(manager) => <ExtensionPage key={`${open}@${manager ?? ""}`} id={r.id} ui={r.ui} manager={manager} onBack={() => go({ kind: "extension", id: r.id, manager })} />}
+        </OwnedExtension>
+      );
     case "catalog":
       return <MarketCatalog onBack={() => onOpen(null)} onOpen={(it) => go({ kind: "item", market: it.market, id: it.id })} onMarkets={() => go({ kind: "markets" })} />;
     case "item":
-      return <MarketItem key={open} market={r.market} id={r.id} onBack={() => go({ kind: "catalog" })} onInstalled={(id) => go({ kind: "extension", id })} />;
+      // another manager's upgrade goes back to that manager's extension: the catalog is the default's
+      return (
+        <MarketItem
+          key={open}
+          market={r.market}
+          id={r.id}
+          manager={r.manager}
+          onBack={() => go(r.manager ? { kind: "extension", id: r.id, manager: r.manager } : { kind: "catalog" })}
+          onInstalled={(id) => go({ kind: "extension", id, manager: r.manager })}
+        />
+      );
     case "markets":
       return <Markets onBack={() => go({ kind: "catalog" })} />;
     default:
@@ -69,8 +92,41 @@ export function Extensions({ open, onOpen, onChannel, onConnector }: {
   }
 }
 
+/**
+ * Whose extension a route is: the manager it names (`<id>@<manager>`), else, for a link that names none (written by
+ * hand, or before several managers), the one the merged list has it under: the default's when it has it, else the
+ * manager that has it, so the page doesn't open on a manager without it (a 404).
+ */
+function OwnedExtension({ id, manager, children }: { id: string; manager?: string; children: (manager: string | undefined) => React.ReactNode }) {
+  const [found, setFound] = useState<{ id: string; manager?: string } | null>(null);
+  const roster = useRoster();
+  const known = useKnownDefault();
+  const several = multiManager(roster); // one manager: every extension is its own, nothing to look up
+  useEffect(() => {
+    if (manager || !several) return;
+    let live = true;
+    listExtensionsInfo()
+      .then(({ extensions }) => {
+        if (!live) return;
+        const listed = extensions.filter((x) => x.id === id);
+        const own = listed.some((x) => !x.manager || x.manager === defaultManager());
+        setFound({ id, manager: own ? undefined : listed[0]?.manager });
+      })
+      .catch(() => live && setFound({ id })); // the page itself says what is wrong
+    return () => {
+      live = false;
+    };
+  }, [id, manager, several]);
+  // before the roster is read it is not known whose a link without a manager is: nothing of the default's is drawn
+  if (!manager && !known) return <div className="p-6"><Loading /></div>;
+  if (manager || !several) return <>{children(manager)}</>;
+  if (found?.id !== id) return <div className="p-6"><Loading /></div>;
+  return <>{children(found.manager)}</>;
+}
+
 /** A page an extension draws (placement plugin_page), under the extension's name. */
-function ExtensionPage({ id, ui, onBack }: { id: string; ui: string; onBack: () => void }) {
+function ExtensionPage({ id, ui, manager, onBack }: { id: string; ui: string; manager?: string; onBack: () => void }) {
+  usePinnedExtension(id, manager);
   const [d, setD] = useState<HubExtensionDetail | null>(null);
   const [n, setN] = useState(0);
   useEffect(() => {
@@ -145,9 +201,13 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
     };
   }, []);
   // a sign-in that changed (signed in, out, expired) shows at once
-  useEffect(() => onAuthChange((id, auth) => setExtensions((cur) => cur?.map((x) => withAuth(x, id, auth)) ?? cur)), []);
+  // only the row of the manager whose extension signed in (or out): another manager's of the same id stays as it is
+  useEffect(() => onAuthChange((id, auth, from) => setExtensions((cur) => cur?.map((x) => ((x.manager || defaultManager()) === from ? withAuth(x, id, auth) : x)) ?? cur)), []);
   // a reconnect the hub could not resume: the extension_auth pushes missed meanwhile are not replayed (#4954)
   useEffect(() => onHubEvent("hello", (m) => !isResumed(m) && load()), []);
+  // with several managers, each one's extensions under its name (docs/managers.md "Clients"); one: as before
+  const roster = useRoster();
+  const groups = groupByManager(extensions ?? [], roster, (x) => x.manager);
 
   return (
     <>
@@ -209,37 +269,47 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
             <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">{t("settings-extensions.empty_detail")}</p>
           </div>
         )}
-        {extensions?.map((p, i) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onOpen(p.id)}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover"
-            style={{ animation: `fade-up 320ms ${EASE} ${Math.min(i, 8) * 30}ms both` }}
-          >
-            <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[8px]", TILE[extensionTone(p)])}>
-              <Icon name="extension" size={15} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[13px] text-ink">{p.name}</span>
-                {p.source && p.source !== "installed" && <Pill>{sourceText(p.source)}</Pill>}
-              </div>
-              {(p.needs_setup?.length || p.error || p.description) && (
-                <div className={cx("mt-0.5 truncate text-[11.5px]", p.error ? "text-red" : p.needs_setup?.length ? "text-orange" : "text-ink-3")}>
-                  {p.error || (p.needs_setup?.length ? t("settings-extensions.needs_setup", { items: formatList(p.needs_setup, NARROW_LIST) }) : p.description)}
-                </div>
-              )}
+        {(groups ?? [{ manager: null, items: extensions ?? [] }]).map((g) => [
+          g.manager && (
+            <div key={`h:${g.manager.id}`} className="bg-inset px-4 py-1.5">
+              <ManagerHeading manager={g.manager} count={g.items.length} />
             </div>
-            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-2">
-              <StateDot extension={p} />
-              {extensionState(p)}
-              {listAuthNote(p.auth)}
-              {p.upgrade?.state === "needs_permission" && t("settings-extensions.upgrade_pending")}
-            </span>
-            <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
-          </button>
-        ))}
+          ),
+          ...g.items.map((p) => {
+            const i = (extensions ?? []).indexOf(p);
+            return (
+              <button
+                key={`${p.manager ?? ""}:${p.id}`}
+                type="button"
+                onClick={() => onOpen(routeSub({ kind: "extension", id: p.id, manager: p.manager && p.manager !== defaultManager() ? p.manager : undefined }) ?? p.id)}
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover"
+                style={{ animation: `fade-up 320ms ${EASE} ${Math.min(i, 8) * 30}ms both` }}
+              >
+                <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[8px]", TILE[extensionTone(p)])}>
+                  <Icon name="extension" size={15} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[13px] text-ink">{p.name}</span>
+                    {p.source && p.source !== "installed" && <Pill>{sourceText(p.source)}</Pill>}
+                  </div>
+                  {(p.needs_setup?.length || p.error || p.description) && (
+                    <div className={cx("mt-0.5 truncate text-[11.5px]", p.error ? "text-red" : p.needs_setup?.length ? "text-orange" : "text-ink-3")}>
+                      {p.error || (p.needs_setup?.length ? t("settings-extensions.needs_setup", { items: formatList(p.needs_setup, NARROW_LIST) }) : p.description)}
+                    </div>
+                  )}
+                </div>
+                <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-2">
+                  <StateDot extension={p} />
+                  {extensionState(p)}
+                  {listAuthNote(p.auth)}
+                  {p.upgrade?.state === "needs_permission" && t("settings-extensions.upgrade_pending")}
+                </span>
+                <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
+              </button>
+            );
+          }),
+        ])}
       </Group>
     </>
   );
@@ -285,14 +355,23 @@ function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy:
   );
 }
 
-function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector }: {
+/** Requests about extension id (its details, settings, models, pages) go to manager while the view is open: the same
+ *  id may be installed under several managers (each one's built-ins), and the default's own keep going to it elsewhere. */
+function usePinnedExtension(id: string, manager: string | undefined) {
+  useLayoutEffect(() => pinManagerAt([`/extensions/${enc(id)}`, `/plugins/${enc(id)}`], manager), [id, manager]);
+}
+
+function ExtensionDetail({ id, manager, onBack, onPage, onUpgrade, onChannel, onConnector }: {
   id: string;
+  /** Whose extension it is (several managers); none: the default's. */
+  manager?: string;
   onBack: () => void;
   onPage: (ui: string) => void;
   onUpgrade: (market: string, id: string) => void;
-  onChannel?: (id: string) => void;
-  onConnector?: (id: string) => void;
+  onChannel?: (id: string, manager?: string) => void;
+  onConnector?: (id: string, manager?: string) => void;
 }) {
+  usePinnedExtension(id, manager);
   const [removing, setRemoving] = useState(false);
   const [detail, setDetail] = useState<HubExtensionDetail | null>(null);
   const [error, setError] = useState("");
@@ -346,7 +425,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   };
   useEffect(load, [id]);
   // its sign-in as the hub pushes it; an install whose next step is signing in opens the dialog once
-  useEffect(() => onAuthChange((x, auth) => setDetail((cur) => (cur ? withAuth(cur, x, auth) : cur))), []);
+  useEffect(() => onAuthChange((x, auth, from) => (manager || defaultManager()) === from && setDetail((cur) => (cur ? withAuth(cur, x, auth) : cur))), [manager]);
   const [startSignIn] = useState(() => signInAsked(id));
   useEffect(() => void takeSignIn(id), [id]);
   const authChanged = (a?: ExtensionAuth) => {
@@ -373,7 +452,8 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   const backNow = useRef(onBack);
   backNow.current = onBack;
   useEffect(() => {
-    const ended = () => operations().filter((o) => o.extension === id && o.state === "succeeded");
+    // this manager's operations of the extension: another manager's upgrade of the same id is not this page's
+    const ended = () => operations().filter((o) => o.extension === id && o.state === "succeeded" && opOf(o, manager));
     const seen = new Set(ended().map((o) => o.id));
     let listed = operationsListed();
     return watchOperations(() => {
@@ -389,7 +469,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       if (fresh[0].kind === "uninstall") return backNow.current();
       void readDetail((d) => (dirtyNow.current ? setDetail(d) : (apply(d), setTyped({}), setFieldErrors({}))));
     });
-  }, [id]);
+  }, [id, manager]);
 
   const edit = (path: string[], value: Json | undefined) => {
     setDraft((d) => setAt(d, path, value));
@@ -559,7 +639,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       {/* a way of talking to Persona: binding it, its switch and where its messages go are on the channel's page */}
       {p?.auth && <AuthGroup id={p.id} auth={p.auth} enabled={p.enabled ?? true} start={startSignIn} onChange={authChanged} />}
 
-      {p && onChannel && channelOf(p) && <ChannelLink id={channelOf(p)!} onOpen={onChannel} />}
+      {p && onChannel && channelOf(p) && <ChannelLink id={channelOf(p)!} manager={manager} onOpen={onChannel} />}
 
       {p && (
         <>
@@ -599,7 +679,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
             </Group>
           )}
 
-          {(p.enabled ?? true) && !!p.contributes?.connectors?.length && <ExtensionConnectorInbox ids={p.contributes.connectors} onOpen={onConnector} />}
+          {(p.enabled ?? true) && !!p.contributes?.connectors?.length && <ExtensionConnectorInbox ids={p.contributes.connectors} manager={manager} onOpen={onConnector} />}
 
           {editable && fields.length > 0 && (
             <>

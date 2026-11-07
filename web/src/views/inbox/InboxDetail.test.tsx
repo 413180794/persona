@@ -5,6 +5,10 @@ import type { InboxItem } from "../../lib/inbox";
 import type { UIPlace } from "../../lib/extension-ui";
 import { InboxDetail } from "./InboxDetail";
 import { fallbackOf, InboxExtensionBody } from "./InboxExtensionBody";
+import { settleRosterDefault } from "../../lib/manager-choice";
+
+// the roster's default is known, as once the app has read it: an item's page draws at once
+settleRosterDefault();
 
 // The slot list as lib/extension-slots.ts caches it: one extension draws the items of its connector examplechat.
 const place: UIPlace = { extension: "example-chat", extension_name: "Example Chat", id: "event", title: "事件", placement: "inbox_item", size: "full", connector: "examplechat" };

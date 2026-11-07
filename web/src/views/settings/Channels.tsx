@@ -2,7 +2,7 @@
 // each one's page — its switch, binding a step at a time (a QR code to scan in the chat app, a pairing code to send the
 // bot, credentials), where its messages go, what it does, a test message to the owner — and, for a market's, the way
 // to install it. Read-only ones (the apps, /agent, voice) say where they are set up.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { errorText } from "../../lib/api";
 import {
@@ -11,6 +11,7 @@ import {
   type Channel, type ChannelDetail, type ChannelPrompt, type ChannelTarget, type ChannelTone,
 } from "../../lib/channels";
 import { canSendStep, fieldInput } from "../../lib/connectors";
+import { otherManager, pinManager } from "../../lib/manager-choice";
 import { ago } from "../../lib/format";
 import { useStore } from "../../lib/store";
 import { Button, copyText, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
@@ -34,11 +35,28 @@ function StateLabel({ c }: { c: Channel }) {
 
 // ── the links from Settings › Connectors ─────────────────
 
+/** Another manager's channels (its extension's page links to its own), read with its name; [] until they are. */
+function useOtherChannels(manager: string | undefined, has: boolean): Channel[] {
+  const [list, setList] = useState<Channel[]>([]);
+  useEffect(() => {
+    setList([]);
+    if (!manager || !has) return;
+    let live = true;
+    listChannels(manager).then((l) => live && setList(l), () => {});
+    return () => void (live = false);
+  }, [manager, has]);
+  return list;
+}
+
 /** On a connector's page (WeChat's, the Feishu bot's): it is a way of talking to Persona, set up under "Channels". Only for a
- * channel there is, on a hub that has them. */
-export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) => void }) {
+ * channel there is, on a hub that has them. `manager`: whose connector the page is (another manager's channel is its
+ * own, docs/managers.md "Clients"); none: the default's. */
+export function ChannelLink({ id, manager, onOpen }: { id: string; manager?: string; onOpen: (id: string, manager?: string) => void }) {
   const has = useStore((s) => s.features.includes("channels"));
-  const list = useChannels();
+  const other = otherManager(manager);
+  const own = useChannels();
+  const theirs = useOtherChannels(other, has);
+  const list = other ? theirs : own;
   const c = list.find((x) => x.id === id);
   if (!has || !c) return null;
   return (
@@ -50,7 +68,7 @@ export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) =
             {t("settings-channels.link_label", { name: c.name })}
           </span>
         }
-        onClick={() => onOpen(id)}
+        onClick={() => (other ? onOpen(id, other) : onOpen(id))}
       />
     </Group>
   );
@@ -133,7 +151,10 @@ export function ChannelList({ onOpen, onMarketItem }: { onOpen: (id: string) => 
 
 // ── one channel ──────────────────────────────────────────
 
-export function ChannelPage({ id, onBack, onSettings }: { id: string; onBack: () => void; onSettings: (url: string) => void }) {
+/** `manager`: whose channel (another manager's, opened from its extension's page): the page's requests name it while it
+ *  is open; none: the default's. */
+export function ChannelPage({ id, manager, onBack, onSettings }: { id: string; manager?: string; onBack: () => void; onSettings: (url: string) => void }) {
+  useLayoutEffect(() => pinManager(`/channels/${encodeURIComponent(id)}`, otherManager(manager)), [id, manager]);
   const [d, setD] = useState<ChannelDetail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");

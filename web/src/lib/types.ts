@@ -14,6 +14,8 @@ export interface DetectedEngine {
 
 export interface Machine {
   id: string;
+  /** The manager it belongs to (docs/protocol.md "Per-manager routing"); none: the default one. */
+  manager?: string;
   name: string;
   online: boolean;
   error?: string;
@@ -152,6 +154,8 @@ export interface Session {
   repo_root?: string;
   machine_id: string;
   session_id: string;
+  /** The manager it belongs to (docs/protocol.md "Per-manager routing"); none: the default one. */
+  manager?: string;
   title: string;
   cwd: string;
   status: string;
@@ -534,6 +538,8 @@ export interface Elicitation {
 
 export interface Interaction {
   id: string;
+  /** The manager it belongs to (docs/protocol.md "Per-manager routing"); none: the default one. */
+  manager?: string;
   machine_id: string;
   session_id: string;
   session_title?: string;

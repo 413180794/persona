@@ -1918,12 +1918,18 @@ def stamp_managers(path, obj):
     if not _stamps() or not isinstance(obj, dict): return obj
     dflt = MANAGERS["default"]
     if path == "/api/v1/inbox" and isinstance(obj.get("items"), list):
-        obj = dict(obj, items=[dict(x, manager=MANAGED_INBOX.get(x.get("id"), dflt) if _manager_known(MANAGED_INBOX.get(x.get("id"), dflt)) else dflt)
-                               if isinstance(x, dict) else x for x in obj["items"]])
+        obj = dict(obj, items=[dict(x, manager=inbox_owner(x.get("id"))) if isinstance(x, dict) else x for x in obj["items"]])
     for key in ("extensions", "plugins", "connectors"):
         if path == "/api/v1/" + key and isinstance(obj.get(key), list):
             obj = dict(obj, **{key: merged_by_manager(obj[key])})
     return obj
+
+
+def inbox_owner(item_id):
+    """The manager whose inbox an item is in, as the merged list stamps it (a manager the roster lacks: the default)."""
+    dflt = MANAGERS["default"]
+    mid = MANAGED_INBOX.get(item_id, dflt)
+    return mid if _manager_known(mid) else dflt
 
 
 def merged_by_manager(items):
@@ -1989,6 +1995,18 @@ def assistant_for_manager(h):
     notes = MANAGER_NOTES.get(mid, "")
     st = {k: v for k, v in st.items() if k not in ("main", "notes")}
     return (dict(st, conversations=[], tasks=[], notes=notes, notes_effective=notes), 200)
+
+
+def other_manager(h):
+    """The manager a request names (X-Persona-Manager, or ?manager=) when another than the default: (id, None), or
+    (id, answer) for one the hub would not reach (unknown: 404 no_manager; offline: 503 assistant_offline). None: the
+    default's."""
+    mid = h.headers.get("X-Persona-Manager") or (parse_qs(urlparse(h.path).query).get("manager") or [""])[0]
+    if not mid or mid == MANAGERS["default"]: return None
+    m = next((x for x in MANAGERS["list"] if x["id"] == mid), None)
+    if not m: return (mid, ({"error": "no manager %r" % mid, "code": "no_manager"}, 404))
+    if not m.get("online"): return (mid, ({"error": "管理者「%s」离线" % m["name"], "code": "assistant_offline"}, 503))
+    return (mid, None)
 
 
 # Each other manager's own 说明 (设置 › 助手 with its X-Persona-Manager): a whole assistant has its own.
@@ -4243,19 +4261,27 @@ MUTES = [] if not os.environ.get("MOCK_MUTES") else [
 ]
 
 
-def mute_item(item_id, tag):
-    """POST /api/v1/inbox/mutes: mute what the item has under tag; its source's open items that match are done."""
+# Another manager's own mutes (each manager keeps its own, docs/managers.md "Clients"), by its id; the default's are MUTES.
+OTHER_MUTES = {}
+
+
+def mute_item(item_id, tag, manager=None):
+    """POST /api/v1/inbox/mutes: mute what the item has under tag; its source's open items that match are done. With
+    `manager` (another than the default), into that manager's mutes, and only its items are done."""
+    mutes = OTHER_MUTES.setdefault(manager, []) if manager else MUTES
     it = next((x for x in INBOX if x["id"] == item_id), None)
     opt = next((m for m in (it or {}).get("mutes") or [] if m["tag"] == tag), None)
     if not opt: return None, 0
     src = it["source"]
-    mute = next((m for m in MUTES if m["source"] == src and m["tag"] == tag and m["value"] == opt["value"]), None)
+    mute = next((m for m in mutes if m["source"] == src and m["tag"] == tag and m["value"] == opt["value"]), None)
     if not mute:
-        mute = {"id": "m%d" % (len(MUTES) + 100), "source": src, "source_name": SOURCE_NAMES.get(src, src), "tag": tag,
+        mute = {"id": "m%d" % (len(mutes) + 100), "source": src, "source_name": SOURCE_NAMES.get(src, src), "tag": tag,
                 "value": opt["value"], "name": opt["name"], "created_at": ago(minutes=0)}
-        MUTES.append(mute)
+        mutes.append(mute)
     settled = 0
+    owner = manager or MANAGERS["default"]
     for x in INBOX:
+        if _stamps() and inbox_owner(x["id"]) != owner: continue
         if x["source"] == src and not x.get("done_at") and any(m["tag"] == tag and m["value"] == opt["value"] for m in x.get("mutes") or []):
             x["done_at"], x["done_by"], x["reason"] = ago(minutes=0), "read", "已静音：" + opt["name"]
             settled += 1
@@ -4269,27 +4295,35 @@ POLICIES = [] if not os.environ.get("MOCK_POLICIES") else [
 ]
 
 
-def set_policy(body, pid=None):
-    """POST (from an item) / PATCH (by id) a policy: one per target; neither part removes it; covered open items take its tier."""
+# Another manager's own policies (each manager keeps its own), by its id; the default's are POLICIES.
+OTHER_POLICIES = {}
+
+
+def set_policy(body, pid=None, manager=None):
+    """POST (from an item) / PATCH (by id) a policy: one per target; neither part removes it; covered open items take its tier.
+    With `manager` (another than the default), that manager's policies and items."""
+    pols = OTHER_POLICIES.setdefault(manager, []) if manager else POLICIES
+    owner = manager or MANAGERS["default"]
     tier, twin = body.get("tier") or "", body.get("twin") or ""
     if tier not in ("", "action", "fyi", "noise") or twin not in ("", "first", "never"): return None, 0
     if pid:
-        pol = next((x for x in POLICIES if x["id"] == pid), None)
+        pol = next((x for x in pols if x["id"] == pid), None)
         if not pol: return None, 0
     else:
         it = next((x for x in INBOX if x["id"] == body.get("item_id")), None)
         opt = next((m for m in (it or {}).get("mutes") or [] if m["tag"] == body.get("tag")), None)
         if not opt: return None, 0
         src = it["source"]
-        pol = next((x for x in POLICIES if x["source"] == src and x["tag"] == opt["tag"] and x["value"] == opt["value"]), None)
+        pol = next((x for x in pols if x["source"] == src and x["tag"] == opt["tag"] and x["value"] == opt["value"]), None)
         if not pol:
-            pol = {"id": "p%d" % (len(POLICIES) + 100), "source": src, "source_name": SOURCE_NAMES.get(src, src), "tag": opt["tag"],
+            pol = {"id": "p%d" % (len(pols) + 100), "source": src, "source_name": SOURCE_NAMES.get(src, src), "tag": opt["tag"],
                    "value": opt["value"], "name": opt["name"], "created_at": ago(minutes=0)}
-            POLICIES.append(pol)
+            pols.append(pol)
     pol.update({"tier": tier, "twin": twin, "updated_at": ago(minutes=0)})
-    if not tier and not twin: POLICIES[:] = [x for x in POLICIES if x["id"] != pol["id"]]
+    if not tier and not twin: pols[:] = [x for x in pols if x["id"] != pol["id"]]
     applied = 0
     for x in INBOX if tier else []:
+        if _stamps() and inbox_owner(x["id"]) != owner: continue
         if x["source"] == pol["source"] and not x.get("done_at") and x.get("tier") and x.get("tier") != tier and \
                 any(m["tag"] == pol["tag"] and m["value"] == pol["value"] for m in x.get("mutes") or []):
             x["tier"], x["reason"] = tier, "按你的规则：" + pol["name"]
@@ -11906,8 +11940,14 @@ class H(BaseHTTPRequestHandler):
             # MOCK_INBOX_DELAY_MS=<ms>: a slow hub, for the inbox refreshing in the background (#1947, docs/testing.md)
             time.sleep(int(os.environ.get("MOCK_INBOX_DELAY_MS", "0")) / 1000)
             return self.send_json(inbox_list(q))
-        if p == "/api/v1/inbox/mutes": return self.send_json({"mutes": MUTES})
-        if p == "/api/v1/inbox/policies": return self.send_json({"policies": POLICIES})
+        if p == "/api/v1/inbox/mutes":
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            return self.send_json({"mutes": OTHER_MUTES.get(other[0], []) if other else MUTES})
+        if p == "/api/v1/inbox/policies":
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            return self.send_json({"policies": OTHER_POLICIES.get(other[0], []) if other else POLICIES})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
         if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})
         if p.startswith("/api/v1/inbox/tree/"):
@@ -13006,24 +13046,36 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(res)
         if p == "/api/v1/inbox/mutes" and self.command == "POST":
             body = json.loads(self.last_body or b"{}")
-            mute, settled = mute_item(body.get("item_id"), body.get("tag"))
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            mute, settled = mute_item(body.get("item_id"), body.get("tag"), other[0] if other else None)
             if not mute: return self.send_json({"error": "这一条没有可静音的" + str(body.get("tag"))}, 400)
             return self.send_json({"mute": mute, "settled": settled})
         if p == "/api/v1/inbox/policies" and self.command == "POST":
-            pol, applied = set_policy(json.loads(self.last_body or b"{}"))
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            pol, applied = set_policy(json.loads(self.last_body or b"{}"), None, other[0] if other else None)
             if not pol: return self.send_json({"error": "这一条不能这样设规则"}, 400)
             return self.send_json({"policy": pol, "applied": applied})
         if p.startswith("/api/v1/inbox/policies/") and self.command == "PATCH":
-            pol, applied = set_policy(json.loads(self.last_body or b"{}"), p.rsplit("/", 1)[1])
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            pol, applied = set_policy(json.loads(self.last_body or b"{}"), p.rsplit("/", 1)[1], other[0] if other else None)
             if not pol: return self.send_json({"error": "没有这条规则"}, 404)
             return self.send_json({"policy": pol, "applied": applied})
         if p.startswith("/api/v1/inbox/policies/") and self.command == "DELETE":
             pid = p.rsplit("/", 1)[1]
-            POLICIES[:] = [x for x in POLICIES if x["id"] != pid]
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            pols = OTHER_POLICIES.get(other[0], []) if other else POLICIES
+            pols[:] = [x for x in pols if x["id"] != pid]
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/inbox/mutes/") and self.command == "DELETE":
             mid = p.rsplit("/", 1)[1]
-            MUTES[:] = [m for m in MUTES if m["id"] != mid]
+            other = other_manager(self)
+            if other and other[1]: return self.send_json(*other[1])
+            mutes = OTHER_MUTES.get(other[0], []) if other else MUTES
+            mutes[:] = [m for m in mutes if m["id"] != mid]
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/read"):  # Mark visible messages as read: the positions a page saw
             body = json.loads(self.last_body or b"{}")

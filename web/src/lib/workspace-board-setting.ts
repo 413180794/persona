@@ -1,6 +1,7 @@
 // Settings › General › Agent › Workflow board (#2475): the board is off unless turned on. The switch is the hub's
 // (GET/PUT /workspace-board/settings), so every browser agrees; a hub that has never stored it answers whether the board
 // was already in use. Off only hides the board: its columns and cards stay on the hub.
+import { defaultKnown, fromDefaultManager, onDefaultManager } from "./manager-choice";
 import { useSyncExternalStore } from "react";
 import { api, ApiError } from "./api";
 import { onHubEvent } from "./store";
@@ -64,10 +65,14 @@ export async function setWorkspaceBoardEnabled(on: boolean): Promise<void> {
 onHubEvent("hello", () => void refreshWorkspaceBoardSetting());
 // another browser or device changed it
 onHubEvent("workspace_board_settings", (e) => {
-  if (typeof e.enabled !== "boolean") return;
+  // the switch this page reads and writes is the default manager's (no X-Persona-Manager): another manager's is not it.
+  // Before the roster says which is the default none is taken: the switch is read again once it does.
+  if (typeof e.enabled !== "boolean" || !defaultKnown() || !fromDefaultManager(e)) return;
   rev++;
   set({ ...state, enabled: e.enabled });
 });
+// the default became known or moved: its switch, which may have changed while its pushes were left out
+onDefaultManager(() => void refreshWorkspaceBoardSetting());
 
 const subscribe = (l: () => void) => {
   listeners.add(l);

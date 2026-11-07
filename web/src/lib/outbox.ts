@@ -8,6 +8,7 @@ import { pickedLauncher, pickedModel, conversationKey } from "./assistant-chat";
 import { uuid } from "./format";
 import { navigate } from "./router";
 import { getState, refreshAssistant, setOutbox } from "./store";
+import { chosenManager, noteConversation } from "./manager-choice";
 import { apiOp, isTransient } from "./ops";
 import { echoed, isEcho, type Seen, type Sent } from "./echo";
 import { parseUserText, type UserMessage } from "./turns";
@@ -169,7 +170,10 @@ export async function askPersona(text: string): Promise<void> {
     void sendToSession(a.machine_id, a.main, { text }, { launcher: pickedLauncher(outboxKey(a.machine_id, a.main)), model: pickedModel(outboxKey(a.machine_id, a.main)) });
     return;
   }
+  const chosen = chosenManager() ?? undefined;
   const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: text, main: true } });
+  // the manager the page showed when it started (it named that one): the conversation's requests go there
+  noteConversation(r.session.session_id, chosen);
   noteSent(r.session.machine_id, r.session.session_id, { text });
   void refreshAssistant().catch(() => {});
   navigate({ name: "persona", sid: r.session.session_id });

@@ -9,6 +9,7 @@ import { api, ApiError } from "./api";
 import type { LarkMessage, LarkPart } from "./inbox";
 import { braveClimbSummary, decodeBraveClimbParts } from "./lark-brave-climb";
 import { larkPath, olAccount } from "./lark-accounts";
+import { fromDefaultManager, itemHeaders, messageManager, useItemManager } from "./manager-choice";
 import { isResumed } from "./reconnect";
 import { onHubEvent } from "./store";
 
@@ -89,10 +90,10 @@ export interface LarkDisplayDeps {
   write: (body: { account_id: string; key: LarkDisplayKey; value: boolean; expected: boolean }) => Promise<LarkMessageDisplay>;
 }
 
-export function liveLarkDisplayDeps(ol?: number): LarkDisplayDeps {
+export function liveLarkDisplayDeps(ol?: number, manager?: string): LarkDisplayDeps {
   return {
-    read: () => api<LarkMessageDisplay>(larkPath("/lark/message-display", ol)),
-    write: (body) => api<LarkMessageDisplay>(larkPath("/lark/message-display", ol), { method: "POST", json: body }),
+    read: () => api<LarkMessageDisplay>(larkPath("/lark/message-display", ol, manager)),
+    write: (body) => api<LarkMessageDisplay>(larkPath("/lark/message-display", ol, manager), { method: "POST", json: body }),
   };
 }
 
@@ -187,27 +188,32 @@ export class LarkDisplayModel {
 
 const models = new Map<string, LarkDisplayModel>();
 
-/** The page's one model for a Feishu account (`ol`, lark-accounts.ts; undefined: the hub's own). */
-export function larkDisplayModel(ol?: number): LarkDisplayModel {
-  const key = String(ol ?? "");
+/** A model's key: the account, and the manager whose Lark it is ("": the default's). */
+const modelKey = (ol: number | undefined, manager: string | undefined) => `${itemHeaders(manager) ? manager : ""}|${ol ?? ""}`;
+
+/** The page's one model for a Feishu account (`ol`, lark-accounts.ts; undefined: the hub's own) of manager's Lark
+ *  (an inbox item's, docs/managers.md "Clients"; undefined: the default's). */
+export function larkDisplayModel(ol?: number, manager?: string): LarkDisplayModel {
+  const key = modelKey(ol, manager);
   let m = models.get(key);
   if (!m) {
-    m = new LarkDisplayModel(liveLarkDisplayDeps(ol));
+    m = new LarkDisplayModel(liveLarkDisplayDeps(ol, manager));
     models.set(key, m);
   }
   return m;
 }
 
-/** A `lark` push that says the settings changed (docs/protocol.md `settings_changed`): read that account's again. */
+/** A `lark` push that says the settings changed (docs/protocol.md `settings_changed`): read that account's again,
+ *  of the manager the push is from. */
 export function onLarkPush(msg: Record<string, unknown>) {
   if (msg.settings_changed !== true) return;
-  models.get(String(olAccount(msg.ol_account) ?? ""))?.refresh();
+  models.get(modelKey(olAccount(msg.ol_account), fromDefaultManager(msg) ? undefined : messageManager(msg)))?.refresh();
 }
 
 /** The settings for one chat or the settings page, read when it shows, when the page comes back to the front, and
  * when the hub says they changed. Use it once per screen; its messages follow with `useLarkDisplay`. */
 export function useLarkDisplayState(ol?: number): LarkDisplayState {
-  const model = larkDisplayModel(ol);
+  const model = larkDisplayModel(ol, useItemManager());
   useEffect(() => {
     void model.refresh();
     const back = () => document.visibilityState === "visible" && void model.refresh();
@@ -226,6 +232,6 @@ export function useLarkDisplayState(ol?: number): LarkDisplayState {
 
 /** What a message follows (see `LarkDisplayModel.policy`); reads nothing itself. */
 export function useLarkDisplay(ol?: number): LarkMessageDisplay {
-  const model = larkDisplayModel(ol);
+  const model = larkDisplayModel(ol, useItemManager());
   return useSyncExternalStore(model.subscribe, () => model.policy, () => model.policy);
 }

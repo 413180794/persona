@@ -6,14 +6,15 @@ import { formatList, t } from "../../i18n";
 import { clock, secondsLeft } from "../../lib/connect-device";
 import { ago } from "../../lib/format";
 import {
-  createManager, deleteBlocked, deleteManager, listManagers, makeDefault, managerError, NAME_MAX, newInstallCode, renameManager, statusLine,
+  createManager, deleteBlocked, deleteManager, listManagers, makeDefault, managerError, NAME_MAX, renameManager, renewCode, statusLine,
   unsupported, validName, whereText, type BotConflict, type InstallCode, type Manager, type Tone,
 } from "../../lib/managers";
-import { onHubEvent } from "../../lib/store";
+import { loadNotifyPrefs, managerMuted, saveManagerPush, useNotifyPrefs } from "../../lib/notify";
+import { onHubEvent, useStore } from "../../lib/store";
 import { Button, copyText, cx, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { inputClass } from "../assistant/parts";
-import { Group, Pill, Row } from "./SettingsParts";
+import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 const DOT: Record<Tone, string> = { green: "bg-green", grey: "bg-line-strong", accent: "bg-accent" };
 
@@ -32,6 +33,8 @@ interface Shown {
   id: string;
   name: string;
   code: InstallCode;
+  /** Never installed: once its code runs out the hub may have dropped it, and a new code makes it again (renewCode). */
+  fresh?: boolean;
 }
 
 export function ManagersSettings() {
@@ -103,18 +106,18 @@ export function ManagersSettings() {
         m={current}
         onClose={() => setOpen(null)}
         onChanged={() => void load()}
-        onCode={(code) => current && (setOpen(null), setShown({ id: current.id, name: current.name, code }))}
+        onCode={(code, id) => current && (setOpen(null), setShown({ id: id ?? current.id, name: current.name, code, fresh: !!current.installing }), void load())}
       />
       <NewManager
         open={creating}
         onClose={() => setCreating(false)}
         onMade={(m, code) => {
           setCreating(false);
-          setShown({ id: m.id, name: m.name, code });
+          setShown({ id: m.id, name: m.name, code, fresh: true });
           void load();
         }}
       />
-      <CodeDialog shown={shown} onClose={() => setShown(null)} onCode={(code) => setShown((s) => (s ? { ...s, code } : s))} />
+      <CodeDialog shown={shown} onClose={() => setShown(null)} onCode={(code, id) => (setShown((s) => (s ? { ...s, code, id } : s)), void load())} />
     </>
   );
 }
@@ -129,6 +132,7 @@ function ManagerRow({ m, now, onOpen }: { m: Manager; now: number; onOpen: () =>
         <div className="flex items-center gap-2">
           <span className={cx("truncate text-[13px]", m.online || m.installing ? "text-ink" : "text-ink-2")}>{m.name}</span>
           {m.default && <Pill tone="accent">{t("settings-managers.default")}</Pill>}
+          {m.needs_update && <Pill tone="orange">{t("settings-managers.needs_update")}</Pill>}
         </div>
         <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{[status.text, where].filter(Boolean).join(" · ")}</div>
       </div>
@@ -137,9 +141,31 @@ function ManagerRow({ m, now, onOpen }: { m: Manager; now: number; onOpen: () =>
   );
 }
 
+/** This device's pushes from one manager (NotifyPrefs.muted_managers); not shown by a hub from before them. */
+function PushSwitch({ id }: { id: string }) {
+  const prefs = useNotifyPrefs();
+  useEffect(() => void loadNotifyPrefs().catch(() => {}), []);
+  if (!prefs.muted_managers) return null;
+  const on = !managerMuted(prefs, id, id);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="overflow-hidden rounded-card bg-inset shadow-hairline">
+        <Row label={t("settings-managers.push")}>
+          <Switch
+            on={on}
+            label={t("settings-managers.push")}
+            onChange={(next) => void saveManagerPush(id, next).catch((e) => toast(t("settings-managers.push_failed", { error: managerError(e) }), "error"))}
+          />
+        </Row>
+      </div>
+      <p className="px-1 text-[11.5px] leading-snug text-ink-3">{t("settings-managers.push_note")}</p>
+    </div>
+  );
+}
+
 type Step = "view" | "rename" | "move" | "delete";
 
-function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; onClose: () => void; onChanged: () => void; onCode: (c: InstallCode) => void }) {
+function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; onClose: () => void; onChanged: () => void; onCode: (c: InstallCode, id?: string) => void }) {
   const [step, setStep] = useState<Step>("view");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -149,6 +175,7 @@ function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; o
     setStep("view");
     setError("");
   }, [id]);
+  const machines = useStore((s) => s.machines);
   // what the dialog shows while closing (m is null by then)
   const [last, setLast] = useState<Manager | null>(null);
   useEffect(() => void (m && setLast(m)), [m]);
@@ -169,10 +196,11 @@ function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; o
     }
   };
   const installing = !!shownM.installing;
+  const ownMachines = machines.filter((x) => x.manager === shownM.id).length;
   const blocked = deleteBlocked(shownM);
   const status = statusLine(shownM);
   const where = whereText(shownM);
-  const code = () => run(() => newInstallCode(shownM.id).then(onCode));
+  const code = () => run(() => renewCode(shownM.id, shownM.name, installing).then((r) => onCode(r.code, r.id)));
 
   let body: React.ReactNode;
   let footer: React.ReactNode;
@@ -212,9 +240,12 @@ function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; o
     );
   } else if (step === "delete") {
     body = (
-      <p className="text-[12.5px] leading-relaxed text-ink-2">
-        {t(installing ? "settings-managers.cancel_install_confirm" : "settings-managers.delete_confirm", { name: shownM.name })}
-      </p>
+      <div className="flex flex-col gap-2 text-[12.5px] leading-relaxed text-ink-2">
+        <p>{t(installing ? "settings-managers.cancel_install_confirm" : "settings-managers.delete_confirm", { name: shownM.name })}</p>
+        {/* what goes with it (docs/managers.md "Moving a machine or a source"): its computers come back, its sources don't */}
+        {!installing && ownMachines > 0 && <p>{t("settings-managers.delete_machines", { count: ownMachines })}</p>}
+        {!installing && <p className="text-orange">{t("settings-managers.delete_sources")}</p>}
+      </div>
     );
     footer = (
       <>
@@ -229,6 +260,7 @@ function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; o
       <div className="flex flex-col gap-4">
         <div className="divide-y divide-line overflow-hidden rounded-card bg-inset shadow-hairline">
           <Row label={t("settings-managers.row_status")}>
+            {shownM.needs_update && <Pill tone="orange">{t("settings-managers.needs_update")}</Pill>}
             <span aria-hidden className={cx("size-2 shrink-0 rounded-full", DOT[status.tone])} />
             <span className="truncate">{status.text}</span>
           </Row>
@@ -237,6 +269,8 @@ function ManagerDetail({ m, onClose, onChanged, onCode }: { m: Manager | null; o
           {shownM.online && shownM.since && <Row label={t("settings-managers.row_since")}>{ago(shownM.since)}</Row>}
           {!shownM.online && shownM.last_seen && <Row label={t("settings-managers.row_last_seen")}>{ago(shownM.last_seen)}</Row>}
         </div>
+        {shownM.needs_update && <p className="-mt-2 px-1 text-[11.5px] leading-snug text-ink-3">{t("settings-managers.needs_update_note")}</p>}
+        {!installing && <PushSwitch id={shownM.id} />}
         <div className="flex flex-wrap gap-2">
           {!installing && (
             <Button icon="pencil" disabled={busy} onClick={() => (setName(shownM.name), setStep("rename"))}>{t("settings-managers.rename")}</Button>
@@ -343,7 +377,7 @@ function NewManager({ open, onClose, onMade }: { open: boolean; onClose: () => v
 }
 
 /** The install code (and commands), its countdown, and once it ran out New installation code. */
-function CodeDialog({ shown, onClose, onCode }: { shown: Shown | null; onClose: () => void; onCode: (c: InstallCode) => void }) {
+function CodeDialog({ shown, onClose, onCode }: { shown: Shown | null; onClose: () => void; onCode: (c: InstallCode, id: string) => void }) {
   const now = useNow(1000);
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<Shown | null>(null);
@@ -354,7 +388,8 @@ function CodeDialog({ shown, onClose, onCode }: { shown: Shown | null; onClose: 
   const again = async () => {
     setBusy(true);
     try {
-      onCode(await newInstallCode(s.id));
+      const r = await renewCode(s.id, s.name, !!s.fresh);
+      onCode(r.code, r.id);
     } catch (e) {
       toast(managerError(e), "error");
     } finally {

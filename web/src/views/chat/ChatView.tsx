@@ -1,4 +1,5 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
+import { useManagerOffline } from "../ManagerParts";
 import { alsoOpenText } from "../../lib/engines";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, errorText, sessionPath } from "../../lib/api";
@@ -157,7 +158,7 @@ export interface PanelChrome {
 
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
  *  no header, no composer. */
-export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage, panel }: {
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage, panel, banner, offline }: {
   mid: string;
   sid: string;
   assistant?: boolean;
@@ -170,8 +171,15 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
    *  "Terminal" | "Chat" and ⌘J (docs/web.md "Terminal ⇄ chat"). Elsewhere (a task's panel) the chat is all there is. */
   inPage?: boolean;
   panel?: PanelChrome;
+  /** Under the header: the assistant page's manager switcher (docs/managers.md "Clients"). */
+  banner?: React.ReactNode;
+  /** The conversation's manager is offline: what the box says instead, and nothing can be sent. */
+  offline?: string;
 }) {
   const { session, detail, retry: retryDetail } = useRuntimeSession(mid, sid);
+  // its manager offline (several managers): nothing can be sent, wherever it was opened from; the page's own word first
+  const ownerOffline = useManagerOffline(session?.manager);
+  const offlineLine = offline ?? ownerOffline;
   // Virtual subagent transcript views read their execution metadata from the complete parent snapshot.
   const parentSid = subagentParent(sid);
   useRuntimeSession(mid, parentSid, parentSid !== sid);
@@ -943,6 +951,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           panel={panel}
         />
       )}
+      {banner}
       {!readOnly && detail.error && <SessionDetailNotice error={detail.error} retry={retryDetail} />}
       {session && !panel && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s), true)} />}
 
@@ -1109,7 +1118,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <div ref={composerBox} className="shrink-0">
         <Composer
           draftKey={draftKey}
-          placeholder={!sessionCan(session, "send") && session?.source_kind ? t("chat-chatview.view_only") : state === "working" || state === "needs_you" ? t("chat-chatview.queue_placeholder") : assistant ? t("chat-chatview.ask_placeholder", { name: persona.name }) : state === "offline" ? t("chat-chatview.resume_placeholder") : t("chat-chatview.agent_placeholder")}
+          placeholder={offlineLine ? offlineLine : !sessionCan(session, "send") && session?.source_kind ? t("chat-chatview.view_only") : state === "working" || state === "needs_you" ? t("chat-chatview.queue_placeholder") : assistant ? t("chat-chatview.ask_placeholder", { name: persona.name }) : state === "offline" ? t("chat-chatview.resume_placeholder") : t("chat-chatview.agent_placeholder")}
           machineId={mid}
           uploadDest={session?.space === "health" ? "health" : undefined}
           working={state === "working"}
@@ -1117,7 +1126,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onSend={onSend}
           resendRef={resend}
           onEdit={failedFromBox ? () => setSendFailure(null) : undefined}
-          disabled={!sessionCan(session, "send")}
+          disabled={Boolean(offlineLine) || !sessionCan(session, "send")}
           // Persona's conversations too, the main one included (#1467): the node stops their turn like an agent's
           onStop={sessionCan(session, "interrupt") ? interrupt : undefined}
           commands={assistant ? [] : agentCommands(AGENT_COMMANDS, session)}

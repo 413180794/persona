@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import { emojiLabel, withToken, type LarkPart } from "../../lib/inbox";
+import { useItemManager, withManager } from "../../lib/manager-choice";
 import {
   cardIconName, directChat, duration, emojiCatalog, fileSize, pressCardAction, profile, profileRows, quickBar, quickReactions,
   type CardButton, type EmojiCatalog, type LarkProfile, type LarkReaction, type ReadMark,
@@ -18,10 +19,11 @@ import { Monogram } from "./InboxParts";
 
 /** A file: type, name, size; a click downloads it under its name. */
 export function FilePart({ p }: { p: LarkPart }) {
+  const manager = useItemManager();
   const meta = p.metadata ?? {};
   const name = p.text || (typeof meta.name === "string" ? meta.name : "") || t("inbox-larkthread.file");
   const ext = String(meta.extension ?? (name.includes(".") ? name.split(".").pop() : "") ?? "").toUpperCase().slice(0, 4);
-  const href = p.url?.startsWith("/api/") ? withToken(p.url) : undefined;
+  const href = p.url?.startsWith("/api/") ? withToken(withManager(p.url, manager)) : undefined;
   const size = fileSize(meta.size);
   const gone = meta.destroyed === true;
   const body = (
@@ -45,7 +47,8 @@ export function FilePart({ p }: { p: LarkPart }) {
 
 /** A voice message: play / pause, a few bars, how long; plays in the page. */
 export function VoicePart({ p }: { p: LarkPart }) {
-  const src = p.url?.startsWith("/api/") ? withToken(p.url) : undefined;
+  const manager = useItemManager();
+  const src = p.url?.startsWith("/api/") ? withToken(withManager(p.url, manager)) : undefined;
   const ms = Number(p.metadata?.duration ?? 0);
   const audio = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -97,9 +100,10 @@ export function VoicePart({ p }: { p: LarkPart }) {
 
 /** A video: its poster with a play button and how long; a click plays it in place with the browser's controls. */
 export function VideoPart({ p }: { p: LarkPart }) {
+  const manager = useItemManager();
   const meta = p.metadata ?? {};
-  const src = p.url?.startsWith("/api/") ? withToken(p.url) : undefined;
-  const poster = typeof meta.posterUrl === "string" && meta.posterUrl.startsWith("/api/") ? withToken(meta.posterUrl) : undefined;
+  const src = p.url?.startsWith("/api/") ? withToken(withManager(p.url, manager)) : undefined;
+  const poster = typeof meta.posterUrl === "string" && meta.posterUrl.startsWith("/api/") ? withToken(withManager(meta.posterUrl, manager)) : undefined;
   const [playing, setPlaying] = useState(false);
   const w = Number(meta.posterWidth) || 16;
   const h = Number(meta.posterHeight) || 9;
@@ -154,9 +158,10 @@ const BUTTON_TONE: Record<string, string> = {
 /** The icon a card button leads with: the page's closest icon for a UD token, else the card's picture, else a dot
  * (iOS LarkCardIcon). */
 function CardButtonIcon({ icon }: { icon: NonNullable<CardButton["icon"]> }) {
+  const manager = useItemManager();
   const name = cardIconName(icon.token);
   if (name) return <Icon name={name as IconName} size={13} className="shrink-0" />;
-  const src = icon.image?.startsWith("/api/") ? withToken(icon.image) : icon.image;
+  const src = icon.image?.startsWith("/api/") ? withToken(withManager(icon.image, manager)) : icon.image;
   if (src) return <img src={src} alt="" className="size-3.5 shrink-0 object-contain" />;
   return <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current opacity-60" />;
 }
@@ -164,6 +169,7 @@ function CardButtonIcon({ icon }: { icon: NonNullable<CardButton["icon"]> }) {
 /** A card's buttons under it: a link opens in a tab, a callback is pressed as the user, then the message is read again
  * 1.2 s later with the spinner still on (iOS LarkCardButton). `onDone` gets the pressed message's id. */
 export function CardButtons({ buttons, messageID, account, onDone }: { buttons: CardButton[]; messageID?: string; account?: number; onDone?: (messageID: string) => void | Promise<void> }) {
+  const manager = useItemManager();
   const [pending, setPending] = useState<number | null>(null);
   // Unmounted (another chat, the message gone): the delayed re-read and the spinner stop there.
   const alive = useRef(true);
@@ -183,7 +189,7 @@ export function CardButtons({ buttons, messageID, account, onDone }: { buttons: 
     const name = b.label || b.tooltip || t("inbox-larkthread.card_button");
     setPending(i);
     try {
-      await pressCardAction(messageID, b.action, account);
+      await pressCardAction(messageID, b.action, account, manager);
       toast(t("inbox-larkthread.card_pressed", { label: name }), "ok");
       await new Promise((r) => setTimeout(r, 1200));
       if (alive.current) await onDone?.(messageID);
@@ -265,21 +271,23 @@ export function ReadMarkView({ mark }: { mark: ReadMark }) {
 // ── reactions ────────────────────────────────────────────
 
 function useCatalog(): EmojiCatalog | null {
+  const manager = useItemManager();
   const [cat, setCat] = useState<EmojiCatalog | null>(null);
   useEffect(() => {
     let live = true;
-    emojiCatalog().then((c) => live && setCat(c)).catch(() => {});
+    emojiCatalog(manager).then((c) => live && setCat(c)).catch(() => {});
     return () => {
       live = false;
     };
-  }, []);
+  }, [manager]);
   return cat;
 }
 
 /** One emoji of Feishu's catalogue as its picture, else `[key]`. */
 export function EmojiImage({ name, size, catalog }: { name: string; size: number; catalog: EmojiCatalog | null }) {
+  const manager = useItemManager();
   const e = catalog?.emojis[name.toLowerCase()];
-  const src = e?.url?.startsWith("/api/") ? withToken(e.url) : e?.url && /^https:/i.test(e.url) ? e.url : undefined;
+  const src = e?.url?.startsWith("/api/") ? withToken(withManager(e.url, manager)) : e?.url && /^https:/i.test(e.url) ? e.url : undefined;
   if (src) return <img src={src} alt={e?.label || name} width={size} height={size} className="shrink-0 object-contain" style={{ width: size, height: size }} />;
   return <span className="text-[11px] text-ink-2">{emojiLabel(name)}</span>;
 }
@@ -317,17 +325,18 @@ export function Reactions({ reactions, onToggle }: { reactions: LarkReaction[]; 
 
 /** "Reactions": the quick row on top, then every group of the catalogue; the ones I put on are tinted. */
 export function ReactionPicker({ mine, onPick, onClose }: { mine: Set<string>; onPick: (key: string) => void; onClose: () => void }) {
+  const manager = useItemManager();
   const catalog = useCatalog();
   const [keys, setKeys] = useState<string[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    quickReactions().then((k) => live && setKeys(quickBar(k, 7))).catch(() => live && setKeys([]));
-    emojiCatalog().catch(() => live && setFailed(true));
+    quickReactions(manager).then((k) => live && setKeys(quickBar(k, 7))).catch(() => live && setKeys([]));
+    emojiCatalog(manager).catch(() => live && setFailed(true));
     return () => {
       live = false;
     };
-  }, []);
+  }, [manager]);
   const cell = (key: string, size: number) => {
     const label = catalog?.emojis[key.toLowerCase()]?.label || key;
     return (
@@ -393,6 +402,7 @@ export function ProfileDialog({
   onClose: () => void;
   onChat?: (feed: string, name: string) => void;
 }) {
+  const manager = useItemManager();
   const [p, setP] = useState<LarkProfile | null>(null);
   const [error, setError] = useState("");
   const [round, setRound] = useState(0);
@@ -400,13 +410,13 @@ export function ProfileDialog({
   useEffect(() => {
     let live = true;
     setError("");
-    profile(who.id, feed, account)
+    profile(who.id, feed, account, manager)
       .then((r) => live && setP(r))
       .catch((e) => live && setError(errorText(e)));
     return () => {
       live = false;
     };
-  }, [who.id, feed, account, round]);
+  }, [who.id, feed, account, manager, round]);
   const name = p?.displayName || who.name;
   const subtitle = [p?.groupNickname && p.groupNickname !== name ? p.groupNickname : "", p?.enName && p.enName !== name ? p.enName : "", p?.alias || ""].filter(Boolean).join(" · ");
   const rows = p ? profileRows(p, FIELD_LABELS()) : [];
@@ -415,7 +425,7 @@ export function ProfileDialog({
     if (!onChat) return;
     setOpening(true);
     try {
-      onChat(await directChat(who.id, account), name);
+      onChat(await directChat(who.id, account, manager), name);
     } catch (e) {
       toast(t("inbox-larkthread.chat_failed", { error: errorText(e) }), "error");
     } finally {

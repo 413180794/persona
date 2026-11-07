@@ -10,7 +10,8 @@ import { applySnapshot } from "./assistant-views";
 import type { AssistantView, ViewAction } from "./extension-wire";
 import { isResumed } from "./reconnect";
 import { deleteTodo, type Todo } from "./todos";
-import { itemPath } from "./inbox";
+import { getInbox, itemPath } from "./inbox";
+import { conversationManager, itemHeaders } from "./manager-choice";
 import { closePanel, getPanel } from "./panel";
 import type { ChatLine } from "./turns";
 import type { Item } from "./types";
@@ -457,7 +458,11 @@ export async function sendMessage(card: FeedItem, text: string) {
   if (blank) throw new Error(t("lib-feed.draft_blank", { blank }));
   set({ busy: { ...st.busy, [card.id]: true } });
   try {
-    await api(`${itemPath(itemId)}/reply`, { method: "POST", json: { text, card: card.id } });
+    // the item is in the inbox of the card's conversation's manager (the one its page noted), else of the one manager
+    // whose list has that id (docs/managers.md "Clients"); none: the default's
+    const listed = getInbox().items.filter((it) => it.id === itemId);
+    const manager = conversationManager(card.conversation) ?? (listed.length === 1 ? listed[0].manager : undefined);
+    await api(`${itemPath(itemId)}/reply`, { method: "POST", json: { text, card: card.id }, headers: itemHeaders(manager) });
     // The hub's assistant_feed event brings the card as it recorded it; this draws it sent without waiting.
     const now = latest();
     if (!cardSent(now)) received([{ ...now, body: { ...now.body, sent_at: new Date().toISOString(), sent: text } }]);

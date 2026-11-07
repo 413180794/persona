@@ -8,6 +8,7 @@ import {
   fieldValue, forwardCount, forwardedMessages, forwardedText, forwardPreviews, hubMediaURL, meetingNumber, stripHTML, summaryFields,
   summaryTone, summaryVariant, voteOptions, type ForwardedMessage, type SummaryTone,
 } from "../../lib/lark-summary";
+import { useItemManager, withManager } from "../../lib/manager-choice";
 import { currentLanguage, t } from "../../i18n";
 import { copyText, cx, Dialog } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -186,6 +187,7 @@ function glyph(variant: string): IconName {
 
 /** Meetings, events, votes, tasks and anything else. */
 function GenericSummaryCard({ meta, title, variant }: { meta: Meta; title: string; variant: string }) {
+  const manager = useItemManager();
   const tone = TONE[summaryTone(variant)];
   const fields = summaryFields(meta, currentLanguage());
   const description = str(meta.description) ? stripHTML(str(meta.description)) : "";
@@ -201,7 +203,7 @@ function GenericSummaryCard({ meta, title, variant }: { meta: Meta; title: strin
       <div className="min-w-0 flex-1 px-3 py-2.5">
         <div className="flex items-start gap-3">
           {image ? (
-            <img src={hubMediaURL(image)} alt="" loading="lazy" className="size-10 shrink-0 rounded-[10px] object-cover shadow-hairline" />
+            <img src={withManager(hubMediaURL(image) ?? "", manager)} alt="" loading="lazy" className="size-10 shrink-0 rounded-[10px] object-cover shadow-hairline" />
           ) : (
             <span aria-hidden className={cx("flex size-10 shrink-0 items-center justify-center rounded-[10px]", tone.glyph)}>
               <Icon name={glyph(variant)} size={18} stroke={2.2} />

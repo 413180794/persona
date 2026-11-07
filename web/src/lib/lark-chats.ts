@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { api, ApiError, enc, errorText } from "./api";
 import { larkPath } from "./lark-accounts";
+import { itemHeaders } from "./manager-choice";
 
 // ── Show messages on home ──────────────────────────────────────
 
@@ -301,11 +302,12 @@ export function useLarkChats(store: LarkChatsStore = larkChats): LarkChatsState 
   return useSyncExternalStore(store.subscribe, () => store.state);
 }
 
-/** The signed-in Feishu user of account `ol` as the hub last said (an add-Pin write carries it). */
-export async function larkAccount(ol?: number): Promise<string> {
-  const known = larkChatsFor(ol).state.account;
+/** The signed-in Feishu user of account `ol` as the hub last said (an add-Pin write carries it); another manager's
+ *  (an inbox item's, docs/managers.md "Clients") is asked of it, as the Messages page's lists are the default's. */
+export async function larkAccount(ol?: number, manager?: string): Promise<string> {
+  const known = itemHeaders(manager) ? undefined : larkChatsFor(ol).state.account;
   if (known) return known;
-  const p = await api<LarkConversationPage>(larkPath("/lark/conversations?scope=chats&limit=1&account_bound=1", ol));
+  const p = await api<LarkConversationPage>(larkPath("/lark/conversations?scope=chats&limit=1&account_bound=1", ol, manager));
   if (!p.account_id) throw new ApiError(426, t("lib-lark-pins.hub_upgrade"), { code: "lark_hub_upgrade_required" });
   return p.account_id;
 }

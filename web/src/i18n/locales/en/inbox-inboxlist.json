@@ -51,5 +51,6 @@
   "no_sources_title": "No message sources yet",
   "no_sources_hint": "Connect mail or Lark and new messages land here, with AI sorting out what needs you and what is just for your information.",
   "no_sources_connect": "Connect {name}",
-  "rules_list": "Rules"
+  "rules_list": "Rules",
+  "mutes_offline": "Offline: its mutes show here once it is back."
 }

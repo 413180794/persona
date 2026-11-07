@@ -9,7 +9,8 @@ import {
   chatHeadline, checkLabel, githubStateLabel, isChatThread, isGitHubThread, labelColor, loadThread, mediaLine, mediaURL, mergeNewest, mergeOlder,
   reachMessage, replyInThread, reviewLabel, startsGroup, type ThreadChat, type ThreadMedia, type ThreadMessage, type ThreadPage,
 } from "../../lib/connectors";
-import { connectorReference, itemPath, shortTime, tightCJK, withToken, type InboxItem } from "../../lib/inbox";
+import { connectorReference, itemPath, itemRequest, shortTime, tightCJK, withToken, type InboxItem } from "../../lib/inbox";
+import { useItemManager, withManager } from "../../lib/manager-choice";
 import { openLink } from "../../lib/links";
 import { t } from "../../i18n";
 import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
@@ -36,10 +37,13 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
   const [page, setPage] = useState<ThreadPage | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [older, setOlder] = useState(false);
+  // the item's connector is its manager's (ItemManager): every read and reply names it
+  const shown = useItemManager();
+  const manager = item.manager ?? shown;
 
   const load = useCallback(async () => {
     try {
-      const p = await loadThread(id, thread);
+      const p = await loadThread(id, thread, undefined, manager);
       setPage((have) => mergeNewest(have, p));
       setFailure(null);
     } catch (e) {
@@ -47,7 +51,7 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
       // simply has no page of its own (a CI run) falls back quietly. "" is failed, null still loading.
       setFailure(e instanceof ApiError && (e.status === 429 || e.status === 409) ? errorText(e) : "");
     }
-  }, [id, thread]);
+  }, [id, thread, manager]);
   // Again when the item moves (a new message came in).
   useEffect(() => void load(), [load, item.updated_at]);
 
@@ -55,7 +59,7 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
     if (!page?.before || older) return;
     setOlder(true);
     try {
-      const p = await loadThread(id, thread, page.before);
+      const p = await loadThread(id, thread, page.before, manager);
       setPage((have) => (have ? mergeOlder(have, p) : p));
     } catch (e) {
       toast(t("inbox-connectorthread.older_failed", { error: errorText(e) }), "error");
@@ -70,7 +74,7 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
     if (page.messages.some((m) => m.id === msg)) return true;
     setOlder(true);
     try {
-      const r = await reachMessage(page, msg, (before) => loadThread(id, thread, before));
+      const r = await reachMessage(page, msg, (before) => loadThread(id, thread, before, manager));
       setPage((have) => (have ? mergeOlder(have, r.page) : r.page));
       return r.found;
     } catch (e) {
@@ -84,7 +88,7 @@ export function ConnectorBody({ item }: { item: InboxItem }) {
   const send = async (text: string, replyTo?: ThreadMessage) => {
     if (!page?.chat.reply) return false;
     try {
-      await replyInThread(id, { thread, action: page.chat.reply, text, reply_to: replyTo?.id });
+      await replyInThread(id, { thread, action: page.chat.reply, text, reply_to: replyTo?.id }, manager);
       await load();
       return true;
     } catch (e) {
@@ -108,13 +112,13 @@ function ConnectorText({ item, problem }: { item: InboxItem; problem?: string })
   const c = item.connector;
   useEffect(() => {
     let live = true;
-    api<InboxItem>(itemPath(item.id))
+    api<InboxItem>(itemPath(item.id), { headers: itemRequest(item) })
       .then((r) => live && (setContext(r.context ?? ""), setFailure("")))
       .catch((e) => live && setFailure(errorText(e)));
     return () => {
       live = false;
     };
-  }, [item.id]);
+  }, [item.id, item.manager]);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-[760px] flex-col gap-3 px-4 py-5 sm:px-6">
@@ -339,7 +343,7 @@ function Bubble({ id, m, head, group, lit, onQuote, onReply }: {
 
 function Picture({ id, media }: { id: string; media: ThreadMedia }) {
   const ref = media.ref || media.thumb!;
-  const src = withToken(mediaURL(id, ref));
+  const src = withToken(withManager(mediaURL(id, ref), useItemManager()));
   const sticker = media.kind === "sticker";
   const [viewing, setViewing] = useState(false);
   const w = media.width && media.height ? Math.min(sticker ? 140 : 260, media.width) : sticker ? 140 : 260;

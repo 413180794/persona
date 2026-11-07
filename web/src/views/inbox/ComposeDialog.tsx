@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import type { MailAccount } from "../../lib/inbox";
 import { badAddresses, parseAddresses, sendMail, type ComposeDraft } from "../../lib/mail";
+import { useItemManager } from "../../lib/manager-choice";
 import { t } from "../../i18n";
 import { Button, Dialog, toast } from "../../ui/atoms";
 import { composing } from "../../lib/send-history";
@@ -21,6 +22,8 @@ const fieldClass = "h-8 min-w-0 flex-1 rounded-control bg-field px-2.5 text-[12.
 
 export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftKey: string; initial: ComposeDraft; accounts: MailAccount[]; onClose: () => void }) {
   const [d, setD] = useState(() => keptDraft(draftKey, initial));
+  // a reply to another manager's mail goes out through that manager (ItemManager; a new mail: the default's)
+  const manager = useItemManager();
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const body = useRef<HTMLTextAreaElement>(null);
@@ -75,7 +78,7 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
     at.done = true;
     kept.delete(draftKey);
     try {
-      await sendMail(d);
+      await sendMail(d, manager);
       toast(t("inbox-composedialog.sent"), "ok");
       onClose();
     } catch (e) {

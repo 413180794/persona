@@ -49,5 +49,7 @@
   "report_delete_confirm": "确定删除",
   "report_keep": "不删了",
   "report_delete_body": "原件和整理好的记录会永久删除，不能恢复。健康对话和健康记忆里已经提到的内容不会一起删，要清掉需要单独处理。",
-  "report_deleted": "已删除「{title}」"
+  "report_deleted": "已删除「{title}」",
+  "conversation_load_failed": "没打开这段健康对话：{error}",
+  "retry": "重试"
 }

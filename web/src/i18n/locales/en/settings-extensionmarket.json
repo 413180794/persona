@@ -123,5 +123,6 @@
   "official_token_link": "Rate-limited? Add a GitHub token in Manage marketplaces",
   "market_unread": "Extensions show up here once the market can be read.",
   "token_create_hint": "No token yet? Create one on GitHub: the name, purpose and a one-year expiry are filled in and no permissions are needed. Click Generate token, then paste it above.",
-  "token_create": "Create on GitHub"
+  "token_create": "Create on GitHub",
+  "for_manager": "For the manager “{name}”: only its copy changes (each manager has its own extensions)."
 }

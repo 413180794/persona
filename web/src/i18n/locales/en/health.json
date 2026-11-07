@@ -49,5 +49,7 @@
   "report_delete_confirm": "Delete for good",
   "report_keep": "Keep it",
   "report_delete_body": "The original and its summary will be deleted for good. Anything your health conversations and health memory already mention stays; remove that separately.",
-  "report_deleted": "Deleted \"{title}\""
+  "report_deleted": "Deleted \"{title}\"",
+  "conversation_load_failed": "Couldn't open this health chat: {error}",
+  "retry": "Retry"
 }

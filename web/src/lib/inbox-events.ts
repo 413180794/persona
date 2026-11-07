@@ -7,6 +7,7 @@
 
 import { t } from "../i18n";
 import { api, ApiError, errorText } from "./api";
+import { itemHeaders } from "./manager-choice";
 import { uuid } from "./format";
 import type { DocChange, InboxItem } from "./inbox";
 import type { Route } from "./router";
@@ -161,8 +162,9 @@ export type ChainTap =
   | { kind: "expand" }
   | { kind: "none" };
 
-/** Where an entry goes. `conversation` maps a processing conversation to its route (the assistant's or an agent's). */
-export function chainTap(e: ChainEntry, conversation: (mid: string, sid: string) => Route): ChainTap {
+/** Where an entry goes. `conversation` maps a processing conversation to its route (the assistant's or an agent's);
+ *  `manager`: whose item the chain is (an item it links is that manager's too). */
+export function chainTap(e: ChainEntry, conversation: (mid: string, sid: string) => Route, manager?: string): ChainTap {
   const l = e.link as Record<string, unknown> | undefined;
   if (l?.type === "source") {
     return { kind: "source", position: typeof l.position === "string" ? l.position : undefined, uid: typeof l.uid === "number" ? l.uid : undefined, url: typeof l.url === "string" ? l.url : undefined };
@@ -170,7 +172,7 @@ export function chainTap(e: ChainEntry, conversation: (mid: string, sid: string)
   if (l?.type === "session" && typeof l.machine_id === "string" && typeof l.session_id === "string" && l.machine_id && l.session_id) {
     return { kind: "route", route: conversation(l.machine_id, l.session_id) };
   }
-  if (l?.type === "item" && typeof l.id === "string" && l.id) return { kind: "route", route: { name: "inbox", id: l.id } };
+  if (l?.type === "item" && typeof l.id === "string" && l.id) return { kind: "route", route: manager ? { name: "inbox", id: l.id, manager } : { name: "inbox", id: l.id } };
   return canExpand(e) ? { kind: "expand" } : { kind: "none" };
 }
 
@@ -208,9 +210,10 @@ export type SuggestionResult =
  * The version shown goes with it, so a suggestion that changed since is not run: the hub answers 409 suggestion_stale
  * with the item as it is now.
  */
-export async function actOnSuggestion(path: string, version: number, action: SuggestionAction, text?: string, clientID = uuid()): Promise<SuggestionResult> {
+export async function actOnSuggestion(path: string, version: number, action: SuggestionAction, text?: string, clientID = uuid(), manager?: string): Promise<SuggestionResult> {
   try {
-    const item = await api<InboxItem>(`${path}/suggestion`, { method: "POST", json: { version, action, text: text || undefined, client_id: clientID } });
+    // the item's manager (another than the default: docs/managers.md "Clients") is named on its request
+    const item = await api<InboxItem>(`${path}/suggestion`, { method: "POST", json: { version, action, text: text || undefined, client_id: clientID }, headers: itemHeaders(manager) });
     return { ok: true, item };
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.body?.code === "suggestion_stale") {

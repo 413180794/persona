@@ -37,6 +37,10 @@ import { resetMailForTests } from "../../lib/mail";
 import { InboxDetail } from "./InboxDetail";
 import { EventBody } from "./InboxEvent";
 import { InboxList } from "./InboxList";
+import { settleRosterDefault } from "../../lib/manager-choice";
+
+// the roster's default is known, as once the app has read it: an item's page draws at once
+settleRosterDefault();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

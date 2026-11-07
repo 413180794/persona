@@ -177,11 +177,15 @@ describe("extension sign-in with the hub", () => {
 
   it("takes the pushed state into what holds the extension", () => {
     const got: [string, ExtensionAuth][] = [];
-    const off = onAuthChange((id, a) => got.push([id, a]));
+    const from: string[] = [];
+    const off = onAuthChange((id, a, manager) => (got.push([id, a]), from.push(manager)));
     hub.listeners.get("extension_auth")!({ type: "extension_auth", extension: "cis", auth: auth("signed_in", { account: "me" }) });
     hub.listeners.get("extension_auth")!({ type: "extension_auth", extension: "cis" }); // no state: ignored
+    // another manager's extension of the same id: it says whose (the hub's stamp)
+    hub.listeners.get("extension_auth")!({ type: "extension_auth", extension: "cis", manager: "m-1", auth: auth("expired") });
     off();
-    expect(got).toEqual([["cis", auth("signed_in", { account: "me" })]]);
+    expect(got).toEqual([["cis", auth("signed_in", { account: "me" })], ["cis", auth("expired")]]);
+    expect(from).toEqual(["assistant", "m-1"]);
     const list = [{ id: "cis" }, { id: "other" }];
     expect(list.map((x) => withAuth(x, "cis", got[0][1]))).toEqual([{ id: "cis", auth: got[0][1] }, { id: "other" }]);
   });

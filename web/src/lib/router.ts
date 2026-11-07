@@ -24,7 +24,9 @@ export type Route =
   // the health space (docs/health.md): its home, or one of its conversations
   | { name: "health"; sid?: string }
   | { name: "profile" }
-  | { name: "inbox"; id?: string }
+  // `manager`: whose item it is when that is another manager than the default (`?manager=`, docs/managers.md
+  // "Clients"): two managers may list the same id
+  | { name: "inbox"; id?: string; manager?: string }
   | { name: "messages"; id?: string }
   | { name: "routines" }
   | { name: "kb"; kind?: string; id?: string }
@@ -61,7 +63,10 @@ export function parse(path: string, search = ""): Route {
   if (p[0] === "history") return p[1] ? { name: "history", origin: p[1] } : { name: "history" };
   if (p[0] === "health") return { name: "health", sid: p[1] || undefined };
   if (p[0] === "assistant") return { name: "profile" };
-  if (p[0] === "inbox") return { name: "inbox", id: p[1] };
+  if (p[0] === "inbox") {
+    const manager = p[1] ? new URLSearchParams(search).get("manager") : null;
+    return manager ? { name: "inbox", id: p[1], manager } : { name: "inbox", id: p[1] };
+  }
   if (p[0] === "messages") return { name: "messages", id: p[1] };
   if (p[0] === "routines") return { name: "routines" };
   if (p[0] === "kb") return { name: "kb", kind: p[1], id: p[2] };
@@ -103,7 +108,7 @@ export function routePath(r: Route): string {
     case "profile":
       return "/assistant";
     case "inbox":
-      return r.id ? `/inbox/${encodeURIComponent(r.id)}` : "/inbox";
+      return r.id ? `/inbox/${encodeURIComponent(r.id)}${r.manager ? `?manager=${encodeURIComponent(r.manager)}` : ""}` : "/inbox";
     case "messages":
       return r.id ? `/messages/${encodeURIComponent(r.id)}` : "/messages";
     case "routines":

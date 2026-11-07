@@ -5,6 +5,7 @@
 import { api, ApiError, enc, getToken } from "./api";
 import { comparePosition, mergeMessages, type LarkMessage, type LarkPage, type LarkPart } from "./inbox";
 import { larkPath } from "./lark-accounts";
+import { withManager } from "./manager-choice";
 import type { LarkPerson } from "./lark-people";
 
 // ── card buttons ─────────────────────────────────────────
@@ -94,8 +95,8 @@ const CARD_ICONS: [string, string][] = [
 ];
 
 /** Presses a card's callback button as the user (`POST /lark/messages/{id}/card-actions/{action}`). */
-export function pressCardAction(messageID: string, action: string, ol?: number): Promise<unknown> {
-  return api(larkPath(`/lark/messages/${enc(messageID)}/card-actions/${enc(action)}`, ol), { method: "POST", json: {}, token: getToken() });
+export function pressCardAction(messageID: string, action: string, ol?: number, manager?: string): Promise<unknown> {
+  return api(larkPath(`/lark/messages/${enc(messageID)}/card-actions/${enc(action)}`, ol, manager), { method: "POST", json: {}, token: getToken() });
 }
 
 /** A page read around one message (`around=`, after a card button) merged into the loaded window. It overlaps the
@@ -158,8 +159,8 @@ export const isVoice = (p: LarkPart) => p.kind === "media" && String(p.metadata?
 // ── @ in a group ─────────────────────────────────────────
 
 /** A chat's members for the @ picker (`GET …/members?q=`): the group nickname first, else the name. */
-export async function chatMembers(feed: string, query: string, ol: number | undefined, signal?: AbortSignal): Promise<LarkPerson[]> {
-  const r = await api<{ members?: LarkPerson[] }>(larkPath(`/lark/conversations/${enc(feed)}/members?q=${enc(query)}&limit=30`, ol), { signal, token: getToken() });
+export async function chatMembers(feed: string, query: string, ol: number | undefined, signal?: AbortSignal, manager?: string): Promise<LarkPerson[]> {
+  const r = await api<{ members?: LarkPerson[] }>(larkPath(`/lark/conversations/${enc(feed)}/members?q=${enc(query)}&limit=30`, ol, manager), { signal, token: getToken() });
   return (r.members ?? []).filter((m) => m.user_id && m.name);
 }
 
@@ -251,8 +252,8 @@ export class ReadReceipts {
   }
 }
 
-export async function readStates(feed: string, ids: string[], ol?: number): Promise<ReadState[]> {
-  const r = await api<{ states?: ReadState[] }>(larkPath(`/lark/conversations/${enc(feed)}/read-states`, ol), { method: "POST", json: { message_ids: ids }, token: getToken() });
+export async function readStates(feed: string, ids: string[], ol?: number, manager?: string): Promise<ReadState[]> {
+  const r = await api<{ states?: ReadState[] }>(larkPath(`/lark/conversations/${enc(feed)}/read-states`, ol, manager), { method: "POST", json: { message_ids: ids }, token: getToken() });
   return r.states ?? [];
 }
 
@@ -297,8 +298,8 @@ export function quickBar(keys: string[], count = 6): string[] {
   return out;
 }
 
-export function react(messageID: string, key: string, remove: boolean, ol?: number): Promise<unknown> {
-  return api(larkPath(`/lark/messages/${enc(messageID)}/reactions`, ol), { method: "POST", json: { key, remove }, token: getToken() });
+export function react(messageID: string, key: string, remove: boolean, ol?: number, manager?: string): Promise<unknown> {
+  return api(larkPath(`/lark/messages/${enc(messageID)}/reactions`, ol, manager), { method: "POST", json: { key, remove }, token: getToken() });
 }
 
 export interface EmojiCatalog {
@@ -306,34 +307,38 @@ export interface EmojiCatalog {
   groups: { title: string; keys: string[] }[];
 }
 
-let catalog: Promise<EmojiCatalog> | null = null;
-let quick: Promise<string[]> | null = null;
+// by manager ("": the default's): each manager reads its own Lark (docs/managers.md "Clients")
+const catalogs = new Map<string, Promise<EmojiCatalog>>();
+const quicks = new Map<string, Promise<string[]>>();
 
-/** Feishu's emoji (key → picture), read once per page; a failure is asked again next time. */
-export function emojiCatalog(): Promise<EmojiCatalog> {
-  catalog ??= api<Partial<EmojiCatalog>>("/lark/emojis", { token: getToken() })
-    .then((r) => ({ emojis: r.emojis ?? {}, groups: r.groups ?? [] }))
-    .catch((e) => {
-      catalog = null;
+/** Once per page and manager; a failure is asked again next time. */
+function readOnce<T>(cache: Map<string, Promise<T>>, manager: string | undefined, read: () => Promise<T>): Promise<T> {
+  const key = manager ?? "";
+  let p = cache.get(key);
+  if (!p) {
+    p = read().catch((e) => {
+      cache.delete(key);
       throw e;
     });
-  return catalog;
+    cache.set(key, p);
+  }
+  return p;
 }
 
-export function quickReactions(): Promise<string[]> {
-  quick ??= api<{ keys?: string[] }>("/lark/reactions/quick", { token: getToken() })
-    .then((r) => r.keys ?? [])
-    .catch((e) => {
-      quick = null;
-      throw e;
-    });
-  return quick;
+/** Feishu's emoji (key → picture) of the Lark the chat's manager reads. */
+export function emojiCatalog(manager?: string): Promise<EmojiCatalog> {
+  return readOnce(catalogs, manager, () => api<Partial<EmojiCatalog>>(withManager("/lark/emojis", manager), { token: getToken() })
+    .then((r) => ({ emojis: r.emojis ?? {}, groups: r.groups ?? [] })));
+}
+
+export function quickReactions(manager?: string): Promise<string[]> {
+  return readOnce(quicks, manager, () => api<{ keys?: string[] }>(withManager("/lark/reactions/quick", manager), { token: getToken() }).then((r) => r.keys ?? []));
 }
 
 /** Tests only. */
 export function resetLarkChatCaches() {
-  catalog = null;
-  quick = null;
+  catalogs.clear();
+  quicks.clear();
 }
 
 // ── profile ──────────────────────────────────────────────
@@ -352,13 +357,13 @@ export interface LarkProfile {
   fields?: { key: string; label?: string; value?: unknown; url?: string }[];
 }
 
-export function profile(userID: string, feed: string | undefined, ol?: number): Promise<LarkProfile> {
-  return api<LarkProfile>(larkPath(`/lark/users/${enc(userID)}${feed ? `?feed_id=${enc(feed)}` : ""}`, ol), { token: getToken() });
+export function profile(userID: string, feed: string | undefined, ol?: number, manager?: string): Promise<LarkProfile> {
+  return api<LarkProfile>(larkPath(`/lark/users/${enc(userID)}${feed ? `?feed_id=${enc(feed)}` : ""}`, ol, manager), { token: getToken() });
 }
 
 /** The 1:1 chat with someone (made when there is none yet). */
-export async function directChat(userID: string, ol?: number): Promise<string> {
-  const r = await api<{ feed_id?: string }>(larkPath(`/lark/users/${enc(userID)}/chat`, ol), { method: "POST", json: {}, token: getToken() });
+export async function directChat(userID: string, ol?: number, manager?: string): Promise<string> {
+  const r = await api<{ feed_id?: string }>(larkPath(`/lark/users/${enc(userID)}/chat`, ol, manager), { method: "POST", json: {}, token: getToken() });
   if (!r.feed_id) throw new Error("no feed_id");
   return r.feed_id;
 }

@@ -26,6 +26,7 @@ import { Icon } from "../../ui/icons";
 import { NativeExtensionUI } from "./NativeExtensionUI";
 import { useStore } from "../../lib/store";
 import { canTryUIStream } from "../../lib/extension-ui-app-stream";
+import { otherManager } from "../../lib/manager-choice";
 import { t } from "../../i18n";
 
 const inputClass =
@@ -139,13 +140,16 @@ export function ExtensionUI(props: Parameters<typeof LegacyExtensionUI>[0]) {
   // mounts, retain it even if a late hello arrives: never allocate a second source page.
   if (waitingHello && !legacyNegotiation) return <Loading />;
   // System/embedded slots remain full fitted snapshots. Old hubs keep the exact existing component.
-  if (legacyNegotiation || !supported || props.embedded || props.compact) return <LegacyExtensionUI {...props} />;
+  // Another manager's extension draws over HTTP, which names its manager on each request (docs/managers.md "Clients").
+  if (legacyNegotiation || !supported || props.embedded || props.compact || otherManager(props.manager)) return <LegacyExtensionUI {...props} />;
   return <NativeExtensionUI key={JSON.stringify([owner, group, props.extension, props.ui, props.state ?? ""])} {...props} legacy={(page) => <LegacyExtensionUI {...page} />} />;
 }
 export function LegacyExtensionUI({
-  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState, onWide, navigation, active = true,
+  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState, onWide, navigation, active = true, manager,
 }: {
   extension: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
+  /** Whose extension it is (another manager's inbox item or computer, docs/managers.md "Clients"); none: the default's. */
+  manager?: string;
   onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
   pages?: "stack" | "open"; history?: boolean; state?: string;
   /** A native/legacy mixed stack has one history owner; HTTP entries delegate navigation. */
@@ -197,7 +201,7 @@ export function LegacyExtensionUI({
   const load = useCallback((keep?: boolean) => {
     const mine = ++asked.current;
     setLoading(true);
-    renderUI(extension, top.ui, context, stateRef.current)
+    renderUI(extension, top.ui, context, stateRef.current, manager)
       .then((v) => mine === asked.current && show(v, keep === true))
       .catch((e) => {
         if (mine !== asked.current) return;
@@ -211,7 +215,7 @@ export function LegacyExtensionUI({
       })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extension, pageKey, ctxKey]);
+  }, [extension, pageKey, ctxKey, manager]);
   // a new page (pushed, popped, another one): its own state, a fresh view
   useEffect(() => {
     stateRef.current = top.state;
@@ -286,7 +290,7 @@ export function LegacyExtensionUI({
     setBusy(action.id);
     const mine = ++asked.current;
     try {
-      const r = outcome(await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
+      const r = outcome(await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: sent, manager }), context?.item);
       // what it says to do is still done; the view it answers only while nothing was asked since
       const latest = mine === asked.current;
       if (r.view && latest) show(r.view, !!(extra && "q" in extra)); // a search keeps what is typed
@@ -315,7 +319,7 @@ export function LegacyExtensionUI({
       // it does not take a number (it does not make a draw on its way older), but its view is not drawn over a newer one
       const at = asked.current;
       try {
-        const r = await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: { ...extra, ...action.values } });
+        const r = await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: { ...extra, ...action.values }, manager });
         if (r.items?.length) setView((v) => (v ? patchView(v, r.items) : v));
         if (r.view && at === asked.current) show(r.view, true);
         if (r.toast) toast(r.toast, "ok");
@@ -326,7 +330,7 @@ export function LegacyExtensionUI({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [extension, pageKey, ctxKey],
+    [extension, pageKey, ctxKey, manager],
   );
   const [keysOpen, setKeysOpen] = useState(false);
   const isReview = !compact && !embedded && reviewing(view);

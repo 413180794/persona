@@ -3,6 +3,7 @@
 // in progress. Only with a hub that has `extension_operations`: an older one keeps the synchronous calls.
 import { api, enc } from "./api";
 import { extRoot } from "./extension-api";
+import { itemHeaders, messageManager, otherManager } from "./manager-choice";
 import { changed } from "./extensions";
 import { previewConsent } from "./extension-model";
 import { bytes } from "./format";
@@ -55,6 +56,9 @@ export type ExtensionOperation = {
   ended_at?: string;
   /** Only from GET of one that waits for consent. */
   preview?: MarketPreview;
+  /** Whose operation it is when another manager's than the default (its push says so, or this page started it with
+   *  that manager's name; docs/managers.md "Clients"); none: the default's. Set here, not by the hub. */
+  manager?: string;
 };
 
 /** Whether this hub runs installs as operations. */
@@ -65,31 +69,39 @@ export const operationsOn = (features: string[] = getState().features) => hubHas
 const OPS = () => `${extRoot()}/-/operations`;
 type Accepted = { operation: ExtensionOperation };
 
+/** The hub's list of operations: the default manager's (the list is not merged). */
 export const listOperations = () => api<{ operations?: ExtensionOperation[] }>(OPS()).then((r) => r.operations ?? []);
-export const getOperation = (id: string) => api<ExtensionOperation>(`${OPS()}/${enc(id)}`);
-export const retryOperation = (id: string) => api<Accepted>(`${OPS()}/${enc(id)}/retry`, { method: "POST" }).then((r) => track(r.operation));
-export const cancelOperation = (id: string) => api<unknown>(`${OPS()}/${enc(id)}`, { method: "DELETE" });
+// `manager` below: whose operation (ExtensionOperation.manager, or the manager a page installs for); none: the default's.
+export const getOperation = (id: string, manager?: string) => api<ExtensionOperation>(`${OPS()}/${enc(id)}`, { headers: itemHeaders(manager) });
+export const retryOperation = (id: string, manager?: string) =>
+  api<Accepted>(`${OPS()}/${enc(id)}/retry`, { method: "POST", headers: itemHeaders(manager) }).then((r) => track(r.operation, manager));
+export const cancelOperation = (id: string, manager?: string) => api<unknown>(`${OPS()}/${enc(id)}`, { method: "DELETE", headers: itemHeaders(manager) });
 
 /** Starts installing (or upgrading) a market's extension: download and checks in the background. */
-export const startFromMarket = (market: string, extension: string) =>
-  api<Accepted>(`${extRoot()}/-/catalog/preview`, { method: "POST", json: { market, extension, plugin: extension, async: true } }).then((r) => track(r.operation));
+export const startFromMarket = (market: string, extension: string, manager?: string) =>
+  api<Accepted>(`${extRoot()}/-/catalog/preview`, { method: "POST", json: { market, extension, plugin: extension, async: true }, headers: itemHeaders(manager) }).then((r) => track(r.operation, manager));
 /** The user agreed to the preview: the same operation goes on. */
-export const agreeTo = (pv: MarketPreview, upgradeOf?: string) =>
+export const agreeTo = (pv: MarketPreview, upgradeOf?: string, manager?: string) =>
   api<Accepted>(upgradeOf ? `${extRoot()}/${enc(upgradeOf)}/-/upgrade` : `${extRoot()}/-/install`, {
     method: "POST",
     json: { ...previewConsent(pv), async: true },
-  }).then((r) => track(r.operation));
-export const startUninstall = (id: string, keepData = false, cascade = false, members = false) => {
+    headers: itemHeaders(manager),
+  }).then((r) => track(r.operation, manager));
+export const startUninstall = (id: string, keepData = false, cascade = false, members = false, manager?: string) => {
   const q = new URLSearchParams({ async: "1" });
   if (keepData) q.set("keep_data", "1");
   if (cascade) q.set("cascade", "1");
   if (members) q.set("members", "1");
-  return api<Accepted>(`${extRoot()}/${enc(id)}/-/?${q}`, { method: "DELETE" }).then((r) => track(r.operation));
+  return api<Accepted>(`${extRoot()}/${enc(id)}/-/?${q}`, { method: "DELETE", headers: itemHeaders(manager) }).then((r) => track(r.operation, manager));
 };
 
 // ── what the page knows ─────────────────────────────────
 
+// By opKey: two managers' operations may have the same id.
 let ops = new Map<string, ExtensionOperation>();
+
+/** An operation's place in the list: its id, and its manager when another than the default's. */
+const opKey = (o: Pick<ExtensionOperation, "id" | "manager">) => (o.manager ? `${o.manager}\u0000${o.id}` : o.id);
 const listeners = new Set<() => void>();
 let started = false;
 // The lists asked for, numbered: an answer older than one already applied is dropped. Each list on its way notes the
@@ -105,12 +117,16 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
-/** Keeps op (newer than what is known), and tells the pages; an operation that just succeeded refreshes the lists. */
-export function track(op: ExtensionOperation): ExtensionOperation {
-  const was = ops.get(op.id);
+/** Keeps op (newer than what is known), and tells the pages; an operation that just succeeded refreshes the lists.
+ *  `manager`: whose it is (a push's sender, or the manager a request named); none: the default's. */
+export function track(raw: ExtensionOperation, manager?: string): ExtensionOperation {
+  const owner = otherManager(manager ?? raw.manager);
+  const op: ExtensionOperation = owner ? { ...raw, manager: owner } : raw.manager ? { ...raw, manager: undefined } : raw;
+  const key = opKey(op);
+  const was = ops.get(key);
   if (was && Date.parse(was.updated_at) > Date.parse(op.updated_at)) return was;
-  ops = new Map(ops).set(op.id, op);
-  listsOut.forEach((since) => since.add(op.id));
+  ops = new Map(ops).set(key, op);
+  listsOut.forEach((since) => since.add(key));
   if (op.state === "succeeded" && was?.state !== "succeeded") changed(null);
   emit();
   return op;
@@ -129,11 +145,13 @@ export async function reloadOperations() {
     applied = mine;
     listed = true;
     const next = new Map(list.map((o) => [o.id, o]));
-    for (const id of since) {
-      const known = ops.get(id);
-      const listed = next.get(id);
-      if (known && (!listed || Date.parse(known.updated_at) > Date.parse(listed.updated_at))) next.set(id, known);
+    for (const key of since) {
+      const known = ops.get(key);
+      const listed = next.get(key);
+      if (known && (!listed || Date.parse(known.updated_at) > Date.parse(listed.updated_at))) next.set(key, known);
     }
+    // the list is the default manager's: the other managers' operations stay as their pushes left them
+    for (const [key, o] of ops) if (o.manager && !next.has(key)) next.set(key, o);
     ops = next;
     emit();
   } catch {
@@ -147,7 +165,8 @@ function start() {
   if (started) return;
   started = true;
   onHubEvent("extension_operation", (msg) => {
-    if (msg.operation && typeof msg.operation === "object") track(msg.operation as ExtensionOperation);
+    // another manager's push says whose (`manager`); the one the hub runs itself names none
+    if (msg.operation && typeof msg.operation === "object") track(msg.operation as ExtensionOperation, messageManager(msg));
   });
   // after hello (its features are in the store by then): events missed while away are not replayed
   onHubEvent("hello", () => void reloadOperations());
@@ -166,17 +185,21 @@ export function watchOperations(l: () => void): () => void {
 /** Whether the hub's list of operations has been read since listening started (it also holds ones that ended a while ago). */
 export const operationsListed = () => listed;
 export const operations = (): ExtensionOperation[] => [...ops.values()].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
-export const forget = (id: string) => {
+export const forget = (op: string | Pick<ExtensionOperation, "id" | "manager">) => {
   ops = new Map(ops);
-  ops.delete(id);
+  ops.delete(typeof op === "string" ? op : opKey(op));
   emit();
 };
 
 // ── words and rules ─────────────────────────────────────
 
-/** The newest operation of extension id (from market, when given), if it is going on or ended just now. */
-export function latestFor(list: ExtensionOperation[], id: string, market?: string): ExtensionOperation | undefined {
-  return list.find((o) => o.extension === id && (!market || !o.market || o.market === market));
+/** Whether op is manager's (none: the default's). */
+export const opOf = (op: ExtensionOperation, manager: string | undefined) => op.manager === otherManager(manager);
+
+/** The newest operation of extension id (from market, when given) of manager (none: the default's), if it is going on
+ *  or ended just now. */
+export function latestFor(list: ExtensionOperation[], id: string, market?: string, manager?: string): ExtensionOperation | undefined {
+  return list.find((o) => o.extension === id && (!market || !o.market || o.market === market) && opOf(o, manager));
 }
 
 export const isActive = (o?: ExtensionOperation) => o?.state === "running" || o?.state === "needs_consent";

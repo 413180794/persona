@@ -279,6 +279,8 @@ export function placeHits(places: readonly PlaceInput[], text: string): PlaceHit
 /** What ⌘K reads of an inbox item (lib/inbox.ts InboxItem). */
 export interface InboxLike {
   id: string;
+  /** Whose inbox it is (several managers may list the same id). */
+  manager?: string;
   title: string;
   sender?: string;
   preview: string;
@@ -300,7 +302,7 @@ export function inboxHits<T extends InboxLike>(items: readonly T[], text: string
   return items
     .flatMap((item) => {
       const score = textScore(item.title, [item.sender, item.preview, item.account_name], text);
-      return score ? [{ key: `i:${item.id}`, item, score }] : [];
+      return score ? [{ key: item.manager ? `i:${item.manager}:${item.id}` : `i:${item.id}`, item, score }] : [];
     })
     .sort((a, b) => b.score - a.score || byTime(b.item.updated_at, a.item.updated_at))
     .slice(0, limit);

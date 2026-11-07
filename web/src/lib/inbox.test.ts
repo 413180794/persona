@@ -648,7 +648,7 @@ describe("列表状态", () => {
     expect(muteLine(list[1])).toBe("GitHub · 仓库");
     expect(muteLine(list[0])).toBe("mail · 发件人");
     fetcher.mockResolvedValueOnce(ok({}));
-    await unmuteInbox("a/b");
+    await unmuteInbox({ id: "a/b" });
     const [url, init] = fetcher.mock.calls[2];
     expect(url).toBe("/api/v1/inbox/mutes/a%2Fb");
     expect(init.method).toBe("DELETE");
@@ -684,6 +684,61 @@ describe("列表状态", () => {
     await setAllDone(getInbox().items, true);
     expect(getInbox().items.every((x) => !x.done_at)).toBe(true);
     expect(toast).toHaveBeenLastCalledWith(expect.stringMatching(/^没标成已处理：.*HTTP 502: boom/), "error");
+  });
+
+  it("several managers: each one's items go to it (X-Persona-Manager), in one request each, the answers put together", async () => {
+    const stamped = [{ ...dm, version: "v1", manager: "assistant" }, { ...doc, version: "v2", manager: "m-1" }, { ...mail, version: "v3", manager: "m-1" }];
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: stamped }));
+    await reloadInbox();
+    const [a, b, c] = getInbox().items;
+    // each manager answers about its own items alone, unstamped (only the merged list stamps)
+    const filed = (x: typeof a) => ({ ...x, manager: undefined, done_at: at(0), done_by: "user" });
+    fetcher
+      .mockResolvedValueOnce(ok({ changed: [filed(a)], unchanged: [], skipped: [] }))
+      .mockResolvedValueOnce(ok({ changed: [filed(b), filed(c)], unchanged: [], skipped: [] }));
+    await setAllDone([a, b, c], true, false);
+    const sent = fetcher.mock.calls.slice(1, 3).map(([url, init]) => [url, new Headers(init.headers).get("X-Persona-Manager"), JSON.parse(init.body).items.map((x: { id: string }) => x.id)]);
+    expect(sent).toEqual([["/api/v1/inbox/bulk", null, [a.id]], ["/api/v1/inbox/bulk", "m-1", [b.id, c.id]]]);
+    expect(getInbox().items.every((x) => x.done_by === "user")).toBe(true);
+    // they keep their stamps: the group they show in, and where their Undo goes
+    expect(getInbox().items.map((x) => x.manager)).toEqual(["assistant", "m-1", "m-1"]);
+    expect(vi.mocked(toast).mock.lastCall?.[0]).toBe("已将 3 件标为已处理");
+  });
+
+  it("several managers: one that does not answer leaves the others' done, puts its own back and says so", async () => {
+    const stamped = [{ ...dm, version: "v1" }, { ...doc, version: "v2", manager: "m-2" }];
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: stamped }));
+    await reloadInbox();
+    const [a, b] = getInbox().items;
+    fetcher
+      .mockResolvedValueOnce(ok({ changed: [{ ...a, done_at: at(0), done_by: "user" }], unchanged: [], skipped: [] }))
+      .mockResolvedValueOnce(fail(503, "assistant offline"));
+    await setAllDone([a, b], true);
+    expect(getInbox().items.map((x) => Boolean(x.done_at))).toEqual([true, false]);
+    expect(getInbox().items[1].manager).toBe("m-2");
+    const [message, tone, action] = vi.mocked(toast).mock.lastCall!;
+    expect(message).toMatch(/^已将 1 件标为已处理；1 件没改成：.*HTTP 503: assistant offline/);
+    expect(tone).toBe("error");
+    // Undo takes back only what was filed, from its own manager
+    fetcher.mockReset().mockResolvedValueOnce(ok({ changed: [a], unchanged: [], skipped: [] }));
+    action!.run();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).items).toEqual([{ id: a.id, version: "v1" }]);
+    expect(new Headers(fetcher.mock.calls[0][1].headers).get("X-Persona-Manager")).toBeNull();
+  });
+
+  it("an answer about one item keeps its manager's stamp", async () => {
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: [{ ...doc, manager: "m-1" }] }));
+    await reloadInbox();
+    const [x] = getInbox().items;
+    fetcher.mockResolvedValueOnce(ok({ ...x, manager: undefined, done_at: at(0), done_by: "user" }));
+    await setDone(x, true);
+    expect(new Headers(fetcher.mock.calls[1][1].headers).get("X-Persona-Manager")).toBe("m-1");
+    expect(getInbox().items[0]).toMatchObject({ manager: "m-1", done_by: "user" });
+    // and its next request still names it
+    fetcher.mockResolvedValueOnce(ok({ ...x, manager: undefined }));
+    await setDone(getInbox().items[0], false);
+    expect(new Headers(fetcher.mock.calls[2][1].headers).get("X-Persona-Manager")).toBe("m-1");
   });
 
   it("全部清理：按忽略记（done_by=dismissed），撤销移回；失败恢复", async () => {

@@ -114,13 +114,13 @@ async function base64(data: Blob): Promise<string> {
 }
 
 /** The request for one attachment (exported for the tests). */
-export async function attachmentRequest(feed: string, a: LarkAttachment, clientID: string, route: LarkAttachmentRoute, ol?: number):
+export async function attachmentRequest(feed: string, a: LarkAttachment, clientID: string, route: LarkAttachmentRoute, ol?: number, manager?: string):
   Promise<{ path: string; init: RequestInit & { json?: unknown } }> {
   const root = `/lark/conversations/${enc(feed)}`;
   const thread = Boolean(route.replyTo && route.thread);
   if (a.kind === "image") {
     return {
-      path: larkPath(`${root}/images`, ol),
+      path: larkPath(`${root}/images`, ol, manager),
       init: {
         method: "POST",
         json: {
@@ -134,7 +134,7 @@ export async function attachmentRequest(feed: string, a: LarkAttachment, clientI
   if (route.replyTo) q.set("reply_to", route.replyTo);
   if (thread) q.set("thread_root", route.threadRoot ?? route.replyTo!);
   return {
-    path: larkPath(`${root}/files?${q.toString()}`, ol),
+    path: larkPath(`${root}/files?${q.toString()}`, ol, manager),
     init: { method: "POST", body: a.data, headers: { "Content-Type": "application/octet-stream" } },
   };
 }
@@ -150,9 +150,9 @@ export class LarkReceiptMissing extends Error {
  * Sends one attachment. A picture needs its message id back; a file may come back without one (it was taken, so it
  * must not be sent again: docs/lark-attachments.md "A successful file receipt may leave out message_id").
  */
-export async function sendLarkAttachment(feed: string, a: LarkAttachment, clientID: string, route: LarkAttachmentRoute = {}, ol?: number):
-  Promise<{ message_id?: string }> {
-  const { path, init } = await attachmentRequest(feed, a, clientID, route, ol);
+export async function sendLarkAttachment(feed: string, a: LarkAttachment, clientID: string, route: LarkAttachmentRoute = {}, ol?: number,
+  manager?: string): Promise<{ message_id?: string }> {
+  const { path, init } = await attachmentRequest(feed, a, clientID, route, ol, manager);
   const r = await api<{ message_id?: string } | null>(path, init);
   const id = r && typeof r === "object" && typeof r.message_id === "string" ? r.message_id.trim() : "";
   if (a.kind === "file") {

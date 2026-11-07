@@ -5,8 +5,9 @@
 // summary, recap, the suggestion, the handling chain); "Original" and the chain's source entries open the thing itself,
 // "Handling" goes back.
 import { useEffect, useState } from "react";
+import { ItemManager, useKnownDefault } from "../../lib/manager-choice";
 import { hasEvent, itemAtUid } from "../../lib/inbox-events";
-import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, policyMenuTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
+import { agentDraft, agentWorking, canDraft, isDone, itemKey, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, policyMenuTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { openPolicyDialog } from "./PolicyDialog";
 import { useInboxItemPlace } from "../../lib/extension-slots";
 import { PHONE, useMedia } from "../../lib/viewport";
@@ -26,6 +27,20 @@ import { EventBody, type SourceAt } from "./InboxEvent";
 import { chatOfItem, LarkThread } from "./LarkThread";
 
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
+  // Whether an item's requests name its manager goes by the roster's default (docs/managers.md "Clients"): the page
+  // waits for it, and is drawn anew when it moves, so nothing it asks goes by a default it was not.
+  const known = useKnownDefault();
+  if (item && !known) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <Loading />
+      </div>
+    );
+  }
+  return <ItemDetail key={`${known}\u0000${item ? itemKey(item) : ""}`} item={item} loaded={loaded} />;
+}
+
+function ItemDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
   const [dialog, setDialog] = useState<"" | "draft" | "handoff">("");
   const [pins, setPins] = useState(false);
   // an event's own page (the chat, the mail) when "Original" or a source entry opened it; null: the event body
@@ -35,7 +50,8 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
     setSource(null);
   }, [item?.id]);
   const prefs = useTranslatePrefs();
-  const place = useInboxItemPlace(item?.source);
+  // the item's manager's extensions draw it (each manager has its own)
+  const place = useInboxItemPlace(item?.source, item?.manager);
   const [ownShown, setOwnShown] = useState(false); // under an extension's page: it fell back to the item's own body
   const muteMenu = useMenu();
   const moreMenu = useMenu();
@@ -72,83 +88,87 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
       )}
     </div>
   );
+  // its chat, mail or connector thread is its manager's (a merged list's stamp, docs/managers.md "Clients"): every
+  // request the bodies below make names it, so one still going out after the next item opened keeps its own
   return (
-    <div className="flex h-full min-h-0 flex-col" key={item.id}>
-      <div className="shrink-0 border-b border-line px-4 pt-4 pb-3 sm:px-6">
-        <div className="mx-auto max-w-[760px]">
-          <div className="flex items-start gap-3">
-            <ItemAvatar it={item} size={36} />
-            <div className="min-w-0 flex-1">
-              <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold text-ink">
-                <span className="truncate" title={translated?.subject ? item.title : undefined}>{translated?.subject || item.title}</span>
-                {label && <Tag urgent={labelIsUrgent(item)}>{label}</Tag>}
-              </h2>
-              {/* the source line gives way first, so the time stays whole */}
-              <p className="mt-0.5 flex min-w-0 text-[12px] text-ink-3">
-                <span className="truncate">{sourceLine(item)}</span>
-                {time && <span className="shrink-0 whitespace-pre">{sourceLine(item) ? ` · ${time}` : time}</span>}
-              </p>
+    <ItemManager.Provider value={item.manager}>
+      <div className="flex h-full min-h-0 flex-col" key={item.id}>
+        <div className="shrink-0 border-b border-line px-4 pt-4 pb-3 sm:px-6">
+          <div className="mx-auto max-w-[760px]">
+            <div className="flex items-start gap-3">
+              <ItemAvatar it={item} size={36} />
+              <div className="min-w-0 flex-1">
+                <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold text-ink">
+                  <span className="truncate" title={translated?.subject ? item.title : undefined}>{translated?.subject || item.title}</span>
+                  {label && <Tag urgent={labelIsUrgent(item)}>{label}</Tag>}
+                </h2>
+                {/* the source line gives way first, so the time stays whole */}
+                <p className="mt-0.5 flex min-w-0 text-[12px] text-ink-3">
+                  <span className="truncate">{sourceLine(item)}</span>
+                  {time && <span className="shrink-0 whitespace-pre">{sourceLine(item) ? ` · ${time}` : time}</span>}
+                </p>
+              </div>
+              {phone && canPin && muteRows.length > 0 ? (
+                <IconButton icon="more" label={t("inbox-inboxdetail.more")} onClick={moreMenu.open} active={Boolean(moreMenu.anchor)} size={32} />
+              ) : (
+                <>
+                  {canPin && <IconButton icon="pin" label={t("inbox-inboxdetail.pin_messages")} onClick={() => setPins(true)} size={32} />}
+                  {muteRows.length > 0 && <IconButton icon="bellOff" label={t("inbox-inboxdetail.mute")} onClick={muteMenu.open} active={Boolean(muteMenu.anchor)} size={32} />}
+                </>
+              )}
+              {muteMenu.anchor && <Menu anchor={muteMenu.anchor} onClose={muteMenu.close} align="right" width={224} items={muteRows} />}
+              {moreMenu.anchor && (
+                <Menu anchor={moreMenu.anchor} onClose={moreMenu.close} align="right" width={224}
+                  items={[
+                    ...(canPin ? [{ key: "pins", label: t("inbox-inboxdetail.pin_messages"), icon: "pin" as const, onSelect: () => setPins(true) }] : []),
+                    ...muteRows.map((r, i) => (i === 0 && canPin ? { ...r, divider: true } : r)),
+                  ]} />
+              )}
+              {done ? (
+                <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>{t("inbox-inboxdetail.move_back")}</Button>
+              ) : (
+                <Button
+                  tone="secondary"
+                  icon="check"
+                  onClick={() => {
+                    // the page leaves the item at once, so say so with "Undo" on any screen (#4162), as a row does on touch
+                    void markFromRow(item, true, true);
+                    navigate({ name: "inbox" });
+                  }}
+                >
+                  {t("inbox-inboxdetail.done")}
+                </Button>
+              )}
             </div>
-            {phone && canPin && muteRows.length > 0 ? (
-              <IconButton icon="more" label={t("inbox-inboxdetail.more")} onClick={moreMenu.open} active={Boolean(moreMenu.anchor)} size={32} />
-            ) : (
-              <>
-                {canPin && <IconButton icon="pin" label={t("inbox-inboxdetail.pin_messages")} onClick={() => setPins(true)} size={32} />}
-                {muteRows.length > 0 && <IconButton icon="bellOff" label={t("inbox-inboxdetail.mute")} onClick={muteMenu.open} active={Boolean(muteMenu.anchor)} size={32} />}
-              </>
+            {item.summary && !showEvent && (
+              <p className="mt-3 text-[13px] leading-relaxed text-ink">
+                <Spark />
+                {item.summary}
+              </p>
             )}
-            {muteMenu.anchor && <Menu anchor={muteMenu.anchor} onClose={muteMenu.close} align="right" width={224} items={muteRows} />}
-            {moreMenu.anchor && (
-              <Menu anchor={moreMenu.anchor} onClose={moreMenu.close} align="right" width={224}
-                items={[
-                  ...(canPin ? [{ key: "pins", label: t("inbox-inboxdetail.pin_messages"), icon: "pin" as const, onSelect: () => setPins(true) }] : []),
-                  ...muteRows.map((r, i) => (i === 0 && canPin ? { ...r, divider: true } : r)),
-                ]} />
-            )}
-            {done ? (
-              <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>{t("inbox-inboxdetail.move_back")}</Button>
-            ) : (
-              <Button
-                tone="secondary"
-                icon="check"
-                onClick={() => {
-                  // the page leaves the item at once, so say so with "Undo" on any screen (#4162), as a row does on touch
-                  void markFromRow(item, true, true);
-                  navigate({ name: "inbox" });
-                }}
-              >
-                {t("inbox-inboxdetail.done")}
-              </Button>
-            )}
-          </div>
-          {item.summary && !showEvent && (
-            <p className="mt-3 text-[13px] leading-relaxed text-ink">
-              <Spark />
-              {item.summary}
-            </p>
-          )}
-          {!showEvent && <InboxLine item={item} />}
-          {!done && !item.handling && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {canDraft(item) ? (
-              <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? t("inbox-inboxdetail.view_draft") : t("inbox-inboxdetail.ai_draft")}</Button>
-            ) : (
-              // Answered in the source's own app (a CI run has nothing to answer: only "Hand to AI").
-              openURL(item) && <Button tone="accent" icon="external" onClick={() => openSystem(openURL(item)!)}>{openTitle(item)}</Button>
-            )}
-            <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>{t("inbox-inboxdetail.hand_to_ai")}</Button>
-            {event && (showEvent ? (
-              <Button tone="quiet" icon={item.mail ? "mail" : "chat"} onClick={() => setSource({})}>{t("inbox-inboxdetail.view_source")}</Button>
-            ) : (
-              <Button tone="quiet" icon="list" onClick={() => setSource(null)}>{t("inbox-inboxdetail.view_event")}</Button>
-            ))}
+            {!showEvent && <InboxLine item={item} />}
+            {!done && !item.handling && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canDraft(item) ? (
+                <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? t("inbox-inboxdetail.view_draft") : t("inbox-inboxdetail.ai_draft")}</Button>
+              ) : (
+                // Answered in the source's own app (a CI run has nothing to answer: only "Hand to AI").
+                openURL(item) && <Button tone="accent" icon="external" onClick={() => openSystem(openURL(item)!)}>{openTitle(item)}</Button>
+              )}
+              <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>{t("inbox-inboxdetail.hand_to_ai")}</Button>
+              {event && (showEvent ? (
+                <Button tone="quiet" icon={item.mail ? "mail" : "chat"} onClick={() => setSource({})}>{t("inbox-inboxdetail.view_source")}</Button>
+              ) : (
+                <Button tone="quiet" icon="list" onClick={() => setSource(null)}>{t("inbox-inboxdetail.view_event")}</Button>
+              ))}
+            </div>
           </div>
         </div>
+        {showEvent ? <EventBody item={item} onSource={setSource} /> : place ? <InboxExtensionBody key={`${itemKey(item)}/${place.extension}/${place.id}`} item={item} place={place} own={own} onOwn={setOwnShown} /> : own()}
+        {dialog === "draft" && <DraftDialog item={item} onClose={() => setDialog("")} />}
+        {dialog === "handoff" && <HandOffDialog item={item} onClose={() => setDialog("")} />}
       </div>
-      {showEvent ? <EventBody item={item} onSource={setSource} /> : place ? <InboxExtensionBody key={`${item.id}/${place.extension}/${place.id}`} item={item} place={place} own={own} onOwn={setOwnShown} /> : own()}
-      {dialog === "draft" && <DraftDialog item={item} onClose={() => setDialog("")} />}
-      {dialog === "handoff" && <HandOffDialog item={item} onClose={() => setDialog("")} />}
-    </div>
+    </ItemManager.Provider>
   );
 }
 

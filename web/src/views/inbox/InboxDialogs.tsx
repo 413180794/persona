@@ -1,11 +1,12 @@
 // What can be done with one item besides reading it (docs/inbox.md "What you can do with one item"): "AI draft reply" (a reply in the
 // user's voice, edited and sent from here) and "Hand to AI" (the item as <persona-context> to Persona or a running agent).
+import { chooseManager, noteConversation, otherManager, ownerHeaders } from "../../lib/manager-choice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText } from "../../lib/api";
 import { noteSent, sendToSession } from "../../lib/outbox";
 import { sessionTitle, stateOf } from "../../lib/format";
 import {
-  agentDraft, connectorReference, conversationRoute, docChangeLine, HANDOFF_PRESETS, handOffMessage, isLark, itemPath, sendReply, setDone, unsentReplies,
+  agentDraft, connectorReference, conversationRoute, docChangeLine, HANDOFF_PRESETS, handOffMessage, isLark, itemKey, itemPath, itemRequest, sendReply, setDone, unsentReplies,
   type DocChange, type InboxItem,
 } from "../../lib/inbox";
 import { machineWithHub } from "../../lib/mesh";
@@ -37,7 +38,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
   const sessions = useStore((s) => s.sessions);
   const assistant = useStore((s) => s.assistant);
   const agentText = agentDraft(item);
-  const [text, setText] = useState(() => unsentReplies.get(item.id) ?? agentText ?? "");
+  const [text, setText] = useState(() => unsentReplies.get(itemKey(item)) ?? agentText ?? "");
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -50,7 +51,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
   const load = async (ask: string) => {
     setLoading(true);
     try {
-      const r = await api<{ text?: string }>(`${itemPath(item.id)}/draft`, { method: "POST", json: { instruction: ask } });
+      const r = await api<{ text?: string }>(`${itemPath(item.id)}/draft`, { method: "POST", json: { instruction: ask }, headers: itemRequest(item) });
       if (!live.current) return;
       setText(r.text ?? "");
       setInstruction("");
@@ -64,7 +65,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
 
   useEffect(() => {
     live.current = true;
-    if (!unsentReplies.has(item.id) && !agentText) void load("");
+    if (!unsentReplies.has(itemKey(item)) && !agentText) void load("");
     return () => {
       live.current = false;
     };
@@ -194,7 +195,7 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
     setBusy(true);
     setError("");
     try {
-      const full = await api<InboxItem>(itemPath(item.id));
+      const full = await api<InboxItem>(itemPath(item.id), { headers: itemRequest(item) });
       const text = handOffMessage({ ...item, ...full }, ask);
       if (target) {
         // the conversation opens at once with the message on its way; a failure shows there with "Retry"
@@ -205,7 +206,12 @@ export function HandOffDialog({ item, onClose }: { item: InboxItem; onClose: () 
         });
         return;
       }
-      const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: text } });
+      // Persona here is the item's own manager's (docs/managers.md "Clients"), whatever the assistant page shows now;
+      // the page then shows that manager, where the conversation is
+      const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: text }, headers: ownerHeaders(item.manager) });
+      // its requests (feed, stop…) go to that manager whatever the page shows later
+      noteConversation(r.session.session_id, otherManager(item.manager));
+      if (item.manager) chooseManager(item.manager);
       noteSent(r.session.machine_id, r.session.session_id, { text });
       void refreshAssistant().catch(() => {});
       if (markDone) void setDone(item, true);

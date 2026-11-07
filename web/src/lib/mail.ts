@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import { useEffect, useState } from "react";
 import { api, enc } from "./api";
 import type { MailAccount } from "./inbox";
+import { itemHeaders, useItemManager } from "./manager-choice";
 
 export interface MailAddress {
   name?: string;
@@ -111,47 +112,60 @@ export function sendBody(d: ComposeDraft) {
   };
 }
 
-export async function sendMail(d: ComposeDraft): Promise<void> {
-  await api("/mail/send", { method: "POST", json: sendBody(d) });
+/** Sends as one of manager's accounts (another manager's mail is its own, docs/managers.md "Clients"; none: the default's). */
+export async function sendMail(d: ComposeDraft, manager?: string): Promise<void> {
+  await api("/mail/send", { method: "POST", json: sendBody(d), headers: itemHeaders(manager) });
 }
 
 /** Opened: the mail is read (best effort; the inbox's own state follows on its next push). */
-export function markMailSeen(accountID: string, uid: number, mailbox: string): Promise<unknown> {
-  return api(`/mail/messages/${enc(accountID)}/${uid}/flags`, { method: "POST", json: { mailbox, seen: true } }).catch(() => undefined);
+export function markMailSeen(accountID: string, uid: number, mailbox: string, manager?: string): Promise<unknown> {
+  return api(`/mail/messages/${enc(accountID)}/${uid}/flags`, { method: "POST", json: { mailbox, seen: true }, headers: itemHeaders(manager) }).catch(() => undefined);
 }
 
 // ── accounts ─────────────────────────────────────────────
 
-let accounts: MailAccount[] = [];
-let inFlight: Promise<MailAccount[]> | null = null;
+// by manager ("": the default's): each manager keeps its own mail accounts
+const known = new Map<string, MailAccount[]>();
+const inFlight = new Map<string, Promise<MailAccount[]>>();
+const accountsKey = (manager?: string) => (itemHeaders(manager) ? manager! : "");
 
-/** The hub's mail accounts, read again on every call (calls while one is out share it); the last answer is kept. */
-export function loadMailAccounts(): Promise<MailAccount[]> {
-  inFlight ??= api<{ accounts?: MailAccount[] }>("/mail/accounts")
-    .then((r) => (accounts = r.accounts ?? []))
-    .finally(() => {
-      inFlight = null;
-    });
-  return inFlight;
+/** The mail accounts of manager (none: the default's), read again on every call (calls while one is out share it);
+ *  the last answer is kept. */
+export function loadMailAccounts(manager?: string): Promise<MailAccount[]> {
+  const key = accountsKey(manager);
+  let p = inFlight.get(key);
+  if (!p) {
+    p = api<{ accounts?: MailAccount[] }>("/mail/accounts", { headers: itemHeaders(manager) })
+      .then((r) => {
+        const list = r.accounts ?? [];
+        known.set(key, list);
+        return list;
+      })
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, p);
+  }
+  return p;
 }
 
-/** The accounts, the last known ones at once and the hub's answer when it comes. */
+/** The accounts of the manager whose item is shown (ItemManager; none: the default's), the last known ones at once and
+ *  the hub's answer when it comes. */
 export function useMailAccounts(): MailAccount[] {
-  const [list, setList] = useState(accounts);
+  const manager = useItemManager();
+  const [list, setList] = useState(() => known.get(accountsKey(manager)) ?? []);
   useEffect(() => {
     let live = true;
-    loadMailAccounts()
+    loadMailAccounts(manager)
       .then((a) => live && setList(a))
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, []);
+  }, [manager]);
   return list;
 }
 
 /** Tests only. */
 export function resetMailForTests() {
-  accounts = [];
-  inFlight = null;
+  known.clear();
+  inFlight.clear();
 }

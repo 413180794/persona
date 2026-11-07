@@ -5,6 +5,7 @@
 // Like the phone's chat (lib/lark-chat.ts, LarkExtras.tsx): pictures open in the viewer, files download, voice and video
 // play here, a card's buttons press, my messages show who read them, reactions can be put on, an avatar opens the
 // person's card, a group's box can @ people, and what is typed stays as the chat's draft.
+import { chooseManager, ItemManager, noteConversation, otherManager, ownerHeaders, useItemManager, withManager } from "../../lib/manager-choice";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
@@ -74,6 +75,8 @@ function refuseAttachments() {
 
 /** The chat a LarkThread shows: from an inbox item, or a row of "Messages". */
 export interface LarkChatRef {
+  /** The manager of the inbox item it opened from (a merged list's stamp): its Persona summarizes it. */
+  manager?: string;
   feed: string;
   title: string;
   topic?: boolean;
@@ -87,7 +90,7 @@ export interface LarkChatRef {
 
 export function chatOfItem(item: InboxItem): LarkChatRef {
   return { feed: item.lark!.feed_id, title: item.title, topic: item.lark?.is_topic, focus: !isDone(item) ? item.lark?.start_position : undefined,
-    account: olAccount(item.lark?.ol_account), group: item.lark?.is_group };
+    account: olAccount(item.lark?.ol_account), group: item.lark?.is_group, manager: item.manager };
 }
 
 /** The account of the chat a message is drawn in: its thread is read as that account. */
@@ -110,16 +113,22 @@ const Tools = createContext<ChatTools | null>(null);
 type LarkThreadProps = { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void };
 
 export function LarkThread(props: LarkThreadProps) {
+  // whose Lark the chat is (an inbox item's manager; a chat opened from it is the same one's): every request below names it
+  const outer = useItemManager();
+  const manager = props.chat.manager ?? outer;
   return (
-    <ChatAccount.Provider value={props.chat.account}>
-      <ChatFeed.Provider value={props.chat.feed}><LarkThreadBody {...props} /></ChatFeed.Provider>
-    </ChatAccount.Provider>
+    <ItemManager.Provider value={manager}>
+      <ChatAccount.Provider value={props.chat.account}>
+        <ChatFeed.Provider value={props.chat.feed}><LarkThreadBody {...props} /></ChatFeed.Provider>
+      </ChatAccount.Provider>
+    </ItemManager.Provider>
   );
 }
 
 function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps) {
   const feed = chat.feed;
   const ol = chat.account;
+  const manager = useItemManager();
   const focus = chat.focus;
   const [page, setPage] = useState<LarkPage | null>(null);
   const [error, setError] = useState("");
@@ -182,7 +191,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     windowGen.current++;
     setJumpShown(false);
     setJumping(false);
-    api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol))
+    api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol, manager))
       .then((r) => {
         if (!live) return;
         const messages = mergeMessages([], r.messages ?? []);
@@ -193,7 +202,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     return () => {
       live = false;
     };
-  }, [base, focus, topic, ol]);
+  }, [base, focus, topic, ol, manager]);
 
   // New messages in this chat (the hub's `lark` push names the chats): read the newest page again when we show it.
   const pageRef = useRef(page);
@@ -206,12 +215,12 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     const at = pageRef.current?.messages.find((m) => m.id === mid)?.position;
     if (!at) return;
     try {
-      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&around=${enc(at)}`, ol));
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&around=${enc(at)}`, ol, manager));
       if (gen === windowGen.current) setPage((cur) => cur && mergeAround(cur, r));
     } catch {
       // the card keeps what it showed; the next push reads the chat again
     }
-  }, [base, ol]);
+  }, [base, ol, manager]);
   useReadReports(feed, ol, scroller, tracker, pageRef, placed, page);
   const { states: receipts, changed: receiptsChanged } = useReadReceipts(feed, ol, scroller, pageRef, page);
 
@@ -223,7 +232,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       receiptsChanged();
       if (p.has_newer) return;
       const gen = windowGen.current;
-      api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol))
+      api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol, manager))
         .then((r) => {
           if (gen !== windowGen.current) return;
           // A list showing its newest message keeps showing it as more come in (iOS larkFollowsEnd).
@@ -244,7 +253,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       offLark();
       offHello();
     };
-  }, [feed, ol, base, receiptsChanged]);
+  }, [feed, ol, manager, base, receiptsChanged]);
 
   // First paint: at the first new message (a little of what came before shows above it), else at the bottom.
   useLayoutEffect(() => {
@@ -282,7 +291,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     const gen = windowGen.current;
     setNewerBusy(true);
     try {
-      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&after=${enc(p.newer_cursor ?? "")}`, ol));
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&after=${enc(p.newer_cursor ?? "")}`, ol, manager));
       if (gen !== windowGen.current) return;
       setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []), has_newer: r.has_newer, newer_cursor: r.newer_cursor });
     } catch (e) {
@@ -290,7 +299,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     } finally {
       setNewerBusy(false);
     }
-  }, [base, ol]);
+  }, [base, ol, manager]);
 
   // One older page at a time (iOS LarkHistoryPaging): the page goes in above with the message being read held where
   // it is; a failed or non-progressing page waits for a click on the header line; a reply for another window is dropped.
@@ -301,7 +310,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     if (!req) return;
     setPagingTick((n) => n + 1);
     try {
-      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&before=${enc(req.cursor)}`, ol));
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&before=${enc(req.cursor)}`, ol, manager));
       const got = paging.current.finish(req, r, pageRef.current?.messages ?? []);
       if (!got) return;
       const el = scroller.current;
@@ -312,7 +321,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     } finally {
       setPagingTick((n) => n + 1);
     }
-  }, [base, ol]);
+  }, [base, ol, manager]);
 
   const autoOlder = page !== null && !topic && !page.topic;
   // Near the top (also right after a page landed, when a short page does not fill the list) asks for the next one.
@@ -356,7 +365,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       setJumping(true);
     }
     try {
-      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol));
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol, manager));
       if (gen !== windowGen.current) return;
       const fresh = mergeMessages([], r.messages ?? []);
       const box = scroller.current;
@@ -373,7 +382,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     } finally {
       if (gen === windowGen.current) setJumping(false);
     }
-  }, [base, ol]);
+  }, [base, ol, manager]);
 
   const handleReply = useCallback((m: LarkMessage) => {
     setReplyTo({
@@ -404,7 +413,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     setAdding(null);
     setChangingPin(true);
     try {
-      await changeChatPin(feed, m.id, undefined, await larkAccount(ol), ol);
+      await changeChatPin(feed, m.id, undefined, await larkAccount(ol, manager), ol, manager);
       toast(t("inbox-larkthread.pin_added"), "ok");
     } catch (e) {
       const recheck = needsRecheck(e);
@@ -414,7 +423,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     } finally {
       setChangingPin(false);
     }
-  }, [feed, ol, onPinsOpen]);
+  }, [feed, ol, manager, onPinsOpen]);
 
   // Closing the list after it read cleanly settles an unknown add.
   const closePins = useCallback((checked: boolean) => {
@@ -436,10 +445,15 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     const prompt = `读取我飞书会话「${chatTitle}」（飞书网关 feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`; // i18n-ignore: prompt
     toast(t("inbox-larkthread.summarizing"), "ok");
     try {
+      // the chat's manager's Persona (the item's; a direct chat opened from a profile in it is the same one's)
       const r = await api<{ session: Session }>("/assistant/conversations", {
         method: "POST",
         json: { prompt },
+        headers: ownerHeaders(manager),
       });
+      // its requests (feed, stop…) go to that manager whatever the page shows later
+      noteConversation(r.session.session_id, otherManager(manager));
+      if (manager) chooseManager(manager);
       navigate({ name: "persona", sid: r.session.session_id });
     } catch (e) {
       toast(t("inbox-larkthread.summary_failed", { error: errorText(e) }), "error");
@@ -447,7 +461,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       askingNow.current = false;
       setAsking(false);
     }
-  }, [chat.title, feed, ol]);
+  }, [chat.title, manager, feed, ol]);
 
   const handleCopy = useCallback((m: LarkMessage) => {
     const text = m.text || (m.parts ?? []).map((p) => p.text ?? "").join("");
@@ -464,7 +478,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     feed, ol,
     (fn) => setPage((cur) => cur && { ...cur, messages: fn(cur.messages) }),
     () => pageRef.current?.messages ?? [],
-    () => api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol)).then((r) => r.messages ?? []),
+    () => api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol, manager)).then((r) => r.messages ?? []),
   );
 
   const handleSend = useCallback(async (content: string, attachments: LarkAttachment[], replyTarget?: LarkReplyTarget, mentions?: LarkPerson[]) => {
@@ -491,14 +505,15 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     const set = (rs: typeof reactions) => setPage((cur) => cur && { ...cur, messages: cur.messages.map((x) => (x.id === m.id ? { ...x, reactions: rs } : x)) });
     set(reactions);
     try {
-      await react(m.id, key, remove, ol);
+      await react(m.id, key, remove, ol, manager);
     } catch (e) {
       set(before);
       toast(t("inbox-larkthread.react_failed", { error: errorText(e) }), "error");
     }
-  }, [ol]);
+  }, [ol, manager]);
 
-  const images = useMemo(() => chatImages(page?.messages ?? [], safeURL), [page]);
+  // the gallery's addresses as the messages draw theirs (with the chat's manager), so the one opened is found in it
+  const images = useMemo(() => chatImages(page?.messages ?? [], (u) => safeURL(u, manager)), [page, manager]);
   const tools = useMemo<ChatTools>(() => ({
     feed,
     group: Boolean(chat.group),
@@ -753,6 +768,8 @@ function useReadReports(
   const observer = useRef<IntersectionObserver | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ready = page !== null;
+  // bound here: a report flushed as the chat closes still goes to this chat's manager
+  const manager = useItemManager();
 
   useEffect(() => {
     const root = scroller.current;
@@ -765,7 +782,7 @@ function useReadReports(
       const previous = t.cursor;
       const report = t.report(p.messages);
       if (!report) return;
-      api(larkPath(`/lark/conversations/${enc(feed)}/read`, ol), { method: "POST", json: report, token: getToken() }).catch(() => t.undo(report, previous));
+      api(larkPath(`/lark/conversations/${enc(feed)}/read`, ol, manager), { method: "POST", json: report, token: getToken() }).catch(() => t.undo(report, previous));
     };
     // The gate (docs/redesign/ux.md 3.5): in front, placed, nothing covering the list.
     const look = () => {
@@ -807,7 +824,7 @@ function useReadReports(
       flush();
       seen.clear();
     };
-  }, [feed, ol, ready, scroller, tracker, pageRef, placed]);
+  }, [feed, ol, manager, ready, scroller, tracker, pageRef, placed]);
 
   // Messages added later (older / newer pages, pushes) are watched too.
   useEffect(() => {
@@ -830,8 +847,9 @@ function useReadReceipts(
   const [states, setStates] = useState<Map<string, ReadState>>(() => new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const busy = useRef(false);
-  const live = useRef({ feed, ol });
-  live.current = { feed, ol };
+  const manager = useItemManager();
+  const live = useRef({ feed, ol, manager });
+  live.current = { feed, ol, manager };
   const observer = useRef<IntersectionObserver | null>(null);
   const ids = useRef("");
 
@@ -848,7 +866,7 @@ function useReadReceipts(
       busy.current = true;
       const at = live.current;
       try {
-        r.record(await readStates(at.feed, ids, at.ol));
+        r.record(await readStates(at.feed, ids, at.ol, at.manager));
       } catch (e) {
         r.failed(statusOf(e));
       } finally {
@@ -896,7 +914,7 @@ function useReadReceipts(
       rr.current = null;
       busy.current = false;
     };
-  }, [feed, ol, ready, scroller, pageRef, schedule]);
+  }, [feed, ol, manager, ready, scroller, pageRef, schedule]);
 
   // Rows drawn later (older / newer pages, pushes, a sent message getting its id) are watched too; observing a row
   // twice is a no-op. Only a change in which messages there are asks again.
@@ -997,6 +1015,7 @@ function Message({
   flash?: number;
 }) {
   const ol = useContext(ChatAccount);
+  const manager = useItemManager();
   const tools = useContext(Tools);
   const [thread, setThread] = useState<LarkMessage[] | null>(null);
   const [opening, setOpening] = useState(false);
@@ -1019,7 +1038,7 @@ function Message({
     if (thread) return setThread(null);
     setOpening(true);
     try {
-      const r = await api<LarkPage>(larkPath(`/lark/messages/${enc(m.id)}/thread?limit=50`, ol));
+      const r = await api<LarkPage>(larkPath(`/lark/messages/${enc(m.id)}/thread?limit=50`, ol, manager));
       setThread(mergeMessages([], r.messages ?? []));
     } catch {
       setThread([]);
@@ -1188,6 +1207,7 @@ function ThreadPanel({ root, thread, setThread, translateTo, attachments }: {
   attachments?: boolean;
 }) {
   const ol = useContext(ChatAccount);
+  const manager = useItemManager();
   const feed = useContext(ChatFeed);
   const threadRef = useRef(thread);
   threadRef.current = thread;
@@ -1195,7 +1215,7 @@ function ThreadPanel({ root, thread, setThread, translateTo, attachments }: {
     feed, ol,
     (fn) => setThread((cur) => fn(cur ?? [])),
     () => threadRef.current,
-    () => api<LarkPage>(larkPath(`/lark/messages/${enc(root.id)}/thread?limit=50`, ol)).then((r) => r.messages ?? []),
+    () => api<LarkPage>(larkPath(`/lark/messages/${enc(root.id)}/thread?limit=50`, ol, manager)).then((r) => r.messages ?? []),
   );
   return (
     <div className="mt-1 border-l-2 border-line pl-1">
@@ -1225,14 +1245,14 @@ export function openMedia(src: string) {
   window.open(src, "_blank", "noopener,noreferrer");
 }
 
-function safeURL(u?: string) {
+function safeURL(u?: string, manager?: string) {
   if (!u) return undefined;
-  if (u.startsWith("/api/")) return withToken(u);
+  if (u.startsWith("/api/")) return withToken(withManager(u, manager));
   return /^(https?:|mailto:)/i.test(u) ? u : undefined;
 }
 
 function LinkText({ url, children }: { url?: string; children: React.ReactNode }) {
-  const safe = safeURL(url);
+  const safe = safeURL(url, useItemManager());
   if (!safe) return <>{children}</>;
   return (
     <a
@@ -1288,10 +1308,11 @@ function Block({ p, mid }: { p: LarkPart; mid?: string }) {
   const meta = p.metadata ?? {};
   const tools = useContext(Tools);
   const ol = useContext(ChatAccount);
+  const manager = useItemManager();
   switch (p.kind) {
     case "image": {
       // a picture this page is sending shows its own preview
-      const src = p.url?.startsWith("blob:") ? p.url : safeURL(p.url);
+      const src = p.url?.startsWith("blob:") ? p.url : safeURL(p.url, manager);
       return src ? (
         <button type="button" onClick={() => (tools ? tools.openImage(src) : openMedia(src))} aria-label={t("inbox-larkthread.open_image")} className="w-fit">
           <img src={src} alt={t("inbox-larkthread.image")} loading="lazy" className="max-h-64 max-w-[min(280px,100%)] rounded-[8px] object-contain shadow-hairline" />
@@ -1299,7 +1320,7 @@ function Block({ p, mid }: { p: LarkPart; mid?: string }) {
       ) : <span className="text-ink-3">{t("inbox-larkthread.image_placeholder")}</span>;
     }
     case "emotion": {
-      const src = safeURL(p.url);
+      const src = safeURL(p.url, manager);
       return src ? <img src={src} alt={p.text || t("inbox-larkthread.sticker")} loading="lazy" className="size-20 object-contain" /> : <span>{emojiLabel(p.refId ?? "", p.text)}</span>;
     }
     case "file":

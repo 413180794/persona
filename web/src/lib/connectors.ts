@@ -8,12 +8,16 @@
 
 import { formatList, formatNumber, t } from "../i18n";
 import { api, enc } from "./api";
+import { itemHeaders } from "./manager-choice";
 
 // ── wire types ───────────────────────────────────────────
 
 /** One of GET /api/v1/connectors (connector.Info). */
 export interface HubConnector {
   id: string;
+  /** The manager whose connector it is, in the hub's merged list (each manager has its own, its built-ins too); none:
+   *  the default's. */
+  manager?: string;
   name: string;
   status: string; // ok | not_configured | not_signed_in | no_permission | rate_limited | error | disabled
   account?: string;
@@ -401,9 +405,10 @@ export function connectorLogout(id: string): Promise<unknown> {
   return api(`/connectors/${enc(id)}/logout`, { method: "POST" });
 }
 
-/** The switch (`enabled`), "Add to knowledge base" (`archive`), "Add to Inbox" (`inbox`) or its own settings (`options`). */
-export function setConnector(id: string, body: { enabled?: boolean; archive?: boolean; inbox?: boolean; options?: unknown }): Promise<HubConnector> {
-  return api<HubConnector>(`/connectors/${enc(id)}/settings`, { method: "PUT", json: body });
+/** The switch (`enabled`), "Add to knowledge base" (`archive`), "Add to Inbox" (`inbox`) or its own settings (`options`).
+ *  `manager`: whose connector (another manager's extension page names it); none: the default's, or the page's pin. */
+export function setConnector(id: string, body: { enabled?: boolean; archive?: boolean; inbox?: boolean; options?: unknown }, manager?: string): Promise<HubConnector> {
+  return api<HubConnector>(`/connectors/${enc(id)}/settings`, { method: "PUT", json: body, headers: itemHeaders(manager) });
 }
 
 export function deleteConnectorData(id: string): Promise<ConnectorDeleted> {
@@ -526,14 +531,15 @@ export function isGitHubThread(c?: ThreadChat): boolean {
 
 export const THREAD_PAGE = 30;
 
-export function loadThread(id: string, thread: string, before = ""): Promise<ThreadPage> {
+/** `manager`: whose connector it is (an inbox item's, docs/managers.md "Clients"; none: the default's). */
+export function loadThread(id: string, thread: string, before = "", manager?: string): Promise<ThreadPage> {
   const q = new URLSearchParams({ thread, limit: String(THREAD_PAGE) });
   if (before) q.set("before", before);
-  return api<ThreadPage>(`/connectors/${enc(id)}/thread?${q}`);
+  return api<ThreadPage>(`/connectors/${enc(id)}/thread?${q}`, { headers: itemHeaders(manager) });
 }
 
-export function replyInThread(id: string, body: { thread: string; action: string; text: string; reply_to?: string }): Promise<unknown> {
-  return api(`/connectors/${enc(id)}/thread/reply`, { method: "POST", json: body });
+export function replyInThread(id: string, body: { thread: string; action: string; text: string; reply_to?: string }, manager?: string): Promise<unknown> {
+  return api(`/connectors/${enc(id)}/thread/reply`, { method: "POST", json: body, headers: itemHeaders(manager) });
 }
 
 /** A media ref's URL under /api/ (an <img> adds the token with withToken). */

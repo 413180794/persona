@@ -1,6 +1,7 @@
 // App-wide state: what the hub pushes over the WebSocket (machines, sessions, interactions), plus the assistant.
 // Views read it with useStore(selector); per-session item streams go to listeners (ChatView subscribes).
 
+import { chosenManager, defaultKnown, defaultManager, fromShownManager, noteConversation, onDefaultManager, onManagerChoice, shownManager } from "./manager-choice";
 import { BASE } from "./base";
 import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents, setAgentListMode } from "./agents";
@@ -519,6 +520,9 @@ if (typeof window !== "undefined") {
   window.addEventListener("offline", () => set({ link: { ...state.link, networkUp: false } }));
 }
 
+// The assistant's live updates about the page itself rather than one conversation: only the shown manager's count.
+const PAGE_EVENTS = new Set(["assistant_schedule"]);
+
 function onMessage(msg: Record<string, unknown>) {
   cursor = msg.type === "hello" ? afterHello(cursor, msg) : afterEvent(cursor, msg);
   switch (msg.type) {
@@ -610,7 +614,12 @@ function onMessage(msg: Record<string, unknown>) {
       sessionListeners.get(key(msg.machine_id as string, msg.session_id as string))?.forEach((l) => l.delta?.(msg.text as string));
       break;
   }
-  if (typeof msg.type === "string") hubListeners.get(msg.type)?.forEach((l) => l(msg));
+  if (typeof msg.type !== "string") return;
+  // another manager's schedule than the assistant page shows (lib/manager-choice.ts) is not this page's; what names a
+  // conversation (feed items, cards) goes by it, whichever manager's it is, and an open conversation of another stays live.
+  // Before the roster says which manager is the default, every one passes: it only makes the page read its own again.
+  if (PAGE_EVENTS.has(msg.type) && defaultKnown() && !fromShownManager(msg)) return;
+  hubListeners.get(msg.type)?.forEach((l) => l(msg));
 }
 
 // This page's changes to the mutes and the pins: numbered, and how many PUTs are still on their way. Each goes out as a
@@ -943,17 +952,61 @@ export async function refreshTodos() {
 
 export async function refreshAssistant() {
   const asked = assistantAsked.ask();
+  const from = pageOf();
   try {
     const a = await asked.answer;
-    if (!asked.fresh()) return;
-    set({ assistant: { ...a, conversations: a.conversations ?? [] }, assistantError: null });
+    if (!asked.fresh() || from !== pageOf()) return;
+    const assistant = { ...a, conversations: a.conversations ?? [] };
+    assistantByManager.set(cacheKey(), assistant);
+    // its conversations' own requests (feed, stop…) go to it, whichever manager the page shows later
+    // (the default's are not noted: with no header the hub finds their manager itself)
+    const owner = chosenManager() ?? undefined;
+    for (const c of assistant.conversations) noteConversation(c.session_id, owner);
+    if (assistant.main) noteConversation(assistant.main, owner);
+    set({ assistant, assistantError: null });
   } catch (err) {
-    if (asked.fresh()) {
+    if (asked.fresh() && from === pageOf()) {
       set({ assistantError: errorText(err) });
     }
     throw err;
   }
 }
+
+// The last /assistant answer of each manager this page showed: an offline one's history stays viewable (its requests
+// answer 503 assistant_offline), and switching back shows the page at once while it is read again.
+const assistantByManager = new Map<string, AssistantInfo>();
+
+/** The assistant page asked for: "" the default's (no header goes, whichever manager the default turns out to be),
+ *  else the manager picked on it. */
+const pageOf = () => chosenManager() ?? "";
+/** Where the page's answer is kept: under its manager once the roster's default is known; "" before (the default's,
+ *  whose id is not known yet), moved under the default's id when it is. */
+const cacheKey = () => (defaultKnown() ? shownManager() : "");
+
+// The manager whose page is drawn (null: the default's, before the roster said which that is).
+let drawnPage = { page: pageOf(), manager: null as string | null };
+
+// Another manager picked on the assistant page, or the default moved while its page is shown: that manager's page, from
+// what this page kept of it until the hub answers. The placeholder default becoming the roster's is the same page.
+onManagerChoice(() => {
+  const page = pageOf();
+  const manager = defaultKnown() ? shownManager() : null;
+  const same = page === drawnPage.page && (drawnPage.manager === null || manager === null || manager === drawnPage.manager);
+  drawnPage = { page, manager };
+  if (same) return;
+  assistantAsked.forget();
+  set({ assistant: assistantByManager.get(cacheKey()) ?? null, assistantError: null });
+  void refreshAssistant().catch(() => {});
+});
+
+// The default's page read before the roster said which manager that is: it is that one's.
+onDefaultManager((was) => {
+  if (!was.settled && drawnPage.page === "") drawnPage = { page: "", manager: defaultManager() };
+  const kept = assistantByManager.get("");
+  if (was.settled || !kept) return;
+  assistantByManager.delete("");
+  assistantByManager.set(defaultManager(), kept);
+});
 
 export function markSeenLocally(mid: string, sid: string) {
   send({ type: "seen", machine_id: mid, session_id: sid });
@@ -967,6 +1020,7 @@ export function reset() {
   // a /todos or /assistant answer still on its way belongs to the old login
   todosAsked.forget();
   assistantAsked.forget();
+  assistantByManager.clear();
   // and so do the pins and mutes of a refresh() or a failed save still on its way
   mutesSaves.rev++;
   pinsSaves.rev++;

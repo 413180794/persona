@@ -16,6 +16,8 @@ export type JsonObject = { [k: string]: Json };
 
 /** One of GET /api/v1/extensions. */
 export interface HubExtension {
+  /** The manager whose extension it is, in the hub's merged list (docs/protocol.md "Per-manager routing"); none: the default. */
+  manager?: string;
   id: string;
   name: string;
   kind: string;

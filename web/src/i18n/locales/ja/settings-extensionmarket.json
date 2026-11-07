@@ -120,5 +120,6 @@
   "official_token_link": "レート制限中？「マーケットを管理」でGitHubトークンを設定",
   "market_unread": "マーケットを読み込めると、ここに拡張機能が表示されます。",
   "token_create_hint": "トークンがない場合はGitHubで作成できます。名前・用途・1年の有効期限は入力済みで、権限は不要です。Generate tokenを押し、コピーして上に貼り付けてください。",
-  "token_create": "GitHubで作成"
+  "token_create": "GitHubで作成",
+  "for_manager": "マネージャー「{name}」の分だけを変更します（マネージャーごとに拡張機能があります）。"
 }

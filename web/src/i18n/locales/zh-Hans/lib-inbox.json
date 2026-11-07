@@ -56,6 +56,7 @@
   "bulk_undone_other": "已移回 {count} 件",
   "bulk_undone_none": "没有要移回的",
   "bulk_fresh_other": "{head}，{count} 件有新消息，留在收件箱",
+  "bulk_partly_other": "{head}；{count} 件没改成：{error}",
   "scope_search": "搜索「{query}」",
   "scope_count_other": "{scope} · {count} 件",
   "scope_all": "全部",

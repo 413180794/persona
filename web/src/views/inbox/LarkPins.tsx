@@ -6,6 +6,7 @@ import { shortTime } from "../../lib/inbox";
 import { olAccount } from "../../lib/lark-accounts";
 import { useLarkDisplay, type LarkMessageDisplay } from "../../lib/lark-display";
 import { canOpenPin, canRemovePin, ChatPinsModel, liveChatPinsDeps, pinSummary, type ChatPin, type ChatPinTarget } from "../../lib/lark-pins";
+import { useItemManager } from "../../lib/manager-choice";
 import { isResumed } from "../../lib/reconnect";
 import { onHubEvent } from "../../lib/store";
 import { t } from "../../i18n";
@@ -22,7 +23,8 @@ export function LarkPinsDialog({ feed, topic, account, onClose, onOpen }: {
   onClose: (checked: boolean) => void;
   onOpen: (target: ChatPinTarget) => void;
 }) {
-  const [model] = useState(() => new ChatPinsModel(liveChatPinsDeps(feed, topic, account)));
+  const manager = useItemManager();
+  const [model] = useState(() => new ChatPinsModel(liveChatPinsDeps(feed, topic, account, manager)));
   const display = useLarkDisplay(account);
   const s = useSyncExternalStore(model.subscribe, () => model.state);
   const [removing, setRemoving] = useState<string | null>(null);

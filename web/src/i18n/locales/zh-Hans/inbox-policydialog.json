@@ -15,5 +15,6 @@
   "empty_title": "还没有规则",
   "empty_hint": "在收件箱里右键一条内容，为它的会话、发送人或仓库设规则。",
   "removed": "已移除“{name}”的规则",
-  "remove_failed": "规则没移除成功：{error}"
+  "remove_failed": "规则没移除成功：{error}",
+  "rules_offline": "离线中：它回来后这里会显示它的规则。"
 }

@@ -2,9 +2,11 @@
 // time), one extension of it (what it may do; preview → install / upgrade; uninstall when this market installed it), and
 // the markets themselves (add with an optional write-only token, remove, read again, change the token). Logic in
 // lib/extension-market.ts.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
-import { errorText } from "../../lib/api";
+import { enc, errorText } from "../../lib/api";
+import { pinManagerAt } from "../../lib/manager-choice";
+import { useRoster } from "../../lib/managers";
 import { ago } from "../../lib/format";
 import {
   addMarket, agreeLabel, canUninstall, getCatalog, installPreview, isGitMarket, itemLine, itemState, listMarkets, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, previewFromMarket,
@@ -243,7 +245,13 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
 
 // ── one extension of a market ──────────────────────────────
 
-export function MarketItem({ market, id, onBack, onInstalled }: { market: string; id: string; onBack: () => void; onInstalled: (id: string) => void }) {
+/** `manager`: whose copy it is for (an upgrade from another manager's extension page, docs/managers.md "Clients"): its
+ *  catalog, preview, consent and operation are that manager's, named on each request, and the page says so; none: the
+ *  default's. */
+export function MarketItem({ market, id, manager, onBack, onInstalled }: { market: string; id: string; manager?: string; onBack: () => void; onInstalled: (id: string) => void }) {
+  // what goes to the extension itself (its details, its upgrade, uninstalling it) names the manager while this is open
+  useLayoutEffect(() => pinManagerAt([`/extensions/${enc(id)}`, `/plugins/${enc(id)}`], manager), [id, manager]);
+  const managerName = useRoster()?.managers.find((m) => m.id === manager)?.name ?? manager;
   const [it, setIt] = useState<CatalogItem | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -252,12 +260,12 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
   const [removing, setRemoving] = useState(false);
   // A hub with extension_operations installs in steps the page draws (and finds again when opened later, #3277).
   const stepped = useStore((s) => operationsOn(s.features));
-  const op = useOperation(id, market);
+  const op = useOperation(id, market, manager);
   const [previewOf, setPreviewOf] = useState(""); // the operation whose preview is open
   const seen = useRef<string>("");
   const load = () => {
     setLoading(true);
-    getCatalog("", market)
+    getCatalog("", market, false, manager)
       .then((c) => {
         const found = c.extensions.find((x) => x.id === id) ?? null;
         setIt(found);
@@ -266,7 +274,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
   };
-  useEffect(load, [market, id]);
+  useEffect(load, [market, id, manager]);
 
   // An operation of this page's extension: when it waits for the user, its preview opens; when it is done, the page
   // moves on as after a synchronous install.
@@ -276,7 +284,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
     const was = seen.current;
     seen.current = key;
     if (op.state === "needs_consent" && previewOf !== op.id && was !== key) {
-      getOperation(op.id)
+      getOperation(op.id, manager)
         .then((full) => {
           if (full.preview) {
             setPreview(full.preview);
@@ -300,10 +308,10 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
     setPreviewing(true);
     try {
       if (stepped) {
-        await startFromMarket(market, id); // the steps show below; its preview opens when it is ready
+        await startFromMarket(market, id, manager); // the steps show below; its preview opens when it is ready
         return;
       }
-      setPreview(await previewFromMarket(market, id));
+      setPreview(await previewFromMarket(market, id, manager));
     } catch (e) {
       toast(t("settings-extensionmarket.preview_failed", { error: errorText(e) }), "error");
     } finally {
@@ -334,7 +342,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
           {loading && !it && <Spinner />}
           {st && <Pill tone={STATE_TONE[st.tone]}>{st.label}</Pill>}
         </div>
-        {(it?.description || it?.tags?.length || it?.problem || error) && (
+        {(it?.description || it?.tags?.length || it?.problem || error || managerName) && (
           <div className="flex flex-col gap-2 border-t border-line px-4 py-3">
             {it?.description && <p className="text-[12.5px] leading-relaxed text-ink-2">{it.description}</p>}
             {!!it?.tags?.length && (
@@ -345,6 +353,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
               </div>
             )}
             {it?.problem && <p className="text-[12px] text-orange">{t("settings-extensionmarket.cant_install", { problem: it.problem })}</p>}
+            {managerName && <p className="text-[12px] text-ink-2" data-for-manager>{t("settings-extensionmarket.for_manager", { name: managerName })}</p>}
             {error && <p className="text-[12px] break-words text-red">{error}</p>}
           </div>
         )}
@@ -368,23 +377,23 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
             op={op}
             onRetry={async () => {
               try {
-                await retryOperation(op.id);
+                await retryOperation(op.id, manager);
               } catch (e) {
                 toast(errorText(e), "error");
               }
             }}
-            onCancel={op.state === "running" && op.steps.some((s) => s.id === "consent" && s.state === "pending") ? () => cancelOperation(op.id).then(() => undefined, (e) => toast(errorText(e), "error")) : undefined}
+            onCancel={op.state === "running" && op.steps.some((s) => s.id === "consent" && s.state === "pending") ? () => cancelOperation(op.id, manager).then(() => undefined, (e) => toast(errorText(e), "error")) : undefined}
             onReview={() => {
               seen.current = "";
               setPreviewOf("");
-              getOperation(op.id).then((full) => {
+              getOperation(op.id, manager).then((full) => {
                 if (full.preview) {
                   setPreview(full.preview);
                   setPreviewOf(op.id);
                 }
               }, (e) => toast(errorText(e), "error"));
             }}
-            onDismiss={() => forget(op.id)}
+            onDismiss={() => forget(op)}
           />
         )}
       </section>
@@ -435,19 +444,20 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
       {preview && it && (
         <PreviewDialog
           pv={preview}
+          managerName={managerName}
           onClose={() => {
             setPreview(null);
-            if (previewOf) void cancelOperation(previewOf).catch(() => undefined); // turned down: the hub drops the preview
+            if (previewOf) void cancelOperation(previewOf, manager).catch(() => undefined); // turned down: the hub drops the preview
             setPreviewOf("");
           }}
           onAgree={async () => {
             if (previewOf) {
-              await agreeTo(preview, preview.upgrade ? it.id : undefined); // installs in the background, in steps
+              await agreeTo(preview, preview.upgrade ? it.id : undefined, manager); // installs in the background, in steps
               setPreview(null);
               setPreviewOf("");
               return;
             }
-            const d = preview.upgrade ? await upgradePreview(it.id, preview) : await installPreview(preview);
+            const d = preview.upgrade ? await upgradePreview(it.id, preview) : await installPreview(preview, manager);
             toast(preview.upgrade ? t("settings-extensionmarket.upgraded", { name: d.name, version: d.version ?? "" }) : t("settings-extensionmarket.installed", { name: d.name }), "ok");
             setPreview(null);
             onInstalled(d.id);
@@ -482,7 +492,9 @@ export function PermissionRow({ p, tone }: { p: ExtensionPermission; tone?: "ora
 }
 
 /** The preview of what installing (or upgrading) does; agreeing installs exactly this (its permissions digest). */
-export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onClose: () => void; onAgree: () => Promise<void> }) {
+/** `managerName`: the manager whose copy it installs or upgrades, when another than the default's (said on the
+ *  consent, so it is agreed to for that one). */
+export function PreviewDialog({ pv, managerName, onClose, onAgree }: { pv: MarketPreview; managerName?: string; onClose: () => void; onAgree: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const now = useNow(1000);
@@ -534,6 +546,7 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
             {m.description && <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2">{m.description}</p>}
           </div>
         </div>
+        {managerName && <p className="rounded-[8px] bg-inset px-3 py-2 text-[12px] leading-relaxed text-ink-2 shadow-hairline" data-for-manager>{t("settings-extensionmarket.for_manager", { name: managerName })}</p>}
         {pv.upgrade && pv.more_permissions && (
           <p className="rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed text-red">{t("settings-extensionmarket.more_permissions")}</p>
         )}

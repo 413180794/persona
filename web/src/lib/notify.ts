@@ -24,6 +24,8 @@ export interface NotifyPrefs {
   done_delay_seconds?: number;
   /** Quiet hours (#5806, hub/quiethours.go): inside the window no "finished" signal, and "Needs you" without sound. */
   quiet?: QuietHours;
+  /** The managers whose pushes this device doesn't want (Settings › Managers); this browser's signals leave them out too. */
+  muted_managers?: string[];
 }
 
 /** "HH:MM" local times; an empty `tz` is this browser's time zone. The window may cross midnight. */
@@ -137,7 +139,31 @@ export function normalize(raw: Partial<NotifyPrefs> | null | undefined): NotifyP
     long_turn_seconds: raw?.long_turn_seconds,
     done_delay_seconds: raw?.done_delay_seconds,
     quiet: raw?.quiet?.enabled || raw?.quiet?.start ? { ...DEFAULT_QUIET, ...raw.quiet } : undefined,
+    // a hub from before them has none: leave the field out, so Settings › Managers knows not to offer the switch
+    ...(Array.isArray(raw?.muted_managers) ? { muted_managers: raw.muted_managers.filter((x): x is string => typeof x === "string") } : {}),
   };
+}
+
+/** Whether this device turned off manager's pushes (an item without one is the default manager's: `fallback`). */
+export function managerMuted(prefs: NotifyPrefs, manager: string | undefined, fallback: string): boolean {
+  return (prefs.muted_managers ?? []).includes(manager || fallback);
+}
+
+/** Turns one manager's pushes on or off for this device: optimistic, as saveNotifyPrefs; only the list is sent. */
+export async function saveManagerPush(manager: string, on: boolean): Promise<void> {
+  const before = prefs;
+  const mine = ++saveSeq;
+  const list = (prefs.muted_managers ?? []).filter((x) => x !== manager);
+  set({ ...prefs, muted_managers: on ? list : [...list, manager] });
+  const { id, kept } = deviceId();
+  if (!kept) return;
+  try {
+    const answer = normalize(await api<Partial<NotifyPrefs>>(`/devices/${enc(id)}/prefs`, { method: "PUT", json: { muted_managers: prefs.muted_managers } }));
+    if (mine === saveSeq) set(answer);
+  } catch (e) {
+    if (mine === saveSeq) set(before);
+    throw e;
+  }
 }
 
 let prefs: NotifyPrefs = typeof localStorage === "undefined" ? DEFAULT_PREFS : readCached();

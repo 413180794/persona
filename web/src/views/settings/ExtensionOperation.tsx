@@ -11,13 +11,14 @@ import { Button, cx, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
 /** The newest operation of extension id (of market), kept up to date. */
-export function useOperation(id: string, market?: string): ExtensionOperation | undefined {
-  const [op, setOp] = useState(() => latestFor(operations(), id, market));
+/** The newest operation of extension id (from market) of manager (none: the default's), as it goes. */
+export function useOperation(id: string, market?: string, manager?: string): ExtensionOperation | undefined {
+  const [op, setOp] = useState(() => latestFor(operations(), id, market, manager));
   useEffect(() => {
-    const read = () => setOp(latestFor(operations(), id, market));
+    const read = () => setOp(latestFor(operations(), id, market, manager));
     read();
     return watchOperations(read);
-  }, [id, market]);
+  }, [id, market, manager]);
   return op;
 }
 

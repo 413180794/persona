@@ -8,7 +8,8 @@ import {
   canExpand, chainRows, chainTap, chainTime, firstLine, handlingFailed, handlingWord, preparing, suggestionButtons, suggestionTitle,
   type ChainEntry, type ChainTap, type InboxSuggestion,
 } from "../../lib/inbox-events";
-import { conversationRoute, docChangeLine, isDone, suggestionAct, useInbox, type InboxItem } from "../../lib/inbox";
+import { conversationRoute, docChangeLine, isDone, itemKey, itemRoute, suggestionAct, useInbox, type InboxItem } from "../../lib/inbox";
+import { otherManager } from "../../lib/manager-choice";
 import { openLink } from "../../lib/links";
 import { navigate, type Route } from "../../lib/router";
 import { useStore } from "../../lib/store";
@@ -168,7 +169,7 @@ function HandlingLine({ item }: { item: InboxItem }) {
  * back to the processing conversation for a new suggestion instead.
  */
 export function SuggestionCard({ item, suggestion: s }: { item: InboxItem; suggestion: InboxSuggestion }) {
-  const busy = useInbox((st) => st.sending.includes(item.id));
+  const busy = useInbox((st) => st.sending.includes(itemKey(item)));
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(s.text);
   const [say, setSay] = useState("");
@@ -297,7 +298,7 @@ export function Chain({ item, onSource }: { item: InboxItem; onSource: (at: Sour
         )}
       </div>
       <ol className="flex flex-col">
-        {rows.map((e) => <ChainRow key={e.id} e={e} tap={chainTap(e, conversation)} onTap={tap} />)}
+        {rows.map((e) => <ChainRow key={e.id} e={e} tap={chainTap(e, conversation, otherManager(item.manager))} onTap={tap} />)}
       </ol>
     </section>
   );
@@ -357,7 +358,7 @@ function Related({ item }: { item: InboxItem }) {
       <ul className="flex flex-col gap-0.5">
         {list.map((r) => (
           <li key={r.id}>
-            <button type="button" onClick={() => navigate({ name: "inbox", id: r.id })} className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[12.5px] whitespace-nowrap text-ink hover:bg-field">
+            <button type="button" onClick={() => navigate(itemRoute({ id: r.id, manager: item.manager }))} className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[12.5px] whitespace-nowrap text-ink hover:bg-field">
               <Icon name={r.source === "mail" ? "mail" : "link"} size={12} className="shrink-0 text-ink-3" />
               <span className="truncate">{r.title}</span>
             </button>

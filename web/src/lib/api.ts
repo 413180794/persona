@@ -1,5 +1,6 @@
 // REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
 
+import { MANAGER_HEADER, managerHeaderFor } from "./manager-choice";
 import { BASE } from "./base";
 import { requestCrumb } from "./error-reports";
 import { currentLanguage, t } from "../i18n";
@@ -108,6 +109,9 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown; to
   // the hub writes its error and status text in the interface language (docs/i18n.md "Protocol")
   if (!headers.has("Accept-Language")) headers.set("Accept-Language", currentLanguage());
   headers.set("X-Persona-Client", `${CLIENT_PLATFORM}/${CLIENT_VERSION}`);
+  // the manager the assistant page shows, on the assistant's requests (lib/manager-choice.ts); none for the default
+  const manager = managerHeaderFor(path);
+  if (manager && !headers.has(MANAGER_HEADER)) headers.set(MANAGER_HEADER, manager);
   let body = init.body;
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");

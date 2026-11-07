@@ -8,6 +8,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatList, t } from "../i18n";
 import { api, enc } from "./api";
+import { itemHeaders } from "./manager-choice";
 import type { ConnectorPrompt } from "./connectors";
 import { useStore } from "./store";
 
@@ -78,8 +79,9 @@ export type ChannelPrompt = ConnectorPrompt;
 
 // ── the hub's interface ──────────────────────────────────
 
-export async function listChannels(): Promise<Channel[]> {
-  const r = await api<{ channels?: Channel[] }>("/channels");
+/** `manager`: whose channels (another manager's, docs/managers.md "Clients"); none: the default's. */
+export async function listChannels(manager?: string): Promise<Channel[]> {
+  const r = await api<{ channels?: Channel[] }>("/channels", { headers: itemHeaders(manager) });
   return r.channels ?? [];
 }
 

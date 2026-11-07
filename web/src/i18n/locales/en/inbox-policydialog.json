@@ -15,5 +15,6 @@
   "empty_title": "No rules",
   "empty_hint": "Right-click an item in the Inbox and pick a rule for its chat, sender or repository.",
   "removed": "Rule removed for “{name}”.",
-  "remove_failed": "Couldn't remove the rule: {error}"
+  "remove_failed": "Couldn't remove the rule: {error}",
+  "rules_offline": "Offline: its rules show here once it is back."
 }

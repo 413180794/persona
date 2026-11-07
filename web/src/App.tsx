@@ -18,6 +18,7 @@ import { unreachable } from "./lib/shell";
 import { ConnectionPill } from "./views/ConnectionPill";
 import { NARROW, useKeyboardFrame, useMedia } from "./lib/viewport";
 import { connect, disconnect, reset, useStore } from "./lib/store";
+import { watchRoster } from "./lib/managers";
 import { t } from "./i18n";
 import { Button, cx, EASE, IconButton, Loading, Spinner, Toasts } from "./ui/atoms";
 import { focusables, trapTab } from "./ui/overlay";
@@ -114,6 +115,8 @@ export function App() {
   useEffect(() => {
     if (!authed) return;
     connect();
+    // the managers' roster from the start (docs/managers.md "Clients"): what goes by the default waits for it
+    watchRoster();
     return () => disconnect();
   }, [authed]);
 
@@ -305,7 +308,7 @@ function Shell() {
       main = <Profile onToggleSidebar={toggle} />;
       break;
     case "inbox":
-      main = <Inbox id={route.id} onToggleSidebar={toggle} />;
+      main = <Inbox id={route.id} manager={route.manager} onToggleSidebar={toggle} />;
       break;
     case "messages":
       main = <Messages id={route.id} onToggleSidebar={toggle} />;

@@ -6,6 +6,7 @@
 // The pure parts (filters, sections, labels, the "Hand to AI" message, Feishu message parts) are plain functions so the
 // tests can run them without a DOM.
 
+import { itemHeaders, otherManager, sameManager } from "./manager-choice";
 import { formatDate, t } from "../i18n";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api, ApiError, enc, errorText, getToken } from "./api";
@@ -77,6 +78,9 @@ export interface InboxAgent {
 
 export interface InboxItem {
   id: string;
+  /** The manager whose inbox it is, in the hub's merged list (docs/protocol.md "Per-manager routing"); none: the default.
+   *  Two managers may list the same id (one account in both): an item is its id and its manager (itemKey). */
+  manager?: string;
   source: string; // lark | mail | a connector's id (github, telegram…)
   kind: string; // dm | mention | group | bot | mail | doc | moment
   account: string;
@@ -142,6 +146,8 @@ export interface InboxMute extends InboxMuteOption {
   source: string;
   source_name?: string;
   created_at?: string;
+  /** Whose mute it is (several managers: each one keeps its own; listInboxMutes stamps it); none: the default's. */
+  manager?: string;
 }
 
 /** The menu's words for a mute option (iOS MuteOption.title). */
@@ -183,14 +189,22 @@ export interface InboxTree {
   children: InboxItem[];
 }
 
-export function fetchInboxTree(kind: InboxParentKind, id: string): Promise<InboxTree> {
+/** `manager`: whose inbox the node is in (an item's, docs/managers.md "Clients"); none: the default's. */
+export function fetchInboxTree(kind: InboxParentKind, id: string, manager?: string): Promise<InboxTree> {
   const path = kind === "session" ? id.split("/").map(enc).join("/") : enc(id).replace(/%3A/gi, ":");
-  return api<InboxTree>(`/inbox/tree/${kind}/${path}`);
+  return api<InboxTree>(`/inbox/tree/${kind}/${path}`, { headers: itemHeaders(manager) });
 }
 
-/** Where a node of a line opens. */
-export function parentRoute(p: InboxParent): Route | undefined {
-  if (p.kind === "inbox") return { name: "inbox", id: p.id };
+/** The route of an inbox item: its id, and its manager when that is another than the default (two managers may list
+ *  the same id). */
+export function itemRoute(it: { id: string; manager?: string }): Extract<Route, { name: "inbox" }> {
+  const other = otherManager(it.manager);
+  return other ? { name: "inbox", id: it.id, manager: other } : { name: "inbox", id: it.id };
+}
+
+/** Where a node of a line opens; `manager`: whose line it is (its items are that manager's too). */
+export function parentRoute(p: InboxParent, manager?: string): Route | undefined {
+  if (p.kind === "inbox") return itemRoute({ id: p.id, manager });
   if (p.kind === "todo") return { name: "todos", id: p.id };
   const i = p.id.indexOf("/");
   return i > 0 && i < p.id.length - 1 ? { name: "session", mid: p.id.slice(0, i), sid: p.id.slice(i + 1) } : undefined;
@@ -369,6 +383,20 @@ export function mailShort(email: string): string {
 export function itemPath(id: string): string {
   return `/inbox/${enc(id).replace(/%3A/gi, ":")}`;
 }
+
+/** An item's identity in the list: its id and the manager whose inbox it is (two managers may list the same id, one
+ *  account in both). A hub with one manager stamps every item alike, so this is unique as the id is. */
+export function itemKey(it: { id: string; manager?: string }): string {
+  return it.manager ? `${it.manager}\u0000${it.id}` : it.id;
+}
+
+/** Whether a and b are the same item: the same id of the same manager (none: the default's). */
+export function sameItem(a: { id: string; manager?: string }, b: { id: string; manager?: string }): boolean {
+  return a.id === b.id && sameManager(a.manager, b.manager);
+}
+
+/** The header naming an item's manager on a request about it (none for the default's). */
+export const itemRequest = (it: { manager?: string }) => itemHeaders(it.manager);
 
 /** Media under /api/ for an <img>: the token goes in the query (an <img> can't send a header), and the path under the
  * sub-path the page is served at (lib/base.ts). */
@@ -794,9 +822,11 @@ interface InboxState {
 
 let state: InboxState = { items: [], triage: null, loaded: false, loading: false, error: "", sending: [], moving: [] };
 const listeners = new Set<() => void>();
-/** Replies that did not go out, by item: the draft dialog opens with that text again. */
+/** Replies that did not go out, by item (itemKey): the draft dialog opens with that text again. */
 export const unsentReplies = new Map<string, string>();
 
+// Every request about an item names its manager where it is made (itemRequest): two managers may list the same id, so
+// nothing is looked up by path.
 function set(patch: Partial<InboxState>) {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
@@ -806,13 +836,25 @@ export function getInbox(): InboxState {
   return state;
 }
 
-function patchItem(id: string, fn: (it: InboxItem) => InboxItem) {
-  set({ items: state.items.map((it) => (it.id === id ? fn(it) : it)) });
+function patchItem(ref: { id: string; manager?: string }, fn: (it: InboxItem) => InboxItem) {
+  set({ items: state.items.map((it) => (sameItem(it, ref) ? fn(it) : it)) });
 }
 
-/** Puts the hub's copy of one item in place (a fresh read after a status move, a reply). */
-export function replaceItem(item: InboxItem) {
-  if (item?.id) patchItem(item.id, () => item);
+/** The list's copy of an item (by id and manager), if it has it. */
+function listed(ref: { id: string; manager?: string }): InboxItem | undefined {
+  return state.items.find((x) => sameItem(x, ref));
+}
+
+/** The hub's copy of an item in place of the one shown. An answer about one item comes from its manager alone, which
+ *  doesn't stamp it (the merged list does): it keeps the stamp it had, so its group and its next requests stay its own. */
+function keepStamp(fresh: InboxItem, before: InboxItem): InboxItem {
+  return fresh.manager || !before.manager ? fresh : { ...fresh, manager: before.manager };
+}
+
+/** Puts the hub's copy of one item in place (a fresh read after a status move, a reply). An answer is its manager's,
+ *  unstamped: `manager` says whose (the item's the request was about); none: the default's. */
+export function replaceItem(item: InboxItem, manager?: string) {
+  if (item?.id) patchItem({ id: item.id, manager: item.manager ?? manager }, (before) => keepStamp(item, before));
 }
 
 /** A done / open mark still being sent: what the item shows until the hub answers. A mute's mark also carries its
@@ -858,7 +900,7 @@ function markOut(id: string): boolean {
 function withPending(items: InboxItem[], seq?: number): InboxItem[] {
   if (!pendingDone.size) return items;
   return items.map((it) => {
-    const e = pendingDone.get(it.id);
+    const e = pendingDone.get(itemKey(it));
     if (!e) return it;
     const lay = e.tookAt === undefined || (seq !== undefined && seq <= e.tookAt);
     return lay ? { ...it, ...e.mark } : it;
@@ -872,24 +914,25 @@ function putMark(id: string, mark: DoneMark) {
 
 /** Ends a mark's request unless a newer mark of the same item replaced it meanwhile. Taken: it stays over the lists
  * that left before now, with the hub's done fields when it answered the item. Not taken: it is dropped (those lists
- * have the item as the hub still has it). */
-function settleMark(id: string, mark: DoneMark, taken: boolean, hub?: InboxItem) {
-  const e = pendingDone.get(id);
+ * have the item as the hub still has it). `key` is the item's itemKey; `hub` the hub's answer about it. */
+function settleMark(key: string, mark: DoneMark, taken: boolean, hub?: InboxItem) {
+  const e = pendingDone.get(key);
   if (e?.mark !== mark) return;
   if (taken) {
     e.tookAt = listSeq;
-    if (hub?.id === id) e.mark = { done_at: hub.done_at, done_by: hub.done_by };
-  } else pendingDone.delete(id);
+    if (hub) e.mark = { done_at: hub.done_at, done_by: hub.done_by };
+  } else pendingDone.delete(key);
   pruneMarks();
 }
 
-/** Marks that did not go through, by item: the current copies (maybe fresher than when they were marked) take back the
- * done state they had (and the reason, for a mark that set one), except those with a newer mark still out. */
+/** Marks that did not go through, by item (itemKey): the current copies (maybe fresher than when they were marked) take
+ * back the done state they had (and the reason, for a mark that set one), except those with a newer mark still out. */
 function undoMarks(was: Map<string, DoneMark>, withReason = false) {
   set({
     items: state.items.map((it) => {
-      const w = was.get(it.id);
-      if (!w || markOut(it.id)) return it;
+      const k = itemKey(it);
+      const w = was.get(k);
+      if (!w || markOut(k)) return it;
       const back = { ...it, done_at: w.done_at, done_by: w.done_by };
       return withReason ? { ...back, reason: w.reason } : back;
     }),
@@ -911,10 +954,10 @@ function start() {
 /** `next` with every item that reads the same as the one of that id we have kept as our object, and our array when
  *  nothing changed: a re-read is fresh JSON, and new objects would render every memoized row again on each push. */
 export function keepSameItems(prev: InboxItem[], next: InboxItem[]): InboxItem[] {
-  const before = new Map(prev.map((it) => [it.id, it]));
+  const before = new Map(prev.map((it) => [itemKey(it), it]));
   let all = prev.length === next.length;
   const out = next.map((it, i) => {
-    const old = before.get(it.id);
+    const old = before.get(itemKey(it));
     const kept = old && sameValue(old, it) ? old : it;
     if (kept !== prev[i]) all = false;
     return kept;
@@ -969,28 +1012,31 @@ export async function refreshInbox(): Promise<void> {
 /** "Done" / "Move back": shown at once, sent in the background; a failure puts the item back. */
 /** Marks an item done or open; resolves to whether the hub took it. */
 export async function setDone(item: InboxItem, done: boolean): Promise<boolean> {
-  const before = state.items.find((x) => x.id === item.id);
+  const before = listed(item);
   if (!before) return false;
+  const key = itemKey(before);
   const mark: DoneMark = { done_at: done ? new Date().toISOString() : null, done_by: done ? "user" : null };
-  putMark(item.id, mark);
-  patchItem(item.id, (it) => ({ ...it, ...mark }));
+  putMark(key, mark);
+  patchItem(before, (it) => ({ ...it, ...mark }));
   try {
-    const r = await api<InboxItem>(`${itemPath(item.id)}/done`, { method: "POST", json: { done } });
-    settleMark(item.id, mark, true, r);
+    const r = await api<InboxItem>(`${itemPath(item.id)}/done`, { method: "POST", json: { done }, headers: itemRequest(before) });
+    const hub = r?.id === item.id ? keepStamp(r, before) : undefined;
+    settleMark(key, mark, true, hub);
     // The hub answers the item as it has it now; a newer mark still out stays on top.
-    if (r?.id === item.id) replaceItem(withPending([r])[0]);
+    if (hub) replaceItem(withPending([hub])[0]);
     return true;
   } catch (e) {
-    settleMark(item.id, mark, false);
-    undoMarks(new Map([[item.id, before]]));
+    settleMark(key, mark, false);
+    undoMarks(new Map([[key, before]]));
     toast(t(done ? "lib-inbox.done_failed" : "lib-inbox.undone_failed", { error: errorText(e) }), "error");
     return false;
   }
 }
 
-/** Whether a mute covers an item: the same source, still open, and the same thing among what it can be muted by. */
-export function muteCovers(source: string, o: InboxMuteOption, it: InboxItem): boolean {
-  return it.source === source && !isDone(it) && (it.mutes ?? []).some((m) => m.tag === o.tag && m.value === o.value);
+/** Whether a mute covers an item: the same source, still open, and the same thing among what it can be muted by; with
+ *  `manager`, only that manager's items (each manager keeps its own mutes and rules). */
+export function muteCovers(source: string, o: InboxMuteOption, it: InboxItem, manager?: { manager?: string }): boolean {
+  return it.source === source && !isDone(it) && (it.mutes ?? []).some((m) => m.tag === o.tag && m.value === o.value) && (!manager || sameManager(it.manager, manager.manager));
 }
 
 /**
@@ -999,31 +1045,33 @@ export function muteCovers(source: string, o: InboxMuteOption, it: InboxItem): b
  */
 export async function muteItem(item: InboxItem, o: InboxMuteOption): Promise<void> {
   // Only the covered items are put back: a reload during the request (every hub inbox event reloads) keeps its items.
-  const before = new Map(state.items.filter((it) => muteCovers(item.source, o, it)).map((it) => [it.id, it]));
+  // The mute is the item's manager's: it covers that manager's items only.
+  const before = new Map(state.items.filter((it) => muteCovers(item.source, o, it, item)).map((it) => [itemKey(it), it]));
   // A mark like setDone's: a list that left before the hub filed them does not put them back open.
   const mark: DoneMark = { done_at: new Date().toISOString(), done_by: "read", reason: t("lib-inbox.muted_reason", { name: o.name }) };
-  for (const id of before.keys()) putMark(id, mark);
-  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, ...mark } : it)) });
+  for (const key of before.keys()) putMark(key, mark);
+  set({ items: state.items.map((it) => (before.has(itemKey(it)) ? { ...it, ...mark } : it)) });
   try {
-    await api("/inbox/mutes", { method: "POST", json: { item_id: item.id, tag: o.tag } });
-    before.forEach((_, id) => settleMark(id, mark, true));
+    await api("/inbox/mutes", { method: "POST", json: { item_id: item.id, tag: o.tag }, headers: itemRequest(item) });
+    before.forEach((_, key) => settleMark(key, mark, true));
     toast(t("lib-inbox.muted", { name: o.name }), "ok");
   } catch (e) {
-    before.forEach((_, id) => settleMark(id, mark, false));
+    before.forEach((_, key) => settleMark(key, mark, false));
     undoMarks(before, true);
     toast(t("lib-inbox.mute_failed", { error: errorText(e) }), "error");
   }
 }
 
-/** What the user muted, in every source (GET /api/v1/inbox/mutes), newest first. */
-export async function listInboxMutes(): Promise<InboxMute[]> {
-  const r = await api<{ mutes?: InboxMute[] }>("/inbox/mutes");
-  return sortMutes(r.mutes ?? []);
+/** What the user muted, in every source (GET /api/v1/inbox/mutes), newest first. `manager`: whose mutes (each manager
+ *  keeps its own; stamped on each); none: the default's. */
+export async function listInboxMutes(manager?: string): Promise<InboxMute[]> {
+  const r = await api<{ mutes?: InboxMute[] }>("/inbox/mutes", { headers: itemHeaders(manager) });
+  return sortMutes((r.mutes ?? []).map((m) => (manager ? { ...m, manager } : m)));
 }
 
-/** "Unmute": only what comes in later comes back. */
-export function unmuteInbox(id: string): Promise<unknown> {
-  return api(`/inbox/mutes/${enc(id)}`, { method: "DELETE" });
+/** "Unmute" (`mute`'s manager's): only what comes in later comes back. */
+export function unmuteInbox(mute: Pick<InboxMute, "id" | "manager">): Promise<unknown> {
+  return api(`/inbox/mutes/${enc(mute.id)}`, { method: "DELETE", headers: itemHeaders(mute.manager) });
 }
 
 /** A policy's tier (docs/inbox.md "Policies"): "" leaves the tier to triage. */
@@ -1040,6 +1088,8 @@ export interface InboxPolicy extends InboxMuteOption {
   twin?: PolicyTwin;
   created_at?: string;
   updated_at?: string;
+  /** Whose rule it is (several managers: each one keeps its own; listInboxPolicies stamps it); none: the default's. */
+  manager?: string;
 }
 
 /** The tags a policy can name, the most specific first: a sender's policy beats its chat's (the hub's rule). */
@@ -1081,16 +1131,17 @@ export function policySummary(p: Pick<InboxPolicy, "tier" | "twin">): string {
   return parts.join(" · ");
 }
 
-/** Whether a policy's tier reaches an item at once (the hub's rule): the same thing, open, triaged, not being handled. */
-function policyReaches(source: string, o: InboxMuteOption, it: InboxItem): boolean {
-  return muteCovers(source, o, it) && Boolean(it.tier) && statusOf(it) !== "working";
+/** Whether a policy's tier reaches an item at once (the hub's rule): the same thing, open, triaged, not being handled,
+ *  and the same manager's (each manager keeps its own rules). */
+function policyReaches(source: string, o: InboxMuteOption, it: InboxItem, manager: { manager?: string }): boolean {
+  return muteCovers(source, o, it, manager) && Boolean(it.tier) && statusOf(it) !== "working";
 }
 
-/** The policies, newest first. */
-export async function listInboxPolicies(): Promise<InboxPolicy[]> {
-  const r = await api<{ policies?: InboxPolicy[] }>("/inbox/policies");
+/** The policies, newest first. `manager`: whose rules (stamped on each); none: the default's. */
+export async function listInboxPolicies(manager?: string): Promise<InboxPolicy[]> {
+  const r = await api<{ policies?: InboxPolicy[] }>("/inbox/policies", { headers: itemHeaders(manager) });
   const ts = (p: InboxPolicy) => (p.created_at ? Date.parse(p.created_at) || 0 : 0);
-  return [...(r.policies ?? [])].sort((a, b) => ts(b) - ts(a));
+  return [...(r.policies ?? [])].map((p) => (manager ? { ...p, manager } : p)).sort((a, b) => ts(b) - ts(a));
 }
 
 /**
@@ -1099,28 +1150,31 @@ export async function listInboxPolicies(): Promise<InboxPolicy[]> {
  * push confirms it; a failure puts them back. Setting neither part removes the policy. Resolves to the policy, or null
  * when the hub refused.
  */
-export async function saveInboxPolicy(target: { item?: InboxItem; option: InboxMuteOption; source: string; id?: string }, tier: PolicyTier, twin: PolicyTwin): Promise<InboxPolicy | null> {
+export async function saveInboxPolicy(target: { item?: InboxItem; option: InboxMuteOption; source: string; id?: string; manager?: string }, tier: PolicyTier, twin: PolicyTwin): Promise<InboxPolicy | null> {
   const { option: o, source } = target;
-  const before = new Map(tier ? state.items.filter((it) => policyReaches(source, o, it)).map((it) => [it.id, it]) : []);
+  // the rule is the manager's whose item (or rule) it is: it reaches that manager's items only
+  const owner = { manager: target.manager ?? target.item?.manager };
+  const before = new Map(tier ? state.items.filter((it) => policyReaches(source, o, it, owner)).map((it) => [itemKey(it), it]) : []);
   const reason = t("lib-inbox.policy_reason", { name: o.name });
   const statusFor = (it: InboxItem) => (it.status && it.status !== "working" ? tier || it.status : it.status);
-  set({ items: state.items.map((it) => (before.has(it.id) && it.tier !== tier ? { ...it, tier, status: statusFor(it), reason, urgent: tier === "action" ? it.urgent : false } : it)) });
+  set({ items: state.items.map((it) => (before.has(itemKey(it)) && it.tier !== tier ? { ...it, tier, status: statusFor(it), reason, urgent: tier === "action" ? it.urgent : false } : it)) });
+  const headers = itemHeaders(owner.manager);
   try {
     const r = target.id
-      ? await api<{ policy: InboxPolicy }>(`/inbox/policies/${enc(target.id)}`, { method: "PATCH", json: { tier, twin } })
-      : await api<{ policy: InboxPolicy }>("/inbox/policies", { method: "POST", json: { item_id: target.item?.id, tag: o.tag, tier, twin } });
+      ? await api<{ policy: InboxPolicy }>(`/inbox/policies/${enc(target.id)}`, { method: "PATCH", json: { tier, twin }, headers })
+      : await api<{ policy: InboxPolicy }>("/inbox/policies", { method: "POST", json: { item_id: target.item?.id, tag: o.tag, tier, twin }, headers });
     toast(tier || twin ? t("lib-inbox.policy_saved", { name: o.name }) : t("lib-inbox.policy_removed", { name: o.name }), "ok");
-    return r.policy;
+    return r.policy && owner.manager ? { ...r.policy, manager: owner.manager } : r.policy;
   } catch (e) {
-    set({ items: state.items.map((it) => before.get(it.id) ?? it) });
+    set({ items: state.items.map((it) => before.get(itemKey(it)) ?? it) });
     toast(t("lib-inbox.policy_failed", { error: errorText(e) }), "error");
     return null;
   }
 }
 
-/** Remove a policy: items keep the tier it gave until new content is triaged again. */
-export function removeInboxPolicy(id: string): Promise<unknown> {
-  return api(`/inbox/policies/${enc(id)}`, { method: "DELETE" });
+/** Remove a policy (`policy`'s manager's): items keep the tier it gave until new content is triaged again. */
+export function removeInboxPolicy(policy: Pick<InboxPolicy, "id" | "manager">): Promise<unknown> {
+  return api(`/inbox/policies/${enc(policy.id)}`, { method: "DELETE", headers: itemHeaders(policy.manager) });
 }
 
 /** What a bulk action does (POST /api/v1/inbox/bulk): `dismiss` is Clean up all (done_by=dismissed), `done` files a section
@@ -1129,7 +1183,7 @@ export type BulkAction = "done" | "dismiss" | "reopen";
 
 /** What a bulk request did: the items it moved as the hub has them now, the ones already so, and the ones it left
  * (`changed`: new messages since the list; `missing`: gone from the hub). */
-export type BulkResult = { changed: InboxItem[]; unchanged: string[]; skipped: { id: string; reason: string }[] };
+export type BulkResult = { changed: InboxItem[]; unchanged: string[]; skipped: { id: string; reason: string; manager?: string }[] };
 
 /** From this many items on, Clean up all asks first ("Will clean up N items"); fewer go at once, with Undo on the toast. */
 export const BULK_CONFIRM_AT = 10;
@@ -1157,15 +1211,54 @@ export function bulkScopeName(filters: string[], query: string): string {
   return parts.length ? parts.join(" · ") : t("lib-inbox.scope_all");
 }
 
+/** What the managers answered, put together, and the items of those that did not answer (with why). */
+type BulkOutcome = { result: BulkResult; failed: { items: InboxItem[]; error: unknown }[] };
+
 /** One bulk request. A hub from before /api/v1/inbox/bulk (404 / 405) gets it the old way (POST /api/v1/inbox/done):
  * it has no Dismiss, so Clean up all there files the items as done (done_by=user), which still clears them out of the list. */
-async function bulkRequest(action: BulkAction, targets: InboxItem[]): Promise<BulkResult> {
+async function bulkRequest(action: BulkAction, targets: InboxItem[]): Promise<BulkOutcome> {
+  // Each manager files its own items (the merged list stamps them; the hub sends /inbox/bulk to the manager the request
+  // names, docs/protocol.md "Per-manager routing"): one request per manager, the answers put together, each one's items
+  // and skips stamped with its manager (it answers unstamped) so the same id of two managers stays apart. One manager
+  // failing (offline) leaves the others' done.
+  const byManager = new Map<string, InboxItem[]>();
+  for (const it of targets) {
+    const m = otherManager(it.manager) ?? "";
+    byManager.set(m, [...(byManager.get(m) ?? []), it]);
+  }
+  const groups = [...byManager];
+  const settled = await Promise.allSettled(groups.map(([m, list]) => bulkOne(action, list, m || undefined)));
+  const answers: BulkResult[] = [];
+  const failed: BulkOutcome["failed"] = [];
+  settled.forEach((s, i) => {
+    if (s.status === "rejected") return void failed.push({ items: groups[i][1], error: s.reason });
+    // whose each answered item is: the manager asked (its own items carry their stamp; the default's may have none)
+    const own = new Map(groups[i][1].map((it) => [it.id, it.manager]));
+    const r = s.value;
+    answers.push({
+      changed: (r.changed ?? []).map((it) => (it.manager || !own.get(it.id) ? it : { ...it, manager: own.get(it.id) })),
+      unchanged: r.unchanged ?? [],
+      skipped: (r.skipped ?? []).map((x) => ({ ...x, manager: x.manager ?? own.get(x.id) })),
+    });
+  });
+  if (!answers.length) throw failed[0].error;
+  if (answers.length === 1) return { result: answers[0], failed };
+  const result = answers.reduce<BulkResult>((all, r) => ({
+    changed: [...all.changed, ...(r.changed ?? [])],
+    unchanged: [...all.unchanged, ...(r.unchanged ?? [])],
+    skipped: [...all.skipped, ...(r.skipped ?? [])],
+  }), { changed: [], unchanged: [], skipped: [] });
+  return { result, failed };
+}
+
+async function bulkOne(action: BulkAction, targets: InboxItem[], manager: string | undefined): Promise<BulkResult> {
   const items = targets.map((it) => ({ id: it.id, version: it.version }));
+  const headers = itemHeaders(manager);
   try {
-    return await api<BulkResult>("/inbox/bulk", { method: "POST", json: { action, items } });
+    return await api<BulkResult>("/inbox/bulk", { method: "POST", json: { action, items }, headers });
   } catch (e) {
     if (!(e instanceof ApiError) || (e.status !== 404 && e.status !== 405)) throw e;
-    return api<BulkResult>("/inbox/done", { method: "POST", json: { done: action !== "reopen", items } });
+    return api<BulkResult>("/inbox/done", { method: "POST", json: { done: action !== "reopen", items }, headers });
   }
 }
 
@@ -1178,29 +1271,32 @@ export async function setAllDone(items: InboxItem[], action: BulkAction | boolea
   const done = a !== "reopen";
   const seen = new Set<string>();
   const targets = items
-    .map((it) => state.items.find((x) => x.id === it.id))
-    .filter((it): it is InboxItem => !!it && isDone(it) !== done && !seen.has(it.id) && !!seen.add(it.id));
+    .map((it) => listed(it))
+    .filter((it): it is InboxItem => !!it && isDone(it) !== done && !seen.has(itemKey(it)) && !!seen.add(itemKey(it)));
   if (!targets.length) return;
-  const before = new Map(targets.map((it) => [it.id, it]));
+  const before = new Map(targets.map((it) => [itemKey(it), it]));
   const now = new Date().toISOString();
   const by = a === "dismiss" ? "dismissed" : "user";
   const mark: DoneMark = { done_at: done ? now : null, done_by: done ? by : null };
-  for (const id of before.keys()) putMark(id, mark);
-  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, ...mark } : it)) });
+  for (const key of before.keys()) putMark(key, mark);
+  set({ items: state.items.map((it) => (before.has(itemKey(it)) ? { ...it, ...mark } : it)) });
   try {
-    const r = await bulkRequest(a, targets);
-    // The ones the hub left (new messages, gone) are not laid over earlier lists; they take back their done state on
-    // the current copy below.
-    const left = new Set((r.skipped ?? []).map((s) => s.id));
-    const fresh = new Map((r.changed ?? []).map((it) => [it.id, it]));
-    before.forEach((_, id) => settleMark(id, mark, !left.has(id), fresh.get(id)));
-    set({ items: withPending(state.items.map((it) => fresh.get(it.id) ?? it)) });
-    if (left.size) undoMarks(new Map([...before].filter(([id]) => left.has(id))));
+    const { result: r, failed } = await bulkRequest(a, targets);
+    // The ones the hub left (new messages, gone), and those of a manager that did not answer, are not laid over earlier
+    // lists; they take back their done state on the current copy below.
+    const lost = new Set(failed.flatMap((f) => f.items.map(itemKey)));
+    const left = new Set([...(r.skipped ?? []).map((x) => itemKey(x)), ...lost]);
+    const fresh = new Map((r.changed ?? []).map((it) => [itemKey(it), it]));
+    before.forEach((_, key) => settleMark(key, mark, !left.has(key), fresh.get(key)));
+    set({ items: withPending(state.items.map((it) => (fresh.has(itemKey(it)) ? keepStamp(fresh.get(itemKey(it))!, it) : it))) });
+    if (left.size) undoMarks(new Map([...before].filter(([key]) => left.has(key))));
     if ((r.skipped ?? []).some((s) => s.reason === "changed")) void reloadInbox();
     const moved = r.changed ?? [];
-    toast(bulkMessage(a, r), "ok", undoable && done && moved.length ? { label: t("lib-inbox.undo"), run: () => void setAllDone(moved, "reopen", false) } : undefined);
+    const undo = undoable && done && moved.length ? { label: t("lib-inbox.undo"), run: () => void setAllDone(moved, "reopen", false) } : undefined;
+    if (failed.length) toast(t("lib-inbox.bulk_partly", { head: bulkMessage(a, r), count: lost.size, error: errorText(failed[0].error) }), "error", undo);
+    else toast(bulkMessage(a, r), "ok", undo);
   } catch (e) {
-    before.forEach((_, id) => settleMark(id, mark, false));
+    before.forEach((_, key) => settleMark(key, mark, false));
     undoMarks(before);
     toast(t(!done ? "lib-inbox.undone_failed" : a === "dismiss" ? "lib-inbox.clean_failed" : "lib-inbox.done_failed", { error: errorText(e) }), "error");
   }
@@ -1209,29 +1305,31 @@ export async function setAllDone(items: InboxItem[], action: BulkAction | boolea
 /** "Send": the hub replies in the chat / by mail / in the document (moving the rows' status in `changes` first) and
  * files the item as done. Filed at once; a failure puts the item back and keeps the text for the draft dialog. */
 export async function sendReply(item: InboxItem, text: string, changes: DocChange[] = []): Promise<boolean> {
-  if (state.sending.includes(item.id)) return false;
-  const before = state.items.find((x) => x.id === item.id);
-  set({ sending: [...state.sending, item.id] });
+  const key = itemKey(item);
+  if (state.sending.includes(key)) return false;
+  const before = listed(item);
+  set({ sending: [...state.sending, key] });
   // A mark like setDone's: a list that left before the hub filed it does not put it back open.
   const mark: DoneMark = { done_at: new Date().toISOString(), done_by: "replied" };
   // (Also for an item the list does not have yet: a list that left before the send must not bring it in open.)
-  putMark(item.id, mark);
-  patchItem(item.id, (it) => ({ ...it, ...mark }));
-  unsentReplies.delete(item.id);
+  putMark(key, mark);
+  patchItem(item, (it) => ({ ...it, ...mark }));
+  unsentReplies.delete(key);
   try {
-    const r = await api<InboxItem>(`${itemPath(item.id)}/reply`, { method: "POST", json: { text, changes: changes.length ? changes : undefined } });
-    settleMark(item.id, mark, true, r);
-    if (r?.id === item.id) replaceItem(withPending([r])[0]);
+    const r = await api<InboxItem>(`${itemPath(item.id)}/reply`, { method: "POST", json: { text, changes: changes.length ? changes : undefined }, headers: itemRequest(item) });
+    const hub = r?.id === item.id ? keepStamp(r, item) : undefined;
+    settleMark(key, mark, true, hub);
+    if (hub) replaceItem(withPending([hub])[0]);
     toast(t("lib-inbox.sent_done"), "ok");
     return true;
   } catch (e) {
-    settleMark(item.id, mark, false);
-    undoMarks(new Map([[item.id, before ?? item]]));
-    if (text) unsentReplies.set(item.id, text);
+    settleMark(key, mark, false);
+    undoMarks(new Map([[key, before ?? item]]));
+    if (text) unsentReplies.set(key, text);
     toast(t("lib-inbox.reply_failed", { error: errorText(e) }), "error");
     return false;
   } finally {
-    set({ sending: state.sending.filter((x) => x !== item.id) });
+    set({ sending: state.sending.filter((x) => x !== key) });
   }
 }
 
@@ -1239,17 +1337,18 @@ export async function sendReply(item: InboxItem, text: string, changes: DocChang
  * changed meanwhile is not run: "Suggestion updated" and the item as it is now. Resolves to whether it went through. */
 export async function suggestionAct(item: InboxItem, action: SuggestionAction, text?: string): Promise<boolean> {
   const s = item.suggestion;
-  if (!s || state.sending.includes(item.id)) return false;
-  set({ sending: [...state.sending, item.id] });
+  const key = itemKey(item);
+  if (!s || state.sending.includes(key)) return false;
+  set({ sending: [...state.sending, key] });
   try {
-    const r = await actOnSuggestion(itemPath(item.id), s.version, action, text);
+    const r = await actOnSuggestion(itemPath(item.id), s.version, action, text, undefined, item.manager);
     if (r.ok) {
-      if (r.item?.id === item.id) replaceItem(r.item);
+      if (r.item?.id === item.id) replaceItem(r.item, item.manager);
       toast(actedText(s, action), "ok");
       return true;
     }
     if (r.stale) {
-      if (r.item) replaceItem(r.item);
+      if (r.item) replaceItem(r.item, item.manager);
       else void reloadInbox();
       toast(r.error, "info");
     } else {
@@ -1258,12 +1357,12 @@ export async function suggestionAct(item: InboxItem, action: SuggestionAction, t
     }
     return false;
   } finally {
-    set({ sending: state.sending.filter((x) => x !== item.id) });
+    set({ sending: state.sending.filter((x) => x !== key) });
   }
 }
 
 export function movingKey(item: InboxItem, row: DocRow, status: DocStatus) {
-  return `${item.id}|${row.ref}|${status.field}`;
+  return `${itemKey(item)}|${row.ref}|${status.field}`;
 }
 
 /** Moves a row's status in its document: shown at once, written by the hub, the item replaced by the hub's fresh
@@ -1271,9 +1370,9 @@ export function movingKey(item: InboxItem, row: DocRow, status: DocStatus) {
 export async function setDocStatus(item: InboxItem, row: DocRow, status: DocStatus, value: string): Promise<void> {
   const key = movingKey(item, row, status);
   if (value === status.value || state.moving.includes(key)) return;
-  const before = state.items.find((x) => x.id === item.id);
+  const before = listed(item);
   set({ moving: [...state.moving, key] });
-  patchItem(item.id, (it) => ({
+  patchItem(item, (it) => ({
     ...it,
     doc: it.doc && {
       ...it.doc,
@@ -1281,11 +1380,11 @@ export async function setDocStatus(item: InboxItem, row: DocRow, status: DocStat
     },
   }));
   try {
-    const fresh = await api<InboxItem>(`${itemPath(item.id)}/doc/status`, { method: "POST", json: { ref: row.ref, field: status.field, value } });
-    if (fresh?.id === item.id) replaceItem(fresh);
+    const fresh = await api<InboxItem>(`${itemPath(item.id)}/doc/status`, { method: "POST", json: { ref: row.ref, field: status.field, value }, headers: itemRequest(item) });
+    if (fresh?.id === item.id) replaceItem(fresh, item.manager);
     toast(t("lib-inbox.status_changed", { name: status.name, value }), "ok");
   } catch (e) {
-    if (before) patchItem(item.id, () => before);
+    if (before) patchItem(item, () => before);
     toast(t("lib-inbox.status_failed", { error: errorText(e) }), "error");
   } finally {
     set({ moving: state.moving.filter((x) => x !== key) });
@@ -1345,8 +1444,8 @@ export interface LarkMention {
 const mentionList = (mentions?: LarkMention[]) => (mentions?.length ? mentions.map((m) => ({ user_id: m.user_id, name: m.name })) : undefined);
 
 /** Sends a message to a Feishu conversation via the native hub API, as account `ol` (undefined: the hub's own). */
-export async function sendLarkMessage(feed: string, text: string, clientID?: string, ol?: number, mentions?: LarkMention[]): Promise<{ message_id?: string }> {
-  return api<{ message_id?: string }>(larkPath(`/lark/conversations/${enc(feed)}/messages`, ol), {
+export async function sendLarkMessage(feed: string, text: string, clientID?: string, ol?: number, mentions?: LarkMention[], manager?: string): Promise<{ message_id?: string }> {
+  return api<{ message_id?: string }>(larkPath(`/lark/conversations/${enc(feed)}/messages`, ol, manager), {
     method: "POST",
     json: { text, client_id: clientID, mentions: mentionList(mentions) },
     token: getToken(),
@@ -1361,8 +1460,9 @@ export async function replyLarkMessage(
   clientID?: string,
   ol?: number,
   mentions?: LarkMention[],
+  manager?: string,
 ): Promise<{ message_id?: string }> {
-  return api<{ message_id?: string }>(larkPath(`/lark/messages/${enc(messageID)}/replies`, ol), {
+  return api<{ message_id?: string }>(larkPath(`/lark/messages/${enc(messageID)}/replies`, ol, manager), {
     method: "POST",
     json: { text, thread, client_id: clientID, mentions: mentionList(mentions) },
     token: getToken(),

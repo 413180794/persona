@@ -6,7 +6,8 @@ import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
 import { answeredTags, attentionSoundEnabled, badgeText, batchDue, finishedBatch, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
-import { claimNotification, closeNotification, dismissNotification, releaseClaim, FRONT_BEAT_MS, inQuietHours, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { claimNotification, closeNotification, dismissNotification, releaseClaim, FRONT_BEAT_MS, inQuietHours, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants, managerMuted } from "./notify";
+import { defaultManager } from "./manager-choice";
 import { failedTagsOver, listenForNotificationClicks } from "./notification-answer";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
@@ -308,7 +309,9 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
       const turn = turns.current.get(k);
       return turn?.endedAt !== undefined ? turn.endedAt - turn.start : undefined;
     };
-    const wanted = [...events, ...fresh.events].filter((e) => wants(e.kind, prefs, e.kind === "finished" ? ran(e.key) : undefined));
+    // a manager this device turned off (Settings › Managers) says nothing here either, as its pushes don't reach the phone
+    const ownMuted = (k: string) => managerMuted(prefs, latest.current.find((x) => agentKey(x) === k)?.manager, defaultManager());
+    const wanted = [...events, ...fresh.events].filter((e) => wants(e.kind, prefs, e.kind === "finished" ? ran(e.key) : undefined) && !ownMuted(e.key));
     const sound = attentionSoundEnabled();
     const speak = (kind: "needs" | "finished", k: string) => {
       if (!sound || inQuietHours(prefs) || suppressed(k, { key: viewing.current, focused: inFront() })) return;

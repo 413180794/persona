@@ -4,7 +4,9 @@ Starts scripts/mock/mock_hub.py on a free port with a HOME of its own (MOCK_EXTE
 - a POST with a body that is not JSON (an image upload) is answered as before: only the move routes read JSON;
 - the merged extensions list has the built-ins under every installed manager (each manager's extmgr adds them);
 - a computer of an offline manager is offline with the hub's words and no error_code, its session (there is one) in state
-  unknown.
+  unknown;
+- each manager keeps its own inbox mutes and rules: one set for another manager covers only its items, and an offline
+  one answers 503 assistant_offline.
 
     python3 scripts/test/test_mock_hub_managers.py
 """
@@ -56,9 +58,11 @@ class MockHubManagersTests(unittest.TestCase):
         except subprocess.TimeoutExpired:
             cls.proc.kill()
 
-    def call(self, method, path, body=None, content_type="application/json"):
-        req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=body, method=method,
-                                     headers={"Authorization": "Bearer mock", "Content-Type": content_type})
+    def call(self, method, path, body=None, content_type="application/json", manager=None):
+        headers = {"Authorization": "Bearer mock", "Content-Type": content_type}
+        if manager:
+            headers["X-Persona-Manager"] = manager
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=body, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return resp.status, json.loads(resp.read() or b"null")
@@ -104,6 +108,28 @@ class MockHubManagersTests(unittest.TestCase):
         self.assertTrue(theirs, "the offline manager's computer has a session to check")
         for s in theirs:
             self.assertEqual((s.get("machine_id"), s.get("state")), ("nas", "unknown"), s)
+
+    def test_each_managers_mutes_and_rules(self):
+        _, listed = self.call("GET", "/api/v1/inbox?sources=all")
+        theirs = next(x for x in listed["items"] if x["manager"] == "m-3fa21c" and x.get("mutes"))
+        tag = theirs["mutes"][0]["tag"]
+        status, answer = self.call("POST", "/api/v1/inbox/mutes", json.dumps({"item_id": theirs["id"], "tag": tag}).encode(), manager="m-3fa21c")
+        self.assertEqual(status, 200, answer)
+        _, mine = self.call("GET", "/api/v1/inbox/mutes")
+        _, work = self.call("GET", "/api/v1/inbox/mutes", manager="m-3fa21c")
+        self.assertNotIn(answer["mute"]["id"], [m["id"] for m in mine["mutes"]])
+        self.assertIn(answer["mute"]["id"], [m["id"] for m in work["mutes"]])
+        status, _ = self.call("DELETE", "/api/v1/inbox/mutes/" + answer["mute"]["id"], manager="m-3fa21c")
+        self.assertEqual(status, 200)
+        status, answer = self.call("POST", "/api/v1/inbox/policies", json.dumps({"item_id": theirs["id"], "tag": tag, "tier": "fyi"}).encode(), manager="m-3fa21c")
+        self.assertEqual(status, 200, answer)
+        _, mine = self.call("GET", "/api/v1/inbox/policies")
+        self.assertNotIn(answer["policy"]["id"], [p["id"] for p in mine["policies"]])
+        status, _ = self.call("DELETE", "/api/v1/inbox/policies/" + answer["policy"]["id"], manager="m-3fa21c")
+        self.assertEqual(status, 200)
+        for path in ("/api/v1/inbox/mutes", "/api/v1/inbox/policies"):
+            status, answer = self.call("GET", path, manager="m-8b04d2")
+            self.assertEqual((status, answer.get("code")), (503, "assistant_offline"), path)
 
 
 if __name__ == "__main__":

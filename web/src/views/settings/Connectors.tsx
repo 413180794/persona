@@ -6,6 +6,7 @@
 // unless the hub has no such client (GET /mail/oauth/google/config): then Gmail goes in here with an app password.
 // Outlook too (Microsoft calls back to a custom scheme only the app catches), though its client ID can be set up here.
 import { useEffect, useId, useState } from "react";
+import { parseOwnedSub } from "../../lib/manager-choice";
 import { clientIDError, EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailCodeGuide, mailErrors, mailProviderBadge, mailRequest, mailSummary, signsInOnPhone, type MailAccount, type MailForm, type MicrosoftConfig } from "../../lib/agent-settings";
 import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
@@ -29,13 +30,17 @@ interface LarkStatus {
   last_event_at?: number;
 }
 
-export function Connectors({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string) => void }) {
+export function Connectors({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string, manager?: string) => void }) {
   // An older hub has no connectors API (feature "connectors"): only mail and Feishu, as before.
   const hasConnectors = useStore((s) => s.features.includes("connectors"));
   // Lark (the Lark gateway through /api/v1/lark/…) only on a hub that has it (feature `lark`); "Lark bot" is the hub's own.
   const lark = useLarkOn();
   // "feishu-bot" is not a hub connector: FeishuBot reads it and opens its own dialog.
-  if (open && open !== "feishu-bot") return <ConnectorDetail key={open} id={open} onBack={() => onOpen(null)} onChannel={onChannel} />;
+  // `<id>@<manager>`: another manager's connector, opened from its extension's page (docs/managers.md "Clients")
+  if (open && open !== "feishu-bot") {
+    const { id, manager } = parseOwnedSub(open);
+    return <ConnectorDetail key={open} id={id} manager={manager} onBack={() => onOpen(null)} onChannel={onChannel} />;
+  }
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">

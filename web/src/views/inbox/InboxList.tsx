@@ -1,9 +1,9 @@
 // The inbox list (docs/inbox.md"App"): filters by source and kind, search, then Needs you (agents waiting on you first),
 // FYI, Collapsed and Done, each a section that opens / closes from its title.
-import { memo, useEffect, useMemo, useState } from "react";
+import { Fragment, memo, useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
-  listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, policyMenuTitle, unmuteInbox,
+  itemKey, itemRoute, listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, policyMenuTitle, sameItem, unmuteInbox,
   BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, reloadInbox, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
   useInbox, waitingAgents, type InboxItem, type InboxMute, type SectionKey,
 } from "../../lib/inbox";
@@ -12,7 +12,9 @@ import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
 import { machineWithHub } from "../../lib/mesh";
 import { href, navigate, onLinkClick } from "../../lib/router";
 import { useInboxSources } from "../../lib/inbox-sources";
+import { managerOrder, multiManager, ownerIn, useRoster, type Manager } from "../../lib/managers";
 import { useStore } from "../../lib/store";
+import { ManagerHeading } from "../ManagerParts";
 import type { Interaction } from "../../lib/types";
 import { t } from "../../i18n";
 import { Button, Collapse, cx, Dialog, IconButton, Loading, Menu, toast, useMenu, type MenuItem } from "../../ui/atoms";
@@ -36,7 +38,11 @@ function useStored(key: string): [string, (v: string) => void] {
   }];
 }
 
-export function InboxList({ selected }: { selected?: string }) {
+/** The sections open at first (in every manager's group): Needs you and FYI. */
+const OPEN_AT_FIRST = new Set(["action", "fyi"]);
+
+/** `selected`: the item opened (its id and manager). */
+export function InboxList({ selected }: { selected?: { id: string; manager?: string } }) {
   const items = useInbox((s) => s.items);
   const loaded = useInbox((s) => s.loaded);
   const loading = useInbox((s) => s.loading);
@@ -53,7 +59,10 @@ export function InboxList({ selected }: { selected?: string }) {
   // machines push that leaves them as they were keeps the same array (useStore compares it item by item) and the list,
   // with every row in it, does not render again.
   const agents = useStore((st) => waitingAgents(st.interactions, st.sessions, st.mutes, { source, kind, query }));
-  const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "fyi"]));
+  // the sections opened or closed by hand, by "<manager group>:<section>" (each manager's group keeps its own; one
+  // manager: the group ""), the others as they are at first
+  const [toggled, setToggled] = useState<Set<string>>(() => new Set());
+  const isOpen = (group: string, k: string) => OPEN_AT_FIRST.has(k) !== toggled.has(`${group}:${k}`);
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
   const more = useMenu();
@@ -63,12 +72,28 @@ export function InboxList({ selected }: { selected?: string }) {
   const [confirm, setConfirm] = useState<{ items: InboxItem[]; scope: string } | null>(null);
 
   // The opened item stays in sight in the list (a link straight to it, a click in the detail).
+  const selectedKey = selected ? itemKey(selected) : "";
   useEffect(() => {
     if (!selected) return;
-    document.querySelector(`[data-item="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [selected, loaded, storeLoaded]);
+    const rows = [...document.querySelectorAll<HTMLElement>(`[data-item="${CSS.escape(selected.id)}"]`)];
+    (rows.find((el) => sameItem({ id: selected.id, manager: el.dataset.manager }, selected)) ?? rows[0])?.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, loaded, storeLoaded]);
 
   const s = useMemo(() => sections(items, { source, kind, query }), [items, source, kind, query]);
+  // with several managers, each one's items and waiting agents under its name, sectioned as before (docs/managers.md
+  // "Clients"); one: the list as it was
+  const roster = useRoster();
+  const byManager = useMemo(() => {
+    if (!multiManager(roster)) return null;
+    return managerOrder(roster)
+      .map((m) => ({
+        manager: m,
+        sec: sections(items.filter((it) => ownerIn(roster, it.manager) === m.id), { source, kind, query }),
+        ags: agents.filter((ix) => ownerIn(roster, ix.manager) === m.id),
+      }))
+      .filter((g) => g.ags.length || g.sec.done.length || TIERS.some((tier) => g.sec.tiers[tier.key].length));
+  }, [roster, items, agents, source, kind, query]);
   const chips = mailAccounts(accounts, items);
   const connectors = useMemo(() => connectorSources(items), [items]);
   const failed = Boolean(error) && !items.length;
@@ -89,10 +114,11 @@ export function InboxList({ selected }: { selected?: string }) {
     if (openInView.length >= BULK_CONFIRM_AT) setConfirm({ items: openInView, scope: bulkScopeName(filterNames, query) });
     else void setAllDone(openInView, "dismiss");
   };
-  const toggle = (k: string) => setOpen((o) => {
+  const toggle = (group: string, k: string) => setToggled((o) => {
     const n = new Set(o);
-    if (n.has(k)) n.delete(k);
-    else n.add(k);
+    const at = `${group}:${k}`;
+    if (n.has(at)) n.delete(at);
+    else n.add(at);
     return n;
   });
   // Agents have no source: picking one leaves the Agent filter, and the Agent filter leaves the source.
@@ -198,24 +224,33 @@ export function InboxList({ selected }: { selected?: string }) {
           </div>
         )}
 
-        {ready && TIERS.map((tier) => {
-          const list = s.tiers[tier.key];
-          const waiting = tier.key === "action" ? agents : [];
-          if (!list.length && !waiting.length) return null;
-          const clear = tier.key === "fyi" ? t("inbox-inboxlist.clear_fyi") : tier.key === "noise" ? t("inbox-inboxlist.clear_noise") : undefined;
+        {(byManager ?? [{ manager: null, sec: s, ags: agents }]).map(({ manager, sec, ags }) => {
+          const group = manager?.id ?? "";
+          const isSelected = (it: InboxItem) => !!selected && sameItem(it, selected);
           return (
-            <Section key={tier.key} k={tier.key} title={tier.title} count={sectionCount(list.length, waiting.length)} open={tier.key === "working" || open.has(tier.key)} onToggle={tier.key === "working" ? undefined : () => toggle(tier.key)}
-              action={clear && list.length ? { label: clear, run: () => setAllDone(list, true) } : undefined}>
-              {waiting.map((ix) => <AgentRow key={ix.id} ix={ix} />)}
-              {list.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={setEditing} />)}
-            </Section>
+            <Fragment key={group}>
+              {manager && <ManagerHeading manager={manager} className="mt-5 px-1" />}
+              {ready && TIERS.map((tier) => {
+                const list = sec.tiers[tier.key];
+                const waiting = tier.key === "action" ? ags : [];
+                if (!list.length && !waiting.length) return null;
+                const clear = tier.key === "fyi" ? t("inbox-inboxlist.clear_fyi") : tier.key === "noise" ? t("inbox-inboxlist.clear_noise") : undefined;
+                return (
+                  <Section key={tier.key} k={tier.key} title={tier.title} count={sectionCount(list.length, waiting.length)} open={tier.key === "working" || isOpen(group, tier.key)} onToggle={tier.key === "working" ? undefined : () => toggle(group, tier.key)}
+                    action={clear && list.length ? { label: clear, run: () => setAllDone(list, true) } : undefined}>
+                    {waiting.map((ix) => <AgentRow key={ix.id} ix={ix} />)}
+                    {list.map((it) => <ItemRow key={itemKey(it)} it={it} selected={isSelected(it)} showAccount={chips.length > 1} onEdit={setEditing} />)}
+                  </Section>
+                );
+              })}
+              {ready && sec.done.length > 0 && (
+                <Section k="done" title={t("inbox-inboxlist.done")} count={sectionCount(sec.done.length, 0)} open={isOpen(group, "done")} onToggle={() => toggle(group, "done")}>
+                  {sec.done.map((it) => <ItemRow key={itemKey(it)} it={it} selected={isSelected(it)} showAccount={chips.length > 1} onEdit={setEditing} />)}
+                </Section>
+              )}
+            </Fragment>
           );
         })}
-        {ready && s.done.length > 0 && (
-          <Section k="done" title={t("inbox-inboxlist.done")} count={sectionCount(s.done.length, 0)} open={open.has("done")} onToggle={() => toggle("done")}>
-            {s.done.map((it) => <ItemRow key={it.id} it={it} selected={it.id === selected} showAccount={chips.length > 1} onEdit={setEditing} />)}
-          </Section>
-        )}
         {loading && loaded && <span className="sr-only">{t("inbox-inboxlist.refreshing")}</span>}
       </div>
       {editing && <DraftDialog item={editing} onClose={() => setEditing(null)} />}
@@ -280,7 +315,7 @@ export async function markFromRow(it: InboxItem, done: boolean, touch = isNoHove
 
 /** Memoized: a push that leaves this item's object as it was (or one for sessions and machines) skips the row. */
 const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selected: boolean; showAccount: boolean; onEdit: (it: InboxItem) => void }) {
-  const to = { name: "inbox", id: it.id } as const;
+  const to = itemRoute(it);
   const done = isDone(it);
   const label = kindLabel(it);
   // a suggestion takes the AI twin's draft's place, and the event's handling the AI twin's "working on it"
@@ -295,7 +330,7 @@ const ItemRow = memo(function ItemRow({ it, selected, showAccount, onEdit }: { i
   // (the menu key / Shift+F10 open it next to the row, see ui/context-menu.ts)
   const [menu, setMenu] = useState<MenuAt | null>(null);
   return (
-    <div data-item={it.id} {...contextMenuProps((at) => setMenu(at))} className={cx("group relative scroll-my-3 rounded-[14px] transition-[background-color,box-shadow] duration-150 hover:bg-inset", selected ? "bg-inset shadow-[0_0_0_1.5px_var(--accent)]" : "bg-surface shadow-card")}>
+    <div data-item={it.id} data-manager={it.manager} {...contextMenuProps((at) => setMenu(at))} className={cx("group relative scroll-my-3 rounded-[14px] transition-[background-color,box-shadow] duration-150 hover:bg-inset", selected ? "bg-inset shadow-[0_0_0_1.5px_var(--accent)]" : "bg-surface shadow-card")}>
       <a href={href(to)} onClick={(e) => onLinkClick(e, to)} aria-current={selected ? "page" : undefined} className="flex gap-3 rounded-[14px] p-3 outline-offset-[-2px]">
         <ItemAvatar it={it} />
         <span className="min-w-0 flex-1">
@@ -368,22 +403,41 @@ export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
   return items;
 }
 
+/** One manager's mutes in the "Muted" dialog (several managers: each keeps its own, read with its name). */
+type MuteGroup = { manager: Manager; mutes: InboxMute[] | null; error: string };
+
+/** Each installed manager's mutes, the default first; one that can't answer (offline) says why under its name. */
+async function mutesByManager(managers: Manager[]): Promise<MuteGroup[]> {
+  const read = await Promise.allSettled(managers.map((m) => listInboxMutes(m.id)));
+  return managers.map((m, i) => {
+    const r = read[i];
+    return r.status === "fulfilled" ? { manager: m, mutes: r.value, error: "" } : { manager: m, mutes: null, error: errorText(r.reason) };
+  });
+}
+
 /** "Muted" (the ⋯ menu; iOS InboxMutesView): every source's muted repositories, chats and senders, newest first, each
- *  with "Unmute". Only what comes in later comes back. */
+ *  with "Unmute". Only what comes in later comes back. With several managers, each one's under its name. */
 function MutesDialog({ onClose }: { onClose: () => void }) {
+  const roster = useRoster();
+  const managers = multiManager(roster) ? managerOrder(roster) : null;
   const [list, setList] = useState<InboxMute[] | null>(null);
+  const [groups, setGroups] = useState<MuteGroup[] | null>(null);
   const [failed, setFailed] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const several = managers?.map((m) => m.id).join(",") ?? "";
   const load = () => {
     setFailed("");
-    listInboxMutes().then(setList, (e) => setFailed(errorText(e)));
+    if (managers) void mutesByManager(managers).then(setGroups);
+    else listInboxMutes().then(setList, (e) => setFailed(errorText(e)));
   };
-  useEffect(load, []);
+  useEffect(load, [several]);
   const unmute = async (m: InboxMute) => {
-    setBusy(m.id);
+    const key = `${m.manager ?? ""}:${m.id}`;
+    setBusy(key);
     try {
-      await unmuteInbox(m.id);
+      await unmuteInbox(m);
       setList((l) => (l ?? []).filter((x) => x.id !== m.id));
+      setGroups((gs) => gs?.map((g) => (g.manager.id === m.manager ? { ...g, mutes: g.mutes?.filter((x) => x.id !== m.id) ?? null } : g)) ?? gs);
       toast(t("inbox-inboxlist.unmuted", { name: m.name }), "ok");
     } catch (e) {
       toast(t("inbox-inboxlist.unmute_failed", { error: errorText(e) }), "error");
@@ -391,6 +445,24 @@ function MutesDialog({ onClose }: { onClose: () => void }) {
       setBusy(null);
     }
   };
+  const row = (m: InboxMute) => {
+    const key = `${m.manager ?? ""}:${m.id}`;
+    return (
+      <li key={key} data-mute={m.id} className="flex items-center gap-3 rounded-control px-1 py-2 hover:bg-hover">
+        <Icon name="bellOff" size={14} className="shrink-0 text-ink-3" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] text-ink" title={m.name}>{m.name}</span>
+          <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">{muteLine(m)}</span>
+        </span>
+        <Button tone="quiet" busy={busy === key} disabled={busy !== null && busy !== key} onClick={() => void unmute(m)}>
+          {t("inbox-inboxlist.unmute")}
+        </Button>
+      </li>
+    );
+  };
+  // several managers: the groups with something to say (mutes, or why they could not be read)
+  const shownGroups = groups?.filter((g) => g.error || g.mutes?.length) ?? null;
+  const empty = managers ? shownGroups?.length === 0 : list?.length === 0;
   return (
     <Dialog open onClose={onClose} title={t("inbox-inboxlist.muted_list")} width={420} footer={<Button tone="primary" onClick={onClose}>{t("inbox-inboxlist.close")}</Button>}>
       {failed ? (
@@ -398,9 +470,9 @@ function MutesDialog({ onClose }: { onClose: () => void }) {
           <p className="text-[12.5px] break-words text-red">{t("inbox-inboxlist.mutes_load_failed", { error: failed })}</p>
           <Button tone="secondary" icon="retry" onClick={load}>{t("inbox-inboxlist.retry")}</Button>
         </div>
-      ) : !list ? (
+      ) : (managers ? !groups : !list) ? (
         <div className="py-2"><Loading /></div>
-      ) : !list.length ? (
+      ) : empty ? (
         <div className="flex flex-col items-center gap-2 py-4 text-center">
           <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3">
             <Icon name="bellOff" size={17} />
@@ -410,20 +482,20 @@ function MutesDialog({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <>
-          <ul className="-mx-1 flex flex-col">
-            {list.map((m) => (
-              <li key={m.id} data-mute={m.id} className="flex items-center gap-3 rounded-control px-1 py-2 hover:bg-hover">
-                <Icon name="bellOff" size={14} className="shrink-0 text-ink-3" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-ink" title={m.name}>{m.name}</span>
-                  <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">{muteLine(m)}</span>
-                </span>
-                <Button tone="quiet" busy={busy === m.id} disabled={busy !== null && busy !== m.id} onClick={() => void unmute(m)}>
-                  {t("inbox-inboxlist.unmute")}
-                </Button>
-              </li>
-            ))}
-          </ul>
+          {shownGroups ? (
+            shownGroups.map((g) => (
+              <section key={g.manager.id} data-mutes-manager={g.manager.id} className="mb-2">
+                <ManagerHeading manager={g.manager} className="px-1 pt-1 pb-0.5" />
+                {g.error ? (
+                  <p className="px-1 py-1.5 text-[12px] break-words text-ink-3">{g.manager.online ? t("inbox-inboxlist.mutes_load_failed", { error: g.error }) : t("inbox-inboxlist.mutes_offline")}</p>
+                ) : (
+                  <ul className="-mx-1 flex flex-col">{g.mutes!.map(row)}</ul>
+                )}
+              </section>
+            ))
+          ) : (
+            <ul className="-mx-1 flex flex-col">{list!.map(row)}</ul>
+          )}
           <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">{t("inbox-inboxlist.muted_note")}</p>
         </>
       )}

@@ -7,16 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThreadMessage, ThreadPage } from "../../lib/connectors";
 import type { InboxItem } from "../../lib/inbox";
 
-const calls = vi.hoisted(() => ({ load: [] as (string | undefined)[], reply: [] as unknown[] }));
+const calls = vi.hoisted(() => ({ load: [] as (string | undefined)[], reply: [] as unknown[], managers: [] as (string | undefined)[] }));
 const pages = vi.hoisted(() => ({ newest: null as unknown, older: null as unknown }));
 vi.mock("../../lib/connectors", async (original) => ({
   ...(await original<typeof import("../../lib/connectors")>()),
-  loadThread: (_id: string, _thread: string, before?: string) => {
+  loadThread: (_id: string, _thread: string, before?: string, manager?: string) => {
     calls.load.push(before);
+    calls.managers.push(manager);
     return Promise.resolve(before ? pages.older : pages.newest);
   },
-  replyInThread: (_id: string, body: unknown) => {
+  replyInThread: (_id: string, body: unknown, manager?: string) => {
     calls.reply.push(body);
+    calls.managers.push(manager);
     return Promise.resolve({ ok: true });
   },
 }));
@@ -49,6 +51,7 @@ const buttons = () => [...host.querySelectorAll<HTMLButtonElement>("button")];
 beforeEach(() => {
   calls.load = [];
   calls.reply = [];
+  calls.managers = [];
   vi.mocked(toast).mockClear();
   Element.prototype.scrollIntoView = vi.fn();
   host = document.createElement("div");
@@ -135,6 +138,26 @@ describe("连接器会话页", () => {
     act(() => box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     await flush();
     expect(calls.reply).toEqual([{ thread: "primary.example-group", action: "examplechat_send", text: "好的", reply_to: "1" }]);
+    expect(calls.managers.every((m) => m === undefined)).toBe(true); // the default's: no manager named
+  });
+
+  it("another manager's item: its thread is read and answered through that manager", async () => {
+    pages.newest = { chat: { id: "g", name: "示例群", kind: "group", reply: "examplechat_send" }, messages: [msg("1")] } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={{ ...item, manager: "m-1" }} />));
+    await flush();
+    act(() => buttons().find((b) => b.textContent?.trim() === "回复")!.click());
+    await flush();
+    const box = host.querySelector("textarea")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    act(() => {
+      setter.call(box, "好的");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await flush();
+    expect(calls.reply).toHaveLength(1);
+    expect(calls.managers.length).toBeGreaterThanOrEqual(2);
+    expect(calls.managers.every((m) => m === "m-1")).toBe(true);
   });
 
   it("opens a picture full screen in the image viewer (G039)", async () => {

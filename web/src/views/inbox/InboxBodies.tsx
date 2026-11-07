@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { bytes, clock } from "../../lib/format";
 import { docTypeName, isDone, momentText, withToken, type InboxItem, type MomentComment, type MomentPost } from "../../lib/inbox";
+import { itemHeaders, useItemManager, withManager } from "../../lib/manager-choice";
 import { openLink } from "../../lib/links";
 import { addressText, markMailSeen, replyDraft, useMailAccounts, type ComposeDraft, type MailMessage } from "../../lib/mail";
 import { hubTranslation, isForeignCached, languageName, strippedHTML, translateMail, translatesMail, useTranslatePrefs, type MailTranslation } from "../../lib/translate";
@@ -34,23 +35,24 @@ export function MailBody({ item }: { item: InboxItem }) {
   const [showOriginal, setShowOriginal] = useState(false);
   const path = `/mail/messages/${enc(m.account_id)}/${uid}`;
   const unread = !isDone(item) && item.read !== true;
+  const manager = useItemManager();
 
   useEffect(() => {
     let live = true;
     setMsg(null);
     setError("");
-    api<{ message: MailMessage }>(`${path}?mailbox=${enc(mailbox)}`)
+    api<{ message: MailMessage }>(`${path}?mailbox=${enc(mailbox)}`, { headers: itemHeaders(manager) })
       .then((r) => {
         if (!live) return;
         setMsg(r.message);
-        if (unread && r.message?.seen !== true) void markMailSeen(m.account_id, uid, mailbox);
+        if (unread && r.message?.seen !== true) void markMailSeen(m.account_id, uid, mailbox, manager);
       })
       .catch((e) => live && setError(errorText(e)));
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, mailbox]);
+  }, [path, mailbox, manager]);
 
   // Settings › Translation: a mail in another language than the target is asked of the hub once it is here.
   const wants = translatesMail(prefs);
@@ -63,7 +65,7 @@ export function MailBody({ item }: { item: InboxItem }) {
     if (!isForeignCached(`${msg.subject ?? ""}\n${body}`, prefs.target)) return;
     let live = true;
     setTranslating(true);
-    translateMail(m.account_id, uid, mailbox, prefs.target)
+    translateMail(m.account_id, uid, mailbox, prefs.target, manager)
       .then((tr) => live && setTranslation(tr))
       .catch((e) => live && setTranslateError(errorText(e)))
       .finally(() => live && setTranslating(false));
@@ -71,7 +73,7 @@ export function MailBody({ item }: { item: InboxItem }) {
       live = false;
       setTranslating(false);
     };
-  }, [msg, wants, prefs.target, m.account_id, uid, mailbox]);
+  }, [msg, wants, prefs.target, m.account_id, uid, mailbox, manager]);
 
   // kept by the item (the thread): a new mail of it moves `uid` on and reads the body again under the dialog
   // another item opened in this body: that reply's dialog goes (and keeps what was typed for its own item)
@@ -131,7 +133,7 @@ export function MailBody({ item }: { item: InboxItem }) {
           <p className="mb-1.5 text-[12px] font-medium text-ink-3">{t("inbox-inboxbodies.attachments", { count: msg.attachments.length })}</p>
           <div className="flex flex-wrap gap-2">
             {msg.attachments.map((a, i) => {
-              const url = a.id ? withToken(`/api/v1${path}/attachments/${enc(a.id)}?mailbox=${enc(mailbox)}`) : undefined;
+              const url = a.id ? withToken(withManager(`/api/v1${path}/attachments/${enc(a.id)}?mailbox=${enc(mailbox)}`, manager)) : undefined;
               const body = (
                 <>
                   <Icon name="clip" size={13} className="shrink-0 text-ink-3" />
@@ -252,21 +254,23 @@ export function MomentBody({ item }: { item: InboxItem }) {
   const [post, setPost] = useState<MomentPost | null>(null);
   const [comments, setComments] = useState<MomentComment[]>([]);
   const [error, setError] = useState("");
+  const manager = useItemManager();
 
   useEffect(() => {
     let live = true;
     setPost(null);
     setError("");
     const base = `/lark/moments/posts/${enc(id)}`;
-    api<MomentPost>(base).then((p) => live && setPost(p)).catch((e) => live && setError(errorText(e)));
-    api<{ comments?: MomentComment[] }>(`${base}/comments`).then((r) => live && setComments(r.comments ?? [])).catch(() => {});
+    const headers = itemHeaders(manager);
+    api<MomentPost>(base, { headers }).then((p) => live && setPost(p)).catch((e) => live && setError(errorText(e)));
+    api<{ comments?: MomentComment[] }>(`${base}/comments`, { headers }).then((r) => live && setComments(r.comments ?? [])).catch(() => {});
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, manager]);
 
   if (!post) return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label={t("inbox-inboxbodies.reading_post")} />}</div>;
-  const images = (post.images ?? []).map((i) => withToken(i.url)).filter(Boolean) as string[];
+  const images = (post.images ?? []).map((i) => withToken(i.url && withManager(i.url, manager))).filter(Boolean) as string[];
   return (
     <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-6">
       <article className="rounded-card bg-surface p-4 shadow-card">

@@ -7,7 +7,7 @@ import { machineWithHub } from "../lib/mesh";
 import { createPortal } from "react-dom";
 import { ago, sessionTitle, shortPath, stateOf, tabLabel } from "../lib/format";
 import { appCommands, commandKeys, contextCommands, filterCommands, inboxHits, orderGroups, parseQuery, placeHits, setPaletteQuery, terminalHits, usePalette, type InboxHit, type MachinePanes, type PaletteCommand, type PlaceHit, type PlaceInput, type TerminalHit } from "../lib/palette";
-import { isDone, useInbox, type InboxItem } from "../lib/inbox";
+import { isDone, itemRoute, useInbox, type InboxItem } from "../lib/inbox";
 import { useNavPages } from "./Sidebar";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
@@ -256,7 +256,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
     onClose();
     if (r.kind === "command") r.cmd.run();
     else if (r.kind === "file") openFileHit(r);
-    else if (r.kind === "inbox") navigate({ name: "inbox", id: r.hit.item.id });
+    else if (r.kind === "inbox") navigate(itemRoute(r.hit.item));
     else if (r.kind === "place") navigate(r.hit.place.to);
     else navigate(r.hit.to);
   };

@@ -120,5 +120,6 @@
   "official_token_link": "被限流了？去「管理市场」填一个 GitHub token",
   "market_unread": "读到以后，扩展会显示在这里。",
   "token_create_hint": "没有 token？在 GitHub 上生成一个：名字、用途和一年的有效期已经填好，不用勾任何权限，点 Generate token 后复制回来粘贴到上面。",
-  "token_create": "去 GitHub 生成"
+  "token_create": "去 GitHub 生成",
+  "for_manager": "只改管理者「{name}」的这一份（每个管理者都有自己的扩展）。"
 }

@@ -19,6 +19,8 @@ import { PersonaAvatar, usePersona } from "./assistant/Persona";
 import { ChatOnlyNote, FailureCard, ReadinessCard, useReadinessGate } from "./assistant/Readiness";
 import { ShellHeaderSlots, ShellSwitch } from "./ShellSwitch";
 import { formatList, t } from "../i18n";
+import { ManagerSwitcher, useShownOffline } from "./ManagerParts";
+import { chosenManager, noteConversation, ownerHeaders, shownManager } from "../lib/manager-choice";
 
 /** The example questions of a hub without readiness (its `suggestions` replace them, docs/onboarding.md 4.7). */
 const SUGGESTIONS = [t("personaassistant.suggestion_meetings"), t("personaassistant.suggestion_agents"), t("personaassistant.suggestion_lark"), t("personaassistant.suggestion_projects")];
@@ -32,19 +34,34 @@ export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string
   const assistant = useStore((s) => s.assistant);
   const assistantError = useStore((s) => s.assistantError);
   const loaded = useStore((s) => s.loaded);
+  // the shown manager offline (with several, ManagerParts): its history stays, nothing goes
+  const offline = useShownOffline();
   if (fresh) return <Starter onToggleSidebar={onToggleSidebar} />;
   const id = sid ?? assistant?.main;
   if (id) {
     if (!assistant) {
-      if (assistantError) return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
+      // an offline manager's read fails as expected: its page says so (Starter) rather than offering Retry
+      if (assistantError && !offline) return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
       return <Centered><Loading /></Centered>;
     }
     // the main conversation is the phone's assistant page: "Assistant | Agents" in its top bar (ChatView's `topCenter`, narrow only)
     const topCenter = id === assistant.main ? <ShellSwitch page="assistant" /> : undefined;
-    return <ChatView key={id} mid={assistant.machine_id} sid={id} assistant starting={starting.has(id)} onToggleSidebar={onToggleSidebar} topCenter={topCenter} />;
+    return (
+      <ChatView
+        key={id}
+        mid={assistant.machine_id}
+        sid={id}
+        assistant
+        starting={starting.has(id)}
+        onToggleSidebar={onToggleSidebar}
+        topCenter={topCenter}
+        banner={id === assistant.main ? <ManagerSwitcher className="border-b border-line" /> : undefined}
+        offline={offline?.composer}
+      />
+    );
   }
   if (!loaded) return <Centered><Loading /></Centered>;
-  if (!sid && assistantError && !assistant) {
+  if (!sid && assistantError && !assistant && !offline) {
     return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
   }
   return <Starter main onToggleSidebar={onToggleSidebar} />;
@@ -67,6 +84,8 @@ function AssistantLoadFailed({ error, onToggleSidebar }: { error: string; onTogg
       <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
         <ShellHeaderSlots page="assistant" onToggleSidebar={onToggleSidebar} end={<IconButton icon="info" label={t("personaassistant.profile")} onClick={() => navigate({ name: "profile" })} />} />
       </header>
+      {/* another manager can still be picked when this one's page didn't load */}
+      <ManagerSwitcher />
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-5 text-center">
         <p className="text-[13px] text-ink-2">{t("personaassistant.load_failed", { error })}</p>
         <Button onClick={retry} busy={retrying} icon="retry">
@@ -89,14 +108,21 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
 
   const gate = useReadinessGate();
   const [failure, setFailure] = useState<CodedFailure | null>(null);
+  const offline = useShownOffline();
 
   const start = async (out: Outgoing): Promise<boolean> => {
     setFailure(null);
     const launcher = pickedLauncher(NEW_CONVERSATION);
     const body = { prompt: out.text, images: out.images.length ? out.images : undefined, launcher, main: main || undefined };
+    // written for the manager shown now: its retries go there even if the switcher moves meanwhile
+    const chosen = chosenManager() ?? undefined;
+    const headers = ownerHeaders(chosen);
+    const from = shownManager();
     for (let attempt = 0; ; attempt++) {
       try {
-        const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: body });
+        const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: body, headers });
+        // its own requests (feed, stop…) go to the manager it started with, whatever the page shows later
+        noteConversation(r.session.session_id, chosen);
         starting.add(r.session.session_id);
         // the prompt shows in the conversation at once (it started with it), until its transcript has it
         noteSent(r.session.machine_id, r.session.session_id, out);
@@ -108,6 +134,8 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
         // the assistant restarting: a few seconds, tried again without a word (docs/onboarding.md 4.6)
         if (passesBySelf(e) && attempt < 3) {
           await new Promise((done) => setTimeout(done, 2000));
+          // the page moved to another manager meanwhile: this one's words stay in the box, nothing goes elsewhere
+          if (shownManager() !== from) return false;
           continue;
         }
         // a card, not a toast (4.4); the readiness changed with it, most likely
@@ -149,6 +177,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
           <PersonaAvatar size={16} fallback={<Icon name="info" size={13} />} /> {t("personaassistant.profile")}
         </button>
       </header>
+      {main && <ManagerSwitcher />}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-5 pb-[10vh]">
         <div className="w-full max-w-[640px]" style={{ animation: `fade-up 450ms ${EASE} both` }}>
           <div className="mb-6 flex flex-col items-center text-center">
@@ -163,7 +192,7 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
             />
             <h1 className="text-[22px] font-semibold tracking-tight text-ink">{t("personaassistant.empty_title")}</h1>
             <p className="mt-1.5 text-[13px] text-ink-2">
-              {setup ? t("personaassistant.empty_body_setup") : online.length ? t("personaassistant.empty_body_machines", { machines: formatList(online.map((m) => m.name), { type: "conjunction", style: "narrow" }) }) : t("personaassistant.empty_body")}
+              {offline ? offline.body : setup ? t("personaassistant.empty_body_setup") : online.length ? t("personaassistant.empty_body_machines", { machines: formatList(online.map((m) => m.name), { type: "conjunction", style: "narrow" }) }) : t("personaassistant.empty_body")}
             </p>
           </div>
           {/* files go to the assistant's machine, as in its conversations (iOS StarterComposer) */}
@@ -174,9 +203,10 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
             </div>
           )}
           {gate.dialog}
-          <Composer key={seed} blocked={gate.blocked} draftKey="persona-new" placeholder={t("personaassistant.ask_placeholder", { name: persona.name })} machineId={assistant?.machine_id} mention={NEW_MENTION} onSend={start} autoFocus commands={[]} footer={assistant ? <StarterLauncherChip /> : undefined} />
+          <Composer key={seed} blocked={offline ? undefined : gate.blocked} disabled={Boolean(offline)} draftKey="persona-new" placeholder={offline ? offline.composer : t("personaassistant.ask_placeholder", { name: persona.name })} machineId={assistant?.machine_id} mention={NEW_MENTION} onSend={start} autoFocus commands={[]} footer={assistant ? <StarterLauncherChip /> : undefined} />
           <div className="mt-4 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {suggestions.map((x, i) => (
+            {/* an offline manager takes nothing: no questions to fill in */}
+            {!offline && suggestions.map((x, i) => (
               <button
                 key={x.key}
                 type="button"

@@ -11,6 +11,10 @@ vi.mock("../../lib/translate", () => ({ useTranslatePrefs: () => ({ enabled: fal
 vi.mock("../../lib/viewport", async (original) => ({ ...(await original<typeof import("../../lib/viewport")>()), useMedia: (q: string) => q === "(max-width: 639px)" }));
 vi.mock("./LarkThread", () => ({ LarkThread: () => null, chatOfItem: () => ({}) }));
 import { InboxDetail } from "./InboxDetail";
+import { settleRosterDefault } from "../../lib/manager-choice";
+
+// the roster's default is known, as once the app has read it: an item's page draws at once
+settleRosterDefault();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

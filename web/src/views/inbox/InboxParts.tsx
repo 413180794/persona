@@ -2,10 +2,11 @@
 // the AI twin's draft card, a document row's status menu, and the few glyphs the shared icon set does not have.
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
-  agentDraft, docChangeLine, isDone, isLark, movingKey, setDocStatus, useInbox, withToken,
+  agentDraft, docChangeLine, isDone, isLark, itemKey, movingKey, setDocStatus, useInbox, withToken,
   type DocRow, type DocStatus, type InboxItem,
 } from "../../lib/inbox";
 import { connectorBrand } from "../../lib/connectors";
+import { useItemManager, withManager } from "../../lib/manager-choice";
 import { t } from "../../i18n";
 import { Button, cx, Menu, Spinner, useMenu } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
@@ -64,9 +65,12 @@ function hash(s: string) {
   return Math.abs(h);
 }
 
-export function Monogram({ name, size = 40, square, neutral, src }: { name: string; size?: number; square?: boolean; neutral?: boolean; src?: string }) {
+/** `manager`: whose item the picture is of (a list row's; inside an item's view, ItemManager tells), so its URL names
+ *  that manager (docs/managers.md "Clients"). */
+export function Monogram({ name, size = 40, square, neutral, src, manager }: { name: string; size?: number; square?: boolean; neutral?: boolean; src?: string; manager?: string }) {
+  const owner = useItemManager();
   const shape = square ? "rounded-[10px]" : "rounded-full";
-  if (src) return <img src={withToken(src)} alt="" width={size} height={size} className={cx("shrink-0 object-cover shadow-hairline", shape)} style={{ width: size, height: size }} />;
+  if (src) return <img src={withToken(withManager(src, manager ?? owner))} alt="" width={size} height={size} className={cx("shrink-0 object-cover shadow-hairline", shape)} style={{ width: size, height: size }} />;
   const first = [...name.trim()][0] ?? "?";
   return (
     <span aria-hidden className={cx("flex shrink-0 items-center justify-center font-semibold", shape)} style={{ width: size, height: size, fontSize: Math.round(size * 0.4), ...(neutral ? MONO[3] : MONO[hash(name) % MONO.length]) }}>
@@ -93,7 +97,7 @@ export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) 
       </span>
     );
   } else if (isLark(it)) {
-    face = <Monogram name={it.title} size={size} square={it.lark?.is_group} src={it.avatar} />;
+    face = <Monogram name={it.title} size={size} square={it.lark?.is_group} src={it.avatar} manager={it.manager} />;
   } else {
     face = <Monogram name={it.sender || it.title} size={size} neutral />;
   }
@@ -162,7 +166,7 @@ export function Count({ n, accent }: { n: number; accent?: boolean }) {
 /** The AI twin's reply under a row: "Send" sends it as it is, "Edit" opens it in the draft dialog. */
 export function DraftCard({ it, onEdit, onSend }: { it: InboxItem; onEdit: () => void; onSend: () => void }) {
   const draft = agentDraft(it);
-  const sending = useInbox((s) => s.sending.includes(it.id));
+  const sending = useInbox((s) => s.sending.includes(itemKey(it)));
   // the four lines may cut it: "Show all" shows the rest in place, so it is read before "Send" (#4742)
   const [open, setOpen] = useState(false);
   const { ref: textRef, cut: long } = useClamped<HTMLParagraphElement>(open);

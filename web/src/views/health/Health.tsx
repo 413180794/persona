@@ -9,7 +9,8 @@ import { memoryEntries, type MemoryEntry, type MemoryFile } from "../../lib/memo
 import { noteSent } from "../../lib/outbox";
 import { plainMarkdown } from "../../lib/plain-markdown";
 import { href, navigate, onLinkClick } from "../../lib/router";
-import { useStore } from "../../lib/store";
+import { onHubEvent, useStore } from "../../lib/store";
+import { noteConversation } from "../../lib/manager-choice";
 import type { Session } from "../../lib/types";
 import { Button, Dialog, EASE, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -17,7 +18,7 @@ import { ChatView } from "../chat/ChatView";
 import { Composer, type Outgoing } from "../chat/Composer";
 import { conversationTitle, newestFirst } from "../assistant/conversations";
 import { HealthReports } from "./HealthReports";
-import { REPORT_FILES, uploadReports } from "./reports";
+import { REPORT_FILES, startHealthConversation, uploadReports } from "./reports";
 import { Empty, SectionTitle } from "../assistant/parts";
 import { t } from "../../i18n";
 
@@ -31,14 +32,19 @@ const SOURCES: { icon: IconName; title: string; body: string }[] = [
   { icon: "upload", title: t("health.source_upload"), body: t("health.source_upload_body") },
 ];
 
-/** The space's conversations, newest first (GET /api/v1/assistant?space=health). */
+/** The space's conversations, newest first, and the machine they run on (GET /api/v1/assistant?space=health). The
+ *  space is the default manager's whichever manager the Persona page shows (`?space=` names none, docs/managers.md):
+ *  its machine is its own answer's, not the shown manager's. */
 function useHealthConversations() {
   const [list, setList] = useState<Session[] | null>(null);
+  const [mid, setMid] = useState<string | undefined>(undefined);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     try {
-      const a = await api<{ conversations?: Session[] }>(`/assistant?space=${HEALTH_SPACE}`);
+      const a = await api<{ machine_id?: string; conversations?: Session[] }>(`/assistant?space=${HEALTH_SPACE}`);
+      for (const c of a.conversations ?? []) noteConversation(c.session_id, undefined);
       setList(a.conversations ?? []);
+      setMid(a.machine_id || undefined);
       setError("");
     } catch (e) {
       setError(errorText(e));
@@ -46,9 +52,10 @@ function useHealthConversations() {
   }, []);
   useEffect(() => {
     void load();
+    // read again on every hello: one that failed while the hub was away, or the space moved meanwhile
+    return onHubEvent("hello", () => void load());
   }, [load]);
-  // the live sessions of the assistant's machine bring their titles and last lines
-  const mid = useStore((s) => s.assistant?.machine_id);
+  // the live sessions of the space's machine bring their titles and last lines
   const live = useStore((s) => (mid ? s.sessions[mid] : undefined));
   const merged = useMemo(() => {
     if (!list) return null;
@@ -56,27 +63,49 @@ function useHealthConversations() {
     for (const s of live ?? []) if (s.space === HEALTH_SPACE) by.set(s.session_id, { ...by.get(s.session_id), ...s });
     return newestFirst([...by.values()].filter((s) => !s.archived));
   }, [list, live]);
-  return { list: merged, error, reload: load };
+  return { list: merged, mid, error, reload: load };
 }
 
 export function Health({ sid, onToggleSidebar }: { sid?: string; onToggleSidebar: () => void }) {
-  const assistant = useStore((s) => s.assistant);
-  if (sid) {
-    if (!assistant) return <div className="flex h-full items-center justify-center"><Loading /></div>;
-    return <ChatView key={sid} mid={assistant.machine_id} sid={sid} assistant onToggleSidebar={onToggleSidebar} />;
-  }
+  if (sid) return <HealthConversation sid={sid} onToggleSidebar={onToggleSidebar} />;
   return <HealthHome onToggleSidebar={onToggleSidebar} />;
 }
 
+/** One of the space's conversations, on the space's machine (its list says which); a list that could not be read
+ *  says why, with Retry. */
+function HealthConversation({ sid, onToggleSidebar }: { sid: string; onToggleSidebar: () => void }) {
+  const { mid, error, reload } = useHealthConversations();
+  const [retrying, setRetrying] = useState(false);
+  if (!mid && error) {
+    const retry = () => {
+      setRetrying(true);
+      void reload().finally(() => setRetrying(false));
+    };
+    return (
+      <div className="flex h-full flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
+          <IconButton icon="sidebar" label={t("health.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-5 text-center" role="alert">
+          <p className="max-w-[420px] text-[13px] break-words text-ink-2">{t("health.conversation_load_failed", { error })}</p>
+          <Button onClick={retry} busy={retrying} icon="retry">{t("health.retry")}</Button>
+        </div>
+      </div>
+    );
+  }
+  if (!mid) return <div className="flex h-full items-center justify-center"><Loading /></div>;
+  return <ChatView key={sid} mid={mid} sid={sid} assistant onToggleSidebar={onToggleSidebar} />;
+}
+
 function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
-  const { list, error, reload } = useHealthConversations();
-  // a report picked in the box goes to the assistant's machine, into the health space's reports/
-  const assistant = useStore((s) => s.assistant);
+  // a report picked in the box goes to the space's machine, into its reports/
+  const { list, mid, error, reload } = useHealthConversations();
   const [seed, setSeed] = useState(0);
 
   const start = async (out: Outgoing): Promise<boolean> => {
     try {
-      const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: out.text, images: out.images.length ? out.images : undefined, space: HEALTH_SPACE } });
+      const r = await startHealthConversation({ prompt: out.text, images: out.images.length ? out.images : undefined });
+      noteConversation(r.session.session_id, undefined);
       noteSent(r.session.machine_id, r.session.session_id, out);
       navigate({ name: "health", sid: r.session.session_id });
       return true;
@@ -89,7 +118,6 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const picker = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const upload = async (files: File[]) => {
-    const mid = assistant?.machine_id;
     if (!mid || !files.length) return;
     setUploading(true);
     try {
@@ -125,9 +153,9 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-relaxed text-ink-2">{t("health.hero_body")}</p>
           </div>
 
-          <Composer key={seed} draftKey="health-new" placeholder={t("health.ask_placeholder")} machineId={assistant?.machine_id} uploadDest={HEALTH_SPACE} onSend={start} autoFocus commands={[]} />
+          <Composer key={seed} draftKey="health-new" placeholder={t("health.ask_placeholder")} machineId={mid} uploadDest={HEALTH_SPACE} onSend={start} autoFocus commands={[]} />
           <input ref={picker} type="file" multiple hidden accept={REPORT_FILES} data-testid="health-report-input" onChange={(e) => void upload(Array.from(e.target.files ?? [])).finally(() => (e.target.value = ""))} />
-          <button type="button" disabled={uploading || !assistant} onClick={() => picker.current?.click()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-control bg-surface px-3 py-2.5 text-[13px] font-medium whitespace-nowrap text-ink shadow-btn transition-colors hover:bg-hover disabled:opacity-60">
+          <button type="button" disabled={uploading || !mid} onClick={() => picker.current?.click()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-control bg-surface px-3 py-2.5 text-[13px] font-medium whitespace-nowrap text-ink shadow-btn transition-colors hover:bg-hover disabled:opacity-60">
             <Icon name="upload" size={14} className="shrink-0" />
             {uploading ? t("health.report_uploading") : t("health.report_upload")}
           </button>

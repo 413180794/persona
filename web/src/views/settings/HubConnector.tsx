@@ -5,8 +5,9 @@
 // at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), "Add to knowledge base" / "Add to Inbox", sign-out and delete. GitHub adds
 // where its token comes from (a computer's gh, or the device flow), the scopes it lacks, and its inbox options.
 // Messages (iMessage) adds "Hand to Persona" and deleting what the hub kept (iOS MessagesConnectorView, /api/v1/imessage…).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
+import { otherManager, pinManagerAt, sameManager } from "../../lib/manager-choice";
 import {
   canSendStep, CI_MODES, deleteIMessageData, imessageAIFooter, imessageStatus, setIMessageAI, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
   deleteConnectorData, deletedLine, feedsFooter, fieldInput, githubAuth, githubInboxFooter, githubMachineLine, githubMachineWarns, githubOptions,
@@ -79,7 +80,10 @@ export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
 
 // ── one connector's page ─────────────────────────────────
 
-export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack: () => void; onChannel?: (id: string) => void }) {
+/** `manager`: whose connector (another manager's, opened from its extension's page, docs/managers.md "Clients"): the
+ *  merged list's copy of that manager, and every request of the page names it while it is open; none: the default's. */
+export function ConnectorDetail({ id, manager, onBack, onChannel }: { id: string; manager?: string; onBack: () => void; onChannel?: (id: string, manager?: string) => void }) {
+  useLayoutEffect(() => pinManagerAt(id === "imessage" ? [`/connectors/${encodeURIComponent(id)}`, "/imessage"] : [`/connectors/${encodeURIComponent(id)}`], otherManager(manager)), [id, manager]);
   const [c, setC] = useState<HubConnector | null>(null);
   const [failure, setFailure] = useState("");
   const [loading, setLoading] = useState(true);
@@ -101,7 +105,7 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
   useEffect(() => {
     const request = latestRequest<HubConnector[]>(
       (list) => {
-        const found = list.find((x) => x.id === id) ?? null;
+        const found = list.find((x) => x.id === id && sameManager(x.manager, manager)) ?? null;
         setC(found);
         setFailure(found ? "" : t("settings-hubconnector.not_on_hub"));
         setLoading(false);
@@ -118,7 +122,7 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
       request.dispose();
       if (reads.current === r) reads.current = null;
     };
-  }, [id, load]);
+  }, [id, manager, load]);
 
   // Switched on, its program takes a moment to start and say it signs in: asked again every second (15 s at most),
   // a tick skipped while the last read hasn't answered.
@@ -162,7 +166,7 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
         {c?.last_sync && <InfoRow k={t("settings-hubconnector.last_sync")} v={ago(c.last_sync)} />}
         {err && <p className={cx("border-t border-line px-4 py-2.5 text-[12px] break-words select-text", rateLimited ? "text-ink-2" : "text-red")}>{err}</p>}
       </section>
-      {onChannel && <ChannelLink id={id} onOpen={onChannel} />}
+      {onChannel && <ChannelLink id={id} manager={manager} onOpen={onChannel} />}
       {c && id !== "imessage" && !signsInHere(c) && !undescribed(c) && (
         <p className="-mt-4 mb-6 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("settings-hubconnector.hub_side_note")}</p>
       )}
@@ -267,28 +271,30 @@ function FeedsGroup({ c, a }: { c: HubConnector; a: Actions }) {
 
 /**
  * An extension's page (Settings › Extensions › …) for the connectors it contributes: each one's "Add to Inbox" switch, the hub's own
- * (the same as on the connector's page), and the way to the connector's page for the rest (persona#3178).
+ * (the same as on the connector's page), and the way to the connector's page for the rest (persona#3178). `manager`: whose
+ * extension it is (each manager has its own connectors, docs/managers.md "Clients"); none: the default's.
  */
-export function ExtensionConnectorInbox({ ids, onOpen }: { ids: string[]; onOpen?: (id: string) => void }) {
+export function ExtensionConnectorInbox({ ids, manager, onOpen }: { ids: string[]; manager?: string; onOpen?: (id: string, manager?: string) => void }) {
   const [list, setList] = useState<HubConnector[]>([]);
   const key = ids.join(",");
   const load = useCallback(async () => {
     try {
       const all = await listConnectors();
-      setList(key.split(",").flatMap((id) => all.find((c) => c.id === id) ?? []));
+      // the merged list has each manager's copy: this extension's manager's
+      setList(key.split(",").flatMap((id) => all.find((c) => c.id === id && sameManager(c.manager, manager)) ?? []));
     } catch {
       setList([]); // the connector page says what is wrong; this group just stays away
     }
-  }, [key]);
+  }, [key, manager]);
   useEffect(() => void load(), [load]);
   return (
     <>
-      {list.map((c) => (c.inbox === undefined ? null : <ExtensionConnectorGroup key={c.id} c={c} reload={load} onOpen={onOpen} />))}
+      {list.map((c) => (c.inbox === undefined ? null : <ExtensionConnectorGroup key={`${c.manager ?? ""}:${c.id}`} c={c} reload={load} onOpen={onOpen} />))}
     </>
   );
 }
 
-export function ExtensionConnectorGroup({ c, reload, onOpen }: { c: HubConnector; reload: () => Promise<void>; onOpen?: (id: string) => void }) {
+export function ExtensionConnectorGroup({ c, reload, onOpen }: { c: HubConnector; reload: () => Promise<void>; onOpen?: (id: string, manager?: string) => void }) {
   const a = useActions(c.id, reload);
   const label = t("settings-hubconnector.to_inbox");
   return (
@@ -296,9 +302,9 @@ export function ExtensionConnectorGroup({ c, reload, onOpen }: { c: HubConnector
       <div className="flex items-center gap-3 px-4 py-2.5">
         <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{label}</span>
         {a.busy === "inbox" && <Spinner />}
-        <Switch on={!!c.inbox} disabled={!!a.busy} label={label} onChange={(v) => void a.run("inbox", () => setConnector(c.id, { inbox: v }))} />
+        <Switch on={!!c.inbox} disabled={!!a.busy} label={label} onChange={(v) => void a.run("inbox", () => setConnector(c.id, { inbox: v }, c.manager))} />
       </div>
-      {onOpen && <Row label={t("settings-hubconnector.extension_open")} hint={t("settings-hubconnector.extension_open_hint")} onClick={() => onOpen(c.id)} />}
+      {onOpen && <Row label={t("settings-hubconnector.extension_open")} hint={t("settings-hubconnector.extension_open_hint")} onClick={() => (otherManager(c.manager) ? onOpen(c.id, otherManager(c.manager)) : onOpen(c.id))} />}
     </Group>
   );
 }
