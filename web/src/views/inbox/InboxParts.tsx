@@ -130,7 +130,7 @@ export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) 
 
 export function Tag({ children, urgent }: { children: ReactNode; urgent?: boolean }) {
   return (
-    <span className={cx("inline-flex h-[18px] shrink-0 items-center rounded-chip px-1.5 text-[10.5px] font-medium whitespace-nowrap", urgent ? "bg-red-tint text-red" : "bg-field text-ink-2")}>
+    <span className={cx("inline-flex h-[18px] shrink-0 items-center rounded-chip px-1.5 text-[10.5px] font-medium whitespace-nowrap", urgent ? "bg-field text-attention" : "bg-field text-ink-2")}>
       {children}
     </span>
   );

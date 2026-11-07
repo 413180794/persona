@@ -294,7 +294,7 @@ function MarketInstallDialog({ item, onClose, onDone }: { item: CatalogItem | nu
             {t("admin-parts.cancel")}
           </Button>
           {pv ? (
-            <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
+            <Button tone="primary" busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
               {pv.upgrade ? (pv.more_permissions ? t("admin-pages-extensionmarket.agree_upgrade") : t("admin-pages-extensionmarket.upgrade")) : t("admin-pages-extensionmarket.agree_install")}
             </Button>
           ) : (

@@ -1,5 +1,13 @@
 # Lessons: web UI and interactions
 
+## Neutralizing status colors without losing selection or code meaning (2026-11-07, #6183)
+
+- Pending permissions, plans and needs-you counters are routine work. Use the semantic attention role through marks, pills, rows, task docks, automatic groups and the phone shell; changing only the approval card leaves the sidebar and header red.
+- Legacy tint names are consumed across built-in pages and selected extension themes. Keep their fills neutral in both paths, retain a distinct neutral selected surface, and separate solid danger fill from readable dark-mode error text. Otherwise a theme switch restores colored banners or white labels become unreadable.
+- Status tints also used to color code comparisons. Give content diffs dedicated diff tokens before neutralizing status fills, so added/deleted lines still differ. Update color-specific regression expectations to the new semantics, not merely remove them.
+- Changing a message bubble from saturated to neutral also changes its children's contrast: replace outgoing quote / attachment white text and white focus indicators, not just the outer fill. Regress an own-message quote with file metadata and both schemes' text-on-bubble contrast.
+- Before/after browser captures need the same synthetic HTTP/WS fixtures, viewport, fonts and time. Open the actual app and exercise Allow / Approve; a screenshot of a standalone component or a real-data page is not interchangeable evidence. Compare computed neutral fills rather than inferring color from a legacy class name.
+
 ## A live card inside work the hub folded (2026-11-06, #3434)
 
 - **`fold_work` hides the step a card hangs on**: a chat opened (or reloaded) while a workflow runs gets the turn's work as one `fold` item, the Workflow call inside it, so "the run's card stays in the open" never sees the call. Pulling the step out of the client's groups is not enough: find the folds whose `[ts, fold.until]` holds the run's `started_at` exactly (the node sets it from the call's own line; a tolerance picks the fold that ended just before the call) and fetch them (`foldsHoldingCalls`, `SegmentView`). Remember what was asked per mounted exchange, not per page: `useTranscript` keeps no cache, so another chat and back (or a rewrite) brings the same fold id back, and a page-wide "asked" set left the card buried for good. Check with the mock hub's `fold_work` on, not only with live pushes, which are never folded.

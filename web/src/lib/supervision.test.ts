@@ -26,7 +26,7 @@ describe("supervision", () => {
     expect(reviewBadge({ ...base, supervision: sup({}) })?.label).toBe("督办中");
     expect(reviewBadge({ ...base, supervision: sup({ state: "pending_review" }) })).toEqual({ label: "待验收", tone: "accent" });
     expect(reviewBadge({ ...base, supervision: sup({ state: "rework", round: 2 }) })?.label).toBe("返工第 2 轮");
-    expect(reviewBadge({ ...base, supervision: sup({ state: "needs_user" }) })?.tone).toBe("red");
+    expect(reviewBadge({ ...base, supervision: sup({ state: "needs_user" }) })?.tone).toBe("orange");
     expect(reviewBadge({ ...base, done_at: "2026-11-05T09:00:00Z", supervision: sup({ state: "accepted" }) })?.label).toBe("已验收");
   });
 

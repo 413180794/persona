@@ -384,7 +384,7 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
             <Button tone="quiet" onClick={() => (setPreview(null), setError(""))}>
               {t("admin-pages-extensions.another")}
             </Button>
-            <Button tone={preview.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(preview, now)} onClick={() => void agree()}>
+            <Button tone="primary" busy={busy} disabled={previewBlocked(preview, now)} onClick={() => void agree()}>
               {upgrade ? (preview.more_permissions ? t("admin-pages-extensionmarket.agree_upgrade") : t("admin-pages-extensionmarket.upgrade")) : t("admin-pages-extensionmarket.agree_install")}
             </Button>
           </>
@@ -466,7 +466,7 @@ export function PreviewBody({ pv }: { pv: ExtensionPreview }) {
         </div>
       </div>
       {pv.upgrade && pv.more_permissions && (
-        <Notice tone="red" icon="alert" title={t("admin-pages-extensions.more_permissions_title")}>
+        <Notice tone="orange" icon="alert" title={t("admin-pages-extensions.more_permissions_title")}>
           {t("admin-pages-extensions.more_permissions_detail")}
         </Notice>
       )}

@@ -428,7 +428,7 @@ function steadyViews(prev: ReadonlyMap<string, TodoRowView>, next: ReadonlyMap<s
 
 // ── Project Section ──────────────────────────────────────────
 
-const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", bg_waiting: "text-status-waiting", done: "text-ink-3" };
+const TREE_TONE: Record<TreeState, string> = { needs_you: "text-attention", working: "text-orange", bg_waiting: "text-status-waiting", done: "text-ink-3" };
 
 /** One project's open todos under a folding title with its Needs you / Working / Done (#2526). */
 const TodoProjectSection = memo(function TodoProjectSection({
@@ -638,7 +638,7 @@ const TodoListItem = memo(function TodoListItem({
         {/* Most Urgent Agent Line */}
         {view.urgentLine && (
           <div className="mt-1 truncate text-[11.5px] text-ink-3">
-            {view.urgentLead && <span className="font-medium text-red">{view.urgentLead}</span>}
+            {view.urgentLead && <span className="font-medium text-attention">{view.urgentLead}</span>}
             {view.urgentText}
           </div>
         )}
@@ -980,7 +980,7 @@ function TodoDetail({
                     ) : now || (st === "needs_you" && askText(ix)) ? (
                       <div className="mt-1 line-clamp-2 text-[12.5px] text-ink-2">
                         {st === "needs_you" && (
-                          <span className="font-medium text-red">{t("todos.kicker_line", { kicker })}</span>
+                          <span className="font-medium text-attention">{t("todos.kicker_line", { kicker })}</span>
                         )}
                         {(st === "needs_you" && askText(ix)) || (now && (now.kind === "words" ? plainMarkdown(now.text) : now.text))}
                       </div>

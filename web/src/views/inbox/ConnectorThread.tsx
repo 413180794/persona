@@ -302,19 +302,19 @@ function Bubble({ id, m, head, group, lit, onQuote, onReply }: {
         {head && group && !mine && <span className="mb-0.5 px-1 text-[11.5px] font-medium text-ink-2">{m.sender.name}</span>}
         {pictures.map((x, i) => <Picture key={i} id={id} media={x} />)}
         {!bare && (
-          <div className={cx("rounded-[16px] px-3 py-1.5 text-[13px] leading-relaxed break-words", mine ? "bg-accent text-white" : "bg-surface text-ink shadow-card", pictures.length > 0 && "mt-1")}>
+          <div className={cx("rounded-[16px] px-3 py-1.5 text-[13px] leading-relaxed break-words", mine ? "bg-neutral-bubble text-ink" : "bg-surface text-ink shadow-card", pictures.length > 0 && "mt-1")}>
             {m.reply_to && (() => {
               const quote = `${m.reply_to.from ? t("inbox-connectorthread.quoted_sender", { name: m.reply_to.from }) : ""}${m.reply_to.text || t("inbox-connectorthread.a_message")}`;
-              const look = cx("mb-1 block w-full truncate border-l-2 pl-2 text-left text-[12px]", mine ? "border-white/60 text-white/80" : "border-line-strong text-ink-3");
+              const look = "mb-1 block w-full truncate border-l-2 border-line-strong pl-2 text-left text-[12px] text-ink-3";
               return onQuote ? (
                 <button type="button" onClick={onQuote} title={t("inbox-connectorthread.quote_jump", { text: quote })} aria-label={t("inbox-connectorthread.quote_jump", { text: quote })}
-                  className={cx(look, "rounded-r-[4px] hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2", mine ? "focus-visible:outline-white" : "focus-visible:outline-accent")}>
+                  className={cx(look, "rounded-r-[4px] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent")}>
                   {quote}
                 </button>
               ) : <p className={look}>{quote}</p>;
             })()}
             {others.map((x, i) => (
-              <p key={i} className={cx("flex items-center gap-1.5 text-[12.5px]", mine ? "text-white/90" : "text-ink-2")}>
+              <p key={i} className="flex items-center gap-1.5 text-[12.5px] text-ink-2">
                 <Icon name={x.kind === "voice" ? "play" : "clip"} size={12} className="shrink-0" />
                 <span className="truncate">{mediaLine(x)}</span>
               </p>
@@ -382,7 +382,7 @@ function Picture({ id, media }: { id: string; media: ThreadMedia }) {
 const STATE_TONE: Record<string, string> = {
   open: "bg-green-tint text-green",
   merged: "bg-accent-tint text-accent-ink",
-  closed: "bg-red-tint text-red",
+  closed: "bg-field text-ink-2",
   draft: "bg-field text-ink-2",
 };
 
@@ -446,10 +446,10 @@ function GitHubHeader({ chat, reference }: { chat: ThreadChat; reference: string
       {!!chat.labels?.length && (
         <div className="flex flex-wrap gap-1.5">
           {chat.labels.map((l) => {
-            // A label's color is the repository's own (data, not theme): a dot of it and a faint tint.
+            // A label's color is the repository's own (data, not theme): a small dot on a neutral fill.
             const c = labelColor(l.color);
             return (
-              <span key={l.name} className="inline-flex h-[20px] items-center gap-1 rounded-full px-2 text-[11px] font-medium whitespace-nowrap text-ink" style={{ background: c ? `color-mix(in srgb, ${c} 22%, transparent)` : "var(--field)" }}>
+              <span key={l.name} className="inline-flex h-[20px] items-center gap-1 rounded-full px-2 text-[11px] font-medium whitespace-nowrap text-ink" style={{ background: "var(--field)" }}>
                 <span className="size-1.5 rounded-full" style={{ background: c ? `color-mix(in srgb, ${c} 80%, var(--ink))` : "var(--ink-3)" }} />
                 {l.name}
               </span>
@@ -490,7 +490,7 @@ function Card({ id, who, at, title, tone, url, children }: {
   );
 }
 
-const REVIEW_TONE: Record<string, string> = { approved: "text-green", changes_requested: "text-red" };
+const REVIEW_TONE: Record<string, string> = { approved: "text-green", changes_requested: "text-attention" };
 
 function TimelineEntry({ id, m }: { id: string; m: ThreadMessage }) {
   if (m.event) {
@@ -532,7 +532,7 @@ function Hunk({ hunk }: { hunk: string }) {
   return (
     <pre className="-mx-3 -mt-2 mb-2 overflow-x-auto border-b border-line bg-inset py-1 font-mono text-[11.5px] leading-[1.55]">
       {hunk.split("\n").map((l, i) => (
-        <div key={i} className={cx("px-3 whitespace-pre", l.startsWith("+") ? "bg-green-tint text-ink" : l.startsWith("-") ? "bg-red-tint text-ink" : l.startsWith("@@") ? "text-ink-3" : "text-ink-2")}>
+        <div key={i} className={cx("px-3 whitespace-pre", l.startsWith("+") ? "bg-diff-add-bg text-diff-add-fg" : l.startsWith("-") ? "bg-diff-del-bg text-diff-del-fg" : l.startsWith("@@") ? "text-ink-3" : "text-ink-2")}>
           {l || " "}
         </div>
       ))}

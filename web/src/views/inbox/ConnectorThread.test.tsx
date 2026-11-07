@@ -62,6 +62,23 @@ afterEach(() => {
 });
 
 describe("连接器会话页", () => {
+  it("keeps own-message quotes, attachment details and focus readable on neutral bubbles", async () => {
+    pages.newest = {
+      chat: { id: "demo", name: "Demo group", kind: "group" },
+      messages: [msg("demo-own", { mine: true, text: "Demo reply", reply_to: { id: "demo-earlier", text: "Demo quote" }, media: [{ kind: "file", name: "demo.txt", size: 120 }] })],
+    } satisfies ThreadPage;
+    act(() => root.render(<ConnectorBody item={item} />));
+    await flush();
+    const row = host.querySelector('[data-mid="demo-own"]')!;
+    expect(row.querySelector(".bg-neutral-bubble")).not.toBeNull();
+    expect(row.querySelector("button.border-l-2")?.className).toContain("text-ink-3");
+    expect(row.querySelector("button.border-l-2")?.className).toContain("focus-visible:outline-accent");
+    expect(row.querySelector("button.border-l-2")?.className).toContain("hover:text-ink");
+    expect(row.querySelector("button.border-l-2")?.className).not.toContain("opacity-80");
+    expect(row.querySelector("p.text-ink-2")?.textContent).toContain("demo.txt");
+    expect(row.innerHTML).not.toContain("text-white");
+    expect(row.innerHTML).not.toContain("outline-white");
+  });
   it("says the group's size over the messages", async () => {
     pages.newest = { chat: { id: "g", name: "示例群", kind: "group", members: 128 }, messages: [msg("1")] } satisfies ThreadPage;
     act(() => root.render(<ConnectorBody item={item} />));

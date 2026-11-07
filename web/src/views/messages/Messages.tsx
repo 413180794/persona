@@ -295,7 +295,7 @@ function ChatRow({ c, selected, display }: { c: LarkConversation; selected: bool
         </span>
         <span className="mt-0.5 flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
-            {c.at_me && <span className="mr-1 font-medium text-red">{c.at_all ? t("messages-messages.at_all") : t("messages-messages.at_me")}</span>}
+            {c.at_me && <span className="mr-1 font-medium text-attention">{c.at_all ? t("messages-messages.at_all") : t("messages-messages.at_me")}</span>}
             {preview}
           </span>
           {b.count ? <Count n={b.count} accent={!b.muted} /> : b.dot ? <span className={cx("size-2 shrink-0 rounded-full", b.muted ? "bg-ink-3" : "bg-accent")} /> : null}

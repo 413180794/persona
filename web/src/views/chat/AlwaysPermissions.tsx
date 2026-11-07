@@ -54,7 +54,7 @@ export function AlwaysPermissions({ session }: { session: string }) {
     <section aria-label={t("chat-sessiondialogs.always_title")}>
       <h3 className="mb-1 text-[11.5px] font-medium text-ink-3">{t("chat-sessiondialogs.always_title")}</h3>
       <p className="mb-2 text-[12px] leading-relaxed text-ink-3">{t("chat-sessiondialogs.always_hint")}</p>
-      {restart && <p role="status" className="mb-2 text-[12px] text-red">{t("chat-sessiondialogs.always_restart")}</p>}
+      {restart && <p role="status" className="mb-2 text-[12px] text-attention">{t("chat-sessiondialogs.always_restart")}</p>}
       {error && <p role="alert" className="mb-2 text-[12px] text-red">{error}</p>}
       {!grants && !error && <Loading />}
       {!grants && error && <Button tone="secondary" onClick={() => setRevision((n) => n + 1)}>{t("chat-sessiondialogs.always_retry")}</Button>}

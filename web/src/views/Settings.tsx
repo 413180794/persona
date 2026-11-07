@@ -668,7 +668,7 @@ export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { nam
             {(l.machines ?? []).map((id) => (
               <Pill key={id}>{mname(id)}</Pill>
             ))}
-            {l.hidden && <Pill tone="red">{t("settings.hidden")}</Pill>}
+            {l.hidden && <Pill>{t("settings.hidden")}</Pill>}
           </div>
 
           {/* how much is left comes before trying it, as in the app */}

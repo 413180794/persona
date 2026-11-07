@@ -141,9 +141,9 @@ export function VideoPart({ p }: { p: LarkPart }) {
 // ── card buttons ─────────────────────────────────────────
 
 const BUTTON_TONE: Record<string, string> = {
-  primary: "bg-accent text-white enabled:hover:brightness-105",
-  primary_filled: "bg-accent text-white enabled:hover:brightness-105",
-  danger_filled: "bg-red text-white enabled:hover:brightness-105",
+  primary: "bg-accent-ink text-surface enabled:hover:brightness-105",
+  primary_filled: "bg-accent-ink text-surface enabled:hover:brightness-105",
+  danger_filled: "bg-danger-fill text-white enabled:hover:brightness-105",
   danger: "bg-surface text-red shadow-btn enabled:hover:bg-hover",
   danger_text: "text-red enabled:hover:bg-red-tint",
   text: "text-accent-ink enabled:hover:bg-accent-tint",

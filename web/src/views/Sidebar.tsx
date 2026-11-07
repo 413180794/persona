@@ -311,8 +311,8 @@ export function useNavPages() {
   const online = machines.filter((m) => m.online).length;
   const main = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
   const page: Record<(typeof NAV_PAGES)[number], NavPage | false> = {
-    home: { k: "home", to: { name: "home" }, icon: "home", label: t("sidebar.nav_home"), short: t("sidebar.nav_home_short"), badge: counts.badge || undefined, badgeTone: "red" },
-    inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: t("sidebar.nav_inbox"), short: t("sidebar.nav_inbox_short"), badge: inbox || undefined, badgeTone: "red", title: inbox ? t("sidebar.inbox_badge_title", { count: inbox }) : undefined },
+    home: { k: "home", to: { name: "home" }, icon: "home", label: t("sidebar.nav_home"), short: t("sidebar.nav_home_short"), badge: counts.badge || undefined, badgeTone: "attention" },
+    inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: t("sidebar.nav_inbox"), short: t("sidebar.nav_inbox_short"), badge: inbox || undefined, badgeTone: "attention", title: inbox ? t("sidebar.inbox_badge_title", { count: inbox }) : undefined },
     health: { k: "health", to: { name: "health" }, icon: "heart", label: t("sidebar.nav_health"), short: t("sidebar.nav_health_short") },
     messages: larkHome && { k: "messages", to: { name: "messages" }, icon: "chat", label: t("sidebar.nav_messages") },
     "workspace-board": boardOn && { k: "workspace-board", to: { name: "workspace-board" }, icon: "layers", label: t("sidebar.nav_board"), short: t("sidebar.nav_board_short") },
@@ -1058,7 +1058,7 @@ function AutoConversations({ conversations, main, shown, activeKey, holds, reg, 
           {groups.map((g) => {
             const k = `auto:${g.origin}`;
             return (
-              <NavRow key={g.origin} k={k} reg={reg} hover={hover} active={activeKey === k || openGroup === g.origin} to={{ name: "history", origin: g.origin }} go={go} icon={ORIGIN_ICON[g.origin]} label={originLabel(g.origin)} hint={String(g.count)} badge={g.needsYou || undefined} badgeTone="red" dot={!g.needsYou && g.working > 0 ? "working" : undefined} />
+              <NavRow key={g.origin} k={k} reg={reg} hover={hover} active={activeKey === k || openGroup === g.origin} to={{ name: "history", origin: g.origin }} go={go} icon={ORIGIN_ICON[g.origin]} label={originLabel(g.origin)} hint={String(g.count)} badge={g.needsYou || undefined} badgeTone="attention" dot={!g.needsYou && g.working > 0 ? "working" : undefined} />
             );
           })}
         </div>
@@ -1134,7 +1134,7 @@ function AgentSection({ group, machines, byTodo, showHost, reg, hover, activeKey
 
 type TreeRowProps = { machines: Machine[]; showHost?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void };
 
-const TREE_TONE: Record<TreeState, string> = { needs_you: "text-red", working: "text-orange", bg_waiting: "text-status-waiting", done: "text-ink-3" };
+const TREE_TONE: Record<TreeState, string> = { needs_you: "text-attention", working: "text-orange", bg_waiting: "text-status-waiting", done: "text-ink-3" };
 
 /** "Needs you" / "Working" / "Done" at the end of a tree node's line. */
 function TreeStateText({ state }: { state: TreeState }) {
@@ -1244,7 +1244,7 @@ function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRo
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {m.needs > 0 && !(folded && online) ? (
-          <span title={stateCount("needs_you", m.needs)} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
+          <span title={stateCount("needs_you", m.needs)} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-field px-1 text-[10.5px] font-semibold text-attention tabular-nums">
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
         ) : !online ? (
@@ -1419,7 +1419,7 @@ function MachineSection({ m, shells, ...p }: { m: HerdrMachine; shells?: TermSpa
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {m.needs > 0 && !(folded && online) ? (
-          <span title={stateCount("needs_you", m.needs)} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
+          <span title={stateCount("needs_you", m.needs)} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-field px-1 text-[10.5px] font-semibold text-attention tabular-nums">
             {m.needs}<span className="sr-only"> {t("sidebar.needs_you_suffix", { count: m.needs })}</span>
           </span>
         ) : !online ? (
@@ -1793,7 +1793,7 @@ export function PersonaRow({ reg, hover, active, go, main, chord, onMenu }: { re
       )}
       {chord && <span aria-hidden data-persona-chord className={cx("hidden sm:inline-flex [@media(hover:none)]:hidden", aside)}><Kbd>{formatChord(chord)}</Kbd></span>}
       {pending > 0 ? (
-        <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums", aside)}>{pending}</span>
+        <span className={cx("flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-field px-1 text-[10.5px] font-semibold text-attention tabular-nums", aside)}>{pending}</span>
       ) : st === "working" || st === "needs_you" || st === "unread" ? (
         <span className={cx("flex", aside)}><StatusMark state={st} /></span>
       ) : null}
@@ -1849,7 +1849,7 @@ function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?
   return <button type="button" onClick={onClick} title={label} aria-label={label} className={cls}>{icon}</button>;
 }
 
-const BADGE_CLASS = { red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
+const BADGE_CLASS = { attention: "bg-field text-attention", red: "bg-red-tint text-red", orange: "bg-orange-tint text-orange", green: "bg-green-tint text-green", accent: "bg-accent-tint text-accent-ink" } as const;
 
 type NavRowProps = { onMenu?: (at: MenuAt, el: HTMLElement, button: boolean) => void; menuLabel?: string; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string; /** A state shown as a dot before the hint ("Automatic"'s rows: some run). */ dot?: AgentState };
 
@@ -1939,7 +1939,7 @@ export function SourceTag({ s, className }: { s: Session; className?: string }) 
 function SecondLine({ line, draft }: { line: { lead?: string; text: string; tone?: "needs" | "reply" }; draft: boolean }) {
   return (
     <span data-row-line data-draft={draft ? "" : undefined} className="truncate text-[11.5px] leading-4 text-ink-3">
-      {line.lead && <span className={cx("font-medium", line.tone === "reply" ? "text-green" : "text-red")}>{line.lead}</span>}
+      {line.lead && <span className={cx("font-medium", line.tone === "reply" ? "text-green" : "text-attention")}>{line.lead}</span>}
       {line.text}
     </span>
   );
@@ -2053,7 +2053,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
           )}
           {detail.length > 0 && <span className="flex h-4 min-w-0 flex-wrap gap-x-1 overflow-hidden whitespace-nowrap text-[11px] leading-4 text-ink-3">
             {detail.map((d, i) => (
-              <span key={i} title={d.title} className={cx("flex shrink-0 items-center gap-1 tabular-nums", d.danger ? "font-medium text-red" : d.warn && "font-medium text-orange")}>
+              <span key={i} title={d.title} className={cx("flex shrink-0 items-center gap-1 tabular-nums", d.danger ? "font-medium text-orange" : d.warn && "font-medium text-orange")}>
                 {i > 0 && <span aria-hidden="true">·</span>}
                 {d.text}
               </span>
@@ -2081,7 +2081,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       {/* the row's ⋯ takes the end on hover: what is there steps aside instead of showing half under it */}
       {tail && <span className={cx("max-w-[72px] shrink-0 truncate text-[11px] text-ink-3", aside)}>{tail}</span>}
       {!tail && (st === "offline" || !showState) && <span className={cx("shrink-0 text-[11px] text-ink-3", aside)}>{ago(s.updated_at)}</span>}
-      {(s.pending_interactions ?? 0) > 0 && <span className={cx("flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums", aside)}>{s.pending_interactions}</span>}
+      {(s.pending_interactions ?? 0) > 0 && <span className={cx("flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-field px-1 text-[10px] font-semibold text-attention tabular-nums", aside)}>{s.pending_interactions}</span>}
     </a>
   );
   if (!onMenu) return link;
@@ -2348,7 +2348,7 @@ export const AgentRow = memo(function AgentRow({ s, reg, hover, active, go, pinn
 // ── the rail: the sidebar folded to its icons on a wide screen (#2524) ──
 
 /** The badge of a folded page, as a dot on its icon. */
-const DOT_CLASS = { red: "bg-red", orange: "bg-orange", green: "bg-green", accent: "bg-accent" } as const;
+const DOT_CLASS = { attention: "bg-attention", red: "bg-red", orange: "bg-orange", green: "bg-green", accent: "bg-accent" } as const;
 
 /** The button that folds the sidebar to the rail and opens it again (⌘⌥B by default; the hint follows a rebinding). */
 export function CollapseButton({ collapsed, chord }: { collapsed: boolean; chord?: string }) {
@@ -2428,7 +2428,7 @@ export function SidebarRail({ route, onSearch, onNewAgent }: { route: Route; onS
           { name: "persona" },
           pending > 0 ? `Persona ${pending}` : "Persona",
           <AppMark size={20} radius={5} className="shadow-hairline" />,
-          pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-red ring-2 ring-canvas" />
+          pending > 0 ? <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-attention ring-2 ring-canvas" />
             : st === "working" || st === "needs_you" || st === "unread" ? <span aria-hidden className="absolute top-0.5 right-0.5 flex rounded-full ring-2 ring-canvas"><StatusMark state={st} /></span> : null,
           bindings.persona ? `${t("sidebar.persona_main")} (${formatChord(bindings.persona)})` : t("sidebar.persona_main"),
         )}

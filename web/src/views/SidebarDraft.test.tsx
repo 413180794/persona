@@ -96,7 +96,7 @@ describe("a sidebar row with an unsent draft (#5568)", () => {
 
     await show("s2");
     expect(draftOf("s1")).toBe("草稿：先把网络层的测试 跑一遍");
-    expect(row("s1").querySelector("[data-draft] .text-red")?.textContent).toBe("草稿：");
+    expect(row("s1").querySelector("[data-draft] .text-attention")?.textContent).toBe("草稿：");
     expect(draftOf("s2")).toBeUndefined();
   });
 

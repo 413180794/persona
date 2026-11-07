@@ -11,10 +11,10 @@ import { useClamped } from "../../ui/use-clamped";
 // on its card, the checklist on its page, a line in the conversation for each review.
 
 const TONE: Record<ReviewTone, string> = {
-  accent: "bg-accent/12 text-accent",
-  red: "bg-red/12 text-red",
-  orange: "bg-orange/14 text-orange",
-  green: "bg-green/12 text-green",
+  accent: "bg-field text-accent-ink",
+  red: "bg-field text-red",
+  orange: "bg-field text-orange",
+  green: "bg-field text-green",
   muted: "bg-field text-ink-2",
 };
 

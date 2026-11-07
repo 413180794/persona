@@ -13,7 +13,6 @@ const ROLES = { accent: "accent", positive: "green", caution: "orange", danger: 
 const BACKGROUNDS = ["page", "canvas", "surface", "inset", "hover", "hover-2", "field"];
 export const MIN_ROLE_CONTRAST = 3;
 export const MIN_TEXT_CONTRAST = 4.5;
-const TINT = { light: 10, dark: 16 };
 
 /** A color token's value in styles.css's first :root / .dark block ("" when it is not a hex there; page-tokens.ts). */
 export function pageToken(role: string, scheme: "light" | "dark"): string {
@@ -63,7 +62,8 @@ export function extensionThemeTokens(t: ExtensionTheme, scheme: "light" | "dark"
   for (const [role, color] of Object.entries(t[scheme])) {
     const token = ROLES[role as keyof typeof ROLES];
     out[`--${token}`] = color;
-    out[`--${token}-tint`] = `color-mix(in srgb, ${color} ${TINT[scheme]}%, var(--surface))`;
+    // Legacy tint names remain compatible, but selected themes cannot recolor whole surfaces.
+    out[`--${token}-tint`] = role === "accent" ? "var(--hover-2)" : "var(--inset)";
     if (role === "accent") out["--accent-ink"] = readableAccent(color, scheme);
     if (role === "ai") out["--thinking-ink"] = color;
   }

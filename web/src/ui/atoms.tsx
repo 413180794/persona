@@ -76,9 +76,9 @@ export function Loading({ label = t("common.loading") }: { label?: string }) {
 /** A state as a word in a pill; `awaiting`: seen and awaiting the user's reply, "Awaiting your reply" in the unread tint (#5096). */
 export function StatePill({ state, awaiting = false, waiting = false }: { state: AgentState; awaiting?: boolean; /** working only on background commands that wait (#6045) */ waiting?: boolean }) {
   const tone: Record<AgentState, string> = {
-    needs_you: "bg-red-tint text-red",
-    working: "bg-orange-tint text-orange",
-    unread: "bg-green-tint text-green",
+    needs_you: "bg-field text-attention",
+    working: "bg-field text-orange",
+    unread: "bg-field text-green",
     idle: "bg-field text-ink-2",
     offline: "bg-field text-ink-3",
     unknown: "bg-field text-ink-3",
@@ -162,10 +162,10 @@ export function Button({
     // an <a> is never :enabled, so the link has its own hover / press
     const links: Record<BtnTone, string> = {
       primary: "bg-ink text-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] hover:opacity-90",
-      accent: "bg-accent text-white hover:brightness-105",
+      accent: "bg-accent-ink text-surface hover:brightness-105",
       secondary: "bg-surface text-ink shadow-btn hover:bg-hover",
       quiet: "text-ink-2 hover:bg-hover hover:text-ink",
-      danger: "bg-red text-white hover:brightness-105",
+      danger: "bg-danger-fill text-white hover:brightness-105",
     };
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" title={title} onClick={onClick} className={cx(base, "active:scale-[0.96]", links[tone], className)}>
@@ -176,11 +176,11 @@ export function Button({
   }
   const tones: Record<BtnTone, string> = {
     primary: "bg-ink text-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] enabled:hover:opacity-90",
-    accent: "bg-accent text-white enabled:hover:brightness-105",
+    accent: "bg-accent-ink text-surface enabled:hover:brightness-105",
     // dark: at 45% the ring and the light label still read as a button you can press, so a disabled one drops both
     secondary: "bg-surface text-ink shadow-btn enabled:hover:bg-hover dark:disabled:bg-transparent dark:disabled:text-ink-3 dark:disabled:shadow-hairline",
     quiet: "text-ink-2 enabled:hover:bg-hover enabled:hover:text-ink",
-    danger: "bg-red text-white enabled:hover:brightness-105",
+    danger: "bg-danger-fill text-white enabled:hover:brightness-105",
   };
   return (
     <button

@@ -232,7 +232,7 @@ function DocCompare({ mid, sides, ext }: { mid: string; sides: [Side, Side]; ext
                     key={j}
                     className={cx(
                       "flex gap-2 px-4 py-[3px] text-[13px] leading-[1.55] whitespace-pre-wrap [overflow-wrap:anywhere]",
-                      o.kind === "add" ? "bg-green-tint text-ink" : o.kind === "del" ? "bg-red-tint text-ink line-through decoration-red/40" : "text-ink-2",
+                      o.kind === "add" ? "bg-diff-add-bg text-ink" : o.kind === "del" ? "bg-diff-del-bg text-ink line-through decoration-red/40" : "text-ink-2",
                     )}
                   >
                     <span className={cx("w-3 shrink-0 font-mono select-none", o.kind === "add" ? "text-green" : o.kind === "del" ? "text-red" : "text-ink-3")}>{o.kind === "add" ? "+" : o.kind === "del" ? "−" : ""}</span>

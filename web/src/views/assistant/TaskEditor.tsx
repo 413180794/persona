@@ -433,13 +433,13 @@ export function RunLine({ run, now, onOpen, showTitle }: { run: Run; now: Date; 
 export function RunMark({ status }: { status: string }) {
   if (status === "ok")
     return (
-      <span aria-label={t("assistant-taskeditor.status_ok")} role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-green text-white">
+      <span aria-label={t("assistant-taskeditor.status_ok")} role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-field text-green">
         <Icon name="check" size={11} stroke={3} />
       </span>
     );
   if (status === "skipped") return <span aria-label={t("assistant-taskeditor.status_skipped")} role="img" className="size-[18px] shrink-0 rounded-full border-[1.5px] border-line-strong" />;
   return (
-    <span aria-label={t("assistant-taskeditor.status_failed")} role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-red text-white">
+    <span aria-label={t("assistant-taskeditor.status_failed")} role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-field text-red">
       <Icon name="x" size={11} stroke={3} />
     </span>
   );

@@ -257,7 +257,7 @@ function Group({ title, count, children, right, hint, grid }: { title: string; c
 }
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-red-tint px-1.5 text-[11px] font-medium whitespace-nowrap text-red">{children}</span>;
+  return <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-field px-1.5 text-[11px] font-medium whitespace-nowrap text-attention">{children}</span>;
 }
 
 /** When a row last changed or how long it has worked: quiet text, its badge already says the state. */
@@ -364,7 +364,7 @@ function TaskRow({ i, state, done, to, title, tags, detail, pill, entry, actions
       style={actions ? undefined : enter}
     >
       {done ? (
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={t("chat-interactions.answered")}>
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-green" aria-label={t("chat-interactions.answered")}>
           <Icon name="check" size={11} stroke={3.2} />
         </span>
       ) : (
@@ -416,14 +416,14 @@ function Badge({ state }: { state: AgentState }) {
   }
   if (state === "unread")
     return (
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={STATE_LABEL[state]}>
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-green" aria-label={STATE_LABEL[state]}>
         <Icon name="check" size={11} stroke={3.2} />
       </span>
     );
   if (state === "needs_you")
     return (
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-red text-[11px] font-bold text-white" aria-label={STATE_LABEL[state]}>
-        !
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-attention" aria-label={STATE_LABEL[state]}>
+        <Icon name="hand" size={13} stroke={2.2} />
       </span>
     );
   return (

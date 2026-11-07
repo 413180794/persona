@@ -11,6 +11,7 @@ Current docs, code comments and lessons cite them to explain "why it is done thi
 
 | File | Contents |
 | --- | --- |
+| `web-visual-noise-6183.md` | 2026-11-07 web approval/status color inventory, neutral semantic surfaces, before/after browser screenshot method, local verification and no-deployment boundary (#6183) |
 | `persona-only-277-acceptance.md` | Persona-only source naming, versioned local verification, row-lock comparison, preserved application identities and approval-gated cutover limits (#277) |
 | `persona-native-6152-acceptance.md` | 2026-11-07 Apple 原生改名验收：全平台编译、单测数量、离线签名、递增构建号升级、phone/watch 配对与未迁移的偏好和 Shortcut（#6152） |
 | `ios-perf-5730-final.md` | 2026-11-07 iOS 性能收尾：逐页 cadence/最差 hitch/最长帧、六批已合并修复、67 项主要场景测试清单、未达标与未测边界（#5730） |

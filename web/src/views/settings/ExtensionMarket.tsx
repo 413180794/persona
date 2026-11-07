@@ -511,7 +511,7 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
           <Button tone="quiet" onClick={onClose} disabled={busy}>
             {t("common.cancel")}
           </Button>
-          <Button tone={pv.more_permissions ? "danger" : "primary"} busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
+          <Button tone="primary" busy={busy} disabled={previewBlocked(pv, now)} onClick={() => void agree()}>
             {agreeLabel(pv)}
           </Button>
         </>

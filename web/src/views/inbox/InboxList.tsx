@@ -434,7 +434,7 @@ function MutesDialog({ onClose }: { onClose: () => void }) {
 const IX_GLYPH: Record<Interaction["kind"], GlyphName | "list" | "terminal"> = { question: "question", plan: "list", permission: "hand", screen: "terminal", elicitation: "sheet" };
 
 /**
- * An agent waiting on you: which agent, what it asks, then what it waits for (red) and where. Memoized, and it reads
+ * An agent waiting on you: which agent, what it asks, then what it waits for (amber) and where. Memoized, and it reads
  * from the store only its route and its place, whose fields are strings: a sessions or machines push renders it again
  * only when one of those changed.
  */
@@ -446,7 +446,7 @@ const AgentRow = memo(function AgentRow({ ix }: { ix: Interaction }) {
   const glyph = IX_GLYPH[ix.kind];
   return (
     <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="flex gap-3 rounded-[14px] bg-surface p-3 shadow-card transition-colors duration-150 hover:bg-inset">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-red-tint text-red">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-field text-attention">
         {glyph === "list" || glyph === "terminal" ? <Icon name={glyph} size={18} stroke={2} /> : <Glyph name={glyph} size={18} stroke={2} />}
       </span>
       <span className="min-w-0 flex-1">
@@ -459,13 +459,13 @@ const AgentRow = memo(function AgentRow({ ix }: { ix: Interaction }) {
           <>
             <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-[1.5] text-ink">{ask}</span>
             <span className="mt-0.5 block truncate text-[11.5px]">
-              <span className="font-medium text-red">{interactionTitle(ix)}</span>
+              <span className="font-medium text-attention">{interactionTitle(ix)}</span>
               <span className="text-ink-3"> · {where}</span>
             </span>
           </>
         ) : (
           <>
-            <span className="mt-0.5 block truncate text-[12.5px] font-medium text-red">{interactionTitle(ix)}</span>
+            <span className="mt-0.5 block truncate text-[12.5px] font-medium text-attention">{interactionTitle(ix)}</span>
             <span className="mt-0.5 block truncate text-[11.5px] text-ink-3">{where}</span>
           </>
         )}

@@ -16,6 +16,13 @@ describe("extension palette tokens", () => {
     expect(tokens).not.toHaveProperty("--page");
     expect(tokens).not.toHaveProperty("--surface");
   });
+  it.each(["light", "dark"] as const)("keeps %s extension status fills neutral and pending-work colors untouched", (scheme) => {
+    const tokens = extensionThemeTokens(forest, scheme);
+    expect(tokens["--accent-tint"]).toBe("var(--hover-2)");
+    expect(tokens["--green-tint"]).toBe("var(--inset)");
+    expect(tokens).not.toHaveProperty("--attention");
+    expect(tokens).not.toHaveProperty("--status-needs");
+  });
   it("rejects hub problems, invalid/unknown roles and insufficient contrast without generating overrides", () => {
     const invalid: ExtensionTheme[] = [{ ...forest, problems: ["unreadable"] }, { ...forest, light: { accent: "#FFFFFF" } }, { ...forest, dark: { accent: "#000000" } }, { ...forest, light: { accent: "red" } }, { ...forest, light: { accent: "#2E7D32", background: "#000000" } }];
     for (const t of invalid) {

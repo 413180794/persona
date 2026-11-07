@@ -154,7 +154,7 @@ function ShareCard({ meta, title, group }: { meta: Meta; title: string; group: b
 
 const TONE: Record<SummaryTone, { bar: string; glyph: string }> = {
   accent: { bar: "bg-accent", glyph: "bg-accent-tint text-accent-ink" },
-  red: { bar: "bg-red", glyph: "bg-red-tint text-red" },
+  red: { bar: "bg-accent", glyph: "bg-accent-tint text-accent-ink" },
   orange: { bar: "bg-orange", glyph: "bg-orange-tint text-orange" },
   green: { bar: "bg-green", glyph: "bg-green-tint text-green" },
 };

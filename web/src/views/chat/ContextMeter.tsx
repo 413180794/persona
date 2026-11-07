@@ -11,8 +11,8 @@ import { contextHeaderLabel, contextHint, contextLabel, contextNotes, contextSho
 import { cx, EASE, Menu, useMenu } from "../../ui/atoms";
 import type { Session } from "../../lib/types";
 
-const TIER_BAR: Record<ContextTier, string> = { ok: "bg-accent", warn: "bg-orange", danger: "bg-red" };
-const TIER_TEXT: Record<ContextTier, string> = { ok: "", warn: "font-medium text-orange", danger: "font-medium text-red" };
+const TIER_BAR: Record<ContextTier, string> = { ok: "bg-accent", warn: "bg-orange", danger: "bg-orange" };
+const TIER_TEXT: Record<ContextTier, string> = { ok: "", warn: "font-medium text-orange", danger: "font-medium text-orange" };
 
 export function ContextMeter({ session, compact = false }: { session: Session; compact?: boolean }) {
   const asUsed = useContextAsUsed();

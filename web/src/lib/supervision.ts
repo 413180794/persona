@@ -62,7 +62,7 @@ export function reviewBadge(todo: Pick<Todo, "done_at"> & { supervision?: Superv
     case "rework":
       return { label: t("assistant-tasks.review_rework", { round: sup.round ?? 1 }), tone: "orange" };
     case "needs_user":
-      return { label: t("assistant-tasks.review_needs_user"), tone: "red" };
+      return { label: t("assistant-tasks.review_needs_user"), tone: "orange" };
     case "accepted":
       return { label: t("assistant-tasks.review_accepted"), tone: "green" };
     case "cancelled":

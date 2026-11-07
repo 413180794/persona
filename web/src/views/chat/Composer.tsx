@@ -801,7 +801,7 @@ export function Composer({
               aria-label={t("chat-composer.interrupt")}
               title={t("chat-composer.interrupt_hint")}
               onClick={onStop}
-              className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-red text-white transition-transform duration-150 active:scale-[0.94]"
+              className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-danger-fill text-white transition-transform duration-150 active:scale-[0.94]"
               style={{ animation: `pop-in 200ms ${EASE} both` }}
             >
               <Icon name="stop" size={12} />

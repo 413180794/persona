@@ -55,15 +55,15 @@ describe("Header", () => {
   });
 
   it("marks ⋯ on a phone when a sibling needs you, as the 同空间 button does wider", () => {
-    expect(header()).toMatch(/aria-label="更多"[^]*?<span aria-hidden="true" class="[^"]*bg-red[^"]*sm:hidden"/);
+    expect(header()).toMatch(/aria-label="更多"[^]*?<span aria-hidden="true" class="[^"]*bg-attention[^"]*sm:hidden"/);
     const calm = { ...sibling, state: "idle" } as Session;
     const quiet = { ...session, state: "idle" } as Session;
-    expect(header({ session: quiet, siblings: [quiet, calm] })).not.toMatch(/bg-red[^"]*sm:hidden/);
+    expect(header({ session: quiet, siblings: [quiet, calm] })).not.toMatch(/bg-attention[^"]*sm:hidden/);
   });
 });
 
 describe("spaceAgentsItem, ⋯'s 同空间 row on a phone (#3576)", () => {
-  it("counts the others, opens the space's menu and is red when one needs you", () => {
+  it("counts the others, opens the space's menu and marks attention when one needs you", () => {
     let opened = 0;
     const item = spaceAgentsItem([sibling], () => opened++);
     expect(item.label).toBe("同空间 1");
@@ -97,7 +97,7 @@ describe("Header, the 终端 | 对话 switch (#2419)", () => {
     expect(chat).toMatch(/<span class="relative flex shrink-0 sm:hidden"><button[^>]*aria-label="终端"/);
     const term = header({ view: "term", onView: () => {} });
     expect(term).toMatch(/<span class="relative flex shrink-0 sm:hidden"><button[^>]*aria-label="对话"/);
-    expect(header({ view: "term", onView: () => {}, viewDot: true })).toMatch(/aria-label="对话"[^]*?<\/button><span aria-hidden="true" class="pointer-events-none absolute[^"]*bg-red"/);
+    expect(header({ view: "term", onView: () => {}, viewDot: true })).toMatch(/aria-label="对话"[^]*?<\/button><span aria-hidden="true" class="pointer-events-none absolute[^"]*bg-attention"/);
   });
   it("marks 对话 when the terminal shows and something wants an answer", () => {
     expect(header({ view: "term", onView: () => {}, viewDot: true })).toMatch(/对话<span aria-hidden="true" class="absolute/);
@@ -112,6 +112,18 @@ const cards = (o: { narrow: boolean; keyboard?: boolean; interactions?: Interact
   renderToStaticMarkup(<PendingCards interactions={o.interactions ?? three} answered={o.answered ?? []} offerNext={o.offer ? { mid: "m", sid: "s" } : undefined} narrow={o.narrow} keyboard={Boolean(o.keyboard)} onDismissKeyboard={() => {}} />);
 
 describe("PendingCards", () => {
+  it("uses attention marks and neutral surfaces for questions, plans and permissions", () => {
+    const html = cards({ narrow: false });
+    expect(html).toContain("text-attention");
+    expect(html).toContain("bg-surface");
+    expect(html).not.toMatch(/\b(?:bg-red|bg-red-tint|text-red)\b/);
+    expect(html).not.toContain("bg-danger-fill");
+  });
+  it("keeps the attention mark when the pending cards fold", () => {
+    const html = cards({ narrow: true, keyboard: true });
+    expect(html).toContain("bg-attention");
+    expect(html).not.toContain("bg-red");
+  });
   it("says what an answered card was about when its answer is one word (允许 / 批准)", () => {
     const perm = ix("p", "permission", { tool_input: { command: "swift test" } });
     const html = cards({ narrow: false, interactions: [], answered: [{ ix: perm, resolution: { allow: true } }] });

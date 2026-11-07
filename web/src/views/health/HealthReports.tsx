@@ -42,7 +42,7 @@ export function HealthReports({ version }: { version: number }) {
           <div className="divide-y divide-line">
             {list.map((r) => (
               <button key={r.name} type="button" onClick={() => setOpen(r)} className="flex w-full min-w-0 items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-tint text-red"><Icon name="file" size={13} /></span>
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-inset text-ink-2"><Icon name="file" size={13} /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-medium text-ink">{r.title}</span>
                   <span className="block truncate text-[12px] text-ink-3">{r.record_path ? t("health.report_recorded") : t("health.report_unrecorded")} · {bytes(r.size)}</span>

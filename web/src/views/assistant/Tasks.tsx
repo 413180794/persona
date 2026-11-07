@@ -422,7 +422,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
         {status !== "done" && status !== "failed" && <span className="shrink-0 text-[12px] text-ink-3">{since(todo.created_at)}</span>}
       </div>
       <div className="truncate text-[12px] text-ink-2">{where}</div>
-      <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", (status === "needs_you" || status === "failed" || cut) && "text-red")}>
+      <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", status === "needs_you" ? "text-attention" : (status === "failed" || cut) && "text-red")}>
         <Icon name={status === "needs_you" ? "hand" : status === "failed" || cut ? "info" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="line-clamp-2">
@@ -843,7 +843,7 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
   if (body.done?.length)
     rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? t("assistant-tasks.today_done_single", { title: body.done[0].title }) : t("assistant-tasks.today_done_n", { count: body.done.length }), detail: body.done.length > 1 ? body.done.map((d) => d.title).join(t("assistant-tasks.list_separator")) : undefined, action: t("assistant-tasks.look"), run: () => openTask(body.done![0].id) });
   if (body.waiting?.length)
-    rows.push({ icon: "hand", tint: "bg-red-tint text-red", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), lines: waitingText ? waitingText.split("\n") : undefined, action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
+    rows.push({ icon: "hand", tint: "bg-field text-attention", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), lines: waitingText ? waitingText.split("\n") : undefined, action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
   if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: t("assistant-tasks.today_working", { count: body.working }), action: t("assistant-tasks.all"), run: () => setBoard(true) });
   for (const m of (body.meetings ?? []).slice(0, 3)) {
     const at = formatDate(m.start, { hour: "2-digit", minute: "2-digit" });
@@ -1000,7 +1000,7 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
       ))}
       {first && (
         <>
-          <div className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-red">
+          <div className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-attention">
             <Icon name="hand" size={13} />
             <span className="truncate">{first.todo.title}</span>
             <span className="flex-1" />
@@ -1072,7 +1072,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
                 e.preventDefault();
                 setMenuFor({ todo, el: e.currentTarget });
               }}
-              className={cx(pill, st === "needs_you" || st === "interrupted" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
+              className={cx(pill, st === "needs_you" || st === "interrupted" ? "bg-field text-attention" : "bg-field text-ink hover:bg-hover")}
             >
               <TaskMark status={st} size={8} />
               <span className="truncate">{todo.title}</span>
@@ -1087,7 +1087,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
               type="button"
               aria-label={t("assistant-tasks.dock_agent", { title: sessionTitle(s), state: stateName(state === "needs_you" ? "needs_you" : "working") })}
               onClick={() => openPanel({ kind: "agent", mid: s.machine_id, sid: s.session_id })}
-              className={cx(pill, state === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
+              className={cx(pill, state === "needs_you" ? "bg-field text-attention" : "bg-field text-ink hover:bg-hover")}
             >
               <StatusMark state={state} />
               <Icon name="agent" size={13} className={cx("shrink-0", state !== "needs_you" && "text-ink-2")} />

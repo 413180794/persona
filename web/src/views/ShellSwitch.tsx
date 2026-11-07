@@ -54,7 +54,7 @@ export function ShellSwitchView({ page, waiting }: { page: ShellPage; waiting: n
             )}
           >
             {p.label}
-            {badge > 0 && <span aria-hidden className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red px-1 text-[10px] font-semibold text-white tabular-nums">{badge}</span>}
+            {badge > 0 && <span aria-hidden className="flex h-4 min-w-4 items-center justify-center rounded-full bg-field px-1 text-[10px] font-semibold text-attention tabular-nums">{badge}</span>}
           </a>
         );
       })}

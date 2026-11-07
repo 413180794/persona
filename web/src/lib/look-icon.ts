@@ -79,7 +79,7 @@ async function builtinSVG(id: string, dark: boolean): Promise<string> {
   const css = getComputedStyle(document.documentElement);
   const accent = css.getPropertyValue("--accent").trim() || "#4f6bed";
   // On its own (an image, not in the page) an SVG needs its namespace, which React leaves out.
-  svg = svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ').replaceAll("var(--accent)", accent).replaceAll("var(--mochi-needs-you)", "#e5484d");
+  svg = svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ').replaceAll("var(--accent)", accent).replaceAll("var(--mochi-needs-you)", css.getPropertyValue("--attention").trim() || accent);
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 

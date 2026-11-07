@@ -110,7 +110,7 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label={t("health.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <h1 className="flex min-w-0 flex-1 items-center gap-2 truncate text-[14px] font-semibold text-ink">
-          <Icon name="heart" size={14} className="text-red" />
+          <Icon name="heart" size={14} className="text-accent-ink" />
           {t("health.title")}
         </h1>
         <IconButton icon="retry" label={t("health.refresh")} onClick={() => void reload()} />
@@ -118,7 +118,7 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-4 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
           <div className="mb-5 flex flex-col items-center text-center">
-            <span className="mb-3 flex size-12 items-center justify-center rounded-full bg-red-tint text-red shadow-raised">
+            <span className="mb-3 flex size-12 items-center justify-center rounded-full bg-inset text-accent-ink shadow-raised">
               <Icon name="heart" size={22} />
             </span>
             <h2 className="text-[22px] font-semibold tracking-tight text-ink">{t("health.hero_title")}</h2>
@@ -127,7 +127,7 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 
           <Composer key={seed} draftKey="health-new" placeholder={t("health.ask_placeholder")} machineId={assistant?.machine_id} uploadDest={HEALTH_SPACE} onSend={start} autoFocus commands={[]} />
           <input ref={picker} type="file" multiple hidden accept={REPORT_FILES} data-testid="health-report-input" onChange={(e) => void upload(Array.from(e.target.files ?? [])).finally(() => (e.target.value = ""))} />
-          <button type="button" disabled={uploading || !assistant} onClick={() => picker.current?.click()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-control bg-red-tint px-3 py-2.5 text-[13px] font-medium whitespace-nowrap text-red shadow-hairline transition-colors hover:brightness-110 disabled:opacity-60">
+          <button type="button" disabled={uploading || !assistant} onClick={() => picker.current?.click()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-control bg-surface px-3 py-2.5 text-[13px] font-medium whitespace-nowrap text-ink shadow-btn transition-colors hover:bg-hover disabled:opacity-60">
             <Icon name="upload" size={14} className="shrink-0" />
             {uploading ? t("health.report_uploading") : t("health.report_upload")}
           </button>
@@ -189,7 +189,7 @@ function HealthRow({ s }: { s: Session }) {
   const last = plainMarkdown(s.last_text);
   return (
     <a href={href(route)} onClick={(e) => onLinkClick(e, route)} className="flex min-w-0 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-tint text-red"><Icon name="heart" size={13} /></span>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-inset text-accent-ink"><Icon name="heart" size={13} /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium text-ink">{conversationTitle(s)}</span>
         {last && <span className="block truncate text-[12px] text-ink-3">{last}</span>}

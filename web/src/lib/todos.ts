@@ -115,7 +115,7 @@ export function todoRank(todo: Todo, status: TodoStatus): number {
 
 export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" | "green" | "amber" | "idle" | "off" }> = {
   done: { label: stateName("done"), tone: "off" },
-  needs_you: { label: stateName("needs_you"), tone: "red" },
+  needs_you: { label: stateName("needs_you"), tone: "amber" },
   interrupted: { label: stateName("interrupted"), tone: "red" },
   unread: { label: stateName("unread"), tone: "green" },
   working: { label: stateName("working"), tone: "amber" },

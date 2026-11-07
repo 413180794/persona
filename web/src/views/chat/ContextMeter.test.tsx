@@ -41,11 +41,11 @@ describe("ContextMeter", () => {
     expect(html).toContain("text-orange");
     expect(html).not.toContain("red");
   });
-  it("turns red from 90% used (10% left), on the bar and the number", () => {
+  it("keeps near-full context as caution, not an error, on the bar and number", () => {
     const html = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 180000 }} />);
-    expect(html).toContain("bg-red");
-    expect(html).toContain("text-red");
-    expect(html).not.toContain("orange");
+    expect(html).toContain("bg-orange");
+    expect(html).toContain("text-orange");
+    expect(html).not.toContain("red");
     const left = renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 178000 }} />);
     expect(left).toContain("bg-orange"); // 89% used: still the warning
   });
@@ -89,7 +89,7 @@ describe("ContextMeter", () => {
     expect(html).toContain('aria-label="上下文剩 61%"');
     expect(html).toContain("touch-hit");
     expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 170000 }} compact />)).toContain("text-orange");
-    expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 180000 }} compact />)).toContain("text-red");
+    expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_tokens: 180000 }} compact />)).toContain("text-orange");
     expect(renderToStaticMarkup(<ContextMeter session={{ ...s, context_window: undefined }} compact />)).toBe("");
   });
 });

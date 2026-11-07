@@ -57,7 +57,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
           )}
         >
           {o.label}
-          {o.dot && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-red" />}
+          {o.dot && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-attention" />}
         </button>
       ))}
     </SegmentedTrack>
