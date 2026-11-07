@@ -74,6 +74,34 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         /// The interaction Allow / Deny / Approve resolve.
         var interaction: String?
         var since: Double?
+        /// A working item whose turn ended while its background work runs (#2935): `detail` says what runs
+        /// ("parity-audit · Verify · 169/185"), and `since` is when its workflow started (#3433). Absent from older hubs.
+        var background = false
+        /// The bar under a background workflow (#3437): the counts `detail` prints. Nil otherwise, or from older hubs.
+        var progress: Progress?
+
+        /// A workflow's agents done of those it started so far (the total is unknown before it ends).
+        nonisolated struct Progress: Codable, Hashable, Sendable {
+            var done = 0
+            var started = 0
+
+            init(done: Int, started: Int) {
+                self.done = done
+                self.started = started
+            }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                done = (try? c.decodeIfPresent(Int.self, forKey: .done)) ?? 0
+                started = (try? c.decodeIfPresent(Int.self, forKey: .started)) ?? 0
+            }
+
+            /// How far the bar is filled, 0...1; nil while nothing has started (no bar to draw).
+            var fraction: Double? {
+                guard started > 0 else { return nil }
+                return Double(min(max(done, 0), started)) / Double(started)
+            }
+        }
 
         nonisolated enum Kind: String, Codable, Hashable, Sendable {
             case permission, plan, question, screen, working, unread
@@ -83,7 +111,8 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
             }
         }
 
-        init(id: String, title: String, place: String = "", kind: Kind, detail: String = "", interaction: String? = nil, since: Double? = nil) {
+        init(id: String, title: String, place: String = "", kind: Kind, detail: String = "", interaction: String? = nil, since: Double? = nil,
+             background: Bool = false, progress: Progress? = nil) {
             self.id = id
             self.title = title
             self.place = place
@@ -91,6 +120,8 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
             self.detail = detail
             self.interaction = interaction
             self.since = since
+            self.background = background
+            self.progress = progress
         }
 
         init(from decoder: Decoder) throws {
@@ -102,9 +133,17 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
             detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
             interaction = try c.decodeIfPresent(String.self, forKey: .interaction)
             since = try c.decodeIfPresent(Double.self, forKey: .since)
+            background = (try? c.decodeIfPresent(Bool.self, forKey: .background)) ?? false
+            // A bar this app cannot read (a newer hub's shape) drops only the bar.
+            progress = try? c.decodeIfPresent(Progress.self, forKey: .progress)
         }
 
         var needsYou: Bool { kind != .working && kind != .unread }
+        /// Background work with a line to say what runs (#3437): drawn with 「后台」 and that line. An older hub's
+        /// background item has no line, and is a working row as before.
+        var runsInBackground: Bool { kind == .working && background && !detail.isEmpty }
+        /// Its row has a second line (a request's ask, background work's line), when names are shown.
+        var twoLines: Bool { needsYou || runsInBackground }
         var sinceDate: Date? { since.map { Date(timeIntervalSince1970: $0) } }
 
         /// machine id and session id, for the deep link.
@@ -190,6 +229,12 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     var workingSinceDate: Date? { workingSince.map { Date(timeIntervalSince1970: $0) } }
     /// Agents left out when only the first `showing` items are drawn ("+2").
     func hidden(showing: Int) -> Int { max(0, needsYou + working + unread - min(showing, items.count)) }
+    /// Whether the expanded island packs its first `showing` rows closer (`IslandMetrics.packedRowGap`): two rows of two
+    /// lines (background work, requests) and the "+2" under them pass its about 160 pt at the usual gap, and the "+2" was
+    /// cut in half (#3437). Packed, the "+2" stays where it always is, as on the lock screen.
+    func islandPacked(showing: Int) -> Bool {
+        hidden(showing: showing) > 0 && items.prefix(showing).filter(\.twoLines).count >= 2
+    }
     /// The first request that can be settled with a button (permission or plan).
     var firstActionable: Item? { items.first { ($0.kind == .permission || $0.kind == .plan) && $0.interaction != nil } }
 }
@@ -212,10 +257,13 @@ nonisolated enum FleetText {
         case .plan: item.detail.isEmpty ? interfaceText("Plan needs approval") : interfaceText("Plan: \(item.detail)")
         case .question: item.detail.isEmpty ? interfaceText("Has a question") : item.detail
         case .screen: item.detail.isEmpty ? interfaceText("Terminal Needs You") : item.detail
-        case .working: StateName.working.text
+        case .working: item.runsInBackground ? item.detail : StateName.working.text
         case .unread: item.detail.isEmpty ? StateName.unread.text : item.detail
         }
     }
+
+    /// Where a background item's place goes (#3437): its turn is over, the work runs on in the background.
+    static var background: String { interfaceText("Background [Live Activity]") }
 
     /// What a hidden (lock screen without details) request says instead of its title.
     static func anonymous(_ item: FleetState.Item) -> String {

@@ -51,6 +51,17 @@ nonisolated enum IslandMetrics {
     static let lockFace: CGFloat = 26
     /// The ring around a count that has no room for its symbol.
     static let ring: CGFloat = 1.5
+    /// A row's text after its status dot (7 pt and an 8 pt gap), on the expanded island and the lock screen.
+    static let rowInset: CGFloat = 15
+    /// A background workflow's bar (#3437), on the row's second line under its clock: its length and thickness.
+    static let bar: CGFloat = 48
+    static let barHeight: CGFloat = 4
+    /// Between the expanded island's rows, and under them the "+2"; packed when two rows of two lines (background work,
+    /// requests) and the "+2" would pass the island's about 160 pt: at the usual gap the "+2" was cut in half (#3437).
+    static let rowGap: CGFloat = 8
+    static let packedRowGap: CGFloat = 4
+    /// Above the expanded island's rows, below its corners.
+    static let rowsTop: CGFloat = 4
 
     // MARK: The settings page's picture of the island
 

@@ -3462,6 +3462,8 @@ def mock_interactions():
 #   done        only finished-unseen agents
 #   one         exactly one working agent (a tap opens it)
 #   empty       nothing (the connection line)
+# A working agent whose turn is over while its background work runs (MOCK_WORKFLOW=1, MOCK_WORKFLOW_CARDS=1) is a
+# background item, as the hub sends it (#3437): background, its workflow's line and bar, the workflow's start as since.
 MOCK_FLEET = os.environ.get("MOCK_FLEET", "")
 
 
@@ -3511,6 +3513,30 @@ def _fleet_unix(stamp):
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() if stamp else 0
 
 
+def _fleet_background(s):
+    """A working session's background part, as the hub's buildFleet adds it (server/internal/assistant/fleet_live.go):
+    {} unless its turn is over while background work runs; else background, the one-line detail, the bar's counts of the
+    workflow that line names (the first running one, #3437), and since from the earliest running workflow (#3433)."""
+    runs = [w for w in s.get("workflows") or [] if w.get("running")]
+    tasks = [b for b in s.get("background") or [] if b.get("kind") != "workflow" or not s.get("workflows")]
+    if not (s.get("background_working") or (s.get("status") != "working" and (runs or tasks))):
+        return {}
+    out = {"background": True}
+    if runs:
+        w = runs[0]
+        parts = [w.get("name") or w.get("summary") or "workflow"] + ([w["phase"]] if w.get("phase") else [])
+        counts = " · %d/%d" % (w.get("agents_done", 0), w.get("agents_started", 0))  # never clipped: the bar draws them
+        out["detail"] = _fleet_clip(" · ".join(parts), max(60 - len(counts), 0)) + counts
+        if w.get("agents_started", 0) > 0:
+            out["progress"] = {"done": min(max(w.get("agents_done", 0), 0), w["agents_started"]), "started": w["agents_started"]}
+        starts = [_fleet_unix(r["started_at"]) for r in runs if r.get("started_at")]
+        if starts:
+            out["since"] = min(starts)
+    else:
+        out["detail"] = "后台 %d 个任务在跑" % (len(tasks) + sum(1 for a in s.get("subagents") or [] if a.get("running")))  # i18n-ignore: the hub's zh-Hans text
+    return out
+
+
 def mock_fleet():
     """The fleet as the hub computes it, narrowed by MOCK_FLEET."""
     mode = MOCK_FLEET or "all"
@@ -3532,7 +3558,7 @@ def mock_fleet():
             continue
         item = {"id": "%s/%s" % key, "title": _fleet_title(s), "place": _fleet_place(s)}
         if s.get("state") == "working" and not s.get("assistant") and mode in ("1", "all", "permission", "working", "one"):
-            working.append(dict(item, kind="working", detail="", since=_fleet_unix(s.get("updated_at"))))
+            working.append({**item, "kind": "working", "detail": "", "since": _fleet_unix(s.get("updated_at")), **_fleet_background(s)})
         elif s.get("state") == "unread" and not s.get("assistant") and not s.get("loop") and mode in ("1", "all", "permission", "working", "done"):
             unread.append(dict(item, kind="unread", detail=_fleet_clip(_fleet_first_line(s.get("last_text")), 60),
                                since=_fleet_unix(s.get("updated_at"))))

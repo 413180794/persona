@@ -248,11 +248,12 @@ func (la *liveActivities) snapshot() FleetState {
 // The activity's content and numbers are the manager's (assistant/fleet_live.go): the hub gives each device its part
 // and pushes it.
 type (
-	FleetState = assistantwire.FleetState
-	FleetLook  = assistantwire.FleetLook
-	FleetStats = assistantwire.FleetStats
-	FleetLoad  = assistantwire.FleetLoad
-	FleetItem  = assistantwire.FleetItem
+	FleetState    = assistantwire.FleetState
+	FleetLook     = assistantwire.FleetLook
+	FleetStats    = assistantwire.FleetStats
+	FleetLoad     = assistantwire.FleetLoad
+	FleetItem     = assistantwire.FleetItem
+	FleetProgress = assistantwire.FleetProgress
 )
 
 // fleetStats are the island's numbers as the manager told them last.

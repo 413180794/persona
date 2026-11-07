@@ -16946,6 +16946,30 @@
       },
       "extractionState": "manual"
     },
+    "Background [Live Activity]": {
+      "comment": "Live Activity: where a row's place goes when the agent's turn is over and its workflow runs on in the background",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バックグラウンド"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后台"
+          }
+        }
+      }
+    },
     "Background Push": {
       "extractionState": "manual",
       "localizations": {

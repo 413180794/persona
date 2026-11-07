@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -25,13 +26,17 @@ import (
 // allows and gives each device its own part (its island's sides, its lock screen details, its persona).
 
 type (
-	FleetState = assistantwire.FleetState
-	FleetStats = assistantwire.FleetStats
-	FleetLoad  = assistantwire.FleetLoad
-	FleetItem  = assistantwire.FleetItem
+	FleetState    = assistantwire.FleetState
+	FleetStats    = assistantwire.FleetStats
+	FleetLoad     = assistantwire.FleetLoad
+	FleetItem     = assistantwire.FleetItem
+	FleetProgress = assistantwire.FleetProgress
 )
 
 const fleetMaxItems = 3
+
+// fleetDetailMax is how long an item's line gets, in runes, before it is clipped (with an ellipsis after).
+const fleetDetailMax = 60
 
 // liveState is what was told the hub last.
 type liveState struct {
@@ -184,7 +189,7 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 		asked[key] = true
 		needs = append(needs, FleetItem{
 			ID: key, Title: agentTitle(a.Session), Place: agentPlace(a.Machine, a.Session), Kind: ix.Kind,
-			Detail: clip(oneLine(interactionDetail(l, ix)), 60), Interaction: ix.ID, Since: unixSeconds(ix.CreatedAt),
+			Detail: clip(oneLine(interactionDetail(l, ix)), fleetDetailMax), Interaction: ix.ID, Since: unixSeconds(ix.CreatedAt),
 		})
 	}
 	for _, a := range agents {
@@ -221,7 +226,8 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 			}
 			it := FleetItem{ID: key, Title: agentTitle(sess), Place: agentPlace(a.Machine, sess), Kind: "working", Since: unixSeconds(since)}
 			if sess.BackgroundWorking {
-				it.Background, it.Detail = true, clip(backgroundDetail(l, sess), 60)
+				it.Background, it.Detail = true, backgroundDetail(l, sess)
+				it.Progress = backgroundProgress(sess)
 			}
 			working = append(working, it)
 		case proto.StateUnread:
@@ -229,7 +235,7 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 				continue
 			}
 			unread = append(unread, FleetItem{ID: key, Title: agentTitle(sess), Place: agentPlace(a.Machine, sess), Kind: "unread",
-				Detail: clip(oneLine(firstLine(sess.LastText)), 60), Since: unixSeconds(sess.UpdatedAt)})
+				Detail: clip(oneLine(firstLine(sess.LastText)), fleetDetailMax), Since: unixSeconds(sess.UpdatedAt)})
 		}
 	}
 	sort.SliceStable(working, func(i, j int) bool { return working[i].Since < working[j].Since })
@@ -298,19 +304,29 @@ func unixSeconds(t time.Time) float64 {
 	return float64(t.Unix())
 }
 
-// backgroundDetail is what a background-working agent runs, in a line: its running workflow ("parity-audit · Verify ·
-// 169/185"), else how many background tasks.
-func backgroundDetail(l i18n.Lang, sess proto.Session) string {
+// shownWorkflow is the running workflow a background-working agent's item names: the first one (Workflows are newest
+// first), as the web's workflow line picks it.
+func shownWorkflow(sess proto.Session) (proto.Workflow, bool) {
 	for _, w := range sess.Workflows {
-		if !w.Running {
-			continue
+		if w.Running {
+			return w, true
 		}
+	}
+	return proto.Workflow{}, false
+}
+
+// backgroundDetail is what a background-working agent runs, in a line: its running workflow ("parity-audit · Verify ·
+// 169/185"), else how many background tasks. A long name or phase is what gets clipped, never the counts at the end:
+// they are what the bar shows (backgroundProgress), so the line changes whenever the bar does and the bar costs no
+// push of its own (#3437).
+func backgroundDetail(l i18n.Lang, sess proto.Session) string {
+	if w, ok := shownWorkflow(sess); ok {
 		parts := []string{cmp.Or(w.Name, w.Summary, "workflow")}
 		if w.Phase != "" {
 			parts = append(parts, w.Phase)
 		}
-		parts = append(parts, fmt.Sprintf("%d/%d", w.AgentsDone, w.AgentsStarted))
-		return strings.Join(parts, " · ")
+		counts := fmt.Sprintf(" · %d/%d", w.AgentsDone, w.AgentsStarted)
+		return clip(strings.Join(parts, " · "), max(fleetDetailMax-utf8.RuneCountInString(counts), 0)) + counts
 	}
 	n := len(sess.Background)
 	for _, a := range sess.Subagents {
@@ -318,5 +334,17 @@ func backgroundDetail(l i18n.Lang, sess proto.Session) string {
 			n++
 		}
 	}
-	return i18n.T(l, "hub-liveactivity.background", i18n.Args{"count": n})
+	return clip(i18n.T(l, "hub-liveactivity.background", i18n.Args{"count": n}), fleetDetailMax)
+}
+
+// backgroundProgress is the bar under a background-working agent's item (#3437): the counts its detail prints (which
+// clipping never cuts), of the same workflow, so the bar and the line beside it agree and the bar never changes the
+// content by itself (the push budget, docs/live-activity.md). Nil without a running workflow, or before it started an
+// agent.
+func backgroundProgress(sess proto.Session) *FleetProgress {
+	w, ok := shownWorkflow(sess)
+	if !ok || w.AgentsStarted <= 0 {
+		return nil
+	}
+	return &FleetProgress{Done: min(max(w.AgentsDone, 0), w.AgentsStarted), Started: w.AgentsStarted}
 }

@@ -6,7 +6,7 @@ final class LiveActivityShots: XCTestCase {
     @MainActor func testShots() throws {
         let env = ProcessInfo.processInfo.environment
         guard let phase = env["PERSONA_FLEET_SAMPLE"] else {
-            throw XCTSkip("set PERSONA_FLEET_SAMPLE=needsYou|working|done|thinking|offline|current")
+            throw XCTSkip("set PERSONA_FLEET_SAMPLE=needsYou|working|background|done|thinking|offline|current")
         }
         if let id = env["PERSONA_ISLAND_PEER"] { endPeer(id) } // one left over from an earlier run
         if phase != "current" { // "current": photograph whatever the activity shows now (after a real push)

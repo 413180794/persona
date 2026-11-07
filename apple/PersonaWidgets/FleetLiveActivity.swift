@@ -49,7 +49,9 @@ struct FleetLiveActivity: Widget {
                     .padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    // Two rows of two lines and the "+2" under them only fit packed (`FleetState.islandPacked`).
+                    let packed = (context.isStale || state.firstActionable == nil) && state.islandPacked(showing: Self.rows)
+                    VStack(alignment: .leading, spacing: packed ? IslandMetrics.packedRowGap : IslandMetrics.rowGap) {
                         if !context.isStale, let act = state.firstActionable {
                             // A request the buttons can settle takes the room: it, its buttons, and how many more.
                             Link(destination: FleetLink.url(act)!) { FleetRow(item: act, showTitle: true, onDark: true) }
@@ -69,7 +71,7 @@ struct FleetLiveActivity: Widget {
                         }
                     }
                     .padding(.horizontal, 4)
-                    .padding(.top, 4)
+                    .padding(.top, packed ? 0 : IslandMetrics.rowsTop)
                     .environment(\.locale, LanguageStore.drawingLocale)
                 }
             } compactLeading: {
@@ -164,8 +166,19 @@ struct FleetRow: View {
     var onDark = false
 
     var body: some View {
+        Group {
+            if showTitle, item.runsInBackground {
+                backgroundRow
+            } else {
+                row
+            }
+        }
+        .foregroundStyle(onDark ? Color.white : Color.primary)
+    }
+
+    private var row: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Circle().fill(FleetPalette.color(item.kind)).frame(width: 7, height: 7).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+            dot
             VStack(alignment: .leading, spacing: 1) {
                 if showTitle {
                     HStack(spacing: 4) {
@@ -185,15 +198,68 @@ struct FleetRow: View {
                 }
             }
             Spacer(minLength: 4)
-            if item.kind == .working, let since = item.sinceDate {
-                FleetTimer(since: since).font(.caption.weight(.medium)).foregroundStyle(onDark ? FleetPalette.working : FleetPalette.workingText)
-                    .frame(maxWidth: 60, alignment: .trailing)
-            }
+            timer
         }
-        .foregroundStyle(onDark ? Color.white : Color.primary)
+    }
+
+    /// An agent whose turn is over while its workflow runs on (#3437): 「后台」 where its place goes, the workflow's clock;
+    /// under them what runs, and the workflow's bar under the clock. Two lines, as a request's row: the island and the lock
+    /// screen keep their height. The bar is static (`FleetBar`): repeating animations never run here.
+    private var backgroundRow: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                dot
+                HStack(spacing: 4) {
+                    Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(FleetText.background).font(.caption2).foregroundStyle(secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                timer
+            }
+            HStack(spacing: 8) {
+                Text(FleetText.line(item)).font(.caption).foregroundStyle(secondary).lineLimit(1)
+                Spacer(minLength: 4)
+                if let fraction = item.progress?.fraction {
+                    FleetBar(fraction: fraction, fill: working, onDark: onDark)
+                }
+            }
+            .padding(.leading, IslandMetrics.rowInset)
+        }
+    }
+
+    private var dot: some View {
+        Circle().fill(FleetPalette.color(item.kind)).frame(width: 7, height: 7).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+    }
+
+    @ViewBuilder private var timer: some View {
+        if item.kind == .working, let since = item.sinceDate {
+            FleetTimer(since: since).font(.caption.weight(.medium)).foregroundStyle(working)
+                .frame(maxWidth: 60, alignment: .trailing)
+        }
     }
 
     private var secondary: Color { onDark ? .white.opacity(0.65) : .secondary }
+    private var working: Color { onDark ? FleetPalette.working : FleetPalette.workingText }
+}
+
+/// A background workflow's bar (#3437): agents done of those started, static. Drawn rather than a linear
+/// `ProgressView`, whose track (the system fill) all but vanished on the island's and the lock screen's black (1.2:1):
+/// the track is `FleetPalette.track`, so the empty part shows and 3/8 reads as three eighths. The line beside it prints
+/// the same counts, so VoiceOver reads those and skips the bar.
+struct FleetBar: View {
+    var fraction: Double
+    var fill: Color
+    var onDark: Bool
+
+    var body: some View {
+        Capsule()
+            .fill(FleetPalette.track(onDark: onDark))
+            .overlay(alignment: .leading) {
+                Capsule().fill(fill).frame(width: IslandMetrics.bar * min(max(fraction, 0), 1))
+            }
+            .frame(width: IslandMetrics.bar, height: IslandMetrics.barHeight)
+            .accessibilityHidden(true)
+    }
 }
 
 /// Counts: 「💬 2 需要你  ⚙ 3 在工作  ● 1 未看」, the first line of the lock screen (the island's symbols).

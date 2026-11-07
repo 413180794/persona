@@ -26,8 +26,59 @@ struct FleetStateTests {
         #expect(empty == FleetState())
     }
 
+    /// A background workflow's item exactly as hub/liveactivity_test.go TestFleetBackgroundItemJSON pins it (#3437): it
+    /// says 「后台」 where the place goes, its line is the workflow, and the bar has the line's counts.
+    @Test func decodesABackgroundItem() throws {
+        let json = #"{"phase":"working","needsYou":0,"working":1,"unread":0,"items":[{"id":"m/s","title":"audit","place":"","kind":"working","detail":"parity-audit · Verify · 169/185","background":true,"progress":{"done":169,"started":185},"since":1761700000}],"workingSince":1761700000,"details":false}"#
+        let s = try JSONDecoder().decode(FleetState.self, from: Data(json.utf8))
+        let item = try #require(s.items.first)
+        #expect(item.background && item.kind == .working && !item.needsYou)
+        #expect(item.progress == .init(done: 169, started: 185))
+        #expect(item.progress?.fraction == 169.0 / 185.0)
+        #expect(item.sinceDate == Date(timeIntervalSince1970: 1761700000))
+        #expect(FleetText.line(item) == "parity-audit · Verify · 169/185")
+        #expect(FleetText.background == "后台")
+    }
+
+    /// An older hub sends neither field (a plain working row as before); a bar in a shape this app cannot read drops
+    /// only the bar, never the activity.
+    @Test func backgroundFieldsAreOptional() throws {
+        let old = try JSONDecoder().decode(FleetState.Item.self, from: Data(#"{"id":"m/s","kind":"working","detail":"x"}"#.utf8))
+        #expect(!old.background && old.progress == nil)
+        #expect(FleetText.line(old) == "工作中")
+        let odd = try JSONDecoder().decode(FleetState.Item.self,
+                                           from: Data(#"{"id":"m/s","kind":"working","background":"yes","progress":[1,2],"detail":"d"}"#.utf8))
+        #expect(odd.id == "m/s" && !odd.background && odd.progress == nil && odd.detail == "d")
+        // No agent started yet: nothing to fill, no bar. Done past started (a racing count) fills it, no more.
+        #expect(FleetState.Item.Progress(done: 0, started: 0).fraction == nil)
+        #expect(FleetState.Item.Progress(done: 9, started: 4).fraction == 1)
+        // Background without a line (an older hub's): a working row as before.
+        let bare = FleetState.Item(id: "m/s", title: "t", kind: .working, background: true)
+        #expect(FleetText.line(bare) == "工作中")
+    }
+
+    /// The expanded island keeps its "+2" (as the lock screen does) and packs its rows to make room for it when two rows
+    /// of two lines (background work, requests) come first: at the usual gap the "+2" was cut in half (#3437).
+    @Test func islandPacksTwoTallRowsToKeepTheMoreLine() {
+        let audit = FleetState.Item(id: "a/1", title: "audit", kind: .working, detail: "parity-audit · 1/2", background: true)
+        let sweep = FleetState.Item(id: "a/2", title: "sweep", kind: .working, detail: "docs-sweep · 3/8", background: true)
+        let plain = FleetState.Item(id: "a/3", title: "plain", kind: .working)
+        let ask = FleetState.Item(id: "a/4", title: "ask", kind: .question)
+        #expect(audit.runsInBackground && audit.twoLines && !plain.twoLines && ask.twoLines)
+        let tall = FleetState(phase: .working, working: 3, unread: 1, items: [audit, sweep, plain])
+        #expect(tall.islandPacked(showing: 2) && tall.hidden(showing: 2) == 2) // the background sample: "+2", packed
+        #expect(FleetState(phase: .needsYou, needsYou: 2, working: 1, items: [ask, ask, plain]).islandPacked(showing: 2))
+        #expect(!FleetState(phase: .working, working: 4, items: [audit, plain, sweep]).islandPacked(showing: 2)) // one tall row
+        #expect(!FleetState(phase: .working, working: 2, items: [audit, sweep]).islandPacked(showing: 2)) // no "+2" to fit
+        // An older hub's background item has no line: a one-line working row.
+        let bare = FleetState.Item(id: "a/5", title: "bare", kind: .working, background: true)
+        #expect(!bare.runsInBackground && !bare.twoLines)
+    }
+
     @Test func roundTripsThroughItsOwnEncoding() throws {
-        let s = FleetState(phase: .needsYou, needsYou: 1, items: [.init(id: "m/s", title: "t", kind: .plan, detail: "d", interaction: "ix")], details: true)
+        let s = FleetState(phase: .needsYou, needsYou: 1, items: [.init(id: "m/s", title: "t", kind: .plan, detail: "d", interaction: "ix"),
+                                                                  .init(id: "m/w", title: "w", kind: .working, detail: "run · 1/2", since: 1761700000,
+                                                                        background: true, progress: .init(done: 1, started: 2))], details: true)
         #expect(try JSONDecoder().decode(FleetState.self, from: JSONEncoder().encode(s)) == s)
     }
 

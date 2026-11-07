@@ -8,6 +8,10 @@ enum FleetPalette {
     static var unread: Color { StatusPalette.unread.dot }
     /// Small working text (the timer) on the lock screen, which follows the system appearance.
     static var workingText: Color { StatusPalette.working.text }
+    /// The empty part of a background workflow's bar (#3437): white on the island's black, the text's color on the lock
+    /// screen (black there too in both appearances). At 0.4 it is 3.7:1 on black and the working fill 3.2:1 on it; the
+    /// system's linear track was 1.2:1 there, and 3/8 read as a short orange line rather than three eighths.
+    static func track(onDark: Bool) -> Color { (onDark ? Color.white : Color.primary).opacity(0.4) }
     /// The app icon's coral (the app's `Theme.brand`): the island's number symbols, nothing to tap.
     static let coral = Palette.coral
     /// System blue, the app's accent: the keyline and the system's action buttons.

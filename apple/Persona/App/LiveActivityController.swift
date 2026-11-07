@@ -288,12 +288,13 @@ final class LiveActivityController {
 
 #if DEBUG
 extension LiveActivityController {
-    /// `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`-fleetDetails YES` for names on the lock screen,
+    /// `-showFleetSample needsYou|working|background|done|thinking|assistant|offline` (`-fleetDetails YES` for names on the lock screen,
     /// `-fleetIsland b`, `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in
     /// each kind there is; `-openPersona nwverse` for the persona): starts the activity with made-up agents, no
     /// hub needed, for screenshots. `thinking` is only the assistant answering (beside one finished agent);
-    /// `assistant` is the assistant alone, nothing to count (the minimal island then shows the persona); `offline` is
-    /// the working sample made stale once it shows.
+    /// `assistant` is the assistant alone, nothing to count (the minimal island then shows the persona); `background`
+    /// leads with two agents whose workflows run on in the background (#3437: their lines, bars and workflows' clocks);
+    /// `offline` is the working sample made stale once it shows.
     func showSample(_ phase: String, details: Bool, island spec: String?, count: Int = 0) {
         UserDefaults.standard.set(details, forKey: Self.detailsKey)
         var island = IslandPrefs()
@@ -314,8 +315,15 @@ extension LiveActivityController {
                                    detail: "支持 HEIC", interaction: "ix_plan", since: now - 300) // i18n-ignore
         let work = FleetState.Item(id: "studio/s3", title: "重构设置页", place: "Studio · notes", kind: .working, since: now - 754) // i18n-ignore
         let done = FleetState.Item(id: "macbook/s4", title: "升级依赖", place: "MacBook · api", kind: .unread, detail: "全部测试通过，已提交", since: now - 60) // i18n-ignore
+        let audit = FleetState.Item(id: "studio/s5", title: "各端功能对齐审计", place: "Studio · persona", kind: .working, // i18n-ignore
+                                    detail: "parity-audit · Verify · 169/185", since: now - 14 * 60, background: true,
+                                    progress: .init(done: 169, started: 185))
+        let sweep = FleetState.Item(id: "macbook/s6", title: "清理过期文档", place: "MacBook · docs", kind: .working, // i18n-ignore
+                                    detail: "docs-sweep · Fix · 3/8", since: now - 13 * 60, background: true, progress: .init(done: 3, started: 8))
         var state: FleetState = switch phase {
         case "working": FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754)
+        // Two background rows first, the most the island and the lock screen draw: both their tallest.
+        case "background": FleetState(phase: .working, working: 3, unread: 1, items: [audit, sweep, work], workingSince: now - 14 * 60)
         case "done", "thinking": FleetState(phase: .done, unread: 1, items: [done])
         case "assistant": FleetState(phase: .none)
         default: FleetState(phase: .needsYou, needsYou: 2, working: 3, unread: 1, items: [ask, plan, work], workingSince: now - 754)

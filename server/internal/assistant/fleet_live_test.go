@@ -1,8 +1,12 @@
 package assistant
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -102,11 +106,133 @@ func TestBuildFleetBackground(t *testing.T) {
 	if it := got["m/wf"]; !it.Background || it.Detail != "parity-audit · Verify · 169/185" {
 		t.Errorf("workflow: %+v", it)
 	}
-	if it := got["m/sh"]; !it.Background || it.Detail != "后台 2 个任务在跑" {
+	// The bar under it (#3437): the same counts as the line.
+	if p := got["m/wf"].Progress; p == nil || *p != (FleetProgress{Done: 169, Started: 185}) {
+		t.Errorf("workflow progress: %+v", p)
+	}
+	if it := got["m/sh"]; !it.Background || it.Detail != "后台 2 个任务在跑" || it.Progress != nil {
 		t.Errorf("background tasks: %+v", it)
 	}
-	if it := got["m/busy"]; it.Background || it.Detail != "" {
+	if it := got["m/busy"]; it.Background || it.Detail != "" || it.Progress != nil {
 		t.Errorf("a plain working one: %+v", it)
+	}
+}
+
+// The bar is the workflow the line names (the first running one, Workflows being newest first), counted the way the
+// line counts it; none before the workflow started an agent, none for a foreground turn (#3437).
+func TestBuildFleetBackgroundProgress(t *testing.T) {
+	newer := proto.Workflow{TaskID: "w2", Name: "review", Running: true, Phase: "Verify", AgentsStarted: 3, AgentsDone: 1}
+	older := proto.Workflow{TaskID: "w1", Name: "parity-audit", Running: true, Phase: "Audit", AgentsStarted: 185, AgentsDone: 169}
+	ended := proto.Workflow{TaskID: "w0", Name: "docs-sweep", AgentsStarted: 4, AgentsDone: 4}
+	fresh := proto.Workflow{TaskID: "w3", Name: "fresh", Running: true}
+	for _, tc := range []struct {
+		name       string
+		background bool
+		runs       []proto.Workflow
+		detail     string
+		want       *FleetProgress
+	}{
+		{"the first running one", true, []proto.Workflow{ended, newer, older}, "review · Verify · 1/3", &FleetProgress{Done: 1, Started: 3}},
+		{"no agent started yet", true, []proto.Workflow{fresh, older}, "fresh · 0/0", nil},
+		{"only ended runs", true, []proto.Workflow{ended}, "后台 0 个任务在跑", nil},
+		{"foreground turn", false, []proto.Workflow{older}, "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := proto.Session{MachineID: "m", SessionID: "s", State: proto.StateWorking, BackgroundWorking: tc.background, Workflows: tc.runs}
+			st := buildFleetIn("zh-Hans", []fleetInput{{Session: s}}, nil)
+			if len(st.Items) != 1 {
+				t.Fatalf("items: %+v", st.Items)
+			}
+			it := st.Items[0]
+			if it.Detail != tc.detail {
+				t.Errorf("detail = %q, want %q", it.Detail, tc.detail)
+			}
+			if (it.Progress == nil) != (tc.want == nil) || (it.Progress != nil && *it.Progress != *tc.want) {
+				t.Errorf("progress = %+v, want %+v", it.Progress, tc.want)
+			}
+		})
+	}
+}
+
+// The bar costs no push (docs/live-activity.md "Push budget"): it is worked out from the counts the detail line already
+// prints, so along a workflow's life the content changes exactly as often with it as without it. That holds for a name
+// or phase long enough to be clipped too, and for a workflow known only by its summary: clipping cuts them, never the
+// counts (#3437 review).
+func TestBuildFleetProgressAddsNoChanges(t *testing.T) {
+	at := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+	long := strings.Repeat("cross-platform-regression-audit-", 2)                     // 64 runes: over the line by itself
+	longPhase := "Verify compatibility and integration behaviour across every client" // clipped after a short name
+	for _, tc := range []struct{ label, name, summary, phase string }{
+		{"short name", "parity-audit", "", "Verify"},
+		{"long name", long, "", "Verify"},
+		{"long phase", "cross-platform-regression-audit", "", longPhase},
+		{"long summary", "", strings.Repeat("Audit every page against the design system, ", 3), "Fix"},
+		{"no name", "", "", ""},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			step := func(runs ...proto.Workflow) fleetInput {
+				return fleetInput{Machine: "box", TurnStart: at, Session: proto.Session{MachineID: "m", SessionID: "s", State: proto.StateWorking,
+					BackgroundWorking: true, UpdatedAt: at, Workflows: runs}}
+			}
+			wf := func(phase bool, done, started int) proto.Workflow {
+				w := proto.Workflow{TaskID: "w1", Name: tc.name, Summary: tc.summary, Running: true, StartedAt: at, AgentsDone: done, AgentsStarted: started}
+				if phase {
+					w.Phase = tc.phase
+				}
+				return w
+			}
+			other := proto.Workflow{TaskID: "w0", Name: "docs-sweep", Running: true, StartedAt: at.Add(-time.Hour), AgentsDone: 1, AgentsStarted: 2}
+			steps := []fleetInput{
+				step(wf(false, 0, 0)), step(wf(true, 0, 4)), step(wf(true, 0, 4)), step(wf(true, 1, 4)), step(wf(true, 2, 4)),
+				step(wf(true, 2, 9)), step(wf(true, 2, 9), other), step(wf(true, 3, 9), other), step(wf(true, 9, 9), other),
+				// The older run moves while the newer one, the one the line names, stands still: neither line nor bar changes.
+				step(wf(true, 9, 9), proto.Workflow{TaskID: "w0", Name: "docs-sweep", Running: true, StartedAt: at.Add(-time.Hour), AgentsDone: 2, AgentsStarted: 2}),
+			}
+			changes := func(withBar bool) int {
+				n, last := 0, ""
+				for _, in := range steps {
+					st := buildFleetIn("en", []fleetInput{in}, nil)
+					if !withBar {
+						for i := range st.Items {
+							st.Items[i].Progress = nil
+						}
+					}
+					b, _ := json.Marshal(st)
+					if string(b) != last {
+						n, last = n+1, string(b)
+					}
+				}
+				return n
+			}
+			if with, without := changes(true), changes(false); with != without {
+				t.Fatalf("content changes with the bar %d, without %d", with, without)
+			}
+			// Each line, however clipped, still ends with the counts the bar draws, and stays within the usual length.
+			for _, in := range steps {
+				it := buildFleetIn("en", []fleetInput{in}, nil).Items[0]
+				w := in.Session.Workflows[0]
+				if want := fmt.Sprintf(" · %d/%d", w.AgentsDone, w.AgentsStarted); !strings.HasSuffix(it.Detail, want) {
+					t.Errorf("detail %q lost its counts %q", it.Detail, want)
+				}
+				if n := utf8.RuneCountInString(it.Detail); n > fleetDetailMax+1 {
+					t.Errorf("detail %q is %d runes", it.Detail, n)
+				}
+			}
+		})
+	}
+}
+
+// A name too long for the line is what gets clipped: "<name>… · 169/185", as the phone prints it (#3437 review).
+func TestBuildFleetBackgroundDetailKeepsCounts(t *testing.T) {
+	name := strings.Repeat("n", 55)
+	s := proto.Session{MachineID: "m", SessionID: "s", State: proto.StateWorking, BackgroundWorking: true,
+		Workflows: []proto.Workflow{{TaskID: "w1", Name: name, Running: true, Phase: "Verify", AgentsDone: 169, AgentsStarted: 185}}}
+	it := buildFleetIn("en", []fleetInput{{Session: s}}, nil).Items[0]
+	if want := name[:50] + "… · 169/185"; it.Detail != want {
+		t.Errorf("detail = %q, want %q", it.Detail, want)
+	}
+	if p := it.Progress; p == nil || *p != (FleetProgress{Done: 169, Started: 185}) {
+		t.Errorf("progress = %+v", p)
 	}
 }
 

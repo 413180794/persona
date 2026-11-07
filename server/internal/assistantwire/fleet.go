@@ -172,9 +172,19 @@ type FleetItem struct {
 	Detail string `json:"detail"`
 	// Background: a working item whose turn ended while its background work runs (#2935, Session.BackgroundWorking);
 	// Detail then says what runs ("parity-audit · Verify · 169/185"). Older apps ignore it and show it working.
-	Background  bool    `json:"background,omitempty"`
-	Interaction string  `json:"interaction,omitempty"` // what "Allow" / "Deny" / "Approve" resolve
-	Since       float64 `json:"since,omitempty"`
+	Background bool `json:"background,omitempty"`
+	// Progress: the counts of the workflow Detail names, for the expanded island's bar (#3437). Nil when the item is not
+	// a background workflow or its workflow has started no agent yet. It moves only when Detail does, so it costs no push.
+	Progress    *FleetProgress `json:"progress,omitempty"`
+	Interaction string         `json:"interaction,omitempty"` // what "Allow" / "Deny" / "Approve" resolve
+	Since       float64        `json:"since,omitempty"`
+}
+
+// FleetProgress is a background workflow's agents done of those it started so far, as Detail prints them ("169/185"):
+// the total is not known before the workflow ends, since scripts fan out as they go.
+type FleetProgress struct {
+	Done    int `json:"done"`
+	Started int `json:"started"`
 }
 
 // UsageSummary is the token usage across the machines (GET /api/v1/usage, the manager's).

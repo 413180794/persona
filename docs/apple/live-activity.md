@@ -87,6 +87,13 @@ and `PERSONA_FLEET_COUNT=12` makes the fabricated count two digits.
 - Not counted: seen (idle), offline and muted Agents, and ones waiting for the next `/loop` wake-up; the assistant (chat tab) only counts when it's asking you. The rules match the Agents list (`hub/liveactivity.go buildFleet`).
 - Item order: needs you (earliest request first) → working (longest-running first) → finished unseen (newest first); the push carries at most 3 items, the UI draws 2, and the rest show as "+N".
 - Timers run locally on the phone (`Text(timerInterval:)`), starting from the turn start time the hub recorded (`turnTracker`); nothing is pushed for timers.
+  For an Agent whose turn is over while its work runs in the background (`background`, #2935) the timer starts when its workflow did (`since`, see "ContentState" below).
+- **Background work** (#3437): such a row says 「后台」 (Background) where the place goes and, on the line under its name, what runs (`detail`: "parity-audit · Verify · 169/185"),
+  with a static bar (`FleetBar`: `progress`, done of started so far) at the end of that line, under the timer, on the Lock Screen (with details) and in the expanded view alike.
+  The bar is drawn, not a linear `ProgressView`: the system track was about 1.2:1 on the black of the island and the Lock Screen, so 3/8 looked like a short orange line with nothing after it. Its track is `FleetPalette.track` (white, or the text color on the Lock Screen, at 0.4: 3.7:1 on black, and the working fill 3.2:1 on it).
+  The row is two lines, like a request's, so neither view gets taller than with requests: two such rows are the tallest case (`-showFleetSample background`).
+  On the expanded view two two-line rows plus the "+N" under them pass the height limit at the usual 8 pt gap (the "+N" was cut in half), so then the rows are packed (`FleetState.islandPacked`: 4 pt between them, no top inset) and the "+N" stays where it always is, as on the Lock Screen.
+  The bar never animates (see "Pitfalls"), and `.numericText` transitions are not used: they could not be checked in the simulator.
 - By default the Lock Screen shows only counts and a nameless line like "A permission request is waiting"; Agent names and content appear only after turning on **Settings › Notifications › Show Details on Lock Screen** (stored per device, `prefs.lock_details`;
   the hub fills `details` when pushing to each device). The Dynamic Island is only visible when unlocked, so it always shows details.
 - Visuals: Persona's status colors (they don't follow the interface style, which the extension can't read); the outline and the Allow / Approve buttons are system blue, matching the App's accent color. The Lock Screen and expanded view are both limited to about 160pt tall, hence at most two items.
@@ -217,12 +224,17 @@ Go `hub.FleetState` and Swift `FleetState` (`apple/Shared/FleetState.swift`) mat
 {"phase":"working","needsYou":0,"working":1,"unread":0,
  "items":[{"id":"<machine>/<session>","title":"…","place":"machine · space","kind":"working","detail":"","since":1761700000},
           // This turn is stopped, but work continues in the background (Session.background_working, #2935): background=true, detail describes the work ("parity-audit · Verify · 169/185", "后台 2 个任务在跑" = "2 tasks running in the background"); old Apps ignore background and treat it as working as usual
-          {"id":"…","title":"…","place":"…","kind":"working","background":true,"detail":"parity-audit · Verify · 169/185","since":1761700000}],
+          // progress (#3437): the counts detail prints, for the expanded view's bar; only for a running workflow that has started an agent
+          {"id":"…","title":"…","place":"…","kind":"working","detail":"parity-audit · Verify · 169/185","background":true,"progress":{"done":169,"started":185},"since":1761700000}],
  "workingSince":1761700000,"details":false}
 ```
 
 - **Times are always Unix seconds (numbers)**: ActivityKit decodes a push's `content-state` with the default JSONDecoder, which interprets a `Date` as seconds since 2001.
 - For background-work items (`background: true`), `since` uses the earliest `started_at` among running workflows with a known start time (#3433), so time spent waiting after the main turn ended isn't counted as workflow duration. If no such workflow exists, fall back to the turn start time, then the session update time. Foreground turns still use their own start time; the one-line `detail` text is unchanged.
+- `progress` `{done, started}` (#3437) is the `agents_done` / `agents_started` of the workflow `detail` names: the first running one (`Session.workflows` is newest first, as the web's workflow line picks it), so the bar and the line beside it never disagree.
+  With one workflow running (the usual case) that is also the one the timer measures; with several, the timer covers the oldest, the line and bar the newest. `done` is capped at `started`; no `progress` before the workflow has started an agent, nor for background shell commands / Monitors / subagents.
+  **No extra pushes**: `progress` is worked out from the same two numbers `detail` already prints, so the content changes exactly when it did before (`TestBuildFleetProgressAddsNoChanges`), and a change is an ordinary one, coalesced at the usual pace ("Push pacing").
+  This needs the counts to stay in `detail` whatever its length: a long workflow name, phase or summary is clipped to leave room for " · done/started" at the end, never the counts (`backgroundDetail`). Clipped from the end as before, a long name lost its counts, `detail` stopped changing while `progress` went on moving, and every finished agent was a push of its own.
 - Every field on the Swift side is decoded leniently (unknown phase / kind values don't error), so adding hub fields won't break the activity.
 - `attributes-type` is `PersonaActivityAttributes`, and `attributes` is `{"kind":"fleet"}` (used by push-to-start); neither name may change.
 - Dynamic Island fields: `left` / `right` (this device's sides, `status|tpm|tokens|requests|assistant|load|timer|none`), `assistant` (assistant replying),
@@ -315,10 +327,11 @@ On the user's real hub, Dynamic Island content changed about 180 times per hour.
 
 ## Verification
 
-- Layout: `-showFleetSample needsYou|working|done|thinking|assistant|offline` (`thinking`: only the assistant replying, plus one finished-unseen item; `assistant`: only the assistant, nothing countable, so the minimal view draws the avatar; `offline`: a working activity marked stale immediately; `-fleetDetails YES` shows Lock Screen details, `-fleetIsland b|c|custom:assistant,load` selects the island sides, `-openPersona persona` selects the default Mochi) starts an activity with fabricated data, no hub needed.
+- Layout: `-showFleetSample needsYou|working|background|done|thinking|assistant|offline` (`thinking`: only the assistant replying, plus one finished-unseen item; `assistant`: only the assistant, nothing countable, so the minimal view draws the avatar; `background`: an Agent whose workflow runs in the background ahead of an ordinary working one (#3437); `offline`: a working activity marked stale immediately; `-fleetDetails YES` shows Lock Screen details, `-fleetIsland b|c|custom:assistant,load` selects the island sides, `-openPersona persona` selects the default Mochi) starts an activity with fabricated data, no hub needed.
   UI test `LiveActivityShots` reads `PERSONA_FLEET_ISLAND` and `PERSONA_PERSONA` (avatar packs need `PERSONA_MOCK_HUB`: mock_hub with `MOCK_PERSONAS=builtin`, downloaded by the App first).
   `testSwitchingPersonaRedrawsTheIsland` reads `PERSONA_PERSONA_SWITCH=nwverse,persona`: while the activity runs, switch through them in **Settings › Appearance › Avatar**, returning home for 3 seconds and capturing the island each time. Two compact shots 0.4 seconds apart (`compact` / `compact2`) check for animation, then another 3 seconds later (`compact3`; just after going home, the island may still be animating and empty).
   `PERSONA_ISLAND_PEER` (another app's activity, landscape) and `PERSONA_FLEET_COUNT` (`-showFleetCount`, changes the number of count digits) are described under "Sharing the Dynamic Island with other apps" above.
+  Background work from a hub's JSON: `MOCK_FLEET=working MOCK_WORKFLOW=1 scripts/mock/mock_hub.py` sends the review Agent as a background item (`background`, `detail`, `progress`, the workflow's `since`) the way the manager builds it; open the App paired to it, then `PERSONA_FLEET_SAMPLE=current`.
   In the simulator a stale activity only appears on the Lock Screen (gray avatar + "Waiting for hub update…"), not the Dynamic Island.
   Settings page: `-tab settings -openNotificationSettings YES -openIslandSettings YES`.
   `simctl io screenshot` can't capture the Dynamic Island or Lock Screen; use UI test `LiveActivityShots` for compact / expanded / Lock Screen shots (`docs/operations/testing.md`).
@@ -332,9 +345,11 @@ On the user's real hub, Dynamic Island content changed about 180 times per hour.
 
 - Calling `endAll()` then `request` in the sample collides: the activity being ended still reports `.active`, so no new activity starts. Use `apply` directly (update if present).
 - A Lock Screen / expanded view over about 160pt is clipped (top or bottom), with no error: take a screenshot before adding content.
+- A linear `ProgressView`'s track is the system fill, about 1.2:1 on the black of the expanded island and the Lock Screen: a partly filled bar looks finished, or like a stray line. Draw the bar with a track of your own (`FleetBar`, #3437).
 - `Text(timerInterval:)` takes all available width; give it a fixed width, or it squeezes neighboring text into "3…".
 - Compact and minimal Dynamic Island views aren't given a width (`GeometryReader` measures its default size); the island grows with content until the cap clips it. Only a width-limited view gets 28pt.
   So `ViewThatFits` is useless here; choose the look by content and measure with `IslandFitTests`.
 - Repeating symbol animations (`.rotate`, `.pulse` with `.repeating`) don't animate in Live Activities, though the App previews do: use static symbols on both sides so the preview doesn't mislead.
 - `sips -c <height> <width> --cropOffset 0 0` is treated as a centered crop (offset 0 means omitted); to crop from the top use something like `--cropOffset 1 0`.
 - After a UI test locks the simulator, unlock it, or the next `xcodebuild test` reports "test runner hung before establishing connection".
+- The first shots after switching the interface language (`PERSONA_UI_LANGUAGE`) can show every text of the activity truncated ("3件作…", "169/1…") with room to spare; the next run draws it right (#3437, iOS 27.0 simulator). Shoot again before treating it as a layout bug.

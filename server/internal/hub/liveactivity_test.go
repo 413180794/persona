@@ -33,6 +33,18 @@ func TestFleetStateJSON(t *testing.T) {
 	}
 }
 
+// A background workflow's item (#2935, #3437), as FleetStateTests.decodesABackgroundItem reads it: background, the line,
+// and the bar's counts. A plain working item carries neither (TestFleetStateJSON), so older apps see the same JSON.
+func TestFleetBackgroundItemJSON(t *testing.T) {
+	st := FleetState{Phase: "working", Working: 1, WorkingSince: 1761700000, Items: []FleetItem{{ID: "m/s", Title: "audit", Kind: "working",
+		Detail: "parity-audit · Verify · 169/185", Background: true, Progress: &FleetProgress{Done: 169, Started: 185}, Since: 1761700000}}}
+	b, _ := json.Marshal(st)
+	want := `{"phase":"working","needsYou":0,"working":1,"unread":0,"items":[{"id":"m/s","title":"audit","place":"","kind":"working","detail":"parity-audit · Verify · 169/185","background":true,"progress":{"done":169,"started":185},"since":1761700000}],"workingSince":1761700000,"details":false}`
+	if string(b) != want {
+		t.Fatalf("got  %s\nwant %s", b, want)
+	}
+}
+
 func TestCoalescer(t *testing.T) {
 	var c coalescer
 	working := FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Kind: "working"}}}
