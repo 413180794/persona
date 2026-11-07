@@ -177,7 +177,8 @@ func TestRuntimeIdleSocketsAreBoundedAndRevoked(t *testing.T) {
 
 func TestRevocationClosesEstablishedTunnel(t *testing.T) {
 	far := make(chan net.Conn, 1)
-	p := &Proxy{Dial: func(context.Context, string, string) (net.Conn, error) { a, b := net.Pipe(); far <- b; return a, nil }}
+	// Straight, not the hub's environment: an HTTPS_PROXY there would make the tunnel CONNECT to it over the pipe.
+	p := &Proxy{Upstream: func(*url.URL) (*url.URL, error) { return nil, nil }, Dial: func(context.Context, string, string) (net.Conn, error) { a, b := net.Pipe(); far <- b; return a, nil }}
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
