@@ -67,8 +67,8 @@ LINK_FIXTURE = ('#!/bin/sh\nif [ "$1" = version ]; then printf "link-version\\n"
 
 class PersonaInstallTests(unittest.TestCase):
     def run_install(self, home, initial='fresh', extra=None, corrupt=False, link=None,
-                    node=False, answers=None, legacy_artifacts=False, script=INSTALL):
-        target = {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()] + '-' + {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
+                    node=False, answers=None, legacy_artifacts=False, script=INSTALL, system=None):
+        target = {'Darwin': 'darwin', 'Linux': 'linux'}[system or platform.system()] + '-' + {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
         name = (FORMER_NAME + 'd-' if legacy_artifacts else 'personad-') + target
         with tempfile.TemporaryDirectory() as directory:
             downloads = Path(directory)
@@ -101,6 +101,12 @@ class PersonaInstallTests(unittest.TestCase):
                             'PERSONA_ROLE': 'hub', 'PERSONA_ADMIN_ACCESS': 'lan'})
                 # The system's tools only besides the fixtures: nothing of the machine running the tests is run.
                 env['PATH'] = '/usr/bin:/bin'
+                if system:  # install.sh takes this system's branch, whichever machine runs the tests
+                    uname = downloads / 'commands' / 'uname'
+                    uname.parent.mkdir()
+                    uname.write_text(f'#!/bin/sh\ncase "$1" in -s) echo {system} ;; -m) echo {platform.machine()} ;; esac\n')
+                    uname.chmod(0o755)
+                    env['PATH'] = f'{uname.parent}:{env["PATH"]}'
                 for key in ('BASH_ENV', 'ENV', 'ZDOTDIR', 'XDG_CONFIG_HOME'):  # nothing of the machine's own setup
                     env.pop(key, None)
                 env.update(extra or {})
@@ -211,18 +217,19 @@ class PersonaInstallTests(unittest.TestCase):
     def test_node_service_gets_the_devices_own_program(self):
         # --node on a new computer: persona-node and Persona Link, no personad; the service persona-link sets up runs
         # persona-node (it prefers it), and a switch is asked for, which does nothing on a new service.
-        pair = {'PERSONA_ROLE': 'node', 'PERSONA_PAIR': 'persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x'}
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=pair)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            bin_dir = home / '.persona/bin'
-            self.assertIn(b'"program":"persona-node"', (bin_dir / 'persona-node').read_bytes())
-            self.assertFalse((bin_dir / 'personad').exists())
-            self.assertIn('persona-node fixture-version installed', result.stdout)
-            calls = self.node_calls(home)
-            self.assertTrue(calls and calls[0].startswith('install --pair'), calls)
-            self.assertEqual(calls[-1], 'node switch')
+        pair_link = 'persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x'
+        pair = {'PERSONA_ROLE': 'node', 'PERSONA_PAIR': pair_link}
+        # A Mac's connector is the menu bar app, so install.sh sets up the resident node and pairs it in two calls.
+        for system, paired in (('Darwin', ['node install', 'pair ' + pair_link]), ('Linux', ['install --pair ' + pair_link])):
+            with self.subTest(system=system), tempfile.TemporaryDirectory() as directory:
+                home = Path(directory)
+                result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=pair, system=system)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                bin_dir = home / '.persona/bin'
+                self.assertIn(b'"program":"persona-node"', (bin_dir / 'persona-node').read_bytes())
+                self.assertFalse((bin_dir / 'personad').exists())
+                self.assertIn('persona-node fixture-version installed', result.stdout)
+                self.assertEqual(self.node_calls(home), paired + ['node switch'])
         with tempfile.TemporaryDirectory() as directory:  # a device that runs personad already: it stays, the service switches
             home = Path(directory)
             self.run_install(home, link=LINK_FIXTURE, node=False, extra=pair)
