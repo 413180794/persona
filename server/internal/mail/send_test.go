@@ -80,8 +80,9 @@ func TestRenderMessageChineseSubject(t *testing.T) {
 	if err != nil || len(cc) != 1 || cc[0].Address != "cc@example.com" {
 		t.Fatalf("cc = %v, %v", cc, err)
 	}
-	if id, err := r.Header.MessageID(); err != nil || id == "" {
-		t.Errorf("message id = %q, %v", id, err)
+	// The Message-ID names the sender's domain, not the machine the hub runs on.
+	if id, err := r.Header.MessageID(); err != nil || !strings.HasSuffix(id, "@example.com") {
+		t.Errorf("message id = %q, %v; want it to end in @example.com", id, err)
 	}
 
 	var text string
@@ -192,6 +193,7 @@ func TestRenderMessageRequiresRecipients(t *testing.T) {
 type fakeSMTPServer struct {
 	addr    string
 	mu      sync.Mutex
+	helo    string
 	from    string
 	rcpts   []string
 	data    []byte
@@ -266,6 +268,9 @@ func newFakeSMTPServer(t *testing.T) *fakeSMTPServer {
 	t.Helper()
 	fs := &fakeSMTPServer{user: "me@example.com", pass: "secret"}
 	srv := smtp.NewServer(smtp.BackendFunc(func(c *smtp.Conn) (smtp.Session, error) {
+		fs.mu.Lock()
+		fs.helo = c.Hostname()
+		fs.mu.Unlock()
 		return &fakeSession{srv: fs}, nil
 	}))
 	srv.Domain = "example.com"
@@ -317,6 +322,9 @@ func TestSendOverSMTP(t *testing.T) {
 
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
+	if fs.helo != "[127.0.0.1]" {
+		t.Errorf("EHLO = %q, want the address literal [127.0.0.1], not the machine's host name", fs.helo)
+	}
 	if fs.from != "me@example.com" {
 		t.Errorf("MAIL FROM = %q", fs.from)
 	}

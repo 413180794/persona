@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"net/mail"
-	"os"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
@@ -29,7 +28,7 @@ func RenderMessage(req SendRequest, from Address) ([]byte, error) {
 
 	var h gomail.Header
 	h.SetDate(time.Now())
-	if err := h.GenerateMessageID(); err != nil {
+	if err := h.GenerateMessageIDWithHostname(messageIDDomain(from.Email)); err != nil {
 		// A missing Message-ID is not fatal, but it breaks threading; fall back
 		// to a random local id.
 		h.SetMessageID(fmt.Sprintf("%d.persona", time.Now().UnixNano()))
@@ -91,6 +90,15 @@ func RenderMessage(req SendRequest, from Address) ([]byte, error) {
 		}
 	}
 	return buf.Bytes(), nil
+}
+
+// messageIDDomain is the part of a sent message's Message-ID after the @: the sender's domain, so the ID does not carry
+// the host name of the machine the hub runs on. email is already lowercased by normalizeEmail before it is stored.
+func messageIDDomain(email string) string {
+	if i := strings.LastIndexByte(email, '@'); i >= 0 && i+1 < len(email) {
+		return email[i+1:]
+	}
+	return "localhost"
 }
 
 func textPartHeader() gomail.InlineHeader {
@@ -244,7 +252,7 @@ func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcp
 	client.CommandTimeout = networkTimeout
 	client.SubmissionTimeout = networkTimeout
 
-	_ = client.Hello(localHostname())
+	_ = client.Hello(ehloName)
 
 	if auth, err := s.smtpAuth(ctx, a); err != nil {
 		return err
@@ -298,13 +306,10 @@ func isASCII(s string) bool {
 	return true
 }
 
-// localHostname is used for the SMTP EHLO greeting.
-func localHostname() string {
-	if h, err := os.Hostname(); err == nil && h != "" {
-		return h
-	}
-	return "localhost"
-}
+// ehloName is the name the SMTP client greets the server with: an address literal, which RFC 5321 (section 4.1.4) asks
+// of a client whose host name does not resolve. The machine's own name is also private, and servers record the EHLO
+// name in the Received header of every message they accept (section 4.4).
+const ehloName = "[127.0.0.1]"
 
 // checkSMTP verifies the SMTP server is reachable and the credentials are
 // accepted, without sending any mail.
@@ -330,7 +335,7 @@ func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
 	defer client.Close()
 	client.CommandTimeout = networkTimeout
 
-	_ = client.Hello(localHostname())
+	_ = client.Hello(ehloName)
 	auth, err := s.smtpAuth(ctx, a)
 	if err != nil {
 		return err
