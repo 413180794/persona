@@ -366,7 +366,7 @@ func (m *Machine) nodeUpdateConnected(ctx context.Context, peer *rpc.Peer, info 
 	} else {
 		var bin string
 		if info.Version != record.Target {
-			bin, err = nodeBinary(info.OS, info.Arch)
+			bin, err = nodeBinary(info.OS, info.Arch, nodeProgram(info), record.Target)
 		}
 		if err == nil {
 			err = m.startRPCDeployment(bin, &record)

@@ -24,6 +24,7 @@ import (
 // Build is what the program was built as (its -X flags).
 type Build struct {
 	Version string
+	Program string // nodeproto.ProgramPersonad or ProgramPersonaNode: what node.info says the node runs as
 }
 
 // Usage is the device commands' part of the usage text (the node part is NodeUsage).
@@ -87,7 +88,7 @@ func Run(ctx context.Context, stop func(), args []string, b Build) (handled bool
 		}
 		runSysmon(ctx, n)
 	case "node-update-check":
-		return true, json.NewEncoder(os.Stdout).Encode(nodeupdate.Check{Version: b.Version, OS: runtime.GOOS, Arch: runtime.GOARCH})
+		return true, json.NewEncoder(os.Stdout).Encode(nodeupdate.Check{Version: b.Version, OS: runtime.GOOS, Arch: runtime.GOARCH, Program: b.Program})
 	case "node-update-watch":
 		return true, runNodeUpdateWatch(ctx, rest)
 	default:
@@ -136,6 +137,7 @@ func runNode(ctx context.Context, args []string, b Build) error {
 	if err != nil {
 		return err
 	}
+	n.Program = b.Program
 	if err = n.ServeStdio(ctx); errors.Is(err, io.EOF) {
 		err = nil
 	}

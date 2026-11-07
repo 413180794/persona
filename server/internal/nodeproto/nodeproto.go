@@ -62,5 +62,13 @@ const (
 // Required are the capabilities a manager built from this code cannot drive a node without.
 var Required = []string{Sessions}
 
+// The programs a node can run as (node.info's program): personad, everything (it may run a hub or a manager too), or
+// persona-node, the device's own (docs/link.md "The device's program"). A node from before program was reported leaves
+// it out: it is personad.
+const (
+	ProgramPersonad    = "personad"
+	ProgramPersonaNode = "persona-node"
+)
+
 // Announced is what a node built from this code announces.
 var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode, HealthSpaces}

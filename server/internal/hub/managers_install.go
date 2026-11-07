@@ -410,5 +410,26 @@ if [ -z "$BIN" ]; then
 	echo "personad installed at $BIN"
 fi
 "$BIN" manager join "$HUB" "$CODE" ` + fp + ` --install "$@"
+# A computer that runs a manager keeps its node on personad, which updates with the node: a node service (persona-link's
+# systemd unit or launchd agent) that runs the device's own program, persona-node, moves back (docs/link.md "The
+# device's program").
+# persona-link is where install.sh puts it, in the Persona Link Mac app, or on PATH.
+find_link() {
+	for c in "${PERSONA_HOME:-$HOME/.persona}/bin/persona-link" "$HOME/.persona/bin/persona-link" \
+		"/Applications/Persona Link.app/Contents/Helpers/persona-link" "$HOME/Applications/Persona Link.app/Contents/Helpers/persona-link"; do
+		[ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
+	done
+	command -v persona-link 2>/dev/null && return 0
+	return 1
+}
+for unit in "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/personad-node.service" "$HOME/Library/LaunchAgents/com.persona.node.plist"; do
+	[ -f "$unit" ] && grep -q '/persona-node[" <]' "$unit" || continue
+	link="$(find_link || true)"
+	if [ -n "$link" ]; then
+		"$link" node switch --to personad || echo "persona manager: the node service still runs persona-node; run '$link' node switch --to personad" >&2
+	else
+		echo "persona manager: the node service runs persona-node, and this computer has no persona-link to move it to personad: install Persona Link (docs/link.md), then run persona-link node switch --to personad" >&2
+	fi
+done
 `
 }

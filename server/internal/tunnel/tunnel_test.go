@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/update/updatetest"
 	"github.com/tailscale/tailcat"
 	"tailscale.com/types/key"
 )
@@ -161,6 +163,19 @@ func TestUploadRefusesABinaryThatDoesNotRun(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(exe); !strings.Contains(string(b), "v1") {
 		t.Fatalf("exe is %q, want v1 kept", b)
+	}
+}
+
+// A personad (it may run a hub or a manager too) never becomes persona-node over tailcat, whatever the hub sends.
+func TestUploadKeepsPersonad(t *testing.T) {
+	exe := updatetest.Program(t, "personad", "", "")
+	before, _ := os.ReadFile(exe)
+	err, restarted := uploadOver(t, exe, updatetest.Program(t, "persona-node", "", ""))
+	if err == nil || !strings.Contains(err.Error(), "not replacing it with persona-node") || restarted {
+		t.Fatalf("persona-node over personad: %v, restarted %v", err, restarted)
+	}
+	if after, _ := os.ReadFile(exe); !bytes.Equal(after, before) {
+		t.Fatal("persona-node replaced personad")
 	}
 }
 

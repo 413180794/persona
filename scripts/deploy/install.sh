@@ -196,17 +196,47 @@ get() {
 	gzip -dc "$tmp/$archive" > "$tmp/$1" || fail "could not unpack $archive: not installed"
 	[ -s "$tmp/$1" ] || fail "$archive contains an empty binary: not installed"
 	prepare_state
-	mkdir -p "$DEST"
-	chmod 755 "$tmp/$1"
-	mv "$tmp/$1" "$DEST/$2"
+	mkdir -p "$DEST" || fail "could not create $DEST: not installed"
+	# Copied beside the old one first, then renamed over it: the temporary directory can be another file system, and a
+	# resident node running $DEST/$2 must never find it missing or half written.
+	cp "$tmp/$1" "$DEST/.$2.new" && chmod 755 "$DEST/.$2.new" || fail "could not write $DEST/.$2.new: not installed"
+	mv -f "$DEST/.$2.new" "$DEST/$2" || fail "could not install $DEST/$2"
 }
 
-get "$name" personad
-version="$("$DEST/personad" version 2>/dev/null || echo unknown)"
-echo "personad $version installed at $DEST/personad"
+# The device's own program (docs/link.md "The device's program"): the node service on a device runs persona-node,
+# at $DEST/persona-node. A computer that runs a hub or a manager keeps its node on personad, which their services run
+# too and which updates with the node (hosts_hub_or_manager).
+has_node_build() { awk -v n="persona-node-$os-$arch.gz" '$2 == n || $2 == "*" n { found = 1 } END { exit !found }' "$tmp/SHA256SUMS"; }
+hosts_hub_or_manager() {
+	[ -f "$STATE/hub.json" ] && return 0
+	for f in "$STATE"/managers/*/manager.json; do
+		if [ -f "$f" ]; then return 0; fi
+	done
+	return 1
+}
+# get_node_program: persona-node at $DEST/persona-node, beside whatever else is there (personad stays).
+get_node_program() {
+	get "persona-node-$os-$arch" persona-node
+	echo "persona-node $("$DEST/persona-node" version 2>/dev/null || echo unknown) installed at $DEST/persona-node"
+}
+
+# The node service given up front (--node) on a device: persona-node and Persona Link, no personad. Everything else:
+# personad, as before (the questions below may add persona-node: node_service).
+if [ "$ROLE" = node ] && has_node_build && ! hosts_hub_or_manager; then
+	get_node_program
+	program=persona-node
+	# A personad here from before (the node service may still run it) is brought up to date too: it is what the
+	# service goes back to when the switch to persona-node does not work out.
+	if [ -e "$DEST/personad" ]; then get "$name" personad; fi
+else
+	get "$name" personad
+	program=personad
+	version="$("$DEST/personad" version 2>/dev/null || echo unknown)"
+	echo "personad $version installed at $DEST/personad"
+fi
 case ":$PATH:" in
 *":$DEST:"*) ;;
-*) echo "(not on PATH: run it as $DEST/personad, or add $DEST to PATH)" ;;
+*) echo "(not on PATH: run it as $DEST/$program, or add $DEST to PATH)" ;;
 esac
 
 # On the computer that runs the hub, PERSONA_WITH=wechat also installs personad-wechat, the WeChat bot's program, next
@@ -252,10 +282,16 @@ fetch_link() {
 	[ -n "$lwant" ] || { echo "personad: $larchive is not in SHA256SUMS" >&2 && return 1; }
 	[ "$(sum "$tmp/$larchive")" = "$lwant" ] || { echo "personad: checksum mismatch for $larchive: not installed" >&2 && return 1; }
 	gzip -dc "$tmp/$larchive" > "$tmp/$lname" && [ -s "$tmp/$lname" ] || { echo "personad: could not unpack $larchive: not installed" >&2 && return 1; }
-	chmod 755 "$tmp/$lname"
-	mv "$tmp/$lname" "$DEST/persona-link"
+	cp "$tmp/$lname" "$DEST/.persona-link.new" && chmod 755 "$DEST/.persona-link.new" && mv -f "$DEST/.persona-link.new" "$DEST/persona-link" ||
+		{ echo "personad: could not install $DEST/persona-link" >&2 && return 1; }
 	LINK_FETCHED=1
 	echo "persona-link $("$DEST/persona-link" version 2>/dev/null || echo unknown) installed at $DEST/persona-link"
+}
+
+# node_service: the node service, chosen at the questions below: with the device's own program when the release has it.
+node_service() {
+	if has_node_build && ! hosts_hub_or_manager; then get_node_program; fi
+	install_node
 }
 
 # install_node makes this computer the node service: the resident node and the connector, paired with the hub
@@ -294,10 +330,40 @@ ASK
 		--pair) "$DEST/persona-link" pair "$PAIR" ${MACHINE:+--machine "$MACHINE"} || return 1 ;;
 		--listen) shift && "$DEST/persona-link" pair --listen "$@" || return 1 ;;
 		esac
-		echo "Mac 上的连接器是菜单栏 App「Persona Link」：装上它（它带着连接器和 personad，配对也在它的菜单里）；没有 App 时先前台跑 $DEST/persona-link run。"
+		switch_node
+		echo "Mac 上的连接器是菜单栏 App「Persona Link」：装上它（它带着连接器和常驻 node 的程序，配对也在它的菜单里）；没有 App 时先前台跑 $DEST/persona-link run。"
 		return 0
 	fi
-	"$DEST/persona-link" install "$@"
+	"$DEST/persona-link" install "$@" || return 1
+	switch_node
+}
+
+# node_runs_persona_node: this computer's node service (persona-link's systemd unit or launchd agent, whoever set it up,
+# the Persona Link Mac app included) runs persona-node.
+node_runs_persona_node() {
+	for f in "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/personad-node.service" "$HOME/Library/LaunchAgents/com.persona.node.plist"; do
+		if [ -f "$f" ] && grep -q '/persona-node[" <]' "$f"; then return 0; fi
+	done
+	return 1
+}
+# unswitch_node: a computer that is to run a hub keeps its node on personad, which updates with the node: a node service
+# that runs persona-node moves back (persona-link node switch --to personad, with the release's persona-link, or the one
+# here when that cannot be downloaded).
+unswitch_node() {
+	node_runs_persona_node || return 0
+	if { fetch_link || [ -x "$DEST/persona-link" ]; } && "$DEST/persona-link" node switch --to personad; then return 0; fi
+	if [ -x "$DEST/persona-link" ]; then link_cmd="$DEST/persona-link"; else link_cmd="persona-link (install Persona Link first)"; fi
+	echo "personad: warning: the node service still runs persona-node; run $link_cmd node switch --to personad (on a Mac, in Terminal on the Mac)" >&2
+	return 0
+}
+
+# switch_node: a node service that runs personad on a device moves over to persona-node (persona-link node switch:
+# whole or not at all, back on personad when persona-node does not answer). A new service runs persona-node already.
+switch_node() {
+	if [ -x "$DEST/persona-node" ] && ! hosts_hub_or_manager; then
+		"$DEST/persona-link" node switch || echo "personad: warning: the node service stays on personad (see above); retry with $DEST/persona-link node switch (on a Mac, in Terminal on the Mac)" >&2
+	fi
+	return 0
 }
 
 # Who may open the admin UI, on the machine that runs the hub (one with a hub.json, or one the person says is).
@@ -332,7 +398,7 @@ elif (: </dev/tty) 2>/dev/null; then
 		} >/dev/tty
 		printf '装成 node 服务？[Y/n] ' >/dev/tty
 		read -r as_node </dev/tty || as_node=
-		case "$as_node" in n | N | no) ;; *) install_node && exit 0 || exit 1 ;; esac
+		case "$as_node" in n | N | no) ;; *) node_service && exit 0 || exit 1 ;; esac
 	fi
 	printf '这台电脑要跑 hub 吗？[y/N] ' >/dev/tty
 	read -r is_hub </dev/tty || is_hub=
@@ -344,7 +410,7 @@ elif (: </dev/tty) 2>/dev/null; then
 	*)
 		printf '装成 node 服务、连到你的 hub？[Y/n] ' >/dev/tty
 		read -r as_node </dev/tty || as_node=
-		case "$as_node" in n | N | no) ;; *) install_node && exit 0 || exit 1 ;; esac
+		case "$as_node" in n | N | no) ;; *) node_service && exit 0 || exit 1 ;; esac
 		;;
 	esac
 else
@@ -354,6 +420,7 @@ fi
 # The machine that runs the hub: personad hub setup does the rest (hub.json, the database, the service, the phone's
 # QR code and the admin URL, docs/onboarding.md 4.1). Running it again is safe, so an upgrade with --hub runs it too.
 if [ "$ROLE" = hub ]; then
+	unswitch_node
 	echo ""
 	echo "接着把这台电脑设成 hub（$DEST/personad hub setup）："
 	if "$DEST/personad" hub setup; then

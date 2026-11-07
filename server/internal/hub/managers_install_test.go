@@ -161,6 +161,59 @@ func TestManagerInstallScriptDownloadsPersonad(t *testing.T) {
 	}
 }
 
+// On a computer whose node service runs the device's own program, the service script moves the node back to personad
+// after the join (the manager's personad updates with the node), with the persona-link install.sh put in the data
+// directory or the one in the Persona Link Mac app; with the node on personad, it leaves it alone; with no persona-link
+// anywhere, it says what to do and the install still succeeds.
+func TestManagerInstallScriptPutsTheNodeBackOnPersonad(t *testing.T) {
+	script := managerInstallScript(managerScript{ID: "m-0a1b2c", Name: "Work", Hub: "https://hub.example.com", Code: "mi_x"})
+	f := filepath.Join(t.TempDir(), "install.sh")
+	if err := os.WriteFile(f, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const fakeLink = "#!/bin/sh\necho \"link $*\" >> \"$HOME/calls\"\n"
+	for _, tc := range []struct {
+		name, runs, link string // link: where persona-link is, under HOME ("" none)
+		mac              bool
+	}{
+		{"linux", "persona-node", ".persona/bin/persona-link", false},
+		{"on personad", "personad", ".persona/bin/persona-link", false},
+		{"mac app", "persona-node", "Applications/Persona Link.app/Contents/Helpers/persona-link", true},
+		{"no persona-link", "persona-node", "", false},
+	} {
+		home := t.TempDir()
+		bin := filepath.Join(home, ".persona", "bin")
+		_ = os.MkdirAll(bin, 0o755)
+		_ = os.WriteFile(filepath.Join(bin, "personad"), []byte("#!/bin/sh\necho \"personad $*\" >> \"$HOME/calls\"\n"), 0o755)
+		if tc.link != "" {
+			_ = os.MkdirAll(filepath.Dir(filepath.Join(home, tc.link)), 0o755)
+			_ = os.WriteFile(filepath.Join(home, tc.link), []byte(fakeLink), 0o755)
+		}
+		// The node service, running tc.runs: persona-link's systemd unit, or its launchd agent.
+		svc := filepath.Join(home, ".config", "systemd", "user", "personad-node.service")
+		content := "[Service]\nExecStart=\"" + filepath.Join(bin, tc.runs) + "\" node --attach\n"
+		if tc.mac {
+			svc = filepath.Join(home, "Library", "LaunchAgents", "com.persona.node.plist")
+			content = "<array><string>" + filepath.Join(bin, tc.runs) + "</string><string>node</string><string>--attach</string></array>\n"
+		}
+		_ = os.MkdirAll(filepath.Dir(svc), 0o755)
+		_ = os.WriteFile(svc, []byte(content), 0o644)
+		cmd := exec.Command("sh", f)
+		cmd.Env = append(os.Environ(), "HOME="+home, "PERSONA_HOME=", "XDG_CONFIG_HOME=", "PATH=/usr/bin:/bin")
+		out, err := cmd.CombinedOutput()
+		calls, _ := os.ReadFile(filepath.Join(home, "calls"))
+		joined := strings.Index(string(calls), "personad manager join https://hub.example.com mi_x")
+		back := strings.Index(string(calls), "link node switch --to personad")
+		wantBack := tc.runs == "persona-node" && tc.link != ""
+		if err != nil || joined < 0 || wantBack != (back > joined) {
+			t.Fatalf("%s: %v\n%s\ncalls:\n%s", tc.name, err, out, calls)
+		}
+		if tc.link == "" && !strings.Contains(string(out), "no persona-link") {
+			t.Fatalf("%s: nothing said:\n%s", tc.name, out)
+		}
+	}
+}
+
 // fakeDockerScript is docker for the install script: it keeps networks, containers, volumes and the passwords they
 // were made with in files under $STATE, logs every call's arguments and the two variables a password goes in, and
 // answers `run --rm` (reading manager.json in the home volume) with the password kept there.

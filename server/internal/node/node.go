@@ -62,6 +62,8 @@ type Node struct {
 	dir  string // ~/.persona
 	bin  string // absolute path of this executable
 	uid  string // the computer's own id (machineuid.go); empty when it could not be read or made
+	// Program is what bin is (nodeproto.ProgramPersonad / ProgramPersonaNode), for node.info; "" says nothing.
+	Program string
 	// managed: launchers kept by the hub (managed.go)
 	managed  managedLaunchers
 	hosts    *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
@@ -1388,6 +1390,8 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 	running, runningKnown := n.herdrRunning(ctx)
 	return proto.NodeInfo{
 		Protocol:           nodeproto.Version,
+		Program:            n.Program,
+		Executable:         n.bin,
 		ProtocolMin:        nodeproto.MinManagerVersion,
 		Capabilities:       nodeproto.Announced,
 		NodeUpdate:         canUpdate,

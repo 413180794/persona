@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/nwverse/persona/server/internal/nodecmd"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -36,6 +37,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, nodecmd.Named(usage))
 		os.Exit(2)
 	}
+	if nodecmd.IsHelpArg(os.Args[1]) {
+		fmt.Println(nodecmd.Named(usage))
+		return
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	switch os.Args[1] {
@@ -47,9 +52,18 @@ func main() {
 		}
 		return
 	}
-	handled, err := nodecmd.Run(ctx, stop, os.Args[1:], nodecmd.Build{Version: version})
+	handled, err := nodecmd.Run(ctx, stop, os.Args[1:], nodecmd.Build{Version: version, Program: nodeproto.ProgramPersonaNode})
 	if !handled {
 		fmt.Fprintln(os.Stderr, nodecmd.Named(usage))
+		// Say where the commands it leaves out are rather than only listing its own.
+		where := "the hub's and the manager's commands are personad's"
+		switch os.Args[1] {
+		case "hub":
+			where = "a hub needs personad (the install command with --hub, on the one computer that runs the hub; docs/release.md)"
+		case "manager", "extension", "assistant":
+			where = "a manager needs personad (the manager's install command from the app installs both; docs/managers.md)"
+		}
+		fmt.Fprintf(os.Stderr, "\npersona-node, the device's own program, has no %q command; %s.\n", os.Args[1], where)
 		os.Exit(2)
 	}
 	var ue nodecmd.UsageError

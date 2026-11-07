@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/nodecmd"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/extension/sandbox"
@@ -110,7 +111,7 @@ func main() {
 		os.Exit(sandbox.Run(os.Args[2:], os.Stderr))
 	}
 	var err error
-	if handled, nerr := nodecmd.Run(ctx, stop, os.Args[1:], nodecmd.Build{Version: version}); handled {
+	if handled, nerr := nodecmd.Run(ctx, stop, os.Args[1:], nodecmd.Build{Version: version, Program: nodeproto.ProgramPersonad}); handled {
 		finish(nerr)
 		return
 	}

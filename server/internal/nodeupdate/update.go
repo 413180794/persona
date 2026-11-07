@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/update"
 )
 
 const (
@@ -36,6 +37,10 @@ type Check struct {
 	Version string `json:"version"`
 	OS      string `json:"os"`
 	Arch    string `json:"arch"`
+	// Program is which program the executable is (nodeproto.ProgramPersonad / ProgramPersonaNode): scripts ask it
+	// before they replace or run one (the ssh Redeploy script, install.sh, persona-link node switch). Builds from before
+	// it leave it out (personad).
+	Program string `json:"program,omitempty"`
 }
 
 type upload struct {
@@ -241,6 +246,11 @@ func (m *Manager) Commit(ctx context.Context, id string, idle func() error) (pro
 	}
 	if u.Offset != u.Spec.Size {
 		return proto.NodeUpdateCommitResult{}, errors.New("node executable upload is incomplete")
+	}
+	// The hub sends the kind of program the node runs (devices/deploy.go nodeBinary); this keeps a personad that may
+	// run a hub or a manager too from becoming persona-node all the same.
+	if err := update.CheckReplace(m.exe, u.Path); err != nil {
+		return proto.NodeUpdateCommitResult{}, err
 	}
 	if err := validate(ctx, u.Path, u.Spec); err != nil {
 		return proto.NodeUpdateCommitResult{}, err
@@ -491,7 +501,7 @@ func validate(ctx context.Context, path string, spec proto.NodeUpdateBeginParams
 	if err := json.Unmarshal(output.Bytes(), &check); err != nil {
 		return fmt.Errorf("node executable self-check output: %w", err)
 	}
-	if check != (Check{Version: spec.Version, OS: runtime.GOOS, Arch: runtime.GOARCH}) {
+	if check.Version != spec.Version || check.OS != runtime.GOOS || check.Arch != runtime.GOARCH {
 		return errors.New("node executable self-check version or platform mismatch")
 	}
 	// Reopening an already executed signed Mach-O file for writing can make

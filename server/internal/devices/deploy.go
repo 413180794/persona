@@ -12,6 +12,9 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeproto"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/update"
 )
 
 // Redeploying a node from the hub (POST /api/v1/machines/{id}/deploy, the button where a machine is not the hub's
@@ -22,8 +25,11 @@ import (
 
 func nodeBinaryDir() string { return identity.NodeBinaryDir() }
 
-// nodeBinary is the hub's build for a machine's OS and architecture.
-func nodeBinary(goos, arch string) (string, error) {
+// nodeBinary is the hub's build (version) for a machine's OS and architecture, of the kind of program its node runs:
+// the device's own persona-node where it runs that and the hub has it for this version, else personad
+// (personad-<os>-<arch>), which does everything. A node that runs personad gets personad: it may run a hub or a
+// manager too, and it is switched to persona-node on the computer itself (persona-link node switch), never by an update.
+func nodeBinary(goos, arch, program, version string) (string, error) {
 	if goos == "" || arch == "" {
 		return "", i18n.Err("devices-deploy.os_unknown")
 	}
@@ -31,7 +37,53 @@ func nodeBinary(goos, arch string) (string, error) {
 	if _, err := os.Stat(p); err != nil {
 		return "", i18n.Err("devices-deploy.no_binary", i18n.Args{"os": goos, "arch": arch})
 	}
+	if program == nodeproto.ProgramPersonaNode {
+		// Only deploy.sh puts persona-node here, with the version it is in <name>.version. The hub's own updates
+		// replace personad-* alone (persona-node is not in the release manifest yet), so a persona-node left from an
+		// earlier deploy would bring the node another build than the hub's: it goes only when it says the hub's.
+		node := filepath.Join(nodeBinaryDir(), nodeproto.ProgramPersonaNode+"-"+goos+"-"+arch)
+		if b, err := os.ReadFile(node + ".version"); err == nil && version != "" && strings.TrimSpace(string(b)) == version {
+			if _, err := os.Stat(node); err == nil {
+				return node, nil
+			}
+		}
+	}
 	return p, nil
+}
+
+// isPersonaNodeBuild: bin is one of the node binary dir's persona-node builds (nodeBinary picked it).
+func isPersonaNodeBuild(bin string) bool {
+	return strings.HasPrefix(filepath.Base(bin), nodeproto.ProgramPersonaNode+"-")
+}
+
+// deviceNode says the node runs from the device's own file (bin/persona-node), whichever program that holds now (a hub
+// without a persona-node build of its version sends personad there): its updates go to that file, and bring
+// persona-node again once the hub has it.
+func deviceNode(info proto.NodeInfo) bool {
+	return info.Program == nodeproto.ProgramPersonaNode || (info.Executable != "" && update.IsDeviceFile(info.Executable))
+}
+
+// nodeProgram is the program to send a node: persona-node to one that runs from the device's own file.
+func nodeProgram(info proto.NodeInfo) string {
+	if deviceNode(info) {
+		return nodeproto.ProgramPersonaNode
+	}
+	return info.Program
+}
+
+// remoteTarget is the file an ssh deploy of bin replaces on the machine: the device's own file for a node that runs
+// from it (whichever build goes there), never personad's for a persona-node build, else remote_bin.
+func remoteTarget(cfg MachineConfig, info proto.NodeInfo, bin string) string {
+	if deviceNode(info) && info.Executable != "" {
+		return info.Executable
+	}
+	if isPersonaNodeBuild(bin) {
+		return "~/.persona/bin/" + nodeproto.ProgramPersonaNode
+	}
+	if cfg.RemoteBin != "" {
+		return cfg.RemoteBin
+	}
+	return "~/.persona/bin/personad"
 }
 
 // startDeploy checks a deploy can start and runs it in the background; the machine list shows its progress.
@@ -42,12 +94,12 @@ func (m *Machine) startDeploy() error {
 		return nil
 	}
 	blocked := m.canDeployLocked()
-	goos, arch, linked := m.info.OS, m.info.Arch, m.rpcDeploymentLocked()
+	goos, arch, program, linked := m.info.OS, m.info.Arch, nodeProgram(m.info), m.rpcDeploymentLocked()
 	m.mu.Unlock()
 	if blocked != nil {
 		return blocked
 	}
-	bin, err := nodeBinary(goos, arch)
+	bin, err := nodeBinary(goos, arch, program, m.d.hubVersion())
 	if err != nil {
 		return err
 	}
@@ -85,20 +137,28 @@ func (m *Machine) startDeploy() error {
 
 // deployScript is the remote command that installs the gzipped binary on stdin as bin and stops a resident node so
 // launchd restarts it. The pkill pattern is written so it does not match this ssh session's own command line.
-func deployScript(bin string) string {
+// personaNode: the binary is persona-node, which never replaces a file that is not persona-node already (a personad,
+// which may run a hub or a manager too, put there since the node said what it runs). The file says which it is in
+// node-update-check; a build that does not say is personad.
+func deployScript(bin string, personaNode bool) string {
 	target := shellQuote(bin)
 	if rest, ok := strings.CutPrefix(bin, "~/"); ok {
 		target = `"$HOME"/` + shellQuote(rest)
 	}
-	return posixCommand("set -e; b=" + target + `; mkdir -p "$(dirname "$b")"; gzip -dc > "$b.new"; chmod 755 "$b.new"; mv "$b.new" "$b"; ` +
-		`pkill -f '` + residentNodePattern + `' || true`)
+	keep := ""
+	if personaNode {
+		keep = `if [ -e "$b" ] && ! "$b" node-update-check 2>/dev/null | grep -q '"program":"persona-node"'; then rm -f "$b.new"; ` +
+			`echo "$b is personad, which may run a hub or a manager too: not replacing it with persona-node" >&2; exit 3; fi; `
+	}
+	return posixCommand("set -e; b=" + target + `; mkdir -p "$(dirname "$b")"; gzip -dc > "$b.new"; chmod 755 "$b.new"; ` + keep +
+		`mv "$b.new" "$b"; pkill -f '` + residentNodePattern + `' || true`)
 }
 
 // residentNodePattern is what the deploy script's pkill -f looks for (an extended regular expression): a resident node's
-// command line, as persona-link's service runs it (`<data dir>/bin/personad node --attach`), or as the service of a
-// computer not cut over to the Persona names yet still does (`.../jarvisd node --attach`). The brackets keep it from
-// matching the remote command itself, whose text contains the pattern.
-const residentNodePattern = "([j]arvisd|[p]ersonad) node --attach"
+// command line, as persona-link's service runs it (`<data dir>/bin/personad node --attach`, or bin/persona-node on a
+// device), or as the service of a computer not cut over to the Persona names yet still does (`.../jarvisd node --attach`).
+// The brackets keep it from matching the remote command itself, whose text contains the pattern.
+const residentNodePattern = "([j]arvisd|[p]ersonad|[p]ersona-node) node --attach"
 
 // shellQuote quotes s for a POSIX shell only (the script inside posixCommand); a remote command goes through
 // anyShellQuote.
@@ -136,10 +196,9 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 		}
 		return m.waitDeployed(ctx)
 	}
-	remote := m.cfg.RemoteBin
-	if remote == "" {
-		remote = "~/.persona/bin/personad"
-	}
+	m.mu.Lock()
+	remote := remoteTarget(m.cfg, m.info, bin)
+	m.mu.Unlock()
 	host := m.cfg.SSHHost
 	if host == "" {
 		host = m.cfg.ID
@@ -149,7 +208,10 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 		return err
 	}
 	defer f.Close()
-	cmd := exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host, deployScript(remote))
+	// The guard keeps persona-node off a file that is not the device's own (a personad installed since the node said
+	// what it runs); the device's file takes either program.
+	guard := isPersonaNodeBuild(bin) && !update.IsDeviceFile(remote)
+	cmd := exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host, deployScript(remote, guard))
 	pr, pw := io.Pipe()
 	// exec copies a non-*os.File Stdin in its own goroutine and never closes it: once ssh exits early (auth failure,
 	// connect timeout, the remote script failing, ctx done) nothing reads pr, and the gzip writer below would block on

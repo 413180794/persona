@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -213,6 +214,59 @@ func TestLinkedDeployTransfersAndConfirms(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Redeploy sends the kind of program the node says it runs: persona-node to persona-node, personad to the rest; so
+// does an update the hub queued before it restarted, when the node comes back (nodeUpdateConnected).
+func TestRedeployBringsTheProgramTheNodeRuns(t *testing.T) {
+	for _, tc := range []struct{ program, via string }{{nodeproto.ProgramPersonaNode, "redeploy"}, {nodeproto.ProgramPersonad, "redeploy"},
+		{"", "redeploy"}, {nodeproto.ProgramPersonaNode, "reconnect"}, {"", "reconnect"}} {
+		program := tc.program
+		t.Run(tc.via+"/program="+program, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
+			isolateNodeBinaries(t)
+			h, m, n, _ := linkedDeployFixture(t, kindLink)
+			dir := nodeBinaryDir()
+			_ = os.MkdirAll(dir, 0o755)
+			full, node := filepath.Join(dir, "personad-linux-amd64"), filepath.Join(dir, "persona-node-linux-amd64")
+			_ = os.WriteFile(full, bytes.Repeat([]byte("personad"), 1000), 0o755)
+			_ = os.WriteFile(node, bytes.Repeat([]byte("persona-node"), 1000), 0o755)
+			_ = os.WriteFile(node+".version", []byte(h.hubVersion()+"\n"), 0o644)
+			h.opts.Store = newMemStore()
+			want := full
+			if program == nodeproto.ProgramPersonaNode {
+				want = node
+			}
+			expected, err := os.ReadFile(want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			n.mu.Lock()
+			n.expected = expected
+			n.mu.Unlock()
+			m.mu.Lock()
+			m.info.Program = program
+			info := m.info
+			m.mu.Unlock()
+			if tc.via == "reconnect" {
+				if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.hubVersion(), State: "queued"}); err != nil {
+					t.Fatal(err)
+				}
+				m.nodeUpdateConnected(context.Background(), m.peer, info)
+			} else if err := m.startDeploy(); err != nil {
+				t.Fatal(err)
+			}
+			waitMachine(t, m, 10*time.Second, func(s proto.Machine) bool { return !s.Deploying })
+			n.mu.Lock()
+			defer n.mu.Unlock()
+			if n.begin != 1 || n.commits != 1 || !bytes.Equal(n.data, expected) {
+				t.Fatalf("begin=%d commits=%d sent %d bytes, want %s (%d bytes); error %q", n.begin, n.commits, len(n.data),
+					filepath.Base(want), len(expected), m.snapshot().DeployError)
+			}
+		})
 	}
 }
 

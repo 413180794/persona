@@ -37,6 +37,23 @@ func LockRun(path string) (release func(), err error) {
 	return func() { f.Close() }, nil
 }
 
+// ErrLocked: another process holds the lock LockFile was asked for.
+var ErrLocked = errBusy
+
+// LockFile takes the exclusive lock of the file at path (made when missing), waiting for it when wait is true; ErrLocked
+// when another process holds it and wait is false. release gives it back; the process ending does too, however it ends.
+func LockFile(path string, wait bool) (release func(), err error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := lockFile(f, wait); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return func() { f.Close() }, nil
+}
+
 // Running says whether a persona-link is running with the link.json at path: whether its run lock is held. It takes the
 // lock for an instant to find out, so a persona-link starting in that instant fails and is restarted by whatever runs it.
 func Running(path string) bool {

@@ -45,6 +45,10 @@ func TestNodeArgsEndToEnd(t *testing.T) {
 			t.Errorf("%q: exit %d, stdout %q, stderr %q", args, code, out, errOut)
 		}
 	}
+	// Scripts tell personad from persona-node by node-update-check's program before they replace or run one.
+	if out, _, code := run("node-update-check"); code != 0 || !strings.Contains(out, `"program":"personad"`) {
+		t.Errorf("node-update-check: exit %d, stdout %q", code, out)
+	}
 	entries, _ := os.ReadDir(home)
 	for _, e := range entries {
 		if e.Name() != ".cache" && e.Name() != ".config" {

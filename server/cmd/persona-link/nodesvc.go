@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/update"
 
 	"encoding/json"
 	"errors"
@@ -24,7 +26,6 @@ const (
 	nodeLabel    = "com.persona.node"      // launchd agent (Mac), likewise
 )
 
-func (e *env) nodeBin() string { return filepath.Join(e.personaDir(), "bin", e.exeName("personad")) }
 func (e *env) nodeLog() string { return filepath.Join(e.personaDir(), "node-attach.log") }
 
 func (e *env) nodeUnitPath() string { return filepath.Join(filepath.Dir(e.unitPath()), nodeUnitName) }
@@ -85,9 +86,11 @@ func nodePlist(bin, logPath string) string {
 `
 }
 
-// nodeInstall sets up the resident node service unless it is there already: personad at ~/.persona/bin/personad (copied
-// from from when there is none yet), then the service, started.
-func nodeInstall(e *env, from string) error {
+// nodeInstall sets up the resident node service unless it is there already: the node program (nodeBin: persona-node
+// when this computer has it, else personad; from is copied in when it has neither, to the name of the program it is),
+// then the service, started. One there already stays as it is (node switch moves one that runs personad over).
+// fromAny: from may be either program (--node-bin; it is asked which), else it is personad (--personad).
+func nodeInstall(e *env, from string, fromAny ...bool) error {
 	if e.goos == "windows" {
 		return errors.New(windowsNodeHint)
 	}
@@ -97,13 +100,39 @@ func nodeInstall(e *env, from string) error {
 	}
 	if fileExists(file) {
 		fmt.Fprintf(e.stdout, "常驻 node 的服务已经装了（%s），保持原样。\n", file)
+		if b, err := os.ReadFile(file); err == nil && e.serviceProgram(string(b)) == e.personadBin() &&
+			e.programOf(e.personaNodeBin()) == programPersonaNode && !e.hostsHubOrManager() {
+			fmt.Fprintf(e.stdout, "It runs personad. To have it run the device's own program (%s): persona-link node switch\n", e.personaNodeBin())
+		}
 		return nil
+	}
+	fromProg := programPersonad // --personad: personad
+	if len(fromAny) > 0 && fromAny[0] && from != "" {
+		// --node-bin: put in under the name of the program it says it is; one that does not say is not guessed at.
+		if fromProg = e.programOf(from); fromProg == "" {
+			return fmt.Errorf("%s does not say which program it is (node-update-check did not answer here): give personad or persona-node built for this computer", from)
+		}
+	} else if from != "" && update.ProgramOf(from) == programPersonaNode { // read from its build info: nothing is run
+		return fmt.Errorf("%s is persona-node, not personad: give it with --node-bin", from)
 	}
 	if _, err := identity.PrepareHome(e.home); err != nil {
 		return err
 	}
+	if from != "" && fromProg == programPersonaNode && !e.hostsHubOrManager() && e.programOf(e.personaNodeBin()) != programPersonaNode {
+		// The device's own program, under its own name, beside a personad this computer may have.
+		if err := copyExecutable(from, e.personaNodeBin()); err != nil {
+			return fmt.Errorf("放不进 %s：%w", e.personaNodeBin(), err)
+		}
+		fmt.Fprintf(e.stdout, "装好了 %s。\n", e.personaNodeBin())
+	}
 	bin := e.nodeBin()
 	if !fileExists(bin) {
+		if from != "" && bin == e.personadBin() && fromProg == programPersonaNode {
+			if !e.hostsHubOrManager() {
+				return fmt.Errorf("%s does not run here", e.personaNodeBin())
+			}
+			return fmt.Errorf("this computer runs a hub or a manager, whose node runs personad: %s is persona-node; install personad (the install command with --hub, or the manager's install command)", from)
+		}
 		if from == "" {
 			return fmt.Errorf("没有 %s：先装 personad（安装脚本会一起装），或者用 --personad <路径> 指定", bin)
 		}
@@ -148,6 +177,10 @@ type nodeState struct {
 	File      string `json:"file,omitempty"`
 	Bin       string `json:"bin"`
 	HasBin    bool   `json:"has_bin"`
+	// Runs is the program the installed service runs (its file says), when that can be read; SwitchPending, a node
+	// switch that did not finish (the next node install or switch, or persona-link run, puts the old service back).
+	Runs          string `json:"runs,omitempty"`
+	SwitchPending bool   `json:"switch_pending,omitempty"`
 	// Running: launchd has the agent loaded / systemd says active; unknown ("") where that cannot be asked.
 	Running string `json:"running,omitempty"`
 }
@@ -155,6 +188,12 @@ type nodeState struct {
 func nodeStatus(e *env) nodeState {
 	st := nodeState{File: e.nodeServiceFile(), Bin: e.nodeBin(), HasBin: fileExists(e.nodeBin())}
 	st.Installed = st.File != "" && fileExists(st.File)
+	if b, err := os.ReadFile(st.File); st.Installed && err == nil {
+		if runs := e.serviceProgram(string(b)); runs != "" {
+			st.Runs, st.Bin, st.HasBin = runs, runs, fileExists(runs)
+		}
+	}
+	st.SwitchPending = e.switchPending()
 	if e.goos == "windows" {
 		st.Installed = e.taskRunsNode()
 	}
@@ -180,7 +219,7 @@ func nodeStatus(e *env) nodeState {
 	return st
 }
 
-// nodeCmd is `persona-link node install [--personad <path>] | status [--json] | uninstall`.
+// nodeCmd is `persona-link node install [--node-bin <path> | --personad <path>] | switch | status [--json] | uninstall`.
 func nodeCmd(e *env, args []string) error {
 	if len(args) == 0 {
 		return errUsage
@@ -188,17 +227,32 @@ func nodeCmd(e *env, args []string) error {
 	switch args[0] {
 	case "install":
 		var from string
+		var fromAny bool
 		for i := 1; i < len(args); i++ {
-			v, next, ok, err := flagValue(args, i, "--personad")
+			v, next, ok, err := flagValue(args, i, "--node-bin")
+			isAny := ok
+			if !ok && err == nil {
+				v, next, ok, err = flagValue(args, i, "--personad")
+			}
 			switch {
 			case err != nil:
 				return err
 			case !ok:
 				return errUsage
 			}
-			from, i = v, next
+			from, fromAny, i = v, isAny, next
 		}
-		return nodeInstall(e, from)
+		return lockedNodeCommand(e, true, func() error { return nodeInstall(e, from, fromAny) })
+	case "switch":
+		to := programPersonaNode
+		switch {
+		case len(args) == 1:
+		case len(args) == 3 && args[1] == "--to" && (args[2] == programPersonad || args[2] == programPersonaNode):
+			to = args[2]
+		default:
+			return errUsage
+		}
+		return nodeSwitch(context.Background(), e, to)
 	case "status":
 		st := nodeStatus(e)
 		if len(args) > 1 && args[1] == "--json" {
@@ -215,6 +269,12 @@ func nodeCmd(e *env, args []string) error {
 			fmt.Fprintf(e.stdout, "常驻 node：服务没装（persona-link node install）\n")
 		default:
 			fmt.Fprintf(e.stdout, "常驻 node：服务装了（%s）%s\n", st.File, map[bool]string{true: " · " + st.Running, false: ""}[st.Running != ""])
+			if st.Runs != "" {
+				fmt.Fprintf(e.stdout, "It runs %s\n", st.Runs)
+			}
+			if st.SwitchPending {
+				fmt.Fprintln(e.stdout, "A node switch did not finish: persona-link run (within half a minute), or the next node install or switch, puts the old service back.")
+			}
 		}
 		if !st.HasBin {
 			fmt.Fprintf(e.stdout, "没有 %s\n", st.Bin)
@@ -224,30 +284,32 @@ func nodeCmd(e *env, args []string) error {
 		}
 		return exitCode(1)
 	case "uninstall":
-		if e.goos == "windows" {
-			return errors.New(windowsNodeHint)
-		}
-		file := e.nodeServiceFile()
-		if file == "" || !fileExists(file) {
-			fmt.Fprintln(e.stdout, "常驻 node 的服务没装。")
-			return nil
-		}
-		switch e.goos {
-		case "linux":
-			if e.systemdMissing() == "" {
-				_, _ = e.systemctl("disable", "--now", nodeUnitName)
+		return lockedNodeCommand(e, false, func() error {
+			if e.goos == "windows" {
+				return errors.New(windowsNodeHint)
 			}
-		case "darwin":
-			_, _ = e.command("launchctl", "bootout", "gui/"+strconv.Itoa(e.uid)+"/"+nodeLabel)
-		}
-		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		if e.goos == "linux" {
-			_, _ = e.systemctl("daemon-reload")
-		}
-		fmt.Fprintf(e.stdout, "停掉并删掉了常驻 node 的服务（%s）；%s 留着。\n", file, e.nodeBin())
-		return nil
+			file := e.nodeServiceFile()
+			if file == "" || !fileExists(file) {
+				fmt.Fprintln(e.stdout, "常驻 node 的服务没装。")
+				return nil
+			}
+			switch e.goos {
+			case "linux":
+				if e.systemdMissing() == "" {
+					_, _ = e.systemctl("disable", "--now", nodeUnitName)
+				}
+			case "darwin":
+				_, _ = e.command("launchctl", "bootout", "gui/"+strconv.Itoa(e.uid)+"/"+nodeLabel)
+			}
+			if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			if e.goos == "linux" {
+				_, _ = e.systemctl("daemon-reload")
+			}
+			fmt.Fprintf(e.stdout, "停掉并删掉了常驻 node 的服务（%s）；%s 留着。\n", file, e.nodeBin())
+			return nil
+		})
 	}
 	return errUsage
 }

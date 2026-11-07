@@ -28,7 +28,7 @@ func TestDeployErrorsKeepCanonicalTextAndCause(t *testing.T) {
 			t.Fatalf("nested node error in %s: %q want %q", l, got, want)
 		}
 	}
-	if _, err := nodeBinary("", ""); err == nil || err.Error() != "还不知道这台电脑的系统，连上以后再试" {
+	if _, err := nodeBinary("", "", "", ""); err == nil || err.Error() != "还不知道这台电脑的系统，连上以后再试" {
 		t.Fatalf("legacy error changed: %v", err)
 	}
 }

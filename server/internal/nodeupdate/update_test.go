@@ -22,6 +22,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
+	"github.com/nwverse/persona/server/internal/update/updatetest"
 )
 
 var fixtureDir string
@@ -241,6 +242,24 @@ func TestInvalidArtifactsNeverReplaceInstalledFile(t *testing.T) {
 				t.Fatal("foreign executable replaced working file")
 			}
 		})
+	}
+}
+
+// A personad (it may run a hub or a manager too) never becomes persona-node through an update, whatever the hub sends.
+func TestPersonaNodeNeverReplacesPersonad(t *testing.T) {
+	out := updatetest.Program(t, "persona-node", "", "")
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _, _ := testManager(t) // the resident is the fixture, a build of another package: personad
+	before := hash(t, m.exe)
+	id := receive(t, m, data, spec(data, "next"))
+	if _, err := m.Commit(context.Background(), id, nil); err == nil || !strings.Contains(err.Error(), "not replacing it with persona-node") {
+		t.Fatalf("persona-node over personad: %v", err)
+	}
+	if hash(t, m.exe) != before {
+		t.Fatal("persona-node replaced personad")
 	}
 }
 

@@ -97,6 +97,7 @@ func (e *env) lingering() bool {
 func install(e *env, args []string) error {
 	var pairLink, machine, listen, personad string
 	var addrs []string
+	nodeBinAny := false // --node-bin: either program, asked which (nodeInstall)
 	pairing, passive, withNode := false, false, true
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; {
@@ -119,7 +120,7 @@ func install(e *env, args []string) error {
 			var next int
 			var ok bool
 			var err error
-			for _, name := range []string{"--machine", "--addr", "--personad"} {
+			for _, name := range []string{"--machine", "--addr", "--personad", "--node-bin"} {
 				if v, next, ok, err = flagValue(args, i, name); ok || err != nil {
 					switch {
 					case err != nil:
@@ -128,7 +129,7 @@ func install(e *env, args []string) error {
 					case name == "--addr":
 						addrs = append(addrs, v)
 					default:
-						personad = v
+						personad, nodeBinAny = v, name == "--node-bin"
 					}
 					break
 				}
@@ -148,10 +149,13 @@ func install(e *env, args []string) error {
 	switch e.goos {
 	case "linux", "windows":
 	case "darwin":
-		return errors.New("Mac 上不用 install：装菜单栏 App「Persona Link」（scripts/app/mac-link.sh install），它带着 persona-link 和 personad、" +
+		return errors.New("Mac 上不用 install：装菜单栏 App「Persona Link」（scripts/app/mac-link.sh install），它带着 persona-link 和 persona-node、" +
 			"管着它们，登录时启动在它的菜单里勾")
 	default:
 		return fmt.Errorf("%s 上 install 还装不了后台服务：先在前台运行 persona-link run，交给这台的进程管理", e.goos)
+	}
+	if e.goos == "windows" && nodeBinAny && personad != "" && e.programOf(personad) != programPersonad {
+		return fmt.Errorf("%s is not personad: on Windows the node runs personad (docs/windows.md); give personad with --personad", personad)
 	}
 	if pairing {
 		c, err := pair(e, pairLink, machine)
@@ -195,7 +199,7 @@ func install(e *env, args []string) error {
 		return exitCode(1)
 	}
 	if withNode {
-		if err := nodeInstall(e, personad); err != nil {
+		if err := lockedNodeCommand(e, true, func() error { return nodeInstall(e, personad, nodeBinAny) }); err != nil {
 			fmt.Fprintf(e.stdout, "常驻 node 没装好：%v\n", err)
 		}
 	}

@@ -170,8 +170,8 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 			n.decided.decide(in, time.Now())
 		}
 		resp = map[string]any{"ok": true}
-	case "ping": // personad node doctor: a round trip that changes nothing
-		resp = map[string]any{"ok": true}
+	case "ping": // personad node doctor, persona-link node switch: a round trip that changes nothing
+		resp = map[string]any{"ok": true, "program": n.Program, "version": n.Version}
 	case "preflight": // personad node doctor's path-access check, read with this node's permissions (preflight.go)
 		resp = n.preflight(ctx)
 	case "ask": // personad ask (scriptcli.go)

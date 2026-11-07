@@ -1,0 +1,59 @@
+// Package updatetest builds tiny Go programs whose build info names their package the way builds of server/cmd/personad
+// and server/cmd/persona-node do, for tests of update.ProgramOf and of what refuses or picks a program by it.
+package updatetest
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// goCache is the build cache as the test binary started: tests that move HOME would otherwise build the standard
+// library again from a cold cache for every stub.
+var goCache = func() string {
+	if c := os.Getenv("GOCACHE"); c != "" {
+		return c
+	}
+	out, err := exec.Command("go", "env", "GOCACHE").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}()
+
+// Program builds an empty main package at <stub module>/cmd/<name> for goos/goarch ("" for this machine's) and returns
+// the executable's path. Skips the test when there is no go tool.
+func Program(t testing.TB, name, goos, goarch string) string {
+	t.Helper()
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("no go tool:", err)
+	}
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "go.mod"), []byte("module example.com/stub\n\ngo 1.21\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(src, "cmd", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), name)
+	cmd := exec.Command(goBin, "build", "-trimpath", "-o", out, "./cmd/"+name)
+	cmd.Dir = src
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=", "GOWORK=off")
+	if goCache != "" {
+		cmd.Env = append(cmd.Env, "GOCACHE="+goCache)
+	}
+	if goos != "" {
+		cmd.Env = append(cmd.Env, "GOOS="+goos, "GOARCH="+goarch)
+	}
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go build %s: %v\n%s", name, err, b)
+	}
+	return out
+}

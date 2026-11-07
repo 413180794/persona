@@ -17,7 +17,7 @@ The user added on 2026-11-02: **recommend that users install only one hub and us
 - **hub**: installed on an always-on machine (a NAS, a home server); one for the whole household. The machine it runs on is also a computer (the local node).
 - **node service**: installed once on every other computer. It contains a resident node plus the connector, **installed with one command or one app**, and after pairing it connects to the hub actively or passively (section 4):
   - Linux: choose "node" in `install.sh`; one command installs both systemd user services and pairs;
-  - Mac: the Persona Link menu bar app bundles personad and installs the resident node on first run (no need to run `scripts/deploy/node-launchd.sh` separately);
+  - Mac: the Persona Link menu bar app bundles persona-node (the device's program) and installs the resident node on first run (no need to run `scripts/deploy/node-launchd.sh` separately);
   - Windows: #299.
 - **Linking multiple hubs** (primary + members) is only for the few cases that need it: e.g. two places each with an always-on machine that can't reach each other, or several hubs already installed that you want to merge.
   Docs, installers, and the admin UI all guide toward "one hub + node services": the admin UI centers on "Add computer" and puts "Linking" under "Advanced";

@@ -418,6 +418,11 @@ type NodeInfo struct {
 	ClaudeVersion      string   `json:"claude_version"`
 	Version            string   `json:"version"`
 	System             *System  `json:"system,omitempty"`
+	// Program is the program the node runs as (nodeproto.ProgramPersonad / ProgramPersonaNode) and Executable the file
+	// it runs from: an update brings the same kind of program, to that file. Older nodes leave both out (personad, at the
+	// machine's remote_bin).
+	Program    string `json:"program,omitempty"`
+	Executable string `json:"executable,omitempty"`
 	// Engine is the engine the node drives now; Engines, what it found (proto.Machine.Engines). Older nodes leave
 	// both out.
 	Engine  string   `json:"engine,omitempty"`

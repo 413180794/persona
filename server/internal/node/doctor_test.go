@@ -250,12 +250,24 @@ func TestDoctorSockets(t *testing.T) {
 	wantStatus(t, rep, "runtime.sock", DoctorWarn, "") // optional: no runtime may be wanted
 }
 
+// ping changes nothing and says which program and build answer (persona-link node switch waits for persona-node).
 func TestNodeAnswersPing(t *testing.T) {
 	e := newDoctorEnv(t)
+	e.n.Program, e.n.Version = "persona-node", "v9"
 	e.listenNode(t, e.opts.NodeSock)
 	line, err := nodeclient.DialAt(context.Background(), e.opts.NodeSock, sockRequest{Kind: "ping"})
-	if err != nil || strings.TrimSpace(string(line)) != `{"ok":true}` {
+	if err != nil || strings.TrimSpace(string(line)) != `{"ok":true,"program":"persona-node","version":"v9"}` {
 		t.Errorf("ping: %q, %v", line, err)
+	}
+}
+
+// Standby (no manager connected) answers ping as the resident node it stands in for.
+func TestStandbyAnswersPingAsTheResident(t *testing.T) {
+	SetResident("persona-node", "v9")
+	t.Cleanup(func() { SetResident("", "") })
+	b, _ := json.Marshal((&standby{}).answer(sockRequest{Kind: "ping"}))
+	if string(b) != `{"ok":true,"program":"persona-node","standby":true,"version":"v9"}` {
+		t.Errorf("standby ping: %s", b)
 	}
 }
 

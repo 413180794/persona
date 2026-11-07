@@ -166,3 +166,34 @@ func TestLinkedMachineBackOnAnotherBuildGetsTheHubsNode(t *testing.T) {
 		t.Fatalf("record=%+v", record)
 	}
 }
+
+// Redeploy over ssh writes to the file the node runs from and sends the guard that keeps personad in place only where
+// persona-node goes to a file that is not the device's own (bin/persona-node takes either program).
+func TestSSHDeployTargetAndGuard(t *testing.T) {
+	calls := fakeSSH(t)
+	m := newMachine(newTestDevices(t), MachineConfig{ID: "box", Kind: "ssh", SSHHost: "box.invalid"})
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		build, program, executable, target string
+		guard                              bool
+	}{
+		{"persona-node-linux-amd64", "persona-node", "/home/u/.persona/bin/persona-node", "/home/u/.persona/bin/persona-node", false},
+		{"personad-linux-amd64", "personad", "/home/u/.persona/bin/persona-node", "/home/u/.persona/bin/persona-node", false},
+		{"persona-node-linux-amd64", "persona-node", "/opt/node/run-me", "/opt/node/run-me", true},
+		{"personad-linux-amd64", "personad", "/home/u/.persona/bin/personad", ".persona/bin/personad", false},
+	} {
+		bin := filepath.Join(dir, tc.build)
+		_ = os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755)
+		_ = os.Remove(calls)
+		m.mu.Lock()
+		m.info = proto.NodeInfo{Program: tc.program, Executable: tc.executable}
+		m.mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := m.deploy(ctx, bin)
+		cancel()
+		got := strings.Join(sshCalls(t, calls), "\n")
+		if err == nil || !strings.Contains(got, tc.target) || strings.Contains(got, "node-update-check") != tc.guard {
+			t.Errorf("%s from %s: err %v, want %s guard %v in %q", tc.build, tc.executable, err, tc.target, tc.guard, got)
+		}
+	}
+}

@@ -209,8 +209,9 @@ enum LinkText {
     @ObservationIgnored private var sawFirstPath = false
 
     nonisolated static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/persona-link")
-    /// The personad the app carries, for the resident node when this Mac has none (`persona-link node install`).
-    nonisolated static let personadURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/personad")
+    /// The device's program the app carries (persona-node), for the resident node when this Mac has none
+    /// (`persona-link node install --node-bin`, docs/link.md "The device's program").
+    nonisolated static let nodeURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/persona-node")
     /// Set once the app has set up (or found) the resident node by itself: later it only offers to.
     static let nodeSetUpKey = "nodeServiceSetUp"
     nonisolated static let stateEnvironment = LinkStatePaths.serviceEnvironment(
@@ -469,16 +470,17 @@ enum LinkText {
         nodeService = try? JSONDecoder().decode(NodeService.self, from: Data(r.out.utf8))
     }
 
-    /// `persona-link node install --personad <the app's>`: the resident node's launchd agent, unless there is one.
+    /// `persona-link node install --node-bin <the app's persona-node>`: the resident node's launchd agent, unless there
+    /// is one.
     func installNode() async {
         nodeNote = nil
-        let r = await Self.runHelper(["node", "install", "--personad", Self.personadURL.path], stdin: nil)
+        let r = await Self.runHelper(["node", "install", "--node-bin", Self.nodeURL.path], stdin: nil)
         if !r.ok { nodeNote = r.message }
         await refreshNodeService()
     }
 
-    /// The resident node's service is there but not running: set it up again (`node uninstall` keeps the personad in
-    /// ~/.persona/bin, `node install` loads the service anew).
+    /// The resident node's service is there but not running: set it up again (`node uninstall` keeps the node program
+    /// in ~/.persona/bin, `node install` loads the service anew).
     func reinstallNode() async {
         nodeNote = nil
         _ = await Self.runHelper(["node", "uninstall"], stdin: nil)
@@ -491,7 +493,7 @@ enum LinkText {
     private func setUpNodeOnce() async {
         await refreshNodeService()
         guard !UserDefaults.standard.bool(forKey: Self.nodeSetUpKey), let s = nodeService else { return }
-        if !s.installed && FileManager.default.isExecutableFile(atPath: Self.personadURL.path) { await installNode() }
+        if !s.installed && FileManager.default.isExecutableFile(atPath: Self.nodeURL.path) { await installNode() }
         if nodeService?.installed == true { UserDefaults.standard.set(true, forKey: Self.nodeSetUpKey) }
     }
 

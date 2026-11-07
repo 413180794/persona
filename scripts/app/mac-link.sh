@@ -1,7 +1,7 @@
 #!/bin/bash
 # Persona Link: the menu bar app around persona-link on a Mac (apple/PersonaLink/, docs/link.md, docs/persona-link-install.md).
 # The bundle keeps its old name "Persona Link.app" and executable PersonaLink (docs/rename.md).
-#   ./scripts/app/mac-link.sh build            apple/PersonaLink/build/Persona Link.app, persona-link and personad inside, signed to run locally
+#   ./scripts/app/mac-link.sh build            apple/PersonaLink/build/Persona Link.app, persona-link and persona-node inside, signed to run locally
 #   ./scripts/app/mac-link.sh install          build, put it in /Applications and open it
 #   ./scripts/app/mac-link.sh snapshot <dir>   draw the menu and the pairing window, light and dark, as PNGs
 # The bundle id is mac.link_bundle_id in ~/.config/persona/config.json (or PERSONA_LINK_BUNDLE_ID),
@@ -30,10 +30,11 @@ build() {
     (cd server && GOOS=darwin GOARCH=$goarch CGO_ENABLED=0 go build -buildvcs=false -trimpath \
       -ldflags "-s -w -X main.version=$version" -o "$OUT/persona-link-$a" ./cmd/persona-link)
     helpers+=("$OUT/persona-link-$a")
-    # The resident node the app sets up when this Mac has none (persona-link node install, docs/link.md).
+    # The resident node the app sets up when this Mac has none (persona-link node install --node-bin, docs/link.md):
+    # the device's own program.
     (cd server && GOOS=darwin GOARCH=$goarch CGO_ENABLED=0 go build -buildvcs=false -trimpath \
-      -ldflags "-s -w -X main.version=$version" -o "$OUT/personad-$a" ./cmd/personad)
-    nodes+=("$OUT/personad-$a")
+      -ldflags "-s -w -X main.version=$version" -o "$OUT/persona-node-$a" ./cmd/persona-node)
+    nodes+=("$OUT/persona-node-$a")
   done
   rm -rf "$APP"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers"
@@ -49,11 +50,11 @@ build() {
     echo "PersonaLink: the SDK version is not $sdk after vtool" >&2; exit 1
   fi
   lipo -create "${helpers[@]}" -output "$APP/Contents/Helpers/persona-link"
-  lipo -create "${nodes[@]}" -output "$APP/Contents/Helpers/personad"
+  lipo -create "${nodes[@]}" -output "$APP/Contents/Helpers/persona-node"
   sed -e "s/__BUNDLE_ID__/$ID/" -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$PKG/Info.plist" > "$APP/Contents/Info.plist"
   # Sign to run locally (ad-hoc): the helpers first, then the bundle that seals them.
   codesign --force --sign - --identifier "$ID.helper" "$APP/Contents/Helpers/persona-link"
-  codesign --force --sign - --identifier "$ID.personad" "$APP/Contents/Helpers/personad"
+  codesign --force --sign - --identifier "$ID.persona-node" "$APP/Contents/Helpers/persona-node"
   codesign --force --sign - "$APP"
   codesign --verify --strict "$APP"
   echo "built $APP ($ID, persona-link $version)"

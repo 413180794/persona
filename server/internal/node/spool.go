@@ -430,8 +430,10 @@ func (s *standby) answer(req sockRequest) any {
 			return map[string]any{"retry": true} // the hook asks again; the manager is likely back soon
 		}
 		return map[string]any{"output": nil} // the terminal decides, as with no manager at all
-	case "hook.decided", "ping":
+	case "hook.decided":
 		return map[string]any{"ok": true, "standby": true}
+	case "ping": // which program and build answer, as a Node's does: persona-link node switch waits for it
+		return map[string]any{"ok": true, "standby": true, "program": residentProgram.Load(), "version": residentVersion.Load()}
 	case "ask":
 		if req.Attempt != "" && s.holding() {
 			return nodeclient.AskReply{Retry: true}

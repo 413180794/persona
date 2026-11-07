@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -73,6 +74,16 @@ func dialResident(ctx context.Context, path string, wait time.Duration) (net.Con
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
+}
+
+// residentProgram and residentVersion are what the resident node of this process runs as (SetResident), for standby's
+// answer to ping while no Node serves (spool.go).
+var residentProgram, residentVersion atomic.Value
+
+// SetResident says which program and build the resident node of this process is (nodecmd runResident, before Attach).
+func SetResident(program, version string) {
+	residentProgram.Store(program)
+	residentVersion.Store(version)
 }
 
 // Attach runs a resident node: it listens on AttachSocketPath and serves one hub connection at a time, each relayed

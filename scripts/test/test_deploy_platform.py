@@ -134,6 +134,11 @@ class DeployBuildsEveryPlatformTests(unittest.TestCase):
         self.assertIn('PLATFORMS=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)', text)
         self.assertIn('for plat in "${PLATFORMS[@]}"; do\n  GOOS=${plat%-*} GOARCH=${plat#*-}', text)
         self.assertIn('for plat in "${PLATFORMS[@]}"; do\n        remote_state "$PERSONA_HUB_SSH"', text)
+        # persona-node is built for every platform too, beside personad; the hub gets it whole, its old version file
+        # gone first and the new one written last.
+        self.assertIn('-o "bin/persona-node-$plat" ./cmd/persona-node', text)
+        self.assertIn('rm -f "$n.version"; cat > "$n.new" && mv "$n.new" "$n"\' < "bin/persona-node-$plat"\n'
+                      '        printf \'%s\\n\' "$VERSION" | remote_state "$PERSONA_HUB_SSH" \'cat > "$PERSONA_HOME/bin/nodes/\'"persona-node-$plat.version"', text)
 
     def test_the_hub_and_the_nodes_do_not_pick_a_build_from_os_alone(self):
         text = DEPLOY.read_text()

@@ -5,9 +5,12 @@ import json
 import os
 from pathlib import Path
 import platform
+import pty
+import select
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,8 +19,54 @@ FORMER_NAME = 'jar' + 'vis'
 FORMER_PREFIX = FORMER_NAME.upper() + '_'
 
 
+def run_with_terminal(argv, env, answers, timeout=30):
+    """Runs argv with a pseudo-terminal as its controlling terminal (install.sh asks on /dev/tty), answering each
+    (prompt, answer) in turn once the prompt shows; returns (exit code, everything it wrote)."""
+    pid, fd = pty.fork()
+    if pid == 0:  # the child: the pty is its terminal, stdin, stdout and stderr
+        try:
+            os.execvpe(argv[0], argv, env)
+        finally:
+            os._exit(127)
+    out, pending, deadline = b'', list(answers), time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([fd], [], [], 0.2)
+            if ready:
+                try:
+                    chunk = os.read(fd, 4096)
+                except OSError:  # the child closed the terminal
+                    break
+                if not chunk:
+                    break
+                out += chunk
+            while pending and pending[0][0].encode() in out:
+                prompt, answer = pending.pop(0)
+                out = out.replace(prompt.encode(), b'[' + prompt.encode() + b']', 1)  # each prompt answered once
+                os.write(fd, answer.encode() + b'\n')
+        else:
+            os.kill(pid, 9)
+    finally:
+        os.close(fd)
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status), out.decode(errors='replace')
+
+
+# A persona-node in a fake release: says it is persona-node, records what it is run with, and like the real one has no
+# hub, manager, extension or assistant (those exit 2).
+NODE_FIXTURE = (b'#!/bin/sh\nif [ "$1" = node-update-check ]; then echo \'{"version":"v","program":"persona-node"}\'; exit 0; fi\n'
+                b'echo "node $*" >> "$HOME/persona-node-calls"\n'
+                b'case "$1" in hub | manager | extension | assistant) exit 2 ;; esac\n'
+                b'if [ "$1" = version ]; then printf "fixture-version\\n"; fi\n')
+# The connector: records every call (persona-link install, node install, node switch, pair); LINK_SWITCH_FAILS makes a
+# switch fail, as one whose persona-node did not answer.
+LINK_FIXTURE = ('#!/bin/sh\nif [ "$1" = version ]; then printf "link-version\\n"; exit 0; fi\necho "$*" >> "$HOME/link-calls"\n'
+                'if [ "$1 $2" = "node switch" ] && [ -n "$LINK_SWITCH_FAILS" ]; then\n'
+                '  echo "persona-node did not answer: the node service runs personad again" >&2; exit 1\nfi\n')
+
+
 class PersonaInstallTests(unittest.TestCase):
-    def run_install(self, home, initial='fresh', extra=None, corrupt=False, link=None):
+    def run_install(self, home, initial='fresh', extra=None, corrupt=False, link=None, node=False, answers=None):
         target = {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()] + '-' + {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
         name = 'personad-' + target
         with tempfile.TemporaryDirectory() as directory:
@@ -30,6 +79,10 @@ class PersonaInstallTests(unittest.TestCase):
                 link_data = gzip.compress(link.encode(), mtime=0)
                 (downloads / ('persona-link-' + target + '.gz')).write_bytes(link_data)
                 sums += hashlib.sha256(link_data).hexdigest() + '  persona-link-' + target + '.gz\n'
+            if node:  # the release has persona-node too
+                node_data = gzip.compress(NODE_FIXTURE, mtime=0)
+                (downloads / ('persona-node-' + target + '.gz')).write_bytes(node_data)
+                sums += hashlib.sha256(node_data).hexdigest() + '  persona-node-' + target + '.gz\n'
             (downloads / 'SHA256SUMS').write_text(sums)
             class Handler(SimpleHTTPRequestHandler):
                 def __init__(self, *args, **kwargs):
@@ -44,7 +97,14 @@ class PersonaInstallTests(unittest.TestCase):
                 env.update({'HOME': str(home), 'PERSONA_DL': f'http://127.0.0.1:{server.server_port}',
                             FORMER_PREFIX + 'DL': 'https://invalid.example.test', 'PERSONA_SKIP_HERDR': '1',
                             'PERSONA_ROLE': 'hub', 'PERSONA_ADMIN_ACCESS': 'lan'})
+                # The system's tools only besides the fixtures: nothing of the machine running the tests is run.
+                env['PATH'] = '/usr/bin:/bin'
+                for key in ('BASH_ENV', 'ENV', 'ZDOTDIR', 'XDG_CONFIG_HOME'):  # nothing of the machine's own setup
+                    env.pop(key, None)
                 env.update(extra or {})
+                if answers is not None:  # with a terminal: install.sh asks, and these answer
+                    code, out = run_with_terminal(['sh', str(INSTALL)], env, answers)
+                    return subprocess.CompletedProcess(['sh', str(INSTALL)], code, out, out)
                 return subprocess.run(['sh', str(INSTALL)], env=env, capture_output=True, text=True, timeout=20)
             finally:
                 server.shutdown()
@@ -87,6 +147,91 @@ class PersonaInstallTests(unittest.TestCase):
             for call in calls:
                 invoked, shown, _ = call.split('|', 2)
                 self.assertEqual((invoked, shown), ('persona-link', ''))
+
+    def node_calls(self, home):
+        p = home / 'link-calls'
+        return p.read_text().splitlines() if p.exists() else []
+
+    def test_node_service_gets_the_devices_own_program(self):
+        # --node on a new computer: persona-node and Persona Link, no personad; the service persona-link sets up runs
+        # persona-node (it prefers it), and a switch is asked for, which does nothing on a new service.
+        pair = {'PERSONA_ROLE': 'node', 'PERSONA_PAIR': 'persona://link?url=https%3A%2F%2Fhub.example.com&token=jp_x'}
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=pair)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            bin_dir = home / '.persona/bin'
+            self.assertIn(b'"program":"persona-node"', (bin_dir / 'persona-node').read_bytes())
+            self.assertFalse((bin_dir / 'personad').exists())
+            self.assertIn('persona-node fixture-version installed', result.stdout)
+            calls = self.node_calls(home)
+            self.assertTrue(calls and calls[0].startswith('install --pair'), calls)
+            self.assertEqual(calls[-1], 'node switch')
+        with tempfile.TemporaryDirectory() as directory:  # a device that runs personad already: it stays, the service switches
+            home = Path(directory)
+            self.run_install(home, link=LINK_FIXTURE, node=False, extra=pair)
+            personad = (home / '.persona/bin/personad').read_bytes()
+            result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=pair)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((home / '.persona/bin/personad').read_bytes(), personad)
+            self.assertTrue((home / '.persona/bin/persona-node').exists())
+            self.assertEqual(self.node_calls(home)[-1], 'node switch')
+        for host in ('hub.json', 'managers/m-1/manager.json'):  # a computer that runs a hub or a manager stays on personad
+            with tempfile.TemporaryDirectory() as directory:
+                home = Path(directory)
+                (home / '.persona' / host).parent.mkdir(parents=True)
+                (home / '.persona' / host).write_text('{}')
+                result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=pair)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((home / '.persona/bin/personad').exists(), host)
+                self.assertFalse((home / '.persona/bin/persona-node').exists(), host)
+                self.assertNotIn('node switch', self.node_calls(home), host)
+        with tempfile.TemporaryDirectory() as directory:  # a release without persona-node: personad, as before
+            home = Path(directory)
+            result = self.run_install(home, link=LINK_FIXTURE, node=False, extra=pair)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((home / '.persona/bin/personad').exists())
+            self.assertFalse((home / '.persona/bin/persona-node').exists())
+            self.assertNotIn('node switch', self.node_calls(home))
+        with tempfile.TemporaryDirectory() as directory:  # --hub on a device: personad comes in, the node goes back to it
+            home = Path(directory)
+            self.run_install(home, link=LINK_FIXTURE, node=True, extra=pair)
+            # The node service persona-link set up (the fixture only records): it runs persona-node.
+            unit = home / '.config/systemd/user/personad-node.service'
+            unit.parent.mkdir(parents=True)
+            unit.write_text('[Service]\nExecStart="' + str(home / '.persona/bin/persona-node') + '" node --attach\n')
+            node = (home / '.persona/bin/persona-node').read_bytes()
+            result = self.run_install(home, link=LINK_FIXTURE, node=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((home / '.persona/bin/personad').exists())
+            self.assertEqual((home / '.persona/bin/persona-node').read_bytes(), node)
+            self.assertIn('node switch --to personad', self.node_calls(home))
+            self.assertIn('hub setup\n', (home / 'personad-calls').read_text())
+            unit.write_text('[Service]\nExecStart="' + str(home / '.persona/bin/personad') + '" node --attach\n')
+            calls = len(self.node_calls(home))
+            result = self.run_install(home, link=LINK_FIXTURE, node=True)  # on personad already: left alone
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('node switch --to personad', self.node_calls(home)[calls:])
+        with tempfile.TemporaryDirectory() as directory:  # a switch that does not work out: said, the install goes on
+            home = Path(directory)
+            self.run_install(home, link=LINK_FIXTURE, node=False, extra=pair)
+            result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=dict(pair, LINK_SWITCH_FAILS='1'))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('the node service stays on personad', result.stderr)
+            self.assertTrue((home / '.persona/bin/persona-node').exists())
+
+    def test_interactive_node_answer_adds_the_devices_own_program(self):
+        # Without a role personad comes first (the questions may make this the hub); answering "node" adds persona-node
+        # and the service runs it.
+        no_role = {'PERSONA_ROLE': '', 'PERSONA_ADMIN_ACCESS': ''}
+        as_node = [('跑 hub 吗', 'n'), ('连到你的 hub', ''), ('选哪个？[1-2', '1'), ('粘贴配对链接', '')]
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            result = self.run_install(home, link=LINK_FIXTURE, node=True, extra=no_role, answers=as_node)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertTrue((home / '.persona/bin/personad').exists())
+            self.assertTrue((home / '.persona/bin/persona-node').exists(), result.stdout)
+            self.assertEqual(self.node_calls(home)[-1], 'node switch', result.stdout)
 
     def test_existing_canonical_state_and_valid_external_symlink_are_not_moved(self):
         for external in (False, True):

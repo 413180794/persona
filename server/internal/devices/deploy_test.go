@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/nodeproto"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // loginShells are the shells on this machine an ssh target's login shell could be: sshd hands the remote command to
@@ -52,8 +54,8 @@ func testDeployScript(t *testing.T, shell, bin string) {
 	_, _ = zw.Write([]byte("#!/bin/sh\necho new\n"))
 	_ = zw.Close()
 	pkilled := fakePkill(t)
-	cmd := exec.Command(shell, "-c", deployScript(bin))
-	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+filepath.Dir(pkilled)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd := exec.Command(shell, "-c", deployScript(bin, false))
+	cmd.Env = shellEnv(home, filepath.Dir(pkilled))
 	cmd.Stdin = &gz
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, out)
@@ -63,26 +65,28 @@ func testDeployScript(t *testing.T, shell, bin string) {
 	if !ok {
 		t.Fatalf("the resident node is not restarted: pkill got %q", got)
 	}
-	// The pattern finds the resident node persona-link's service runs (cmd/persona-link nodesvc.go), and the one of a
-	// computer not cut over to the Persona names yet; it leaves the other Persona processes and the remote command that
-	// carries it alone.
+	// The pattern finds the resident node persona-link's service runs (cmd/persona-link nodesvc.go: personad, or
+	// persona-node on a device), and the one of a computer not cut over to the Persona names yet; it leaves the other
+	// Persona processes and the remote command that carries it alone.
 	re := regexp.MustCompile(pattern)
 	personad := filepath.Join(home, ".persona", "bin", "personad")
-	for _, node := range []string{personad + " node --attach", filepath.Join(home, ".jarvis", "bin", "jarvisd") + " node --attach"} {
+	for _, node := range []string{personad + " node --attach", filepath.Join(home, ".persona", "bin", "persona-node") + " node --attach",
+		filepath.Join(home, ".jarvis", "bin", "jarvisd") + " node --attach"} {
 		if !re.MatchString(node) {
 			t.Errorf("pkill -f %q does not find the resident node %q", pattern, node)
 		}
 	}
 	for _, other := range []string{personad + " node --stdio", personad + " hub run", personad + " hook", personad + "-wechat run",
-		personad + " manager run --dir /x", deployScript(bin)} {
+		personad + " manager run --dir /x", filepath.Join(home, ".persona", "bin", "persona-node") + " node --stdio",
+		filepath.Join(home, ".persona", "bin", "persona-link") + " run", deployScript(bin, false), deployScript(bin, true)} {
 		if re.MatchString(other) {
 			t.Errorf("pkill -f %q matches %q", pattern, other)
 		}
 	}
 	path := filepath.Join(home, strings.TrimPrefix(bin, "~/"))
-	got, err := os.ReadFile(path)
-	if err != nil || string(got) != "#!/bin/sh\necho new\n" {
-		t.Fatalf("%q %v", got, err)
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "#!/bin/sh\necho new\n" {
+		t.Fatalf("%q %v", data, err)
 	}
 	if st, _ := os.Stat(path); st.Mode().Perm() != 0o755 {
 		t.Errorf("mode %v", st.Mode())
@@ -97,18 +101,177 @@ func TestNodeBinaryMissing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	if _, err := nodeBinary("plan9", "mips"); err == nil || !strings.Contains(err.Error(), "deploy.sh") {
+	isolateNodeBinaries(t)
+	if _, err := nodeBinary("plan9", "mips", "", ""); err == nil || !strings.Contains(err.Error(), "deploy.sh") {
 		t.Fatalf("err = %v", err)
 	}
-	if _, err := nodeBinary("", ""); err == nil {
+	if _, err := nodeBinary("", "", "", ""); err == nil {
 		t.Fatal("no platform yet: want an error")
 	}
 	dir := nodeBinaryDir()
 	_ = os.MkdirAll(dir, 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "personad-darwin-arm64"), []byte("x"), 0o755)
-	if p, err := nodeBinary("darwin", "arm64"); err != nil || filepath.Base(p) != "personad-darwin-arm64" {
+	if p, err := nodeBinary("darwin", "arm64", "", ""); err != nil || filepath.Base(p) != "personad-darwin-arm64" {
 		t.Fatalf("%s %v", p, err)
 	}
+	// A node that runs persona-node gets persona-node when the hub has it for the hub's version, personad otherwise;
+	// one that runs personad (or an older node that does not say) always personad: it may run a hub or a manager too.
+	if p, _ := nodeBinary("darwin", "arm64", nodeproto.ProgramPersonaNode, "v2"); filepath.Base(p) != "personad-darwin-arm64" {
+		t.Fatalf("persona-node without its build on the hub: %s", p)
+	}
+	node := filepath.Join(dir, "persona-node-darwin-arm64")
+	_ = os.WriteFile(node, []byte("x"), 0o755)
+	if p, _ := nodeBinary("darwin", "arm64", nodeproto.ProgramPersonaNode, "v2"); filepath.Base(p) != "personad-darwin-arm64" {
+		t.Fatalf("a persona-node that does not say its version: %s", p)
+	}
+	_ = os.WriteFile(node+".version", []byte("v2\n"), 0o644) // deploy.sh writes it after the binary
+	for program, want := range map[string]string{nodeproto.ProgramPersonaNode: "persona-node-darwin-arm64",
+		nodeproto.ProgramPersonad: "personad-darwin-arm64", "": "personad-darwin-arm64"} {
+		if p, err := nodeBinary("darwin", "arm64", program, "v2"); err != nil || filepath.Base(p) != want {
+			t.Errorf("%q: %s %v, want %s", program, p, err, want)
+		}
+	}
+	// The hub moved on (its own update replaces personad-* alone), or no version is known: the earlier deploy's
+	// persona-node is another build, never sent.
+	for _, hub := range []string{"v3", ""} {
+		if p, _ := nodeBinary("darwin", "arm64", nodeproto.ProgramPersonaNode, hub); filepath.Base(p) != "personad-darwin-arm64" {
+			t.Errorf("hub %q: %s, want personad", hub, p)
+		}
+	}
+	_ = os.Remove(node) // the version without the file
+	if p, _ := nodeBinary("darwin", "arm64", nodeproto.ProgramPersonaNode, "v2"); filepath.Base(p) != "personad-darwin-arm64" {
+		t.Errorf("no persona-node file: %s", p)
+	}
+}
+
+// The ssh deploy keeps personad where it is when the build nodeBinary picked is persona-node, by its file name there.
+func TestIsPersonaNodeBuild(t *testing.T) {
+	for bin, want := range map[string]bool{"/h/.persona/bin/nodes/persona-node-darwin-arm64": true,
+		"/h/.persona/bin/nodes/personad-darwin-arm64": false, "/h/persona-node-dir/personad-linux-amd64": false} {
+		if isPersonaNodeBuild(bin) != want {
+			t.Errorf("%s: %v", bin, !want)
+		}
+	}
+}
+
+// Redeploying persona-node over ssh never replaces a file that is not persona-node already (an install that made it
+// personad after the node said what it runs), in every login shell; persona-node over persona-node, or where there is
+// nothing yet, goes in as any build does.
+func TestDeployScriptKeepsPersonad(t *testing.T) {
+	for _, shell := range loginShells(t) {
+		t.Run(filepath.Base(shell), func(t *testing.T) {
+			for _, tc := range []struct {
+				name, existing string
+				replaced       bool
+			}{
+				{"none", "", true},
+				{"persona-node", `{"version":"v1","os":"linux","arch":"amd64","program":"persona-node"}`, true},
+				{"personad", `{"version":"v1","os":"linux","arch":"amd64","program":"personad"}`, false},
+				{"older personad", "", false}, // a build without node-update-check: usage on stderr, exit 2
+			} {
+				home := t.TempDir()
+				bin := filepath.Join(home, ".persona", "bin", "persona-node")
+				old := ""
+				if tc.name != "none" {
+					old = "#!/bin/sh\n[ \"$1\" = node-update-check ] || exit 0\n"
+					if tc.existing != "" {
+						old += "echo '" + tc.existing + "'\n"
+					} else {
+						old += "echo usage >&2; exit 2\n"
+					}
+					_ = os.MkdirAll(filepath.Dir(bin), 0o755)
+					_ = os.WriteFile(bin, []byte(old), 0o755)
+				}
+				var gz bytes.Buffer
+				zw := gzip.NewWriter(&gz)
+				_, _ = zw.Write([]byte("#!/bin/sh\necho new\n"))
+				_ = zw.Close()
+				pkilled := fakePkill(t)
+				cmd := exec.Command(shell, "-c", deployScript("~/.persona/bin/persona-node", true))
+				cmd.Env = shellEnv(home, filepath.Dir(pkilled))
+				cmd.Stdin = &gz
+				out, err := cmd.CombinedOutput()
+				got, _ := os.ReadFile(bin)
+				if tc.replaced {
+					if err != nil || string(got) != "#!/bin/sh\necho new\n" {
+						t.Errorf("%s: %v %s, file %q", tc.name, err, out, got)
+					}
+					continue
+				}
+				if err == nil || !strings.Contains(string(out), "not replacing it with persona-node") || string(got) != old {
+					t.Errorf("%s: %v %s, file %q", tc.name, err, out, got)
+				}
+				if called, _ := os.ReadFile(pkilled); len(called) != 0 {
+					t.Errorf("%s: the node was restarted: %q", tc.name, called)
+				}
+				if _, err := os.Stat(bin + ".new"); err == nil {
+					t.Errorf("%s: .new left behind", tc.name)
+				}
+			}
+		})
+	}
+}
+
+// An ssh deploy writes to the device's file when the node runs from it (persona-node, or personad when the hub has no
+// persona-node build), never persona-node to remote_bin (personad on a computer that may run a hub or a manager too);
+// a personad node's goes to remote_bin as before. nodeProgram brings persona-node back to a device file that holds
+// personad.
+func TestRemoteTarget(t *testing.T) {
+	if got := nodeProgram(proto.NodeInfo{Program: nodeproto.ProgramPersonad, Executable: "/home/u/.persona/bin/persona-node"}); got != nodeproto.ProgramPersonaNode {
+		t.Errorf("personad in the device's file: %s", got)
+	}
+	if got := nodeProgram(proto.NodeInfo{Program: nodeproto.ProgramPersonad, Executable: "/home/u/.persona/bin/personad"}); got != nodeproto.ProgramPersonad {
+		t.Errorf("personad: %s", got)
+	}
+	node := proto.NodeInfo{Program: nodeproto.ProgramPersonaNode, Executable: "/home/u/.persona/bin/persona-node"}
+	full := proto.NodeInfo{Program: nodeproto.ProgramPersonad, Executable: "/home/u/.persona/bin/personad"}
+	custom := MachineConfig{RemoteBin: "/opt/persona/personad"}
+	for _, tc := range []struct {
+		cfg  MachineConfig
+		info proto.NodeInfo
+		bin  string
+		want string
+	}{
+		{MachineConfig{}, node, "/hub/nodes/persona-node-linux-amd64", "/home/u/.persona/bin/persona-node"},
+		{custom, node, "/hub/nodes/persona-node-linux-amd64", "/home/u/.persona/bin/persona-node"},
+		{MachineConfig{}, proto.NodeInfo{}, "/hub/nodes/persona-node-linux-amd64", "~/.persona/bin/persona-node"},
+		{MachineConfig{}, full, "/hub/nodes/personad-linux-amd64", "~/.persona/bin/personad"},
+		{custom, full, "/hub/nodes/personad-linux-amd64", "/opt/persona/personad"},
+		{MachineConfig{}, node, "/hub/nodes/personad-linux-amd64", "/home/u/.persona/bin/persona-node"}, // no persona-node build: personad to that file
+		// personad landed in the device's file before: the node says personad, its file is still the device's.
+		{custom, proto.NodeInfo{Program: nodeproto.ProgramPersonad, Executable: "/home/u/.persona/bin/persona-node"},
+			"/hub/nodes/persona-node-linux-amd64", "/home/u/.persona/bin/persona-node"},
+	} {
+		if got := remoteTarget(tc.cfg, tc.info, tc.bin); got != tc.want {
+			t.Errorf("%+v %s: %s, want %s", tc.info, filepath.Base(tc.bin), got, tc.want)
+		}
+	}
+}
+
+// isolateNodeBinaries points the node binary dir at a directory of this test: an exported PERSONA_HOME (an assistant's
+// shell on the hub machine has one) or *_NODE_BINARIES would otherwise send these tests' files into the real one.
+func isolateNodeBinaries(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("PERSONA_NODE_BINARIES", dir)
+}
+
+// shellEnv is the environment the deploy script runs in under each login shell: HOME is home, the PATH is stubs then the
+// system's tools only, and nothing makes a shell read the developer's rc files (BASH_ENV, ENV, ZDOTDIR, fish through
+// XDG_CONFIG_HOME) or points at their state (PERSONA_*).
+func shellEnv(home, stubs string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		switch {
+		case k == "PATH", k == "HOME", k == "BASH_ENV", k == "ENV", k == "ZDOTDIR", strings.HasPrefix(k, "XDG_"),
+			strings.HasPrefix(k, "PERSONA_"):
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, "HOME="+home, "ZDOTDIR="+home, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+		"PATH="+stubs+string(os.PathListSeparator)+"/usr/bin:/bin")
 }
 
 // fakePkill puts a pkill first on PATH that only records its arguments (the returned file) and kills nothing. The

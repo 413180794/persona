@@ -138,6 +138,10 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
     -o "../$OUT/bin/personad-${t%/*}-${t#*/}" ./cmd/personad)
   (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
     -o "../$OUT/bin/persona-link-${t%/*}-${t#*/}" ./cmd/persona-link)
+  # The device's own program (cmd/persona-node): install.sh --node puts it at ~/.persona/bin/persona-node. It is in
+  # SHA256SUMS, not in latest.json, so hubs keep updating as before (docs/hub-update.md).
+  (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
+    -o "../$OUT/bin/persona-node-${t%/*}-${t#*/}" ./cmd/persona-node)
 done
 # The programs released with personad (update.ProgramNames): built the same way, on the same platforms; a hub swaps
 # them with personad. personad-wechat is the WeChat bot (docs/wechat.md), a plugin of its own. (Telegram's connector is
@@ -161,6 +165,8 @@ host_bin="$OUT/bin/personad-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/
 [ "$("$host_bin" version)" = "$VERSION" ] || { echo "the built personad does not report $VERSION" >&2; exit 1; }
 host_link="$OUT/bin/persona-link-${host_bin##*/personad-}"
 [ "$("$host_link" version)" = "$VERSION" ] || { echo "the built persona-link does not report $VERSION" >&2; exit 1; }
+host_node="$OUT/bin/persona-node-${host_bin##*/personad-}"
+[ "$("$host_node" version -v)" = "$("$host_bin" version -v)" ] || { echo "persona-node is not the same build as personad" >&2; exit 1; }
 "$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built personad is not release build $BUILD" >&2; exit 1; }
 for p in wechat; do
   host_p="$OUT/bin/personad-$p-${host_bin##*/personad-}"
@@ -172,10 +178,10 @@ curl -fsSL "$PERSONA_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/nu
 "$host_bin" release check-next "$OUT/served.json" --build "$BUILD" --commit "$COMMIT" || exit 1
 
 # The privacy scan checked the raw binaries; only the gzipped ones are published (to the bucket, see above).
-for bin in "$OUT/bin"/personad-* "$OUT/bin"/persona-link-*; do
+for bin in "$OUT/bin"/personad-* "$OUT/bin"/persona-link-* "$OUT/bin"/persona-node-*; do
   gzip -n -9 -c "$bin" > "$bin.gz"
 done
-(cd "$OUT/bin" && shasum -a 256 personad-*.gz persona-link-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
+(cd "$OUT/bin" && shasum -a 256 personad-*.gz persona-link-*.gz persona-node-*.gz > SHA256SUMS && printf '%s\n' "$VERSION" > VERSION)
 
 # The manifest hubs update from: version, build number, commit and every download's sha256 (not signed, the user's
 # call: it guards against a broken download over HTTPS, docs/hub-update.md "Security").

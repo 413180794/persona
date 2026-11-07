@@ -1,5 +1,9 @@
 .DS_Store
 /server/bin/
+# `go build ./cmd/<name>` run in server/ drops the program there.
+/server/personad
+/server/persona-node
+/server/persona-link
 /build/
 /build-release/
 /apple/*.xcodeproj

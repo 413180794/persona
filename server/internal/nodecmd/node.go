@@ -101,6 +101,7 @@ func runResident(ctx context.Context, b Build) error {
 	defer cancel()
 	restart := make(chan struct{})
 	updater := nodeupdate.New(b.Version, func() { close(restart); cancel() })
+	node.SetResident(b.Program, b.Version)
 	defer updater.Close()
 	if updater.RestartRequired() {
 		return syscall.Exec(updater.Executable(), os.Args, os.Environ())
@@ -142,6 +143,7 @@ func runResident(ctx context.Context, b Build) error {
 		n, err := node.New(b.Version)
 		if err == nil {
 			n.SetUpdater(updater)
+			n.Program = b.Program
 		}
 		return n, err
 	}, conns, node.NewRuntimeHost(b.Version, ""))

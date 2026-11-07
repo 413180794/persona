@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/update"
 )
 
 // The upload port takes a new personad for the node, what the hub's "Redeploy" sends over ssh otherwise (devices/deploy.go):
@@ -137,6 +139,11 @@ func install(r *bufio.Reader, exe string) error {
 		return errors.New("sha256 mismatch")
 	}
 	if err := os.Chmod(tmp, 0o755); err != nil {
+		return err
+	}
+	// The hub sends the kind of program the node runs (devices/deploy.go nodeBinary); a personad, which may run a hub
+	// or a manager too, never becomes persona-node all the same.
+	if err := update.CheckReplace(exe, tmp); err != nil {
 		return err
 	}
 	// It must run here (right OS and architecture, not truncated) before it replaces the working one.

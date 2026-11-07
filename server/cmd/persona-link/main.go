@@ -37,17 +37,20 @@ const usage = `用法：
                                                  看 / 切换模式：active 我去连 hub，passive 让 hub 来连；
                                                  两种模式的配对各自留着，切回去不用重新配对
   persona-link install [--pair <链接>|-] [--machine <id>] [--listen [<监听地址>]] [--addr <地址>]…
-                    [--personad <路径>] [--no-node]
+                    [--node-bin <路径> | --personad <路径>] [--no-node]
                                                  Linux：装成 systemd 用户服务并启动，等它连上 hub（被动模式：等它开始监听）；
                                                  --pair 先配对（主动），--listen 改成被动模式、还没配对时打印配对链接；
                                                  常驻 node 的服务没装时一起装上（--no-node 不装）。
                                                  没有 systemd 时告诉你别的办法。
                                                  Windows：装成登录时启动的计划任务「Persona Link」，常驻 node 和
                                                  persona-link 都在里面，退出了重启；--personad 给的 personad.exe 每次都换上
-  persona-link node install [--personad <路径>] | status [--json] | uninstall
-                                                 常驻 node（personad node --attach）的服务：Linux systemd 用户服务
-                                                 personad-node，Mac launchd 的 com.persona.node；已经装了的保持原样；
-                                                 没有 ~/.persona/bin/personad 时从 --personad 复制
+  persona-link node install [--node-bin <路径> | --personad <路径>] | switch [--to personad] | status [--json] | uninstall
+                                                 常驻 node（node --attach）的服务：Linux systemd 用户服务
+                                                 personad-node，Mac launchd 的 com.persona.node；已经装了的保持原样。
+                                                 跑设备自己的程序 ~/.persona/bin/persona-node（有的话），否则 personad；
+                                                 --node-bin 给的程序按它是哪个放进去，--personad 给的当 personad。
+                                                 switch：已装的服务改跑 persona-node（--to personad 改回），新的 node
+                                                 应答前保留旧服务文件，应答不了就换回去
   persona-link discover [--wait <秒>] [--json]    局域网里有哪些 hub（mDNS）；听到了退出码 0，否则 1
   persona-link status [--json]                    模式、链路、hub、本机 node、后台服务的状态；连着（被动模式：在监听）时
                                                  退出码 0，否则 1
@@ -336,6 +339,9 @@ func keepLink(ctx context.Context, path, logPath string, stdout io.Writer) error
 		log.SetOutput(lf)
 		defer log.SetOutput(os.Stderr)
 	}
+	// A node switch whose persona-link died half way (nodeswitch.go) is undone now and whenever one turns up: by the
+	// one persona-link run that holds the lock, saying what it did in the log (stdout is the menu bar app's JSON lines).
+	go watchSwitch(ctx)
 	check, redial := make(chan struct{}, 1), make(chan struct{}, 1)
 	poke := func(ch chan struct{}) {
 		select {

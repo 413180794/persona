@@ -91,7 +91,7 @@ install a resident node plus the connector persona-link, with one command or one
 - Linux: `curl -fsSL <site>/install.sh | sh -s -- --node --pair '<link from personad hub pair --machine <id>>'` (this computer connects to the hub; in `machines` it is
   `{"id":"laptop","name":"Laptop","kind":"link","icon":"laptop"}`, and the hub needs `public.tls_listen`), or `… --node --listen` (the hub connects to it;
   paste the printed link into the hub admin UI under **Computers › Add computer › Hub connects**, and in `machines` it is kind `service`).
-- Mac: install the menu bar App "Persona Link" (`./scripts/app/mac-link.sh install`); it bundles personad and installs the resident node on first run; pairing is in its menu.
+- Mac: install the menu bar App "Persona Link" (`./scripts/app/mac-link.sh install`); it bundles persona-node, the device's own program, and installs the resident node on first run; pairing is in its menu.
 
 No `ssh_host`, and no SSH setup on the hub. The SSH setup in steps 1–6 above still works, and is kept only for compatibility from now on.
 
