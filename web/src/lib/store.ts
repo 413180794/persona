@@ -15,6 +15,7 @@ import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, errorT
 import { currentLanguage } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
+import { timeMs } from "./times";
 import { NO_PINS, pinsOf, type AgentPins } from "./pins";
 import type { AssistantInfo, Interaction, Item, Machine, MeshHub, Session } from "./types";
 import type { Resolution } from "./answered";
@@ -672,21 +673,26 @@ export function savePins(pins: AgentPins): Promise<void> {
 
 /** "Mark all as seen": every finished-unread one of these is seen now, in one update of the list (iOS AppModel.markSeen). The
  * hub pushes the sessions back as seen; the list does not wait for it. */
-export function markSeen(list: Pick<Session, "machine_id" | "session_id">[]) {
-  const keys = new Set(list.map((s) => `${s.machine_id}/${s.session_id}`));
+export function markSeen(list: Session[]) {
+  const keys = new Set<string>();
+  const retained = new Map(Object.values(state.sessions).flat().map((s) => [runtimeIdentity(s), s]));
+  const changedAt = (s: Session) => Math.max(timeMs(s.updated_at), timeMs(s.state_since), timeMs(s.seen_at));
   const now = new Date().toISOString();
-  const sessions: Record<string, Session[]> = {};
-  let changed = false;
-  for (const [mid, ss] of Object.entries(state.sessions)) {
-    sessions[mid] = ss.map((s) => {
-      if (!keys.has(`${s.machine_id}/${s.session_id}`) || stateOf(s) !== "unread") return s;
-      changed = true;
-      if (isOpen()) markSeenLocally(s.machine_id, s.session_id);
-      else void api(`/sessions/${encodeURIComponent(s.machine_id)}/${encodeURIComponent(s.session_id)}/seen`, { method: "POST" }).catch(() => {});
-      return { ...s, state: "idle" as const, seen_at: now };
-    });
+  const changed: Session[] = [];
+  for (const given of list) {
+    const id = runtimeIdentity(given);
+    if (keys.has(id)) continue;
+    keys.add(id);
+    // The full-list fallback can supply rows absent from the bounded store. Retain only acted-on rows,
+    // and honor a more recent local state (for example, an agent that has started working again).
+    const current = retained.get(id);
+    const s = current && changedAt(current) >= changedAt(given) ? current : given;
+    if (stateOf(s) !== "unread") continue;
+    if (isOpen()) markSeenLocally(s.machine_id, s.session_id);
+    else void api(`/sessions/${encodeURIComponent(s.machine_id)}/${encodeURIComponent(s.session_id)}/seen`, { method: "POST" }).catch(() => {});
+    changed.push({ ...s, state: "idle", seen_at: now });
   }
-  if (changed) set({ sessions });
+  applyCompleteSessions(changed);
 }
 
 export function putLaunch(launch: AgentLaunch) {

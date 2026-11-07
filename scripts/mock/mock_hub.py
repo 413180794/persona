@@ -34,7 +34,8 @@ def features():
                 ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] + ([] if os.environ.get("MOCK_TERMINAL_FULL_NOFOCUS") else ["herdr_focus"]) if TERMINAL_FULL else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else []) + (
                 ["messaging"] if os.environ.get("MOCK_MESSAGING") == "1" else []) + (
-                ["conversation_origin"] if os.environ.get("MOCK_AUTO_CONVERSATIONS") == "1" else [])
+                ["conversation_origin"] if os.environ.get("MOCK_AUTO_CONVERSATIONS") == "1" else []) + (
+                ["sessions_list", "sessions_lookup"] if os.environ.get("MOCK_SESSIONS_LIST") == "1" else [])
 
 
 def identity():
@@ -7525,6 +7526,53 @@ def all_sessions():
     return [decorated_session(s) for s in (SESSIONS + ASSISTANT)]
 
 
+def paged_sessions(query):
+    """Small screenshot fixture for paging hubs; unqueried reads retain the legacy full list.
+
+    Changed fixtures expire cursors/revisions instead of retaining a delta journal.
+    """
+    rows = out_by_machine(all_sessions())
+    if os.environ.get("MOCK_SESSIONS_LIST") != "1" or not query:
+        return {"sessions": rows}, 200
+    revision = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()[:16]
+    fields = {"machine_id": "machine_id", "session_id": "session_id", "state": "state",
+              "group": "space_id", "source": "source_kind", "provider": "agent"}
+    search = query.get("q", [""])[0].lower()
+    rows = [s for s in rows if all(not query.get(k, [""])[0] or query[k][0] == s.get(v, "")
+                                  for k, v in fields.items())
+            and (not query.get("project", [""])[0] or query["project"][0] == (s.get("repo_root") or s.get("workspace_cwd") or s.get("cwd", "")))
+            and (not search or search in "\n".join(str(s.get(k, "")) for k in ("title", "cwd", "space_name", "slot_name", "last_text")).lower())]
+    rows.sort(key=lambda s: json.dumps([s["machine_id"], s["session_id"]], separators=(",", ":")))
+    rows.sort(key=lambda s: s.get("updated_at", ""), reverse=True)
+    if query.get("counts", [""])[0] == "1":
+        counts = {"total": len(rows), "revision": revision, "machine": {}, "project": {}, "group": {}, "state": {}}
+        for s in rows:
+            values = {"machine": s["machine_id"], "project": s.get("repo_root") or s.get("workspace_cwd") or s.get("cwd", ""),
+                      "group": s.get("space_id") or s.get("workspace_id", ""), "state": s.get("state", "unknown")}
+            for key, value in values.items():
+                counts[key][value] = counts[key].get(value, 0) + 1
+        return counts, 200
+    since = query.get("since", [None])[0]
+    if since and since != revision:
+        return {"error": "Fixture changed; reload the list", "code": "revision_expired"}, 409
+    cursor = query.get("cursor", [revision + ":0"])[0]
+    try:
+        frozen, offset = cursor.rsplit(":", 1)
+        offset, limit = int(offset), max(1, min(200, int(query.get("limit", ["50"])[0])))
+        if frozen != revision or offset < 0:
+            raise ValueError()
+    except ValueError:
+        return {"error": "Fixture cursor expired", "code": "cursor_expired"}, 409
+    selected = [] if since else rows[offset:offset + limit]
+    if query.get("summary", [""])[0] == "1":
+        selected = [{**s, "waiting": bool(s.get("background_waiting"))} for s in selected]
+    more = not since and offset + limit < len(rows)
+    result = {"sessions": selected, "remove": [], "has_more": more, "revision": revision, "total": len(rows)}
+    if more:
+        result["next_cursor"] = revision + ":" + str(offset + limit)
+    return result, 200
+
+
 def find_items(sid):
     items = ITEMS.get(sid, [])
     if GAP and sid == SESSIONS[0]["session_id"] and not GAP_STATE["grown"]:
@@ -11476,6 +11524,7 @@ VOICE_VOICES = {
 }
 # What --help lists after the options.
 MOCK_HELP = [
+    "MOCK_SESSIONS_LIST=1  Paged Agents, counts and exact lookup; list-mode sockets send hints instead of full lists (#6362)",
     "MOCK_MANUAL_HERDR=1  没挂待办的 herdr Agent 算手动开的（started_by_persona 为假），Agents「按待办」里出「手动开的」一段（#2917）",
     "MOCK_ORCA_CHILDREN=1  MacBook 上一个 Orca 工作区带三个子工作区（其中一个还有子项，parent_space_id，#2073）",
     "MOCK_EXTENSIONS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
@@ -11969,7 +12018,7 @@ class H(BaseHTTPRequestHandler):
             if r == "24h" and os.environ.get("MOCK_PERF_METRIC_STEP"):
                 step = max(1, int(os.environ["MOCK_PERF_METRIC_STEP"]))
             return self.send_json({"metrics": machine_metrics(p.split("/")[4], secs, step), "range": r, "step": step})
-        if p == "/api/v1/sessions": return self.send_json({"sessions": out_by_machine(all_sessions())})
+        if p == "/api/v1/sessions": return self.send_json(*paged_sessions(q))
         if tasks_area(self, "GET", p, None): return
         if p == "/api/v1/todos": return self.send_json({"todos": sorted_todos()})
         if p.startswith("/api/v1/todos/") and p.count("/") == 4:
@@ -13895,6 +13944,7 @@ class H(BaseHTTPRequestHandler):
         # An app that asks for sessions_delta (?features=) gets each machine's list once, then deltas, like the hub
         # (hub/sessions_push.go); MOCK_WHOLE_LISTS=1 is an older hub that ignores the question.
         asked = parse_qs(urlparse(self.path).query).get("features", [""])[0].split(",")
+        paged = "sessions_list" in asked and os.environ.get("MOCK_SESSIONS_LIST") == "1"
         delta = "sessions_delta" in asked and not os.environ.get("MOCK_WHOLE_LISTS")
         restart_backlog()  # MOCK_RESTART: a connection during the restart waits in the socket's backlog
         have = {}  # machine -> {session id: its JSON}: what this app has
@@ -13906,6 +13956,8 @@ class H(BaseHTTPRequestHandler):
         lock = threading.Lock()
 
         def send(obj):
+            if paged and obj.get("type") == "sessions":
+                obj = {"type": "sessions_list", "revision": "mock-sessions"}
             if obj.get("error") and "code" not in obj:
                 obj = {**obj, "code": "terminal_busy" if obj.get("state") == "busy" else "internal"}
             with lock:

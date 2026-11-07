@@ -180,6 +180,10 @@ Six parallel lanes (chat rendering, message actions, Agents list / Machines, Ter
 
 ### Sidebar and Machines
 
+- A paging fallback must change its data source as well as its component (#6362). `useAgentSessions` exposes only the bounded window on paging hubs, and those hubs suppress full socket snapshots. Pins and groups require a query-free complete `/sessions` read, refreshed by invalidation hints and scoped to the fallback's lifetime. Test a pin beyond the first page without injecting a full socket list. Bulk actions must also accept displayed rows absent from the detail cache: iterating only cached rows silently skips them. Overlay changed local details without replacing newer HTTP rows with unchanged old cache entries.
+- Serializing full-list reads is not throttling (#6362): working agents can continuously invalidate display data, producing back-to-back complete downloads. Enforce a completion-based cooldown with one trailing read at a fixed deadline; preserve immediate reconnects and clear scheduled reads on reset/unmount.
+- Treat loading counts as unknown, not zero (#6362). Clearing scoped counts before a refresh, or copying a temporary null root count during rebaseline, removes state chips and changes list height. Keep the last successful counts until a valid replacement arrives, including real zero counts; test deferred responses after root-count changes as well as filter changes.
+
 - Never nest buttons in link rows: make row ⋯ a sibling of `<a>`, absolutely positioned with `group-hover/row:flex` (Tailwind v4 `group-hover` already works only under `@media (hover:hover)`). Row-end hints / badges yield on hover with
   `group-hover/row:invisible`, or ⋯ covers half of them. Right-click / menu key uses `<a>`'s `onContextMenu`.
 - `Icon` is `aria-hidden` and does not accept `aria-label` (TS does not check hyphenated JSX attributes, so it gives no error). For announcements, wrap with `<span title>` + `sr-only` text.

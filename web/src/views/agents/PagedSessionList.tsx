@@ -87,7 +87,12 @@ export function PagedSessionList<T>({ root, path, identity, compare, removeIdent
     return () => { live = false; controller.abort(); off(); };
   }, [path, event, root, rootPage.counts, facetFilters]);
   useEffect(() => {
-    if (scopeQuery === "counts=1") { setScopeCounts(rootPage.counts); setScopeError(""); return; }
+    // Keep the last counts while a refresh or a new scope is loading, including a root rebaseline.
+    if (scopeQuery === "counts=1") {
+      if (rootPage.counts) setScopeCounts(rootPage.counts);
+      setScopeError("");
+      return;
+    }
     let sequence = 0;
     const abort = new AbortController();
     const read = () => {
@@ -96,7 +101,6 @@ export function PagedSessionList<T>({ root, path, identity, compare, removeIdent
         if (request === sequence && counts.state) { setScopeCounts(counts); setScopeError(""); }
       }, (e) => { if (request === sequence) setScopeError(errorText(e)); });
     };
-    setScopeCounts(null);
     read();
     const off = onHubEvent(event, read);
     return () => { sequence++; abort.abort(); off(); };

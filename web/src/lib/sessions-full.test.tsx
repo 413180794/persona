@@ -1,0 +1,290 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Session } from "./types";
+
+const fixture = vi.hoisted(() => ({
+  state: { sessions: {} as Record<string, Session[]>, features: [] as string[], loaded: false },
+  listeners: new Set<() => void>(),
+  events: new Map<string, Set<() => void>>(),
+  api: vi.fn(),
+  owner: "first-login",
+}));
+vi.mock("./api", () => ({ api: fixture.api, credentialOwner: () => fixture.owner }));
+vi.mock("./store", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => {
+    fixture.listeners.add(listener);
+    return () => { fixture.listeners.delete(listener); };
+  };
+  return {
+    getState: () => fixture.state,
+    subscribe,
+    useStore: <T,>(select: (state: typeof fixture.state) => T) => useSyncExternalStore(subscribe, () => select(fixture.state)),
+    onHubEvent: (event: string, listener: () => void) => {
+      if (!fixture.events.has(event)) fixture.events.set(event, new Set());
+      fixture.events.get(event)!.add(listener);
+      return () => { fixture.events.get(event)!.delete(listener); };
+    },
+  };
+});
+import { useFullAgentSessions } from "./sessions";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+const row = (session_id: string, patch: Partial<Session> = {}): Session => ({
+  machine_id: "demo", session_id, title: session_id, cwd: "/demo", status: "idle", ...patch,
+});
+const deferred = () => {
+  let resolve!: (value: { sessions: Session[] }) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<{ sessions: Session[] }>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
+function Probe() {
+  const { sessions, loaded } = useFullAgentSessions();
+  return <output data-loaded={loaded} data-states={sessions.map((s) => s.state).join(",")} data-titles={sessions.map((s) => s.title).join(",")}>{sessions.map((s) => s.session_id).join(",")}</output>;
+}
+const publish = (patch: Partial<typeof fixture.state>) => {
+  fixture.state = { ...fixture.state, ...patch };
+  fixture.listeners.forEach((listener) => listener());
+};
+const push = (event: string) => fixture.events.get(event)?.forEach((listener) => listener());
+const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+let host: HTMLDivElement;
+let root: Root | undefined;
+const mount = async () => { root = createRoot(host); await act(async () => { root!.render(<Probe />); }); };
+const resolve = async (request: ReturnType<typeof deferred>, sessions: Session[]) => {
+  await act(async () => { request.resolve({ sessions }); });
+};
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  fixture.state = { sessions: {}, features: ["sessions_list", "sessions_lookup"], loaded: true };
+  fixture.owner = "first-login";
+  fixture.api.mockReset();
+  host = document.createElement("div");
+  document.body.append(host);
+});
+afterEach(async () => {
+  await act(async () => { root?.unmount(); });
+  root = undefined;
+  host.remove();
+  expect(vi.getTimerCount()).toBe(0);
+  vi.useRealTimers();
+  expect(fixture.listeners.size).toBe(0);
+  expect([...fixture.events.values()].every((listeners) => listeners.size === 0)).toBe(true);
+});
+
+describe("complete session snapshots for the sidebar fallback", () => {
+  it("keeps an old hub's full store and does not fetch a second list", async () => {
+    fixture.state = { sessions: { demo: [row("legacy"), row("assistant", { assistant: true })] }, features: [], loaded: true };
+    await mount();
+    expect(host.textContent).toBe("legacy");
+    expect(host.querySelector("output")!.dataset.loaded).toBe("true");
+    expect(fixture.api).not.toHaveBeenCalled();
+    await act(async () => { publish({ sessions: { demo: [row("updated")] } }); });
+    expect(host.textContent).toBe("updated");
+  });
+
+  it("loads complete rows beyond the first page and gates filter seeding on that answer", async () => {
+    const request = deferred();
+    fixture.api.mockReturnValue(request.promise);
+    fixture.state.sessions = { demo: [row("bounded-page")] };
+    await mount();
+    expect(fixture.api).toHaveBeenCalledWith("/sessions", { signal: expect.any(AbortSignal) });
+    expect(host.querySelector("output")!.dataset.loaded).toBe("false");
+    const rows = Array.from({ length: 75 }, (_, i) => row(`agent-${i}`));
+    await resolve(request, [...rows, row("assistant", { assistant: true })]);
+    expect(host.textContent).toBe(rows.map((s) => s.session_id).join(","));
+    expect(host.querySelector("output")!.dataset.loaded).toBe("true");
+    expect(fixture.state.sessions.demo).toEqual([row("bounded-page")]);
+  });
+
+  it("reflects actions on fallback-only rows without replacing newer HTTP rows with old details", async () => {
+    const cached = row("cached", { title: "Old cached title" });
+    fixture.state.sessions = { demo: [cached] };
+    fixture.api.mockResolvedValue({ sessions: [row("cached", { title: "Current title" }), row("tail", { state: "unread" })] });
+    await mount();
+    await act(async () => { publish({ sessions: { demo: [cached, row("tail", { state: "idle" })] } }); });
+    expect(host.querySelector("output")!.dataset.states).toBe(",idle");
+    expect(host.querySelector("output")!.dataset.titles).toBe("Current title,tail");
+    await act(async () => { publish({ sessions: { demo: [cached, row("tail", { state: "idle", title: "Renamed" })] } }); });
+    expect(host.querySelector("output")!.dataset.titles).toBe("Current title,Renamed");
+  });
+
+  it("waits for initial hub loading before requesting the fallback snapshot", async () => {
+    fixture.state.loaded = false;
+    fixture.api.mockResolvedValue({ sessions: [row("ready")] });
+    await mount();
+    expect(fixture.api).not.toHaveBeenCalled();
+    await act(async () => { publish({ loaded: true }); });
+    expect(host.textContent).toBe("ready");
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["sessions_list", "session", "sessions", "sessions_delta", "hello"])("refreshes on %s without clearing visible rows", async (event) => {
+    const next = deferred();
+    fixture.api.mockResolvedValueOnce({ sessions: [row("previous")] }).mockReturnValueOnce(next.promise);
+    await mount();
+    await act(async () => { push(event); });
+    expect(host.textContent).toBe("previous");
+    expect(fixture.api).toHaveBeenCalledTimes(event === "hello" ? 2 : 1);
+    if (event !== "hello") await advance(3_000);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    await resolve(next, [row("updated")]);
+    expect(host.textContent).toBe("updated");
+  });
+
+  it("bounds dense event bursts and reads the final change without postponing the trailing deadline", async () => {
+    let revision = 0;
+    fixture.api.mockImplementation(async () => ({ sessions: [row(`revision-${revision}`)] }));
+    await mount();
+    const events = ["sessions_list", "session", "sessions", "sessions_delta"];
+    for (let i = 1; i <= 10; i++) {
+      await advance(200);
+      revision = i;
+      await act(async () => { push(events[i % events.length]); });
+    }
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await advance(999);
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toBe("revision-10");
+
+    for (let i = 11; i <= 20; i++) {
+      await advance(200);
+      revision = i;
+      await act(async () => { push(events[i % events.length]); });
+    }
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    await advance(999);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    await advance(1);
+    expect(fixture.api).toHaveBeenCalledTimes(3);
+    expect(host.textContent).toBe("revision-20");
+    await advance(10_000);
+    expect(fixture.api).toHaveBeenCalledTimes(3);
+  });
+
+  it("waits three seconds after slow requests finish before draining queued hints", async () => {
+    const initial = deferred(), intermediate = deferred();
+    fixture.api.mockReturnValueOnce(initial.promise).mockReturnValueOnce(intermediate.promise).mockResolvedValue({ sessions: [row("current")] });
+    await mount();
+    await advance(10_000);
+    await act(async () => { push("sessions_list"); push("session"); push("sessions_delta"); });
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await resolve(initial, [row("initial")]);
+    expect(host.textContent).toBe("initial");
+    await advance(2_999);
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+
+    await advance(5_000);
+    await act(async () => { push("sessions_list"); push("sessions"); });
+    await resolve(intermediate, [row("intermediate")]);
+    expect(host.textContent).toBe("intermediate");
+    await advance(2_999);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    await advance(1);
+    expect(fixture.api).toHaveBeenCalledTimes(3);
+    expect(host.textContent).toBe("current");
+  });
+
+  it("refreshes immediately on hello during cooldown without leaving a duplicate trailing read", async () => {
+    fixture.api.mockResolvedValue({ sessions: [row("current")] });
+    await mount();
+    await act(async () => { push("sessions_list"); });
+    await advance(1_000);
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await act(async () => { push("hello"); });
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    await advance(10_000);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+  });
+
+  it("serializes hello during an in-flight read and immediately follows it with one fresh read", async () => {
+    const pending = deferred();
+    fixture.api.mockReturnValueOnce(pending.promise).mockResolvedValue({ sessions: [row("reconnected")] });
+    await mount();
+    await act(async () => { push("sessions_list"); push("hello"); push("hello"); push("sessions_delta"); });
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await resolve(pending, [row("before-reconnect")]);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toBe("reconnected");
+    await advance(10_000);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["reset", "unmount"])("cancels a queued trailing read on %s", async (end) => {
+    fixture.api.mockResolvedValue({ sessions: [row("current")] });
+    await mount();
+    await act(async () => { push("sessions_list"); });
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      if (end === "reset") publish({ loaded: false });
+      else { root!.unmount(); root = undefined; }
+    });
+    await advance(10_000);
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the last complete snapshot after a failed refresh", async () => {
+    fixture.api.mockResolvedValueOnce({ sessions: [row("previous")] }).mockRejectedValueOnce(new Error("offline"));
+    await mount();
+    await act(async () => { push("sessions_list"); });
+    await advance(3_000);
+    expect(fixture.api).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toBe("previous");
+    expect(host.querySelector("output")!.dataset.loaded).toBe("true");
+  });
+
+  it("retries an initial failure even when the hub sends no further hints", async () => {
+    fixture.api.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ sessions: [row("recovered")] });
+    await mount();
+    expect(host.querySelector("output")!.dataset.loaded).toBe("false");
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(host.textContent).toBe("recovered");
+    expect(host.querySelector("output")!.dataset.loaded).toBe("true");
+  });
+
+  it("clears on reset and rejects a late response even with unchanged credentials", async () => {
+    const stale = deferred(), next = deferred();
+    fixture.api.mockResolvedValueOnce({ sessions: [row("previous")] }).mockReturnValueOnce(stale.promise).mockReturnValueOnce(next.promise);
+    await mount();
+    await act(async () => { push("sessions_list"); });
+    await advance(3_000);
+    const signal = fixture.api.mock.calls[1][1].signal as AbortSignal;
+    await act(async () => { publish({ loaded: false }); });
+    expect(signal.aborted).toBe(true);
+    expect(host.textContent).toBe("");
+    await resolve(stale, [row("stale")]);
+    expect(host.textContent).toBe("");
+    await act(async () => { publish({ loaded: true }); });
+    await resolve(next, [row("new-login")]);
+    expect(host.textContent).toBe("new-login");
+  });
+
+  it("aborts and unsubscribes when the bounded path replaces the fallback", async () => {
+    const request = deferred();
+    fixture.api.mockReturnValue(request.promise);
+    await mount();
+    const signal = fixture.api.mock.calls[0][1].signal as AbortSignal;
+    await act(async () => { root!.unmount(); root = undefined; });
+    expect(signal.aborted).toBe(true);
+    await resolve(request, [row("too-late")]);
+    push("sessions_list");
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels a pending retry when the fallback unmounts", async () => {
+    fixture.api.mockRejectedValue(new Error("offline"));
+    await mount();
+    await act(async () => { root!.unmount(); root = undefined; });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fixture.api).toHaveBeenCalledTimes(1);
+  });
+});

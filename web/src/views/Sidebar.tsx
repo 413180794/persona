@@ -29,7 +29,7 @@ import { useExtensionSlot } from "../lib/extension-slots";
 import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
 import { href, navigate, routePath, useRoute, type Route } from "../lib/router";
-import { useAgentSessions, useCounts } from "../lib/sessions";
+import { useAgentSessions, useCounts, useFullAgentSessions } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, rememberSessionRow, useLarkOn, useStore } from "../lib/store";
 import { draftLine, rowLine } from "../lib/row-line";
@@ -552,12 +552,25 @@ function MorePages({ more, reg, hover, activeKey, go }: { more: NavPage[]; reg: 
 
 /** The sidebar's "Agents": grouping, the quick filter, "Pinned", "Starting", the groups (spaces, machines, repositories,
  *  states or todos) and "Recent". The drawer and the phone's Agents page both show it. `add`: the title row's "+". */
-function AgentsBlock(props: Parameters<typeof LegacyAgentsBlock>[0]) {
+type AgentsBlockProps = { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean; foldable?: boolean };
+
+function AgentsBlock(props: AgentsBlockProps) {
   const bounded = useStore((s) => s.features.includes(SESSIONS_LIST_FEATURE));
-  return bounded ? <BoundedAgentsBlock {...props} /> : <LegacyAgentsBlock {...props} />;
+  const pins = useStore((s) => s.pins);
+  const [grouping, setGrouping] = useState(() => storedValue("persona.agentGrouping"));
+  useEffect(() => onGrouping(setGrouping), []);
+  // A saved grouping (including an explicitly selected default) is a view preference the paged API cannot express.
+  const grouped = AGENT_GROUPINGS.some((g) => g.key === grouping);
+  const full = pins.sessions.length > 0 || pins.spaces.length > 0 || grouped;
+  const chooseGrouping = (g: AgentGrouping) => {
+    storeValue("persona.agentGrouping", g);
+    setGrouping(g);
+    props.hover(null);
+  };
+  return bounded && !full ? <BoundedAgentsBlock {...props} /> : <LegacyAgentsBlock {...props} grouping={agentGrouping(grouping)} chooseGrouping={chooseGrouping} />;
 }
 
-function BoundedAgentsBlock({ reg, hover, activeKey, go, onNewAgent, add = true }: Parameters<typeof LegacyAgentsBlock>[0]) {
+function BoundedAgentsBlock({ reg, hover, activeKey, go, onNewAgent, add = true }: AgentsBlockProps) {
   const machines = useStore((s) => s.machines);
   const [rowMenu, setRowMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
   const [renaming, setRenaming] = useState<Session | null>(null);
@@ -583,30 +596,21 @@ function BoundedAgentsBlock({ reg, hover, activeKey, go, onNewAgent, add = true 
   </>;
 }
 
-function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true, foldable = false }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean; foldable?: boolean }) {
+function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true, foldable = false, grouping, chooseGrouping }: AgentsBlockProps & { grouping: AgentGrouping; chooseGrouping: (g: AgentGrouping) => void }) {
   const machines = useStore((s) => s.machines);
-  const all = useAgentSessions();
+  const { sessions: all, loaded } = useFullAgentSessions();
   const mutes = useStore((s) => s.mutes);
   const pins = useStore((s) => s.pins);
-  const loaded = useStore((s) => s.loaded);
   const todos = useStore((s) => s.todos);
   const todosSupported = useStore((s) => s.todosSupported);
   const todosLoaded = useStore((s) => s.todosLoaded);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
-  const [grouping, setGrouping] = useState(() => agentGrouping(storedValue("persona.agentGrouping")));
-  // the switch-grouping shortcut (lib/sidebar-api.ts)
-  useEffect(() => onGrouping(setGrouping), []);
   const availableGroupings = useMemo(() => {
     if (todosSupported === false) return AGENT_GROUPINGS.filter((g) => g.key !== "todo");
     return AGENT_GROUPINGS;
   }, [todosSupported]);
   // a hub without todos shows by machine, a by-todo choice kept for when it has them
   const shownGrouping = todosSupported === false && grouping === "todo" ? "machine" : grouping;
-  const chooseGrouping = (g: AgentGrouping) => {
-    storeValue("persona.agentGrouping", g);
-    setGrouping(g);
-    hover(null);
-  };
   // "State first" / "Recently updated" (iOS AgentSort, G099): not under "By status", whose sections are the states already
   const [sortChoice, setSortChoice] = useState<AgentSort>(() => agentSort(localStorage.getItem(AGENT_SORT_KEY)));
   const byUpdate = sortChoice === "updated" && shownGrouping !== "state";
