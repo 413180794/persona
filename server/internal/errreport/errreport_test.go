@@ -24,6 +24,8 @@ func TestScrubText(t *testing.T) {
 		{"blob QWxhZGRpbjpvcGVuIHNlc2FtZQ1234567890abcd", "blob " + Redacted},
 		{"mail me@example.com now", "mail <email> now"},
 		{"from 198.51.100.20:5432 and [2001:db8:85a3:0:0:8a2e:370:7334]", "from <ip> and <ip>"},
+		{"dial tcp [2001:db8::c3d4:e5f6:7890]:443 via fe80::21a:2bff:fe3c:4d5e%en0", "dial tcp <ip>:443 via <ip>%en0"},
+		{"route 2001:db8:1:2::/64 and 2001:db8:1:2:3::5", "route <ip>/64 and <ip>"},
 		{"at 12:30:45 ok", "at 12:30:45 ok"},
 		{"open /Users/alice/Library/x and /home/bob/.persona and C:\\Users\\carol\\a", "open ~/Library/x and ~/.persona and ~\\a"},
 		{"/home/user/code", "~/code"},

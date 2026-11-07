@@ -68,8 +68,10 @@ var (
 	// URLs keep scheme and path; the host, the user info, the query and the fragment go.
 	urlRe = regexp.MustCompile(`\b([a-zA-Z][a-zA-Z0-9+.\-]{1,15})://([^/\s"'<>]*)([^\s"'<>?#]*)(\?[^\s"'<>#]*)?(#[^\s"'<>]*)?`)
 	ipv4  = regexp.MustCompile(`\b(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(:\d{1,5})?\b`)
-	// IPv6: at least five groups (so 12:30:45 times are not addresses), or :: forms
-	ipv6 = regexp.MustCompile(`(?i)\[?\b([0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b\]?|\[?\b([0-9a-f]{1,4}:){1,6}:([0-9a-f]{1,4})?\b\]?|\[?::ffff:[0-9.]+\]?|\[::1\]`)
+	// IPv6: one or more groups, a ::, and any number of groups (a form ending in :: has no word boundary to end on,
+	// hence its own alternative); or at least five groups (so 12:30:45 times are not addresses). The :: forms go
+	// first: the five-group form also matches the groups before a ::, and would leave the rest behind.
+	ipv6 = regexp.MustCompile(`(?i)\[?\b([0-9a-f]{1,4}:){1,7}(:[0-9a-f]{1,4}){1,6}\b\]?|\[?\b([0-9a-f]{1,4}:){1,7}:\]?|\[?\b([0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b\]?|\[?::ffff:[0-9.]+\]?|\[::1\]`)
 	// the user's name in home directories: /Users/x/, /home/x/, /data00/home/x/, C:\Users\x\
 	homeDir = regexp.MustCompile(`(?i)(/Users/|/home/|/data\d*/home/|/var/home/|/root\b|[A-Z]:\\Users\\|[A-Z]:/Users/)([^/\\\s"'<>]*)`)
 	// quoted spans: what errors carry of the user's content most often
