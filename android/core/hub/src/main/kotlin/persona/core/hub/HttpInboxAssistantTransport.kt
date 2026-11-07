@@ -92,9 +92,9 @@ class HttpInboxAssistantTransport private constructor(
             })
         })
     } catch (e: HubFailure) {
-        // A hub from before /inbox/bulk: "Done" and "Move back" the old way; it has no "Dismiss".
-        if (action == InboxBulkAction.Dismiss || (e.status != 404 && e.status != 405)) throw e
-        setDone(items, action == InboxBulkAction.Done)
+        // A hub from before /inbox/bulk: the old way, "Dismiss" as "Done" (like the web and Apple).
+        if (e.status != 404 && e.status != 405) throw e
+        setDone(items, action != InboxBulkAction.Reopen)
     }
     override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject {
         require(clientId.isNotBlank() && text.isNotBlank())

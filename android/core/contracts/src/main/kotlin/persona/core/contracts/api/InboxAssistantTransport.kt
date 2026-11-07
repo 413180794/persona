@@ -30,11 +30,10 @@ interface InboxAssistantTransport {
         throw UnsupportedOperationException("Bulk done unavailable")
     /**
      * [action] on many items in one request (`POST /api/v1/inbox/bulk`), each with the version it was listed at.
-     * Answers what [setDone] does, plus `ids` (the changed ones) and `undo`. Without it, "Done" / "Move back" go the old way.
+     * Answers what [setDone] does, plus `ids` (the changed ones) and `undo`. Without it, all go the old way ("Dismiss" as "Done").
      */
     suspend fun bulk(items: List<InboxDoneTarget>, action: InboxBulkAction): JsonObject =
-        if (action == InboxBulkAction.Dismiss) throw UnsupportedOperationException("Bulk dismiss unavailable")
-        else setDone(items, action == InboxBulkAction.Done)
+        setDone(items, action != InboxBulkAction.Reopen)
     suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject
     /**
      * Acts on an item's suggestion (`POST /api/v1/inbox/{id}/suggestion`, inbox phase 1): [action] is confirm, reject or

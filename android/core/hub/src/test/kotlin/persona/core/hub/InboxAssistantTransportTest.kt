@@ -21,7 +21,7 @@ class InboxAssistantTransportTest {
             assertEquals("/api/v1/inbox/bulk", bulk.path)
             assertEquals("""{"action":"dismiss","items":[{"id":"a","version":"va"},{"id":"b"}]}""", bulk.body.readUtf8())
 
-            // A hub from before /inbox/bulk: "Done" goes to /inbox/done; "Ignore" says it can't.
+            // A hub from before /inbox/bulk: "Done" and "Dismiss" go to /inbox/done, like the web and Apple.
             server.enqueue(MockResponse().setResponseCode(405).setBody("{\"error\":\"method not allowed\"}"))
             server.enqueue(MockResponse().setBody("{\"changed\":[]}"))
             transport.bulk(targets, persona.core.contracts.api.InboxBulkAction.Done)
@@ -30,9 +30,13 @@ class InboxAssistantTransportTest {
             assertEquals("/api/v1/inbox/done", old.path)
             assertEquals("""{"done":true,"items":[{"id":"a","version":"va"},{"id":"b"}]}""", old.body.readUtf8())
             server.enqueue(MockResponse().setResponseCode(405).setBody("{\"error\":\"method not allowed\"}"))
-            try { transport.bulk(targets, persona.core.contracts.api.InboxBulkAction.Dismiss); fail("An old hub has no dismiss") }
-            catch (e: HubFailure) { assertEquals(405, e.status) }
-            assertEquals(4, server.requestCount)
+            server.enqueue(MockResponse().setBody("{\"changed\":[]}"))
+            transport.bulk(targets, persona.core.contracts.api.InboxBulkAction.Dismiss)
+            server.takeRequest()
+            val dismissed = server.takeRequest()
+            assertEquals("/api/v1/inbox/done", dismissed.path)
+            assertEquals("""{"done":true,"items":[{"id":"a","version":"va"},{"id":"b"}]}""", dismissed.body.readUtf8())
+            assertEquals(5, server.requestCount)
         }
     }
 
