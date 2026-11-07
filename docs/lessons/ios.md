@@ -2,6 +2,10 @@
 
 Pitfalls, odd behavior and the decisions made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Release-mode demo coverage (#6227)
+
+- A mock can support a feature while the bundled demo still hides it: omitted collections become empty defaults, and DEBUG screenshot helpers never run in TestFlight. Include the same synthetic todo samples in the bundle, verify every linked Agent has bundled content, and exercise knowledge search through the normal demo route. Keep the response compatible with both grouped results and flat hits; leave real network and phone-data actions refused.
+
 - Helper extensions referenced by shared views must compile into every target too: after replacing `Color.mix` with `blended` for watchOS 10 compatibility, leaving the helper in `Theme.swift` causes Release archives to fail for Dynamic Island widgets that only include `PersonaFace`. Compile the helper with `PersonaFace.swift` into every target; do not drag the entire app theme into extensions or declare it twice.
 
 ## 产品改名不等于签名资源改名（#6150）

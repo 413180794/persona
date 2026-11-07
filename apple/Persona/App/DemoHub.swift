@@ -216,7 +216,7 @@ final class DemoHub {
         case ["lark", "labels"]: return ["labels": .array([])]
         case ["lark", "flags"]: return ["conversations": .array([]), "messages": .array([])]
         case ["lark", "emojis"]: return ["emojis": .object([:])]
-        case ["kb-search"]: return ["hits": .array([]), "results": .array([])]
+        case ["kb-search"]: return DemoKnowledgeSearch.answer(q["q"] ?? "", kb: data["kb"])
         case ["lark", "reactions", "quick"]: return ["keys": .array([])]
         default: break
         }

@@ -15,7 +15,7 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "..", "apple", "Persona", "Resources", "Demo.json")
+OUT = os.environ.get("PERSONA_DEMO_OUTPUT", os.path.join(HERE, "..", "..", "apple", "Persona", "Resources", "Demo.json"))
 
 os.environ.update(MOCK_TASKS="1", MOCK_RICH="1")
 sys.path.insert(0, HERE)
@@ -185,6 +185,7 @@ data = {
     "assistant": {"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.persona/assistant", "timezone": "Asia/Shanghai",
                   "notes_effective": "", "conversations": m.ASSISTANT, "main": m.ASK1},
     "tasks": m.SCHEDULE,
+    "todos": m.sorted_todos(),
     "runs": m.RUNS,
     "memory": m.MEMORY,
     "inbox": m.INBOX,
