@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TRAE's mark (Simple Icons trae.svg, source trae.ai, viewBox cropped to the glyph); the same artwork as
+     apple/…/Brands/brand-trae.imageset/trae.svg. See THIRD_PARTY_NOTICES.md. One color: tinted where drawn. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="17dp"
+    android:viewportWidth="24" android:viewportHeight="17">
+    <group android:translateY="-3.5">
+        <path android:fillColor="#000000" android:pathData="M24 20.5H3.5V17H0V3.5h24ZM3.5 17h17V7h-17Zm8.5-5-2.5 2.5L7 12l2.5-2.5Zm7 0-2.5 2.5L14 12l2.5-2.5z" />
+    </group>
+</vector>

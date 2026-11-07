@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 type codexRegistry struct {
@@ -413,6 +414,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 					continue
 				}
 				s.Cwd, s.Model, s.LastText, s.UpdatedAt, s.Rev = m.cwd, m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				s.AgentSurface = m.surface
 				s.TurnError, s.TurnErrorKind = m.turnError, m.turnErrorKind
 				setContext(&s, m)
 				s.Title = threadTitle(src.home, src.thread)
@@ -461,18 +463,18 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		} else if o := readCodexOrigin(src.path); o.desktop {
 			switch {
 			case o.parent != "":
-				s.AgentName, s.ParentThreadID = "Codex App", o.parent
+				s.AgentName, s.ParentThreadID, s.AgentSurface = "Codex App", o.parent, transcript.SurfaceDesktop
 				s.ReadOnlyReason = "仅查看：这个子 Agent 由父 Agent 驱动"
 				n.placeCodexDesktop(&s, src, o.parent, true)
 			case codexDesktopChat(src):
 				// The Codex App on this machine runs it (codex_desktop.go): sendable while the App has the thread loaded.
-				s.AgentName = "Codex App"
+				s.AgentName, s.AgentSurface = "Codex App", transcript.SurfaceDesktop
 				s.Capabilities.Send = true
 				s.ReadOnlyReason = ""
 				n.placeCodexDesktop(&s, src, src.thread, false)
 			}
 		} else if o.cli {
-			s.AgentName = "Codex CLI"
+			s.AgentName, s.AgentSurface = "Codex CLI", transcript.SurfaceCLI
 		}
 		n.decorateCodexSession(&s, src, cfg.LegacyHome, projects)
 		if s.SourceKind == "codex_history" && !s.Capabilities.Send && !s.IsSubagent && n.codexResumable(id) {

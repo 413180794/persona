@@ -264,6 +264,8 @@ extension Theme {
         static let ai = "sparkles"
         /// The Agents tab and what stands for it.
         static let agents = "chevron.left.forwardslash.chevron.right"
+        /// An agent run from its command line, not its desktop app: the badge on its mark (`AgentMark`, #6390).
+        static let commandLine = agents
         /// Source code (a code file, a doc's code block, viewing a file's source).
         static let code = "curlybraces"
         static let terminal = "terminal"
@@ -500,6 +502,8 @@ extension Theme {
     nonisolated enum Brand {
         static let claude = "brand-claude"
         static let openAI = "brand-openai"
+        /// TRAE's mark (Simple Icons' trae.svg), a template image: it takes the foreground color.
+        static let trae = "brand-trae"
         static let lark = "brand-lark"
         /// GitHub's mark (primer/octicons mark-github), a template image: it takes the foreground color.
         static let github = "brand-github"

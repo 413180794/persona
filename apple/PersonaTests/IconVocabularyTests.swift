@@ -109,9 +109,9 @@ struct IconVocabularyTests {
     /// for each Avatar's icon (`AppGlyph`).
     @Test @MainActor func everyBrandIsAnImage() {
         let families: [OSFamily] = [.ubuntu, .debian, .fedora, .redhat, .centos, .rocky, .alma, .arch, .alpine, .opensuse, .nixos, .linux]
-        let names = [Theme.Brand.claude, Theme.Brand.openAI, Theme.Brand.lark, Theme.Brand.google, Theme.Brand.gmail]
+        let names = [Theme.Brand.claude, Theme.Brand.openAI, Theme.Brand.trae, Theme.Brand.lark, Theme.Brand.google, Theme.Brand.gmail]
             + families.compactMap(Theme.Brand.os) + AppIconChoice.allCases.map(\.preview)
-        #expect(names.count == 18)
+        #expect(names.count == 19)
         let missing = names.filter { UIImage(named: $0) == nil }
         #expect(missing.isEmpty, "not in Assets.xcassets: \(missing)")
     }

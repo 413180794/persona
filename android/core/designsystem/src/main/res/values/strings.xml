@@ -167,6 +167,9 @@
     <string name="designsystem_attachment_edit">Edit</string>
     <string name="designsystem_brand_persona">Persona</string>
     <string name="designsystem_brand_lark">Lark</string>
+    <!-- An agent's mark (#6390): the agent, and the client it runs in. -->
+    <string name="designsystem_agent_mark_cli">%1$s, command line</string>
+    <string name="designsystem_agent_mark_desktop">%1$s, desktop app</string>
     <string name="designsystem_channel_source">From %1$s</string>
     <string name="designsystem_series_separator">"; "</string>
     <!-- Chat parts: plans, work rows, the send button -->

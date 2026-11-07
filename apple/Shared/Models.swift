@@ -550,6 +550,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var codexRouteNote: String? = nil
     /// What the hub says to call an agent this app does not know (a runtime's own name, "DSH"); nil for the known ones.
     var agentLabelHint: String? = nil
+    /// The client the agent runs in (`agent_surface`, #6390): "desktop" (Claude's or Codex's desktop app) or "cli" (its
+    /// command line); nil when the node cannot tell (an SDK, a runtime, an older node). The command line's mark carries </>.
+    var agentSurface: String? = nil
     var launcher: String?
     var model: String?
     /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex
@@ -772,6 +775,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              parentThreadID = "parent_thread_id", readOnlyReason = "read_only_reason"
         case codexRoute = "codex_route", codexRouteNote = "codex_route_note"
         case agentLabelHint = "agent_label"
+        case agentSurface = "agent_surface"
         case permissionMode = "permission_mode"
         case contextTokens = "context_tokens", contextWindow = "context_window"
         case repoRoot = "repo_root"
@@ -812,6 +816,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         codexRoute = try c.decodeIfPresent(String.self, forKey: .codexRoute)
         codexRouteNote = try c.decodeIfPresent(String.self, forKey: .codexRouteNote)
         agentLabelHint = try c.decodeIfPresent(String.self, forKey: .agentLabelHint)
+        agentSurface = try c.decodeIfPresent(String.self, forKey: .agentSurface)
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)

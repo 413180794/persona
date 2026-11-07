@@ -16,7 +16,7 @@ describe("agentId", () => {
 
 describe("agentName", () => {
   it("names the known agents by their product", () => {
-    expect(MARKED_AGENTS.map((a) => agentName(a))).toEqual(["Claude Code", "Codex", "OpenCode", "Pi", "Gemini CLI", "Cursor"]);
+    expect(MARKED_AGENTS.map((a) => agentName(a))).toEqual(["Claude Code", "Codex", "OpenCode", "Pi", "Gemini CLI", "Cursor", "TRAE"]);
     expect(agentName("traex")).toBe("TRAEX");
     expect(agentName("")).toBe("Claude Code");
   });
@@ -31,7 +31,10 @@ describe("sessionAgent", () => {
   it("is Codex for a thread read off the app-server or its history, whatever it reports", () => {
     expect(sessionAgent({ source_kind: "codex_app_server" }).agent).toBe("codex");
     expect(sessionAgent({ agent: "claude", source_kind: "codex_history" }).agent).toBe("codex");
-    expect(sessionAgent({ agent: "opencode", agent_label: "x" })).toEqual({ agent: "opencode", label: "x" });
+    expect(sessionAgent({ agent: "opencode", agent_label: "x" })).toEqual({ agent: "opencode", label: "x", surface: undefined });
+    expect(sessionAgent({ agent: "claude", agent_surface: "cli" }).surface).toBe("cli");
+    expect(sessionAgent({ agent: "codex", agent_surface: "desktop" }).surface).toBe("desktop");
+    expect(sessionAgent({ agent: "codex", agent_surface: "sdk" }).surface).toBeUndefined();
   });
 });
 

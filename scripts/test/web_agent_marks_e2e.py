@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""End-to-end check of the agent marks (#3391): the mark of each agent's program beside its state dot in the sidebar's
+"""End-to-end check of the agent marks (#3391): the mark of each agent's program before its state dot in the sidebar's
 rows, the session header, the /terminal tree, the palette's results and the launcher picker; a lettered tile for an
-agent with no mark of its own. Light / dark x wide / 390 px.
+agent with no mark of its own; a </> badge on the mark of one run from the command line, none on the desktop app's
+(#6390). Light / dark x wide / 390 px.
 
 Needs the fake hub with one agent of each kind, a web page against it and Playwright for Python:
 
@@ -19,16 +20,18 @@ from playwright.sync_api import expect, sync_playwright
 
 # title of the mock session -> (the mark's kind, its accessible name)
 AGENTS = {
-    "整理发布说明": ("claude", "Claude Code"),
-    "修复订单列表的 N+1 查询": ("codex", "Codex"),
+    "整理发布说明": ("claude", "Claude Code（命令行版）"),
+    "修复订单列表的 N+1 查询": ("codex", "Codex（桌面版）"),
     "重构解析器的错误处理": ("opencode", "OpenCode"),
     "给导出脚本加上进度条": ("pi", "Pi"),
     "Gemini CLI": ("gemini", "Gemini CLI"),
     "补全设置页的单元测试": ("cursor", "Cursor"),
     "TRAEX 的一个会话": ("letter", "TRAEX"),
     "amp 的一个会话": ("letter", "amp"),
+    "TRAE CLI 的一个会话": ("trae", "TRAE（命令行版）"),
 }
-TEMPLATES = ("codex", "opencode", "pi", "gemini", "cursor")
+TEMPLATES = ("codex", "opencode", "pi", "gemini", "cursor", "trae")
+CLI = ("整理发布说明", "TRAE CLI 的一个会话")  # the ones the mock runs from the command line (#6390)
 
 
 def ok(msg):
@@ -36,11 +39,13 @@ def ok(msg):
 
 
 def rows_of(page):
-    return {title: page.locator(f'aside a[title^="{title}"]').first for title in AGENTS}
+    """The marks workspace's rows (another mock session shares the first title)."""
+    return {title: page.locator(f'aside a[href^="/s/server/marks-"][title^="{title}"]').first for title in AGENTS}
 
 
 def check_sidebar(page, theme, where):
-    """Every row has its mark, named, in a 14 px box, centred on its dot and at the same x as the others."""
+    """Every row has its mark, named, in a 14 px box, centred on its dot, before it and at the same x as the others; the
+    command line's carry the </> badge inside the row, the others none."""
     rows = rows_of(page)
     xs, shades = [], {}
     for title, (kind, name) in AGENTS.items():
@@ -53,7 +58,12 @@ def check_sidebar(page, theme, where):
         box, dot = mark.bounding_box(), row.locator('[role="img"]:not([data-agent-mark])').first.bounding_box()
         assert round(box["width"]) == 14 and round(box["height"]) == 14, (title, box)
         assert abs((box["y"] + box["height"] / 2) - (dot["y"] + dot["height"] / 2)) <= 1.5, (title, box, dot)
-        assert box["x"] > dot["x"] + dot["width"], (title, "the mark sits after the state dot, not on it")
+        assert box["x"] + box["width"] < dot["x"], (title, "the mark sits before the state dot, not on it")
+        badge = mark.locator("[data-agent-badge=cli]")
+        expect(badge).to_have_count(1 if title in CLI else 0)
+        if title in CLI:
+            b, r = badge.bounding_box(), row.bounding_box()
+            assert b["x"] + b["width"] < dot["x"] and b["y"] >= r["y"] and b["y"] + b["height"] <= r["y"] + r["height"], (title, b, dot, r)
         xs.append(round(box["x"], 1))
         if kind in TEMPLATES:
             shades[kind] = mark.locator("span").first.evaluate("e => getComputedStyle(e).backgroundColor")
@@ -65,7 +75,7 @@ def check_sidebar(page, theme, where):
         assert (lum < 0.5) == (theme == "light"), (kind, rgb, theme)
     letters = rows["TRAEX 的一个会话"].locator("[data-agent-mark=letter]").inner_text()
     assert letters == "T", letters
-    ok(f"{where} {theme}: 8 rows, each mark named, 14 px, centred on its dot, one color follows the theme, letters for TRAEX and amp")
+    ok(f"{where} {theme}: {len(AGENTS)} rows, each mark named, 14 px, before its dot, one color follows the theme, letters for TRAEX and amp, </> on the command line's")
 
 
 def settle(page):
@@ -85,7 +95,7 @@ def run(browser, base, token, shots, channel_note):
             page.reload()
             if width <= 600:
                 page.locator("main").get_by_role("button", name="侧边栏").first.click()
-            expect(page.locator('aside a[title^="整理发布说明"]').first).to_be_visible()
+            expect(page.locator('aside a[href="/s/server/marks-claude"]').first).to_be_visible()
             check_sidebar(page, theme, where)
             if shots:
                 settle(page)
@@ -96,12 +106,13 @@ def run(browser, base, token, shots, channel_note):
             # the session header
             page.goto(base + "/s/server/marks-codex")
             header = page.locator("header").first
-            expect(header.locator("[data-agent-mark=codex]")).to_have_attribute("aria-label", "Codex")
-            expect(header.locator('[role="img"][aria-label="Codex"]')).to_have_count(1)
+            expect(header.locator("[data-agent-mark=codex]")).to_have_attribute("aria-label", "Codex（桌面版）")
+            expect(header.locator('[role="img"][aria-label="Codex（桌面版）"]')).to_have_count(1)
+            expect(header.locator("[data-agent-badge]")).to_have_count(0)
             page.wait_for_timeout(600)
             box = header.locator("[data-agent-mark]").bounding_box()
             assert round(box["width"]) == 16, box
-            ok(f"{where} {theme}: the session header names Codex beside the state dot")
+            ok(f"{where} {theme}: the session header names Codex, its desktop app, without a badge")
             if shots:
                 page.screenshot(path=os.path.join(shots, f"header-{where}-{theme}.png"), clip={"x": 0, "y": 0, "width": width, "height": 70})
 

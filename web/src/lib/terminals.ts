@@ -3,6 +3,7 @@
 // Jump-To filter and which terminals the page keeps alive. Pure, so it is tested without a DOM.
 import { t } from "../i18n";
 import { baseName, sessionTitle, shortPath, stateOf } from "./format";
+import { agentSurface, type AgentSurface } from "./agent-kind";
 import type { AgentState, Session } from "./types";
 
 // ── what the hub sends (proto/panes.go) ──────────────────
@@ -62,6 +63,8 @@ export interface TermPane {
   /** The line under the title: the agent, the directory. */
   detail: string;
   agent: string;
+  /** The client its agent runs in, from the session in the pane (#6390): the command line's mark carries </>. */
+  surface?: AgentSurface;
   /** The pane's working directory ("" when the host does not say). */
   cwd: string;
   state: PaneState;
@@ -153,6 +156,7 @@ export function buildTerminalTree(res: PanesResponse | undefined, sessions: read
                 id: terminalId(p),
                 ...row,
                 agent: p.agent ?? "",
+                surface: agentSurface(session?.agent_surface),
                 cwd: p.cwd ?? "",
                 state: paneState(p, session),
                 pane: p.pane,

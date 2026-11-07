@@ -382,10 +382,10 @@ function TabBlock({ machine, sp, t: tab, searching, shown, activeItem, open }: {
                   {...contextMenuProps((at) => open(node, at, header))}
                   className={cx("flex min-h-9 items-center gap-2.5 rounded-[7px] py-1 pr-2.5 pl-7 transition-colors", on ? "bg-hover" : "hover:bg-hover", hot && !on && "bg-inset")}
                 >
+                  {p.state !== "shell" && p.agent && <AgentMark agent={p.agent} surface={p.surface} size={14} />}
                   <span className="flex size-4 shrink-0 items-center justify-center text-ink-3">
                     {p.state === "shell" ? <Icon name="terminal" size={13} /> : <StatusMark state={p.state} />}
                   </span>
-                  {p.state !== "shell" && p.agent && <AgentMark agent={p.agent} size={14} />}
                   <span className="min-w-0 flex-1">
                     <span className={cx("block truncate text-[12.5px]", on ? "font-medium text-ink" : "text-ink")}>{p.title}</span>
                     {p.detail && <span className="block truncate text-[11px] text-ink-3">{p.detail}</span>}

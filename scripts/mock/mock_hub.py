@@ -1039,7 +1039,7 @@ if os.environ.get("MOCK_OPENCODE"):
     ]
 
 # MOCK_AGENT_MARKS=1 (#3391): one agent of each kind the web draws a mark for, on the server: Claude Code, Codex, opencode, pi,
-# gemini, cursor, and two with none of their own (a compatible CLI, amp: the lettered fallback). Their panes are in the terminal tree too.
+# gemini, cursor, TRAE, and two with none of their own (a compatible CLI, amp: the lettered fallback). Their panes are in the terminal tree too.
 MARKS_SPACE = "marks"
 MARKS_AGENTS = []  # (session id, agent, title, status, state, minutes ago)
 if os.environ.get("MOCK_AGENT_MARKS"):
@@ -1053,9 +1053,14 @@ if os.environ.get("MOCK_AGENT_MARKS"):
         ("marks-cursor", "cursor", "补全设置页的单元测试", "idle", "idle", 50),
         ("marks-traex", "traex", "TRAEX 的一个会话", "done", "done", 9),
         ("marks-amp", "amp", "amp 的一个会话", "idle", "idle", 70),
+        ("marks-trae", "trae", "TRAE CLI 的一个会话", "working", "working", 3),
     ]
+    # the client each one runs in (#6390): the command-line ones carry the </> badge, the desktop app and the unknown none
+    MARKS_SURFACES = {"marks-claude": "cli", "marks-codex": "desktop", "marks-trae": "cli"}
     for i, (sid, agent, title, status, state, mins) in enumerate(MARKS_AGENTS, 1):
         extra = {} if agent in ("claude", "codex") else dict(_nr)
+        if sid in MARKS_SURFACES:
+            extra["agent_surface"] = MARKS_SURFACES[sid]
         SESSIONS.append(sess("server", sid, title, "/home/me/code/marks", status, state, MARKS_SPACE, 12, f"agent-{i}", i, mins,
                              "好的，我先看一下。", agent=agent, **extra))
 

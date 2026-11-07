@@ -4,7 +4,8 @@
 
 `apple/Persona/Resources/Assets.xcassets/Brands` and `apple/PersonaWatch/Assets.xcassets/Brands` hold other products' marks
 (`web/src/views/inbox/lark.svg` is a copy of `brand-lark` for the web inbox, and
-`android/core/designsystem/src/main/res/drawable/brand_lark.xml` the same mark as an Android vector drawable),
+`android/core/designsystem/src/main/res/drawable/brand_lark.xml`, `brand_claude.xml`, `brand_openai.xml` and `brand_trae.xml`
+the same marks as Android vector drawables),
 shown next to the service Persona connects to. The marks are trademarks of their owners; using them here does not imply
 endorsement. They are drawn as published: not recolored (the one-color OS marks take the distribution's color), not
 redrawn.
@@ -13,6 +14,7 @@ redrawn.
 | --- | --- | --- | --- |
 | `brand-claude` | Claude (Anthropic) | Simple Icons `claude.svg` (CC0 for the file) | Anthropic's brand guidelines |
 | `brand-openai` | OpenAI Blossom | github.com/openai/openai-cookbook, `chatgpt-blossom-black.svg` (viewBox cropped to the mark) | openai.com/brand |
+| `brand-trae` | TRAE, the agent mark on iOS / Mac and Android (#6390) | Simple Icons `trae.svg` (CC0 for the file; viewBox cropped to the mark); upstream trae.ai | TRAE's trademark |
 | `brand-lark` | 飞书 / Lark | github.com/larksuite/lark-samples, `public/svg/icon.svg` (viewBox cropped to the mark) | Lark user agreement; no public logo guidelines found |
 | `brand-google` | Google G | developers.google.com/identity/branding-guidelines, `signin-assets.zip` (the G matted from the light and dark buttons) | Google Sign-In branding guidelines |
 | `brand-gmail` | Gmail | gstatic.com Google product icon `gmail_2020q4_512dp.png` | Google brand terms |
@@ -26,6 +28,7 @@ redrawn.
 | `web/src/ui/brands/cursor.svg` | Cursor, agent mark in the web client | Simple Icons 16.36.0 `cursor.svg` (CC0 for the file; viewBox cropped to the mark); upstream cursor.com/brand | Cursor's brand page |
 | `web/src/ui/brands/gemini.svg` | Google Gemini, agent mark in the web client | Simple Icons 16.36.0 `googlegemini.svg` (CC0 for the file); upstream gemini.google.com, no brand kit found | Google brand terms |
 | `web/src/ui/brands/pi.svg` | Pi, agent mark in the web client | Simple Icons 16.36.0 `pi.svg` (CC0 for the file); upstream pi.dev/favicon.svg, no licence text found | Pi's trademark |
+| `web/src/ui/brands/trae.svg` | TRAE, agent mark in the web client | Same file as `brand-trae` | TRAE's trademark |
 | `web/src/ui/brands/github.svg` | GitHub mark in the web client | Same file as `brand-github` | GitHub's logo usage terms |
 | `web/src/ui/brands/telegram.svg` | Telegram in the web client | Same file as `brand-telegram` | Telegram's trademark |
 | `os-*` | Ubuntu, Debian, Fedora, Red Hat, CentOS, Rocky Linux, AlmaLinux, Arch Linux, Alpine Linux, openSUSE, NixOS, Linux (Tux) | Simple Icons (CC0 for the files) | Debian CC-BY-SA-3.0, NixOS CC-BY-4.0, Rocky Linux CC-BY-SA-4.0; the others under each project's trademark policy |

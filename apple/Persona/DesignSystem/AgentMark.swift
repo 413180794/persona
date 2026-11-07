@@ -1,0 +1,111 @@
+import SwiftUI
+
+/// Which agent runs in a session, as its mark draws it (#6390, the web's `AgentMark`): Claude's, Codex's (OpenAI's),
+/// TRAE's own mark, else the first letter of the agent's name on a tile; and the client it runs in, from the node's
+/// `agent_surface`. Pure data, so lists and tests read it without drawing.
+nonisolated struct AgentKind: Equatable, Sendable {
+    /// The mark's image in the asset catalog (`Theme.Brand`), nil for an agent with no mark of its own.
+    var brand: String?
+    /// The agent's name: the mark's accessible name and the source of the letter tile.
+    var name: String
+    var surface: Surface?
+
+    enum Surface: String, Sendable {
+        /// Claude's or Codex's desktop app.
+        case desktop
+        /// Its command line, in a terminal: the mark carries </>.
+        case cli
+    }
+
+    init(brand: String?, name: String, surface: Surface?) {
+        self.brand = brand
+        self.name = name
+        self.surface = surface
+    }
+
+    init(_ s: Session) {
+        surface = s.agentSurface.flatMap(Surface.init(rawValue:))
+        switch (s.agent ?? "").lowercased() {
+        case _ where s.isCodex: brand = Theme.Brand.openAI; name = "Codex"
+        case "trae", "trae-cli", "traecli": brand = Theme.Brand.trae; name = "TRAE"
+        case _ where s.isClaude: brand = Theme.Brand.claude; name = "Claude Code"
+        default: brand = nil; name = s.agentLabel
+        }
+    }
+
+    /// The letter on the tile of an agent with no mark: the name's first letter or digit, upper case.
+    var letter: String {
+        name.first(where: { $0.isLetter || $0.isNumber }).map { String($0).uppercased() } ?? "?"
+    }
+
+    /// "Claude Code, command line": the mark's accessible name.
+    var spoken: String {
+        switch surface {
+        case .cli: String(localized: "\(name), command line", comment: "An agent's mark: the agent, run from its command line")
+        case .desktop: String(localized: "\(name), desktop app", comment: "An agent's mark: the agent, run in its desktop app")
+        case nil: name
+        }
+    }
+}
+
+/// The mark of the agent in a session, in a square box of `side` points (scaled with the text size) that lines a
+/// column of rows up; drawn before the state dot, never in its place. Claude's mark keeps its coral, the one-color marks
+/// take the text color (light and dark, a selected row); an agent with no mark gets its letter on a tile of the same
+/// box. One run from its command line carries a </> badge on the lower right, ringed in the page's color so it reads
+/// on any row.
+struct AgentMark: View {
+    var kind: AgentKind
+    var side: CGFloat = Theme.Size.markS
+
+    init(_ session: Session, side: CGFloat = Theme.Size.markS) {
+        kind = AgentKind(session)
+        self.side = side
+    }
+
+    init(kind: AgentKind, side: CGFloat = Theme.Size.markS) {
+        self.kind = kind
+        self.side = side
+    }
+
+    var body: some View {
+        ZStack {
+            if let brand = kind.brand {
+                BrandMark(brand, side: side).foregroundStyle(.secondary)
+            } else {
+                Text(kind.letter)
+                    .font(Theme.Font.labelHeavy)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                    .scaledFrame(width: side * 0.92, height: side * 0.92)
+                    .background(Theme.Fill.chip, in: RoundedRectangle(cornerRadius: Theme.Radius.thumbnail, style: .continuous))
+            }
+        }
+        .scaledFrame(width: side, height: side)
+        .overlay(alignment: .bottomTrailing) {
+            if kind.surface == .cli { CommandLineBadge(side: side * 0.62).offset(x: side * 0.22, y: side * 0.18) }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(kind.spoken)
+        .accessibilityIdentifier("agent.mark")
+    }
+}
+
+/// The command line's badge (#6390): </> on a small dark tile, ringed in the page's color.
+private struct CommandLineBadge: View {
+    var side: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.thumbnail, style: .continuous)
+        Image(systemName: Theme.Icon.commandLine)
+            .resizable()
+            .scaledToFit()
+            .fontWeight(.bold)
+            .foregroundStyle(Theme.pageBackground)
+            .padding(side * 0.18)
+            .scaledFrame(width: side, height: side)
+            .background(Color.primary, in: shape)
+            .overlay(shape.strokeBorder(Theme.pageBackground, lineWidth: Theme.Size.line))
+            .accessibilityHidden(true)
+    }
+}

@@ -117,7 +117,7 @@ func (n *Node) claudeBgSessions(procs []claudeProc, seen map[string]bool) []prot
 		s := proto.Session{
 			SessionID: id, Cwd: c.Cwd, Status: status, Agent: "claude", Title: m.title, SourceKind: sourceClaudeBg,
 			Capabilities: &proto.SessionCapabilities{Read: true}, ReadOnlyReason: claudeBgReadOnly,
-			Model: m.model, LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, st), Rev: st.Size(),
+			Model: m.model, LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, st), Rev: st.Size(), AgentSurface: m.surface,
 		}
 		if s.Cwd == "" {
 			s.Cwd = m.cwd

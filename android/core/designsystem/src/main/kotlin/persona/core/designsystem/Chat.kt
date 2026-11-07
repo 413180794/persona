@@ -55,6 +55,8 @@ fun ChatTopBar(
     source: String? = null,
     busy: Boolean = false,
     onTitleClick: (() -> Unit)? = null,
+    /** Which agent runs here, and in which client (#6390): its mark before the status line's dot. */
+    agentMark: AgentMarkSpec? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val palette = PersonaTheme.palette
@@ -68,6 +70,7 @@ fun ChatTopBar(
                 Text(title, style = if (style == AppStyle.Board) type.headline else type.label.copy(fontSize = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)), color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (statusText != null || source != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                agentMark?.let { JAgentMark(it, size = AgentMarkInBar); Spacer(Modifier.width(Tokens.Space.xs + Tokens.Space.xxs)) }
                 if (status != null && statusText != null) {
                     when {
                         style == AppStyle.Brief && status == Status.NeedsYou -> MarkerText(statusText, type.micro.copy(fontWeight = FontWeight.Bold))
@@ -613,3 +616,6 @@ fun IncomingBubbleFrame(
         }
     }
 }
+
+/** An agent's mark in the bar's status line, beside its 7 dp dot (#6390). */
+private val AgentMarkInBar = 12.dp

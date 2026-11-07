@@ -61,6 +61,7 @@ type entry struct {
 	CustomTitle    string `json:"customTitle"`
 	GitBranch      string `json:"gitBranch"`
 	Version        string `json:"version"`
+	Entrypoint     string `json:"entrypoint"` // the client Claude Code runs in: "cli", "claude-desktop", "sdk-cli"…
 	PermissionMode string `json:"permissionMode"`
 	Effort         string `json:"effort"` // assistant lines: the effort level the reply was generated with
 	Operation      string `json:"operation"`
@@ -112,6 +113,10 @@ type Meta struct {
 	// Developer info for the chat header (all from fields Claude Code writes on each line).
 	GitBranch string
 	Version   string
+	// Surface is the client the agent runs in: SurfaceDesktop (Claude's or Codex's desktop app), SurfaceCLI (its command
+	// line, in a terminal), "" when the transcript does not say (an SDK, an older version). Claude Code writes its
+	// entrypoint on every line, a Codex rollout its originator on the first (surface.go).
+	Surface string
 	// VersionAt is when the line that said Version was written (zero when it had no timestamp).
 	VersionAt      time.Time
 	PermissionMode string
@@ -345,6 +350,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	}
 	if e.Version != "" {
 		meta.Version, meta.VersionAt = e.Version, e.Timestamp
+	}
+	if e.Entrypoint != "" {
+		meta.Surface = ClaudeSurface(e.Entrypoint)
 	}
 	if meta.StartedAt.IsZero() && !e.Timestamp.IsZero() {
 		meta.StartedAt = e.Timestamp

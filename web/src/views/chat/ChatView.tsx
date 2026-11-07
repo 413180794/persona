@@ -1483,8 +1483,8 @@ export function Header({
       </div>
       <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
-          {session && !assistant && <StatusMark state={state} awaiting={awaiting} waiting={Boolean(session && backgroundWaiting(session))} />}
           {session && !assistant && <SessionMark s={session} size={16} />}
+          {session && !assistant && <StatusMark state={state} awaiting={awaiting} waiting={Boolean(session && backgroundWaiting(session))} />}
           {assistant && <AssistantFace session={session} last={last} />}
           {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
           <h1 className="truncate text-[14px] font-semibold text-ink">{chrome?.title || title}</h1>

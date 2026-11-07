@@ -284,6 +284,11 @@ data class Session(
     /** What the hub calls an agent this app does not know (a runtime's own name, "DSH"; docs/integrations/runtimes.md). */
     @SerialName("agent_label") val agentLabelHint: String? = null,
     /**
+     * The client the agent runs in (#6390): "desktop" (Claude's or Codex's desktop app) or "cli" (its command line);
+     * absent when the node cannot tell (an SDK, a runtime, an older node). The command line's mark carries </>.
+     */
+    @SerialName("agent_surface") val agentSurface: String? = null,
+    /**
      * Where a session comes from when it is not an agent in a terminal engine: codex_app_server, codex_history,
      * identity_conflict, runtime (docs/protocol/protocol.md "Codex sources and capabilities"). Absent on older sources, which can do everything;
      * a session with a source can only do what [capabilities] explicitly allows (core:domain SessionSource).

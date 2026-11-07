@@ -451,6 +451,8 @@ Provider responses carry only the description and `has_key`, never secrets. Defa
  "pane_index":0,   // optional (#2320): this pane's positional index within its tab, from 0, top-left is 0 (the other panes were all split from it; with Agents, it's the group's initiator);
                    // the herdr node computes it from the snapshot's layouts; omitted when the host gives no layout, on old nodes, or when the pane isn't in the layout (0 is still sent; only absence means unknown). See docs/protocol/agent-states.md "Several panes in one tab"
  "agent":"claude","agent_label":"",   // agent_label only on Agents the App doesn't know: the runtime's name for it ("DSH", see "Runtime ↔ node")
+ "agent_surface":"cli",   // optional (#6390): the client the agent runs in, "desktop" (Claude's or Codex's desktop app) or "cli" (its command line), read off its record
+                          // (Claude Code's entrypoint, a Codex rollout's originator); omitted when it does not say (an SDK, a runtime, older nodes). The apps badge the command line's mark with </>
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_persona":true,"assistant":false,
  "ultracode":false,"ultracode_note":"…","ultracode_pending":true,"ultracode_lost_at":"...", // Optional; see "Claude Code ultracode". Omitted ultracode means unknown
  "origin":"inbox","origin_ref":"<Inbox item id>",   // only on assistant chats (assistant: true): who opened this chat, see "Origin of assistant chats" below; absent = user
@@ -1385,7 +1387,7 @@ The direct lookup/count path does not build, scan or sort unrelated session view
 Runtime summaries keep the existing snake_case names and decode as a `Session` with optional detail fields absent. They contain:
 
 - Identity/ownership: `machine_id`, `session_id`, `manager`; source/runtime and hierarchy fields (`source_kind`, `source_thread_id`, `source_instance_id`, `parent_thread_id`, `parent_session_id`, `root_session_id`, `is_subagent`).
-- Display/grouping: `title`, `cwd`, `workspace_cwd`, `repo_root`, `agent`, `agent_label`, `agent_name`; space, parent-space, slot, pane, tab and workspace identifiers/names/indices; `todo {id,title}`.
+- Display/grouping: `title`, `cwd`, `workspace_cwd`, `repo_root`, `agent`, `agent_label`, `agent_surface`, `agent_name`; space, parent-space, slot, pane, tab and workspace identifiers/names/indices; `todo {id,title}`.
 - State/freshness: `state`, `status`, `updated_at`, `state_since`, `seen_at`, `pending_interactions`, `rev`, `quiet`, `awaits_reply`, `background_working`, `background_waiting`, `starting`, `start_error`, turn-error fields.
 - Row content/progress: `last_text`, `activity`, `activity_at`, `model`, context-token/window counts; bounded `work` (phase/on/line/wait/then/wake/attempts/agent/deferred), `plan`, `goal`, and `loop` timing with its prompt omitted.
 - Routing/action safety: `capabilities`, `attached`, `can_fork`, `read_only_reason`, `started_by_persona`, `assistant`, `archived`, `space`, `origin`, `origin_ref`.

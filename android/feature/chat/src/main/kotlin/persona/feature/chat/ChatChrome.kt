@@ -74,6 +74,7 @@ internal fun ChatHeader(
             .joinToString(" / ").takeIf(String::isNotBlank),
         busy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
         onTitleClick = onDetails,
+        agentMark = session?.agentMark,
     ) {
         actions()
         JIconButton(PhIcons.DotsThree, stringResource(R.string.chat_chrome_more), { menu = true })

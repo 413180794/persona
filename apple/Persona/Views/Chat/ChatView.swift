@@ -2377,7 +2377,10 @@ struct ChatView: View {
                         ProgressView().controlSize(.mini)
                         Text(ConnectionLabel.text(model.connection.shown, hubRestarting: model.hubUpdate?.restarting == true)).lineLimit(1)
                     } else {
-                        if let s = session { StatusDot(state: s.state, size: 7) }
+                        if let s = session {
+                            if !s.assistant { AgentMark(s, side: Theme.Size.markXS) } // its agent before its state (#6390)
+                            StatusDot(state: s.state, size: 7)
+                        }
                         Text(compactPlace).lineLimit(1).truncationMode(.middle)
                     }
                 }
@@ -2629,6 +2632,7 @@ struct ChatView: View {
             let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
             let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
+                AgentMark(s, side: Theme.Size.markXS) // its agent before its state (#6390); this line is an agent's only
                 StatusDot(state: s.state, size: 7)
                 // Not ViewThatFits: that measured both lines again at every width of a window resize (#1337).
                 FirstFitting {

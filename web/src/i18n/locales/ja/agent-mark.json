@@ -6,5 +6,9 @@
   "gemini": "Gemini CLI",
   "cursor": "Cursor",
   "traex": "TRAEX",
-  "unknown": "Agent"
+  "trae": "TRAE",
+  "unknown": "Agent",
+  "surface_cli": "コマンドライン版",
+  "surface_desktop": "デスクトップ版",
+  "with_surface": "{agent}（{surface}）"
 }

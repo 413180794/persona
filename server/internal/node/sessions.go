@@ -241,6 +241,7 @@ type quickMeta struct {
 	wfScript map[string]string      // their script files by run id
 	cwd      string
 	model    string
+	surface  string // the client it runs in (transcript.Meta.Surface)
 	lastText string
 	// asks is what lastText asks the user (transcript.AskOf), when no message came in after it (#5096).
 	asks string
@@ -418,6 +419,10 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	}
 	rewound := tail.Settle(&tm)
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
+	m.surface = tm.Surface
+	if m.surface == "" {
+		m.surface = prev.surface // Claude writes it on every line, a rollout on its first: the head read above has it
+	}
 	m.wake, m.turnClosed, m.lastTextAt, m.lastPromptAt = tm.LastTurnWake, tm.TurnClosed, tm.LastTextAt, tm.LastPromptAt
 	if m.lastText == "" && off > 0 {
 		// An agent that said a line and then ran tools for a while: their results and hook lines push its words out of
@@ -830,6 +835,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				s.AgentSurface = m.surface
 				s.Asks, s.AsksRead = m.asks, true // the list's last_text is only the reply's start (#5096)
 				promptAt = m.lastPromptAt
 				if a.Agent != "codex" && a.Agent != traexAgent {
@@ -1063,7 +1069,7 @@ func (n *Node) scanOffline() []proto.Session {
 		n.setGuessedPath(id, c.path)
 		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
-			Agent:    "claude",
+			Agent: "claude", AgentSurface: m.surface,
 			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),
 		}
 		s.Activity, s.ActivityAt = m.activityOf()

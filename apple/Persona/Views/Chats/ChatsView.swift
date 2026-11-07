@@ -2889,9 +2889,18 @@ nonisolated struct SlotRow: View, Equatable {
                 } detail: {
                     if !session.runningWorkflows.isEmpty { WorkflowLine(runs: session.runningWorkflows) }
                 }
+                // The badge's column holds the state alone (#3004): the agent's mark leads the title (#6390).
+                .titleLeading(session.assistant ? nil : { AgentMark(session) })
             } else {
                 HStack(alignment: .top, spacing: Theme.Space.m) {
-                    if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
+                    // The agent's mark before its state (#6390): what runs there, then how it is doing.
+                    if dot {
+                        HStack(spacing: Theme.Space.s) {
+                            if !session.assistant { AgentMark(session) }
+                            StatusDot(state: session.state, size: 9)
+                        }
+                        .padding(.top, Theme.Space.xs)
+                    }
                     // The words on the left, the time with its source under it on the right (#3043): the title
                     // starts at the row's edge, and the tag takes no room from it nor pushes the preview down.
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
@@ -3052,6 +3061,8 @@ nonisolated struct CompactSlotRow: View, Equatable {
         let _ = PerfTrace.body("CompactSlotRow")
         #endif
         HStack(spacing: CompactList.gap) {
+            // The agent's mark before its state (#6390).
+            if !session.assistant { AgentMark(session) }
             Group {
                 if AppStyle.current.usesBeautifulUI { AgentStateBadge(state: session.state).scaleEffect(0.8) } else { StatusDot(state: session.state, size: Theme.Size.dot) }
             }

@@ -146,6 +146,9 @@
     <string name="designsystem_attachment_remove">これを削除</string>
     <string name="designsystem_attachment_edit">編集</string>
     <string name="designsystem_brand_lark">Lark</string>
+    <!-- An agent's mark (#6390): the agent, and the client it runs in. -->
+    <string name="designsystem_agent_mark_cli">%1$s（コマンドライン版）</string>
+    <string name="designsystem_agent_mark_desktop">%1$s（デスクトップ版）</string>
     <string name="designsystem_channel_source">%1$sから</string>
     <string name="designsystem_series_separator">／</string>
     <string name="designsystem_plan_spoken">プラン、%2$dステップ中%1$dステップ目、%3$s</string>

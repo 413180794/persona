@@ -57,18 +57,47 @@ describe("AgentMark", () => {
   it("keeps every mark in a box of the size asked, centred, whatever its shape", () => {
     for (const a of [...MARKED_AGENTS, "traex"]) {
       const html = draw(a, { size: 18 });
-      expect(html).toMatch(/^<span [^>]*class="inline-flex shrink-0 items-center justify-center/);
+      expect(html).toMatch(/^<span [^>]*class="relative inline-flex shrink-0 items-center justify-center/);
       expect(html).toContain("width:18px;height:18px");
     }
   });
 
   it("pulls a square or tall mark in so it does not look bigger than a round one", () => {
     const inner = (a: string) => Number(/width:(\d+)px/.exec(draw(a, { size: 32 }).replace("width:32px;height:32px", ""))?.[1]);
-    expect(MARKED_AGENTS.map((a) => inner(a === "claude" ? "codex" : a))).toEqual([32, 32, 28, 28, 32, 29]);
+    expect(MARKED_AGENTS.map((a) => inner(a === "claude" ? "codex" : a))).toEqual([32, 32, 28, 28, 32, 29, 29]);
+  });
+});
+
+describe("AgentMark's client (#6390)", () => {
+  it("badges the command line's mark with </>, and says so", () => {
+    for (const a of ["claude", "codex", "traex"]) {
+      const html = draw(a, { surface: "cli" });
+      expect(html).toContain('data-agent-badge="cli"');
+      expect(html).toContain('data-agent-surface="cli"');
+    }
+    expect(draw("claude", { surface: "cli" })).toContain('aria-label="Claude Code（命令行版）"'); // tests run in zh-Hans
+    expect(draw("codex", { surface: "desktop" })).toContain('aria-label="Codex（桌面版）"');
+  });
+
+  it("draws the desktop app's mark and an unknown client's as before, with no badge", () => {
+    expect(draw("codex", { surface: "desktop" })).not.toContain("data-agent-badge");
+    expect(draw("codex")).not.toContain("data-agent-badge");
+    expect(draw("codex")).toContain('aria-label="Codex"');
+  });
+
+  it("keeps the badge inside a readable size on the smallest marks", () => {
+    const side = (size: number) => Number(/data-agent-badge="cli"[^>]*width:(\d+)px/.exec(draw("codex", { surface: "cli", size }))?.[1]);
+    expect(side(13)).toBe(8);
+    expect(side(16)).toBe(10);
   });
 });
 
 describe("SessionMark", () => {
+  it("badges a session whose agent runs on the command line", () => {
+    expect(renderToStaticMarkup(<SessionMark s={{ agent: "codex", agent_surface: "cli" }} size={14} />)).toBe(draw("codex", { surface: "cli" }));
+    expect(renderToStaticMarkup(<SessionMark s={{ agent: "codex", agent_surface: "web" }} size={14} />)).toBe(draw("codex"));
+  });
+
   it("is the mark of the session's agent", () => {
     const html = renderToStaticMarkup(<SessionMark s={{ agent: "opencode" }} size={14} />);
     expect(html).toBe(draw("opencode"));

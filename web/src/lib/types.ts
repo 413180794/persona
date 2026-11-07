@@ -176,6 +176,8 @@ export interface Session {
   can_fork?: boolean;
   /** What to call an agent the app does not know (a runtime's own name, "DSH"; docs/integrations/runtimes.md). */
   agent_label?: string;
+  /** The client the agent runs in: "desktop" (its desktop app) or "cli" (its command line); absent when unknown (#6390). */
+  agent_surface?: string;
   launcher?: string;
   model?: string;
   permission_mode?: string;

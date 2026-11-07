@@ -314,6 +314,8 @@ fun AgentRow(
     branch: Boolean = false,
     /** Where it was opened (Lark group / Terminal, #3132): under the time, right-aligned, so the title keeps the whole line (#3043). */
     source: RowSource? = null,
+    /** Which agent runs there, and in which client (#6390): its mark before the state mark. */
+    agentMark: AgentMarkSpec? = null,
     end: (@Composable () -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
@@ -387,6 +389,8 @@ fun AgentRow(
                 .border(Hairline, palette.line, shape).then(click).stableAlpha(if (muted) 0.75f else 1f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // The agent's mark before its state (#6390): what runs there, then how it is doing.
+            agentMark?.let { Spacer(Modifier.width(Tokens.Space.s)); JAgentMark(it) }
             Box(Modifier.width(Holder), contentAlignment = Alignment.Center) { HolderGlyph(shown) }
             Column(Modifier.weight(1f).padding(horizontal = Tokens.Space.m - Tokens.Space.xxs, vertical = Tokens.Space.s - Tokens.Space.xxs), content = text)
             end?.invoke()
@@ -401,6 +405,8 @@ fun AgentRow(
             .stableAlpha(if (muted) 0.72f else 1f).padding(start = start, top = Tokens.Space.s, bottom = Tokens.Space.s),
         verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Top,
     ) {
+        // The agent's mark before its state (#6390): what runs there, then how it is doing.
+        agentMark?.let { Box(Modifier.height(mark), contentAlignment = Alignment.Center) { JAgentMark(it) }; Spacer(Modifier.width(Tokens.Space.xs)) }
         Box(Modifier.size(mark), contentAlignment = Alignment.Center) { JStatusMark(shown) }
         Spacer(Modifier.width(gap))
         Column(Modifier.weight(1f).padding(top = if (compact) None else Tokens.Space.xxs), content = text)

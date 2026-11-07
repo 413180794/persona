@@ -146,6 +146,9 @@
     <string name="designsystem_attachment_remove">移除这张</string>
     <string name="designsystem_attachment_edit">编辑</string>
     <string name="designsystem_brand_lark">飞书</string>
+    <!-- An agent's mark (#6390): the agent, and the client it runs in. -->
+    <string name="designsystem_agent_mark_cli">%1$s（命令行版）</string>
+    <string name="designsystem_agent_mark_desktop">%1$s（桌面版）</string>
     <string name="designsystem_channel_source">来自 %1$s</string>
     <string name="designsystem_series_separator">；</string>
     <string name="designsystem_plan_spoken">计划，第 %1$d 步，共 %2$d 步，%3$s</string>

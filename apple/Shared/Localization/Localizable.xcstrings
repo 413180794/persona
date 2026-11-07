@@ -3568,6 +3568,52 @@
       },
       "extractionState": "manual"
     },
+    "%@, command line": {
+      "comment": "An agent's mark: the agent, run from its command line",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, command line"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（コマンドライン版）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（命令行版）"
+          }
+        }
+      }
+    },
+    "%@, desktop app": {
+      "comment": "An agent's mark: the agent, run in its desktop app",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, desktop app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（デスクトップ版）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@（桌面版）"
+          }
+        }
+      }
+    },
     "%@, show title and tags": {
       "localizations": {
         "en": {

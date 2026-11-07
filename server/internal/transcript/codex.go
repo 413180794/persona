@@ -36,6 +36,7 @@ type codexPayload struct {
 	ID         string `json:"id"`
 	Cwd        string `json:"cwd"`
 	CLIVersion string `json:"cli_version"`
+	Originator string `json:"originator"`
 	// turn_context
 	Model          string `json:"model"`
 	ApprovalPolicy string `json:"approval_policy"`
@@ -152,7 +153,7 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 	}
 	switch l.Type {
 	case "session_meta":
-		meta.Cwd, meta.Version = p.Cwd, p.CLIVersion
+		meta.Cwd, meta.Version, meta.Surface = p.Cwd, p.CLIVersion, CodexSurface(p.Originator)
 		if meta.StartedAt.IsZero() {
 			meta.StartedAt = l.Timestamp
 		}

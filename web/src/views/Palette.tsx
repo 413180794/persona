@@ -376,8 +376,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
                 heading: sessionsHeading,
                 row: (
                 <button ref={ref} type="button" {...option} onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
+                  {h.state !== "shell" && h.agent && <AgentMark agent={h.agent} surface={h.surface} size={14} />}
                   <span className="flex size-5 shrink-0 items-center justify-center">{h.state === "shell" ? <Icon name="terminal" size={13} className="text-ink-3" /> : <StatusMark state={h.state} />}</span>
-                  {h.state !== "shell" && h.agent && <AgentMark agent={h.agent} size={14} />}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium text-ink">{h.title}</span>
                     <span className="block truncate text-[11.5px] text-ink-3">{[h.trail, h.detail].filter(Boolean).join(" · ")}</span>
@@ -395,8 +395,8 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
               heading: sessionsHeading,
               row: (
               <button ref={ref} type="button" {...option} onMouseMove={() => setActive(i)} onClick={() => pick(r)} className={rowClass}>
-                <span className="flex size-5 shrink-0 items-center justify-center">{h.assistant ? <Icon name="spark" size={13} className="text-ink-3" /> : <StatusMark state={st} />}</span>
                 {!h.assistant && <SessionMark s={h.s} size={14} />}
+                <span className="flex size-5 shrink-0 items-center justify-center">{h.assistant ? <Icon name="spark" size={13} className="text-ink-3" /> : <StatusMark state={st} />}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium text-ink">{sessionTitle(h.s)}</span>
                   <span className="block truncate text-[11.5px] text-ink-3">{[meta, shortPath(h.s.cwd)].filter(Boolean).join(" · ")}</span>

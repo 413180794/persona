@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 const codexProjectCacheTTL = 30 * time.Second
@@ -82,7 +83,7 @@ func (n *Node) decorateCodexSession(s *proto.Session, src codexSource, legacy st
 	if !origin.desktop {
 		return
 	}
-	s.AgentName = "Codex App"
+	s.AgentName, s.AgentSurface = "Codex App", transcript.SurfaceDesktop
 	app := loadCodexAppState(src.home)
 	s.SpaceKind = "codex_app"
 	cwd := s.Cwd

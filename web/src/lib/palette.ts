@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { chordParts, SCOPE_LABEL, SHORTCUTS, DIGITS, type Bindings, type Platform } from "./shortcuts";
 import type { Route } from "./router";
 import type { PaneState, TermSpace } from "./terminals";
+import type { AgentSurface } from "./agent-kind";
 import type { IconName } from "../ui/icons";
 import { byTime } from "./times";
 
@@ -189,8 +190,9 @@ export interface TerminalHit {
   /** The place and what runs: machine › workspace › tab. */
   trail: string;
   detail: string;
-  /** The agent in the pane ("" for a plain shell). */
+  /** The agent in the pane ("" for a plain shell), and the client it runs in. */
   agent: string;
+  surface?: AgentSurface;
   state: PaneState;
   to: Route;
   score: number;
@@ -226,6 +228,7 @@ export function terminalHits(machines: readonly MachinePanes[], query: string): 
             trail: [m.machine, sp.label, tab.label === sp.label ? "" : tab.label].filter(Boolean).join(" › "),
             detail: p.detail,
             agent: p.agent,
+            surface: p.surface,
             state: p.state,
             to: { name: "terminal", mid: m.mid, id: p.id },
             score: s,

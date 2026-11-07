@@ -13,8 +13,10 @@
 //   cursor    SI `cursor.svg`; source cursor.com/brand
 //   gemini    SI `googlegemini.svg`; source gemini.google.com (no brand kit found)
 //   pi        SI `pi.svg`; source pi.dev/favicon.svg (no licence text found)
-// viewBoxes of opencode and cursor are cropped to the glyph (CLAUDE.md: assets carry no padding); nothing else is changed.
-import { agentId, agentLetter, agentName, isMarked, sessionAgent, type MarkedAgent } from "../lib/agent-kind";
+//   trae      SI `trae.svg`; source trae.ai (TRAE, ByteDance's coding agent; not TRAEX, which keeps its letter)
+// viewBoxes of opencode, cursor and trae are cropped to the glyph (CLAUDE.md: assets carry no padding); nothing else is changed.
+import { t } from "../i18n";
+import { agentId, agentLetter, agentName, isMarked, sessionAgent, type AgentSurface, type MarkedAgent } from "../lib/agent-kind";
 import type { Session } from "../lib/types";
 import { cx } from "./atoms";
 import claudeMark from "./brands/claude.svg";
@@ -23,6 +25,7 @@ import cursorMark from "./brands/cursor.svg";
 import geminiMark from "./brands/gemini.svg";
 import opencodeMark from "./brands/opencode.svg";
 import piMark from "./brands/pi.svg";
+import traeMark from "./brands/trae.svg";
 
 // `fit`: the share of the box the mark is drawn at. Round and full-bleed shapes fill it; a square or a tall one is
 // pulled in so it does not look bigger than its neighbours (iOS: `Theme.Brand.optical`).
@@ -33,28 +36,33 @@ const MARKS: Record<MarkedAgent, { src: string; template?: boolean; fit: number 
   pi: { src: piMark, template: true, fit: 0.88 },
   gemini: { src: geminiMark, template: true, fit: 1 },
   cursor: { src: cursorMark, template: true, fit: 0.92 },
+  trae: { src: traeMark, template: true, fit: 0.92 },
 };
 
 /**
  * `agent` is what the node reports ("" is Claude Code); `label` the runtime's own name for an agent the app does not
- * know. `size` is the box. The mark says what it is (role=img, "Claude Code"); `decorative` for a place that names the
- * agent in text right beside it.
+ * know; `surface` the client it runs in (#6390): the command line's mark carries a </> badge on its lower right, the
+ * desktop app's none. `size` is the box. The mark says what it is (role=img, "Claude Code, command line");
+ * `decorative` for a place that names the agent in text right beside it.
  */
-export function AgentMark({ agent, label, size = 14, decorative, className }: { agent?: string; label?: string; size?: number; decorative?: boolean; className?: string }) {
+export function AgentMark({ agent, label, surface, size = 14, decorative, className }: { agent?: string; label?: string; surface?: AgentSurface; size?: number; decorative?: boolean; className?: string }) {
   const id = agentId(agent);
-  const name = agentName(agent, label);
+  const agentNamed = agentName(agent, label);
+  const name = surface ? t("agent-mark.with_surface", { agent: agentNamed, surface: t(`agent-mark.surface_${surface}`) }) : agentNamed;
   const a11y = decorative ? { "aria-hidden": true as const } : { role: "img" as const, "aria-label": name };
-  const box = cx("inline-flex shrink-0 items-center justify-center", className ?? "text-ink-2");
+  const box = cx("relative inline-flex shrink-0 items-center justify-center", className ?? "text-ink-2");
+  const badge = surface === "cli" && <CliBadge size={size} />;
   if (!isMarked(id)) {
     return (
-      <span {...a11y} data-agent-mark="letter" className={box} style={{ width: size, height: size }}>
+      <span {...a11y} data-agent-mark="letter" data-agent-surface={surface} className={box} style={{ width: size, height: size }}>
         <span
           aria-hidden
           className="flex items-center justify-center bg-inset font-semibold leading-none"
           style={{ width: Math.round(size * 0.92), height: Math.round(size * 0.92), borderRadius: Math.max(3, Math.round(size * 0.28)), fontSize: Math.max(8, Math.round(size * 0.6)) }}
         >
-          {agentLetter(name)}
+          {agentLetter(agentNamed)}
         </span>
+        {badge}
       </span>
     );
   }
@@ -62,17 +70,39 @@ export function AgentMark({ agent, label, size = 14, decorative, className }: { 
   const px = Math.round(size * fit);
   const mask = `url("${src}") center / contain no-repeat`;
   return (
-    <span {...a11y} data-agent-mark={id} className={box} style={{ width: size, height: size }}>
+    <span {...a11y} data-agent-mark={id} data-agent-surface={surface} className={box} style={{ width: size, height: size }}>
       {template ? (
         <span aria-hidden className="block bg-current" style={{ width: px, height: px, mask, WebkitMask: mask }} />
       ) : (
         <img src={src} alt="" aria-hidden width={px} height={px} style={{ width: px, height: px }} />
       )}
+      {badge}
+    </span>
+  );
+}
+
+/**
+ * The command line's badge (#6390): </> on a small tile at the mark's lower right, the page's colour around it so it
+ * reads on any row (selected, hovered). The tile is about 60% of the mark, the glyph drawn as strokes so it stays sharp
+ * down to the 13 px launcher marks.
+ */
+function CliBadge({ size }: { size: number }) {
+  const side = Math.max(8, Math.round(size * 0.62));
+  return (
+    <span
+      aria-hidden
+      data-agent-badge="cli"
+      className="absolute flex items-center justify-center rounded-[3px] bg-ink text-page ring-1 ring-page"
+      style={{ width: side, height: side, right: -Math.round(side * 0.35), bottom: -Math.round(side * 0.3) }}
+    >
+      <svg viewBox="0 0 12 12" width={side - 2} height={side - 2} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3.6 3.6 1.4 6l2.2 2.4M8.4 3.6 10.6 6 8.4 8.4M6.9 2.6 5.1 9.4" />
+      </svg>
     </span>
   );
 }
 
 /** The mark of a session's agent. */
-export function SessionMark({ s, ...rest }: { s: Pick<Session, "agent" | "agent_label" | "source_kind"> } & Omit<Parameters<typeof AgentMark>[0], "agent" | "label">) {
+export function SessionMark({ s, ...rest }: { s: Pick<Session, "agent" | "agent_label" | "source_kind" | "agent_surface"> } & Omit<Parameters<typeof AgentMark>[0], "agent" | "label" | "surface">) {
   return <AgentMark {...sessionAgent(s)} {...rest} />;
 }

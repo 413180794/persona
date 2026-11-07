@@ -801,8 +801,12 @@ type Session struct {
 	// AgentLabel is what the apps call the agent when they do not know it themselves: a runtime's own name ("DSH").
 	// Empty for the agents the apps know (Claude Code, Codex, a compatible CLI).
 	AgentLabel string `json:"agent_label,omitempty"`
-	Launcher   string `json:"launcher,omitempty"`
-	Model      string `json:"model,omitempty"`
+	// AgentSurface is the client the agent runs in: "desktop" (Claude's or Codex's desktop app) or "cli" (its command
+	// line); empty when its record does not say (an SDK, an older version, a runtime). The apps badge the agent's mark
+	// with </> for "cli" (#6390).
+	AgentSurface string `json:"agent_surface,omitempty"`
+	Launcher     string `json:"launcher,omitempty"`
+	Model        string `json:"model,omitempty"`
 	// PermissionMode and Effort are what Claude Code runs with now: default / acceptEdits / plan / auto /
 	// bypassPermissions, and low … max. Empty while unknown (before the first turn, Codex). A Codex thread the phone
 	// drives through its app-server has an Effort too (Codex's levels, see Efforts) but never a PermissionMode.
