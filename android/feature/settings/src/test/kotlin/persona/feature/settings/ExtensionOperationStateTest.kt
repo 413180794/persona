@@ -37,14 +37,20 @@ internal open class FakeOperations(var stepped: Boolean = true) : ExtensionApiSt
     override suspend fun catalog(query: String, market: String?, refresh: Boolean) = ExtensionCatalog(listOf(ExtensionMarket("m1", name = "Example")), catalog)
     override suspend fun previewFromMarket(market: String, extension: String): ExtensionPreview { calls += "preview"; return opPreview }
     override suspend fun install(preview: ExtensionPreview): ExtensionDetail { calls += "install"; return ExtensionDetail(HubExtension("example-notes", "Example Notes", "ui", "running")) }
-    override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) { calls += "uninstall" }
+    /** Enabled extensions depend on it: the older hub refuses a removal without cascade (409 has_dependents). */
+    var dependents = emptyList<ExtensionDependent>()
+    override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) {
+        calls += if (cascade) "uninstall cascade" else "uninstall"
+        if (dependents.isNotEmpty() && !cascade) throw ExtensionHasDependents(dependents, "B depends on it")
+    }
     override suspend fun startFromMarket(market: String, extension: String): ExtensionOperation { calls += "start $market/$extension"; return started }
     override suspend fun agree(preview: ExtensionPreview, upgradeOf: String?): ExtensionOperation {
         calls += "agree ${preview.previewId} $upgradeOf"
         return op("running", "install", 6, "download" to "done", "consent" to "done", "install" to "running")
     }
-    override suspend fun startUninstall(id: String, keepData: Boolean): ExtensionOperation {
-        calls += "uninstall-async $id keep=$keepData"; return op("running", "stop", 1, "stop" to "running", "remove" to "pending", kind = "uninstall", id = "op2")
+    override suspend fun startUninstall(id: String, keepData: Boolean, cascade: Boolean): ExtensionOperation {
+        calls += "uninstall-async $id keep=$keepData" + if (cascade) " cascade" else ""
+        return op("running", "stop", 1, "stop" to "running", "remove" to "pending", kind = "uninstall", id = if (cascade) "op3" else "op2")
     }
     override suspend fun operations(): List<ExtensionOperation> { calls += "list"; return listed }
     override suspend fun operation(id: String): ExtensionOperation { calls += "get $id"; return listed.firstOrNull { it.id == id }?.copy(preview = opPreview) ?: started.copy(preview = opPreview) }
@@ -162,6 +168,81 @@ class ExtensionOperationStateTest {
             api.pushes.emit(op("succeeded", "nodes", 9, kind = "uninstall", id = "op2"))
             until { notices.isNotEmpty() }
             assertEquals("已卸载 Example Notes", notices.single())
+        }
+    }
+
+    @Test fun removingOneOthersDependOnAsksThenCascades() {
+        // #5611: in steps the refusal is only the failed operation's error_code; asked, it starts again with cascade.
+        val api = FakeOperations()
+        watching(api) { model, notices ->
+            assertFalse(model.uninstall(keepData = false))
+            api.pushes.emit(op("failed", "stop", 2, "stop" to "failed", "remove" to "pending", kind = "uninstall", id = "op2",
+                error = "B depends on it").copy(errorCode = "has_dependents"))
+            until { model.state.value.cascade != null }
+            val ask = model.state.value.cascade!!
+            assertEquals(ExtensionCascade(emptyList(), keepData = false), ask)
+            // The operation does not name them.
+            assertEquals("其他扩展依赖 Example Notes，会一起停用。", ExtensionText.cascade(res, ask, "Example Notes"))
+            assertFalse(model.confirmCascade())
+            assertNull(model.state.value.cascade)
+            assertEquals("uninstall-async example-notes keep=false cascade", api.calls.last())
+            assertEquals("op3", model.state.value.operation?.id)
+            api.pushes.emit(op("succeeded", "nodes", 9, kind = "uninstall", id = "op3"))
+            until { notices.isNotEmpty() }
+            assertEquals("已卸载 Example Notes", notices.single())
+        }
+        // An older hub's 409 names them.
+        val older = FakeOperations(stepped = false).apply { dependents = listOf(ExtensionDependent("ext-b", "B")) }
+        watching(older) { model, _ ->
+            assertFalse(model.uninstall(keepData = true))
+            assertEquals(ExtensionCascade(listOf("B"), keepData = true), model.state.value.cascade)
+            assertNull(model.state.value.actionError)
+            assertTrue(model.confirmCascade())
+            assertEquals(listOf("uninstall", "uninstall cascade"), older.calls)
+        }
+    }
+
+    @Test fun retryingARefusedRemovalAsksAgain() {
+        // The hub's retry would run it again without cascade and fail the same way: Retry asks instead.
+        val refused = op("failed", "stop", 2, "stop" to "failed", "remove" to "pending", kind = "uninstall", id = "op2",
+            error = "B depends on it", retryable = true).copy(errorCode = "has_dependents")
+        val api = FakeOperations()
+        watching(api) { model, _ ->
+            assertFalse(model.uninstall(keepData = false))
+            api.pushes.emit(refused)
+            until { model.state.value.cascade != null }
+            model.dismissCascade()
+            assertFalse(model.retry())
+            assertEquals(ExtensionCascade(emptyList(), keepData = false), model.state.value.cascade)
+            assertFalse(model.confirmCascade())
+            assertEquals("uninstall-async example-notes keep=false cascade", api.calls.last())
+            assertTrue(api.calls.none { it.startsWith("retry") })
+        }
+        // Reopened while it is still listed: nothing remembers keepData, so the data stays.
+        val reopened = FakeOperations().apply { listed = listOf(refused) }
+        watching(reopened) { model, _ ->
+            until { model.state.value.operation != null }
+            assertNull(model.state.value.cascade)
+            assertFalse(model.retry())
+            assertEquals(ExtensionCascade(emptyList(), keepData = true), model.state.value.cascade)
+            assertFalse(model.confirmCascade())
+            assertEquals("uninstall-async example-notes keep=true cascade", reopened.calls.last())
+        }
+    }
+
+    @Test fun onlyTheRemovalThisPageStartedAsks() {
+        // Its own removal was canceled; a later refusal started elsewhere is not asked about.
+        val api = FakeOperations()
+        watching(api) { model, _ ->
+            assertFalse(model.uninstall(keepData = false))
+            api.pushes.emit(op("canceled", "stop", 3, kind = "uninstall", id = "op2"))
+            until { model.state.value.operation == null }
+            api.pushes.emit(op("running", "stop", 4, "stop" to "running", kind = "uninstall", id = "op9"))
+            until { model.state.value.operation?.id == "op9" }
+            api.pushes.emit(op("failed", "stop", 5, "stop" to "failed", kind = "uninstall", id = "op9", error = "B depends on it")
+                .copy(errorCode = "has_dependents"))
+            until { model.state.value.operation?.failed == true }
+            assertNull(model.state.value.cascade)
         }
     }
 

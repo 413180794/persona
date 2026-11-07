@@ -4,6 +4,7 @@ import android.content.res.Resources
 import persona.core.contracts.api.CatalogExtension
 import persona.core.contracts.api.ExtensionCatalog
 import persona.core.contracts.api.ExtensionDetail
+import persona.core.contracts.api.ExtensionHasDependents
 import persona.core.contracts.api.ExtensionMarket
 import persona.core.contracts.api.ExtensionMarkets
 import persona.core.contracts.api.ExtensionOperation
@@ -224,6 +225,8 @@ internal data class CatalogExtensionState(
     val operation: ExtensionOperation? = null,
     /** The operation whose preview the sheet shows: agreeing goes on with it, closing the sheet cancels it. */
     val consentFor: String? = null,
+    /** The removal was refused for its enabled dependents (`has_dependents`, #5611): asked before going on with `cascade`. */
+    val cascade: ExtensionCascade? = null,
 ) {
     val busy: Boolean get() = loading || previewing || acting || operation?.active == true
 }
@@ -239,6 +242,8 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
     private var onDone: (String) -> Unit = {}
     /** Opens the installed extension's sign-in (an operation that succeeded with `next: auth`, #4507). */
     private var onSignIn: (String) -> Unit = {}
+    /** The removal in steps this page started and its keepData, until it ends (kept when refused, for Retry). */
+    private var removing: Pair<String, Boolean>? = null
 
     /** The hub runs installs in steps; asked when something starts (a hub without the flag: no). */
     private suspend fun stepped(): Boolean = try {
@@ -270,6 +275,8 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
         if (was != null && was.id == op.id && !OperationText.newer(op, was)) return
         // One that ended before the page knew it is not news; a failed one still shows where it stopped.
         if (was?.id != op.id && !op.active && !op.failed) return
+        val refused = op.failed && op.kind == "uninstall" && op.errorCode == "has_dependents"
+        if (!op.active && !refused && removing?.first == op.id) removing = null
         when (op.state) {
             ExtensionOperation.Succeeded -> {
                 mutable.update { it.copy(operation = null, consentFor = null, preview = if (it.consentFor == op.id) null else it.preview) }
@@ -284,6 +291,9 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
             else -> {
                 mutable.update { it.copy(operation = op) }
                 if (op.state == ExtensionOperation.NeedsConsent && state.value.consentFor != op.id) askConsent(op)
+                // The operation carries only the code, not who depends on it.
+                val keepData = removing?.takeIf { it.first == op.id }?.second
+                if (refused && keepData != null) mutable.update { it.copy(cascade = ExtensionCascade(emptyList(), keepData)) }
             }
         }
     }
@@ -309,6 +319,12 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
     suspend fun retry(): Boolean {
         val op = state.value.operation?.takeIf { it.failed && it.retryable } ?: return false
         if (state.value.acting) return false
+        // The hub would run it again without cascade and be refused again: asked instead (no remembered keepData: kept).
+        if (op.kind == "uninstall" && op.errorCode == "has_dependents") {
+            val keepData = removing?.takeIf { it.first == op.id }?.second ?: true
+            mutable.update { it.copy(cascade = ExtensionCascade(emptyList(), keepData)) }
+            return false
+        }
         mutable.update { it.copy(acting = true, actionError = null) }
         return try { track(api.retryOperation(op.id)); true }
         catch (cancelled: CancellationException) { throw cancelled }
@@ -397,24 +413,39 @@ internal class CatalogExtensionModel(private val api: ExtensionMarkets, private 
     }
 
     /** Removes it; true when it is gone now. In steps it returns false at once and says it when it ends. */
-    suspend fun uninstall(keepData: Boolean): Boolean {
+    suspend fun uninstall(keepData: Boolean, cascade: Boolean = false): Boolean {
         if (state.value.busy) return false
         mutable.update { it.copy(acting = true, actionError = null) }
         return try {
             if (stepped()) {
-                track(api.startUninstall(id, keepData))
+                removing = null
+                val op = api.startUninstall(id, keepData, cascade)
+                if (!cascade) removing = op.id to keepData
+                track(op)
                 return false
             }
-            api.uninstall(id, keepData)
+            api.uninstall(id, keepData, cascade)
             mutable.update { it.copy(acting = false) }
             load()
             true
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) {
+        catch (refused: ExtensionHasDependents) {
+            mutable.update { it.copy(cascade = ExtensionCascade(refused.dependents.map { d -> d.label }, keepData)) }
+            false
+        } catch (error: Exception) {
             mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_not_removed, failureReasonText(error).resolve(res))) }
             false
         } finally { mutable.update { it.copy(acting = false) } }
     }
+
+    /** Asked about the dependents: switches them off and removes it with `cascade`. */
+    suspend fun confirmCascade(): Boolean {
+        val ask = state.value.cascade ?: return false
+        mutable.update { it.copy(cascade = null) }
+        return uninstall(ask.keepData ?: true, cascade = true)
+    }
+
+    fun dismissCascade() = mutable.update { it.copy(cascade = null) }
 }
 
 internal data class MarketsState(

@@ -206,7 +206,7 @@ object MachineManagementModule {
         override suspend fun uninstall(id: String, keepData: Boolean, cascade: Boolean) = changed { api().uninstall(id, keepData, cascade) }
         override suspend fun startFromMarket(market: String, extension: String) = api().startFromMarket(market, extension)
         override suspend fun agree(preview: ExtensionPreview, upgradeOf: String?) = api().agree(preview, upgradeOf)
-        override suspend fun startUninstall(id: String, keepData: Boolean) = api().startUninstall(id, keepData)
+        override suspend fun startUninstall(id: String, keepData: Boolean, cascade: Boolean) = api().startUninstall(id, keepData, cascade)
         override suspend fun operations() = api().operations()
         override suspend fun operation(id: String) = api().operation(id)
         override suspend fun retryOperation(id: String) = api().retryOperation(id)

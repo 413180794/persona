@@ -224,6 +224,7 @@
     <string name="settings_ext_uninstall_text">会停掉它，删掉它的设置和密钥；它提供的连接器也一起去掉。</string>
     <string name="settings_ext_dependents_title">一起停用依赖它的扩展？</string>
     <string name="settings_ext_dependents_text">%1$s 依赖 %2$s，会一起停用。</string>
+    <string name="settings_ext_dependents_unnamed">其他扩展依赖 %1$s，会一起停用。</string>
     <string name="settings_ext_dependents_off">全部停用</string>
     <string name="settings_ext_dependents_remove">停用并卸载</string>
     <string name="settings_ext_keep_data">保留它的数据</string>

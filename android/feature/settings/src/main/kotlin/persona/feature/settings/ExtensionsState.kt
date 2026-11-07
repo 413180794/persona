@@ -65,9 +65,10 @@ internal object ExtensionText {
         else -> Status.Offline
     }
 
-    /** What asking before switching off [name]'s dependents with it says (#5192). */
+    /** What asking before switching off [name]'s dependents with it says (#5192); unnamed when only an operation's error_code said so (#5611). */
     fun cascade(res: Resources, ask: ExtensionCascade, name: String): String =
-        res.getString(R.string.settings_ext_dependents_text, ask.names.joinToString(res.getString(R.string.settings_ext_list_separator)), name)
+        if (ask.names.isEmpty()) res.getString(R.string.settings_ext_dependents_unnamed, name)
+        else res.getString(R.string.settings_ext_dependents_text, ask.names.joinToString(res.getString(R.string.settings_ext_list_separator)), name)
 
     fun source(res: Resources, s: String?): String? = when (s) {
         "builtin" -> res.getString(R.string.settings_ext_source_builtin)

@@ -70,8 +70,8 @@ interface ExtensionMarkets {
     /** The user agreed to an operation's preview: `POST …/-/install` (or `{upgradeOf}/-/upgrade`) with `async`, the same operation goes on. */
     suspend fun agree(preview: ExtensionPreview, upgradeOf: String? = null): ExtensionOperation = unsupported()
 
-    /** `DELETE …/{id}/-/?async=1`. */
-    suspend fun startUninstall(id: String, keepData: Boolean = true): ExtensionOperation = unsupported()
+    /** `DELETE …/{id}/-/?async=1`; with enabled dependents it fails with `has_dependents` unless [cascade] (`cascade=1`). */
+    suspend fun startUninstall(id: String, keepData: Boolean = true, cascade: Boolean = false): ExtensionOperation = unsupported()
 
     /** `GET …/-/operations`: those going on and those ended in the last minutes. */
     suspend fun operations(): List<ExtensionOperation> = emptyList()

@@ -246,6 +246,14 @@ fun ExtensionCatalogPage(
         removing = false
         scope.launch { if (model.uninstall(keep)) feedback?.notice(res.getString(R.string.settings_ext_uninstalled, extension.label)) }
     }
+    // Others depend on it (#5611): asked as on its own page, then removed with them switched off.
+    state.cascade?.let { ask ->
+        val name = extension?.label ?: extensionId
+        JDialog({ model.dismissCascade() }, title = stringResource(R.string.settings_ext_dependents_title), text = ExtensionText.cascade(res, ask, name),
+            destructive = true, confirm = stringResource(R.string.settings_ext_dependents_remove) to {
+                scope.launch { if (model.confirmCascade()) feedback?.notice(res.getString(R.string.settings_ext_uninstalled, name)) }
+            })
+    }
 }
 
 private fun LazyListScope.catalogExtensionBody(

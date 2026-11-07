@@ -62,6 +62,10 @@ class HttpExtensionOperationsTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"operation":$op}"""))
         api.startUninstall("example-notes", keepData = false)
         assertEquals("DELETE /api/v1/extensions/example-notes/-/?async=1 ", body(server))
+        // #5611: agreed to switch off its dependents, the removal in steps goes on with cascade.
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"operation":$op}"""))
+        api.startUninstall("example-notes", keepData = true, cascade = true)
+        assertEquals("DELETE /api/v1/extensions/example-notes/-/?async=1&keep_data=1&cascade=1 ", body(server))
 
         server.enqueue(MockResponse().setBody("""{"operations":[$op]}"""))
         assertEquals(listOf("0a1b2c"), api.operations().map { it.id })

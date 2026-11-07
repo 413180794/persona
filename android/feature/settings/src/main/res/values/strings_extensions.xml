@@ -231,6 +231,7 @@
     <string name="settings_ext_uninstall_text">This stops it and deletes its settings and secrets; the connectors it provides go too.</string>
     <string name="settings_ext_dependents_title">Switch off the extensions that depend on it?</string>
     <string name="settings_ext_dependents_text">Extensions that depend on %2$s will be switched off too: %1$s.</string>
+    <string name="settings_ext_dependents_unnamed">Other extensions depend on %1$s and will be switched off too.</string>
     <string name="settings_ext_dependents_off">Switch all off</string>
     <string name="settings_ext_dependents_remove">Switch off and remove</string>
     <string name="settings_ext_keep_data">Keep its data</string>

@@ -244,8 +244,10 @@ class HttpExtensionManagement internal constructor(
         return accepted(call(if (upgradeOf != null) path(upgradeOf, "-", "upgrade") else hubPath("install"), "POST", body))
     }
 
-    override suspend fun startUninstall(id: String, keepData: Boolean): ExtensionOperation =
-        accepted(call(path(id, "-", "") + if (keepData) "?async=1&keep_data=1" else "?async=1", "DELETE"))
+    override suspend fun startUninstall(id: String, keepData: Boolean, cascade: Boolean): ExtensionOperation {
+        val query = listOfNotNull("async=1", "keep_data=1".takeIf { keepData }, "cascade=1".takeIf { cascade }).joinToString("&")
+        return accepted(call(path(id, "-", "") + "?$query", "DELETE"))
+    }
 
     override suspend fun operations(): List<ExtensionOperation> {
         val list = (parse(call(hubPath("operations"), "GET")) as? JsonObject)?.get("operations") as? JsonArray ?: return emptyList()

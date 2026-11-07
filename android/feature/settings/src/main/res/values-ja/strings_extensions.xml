@@ -224,6 +224,7 @@
     <string name="settings_ext_uninstall_text">停止して設定とシークレットを削除します。提供しているコネクタも一緒に削除されます。</string>
     <string name="settings_ext_dependents_title">依存する拡張機能も無効にしますか？</string>
     <string name="settings_ext_dependents_text">%1$sは%2$sに依存しているため、一緒に無効になります。</string>
+    <string name="settings_ext_dependents_unnamed">他の拡張機能が%1$sに依存しているため、一緒に無効になります。</string>
     <string name="settings_ext_dependents_off">すべて無効にする</string>
     <string name="settings_ext_dependents_remove">無効にしてアンインストール</string>
     <string name="settings_ext_keep_data">データを残す</string>
