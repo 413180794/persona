@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,8 +19,9 @@ type gatedNode struct {
 	method          string
 	hold            bool
 	once, newerOnce sync.Once
+	holding         atomic.Bool   // the held call is at the node
 	arrived         chan struct{} // closed when the held call reaches the node
-	newer           chan struct{} // closed when a call that says !hold reaches it
+	newer           chan struct{} // closed when a call that says !hold reaches it while the held one waits
 	release         chan struct{}
 	done            chan struct{} // closed when the held call has been answered
 }
@@ -34,13 +36,16 @@ func (g *gatedNode) Call(ctx context.Context, method string, params, out any) er
 		On bool `json:"on"`
 	}
 	_ = json.Unmarshal(b, &p)
-	if name == g.method && p.On != g.hold {
+	// Only while the held call waits: a tell started by the setup (SetEnabled's computerChanged) can read !hold
+	// before the config says hold and reach the node just before the held call, in order, which is no overtaking.
+	if name == g.method && p.On != g.hold && g.holding.Load() {
 		g.newerOnce.Do(func() { close(g.newer) })
 	}
 	if name == g.method && p.On == g.hold {
 		held := false
 		g.once.Do(func() { held = true })
 		if held {
+			g.holding.Store(true)
 			close(g.arrived)
 			<-g.release
 			defer close(g.done)
