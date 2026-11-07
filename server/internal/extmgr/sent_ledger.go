@@ -598,7 +598,7 @@ func (h *Manager) sentLedgerLoop(ctx context.Context) {
 // text of what was written as the user.
 func (h *Manager) sentRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/connectors/sent", func(w http.ResponseWriter, r *http.Request) {
-		if p := principalOf(r.Context()); !(byOwnDevice(r.Context()) || p.Owner) || p.Extension != "" {
+		if !mayReadLedger(r.Context()) {
 			writeErr(w, http.StatusForbidden, errors.New("only a device with full rights reads what was sent as the user"))
 			return
 		}
@@ -638,6 +638,6 @@ func (h *Manager) sentRoutes(api *http.ServeMux) {
 		if next > 0 {
 			nextOut = next
 		}
-		writeJSON(w, map[string]any{"items": rows, "next": nextOut})
+		writeJSON(w, map[string]any{"items": h.sentItems(r.Context(), rows), "next": nextOut})
 	})
 }

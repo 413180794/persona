@@ -12,7 +12,7 @@ import (
 
 // Taking back what was sent as the user (docs/extensions/connectors.md "Sent as the user", #5278). A row of the ledger can be taken
 // back when the connector that wrote it can (connector.Recaller), it said which message it made, the message is recent
-// enough and it was not taken back before. RecallSent is what a route will call: the checks, the connector's recall,
+// enough and it was not taken back before. RecallSent is what the route calls: the checks, the connector's recall,
 // and only when the other side says the message is gone, recalled_at. Who may ask, and whether the user is asked first
 // (a card, their own device), is the caller's: it passes how the user agreed.
 
@@ -32,7 +32,7 @@ const (
 // sentRecallTimeout is how long the connector has for its one recall; a variable so that tests can shorten it.
 var sentRecallTimeout = 30 * time.Second
 
-// Why a recall did not happen (RecallError.Code): the words a route answers with.
+// Why a recall did not happen (RecallError.Code): the words the route answers with.
 const (
 	RecallNotFound        = "not_found"             // no such row
 	RecallNotRecallable   = "not_recallable"        // its connector cannot take that message back, or the row has no way to find it

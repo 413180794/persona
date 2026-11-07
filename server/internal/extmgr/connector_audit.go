@@ -25,6 +25,7 @@ const (
 	auditConnectorDataDeleted    = "connector_data_deleted"    // {chats, people, inbox}: "Delete saved data"
 	auditConnectorArchiveDeleted = "connector_archive_deleted" // {chats, people}: "Delete saved knowledge base content"
 	auditConnectorAuthSource     = "connector_auth_source"     // {source, machine}: where GitHub's token comes from
+	auditConnectorRecall         = "connector_recall"          // {row, action}: a message the ledger has a row for was taken back
 )
 
 // auditConnector records an action on connector id by whoever made the request (actorOf: device:<id>, or the hub

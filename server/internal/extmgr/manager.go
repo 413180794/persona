@@ -115,6 +115,7 @@ type Manager struct {
 	connectorsOff map[string]bool
 	migrated      sync.Map
 	media         mediaCache
+	recalls       recallLocks
 	extensions    *extensions
 	extTokens     extTokens
 	legacyCalls   legacyCalls
