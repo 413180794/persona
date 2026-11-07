@@ -12,17 +12,41 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-func delegationMachineTrust(s *Service, machine, trust string) {
+// delegationMachineTrust gives s devices with machine at trust. The environment's todo link started a token send to
+// the machine, which reads s.devs (#6545): the devices are swapped only once that send is done.
+func delegationMachineTrust(t *testing.T, s *Service, machine, trust string) {
+	t.Helper()
+	tokenSendDone(t, s, machine)
 	d := newFleetDevs()
 	d.add(machine, "Computer").trust = trust
 	s.devs = d
+}
+
+// tokenSendDone waits until no todo-token send to machine runs (syncTodoTokens). The send clears sending under ts.mu
+// after its last read, so what the test writes next comes after it.
+func tokenSendDone(t *testing.T, s *Service, machine string) {
+	t.Helper()
+	ts := s.tokenSyncOf(machine)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		ts.mu.Lock()
+		sending := ts.sending
+		ts.mu.Unlock()
+		if !sending {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the todo-token send to %s did not end", machine)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func TestDelegationProjectContextRespectsMachineTrust(t *testing.T) {
 	for _, trust := range []string{"", "personal", "work"} {
 		t.Run("trust="+trust, func(t *testing.T) {
 			s, f, _ := outcomeEnv(t, nil, outcomeReply)
-			delegationMachineTrust(s, "box", trust)
+			delegationMachineTrust(t, s, "box", trust)
 			ctx := context.Background()
 			const prompt = "Add dark mode"
 			args, _ := json.Marshal(map[string]string{"machine": "box", "cwd": "/code/weather", "prompt": prompt})
@@ -62,7 +86,7 @@ func TestAssistantStartRefusesWorkBeforePreparing(t *testing.T) {
 	for _, guest := range []bool{false, true} {
 		f := newFakeHub().withMachine()
 		s := newStorelessService(t, f)
-		delegationMachineTrust(s, "server", "work")
+		delegationMachineTrust(t, s, "server", "work")
 		p := StartParams{Text: "Private request", Untitled: true, MachineID: "server"}
 		if guest {
 			p.GuestTools = []string{}
@@ -90,7 +114,7 @@ func TestInboxAgentMachineTrust(t *testing.T) {
 					machine, cfg.Machine = "twin", "twin"
 					h.f.setSessions(machine)
 				}
-				delegationMachineTrust(h.Service, machine, trust)
+				delegationMachineTrust(t, h.Service, machine, trust)
 				it := actionItem("event", time.Now())
 				mid, sid, err := h.startInboxAgent(context.Background(), cfg, it, "Handle this message")
 				if trust == "work" {
@@ -110,7 +134,7 @@ func TestInboxAgentMachineTrust(t *testing.T) {
 func TestInboxDoesNotResumeOnWorkMachine(t *testing.T) {
 	h := agentHub(t)
 	ctx := context.Background()
-	delegationMachineTrust(h.Service, "work", "work")
+	delegationMachineTrust(t, h.Service, "work", "work")
 	it := actionItem("event", time.Now())
 	it.Agent = &InboxAgent{State: AgentRunning, MachineID: "work", SessionID: "twin-session"}
 	h.inbox.items[it.ID] = it
