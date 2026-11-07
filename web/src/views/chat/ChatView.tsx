@@ -158,7 +158,7 @@ export interface PanelChrome {
 
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
  *  no header, no composer. */
-export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage, panel, banner, offline }: {
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter, inPage, panel, banner, offline, mainCache, refreshError, onRefresh }: {
   mid: string;
   sid: string;
   assistant?: boolean;
@@ -175,6 +175,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   banner?: React.ReactNode;
   /** The conversation's manager is offline: what the box says instead, and nothing can be sent. */
   offline?: string;
+  /** Only the main conversation keeps its latest page across browser loads. */
+  mainCache?: { scope: string; manager?: string };
+  refreshError?: string;
+  onRefresh?: () => void;
 }) {
   const { session, detail, retry: retryDetail } = useRuntimeSession(mid, sid);
   // its manager offline (several managers): nothing can be sent, wherever it was opened from; the page's own word first
@@ -196,7 +200,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const answered = useStore((s) => Object.values(s.answered).filter((a) => a.ix.machine_id === mid && a.ix.session_id === sid));
   // the list as pushed: its updated_at is what tells the page it fell behind (useTranscript)
   const viewed = readOnly ? (listed?.find((a) => a.session_id === sid) ?? null) : null;
-  const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at });
+  const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at, cache: mainCache });
   // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
   const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure; fromBox?: boolean } | null>(null);
   // the composer's own send, for the failure card's "Send again": the words are back in the box, so the box is what goes
@@ -271,7 +275,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const canCompose = !readOnly && sessionCan(session, "send");
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const mainConversation = useStore((s) => s.assistant?.main);
-  const isMain = Boolean(assistant && sid === mainConversation);
+  const isMain = Boolean(assistant && (mainCache || sid === mainConversation));
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
   const canFork = Boolean(session?.can_fork) && !readOnly;
   // "Rewind to here" (#2436): offered on your messages of a session in a terminal; off with a reason while it cannot
@@ -959,7 +963,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       <div className={switchable ? "relative min-h-0 flex-1" : "contents"}>
       <ViewLayer bare={!switchable} on={view === "chat"} from="start">
       <div className="relative min-h-0 flex-1">
-        {tr.notLive && <NotLivePill onReload={tr.reload} lower={Boolean(picked && !search.open)} />}
+        {(tr.notLive || (mainCache && tr.items.length > 0 && (tr.error || refreshError))) && <NotLivePill error={mainCache ? tr.error || refreshError : undefined} onReload={() => { tr.reload(); onRefresh?.(); }} lower={Boolean(picked && !search.open)} />}
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="relative h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
@@ -1198,11 +1202,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 }
 
 /** Over the chat's top edge when the page keeps getting its items by asking for them, not by push (lib/stale-page.ts). */
-function NotLivePill({ onReload, lower }: { onReload: () => void; /** The search's return pill is at the same edge: under it. */ lower?: boolean }) {
+function NotLivePill({ onReload, lower, error }: { onReload: () => void; /** The search's return pill is at the same edge: under it. */ lower?: boolean; error?: string }) {
   return (
     <div role="status" data-testid="chat-not-live" className={lower ? "absolute top-14 left-1/2 z-10 -translate-x-1/2" : "absolute top-3 left-1/2 z-10 -translate-x-1/2"} style={{ animation: "fade-up 150ms ease-out both" }}>
       <div className="flex h-8 items-center gap-2 rounded-full border border-line bg-surface px-3 text-[12px] leading-none whitespace-nowrap text-ink-2 shadow-raised">
-        <span>{t("chat-chatview.not_live")}</span>
+        <span title={error}>{t(error ? "chat-chatview.refresh_failed" : "chat-chatview.not_live")}</span>
         <button type="button" onClick={onReload} className="font-medium text-accent-ink hover:underline">
           {t("chat-chatview.not_live_reload")}
         </button>

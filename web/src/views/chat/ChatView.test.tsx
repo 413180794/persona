@@ -11,6 +11,7 @@ const captured = vi.hoisted(() => ({
   onSend: undefined as ((out: Outgoing) => Promise<boolean>) | undefined,
   session: { machine_id: "hub", session_id: "c1", title: "Conversation", cwd: "/code", status: "idle" } as Session,
   items: [] as Item[],
+  error: "",
 }));
 
 vi.mock("./Composer", async (importOriginal) => ({
@@ -21,7 +22,7 @@ vi.mock("./Composer", async (importOriginal) => ({
   },
 }));
 vi.mock("./useTranscript", () => ({
-  useTranscript: () => ({ items: captured.items, loading: false, error: "", hasMore: false, streaming: "" }),
+  useTranscript: () => ({ items: captured.items, loading: false, error: captured.error, hasMore: false, streaming: "" }),
 }));
 vi.mock("../../lib/store", async (importOriginal) => {
   const store = await importOriginal<typeof import("../../lib/store")>();
@@ -71,6 +72,7 @@ beforeEach(() => {
   setRoute("c1", null);
   captured.onSend = undefined;
   captured.items = [];
+  captured.error = "";
   delete captured.session.source_kind;
   delete captured.session.capabilities;
   vi.mocked(toast).mockClear();
@@ -127,6 +129,18 @@ describe("ChatView message context availability", () => {
     const html = renderToStaticMarkup(<ChatView mid="hub" sid="c1" assistant={assistant} readOnly={readOnly} />);
     expect(html.includes('aria-label="交给 Persona"')).toBe(handoff);
     expect(html.includes('aria-label="作为上下文"')).toBe(context);
+  });
+});
+
+describe("cached main conversation refresh notice", () => {
+  it.each(["assistant", "transcript"])("keeps the transcript and offers Reload when the %s refresh fails", (source) => {
+    captured.items = [{ id: "cached", seq: 1, role: "assistant", kind: "text", text: "Cached reply" }];
+    if (source === "transcript") captured.error = "Unavailable";
+    const html = renderToStaticMarkup(<ChatView mid="hub" sid="c1" assistant mainCache={{ scope: "test-scope" }} refreshError={source === "assistant" ? "Unavailable" : undefined} />);
+    expect(html).toContain("Cached reply");
+    expect(html).toContain(t("chat-chatview.refresh_failed"));
+    expect(html).toContain(t("chat-chatview.not_live_reload"));
+    expect(html).toContain('title="Unavailable"');
   });
 });
 

@@ -650,6 +650,16 @@ Permission cards state the actual scope before approval: Claude Bash covers ever
 
 For browser checks, run the mock hub with `MOCK_ALWAYS_SCOPE=1`. It adds a Bash permission card and two saved grants to the main conversation, with a working per-row DELETE endpoint. Native permission-management screens remain follow-up work.
 
+### Main conversation on browser reload (#5025)
+
+The main conversation shows this browser's last successful latest page immediately, using the existing chat renderer, while the hub refreshes it. `/assistant` applies as soon as it answers, independently of slower session or sidebar reads. Its main-conversation reference is authoritative: changing or removing the main conversation discards the old cached reference. Other conversations and Agent pages do not use this persistent cache.
+
+`lib/feed-cache.ts` keeps one page in localStorage, partitioned by hub origin plus proxy prefix and a fingerprint of the device token id and credential (a token fingerprint alone on older hubs). Cache keys and values never contain the authentication token. Signing out or replacing credentials removes cached pages and invalidates in-flight writers. The page records its manager selection so a different manager cannot reuse it.
+
+Only the latest two user turns are eligible, matching the latest-page request. Older pages and expanded folds remain in memory. The cache is limited to 200 items and 256 KiB of UTF-8 JSON; a page exceeding either limit is not retained. Image bodies and inline base64 image URLs are removed, leaving lazy image metadata. Storage restrictions, corrupt entries and quota failures fall back to the usual loading behavior. This is local conversation storage, not an offline sync queue; no configuration is required.
+
+Fresh items replace matching ids; a changed transcript history or a confirmed empty transcript replaces stale content. A failed refresh keeps the last page and shows the existing chat status capsule with **Couldn't refresh** and **Reload**, localized in English, Simplified Chinese and Japanese. Reload retries both the main-conversation reference and its transcript without blanking the cached page.
+
 ### Unified main-chat entry (#930)
 
 The same system as iOS ([unified-entry.md](unified-entry.md)): the hub's chat activity is inserted into assistant chats (`displayLines` in `lib/feed.ts`: each item goes at the end of the turn when it happened,

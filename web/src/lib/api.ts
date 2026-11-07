@@ -6,6 +6,7 @@ import { BASE } from "./base";
 import { requestCrumb } from "./error-reports";
 import { currentLanguage, t } from "../i18n";
 import type { Item } from "./types";
+import { clearFeedCache } from "./feed-cache";
 
 let ownerToken: string | undefined;
 let ownerGeneration = 0;
@@ -21,6 +22,7 @@ export function getToken(): string {
 }
 
 export function setToken(token: string, tokenId?: string) {
+  if (token !== getToken() || !token) clearFeedCache();
   storeCredentials(token, tokenId);
   credentialOwner();
 }

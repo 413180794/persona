@@ -2,9 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errorText, isAbort, sessionPath } from "../../lib/api";
 import { sessionLoadError } from "../../lib/session-link";
-import { listenSession, send, type ItemsEvent } from "../../lib/store";
+import { getState, listenSession, send, type ItemsEvent } from "../../lib/store";
 import { afterPull, afterPush, FRESH_TALLY, newestItemAt, notLive as tallyNotLive, shouldPull, type StaleTally } from "../../lib/stale-page";
 import { mergeItems } from "../../lib/turns";
+import { chosenManager } from "../../lib/manager-choice";
+import { discardFeedCache, readFeedCache, writeFeedCache, type FeedCache } from "../../lib/feed-cache";
 import type { Item, ItemsPage } from "../../lib/types";
 import { createTextThrottle, type TextThrottle } from "../../ui/stream/throttle";
 
@@ -37,16 +39,32 @@ export function applyDelta(t: TextThrottle, text: string): void {
   else t.flush("");
 }
 
+export interface TranscriptCache {
+  scope: string;
+  manager?: string;
+}
+
+function cachedPage(mid: string, sid: string, cache?: TranscriptCache): FeedCache | null {
+  if (!cache) return null;
+  const page = readFeedCache(cache.scope);
+  return page?.machineID === mid && page.sessionID === sid && (page.manager ?? "") === (cache.manager ?? "") ? page : null;
+}
+
 /** `updatedAt`: the session's `updated_at` from the list (a subagent's from its parent's), what the stale-page check compares. */
-export function useTranscript(mid: string, sid: string, opts: { starting?: boolean; updatedAt?: string } = {}): Transcript {
-  const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useTranscript(mid: string, sid: string, opts: { starting?: boolean; updatedAt?: string; cache?: TranscriptCache } = {}): Transcript {
+  const [initial] = useState(() => cachedPage(mid, sid, opts.cache));
+  const [items, setItems] = useState<Item[]>(initial?.items ?? []);
+  const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState("");
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(initial?.hasMore ?? false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [nonce, setNonce] = useState(0);
   const [notLive, setNotLive] = useState(false);
+  const cacheScope = opts.cache?.scope;
+  const cacheManager = opts.cache?.manager ?? "";
+  // This is only the latest page and its live additions, never older pages or expanded folds.
+  const snapshot = useRef<{ scope: string; page: FeedCache } | null>(initial && cacheScope ? { scope: cacheScope, page: initial } : null);
   const updatedAt = useRef(opts.updatedAt);
   updatedAt.current = opts.updatedAt;
   const covered = useRef(0); // the last transcript line we have without a gap
@@ -78,13 +96,16 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
     generation.current++;
     earlierInFlight.current = false;
     setLoadingEarlier(false);
-    setItems([]);
-    setLoading(true);
+    const kept = snapshot.current;
+    const cached = cacheScope && kept?.scope === cacheScope && kept.page.machineID === mid && kept.page.sessionID === sid && (kept.page.manager ?? "") === cacheManager
+      ? kept.page : cachedPage(mid, sid, opts.cache);
+    setItems(cached?.items ?? []);
+    setLoading(!cached);
     setError("");
-    setHasMore(false);
+    setHasMore(cached?.hasMore ?? false);
     deltas.current.flush("");
     covered.current = 0;
-    history.current = "";
+    history.current = cached?.history ?? "";
     earlierRetryAt.current = 0;
     earlierWait.current = 0;
     setNotLive(false);
@@ -94,6 +115,32 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
     let pulling = false;
     let checkedFor: string | undefined;
     const pullKey = `${mid}/${sid}`;
+    let latest = cached?.items ?? [];
+    let latestMore = cached?.hasMore ?? false;
+    let pendingItems: Item[] = []; // pushes after the HTTP request started win over its answer
+    let pendingHistory = "";
+    const save = () => {
+      if (!cacheScope || (chosenManager() ?? "") !== cacheManager) return;
+      // The store may have accepted a new main before React unmounts this chat. Its old request must not
+      // recreate the discarded cache in that interval, even though the credential scope is unchanged.
+      const assistant = getState().assistant;
+      if (assistant && (assistant.main !== sid || assistant.machine_id !== mid)) return;
+      const page: FeedCache = { machineID: mid, sessionID: sid, manager: cacheManager, items: latest, hasMore: latestMore, history: history.current || undefined };
+      snapshot.current = { scope: cacheScope, page };
+      writeFeedCache(cacheScope, page);
+    };
+    const remember = (batch: Item[]) => {
+      if (!ready) pendingItems = mergeItems(pendingItems, batch);
+      latest = mergeItems(latest, batch);
+      if (ready) save();
+    };
+    const rewritten = () => {
+      dead = true; // invalidate in-flight reads before React runs the next effect
+      generation.current++;
+      if (cacheScope) discardFeedCache(cacheScope);
+      snapshot.current = null;
+      setNonce((x) => x + 1);
+    };
 
     const subscribe = () => send({ type: "subscribe", machine_id: mid, session_id: sid, since_seq: covered.current || undefined, lazy_images: true, fold_work: true });
 
@@ -104,13 +151,14 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
         const p = await api<ItemsPage>(`${sessionPath(mid, sid)}/items?after_seq=${covered.current}&lazy_images=1`, { signal: ctl.signal });
         if (dead) return fresh;
         if (p.history && history.current && p.history !== history.current) {
-          setNonce((x) => x + 1); // the file was rewritten: start over
+          rewritten(); // the file was rewritten: start over
           return fresh;
         }
         const got = p.items ?? [];
         // Not what the stream brought while this was on its way: those are merged as they are, and not a miss.
         fresh += got.filter((i) => i.seq > covered.current).length;
         apply(got);
+        remember(got);
         if (p.to_seq) covered.current = Math.max(covered.current, p.to_seq);
         lastArrival = Date.now();
         if (!p.more_after) return fresh;
@@ -145,11 +193,14 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
     document.addEventListener("visibilitychange", checkStale);
 
     const onItems = (e: ItemsEvent) => {
+      if (dead) return;
       if (e.history && history.current && e.history !== history.current) {
-        setNonce((x) => x + 1); // the file was rewritten: start over
+        rewritten(); // the file was rewritten: start over
         return;
       }
       if (e.history) history.current = e.history;
+      if (!ready && e.history) pendingHistory = e.history;
+      remember(e.items ?? []);
       lastArrival = Date.now();
       if (e.items?.length && tally !== FRESH_TALLY) {
         tally = afterPush(tally); // the stream works
@@ -179,10 +230,20 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       try {
         const p = await api<ItemsPage>(`${sessionPath(mid, sid)}/items?${PAGE}`, { signal: ctl.signal });
         if (dead) return;
-        apply(p.items ?? []);
-        setHasMore(Boolean(p.has_more));
+        if (pendingHistory && p.history && pendingHistory !== p.history) {
+          rewritten(); // a push already belongs to a newer transcript than this response
+          return;
+        }
+        const batch = p.items ?? [];
+        const replace = !batch.length || Boolean(p.history && history.current && p.history !== history.current);
+        setItems((have) => mergeItems(mergeItems(replace ? [] : have, batch), pendingItems));
+        latest = mergeItems(mergeItems(replace ? [] : latest, batch), pendingItems);
+        latestMore = Boolean(p.has_more);
+        setHasMore(latestMore);
         if (p.history) history.current = p.history;
-        covered.current = p.to_seq ?? Math.max(0, ...(p.items ?? []).map((i) => i.seq));
+        save();
+        if (batch.some((i) => i.role === "assistant" && i.kind === "text")) deltas.current.flush("");
+        covered.current = Math.max(covered.current, p.to_seq ?? Math.max(0, ...batch.map((i) => i.seq)));
       } catch (e) {
         if (dead) return;
         // a session that is still starting has no transcript yet
@@ -207,7 +268,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       send({ type: "unsubscribe", machine_id: mid, session_id: sid });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mid, sid, nonce]);
+  }, [mid, sid, nonce, cacheScope, cacheManager]);
 
   const loadEarlier = useCallback(async () => {
     const first = itemsRef.current[0];

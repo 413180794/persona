@@ -2,9 +2,10 @@ import { storeValue } from "../lib/compatibility";
 // The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). `/` (and the old `/persona`) is the main
 // conversation, `/persona/<id>` one of them, `/persona/new` a new one-off conversation. With no main conversation yet, the first
 // message on `/` starts it.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { MentionSource } from "./chat/MentionMenu";
 import { api } from "../lib/api";
+import { feedCacheScope, readFeedCache } from "../lib/feed-cache";
 import { codedFailure, helpTopic, passesBySelf, refreshReadiness, type CodedFailure } from "../lib/readiness";
 import { navigate } from "../lib/router";
 import { refreshAssistant, useStore } from "../lib/store";
@@ -37,31 +38,43 @@ export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string
   const loaded = useStore((s) => s.loaded);
   // the shown manager offline (with several, ManagerParts): its history stays, nothing goes
   const offline = useShownOffline();
+  const scope = feedCacheScope();
+  const manager = chosenManager() ?? "";
+  const cached = useMemo(() => {
+    if (sid || fresh || assistant) return null;
+    const page = readFeedCache(scope);
+    return page && (page.manager ?? "") === manager ? page : null;
+  }, [scope, manager, sid, fresh, assistant]);
+  const main = assistant?.main ?? cached?.sessionID;
+  const machine = assistant?.machine_id ?? cached?.machineID;
   if (fresh) return <Starter onToggleSidebar={onToggleSidebar} />;
-  const id = sid ?? assistant?.main;
+  const id = sid ?? main;
   if (id) {
-    if (!assistant) {
+    if (!machine) {
       // an offline manager's read fails as expected: its page says so (Starter) rather than offering Retry
       if (assistantError && !offline) return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
       return <Centered><Loading /></Centered>;
     }
     // the main conversation is the phone's assistant page: "Assistant | Agents" in its top bar (ChatView's `topCenter`, narrow only)
-    const topCenter = id === assistant.main ? <ShellSwitch page="assistant" /> : undefined;
+    const topCenter = id === main ? <ShellSwitch page="assistant" /> : undefined;
     return (
       <ChatView
-        key={id}
-        mid={assistant.machine_id}
+        key={`${scope}/${manager}/${machine}/${id}`}
+        mid={machine}
         sid={id}
         assistant
         starting={starting.has(id)}
         onToggleSidebar={onToggleSidebar}
         topCenter={topCenter}
-        banner={id === assistant.main ? <ManagerSwitcher className="border-b border-line" /> : undefined}
+        banner={id === main ? <ManagerSwitcher className="border-b border-line" /> : undefined}
+        mainCache={id === main && scope ? { scope, manager } : undefined}
+        refreshError={id === main ? assistantError ?? undefined : undefined}
+        onRefresh={id === main ? () => void refreshAssistant().catch(() => {}) : undefined}
         offline={offline?.composer}
       />
     );
   }
-  if (!loaded) return <Centered><Loading /></Centered>;
+  if (!loaded && !assistant && !assistantError) return <Centered><Loading /></Centered>;
   if (!sid && assistantError && !assistant && !offline) {
     return <AssistantLoadFailed error={assistantError} onToggleSidebar={onToggleSidebar} />;
   }

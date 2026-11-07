@@ -4,6 +4,7 @@ import { compatibleEnvelope, setCompatibilityFeatures } from "./compatibility";
 
 import { chosenManager, defaultKnown, defaultManager, fromShownManager, noteConversation, onDefaultManager, onManagerChoice, shownManager } from "./manager-choice";
 import { BASE } from "./base";
+import { discardFeedCache, feedCacheScope, readFeedCache } from "./feed-cache";
 import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents, setAgentListMode } from "./agents";
 import { onRuntimeChanges, runtimeIdentity, runtimeRemoval, runtimeSessions, SESSIONS_LOOKUP_FEATURE } from "./runtime-list";
@@ -861,22 +862,24 @@ export async function refresh() {
   const mutesAt = mutesSaves.out ? -1 : mutesSaves.rev;
   const pinsAt = pinsSaves.out ? -1 : pinsSaves.rev;
   const asked = todosAsked.ask();
-  const askedAssistant = assistantAsked.ask();
+  // The main conversation must not wait for the slowest sidebar request. refreshAssistant also guards
+  // against an earlier login or manager's answer and invalidates a superseded cached main conversation.
+  const assistantDone = refreshAssistant().catch(() => {});
   // the todos go in as soon as they answer: By to-do (the default, #2812) waits for them, not for /sessions, which can
   // take seconds on a busy hub while the socket has pushed the sessions already
   const todosDone = asked.answer.then(
     (res) => applyTodos({ status: "fulfilled", value: res }, asked.fresh),
     (reason: unknown) => applyTodos({ status: "rejected", reason }, asked.fresh),
   );
-  const [sessions, interactions, assistant, machines, mutes, pins] = await Promise.allSettled([
+  const [sessions, interactions, machines, mutes, pins] = await Promise.allSettled([
     state.features.includes(SESSIONS_LIST_FEATURE)
       ? runtimeSessions.load().then(() => null)
       : state.loaded ? Promise.resolve(null) : api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
-    askedAssistant.answer,
     api<{ machines: Machine[] }>("/machines"),
     api<AgentMutes>("/mutes"),
     api<Partial<AgentPins>>("/pins"),
+    assistantDone, // keep the cold-start loaded gate until the main reference or its error is known
   ]);
   if (gen < refreshes.applied) return todosDone;
   refreshes.applied = gen;
@@ -895,17 +898,11 @@ export async function refresh() {
     patch.sessions = by;
   }
   if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);
-  if (assistant.status === "fulfilled" && askedAssistant.fresh()) {
-    patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
-    patch.assistantError = null;
-  } else if (assistant.status === "rejected" && askedAssistant.fresh()) {
-    patch.assistantError = errorText(assistant.reason);
-  }
   if (machines.status === "fulfilled" && machinesAt === machinesRev) patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled" && mutesAt === mutesSaves.rev) patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled" && pinsAt === pinsSaves.rev) patch.pins = pinsOf(pins.value);
   set(patch);
-  await todosDone;
+  await Promise.all([todosDone, assistantDone]);
 }
 
 /** refresh()'s GET /todos: the list, or a hub without todos (404), unless a later request's answer is in place (`fresh`);
@@ -962,6 +959,9 @@ export async function refreshAssistant() {
     const a = await asked.answer;
     if (!asked.fresh() || from !== pageOf()) return;
     const assistant = { ...a, conversations: a.conversations ?? [] };
+    const scope = feedCacheScope();
+    const cached = readFeedCache(scope);
+    if (cached && (cached.manager ?? "") === from && (cached.machineID !== assistant.machine_id || cached.sessionID !== assistant.main)) discardFeedCache(scope);
     assistantByManager.set(cacheKey(), assistant);
     // its conversations' own requests (feed, stop…) go to it, whichever manager the page shows later
     // (the default's are not noted: with no header the hub finds their manager itself)
