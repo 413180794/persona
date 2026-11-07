@@ -2,8 +2,8 @@ import EventKit
 import SwiftUI
 
 // The top of the day in the main conversation (docs/unified-entry.md「对话的形状」): a line with the date, and the
-// Today card — what finished overnight, what waits, the day's meetings, the chats that @ the user, the phone's reminders
-// due today. Each row is one tap: open the task, or say the obvious thing to Persona.
+// Today card — what finished overnight, what did not go through, what waits, the day's meetings, the chats that @ the
+// user, the phone's reminders due today. Each row is one tap: open the task, or say the obvious thing to Persona.
 
 /// Today at a Glance: the hub's `today` item, plus the phone's reminders due today when the app may read them.
 struct TodayCard: View {
@@ -44,6 +44,10 @@ struct TodayCard: View {
                              detail: done.count > 1 ? done.map(\.title).joined(separator: String(localized: "、", comment: "Separator between list items")) : nil,
                              action: String(localized: "View [Task Views d87059]"), run: .open(done[0].id)))
         }
+        if let failed = TodayFailedRow(today, routines: TodayRow.showRoutines != nil) {
+            out.append(.init(symbol: Theme.Icon.errorFilled, tint: Theme.danger, title: failed.title, detail: failed.detail,
+                             action: String(localized: "View [Today Card 88f472]"), run: failed.run))
+        }
         if let waiting = today.waiting, !waiting.isEmpty {
             out.append(.init(symbol: Theme.Icon.askFirst, tint: AgentState.needsYou.tone.text,
                              title: waiting.count == 1 ? String(localized: "Needs you: \(waiting[0].title)") : StateName.count(.needsYou, waiting.count),
@@ -74,9 +78,52 @@ struct TodayCard: View {
     }
 }
 
+/// The Today card's row for what did not go through overnight (#4124): one by its title, how it ended and why; several by
+/// how many (`failedTotal`, past the hub's newest 8) and the first titles. Its button opens the newest: a task's sheet, or
+/// Scheduled Tasks when the app has a way there (`routines`). Nil when nothing failed, or from a hub before it: the card
+/// stays as it was.
+struct TodayFailedRow {
+    var title: String
+    var detail: String
+    var run: TodayRow.Run?
+
+    /// The titles listed when several did not go through.
+    static let listed = 3
+
+    init?(_ today: TodayBody, routines: Bool) {
+        guard let failed = today.failed, let first = failed.first else { return nil }
+        let count = max(today.failedTotal ?? failed.count, failed.count)
+        if count == 1 {
+            title = String(localized: "Didn't go through: \(first.title)")
+            detail = Self.line(first)
+        } else {
+            title = String(localized: "\(count) didn't go through")
+            let shown = failed.prefix(Self.listed)
+            let titles = shown.map(\.title).joined(separator: String(localized: "、", comment: "Separator between list items"))
+            let more = count - shown.count
+            detail = more > 0 ? String(localized: "\(titles) · \(String(localized: "\(more) more"))") : titles
+        }
+        switch first.kind {
+        case "task": run = .open(first.id)
+        case "routine": run = routines ? .routines : nil
+        default: run = nil
+        }
+    }
+
+    /// How one ended, when, and why when the hub said: "Did not start · 3:12 — rpc: connection closed".
+    static func line(_ f: TodayBody.Failed) -> String {
+        let time = f.at.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+        let how = f.kind == "routine"
+            ? (f.skipped == true ? String(localized: "Skipped · \(time)") : String(localized: "Run failed · \(time)"))
+            : String(localized: "Did not start · \(time)")
+        guard let why = f.why?.trimmingCharacters(in: .whitespacesAndNewlines), !why.isEmpty else { return how }
+        return "\(how) — \(why)"
+    }
+}
+
 /// One row of the Today card: a tinted mark, what it is, and its one action.
 struct TodayRow: View {
-    enum Run: Hashable { case open(String), board, say(String) }
+    enum Run: Hashable { case open(String), board, say(String), routines }
 
     struct Model {
         var symbol: String
@@ -89,6 +136,17 @@ struct TodayRow: View {
 
     var row: Model
     private var store: TasksStore { .shared }
+
+    /// Scheduled Tasks from the conversation: the iPhone's shell or the iPad's sidebar pushes it on the Persona page. The
+    /// Mac and the old tabs have no way there (nil).
+    static var showRoutines: (() -> Void)? {
+        let router = AppModel.shared.tabRouter
+        if let shell = router as? ShellState { return { shell.show(.routines) } }
+        #if os(iOS)
+        if let pad = router as? PadRouter { return { pad.show(.routines) } }
+        #endif
+        return nil
+    }
 
     var body: some View {
         HStack(spacing: Theme.Space.m) {
@@ -117,6 +175,7 @@ struct TodayRow: View {
         case .board: store.showBoard = true
         case .say(let text):
             if let key = AppModel.shared.assistantMain { AppModel.shared.sendNow(key, text: text) }
+        case .routines: Self.showRoutines?()
         }
     }
 }

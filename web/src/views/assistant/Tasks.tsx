@@ -24,6 +24,7 @@ import {
   startFailure,
   setRoute,
   startPlan,
+  todayFailedRow,
   useFeed,
   type FeedItem,
   type PlanTask,
@@ -36,6 +37,7 @@ import { dockAgents, type DockAgent, interruption, isRemovable, mostUrgentAgent,
 import { parseAPIError } from "../../lib/api-errors";
 import { boardSections, type BoardSectionKey } from "../../lib/task-board";
 import { openPanel } from "../../lib/panel";
+import { navigate } from "../../lib/router";
 import { plainMarkdown } from "../../lib/plain-markdown";
 import { Markdown } from "../../ui/Markdown";
 import { LiveCard } from "../../ui/AssistantCard";
@@ -855,6 +857,12 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
   const rows: { icon: IconName; tint: string; title: string; detail?: string; lines?: string[]; action?: string; run?: () => void }[] = [];
   if (body.done?.length)
     rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? t("assistant-tasks.today_done_single", { title: body.done[0].title }) : t("assistant-tasks.today_done_n", { count: body.done.length }), detail: body.done.length > 1 ? body.done.map((d) => d.title).join(t("assistant-tasks.list_separator")) : undefined, action: t("assistant-tasks.look"), run: () => openTask(body.done![0].id) });
+  // What did not go through overnight (#4124): "View" opens the newest, a task beside the conversation or a run's Scheduled tasks
+  const failed = todayFailedRow(body);
+  if (failed) {
+    const first = failed.first;
+    rows.push({ icon: "info", tint: "bg-red-tint text-red", title: failed.title, detail: failed.detail, action: t("assistant-tasks.go_look"), run: first.kind === "task" ? () => openTask(first.id) : () => navigate({ name: "routines" }) });
+  }
   if (body.waiting?.length)
     rows.push({ icon: "hand", tint: "bg-field text-attention", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), lines: waitingText ? waitingText.split("\n") : undefined, action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
   if (body.pending_review?.length)

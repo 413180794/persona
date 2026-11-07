@@ -242,6 +242,48 @@ struct TasksTests {
         let body = try #require(item.today)
         #expect(item.kind == .today && body.done?.first?.title == "博客迁移" && body.working == 2 && body.meetings?.first?.title == "设计评审")
         #expect(body.atMe?.first?.name == "发布群" && body.unread == 4 && body.waiting == nil)
+        #expect(body.failed == nil && body.failedTotal == nil) // a hub before #4124
+    }
+
+    /// What did not go through overnight (#4124): the hub's newest ones and how many there were in all.
+    @Test func todayFailuresDecode() throws {
+        let item = try decode(#"""
+        {"id":"f","conversation":"c1","at":"2026-11-03T00:00:00+08:00","kind":"today","ref":"2026-11-03",
+         "body":{"date":"2026-11-03","failed":[
+           {"kind":"task","id":"t1","title":"对齐按钮","at":"2026-11-03T03:12:00+08:00","why":"rpc: connection closed"},
+           {"kind":"routine","id":"rt_weekly","ref":"run_1","title":"周报","at":"2026-11-02T22:00:00+08:00","why":"assistant machine is offline"},
+           {"kind":"routine","id":"evening","ref":"run_2","title":"晚间回顾","at":"2026-11-02T21:30:00+08:00","skipped":true}],
+          "failed_total":5}}
+        """#, as: FeedItem.self)
+        let body = try #require(item.today)
+        let failed = try #require(body.failed)
+        #expect(failed.map(\.kind) == ["task", "routine", "routine"] && failed.map(\.id) == ["t1", "rt_weekly", "evening"])
+        #expect(failed[0].why == "rpc: connection closed" && failed[0].ref == nil && failed[0].skipped == nil)
+        #expect(failed[1].ref == "run_1" && failed[2].skipped == true && failed[2].why == nil && body.failedTotal == 5)
+    }
+
+    /// The Today card's row for them: one by its title, how it ended and why; several by how many (past the hub's list)
+    /// and the first titles. Its button opens the newest: a task's sheet, or Scheduled Tasks where the app can.
+    @Test func todayFailedRow() throws {
+        let at = Date(timeIntervalSince1970: 1_793_700_000)
+        let time = at.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+        let task = TodayBody.Failed(kind: "task", id: "t1", title: "对齐按钮", at: at, why: "rpc: connection closed")
+        let run = TodayBody.Failed(kind: "routine", id: "rt_weekly", ref: "run_1", title: "周报", at: at, why: " ")
+        let skipped = TodayBody.Failed(kind: "routine", id: "evening", ref: "run_2", title: "晚间回顾", at: at, skipped: true)
+        // Nothing failed, or a hub before #4124: no row, the card as it was.
+        #expect(TodayFailedRow(TodayBody(date: "2026-11-03"), routines: true) == nil)
+        #expect(TodayFailedRow(TodayBody(date: "2026-11-03", failed: [], failedTotal: 0), routines: true) == nil)
+
+        let one = try #require(TodayFailedRow(TodayBody(date: "2026-11-03", failed: [task], failedTotal: 1), routines: true))
+        #expect(one.title == "没成：对齐按钮" && one.detail == "没开起来 · \(time) — rpc: connection closed" && one.run == .open("t1"))
+        #expect(TodayFailedRow.line(run) == "运行失败 · \(time)") // a blank why says nothing
+        #expect(TodayFailedRow.line(skipped) == "被跳过 · \(time)")
+
+        let several = try #require(TodayFailedRow(TodayBody(date: "2026-11-03", failed: [run, skipped, task], failedTotal: 5), routines: true))
+        #expect(several.title == "5 件没成" && several.detail == "周报、晚间回顾、对齐按钮 · 还有 2 件" && several.run == .routines)
+        let listed = try #require(TodayFailedRow(TodayBody(date: "2026-11-03", failed: [run, task]), routines: false))
+        #expect(listed.title == "2 件没成" && listed.detail == "周报、对齐按钮")
+        #expect(listed.run == nil) // no way to Scheduled Tasks from the conversation (the Mac): no button
     }
 
     @Test func messageCardDecodes() throws {

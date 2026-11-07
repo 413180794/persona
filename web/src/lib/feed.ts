@@ -58,6 +58,10 @@ export interface TodayBody {
   meetings?: { start: string; end: string; title: string }[];
   at_me?: { name: string; unread?: number; preview?: string }[];
   unread?: number;
+  /** What did not go through since yesterday 18:00 (#4124), newest first: the newest 8, `failed_total` all of them.
+   *  A hub before it sends neither. */
+  failed?: BriefFailed[];
+  failed_total?: number;
 }
 
 /** `brief`: the fixed part of a morning or evening run (docs/protocol.md), as the hub worked it out when the run started. */
@@ -81,6 +85,37 @@ export interface BriefFailed {
   at: string;
   why?: string;
   skipped?: boolean;
+}
+
+/** How one thing that did not go through ended, in the brief and on the "Today" card: did not start, run failed, skipped. */
+export function failedKey(x: BriefFailed): string {
+  if (x.kind === "routine") return x.skipped ? "assistant-brief.failed_skipped" : "assistant-brief.failed_run";
+  return "assistant-brief.failed_task";
+}
+
+/** "did not start · 03:12 — rpc: connection closed": how it ended, when, and why when the hub said. */
+export function failedLine(x: BriefFailed): string {
+  const how = t(failedKey(x), { time: formatDate(x.at, { hour: "2-digit", minute: "2-digit" }) });
+  const why = x.why?.trim();
+  return why ? `${how} — ${why}` : how;
+}
+
+/** The titles the "Today" card's row lists when several did not go through. */
+const TODAY_FAILED_LISTED = 3;
+
+/** The "Today" card's row for what did not go through overnight (#4124): one by its title, how it ended and why; several by
+ *  how many (failed_total, past the hub's newest 8) and the first titles. `first` is the newest, what its button opens.
+ *  Undefined when nothing did, or from a hub before it: the card stays as it was. */
+export function todayFailedRow(body: TodayBody): { title: string; detail: string; first: BriefFailed } | undefined {
+  const failed = body.failed ?? [];
+  const first = failed[0];
+  if (!first) return undefined;
+  const count = Math.max(body.failed_total ?? failed.length, failed.length);
+  if (count === 1) return { title: t("assistant-tasks.today_failed_single", { title: first.title }), detail: failedLine(first), first };
+  const shown = failed.slice(0, TODAY_FAILED_LISTED);
+  const titles = shown.map((x) => x.title).join(t("assistant-tasks.list_separator"));
+  const more = count - shown.length;
+  return { title: t("assistant-tasks.today_failed_n", { count }), detail: more > 0 ? `${titles} · ${t("assistant-tasks.more_asks", { count: more })}` : titles, first };
 }
 
 export interface BriefBody {

@@ -60,6 +60,8 @@
   "on_iphone": "iPhone上",
   "today_done_single": "完了：{title}",
   "today_done_n_other": "{count}件のタスクが完了",
+  "today_failed_single": "未達：{title}",
+  "today_failed_n_other": "{count}件が未達",
   "today_waiting_single": "要対応：{title}",
   "today_pending_review_single": "検収待ち：{title}",
   "today_pending_review_n_other": "検収待ち{count}件",

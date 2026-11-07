@@ -60,6 +60,8 @@
   "on_iphone": "在 iPhone 上",
   "today_done_single": "已完成：{title}",
   "today_done_n_other": "已完成 {count} 个任务",
+  "today_failed_single": "没成：{title}",
+  "today_failed_n_other": "{count} 件没成",
   "today_waiting_single": "需要你：{title}",
   "today_pending_review_single": "等你验收：{title}",
   "today_pending_review_n_other": "{count} 件等你验收",

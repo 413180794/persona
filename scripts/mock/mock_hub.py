@@ -2667,6 +2667,13 @@ if MOCK_TASKS:
     _local = datetime.now().astimezone()
     _midnight = _local.replace(hour=0, minute=0, second=0, microsecond=0)
     _today_min = (NOW - _midnight.astimezone(timezone.utc)).total_seconds() / 60
+    # MOCK_TODAY_FAILED=1: what did not go through overnight on the Today card (#4124), newest first and capped like the hub,
+    # so failed_total is larger than the list: a task that did not start, a routine run that failed and one that was skipped.
+    _today_failed = {
+        "failed": [{"kind": "task", "id": "todo_task_align", "title": "设置页按钮对齐", "at": ago(hours=3), "why": "rpc: connection closed"},
+                   {"kind": "routine", "id": "rt_weekly", "ref": "run_weekly", "title": "周报", "at": ago(hours=5), "why": "assistant machine is offline"},
+                   {"kind": "routine", "id": "evening", "title": "晚间回顾", "at": ago(hours=9), "why": "Persona 停机，错过了时间", "skipped": True}],
+        "failed_total": 5} if os.environ.get("MOCK_TODAY_FAILED") == "1" else {}
     TASK_TRUST = [{"key": "macbook|/Users/me/code/weather|read", "machine": "macbook", "cwd": "/Users/me/code/weather", "readonly": True},
                   {"key": "studio|/Users/me/code/blog|edit", "machine": "studio", "cwd": "/Users/me/code/blog", "readonly": False}]
     TASK_FEED[ASK1] = [
@@ -2680,7 +2687,7 @@ if MOCK_TASKS:
             "meetings": [{"start": later(hours=2), "end": later(hours=3), "title": "设计评审"},
                          {"start": later(hours=4), "end": later(hours=4.5), "title": "和李雷 1:1"}],
             "at_me": [{"name": "发布群", "unread": 3, "preview": "韩梅梅：周五的发布能赶上吗？"}],
-            "unread": 4}),
+            "unread": 4, **_today_failed}),
         _feed("feed_m1", 43.5, "plan", "plan_mock_1"),
         _feed("feed_m2", 43.4, "task", "todo_task_widget"),
         _feed("feed_m3", 43.3, "task", "todo_task_tests"),

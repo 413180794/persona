@@ -4332,6 +4332,41 @@
       },
       "extractionState": "manual"
     },
+    "%lld didn't go through": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld didn't go through"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld didn't go through"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld件が未達"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 件没成"
+          }
+        }
+      }
+    },
     "%lld Groups": {
       "localizations": {
         "en": {
@@ -32647,6 +32682,52 @@
       },
       "extractionState": "manual"
     },
+    "Did not start · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Did not start · %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始できませんでした・%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没开起来 · %1$@"
+          }
+        }
+      }
+    },
+    "Didn't go through: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Didn't go through: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未達：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没成：%1$@"
+          }
+        }
+      }
+    },
     "DMs": {
       "localizations": {
         "en": {
@@ -42449,6 +42530,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "不管这台电脑设了什么代理，发往网关的请求都直连；其他请求（比如网页和它运行的命令）照这台电脑的设置走。"
+          }
+        }
+      }
+    },
+    "Run failed · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run failed · %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "実行に失敗・%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行失败 · %1$@"
           }
         }
       }
@@ -74003,6 +74107,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "最后设置，优先于上面各项和这台电脑自己的设置；写 NAME= 不带值会把变量设成空。要让这个网关不走代理，请改在「代理」里选「不使用代理」。"
+          }
+        }
+      }
+    },
+    "Skipped · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped · %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スキップ・%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被跳过 · %1$@"
           }
         }
       }

@@ -166,6 +166,17 @@ nonisolated struct TodayBody: Codable, Hashable, Sendable {
     nonisolated struct TaskRef: Codable, Hashable, Sendable { var id: String; var title: String }
     nonisolated struct Meeting: Codable, Hashable, Sendable { var start: Date; var end: Date; var title: String }
     nonisolated struct Chat: Codable, Hashable, Sendable { var name: String; var unread: Int?; var preview: String? }
+    /// One thing that did not go through overnight (#4124): `task`, a dispatched task whose agent did not start (`id` its
+    /// todo); `routine`, a scheduled run that failed or was skipped (`id` the scheduled task, `ref` the run).
+    nonisolated struct Failed: Codable, Hashable, Sendable {
+        var kind: String
+        var id: String
+        var ref: String?
+        var title: String
+        var at: Date
+        var why: String?
+        var skipped: Bool?
+    }
 
     var date: String
     var done: [TaskRef]?
@@ -174,10 +185,14 @@ nonisolated struct TodayBody: Codable, Hashable, Sendable {
     var meetings: [Meeting]?
     var atMe: [Chat]?
     var unread: Int?
+    /// What did not go through since yesterday 18:00, newest first: the hub's newest 8, `failedTotal` all of them. A hub
+    /// before #4124 sends neither.
+    var failed: [Failed]?
+    var failedTotal: Int?
 
     enum CodingKeys: String, CodingKey {
-        case date, done, waiting, working, meetings, unread
-        case atMe = "at_me"
+        case date, done, waiting, working, meetings, unread, failed
+        case atMe = "at_me", failedTotal = "failed_total"
     }
 }
 

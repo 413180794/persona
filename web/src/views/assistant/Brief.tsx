@@ -3,7 +3,7 @@
 // rows as the Lark card, with an Accept button for each task to verify and a Handled button for each question that can wait
 // (docs/bots.md "Morning and evening briefings").
 import { useState } from "react";
-import { acceptBrief, briefBody, handledLater, type BriefBody, type BriefFailed, type BriefRow, type FeedItem } from "../../lib/feed";
+import { acceptBrief, briefBody, failedKey, handledLater, type BriefBody, type BriefRow, type FeedItem } from "../../lib/feed";
 import { shortDuration } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
 import { formatDate, t } from "../../i18n";
@@ -135,11 +135,6 @@ function LaterRow({ row }: { row: BriefRow }) {
       )}
     </div>
   );
-}
-
-function failedKey(x: BriefFailed): string {
-  if (x.kind === "routine") return x.skipped ? "assistant-brief.failed_skipped" : "assistant-brief.failed_run";
-  return "assistant-brief.failed_task";
 }
 
 function clock(iso: string): string {
