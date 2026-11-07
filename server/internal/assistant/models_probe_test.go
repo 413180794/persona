@@ -250,6 +250,32 @@ func TestLauncherHeadersSealedAndNewFields(t *testing.T) {
 	}
 }
 
+// A bypass list that is the gateway's host alone (iOS's Proxy › No Proxy, #6238) follows the gateway to a new address,
+// as the web form sends it back unchanged; any other list stays as it is.
+func TestNoProxyOfTheGatewayFollowsItsAddress(t *testing.T) {
+	s, mux := launcherTestService(t)
+	ctx := context.Background()
+	if code, raw := launcherCall(t, mux, "POST", "/api/v1/launchers", `{"name":"gw","base_url":"https://GW.example.com/anthropic","model":"m1",
+		"api_key":"`+fakeKey+`","no_proxy":"gw.example.com"}`); code != 200 {
+		t.Fatal(code, raw)
+	}
+	for _, tc := range []struct{ body, want string }{
+		{`{"base_url":"https://other.example.com/anthropic","model":"m1","no_proxy":"gw.example.com"}`, "other.example.com"},
+		{`{"base_url":"https://third.example.com","model":"m1"}`, "third.example.com"},                          // a client without the field
+		{`{"base_url":"https://third.example.com","model":"m1","no_proxy":"gw.example.com"}`, "gw.example.com"}, // same address
+		{`{"base_url":"https://fourth.example.com","model":"m1","no_proxy":"third.example.com, localhost"}`, "third.example.com, localhost"},
+		{`{"base_url":"https://fourth.example.com","model":"m1","no_proxy":"FOURTH.example.com,"}`, "FOURTH.example.com,"},
+		{`{"base_url":"https://fifth.example.com","model":"m1","no_proxy":"FOURTH.example.com,"}`, "fifth.example.com"},
+	} {
+		if code, raw := launcherCall(t, mux, "PUT", "/api/v1/launchers/gw", tc.body); code != 200 {
+			t.Fatal(code, raw)
+		}
+		if got := s.storedLaunchers(ctx)[0].NoProxy; got != tc.want {
+			t.Errorf("%s: no_proxy %q, want %q", tc.body, got, tc.want)
+		}
+	}
+}
+
 // The launcher's own environment (#5953) is sealed like the key: GET says has_env only, PUT without it keeps it, ""
 // clears it, and the node gets it in the clear.
 func TestLauncherEnvSealed(t *testing.T) {

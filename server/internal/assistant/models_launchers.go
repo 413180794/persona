@@ -758,6 +758,21 @@ func (in launcherInput) applyProvider(s *storedLauncher) {
 
 var errNoPreset = i18n.Err("assistant-models_launchers.err_no_preset")
 
+// gatewayHost is the host of a provider's Base URL, lower case; "" without one.
+func gatewayHost(baseURL string) string {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
+// onlyHost says whether a bypass list names host and nothing else, as iOS reads No Proxy back.
+func onlyHost(list, host string) bool {
+	hosts := strings.FieldsFunc(strings.ToLower(list), func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	return host != "" && len(hosts) == 1 && hosts[0] == host
+}
+
 func (in launcherInput) check() error {
 	if in.Kind != "" && in.Kind != "api" && in.Kind != "launcher" {
 		return i18n.Err("assistant-models_launchers.err_kind")
@@ -1192,6 +1207,11 @@ func (s *Service) saveLauncher(ctx context.Context, in launcherInput, old *store
 		l.KeySealed = sealed
 	}
 	in.applyProvider(&l)
+	// A bypass list that is the gateway's host alone (iOS's Proxy › No Proxy) follows the gateway to a new address: the
+	// web form and an import send it back as it was, and the old host would leave the new gateway on the proxy (#6238).
+	if old != nil && l.BaseURL != old.BaseURL && onlyHost(l.NoProxy, gatewayHost(old.BaseURL)) {
+		l.NoProxy = gatewayHost(l.BaseURL)
+	}
 	if in.Headers != nil { // left out keeps them, "" clears them
 		l.HeadersSealed = ""
 		if hd := strings.TrimSpace(*in.Headers); hd != "" {

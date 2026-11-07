@@ -19,11 +19,12 @@ struct ProviderWizardTests {
         ProviderWizardModel(existing: existing, deps: .init(api: { hub.client }))
     }
 
-    private static func existing(headers: Bool = true, env: Bool = false) throws -> LauncherView {
+    private static func existing(headers: Bool = true, env: Bool = false, proxy: String? = nil, noProxy: String? = nil) throws -> LauncherView {
+        let proxies = (proxy.map { #","proxy":"\#($0)""# } ?? "") + (noProxy.map { #","no_proxy":"\#($0)""# } ?? "")
         let json = #"""
         {"name":"jv_glm","source":"persona","kind":"launcher","base_url":"https://gateway.example.com","model":"glm-5","has_key":true,
          "auth":"bearer","has_headers":\#(headers),"has_env":\#(env),"models":[{"id":"glm-5","context_window":200000}],"opus_model":"glm-5-plus",
-         "timeout_ms":600000,"origin":"zshrc:cc_glm@macbook"}
+         "timeout_ms":600000,"origin":"zshrc:cc_glm@macbook"\#(proxies)}
         """#
         return try JSON.decoder.decode(LauncherView.self, from: Data(json.utf8))
     }
@@ -145,6 +146,80 @@ struct ProviderWizardTests {
         #expect(await w.save())
         #expect(bodies[2]["env"]?.string == "HTTP_PROXY=\nX_TEAM=1")
         #expect(!wizard(hub, existing: try Self.existing()).hasStoredEnv)
+    }
+
+    /// Configure Proxy (#6238): a stored provider opens on the choice its `proxy` / `no_proxy` make, and each choice saves
+    /// its own pair.
+    @Test func aStoredProxyOpensOnItsChoice() throws {
+        let hub = FakeHub()
+        let follow = wizard(hub, existing: try Self.existing(noProxy: ".corp.example"))
+        #expect(follow.proxyMode == .follow && follow.proxyValues == ("", ".corp.example"))
+        #expect(wizard(hub, existing: try Self.existing()).proxyMode == .follow)
+        #expect(wizard(hub, existing: try Self.existing(noProxy: "gateway.example.com, localhost")).proxyMode == .follow)
+        // "*" sends everything direct, the agent's web pages and commands too: shown as it is, not as No Proxy.
+        let all = wizard(hub, existing: try Self.existing(noProxy: "*"))
+        #expect(all.proxyMode == .follow && all.noProxy == "*" && all.proxyValues == ("", "*"))
+
+        // The gateway's host alone is No Proxy.
+        let direct = wizard(hub, existing: try Self.existing(noProxy: "Gateway.example.com"))
+        #expect(direct.proxyMode == .direct && direct.noProxy.isEmpty && direct.proxyValues == ("", "gateway.example.com"))
+        // Back to Follow: the host is not left behind as its list.
+        direct.proxyMode = .follow
+        #expect(direct.proxyValues == ("", ""))
+
+        let manual = wizard(hub, existing: try Self.existing(proxy: "http://127.0.0.1:7890", noProxy: "localhost"))
+        #expect(manual.proxyMode == .manual && manual.proxyValues == ("http://127.0.0.1:7890", "localhost"))
+        #expect(manual.proxySummary == "http://127.0.0.1:7890" && manual.proxyProblem == nil && manual.canSave)
+    }
+
+    @Test func eachProxyChoiceSavesItsOwnPair() async throws {
+        let hub = FakeHub()
+        var bodies: [[String: JSONValue]] = []
+        hub.on("PUT", "/api/v1/launchers/jv_glm") { req in
+            bodies.append(try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data()).object ?? [:])
+            return Data(#"{"ok":true}"#.utf8)
+        }
+        let w = wizard(hub, existing: try Self.existing(proxy: "http://127.0.0.1:7890", noProxy: "localhost"))
+        w.proxy = " socks5h://127.0.0.1:1080 "
+        w.noProxy = " localhost, .corp.example "
+        #expect(await w.save())
+        #expect(bodies[0]["proxy"]?.string == "socks5h://127.0.0.1:1080" && bodies[0]["no_proxy"]?.string == "localhost, .corp.example")
+
+        // Follow This Computer clears the server and keeps the list.
+        w.proxyMode = .follow
+        #expect(await w.save())
+        #expect(bodies[1]["proxy"]?.string == "" && bodies[1]["no_proxy"]?.string == "localhost, .corp.example")
+
+        // No Proxy: the gateway's host, whatever was typed, and the host of the address being saved.
+        w.proxyMode = .direct
+        #expect(await w.save())
+        #expect(bodies[2]["proxy"]?.string == "" && bodies[2]["no_proxy"]?.string == "gateway.example.com")
+        w.baseURL = "https://other.example.com/anthropic"
+        #expect(await w.save())
+        #expect(bodies[3]["base_url"]?.string == "https://other.example.com/anthropic" && bodies[3]["no_proxy"]?.string == "other.example.com")
+
+        // Back to Manual: the server typed before is still there.
+        w.proxyMode = .manual
+        #expect(w.proxyValues == ("socks5h://127.0.0.1:1080", "localhost, .corp.example"))
+    }
+
+    @Test func manualNeedsAServerTheHubTakes() throws {
+        let w = wizard(FakeHub(), existing: try Self.existing())
+        #expect(w.proxyProblem == nil && w.canSave)
+        w.proxyMode = .manual
+        #expect(w.proxyProblem != nil && !w.canSave) // no server yet
+        for bad in ["127.0.0.1:7890", "ftp://127.0.0.1:21", "http://", "http://user:secret@127.0.0.1:7890", "http://user@127.0.0.1:7890"] {
+            w.proxy = bad
+            #expect(w.proxyProblem != nil && !w.canSave, "\(bad)")
+        }
+        for good in ["http://127.0.0.1:7890", "HTTPS://proxy.example.com", "socks5://127.0.0.1:1080", "socks5h://[::1]:1080", "http://:8080"] {
+            w.proxy = good
+            #expect(w.proxyProblem == nil && w.canSave, "\(good)")
+        }
+        // A server left over from Manual doesn't stop the other choices from saving.
+        w.proxy = "not a proxy"
+        w.proxyMode = .follow
+        #expect(w.proxyProblem == nil && w.canSave)
     }
 
     @Test func aStoredProviderTestsWithItsStoredKey() async throws {

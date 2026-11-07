@@ -9681,6 +9681,29 @@
       },
       "extractionState": "manual"
     },
+    "Addresses That Go Direct": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Addresses That Go Direct"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロキシを使わないアドレス"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不走代理的地址"
+          }
+        }
+      }
+    },
     "AI Draft Reply": {
       "localizations": {
         "en": {
@@ -11333,29 +11356,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "地址"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Addresses that bypass the proxy (NO_PROXY)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Addresses that bypass the proxy (NO_PROXY)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "プロキシを使わないアドレス（NO_PROXY）"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不走代理的地址（NO_PROXY）"
           }
         }
       },
@@ -38400,6 +38400,29 @@
       },
       "extractionState": "manual"
     },
+    "Enter the proxy server, or choose Follow This Computer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the proxy server, or choose Follow This Computer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロキシサーバーを入力するか、「このコンピューターに従う」を選んでください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请填写代理服务器，或选「跟随这台电脑」。"
+          }
+        }
+      }
+    },
     "Entered. Tap Verify and Save": {
       "localizations": {
         "en": {
@@ -39828,6 +39851,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Follow This Computer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow This Computer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピューターに従う"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随这台电脑"
+          }
+        }
+      }
     },
     "From PATH": {
       "localizations": {
@@ -42039,6 +42085,75 @@
       },
       "extractionState": "manual"
     },
+    "Hosts or domains, separated by commas; .example.com covers its subdomains. Only these skip this proxy: the list on this computer is for its own proxy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hosts or domains, separated by commas; .example.com covers its subdomains. Only these skip this proxy: the list on this computer is for its own proxy."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホスト名またはドメインをカンマで区切って入力します。.example.com はサブドメインも含みます。このプロキシを通らないのはここに入力したものだけです。このコンピューターのリストは、コンピューター自身のプロキシ用です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主机名或域名，用逗号分隔；.example.com 包括它的子域名。只有这些地址不走这个代理：电脑上的列表是给它自己的代理用的。"
+          }
+        }
+      }
+    },
+    "Hosts or domains, separated by commas; .example.com covers its subdomains. They go direct along with the ones this computer already lists.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hosts or domains, separated by commas; .example.com covers its subdomains. They go direct along with the ones this computer already lists."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホスト名またはドメインをカンマで区切って入力します。.example.com はサブドメインも含みます。このコンピューターに既にあるリストと合わせて適用されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主机名或域名，用逗号分隔；.example.com 包括它的子域名。会和这台电脑已有的列表一起生效。"
+          }
+        }
+      }
+    },
+    "Manual": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手動"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动"
+          }
+        }
+      }
+    },
     "Mark All as Seen (%lld) [State Names]": {
       "extractionState": "manual",
       "localizations": {
@@ -42104,6 +42219,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要你"
+          }
+        }
+      }
+    },
+    "No Proxy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Proxy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロキシを使わない"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不使用代理"
+          }
+        }
+      }
+    },
+    "No proxy of its own: it goes the way this computer does. A proxy there that no longer answers is skipped when the gateway answers directly.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No proxy of its own: it goes the way this computer does. A proxy there that no longer answers is skipped when the gateway answers directly."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のプロキシは使わず、このコンピューターと同じ経路を使います。そのプロキシが応答しなくなった場合は、ゲートウェイに直接つながればそのプロキシを使いません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不单独设代理，跟这台电脑走同样的路。电脑上的代理连不上时，只要网关能直连，就会跳过它。"
           }
         }
       }
@@ -42199,6 +42360,52 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Proxy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proxy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロキシ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理"
+          }
+        }
+      }
+    },
+    "Requests to the gateway go direct, whatever proxy this computer has. Everything else, like web pages and the commands it runs, goes the way this computer does.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requests to the gateway go direct, whatever proxy this computer has. Everything else, like web pages and the commands it runs, goes the way this computer does."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピューターにどんなプロキシが設定されていても、ゲートウェイへのリクエストは直接送られます。それ以外（Web ページや実行するコマンドなど）は、このコンピューターの設定に従います。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不管这台电脑设了什么代理，发往网关的请求都直连；其他请求（比如网页和它运行的命令）照这台电脑的设置走。"
+          }
+        }
+      }
     },
     "Script on PATH": {
       "localizations": {
@@ -73484,29 +73691,6 @@
       },
       "extractionState": "manual"
     },
-    "Proxy, like http://127.0.0.1:7890": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Proxy, like http://127.0.0.1:7890"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "プロキシ（例：http://127.0.0.1:7890）"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "代理，比如 http://127.0.0.1:7890"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
     "Public": {
       "localizations": {
         "en": {
@@ -73829,6 +74013,29 @@
       },
       "extractionState": "manual"
     },
+    "Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, choose No Proxy under Proxy instead.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, choose No Proxy under Proxy instead."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後に設定され、上の項目やコンピューター側の設定より優先されます。NAME= のように値を空にすると、その変数が空になります。プロキシを通さないようにするには、代わりに「プロキシ」で「プロキシを使わない」を選んでください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最后设置，优先于上面各项和这台电脑自己的设置；写 NAME= 不带值会把变量设成空。要让这个网关不走代理，请改在「代理」里选「不使用代理」。"
+          }
+        }
+      }
+    },
     "Synced": {
       "localizations": {
         "en": {
@@ -73875,6 +74082,29 @@
       },
       "extractionState": "manual"
     },
+    "The gateway, web pages and the commands the agent runs all go through this proxy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The gateway, web pages and the commands the agent runs all go through this proxy."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゲートウェイ、Web ページ、実行するコマンドのすべてがこのプロキシを経由します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关、网页和它运行的命令都走这个代理。"
+          }
+        }
+      }
+    },
     "The plain claude command on each computer: “Claude Code default” in Model Configuration.": {
       "localizations": {
         "en": {
@@ -73897,6 +74127,52 @@
         }
       },
       "extractionState": "manual"
+    },
+    "The proxy can't include a user name or password.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The proxy can't include a user name or password."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロキシにユーザー名やパスワードは含められません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理地址里不能带用户名和密码。"
+          }
+        }
+      }
+    },
+    "The proxy starts with http://, https:// or socks5://, like http://127.0.0.1:7890.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The proxy starts with http://, https:// or socks5://, like http://127.0.0.1:7890."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロキシは http://、https://、socks5:// のいずれかで始めてください（例：http://127.0.0.1:7890）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理要以 http://、https:// 或 socks5:// 开头，比如 http://127.0.0.1:7890。"
+          }
+        }
+      }
     },
     "They're only hidden in Persona; nothing on the computer is changed. Open one to unhide it.": {
       "localizations": {
@@ -81765,29 +82041,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "保存后清除已设置的环境变量"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, add the gateway's host to NO_PROXY instead.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, add the gateway's host to NO_PROXY instead."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最後に設定され、上の項目やコンピューター側の設定より優先されます。NAME= のように値を空にすると、その変数が空になります。プロキシを通さないようにするには、代わりにゲートウェイのホストを NO_PROXY に追加してください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最后设置，优先于上面各项和这台电脑自己的设置；写 NAME= 不带值会把变量设成空。要让这个网关不走代理，请改为把它的主机名加进 NO_PROXY。"
           }
         }
       },

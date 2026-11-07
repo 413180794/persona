@@ -1,6 +1,7 @@
 package node
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -231,6 +232,14 @@ func (n *Node) sdkCommand(b sdkBridge, launcher string, s sdkStart, base []strin
 	if l, managed := n.managedLauncher(launcher); managed {
 		// the main conversation's provider env (launcherenv.go); its values hold the key: never logged
 		s.env, s.launcherArgs = providerEnv(l, s.model, "", true), l.Args
+		if mergesNoProxy(l) {
+			// As `personad launch` and its settings file do (#6238): the provider's hosts are added to the bypass lists
+			// this claude would read without it, the user's settings env's (applied over the environment), else the node's.
+			user := n.userNoProxy(l)
+			s.env["NO_PROXY"], s.env["no_proxy"] = addNoProxy(s.env["NO_PROXY"], func(k string) string {
+				return cmp.Or(user[k], envValue(base, k))
+			})
+		}
 		base = withoutEnv(base, envClearFor(l))
 		own := envList(s.env)
 		base = append(base, own...)

@@ -134,7 +134,60 @@ final class ProviderWizardUITests: XCTestCase {
         shot("9-advanced-env")
     }
 
-    /// A wrapper script on a machine's PATH (#5954) is listed with the ~/.zshrc launchers, and its page says where it comes from.
+    /// Advanced › Proxy (#6238): one row saying the choice, and a page like iOS Settings' Configure Proxy behind it. Manual
+    /// without a server can't be saved; with one, the row says the server.
+    @MainActor func testTheProxyPageIsLikeConfigureProxy() {
+        launch("models")
+        // A model ticked, so the provider can be saved: Manual without a server is what stops it below.
+        let glm = app.buttons["wizard.model.glm-5"]
+        XCTAssertTrue(glm.waitForExistence(timeout: 15), "no 勾选模型:\n\(app.debugDescription)")
+        glm.tap()
+        let save = app.buttons["wizard.save"]
+        XCTAssertTrue(save.isEnabled, "保存 with GLM-5 ticked")
+        let advanced = el("wizard.advanced")
+        XCTAssertTrue(advanced.waitForExistence(timeout: 15), "no Advanced:\n\(app.debugDescription)")
+        advanced.tap()
+        // Found by its label, the title and the choice together: the disclosure group's identifier is its rows' too.
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "代理")).firstMatch
+        for _ in 0..<8 where !(row.exists && row.isHittable) { app.swipeUp() }
+        XCTAssertTrue(row.isHittable, "no Proxy row:\n\(app.debugDescription)")
+        XCTAssertTrue(row.label.contains("跟随这台电脑"), row.label)
+        shot("12-proxy-row")
+
+        row.tap()
+        let follow = el("wizard.proxy.follow")
+        XCTAssertTrue(follow.waitForExistence(timeout: 5), "no proxy page:\n\(app.debugDescription)")
+        XCTAssertTrue(follow.isSelected && !el("wizard.proxy.server").exists)
+        XCTAssertTrue(el("wizard.proxy.bypass").exists)
+        shot("13-proxy-follow")
+
+        el("wizard.proxy.direct").tap()
+        XCTAssertTrue(el("wizard.proxy.bypass").waitForNonExistence(timeout: 5), "No Proxy still lists addresses")
+        XCTAssertTrue(el("wizard.proxy.direct").isSelected)
+        shot("14-proxy-direct")
+
+        el("wizard.proxy.manual").tap()
+        let server = el("wizard.proxy.server")
+        XCTAssertTrue(server.waitForExistence(timeout: 5), "no server field:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["请填写代理服务器，或选「跟随这台电脑」。"].exists, "no hint for an empty server:\n\(app.debugDescription)")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5) && row.label.contains("手动"), row.label)
+        XCTAssertFalse(save.isEnabled, "Manual without a server saves")
+
+        row.tap()
+        XCTAssertTrue(server.waitForExistence(timeout: 5))
+        server.tap()
+        server.typeText("http://127.0.0.1:7890")
+        type("wizard.proxy.bypass", "localhost, .corp.example")
+        XCTAssertTrue(app.staticTexts["请填写代理服务器，或选「跟随这台电脑」。"].waitForNonExistence(timeout: 5))
+        shot("15-proxy-manual")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5) && row.label.contains("http://127.0.0.1:7890"), row.label)
+        XCTAssertTrue(save.isEnabled, "Manual with a server does not save")
+        shot("16-proxy-row-manual")
+    }
+
+    /// A wrapper script on a machine's PATH (#5954) is listed under From PATH, and its page says where it comes from.
     @MainActor func testAScriptOnPathSaysWhereItComesFrom() {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "YES", "-tab", "settings", "-dev.openChat", "", "-openModelLaunchers", "YES"]
@@ -142,7 +195,8 @@ final class ProviderWizardUITests: XCTestCase {
         let row = app.staticTexts["claude-work"]
         for _ in 0..<6 where !(row.exists && row.isHittable) { app.swipeUp() }
         XCTAssertTrue(row.waitForExistence(timeout: 15), "no claude-work:\n\(app.debugDescription)")
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "来自 ~/.zshrc 和 PATH")).firstMatch.exists, "\(app.debugDescription)")
+        // Its own section since #6248 split the rc files' launchers by file.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "来自 PATH")).firstMatch.exists, "\(app.debugDescription)")
         shot("10-path-list")
         row.tap()
         // The row reads as one element, its title and value together.

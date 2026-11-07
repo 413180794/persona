@@ -32,8 +32,9 @@ var proxyEnvClear = []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_prox
 
 // envClearFor is what to drop before l runs: a launcher from before #2455 keeps the shell's proxy and timeout, as it
 // always has; a provider keeps the shell's proxy unless it has one (a dead one is dropped at launch,
-// withoutDeadProxies), and the shell's no_proxy, which Claude Code reads together with the NO_PROXY it sets. What the
-// launcher's own environment sets (Env) goes too, a proxy variable in both spellings: its value is the one that counts.
+// withoutDeadProxies). Its bypass list replaces the shell's in both spellings (`personad launch` adds the inherited
+// ones to it first when it follows the shell's proxy, mergesNoProxy). What the launcher's own environment sets (Env)
+// goes too, a proxy variable in both spellings: its value is the one that counts.
 func envClearFor(l proto.ManagedLauncher) []string {
 	var clear []string
 	switch {
@@ -42,7 +43,7 @@ func envClearFor(l proto.ManagedLauncher) []string {
 	case l.Proxy != "":
 		clear = append(slices.Clone(providerEnvClear), proxyEnvClear...)
 	case l.NoProxy != "":
-		clear = append(slices.Clone(providerEnvClear), "NO_PROXY")
+		clear = append(slices.Clone(providerEnvClear), "NO_PROXY", "no_proxy")
 	default:
 		clear = slices.Clone(providerEnvClear)
 	}
@@ -59,6 +60,62 @@ func envClearFor(l proto.ManagedLauncher) []string {
 // proxyNames are the proxy variables Claude Code (Node's fetch) reads in either spelling, the lower-case one first; an
 // empty value falls through to the other one.
 var proxyNames = []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"}
+
+// mergesNoProxy says whether l's bypass list is added to the ones its claude would otherwise read (#6238): the user's
+// settings env's, else the shell's at launch or the node's for the main conversation (withInheritedNoProxy). Only for a
+// provider that follows the
+// computer's proxy, whose list goes with it. One with a proxy of its own brings its whole list: the computer's is for
+// the computer's proxy, and its "*" or the gateway in it would turn the provider's off. Nor when the provider's own
+// environment sets the list or a proxy (it is set after everything else), or the list is "*" (no proxy at all).
+func mergesNoProxy(l proto.ManagedLauncher) bool {
+	if l.Proxy != "" || l.NoProxy == "" || l.NoProxy == "*" {
+		return false
+	}
+	return !slices.ContainsFunc(launcherEnvVars(l.Env), func(kv [2]string) bool {
+		return slices.Contains([]string{"NO_PROXY", "HTTP_PROXY", "HTTPS_PROXY"}, strings.ToUpper(kv[0]))
+	})
+}
+
+// withInheritedNoProxy is env (KEY=value entries) with the bypass lists lookup gives added to the provider's
+// (addNoProxy), for a launcher that mergesNoProxy: the provider's hosts go direct, and the inherited ones keep going
+// direct for the commands Claude runs (#6238).
+func withInheritedNoProxy(env []string, lookup func(string) string) []string {
+	upper, lower := addNoProxy(envValue(env, "NO_PROXY"), lookup)
+	out := slices.Clone(env)
+	for i, kv := range out {
+		switch k, _, _ := strings.Cut(kv, "="); k {
+		case "NO_PROXY":
+			out[i] = k + "=" + upper
+		case "no_proxy":
+			out[i] = k + "=" + lower
+		}
+	}
+	return out
+}
+
+// addNoProxy is ours (a provider's bypass list) added to each spelling's list that lookup gives, else to the other
+// spelling's, so a tool that reads one spelling first keeps the hosts it had (Go NO_PROXY, curl and the runtime under
+// Claude Code no_proxy): NO_PROXY's, then no_proxy's.
+func addNoProxy(ours string, lookup func(string) string) (upper, lower string) {
+	u, l := lookup("NO_PROXY"), lookup("no_proxy")
+	return mergeNoProxy(ours, cmp.Or(u, l)), mergeNoProxy(ours, cmp.Or(l, u))
+}
+
+// mergeNoProxy is two bypass lists as one, each host once (the first's order first); "*" in either is all of them.
+func mergeNoProxy(a, b string) string {
+	var out []string
+	seen := map[string]bool{}
+	for _, h := range strings.FieldsFunc(a+","+b, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
+		if h == "*" {
+			return "*"
+		}
+		if k := strings.ToLower(h); !seen[k] {
+			seen[k] = true
+			out = append(out, h)
+		}
+	}
+	return strings.Join(out, ",")
+}
 
 // otherSpelling is k's other spelling when k is one of proxyNames in either case, none otherwise.
 func otherSpelling(k string) []string {
@@ -241,7 +298,13 @@ func providerEnv(l proto.ManagedLauncher, model, effort string, mainConversation
 			env[k] = l.Proxy
 		}
 	}
-	set("NO_PROXY", l.NoProxy) // not no_proxy: Claude Code takes both, so the shell's own list stays in it
+	// Both spellings: Claude Code's own check reads both, but the runtime under it (Bun) takes no_proxy || NO_PROXY,
+	// so a lower-case list from the shell alone would still send the gateway through the proxy (#6238). A provider with
+	// a proxy of its own brings its whole list, an empty one too: one from the shell or the user's settings would apply
+	// to its proxy. "*" is no proxy at all.
+	if l.NoProxy != "" || l.Proxy != "" {
+		env["NO_PROXY"], env["no_proxy"] = l.NoProxy, l.NoProxy
+	}
 	if l.CustomModel != "" {
 		env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = l.CustomModel
 		set("ANTHROPIC_CUSTOM_MODEL_OPTION_NAME", l.CustomModelName)

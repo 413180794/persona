@@ -122,6 +122,20 @@ func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ou
 	for k, v := range managedSettingsEnv(l) {
 		env[k] = v
 	}
+	// A provider that follows the computer's proxy adds its bypass list to each spelling the user's settings env sets
+	// (which Claude Code applies over the environment), pinned here. A spelling they leave alone is the launch
+	// environment's, which `personad launch` fills from the shell, else the user's other spelling (withInheritedNoProxy),
+	// and which a pinned one here would replace (#6238). Any other list is pinned as it is.
+	if ours, _ := env["NO_PROXY"].(string); mergesNoProxy(l) && ours != "" {
+		user := n.userNoProxy(l)
+		for _, k := range []string{"NO_PROXY", "no_proxy"} {
+			if theirs := user[k]; theirs != "" {
+				env[k] = mergeNoProxy(ours, theirs)
+			} else {
+				delete(env, k)
+			}
+		}
+	}
 	// A proxy the user's settings give every claude that no longer answers would hold this launcher's requests until
 	// they time out; one the launcher does not set itself is taken away (deadproxy.go, #5953).
 	for _, k := range n.deadSettingsProxies(env, l.BaseURL) {

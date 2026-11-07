@@ -1,6 +1,7 @@
 package node
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -172,6 +173,9 @@ func Launch(ctx context.Context, name string, args []string) error {
 		Clear []string `json:"clear"` // what to drop from the shell's env first (envClearFor)
 		Args  []string `json:"args"`
 		Error string   `json:"error"`
+		// for a provider whose bypass list joins the inherited ones (mergesNoProxy): the user's settings env's lists, which
+		// come before the shell's. An older node does not send it: the provider's list alone.
+		NoProxyMerge map[string]string `json:"no_proxy_merge"`
 	}
 	if err := json.Unmarshal(line, &resp); err != nil {
 		return err
@@ -193,6 +197,9 @@ func Launch(ctx context.Context, name string, args []string) error {
 			resp.Clear = legacyEnvClear
 		}
 		resp.Clear, resp.Env = launchEnvFor(resp.Clear, resp.Env, os.Getenv("PERSONA_ASSISTANT") == "1")
+		if resp.NoProxyMerge != nil { // the inherited bypasses still hold for what claude runs
+			resp.Env = withInheritedNoProxy(resp.Env, func(k string) string { return cmp.Or(resp.NoProxyMerge[k], os.Getenv(k)) })
+		}
 		env = append(withoutEnv(os.Environ(), resp.Clear), resp.Env...)
 		// A proxy the shell still names that no longer answers would hold every request (deadproxy.go, #5953).
 		env = withoutDeadProxies(env, resp.Env, envValue(resp.Env, "ANTHROPIC_BASE_URL"),
@@ -271,7 +278,11 @@ func (n *Node) launcherEnv(name string) map[string]any {
 	if !ok {
 		return map[string]any{"error": "no launcher " + name + " in Persona (设置 › 模型), or the hub has not sent it yet"}
 	}
-	return map[string]any{"env": managedEnv(l), "clear": envClearFor(l), "args": l.Args, "agent": l.AgentType(), "model": l.Model}
+	out := map[string]any{"env": managedEnv(l), "clear": envClearFor(l), "args": l.Args, "agent": l.AgentType(), "model": l.Model}
+	if mergesNoProxy(l) {
+		out["no_proxy_merge"] = n.userNoProxy(l)
+	}
+	return out
 }
 
 var secretValue = regexp.MustCompile(`(?i)((?:key|token|secret|password|passwd|auth)[A-Za-z0-9_]*\s*=\s*)("[^"]*"|'[^']*'|\S+)`)

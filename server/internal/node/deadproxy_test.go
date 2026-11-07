@@ -1,9 +1,11 @@
 package node
 
 import (
+	"cmp"
 	"context"
 	"io"
 	"log"
+	"maps"
 	"net"
 	"path/filepath"
 	"slices"
@@ -113,8 +115,9 @@ func TestLauncherEnvLines(t *testing.T) {
 }
 
 // A provider's proxy goes in both spellings: Node's fetch reads the lower-case one first, so a lower-case proxy in the
-// user's settings would otherwise win. Its NO_PROXY goes in upper case only: Claude Code reads both spellings
-// together, so the shell's own no_proxy list still counts.
+// user's settings would otherwise win. So does its bypass list: Claude Code's own check reads both, but the runtime
+// under it takes no_proxy || NO_PROXY, so the shell's lower-case list would still win (#6238). With a proxy of its
+// own, an empty list is set too.
 func TestProviderProxyBothSpellings(t *testing.T) {
 	env := providerEnv(proto.ManagedLauncher{Name: "p", Kind: "api", Proxy: "http://proxy.example:3128", NoProxy: "gw.example.com"}, "", "", false)
 	for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
@@ -122,12 +125,79 @@ func TestProviderProxyBothSpellings(t *testing.T) {
 			t.Errorf("%s = %q", k, env[k])
 		}
 	}
-	if _, lower := env["no_proxy"]; env["NO_PROXY"] != "gw.example.com" || lower {
+	if env["NO_PROXY"] != "gw.example.com" || env["no_proxy"] != "gw.example.com" {
 		t.Errorf("no proxy: %v", env)
 	}
+	env = providerEnv(proto.ManagedLauncher{Name: "p", Kind: "api", Proxy: "http://proxy.example:3128"}, "", "", false)
+	if v, ok := env["no_proxy"]; !ok || v != "" || env["NO_PROXY"] != "" {
+		t.Errorf("its own proxy with no list: %v", env)
+	}
+	if _, ok := providerEnv(proto.ManagedLauncher{Name: "p", Kind: "api"}, "", "", false)["no_proxy"]; ok {
+		t.Error("following the computer's proxy with no list sets one")
+	}
 	shell := []string{"HTTPS_PROXY=p", "NO_PROXY=old", "no_proxy=old", "PATH=/bin"}
-	if got := withoutEnv(shell, envClearFor(proto.ManagedLauncher{Name: "p", Kind: "api", NoProxy: "gw.example.com"})); !slices.Equal(got, []string{"HTTPS_PROXY=p", "no_proxy=old", "PATH=/bin"}) {
+	if got := withoutEnv(shell, envClearFor(proto.ManagedLauncher{Name: "p", Kind: "api", NoProxy: "gw.example.com"})); !slices.Equal(got, []string{"HTTPS_PROXY=p", "PATH=/bin"}) {
 		t.Errorf("no proxy alone: %q", got)
+	}
+	// At launch the inherited lists go into the provider's (their hosts keep going direct for what Claude runs), each
+	// host once: the user's settings' first, as Claude Code applies them over the shell's. One spelling given is both
+	// spellings'; with two, each keeps its own.
+	ours := []string{"NO_PROXY=gw.example.com", "no_proxy=gw.example.com", "PATH=/bin"}
+	for _, tc := range []struct {
+		user, shell  map[string]string
+		upper, lower string
+	}{
+		{nil, map[string]string{"no_proxy": "localhost, .corp.example,GW.example.com"}, "gw.example.com,localhost,.corp.example", "gw.example.com,localhost,.corp.example"},
+		{nil, map[string]string{"NO_PROXY": ".corp.example"}, "gw.example.com,.corp.example", "gw.example.com,.corp.example"},
+		{nil, map[string]string{"no_proxy": "localhost", "NO_PROXY": ".corp.example"}, "gw.example.com,.corp.example", "gw.example.com,localhost"},
+		{nil, map[string]string{}, "gw.example.com", "gw.example.com"},
+		// The user's settings set NO_PROXY only: the runtime under Claude Code, reading no_proxy, keeps those hosts.
+		{map[string]string{"NO_PROXY": "localhost,.corp.example"}, map[string]string{}, "gw.example.com,localhost,.corp.example", "gw.example.com,localhost,.corp.example"},
+		{map[string]string{"NO_PROXY": ".corp.example"}, map[string]string{"no_proxy": "localhost", "NO_PROXY": "shell.example"}, "gw.example.com,.corp.example", "gw.example.com,localhost"},
+	} {
+		got := withInheritedNoProxy(ours, func(k string) string { return cmp.Or(tc.user[k], tc.shell[k]) })
+		if want := []string{"NO_PROXY=" + tc.upper, "no_proxy=" + tc.lower, "PATH=/bin"}; !slices.Equal(got, want) {
+			t.Errorf("user %v, shell %v: %q", tc.user, tc.shell, got)
+		}
+	}
+	if got := mergeNoProxy("a.example", "*"); got != "*" {
+		t.Errorf("a list with *: %q", got)
+	}
+}
+
+// Only a provider that follows the computer's proxy adds its bypass list to the computer's (#6238). One with a proxy
+// of its own, in its fields or its environment, brings its whole list, as one whose environment sets the list does:
+// the computer's "*", or the gateway in its list, would turn the provider's proxy off. "*" is no proxy at all.
+func TestOnlyAFollowingProviderMergesItsBypassList(t *testing.T) {
+	follow := proto.ManagedLauncher{Name: "p", Kind: "api", NoProxy: "gw.example.com"}
+	for _, tc := range []struct {
+		name string
+		l    proto.ManagedLauncher
+		want bool
+	}{
+		{"follow", follow, true},
+		{"another variable of its own", proto.ManagedLauncher{Name: "p", NoProxy: "gw.example.com", Env: "X_TEAM=1"}, true},
+		{"its own proxy", proto.ManagedLauncher{Name: "p", Proxy: "http://proxy.example:3128", NoProxy: "gw.example.com"}, false},
+		{"a proxy in its environment", proto.ManagedLauncher{Name: "p", NoProxy: "gw.example.com", Env: "https_proxy=http://proxy.example:3128"}, false},
+		{"the list in its environment", proto.ManagedLauncher{Name: "p", NoProxy: "gw.example.com", Env: "export NO_PROXY=other.example"}, false},
+		{"no proxy at all", proto.ManagedLauncher{Name: "p", NoProxy: "*"}, false},
+		{"no list", proto.ManagedLauncher{Name: "p", Kind: "api"}, false},
+	} {
+		if got := mergesNoProxy(tc.l); got != tc.want {
+			t.Errorf("%s: %v", tc.name, got)
+		}
+	}
+	// `personad launch` is told to merge, with the user's settings' lists, which come before the shell's.
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, "profile"))
+	writeFile(t, filepath.Join(home, "profile", "settings.json"), `{"env":{"NO_PROXY":".corp.example","HTTPS_PROXY":"http://proxy.example:3128"}}`)
+	n := &Node{home: home}
+	n.setManaged([]proto.ManagedLauncher{follow, {Name: "o", Kind: "api", Proxy: "http://proxy.example:3128", NoProxy: "gw.example.com"}})
+	if got, _ := n.launcherEnv("p")["no_proxy_merge"].(map[string]string); !maps.Equal(got, map[string]string{"NO_PROXY": ".corp.example"}) {
+		t.Errorf("follow: %v", n.launcherEnv("p"))
+	}
+	if _, told := n.launcherEnv("o")["no_proxy_merge"]; told {
+		t.Errorf("its own proxy: %v", n.launcherEnv("o"))
 	}
 }
 
@@ -202,8 +272,45 @@ func TestManagedSettingsTakeAwayADeadUserProxy(t *testing.T) {
 		if env["https_proxy"] != alive || env["HTTPS_PROXY"] != alive {
 			t.Errorf("the launcher's own proxy: %v", env)
 		}
-		if env["NO_PROXY"] != "gw.example.com" {
-			t.Errorf("the launcher's own NO_PROXY: %v", env)
+		// Its own proxy brings its own bypass list, pinned over the user's settings in both spellings.
+		if env["NO_PROXY"] != "gw.example.com" || env["no_proxy"] != "gw.example.com" {
+			t.Errorf("the launcher's own bypass list: %v", env)
+		}
+	}
+}
+
+// A provider that follows the computer's proxy adds its bypass list to each spelling the user's settings set (which
+// Claude Code applies over the environment) and pins those; a spelling they leave alone is the launch environment's,
+// with the shell's (#6238). One with its own proxy pins its own list, an empty one too; "*" is pinned as it is.
+func TestManagedSettingsPinTheBypassList(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, "profile"))
+	n := &Node{home: home, dir: filepath.Join(home, ".persona"), logger: log.New(io.Discard, "", 0)}
+	n.setManaged([]proto.ManagedLauncher{
+		{Name: "f", Kind: "api", BaseURL: "https://gw.example.com", Model: "m1", NoProxy: "gw.example.com"},
+		{Name: "o", Kind: "api", BaseURL: "https://gw.example.com", Model: "m1", Proxy: "http://proxy.example:3128", NoProxy: "gw.example.com"},
+		{Name: "d", Kind: "api", BaseURL: "https://gw.example.com", Model: "m1", NoProxy: "*"},
+		{Name: "e", Kind: "api", BaseURL: "https://gw.example.com", Model: "m1", Proxy: "http://proxy.example:3128"},
+	})
+	pinned := func(name string) (upper, lower any) {
+		env, _ := readSettings(t, n.claudeSettings(context.Background(), name, "", home))["env"].(map[string]any)
+		return env["NO_PROXY"], env["no_proxy"]
+	}
+	settings := filepath.Join(home, "profile", "settings.json")
+	for _, tc := range []struct {
+		user, name   string
+		upper, lower any
+	}{
+		{`{}`, "f", nil, nil},
+		{`{"env":{"NO_PROXY":".corp.example"}}`, "f", "gw.example.com,.corp.example", nil},
+		{`{"env":{"no_proxy":"localhost,.corp.example","NO_PROXY":"upper.example"}}`, "f", "gw.example.com,upper.example", "gw.example.com,localhost,.corp.example"},
+		{`{"env":{"no_proxy":"localhost"}}`, "o", "gw.example.com", "gw.example.com"},
+		{`{"env":{"no_proxy":"*"}}`, "e", "", ""},
+		{`{"env":{"no_proxy":"localhost"}}`, "d", "*", "*"},
+	} {
+		writeFile(t, settings, tc.user)
+		if up, low := pinned(tc.name); up != tc.upper || low != tc.lower {
+			t.Errorf("%s with %s: %v %v", tc.name, tc.user, up, low)
 		}
 	}
 }

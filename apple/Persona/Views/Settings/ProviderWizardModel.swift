@@ -61,6 +61,26 @@ enum LauncherName {
 
     static let anthropicURL = "https://api.anthropic.com"
 
+    /// Configure Proxy's three choices (#6238).
+    enum ProxyMode: String, CaseIterable, Identifiable {
+        /// No proxy of its own: the computer's (`personad launch` skips one that no longer answers, #5953).
+        case follow
+        /// The gateway goes direct, everything else the computer's way: the gateway's host as `no_proxy`. Not "*",
+        /// which would send the web pages and commands of the agent direct too.
+        case direct
+        /// Its own server.
+        case manual
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .follow: String(localized: "Follow This Computer")
+            case .direct: String(localized: "No Proxy")
+            case .manual: String(localized: "Manual")
+            }
+        }
+    }
+
     let existing: LauncherView?
     var kind: Kind = .custom
     var name = ""
@@ -91,6 +111,9 @@ enum LauncherName {
     var subagentModel = ""
     var subagentForce = false
     var effort = ""
+    /// How the provider reaches its gateway (#6238), as iOS Settings' Configure Proxy: its own proxy or none. `proxy`
+    /// is Manual's server, `noProxy` the hosts that go direct (Follow and Manual); No Proxy is the gateway's host.
+    var proxyMode: ProxyMode = .follow
     var proxy = ""
     var noProxy = ""
     /// Numbers as typed; empty or 0 is the default.
@@ -188,6 +211,8 @@ enum LauncherName {
         effort = e.effort ?? ""
         proxy = e.proxy ?? ""
         noProxy = e.noProxy ?? ""
+        proxyMode = Self.proxyMode(proxy: proxy, noProxy: noProxy, gateway: gatewayHost)
+        if proxyMode == .direct { noProxy = "" }
         timeoutMS = Self.number(e.timeoutMS)
         compactWindow = Self.number(e.compactWindow)
         maxContext = Self.number(e.maxContext)
@@ -229,7 +254,7 @@ enum LauncherName {
 
     var canTest: Bool { connectionReady && !testModel.isEmpty && !testing }
 
-    var canSave: Bool { connectionReady && models.contains { $0.id == defaultModel } && !saving }
+    var canSave: Bool { connectionReady && models.contains { $0.id == defaultModel } && proxyProblem == nil && !saving }
 
     /// What the models step lists: the picked ones, then the rest of what the gateway serves.
     var choices: [ProviderModel] {
@@ -303,16 +328,61 @@ enum LauncherName {
         }
     }
 
+    /// The choice a stored provider opens on: its own server is Manual, a bypass list of the gateway's host alone No
+    /// Proxy (what Follow with that list does too), anything else Follow, "*" included.
+    static func proxyMode(proxy: String, noProxy: String, gateway: String) -> ProxyMode {
+        if !proxy.trimmingCharacters(in: .whitespaces).isEmpty { return .manual }
+        let hosts = noProxy.lowercased().split { $0 == "," || $0.isWhitespace }
+        return !gateway.isEmpty && hosts == [Substring(gateway)] ? .direct : .follow
+    }
+
+    /// The host of the gateway's address, lower case; "" without one.
+    var gatewayHost: String { URL(string: address)?.host()?.lowercased() ?? "" }
+
+    /// What the choice stores as `proxy` and `no_proxy`.
+    var proxyValues: (proxy: String, noProxy: String) {
+        let t = { (s: String) in s.trimmingCharacters(in: .whitespaces) }
+        switch proxyMode {
+        case .follow: return ("", t(noProxy))
+        case .direct: return ("", gatewayHost)
+        case .manual: return (t(proxy), t(noProxy))
+        }
+    }
+
+    /// Manual without a server, or one the hub refuses (`checkLauncher`: http, https, socks5 or socks5h, and no user or
+    /// password, as the proxy goes back to every client as is): nil when it will do.
+    var proxyProblem: String? {
+        guard proxyMode == .manual else { return nil }
+        let server = proxy.trimmingCharacters(in: .whitespaces)
+        if server.isEmpty { return String(localized: "Enter the proxy server, or choose Follow This Computer.") }
+        guard let u = URL(string: server), ["http", "https", "socks5", "socks5h"].contains(u.scheme?.lowercased() ?? ""),
+              !(u.host() ?? "").isEmpty || u.port != nil else { // the hub takes http://:8080 (this computer) too
+            return String(localized: "The proxy starts with http://, https:// or socks5://, like http://127.0.0.1:7890.")
+        }
+        if u.user() != nil || u.password() != nil { return String(localized: "The proxy can't include a user name or password.") }
+        return nil
+    }
+
+    /// The Proxy row's value: the choice, Manual's server itself.
+    var proxySummary: String {
+        switch proxyMode {
+        case .follow: String(localized: "Follow This Computer")
+        case .direct: String(localized: "No Proxy")
+        case .manual: proxy.trimmingCharacters(in: .whitespaces).isEmpty ? String(localized: "Manual") : proxy.trimmingCharacters(in: .whitespaces)
+        }
+    }
+
     var input: LauncherInput {
         let e = existing
         let t = { (s: String) in s.trimmingCharacters(in: .whitespaces) }
+        let (proxyValue, noProxyValue) = proxyValues
         return LauncherInput(name: trimmedName, baseURL: address, model: defaultModel, smallModel: t(smallModel), subagentModel: t(subagentModel),
                              customModel: e?.customModel ?? "", customModelName: e?.customModelName ?? "",
                              customModelDescription: e?.customModelDescription ?? "", args: e?.args ?? [],
                              apiKey: key.isEmpty ? nil : key, kind: e?.kind ?? "launcher", api: "messages", auth: authMode,
                              models: models, opusModel: t(opusModel), sonnetModel: t(sonnetModel), haikuModel: t(haikuModel),
-                             fableModel: t(fableModel), subagentForce: subagentForce, headers: headersValue, env: envValue, proxy: t(proxy),
-                             noProxy: t(noProxy), timeoutMS: Int(t(timeoutMS)) ?? 0, compactWindow: Int(t(compactWindow)) ?? 0,
+                             fableModel: t(fableModel), subagentForce: subagentForce, headers: headersValue, env: envValue, proxy: proxyValue,
+                             noProxy: noProxyValue, timeoutMS: Int(t(timeoutMS)) ?? 0, compactWindow: Int(t(compactWindow)) ?? 0,
                              maxContext: Int(t(maxContext)) ?? 0, effort: t(effort))
     }
 

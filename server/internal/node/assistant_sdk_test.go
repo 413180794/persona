@@ -261,6 +261,46 @@ func TestAssistantSDKStartKeepsTheKeyOffTheCommandLine(t *testing.T) {
 	}
 }
 
+// The main conversation's provider that follows the computer's proxy adds its bypass list to the one its claude would
+// read without it, the user's settings env's, else the node's (#6238); one with its own proxy keeps its own.
+func TestSDKStartMergesAFollowingProvidersBypassList(t *testing.T) {
+	agentSandboxFakes(t, macSandbox)
+	b := sdkBridge{js: jsRuntime{Path: "/opt/bin/node"}, script: "/x/bridge.mjs", claude: "/opt/bin/claude"}
+	n := agentNode(t, false)
+	profile := filepath.Join(n.home, "profile")
+	t.Setenv("CLAUDE_CONFIG_DIR", profile)
+	n.setManaged([]proto.ManagedLauncher{
+		{Name: "f", Kind: "api", BaseURL: "https://gw.example.com", Model: "m1", NoProxy: "gw.example.com"},
+		{Name: "o", Kind: "api", BaseURL: "https://gw.example.com", Model: "m1", Proxy: "http://proxy.example:3128", NoProxy: "gw.example.com"},
+	})
+	pinned := func(launcher string) (any, any) {
+		t.Helper()
+		s := sdkStart{id: "s1", cwd: filepath.Join(n.dir, "assistant"), mcp: map[string]any{}}
+		_, first, err := n.sdkCommand(b, launcher, s, []string{"PATH=/usr/bin", "no_proxy=localhost"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var start struct {
+			Options struct{ Settings struct{ Env map[string]any } }
+		}
+		if err := json.Unmarshal(first, &start); err != nil {
+			t.Fatal(err)
+		}
+		return start.Options.Settings.Env["NO_PROXY"], start.Options.Settings.Env["no_proxy"]
+	}
+	if up, low := pinned("f"); up != "gw.example.com,localhost" || low != up {
+		t.Errorf("with the node's list: %v %v", up, low)
+	}
+	// The user's settings set the upper-case one: it is that spelling's; the lower-case one is still the node's.
+	writeFile(t, filepath.Join(profile, "settings.json"), `{"env":{"NO_PROXY":".corp.example"}}`)
+	if up, low := pinned("f"); up != "gw.example.com,.corp.example" || low != "gw.example.com,localhost" {
+		t.Errorf("with the user's settings' list: %v %v", up, low)
+	}
+	if up, low := pinned("o"); up != "gw.example.com" || low != up {
+		t.Errorf("its own proxy: %v %v", up, low)
+	}
+}
+
 // Deltas and the result come through as from the CLI; the modes go as control requests the bridge answers.
 func TestAssistantSDKStreamsAndControlRequests(t *testing.T) {
 	f := sdkTest(t)

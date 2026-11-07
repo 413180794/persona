@@ -713,10 +713,15 @@ struct ProviderWizard: View {
             numberField(String(localized: "Auto-Compact Window"), $wizard.compactWindow, String(localized: "By model"))
             numberField(String(localized: "Max Context"), $wizard.maxContext, String(localized: "By model"))
             numberField(String(localized: "Request Timeout (ms)"), $wizard.timeoutMS, String(localized: "Default 3000000"))
-            TextField(String(localized: "Proxy, like http://127.0.0.1:7890"), text: $wizard.proxy)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-            TextField(String(localized: "Addresses that bypass the proxy (NO_PROXY)"), text: $wizard.noProxy)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            // As iOS Settings' Configure Proxy: one row saying the choice, its page behind it (#6238).
+            NavigationLink {
+                ProviderProxyPage(wizard: wizard)
+            } label: {
+                LabeledContent(String(localized: "Proxy")) {
+                    Text(wizard.proxySummary).foregroundStyle(wizard.proxyProblem == nil ? Color.secondary : Theme.danger)
+                }
+                .lineLimit(1)
+            }
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 TextField(wizard.hasStoredHeaders ? String(localized: "Headers set (hidden; leave empty to keep)") : String(localized: "Headers, one Name: value per line"),
                           text: $wizard.headers, axis: .vertical)
@@ -746,7 +751,7 @@ struct ProviderWizard: View {
                 } else if wizard.clearEnv {
                     Text("Saved environment will be cleared when you save").font(Theme.Font.label).foregroundStyle(Theme.cautionText)
                 } else {
-                    Text("Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, add the gateway's host to NO_PROXY instead.")
+                    Text("Set last, over the fields above and the computer's own. NAME= with nothing after it sets a variable empty; to go around a proxy, choose No Proxy under Proxy instead.")
                         .font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
