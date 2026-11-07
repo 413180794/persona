@@ -598,6 +598,8 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
         groups.value.forEach { it.reconnect() }
     }
 
+    override val groupLinks get() = groups.value.map { group -> GroupLink(group.state) { refreshNetwork(); group.reconnect() } }
+
     override fun send(message: JsonObject): Boolean = selected.value?.connectionOrNull?.send(message) ?: false
 
     override fun onStart(owner: LifecycleOwner) {

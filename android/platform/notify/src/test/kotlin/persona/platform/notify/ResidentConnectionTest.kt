@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import persona.core.contracts.api.ConnectionState
+import persona.core.contracts.api.GroupLink
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.ServerEvent
 
@@ -15,6 +16,19 @@ class ResidentConnectionTest {
         override val events = MutableSharedFlow<ServerEvent>()
         var reconnects = 0
         override fun reconnect() { reconnects++ }
+        override fun send(message: JsonObject) = false
+    }
+
+    /** Two groups, the first selected; [reconnect] restarts both, as the app runtime does. */
+    private class TwoGroupConnection(selected: ConnectionState, other: ConnectionState) : HubConnection {
+        private val selectedState = MutableStateFlow(selected)
+        private val otherState = MutableStateFlow(other)
+        override val state = selectedState
+        override val events = MutableSharedFlow<ServerEvent>()
+        var selectedReconnects = 0
+        var otherReconnects = 0
+        override fun reconnect() { selectedReconnects++; otherReconnects++ }
+        override val groupLinks = listOf(GroupLink(selectedState) { selectedReconnects++ }, GroupLink(otherState) { otherReconnects++ })
         override fun send(message: JsonObject) = false
     }
 
@@ -34,6 +48,18 @@ class ResidentConnectionTest {
             val connection = CountingConnection(state)
             ResidentConnection.resume(connection)
             assertEquals("$state", 1, connection.reconnects)
+        }
+    }
+
+    // With two hub groups, resume read only the selected group's state and reconnect() restarted both: a selected
+    // group offline dropped the other's live connection, and a selected group online left the other waiting (#5311).
+    @Test fun eachGroupIsResumedOnItsOwnState() {
+        for ((selected, other) in listOf(ConnectionState.Connecting to ConnectionState.Online,
+            ConnectionState.Online to ConnectionState.Connecting)) {
+            val connection = TwoGroupConnection(selected, other)
+            ResidentConnection.resume(connection)
+            assertEquals("$selected/$other selected", if (selected == ConnectionState.Online) 0 else 1, connection.selectedReconnects)
+            assertEquals("$selected/$other other", if (other == ConnectionState.Online) 0 else 1, connection.otherReconnects)
         }
     }
 
