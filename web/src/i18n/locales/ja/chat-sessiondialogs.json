@@ -54,5 +54,15 @@
   "always_empty": "保存された権限はありません。",
   "always_unknown": "名前のない権限",
   "always_revoke": "取り消す",
-  "always_retry": "再試行"
+  "always_retry": "再試行",
+  "wt_title": "このエージェントは Persona が作った worktree で作業していました",
+  "wt_keep": "worktree を残す",
+  "wt_remove": "削除する",
+  "wt_delete_branch": "ブランチ {branch} も削除する",
+  "wt_dirty_other": "コミットされていない変更が {count} ファイルあります。worktree を削除すると失われます。",
+  "wt_unmerged_other": "ブランチに {main} にないコミットが {count} 件あります。ブランチを削除すると失われます。",
+  "wt_confirm_loss": "これらの変更が失われることを理解しています",
+  "wt_removed": "worktree を削除しました",
+  "wt_removed_branch": "worktree とブランチを削除しました",
+  "wt_remove_failed": "worktree を削除できませんでした：{error}"
 }

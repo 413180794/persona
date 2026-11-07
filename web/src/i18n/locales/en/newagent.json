@@ -29,5 +29,10 @@
   "permission_mode": "Permission mode",
   "permission_mode_hint": "You can change the mode in the conversation later; Allow everything can only be picked when starting.",
   "no_computer_title": "No computers yet",
-  "no_computer_body": "An agent runs on one of your computers, so there is nothing to pick here yet. Add one first."
+  "no_computer_body": "An agent runs on one of your computers, so there is nothing to pick here yet. Add one first.",
+  "worktree": "In a new worktree",
+  "worktree_hint": "A branch and a checkout of its own: the agent changes code there, and this folder stays as it is.",
+  "worktree_branch": "Branch",
+  "worktree_path": "Checks out to {path}",
+  "worktree_failed": "Couldn’t create the worktree: {error}"
 }

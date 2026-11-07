@@ -149,3 +149,80 @@ export function onOpenNewWorktree(l: (r: WorktreeRequest) => void) {
     openers.delete(l);
   };
 }
+
+// ── a new agent's own worktree (#6115) ──
+// worktree/add makes one from the agent's folder on persona/<its name>; worktree/status says whether a folder is one of
+// Persona's and what removing it would lose; worktree/remove takes it away when the agent is closed and the user says so.
+
+/** What worktree/status says of a folder (server/internal/proto/panes.go WorktreeStatus). `path` is set for any folder
+ *  in a repository (its top level), `worktree` only for a linked worktree, `ours` only for one Persona made. */
+export interface WorktreeStatus {
+  worktree: boolean;
+  ours: boolean;
+  path?: string;
+  branch?: string;
+  root?: string;
+  main_branch?: string;
+  /** Where a new agent's worktree of this repository goes (newer nodes). */
+  checkouts?: string;
+  dirty: number;
+  unmerged: number;
+}
+
+export interface WorktreeAdded {
+  path: string;
+  branch: string;
+  root: string;
+}
+
+/** The branch a new agent's worktree gets, as the node names it: persona/<its name as a slug, 40 at most>, "agent"
+ *  when the name has no ASCII letters or digits (node agentBranch). */
+export function agentBranch(nameHint: string): string {
+  let slug = branchSlug(nameHint);
+  if (slug.length > 40) slug = slug.slice(0, 40).replace(/-+$/, "");
+  return `persona/${slug || "agent"}`;
+}
+
+/** What names the agent's branch: its prompt, or its folder's name when the prompt has no ASCII letters or digits to
+ *  name a branch with (a prompt in Chinese makes persona/<folder>, not persona/agent). */
+export function agentNameHint(prompt: string, cwd: string): string {
+  const p = prompt.trim();
+  return branchSlug(p) ? p : (cwd.trim().replace(/\/+$/, "").split("/").pop() ?? "");
+}
+
+/** Null when the computer cannot say (an older node, offline): the switch and the cleanup then stay out of the way. */
+export async function worktreeStatus(mid: string, cwd: string, signal?: AbortSignal): Promise<WorktreeStatus | null> {
+  try {
+    return await api<WorktreeStatus>(`/machines/${enc(mid)}/worktree/status`, { method: "POST", json: { cwd }, signal });
+  } catch {
+    return null;
+  }
+}
+
+export function addAgentWorktree(mid: string, cwd: string, nameHint: string, branch = ""): Promise<WorktreeAdded> {
+  return api<WorktreeAdded>(`/machines/${enc(mid)}/worktree/add`, {
+    method: "POST",
+    json: { cwd, ...(nameHint ? { name_hint: nameHint } : {}), ...(branch.trim() ? { branch: branch.trim() } : {}) },
+  });
+}
+
+/** What removing a worktree would lose: changed files, and with the branch, its commits the main branch lacks. */
+export function worktreeLoss(st: WorktreeStatus, deleteBranch: boolean): { dirty: number; unmerged: number } {
+  return { dirty: st.dirty, unmerged: deleteBranch ? st.unmerged : 0 };
+}
+
+/** Removes it once its agent is closed: the node may still list the agent for a moment (worktree_in_use), so a few
+ *  tries a second apart. `force` only when the user confirmed what is lost. */
+export async function removeAgentWorktree(mid: string, path: string, o: { deleteBranch: boolean; force: boolean }, tries = 6, wait = 1000): Promise<{ removed: boolean; branch_deleted: boolean }> {
+  for (let i = 1; ; i++) {
+    try {
+      return await api<{ removed: boolean; branch_deleted: boolean }>(`/machines/${enc(mid)}/worktree/remove`, {
+        method: "POST",
+        json: { path, ...(o.deleteBranch ? { delete_branch: true } : {}), ...(o.force ? { force: true } : {}) },
+      });
+    } catch (e) {
+      if (i >= tries || !(e instanceof ApiError) || e.code !== "worktree_in_use") throw e;
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}

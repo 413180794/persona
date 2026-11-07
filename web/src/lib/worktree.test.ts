@@ -5,8 +5,8 @@ vi.mock("./router", () => ({ href: () => "/", navigate: vi.fn() }));
 import { ApiError, errorText } from "./api";
 import { navigate } from "./router";
 import {
-  branchProblem, branchSlug, createWorktree, emptyForm, formProblem, onOpenNewWorktree, openCreated, openNewWorktree, prepareWorktree, suggestedPath,
-  typeBranch, typePath, WORKTREE_COPY, worktreeProblem,
+  addAgentWorktree, agentBranch, agentNameHint, branchProblem, branchSlug, createWorktree, emptyForm, formProblem, onOpenNewWorktree, openCreated, openNewWorktree, prepareWorktree,
+  removeAgentWorktree, suggestedPath, typeBranch, typePath, WORKTREE_COPY, worktreeLoss, worktreeProblem, worktreeStatus,
 } from "./worktree";
 
 function response(body: unknown, status = 200) {
@@ -126,5 +126,55 @@ describe("opening the dialog", () => {
     off();
     openNewWorktree({ mid: "m1", workspaceId: "w1" });
     expect(seen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a new agent's own worktree (#6115)", () => {
+  it("names its branch as the node does", () => {
+    expect(agentBranch("Fix the login crash!")).toBe("persona/fix-the-login-crash");
+    expect(agentBranch("修登录")).toBe("persona/agent");
+    // a prompt with nothing to name a branch with: the folder's name
+    expect(agentBranch(agentNameHint("修登录", "/home/me/code/weather/"))).toBe("persona/weather");
+    expect(agentBranch(agentNameHint(" Fix login ", "/home/me/code/weather"))).toBe("persona/fix-login");
+    expect(agentNameHint("", "")).toBe("");
+    expect(agentBranch("a".repeat(30) + " " + "b".repeat(30))).toBe("persona/" + "a".repeat(30) + "-" + "b".repeat(9));
+  });
+
+  it("counts what removing it loses: the branch's commits only with the branch", () => {
+    const st = { worktree: true, ours: true, path: "/wt/x", branch: "persona/x", dirty: 2, unmerged: 3 };
+    expect(worktreeLoss(st, false)).toEqual({ dirty: 2, unmerged: 0 });
+    expect(worktreeLoss(st, true)).toEqual({ dirty: 2, unmerged: 3 });
+  });
+
+  it("asks the computer, and stays out of the way when it cannot say", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ worktree: false, ours: false, path: "/r", dirty: 0, unmerged: 0 })).mockResolvedValueOnce(response({ error: "unknown method" }, 409));
+    vi.stubGlobal("fetch", fetcher);
+    expect((await worktreeStatus("m", "/r/sub"))?.path).toBe("/r");
+    expect(await worktreeStatus("m", "/r/sub")).toBeNull();
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/machines/m/worktree/status");
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ cwd: "/r/sub" });
+  });
+
+  it("makes it with the agent's name, a branch only when typed", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ path: "/wt/proj/persona-x", branch: "persona/x", root: "/r" }));
+    vi.stubGlobal("fetch", fetcher);
+    await addAgentWorktree("m", "/r", "x");
+    await addAgentWorktree("m", "/r", "x", " feat/y ");
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ cwd: "/r", name_hint: "x" });
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ cwd: "/r", name_hint: "x", branch: "feat/y" });
+  });
+
+  it("removes it once the closed agent is gone, trying again while the node still lists it", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ code: "worktree_in_use", error: "an agent still runs in this worktree" }, 409))
+      .mockResolvedValueOnce(response({ removed: true, branch_deleted: true }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(removeAgentWorktree("m", "/wt/x", { deleteBranch: true, force: false }, 3, 1)).resolves.toEqual({ removed: true, branch_deleted: true });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ path: "/wt/x", delete_branch: true });
+    // another refusal is said at once
+    fetcher.mockReset().mockResolvedValue(response({ code: "worktree_dirty", error: "the worktree has uncommitted changes" }, 409));
+    await expect(removeAgentWorktree("m", "/wt/x", { deleteBranch: false, force: false }, 3, 1)).rejects.toBeInstanceOf(ApiError);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

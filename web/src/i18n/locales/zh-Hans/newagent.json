@@ -29,5 +29,10 @@
   "permission_mode": "权限模式",
   "permission_mode_hint": "权限模式在对话里也能随时改，全部放行只能在新开时选。",
   "no_computer_title": "还没有电脑",
-  "no_computer_body": "Agent 要在你的一台电脑上运行，这里才有电脑可选。先添加一台。"
+  "no_computer_body": "Agent 要在你的一台电脑上运行，这里才有电脑可选。先添加一台。",
+  "worktree": "在新 worktree 里",
+  "worktree_hint": "给它单独开一个分支和检出：Agent 在那里改代码，这个文件夹不受影响。",
+  "worktree_branch": "分支",
+  "worktree_path": "检出到 {path}",
+  "worktree_failed": "没能建 worktree：{error}"
 }

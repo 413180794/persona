@@ -29,5 +29,10 @@
   "permission_mode": "権限モード",
   "permission_mode_hint": "権限モードはチャット中にも変更できます。「すべて許可」は新規作成時にのみ選べます。",
   "no_computer_title": "まだコンピューターがありません",
-  "no_computer_body": "エージェントはあなたのコンピューターで動くため、まだ選べるものがありません。まず 1 台追加してください。"
+  "no_computer_body": "エージェントはあなたのコンピューターで動くため、まだ選べるものがありません。まず 1 台追加してください。",
+  "worktree": "新しい worktree で",
+  "worktree_hint": "専用のブランチとチェックアウトを作ります。エージェントはそこでコードを変え、このフォルダはそのままです。",
+  "worktree_branch": "ブランチ",
+  "worktree_path": "チェックアウト先：{path}",
+  "worktree_failed": "worktree を作れませんでした：{error}"
 }

@@ -3685,6 +3685,36 @@ def worktree_route(h, p, body):
     return h.send_json({"workspace_id": wid, "tab_id": wid + ":t1", "pane": wid + ":p1", "terminal": "pane:" + wid + ":p1", "path": path, "branch": branch})
 
 
+# MOCK_AGENT_WORKTREE=1 (#6115): a new agent in a worktree of its own. worktree/status says a folder under
+# /Users/me/code/<repo> is in a repository, and one under <repo>/.worktrees/ is one of Persona's worktrees (the widget one
+# with 2 changed files and 3 commits main lacks, to see what removing it loses); worktree/add makes persona/<name> (a name
+# with "taken" in it is refused, to see the error); worktree/remove is recorded at GET /mock/node_actions.
+AGENT_WORKTREE = bool(os.environ.get("MOCK_AGENT_WORKTREE"))
+
+
+def agent_worktree_route(h, p, body):
+    """POST /api/v1/machines/{mid}/worktree/{status,add,remove} (#6115)."""
+    mid, verb = p.split("/")[4], p.split("/")[6]
+    NODE_ACTIONS.append({"machine": mid, "route": "worktree/" + verb, **body})
+    if verb == "status":
+        cwd = str(body.get("cwd", "")).rstrip("/")
+        m = re.match(r"(/Users/me/code/[^/]+)(?:/\.worktrees/([^/]+))?", cwd)
+        if not m:
+            return h.send_json({"worktree": False, "ours": False, "dirty": 0, "unmerged": 0})
+        root, wt = m.group(1), m.group(2)
+        if not wt:
+            return h.send_json({"worktree": False, "ours": False, "path": root, "branch": "main", "checkouts": root + "/.worktrees", "dirty": 0, "unmerged": 0})
+        busy = wt == "widget"
+        return h.send_json({"worktree": True, "ours": True, "path": root + "/.worktrees/" + wt, "branch": "persona/" + wt, "root": root,
+                            "main_branch": "main", "checkouts": root + "/.worktrees", "dirty": 2 if busy else 0, "unmerged": 3 if busy else 0})
+    if verb == "add":
+        name = str(body.get("branch") or "persona/" + (re.sub(r"[^a-z0-9]+", "-", str(body.get("name_hint", "")).lower()).strip("-")[:40] or "agent"))
+        if "taken" in name:
+            return h.send_json({"error": "fatal: a branch named '%s' already exists" % name, "code": "worktree_failed"}, 409)
+        root = str(body.get("cwd", "")).rstrip("/")
+        return h.send_json({"path": root + "/.worktrees/" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-"), "branch": name, "root": root})
+    return h.send_json({"removed": True, "branch_deleted": bool(body.get("delete_branch"))})
+
 def node_action(h, p, body):
     """POST /api/v1/machines/{mid}/{panes,tabs}/{close,split,agent,git,rename}: what the menus ask of a computer."""
     mid, area, verb = p.split("/")[4], p.split("/")[5], p.split("/")[6]
@@ -5482,7 +5512,7 @@ if os.environ.get("MOCK_LARK_BRAVE_CLIMB"):
     split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
     inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
     inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join(""[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
+    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
     legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
     reply = _lm("214", "我", "好的", mine=True, mins=36)
     reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
@@ -12522,6 +12552,8 @@ class H(BaseHTTPRequestHandler):
             return node_action(self, p, json.loads(self.last_body or b"{}"))
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/worktree/(prepare|create)", p):
             return worktree_route(self, p, json.loads(self.last_body or b"{}"))
+        if AGENT_WORKTREE and re.fullmatch(r"/api/v1/machines/[^/]+/worktree/(status|add|remove)", p):
+            return agent_worktree_route(self, p, json.loads(self.last_body or b"{}"))
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/spaces/[^/]+/rename", p):
             NODE_ACTIONS.append({"machine": p.split("/")[4], "route": "spaces/rename", "workspace_id": p.split("/")[6], **json.loads(self.last_body or b"{}")})
             return self.send_json({})

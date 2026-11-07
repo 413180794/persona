@@ -54,5 +54,15 @@
   "always_empty": "没有已保存的权限。",
   "always_unknown": "未命名权限",
   "always_revoke": "撤销",
-  "always_retry": "重试"
+  "always_retry": "重试",
+  "wt_title": "这个 Agent 在 Persona 建的 worktree 里干活",
+  "wt_keep": "保留 worktree",
+  "wt_remove": "移除",
+  "wt_delete_branch": "同时删除分支 {branch}",
+  "wt_dirty_other": "有 {count} 个文件的改动没提交，移除 worktree 会丢掉。",
+  "wt_unmerged_other": "分支上有 {count} 个提交不在 {main} 上，删除分支会丢掉。",
+  "wt_confirm_loss": "我知道这些改动会丢失",
+  "wt_removed": "已移除 worktree",
+  "wt_removed_branch": "已移除 worktree 和分支",
+  "wt_remove_failed": "没能移除 worktree：{error}"
 }

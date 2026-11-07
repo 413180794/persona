@@ -55,5 +55,17 @@
   "always_empty": "No saved permissions.",
   "always_unknown": "Unnamed permission",
   "always_revoke": "Revoke",
-  "always_retry": "Retry"
+  "always_retry": "Retry",
+  "wt_title": "This agent worked in a worktree Persona made",
+  "wt_keep": "Keep the worktree",
+  "wt_remove": "Remove it",
+  "wt_delete_branch": "Delete the branch {branch} too",
+  "wt_dirty_one": "{count} file has uncommitted changes. Removing the worktree loses it.",
+  "wt_dirty_other": "{count} files have uncommitted changes. Removing the worktree loses them.",
+  "wt_unmerged_one": "The branch has {count} commit that isn’t on {main}. Deleting the branch loses it.",
+  "wt_unmerged_other": "The branch has {count} commits that aren’t on {main}. Deleting the branch loses them.",
+  "wt_confirm_loss": "I understand these changes will be lost",
+  "wt_removed": "Worktree removed",
+  "wt_removed_branch": "Worktree and branch removed",
+  "wt_remove_failed": "Couldn’t remove the worktree: {error}"
 }

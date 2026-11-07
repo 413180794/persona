@@ -13,10 +13,11 @@ import {
 } from "../lib/launcher-models";
 import { BYPASS_MODE, BYPASS_WARNING, EFFORTS, effortTitle, PERMISSION_MODES } from "../lib/session-actions";
 import { baseName, shortPath } from "../lib/format";
+import { addAgentWorktree, agentBranch, agentNameHint, suggestedPath, worktreeStatus, type WorktreeStatus } from "../lib/worktree";
 import { useStore } from "../lib/store";
 import type { Launcher } from "../lib/types";
 import { AgentMark } from "../ui/AgentMark";
-import { Button, cx, Dialog, Spinner, toast } from "../ui/atoms";
+import { Button, cx, Dialog, Spinner, Switch, toast } from "../ui/atoms";
 import { Pill } from "./settings/SettingsParts";
 import { startBlocked, ultracodeStartOffered } from "../lib/ultracode";
 import { UltracodeStartRow } from "./chat/Ultracode";
@@ -86,7 +87,29 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     submitted.current = false;
     setEffort("");
     setUltracode(false);
+    setInWorktree(false);
+    setWtBranch("");
+    setWtError("");
   }, [open]);
+  // a worktree of its own (#6115): offered for a folder in a Git repository (what the computer says of it), off each
+  // time the sheet opens
+  const [inWorktree, setInWorktree] = useState(false);
+  const [wtBranch, setWtBranch] = useState("");
+  const [wtBusy, setWtBusy] = useState(false);
+  const [wtError, setWtError] = useState("");
+  const [repo, setRepo] = useState<WorktreeStatus | null>(null);
+  useEffect(() => {
+    setRepo(null);
+    const dir = cwd.trim();
+    if (!open || !mid || !dir) return;
+    const c = new AbortController();
+    const timer = setTimeout(() => void worktreeStatus(mid, dir, c.signal).then((st) => { if (!c.signal.aborted) setRepo(st); }), 400);
+    return () => {
+      clearTimeout(timer);
+      c.abort();
+    };
+  }, [open, mid, cwd]);
+  const worktreeOffered = Boolean(repo?.path);
   useEffect(() => {
     if (!open || !preset) return;
     if (preset.prompt) setPrompt((draft) => presetPrompt(preset.prompt, draft));
@@ -235,11 +258,29 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     const opensIn = host && host !== currentHosts(picked ?? {}).default ? host : undefined; // only a choice away from the default
     // only an explicit "on" is sent: off is what a new Claude is anyway
     const ultra = ultracodeShown && !ultracodeBlocked && ultracode ? true : undefined;
-    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, permissionMode: permissionMode || undefined, host: opensIn, ultracode: ultra, text: prompt.trim(), attachments });
-    attachmentsRef.current = [];
-    setAttachments([]);
-    setPrompt("");
-    onClose();
+    const launch = (dir: string) => {
+      launchAgent({ machineId: mid, cwd: dir, launcher, ...picks, permissionMode: permissionMode || undefined, host: opensIn, ultracode: ultra, text: prompt.trim(), attachments });
+      attachmentsRef.current = [];
+      setAttachments([]);
+      setPrompt("");
+      onClose();
+    };
+    // in a worktree of its own (#6115): made first; a failure says why here, and nothing starts
+    if (inWorktree && worktreeOffered) {
+      setWtBusy(true);
+      setWtError("");
+      void addAgentWorktree(mid, cwd.trim(), agentNameHint(prompt, cwd), wtBranch)
+        .then(
+          (wt) => launch(wt.path),
+          (e) => {
+            submitted.current = false;
+            setWtError(errorText(e));
+          },
+        )
+        .finally(() => setWtBusy(false));
+      return;
+    }
+    launch(cwd.trim());
   };
 
   if (none)
@@ -295,7 +336,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
             <Button tone="quiet" onClick={onClose}>
               {t("common.cancel")}
             </Button>
-            <Button tone="primary" disabled={loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()} onClick={start}>
+            <Button tone="primary" busy={wtBusy} disabled={loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()} onClick={start}>
               {t("newagent.start")}
             </Button>
           </>
@@ -354,6 +395,38 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
               ))}
             </div>
           </Field>
+          {worktreeOffered && (
+            <div data-testid="new-agent-worktree" className="-mt-2 rounded-control bg-surface px-3 py-2 shadow-hairline">
+              <div className="flex items-center gap-2">
+                <Icon name="branch" size={13} stroke={2.2} className="shrink-0 text-ink-2" />
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">{t("newagent.worktree")}</span>
+                <Switch on={inWorktree} onChange={setInWorktree} label={t("newagent.worktree")} />
+              </div>
+              <p className="mt-1 pl-[21px] text-[11.5px] leading-snug text-ink-3">{t("newagent.worktree_hint")}</p>
+              {inWorktree && (
+                <label className="mt-1.5 flex items-center gap-2 pl-[21px]">
+                  <span className="shrink-0 text-[11.5px] text-ink-3">{t("newagent.worktree_branch")}</span>
+                  <input
+                    value={wtBranch}
+                    onChange={(e) => {
+                      setWtBranch(e.target.value);
+                      setWtError("");
+                    }}
+                    placeholder={agentBranch(agentNameHint(prompt, cwd))}
+                    spellCheck={false}
+                    data-worktree-branch
+                    className="h-7 min-w-0 flex-1 rounded-control bg-inset px-2 font-mono text-[12px] text-ink shadow-hairline outline-none placeholder:text-ink-3 focus:shadow-[0_0_0_1px_var(--line-strong)]"
+                  />
+                </label>
+              )}
+              {inWorktree && repo?.checkouts && (
+                <p data-worktree-path className="mt-1 truncate pl-[21px] font-mono text-[11px] text-ink-3">
+                  {t("newagent.worktree_path", { path: shortPath(suggestedPath(repo.checkouts, wtBranch.trim() || agentBranch(agentNameHint(prompt, cwd)))) })}
+                </p>
+              )}
+              {wtError && <p role="alert" className="mt-1 pl-[21px] text-[11.5px] leading-snug text-red">{t("newagent.worktree_failed", { error: wtError })}</p>}
+            </div>
+          )}
 
           {hosts.length > 1 && (
             <Field label={t("lib-engines.start_in")}>
