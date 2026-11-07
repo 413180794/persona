@@ -87,4 +87,58 @@ struct WatchGroupRefreshTests {
         // Past the limit the oldest first-seen uids drop, so the persisted record can not grow without end.
         #expect(WatchGroupRefresh.rememberSeen([], adding: (0..<5).map { "u\($0)" }, limit: 3) == ["u2", "u3", "u4"])
     }
+
+    // #6257: what a phone summary carries, and whether it is still news.
+
+    private func session(_ id: String, _ state: String, updated: TimeInterval) throws -> Session {
+        let o: [String: Any] = ["machine_id": "watchsummarybox", "session_id": id, "title": id, "cwd": "/code/\(id)",
+                                "status": "idle", "state": state, "started_by_persona": false, "assistant": false,
+                                "pending_interactions": 0,
+                                "updated_at": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: updated))]
+        return try JSON.decoder.decode(Session.self, from: JSONSerialization.data(withJSONObject: o))
+    }
+
+    @Test func aSummaryOlderThanWhatTheWatchShowsIsDropped() {
+        let shown = Date(timeIntervalSince1970: 1000)
+        #expect(WatchGroupRefresh.acceptsSummary(at: shown.addingTimeInterval(-1), lastUpdate: shown) == false)
+        #expect(WatchGroupRefresh.acceptsSummary(at: shown, lastUpdate: shown) == false)
+        #expect(WatchGroupRefresh.acceptsSummary(at: shown.addingTimeInterval(1), lastUpdate: shown))
+    }
+
+    @Test func theFirstSummaryKeepsItsOwnAgeAndAFutureOneStopsAtNow() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let old = now.addingTimeInterval(-3600)
+        #expect(WatchGroupRefresh.acceptsSummary(at: old, lastUpdate: nil))
+        #expect(WatchGroupRefresh.dataDate(ofSummaryAt: old, now: now) == old)
+        #expect(WatchGroupRefresh.dataDate(ofSummaryAt: now.addingTimeInterval(5), now: now) == now)
+    }
+
+    @Test func busyAgentsOutlastTheSummaryLimit() throws {
+        let idle = try (0..<3).map { try session("idle\($0)", "idle", updated: 100 + Double($0)) }
+        let busy = [try session("asking", "needs_you", updated: 1), try session("working", "working", updated: 2)]
+        #expect(WatchGroupRefresh.summarySessions(idle + busy, limit: 3).map(\.title) == ["idle2", "working", "asking"])
+    }
+
+    @Test func busyAgentsPastTheLimitAreAllKept() throws {
+        let busy = try (0..<4).map { try session("b\($0)", "working", updated: Double($0)) }
+        let idle = try session("idle", "idle", updated: 100)
+        #expect(WatchGroupRefresh.summarySessions(busy + [idle], limit: 3).count == 4)
+    }
+
+    @Test func aFewAgentsAreAllKeptNewestFirst() throws {
+        let all = try [session("a", "idle", updated: 1), session("b", "idle", updated: 3), session("c", "idle", updated: 2)]
+        #expect(WatchGroupRefresh.summarySessions(all).map(\.title) == ["b", "c", "a"])
+    }
+
+    @MainActor @Test func thePhoneSummaryKeepsAnOldWorkingAgent() throws {
+        let model = AppModel()
+        model.registry = HubRegistry(hubs: [PairedHub(id: "watchsummarybox",
+                                                      config: ServerConfig(url: URL(string: "http://hub.example.com")!, token: "t"))])
+        model.buildLinks()
+        try (0..<25).forEach { model.adopt(try session("idle\($0)", "idle", updated: 1000 + Double($0))) }
+        model.adopt(try session("old", "working", updated: 1))
+        let titles = model.watchSummary().sessions.map(\.title)
+        #expect(titles.count == 20)
+        #expect(titles.contains("old"))
+    }
 }

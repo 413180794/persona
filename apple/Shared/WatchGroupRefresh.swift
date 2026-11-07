@@ -11,8 +11,8 @@ nonisolated struct WatchGroupData: Equatable, Sendable {
     static let empty = WatchGroupData(sessions: [], interactions: [], machines: [])
 }
 
-/// Pure decisions behind the watch's per-group refresh: keeping a failed group's last cards, and never buzzing twice
-/// for the same card. The watch and its tests use these; Foundation only, no UI.
+/// Pure decisions behind the watch's refresh: keeping a failed group's last cards, never buzzing twice for the same
+/// card, and what a phone summary carries and whether it is still news. The watch and its tests use these; Foundation only, no UI.
 nonisolated enum WatchGroupRefresh {
     /// Keep each failed group's last successful data and replace every group that answered. Groups not attempted this
     /// round (no credential yet) keep their old data as well. `staleFailed` lists the failed groups whose earlier data
@@ -23,6 +23,30 @@ nonisolated enum WatchGroupRefresh {
         var stored = old
         for (group, data) in new { stored[group] = data }
         return (stored, failures.filter { stored[$0] != nil }.sorted())
+    }
+
+    /// Whether a phone summary is news to the watch. Its application context replays at launch and can arrive late, so
+    /// a summary older than what the watch already shows (say, its own direct fetch) must not put old state back (#6257).
+    static func acceptsSummary(at: Date, lastUpdate: Date?) -> Bool {
+        guard let lastUpdate else { return true }
+        return at > lastUpdate
+    }
+
+    /// When a summary's data dates from: its own time, never later than now, in case the phone's clock runs ahead.
+    static func dataDate(ofSummaryAt at: Date, now: Date = .now) -> Date { min(at, now) }
+
+    /// The agents a phone summary carries, most recently updated first: everyone who needs the user or is working,
+    /// however long ago they last updated, and the others up to `limit` in all. The watch replaces its list with the
+    /// summary, so a busy agent left out would vanish from the wrist until the next direct fetch (#6257).
+    static func summarySessions(_ sessions: [Session], limit: Int = 20) -> [Session] {
+        func busy(_ s: Session) -> Bool { s.state == .needsYou || s.state == .working }
+        var room = limit - sessions.filter(busy).count
+        return sessions.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }.filter { s in
+            if busy(s) { return true }
+            guard room > 0 else { return false }
+            room -= 1
+            return true
+        }
     }
 
     /// The uids the wrist has never been told about: only those get a haptic. A card that vanished with a failed

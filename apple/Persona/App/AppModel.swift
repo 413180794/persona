@@ -2639,7 +2639,6 @@ final class AppModel {
         // A quiet task's agent and its questions are the main conversation's (#1731).
         let (live, asking) = QuietTasks.leavingOut(sessions: allSessions.filter { $0.status.isLive }, interactions: pendingInteractions,
                                                    quiet: isQuiet)
-        let sessions = live.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         // Connectors' items too: the watch lists them read-only under their own label (#2727).
         let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action }
         // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」). Muted agents and spaces
@@ -2650,7 +2649,7 @@ final class AppModel {
             ix.taskTitle = tasks.task(of: ix.sessionKey)?.title
             return ix
         }
-        return WatchSummary(sessions: Array(sessions.prefix(20)), interactions: interactions, machines: machines,
+        return WatchSummary(sessions: WatchGroupRefresh.summarySessions(live), interactions: interactions, machines: machines,
                             inbox: Array(inbox.prefix(20)))
     }
 }

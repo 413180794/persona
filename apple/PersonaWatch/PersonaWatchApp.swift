@@ -86,7 +86,7 @@ final class WatchModel {
             Task { await self?.refresh() }
         }
         WatchSync.shared.onSummary = { [weak self] s in
-            guard let self else { return }
+            guard let self, WatchGroupRefresh.acceptsSummary(at: s.at, lastUpdate: self.lastUpdate) else { return }
             // The phone's summary is every group merged; split it back so a later failed direct fetch keeps the right
             // group's data, and take the phone's word that the groups it covers are reachable (#4369).
             var byGroup: [String: WatchGroupData] = [:]
@@ -96,7 +96,8 @@ final class WatchModel {
             self.groupData = WatchGroupRefresh.mergeGroups(old: self.groupData, new: byGroup, failures: []).data
                 .filter { self.configs[$0.key] != nil }
             self.groupFailures = []
-            self.apply(sessions: s.sessions, interactions: s.interactions, machines: s.machines)
+            self.apply(sessions: s.sessions, interactions: s.interactions, machines: s.machines,
+                       at: WatchGroupRefresh.dataDate(ofSummaryAt: s.at))
             if let inbox = s.inbox { self.applyInbox(inbox) }
         }
         WatchRecordingTransfer.shared.start()
@@ -104,7 +105,7 @@ final class WatchModel {
         Task { await poll() }
     }
 
-    private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
+    private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine], at: Date = .now) {
         // Agents of quiet tasks and their questions are the main conversation's to tell (#1731), by the hub's word.
         let (sessions, interactions) = QuietTasks.leavingOut(sessions: sessions, interactions: interactions, quiet: \.quiet)
         // A muted agent's or space's card never reaches the wrist (#4360): it is neither shown nor buzzed for.
@@ -117,7 +118,7 @@ final class WatchModel {
             .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.sortDate > $1.sortDate }
         self.interactions = shown
         if !machines.isEmpty { self.machines = machines }
-        lastUpdate = .now
+        lastUpdate = at
         guard !freshUids.isEmpty else { return }
         seenInteractionUids = WatchGroupRefresh.rememberSeen(seenInteractionUids, adding: freshUids)
         UserDefaults.standard.set(seenInteractionUids, forKey: Self.seenUidsKey)
