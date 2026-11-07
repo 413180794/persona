@@ -560,7 +560,10 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		return "", "", nil
 	}
 	// A health conversation's writes are confirmed each time: no rule's allow, no "Always allow for this session" (docs/health.md "Outgoing").
-	health := identity.SpaceOf(cwd) == identity.SpaceHealth
+	// Its space is the one its process was started in (assistantLarkEnv notes it, and the gate proxy goes by the same),
+	// not the directory the hook says: that is where the model's last `cd` left it. A hook directory that is a health
+	// space's counts too, so a mix-up can only ask more.
+	health := n.gates().healthSession(session) || identity.SpaceOf(cwd) == identity.SpaceHealth
 	// ask: the calls to confirm on the phone; covered: those "Always allow for this session" covers. Once let through
 	// here, the gate proxy lets each go once (gateproxy.go).
 	var ask, covered []larkCall
@@ -761,12 +764,22 @@ func assistantSpace(cwd string) string {
 // its credentials in the node: its BaseEnv is this process's own address at the gate proxy, and neither its Secret
 // nor what Auth puts on the requests is given (gateproxy.go, #1317); release takes the addresses back once the
 // process is gone. session is the conversation the process was started for: the proxy tells the manager of the writes
-// that went out under it. Without a config from the hub the commands say their API is not reachable.
+// that went out under it. A process started in the health space gets addresses that let a write through only once the
+// phone confirmed it, whatever the rules allow (larkCheck holds the gated command to the same). Without a config from
+// the hub the commands say their API is not reachable.
 //
 // The process also learns its conversation's space, PERSONA_SPACE (assistantSpace): every gated command reaches every
 // space, and one meant for the health space alone checks this instead of its working directory, which a `cd` in front
 // of the command changes without a confirmation (#6003).
 func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func()) {
+	env, release, _ = n.assistantLarkEnvNamed(cwd, session)
+	return env, release
+}
+
+// assistantLarkEnvNamed is assistantLarkEnv for a process that may start before its conversation has an id (a new Codex
+// conversation gets it from its thread): name tells the id once it is known, and the addresses opened so far stand for it
+// (nameAddr).
+func (n *Node) assistantLarkEnvNamed(cwd, session string) (env []string, release func(), name func(session string)) {
 	var released []func()
 	release = func() {
 		for _, f := range released {
@@ -779,8 +792,15 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 	}
 	bin := n.assistantBin(cwd)
 	_ = os.MkdirAll(bin, 0o755)
+	space := assistantSpace(cwd)
+	health := space == identity.SpaceHealth
+	gp := n.gates()
+	if health {
+		gp.markHealth(session) // larkCheck decides the conversation's space by this, not by the directory a hook runs in
+	}
+	var bases []string // the addresses opened for this process
 	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "PERSONA_ASSISTANT_BIN=" + bin,
-		"PERSONA_SPACE=" + assistantSpace(cwd)}
+		"PERSONA_SPACE=" + space}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cfg := n.assistantLark(ctx)
@@ -805,13 +825,13 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 			for _, m := range gateAuthRef.FindAllStringSubmatch(g.Auth.Value, -1) {
 				held[m[1]] = true
 			}
-			b, done, err := n.gates().open(g.Command, session)
+			b, done, err := gp.openIn(g.Command, session, health) // the proxy holds a health process's writes to the phone
 			if err != nil {
 				// Its credentials stay out all the same: without the base too, the command fails plainly.
 				n.logger.Printf("assistant: %s: gate proxy: %v", g.Command, err)
 				held[g.BaseEnv] = true
 			} else {
-				base, released = b, append(released, done)
+				base, released, bases = b, append(released, done), append(bases, b)
 			}
 		}
 		keys := make([]string, 0, len(g.Env))
@@ -843,7 +863,15 @@ func (n *Node) assistantLarkEnv(cwd, session string) (env []string, release func
 		}
 	}
 	n.writeLarkCLIWrapper(bin, cfg.CLI) // lark-cli, when hub.json has lark.cli (larkcligate.go)
-	return env, release
+	name = func(id string) {
+		for _, b := range bases {
+			gp.nameAddr(b, id)
+		}
+		if health {
+			gp.markHealth(id)
+		}
+	}
+	return env, release, name
 }
 
 const gateWrapperMark = "# a skill's gated command"

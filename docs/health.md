@@ -91,9 +91,11 @@ The decision always depends on the chat's space (the trusted session directory),
 | `agent_send` / `agent_start` | Confirmed on the phone every time; the card states that once handed over, the record on the other side is not deleted with the Health space | `assistant/health.go` `confirmOutbound` |
 | `task_plan` | Never starts automatically; always waits for the user to tap start on the plan card | `assistant/tasks.go` |
 | `mail_send` and connector write operations | Confirmed on the phone every time; gate allow rules do not let it through (deny still rejects) | `connector.ConfirmEach`, `callConnector` in `extmgr/connectors.go` |
-| Lark write operations (lark-cli, command gate) | Confirmed on the phone every time; allow rules do not let it through, and there is no **Always Allow in Session**; reads work as usual | `node/larkgate.go` `larkCheck` |
+| Lark write operations (lark-cli, command gate) | Confirmed on the phone every time; allow rules do not let it through, and there is no **Always Allow in Session**; reads work as usual (deny still rejects). Both entrances hold it: the gated command (`larkCheck`) and the node's gate proxy, which a script can call without the command: a health process's proxy address lets a write through only with the one-time grant `larkCheck` leaves once the phone confirmed it. Both decide the space from a record made when the conversation's process is started, not from the directory a command runs in (a `cd` moves it); a hook directory that is itself a health space counts too, so a mix-up can only ask more | `node/larkgate.go` `larkCheck`, `node/gateproxy.go` `ServeHTTP` |
 
 Memory, chats and reminders within the same space need no confirmation.
+
+Known limit: a gate proxy address does not know who calls it. A process in a health conversation could in principle learn the address of another conversation (another process of the same user has an environment that can be read), the same kind of gap as the Bash one under "How directories and memory are isolated": closing it needs the sandbox or OS-level isolation (see "Later").
 
 ## Web entry point
 

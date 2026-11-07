@@ -56,6 +56,9 @@ type codexConn struct {
 	writeMessage func([]byte) error
 	ended        <-chan struct{}
 	onMessage    func(codexMessage)
+	// nameGates tells the gate proxy the thread's id once there is one: the process's addresses were opened before it
+	// (assistantLarkEnvNamed). nil when the id was known at the start.
+	nameGates func(id string)
 
 	mu       sync.Mutex
 	pending  map[int64]chan codexReply
@@ -204,7 +207,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "persona"}, codexArgs(n.bin, key)...)...)
 	cmd.Dir = root
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
-	gateEnv, releaseGates := n.assistantLarkEnv(cwd, id) // its addresses at the gate proxy go with the process
+	gateEnv, releaseGates, nameGates := n.assistantLarkEnvNamed(cwd, id) // its addresses at the gate proxy go with the process
 	started := false
 	defer func() {
 		if !started {
@@ -231,7 +234,8 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	started = true
 	p := &assistantProc{id: id, agent: "codex", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
 		born: time.Now(), lastActive: time.Now(), model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
-	c := &codexConn{n: n, p: p, key: key, memDir: memDir, pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{}, files: map[string][]string{}}
+	c := &codexConn{n: n, p: p, key: key, memDir: memDir, pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{}, files: map[string][]string{},
+		nameGates: nameGates}
 	p.cx = c
 	n.mu.Lock()
 	n.akeys[key] = p
@@ -365,6 +369,9 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 		delete(n.pathsAt, res.Thread.ID)
 	}
 	n.mu.Unlock()
+	if c.nameGates != nil { // larkCheck records what it confirmed under this id (p.id): the addresses stand for it from now on
+		c.nameGates(res.Thread.ID)
+	}
 	return nil
 }
 

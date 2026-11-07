@@ -32,6 +32,10 @@ import (
 // larkCheck let that very call through (the phone confirmed it, or "Always allow in this session" covers it). Printing the
 // environment so yields an address that works on this machine only and skips nothing.
 //
+// In a health conversation (docs/health.md "Outbound") every write goes that way, whatever the rules say: the address of
+// a process started in the health space is marked so when it is opened, and a write there goes only with the grant larkCheck
+// gave it after the phone confirmed, as larkCheck itself holds it. Reads go as everywhere.
+//
 // The proxy also sees what the API answered. A write it forwarded that came back 2xx is told to the manager
 // (proto.MethodLarkSent), which keeps it in the sent-as-user ledger with how the gate let it through (docs/connectors.md
 // "Sent as the user", #5278): the gate decides before the command runs and cannot know whether it sent. What does not
@@ -72,6 +76,9 @@ type gateProxy struct {
 	ln     net.Listener
 	keys   map[string]gateKey // key → the gate's command and the conversation its process was started for
 	grants []gateGrant
+	// health: the conversations known to be in the health space (markHealth). A conversation does not change space,
+	// so one stays in it, and only the health ones are kept.
+	health map[string]struct{}
 
 	// reporting holds a slot for each report to the manager in flight (gateReportsMax).
 	reporting chan struct{}
@@ -83,6 +90,9 @@ type gateKey struct {
 	// session is the conversation the process was started for ("" when none is known). The assistant's process serves
 	// one, so a write a rule allowed belongs to it.
 	session string
+	// health: the process was started in the health space. Decided once, from the directory the node started it in,
+	// when its address is opened: the address stays with that one process, so it never serves another space.
+	health bool
 }
 
 // gateGrant is a call larkCheck let through, to go once.
@@ -124,9 +134,10 @@ func (n *Node) gates() *gateProxy {
 	return p
 }
 
-// open gives one process of the assistant, the one started for session ("" when that is not known), its own address
-// for command's gate: the base to put in its BaseEnv, and release, which takes the address back when the process ends.
-func (p *gateProxy) open(command, session string) (base string, release func(), err error) {
+// openIn gives one process of the assistant, the one started for session ("" when that is not known yet: nameAddr gives
+// it later), its own address for command's gate: the base to put in its BaseEnv, and release, which takes the address
+// back when the process ends. health says whether the process is in the health space.
+func (p *gateProxy) openIn(command, session string, health bool) (base string, release func(), err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.ln == nil {
@@ -145,12 +156,48 @@ func (p *gateProxy) open(command, session string) (base string, release func(), 
 		return "", nil, err
 	}
 	key := hex.EncodeToString(b)
-	p.keys[key] = gateKey{command: command, session: session}
+	p.keys[key] = gateKey{command: command, session: session, health: health}
 	return "http://" + p.ln.Addr().String() + "/" + key, func() {
 		p.mu.Lock()
 		delete(p.keys, key)
 		p.mu.Unlock()
 	}, nil
+}
+
+// nameAddr says which conversation the address base stands for, when it was opened for a process that did not know its
+// conversation yet (a new Codex conversation has an id only once its thread starts). An address that has one keeps it.
+func (p *gateProxy) nameAddr(base, session string) {
+	if session == "" {
+		return
+	}
+	key := base[strings.LastIndex(base, "/")+1:]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if gk, ok := p.keys[key]; ok && gk.session == "" {
+		gk.session = session
+		p.keys[key] = gk
+	}
+}
+
+// markHealth notes that session is a conversation in the health space (larkCheck asks healthSession).
+func (p *gateProxy) markHealth(session string) {
+	if session == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.health == nil {
+		p.health = map[string]struct{}{}
+	}
+	p.health[session] = struct{}{}
+}
+
+// healthSession says whether session was noted as a health conversation: the space its process was started in.
+func (p *gateProxy) healthSession(session string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, ok := p.health[session]
+	return ok && session != ""
 }
 
 // close stops listening (tests; the node's proxy lives as long as the node).
@@ -183,20 +230,24 @@ func (p *gateProxy) grant(command, session string, c larkCall, through proto.Lar
 	}
 }
 
-// take uses up a grant for a request: command's gate, the method and path, and the body confirmed if one was. A grant
-// of one conversation is not for another's request: when both are known and differ, it stays for its own. It returns
-// the grant.
-func (p *gateProxy) take(command, session, method, path string, body []byte, isJSON bool) (gateGrant, bool) {
+// take uses up a grant for a request at the address k stands for: its command's gate, the method and path, and the body
+// confirmed if one was. A grant of one conversation is not for another's request: when both are known and differ, it
+// stays for its own. A health conversation's address takes only a grant of its own conversation: not one made for no
+// conversation, nor any when it has none. It returns the grant.
+func (p *gateProxy) take(k gateKey, method, path string, body []byte, isJSON bool) (gateGrant, bool) {
 	var sent any
 	parsed := isJSON && json.Unmarshal(body, &sent) == nil
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pruneLocked()
 	for i, g := range p.grants {
-		if g.command != command || g.method != method || g.path != path {
+		if g.command != k.command || g.method != method || g.path != path {
 			continue
 		}
-		if g.session != "" && session != "" && g.session != session {
+		if k.health && (k.session == "" || g.session != k.session) {
+			continue
+		}
+		if g.session != "" && k.session != "" && g.session != k.session {
 			continue
 		}
 		if g.body != nil && (!parsed || !reflect.DeepEqual(g.body, sent)) {
@@ -265,9 +316,13 @@ func (p *gateProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch larkDecision(cfg, c) {
 	case "allow":
 		// A call larkCheck confirmed and a rule allows too (a health conversation confirms what a rule allows) was
-		// let through by the card: it uses up its grant, as a confirmed call does.
-		if gr, ok := p.take(command, gk.session, c.Method, c.Path, body, isJSON); ok {
+		// let through by the card: it uses up its grant, as a confirmed call does. In a health conversation a write
+		// goes only so: a rule's allow is not the phone's yes.
+		if gr, ok := p.take(gk, c.Method, c.Path, body, isJSON); ok {
 			session, through = firstNonEmpty(gr.session, session), gr.through
+		} else if gk.health && !larkRead(c) {
+			gateNeedsPhone(w, command, c)
+			return
 		} else if rule, ok := firstLark(g.Rules, c); ok {
 			through = proto.LarkLetThrough{Kind: proto.LarkThroughRule, Rule: &rule}
 		}
@@ -275,10 +330,9 @@ func (p *gateProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		gateRefuse(w, http.StatusForbidden, "这个操作按配置不允许（"+c.Method+" "+c.Path+"）。")
 		return
 	default:
-		gr, ok := p.take(command, gk.session, c.Method, c.Path, body, isJSON)
+		gr, ok := p.take(gk, c.Method, c.Path, body, isJSON)
 		if !ok {
-			gateRefuse(w, http.StatusForbidden, "这个操作要用户先在手机上确认（"+c.Method+" "+c.Path+"）：单独一条 `"+command+
-				" METHOD PATH [BODY]` 发，不放进脚本、循环或 $(…) 里，确认卡片会发到用户手机上，确认过的才发得出去。")
+			gateNeedsPhone(w, command, c)
 			return
 		}
 		session, through = firstNonEmpty(gr.session, session), gr.through
@@ -492,6 +546,12 @@ var gateAuthRef = regexp.MustCompile(`\$\{([A-Z_][A-Z0-9_]*)\}`)
 // gateAuthValue is a gate's Auth.Value with its credentials filled in.
 func gateAuthValue(tmpl string, env map[string]string) string {
 	return gateAuthRef.ReplaceAllStringFunc(tmpl, func(m string) string { return env[m[2:len(m)-1]] })
+}
+
+// gateNeedsPhone refuses a call that goes only after the user confirmed it on the phone, and says how to ask.
+func gateNeedsPhone(w http.ResponseWriter, command string, c larkCall) {
+	gateRefuse(w, http.StatusForbidden, "这个操作要用户先在手机上确认（"+c.Method+" "+c.Path+"）：单独一条 `"+command+
+		" METHOD PATH [BODY]` 发，不放进脚本、循环或 $(…) 里，确认卡片会发到用户手机上，确认过的才发得出去。")
 }
 
 // gateRefuse answers for the proxy, in JSON as the APIs do: the gated command prints it, so the model reads why.

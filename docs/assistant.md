@@ -218,6 +218,9 @@ The current mechanisms are generic; specific commands, routes, and variables are
     other writes (send / reply / recall / forward, reactions, docs, schedules, approvals, mail, group settings…) show a phone "Lark" approval card with action, chat name (extension `assistant.summary`),
     method, path, and body to send (reads `@file`). Denial returns user feedback as the reason; "Always allow in this session" remembers this route type with ids stripped.
   - A write that went out through the proxy (the API answered 2xx) is kept in the sent-as-user ledger (`docs/connectors.md` "Sent as the user"): the node tells the manager (`lark.sent`) how the gate let it through. Not in it: lark-cli writes and gates without `auth`.
+  - A health conversation's writes are confirmed each time, rules' allow included (`docs/health.md` "Outbound"), at both entrances: `larkCheck` turns an allow into a card, and the proxy address opened for a process started in the health space
+    lets a write through only by taking the grant that card left (a conversation's own: a new Codex conversation's addresses are given its id once its thread starts, and take nothing before). Both decide the space from a record made when
+    the process is started, not from the directory a hook reports (the model's `cd` moves it); a hook directory that is a health space's counts too, so a mix-up can only ask more. Reads go as everywhere.
   - Credential variables, `/proc/*/environ`, direct gateway curl, or flags exposing headers such as `-v` / `--trace` / `-w`: reject directly.
   - Other commands (piped to python, writes outside /tmp, `$(…)`) bypass this gate and follow ordinary Bash approval in the permission mode; but any gated write inside is rejected with instructions to send it separately:
     the proxy allows only the exact call read and confirmed by the gate, so whole-command approval still can't send it (before #1317, the whole command showed a card).
