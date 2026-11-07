@@ -1514,10 +1514,12 @@ Typing into someone else's terminal is the riskiest thing this App does. Before 
   Without either, or when a newer read shows neither, the send is refused (`not_delivered`) as before (#6308).
   Judged on its bottom rows, a dialog is never a notice that Enter closes (its head may be above them): a send with `dismiss_notice` presses nothing there and is refused as `dialog_open`.
   A refusal logs whether the read had colors and the box row's styles, never its text (`screen.BoxStyle`).
-- `clear_draft`: after seeing the draft in the App, the user picks **Clear and Send**, and the App resends the same message (same `client_msg_id`) with the `clearable` it received;
+- `clear_draft`: after seeing the draft in the App, the user picks **Clear and Send**, and the App sends the same message again with the `clearable` it received, under a new id
+  (`client_msg_id` and op id: the refused id's receipt answers its repeats, and the same id with `clear_draft` added is `op_id_reused`, #6425);
   the node clears it with `ctrl+k ctrl+u` only if the input box **still has that same text**, then reads again to confirm it's empty before sending. Multi-line drafts can only be handled on the computer (those two keys clear one line at a time).
 - `client_msg_id`: the App gives each pending message a UUID, and automatic resends (no response, resending after a network drop) reuse it. **Dedup is on the hub** (`hub/send.go`, Postgres table
-  `sent_messages`, with no age-based expiry): the same id arriving while a send is in progress waits for the first one's result; already delivered returns success directly; rejected or offline (nothing typed) is forgotten and can be sent again;
+  `sent_messages`, with no age-based expiry): the same id arriving while a send is in progress waits for the first one's result; already delivered returns success directly; rejected or offline (nothing typed) is forgotten and can be sent again
+  (with an op id, though, the refusal is that id's receipt and answers its repeats: the apps send a refused message again under a new id, #6425);
   interrupted mid-typing (the node returned `delivered: "unknown"`, or the request reached the node but no response came back: connection dropped, timeout) returns 502 + `delivered: "unknown"`,
   and resending the same id only returns the same error, never typing it a second time. The same holds after a hub restart or node reconnect (dedup used to live only in the node process's memory, and the new process after a reconnect knew nothing;
   on 2026-10-31 a message sent during a reconnect was observed reaching the computer while the App got "rpc: connection closed"). When the user has looked at the chat, confirmed it didn't arrive and taps resend, the App uses a new id.

@@ -1272,6 +1272,9 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
     /// The send broke off while the message was being typed (delivered: unknown): it may be on the computer. A resend
     /// the user asks for goes with a new id, or the hub would answer it from the first one.
     var mayHaveArrived: Bool?
+    /// The hub refused it with nothing typed (delivered: none: a draft in the computer's input box, a dialog…) and
+    /// answers its id with that refusal from then on: Resend and Clear and Send go with a new id (#6425).
+    var refused: Bool?
 
     /// Comparable form: what the transcript keeps of it — the phone's image note, pasted wrappers and Claude's
     /// "[Image #21]" placeholders removed, whitespace ignored.

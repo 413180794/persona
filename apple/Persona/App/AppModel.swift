@@ -1824,6 +1824,14 @@ final class AppModel {
         guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
         guard chat(key).pending[i].mayHaveArrived == true else {
             chat(key).pending[i].state = .sending
+            if chat(key).pending[i].refused == true {
+                // Refused with nothing typed: under its old id the hub would answer that refusal again without asking
+                // the computer, and Clear and Send's clear_draft would be another op on a used id (op_id_reused).
+                // Saved before it goes: an app killed meanwhile sends it again under the id it went with.
+                chat(key).pending[i].id = UUID()
+                chat(key).pending[i].refused = nil
+                saveOutbox()
+            }
             deliver(key, chat(key).pending[i], clearDraft: clearDraft)
             return
         }
@@ -1847,6 +1855,7 @@ final class AppModel {
             }
             chat(key).pending[j].id = UUID()
             chat(key).pending[j].mayHaveArrived = nil
+            saveOutbox()
             deliver(key, chat(key).pending[j], clearDraft: clearDraft)
         }
     }

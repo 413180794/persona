@@ -976,6 +976,8 @@ Like Telegram: network trouble shows no banner; **the page title becomes "small 
   - **Op id**: messages carry `X-Persona-Op-Id` (the message id, equal to `client_msg_id`); each answer / approval tap gets one;
     the hub executes it once (`docs/protocol/protocol.md` ("Operation receipts")). A duplicate request returning `202 {"state":"pending"|"unknown"}` is not success: pending keeps retrying, unknown is treated as "May already have been delivered".
     Retrying a "May already have been delivered" message first checks `GET /api/v1/ops/{old id}`: `done` means sent, no resend; otherwise resend with a new id as before.
+    A message the hub refused with nothing typed (`delivered: "none"`: a draft in the computer's input box, a dialog open…) goes again under a new id too, on Resend and on Clear and Send:
+    the hub answers the refused id with that refusal without asking the computer again, so a Resend after clearing the box on the computer kept getting the old alert (#6425).
   - **Approve / answer**: if a request dies in transit (connection refused / reset, timeout, 502 / 503 / 504 not issued by the hub), keep the card submitted and retry with the same op id for at most 60 seconds (`OpRetry`), then restore the card and show a notice.
   - **Other one-shot actions**: never queue them (computer state may already have changed). Offline cards remain unchanged; failure restores the card,
     with a blue "Can't reach the hub / No network; that action did not take effect" notice (at most one per 4 seconds), not a red error.

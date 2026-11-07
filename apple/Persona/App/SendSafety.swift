@@ -2,7 +2,8 @@ import SwiftUI
 
 // Sending into a terminal safely (docs/protocol/protocol.md「发消息」): the node refuses a message — nothing typed — when the
 // computer's Claude input box holds a draft or a dialog has the keyboard. Each pending message carries its id as
-// client_msg_id, so a retry after a lost response is not typed twice.
+// client_msg_id, so a retry after a lost response is not typed twice. A refused one goes again under a new id: the
+// hub answers an id it refused with that refusal, without asking the computer again (#6425).
 
 /// A send refused because the computer's input box holds a draft: the app shows it and may clear it and send.
 struct SendRefusal: Identifiable {
@@ -39,18 +40,27 @@ extension AppModel {
             return .sent
         } catch let e as APIError where e.code == "input_draft" {
             Haptics.attention()
+            markRefused(key, msg.id)
             sendRefusal = SendRefusal(key: key, messageID: msg.id, draft: e.fields["draft"] ?? "", clearable: e.fields["clearable"])
             return .failed
-        } catch let e as APIError where e.fields["delivered"] == "unknown" || e.code == OpReceipt.unknownCode {
+        } catch let e as APIError where e.fields["delivered"] == "unknown" || e.code == OpReceipt.unknownCode || e.code == "op_id_reused" {
+            // op_id_reused: this id went once with other words (Clear and Send's clear_draft, then a resend of the
+            // waiting message without it); what became of that try is the op's to say, as for an unknown outcome.
             toast = Toast(String(localized: "It may have reached the computer already. Check the chat before sending it again."), style: .error)
             if let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) { chat(key).pending[i].mayHaveArrived = true }
             return .failed
         } catch where error.isOffline || error.isTimeout || error.isGap {
             return .waiting
         } catch {
+            if (error as? APIError)?.fields["delivered"] == "none" { markRefused(key, msg.id) } // a dialog open, say
             show(error)
             return .failed
         }
+    }
+
+    /// The hub answered this message's id with a refusal it keeps: the next try goes with a new id (`retry`).
+    private func markRefused(_ key: SessionKey, _ id: UUID) {
+        if let i = chat(key).pending.firstIndex(where: { $0.id == id }) { chat(key).pending[i].refused = true }
     }
 
     /// The user chose Clear and Send: the node clears that draft (only if the box still shows it) and sends.
