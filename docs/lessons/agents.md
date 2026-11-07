@@ -501,3 +501,26 @@ Closing is not durable merely because the card vanished: persist the interaction
   (`docs/integrations/claude-integration.md` "Global report-only hooks"); keep that property for anything new.
 - Read a user's global settings as "hooks that other tools may run too": a blocking entry there blocks grok's sessions and
   the other tools' sessions, not only Claude's.
+
+## The session merge must not call another host (2026-11-07, #5816)
+
+- `setAgentsAt` merges every host's agents after any refresh, even one of a single host. Whatever in it calls a host
+  runs on every host's refresh: it asked each pane's host what runs in the pane (`sessionFromProcess`), so Orca's poll
+  every second asked herdr, and a herdr refresh ran Orca's process scan (three `ps` runs, 157-211 ms on a Mac) when an
+  Orca pane was due for a look. The merge now asks only the hosts that answered its refresh; another host's pane keeps
+  the pid its own refresh found. A new host call in the merge needs the same scope (`fromProcess` there).
+- So a pane is looked at again only by its own host's refresh: a herdr pane whose claude has not written its sessions
+  file yet waits for herdr's next refresh (an event, or `slowSnapshot`), as with herdr alone, not for Orca's next poll.
+- Ownership's rule 1 is the exception (`resolve`): it asks every candidate's host. Scoped like the rest, Orca's poll
+  made the Orca pane the owner of a session herdr's pane also ran, because herdr had never been asked about its pane,
+  and herdr's next refresh gave it back.
+
+## One slow herdr call in forty is not a regression (herdr 0.9.5, measured 2026-11-07; re-check on newer versions)
+
+- herdr answers about 0.1 s late now and then with nothing else asking it: on one Mac 12,000 pings over six minutes had
+  p99.9 2.3 ms and one answer of 107 ms, and 2,400 more had one of 103 ms; a busier machine may see more. #5816 began
+  from single ~170 ms sends in runs of 40 with Orca beside herdr, but a herdr-only run had one of 149 ms, and on fakes a
+  herdr send is the same with and without Orca. Measure 400 or more per configuration and read p99 before you blame a
+  change.
+- Probing herdr from Python with `subprocess.run` in another thread of the same process shows a ~110 ms stall on many
+  of the spawns. That is the probe, not herdr: the same spawns from a separate process show none.

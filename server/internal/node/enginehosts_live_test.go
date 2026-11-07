@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 	"time"
 
@@ -24,17 +23,6 @@ import (
 )
 
 const liveRounds = 40
-
-type latencies []time.Duration
-
-func (l latencies) String() string {
-	s := slices.Clone(l)
-	slices.Sort(s)
-	q := func(p float64) time.Duration { return s[int(p*float64(len(s)-1))] }
-	return fmt.Sprintf("p50 %6.1f ms  p95 %6.1f ms  max %6.1f ms  (n=%d)", ms(q(0.5)), ms(q(0.95)), ms(s[len(s)-1]), len(s))
-}
-
-func ms(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
 
 func latencyNode(home string, hs ...host.Host) *Node {
 	n := &Node{home: home, paths: map[string]string{}, agents: map[string]host.Agent{}, panes: map[string]string{},

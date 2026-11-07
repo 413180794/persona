@@ -1231,6 +1231,7 @@ func (n *Node) refreshHosts(ctx context.Context, only ...host.Host) error {
 		n.hostAgents = map[string][]host.Agent{}
 	}
 	answered, snapped, firstErr := false, false, error(nil)
+	heard := map[string]bool{} // the hosts that answered: the merge asks only their panes what they run (setAgentsAt)
 	for _, o := range outs {
 		if o.err != nil && errors.Is(o.err, host.ErrNotRunning) {
 			o.err, o.agents = nil, nil // an answer: nothing runs there
@@ -1243,6 +1244,7 @@ func (n *Node) refreshHosts(ctx context.Context, only ...host.Host) error {
 		} else {
 			answered, snapped = true, snapped || o.full
 			n.hostAgents[o.kind] = o.agents
+			heard[o.kind] = true
 		}
 	}
 	union := make([]host.Agent, 0)
@@ -1254,7 +1256,7 @@ func (n *Node) refreshHosts(ctx context.Context, only ...host.Host) error {
 	if !answered {
 		return firstErr
 	}
-	if !n.setAgentsAt(union, epoch) {
+	if !n.setAgentsAt(union, epoch, heard) {
 		return errEngineChanged
 	}
 	n.backfillResume(union) // herdrresume.go
@@ -1425,11 +1427,22 @@ func (n *Node) setAgents(agents []host.Agent) {
 	n.mu.Lock()
 	epoch := n.engEpoch
 	n.mu.Unlock()
-	n.setAgentsAt(agents, epoch)
+	n.setAgentsAt(agents, epoch, nil)
 }
 
-// setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since.
-func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
+// setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since. heard is
+// the hosts that answered the refresh (nil: every host): only their panes' processes are asked for. The merge covers
+// every host's agents, and asking all of them tied each host's refresh to the others' I/O (#5816): Orca's poll every
+// second asked herdr, and herdr's refresh ran Orca's process scan (three ps runs, about 0.2 s on a Mac). A pane of
+// another host keeps the pid its own refresh found (sessionFromKnownProcess), and is looked at again only by that
+// host's refresh. Ownership's rule 1 still asks every candidate's host (resolve).
+func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64, heard map[string]bool) bool {
+	fromProcess := func(pane string) string {
+		if heard == nil || heard[host.ParsePane(pane).Kind] {
+			return n.sessionFromProcess(pane)
+		}
+		return n.sessionFromKnownProcess(pane)
+	}
 	m, onList := map[string]host.Agent{}, map[string]bool{}
 	var unknown, codex, pi, opencode, botmux []host.Agent
 	other := map[string]host.Agent{} // terminal-only agents by their row id (opencode.go)
@@ -1446,7 +1459,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	if unplaced(procs, agents) {
 		for _, a := range agents {
 			if a.Agent == "claude" && a.SessionID() != "" && a.PaneID != "" {
-				if id := n.sessionFromProcess(a.PaneID); id != "" {
+				if id := fromProcess(a.PaneID); id != "" {
 					own[a.PaneID] = id
 				}
 			}
@@ -1543,7 +1556,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		// database and come back when node restarts, long after another claude took the pane (2026-10-31: after a
 		// redeploy two panes showed sessions they had run days earlier). A guess (title, then newest transcript in
 		// the directory) is the last resort — six agents in one repo got each other's tab names that way.
-		id := n.sessionFromProcess(a.PaneID)
+		id := fromProcess(a.PaneID)
 		if j, ok := parked[id]; ok { // the same, as the pane's own claude tells it
 			if bg := j.shownIn(a); bg != "" {
 				if !liveTaken(m, bg) {
@@ -1674,7 +1687,7 @@ func (n *Node) sessionFromProcess(pane string) string {
 		pids, err := n.paneProcesses(ctx, pane)
 		cancel()
 		if err != nil {
-			return ""
+			return n.sessionOfPID(pane, c.pid) // the pid found before, as the other hosts' refreshes read it
 		}
 		c = panePID{checked: time.Now()}
 		for _, pid := range pids {
@@ -1687,13 +1700,30 @@ func (n *Node) sessionFromProcess(pane string) string {
 		n.panePIDs[pane] = c
 		n.mu.Unlock()
 	}
-	if c.pid == 0 {
+	return n.sessionOfPID(pane, c.pid)
+}
+
+// sessionFromKnownProcess is sessionFromProcess without asking the pane's host: from the pid an earlier look found,
+// however long ago ("" when none was found).
+func (n *Node) sessionFromKnownProcess(pane string) string {
+	n.mu.Lock()
+	c := n.panePIDs[pane]
+	n.mu.Unlock()
+	return n.sessionOfPID(pane, c.pid)
+}
+
+// sessionOfPID is the session the claude with pid runs, from its sessions/<pid>.json; with the file gone the pane's pid
+// is forgotten, and the next look at the pane finds it again.
+func (n *Node) sessionOfPID(pane string, pid int) string {
+	if pid == 0 {
 		return ""
 	}
-	f := n.claudeSessionFile(c.pid)
+	f := n.claudeSessionFile(pid)
 	if _, err := os.Stat(f); err != nil {
 		n.mu.Lock()
-		delete(n.panePIDs, pane) // claude exited / restarted: look again next time
+		if c, ok := n.panePIDs[pane]; ok && c.pid == pid { // not a newer pid a concurrent look just found
+			delete(n.panePIDs, pane) // claude exited / restarted: look again next time
+		}
 		n.mu.Unlock()
 		return ""
 	}

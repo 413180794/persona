@@ -78,7 +78,9 @@ func crossHost(m map[string]host.Agent, id string, a host.Agent) bool {
 }
 
 // resolve settles every contested session in m (the owner listed, the others recorded) and remembers which other
-// hosts each is also open in. Called without n.mu: rule 1 asks the panes' processes.
+// hosts each is also open in. Called without n.mu: rule 1 asks the panes' processes, every candidate's host even in a
+// refresh of another host (unlike the rest of setAgentsAt, #5816): a contest is rare, and its owner must not depend on
+// which host refreshed last.
 func (n *Node) resolve(m map[string]host.Agent, c contest) map[string][]string {
 	also := map[string][]string{}
 	owners := map[string]string{}

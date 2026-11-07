@@ -45,8 +45,17 @@ two hosts shows "Also open in …" above the composer. iOS and Android still pic
 
   In two of the three runs the herdr + Orca send had one max of about 170 ms (herdr alone had one of 149 ms in one run); p50 did not move.
   The refresh of every host is slower because it now includes Orca, the heaviest host. herdr's own refresh gains about 10 ms at p50 and about
-  0.1 s at p95: Orca's refresh every second and herdr's share the session merge step (`setAgentsAt`: process lookups, session files) and wait for
-  each other when they collide.
+  0.1 s at p95: the session merge after it (`setAgentsAt`: process lookups, session files) covers Orca's agents too.
+
+  A herdr send waits for nothing of Orca's. Measured again for #5816 on fakes (2026-11-07,
+  `PERSONA_BENCH_ENGINEHOSTS=1 go test -run EngineHostsLatencyOnFakes ./internal/node/ -v`: a fake herdr, a fake Orca whose process scan
+  takes 170 ms as three `ps` runs do on a Mac, 400 rounds each), a herdr send is p95 0.1 ms with and without Orca. herdr itself answers
+  about 0.1 s late now and then with nothing else asking it (`docs/lessons/agents.md`).
+
+  The merge asks only the hosts that answered the refresh what their panes run; another host's pane keeps the pid its own refresh found.
+  Only the owner of a session live in two hosts still asks both, so it does not change with the host that refreshed. When the merge asked
+  every host, herdr's refresh ran Orca's process scan whenever an Orca pane was due for a look (p95 174 ms on the fakes, 1.6 ms now), and
+  Orca's poll asked herdr about every herdr pane due for one.
 
 "Engine" below means this choice. APIs, storage, and node switching: `docs/protocol/protocol.md` ("Engines"); design / trade-offs: `docs/plans/plan-orca-support.md`.
 

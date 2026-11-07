@@ -20,12 +20,14 @@ import (
 // setHost is a host for the engine-set tests: its agents (or an error), the pids in each pane, and what it was sent.
 type setHost struct {
 	bareHost
-	mu     sync.Mutex
-	agents []host.Agent
-	err    error
-	pids   map[string]int // pane ref → the claude's pid
-	sent   []string       // pane ref + ": " + text
-	calls  int
+	mu      sync.Mutex
+	agents  []host.Agent
+	err     error
+	pids    map[string]int // pane ref → the claude's pid
+	sent    []string       // pane ref + ": " + text
+	calls   int
+	looks   int   // PaneProcesses calls
+	lookErr error // what PaneProcesses fails with, when set
 }
 
 func newSetHost(kind string, agents ...host.Agent) *setHost {
@@ -49,6 +51,10 @@ func (h *setHost) Agents(context.Context) ([]host.Agent, error) {
 func (h *setHost) PaneProcesses(_ context.Context, pane host.PaneRef) ([]int, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.looks++
+	if h.lookErr != nil {
+		return nil, h.lookErr
+	}
 	if pid := h.pids[pane.String()]; pid != 0 {
 		return []int{pid}, nil
 	}
@@ -60,6 +66,12 @@ func (h *setHost) SendText(_ context.Context, pane host.PaneRef, text string) er
 	defer h.mu.Unlock()
 	h.sent = append(h.sent, pane.String()+": "+text)
 	return nil
+}
+
+func (h *setHost) looked() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.looks
 }
 
 func (h *setHost) sentText() []string {
@@ -300,6 +312,134 @@ func TestSendGoesToTheOwnerOnly(t *testing.T) {
 	}
 	if got := oh.sentText(); len(got) != 0 {
 		t.Errorf("orca got %v", got)
+	}
+}
+
+// claudeOutsidePanes is a claude in a plain terminal (this test's own pid, so it is alive) running a session no pane
+// runs: the merge then also checks what the panes whose sessions their host names run (setAgentsAt's own).
+func claudeOutsidePanes(t *testing.T, home string) {
+	t.Helper()
+	b, _ := json.Marshal(map[string]any{"pid": os.Getpid(), "sessionId": "0d000000-0000-4000-8000-0000000000ff", "kind": "interactive"})
+	if err := os.WriteFile(filepath.Join(home, ".claude", "sessions", strconv.Itoa(os.Getpid())+".json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A refresh asks only the hosts that answered it what their panes run (#5816). The session merge covers every host's
+// agents and asked each pane's host for its processes (sessionFromProcess): Orca's poll every second asked herdr, and
+// herdr's refresh ran Orca's process scan (three ps runs, about 0.2 s on a Mac) before it could finish. A pane of
+// another host keeps the pid its own refresh found: its session stays listed in that pane. Each host has a claude it
+// names no session for and one it names, checked because a claude outside every pane runs another session.
+func TestARefreshAsksOnlyItsOwnHostsWhatTheirPanesRun(t *testing.T) {
+	const (
+		herdrNamed = "0d000000-0000-4000-8000-000000000003"
+		orcaNamed  = "0d000000-0000-4000-8000-000000000004"
+	)
+	n, hh, oh, home := setNode(t)
+	unnamed := func(pane string) host.Agent {
+		return host.Agent{Agent: "claude", PaneID: pane, Cwd: "/work/repo", AgentStatus: proto.StatusIdle}
+	}
+	hh.agents = []host.Agent{unnamed(herdrPane), claudeIn("w1:p2", herdrNamed, proto.StatusIdle)}
+	oh.agents = []host.Agent{unnamed(orcaPane), claudeIn("orca:t2:l1", orcaNamed, proto.StatusIdle)}
+	hh.pids[herdrPane], hh.pids["w1:p2"], oh.pids[orcaPane], oh.pids["orca:t2:l1"] = 4101, 4102, 4201, 4202
+	writePID(t, home, 4101, sidShared)
+	writePID(t, home, 4102, herdrNamed)
+	writePID(t, home, 4201, sidOnly)
+	writePID(t, home, 4202, orcaNamed)
+	claudeOutsidePanes(t, home)
+	listed := func(when string) {
+		t.Helper()
+		for id, pane := range map[string]string{sidShared: herdrPane, herdrNamed: "w1:p2", sidOnly: orcaPane, orcaNamed: "orca:t2:l1"} {
+			if a, _ := n.agent(id); a.PaneID != pane {
+				t.Errorf("%s: %s in %q, want %s", when, id, a.PaneID, pane)
+			}
+		}
+	}
+	ctx := context.Background()
+	if err := n.refreshHosts(ctx); err != nil {
+		t.Fatal(err)
+	}
+	listed("every host refreshed")
+	if hh.looked() != 2 || oh.looked() != 2 {
+		t.Fatalf("a refresh of every host asked herdr %d times, Orca %d times, want each pane once", hh.looked(), oh.looked())
+	}
+	for _, c := range []struct {
+		name             string
+		refreshed, other *setHost
+	}{{"Orca's poll", oh, hh}, {"herdr's refresh", hh, oh}} {
+		dueLooks(n, host.Herdr) // a minute on: every pane is due for another look
+		dueLooks(n, host.Orca)
+		own, other := c.refreshed.looked(), c.other.looked()
+		if err := n.refreshHosts(ctx, c.refreshed); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.other.looked() - other; got != 0 {
+			t.Errorf("%s asked the other host what its panes run (%d times)", c.name, got)
+		}
+		if got := c.refreshed.looked() - own; got != 2 {
+			t.Errorf("%s looked at its own panes %d times, want 2", c.name, got)
+		}
+		listed("after " + c.name)
+	}
+}
+
+// A session live in two hosts has the same owner whichever host refreshed (ownership's rule 1 asks every candidate's
+// host, #5816). herdr names the session in its pane and was never asked what runs there; then the same session is
+// resumed in Orca. Both panes' claudes run it and no hook said which started it last, so the default host's pane owns it
+// (rule 3), after Orca's poll as after herdr's refresh.
+func TestAContestedSessionsOwnerDoesNotDependOnWhichHostRefreshed(t *testing.T) {
+	n, hh, oh, home := setNode(t)
+	hh.agents, oh.agents = []host.Agent{claudeIn(herdrPane, sidShared, proto.StatusIdle)}, nil
+	hh.pids[herdrPane], oh.pids[orcaPane] = 4101, 4201
+	writePID(t, home, 4101, sidShared)
+	writePID(t, home, 4201, sidShared)
+	ctx := context.Background()
+	if err := n.refreshHosts(ctx); err != nil {
+		t.Fatal(err)
+	}
+	oh.agents = []host.Agent{{Agent: "claude", PaneID: orcaPane, Cwd: "/work/repo", AgentStatus: proto.StatusIdle}}
+	for _, c := range []struct {
+		name string
+		h    *setHost
+	}{{"Orca's poll", oh}, {"herdr's refresh", hh}, {"Orca's next poll", oh}} {
+		if err := n.refreshHosts(ctx, c.h); err != nil {
+			t.Fatal(err)
+		}
+		if a, _ := n.agent(sidShared); a.PaneID != herdrPane {
+			t.Errorf("after %s: owner %q, want herdr's pane", c.name, a.PaneID)
+		}
+		if got := n.alsoOpenIn(sidShared); !slices.Equal(got, []string{host.Orca}) {
+			t.Errorf("after %s: also open in %v", c.name, got)
+		}
+	}
+}
+
+// A process lookup that fails keeps the pid found before (#5816): the other host's refreshes read that pid
+// (sessionFromKnownProcess), and the pane's own refresh must not drop the session they list.
+func TestAFailedLookupKeepsThePidFoundBefore(t *testing.T) {
+	n, hh, oh, home := setNode(t)
+	hh.agents = nil
+	oh.agents = []host.Agent{{Agent: "claude", PaneID: orcaPane, Cwd: "/work/repo", AgentStatus: proto.StatusIdle}}
+	oh.pids[orcaPane] = 4201
+	writePID(t, home, 4201, sidOnly)
+	ctx := context.Background()
+	if err := n.refreshHosts(ctx); err != nil {
+		t.Fatal(err)
+	}
+	oh.mu.Lock()
+	oh.lookErr = errors.New("ps: interrupted")
+	oh.mu.Unlock()
+	for _, c := range []struct {
+		name string
+		h    *setHost
+	}{{"herdr's refresh", hh}, {"Orca's poll", oh}} {
+		dueLooks(n, host.Orca)
+		if err := n.refreshHosts(ctx, c.h); err != nil {
+			t.Fatal(err)
+		}
+		if a, ok := n.agent(sidOnly); !ok || a.PaneID != orcaPane {
+			t.Errorf("after %s: listed %v in %q", c.name, ok, a.PaneID)
+		}
 	}
 }
 
