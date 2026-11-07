@@ -811,3 +811,29 @@ When a `httputil.ReverseProxy` has to read what it forwards (the sent-as-user le
 ## A push's nil "wants" means "asked for explicitly" (2026-11-06, per-manager push switches)
 
 `Pusher.send*` and the WebSocket notify take `wants func(NotifyPrefs) bool`, and nil is not just "every device": `alertWanted` lets it past Phone Muted (`mute_while_desktop`) and the pusher sends it to an open desktop too (an assistant's reminder, an extension's push). Wrapping nil in a filter to add one more condition (a muted manager) silently turns those pushes into ordinary ones, and they stop reaching a phone in Phone Muted mode. Put an extra per-device rule where the devices are walked (`Pusher.sendFrom`, `notifyWSFrom` take the manager) instead of in `wants`.
+## A LaunchAgent without ProcessType runs under the Background policy (macOS, measured 2026-11; re-check)
+
+- `launchd` gives a job with no `ProcessType` the Background policy: low scheduling priority and throttled I/O. A resident
+  node under it got 15.45 CPU-seconds in 139 s (scheduling priority 4 instead of 31), and the Claude Code it started failed to
+  become ready in time. Nothing looks wrong in the node's own logs; only the timings are long.
+- `ProcessType` = `Interactive` fixes the priority. It changes scheduling only: it grants no TCC permission, so a job that
+  cannot read a protected folder still cannot (`docs/plan-connectors.md` "Full Disk Access (TCC)").
+- The plists Persona writes (`scripts/deploy/node-launchd.sh`, `nodePlist` in `cmd/persona-link/nodesvc.go`) did not set it,
+  which is #5944. A resident node whose Agents start slowly or time out is worth checking with `launchctl print gui/<uid>/…`
+  for its policy before blaming the machine's load.
+
+## A symlink or working directory inside a TCC-protected folder makes Claude hang before any hook (macOS, measured 2026-11; re-check)
+
+- When a skill directory, a command file, or the working directory is (or links into) Documents, Desktop or Downloads, a
+  Claude Code started by a process macOS has not allowed stops at "Loading commands and agents" and never reaches
+  `SessionStart`. No hook fires, so the node sees a pane with no session and no error, and the phone shows a session that
+  never starts. It looks exactly like a slow machine (`#1396`), and a timeout message about the shell is misleading.
+- This is TCC on the responsible process (`sshd-keygen-wrapper` for an SSH-started node, the node's own identity for a
+  LaunchAgent), the same rule as the file-access entry above. The observed shape differs (a stall rather than
+  `operation not permitted`); the exact point it blocks at on a given version may move, so treat "stalls before
+  `SessionStart`" as the symptom rather than any single message.
+- Two ways out: grant Full Disk Access to the program that runs the node, or move the directory out of the protected folder.
+  When diagnosing, read the target's real path (`realpath`) before checking which folder it is in — a link under `~/code`
+  can point into `~/Documents`.
+- `explainDenied` (`node/files.go`) only explains access errors in terms of ssh, and `doctorChecks` (`node/doctor.go`) probes
+  none of this; both are #5944. Until then, a stuck "Loading commands and agents" is a manual check.

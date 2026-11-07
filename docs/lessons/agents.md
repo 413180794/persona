@@ -453,3 +453,48 @@ After a group kill whose leftovers matter, sweep with `osproc.SweepGroup`, which
 A question UI can be correct while a second producer omits its cancellation capability. Match the reported card ID and tool against both pending interactions and history. A later question with a different ID can be a newly generated triage question, not replay of the answered one. Treat explicit defer as structured option intent instead of forwarding a model-generated pause label to an Agent and causing another turn.
 
 Closing is not durable merely because the card vanished: persist the interaction outcome and the owning turn, propagate write failures, and serialize turn writes so an earlier snapshot cannot overwrite cancellation. Replay terminal outcomes to owners after reconnect instead of asking again. Test the actual triage producer, old persisted cards, failed writes, stale snapshots, and a genuinely new turn; Agent-runtime tests alone miss this path.
+
+## herdr still answers while it shuts down (herdr 0.9.x, measured 2026-11; re-check on the installed version)
+
+- While herdr's server is stopping, its socket still accepts connections and `ping` still answers; only calls that need the
+  server's state, such as `session.snapshot`, return `server_unavailable`. Measured shutdown time: about 0.15 s with no
+  panes, about 1 s with ten, and 40–120 s when one child process hangs.
+- So neither dialing the socket nor `ping` is a liveness check. `herdrAlive` (`node/herdrstart.go`) only dials and would
+  call a stopping herdr alive, and `ensureHerdr` / `startHerdr` then skip starting a new one although the old one is about
+  to be gone. Where the question is "may I use it", call something that needs state (`session.snapshot`); keep the dial only
+  for "is this socket stale / mine".
+- The long tail is a child that ignores its exit. When a start looks stuck for a minute or more, look for one hung child
+  process rather than a slow herdr.
+
+## Esc on an idle Claude input box exits claude (Claude Code 2.1.270; re-check on newer versions)
+
+- With an empty box and no turn running, one Esc leaves claude and the pane falls back to its shell. Esc stops a running
+  turn; on an idle conversation it is "quit", not "clear the input".
+- Every place Persona sends `esc` to a Claude pane, checked 2026-11-07:
+  - `session.interrupt` (`node/node.go`, the Claude case calling `n.keys(ctx, p.SessionID, []string{"esc"}, "")`; a Codex
+    session goes to `interruptCodex` and an assistant conversation to `assistantInterrupt`, which kills the process rather
+    than sending Esc): the app's stop button, the assistant's `agent_interrupt`, Feishu cards and channels all land here. It
+    does not look at the session's state first, so a stop sent on a stale "working" state, or a second stop after the turn
+    already ended, can hit an idle box and end the session.
+  - Not guarded: the `/effort` picker (`node/modes.go`) sends `esc` when it could not recognize the picker within its own
+    timeout (`_ = n.sendKeys(ctx, pane, "esc")` before returning "没打开思考强度的选择器…"), right after `/effort` was typed
+    and submitted. On a version without `/effort` the box is idle at that moment — exactly the case above. It also sends
+    `esc` when the picker is open but does not close.
+  - Guarded: the `/model` picker (`node/model_switch.go`, Esc only once `modelPicker(s)` saw the picker), the `/rewind`
+    panel (`node/rewind.go`'s `close`, which returns unless `screen.ParseRewind` still parses a panel) and the automatic
+    guide (`node/sendsafe.go`'s `declineGuide`, reached only after `screen.Guide` / `CheckClaude` recognized the screen).
+    Each sends Esc only after its own screen was recognized.
+  - Free key presses from a phone terminal, a watch answer, or a Feishu screen card's Esc button
+    (`assistant/feishu_cards.go`): the user's own key, not a decision Persona makes.
+- Before sending `esc` as "stop", confirm the turn is running (session state, or the working status line above the box);
+  send it at most once per stop, and never as a way to clear the box — the `/effort` path above shows how easy that is.
+
+## Another program runs the user's Claude hooks: grok does (measured 2026-11; re-check)
+
+- grok runs the hooks in `~/.claude/settings.json`, and setting `GROK_HOME` does not stop it: a global Persona hook, or a
+  profile's, runs under grok as well. Only `GROK_CLAUDE_HOOKS_ENABLED=0` turns that off.
+- Our hooks must assume a different program at the other end: no pane variable (`HERDR_PANE_ID`, `ORCA_*`), a session id
+  grok's own, and possibly no `node.sock`. `hook --persona-global` already exits at once without a pane variable or socket
+  (`docs/claude-integration.md` "Global report-only hooks"); keep that property for anything new.
+- Read a user's global settings as "hooks that other tools may run too": a blocking entry there blocks grok's sessions and
+  the other tools' sessions, not only Claude's.

@@ -77,3 +77,27 @@ When Claude Code changes how something reports back, record a real session and l
 As a chat opens, the latest page can arrive twice: once over HTTP (`loadInitial`, when the socket is not up yet) and once in the socket's subscribe backlog, both with `fold_work`. With "open all work" on, the first fold row fetched its steps (`AppModel.unfold`) before the second page came; that page carried the same fold, `dropFolded` took the steps out again and the fold came back under the same row id.
 `FoldedWorkRow` fetches in `.task(id: attempt)`, which had already run for that id, so the row stayed on "Loading N steps…" (about 1 run in 3 on the mock hub). `ChatStore` now remembers the folds it opened (`opened`): a page with the same fold over the same or a shorter range leaves the work open, a fold that reaches further folds it again, and starting over (`reset`, `replace`) forgets them.
 A view that fetches once per id cannot recover when the store puts the same id back: the store must not undo what the view already did.
+## A queued message is taken in at the next tool boundary, not at the end of the turn (measured Claude Code 2.1.2xx; re-check)
+
+- See also "Queued messages" in `docs/claude-integration.md` (#6088, measured on 2.1.319), which also covers "send now".
+- Extending the "absorbed mid-turn" entry above: Enter while Claude is working queues the text, and Claude takes it in as soon as the current tool call returns: the
+  transcript gets it as `attachment/queued_command` (`commandMode=prompt`, `origin.kind=human`) and the queue-operation line
+  records `reason: "absorbed_mid_turn"`. It is not held until the turn ends, so a message sent during a long turn can be
+  half-way through the reply before the phone shows it.
+- Esc stops only the tool call that is running. The queue survives and starts the next turn, so "stop" and "the queued
+  message" are independent; after an interrupt, look for the queued message becoming a new turn rather than assuming the
+  interrupt cancelled it. The parser must not treat that later turn as a new user message typed after the stop.
+
+## A herdr started from inside a Claude session makes its panes write no transcript (measured Claude Code 2.1.2xx; re-check)
+
+- Claude Code sets `CLAUDE_CODE_CHILD_SESSION` for the processes it starts. A herdr that someone launches from inside a
+  Claude session therefore passes it to every pane, and Claude in those panes treats itself as a child session and writes no
+  `~/.claude/projects/…/<session id>.jsonl`. The Agent then appears in lists with no transcript: no title, no last words, and
+  a chat that stays empty while the terminal is clearly working.
+- `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` overrides it and writes the transcript again. Set it on the Agent command (like
+  `HERDR_AGENT=claude`) rather than exporting it into the pane shell, and only when the parent environment has the child flag:
+  an agent started normally must keep whatever its launcher decided.
+- Symptom to recognize: a pane whose Claude works and herdr reports an id, and a `sessions/<pid>.json` that names a session
+  id whose `projects/…/<id>.jsonl` never appears. (The pid file has no transcript path; node derives it from the session id —
+  `transcriptPath` in `node/sessions.go` looks for `<config dir>/projects/*/<id>.jsonl`.) Check the node's own environment
+  for the child flag first (`/proc/<pid>/environ`, on macOS `KERN_PROCARGS2`), then the pane shell's.

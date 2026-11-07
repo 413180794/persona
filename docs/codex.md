@@ -332,8 +332,19 @@ Read codex-rs source tags `rust-v0.153.4` / `rust-v0.163.0`, plus binaries for b
 - **Limitations**:
   - The hook runs **before** the terminal prompt, not concurrently. Before the phone answers, the user at the computer cannot see or answer the prompt, conflicting with the requirement that "the phone notices if the computer answers first."
     A very short timeout (seconds to tens of seconds) can fall back to the terminal, but late phone answers then become useless.
-  - User hooks run only when trusted: `trusted_hash` in `hooks.state` in `config.toml`, managed / system configuration, or
-    `--dangerously-bypass-hook-trust` (also disables the daemon in 0.163). Codex configuration must change on every machine.
+  - User hooks run only when trusted: a `trusted_hash` in `config.toml`'s `hooks.state`, managed / system configuration, or
+    `--dangerously-bypass-hook-trust`. Measured on 0.163 (re-check on the installed version), the details differ from what
+    the source suggests:
+    - the hash covers the handler configuration only, so editing a hook's `command` / `args` / `timeout` drops the trust and
+      asks again, while an unrelated config change does not;
+    - a separate `hooks.state` **file** has no effect; the state lives under `[hooks]` in `config.toml`;
+    - the hook engine itself is on by default in the versions read above; where a machine reports hooks off, the switch is
+      `[features] hooks = true`;
+    - `--dangerously-bypass-hook-trust` given **before** `app-server` does nothing — it is not parsed as a daemon flag — so
+      passing it on the daemon command line does not make hooks trusted. (An earlier note said the flag also disables the
+      daemon in 0.163; this measurement neither confirms nor contradicts that, so re-test it before relying on either.)
+    On the `app-server` daemon command line there is thus no per-machine bypass to rely on; Codex configuration must change
+    on every machine.
   - Async hooks cannot make decisions.
   - `request_user_input` triggers only `PreToolUse` (tool name `request_user_input`), not `PermissionRequest`. PreToolUse supports only "deny + reason" or
     "allow with rewritten input", not a plain allow. An inferred workaround is to use the phone answer as a denial reason, which the model reads as tool output, but the question never appears in the terminal. `notify` has only `agent-turn-complete`.
