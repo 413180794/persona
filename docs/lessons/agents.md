@@ -141,6 +141,9 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly in `CLAUDE
   a probe definition like `claude() { … }` expands the alias first, breaking the whole script. Define stubs as `function claude { … }`.
 - Tests running launchers or probes use a minimal environment (`HOME`, `ZDOTDIR`, `PATH`); never print all output in failure messages: probe output contains the complete process environment, and dev machines
   contain real keys.
+- Anything run through `zsh -ic` / `bash -ic` shares stdout with the rc files (#6310): Ubuntu's `/etc/bash.bashrc` prints a two-line sudo hint until the user has run sudo once,
+  other rc files print greetings, and an `EXIT` trap prints after the script. The launcher scan read that as helper output ("To", "See" listed as launchers) and lost the last PATH entry.
+  The script now frames its output with begin/end markers and node parses only between them (`launcherOutput`); a test's fake rc file should print noise before and after the definitions.
 
 - Codex has two kinds of questions (source read + measurements on 0.153.4 / 0.163.0, 2026-11-02): in Default mode, current models receive `request_user_input_async`; the call immediately returns
   `{"accepted":true}`, the turn ends normally, and the answer later arrives as a user message carrying `<send_user_message_question_reply>`. "Call without output" can't recognize this;

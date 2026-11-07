@@ -2201,8 +2201,10 @@ var launcherCache struct {
 // as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here (bash prints
 // `alias -p` after bashAliasMark instead, launchers_shell.go); then, each after a GS byte, where codex, traex and omp
 // are on the PATH, the names of the shell's functions and aliases (one a line: they come before a file on PATH of the
-// same name), and its PATH (for the wrapper scripts on it, pathlaunchers.go).
-const launcherScript = `__jl_path=$PATH
+// same name), and its PATH (for the wrapper scripts on it, pathlaunchers.go). All of it between launcherBegin and
+// launcherEnd, so what the rc files print around it is never read as a section (launcherOutput).
+const launcherScript = `printf '\001persona-launchers-begin\001'
+__jl_path=$PATH
 _claude_launchers 2>/dev/null || true
 printf '\035'
 if [ -n "$ZSH_VERSION" ]; then
@@ -2225,7 +2227,26 @@ if [ -n "$ZSH_VERSION" ]; then whence -p omp 2>/dev/null; else command -v omp 2>
 printf '\035'
 if [ -n "$ZSH_VERSION" ]; then eval 'print -rl -- ${(k)functions} ${(k)aliases}'; elif [ -n "$BASH_VERSION" ]; then compgen -A function; compgen -a; fi
 printf '\035'
-printf '%s' "$__jl_path"`
+printf '%s' "$__jl_path"
+printf '\001persona-launchers-end\001'`
+
+// launcherBegin and launcherEnd frame what launcherScript prints (launcherOutput).
+const (
+	launcherBegin = "\x01persona-launchers-begin\x01"
+	launcherEnd   = "\x01persona-launchers-end\x01"
+)
+
+// launcherOutput is what launcherScript itself printed: rc files print what they like to stdout while the shell
+// starts (Ubuntu's /etc/bash.bashrc a sudo hint, #6310) and an exit trap after the script, none of it the script's.
+// Nothing without the begin marker; to the end of the output without the end marker (a shell cut off by the timeout).
+func launcherOutput(out string) string {
+	i := strings.LastIndex(out, launcherBegin)
+	if i < 0 {
+		return ""
+	}
+	out, _, _ = strings.Cut(out[i+len(launcherBegin):], launcherEnd)
+	return out
+}
 
 // launchers lists the launchers of this machine's login shell: the `_claude_launchers` helper's (claude wrapper
 // functions), then every alias that runs claude (`alias dmcc="ANTHROPIC_BASE_URL=… claude …"`), by name. A name
@@ -2263,7 +2284,7 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 // name (launcher_settings.go); an alias is what the shell runs for its name even when the helper lists the name too.
 // scripts: where each wrapper script is.
 func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string, settings, scripts map[string]string) {
-	helper, rest, _ := strings.Cut(out, "\x1d")
+	helper, rest, _ := strings.Cut(launcherOutput(out), "\x1d")
 	aliases, rest, _ := strings.Cut(rest, "\x1d")
 	if a, ok := strings.CutPrefix(aliases, bashAliasMark); ok {
 		aliases = bashAliases(a)

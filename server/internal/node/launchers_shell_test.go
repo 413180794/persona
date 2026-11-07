@@ -14,11 +14,16 @@ import (
 // in asNode's minimal environment (without fixedBins).
 func asBash(t *testing.T, defs, script string) string {
 	t.Helper()
+	return asBashIn(t, t.TempDir(), defs, script)
+}
+
+// asBashIn is asBash with dir as the HOME, for a test that puts something in it first.
+func asBashIn(t *testing.T, dir, defs, script string) string {
+	t.Helper()
 	bash, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("no bash")
 	}
-	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".bashrc"), []byte(defs), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +70,63 @@ func TestBashrcWithoutLaunchers(t *testing.T) {
 	list, _, _, _ := mergeLaunchers(asBash(t, `alias ll="ls -l"`, launcherScript))
 	if len(list) != 1 || list[0].Name != "claude" {
 		t.Fatalf("got %v", list)
+	}
+}
+
+// What the rc files print is not the script's: Ubuntu's /etc/bash.bashrc prints a sudo hint until the user has run
+// sudo once (#6310), other rc files a greeting, and an exit trap prints after the script. None of it is a launcher,
+// and the last PATH entry (where a wrapper script is) stays whole.
+func TestRcFileOutputIsNotLaunchers(t *testing.T) {
+	defs := `cat <<'EOF'
+To run a command as administrator (user "root"), use "sudo <command>".
+See "man sudo_root" for details.
+
+EOF
+` + fixture(t, "aliases.zsh") + `export PATH="$PATH:$HOME/bin"
+echo "Welcome back, tester"
+trap 'echo bye' EXIT
+`
+	want := []string{"dmcc", "envcc", "expcc", "kcc", "mycc", "ncc", "pathcc", "spaced", "claude-demo", "ncodex"}
+	for _, sh := range []struct {
+		name string
+		run  func(t *testing.T, dir, defs, script string) string
+	}{{"bash", asBashIn}, {"zsh", asNodeIn}} {
+		t.Run(sh.name, func(t *testing.T) {
+			home := t.TempDir()
+			writeScript(t, filepath.Join(home, "bin", "claude-demo"), demoScript, 0o755)
+			list, _, _, _ := mergeLaunchers(sh.run(t, home, defs, launcherScript))
+			var names []string
+			for _, l := range list {
+				names = append(names, l.Name)
+			}
+			if !slices.Equal(names, want) {
+				t.Fatalf("launchers %v, want %v", names, want)
+			}
+		})
+	}
+}
+
+// The parser on its own: what comes before the script's begin marker and after its end marker is never a launcher,
+// and output without the begin marker has none of the script's sections.
+func TestLauncherOutputReadsOnlyBetweenMarkers(t *testing.T) {
+	hint := "To run a command as administrator (user \"root\"), use \"sudo <command>\".\nSee \"man sudo_root\" for details.\n"
+	body := "\x1dkcc\x1fANTHROPIC_BASE_URL=https://gw.example.com\x1fclaude\x1f\x1e\x1d\x1d\x1d\x1d\x1d"
+	for name, c := range map[string]struct {
+		out  string
+		want []string
+	}{
+		"framed":          {hint + launcherBegin + body + launcherEnd + "bye\n", []string{"kcc"}},
+		"no end marker":   {hint + launcherBegin + body, []string{"kcc"}},
+		"no begin marker": {hint + body, []string{"claude"}},
+	} {
+		list, _, _, _ := mergeLaunchers(c.out)
+		var names []string
+		for _, l := range list {
+			names = append(names, l.Name)
+		}
+		if !slices.Equal(names, c.want) {
+			t.Errorf("%s: launchers %v, want %v", name, names, c.want)
+		}
 	}
 }
 

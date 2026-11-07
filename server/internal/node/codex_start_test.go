@@ -331,7 +331,7 @@ alias dmcc='ANTHROPIC_BASE_URL=http://127.0.0.1:8 claude'
 		t.Errorf("own process: %q %q", codexOwnProcess(codex["cx"]), codexOwnProcess(codex["cxr"]))
 	}
 	// Plain codex on the PATH is a launcher of its own.
-	list, codex, _, _ = mergeLaunchers("\x1d\x1d/usr/local/bin/codex\n")
+	list, codex, _, _ = mergeLaunchers(launcherBegin + "\x1d\x1d/usr/local/bin/codex\n" + launcherEnd)
 	if len(list) != 2 || list[1].Name != "codex" || list[1].Agent != "codex" || len(codex["codex"]) != 1 {
 		t.Errorf("plain codex: %+v %v", list, codex)
 	}
