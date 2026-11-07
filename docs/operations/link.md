@@ -538,6 +538,15 @@ WantedBy=default.target
 
 Resident node likewise: `nohup ~/.persona/bin/personad node --attach >> ~/.persona/node-attach.log 2>&1 &`.
 
+Two things to know about a node without systemd:
+- The hub cannot update it: remote node updates need launchd or systemd for their rollback watchdog, so the machine shows `can_deploy: false`
+  and Redeploy and the automatic node update after a hub update skip it. Upgrade by hand: replace `~/.persona/bin/personad` with the hub's
+  own build for that platform (same version as the hub) and restart the node process.
+- A container on the hub's own machine may not reach the hub at the hub's LAN address or public name (a NAS's policy routing sends the
+  replies elsewhere; a default bridge network has no IPv6). Its bridge's gateway does reach it: pair with the link's `url` host replaced by the
+  gateway address, and add `https://<gateway>:<TLS port>` with `persona-link address add` so it stays first ([lessons/server.md](../lessons/server.md)
+  "A node service in a Docker container on the hub's own NAS").
+
 **Status, logs, uninstall**
 
 | Command | Action |

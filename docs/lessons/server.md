@@ -306,6 +306,35 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
 - `docker build` with `FROM <image id>` looks for a registry image named that id (`registry-1.docker.io … EOF`): first `docker tag <id> <name>`, then `FROM <name>`.
   Removing a tag added to a dangling image also deletes the image.
 
+## A node service in a Docker container on the hub's own NAS (2026-11-07)
+
+Setup: a plain Debian container on a bridge network of its own, no published ports, not privileged; a small supervisor script as the main
+process (under `--init`) keeps `personad node --attach` and `persona-link run` up, both restarted when they exit; everything else lives in the
+home volume (docs/operations/link.md "Without systemd").
+
+- **Only the bridge's gateway reaches the hub.** The NAS's LAN address timed out from the container and its public name was refused:
+  Synology's policy routing (`ip rule`: `from <LAN address> lookup <interface>-table`) sends the replies of a connection to the LAN address out
+  through the router instead of back over the bridge, and the container had no IPv6 for the name's AAAA. The pairing link carries only the
+  hub's addresses, so the redeem failed with both. Fix: rewrite the link's `url` host to the gateway (`172.x.0.1`) before `persona-link pair -`
+  (the pin is the hub's key and does not check names) and `persona-link address add https://<gateway>:<TLS port>`: manual candidates survive
+  the hub's endpoint updates and rank first. Pipe the link straight from `hub pair` into `pair -` so it never lands on a screen or in a log.
+- **Restart measurements need over a minute between restarts.** Ten `docker restart`s about 6 s apart took 2.3, 4.5, 8.3, 16, 32 s to come back
+  online, then hit a 2-minute timeout: Persona Link reconnected in about a second every time, but the manager's run loop counts a connection
+  that ended within a minute of starting as a failed path (`pathEnded`: 2 s doubling to a minute) and does not try the path before then, even
+  though a new link is up (`setLink` wakes the loop, `choosePath` still skips the path). With a container that stayed up 75 s or more before
+  each restart, ten runs came back in min 2.2 / p50 2.4 / p90 2.5 / max 2.8 s (time from `docker restart` to the hub listing it online on a
+  new link). A real flapping link (a laptop on a bad network) gets the same delays.
+- **No systemd, no remote node updates**: `can_deploy` is false ("The resident node is not managed by launchd/systemd…", `nodeupdate.New` looks
+  for `INVOCATION_ID` and `systemd-run`): the hub's Redeploy and its automatic node update after a hub update skip such a node. Upgrade it by
+  hand: put the hub's own node build (`~/.persona/bin/nodes/…-linux-amd64`, the same version) into the volume and kill the node process.
+- **Some downloads only work over IPv6 from that network, and a default bridge has none**: the Claude Code installer's download host timed out
+  over IPv4 from the NAS and its containers, while the npm registry worked (`npm install -g @anthropic-ai/claude-code` with
+  `npm config set prefix ~/.local`). herdr's manifest (`herdr.dev/latest.json`) timed out repeatedly; the binary itself came from GitHub
+  releases, checked against the manifest's sha256 fetched from another machine.
+- **The node starts herdr's server by itself** when herdr is installed but not running (`herdr_autostart`, default on): no need to start it in
+  the supervisor. Without systemd it runs in a session of its own: killing the node left it running (reparented to the container's init) and
+  the restarted node used it again; a container stop ends it.
+
 ## Safe pulls in the Git panel (2026-11-03, #684)
 
 - `git status` behind counts use only locally cached remote refs; "up to date" doesn't mean no new remote commits. Keep Pull available even when synced.
