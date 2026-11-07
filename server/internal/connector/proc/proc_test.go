@@ -851,3 +851,11 @@ func TestWriteSaysWhichMessageItMade(t *testing.T) {
 		}
 	}
 }
+
+// A program's connector cannot take a message back yet (the extension protocol has no such method): it implements
+// every capability interface as a proxy, so it must not be a Recaller, or the ledger would offer a recall it cannot make.
+func TestAProgramCannotRecall(t *testing.T) {
+	if _, ok := connector.RecallerOf(New(program(t, &memSecrets{}))); ok {
+		t.Fatal("a program's connector is a Recaller")
+	}
+}

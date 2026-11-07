@@ -57,6 +57,29 @@ func (s *sentLedgerStore) PruneSentAsUser(_ context.Context, before time.Time) (
 	return 0, nil
 }
 
+func (s *sentLedgerStore) SentAsUserByID(_ context.Context, id int64) (db.SentAsUser, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id < 1 || id > int64(len(s.rows)) {
+		return db.SentAsUser{}, false, nil
+	}
+	return s.rows[id-1], true, nil
+}
+
+// MarkSentAsUserRecalled is the database's UPDATE … WHERE recalled_at IS NULL: once, and not with a ctx that is done.
+func (s *sentLedgerStore) MarkSentAsUserRecalled(ctx context.Context, id int64, at time.Time) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id < 1 || id > int64(len(s.rows)) || s.rows[id-1].RecalledAt != nil {
+		return false, nil
+	}
+	s.rows[id-1].RecalledAt = &at
+	return true, nil
+}
+
 func (s *sentLedgerStore) all() []db.SentAsUser {
 	s.mu.Lock()
 	defer s.mu.Unlock()

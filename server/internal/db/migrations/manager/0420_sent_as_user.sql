@@ -8,7 +8,7 @@
 --   let_through  how the gate let it through: {"kind": "rule", "rule": {...}} or
 --                {"kind": "card", "interaction_id", "answered_by"?}
 --   message_ref  the sent message's id on the other side, when the connector gave one ('' when it did not)
---   recalled_at  when the user took it back, if they did (not written by anything yet)
+--   recalled_at  when the user took it back, if they did (set by the recall, extmgr/sent_recall.go)
 CREATE TABLE IF NOT EXISTS sent_as_user (
     id          bigserial PRIMARY KEY,
     at          timestamptz NOT NULL DEFAULT now(),

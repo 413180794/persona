@@ -37,7 +37,8 @@ const oldHubJSON = `{
   "extension_runtime": {"path": "/runtime/deno", "version": "2.9.6", "sha256": "example-digest"},
   "ui_page_sessions": {"principal": 4, "extension": 32, "runtime": 128},
   "usage": {"sources": [{"id": "relay", "key": "secret-key"}]},
-  "sent_ledger_days": 30
+  "sent_ledger_days": 30,
+  "sent_recall_hours": 48
 }
 `
 

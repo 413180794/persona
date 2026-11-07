@@ -30,6 +30,9 @@ type Config struct {
 	// Egress gives github.proxy: an http:// proxy for everything sent to GitHub (the device flow on its web host,
 	// the REST API, CI logs), for networks that cannot reach github.com directly; empty is direct.
 	connector.Egress
+	// APIRoot is where the REST requests go (no trailing slash) instead of the host's own API, read when the connector is
+	// made: a fake GitHub for a test in another package. It is not a setting (never read from hub.json).
+	APIRoot string `json:"-"`
 }
 
 // AuthConfig: whose gh login the hub reads, and for which host. Host is github.com when empty; a GitHub Enterprise
@@ -139,6 +142,9 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 	api := "https://api.github.com"
 	if h := cfg.host(); h != "github.com" {
 		api = "https://" + h + "/api/v3"
+	}
+	if cfg.APIRoot != "" {
+		api = cfg.APIRoot
 	}
 	waiting, source := "正在读取 "+machine+" 上的 gh 登录…", SourceMachine
 	if fetch == nil {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // The manager's sections come from its manager.json; hub.json's copies (kept for an older build) are not read, its
@@ -117,6 +118,31 @@ func TestLoadConfigPassesAReadableFile(t *testing.T) {
 		}
 		if cfg, err := LoadConfig(dir, file); err != nil || cfg.Token != "hub-token" {
 			t.Fatalf("%q: %+v %v", good, cfg, err)
+		}
+	}
+}
+
+// The ledger's two settings are read from the manager.json (they are in managerconf.Moved: a key outside it is dropped
+// before the manager sees it), hub.json's copies are not, and they reach the places that use them.
+func TestConfigReadsTheLedgerSettingsFromManagerJSON(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(`{"token":"hub-token","sent_ledger_days":7,"sent_recall_hours":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "managers", "assistant", "manager.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(`{"sent_ledger_days":30,"sent_recall_hours":48}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, load := range map[string]func(string, string) (*Config, error){"loadConfig": loadConfig, "LoadConfig": LoadConfig} {
+		cfg, err := load(dir, file)
+		if err != nil || cfg.SentLedgerDays != 30 || cfg.SentRecallHours != 48 {
+			t.Fatalf("%s: %+v %v", name, cfg, err)
+		}
+		if limit, limited := (&Manager{cfg: cfg}).recallWindow(); !limited || limit != 48*time.Hour {
+			t.Errorf("%s: the recall window is %v (limited %v)", name, limit, limited)
 		}
 	}
 }

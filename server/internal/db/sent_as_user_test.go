@@ -112,3 +112,84 @@ func TestSentAsUserPrune(t *testing.T) {
 		t.Fatalf("left %+v", rows)
 	}
 }
+
+// A row is read by its id, with every column; an id that is not there is not an error.
+func TestSentAsUserByID(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 6, 8, 0, 0, 0, time.UTC)
+	id, err := d.RecordSentAsUser(ctx, SentAsUser{At: at, Connector: "github", Action: "github_comment", MessageRef: "3000000001",
+		Target: json.RawMessage(`{"ref":"example-org/example-repo#12"}`), Text: "Looks good.", Summary: "comment on example-org/example-repo#12",
+		Origin: json.RawMessage(`{"machine_id":"mac"}`), LetThrough: json.RawMessage(`{"kind":"card","interaction_id":"ix_1"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.RecordSentAsUser(ctx, SentAsUser{Connector: "mail", Action: "mail_send"}); err != nil {
+		t.Fatal(err)
+	}
+	row, ok, err := d.SentAsUserByID(ctx, id)
+	if err != nil || !ok || row.ID != id || !row.At.Equal(at) || row.Connector != "github" || row.Action != "github_comment" ||
+		row.MessageRef != "3000000001" || row.Text != "Looks good." || row.Summary != "comment on example-org/example-repo#12" ||
+		row.RecalledAt != nil || string(row.Target) != `{"ref": "example-org/example-repo#12"}` ||
+		string(row.Origin) != `{"machine_id": "mac"}` || string(row.LetThrough) != `{"kind": "card", "interaction_id": "ix_1"}` {
+		t.Fatalf("%+v %v %v", row, ok, err)
+	}
+	if row, ok, err := d.SentAsUserByID(ctx, id+100); err != nil || ok || row.ID != 0 {
+		t.Fatalf("a row that is not there: %+v %v %v", row, ok, err)
+	}
+}
+
+// Marking a row recalled sets its recalled_at once and touches nothing else: not another column, not another row, and
+// not the time of the first mark when it is asked again.
+func TestSentAsUserMarkRecalled(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	record := func(text string) int64 {
+		t.Helper()
+		id, err := d.RecordSentAsUser(ctx, SentAsUser{Connector: "github", Action: "github_comment", MessageRef: "7", Text: text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	first, other := record("first"), record("other")
+	before, _, _ := d.SentAsUserByID(ctx, first)
+
+	at := time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
+	if done, err := d.MarkSentAsUserRecalled(ctx, first, at); err != nil || !done {
+		t.Fatalf("first mark: %v %v", done, err)
+	}
+	row, _, _ := d.SentAsUserByID(ctx, first)
+	if row.RecalledAt == nil || !row.RecalledAt.Equal(at) {
+		t.Fatalf("recalled_at %v, want %v", row.RecalledAt, at)
+	}
+	row.RecalledAt = nil
+	if gotJSON, _ := json.Marshal(row); string(gotJSON) != mustJSON(t, before) {
+		t.Fatalf("another column changed:\n%s\n%s", gotJSON, mustJSON(t, before))
+	}
+	if done, err := d.MarkSentAsUserRecalled(ctx, first, at.Add(time.Hour)); err != nil || done {
+		t.Fatalf("second mark: %v %v", done, err)
+	}
+	if row, _, _ := d.SentAsUserByID(ctx, first); row.RecalledAt == nil || !row.RecalledAt.Equal(at) {
+		t.Fatalf("the first mark was moved to %v", row.RecalledAt)
+	}
+	if done, err := d.MarkSentAsUserRecalled(ctx, other+100, at); err != nil || done {
+		t.Fatalf("a row that is not there: %v %v", done, err)
+	}
+	if row, _, _ := d.SentAsUserByID(ctx, other); row.RecalledAt != nil {
+		t.Fatalf("another row was marked: %v", row.RecalledAt)
+	}
+	rows, _, _ := d.SentAsUsers(ctx, 0, 10, "")
+	if len(rows) != 2 || rows[1].ID != first || rows[1].RecalledAt == nil || rows[0].RecalledAt != nil {
+		t.Fatalf("the list: %+v", rows)
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

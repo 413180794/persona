@@ -82,6 +82,8 @@ Manifest fields:
 | `machines.online` | `{machine}` → `{}` | Machines declared; user's computer just connected, allowing token-on-computer connector retry. Hub does not await reply |
 | `auth.get` / `auth.set` | `{}` / `{source, machine?, machine_name?}` → `{source, machine?, scopes?, scopes_known}` | User chooses auth source, hub stores (currently GitHub only: machine gh login / device-code login). `auth.set` **after each startup** and user change; program does not persist. Scopes present only if GitHub reports token permissions |
 
+There is no method for taking back a sent message yet (#5278): the hub's sent-as-user ledger can recall only through a built-in connector that implements `connector.Recaller` (GitHub's comments, `docs/connectors.md` "Sent as the user"), so a program's connector is never offered a recall and `message_ref` in `actions.do` is only kept. A method and a declared capability for programs come in a later step.
+
 `InboxThing`: required thread (stable item key), kind, label, title, sender, preview, context, at, last (latest-step marker; change means new activity), url, `open_url`, `reply_to`, `can_reply`, tier (action / fyi / noise, blank for model), why, done (read / replied: item finished), read, `tags: [{key, value, name}]` (repo / chat / sender user-mutable), rules, extra below, group / id / meta (“Event grouping”).
 
 - Rules: user's original sorting instructions for source / account (extension `triage_rules`, `docs/extensions.md` “Conventional settings”). If present, **use only these**, not global hub `inbox.rules`; empty uses global. Hub defaults remain below, user overrides. Multiline allowed, max 4000 characters, truncate excess. Top-level thing field even migrated extra-bearing connectors. Old hub ignores, uses global.

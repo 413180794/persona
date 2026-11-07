@@ -91,13 +91,13 @@ LANGS = {"en": "", "zh-CN": ".zh-CN"}
 
 CHIPS = {  # Illustrative tasks, not activity from a real hub.
     "en": [
-        (None, "Superagent", "One conversation", False),
+        (None, "SuperAgent", "One conversation", False),
         ("#e0a33a", "Delegate", "Ship the fix", False),
         ("#3f9b62", "Connect", "Calendar · Inbox", False),
         ("#e2553a", "Your call", "Approve a plan", True),
     ],
     "zh-CN": [
-        (None, "Superagent", "一个入口", False),
+        (None, "SuperAgent", "一个入口", False),
         ("#e0a33a", "交给 AI", "把问题解决", False),
         ("#3f9b62", "连接", "日历 · 收件箱", False),
         ("#e2553a", "你来拍板", "批准执行计划", True),
@@ -108,7 +108,7 @@ TAGLINE = {  # (text, font family, size, letter spacing)
     "en": ("One place. Every task.", SERIF, 32, 0),
     "zh-CN": ("一个入口，解决所有问题。", SERIF_CJK, 32, 1),
 }
-SUPERAGENT = {"en": "YOUR SUPERAGENT", "zh-CN": "你的 SUPERAGENT"}
+SUPERAGENT = {"en": "Your SuperAgent", "zh-CN": "你的 SuperAgent"}
 
 
 def banner(theme, lang="en"):
@@ -202,16 +202,11 @@ GLYPHS = {
 def icon(name):
     glyph = GLYPHS[name]
     if glyph is None:
-        glyph = (f'<path d="{spark_path(31, 33, 15, 64)}" fill="#fff" stroke="none"/>'
-                 f'<path d="{spark_path(43.5, 20.5, 3.6, 32)}" fill="#fff" stroke="none"/>')
+        glyph = (f'<path d="{spark_path(31, 33, 15, 64)}" fill="{EMBER}" stroke="none"/>'
+                 f'<path d="{spark_path(43.5, 20.5, 3.6, 32)}" fill="{EMBER}" stroke="none"/>')
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-<defs>
-  <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4956a"/><stop offset="1" stop-color="#c24a28"/></linearGradient>
-  <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
-</defs>
-<rect width="64" height="64" rx="16" fill="url(#g)"/>
-<rect x=".75" y=".75" width="62.5" height="62.5" rx="15.25" fill="url(#hl)" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
-<g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">{glyph}</g>
+<rect x=".75" y=".75" width="62.5" height="62.5" rx="15.25" fill="{PEACH}" stroke="{CORAL}" stroke-opacity=".45" stroke-width="1.5"/>
+<g fill="none" stroke="{EMBER}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">{glyph}</g>
 </svg>
 '''
 
@@ -238,8 +233,15 @@ def versions():
             ("Android", android + "+"), ("hub", "Go " + ".".join(go.split(".")[:2]))]
 
 
-RUNTIME_BADGES = ("Claude Code", "Codex", "herdr", "Orca")
-CLIENTS_BADGE = "iPhone · Watch · Mac · Vision Pro · Android · Web"
+AGENT_BADGES = ("Claude Code", "Codex", "DSH", "pi", "opencode")
+ENGINE_BADGES = ("herdr", "Herdr App", "Orca", "Paseo")
+RUNTIME_BADGES = AGENT_BADGES + ENGINE_BADGES
+CLIENTS_BADGE = "iPhone · Apple Watch · Mac · Vision Pro · Android · Web"
+SUPPORT_BADGES = {
+    "Clients": CLIENTS_BADGE,
+    "Agents": " · ".join(AGENT_BADGES),
+    "Engines": " · ".join(ENGINE_BADGES),
+}
 
 
 VERDANA = {  # advance widths at 11px, shields.io's metric for Verdana
@@ -272,6 +274,25 @@ def badge(label, value=""):
 '''
 
 
+def support_badge(label):
+    """Three equally sized support rows, with the category labels aligned."""
+    value = SUPPORT_BADGES[label]
+    advance = vw(value) * 12 / 11
+    left = 76
+    width = math.ceil(max(vw(s) * 12 / 11 for s in SUPPORT_BADGES.values()) + left + 24)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="26" viewBox="0 0 {width} 26" role="img" aria-label="{label}: {value}">
+<title>{label}: {value}</title>
+<clipPath id="r"><rect x=".5" y=".5" width="{width - 1}" height="25" rx="5"/></clipPath>
+<g clip-path="url(#r)"><rect width="{width}" height="26" fill="#fffdf9"/><rect width="{left}" height="26" fill="{PEACH}"/></g>
+<rect x=".5" y=".5" width="{width - 1}" height="25" rx="5" fill="none" stroke="#e6d9c8"/>
+<g font-family="Verdana, 'DejaVu Sans', Geneva, sans-serif" font-size="12">
+  <text x="{left / 2}" y="17" text-anchor="middle" font-weight="bold" fill="{EMBER}">{label}</text>
+  <text x="{left + 12}" y="17" textLength="{advance:.1f}" fill="#49362a">{value}</text>
+</g>
+</svg>
+'''
+
+
 # ---------------------------------------------------------------- architecture
 
 TILE_GLYPHS = {  # drawn around (0, 0), about 26 wide, stroked in the accent
@@ -287,137 +308,86 @@ TILE_GLYPHS = {  # drawn around (0, 0), about 26 wide, stroked in the accent
 
 ARCH = {
     "en": dict(
-        title="How Persona fits together: your devices connect to the hub, the hub to your computers and connectors",
-        devices=(("iPhone · Apple Watch", "App, Live Activity, watch"), ("Mac · Web", "Web app hosted by the hub"),
-                 ("Android", "No push service needed")),
-        machine="An always-on machine", parts=("Assistant", "Inbox", "Knowledge", "Postgres"),
-        duties=("Relays chats · tracks requests", "Runs the assistant · gets messages",
-                "Reaches you over APNs when closed"),
-        connectors="Connectors", sources=("Lark", "Mail", "GitHub", "Telegram"),
-        ssh="SSH or Persona Link", apns="APNs push"),
+        title="Your devices, context and Agents come together in Persona",
+        devices=(("iPhone · Apple Watch", "Ask, answer and keep up"), ("Mac · Web", "Pick up where you left off"),
+                 ("Android · Vision Pro", "The same work, another screen")),
+        machine="Your context. Your decisions.", parts=("Assistant", "Inbox", "Knowledge", "Tasks"),
+        duties=("Bring the context together", "Decide what happens next", "Follow the work through"),
+        connectors="Your context", sources=("Messages", "Mail", "Calendar", "Photos"),
+        computers="Your computers", agents="Where your Agents work", ask="Ask · decide", work="Delegate"),
     "zh-CN": dict(
-        title="Persona 的结构：你的设备连 hub，hub 连你的各台电脑和连接器",
-        devices=(("iPhone · Apple Watch", "App、灵动岛和手表"), ("Mac · 网页", "网页版由 hub 托管"),
-                 ("Android", "同一套协议，不靠推送服务")),
-        machine="一台常开的机器", parts=("助手", "收件箱", "知识库", "Postgres"),
-        duties=("转发对话 · 管理要你回答的事", "运行助手 · 收消息和邮件", "App 关着时经 APNs 提醒你"),
-        connectors="连接器", sources=("飞书", "邮件", "GitHub", "Telegram"),
-        ssh="SSH 或 Persona Link", apns="APNs 推送"),
+        title="设备、上下文和 Agent，在 Persona 汇合",
+        devices=(("iPhone · Apple Watch", "提问、回答，随时掌握进度"), ("Mac · Web", "回到桌前，接着同一件事"),
+                 ("Android · Vision Pro", "换一块屏幕，工作继续")),
+        machine="你的上下文，你来决定", parts=("助手", "收件箱", "知识库", "任务"),
+        duties=("串起相关信息", "决定下一步怎么做", "跟进每件事的进展"),
+        connectors="与你有关的信息", sources=("消息", "邮件", "日历", "照片"),
+        computers="你的电脑", agents="Agent 在这里动手", ask="提问 · 决策", work="安排任务"),
 }
 
 
 def architecture(theme, lang="en"):
-    t = THEMES[theme]
+    """A product overview, not a deployment diagram; deliberately quiet in either appearance."""
     a = ARCH[lang]
-    accent = "#d4683f" if theme == "light" else "#ef7c4f"
-    line = "#dccbb7" if theme == "light" else "#4a3d33"
-    shadow = "#3c1e0a" if theme == "light" else "#000000"
-    shadow_op = 0.10 if theme == "light" else 0.45
-    W, H = 1280, 620
+    W, H = 1280, 540
+    ink, muted, line = "#1e293b", "#64748b", "#94a3b8"
     out = []
 
-    def tile(x, y, glyph):
-        return (f'<rect x="{x}" y="{y}" width="44" height="44" rx="12" fill="{accent}" fill-opacity=".14"/>'
-                f'<g transform="translate({x + 22} {y + 22})" fill="none" stroke="{accent}" stroke-width="2.2" '
-                f'stroke-linecap="round" stroke-linejoin="round" color="{accent}">{TILE_GLYPHS[glyph]}</g>')
-
-    def card(x, y, w, h, stroke=None, width=1, opacity=1):
-        return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="18" fill="{t["card"]}" stroke="{stroke or t["stroke"]}" '
-                f'stroke-width="{width}" stroke-opacity="{opacity}" filter="url(#shadow)"/>')
-
-    def text(x, y, s, size, weight=400, color=None, anchor="start"):
+    def text(x, y, s, size=16, weight=400, color=ink, anchor="start"):
         return (f'<text x="{x}" y="{y}" font-family="{SANS}" font-size="{size}" font-weight="{weight}" '
-                f'fill="{color or t["fg"]}" text-anchor="{anchor}">{s}</text>')
+                f'fill="{color}" text-anchor="{anchor}">{s}</text>')
 
-    def chip(x, y, s, size=15, strong=False):
-        w = text_width(s, size) + 18
-        fill = f'fill="{accent}" fill-opacity=".14"' if strong else f'fill="{t["bg2"]}" fill-opacity="{".5" if theme == "light" else ".9"}"'
-        return (w, f'<rect x="{x:.0f}" y="{y}" width="{w:.0f}" height="{size + 13}" rx="{(size + 13) / 2}" {fill} '
-                   f'stroke="{accent if strong else t["stroke"]}" stroke-opacity="{".5" if strong else "1"}"/>'
-                   + text(f"{x + w / 2:.0f}", y + size + 2, s, size, 500, accent if strong else t["fg"], "middle"))
+    def card(x, y, w, h, fill="#f8fafc", stroke="#cbd5e1", dashed=False):
+        dash = ' stroke-dasharray="6 3"' if dashed else ""
+        return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="16" fill="{fill}" stroke="{stroke}"{dash}/>'
 
-    def chips(x, y, items, size=15, strong=False, gap=8):
-        parts = []
+    def tile(x, y, glyph, color):
+        return (f'<g transform="translate({x} {y})" fill="none" stroke="{color}" stroke-width="2.2" '
+                f'stroke-linecap="round" stroke-linejoin="round" color="{color}">{TILE_GLYPHS[glyph]}</g>')
+
+    def chips(x, y, items, color=muted, size=14):
+        rendered = []
         for s in items:
-            w, svg = chip(x, y, s, size, strong)
-            parts.append(svg)
-            x += w + gap
-        return "".join(parts)
+            w = text_width(s, size) + 20
+            rendered.append(card(x, y, round(w), 30, "#fff", "#dbe4e8"))
+            rendered.append(text(round(x + w / 2), y + 20, s, size, 500, color, "middle"))
+            x += w + 8
+        return "".join(rendered)
 
-    def label(cx, cy, s, size=14):
-        w = text_width(s, size) + 18
-        return (f'<rect x="{cx - w / 2:.0f}" y="{cy - 13}" width="{w:.0f}" height="26" rx="13" fill="{t["card"]}" '
-                f'stroke="{accent}" stroke-opacity=".55"/>' + text(cx, cy + 5, s, size, 500, accent, "middle"))
+    # Context and decisions enter Persona; work continues with the user's Agents.
+    for d in ("M330 112 C400 112 400 168 470 168", "M330 224 L470 224",
+              "M330 336 C400 336 400 280 470 280", "M810 224 L960 224", "M640 438 L640 380"):
+        out.append(f'<path d="{d}" fill="none" stroke="{line}" stroke-width="2" marker-end="url(#arrow)"/>')
 
-    # Wires first (under the cards): a quiet base line, and accent dots running along it.
-    wires = [
-        "M330 158 C400 158 400 220 470 220", "M330 274 L470 274", "M330 390 C400 390 400 328 470 328",  # devices -> hub
-        "M810 220 C885 220 885 189 960 189", "M810 328 C885 328 885 359 960 359",                       # hub -> computers
-        "M640 500 L640 438",                                                                             # connectors -> hub
-    ]
-    for d in wires:
-        out.append(f'<path d="{d}" fill="none" stroke="{line}" stroke-width="2"/>')
-        out.append(f'<path class="flow" d="{d}" fill="none" stroke="{accent}" stroke-width="3" stroke-linecap="round" '
-                   f'stroke-dasharray="1 15"/>')
-    apns = "M640 110 C640 40 180 40 180 110"
-    out.append(f'<path d="{apns}" fill="none" stroke="{accent}" stroke-opacity=".55" stroke-width="2" stroke-dasharray="6 7"/>')
-    out.append(f'<path class="flow slow" d="{apns}" fill="none" stroke="{accent}" stroke-width="3" stroke-linecap="round" '
-               f'stroke-dasharray="1 15"/>')
+    for (y, glyph), (title, subtitle) in zip(((68, "phone"), (180, "desktop"), (292, "android")), a["devices"]):
+        out += [card(30, y, 300, 88, "#eff6ff", "#bfdbfe", True), tile(72, y + 43, glyph, "#3b82f6"),
+                text(110, y + 38, title, weight=600), text(110, y + 63, subtitle, 14, color=muted)]
 
-    # Your devices.
-    for (y, glyph), (title, sub) in zip(((110, "phone"), (226, "desktop"), (342, "android")), a["devices"]):
-        out += [card(30, y, 300, 96), tile(50, y + 26, glyph), text(110, y + 43, title, 20, 600),
-                text(110, y + 70, sub, 16, 400, t["muted"])]
-
-    # The hub.
-    out.append(f'<rect x="462" y="102" width="356" height="344" rx="24" fill="{accent}" fill-opacity=".18" filter="url(#glow)"/>')
-    out.append(card(470, 110, 340, 328, stroke=accent, width=1.5, opacity=0.7))
-    out.append(f'<path d="{spark_path(512, 152, 18, 64)}" fill="url(#spark)"/>')
-    out += [text(546, 150, "personad hub", 24, 700), text(546, 176, a["machine"], 16, 400, t["muted"])]
+    out += [card(470, 68, 340, 312, "#fff4eb", PEACH),
+            f'<path d="{spark_path(512, 120, 18, 64)}" fill="{CORAL}"/>',
+            text(546, 130, "Persona", 32, 700), text(490, 158, a["machine"], 14, color=muted)]
     for i, s in enumerate(a["parts"]):
-        cx, cy = 490 + (i % 2) * 154, 214 + (i // 2) * 58
-        out.append(f'<rect x="{cx}" y="{cy}" width="146" height="46" rx="14" fill="{accent}" fill-opacity=".10" '
-                   f'stroke="{accent}" stroke-opacity=".35"/>' + text(cx + 73, cy + 29, s, 18, 600, t["fg"], "middle"))
-    out += [text(640, 362 + 26 * i, s, 15, 400, t["muted"], "middle") for i, s in enumerate(a["duties"])]
+        x, y = 490 + (i % 2) * 154, 182 + (i // 2) * 58
+        out += [card(x, y, 146, 46, "#fff", PEACH), text(x + 73, y + 29, s, 16, 600, EMBER, "middle")]
+    out += [text(640, 314 + 23 * i, s, 14, color=muted, anchor="middle") for i, s in enumerate(a["duties"])]
 
-    # Your computers.
-    for y, glyph, title, items in ((130, "laptop", "Mac", ("Claude Code", "iMessage")),
-                                   (300, "server", "Linux", ("Codex",))):
-        out += [card(960, y, 290, 118), tile(980, y + 20, glyph), text(1040, y + 40, title, 20, 600),
-                text(1040, y + 64, "personad node · herdr", 15, 400, t["muted"]), chips(1040, y + 78, items)]
+    out += [card(960, 86, 290, 276, "#ecfdf5", "#a7f3d0", True), tile(995, 124, "laptop", "#059669"),
+            text(1025, 130, a["computers"], weight=600), text(980, 164, a["agents"], 14, color=muted),
+            chips(980, 192, ("Claude Code", "Codex"), "#065f46"),
+            chips(980, 240, ("DSH", "pi", "opencode"), "#065f46")]
+    out += [card(470, 438, 340, 72), text(490, 465, a["connectors"], weight=600),
+            chips(490, 476, a["sources"], size=13)]
 
-    # Connectors.
-    out += [card(470, 500, 340, 96), text(490, 534, a["connectors"], 18, 600),
-            chips(490, 550, a["sources"], 15, True)]
+    for x, label in ((400, a["ask"]), (885, a["work"])):
+        w = text_width(label, 13) + 20
+        out += [card(round(x - w / 2), 211, round(w), 26, "#fff", "#cbd5e1"),
+                text(x, 229, label, 13, 500, muted, "middle")]
 
-    # Wire labels on top.
-    out += [label(400, 274, "HTTPS / WSS"), label(885, 274, a["ssh"], 13), label(410, 57, a["apns"])]
-
-    s1, s2, s3 = t["spark"]
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" lang="{lang}">
 <title>{a["title"]}</title>
-<style>
-  .flow {{ animation: flow 1.6s linear infinite; }}
-  .slow {{ animation-duration: 3.2s; }}
-  @keyframes flow {{ to {{ stroke-dashoffset: -32; }} }}
-  @media (prefers-reduced-motion: reduce) {{ .flow {{ animation: none; }} }}
-</style>
-<defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{t["bg1"]}"/><stop offset="1" stop-color="{t["bg2"]}"/></linearGradient>
-  <radialGradient id="halo" cx="640" cy="274" r="420" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{t["glow"]}" stop-opacity="{t["glow_op"] * 0.7:.2f}"/><stop offset="1" stop-color="{t["glow"]}" stop-opacity="0"/></radialGradient>
-  <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{s1}"/><stop offset=".55" stop-color="{s2}"/><stop offset="1" stop-color="{s3}"/></linearGradient>
-  <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.3" fill="{t["dots"]}" fill-opacity="{t["dot_op"]}"/></pattern>
-  <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="{shadow}" flood-opacity="{shadow_op}"/></filter>
-  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
-  <clipPath id="frame"><rect width="{W}" height="{H}" rx="24"/></clipPath>
-</defs>
-<g clip-path="url(#frame)">
-  <rect width="{W}" height="{H}" fill="url(#bg)"/>
-  <rect width="{W}" height="{H}" fill="url(#dots)"/>
-  <rect width="{W}" height="{H}" fill="url(#halo)"/>
-  {"".join(out)}
-  <rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="24" fill="none" stroke="{t["stroke"]}"/>
-</g>
+<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="none" stroke="{line}" stroke-width="1.5"/></marker></defs>
+<rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="20" fill="#fff" stroke="#e2e8f0"/>
+{"".join(out)}
 </svg>
 '''
 
@@ -433,7 +403,8 @@ def cmd_svg():
         write(f"badge-{label.lower()}.svg", badge(label, value))
     for label in RUNTIME_BADGES:
         write(f"badge-{label.lower().replace(' ', '-')}.svg", badge(label))
-    write("badge-clients.svg", badge("clients", CLIENTS_BADGE))
+    for label in SUPPORT_BADGES:
+        write(f"badge-{label.lower()}.svg", support_badge(label))
 
 
 # ---------------------------------------------------------------- shoot (simulator, demo mode)
