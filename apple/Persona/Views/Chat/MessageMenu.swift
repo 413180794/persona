@@ -95,13 +95,15 @@ struct SelectableText: Identifiable {
     var plain = false
     /// The message's id, for quoting part of it.
     var msg = ""
+    /// Its words may be quoted (not a message that has not gone out, #6427).
+    var quotable = true
     var id: String { text }
 }
 
 extension MessageMenu {
     /// Select Text › Quote (#4549): quotes the picked words of the page's message; nil when the chat does not quote.
     func selectionQuote(of page: SelectableText) -> ((String) -> Void)? {
-        guard let quote else { return nil }
+        guard let quote, page.quotable else { return nil }
         return { picked in quote(picked, page.msg, page.plain, ContextRef.selectionPart) }
     }
 }
@@ -228,8 +230,10 @@ extension View {
     /// The pressable part of a message (the bubble / the text).
     func messageLongPress(id: String) -> some View { modifier(MessageLongPress(id: id)) }
     /// The whole row of a message: hosts the action bar above the press point and lifts the row above its neighbours.
-    func messageActionBar(id: String, text: String, isUser: Bool, date: Date? = nil) -> some View {
-        modifier(MessageActionBarHost(id: id, text: text, isUser: isUser, date: date))
+    /// pending: your message not in the transcript yet (`PendingBubble`, #6427): Copy, Select Text and Share only, no
+    /// quote (it may never reach the agent) and no Edit (a waiting one would still go out besides the edited one).
+    func messageActionBar(id: String, text: String, isUser: Bool, date: Date? = nil, pending: Bool = false) -> some View {
+        modifier(MessageActionBarHost(id: id, text: text, isUser: isUser, date: date, pending: pending))
     }
 }
 
@@ -275,6 +279,7 @@ private struct MessageActionBarHost: ViewModifier {
     let text: String
     let isUser: Bool
     let date: Date?
+    let pending: Bool
     @State private var drag: CGFloat = 0
     @State private var armed = false
 
@@ -289,14 +294,14 @@ private struct MessageActionBarHost: ViewModifier {
                             // The bar may stick out of a narrow bubble, but not out of the chat.
                             let inArea = geo.frame(in: .named(MessageMenu.area))
                             let areaWidth = max(menu.areaWidth, inArea.maxX)
-                            let count = MessageActionBar.count(id: id, isUser: isUser, menu: menu)
+                            let count = MessageActionBar.count(id: id, isUser: isUser, menu: menu, pending: pending)
                             // Six actions are wider than a small phone: they share what the chat has.
                             let width = min(MessageActionBar.width(count: count), max(menu.areaWidth, inArea.maxX) - 16)
                             let x = min(max(inArea.minX + menu.anchor.x, width / 2 + 8), areaWidth - width / 2 - 8) - inArea.minX
                             // Above the finger; below it when that would go under the navigation bar.
                             let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
                             let y = menu.anchor.y + (above ? -(MessageActionBar.height / 2 + 16) : MessageActionBar.height / 2 + 24)
-                            MessageActionBar(id: id, text: text, isUser: isUser, date: date, menu: menu, itemWidth: MessageActionBar.itemWidth(width, count: count))
+                            MessageActionBar(id: id, text: text, isUser: isUser, date: date, menu: menu, pending: pending, itemWidth: MessageActionBar.itemWidth(width, count: count))
                                 .position(x: x, y: y)
                                 .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
@@ -311,7 +316,7 @@ private struct MessageActionBarHost: ViewModifier {
     /// The row as a drag to the left moves it, with the reply icon coming in at the right (#1058).
     @ViewBuilder private func swipeable(_ content: Content, _ menu: MessageMenu) -> some View {
         #if os(iOS)
-        if menu.swipeQuotes {
+        if menu.swipeQuotes && !pending {
             content
                 .offset(x: MessageSwipe.offset(drag))
                 .overlay(alignment: .trailing) {
@@ -361,6 +366,8 @@ struct MessageActionBar: View {
     var isUser: Bool
     var date: Date?
     var menu: MessageMenu
+    /// Not in the transcript yet (`messageActionBar(pending:)`): Copy, Select Text and Share.
+    var pending = false
     var itemWidth: CGFloat = Self.item
 
     static let height: CGFloat = 62
@@ -370,8 +377,9 @@ struct MessageActionBar: View {
     /// Each action's width when the bar is `width` wide.
     static func itemWidth(_ width: CGFloat, count: Int) -> CGFloat { min(item, (width - 12) / CGFloat(max(count, 1))) }
     /// How many actions the bar has for this message.
-    static func count(id: String, isUser: Bool, menu: MessageMenu) -> Int {
-        (isUser ? 5 : 4) + (forks(id: id, isUser: isUser, menu: menu) ? 1 : 0) + (rewinds(id: id, isUser: isUser, menu: menu) ? 1 : 0)
+    static func count(id: String, isUser: Bool, menu: MessageMenu, pending: Bool = false) -> Int {
+        if pending { return 3 }
+        return (isUser ? 5 : 4) + (forks(id: id, isUser: isUser, menu: menu) ? 1 : 0) + (rewinds(id: id, isUser: isUser, menu: menu) ? 1 : 0)
     }
     /// Your own message ends in Rewind when the chat's session is a Claude agent's and the message is a transcript line
     /// of its own (`<uuid>#<n>`); while the session cannot, the dialog says why.
@@ -392,12 +400,16 @@ struct MessageActionBar: View {
                 Haptics.success()
             }
             // "Select Text", not "Select": next to Copy a bare Select reads as picking messages (WeChat's multi-select).
-            action(String(localized: "Select Text [Message Menu 4d8efc]"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser, msg: id) }
-            action(String(localized: "Quote"), "quote.opening") { menu.quote?(text, id, isUser, nil) }
+            action(String(localized: "Select Text [Message Menu 4d8efc]"), Theme.Icon.select) {
+                menu.selecting = SelectableText(text: text, plain: isUser, msg: id, quotable: !pending)
+            }
+            if !pending {
+                action(String(localized: "Quote"), "quote.opening") { menu.quote?(text, id, isUser, nil) }
+            }
             action(String(localized: "Share"), "square.and.arrow.up") {
                 menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
             }
-            if isUser {
+            if isUser && !pending {
                 action(String(localized: "Edit [Message Menu 051836]"), "pencil") { menu.edit?(text) }
             }
             if Self.rewinds(id: id, isUser: isUser, menu: menu) {

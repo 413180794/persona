@@ -267,7 +267,8 @@ struct PeerMessage: View {
 
 /// A message just sent from this phone, before the transcript has it: drawn like a sent bubble right away, with a
 /// quiet clock while the request runs, the clock and "Sends when connected" while it waits for the network (Outbox.swift),
-/// and a red "Resend" when it failed.
+/// and a red "Resend" when it failed. A long press gives an action bar like a sent message's, with Copy, Select Text and
+/// Share (#6427): one that never went out can be copied rather than typed again.
 struct PendingBubble: View {
     var msg: PendingMessage
     var retry: () -> Void
@@ -276,6 +277,8 @@ struct PendingBubble: View {
     @Environment(\.chatImages) private var chatImages
 
     var body: some View {
+        let parsed = ContextRef.parse(msg.text)
+        let shown = AttachedFile.parse(parsed.rest).rest
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             let files = AttachedFile.parse(msg.text).files
             if !files.isEmpty { AttachedFileCards(files: files) }
@@ -322,9 +325,9 @@ struct PendingBubble: View {
                     }
                     .accessibilityLabel("Failed to send. Resend or delete.")
                 }
-                let parsed = ContextRef.parse(msg.text)
-                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: AttachedFile.parse(parsed.rest).rest)
+                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: shown)
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
+                    .messageLongPress(id: msg.id.uuidString)
             }
             if msg.state == .waiting {
                 Text("Sends when connected").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -332,6 +335,7 @@ struct PendingBubble: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .messageActionBar(id: msg.id.uuidString, text: shown, isUser: true, date: msg.createdAt, pending: true)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
