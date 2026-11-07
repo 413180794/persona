@@ -131,5 +131,7 @@
   "more_pages": "その他",
   "more_pages_count": "その他（{count} ページ）",
   "arrange_pages": "サイドバーを整理…",
-  "draft": "下書き"
+  "draft": "下書き",
+  "resize_label": "ドラッグしてサイドバーの幅を調整",
+  "resize_title": "ドラッグで幅を調整、ダブルクリックで元に戻す"
 }

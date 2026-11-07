@@ -443,3 +443,9 @@ If the header grows, elements below it (App.tsx connection-status pill) cannot a
 
 - The published hub binary embeds `web/dist`, and the release privacy scan refuses any real email address in it. Package license files routinely name their authors with addresses, so `third-party-licenses.ts` drops the addresses (names and years stay) and its test checks none is left. A generator that copies license texts verbatim passes every web check and fails only at release.
 - Count what the client ships from `package-lock.json` (entries not marked `dev`, `optional` or `devOptional`), not from `node_modules`: a local install also holds dev tools and platform-specific optional binaries the browser never loads.
+
+## Resizing a column without re-rendering the shell (2026-11-07, #6466)
+
+- A drag that sets React state on every `pointermove` re-renders whatever owns that state. The sidebar sits in the app shell, so keeping its width in shell state would re-render the whole app on every move. Instead, a leaf component (`views/SidebarResize.tsx`) writes the width straight to a CSS variable on the column (`--sidebar-w`, read by `lg:w-[var(--sidebar-w,284px)]`) while dragging, and writes the store (`lib/layout.ts`) once when the drag ends. To catch a regression, count renders or DOM mutations in the shell over a 30-step drag; it should stay at zero.
+- On the first commit a child's `useLayoutEffect` runs before React attaches its parent's ref, so a child that reads `parentRef.current` there gets `null` and the column renders without its width. Pass the column's `id` (`useId`) and look it up with `document.getElementById` instead.
+- Modules mocked by `AppShellRenders.test` (for example `views/SidePanel`) expose only the exports the mock defines, so a new shell component that imports a constant from such a module fails with `No "X" export is defined on the mock`. Shared layout constants (`CHAT_MIN`, `PANEL_MIN`) belong in `lib/layout.ts`.

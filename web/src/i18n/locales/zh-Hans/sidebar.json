@@ -131,5 +131,7 @@
   "more_pages": "更多",
   "more_pages_count": "更多（{count} 个页面）",
   "arrange_pages": "整理侧栏…",
-  "draft": "草稿"
+  "draft": "草稿",
+  "resize_label": "拖动调整侧边栏宽度",
+  "resize_title": "拖动调整宽度，双击还原"
 }

@@ -1,4 +1,4 @@
-import { Component, Suspense, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
 import { useCloseOnBack } from "./lib/back-close";
@@ -36,6 +36,7 @@ import { closePalette, openPalette, usePalette } from "./lib/palette";
 import { sidebarRail, sidebarShown, useLayout } from "./lib/layout";
 import { SIDEBAR_LABEL, useShortcuts } from "./lib/use-shortcuts";
 import { Sidebar, SidebarRail } from "./views/Sidebar";
+import { SidebarResize } from "./views/SidebarResize";
 import { SidePanel } from "./views/SidePanel";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
 import { useExtensionPlace } from "./lib/extension-slots";
@@ -205,6 +206,7 @@ function Shell() {
   // under 20% black) for the status bar strip of the installed app.
   const scrimShown = useLingers(drawer, SCRIM_FADE);
   const drawerBox = useRef<HTMLDivElement>(null);
+  const sidebarId = useId();
   const scrim = useRef<HTMLDivElement>(null);
   const mainBox = useRef<HTMLElement>(null);
   const a11y = drawerA11y(narrow, drawer);
@@ -359,20 +361,22 @@ function Shell() {
       {/* wide: a fixed column; narrow: a drawer over the page, clear of a landscape notch and the home indicator */}
       <div
         ref={drawerBox}
+        id={sidebarId}
         role={a11y.modal ? "dialog" : undefined}
         aria-modal={a11y.modal || undefined}
         aria-label={a11y.modal ? SIDEBAR_LABEL : undefined}
         inert={a11y.inert || undefined}
         className={cx(
-          "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
+          "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:relative lg:z-auto lg:translate-x-0 lg:shadow-none",
           drawer ? "translate-x-0 shadow-overlay" : "-translate-x-full",
-          // ⌘⌥B folds it to the rail, ⌘⇧↵ hides it, on a wide screen
-          rail && "lg:w-14",
+          // ⌘⌥B folds it to the rail, ⌘⇧↵ hides it, on a wide screen; unfolded, its right edge drags (SidebarResize)
+          rail ? "lg:w-14" : "lg:w-[var(--sidebar-w,284px)]",
           !sidebarShown(layout) && "lg:hidden",
         )}
         style={{ transitionTimingFunction: EASE }}
       >
         {rail ? <SidebarRail route={route} onSearch={() => openPalette("jump")} onNewAgent={openNewAgent} /> : <Sidebar route={route} onSearch={() => openPalette("jump")} onNewAgent={openNewAgent} onNavigate={close} />}
+        {!narrow && !rail && <SidebarResize column={sidebarId} />}
       </div>
       {/* the scrim fades out as well as in; a drag sets its opacity as it goes (lib/drawer.ts) */}
       <div
