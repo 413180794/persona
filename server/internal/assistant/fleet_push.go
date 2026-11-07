@@ -164,7 +164,7 @@ func (t *turnTracker) settle(key string, gen int, sess proto.Session, seen, mute
 		return finishStale, 0
 	}
 	took := tr.endedAt.Sub(tr.start)
-	if sess.Status != proto.StatusDone || seen || muted || assistantPushed {
+	if completionChild(sess) || sess.Status != proto.StatusDone || seen || muted || assistantPushed {
 		delete(t.turns, key)
 		return finishDrop, took
 	}
@@ -210,34 +210,15 @@ func (s *Service) noteStop(machine, sid string, p map[string]any) {
 	}
 }
 
-// stopDuplicate says whether the "finished" push about to go out repeats one already sent: the same reply (by the
-// signature the node hashed from the Stop hook's last_assistant_message) with no prompt in between. That is the same
-// completion seen twice, as when the status flaps working → done → working → done around one turn. A session without
-// hooks, or a Stop without a reply, has no signature and is never held back. Otherwise it records the push. In
-// memory: after a manager restart at worst one repeat gets through.
-func (s *Service) stopDuplicate(machine, sid string) bool {
-	k := [2]string{machine, sid}
-	s.fleet.mu.Lock()
-	defer s.fleet.mu.Unlock()
-	sig := s.fleet.stopSig[k]
-	if sig == "" {
-		return false
-	}
-	if s.fleet.pushedSig[k] == sig {
-		return true
-	}
-	if s.fleet.pushedSig == nil {
-		s.fleet.pushedSig = map[[2]string]string{}
-	}
-	s.fleet.pushedSig[k] = sig
-	return false
-}
-
 // notifyFinished decides, after the delay, whether this end of a turn is worth a push and to which devices.
 func (s *Service) notifyFinished(machine, id string, gen int) {
 	t := s.notifyTimings()
 	time.Sleep(t.doneDelay())
 	sess, ok := s.decoratedSession(machine, id)
+	if ok && s.completionChildrenRunning(machine, sess) {
+		// Only the completion decision uses this copy; session state and reports stay intact.
+		sess.Background = append([]proto.BackgroundTask{{ID: "completion-children", Kind: "agent"}}, sess.Background...)
+	}
 	if ok && !sess.Assistant && sess.Status != proto.StatusWorking {
 		s.kbAgentDone(machine, sess)
 	}
@@ -271,6 +252,9 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	// turn took it.
 	report := s.reportTurn(id, start)
 	if verdict != finishPush {
+		if completionChild(sess) {
+			s.logf("assistant: completion suppressed for child %s/%s (parent=%s root=%s)", machine, id, sess.ParentSessionID, sess.RootSessionID)
+		}
 		return
 	}
 	long := t.longTurn()
@@ -287,7 +271,7 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	if s.supervising(id) && assistantwire.SupervisedFinish(sess, true) {
 		return
 	}
-	if s.stopDuplicate(machine, id) {
+	if s.finishedDuplicate(machine, sess) {
 		return
 	}
 	place := s.pushPlace(machine, sess)
