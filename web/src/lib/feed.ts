@@ -69,7 +69,7 @@ export interface BriefRow {
   link?: string;
   waited_s: number;
   nudged?: boolean;
-  /** accept: when the round's "Please verify" card was asked; the Accept button sends it back. */
+  /** accept: when the round's "Please verify" ask was made (with or without a Lark card); the Accept button sends it back. */
   asked_at?: string;
 }
 

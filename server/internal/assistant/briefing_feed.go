@@ -45,7 +45,7 @@ type briefBodyRow struct {
 	Link    string    `json:"link,omitempty"`    // the page in the web app (empty when hub.json has no public_url)
 	WaitedS int64     `json:"waited_s"`          // seconds waited when the run started
 	Nudged  bool      `json:"nudged,omitempty"`  // waiting: the bot nudged under its card
-	AskedAt time.Time `json:"asked_at,omitzero"` // accept: when the round's "Please verify" card was asked; POST /api/v1/todos/{id}/accept takes it back
+	AskedAt time.Time `json:"asked_at,omitzero"` // accept: when the round's "Please verify" ask was made (with or without a Lark card); POST /api/v1/todos/{id}/accept takes it back
 }
 
 // briefBodyDone is a task closed in the window.

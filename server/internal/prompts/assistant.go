@@ -210,7 +210,7 @@ type Snapshot struct {
 	Tasks         []SnapshotTask    // tasks opened from assistant conversations (task_plan), newest first
 	Plans         []SnapshotPlan    // plan cards in the main conversation waiting for "Start", newest first (at most five)
 	PlansTotal    int
-	// Unaccepted: deployed tasks whose "Please accept" card the user has not passed yet (#2768), oldest first; the morning
+	// Unaccepted: deployed tasks the user has not passed yet (their "Please verify" ask, with a Lark card or without) (#2768), oldest first; the morning
 	// briefing brings them up again.
 	Unaccepted      []SnapshotAccept
 	UnacceptedTotal int // all of them (Unaccepted is the oldest eight)

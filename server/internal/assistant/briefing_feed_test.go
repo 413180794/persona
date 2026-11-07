@@ -29,8 +29,7 @@ func (e *briefRunEnv) briefItems() []FeedItem {
 }
 
 // With the Lark bot's switches off the routine still writes its facts into its conversation: the same rows as the card has,
-// no Lark card sent. (The task to verify is planted as asked earlier, while the bot was on: with the bot off nothing is
-// asked, and that section stays empty.)
+// no Lark card sent. (The task to verify is planted with a card; a card-less ask is in acceptance_cardless_test.go.)
 func TestBriefItemIsWrittenWithoutLark(t *testing.T) {
 	e := newBriefRunEnvWith(t, true, func(e *briefRunEnv) { e.features(FeishuFeatures{}) })
 	e.mirror()

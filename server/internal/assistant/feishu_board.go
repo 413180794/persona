@@ -261,7 +261,7 @@ type boardRow struct {
 	from     string
 	link     string
 	nudged   bool // the bot nudged under its card in the chat (feishu_nudge.go, #6084)
-	// asked is when the "Please verify" card of a to-do waiting to be verified went out (zero: the row is not one); id is the to-do.
+	// asked is when the "Please verify" ask of a to-do waiting to be verified was made (its card, if it has one, went out then) (zero: the row is not one); id is the to-do.
 	asked time.Time
 }
 
@@ -357,7 +357,7 @@ type awaitingAccept struct {
 	since                         time.Time
 }
 
-// awaitingAcceptance are the to-dos whose "Please verify" card is up and not passed: the ones that can still be passed
+// awaitingAcceptance are the to-dos whose "Please verify" ask is up (with a card or without, NoCard) and not passed: the ones that can still be passed
 // (not closed by the owner or a review, not asked before the latest reopen), in the order they were asked. Read only:
 // the sweeps that forget the ended ones are the reminders' and the snapshot's.
 func (s *Service) awaitingAcceptance(ctx context.Context) []awaitingAccept {
@@ -369,7 +369,7 @@ func (s *Service) awaitingAcceptance(ctx context.Context) []awaitingAccept {
 	}
 	asks := map[string]acceptAsk{}
 	for id, a := range b.asks {
-		if a.MessageID != "" && a.AcceptedAt.IsZero() {
+		if !a.AskedAt.IsZero() && a.AcceptedAt.IsZero() {
 			asks[id] = *a
 		}
 	}

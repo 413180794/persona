@@ -16,9 +16,10 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// "Please verify" (#2768, docs/bots.md "Please verify"): once a task's work is deployed, the bot asks the user in Feishu to try it —
-// three lines: what changed, where to look (a link straight to the page), how to check — with "Pass" on the card. "Pass"
-// (the button, or a reply saying so) marks the task verified; any other reply to the card is written into the todo's
+// "Please verify" (#2768, docs/bots.md "Please verify"): once a task's work is deployed, the hub keeps an ask for the user to try it —
+// three lines: what changed, where to look (a link straight to the page), how to check. With the bot on (and its task reports
+// on) the ask goes out as a Feishu card with "Pass" on it; without, it is kept all the same (NoCard) and the briefing, the
+// board and the web app show it. "Pass" (the button, a reply saying so, or the web Accept button) marks the task verified; any other reply to the card is written into the todo's
 // decisions and sent to the agent that did the work. One still not accepted is asked again the next morning.
 
 const acceptanceKey = "assistant.acceptance"
@@ -28,7 +29,7 @@ const acceptanceKey = "assistant.acceptance"
 const acceptMorningHour = 9
 
 type acceptAsk struct {
-	MessageID string   `json:"message_id"`
+	MessageID string   `json:"message_id"`         // the first card ("" while none went out, see NoCard)
 	Messages  []string `json:"messages,omitempty"` // every card asking it (the first and the reminders)
 	// Earlier are the cards of the task's rounds before this one (#4853): dead, so a press or a reply on one is answered
 	// "already handled" and never accepts this round or reaches the chat.
@@ -41,6 +42,10 @@ type acceptAsk struct {
 	AskedAt    time.Time `json:"asked_at"`
 	RemindedAt time.Time `json:"reminded_at,omitzero"`
 	AcceptedAt time.Time `json:"accepted_at,omitzero"`
+	// NoCard: no card was due when the ask was made (the bot is off or not paired, or task reports are off), so MessageID
+	// stays empty by design; the owner is asked by the briefing, the board and the web app instead. An empty MessageID
+	// without it is a card that did not go out and may be posted again.
+	NoCard bool `json:"no_card,omitempty"`
 }
 
 type acceptBook struct {
@@ -85,7 +90,9 @@ func (s *Service) saveAcceptLocked(ctx context.Context) {
 
 var urlRe = regexp.MustCompile(`https?://[^\s<>()\[\]"'，。；、）]+`)
 
-// askAcceptance posts task t's "Please verify" card once (reply: what its agent said last, on machine/session).
+// askAcceptance keeps task t's "Please verify" ask once (reply: what its agent said last, on machine/session) and posts its
+// card when the bot can. The ask is a fact of the hub, not of the card: with no card due it is kept all the same (NoCard),
+// and the briefing, the board and the snapshot list it.
 func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -111,20 +118,28 @@ func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 		delete(b.asks, t.ID)
 		b.mu.Unlock()
 	}
-	f, ready := s.feishuFeatures(ctx)
-	if !ready || !f.Reports {
-		release()
-		return
-	}
-	a := s.acceptLines(ctx, t, machine, session, reply)
-	a.MachineID, a.SessionID, a.AskedAt = machine, session, time.Now().UTC()
-	mid, err := s.botPost(ctx, "", s.acceptCard(ctx, t, a, false), a.Changed)
+	// No card is due when the bot is off or not paired, or its task reports are off. A status that cannot be read (the
+	// manager away) is not that: the card is for later, and nothing is kept for it here.
+	st, err := s.feishuStatus(ctx)
 	if err != nil {
 		s.logf("task %s: acceptance: %v", t.ID, err)
 		release()
 		return
 	}
-	a.MessageID, a.Messages, a.Earlier = mid, []string{mid}, earlier
+	post := st.Ready && st.Features.Reports
+	a := s.acceptLines(ctx, t, machine, session, reply)
+	a.MachineID, a.SessionID, a.AskedAt, a.Earlier = machine, session, time.Now().UTC(), earlier
+	if post {
+		mid, err := s.botPost(ctx, "", s.acceptCard(ctx, t, a, false), a.Changed)
+		if err != nil {
+			s.logf("task %s: acceptance: %v", t.ID, err)
+			release()
+			return
+		}
+		a.MessageID, a.Messages = mid, []string{mid}
+	} else {
+		a.NoCard = true
+	}
 	b.mu.Lock()
 	b.asks[t.ID] = &a
 	s.saveAcceptLocked(ctx)
@@ -326,9 +341,10 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	return true
 }
 
-// accepted marks task id verified; false when already handled, never asked, or asked before the latest reopen. card is
-// the message pressed ("" from a reply, which acceptFor already matched, or when Feishu does not say): a card that is
-// not this round's (an earlier round's, once the next one has its own) accepts nothing (#4853).
+// accepted marks task id verified; false when already handled, never asked, or asked before the latest reopen. A card-less
+// ask (NoCard) can be accepted too, from the web app. card is the message pressed ("" from a reply, which acceptFor already
+// matched, from the web app, or when Feishu does not say): a card that is not this round's (an earlier round's, once the
+// next one has its own) accepts nothing (#4853).
 func (s *Service) accepted(ctx context.Context, id, card string) bool {
 	t, todoOK := s.todoNow(id)
 	b := &s.accept
@@ -338,7 +354,7 @@ func (s *Service) accepted(ctx context.Context, id, card string) bool {
 		return false
 	}
 	a, ok := b.asks[id]
-	if !ok || a.MessageID == "" || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) || (card != "" && card != a.MessageID && !slices.Contains(a.Messages, card)) {
+	if !ok || a.AskedAt.IsZero() || !a.AcceptedAt.IsZero() || (todoOK && acceptAskStale(a, t)) || (card != "" && card != a.MessageID && !slices.Contains(a.Messages, card)) {
 		b.mu.Unlock()
 		return false
 	}
@@ -393,6 +409,7 @@ func (s *Service) remindAcceptance(now time.Time) {
 	var due []string
 	seen := map[string]time.Time{} // each due card's AskedAt: the round the sweep judges
 	for id, a := range b.asks {
+		// A card again only for an ask that has a card; a card-less one (NoCard) is listed by the briefing and the board.
 		if a.MessageID != "" && a.AcceptedAt.IsZero() && a.AskedAt.Before(today) && a.RemindedAt.Before(today) {
 			due = append(due, id)
 			seen[id] = a.AskedAt
@@ -490,7 +507,7 @@ func (s *Service) snapshotUnaccepted(ctx context.Context, loc *time.Location) ([
 	}
 	var list []ask
 	for id, a := range b.asks {
-		if a.MessageID != "" && a.AcceptedAt.IsZero() {
+		if !a.AskedAt.IsZero() && a.AcceptedAt.IsZero() { // asked (a claim still going out has no time), card or not
 			list = append(list, ask{id, *a})
 		}
 	}

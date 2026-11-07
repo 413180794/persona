@@ -2387,7 +2387,7 @@ Tasks dispatched from an assistant chat ([unified-entry.md](unified-entry.md)). 
 //          "accept":[{"id":"<to-do id>","title","detail"?:"what changed","from"?,"link"?,"waited_s","asked_at":"…"}],  // to-dos waiting to be verified, the longest waiting first
 //          "progress":[{"id":"<to-do id>","title","stage"?:"plan|develop|review|merge|deploy|verify"}],"progress_total":2}  // open to-dos whose Agents are working, the longest open first, at most 8
 //         waiting_unknown: the cards waiting for an answer were not read yet (the hub had just started), so `waiting` is empty for want of knowing. The Accept button posts `asked_at` to
-//         POST /api/v1/todos/{id}/accept. `accept` has rows only while the Lark bot asks for verification (its `reports` switch): the "Please verify" ask is made when the Lark card goes out. A retry of a failed run adds no second item. Clients that don't know the kind skip the entry (iOS decodes it as `unknown`, Android's draw has no branch for it).
+//         POST /api/v1/todos/{id}/accept. `accept` has a row for every deployed to-do that waits for the owner, with or without the Lark bot: the "Please verify" ask is kept whether or not a Lark card went out. A retry of a failed run adds no second item. Clients that don't know the kind skip the entry (iOS decodes it as `unknown`, Android's draw has no branch for it).
 ```
 
 The live state of task cards and plan cards isn't in the feed: clients read the plan (`task_plan` push) and the to-do + the session state of its attached Agents by `ref` (status rules as in [todos.md](todos.md)).
