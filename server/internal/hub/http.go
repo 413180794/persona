@@ -22,6 +22,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -266,20 +267,39 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 		if _, fwd := forwardedOf(r); fwd {
 			limited = false // the member that passed it on keeps the count (peer_http.go memberForward)
 		}
+		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if tok == "" {
+			tok = r.URL.Query().Get("token")
+		}
+		// An extension's token that fails counts in a bucket of its own, which gates extensions' tokens only: never the
+		// bus, the apps or any other credential. A relayed manager's extensions call from its address, and calls the
+		// hub can't place (the manager off the bus a moment) must not lock the manager itself out. There is nothing
+		// to guess in one either: it is 32 random bytes, new each start.
+		ext := strings.HasPrefix(tok, extTokenPrefix)
+		failed := &h.devtok.failures
+		if ext {
+			failed = &h.devtok.extFailures
+		}
 		if limited {
-			if retry := h.devtok.failures.retry(authSourceKey(r), time.Now(), h.cfg.Security); retry > 0 {
+			retry := h.devtok.failures.retry(authSourceKey(r), time.Now(), h.cfg.Security)
+			if ext {
+				retry = max(retry, failed.retry(authSourceKey(r), time.Now(), h.cfg.Security))
+			}
+			if retry > 0 {
 				retryAfter(w, retry)
 				h.securityError(w, r, http.StatusTooManyRequests, "rate_limited", 0)
 				return
 			}
 		}
-		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if tok == "" {
-			tok = r.URL.Query().Get("token")
+		// A manager's proof is read here and goes no further: not to a manager, a log or anything that copies headers.
+		proof := r.Header.Get(extwire.HeaderManagerProof)
+		if _, there := r.Header[http.CanonicalHeaderKey(extwire.HeaderManagerProof)]; there {
+			r = r.Clone(r.Context())
+			r.Header.Del(extwire.HeaderManagerProof)
 		}
 		var p principal
 		var ok bool
-		if strings.HasPrefix(tok, extTokenPrefix) {
+		if ext {
 			p, ok, p.extOpens, p.extScope = h.authorizeExtension(r.Context(), tok, r)
 		} else {
 			p, ok = h.authenticate(r.Context(), tok)
@@ -287,7 +307,7 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 		if !ok {
 			failures := 0
 			if limited {
-				failures = h.devtok.failures.fail(authSourceKey(r), time.Now(), h.cfg.Security)
+				failures = failed.fail(authSourceKey(r), time.Now(), h.cfg.Security)
 			}
 			h.securityError(w, r, http.StatusUnauthorized, "", failures)
 			return
@@ -298,10 +318,32 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 		}
 		if p.Role == roleExtension {
 			// (authenticate asked the manager whose it is and whether it opens this route: authorizeExtension)
-			// An extension's token is for the hub it runs beside, on this machine (hub.url).
+			// An extension's token is for the hub it runs beside, on this machine (hub.url), or comes through its
+			// manager's relay with the manager's proof: a relayed manager's computer may reach the hub only across the
+			// internet (docs/managers.md "Extensions and the hub's API"; the gate still holds it to TLS there). A
+			// token alone from there is refused, and counted against the source; a proof the manager did sign but
+			// that is out of time, sent twice or one too many just now is refused without counting.
 			if public {
-				h.securityError(w, r, http.StatusForbidden, "extension_token_local_only", 0)
-				return
+				switch h.extensionProof(r, proof, tok, p.Manager) {
+				case proofOK:
+				case proofSkew:
+					h.securityError(w, r, http.StatusForbidden, codeClockSkew, 0)
+					return
+				case proofReplayed:
+					h.securityError(w, r, http.StatusForbidden, codeProofReplayed, 0)
+					return
+				case proofBusy:
+					retryAfter(w, extwire.ProofWindow)
+					h.securityError(w, r, http.StatusTooManyRequests, codeProofBusy, 0)
+					return
+				default:
+					failures := 0
+					if limited {
+						failures = failed.fail(authSourceKey(r), time.Now(), h.cfg.Security)
+					}
+					h.securityError(w, r, http.StatusForbidden, "extension_token_local_only", failures)
+					return
+				}
 			}
 			if ok, scope := p.extOpens, p.extScope; !ok {
 				body := errorBody(http.StatusForbidden, "permission_denied", errors.New("this extension was not granted this part of the hub's API"))

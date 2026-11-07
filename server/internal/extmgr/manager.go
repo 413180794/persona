@@ -63,6 +63,15 @@ type Options struct {
 	Build      update.Build
 	Hub        Host
 	Devices    Devices
+	// ManagerID is the manager's id ("" is the built-in one's, the assistant).
+	ManagerID string
+	// HubURL and HubClient are how the manager reaches the hub (its manager.json's hub, and the client that pins the
+	// hub's key), and HubProofKey its proof's key (extwire.ProofKey of its bus token, never the token): a relayed
+	// manager's extensions call the hub's API through it (hub_relay.go). The built-in manager's reach the hub on this
+	// machine, as hub.json says (Config.Listen).
+	HubURL      string
+	HubClient   *http.Client
+	HubProofKey string
 	// Assistant asks the assistant in this process what the hub used to ask it over the bus (same methods and
 	// params: channels.receive, feishu.message, inbox.collected, kb.*…); nil: none here (tests).
 	Assistant func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)

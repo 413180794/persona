@@ -215,8 +215,12 @@ func (ps *extensions) egress() (*egress.Proxy, error) {
 	sb.once.Do(func() {
 		hubAddr := "127.0.0.1:18660"
 		if ps.h != nil && ps.h.cfg != nil {
-			if u, err := url.Parse(hubLocalURL(ps.h.cfg.Listen)); err == nil {
+			// The hub on this machine, or another manager's relay to it (hub_relay.go): nowhere when that is down.
+			hub, err := ps.hubURL()
+			if u, perr := url.Parse(hub); err == nil && perr == nil {
 				hubAddr = u.Host
+			} else {
+				hubAddr = ""
 			}
 		}
 		px := &egress.Proxy{HubAddr: hubAddr, Logf: ps.logf}

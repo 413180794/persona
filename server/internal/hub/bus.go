@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -130,6 +131,11 @@ type busConn struct {
 
 	// mutesSettled: its first word after the handshake was heard, and the mutes went once more (fleet_link.go).
 	mutesSettled atomic.Bool
+
+	// proofKey is the key of its manager's proofs that a request with one of its extensions' tokens came through it
+	// (extwire.ProofKey of the token it connected with, extensions_proof.go): made from the token as it connects, kept
+	// here only, never stored.
+	proofKey string
 
 	// guarded by busState.mu
 	presence busPresence
@@ -268,7 +274,8 @@ func (h *Hub) serveBus(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	conn := bus.NewConn(ctx, ws)
-	c := &busConn{ident: ident, ws: ws, peer: rpc.New("h", conn), helloed: make(chan struct{})}
+	tok, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ") // the one busCaller took
+	c := &busConn{ident: ident, proofKey: extwire.ProofKey(tok), ws: ws, peer: rpc.New("h", conn), helloed: make(chan struct{})}
 	// A card the hub's own feature asks (fleet.ask) is withdrawn when that feature stops waiting (a tool call whose
 	// caller went away, #2597).
 	c.peer.Cancels = map[string]bool{assistantwire.MethodFleetAsk: true}

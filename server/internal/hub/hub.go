@@ -33,6 +33,8 @@ type Hub struct {
 	linkPing      [2]time.Duration     // tests: heartbeat interval and timeout of new links
 	listedWait    time.Duration        // tests: how long a started session is awaited in the list (0: listedWaitMax)
 	bus           busState             // the services' connections and the roster (bus.go)
+	// extProofs are the managers' proofs' nonces seen lately (extensions_proof.go).
+	extProofs proofNonces
 	// tests: replaces os.Hostname
 	hostname func() (string, error)
 

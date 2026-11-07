@@ -31,7 +31,8 @@ func serveScopedExtensionForTest() {
 		mu.Lock()
 		defer mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{"env": os.Getenv("PERSONA_HUB_TOKEN"), "env_url": os.Getenv("PERSONA_HUB_URL"),
-			"init": init.Token, "url": init.URL, "scopes": init.Scopes})
+			"init": init.Token, "url": init.URL, "scopes": init.Scopes, "manager": os.Getenv("PERSONA_MANAGER"),
+			"init_manager": init.Manager})
 	}))
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "scoped", Version: "1.0.0",
 		Init: func(_ context.Context, ip extension.InitializeParams, _ *pserve.Hub) (map[string]any, error) {
@@ -42,7 +43,10 @@ func serveScopedExtensionForTest() {
 		}})
 }
 
-func scopedPackage(t *testing.T, hub string) string {
+func scopedPackage(t *testing.T, hub string) string { return scopedPackageOf(t, `"hub": `+hub) }
+
+// scopedPackageOf is the scoped extension asking for perms (the inside of its permissions).
+func scopedPackageOf(t *testing.T, perms string) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
@@ -50,7 +54,7 @@ func scopedPackage(t *testing.T, hub string) string {
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "scoped", "name": "Scoped", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/scoped"}, "http": true},
 		"activation_events": ["on_startup"], "contributes": {"api": [{"id": "x", "prefix": "scopedx"}]},
-		"permissions": {"hub": %s}}`, runtime.GOOS+"-"+runtime.GOARCH, hub)
+		"permissions": {%s}}`, runtime.GOOS+"-"+runtime.GOARCH, perms)
 	_ = os.WriteFile(filepath.Join(dir, extension.ManifestFile), []byte(manifest), 0o644)
 	return dir
 }
@@ -92,6 +96,9 @@ func TestExtensionScopedToken(t *testing.T) {
 	}
 	if b, _ := json.Marshal(got["scopes"]); string(b) != `["kb.read","extensions.call:other"]` {
 		t.Fatalf("scopes: %s", b)
+	}
+	if got["url"] != hubLocalURL(h.cfg.Listen) || got["manager"] != "" || got["init_manager"] != "" {
+		t.Fatalf("the built-in manager's extension reaches the hub on this machine, and is told no manager: %v", got)
 	}
 
 	// On the hub's own routes the hub asks the manager (extensions.authorize, with the route's pattern on its mux);

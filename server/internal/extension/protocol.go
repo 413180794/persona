@@ -127,10 +127,15 @@ type HubInfo struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 	// URL and Token are the hub's API on this machine and a token of the scopes it was granted (permissions.hub; also
 	// PERSONA_HUB_URL / PERSONA_HUB_TOKEN when the hub runs it): a new one each start, revoked when it stops for good.
-	// An extension granted the full token the old way (hub_api) has it in the environment only.
+	// An extension granted the full token the old way (hub_api) has it in the environment only. On a manager other
+	// than the built-in, URL is that manager's relay to the hub on this machine's loopback (docs/managers.md
+	// "Extensions and the hub's API").
 	URL    string   `json:"url,omitempty"`
 	Token  string   `json:"token,omitempty"`
 	Scopes []string `json:"scopes,omitempty"`
+	// Manager is the id of the manager that runs the extension, when it is not the built-in one (also
+	// PERSONA_MANAGER when it runs the program); absent: the built-in manager, or an older build.
+	Manager string `json:"manager,omitempty"`
 }
 
 // Hub capabilities (HubInfo.Capabilities).

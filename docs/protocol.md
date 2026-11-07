@@ -16,7 +16,7 @@ The web client may send `"replaces":"<this browser's previous device id>"`: once
   which can only open `/api/v1/link` and `/api/v1/link/stream`; every other API is 403. The list includes `machine_id`. When redeeming a pairing code generated for that computer (`{"machine"}` below),
   kind and machine are set by the pairing code; naming a different machine in the request returns 403.
 - Extension tokens (starting with `pext_`, #1855): the hub issues them for the scopes the extension was granted (`permissions.hub`). They open only the routes registered for those scopes; everything else is 403 `permission_denied` (with `scope` when a scope is missing),
-  and only requests from the local machine are accepted. See [extensions.md](extensions.md) ("Permissions", "Hub API: scopes").
+  and only requests from the local machine are accepted, unless they carry their manager's proof that they came through it (`X-Persona-Manager-Proof`, a relayed manager's extensions: [managers.md](managers.md) "Extensions and the hub's API"). See [extensions.md](extensions.md) ("Permissions", "Hub API: scopes").
 - Linked hubs ([mesh.md](mesh.md)): another hub's credential has kind / role `peer` (`machine_id` is the other side's hub_id) and can only open `GET /api/v1/peer`;
   a link code `jx_…` can only `POST /api/v1/peer/pair`; every other API is 403. In a group only the **primary hub** accepts App credentials: a member forwards App requests unchanged (with `Authorization`)
   to the primary, and when it joins it hands the credentials it has issued (hashes) to the primary, so devices paired with the member keep working. When the primary is unreachable, the member returns

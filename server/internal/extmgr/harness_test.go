@@ -338,16 +338,17 @@ func (h *Manager) routes() http.Handler {
 				set(extwire.HeaderOwner, "1")
 			}
 		case strings.HasPrefix(tok, "pext_"):
-			p, ok := h.extTokens.lookup(tok)
+			e, ok := h.extTokens.lookupHash(hashToken(tok))
 			if !ok {
 				writeErr(w, http.StatusUnauthorized, errors.New("unauthorized"))
 				return
 			}
+			p := e.principal()
 			pattern := ""
 			if _, pt := h.apiMux.Handler(r); pt != "" {
 				pattern = pt
 			}
-			if ok, scope := scopeOpens(p.Scopes, pattern, r.URL.EscapedPath()); !ok {
+			if ok, scope := e.opens(pattern, r.URL.EscapedPath()); !ok {
 				body := map[string]any{"error": "this extension was not granted this part of the hub's API", "code": "permission_denied"}
 				if scope != "" {
 					body["scope"] = scope

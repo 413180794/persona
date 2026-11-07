@@ -121,7 +121,8 @@ func serveExtensionForTest() {
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"path": r.URL.Path, "query": r.URL.RawQuery, "auth": r.Header.Get("Authorization"),
 			"hub": os.Getenv("PERSONA_HUB_URL"), "id": os.Getenv("PERSONA_PLUGIN_ID"), "extra": os.Getenv("EXTRA"),
-			"config": os.Getenv("PERSONA_PLUGIN_CONFIG"),
+			"config": os.Getenv("PERSONA_PLUGIN_CONFIG"), "token": os.Getenv("PERSONA_HUB_TOKEN"),
+			"manager": os.Getenv("PERSONA_MANAGER"),
 		})
 	})
 	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +199,8 @@ func TestExtensionRelay(t *testing.T) {
 	var echo map[string]string
 	_ = json.NewDecoder(res.Body).Decode(&echo)
 	res.Body.Close()
-	want := map[string]string{"path": "/echo", "query": "a=1", "auth": "", "hub": "http://127.0.0.1:18999", "id": "voice", "extra": "x", "config": `{"providers":[]}`}
+	want := map[string]string{"path": "/echo", "query": "a=1", "auth": "", "hub": "http://127.0.0.1:18999", "id": "voice", "extra": "x",
+		"config": `{"providers":[]}`, "token": "secret", "manager": ""}
 	if fmt.Sprint(echo) != fmt.Sprint(want) {
 		t.Fatalf("got %v, want %v", echo, want)
 	}

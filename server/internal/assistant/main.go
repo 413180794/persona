@@ -28,6 +28,7 @@ import (
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/errreport"
 	"github.com/nwverse/persona/server/internal/extmgr"
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/managerconf"
@@ -285,7 +286,7 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 	// The extensions, connectors and bots (internal/extmgr): the data directory here, its own sections in manager.json
 	// (as moveConfig read and checked them) and its own secret.key.
 	ext = extmgr.New(extmgr.Options{Dir: home, ConfigFile: o.ConfigFile, Config: o.ExtConfig, SecretKey: o.SecretKey,
-		Store: database, Build: build,
+		Store: database, Build: build, ManagerID: o.ID, HubURL: hub, HubClient: httpClient, HubProofKey: extwire.ProofKey(token),
 		Logf: log.New(stderr, "extensions: ", log.LstdFlags).Printf,
 		Hub:  lazyHost{c: func() *bus.Client { return bh.Client() }, b: func() *BusHub { return bh }}, Devices: devs,
 		Assistant: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {

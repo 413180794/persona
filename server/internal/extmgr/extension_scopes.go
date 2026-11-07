@@ -25,6 +25,29 @@ type extToken struct {
 	extension string
 	name      string
 	scopes    []string
+	// all: every scope (an extension of a manager other than the built-in granted the hub's full token the old way,
+	// hub_api or manager.json's extensions: it gets this instead, hub_relay.go). Never a route open to full
+	// credentials only.
+	all bool
+}
+
+// opens is scopeOpens for the token.
+func (e extToken) opens(pattern, path string) (bool, string) {
+	if e.all {
+		_, scope := scopeOpens(nil, pattern, path)
+		return scope != "", scope
+	}
+	return scopeOpens(e.scopes, pattern, path)
+}
+
+// principal is who the token is.
+func (e extToken) principal() principal {
+	scopes := e.scopes
+	if e.all {
+		scopes = extension.HubScopes
+	}
+	return principal{ID: "extension:" + e.extension, Name: e.name, Role: roleExtension, Extension: e.extension,
+		Scopes: slices.Clone(scopes)}
 }
 
 // extTokens are the extensions' live tokens.
@@ -36,6 +59,16 @@ type extTokens struct {
 
 // issue makes id a new token of scopes, dropping the one it had.
 func (t *extTokens) issue(id, name string, scopes []string) string {
+	return t.issueToken(extToken{extension: id, name: name, scopes: slices.Clone(scopes)})
+}
+
+// issueAll makes id a new token of every scope, dropping the one it had.
+func (t *extTokens) issueAll(id, name string) string {
+	return t.issueToken(extToken{extension: id, name: name, all: true})
+}
+
+func (t *extTokens) issueToken(e extToken) string {
+	id := e.extension
 	tok := extTokenPrefix + randomToken()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -46,7 +79,7 @@ func (t *extTokens) issue(id, name string, scopes []string) string {
 		delete(t.byHash, old)
 	}
 	hash := hashToken(tok)
-	t.byHash[hash] = extToken{extension: id, name: name, scopes: slices.Clone(scopes)}
+	t.byHash[hash] = e
 	t.byExt[id] = hash
 	return tok
 }
@@ -69,8 +102,7 @@ func (t *extTokens) lookup(tok string) (principal, bool) {
 	if !ok {
 		return principal{}, false
 	}
-	return principal{ID: "extension:" + e.extension, Name: e.name, Role: roleExtension, Extension: e.extension,
-		Scopes: e.scopes}, true
+	return e.principal(), true
 }
 
 // scopeOpens says whether scopes open the route of pattern (the hub's mux pattern, or the manager's for a relayed one)
@@ -89,16 +121,12 @@ func scopeOpens(scopes []string, pattern, path string) (bool, string) {
 	return slices.Contains(scopes, scope), scope
 }
 
-// lookupHash is lookup by the token's hash (the hub asks with it: extensions.authorize).
-func (t *extTokens) lookupHash(hash string) (principal, bool) {
+// lookupHash is the token of the hash (the hub asks with it: extensions.authorize).
+func (t *extTokens) lookupHash(hash string) (extToken, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	e, ok := t.byHash[hash]
-	if !ok {
-		return principal{}, false
-	}
-	return principal{ID: "extension:" + e.extension, Name: e.name, Role: roleExtension, Extension: e.extension,
-		Scopes: e.scopes}, true
+	return e, ok
 }
 
 // answerOnly says whether the request comes from an answer-only device (a watch): what such a device sends is held to
@@ -114,9 +142,14 @@ type startToken struct {
 	tok string
 }
 
-// renew makes p a new token of the scopes it was granted, dropping the one before.
-func (t *startToken) renew(ps *extensions, p *extension.Extension) string {
-	tok := ps.h.extTokens.issue(p.Record.ID, p.Manifest.Name, p.Record.Granted.Hub)
+// renew makes p a new token of the scopes it was granted (all: of every scope), dropping the one before.
+func (t *startToken) renew(ps *extensions, p *extension.Extension, all bool) string {
+	var tok string
+	if all {
+		tok = ps.h.extTokens.issueAll(p.Record.ID, p.Manifest.Name)
+	} else {
+		tok = ps.h.extTokens.issue(p.Record.ID, p.Manifest.Name, p.Record.Granted.Hub)
+	}
 	t.mu.Lock()
 	t.tok = tok
 	t.mu.Unlock()

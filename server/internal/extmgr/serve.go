@@ -399,10 +399,11 @@ func (h *Manager) Event(name string, params json.RawMessage) bool {
 
 // authorize says whose extension token hash is and whether it opens the hub's route.
 func (h *Manager) authorize(a extwire.Authorize) extwire.Authorized {
-	p, ok := h.extTokens.lookupHash(a.Hash)
+	e, ok := h.extTokens.lookupHash(a.Hash)
 	if !ok {
 		return extwire.Authorized{}
 	}
+	p := e.principal()
 	out := extwire.Authorized{Extension: p.Extension, Name: p.Name, Scopes: p.Scopes}
 	if dotSegment(a.Path) {
 		// A "." or ".." segment, escaped or not, is no route's: a decoded path (an older hub) would be cleaned onto
@@ -416,7 +417,7 @@ func (h *Manager) authorize(a extwire.Authorize) extwire.Authorized {
 			_, pattern = h.apiMux.Handler(req)
 		}
 	}
-	out.OK, out.Scope = scopeOpens(p.Scopes, pattern, a.Path)
+	out.OK, out.Scope = e.opens(pattern, a.Path)
 	return out
 }
 

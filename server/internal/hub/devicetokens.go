@@ -75,6 +75,10 @@ type devTokens struct {
 	onLink     func() []netip.Prefix
 	linkCache  []netip.Prefix
 	linkCached time.Time
+
+	// extFailures are extensions' tokens' failures from the internet, apart: they gate only extensions' tokens
+	// (http.go auth).
+	extFailures authLimiter
 }
 
 type cachedToken struct {

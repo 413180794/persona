@@ -364,7 +364,7 @@ func TestExtensionKBStopRevokesTokenMintedDuringStartup(t *testing.T) {
 		StartEnv: func() []string {
 			close(entered)
 			<-release
-			minted <- token.renew(ps, snapshot)
+			minted <- token.renew(ps, snapshot, false)
 			return nil
 		}})
 	t.Cleanup(func() { unblock(); p.Stop() })

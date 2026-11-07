@@ -146,6 +146,9 @@ func (h *Hub) securityError(w http.ResponseWriter, r *http.Request, status int, 
 		"master_token_local_only": "the master token is restricted to local networks",
 		"rate_limited":            "too many authentication failures",
 		bus.CodeTokenRevoked:      "this token was revoked or replaced",
+		codeClockSkew:             "the manager's clock is more than a minute off the hub's: set its clock right",
+		codeProofReplayed:         "this request was sent before",
+		codeProofBusy:             "too many requests from this manager's extensions just now",
 	}[code]
 	if message == "" {
 		message = "invalid token"

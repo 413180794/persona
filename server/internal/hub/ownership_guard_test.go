@@ -30,6 +30,7 @@ import (
 // (f.mu), when set, is told the hub's events (heard).
 type guardManager struct {
 	id      string
+	token   string // its bus token
 	peer    *rpc.Peer
 	mu      sync.Mutex
 	got     []string
@@ -41,7 +42,8 @@ func connectGuardManager(t *testing.T, h *Hub, url, id string, answer func(metho
 	f := &guardManager{id: id}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	ws, err := bus.Dial(ctx, url, busToken(t, h, id, id), nil)
+	f.token = busToken(t, h, id, id)
+	ws, err := bus.Dial(ctx, url, f.token, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

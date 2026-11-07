@@ -185,6 +185,8 @@ type extensions struct {
 	// once registered, "" when there is none (voice_extension.go).
 	voice   *ExtensionConfig
 	voiceID string
+	// hubRelay is how a relayed manager's extensions reach the hub's API (hub_relay.go).
+	hubRelay hubRelay
 }
 
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
@@ -734,6 +736,13 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	}
 	hubEnv := ps.hubEnv()
 	var hubToken startToken // its token of the hub's API this start (extension_scopes.go)
+	// A relayed manager hands its extensions no token of the hub's own: those granted it get one of every scope, through
+	// its relay (hub_relay.go). An extension of a manager other than the built-in one is told whose it is.
+	relayed := ps.h != nil && ps.h.relayed()
+	var managerEnv []string
+	if ps.h != nil && !ps.h.builtin() {
+		managerEnv = []string{"PERSONA_MANAGER=" + ps.h.opts.ManagerID}
+	}
 
 	if c, ok := p.Legacy.(ExtensionConfig); ok { // hub.json's, exactly as it has always run
 		hp.socket = ps.legacySocket(c)
@@ -745,11 +754,19 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			}
 			s.Command, s.Args, s.Dir = command, c.Args, expandHome(c.Dir)
 			s.Env = append(slices.Clone(hubEnv), "PERSONA_PLUGIN_ID="+c.ID, "PERSONA_PLUGIN_SOCKET="+hp.socket)
+			s.Env = append(s.Env, managerEnv...)
 			for k, v := range c.Env {
 				s.Env = append(s.Env, k+"="+v)
 			}
 			if len(c.Config) > 0 {
 				s.Env = append(s.Env, "PERSONA_PLUGIN_CONFIG="+string(c.Config))
+			}
+			if relayed {
+				start, err := ps.hubStartEnv(&hubToken, p, true)
+				if err != nil {
+					return s, err
+				}
+				s.StartEnv = start
 			}
 		}
 		return s, nil
@@ -796,6 +813,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			return s, err
 		}
 		s.Env = []string{"PERSONA_PLUGIN_ID=" + id, "PERSONA_PLUGIN_DIR=" + p.Dir, "PERSONA_PLUGIN_DATA=" + dataDir}
+		s.Env = append(s.Env, managerEnv...)
 		// Its command-line programs (manifest.tools, installed with this version) first on PATH, for it and what it runs.
 		if len(ps.reg.Tools(id, p.Record.Version)) > 0 {
 			s.Env = append(s.Env, "PATH="+ps.reg.ToolPath(id, p.Record.Version, os.Getenv("PATH")))
@@ -808,13 +826,14 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			s.HTTP, s.Socket = true, hp.socket
 			s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+hp.socket)
 		}
-		if p.Record.Granted.FullHub() {
+		if full := p.Record.Granted.FullHub(); full && !relayed {
 			s.Env = append(s.Env, hubEnv...)
-		} else if len(p.Record.Granted.Hub) > 0 && ps.h != nil {
-			url := hubLocalURL(ps.h.cfg.Listen)
-			s.StartEnv = func() []string {
-				return []string{"PERSONA_HUB_URL=" + url, "PERSONA_HUB_TOKEN=" + hubToken.renew(ps, p)}
+		} else if (full || len(p.Record.Granted.Hub) > 0) && ps.h != nil {
+			start, err := ps.hubStartEnv(&hubToken, p, full)
+			if err != nil {
+				return s, err
 			}
+			s.StartEnv = start
 		}
 		if !s.RPC { // no initialize to carry them
 			secrets, err := ps.reg.Secrets(ctx, id)
@@ -851,13 +870,20 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			Locale:       locale,
 			Capabilities: extension.HubCapabilities()}, Extension: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
+		if ps.h != nil && !ps.h.builtin() {
+			params.Hub.Manager = ps.h.opts.ManagerID
+		}
 		if g := p.Record.Granted; !g.FullHub() && len(g.Hub) > 0 && ps.h != nil {
+			url, err := ps.hubURL()
+			if err != nil {
+				return extension.InitializeParams{}, err
+			}
 			// The program the hub started has it already (StartEnv); one elsewhere gets its first here.
 			tok := hubToken.current()
 			if tok == "" || p.Record.Remote != nil {
-				tok = hubToken.renew(ps, p)
+				tok = hubToken.renew(ps, p, false)
 			}
-			params.Hub.URL, params.Hub.Token, params.Hub.Scopes = hubLocalURL(ps.h.cfg.Listen), tok, slices.Clone(g.Hub)
+			params.Hub.URL, params.Hub.Token, params.Hub.Scopes = url, tok, slices.Clone(g.Hub)
 		}
 		for _, c := range conns {
 			if ps.h == nil || ps.h.connectors.Enabled(c.ID) {
@@ -1062,14 +1088,28 @@ func connectorManifest(c extension.ConnectorItem) connector.Manifest {
 	return m
 }
 
-// hubEnv is what a plugin granted hub_api (and every hub.json one) gets: the hub's address and token on this machine.
+// hubEnv is what a plugin granted hub_api (and every hub.json one) gets from a manager that is not relayed (the
+// built-in one): the hub's address and token on this machine. A relayed manager's get a token of every scope instead
+// (hubStartEnv): none of the hub's own, even should its directory hold a hub.json with one.
 func (ps *extensions) hubEnv() []string {
-	if ps.h == nil || ps.h.cfg == nil {
+	if ps.h == nil || ps.h.cfg == nil || ps.h.relayed() {
 		return nil
 	}
 	// A plugin granted it is configured or accepted by whoever runs the hub, so it gets the hub's own credential to
 	// call its API with (the knowledge base, the agents, …): like a node, it is part of the hub.
 	return []string{"PERSONA_HUB_URL=" + hubLocalURL(ps.h.cfg.Listen), "PERSONA_HUB_TOKEN=" + ps.h.cfg.Token}
+}
+
+// hubStartEnv is the hub's address and p's new token of the hub's API at each start of its program (all: of every
+// scope; else of the scopes it was granted).
+func (ps *extensions) hubStartEnv(tok *startToken, p *extension.Extension, all bool) (func() []string, error) {
+	url, err := ps.hubURL()
+	if err != nil {
+		return nil, err
+	}
+	return func() []string {
+		return []string{"PERSONA_HUB_URL=" + url, "PERSONA_HUB_TOKEN=" + tok.renew(ps, p, all)}
+	}, nil
 }
 
 // remoteManifest asks a plugin elsewhere for its manifest: initialize over its protocol socket says who it is and
