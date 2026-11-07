@@ -183,7 +183,7 @@ class CapsuleSessionsTest {
         val inbox = capsuleInbox(snapshot)
         assertEquals(3, inbox.entries.size)
         assertEquals(setOf("inbox:item:mail:action", "inbox:request:ask-a", "inbox:request:ask-b~g0a1b2c3d"), inbox.targets.keys)
-        assertEquals(CapsuleInboxTarget.Request(other.key), inbox.targets["inbox:request:ask-b~g0a1b2c3d"])
+        assertEquals(CapsuleInboxTarget.Request(other.key, "ask-b~g0a1b2c3d"), inbox.targets["inbox:request:ask-b~g0a1b2c3d"])
     }
 
     @Test fun requestsFromTheSameConversationKeepTheirDistinctHeadlines() {
@@ -214,6 +214,19 @@ class CapsuleSessionsTest {
         fixture.source.select("inbox:request:ask~g0a1b2c3d")
         assertEquals(listOf(other.key to false), fixture.opened)
         assertNull(fixture.source.content.value.selectedId)
+    }
+
+    @Test fun aRequestOutsideAnySessionOpensItsCardInsteadOfABlankConversation() = runTest {
+        val fixture = Fixture(backgroundScope)
+        fixture.bindings.value = fixture.binding()
+        fixture.inbox.value = persona.feature.inbox.InboxSnapshot(
+            interactions = listOf(inboxRequest("script", Session("home", "")).copy(title = "Deploy?")))
+        runCurrent()
+        fixture.source.selectSection(InboxSection)
+        runCurrent()
+        fixture.source.select("inbox:request:script")
+        assertEquals(emptyList<Pair<SessionKey?, Boolean>>(), fixture.opened)
+        assertEquals(listOf(persona.core.navigation.RequestRef("home", "script")), fixture.openedCards)
     }
 
     @Test fun anOldInboxCannotOpenTheSameRawIdInANewPairing() = runTest {
@@ -482,6 +495,7 @@ class CapsuleSessionsTest {
         val observed = mutableListOf<SessionKey>()
         val opened = mutableListOf<Pair<SessionKey?, Boolean>>()
         val openedInbox = mutableListOf<String?>()
+        val openedCards = mutableListOf<persona.core.navigation.RequestRef>()
         val inbox = MutableStateFlow(persona.feature.inbox.InboxSnapshot())
         val hubPreferences = MutableStateFlow(HubPreferencesSnapshot())
         val messages = mutableMapOf<SessionKey, MutableStateFlow<ChatSnapshot>>()
@@ -551,7 +565,8 @@ class CapsuleSessionsTest {
                 override suspend fun markSeen(session: SessionKey, version: String) = Unit
             }),
         )
-        val source = CapsuleSessions(shell, wiring, scope, openInbox = { openedInbox += it }) { key, assistant -> opened += key to assistant }
+        val source = CapsuleSessions(shell, wiring, scope, openInbox = { openedInbox += it },
+            openConversation = { key, assistant -> opened += key to assistant }, openCard = { openedCards += it })
         fun binding(key: HubScope = hubScope, connection: HubConnection = this.connection) = ChatAppBindings(
             key, scope, unused(), connection, unused(), unused(), unused(), unused(), mainSender,
         )

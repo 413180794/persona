@@ -61,11 +61,11 @@ class CapsuleRuntime @Inject constructor(
                         launchApp(Uri.Builder().scheme("persona").authority("open")
                             .appendQueryParameter("target", if (item == null) "tab" else "inbox")
                             .apply { if (item == null) appendQueryParameter("tab", "inbox") else appendQueryParameter("item", item) }.build())
-                    }) { key, assistant ->
+                    }, openConversation = { key, assistant ->
                         val uri = if (key == null) Uri.parse(if (assistant) AskPersonaLink else "persona://open?target=tab&tab=agents")
                             else NotificationRoute.conversation(key.machineId, key.sessionId, assistant).uri()
                         launchApp(uri)
-                    }
+                    }, openCard = { card -> launchApp(NotificationRoute.card(card.machineId, card.requestId).uri()) })
                     val window = CapsuleHost(app, preferences, source,
                         extraContent = { ExtensionCapsuleCards(extensions.takeUnless { session.demo != null }, ::openExtension) },
                         theme = { content -> CapsuleEnvironment(content) })

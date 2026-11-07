@@ -1434,7 +1434,7 @@ Native TYPE_APPLICATION_OVERLAY, independent of status-bar Live Updates, support
 
 - Collapsed about 64×40 dp, avatar/dot only; drag snaps nearest edge, remembers relative height, no long summary or priority/active counts expanding window.
 - Expanded about 300 dp wide/max 420 high, fixed Unread/Main chat/Inbox entries. Unread follows Agent unread/seen-version projection, excludes mute/quiet; Main chat always Persona; Inbox current-group pending actions includes items/interactions. Clear per-entry counts, working not unread.
-- Preview unread/send in capsule; preview doesn't mark read, full chat existing read confirmation. Inbox opens existing detail/chat; View and handle/Open chat retain action chain.
+- Preview unread/send in capsule; preview doesn't mark read, full chat existing read confirmation. Inbox opens existing detail/chat; a request outside any session (`personad ask` in a plain terminal) opens its card in Agents (#4808 card route, #5308); View and handle/Open chat retain action chain.
 - New completion temporarily one line session · Completed, about 4 sec then small; queued sequentially, tap target. Separate nonfocus notice, no transcript/IME, no changing manual-entry choice/draft.
 - Tracks this turn observed Working while online, includes completion after NeedsYou wait; Unread consumes turn, Idle/removal/disconnect clear marker. Main/Agent both; no old-unread/duplicate/muted-quiet/interrupted replay. First fresh reconnect snapshot only baseline, never guesses unseen runs. Independent of system long-task notification filters.
 - Manual-card viewing/typing never interrupted, no delayed replay. Foreground/lock/screenoff/revoke/disable/unpair clear notice/queue; old timers cannot collapse newly opened manual card.

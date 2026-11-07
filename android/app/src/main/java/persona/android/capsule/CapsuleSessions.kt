@@ -19,6 +19,7 @@ import persona.core.domain.inbox.buildInboxList
 import persona.core.domain.sort.AgentPreferences
 import persona.core.domain.sort.AgentSession
 import persona.core.domain.sort.canSend
+import persona.core.navigation.RequestRef
 import persona.feature.agents.AgentsPreferencesSnapshot
 import persona.feature.agents.listSession
 import persona.feature.chat.ChatWiringSource
@@ -56,7 +57,7 @@ private fun capsuleEntry(session: Session, requests: List<Interaction> = emptyLi
 
 internal sealed interface CapsuleInboxTarget {
     data class Item(val id: String) : CapsuleInboxTarget
-    data class Request(val key: SessionKey) : CapsuleInboxTarget
+    data class Request(val key: SessionKey, val id: String) : CapsuleInboxTarget
 }
 internal data class CapsuleInbox(val entries: List<CapsuleEntry>, val targets: Map<String, CapsuleInboxTarget>)
 
@@ -79,7 +80,7 @@ internal fun capsuleInbox(snapshot: InboxSnapshot): CapsuleInbox {
         InboxRowType.Interaction -> {
             val request = interactions.getValue(row.id)
             val id = "inbox:request:${request.id}"
-            targets[id] = CapsuleInboxTarget.Request(SessionKey(request.machineId, request.sessionId))
+            targets[id] = CapsuleInboxTarget.Request(SessionKey(request.machineId, request.sessionId), request.id)
             val preview = listOfNotNull(request.title.takeIf { it.isNotBlank() }, request.summary?.takeIf { it.isNotBlank() })
                 .distinct().joinToString(" · ")
             CapsuleEntry(id, request.sessionTitle.ifBlank { request.title }, preview, CapsuleState.NeedsYou)
@@ -115,6 +116,8 @@ internal class CapsuleSessions(
     private val scope: CoroutineScope,
     private val openInbox: (String?) -> Unit,
     private val openConversation: (SessionKey?, Boolean) -> Unit,
+    /** A request outside any session (#5308): there is no conversation to open, only its card (#4808). */
+    private val openCard: (RequestRef) -> Unit,
 ) : CapsuleContentSource {
     private val selectedSection = MutableStateFlow<String?>(null)
     private val selected = MutableStateFlow<Session?>(null)
@@ -307,7 +310,8 @@ internal class CapsuleSessions(
             if (id == null) { openInbox(null); return }
             when (val item = catalog.value.inbox.targets[id] ?: error(AppText.get(R.string.app_capsule_item_changed))) {
                 is CapsuleInboxTarget.Item -> openInbox(item.id)
-                is CapsuleInboxTarget.Request -> openConversation(item.key, find(item.key)?.assistant == true)
+                is CapsuleInboxTarget.Request -> if (item.key.sessionId.isBlank()) openCard(RequestRef(item.key.machineId, item.id))
+                    else openConversation(item.key, find(item.key)?.assistant == true)
             }
             return
         }
