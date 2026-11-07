@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -87,6 +88,9 @@ type pageSession struct {
 	visibility                         uint64 // newer suspension wins over an in-flight recovery
 	legacy                             bool
 	legacyUse                          bool // one complete HTTP lifecycle, including its deferred pause
+	openID                             string
+	openBody                           [sha256.Size]byte
+	openDone                           chan struct{} // duplicate opens wait outside the session mutex
 	mountDone                          chan struct{}
 	mountCancel                        context.CancelFunc
 	disposeOnce                        sync.Once
@@ -103,6 +107,28 @@ type pageSessions struct {
 }
 
 func pageError(code string) error { return i18n.Err("extension-stream." + code) }
+
+// Classify only manager-owned errors, never localized strings or guest messages.
+func pageFailureCode(err error) string {
+	var message *i18n.Message
+	if errors.As(err, &message) {
+		switch message.Key {
+		case "extension-stream.expired":
+			return "expired"
+		case "extension-stream.inactive":
+			return "inactive"
+		case "extension-stream.forbidden":
+			return "forbidden"
+		case "extension-stream.invalid":
+			return "invalid"
+		case "extension-stream.quota":
+			return "quota"
+		case "extension-stream.negotiation":
+			return "negotiation"
+		}
+	}
+	return "rejected"
+}
 func samePageOwner(a, b extwire.UIPrincipal) bool {
 	return a.Hub == b.Hub && a.Principal == b.Principal
 }
@@ -483,10 +509,15 @@ func (h *Manager) pageOpen(ctx context.Context, who extwire.UIPrincipal, req wir
 		if !extension.FullPage(item.Placement) {
 			return extension.ActionResult{}, pageError("negotiation")
 		}
-		s, err := h.pageReserve(who, req.Extension, req.Contribution, hp.proc, slot, params)
+		s, reused, err := h.pageReserveOpen(who, req, hp.proc, slot, params)
 		if err != nil {
 			return extension.ActionResult{}, err
 		}
+		if reused {
+			frame, err = h.pageRetryOpen(ctx, who, req, s)
+			return extension.ActionResult{}, err
+		}
+		defer close(s.openDone)
 		s.manifest = p.Manifest
 		s.item = item
 		s.components = map[string]bool{}
@@ -552,10 +583,79 @@ func (h *Manager) pageMount(ctx context.Context, s *pageSession) (pageNative, er
 	return native, err
 }
 
+// pageReserveOpen keeps idempotency metadata only on quota-bounded live sessions.
+// Request IDs select an allocation within an authenticated owner, not across owners.
+func (h *Manager) pageReserveOpen(who extwire.UIPrincipal, req wire.UIStreamRequest, process pageProcess, slot extension.UISlot, params extension.UIParams) (*pageSession, bool, error) {
+	raw, err := json.Marshal(req)
+	if err != nil {
+		return nil, false, pageError("invalid")
+	}
+	body := sha256.Sum256(raw)
+	ps := &h.uiPages
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	for _, s := range ps.sessions {
+		if s.openID != req.RequestID || !samePageOwner(s.who, who) {
+			continue
+		}
+		if s.openBody != body || s.extension != req.Extension || s.contribution != req.Contribution || s.process != process {
+			return nil, false, pageError("invalid")
+		}
+		if s.who.Connection != who.Connection && !s.suspended {
+			return nil, false, pageError("forbidden")
+		}
+		return s, true, nil
+	}
+	s, err := h.pageReserveLocked(who, req.Extension, req.Contribution, process, slot, params)
+	if err != nil {
+		return nil, false, err
+	}
+	s.openID, s.openBody, s.openDone = req.RequestID, body, make(chan struct{})
+	return s, false, nil
+}
+
+func (h *Manager) pageRetryOpen(ctx context.Context, who extwire.UIPrincipal, req wire.UIStreamRequest, s *pageSession) (json.RawMessage, error) {
+	select {
+	case <-s.openDone:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	ps := &h.uiPages
+	ps.mu.Lock()
+	if s.closed || s.tree == nil || s.run == 0 || s.process.Generation() != s.run || !s.expires.IsZero() && time.Now().After(s.expires) {
+		ps.mu.Unlock()
+		return nil, pageError("expired")
+	}
+	if s.who.Connection != who.Connection && !s.suspended {
+		ps.mu.Unlock()
+		return nil, pageError("forbidden")
+	}
+	if s.suspended {
+		resume := wire.UIStreamRequest{Request: "resume", Protocol: 1, RequestID: req.RequestID, Session: s.id, Epoch: s.epoch, Version: s.tree.Version()}
+		ps.mu.Unlock()
+		raw, _ := json.Marshal(wire.UIStreamClientEnvelope{Type: "extension_ui_stream", Request: &resume})
+		return h.uiStream(ctx, extwire.UIStreamCall{Who: who, Envelope: raw})
+	}
+	// A duplicate read must not allocate, restart a callback, or wait on guest work.
+	frame := streamFrame("snapshot", req.RequestID, s.tree)
+	if !h.pageEmit(s.who, frame) {
+		ps.mu.Unlock()
+		return nil, pageError("inactive")
+	}
+	ps.mu.Unlock()
+	return frame, nil
+}
+
 func (h *Manager) pageReserve(who extwire.UIPrincipal, ext, ui string, process pageProcess, slot extension.UISlot, params extension.UIParams) (*pageSession, error) {
 	ps := &h.uiPages
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
+	return h.pageReserveLocked(who, ext, ui, process, slot, params)
+}
+
+// The caller holds uiPages.mu, shared by native and legacy reservation paths.
+func (h *Manager) pageReserveLocked(who extwire.UIPrincipal, ext, ui string, process pageProcess, slot extension.UISlot, params extension.UIParams) (*pageSession, error) {
+	ps := &h.uiPages
 	limits := h.cfg.UIPageSessions
 	total, owner, extensionTotal := 0, 0, 0
 	for _, s := range ps.sessions {

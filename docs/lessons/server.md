@@ -2,6 +2,11 @@
 
 Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" in `CLAUDE.md`; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or create one if none fits.
 
+## Lost initial native snapshots (#6251)
+
+- A successful open can allocate a page before its first snapshot reaches the client. Retrying that request after disconnect must reuse the same owner-bound allocation, not reserve another quota slot. Store only a request ID, a bounded-body digest and a completion channel on each live session; concurrent duplicates wait outside the session mutex. Changed payloads and live-connection theft remain rejected. A disconnected retry uses the existing authorized snapshot-first resume path. Independent page instances need independent open IDs; legacy HTTP checkpoints do not share this identity.
+- Recovery must distinguish an expired allocation from a transient inactive/busy request. Emit structured codes only from known manager-owned catalog errors, not localized text or guest messages. An `expired` lifecycle reply may remount; `inactive`, `invalid` or generic `rejected` must not blindly allocate a replacement. Display text remains localized and is never authorization.
+
 ## Database-move diagnostic timestamps (#6212)
 
 - A persisted move time is an absolute instant. Formatting it with `.Local()` and a minute-only layout makes operational errors depend on the hub machine's zone and loses the offset. Use explicit UTC RFC 3339 for these database-move diagnostics; normal user-facing calendars and schedules still use the configured user zone. Test equivalent UTC, positive-offset and negative-offset inputs, and keep the time-zone guard unchanged.

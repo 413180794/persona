@@ -6,7 +6,7 @@ import { createElement, View, Section, Text, Button, Row, Code, callback } from 
 import { useState, useInterval, useEffect } from "../../../../sdk/ts/src/hooks.ts";
 
 // A real Node source program over an injected test host, not a sandbox E2E.
-let writes = 0, uiTicks = 0, serviceTicks = 0;
+let writes = 0, uiTicks = 0, serviceTicks = 0, mounts = 0;
 let update: (n: number) => void = () => {};
 let prompt = "Synthetic confirmation", effectUpdates = false, renders = 0, disposes = 0;
 let rootGate: Promise<void> | undefined, releaseRoot: (() => void) | undefined;
@@ -45,7 +45,7 @@ const protocol = connect({ id:"example-page",version:"1.0.0",ui:{home:componentP
   if(method==="update") { update(params.count); await new Promise(resolve => setTimeout(resolve, 5)); return {}; }
   if(method==="prompt") { prompt=params.prompt; update(params.count); await new Promise(resolve => setTimeout(resolve, 5)); return {}; }
   if(method==="restart") process.exit(0);
-  if(method==="stats") return {writes,uiTicks,serviceTicks,renders,disposes,held:held.length};
+  if(method==="stats") return {writes,uiTicks,serviceTicks,renders,disposes,mounts,held:held.length};
   throw new Error("unknown fixture method");
  }},
 }, line => {
@@ -57,6 +57,7 @@ const input = createInterface({ input:inputStream });
 input.on("line", line => {
  const frame=JSON.parse(line);
  if(frame.id) methods.set(frame.id, frame.method);
+ if(frame.method==="ui.page.mount") mounts++;
  if(frame.method==="ui.page.dispose") disposes++;
  protocol.line(line);
 });

@@ -324,7 +324,7 @@ func (h *Manager) Request(ctx context.Context, method string, params json.RawMes
 			if env, decodeErr := uistream.DecodeClientEnvelope(call.Envelope); decodeErr == nil && env.Request != nil {
 				requestID = env.Request.RequestID
 			}
-			frame = streamFrame("error", requestID, &wire.UIStreamFailure{Code: "rejected", Message: i18n.Localize(err, i18n.Resolve(call.Who.Lang))})
+			frame = streamFrame("error", requestID, &wire.UIStreamFailure{Code: pageFailureCode(err), Message: i18n.Localize(err, i18n.Resolve(call.Who.Lang))})
 		}
 		var envelope struct {
 			Kind string `json:"kind"`

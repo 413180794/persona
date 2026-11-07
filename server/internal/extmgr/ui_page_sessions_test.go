@@ -96,7 +96,7 @@ func pageCall(t *testing.T, h *Manager, who extwire.UIPrincipal, request wire.UI
 }
 func pageOpenTest(t *testing.T, h *Manager, who extwire.UIPrincipal) *uistream.Tree {
 	t.Helper()
-	req := wire.UIStreamRequest{Request: "open", Protocol: 1, RequestID: "open", Extension: "example-page", Contribution: "home", Context: &wire.UIContext{UIVersion: 6, Platform: "web", Stream: &wire.UIStreamCapability{Protocol: 1, Components: []string{"text", "button", "row", "code"}}}}
+	req := wire.UIStreamRequest{Request: "open", Protocol: 1, RequestID: "open-" + randomHex(8), Extension: "example-page", Contribution: "home", Context: &wire.UIContext{UIVersion: 6, Platform: "web", Stream: &wire.UIStreamCapability{Protocol: 1, Components: []string{"text", "button", "row", "code"}}}}
 	raw, err := pageCall(t, h, who, req)
 	if err != nil {
 		t.Fatal(err)
