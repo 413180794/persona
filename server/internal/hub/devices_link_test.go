@@ -418,6 +418,61 @@ func TestAWarmMachineIsNotConnectedYet(t *testing.T) {
 	}
 }
 
+// #6372: a chat subscribed through a node restart keeps getting its items. A node watches per connection, so the
+// manager tells the new connection to watch again.
+func TestLiveItemsAfterTheNodeReconnects(t *testing.T) {
+	box := newMeshNode("uid-box", "box", "s1")
+	box.resident, box.pushWatchedOnly = true, true
+	mh := startTestHub(t, hubA, "Dev", []MachineConfig{{ID: "box", Name: "Box", Kind: "ssh"}}, []*meshNode{box})
+	tok, _ := mh.deviceToken(t, roleFull)
+	eventually(t, 10*time.Second, "online", func() bool { return mh.machines(t, tok)["box"].Online })
+	a := dialApp(t, mh, tok)
+	a.send(t, map[string]any{"type": "subscribe", "machine_id": "box", "session_id": "s1"})
+	a.wait(t, "backlog", 0, hasItem("hi from s1"))
+	box.addItem("s1", "before the restart")
+	a.wait(t, "live before the restart", 0, hasItem("before the restart"))
+	box.mu.Lock()
+	first := box.connects
+	box.mu.Unlock()
+	_ = box.current().c.Close() // the node restarts
+	eventually(t, 15*time.Second, "watched on the new connection", func() bool {
+		box.mu.Lock()
+		defer box.mu.Unlock()
+		return box.connects > first && len(box.conns) == 1 && box.conns[0].watching["s1"]
+	})
+	box.addItem("s1", "after the restart")
+	a.wait(t, "live after the restart", 0, hasItem("after the restart"))
+}
+
+// … and when the restarted node refuses the first watch (still starting), the chat still gets its items.
+func TestLiveItemsAfterTheRestartedNodeRefusesTheFirstWatch(t *testing.T) {
+	box := newMeshNode("uid-box", "box", "s1")
+	box.resident, box.pushWatchedOnly = true, true
+	mh := startTestHub(t, hubA, "Dev", []MachineConfig{{ID: "box", Name: "Box", Kind: "ssh"}}, []*meshNode{box})
+	tok, _ := mh.deviceToken(t, roleFull)
+	eventually(t, 10*time.Second, "online", func() bool { return mh.machines(t, tok)["box"].Online })
+	a := dialApp(t, mh, tok)
+	a.send(t, map[string]any{"type": "subscribe", "machine_id": "box", "session_id": "s1"})
+	a.wait(t, "backlog", 0, hasItem("hi from s1"))
+	box.mu.Lock()
+	first := box.connects
+	box.failWatch = map[string]int{"s1": 1}
+	box.mu.Unlock()
+	_ = box.current().c.Close()
+	eventually(t, 15*time.Second, "connected again", func() bool {
+		box.mu.Lock()
+		defer box.mu.Unlock()
+		return box.connects > first && len(box.conns) == 1
+	})
+	eventually(t, 15*time.Second, "watched on the new connection after the refusal", func() bool {
+		box.mu.Lock()
+		defer box.mu.Unlock()
+		return len(box.conns) == 1 && box.conns[0].watching["s1"]
+	})
+	box.addItem("s1", "after the refusal")
+	a.wait(t, "live after the refusal", 0, hasItem("after the refusal"))
+}
+
 // A manager that is new is asked to watch again what the apps watch, a few at a time: a computer slow to answer does
 // not hold up the others' items.
 func TestWatchedAgainAtOnceWithANewManager(t *testing.T) {

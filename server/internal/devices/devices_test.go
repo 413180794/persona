@@ -35,6 +35,8 @@ type testNode struct {
 	info *proto.NodeInfo
 	// echoHealth: it says which health space it answered about (health_dir), as a node with health_spaces does.
 	echoHealth bool
+	// refuseWatch: how many more session.watch calls of a session it refuses (a node just started, #6372).
+	refuseWatch map[string]int
 }
 
 func (n *testNode) dial(context.Context) (net.Conn, error) {
@@ -52,6 +54,14 @@ func (n *testNode) dial(context.Context) (net.Conn, error) {
 			return proto.NodeInfo{Hostname: "box", OS: "linux", Arch: "amd64", Home: "/home/me", Version: "test"}, nil
 		case "sessions.list":
 			return map[string]any{"sessions": n.sessions}, nil
+		case "session.watch":
+			var w struct {
+				SessionID string `json:"session_id"`
+			}
+			if _ = json.Unmarshal(params, &w); n.refuseWatch[w.SessionID] > 0 {
+				n.refuseWatch[w.SessionID]--
+				return nil, errors.New("transcript for session " + w.SessionID + " not found")
+			}
 		}
 		if n.refuse != nil {
 			return nil, n.refuse
@@ -368,6 +378,42 @@ func TestANewBusConnectionEndsWhatTheLastOneOpened(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if len(n.seen("terminal.unwatch")) != 1 {
 		t.Fatal("ended twice")
+	}
+}
+
+// #6372: a watch the node refuses on its new connection is asked again on that connection while the hub still wants
+// it; one the hub stopped wanting meanwhile is let go; a node that keeps refusing is given up on after rewatchTries.
+func TestRefusedRewatchAskedAgain(t *testing.T) {
+	wait, tries := rewatchWait, rewatchTries
+	rewatchWait, rewatchTries = 300*time.Millisecond, 3
+	t.Cleanup(func() { rewatchWait, rewatchTries = wait, tries })
+	d := newTestDevices(t)
+	n := &testNode{}
+	m := connectedMachine(t, d, "box", n)
+	watch := func(method, id string) {
+		t.Helper()
+		if _, err := d.Call(context.Background(), devicewire.NodeCall{MachineID: "box", Method: method,
+			Params: json.RawMessage(`{"session_id":"` + id + `"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{"s1", "s2", "s3"} {
+		watch("session.watch", id)
+	}
+	calls := func(id string) int {
+		return len(slices.DeleteFunc(n.seen("session.watch"), func(c string) bool { return !strings.Contains(c, `"`+id+`"`) }))
+	}
+	n.mu.Lock()
+	n.refuseWatch = map[string]int{"s1": 1, "s2": 1, "s3": 100}
+	n.mu.Unlock()
+	m.reconnect()
+	eventually(t, 5*time.Second, "each refused on the new connection", func() bool { return calls("s1") == 2 && calls("s2") == 2 && calls("s3") == 2 })
+	watch("session.unwatch", "s2") // the app left before the node was asked again
+	eventually(t, 5*time.Second, "s1 asked again and taken", func() bool { return calls("s1") == 3 })
+	eventually(t, 10*time.Second, "s3 given up on after its tries", func() bool { return calls("s3") == 2+rewatchTries })
+	time.Sleep(2 * rewatchWait)
+	if calls("s2") != 2 || calls("s3") != 2+rewatchTries || calls("s1") != 3 {
+		t.Fatalf("asked again past what was wanted: s1 %d, s2 %d, s3 %d", calls("s1"), calls("s2"), calls("s3"))
 	}
 }
 

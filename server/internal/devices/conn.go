@@ -324,6 +324,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	if f := m.d.opts.OnConnected; f != nil && compat.Incompatible == "" {
 		go f(m.cfg.ID)
 	}
+	var refused []string
 	for id, since := range rewatch {
 		if c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil) == nil {
 			m.mu.Lock()
@@ -331,7 +332,13 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 				delete(m.unsettled, id) // a Follow that failed is taken now
 			}
 			m.mu.Unlock()
+		} else if ctx.Err() == nil {
+			refused = append(refused, id)
 		}
+	}
+	if len(refused) > 0 {
+		m.d.logf("[%s] the new connection refused session.watch for %d session(s); asking again", m.cfg.ID, len(refused))
+		go m.rewatchRefused(sctx, c.peer, refused)
 	}
 	go m.watchPaths(sctx, ctx, c)
 	if info.ClaudeVersion == "" {
@@ -365,6 +372,55 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 	return err
 }
+
+// rewatchRefused asks a new connection again, while it lasts, to watch the sessions whose watch it refused when it
+// came (a node just started may not find a transcript yet). One left refused would keep an app's open chat without
+// its items until the app subscribed again, while the hub takes the session as watched (#6372). A session neither the
+// hub nor a Follow wants any more is let go; after rewatchTries the node is taken at its word, logged once.
+func (m *Machine) rewatchRefused(ctx context.Context, peer *rpc.Peer, ids []string) {
+	wait := rewatchWait
+	for try := 0; len(ids) > 0; try++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		var left []string
+		for _, id := range ids {
+			m.mu.Lock()
+			want, since := m.watched[id] || m.followed[id], m.lastSeq[id]
+			m.mu.Unlock()
+			if !want {
+				continue
+			}
+			if err := peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				if try+1 >= rewatchTries {
+					m.d.logf("[%s] session.watch %s on the new connection: %v (gave up)", m.cfg.ID, id, err)
+					continue
+				}
+				left = append(left, id)
+				continue
+			}
+			m.mu.Lock()
+			if m.followed[id] {
+				delete(m.unsettled, id)
+			}
+			m.mu.Unlock()
+		}
+		ids = left
+		wait = min(wait*2, 30*time.Second)
+	}
+}
+
+// rewatchWait is the first wait before a refused watch is asked again (it doubles, up to 30 s), rewatchTries how
+// many times it is asked.
+var (
+	rewatchWait  = time.Second
+	rewatchTries = 8
+)
 
 // watchPaths, while c is the connection, leaves it for a clearly better path once that has stayed better long
 // enough (connecting the new one first), and lets it go when its path now reaches another computer or this machine

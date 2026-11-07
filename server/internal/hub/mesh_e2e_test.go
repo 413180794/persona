@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -49,6 +50,10 @@ type meshNode struct {
 	events []string // one-way events from the hub, "name text"
 	who    []string // the hubs that connected, in order
 	whoAt  []whoAt
+	// pushWatchedOnly: addItem pushes only to the connections that watch the session, as a real node does (#6372);
+	// failWatch: the next session.watch calls of a session that fail (a node still starting).
+	pushWatchedOnly bool
+	failWatch       map[string]int
 }
 
 type whoAt struct {
@@ -61,6 +66,9 @@ type meshNodeConn struct {
 	c   net.Conn
 	hub *Hub
 	mux *streams.Mux // forwarded ports' streams
+	// watching: the sessions this connection was told to watch (meshNode.mu), as a real node's watch follows the
+	// connection that asked for it.
+	watching map[string]bool
 }
 
 func newMeshNode(uid, host string, sessions ...string) *meshNode {
@@ -146,6 +154,27 @@ func (f *meshNode) dialer(h *Hub) func(context.Context) (net.Conn, error) {
 			if held != nil {
 				<-held
 			}
+			if method == "session.watch" || method == "session.unwatch" {
+				var w struct {
+					SessionID string `json:"session_id"`
+				}
+				_ = json.Unmarshal(params, &w)
+				f.mu.Lock()
+				if method == "session.watch" && f.failWatch[w.SessionID] > 0 {
+					f.failWatch[w.SessionID]--
+					f.mu.Unlock()
+					return nil, errors.New("transcript for session " + w.SessionID + " not found")
+				}
+				if fc.watching == nil {
+					fc.watching = map[string]bool{}
+				}
+				if method == "session.watch" {
+					fc.watching[w.SessionID] = true
+				} else {
+					delete(fc.watching, w.SessionID)
+				}
+				f.mu.Unlock()
+			}
 			return f.handle(method, params)
 		}
 		go func() {
@@ -222,7 +251,12 @@ func (f *meshNode) addItem(sid, text string) {
 	f.mu.Lock()
 	it := proto.Item{Seq: len(f.items[sid]) + 1, Kind: "assistant", Text: text}
 	f.items[sid] = append(f.items[sid], it)
-	conns := append([]*meshNodeConn{}, f.conns...)
+	var conns []*meshNodeConn
+	for _, c := range f.conns {
+		if !f.pushWatchedOnly || c.watching[sid] {
+			conns = append(conns, c)
+		}
+	}
 	f.mu.Unlock()
 	for _, c := range conns {
 		_ = c.p.Notify("session.items", map[string]any{"session_id": sid, "items": []proto.Item{it}})
