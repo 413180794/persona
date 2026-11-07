@@ -28,6 +28,10 @@ type Rule struct {
 	Action    string         `json:"action"`
 	Match     map[string]any `json:"match,omitempty"`
 	Decision  string         `json:"decision"`
+
+	// fromUser marks a rule the user made from the ledger (SetUserRules), so a write it let through is told apart from one a
+	// hand-written rule did (LetThrough.UserRule). Not in the JSON: no file can say it.
+	fromUser bool
 }
 
 // Lark is the connector id whose rules are the assistant's Feishu writes (an extension's gated command, lark-cli). Those run on
@@ -236,7 +240,7 @@ func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string
 		res := proto.ErrorResult(proto.ToolErrorDeclined, text, 0)
 		return &res, through
 	case Allow:
-		through = LetThrough{Kind: ThroughRule, Rule: rule}
+		through = LetThrough{Kind: ThroughRule, Rule: rule, UserRule: rule != nil && rule.fromUser}
 	case Confirm:
 		act, summary, err := a.Describe(ctx, name, args)
 		if err != nil {

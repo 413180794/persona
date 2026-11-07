@@ -81,6 +81,7 @@ func (h *Manager) connectorRoutes(api *http.ServeMux) {
 	h.connectorThreadRoutes(api)
 	h.sentRoutes(api)
 	h.sentRecallRoutes(api)
+	h.chatRuleRoutes(api)
 	api.HandleFunc("GET /api/v1/connectors", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connectors": h.listedConnectors(r.Context(), r.URL.Query().Get("all") == "1")})
 	})

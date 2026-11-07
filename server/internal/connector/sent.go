@@ -22,6 +22,9 @@ type LetThrough struct {
 	Kind string
 	// Rule is the rule that allowed it (ThroughRule).
 	Rule *Rule
+	// UserRule says the rule was one the user made from the ledger ("don't ask again in this chat", SetUserRules), not a
+	// hand-written one (ThroughRule).
+	UserRule bool
 	// Summary is the words the card showed (ThroughCard): Describe's, cut to cardMost.
 	Summary string
 }

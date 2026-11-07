@@ -17,16 +17,20 @@ type sentItem struct {
 	db.SentAsUser
 	// CanRecall: the message can be taken back now (recallCheck finds nothing against it).
 	CanRecall bool `json:"can_recall"`
+	// ChatRule: what the row offers of the user's per-chat rules, and whether its chat has one (chat_rules_routes.go).
+	ChatRule chatRuleState `json:"chat_rule"`
 }
 
 // sentItems are rows as the routes give them, judged at the one moment now.
 func (h *Manager) sentItems(ctx context.Context, rows []db.SentAsUser) []sentItem {
 	now := sentLedgerNow()
+	states := h.chatRuleStates(ctx, rows) // once for the page: the rules and the Lark gates' commands are read once
 	out := make([]sentItem, len(rows))
 	for i, row := range rows {
 		out[i].SentAsUser = row
 		_, err := h.recallCheck(ctx, row, now)
 		out[i].CanRecall = err == nil
+		out[i].ChatRule = states[i]
 	}
 	return out
 }

@@ -43,6 +43,7 @@ extensions.call:{id} /api/v1/extensions/{id}/
 -                    DELETE /api/v1/auth/tokens/{id}
 -                    DELETE /api/v1/bots/feishu/owner
 -                    DELETE /api/v1/channels/{id}/binding
+-                    DELETE /api/v1/connectors/sent/chat-rules/{id}
 -                    DELETE /api/v1/connectors/{id}/archive
 -                    DELETE /api/v1/connectors/{id}/data
 -                    DELETE /api/v1/extensions/-/operations/{op}
@@ -110,6 +111,7 @@ assistant.ask        GET /api/v1/assistant/reporters
 -                    GET /api/v1/connectors
 -                    GET /api/v1/connectors/github/auth
 -                    GET /api/v1/connectors/sent
+-                    GET /api/v1/connectors/sent/chat-rules
 -                    GET /api/v1/connectors/{id}/media
 -                    GET /api/v1/connectors/{id}/thread
 -                    GET /api/v1/devices/push
@@ -288,6 +290,7 @@ assistant.ask        POST /api/v1/assistant/conversations/{id}/stop
 -                    POST /api/v1/bots/feishu/test
 -                    POST /api/v1/channels/{id}/bind
 -                    POST /api/v1/channels/{id}/test
+-                    POST /api/v1/connectors/sent/chat-rules
 -                    POST /api/v1/connectors/sent/{id}/recall
 -                    POST /api/v1/connectors/{id}/login
 -                    POST /api/v1/connectors/{id}/logout

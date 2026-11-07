@@ -42,7 +42,7 @@ func (h *Manager) Run(ctx context.Context) error {
 		}
 	}
 	h.initAgents()
-	h.connectors = h.newConnectors(h.cfg.ConnectorGate)
+	h.startConnectorGate(ctx) // the connectors' registry, with the gate's rules: connector_gate and the user's own
 	h.migrateWeChatState(ctx) // into the channels' state before the assistant and the WeChat program read it
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)

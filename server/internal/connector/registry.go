@@ -24,9 +24,12 @@ type Ask func(ctx context.Context, summary string, input json.RawMessage) bool
 
 // Registry holds the hub's connectors, in the order added, and the write gate's rules.
 type Registry struct {
-	mu    sync.RWMutex
-	list  []Connector
+	mu   sync.RWMutex
+	list []Connector
+	// rules are the hand-written ones (hub.json connector_gate), read once at start; user are the rules the user made
+	// from the ledger (SetUserRules), which can change while it runs and come after them.
 	rules []Rule
+	user  []Rule
 	off   map[string]bool // switched off by the user (SetEnabled)
 	// feedsOff are the feeds the user turned off, by connector (SetFeed).
 	feedsOff map[string]map[Feed]bool
@@ -47,6 +50,42 @@ type starter struct {
 // NewRegistry holds no connector yet; rules are the write gate's (hub.json connector_gate, ValidateRules).
 func NewRegistry(rules []Rule) *Registry {
 	return &Registry{rules: rules, off: map[string]bool{}, feedsOff: map[string]map[Feed]bool{}, stop: map[string]context.CancelFunc{}}
+}
+
+// SetUserRules sets the rules the user made from the ledger ("don't ask again in this chat", ChatRuleFor), replacing
+// the ones set before, at once and without a restart: the next write is decided by them. They come after the
+// hand-written rules given to NewRegistry, so a hand-written deny or confirm that matches still wins, and an allow of
+// theirs is clamped to a card as any allow is (Manifest.ConfirmAlways, ConfirmEach). A rule that is not a one-chat
+// allow (UserRule.Validate) is left out and named in the error, the rest are set all the same: a rule left out can only
+// make the gate ask more. nil or empty leaves the gate as the hand-written rules alone make it.
+func (r *Registry) SetUserRules(list []UserRule) error {
+	rules, err := userRuleSet(list)
+	r.mu.Lock()
+	r.user = rules
+	r.mu.Unlock()
+	return err
+}
+
+// UserRules are the rules SetUserRules set, as the gate runs them (do not change them): what the node's Lark gate is
+// served too. nil when none are, and for a nil Registry.
+func (r *Registry) UserRules() []Rule {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.user
+}
+
+// gateRules are the rules a write is decided by: the hand-written ones, then the user's. With no user rule they are the
+// hand-written ones as they were given.
+func (r *Registry) gateRules() []Rule {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if len(r.user) == 0 {
+		return r.rules
+	}
+	return slices.Concat(r.rules, r.user)
 }
 
 // switchedOff are the connectors switched off, by instance: StatusOf answers StateDisabled for them, so every pipe
@@ -335,10 +374,7 @@ func (r *Registry) call(ctx context.Context, name string, args json.RawMessage, 
 	}
 	var through LetThrough
 	if gated {
-		r.mu.RLock()
-		rules := r.rules
-		r.mu.RUnlock()
-		res, how := gate(ctx, rules, c, a, name, args, ask)
+		res, how := gate(ctx, r.gateRules(), c, a, name, args, ask)
 		if res != nil {
 			return *res
 		}

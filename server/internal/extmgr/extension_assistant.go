@@ -170,6 +170,33 @@ func (ps *extensions) assistantGates(ctx context.Context, userRules func(connect
 	return out
 }
 
+// gateCommands are the commands of the enabled extensions' command gates that are for connector id (their gate files'
+// connector field), as assistantGates hands them over.
+func (ps *extensions) gateCommands(connectorID string) []string {
+	var out []string
+	if ps == nil {
+		return out
+	}
+	for _, p := range ps.reg.List() {
+		if !p.Record.Enabled || p.Problem != "" || p.Dir == "" {
+			continue
+		}
+		for _, a := range p.Manifest.Assistants() {
+			if a.Gate == "" {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join(p.Dir, filepath.FromSlash(a.Gate)))
+			if err != nil {
+				continue
+			}
+			if gf, err := extension.ParseGate(raw); err == nil && gf.Connector == connectorID {
+				out = append(out, gf.Command)
+			}
+		}
+	}
+	return out
+}
+
 // assistantCredentials asks a plugin for its gate's credentials (assistant.credentials → {env}), keeping only the
 // names its gate file declares; nothing when it cannot answer (the command then says its API is not reachable).
 func (ps *extensions) assistantCredentials(ctx context.Context, id, contribution string, names []string) map[string]string {
@@ -242,7 +269,9 @@ func (ps *extensions) assistantSummary(ctx context.Context, title, summary strin
 // settings and rules, and the plugins' command gates.
 func (h *Manager) assistantLark(ctx context.Context) (proto.AssistantLark, error) {
 	lc := h.cfg.Lark
-	larkRules := connector.LarkRules(h.cfg.ConnectorGate, h.cfg.LarkGate)
+	// The hand-written rules first (connector_gate's, then lark_gate's), the user's per-chat ones after them
+	// (chat_rules.go): a hand-written deny or confirm that matches still wins. Nothing the user made, nothing added.
+	larkRules := append(connector.LarkRules(h.cfg.ConnectorGate, h.cfg.LarkGate), connector.LarkRules(h.connectors.UserRules(), nil)...)
 	out := proto.AssistantLark{Rules: larkRules, Prefer: lc.Prefer}
 	if lc.CLI != nil {
 		out.CLI = &proto.LarkCLI{Bin: lc.CLI.Bin, Profile: lc.CLI.Profile}

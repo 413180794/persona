@@ -98,6 +98,9 @@ func sentRow(s connector.Sent, trace *sentTrace) db.SentAsUser {
 	switch s.Through.Kind {
 	case connector.ThroughRule:
 		through["rule"] = s.Through.Rule
+		if s.Through.UserRule { // one the user made from this page, not one that is written in manager.json
+			through["user_rule"] = true
+		}
 	case connector.ThroughCard:
 		if trace != nil && trace.card != "" {
 			through["interaction_id"] = trace.card
@@ -432,6 +435,9 @@ func (h *Manager) RecordNodeSent(ctx context.Context, machineID string, raw json
 	if err != nil {
 		return nil, &rpc.Error{Code: "invalid_params", Message: "lark.sent: " + err.Error()}
 	}
+	if p.LetThrough.Kind == proto.LarkThroughRule && h.isUserLarkRule(p.LetThrough.Rule) {
+		through["user_rule"] = true
+	}
 	st, _ := h.store.(sentStore)
 	if st == nil {
 		return nil, &rpc.Error{Code: "no_database", Message: "lark.sent: no database, there is no ledger"}
@@ -461,6 +467,21 @@ func (h *Manager) RecordNodeSent(ctx context.Context, machineID string, raw json
 		return nil, errors.New("lark.sent: the ledger could not be written")
 	}
 	return struct{}{}, nil
+}
+
+// isUserLarkRule says whether the rule a node's gate says let a write through is one the user made from the ledger (chat_rules.go):
+// the same method and path as one of theirs, allowing, with no body match. The node does not know which of the rules it
+// was served are the user's; a hand-written rule of the very same method and path would decide the same way and comes
+// first, so then it is not told as theirs.
+func (h *Manager) isUserLarkRule(r *proto.LarkRule) bool {
+	if r == nil || r.Action != connector.Allow || len(r.Body) > 0 {
+		return false
+	}
+	same := func(o proto.LarkRule) bool {
+		return o.Action == connector.Allow && len(o.Body) == 0 && strings.EqualFold(o.Method, r.Method) && o.Path == r.Path
+	}
+	return slices.ContainsFunc(connector.LarkRules(h.connectors.UserRules(), nil), same) &&
+		!slices.ContainsFunc(connector.LarkRules(h.cfg.ConnectorGate, h.cfg.LarkGate), same)
 }
 
 // nodeWriteMethods are the methods the gate treats as writes (node/larkgate.go larkRead: all but GET and HEAD).

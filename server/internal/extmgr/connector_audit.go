@@ -28,6 +28,13 @@ const (
 	auditConnectorRecall         = "connector_recall"          // {row, action}: a message the ledger has a row for was taken back
 )
 
+// The user's per-chat rules (#5278, chat_rules_routes.go): a rule made from a ledger row, and one dropped. The detail names
+// the chat and the row it came from, never the row's words.
+const (
+	auditConnectorChatRuleAdded   = "connector_chat_rule_added"   // {row, chat}: "don't ask again in this chat" was made
+	auditConnectorChatRuleRemoved = "connector_chat_rule_removed" // {chat, row?}: such a rule was dropped (off in the gate, or gone from the store)
+)
+
 // auditConnector records an action on connector id by whoever made the request (actorOf: device:<id>, or the hub
 // token).
 func (h *Manager) auditConnector(ctx context.Context, id, action string, detail map[string]any) {
