@@ -47,7 +47,6 @@ const files = import.meta.glob<{ cases: SyncCase[] }>("../../../../../spec/fixtu
  *  for another reason, or passes, fails the suite: the fixed bug comes off this list, and a new one is not hidden. */
 const KNOWN: Record<string, { issue: string; because: RegExp }> = {
   catch_up_over_cap_asks_rest: { issue: "#1118", because: /after_seq":12\}|want \[.*Question 6/ },
-  send_accepted_transcript_late: { issue: "#1119", because: /m1 shows 0 times|want \[.*Add a picnic on Saturday/ },
   send_unknown_then_transcript_has_it: { issue: "#1121", because: /m1 shows 2 times|failed \["Reserve two bikes."\], want \[\]/ },
   send_failed_stays_above_later: { issue: "#1122", because: /m1 shows 0 times|failed \[\], want \["Find a dinner place."\]/ },
 };
