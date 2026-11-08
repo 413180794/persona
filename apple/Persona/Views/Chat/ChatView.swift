@@ -1841,6 +1841,7 @@ struct ChatView: View {
         .environment(\.subagentsByCall, subagentsByCall)
         .environment(\.workflowChat, key)
         .environment(\.chatActions, actions)
+        .environment(\.subagentParent, key)
         .environment(\.openFold, actions.openFold)
         .environment(\.taskIndex, store.tasks)
         .environment(\.jumpToCall, actions.jumpToCall)
