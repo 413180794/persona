@@ -1,5 +1,13 @@
 # Lessons: web UI and interactions
 
+## Notification preference writes need hub ordering (#1285)
+
+Ignoring an older PUT response cannot stop its request from committing last. Serialize notification and manager-push writes together, keep confirmed preferences separately from queued intents, and send only the changed fields. Remove a failed intent before rebuilding the optimistic view, so another field's save does not silently retry it. Reads started during a write need completion fencing too. Regress authoritative commits and reloads with a deferred transport; response-only checks can pass while the hub retains the wrong choice.
+
+A queue also survives in-place sign-out and re-pairing. Bind it to the credential generation when enqueuing, retire unsent intents and fence late responses, rollback and cache writes when that generation ends. Exercise the real REST client with synthetic token A/B fetches: an `api()` mock hides its deferred token lookup. A late old-session 401 must not invoke the new login's sign-out callback; current-session 401 handling must still work.
+
+Retiring a generation must also wake mounted consumers to read the next generation's preferences. Another tab's token replacement can leave Settings mounted; an effect that loads only on mount strands an aborted initial read or a hidden manager switch. Subscribe to the generation independently of the preference value, bind loading state to it, and test actual components with abort-aware fetches rather than manually loading the new login in the test.
+
 ## Connector sends acknowledge one draft revision (#1286)
 
 - Keep an editable composer's text and quote together: clear them after success only if neither changed during the send or its refresh. Comparing final text alone misses edits away and back to the same words. A synchronous ref admits one send before React rerenders, and the manager, item, source and thread scope its local draft and pending state. Exercise delayed success, failure/retry, quote changes and ownership switches in both chat and GitHub comment modes.
