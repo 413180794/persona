@@ -148,8 +148,8 @@ Chat page:
   The queue strip above the composer (`QueueStrip`): each queued message's menu takes it back to edit, copies or deletes it. For a Claude in a terminal pane (`Session.steersQueue`, #6088) the strip also has Send Now (after a confirmation that says a running command moves to the background and a reply being written starts again; `POST …/queue/send-now`, Claude Code's own send-now, which takes the whole queue; the hub's words for `nothing_queued` / `send_now_unsupported` / `send_now_in_doubt` are shown as they come), and each message Move Up / Move Down (`QueueOrder.moved`: the `/queue` `keep` in the new order). UI test `QueueSteerUITests` (`MOCK_QUEUE=1`; `MOCK_SEND_NOW=<code>` makes the mock refuse).
   Multiple queued messages in one turn still pair one-to-one after completion, each with its work/reply (#2512 removed merged-bubble completion); sent images are square thumbnails above message (`SentPhotos`, same as pending),
   stripping Claude "[Image #N]" placeholders from bubbles.
-- Landing: Unread chats show only the last line of your last input at top, then this turn's work and answer (`landUnderInput`: jump by id, correct measured position; header collapses to slim bar and layout uses that height); other chats restore topmost row from last visit (`chat.read.<session>`,
-  cleared when leaving at latest). Landings within final screen land at bottom and follow new messages (`ChatView.landed`).
+- Landing: Unread chats show only the last line of your last input at top, then this turn's work and answer (`landUnderInput`: jump by id, correct measured position; header collapses to slim bar and layout uses that height); other chats, Persona's conversations included (#1666), restore topmost row from last visit (`chat.read.<session>`,
+  cleared when leaving at latest; in Persona's conversations only a transcript row is remembered, never a hub feed line or a day line, which may arrive after the transcript on the next launch). Landings within final screen land at bottom and follow new messages (`ChatView.landed`).
   Thus outputs always follow each input whether folded or expanded, no piled-up inputs or numbering.
   - Work row folds everything except final text: tools, thinking (new Claude Code narration uses thinking), system messages (background completion),
     intermediate replies. Tap lists steps inline in order (thin left line), tap same row to fold; Collapse N steps below last avoids scrolling hundreds back.
@@ -1081,6 +1081,24 @@ Apple clients do not draw them as user bubbles or show the model's instructions:
 - Watch: a small centered line (icon plus `line`), no bubble (screenshots: mock `MOCK_INJECTED_WATCH=1`, watch `-openWatchItem session`).
 - Chat-list previews use the assistant's words (`last_text`), which already exclude these messages.
 - `ChatCache` bumped to v9: old cached items lack `injected`.
+
+## New conversation layout (#1666)
+
+Settings › Appearance › New Conversation Layout (`ui.newChatLayout`, on by default; a key of its own, not the shell's Layout switch) tidies Persona's main conversation on iPhone and iPad.
+Off, the conversation is drawn exactly as before. The Agents chat, the Mac and Vision Pro never use it (`ChatLayoutSettings.layout(assistant:)` returns `ChatLayout.off` there).
+`ChatView` reads the choice once and hands rows `\.chatLayout` through the environment, so no row observes UserDefaults (`Persona/Views/Chat/ChatLayout.swift`).
+
+- **Who talks to whom**, from the hub's existing fields only: feed `routed` that Persona wrote (`from` `assistant`, #1542) reads "Persona → @task" (`RoutedExchange`; off, #1542's folded `AgentSentLine`), what the user sent a task (`routed` without `from`) "Me → @task" in the user's box (`UserRoutedExchange`), feed `report` reads "task → @Persona" (`ReportExchange`),
+  and injected `system` / `supervise` (the supervision digest) and `followup` (scheduled runs, follow-ups, wake-ups) read "Supervision · Persona → @Persona" (`Injected.isPatrol`, `InjectedLine.patrol`): Persona writing to itself,
+  on Persona's side, never where the user's messages are. Task notices, node-restart and Inbox lines keep their centered line. The addressee is in the accent; there is no group name, member list or avatar per speaker.
+- **Boxes**: every message sits in a box, the user's pale blue (`Theme.ChatBox.user`) and Persona's, its exchanges' and its notes' pale gray (`Theme.ChatBox.persona`), words in the primary color in both modes (`ChatLayoutTests` checks the contrast). The answer streams in the box it settles in.
+- **Folding**: what Persona and a task say to each other shows its first N lines (3 by default) with Expand / Collapse under it (`ExchangeText`, measured against the whole text, so a short one has no button); the setting offers Folded / Show N Lines / Expand All.
+  No evidence list under a report (it was not tappable); web links in the words are links (`ExchangeText.linked`).
+- **Right-edge navigator** (`ChatEdgeScrub.swift`), like the ChatGPT desktop app's: a slide up or down that starts in the band along the list's right edge (`Theme.Size.edgeBand`, inside the list's side margin, below the top bar) shows one tick per message the user typed
+  (not injected lines, other conversations' messages or /loop ticks), a light tap as it opens and a selection tick per message passed, with the picked message's first two lines beside it; letting go brings it to the middle of the list and lights it up.
+  It is a UIKit recognizer: it fails at once for a touch outside the band and for a slide more sideways than up-and-down (the shell's pager and the drawer keep those, `DrawerPan`), and the list's scroll view pan waits for it to fail (`shouldBeRequiredToFailBy`); the system's back swipe is at the other edge.
+  With more messages than fit, the newest that fit are shown. `-showEdgeScrub N` holds it open on the Nth newest message for screenshots; `-openAppearance chat` opens the settings page.
+- Tests: `ChatLayoutTests` (unit: default, launch-argument off, old look outside Persona's conversations, folding, patrol kinds, tick placement, links, contrast); `NewChatLayoutTests` (UI, mock `MOCK_EXCHANGES=1`, see `docs/operations/testing.md`): headers, folding, no evidence list, the old layout with `-ui.newChatLayout NO`, a slide along the edge; `ChatFollowTests.testPersonaReopensWhereItWasLeft`: the reading position after a restart.
 
 ## Connection status (slow / offline networks)
 
