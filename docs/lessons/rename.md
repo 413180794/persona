@@ -82,3 +82,11 @@ The manager names the assistant's directories relative to HOME with the former s
 - Before removing an alias, look for paths that are built with the name it stands for, not only for links pointing at it: they keep working through the alias and break only when it goes.
 - Resolve a spelling to the directory actually in use (here, the node's state directory) instead of joining it to HOME; a directory that should exist and is missing is an error, not something to make again empty.
 - With two real state directories, `identity.DataDir` without `PERSONA_HOME` picks the former one: run `personad` by hand with `PERSONA_HOME` until the stray one is gone.
+
+## A migration verified against a copy nobody reads (2026-11-09, #1686)
+
+The cutover transaction ran against the hub's database. The built-in manager had moved its tables into a database of its own on its first start after the cutover, and the hub's database kept the old ones as they were, for a build from before the move. The transaction rewrote that copy and reported every field verified, while the manager's own database kept the previous session folders and its nodes kept resuming sessions there.
+
+- Before writing a table, find out which process reads it and from where: a table with the expected name and schema can be a frozen copy.
+- Verify in the place the service reads. A zero count in a copy proves nothing.
+- Data that moves is marked where it left (`manager_moved`); a tool that writes there checks the mark and says where the live data is.
