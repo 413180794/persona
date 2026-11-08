@@ -91,7 +91,7 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - Do not nest `#require` in Swift Testing macros (2026-11-05, #2024). `#require(JSONSerialization.jsonObject(with: try #require(body)) …)` fails real compilation with recursive expansion. Unwrap body in a separate `#require`, then parse/assert. `#expect(array.allSatisfy(keyPath))` can also be mistaken for a throwing closure during macro expansion; use an explicit nonthrowing closure. Preserve assertions rather than skip tests.
 - Another session can claim a build slot between inspection and launch (2026-11-05, #2024). `pgrep` observes, not locks. All `xcodebuild` must use `~/.local/bin/xcode-slot xcodebuild …` for the machine-wide slot, max two concurrent, queue when full. Never bypass the lock or increase `XCODE_SLOTS`. Outer waits have an overall timeout; distinguish not started, build failure, and success. A queue-exit code is neither test failure nor pass; serialize your own builds.
 
-- After resolving rebase conflicts, `git diff --check` covers only uncommitted edits; a clean worktree does not prove commits lack conflict markers (#2195). Before push/merge also run `git diff origin/master...HEAD --check` over the full PR diff.
+- After resolving rebase conflicts, `git diff --check` covers only uncommitted edits; a clean worktree does not prove commits lack conflict markers (#2195). Before push/merge also run `git diff origin/main...HEAD --check` over the full PR diff.
 
 - When moving a settings entry between levels, update DEBUG deep links too (#2195). After channels leave extensions, `-openChannels` / `-openChannel` must no longer push the extensions page first. iPad / Mac columns retain both settings list and detail; assertions that a detail "has no such row" must scope to the detail list, not the whole app. Scope scrolling to the intended list too, rather than swiping the neighboring detail.
 
@@ -624,7 +624,7 @@ The test binary does not recognize `voice`, reruns the whole package recursively
   (the JSON node passes to headless assistant chats), launch `personad mcp`, and send `initialize`,
   `notifications/initialized`, and `tools/call`. The tool identifies the chat by `PERSONA_SESSION_ID`, following the real node → hub → manager path. A test-written plan file decides which tool to call by matching a phrase in the message.
 - `prompts.TestEveryTemplateIsUsed` searches Go and templates for quoted full template names (`"inbox/handling/sent"`); names built by concatenation (`"inbox/handling/" + name`) look unused. Write full names in constants.
-- The old Inbox e2e cases in `run.py` for "hub keeps reading sources after the manager stops" no longer apply after sources moved into managers on 2026-11-05. The same six cases fail on master; run master first when comparing.
+- The old Inbox e2e cases in `run.py` for "hub keeps reading sources after the manager stops" no longer apply after sources moved into managers on 2026-11-05. The same six cases failed on master at the time too; when comparing, run them on `main` first.
 
 ## Checking Android and Swift pure logic on a Linux-only machine (2026-11-05, #2840)
 
