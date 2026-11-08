@@ -95,6 +95,10 @@ Adding Bcc to the request alone leaves Bcc-only edits lost on dismissal and Bcc-
 - Successful retries clear old errors; disable the button or show loading while in flight. Read retries only repeat reads: hub "Check for updates" / "Update hub" are separate write operations, not substitutes for rereading.
 - `npm ci` rebuilds `node_modules`; never run it alongside Vite screenshots that depend on them, or temporary services may report missing modules. Finish installation before starting your temporary service; after reinstalling dependencies, stop and restart only your own Vite by port.
 
+## Extension sign-in startup belongs to its identity (#1296)
+
+An auth status push rerenders the sign-in group and replaces inline completion callbacks. Keep those callbacks current independently of startup, or their effect dependency chain sends another empty step and restarts authentication. Key the flow by extension identity and fence success, error and finally with its request lifetime; a shared mounted flag can accept an old identity's response after replacement. Retire on cancel before the parent unmounts, clean up scheduled and in-flight polling, and serialize Next, form submission and Restart before React rerenders. Regress the real group with synthetic transport, status-only pushes, retained fields, late responses, explicit retry and StrictMode effect replay.
+
 ## Panel identity for workspaces without sessions (2026-11-04, #1646)
 
 - **File and Git panel keys must include the directory**: without an Agent, `sid` is empty, so two empty workspace cards on one machine share the same `mid/sid` key. Open files or a commit in A, then the same panel type from B, and React retains A's preview or Git subview, leaking state across directories. Generate stable keys from machine, session, and directory. Regression tests must cover same machine, empty sid, different cwd, not just static card HTML.
