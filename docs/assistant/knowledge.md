@@ -14,7 +14,7 @@ As part of moving hub business logic into managers (`docs/assistant/assistant.md
   The assistant's `kb_*` tools, knowledge base in live snapshots, and knowledge directory in the assistant directory's CLAUDE.md are local manager calls (no longer `app.call kb.*`).
 - **Sources** (in the manager's `internal/extmgr` since 2026-11-05; the methods below are unchanged but now called directly in-process, without the bus; attachments also no longer have a 4 MB limit): data delivered by connectors and plugins (chat messages, posts…). The knowledge base asks sources (`app.call connectors.*`, data in and out):
   `connectors.archives` (which connectors to read now: signed in with "Include in knowledge base" on, their polling intervals, other archive names, attachment support; and those with documents / meetings / events),
-  `connectors.changes` (a connector's changes since a cursor), `connectors.archive_media` (attachments for a message; when the manager is elsewhere, up to 4 MB, since one bus message must not occupy a slow link longer than a heartbeat; larger ones leave `[附件]` ("[attachment]") on the line), `connectors.items` / `connectors.doc_title` (documents, meetings, events).
+  `connectors.changes` (a connector's changes since a cursor), `connectors.archive_media` (attachments for a message; when the manager is elsewhere, up to 4 MB, since one bus message must not occupy a slow link longer than a heartbeat; larger ones leave `[附件]` ("[attachment]") on the line), `connectors.items` / `connectors.doc_title` (documents, meetings, events). A connector declaring `history` also offers its older history, read-only: `connectors.history_chats`, `connectors.history` and `connectors.history_anchors` (`docs/protocol/connector-protocol.md` "History").
   **The manager owns the cursor** (`cursors/<connector>.json`, same file as before), which advances only after writing the data. For Moments posts submitted by plugin programs (`posts.*`, `archive.chats`), the hub first checks
   whether "Include in knowledge base" is on, then forwards them unchanged to the manager (`kb.posts_put`, `kb.posts_comments`, `kb.posts_pending`, `kb.archived_chats`).
 - **When the hub's own features need the knowledge base**, they ask the manager over the bus through one hub function, `kbAsk` (`hub/kb.go`; those features are also moving into the manager, becoming local calls afterwards):
@@ -231,6 +231,14 @@ text. Direct `AppendMessages` writes and imported history keep their existing be
 remains described below. No public message wire fields or Markdown line format change. Receipts expire with their original text day during pruning (original
 instants keep them correct across timezone changes). Pruning does not decrement `messages` or `pending`, matching existing behavior. Forgetting a source removes
 its entire chat directories, including receipts and any completed recovery state, so importing it again is allowed.
+
+### What sources report for the selection (#1523)
+
+Which chats and documents the knowledge base keeps is decided by one selection config with priority rules (the issue has the design). The rules read only what the
+connector reports (`docs/protocol/connector-protocol.md` "Chat flags and document signals"): a chat's kind (dm, group, bot, official, system; a source's other kinds such as mail match no kind rule) and the
+owner's flags `muted`, `collapsed` and `done` (`kbwire.SourceChat` on every `archive.changes` batch, `connectorwire.HistoryChat` on every `history.chats` entry); a message's
+`mine`, `mentioned` (the owner by name) and `mentioned_all` (an @all, which counts only with the mentions rule's `include_all`), daily batches and history pages alike; a document's `signals` (`mentions`, `comment_mentions`, `authored`, `viewed`; `kbwire.Item.Signals`, kept with the item as the source last reported them). A connector that does
+not report one never matches its rule.
 
 ### History import
 
