@@ -115,6 +115,11 @@ Adding Bcc to the request alone leaves Bcc-only edits lost on dismissal and Bcc-
 - Multi-entity removals can fail after saving one end. Keep the original intent outside the rendered row and retain an accessible pending correction after dialog dismissal, refresh both ends after rejection, and offer the same idempotent correction even when the row disappears. After an accepted request, retry failed verification with reads only. A successful HTTP status from an older hub can still leave the relationship unchanged.
 - React Strict Mode rehearses effect cleanup on mount. Recreate a verification abort controller and restore its live flag in setup, then exercise the actual detail component under Strict Mode; a permanently retired mount can otherwise leave every confirmation inert.
 
+### Persisted computer-app approvals survive live control being unavailable (#1489)
+
+- The approvals list and revoke use manager settings, so render them outside the online/enabled control gates. Display and encode the returned identifier verbatim: it may be a bundle ID, a `name:` identifier or `screen`.
+- Apply the successful DELETE's complete list, and invalidate earlier reads when admitting the write. Aborting a request alone cannot fence a transport that already has a response. Machine routes ignore the manager header in favor of current ownership: a captured header is not a precondition. Enforce `expected_manager` against the hub's single captured routing target before relay; a receiving-manager check cannot protect a handover to an older receiver. Mint the acknowledgement at the hub and retire prior mutation admission on refresh. Use a guarded mutation path that legacy receivers cannot match, so a hub downgrade after the capability read also fails safely. Removing a saved record does not enable `app_approval`; future-prompt copy must be conditional. Bind confirmation, retry and finalizers to the machine, actual manager and credential generation; pass captured credentials with their owner so current 401 recovery still works.
+
 ## Overview with no computers (2026-11-06, #3729)
 
 - No pending Agent does not mean an Agent can be started. Overview's idle summary and cards distinguish "No computers" from "Computers exist, no tasks"; the header must not keep suggesting New Agent. Use the total computer count, not treating offline computers as never connected.
