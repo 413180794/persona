@@ -1,5 +1,9 @@
 # Lessons: web UI and interactions
 
+## Pushed batches follow more_after too (#1118)
+
+- A contiguous reconnect replay can still be incomplete when its final batch carries `more_after`. Follow that flag on pushed batches as well as HTTP pages, continuing from the updated contiguous coverage cursor through the existing gap-fill timer; do not wait for another push to reveal a gap.
+
 ## State updaters stay pure under StrictMode (#1165)
 
 - Keep React state updaters free of mutations to refs. Echo matching claims transcript IDs, so do it in the effect, then pass captured IDs and a timestamp into a pure pending-message filter. Exercise sending and transcript delivery under StrictMode to catch double-invocation failures.
