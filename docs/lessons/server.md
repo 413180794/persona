@@ -1,5 +1,25 @@
 # Lessons: hub / node and networking
 
+## Update checks must preserve installation state (#1912)
+
+The hub's `running` flag belongs to the installing process; it is false in the new
+process while that process confirms the update. Guard check-driven state changes
+with both install and confirmation status, under the same mutex as the write.
+Check again after the manifest request: an install can start while it is in flight.
+Successful checks may refresh release metadata and failed checks may advance the
+last-check time, but neither may replace an active update's state, progress or error.
+Apply the guard in the shared check path used by manual, startup and hourly checks,
+and keep automatic installation and held-release recording out of confirmation.
+Regression tests must observe the state while the request is blocked as well as
+after success or failure; checking only the final state misses a transient
+`checking` event that already hid the progress in every client.
+
+In timer tests, wait on a request channel with a timeout and assert the request's
+timestamp, then use `synctest.Wait` before inspecting the completed result. This
+synchronizes the observation without fixed sleeps or a shared request counter.
+Even inside `synctest`, new `time.Sleep` calls fail the repository's sleep ratchet;
+run `scripts/ci/guards.sh` as well as the server build and race checks.
+
 ## Model connection tests must match the runtime (#1732)
 
 A successful connection probe can still hide a request the model server will reject: exercise the same output-token field and its narrowly scoped fallback as the runtime. Parse SSE events rather than individual `data:` lines, including multiline events and CRLF, and test empty, truncated, refused, and errored replies separately.
