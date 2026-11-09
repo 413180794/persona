@@ -1,5 +1,9 @@
 # Lessons: hub / node and networking
 
+## Retained extension lists need installed managers (#1918)
+
+A relay can retain an offline manager's GET answer while the merged list drops it before the relay is called. For merged retained GET routes, enumerate installed bus identities as well as live managers; keep ordinary lists such as inbox and todos online-only. Never discover owners by scanning cache keys: a removed manager can still have cached answers. Fail closed when the installed roster cannot be read, and test the real relay warm-up followed by disconnect, missing cache, revocation, and an offline default. In external mode even the identity named `assistant` is removable: only seed it when `builtinManager` says it is built in, and return unavailable for an empty roster rather than reviving a cached default.
+
 ## Update checks must preserve installation state (#1912)
 
 The hub's `running` flag belongs to the installing process; it is false in the new
