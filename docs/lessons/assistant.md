@@ -1,5 +1,7 @@
 # Lessons: assistant (headless Claude / Codex)
 
+- Retiring a to-do's existing wake is not a lasting check on automatic follow-ups (#1921). A new turn clears the retirement marker, and a failed retirement write can leave a wake in storage. Check the current unreleased, undismissed to-do links both before triage acts and before a wake sends; an open link wins over completed links. A user-completed to-do stays done after a manual message, whereas `taskWorking` reopens hub-completed tasks (`auto` / `review`). Do not mistake a new turn or an old CI watch proof for a reopened to-do. A failed to-do read must leave triage retryable and postpone a wake, not treat the session as unlinked or permanently cancel it.
+
 - A shared completion value does not imply the same handling-chain explanation (#1908). Mutes retain `done_by=read` for compatibility, but must say they were muted, not read elsewhere. Cover existing items, new connector-item admission and grouped events in every hub language, and keep an ordinary-read control.
 
 - Health notification redaction must cover every notification route (#1914). `notify_user` passes through `runTool`, but `phone_notify` goes directly through `mcpCall` to the phone. Apply the existing caller-space check and `healthNotice` before phone dispatch, and assert the forwarded title and body in tests. Device notification-preview settings and a prompt recommendation cannot enforce the space boundary. Keep explicitly requested, phone-confirmed reminders separate from generic notices.
