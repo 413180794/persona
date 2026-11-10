@@ -295,6 +295,15 @@ Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUD
 - Background builds/tests require pinned source snapshots; do not merge branches or edit their worktree while running. On 2026-11-05, targeted Go regression enumerated old files before a merge introduced a new caller, producing undefined-method compilation errors. Mixed snapshots cannot judge commits or count as passes. Freeze a commit in a separate detached worktree and rerun.
 - A Go test wrapper embedding a narrow `Store` interface does not gain methods by assigning real Postgres to it. Once card handlers checked optional persistence interfaces first, admin-page tests returned 503; old handlers rejected bad JSON first and hid the fixture gap. Real bus regressions explicitly pass the full DB to the assistant, while hub admin login keeps its wrapper. Retain status assertions, not longer waits or 503 as a pass.
 
+## Running the hosted CI lanes on a Mac (2026-11-09)
+
+The `scripts/ci/` lanes are written for the hosted runners; on a Mac developer machine:
+
+- `scripts/ci/server.sh` (all / `node`) first runs "Browser runner resources" (`google-chrome --version`, `free -m`, `df -h /dev/shm`), a Linux runner diagnostic that exits 127 on macOS before any node test. Run `server.sh build`, `managers` and `other`, and the node shard's own step (`scripts/ci/server-shards.py node --database-file …` against the same Postgres 18 fixture); every Go test still runs.
+- `server/internal/extension/denohost` needs `bun` on PATH at the version `.github/workflows/server-test.yml` pins (1.4.2); without it `TestTrustedAdapterMatchesOfficialSDK` fails with "Bun is required", and with another version the committed `adapter.mjs` looks stale. A pinned copy outside the global environment works: `npm install --prefix <dir> bun@1.4.2`.
+- `scripts/ci/scripts.sh` expects Python 3.11 or later with `scripts/ci/requirements.txt` (PyYAML, Pillow) and `actionlint` (CI: `go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`). Xcode's `/usr/bin/python3` (3.9, no PyYAML) fails about twenty suites for reasons unrelated to the change; use a venv first on PATH.
+- `scripts/ci/apple.sh` refuses anything but Xcode 26.0.x (`DEVELOPER_DIR` defaults to `/Applications/Xcode_26.0.1.app`) and creates its own stock 26.0 simulator. On a Mac with only a newer Xcode, run a copy kept outside the repository that changes only those two things (drops the version check, picks the simulator runtime matching the selected Xcode's SDK) and sources the worktree's `common.sh`; every other step runs as written. Say in the PR which Xcode ran it.
+
 ## Test database setup (2026-11-10, #2786)
 
 - `TRUNCATE` gives every table it names new files, whether it had a row or not, so clearing two dozen mostly empty tables before each test cost more than many of the tests. Check the tables the cascade reaches in one statement and truncate only those with a row (`db.truncateNonEmpty`). Don't replace it with `DELETE`: it does not cascade, and `devices` has a `BEFORE DELETE` trigger (`devices_guarded_delete`, hub 0435) that refuses an unguarded delete with "push retirement requires a guarded writer".
