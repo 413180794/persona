@@ -278,6 +278,11 @@ extension Theme {
         static let forward = "chevron.forward"
         static let expand = "chevron.down"
         static let collapse = "chevron.up"
+        /// Holding the mic: slide this way to drop what was heard, or up to keep dictating hands-free (`DictationHold`).
+        static let slideToCancel = back
+        static let slideToLock = collapse
+        /// Clears an agent's context (/clear), in the 「+」 menu and panel.
+        static let clearContext = "eraser"
 
         // MARK: Things
 
