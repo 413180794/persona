@@ -399,6 +399,10 @@ func RenderInterject() string { return render("assistant/interject", nil) }
 // is a <persona-context> block only: the apps show no bubble for it.
 func RenderUsageRetry() string { return render("assistant/usage_retry", nil) }
 
+// RenderModelRetry resumes the same request after a bounded transient model failure. It adds no user bubble and never
+// rewrites the original request (node/assistant_recovery.go).
+func RenderModelRetry() string { return render("assistant/model_retry", nil) }
+
 // TaskNotice tells the main conversation (or a reporting one) about one of its quiet tasks (#1731): it was done, waits for the user, was
 // cut off by the model service or did not start. The assistant decides what to tell the user.
 type TaskNotice struct {

@@ -167,6 +167,10 @@ type Node struct {
 	// usageRetried: when a conversation's message was last sent again after its transcript's usage was repaired
 	// (assistant_usage.go): once in a while at most. Under mu; nil until the first.
 	usageRetried map[string]time.Time
+	// recoveries: a conversation's bounded model-failure recovery, surviving the process replaced by a model switch.
+	// recoveryClosed stops the ended connection's Node from starting another attempt while its processes hand over.
+	recoveries     map[string]*assistantTurnRecovery
+	recoveryClosed bool
 
 	// runtimes: agent runtimes without a terminal, connected on runtime.sock (runtimes.go); runtimeSock overrides the
 	// socket path (tests).
@@ -1449,6 +1453,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return ok(nil)
 		}
 		if n.isAssistantSession(p.SessionID) {
+			defer n.typing.lock(p.SessionID)()
 			n.stopAssistant(p.SessionID)
 			return ok(nil)
 		}
