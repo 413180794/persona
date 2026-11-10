@@ -314,39 +314,43 @@ The app's crashes and ANRs go to the hub's `error_reports` (format and rules: [p
 
 ## Release shrinking
 
-The release build runs R8 in shrink-only mode (`android/app/build.gradle.kts`, `android/app/proguard-rules.pro`, #2441): it
-removes the classes and members nothing reaches, and with `-dontobfuscate` and `-dontoptimize` it obfuscates, optimizes
-and merges nothing; only lambda bodies' method names change ("Error reports" below). Resource shrinking stays off, and
-debug builds are not shrunk.
+The release build runs R8 with shrinking and optimization but without obfuscation (`android/app/build.gradle.kts`,
+`android/app/proguard-rules.pro`, #2441, #2840): it removes the classes and members nothing reaches, then inlines,
+merges and outlines code; with `-dontobfuscate` the classes and members that are left keep their source names. Resource
+shrinking stays off (below), and debug builds are not shrunk.
 
-- **Size**: at 0fabb8556 the release APK was 92,979,891 bytes, 6 dex files and 61,136 classes; shrunk it is 32,358,397
-  bytes, 3 dex files and 32,796 classes (-65%). Most of the removed code is library code. The build's
-  `app/build/outputs/mapping/release/usage.txt` lists every removed class and member; by that list, 1,090 of persona's
-  own classes went whole (unused contract models, generated factories, `R` classes).
-- **Error reports** ("Error reports" above): class and source file names are the source's, so frames keep `in_app`
-  for `persona.*`, and breadcrumbs keep route type names. Method names are the source's except in lambda bodies: when a
-  lambda is desugared, its implementation method may be renamed `$r8$lambda$<hash>` (in one build,
-  `PersonaApp.onCreate$lambda$0` became `$r8$lambda$Dco_yZEW5o_ibRoRPfpTRYJvUSI`). D8 already does this in an unshrunk build (5,027 of persona's
-  15,484 lambda methods, 32%); R8 does it to more (7,899 of 15,194, 52%), so a frame inside a Compose callback or a
-  coroutine block more often carries a hashed `function`, which `mapping.txt` maps back. Lines are the source's too,
-  except inside bodies kotlinc inlined from an `inline` function (Compose's `remember` and `Layout`, collection
-  helpers): an unshrunk build already numbers those past the end of the file, and R8 gives them new numbers that its
-  `mapping.txt` resolves to the inlined function and the calling line. In `:feature:settings`, 13,501 methods keep
-  exactly the unshrunk lines, 985 differ only inside such bodies, and 5 lost a line no instruction was left on. The
-  release worker does not keep `mapping.txt` yet, but the release build is reproducible: the same commit and toolchain
-  give a byte-identical APK (six rebuilds of one commit matched). Running `:app:assembleRelease` at the commit in a
-  report's release (`0.1.<versionCode>-<commit>`) regenerates its `mapping.txt`, and `retrace` from the SDK
-  command-line tools applies it.
-  R8 also adds `$$ExternalSyntheticApiModelOutline` / `$$ExternalSyntheticBUOutline` classes (source file
-  `R8$$SyntheticClass`), which put one extra frame between app code and a newer platform API or a backport.
+- **Size**: at 0fabb8556 the release APK was 92,979,891 bytes, 6 dex files and 61,136 classes; shrunk it was 32,358,397
+  bytes. At 02202d070 the shrunk APK is 33,222,269 bytes, 3 dex files, 33,625 classes and 179,195 method references;
+  optimized it is 19,476,047 bytes (-41%), one dex file, 13,451 classes and 59,922 method references, and an update
+  download, which the hub sends gzipped ([protocol.md](../protocol/protocol.md) "Android packages"), is about 10.3 MB
+  instead of 33.2 MB. Most of the removed code is library code. The build's
+  `app/build/outputs/mapping/release/usage.txt` lists every removed class and member. Optimizing costs build time:
+  `:app:minifyReleaseWithR8 --rerun` took a median 130.7 s instead of 85.7 s (five alternating runs on a shared
+  machine, paired difference +43.8 s).
+- **Error reports** ("Error reports" above): exception types and breadcrumbs keep their source names. Class merging folded
+  exceptions into other classes, `CoreTextException` and four of its subclasses and 25 library ones (a lateinit crash
+  came out as `coil3.network.HttpException`), so `-keepnames class * extends java.lang.Throwable` keeps every
+  Throwable's name, the libraries' too: reports, and messages that fall back to the simple name, print whatever was
+  thrown. R8 keeps the InnerClass annotation that gives a nested exception its simple name only when it keeps the names
+  of both the exception and its outer class (seven persona nested exceptions lost theirs), so the rules also keep those
+  five outer classes' names. Library exceptions nested in a class that is no Throwable (11, such as
+  `FrameworkSQLiteOpenHelper$OpenHelper$CallbackException`) report their simple name as `Outer$Inner`. All 45 route
+  classes keep their names without a rule. Frames are another matter: an
+  inlined method runs inside its caller, a merged class's code under the class it went into, and outlined or desugared
+  code under R8's names (`$r8$lambda$<hash>`, `$$ExternalSyntheticApiModelOutline`, source file `R8$$SyntheticClass`),
+  so a frame's class, method and line can differ from the source. `retrace` from the SDK command-line tools maps them
+  back with the build's `mapping.txt`, which the release worker keeps gzipped next to the unsigned APK it belongs to
+  (`mapping-<unsigned sha256>.txt.gz`, about 12 MB; [release.md](../operations/release.md)).
 - **Reached by name**: R8 keeps what code references, the libraries' own rules (AndroidX, WorkManager, Room, Hilt,
   kotlinx.serialization) and the default `@JavascriptInterface` rule. What the app itself reaches only by name needs a
   rule in `proguard-rules.pro`; today that is `HubFailure.getStatus` / `getCode`, which the tasks store looks up on a
   failed call. `scripts/release/check_android_shrink.py` checks a release APK for manifest components and App Startup
   initializers with their no-argument constructors, workers' `(Context, WorkerParameters)` constructors, Room's
   generated `_Impl` classes, the Markdown bridge's `done` / `fail`, those getters, the InnerClass annotations that give
-  persona exceptions and routes their simple names, and an empty `missing_rules.txt`. The release worker runs it before
-  signing ([release.md](../operations/release.md) "Android publisher repository migration and status retries"):
+  persona exceptions and routes their simple names, an empty `missing_rules.txt`, every class R8's `seeds.txt` lists
+  either in the dex or removed in `usage.txt`, never merged, and every Throwable in the dex among those seeds (the
+  `-keepnames` rule matches them all). The release worker runs it before signing ([release.md](../operations/release.md) "Android publisher
+  repository migration and status retries"):
 
   ```bash
   cd android && ./gradlew :app:assembleRelease
@@ -354,10 +358,18 @@ debug builds are not shrunk.
     app/build/outputs/mapping/release
   ```
 
-- **Rollback**: set `isMinifyEnabled = false` in `android/app/build.gradle.kts` and change the assertion that pins it in
-  `scripts/release/test_check_android_shrink.py` in the same commit. The test runs in the scripts CI shard and in the
-  release worker before it builds, so a merge or an edit that turns shrinking off by mistake stops there instead of
-  publishing a 93 MB APK. After a rollback the rules file is unused, and the check reads only the APK.
+- **Rollback**: `-dontoptimize` in `proguard-rules.pro` goes back to shrinking only (a 33 MB APK; the name rules can
+  stay). `isMinifyEnabled = false` in `android/app/build.gradle.kts` turns R8 off. Either way, change the assertion that
+  pins it in `scripts/release/test_check_android_shrink.py` in the same commit. The test runs in the scripts CI shard and in the
+  release worker before it builds, so a merge or an edit that turns shrinking off or drops a name rule by mistake stops
+  there instead of publishing a 93 MB APK or renamed exceptions. After `isMinifyEnabled = false` the rules file is
+  unused, and the check reads only the APK.
+- **Compose trace markers**: optimized R8 already removes them (no `traceEventStart` call or trace string is left in the
+  dex, against 1,528 trace strings in the shrunk APK), so `includeTraceMarkers = false` in the Compose compiler options
+  saves nothing (the APK size did not change) and is not set.
+- **Resource shrinking**: `isShrinkResources = true` takes 67,422 bytes off the optimized APK but removes 98 of
+  persona's own resources from the table (strings and plurals that no code left after R8 references, such as
+  `chat_composer_placeholder` and `notify_stopped_title`), so it stays off.
 - **Icons**: icons come from `PhIcons` ([android-design.md](android-design.md)); `material-icons-extended`, whose only
   use was a button nothing called, is no longer a dependency. The debug APK went from 123,355,666 to 91,537,359 bytes
   (-31.8 MB, 29 to 28 dex files); R8 had already dropped the library from the release APK.
