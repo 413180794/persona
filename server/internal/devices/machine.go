@@ -53,6 +53,8 @@ type MachineConfig struct {
 	HerdrAutostart   *bool    `json:"herdr_autostart,omitempty"`
 	HerdrAutoinstall bool     `json:"herdr_autoinstall,omitempty"`
 	ClaudeStartDir   string   `json:"claude_start_dir,omitempty"`
+	// InboxDir is the receive folder transfers put files in (hub/config.go, docs/protocol/file-transfer.md).
+	InboxDir string `json:"inbox_dir,omitempty"`
 	// ClaudeGlobalHooks: the node puts report-only hooks into its default claude config directory (hub/config.go).
 	ClaudeGlobalHooks bool `json:"claude_global_hooks,omitempty"`
 	// UsageWindows false: the node does not read the agents' subscription rate-limit windows (hub/config.go, #2432).
@@ -217,6 +219,7 @@ func (m *Machine) snapshot() proto.Machine {
 		version, noPackage = d.nodeTarget(info), d.packageBlocked(info)
 	}
 	clipboardOn := d.clipboardOn(m.cfg.ID)
+	fileTransferOn := d.fileTransferOn(m.cfg.ID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
@@ -268,7 +271,8 @@ func (m *Machine) snapshot() proto.Machine {
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
 		Engine: engine, Engines: engines, EngineHosts: choice.Hosts, EngineDefault: choice.Default,
 		EngineSuggested: suggested, EngineSetsUnsupported: setsUnsupported, Link: link, System: d.metrics.system(m.cfg.ID),
-		Clipboard: m.clipboardStateLocked(clipboardOn),
+		Clipboard:    m.clipboardStateLocked(clipboardOn),
+		FileTransfer: m.fileTransferState(fileTransferOn),
 	}
 }
 
