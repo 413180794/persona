@@ -3206,7 +3206,7 @@ Each write broadcasts `{"type":"agents"}` (the list) and `{"type":"agents.prefs"
 | `<persona-context kind="workspace" title="…" url="" machine="<machine id>" cwd="<folder>" branch="…">` | web (a workspace picked in the assistant's @ menu, #5594) | shown like the other blocks. Before the assistant gets it, the manager replaces the block (same tag, `branch` dropped) with where to dispatch by default, knowledge-base projects and recent Agents in that folder (docs/assistant/assistant.md "Workspace mentions"); a block naming an unknown computer is passed on as written |
 | `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code (cross-session messages) | a left-side "From name" card, body rendered as Markdown |
 
-### Quote and comment blocks at the start of messages (web, #2427, #2437)
+### Quote and comment blocks at the start of messages (web and iOS, #2427, #2437, #151)
 
 Web "Quote" and "Comment" use no tags or structured fields: on send they become `> ` blocks at the start of the message (`withQuoteBlock` in `web/src/lib/drafts.ts`, `web/src/lib/comments.ts`); the assistant and Agents on computers read them as text, and other clients that don't recognize them simply see `>` lines.
 At most one quote block starts a message (the quoted words; for a task card, the first line is `任务「标题」（todo id: …）`, meaning `Task “title” (todo id: …)`), followed by any number of comment blocks, separated by blank lines, and finally the user's typed text:
@@ -3245,7 +3245,7 @@ The user's typed text
 ```
 
 Limits: comments up to 4000 characters, attached code up to 60 lines (extra lines are counted in `Truncated` but not included); the fence has one more backtick than the longest run in the code. Numbers follow the order of comments above the input, starting at 1.
-On reading back, web only recognizes blocks after the first block whose first line is `Comment N` / `Code comment N` / `Element comment N` (`splitQuotes`), so ordinary `> ` quotes are unaffected; editing a sent message puts comments back above the input.
+On reading back, web only recognizes blocks after the first block whose first line is `Comment N` / `Code comment N` / `Element comment N` (`splitQuotes`), so ordinary `> ` quotes are unaffected; editing a sent message puts comments back above the input. The iOS app writes and reads the same blocks (`MessageComments`) and draws them as cards in sent bubbles; both are checked against `spec/fixtures/comments`.
 
 ### Message source (#2125)
 

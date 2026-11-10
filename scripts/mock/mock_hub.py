@@ -3033,6 +3033,22 @@ if os.environ.get("MOCK_QUOTE") == "1":
            "> 2. **照片同步脚本**（Mac Studio）的计划写好了，等你批准。\n> 3. 韩梅梅在飞书问你**周五的发布能不能赶上**，她下午要和客户确认。\n\n第二件先放一放，周五前提醒我。"),
         it("assistant", "text", 2.2, text="好，周四下午提醒你看照片同步脚本的计划。"),
     ]
+# MOCK_COMMENTS=1: a review sent from the web (#151): the widget chat's newest message leads with two `Code comment N`
+# blocks and an `Element comment N` block (docs/protocol/protocol.md "Quote and comment blocks at the start of messages"),
+# then its summary; the iOS bubble draws the blocks as cards (MessageComments, CommentBubbleTests).
+if os.environ.get("MOCK_COMMENTS") == "1":
+    ITEMS[WIDGET] = ITEMS[WIDGET] + [
+        it("user", "text", 0.6, text="\n".join([
+            "> Code comment 1", "> File: Shared/Forecast.swift:7", "> Diff: branch since 4f2a9c1", "> ```diff", "> +let city: String?", "> ```", "> ",
+            "> 城市名用可选的吧，老缓存里没有这个字段", "",
+            "> Code comment 2", "> File: Shared/Forecast.swift:30-31", "> Diff: branch since 4f2a9c1", "> ```diff", ">  return cached", "> +?? last", "> ```", "> ",
+            "> 解析失败时回退到上次的缓存，别让小组件空着", "",
+            "> Element comment 3", "> Page: http://localhost:5173/settings", "> Element: button.save",
+            "> Component: SaveButton (src/settings/SaveButton.tsx:14)", "> Text: Save", "> ```html", '> <button class="save">Save</button>', "> ```", "> ",
+            "> 改成整行宽的主按钮", "",
+            "整体可以，改完这三处再提交。"])),
+        it("assistant", "text", 0.4, text="好，三处都改：城市名改成可选，解析失败回退到上次的缓存，保存按钮改成整行宽的主按钮。"),
+    ]
 # MOCK_TASKS=1: the unified entry (docs/assistant/unified-entry.md, #930). The main conversation dispatches tasks: a started plan
 # of two (the widget fix working, the unit tests waiting for an answer — ix_tests), a read-only one that finished with a
 # receipt, an answered card, a message routed straight to a task, a reminder done on the phone, and an open plan at the

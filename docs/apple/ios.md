@@ -123,6 +123,12 @@ Chat page:
   - **Not quotes**: hub Lark /agent instructions/docs (kind instructions / doc) still fold into one row (`ContextGroup`).
   - **Lark chats**: reply strip also inside input; bubble quote navigates to original.
   - Screenshots `-showSampleQuotes YES` adds website excerpt and session above input; end-to-end `QuoteBubbleTests`.
+- Comments (#151, #150; `Views/Chat/MessageComments.swift`, `CommentCards.swift`; iOS only, the Mac app is frozen): the `> Comment N` / `Code comment N` / `Element comment N` blocks a message leads with (docs/protocol/protocol.md, "Quote and comment blocks at the start of messages"), written and read back exactly as the web does, both checked by `spec/fixtures/comments`.
+  - **Waiting**: `AppModel.composerComments` (kept across launches in the `composer-comments` StateCache file, a Draft on the Agents row like quotes) shows as a row of cards over the composer: kind and number, the review's scope, the file and lines or the element and its page, a line of the note, ×.
+  - **Sending**: after the `<persona-context>` tags and before what was typed, numbered from 1; comments alone send without words.
+  - **Sent bubble**: the blocks, from any client, are quote cards at the top of the bubble (kind, number, place; the note); a tap opens the whole note and the code. A plain `> ` quote before them is a quote card too; a message with no comment block is drawn as before.
+  - **Edit**: the comments go back over the box as cards, the words into it.
+  - Screenshots `-showSampleComments YES` (two code comments and an element over the box); `MOCK_COMMENTS=1` gives the widget chat a review sent from the web; end-to-end `CommentBubbleTests`.
 - Files: message paths and Read / Edit / Write tool paths become tappable file tags, read from the session's computer
   (`GET /api/v1/machines/{mid}/file`, at most 2 MB, iCloud directories denied), rendered Markdown / numbered code / images / PDF / directories.
 - Other Agents in the space (Agents): the left part of the header's second row is `SiblingTabs` (restored flat tabs at request 2026-10-31), one capsule each with state-color background

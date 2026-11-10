@@ -176,8 +176,8 @@ struct UserBubble: View, Equatable {
             if !shown.isEmpty || !quotes.isEmpty {
                 HStack {
                     Spacer(minLength: 48)
-                    UserBubbleBody(quotes: quotes, text: shown, paths: d.pathRefs)
-                        .messageLongPress(id: item.id) { UserBubbleBody(quotes: quotes, text: shown, paths: d.pathRefs) }
+                    UserBubbleBody(quotes: quotes, text: d.words, paths: d.pathRefs, comments: d.comments, lead: d.lead)
+                        .messageLongPress(id: item.id) { UserBubbleBody(quotes: quotes, text: d.words, paths: d.pathRefs, comments: d.comments, lead: d.lead) }
                 }
             }
             if let openFile { FileChips(paths: d.chips, open: openFile) }
@@ -344,9 +344,12 @@ struct PendingBubble: View {
                     }
                     .accessibilityLabel("Failed to send. Resend or delete.")
                 }
-                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: shown)
+                let split = MessageComments.inBubble(shown)
+                UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: split?.rest ?? shown, comments: split?.comments ?? [], lead: split?.quote)
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
-                    .messageLongPress(id: msg.id.uuidString) { UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: shown) }
+                    .messageLongPress(id: msg.id.uuidString) {
+                        UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: split?.rest ?? shown, comments: split?.comments ?? [], lead: split?.quote)
+                    }
             }
             if msg.state == .waiting {
                 Text("Sends when connected").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -1165,7 +1168,11 @@ nonisolated struct UserRowText {
     let refs: [ContextRef]
     let text: String   // without the context tags
     let cardSource: AssistantActionSource.Parsed?
-    let shown: String  // without the image notes and the files' tags
+    let shown: String  // without the image notes and the files' tags (what Copy and Edit take)
+    /// The bubble's words: `shown` without the comment blocks it led with, drawn as cards (`comments`, `lead`).
+    let words: String
+    let comments: [MessageComment]
+    let lead: String?
     let images: [String]
     /// The files sent with it (videos), drawn as cards.
     let attached: [AttachedFile]
@@ -1181,13 +1188,20 @@ nonisolated struct UserRowText {
         text = parsed.rest
         let shown = UserBubble.display(parsed.rest)
         self.shown = shown
+        let split = MessageComments.inBubble(shown)
+        let words = split?.rest ?? shown
+        self.words = words
+        comments = split?.comments ?? []
+        lead = split?.quote
         let images = UserBubble.imagePaths(parsed.rest)
         self.images = images
         let sent = AttachedFile.parse(parsed.rest)
         attached = sent.files
-        let files = FilePaths.find(in: sent.rest).filter { !images.contains($0) }
+        // The comments' files are on their cards: the chips are the ones the words name.
+        let named = split == nil ? sent.rest : (MessageComments.split(sent.rest)?.rest ?? sent.rest)
+        let files = FilePaths.find(in: named).filter { !images.contains($0) }
         self.files = files
-        let found = PathRefs.find(in: shown)
+        let found = PathRefs.find(in: words)
         pathRefs = found
         let inline = PathRefs.unique(found, limit: 40)
         let linked = Set(inline)
