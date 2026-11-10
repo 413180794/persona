@@ -3449,6 +3449,28 @@
         }
       }
     },
+    "Changes the extension ID from %@ to %@. Needs your confirmation; its settings and data stay.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes the extension ID from %@ to %@. Needs your confirmation; its settings and data stay."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能の ID が %1$@ から %2$@ に変わります。確認が必要です。設定とデータはそのまま保持されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展 ID 会从 %1$@ 改为 %2$@，需要你确认；设置和数据保持不变。"
+          }
+        }
+      }
+    },
     "Checks for itself": {
       "extractionState": "manual",
       "localizations": {
