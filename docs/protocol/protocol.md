@@ -1484,6 +1484,18 @@ When an Agent is blocked without a hook interaction, the hub reads the screen on
   The App's answer carries `options` (the keys of options to check; unlisted ones get unchecked) and `text` (the free answer; empty means don't check it). The hub passes it to the node's `session.keys`
   (`multi: true`, `options`, `free_text`), and the node presses one key at a time, re-reading the screen after each, and finally presses Submit / Next; on the confirmation page, if all questions are answered it presses "Submit answers" too.
   Old Apps send only one `option` for a multi-select card: treated as checking just that one.
+- **Several questions on iPhone and iPad** (#2970, `ScreenStepsLogic`): the card shows `steps` with the question it is on, **Previous** / **Next** and a review before
+  the answers go. Nothing new is asked of the hub or the node:
+  - Previous and Next are answers with `keys: ["left"]` / `["right"]` and no `option`: the node checks `rev` and presses the key, and the hub's look after an answer
+    makes the card of the question that shows next. The terminal marks the current tab by color only, which the screen reading drops, so the app tracks it from
+    its own keys and answers (`ScreenTrail`, in memory) and highlights nothing when it can't tell.
+  - A question gone back to has the `rev`, and so the card id, it had: once this device answers in the dialog, the session's other screen cards it had ended may
+    come again. The terminal marks the answer it had (`checked`); words already in a "Type something" field are cleared (`ctrl+e`, `ctrl+u` in `pre_keys`) before
+    the new ones.
+  - The node presses "Submit answers" after an answer that names its `option` once every question has one. So the answer that may complete them goes as keys
+    (a choice's number, or `pre_keys` + `text` + `enter`), and the review tab comes as a card of its own: a row per question from its `detail`, Submit (its first
+    option) or, with a question left, a button that goes back to it with ← one card at a time. A multi-select last question is held for a review the app draws
+    from what it answered, then sent as before. The Mac app keeps the old card.
 - Passwords: when the last line on the screen is a password prompt (`[sudo] password for …:`, `Password:`, an ssh passphrase, the passwd, mysql/psql, ssh-keygen, ansible-vault and openssl/keytool prompts…; the rules are deliberately narrow, and the word password in body text doesn't count), the card carries
   `secret: true` and the App uses a password field (not saved to drafts). Password or not, `text` in terminal card answers is always stored as `<redacted>` in the database;
   the terminal panel's key endpoint (`/keys`) isn't stored at all, and the hub's request log only records the path and status code.
