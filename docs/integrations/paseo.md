@@ -28,6 +28,13 @@ run with `ELECTRON_RUN_AS_NODE=1`. A plain `node` always runs the bridge without
   An Agent visible in Paseo's own App is also visible in Persona; archived Agents are omitted. Your own Agents come first:
   Agents another Agent created (below) fill what is left of the 300, and one of those that runs or waits for you is listed with
   every Agent between it and yours, whatever the count.
+- **Archived Agents** (#4521): an archived Agent of yours that ran Claude Code stays in Persona as its transcript, under Not running (the last 7 days), and a message to it has
+  Paseo take it over again. Paseo starts Claude Code's command line itself, so these transcripts read like a script's one-shot `claude -p` runs, which node
+  leaves out; the bridge therefore names the Claude sessions of the Agents archived in the last 8 days to node (`unlisted_transcripts`): an Agent that leaves Paseo's list, once Paseo
+  says it was archived, and after connecting the ones Paseo's directory still has (read newest first, archived Agents included).
+  Not named: an Agent deleted in Paseo (it stays gone), an Agent another Agent created (its creator's chat says what it did), and Paseo's own helper runs, which have no Agent.
+  The transcript is listed under its Claude session ID. An Agent whose row had another ID (`paseo-<agent id>`, below) comes back as a different row: what Persona kept for the old
+  ID (an archive mark, a to-do's link) does not follow it.
 - **Session IDs**:
   - An Agent running Claude Code (including custom providers with `extends: "claude"`) uses its Claude session ID, the same ID as that chat in herdr or "Not running."
     An Agent created by Paseo itself has no session ID before its first turn, so it is not listed yet.

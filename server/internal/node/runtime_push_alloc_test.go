@@ -101,12 +101,29 @@ func TestRuntimeRowExtrasReadsAsEachAlone(t *testing.T) {
 		`{"sessions":[{"session_id":"paseo-c1","codex_thread":` + tr + `},{"session_id":"bad id","codex_thread":` + tr + `},{"session_id":"paseo-c2","codex_thread":"not a thread"}]}`,
 		`{"sessions":[{"session_id":"paseo-c1","codex_thread":7,"transcript":` + tr + `}]}`,
 		`{"sessions":[{"session_id":"paseo-c1","codex_thread":` + tr + `,"resume_argv":"pi"}]}`,
+		`{"sessions":[{"session_id":` + id + `,"transcript":` + tr + `}],"unlisted_transcripts":[` + tr + `,"not an id",` + id + `]}`,
+		`{"sessions":[{"session_id":` + id + `,"transcript":` + tr + `}],"unlisted_transcripts":` + tr + `}`,
+		`{"sessions":[{"session_id":` + id + `,"resume_argv":"pi"}],"unlisted_transcripts":[` + tr + `]}`,
+		`{"sessions":[{"session_id":` + id + `}],"unlisted_transcripts":[]}`,
+		`{"sessions":[{"session_id":` + id + `}],"unlisted_transcripts":null}`,
 		`{"sessions":null}`, `{"sessions":{}}`, `{}`, `[`,
 	} {
 		got := runtimeRowExtras(json.RawMessage(params), 4)
-		each := rowExtras{resumeArgvs(json.RawMessage(params)), runtimeTranscripts(json.RawMessage(params)), runtimeCodexThreads(json.RawMessage(params))}
+		unlisted, said := unlistedTranscripts(json.RawMessage(params))
+		each := rowExtras{resumeArgvs(json.RawMessage(params)), runtimeTranscripts(json.RawMessage(params)),
+			runtimeCodexThreads(json.RawMessage(params)), unlisted, said}
 		if !reflect.DeepEqual(got, each) {
 			t.Errorf("%s:\nread %+v\nwas  %+v", params, got, each)
 		}
+	}
+	// An empty list says "none"; a push without the field, or with something else there, says nothing.
+	for params, want := range map[string]bool{`{"unlisted_transcripts":[]}`: true, `{"unlisted_transcripts":["x"]}`: true, `{}`: false,
+		`{"unlisted_transcripts":null}`: false, `{"unlisted_transcripts":"x"}`: false} {
+		if _, said := unlistedTranscripts(json.RawMessage(params)); said != want {
+			t.Errorf("%s: said %v, want %v", params, said, want)
+		}
+	}
+	if got := runtimeCodexThreads(json.RawMessage(`{"sessions":[{"session_id":"paseo-c1","codex_thread":` + tr + `},{"session_id":"paseo-c2","codex_thread":"x"}]}`)); len(got) != 1 || got["paseo-c1"] != "0e000000-0000-4000-8000-0000000000ff" {
+		t.Errorf("codex threads read as %v", got)
 	}
 }
