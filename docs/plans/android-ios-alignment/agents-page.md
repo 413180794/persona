@@ -116,7 +116,8 @@ Each becomes an iOS issue or a row in the intentional-differences list, decided 
 
 - Rename `MachineSpace` to By Project in the strings (en, zh-Hans, ja), keeping the stored value.
 - By To-do: flatten `AgentList.kt`'s to-do branch to iOS's order; hide the choice when the hub has no to-dos.
-- By Status: add the background-waiting section (the state exists in core/domain), counts on every header, Seen folded.
+- By Status: add the background-waiting section, counts on every header, Seen folded.
+- Done (11-11): Android reads the hub's `background_waiting` (`AgentSession.waitsInBackground`) and By Status has iOS's eight sections in rank order (`AgentStateSections`); each header carries one count with its state's dot, Waiting in the background a clock; Seen starts folded and opens from its header (kept as `!state/idle` in the folds, `ByStatusTest`, `AgentsFoldAllTest`), with no "N more idle" row; rows under a section leave their state word out, Muted's keep it. The shared fixtures in `spec/fixtures/sort` follow. Still to do: the background-waiting agent counted apart from Working with its own quick filter (A9) and its lighter dot (Android has no such tone yet), and By To-do's layout.
 - Done (11-11): "By computer and space" reads By project (按项目, プロジェクト別), the stored value unchanged; the sheet offers By To-do only while the hub has to-dos (`offeredGroupings`, `AgentsListInfoTest`). The two layouts are still to change.
 
 ### A6

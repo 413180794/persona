@@ -496,7 +496,8 @@ internal fun AgentsScreen(
                                 icon = PhIcons.Folder, counts = group.headingCounts,
                                 detail = pluralStringResource(R.plurals.agents_count_todos, todoCount, todoCount))
                         } else AgentTreeHeader(groupTitle, group.folded, { model.fold(group) }, first = entry.first,
-                            icon = PhIcons.PushPin.takeIf { group.id == "pinned" }, counts = group.headingCounts)
+                            icon = PhIcons.PushPin.takeIf { group.id == "pinned" } ?: PersonaIcons.backgroundWaiting.takeIf { group.id == "state/background" },
+                            counts = group.stateSectionCounts ?: group.headingCounts)
                     }
                     is TreeRowEntry -> item(entry.key, contentType = "session") {
                         val row = entry.row
@@ -511,7 +512,7 @@ internal fun AgentsScreen(
                             depth = entry.depth, position = GroupPosition(entry.first, entry.last), located = entry.located,
                             onOpen = { openRow(row) }, menuItems = { rowMenu(row, entry.nested) },
                             onClose = closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) },
-                            launcher = entry.launcher, branch = entry.branch,
+                            launcher = entry.launcher, branch = entry.branch, hideState = entry.inStateSection,
                             requestCount = cardCounts[row.session.key] ?: 0, card = cards[row.session.key])
                     }
                     is TreeChildrenEntry -> item(entry.key, contentType = "children") {
@@ -758,6 +759,8 @@ internal fun SlotRow(
     launcher: Boolean = false, branch: Boolean = false,
     /** The card this agent waits on, first of its own ([firstBySession]): what it asks is the row's line while it needs you. */
     card: Interaction? = null,
+    /** Its By Status section names its state, so the row does not ([TreeRowEntry.inStateSection]). */
+    hideState: Boolean = false,
 ) {
     var menu by remember { mutableStateOf(false) }
     val session = row.session
@@ -779,7 +782,7 @@ internal fun SlotRow(
         preview = session.rowLine(card, now, muted)?.text(), time = relativeTime(agentResources(), row.updatedAt, now),
         // Codex, a compatible CLI or what the hub calls a runtime's agent ("DSH"); a session with a source names it in its facts instead.
         agent = session.agentLabel.takeIf { !session.isClaude && source == null },
-        statusText = row.rowStatusText(muted),
+        statusText = row.rowStatusText(muted).takeUnless { hideState },
         facts = buildList {
             // Where its closeout stands on merged and deployed (#3612), first: the facts' line is cut at its end.
             session.closeoutFacts.forEach { add(RowFact(it.text.text(), caution = it.contradicted)) }
