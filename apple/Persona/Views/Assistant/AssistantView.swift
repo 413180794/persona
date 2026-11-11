@@ -546,6 +546,7 @@ struct FirstMessagePending: View {
                 DayLine(date: failed.at)
                 PendingBubble(msg: PendingMessage(id: failed.op, text: failed.text, images: failed.images, state: .failed, createdAt: failed.at),
                               retry: resend, discard: delete)
+                    .chatMark("chat.outbox.failed.\(failed.op.uuidString)")
             } else {
                 DayLine(date: .now)
                 VStack(alignment: .trailing, spacing: Theme.Space.sm) {
@@ -558,6 +559,7 @@ struct FirstMessagePending: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .chatMark("chat.outbox.sending.start")
                 TypingIndicator(text: String(localized: "\(name) is getting ready…"))
             }
         }
