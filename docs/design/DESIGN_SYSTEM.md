@@ -541,6 +541,7 @@ A dispatched task's Open link (#3711) is a compact row using existing typography
 | Swipe on a message (Agents) | quote, threshold 66 pt, with a VoiceOver "Quote" action |
 | Long press on a message | lifted menu with an action bar |
 | Hold the mic | cancel by sliding left, lock by sliding up |
+| Touch and hold the composer's + (iPhone) | system menu of the attach panel's More list; a tap still opens the panel, whose More tab is the plain alternative (#3225) |
 | Link card drag | to 0.6 it stops blocking the chat; further down it closes |
 | Terminal cover drag | its bar follows the finger; past 140 pt or a fast flick it closes. The bar, with a 44 pt Close, is there in every state; with no terminal the whole area drags (#4328) |
 | Tap on a saved place's map | moves the place there (#4248); search and Use Current Location do the same without the gesture |
