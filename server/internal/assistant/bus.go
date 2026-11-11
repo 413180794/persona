@@ -546,6 +546,7 @@ func (b *BusHub) request(ctx context.Context, method string, params json.RawMess
 		}
 		params, err := s.SendParams(ctx, p)
 		if err != nil {
+			s.appSendRefused(p.MachineID, p.SessionID, err) // the hub sends nothing: no ConversationSent (north_star.go)
 			return nil, err
 		}
 		return map[string]any{"params": params}, nil
@@ -764,6 +765,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		go s.StartEnded(context.WithoutCancel(ctx), p)
+	case assistantwire.EventConversationSent:
+		var p ConversationSent
+		if err := decode(&p); err != nil {
+			return err
+		}
+		go s.ConversationSent(context.WithoutCancel(ctx), p)
 	case assistantwire.EventInteractionResolved:
 		var p InteractionResolved
 		if err := decode(&p); err != nil {
