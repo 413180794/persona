@@ -4255,14 +4255,14 @@ def followup_send(rid, msg):
     m = conv_of(rid, True)
     f = m.get("followup")
     images = [it("user", "image", 0, image={"mime": x["mime"], "data": x["data"]}) for x in msg["images"]]
-    words = [conv_item("user", msg["text"], client_msg_id="followup-" + msg["id"])] if msg["text"] else []
-    reply = [conv_item("assistant", FOLLOWUP_REPLY)]
+    # The reply is made after the owner's words: items take their seq as they are made, and apps order by it.
     if f and f.get("session_id"):
         if f.get("op_id") == msg["id"]: return 200, {"followup": followup_view(m), "created": True, "client_msg_id": "followup-" + msg["id"]}
-        conv_append(f["machine_id"], f["session_id"], images + words + reply)
+        words = [conv_item("user", msg["text"], client_msg_id="followup-" + msg["id"])] if msg["text"] else []
+        conv_append(f["machine_id"], f["session_id"], images + words + [conv_item("assistant", FOLLOWUP_REPLY)])
         return 200, {"followup": followup_view(m), "created": False, "client_msg_id": "followup-" + msg["id"]}
     first = conv_item("user", followup_seed(rid, msg["text"]), client_msg_id="followup-" + msg["id"])
-    mid, sid = conv_start(rid, "followup", "meeting_followup", images + [first] + reply)
+    mid, sid = conv_start(rid, "followup", "meeting_followup", images + [first] + [conv_item("assistant", FOLLOWUP_REPLY)])
     m["followup"] = {"machine_id": mid, "session_id": sid, "op_id": msg["id"]}
     meeting_changed(rid, ["followup"])
     return 200, {"followup": followup_view(m), "created": True, "client_msg_id": "followup-" + msg["id"]}
@@ -4279,16 +4279,53 @@ def just_me_send(rid, msg):
             f'and its calendar invite, not my words): title "{meeting_name(rec)}".\nRecording: {rid} (read it with kb_get kind=recordings).\n'
             f"Time in the meeting: {at}.\n</persona-context>\n\n{msg['text']}")
     main = ASSISTANT_CONFIG.get("main")
-    if not main or not any(x["session_id"] == main for x in ASSISTANT):
+    made = not main or not any(x["session_id"] == main for x in ASSISTANT)
+    if made:
+        before = ASSISTANT_CONFIG.get("main")
         main = str(uuid.uuid4())
         s = assistant_sess(main, "", 0, "")
         s.update(main=True, rev=0)
         ASSISTANT.append(s)
         ITEMS[main] = []
         ASSISTANT_CONFIG["main"] = main
+        JUST_ME_BEFORE.setdefault(main, {"made": True, "main": before})
+    else:
+        row = next(x for x in ASSISTANT if x["session_id"] == main)
+        JUST_ME_BEFORE.setdefault(main, {"made": False, **{k: row.get(k) for k in ("updated_at", "last_text")}})
     images = [it("user", "image", 0, image={"mime": x["mime"], "data": x["data"]}) for x in msg["images"]]
-    conv_append(mid, main, images + [conv_item("user", text, client_msg_id="just-me-" + msg["id"])])
+    sent = images + [conv_item("user", text, client_msg_id="just-me-" + msg["id"])]
+    JUST_ME_ITEMS.update(x["id"] for x in sent)
+    conv_append(mid, main, sent)
+    # The main chat answers a moment later, as its turn would (the meeting page shows it under Just me); not once a fresh
+    # start (meeting_conversation_reset) came between.
+    generation = JUST_ME_GENERATION[0]
+
+    def reply():
+        if JUST_ME_GENERATION[0] != generation: return
+        answer = conv_item("assistant", just_me_reply(rec))
+        JUST_ME_ITEMS.add(answer["id"])
+        conv_append(mid, main, [answer])
+    timer = threading.Timer(JUST_ME_REPLY_SECONDS, reply)
+    timer.daemon = True
+    timer.start()
     return 200, {"conversation": {"machine_id": mid, "session_id": main}, "client_msg_id": "just-me-" + msg["id"]}
+
+
+JUST_ME_REPLY_SECONDS = float(os.environ.get("MOCK_JUST_ME_REPLY_SECONDS", "1"))
+# What Just me wrote into the main chat since the last fresh start, so meeting_conversation_reset takes exactly that back
+# out (a UI test's question and its reply would otherwise show in every later test's main chat): the items' ids, each
+# main chat's list row as it was (or that Just me made the chat, and which one was the main chat before), and a counter
+# a pending reply checks.
+JUST_ME_ITEMS = set()
+JUST_ME_BEFORE = {}
+JUST_ME_GENERATION = [0]
+
+
+def just_me_reply(rec):
+    """The main chat's made-up private answer, in the recording's language."""
+    if (rec.get("language") or "en").lower().startswith("zh"):
+        return "发布说明一般由负责这个版本的人来写。上周的周会把这个版本交给了张三，可以先请他起个草稿。"  # i18n-ignore: made-up model answer
+    return "Release notes usually come from whoever owns the release. Last week's review gave this one to Bo, so ask Bo for a first draft."
 
 
 def meeting_receipt(h, kind, raw, run):
@@ -4382,7 +4419,8 @@ def meeting_conversation_route(h, method, p):
 
 
 def meeting_conversation_reset():
-    """A fresh start (POST /mock/recording_minutes): the meetings' rooms and follow-ups leave the lists, and the receipts go."""
+    """A fresh start (POST /mock/recording_minutes): the meetings' rooms and follow-ups leave the lists, the receipts go,
+    and what Just me wrote into the main chat (its messages and the replies to them) is taken out again."""
     for m in MEETING_CONV.values():
         for c in (m.get("room") or {}, m.get("followup") or {}):
             if c.get("session_id"):
@@ -4390,6 +4428,20 @@ def meeting_conversation_reset():
                 ITEMS.pop(c["session_id"], None)
     MEETING_CONV.clear(); MEETING_RECEIPTS.clear()
     with MEETING_EVENT_LOCK: MEETING_EVENTS.clear()
+    JUST_ME_GENERATION[0] += 1  # a reply still on its timer is not written
+    for main, before in JUST_ME_BEFORE.items():
+        if before["made"]:
+            ASSISTANT[:] = [x for x in ASSISTANT if x["session_id"] != main]
+            ITEMS.pop(main, None)
+            if ASSISTANT_CONFIG.get("main") == main: ASSISTANT_CONFIG["main"] = before["main"]
+            continue
+        ITEMS[main] = [x for x in ITEMS.get(main, []) if x["id"] not in JUST_ME_ITEMS]
+        row = next((x for x in ASSISTANT if x["session_id"] == main), None)
+        if row is not None:
+            # The rev only goes up: an app that read the chat with Just me in it reads it again.
+            row.update(updated_at=before["updated_at"], last_text=before["last_text"], rev=(row.get("rev") or 0) + 1)
+    if JUST_ME_BEFORE: push_machine(ASSISTANT_CONFIG["machine_id"])
+    JUST_ME_ITEMS.clear(); JUST_ME_BEFORE.clear()
 
 
 # Photos (#3862 phase 3, docs/assistant/meeting-minutes.md "Phase 3: photos"): the feature `meeting_photos` (only beside
