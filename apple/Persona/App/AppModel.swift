@@ -132,7 +132,10 @@ final class AppModel {
     @ObservationIgnored private var spaceCells: [String: SpaceCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
     private(set) var interactions: [String: Interaction] = [:] {
-        didSet { saveSnapshot(); countBadges(); withdrawSettled(Set(oldValue.keys).subtracting(interactions.keys)) }
+        didSet {
+            saveSnapshot(); countBadges(); withdrawSettled(Set(oldValue.keys).subtracting(interactions.keys))
+            PermissionDiff.prewarm(interactions.lazy.filter { oldValue[$0.key] == nil }.map(\.value))
+        }
     }
     /// When each group's whole list of pending interactions was last asked for (NotificationWithdrawal.stale).
     @ObservationIgnored var interactionsListedAt: [String: Date] = [:]
