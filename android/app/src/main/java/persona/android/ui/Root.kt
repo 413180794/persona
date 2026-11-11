@@ -256,7 +256,6 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     val pending by session.interactions.pending.collectAsStateWithLifecycle()
     val inbox by session.inbox.snapshot.collectAsStateWithLifecycle()
     val connection by session.connection.state.collectAsStateWithLifecycle()
-    val pins by session.assistant.pinned.collectAsStateWithLifecycle()
     val preferences by session.preferences.snapshots.collectAsStateWithLifecycle(AgentsPreferencesSnapshot())
     val todos by (session.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
     val todosSupported by (session.tasks?.todosSupported ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsStateWithLifecycle()
@@ -522,7 +521,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         // on Agents in a regular window the drawer opens while the Assistant page (kept composed) still holds its column.
         val sharedSidebar: @Composable (String) -> Unit = { stateKey ->
             sidebarState.SaveableStateProvider(stateKey) {
-                AssistantSidebarContent(assistant, session.assistant, pins, sidebar.active, sidebarOperations, session.demo != null,
+                AssistantSidebarContent(assistant, session.assistant, sidebar.active, sidebarOperations, session.demo != null,
                     onOpen = { key ->
                         sidebar.opened.value = false
                         selected = openResolved(ResolvedRoute(AppTab.Persona, ChatRoute(key.machineId, key.sessionId, ConversationKind.Assistant)))
@@ -545,7 +544,6 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                             sidebarDestination(ExtensionUiRoute(page.extension, page.id, page.title.ifBlank { page.id }))
                         }
                     },
-                    onTogglePin = { key -> session.preferences.togglePin(key.path) },
                     onRetired = { key -> sidebar.retired = sidebar.retired + key },
                     // The current assistant at the sidebar's head; its roster opens under it.
                     switcher = { head, trailing, fallback ->
@@ -614,12 +612,11 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         val provider = entryProvider<NavKey> {
             assistantEntries(navigator) {
                 AssistantScreen(assistantNavigator, session.assistant, session.sender, session.assistant::startConversation,
-                    pins, connectionLabel = connection.title(),
+                    connectionLabel = connection.title(),
                     hubOnline = connection == ConnectionState.Online || connection == ConnectionState.Updating, demo = session.demo != null,
                     requestedSession = assistantRequest, onKnowledge = { sidebarDestination(KnowledgeRoute) },
                     needsYou = needsYou, onOpenNeed = { line -> openWithCard(needsYouRoute(line)) },
                     onOpenInbox = { sidebarDestination(InboxRoute) },
-                    onTogglePin = { key -> session.preferences.togglePin(key.path) },
                     onVoice = voiceExtension?.let { extension -> { navigator.navigate(VoiceRoute(extension.id, extension.name)) } },
                     onTodos = { sidebarDestination(persona.core.navigation.TodosRoute) },
                     todoCount = uncompletedTodosCount,

@@ -45648,19 +45648,180 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Directions"
+            "value": "Pinned"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "方向性"
+            "value": "常駐"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "方向"
+            "value": "常驻"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Direction Ended [Assistant Sidebar 9c07f3]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unpinned"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常駐をやめました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消常驻"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Direction Pinned [Assistant Sidebar 2e8a51]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pinned"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常駐にしました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已设为常驻"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Pin [Assistant Sidebar 6d1f2a]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常駐にする"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设为常驻"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Unpin [Assistant Sidebar b7c40e]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unpin"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常駐をやめる"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消常驻"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%lld need you": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld need you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対応待ち %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你 %lld"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%lld working": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld working"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業中 %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在做 %lld"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%lld working · %lld need you": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld working · %lld need you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業中 %1$lld · 対応待ち %2$lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在做 %1$lld · 等你 %2$lld"
           }
         }
       },

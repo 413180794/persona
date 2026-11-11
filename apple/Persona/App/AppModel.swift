@@ -262,6 +262,9 @@ final class AppModel {
     /// The directions' names by leader conversation id (`GET /api/v1/assistant/leaders`): the sidebar's Directions group
     /// shows these instead of the conversations' titles. Read again with the assistant; empty without leaders.
     private(set) var directionNames: [String: String] = [:]
+    /// How much work each direction holds (`GET /api/v1/assistant/directions/tree`, read on its `directions` push and on
+    /// every (re)connect): the sidebar's "N working · N need you" under its name. Empty from a hub without the tree.
+    private(set) var directionCounts: [String: APIClient.DirectionCounts] = [:]
     @ObservationIgnored private var assistantRetryInFlight: Task<Void, Never>?
     /// The assistant conversation shown in the Chat tab (persisted across launches).
     ///
@@ -970,7 +973,7 @@ final class AppModel {
                 assistantConfig = updated
             }
             guard showsPage(of: api) else { return }
-            await refreshDirectionNames(api, leaders: st.leaders ?? [])
+            await refreshDirectionInfo(api, leaders: st.leaders ?? [])
             guard showsPage(of: api) else { return }
             // A hub that names no launcher gets the same retry state as a failed read (#4200): current hubs always
             // resolve one (their default), so an empty answer means an old hub — show Couldn't Load Settings instead of an
@@ -982,21 +985,58 @@ final class AppModel {
         }
     }
 
-    /// The directions' names for `leaders`: none without leaders; a hub that cannot list them keeps the names held
-    /// (or none), and the sidebar shows those conversations' titles.
-    private func refreshDirectionNames(_ api: APIClient, leaders: [String]) async {
+    /// The directions' names for `leaders`: none without leaders; a hub that cannot list them keeps what is held (or
+    /// none), and the sidebar shows those conversations' titles. The counts come from the direction tree alone.
+    private func refreshDirectionInfo(_ api: APIClient, leaders: [String]) async {
         guard !leaders.isEmpty else {
             if !directionNames.isEmpty { directionNames = [:] }
+            if !directionCounts.isEmpty { directionCounts = [:] }
             return
         }
-        guard let names = try? await api.directionNames(), showsPage(of: api), names != directionNames else { return }
-        directionNames = names
+        guard let list = try? await api.leaders(), showsPage(of: api) else { return }
+        let names = APIClient.directionNames(list)
+        if names != directionNames { directionNames = names }
     }
 
-    /// The assistant's leader conversations (the sidebar's Directions), in the hub's order, never the main one.
+    /// The assistant's leader conversations (the sidebar's Directions), never the main one, in the hub's order.
     var assistantLeaders: [String] {
         let main = assistantConfig?.main
         return (assistantConfig?.leaders ?? []).filter { !$0.isEmpty && $0 != main }
+    }
+
+    /// Makes conversation `id` a direction on the hub, or ends it (#4331): the hub's new list is read back, and an
+    /// error is shown as it is.
+    func setDirectionLead(_ id: String, _ lead: Bool) async {
+        guard let api else { return }
+        Haptics.tap()
+        do {
+            if lead { try await api.makeDirection(id) } else { try await api.endDirection(id) }
+            await refreshAssistant()
+            toast = Toast(lead ? String(localized: "Direction Pinned [Assistant Sidebar 2e8a51]")
+                               : String(localized: "Direction Ended [Assistant Sidebar 9c07f3]"), style: .success)
+        } catch { show(error) }
+    }
+
+    /// The hub's direction tree (#4352): its current directions in order, their names and counts. Read on the hub's
+    /// `directions` push and on every (re)connect. The tree answers for the default manager alone, so another manager's
+    /// page keeps what `GET /api/v1/assistant/leaders` gave it; a hub older than the tree (404) changes nothing.
+    private func refreshDirectionTree(_ api: APIClient) async {
+        guard assistantShows(nil), showsPage(of: api) else { return }
+        guard let tree = try? await api.directionsTree(), assistantShows(nil), showsPage(of: api) else { return }
+        let directions = APIClient.directions(tree)
+        let names = APIClient.directionNames(tree)
+        let counts = APIClient.directionCounts(tree)
+        if names != directionNames { directionNames = names }
+        if counts != directionCounts { directionCounts = counts }
+        let ids = directions.map(\.id)
+        if ids != assistantLeaders, var cfg = assistantConfig {
+            cfg.leaders = ids
+            assistantConfig = cfg
+        }
+        // A direction the page's conversations do not list yet: the whole settings are read, so its row appears
+        // without a relaunch.
+        let known = Set((assistantConfig?.conversations ?? []).map(\.sessionID))
+        if ids.contains(where: { !known.contains($0) }) { await refreshAssistant() }
     }
 
     /// The Couldn't Load Settings retry: the page flips back to Reading at once, and repeated taps share the one request (#4200).
@@ -1775,6 +1815,8 @@ final class AppModel {
                 Task { await self.refresh(link) }
             }
             if isHub { PersonalAgentSync.shared.received([]) }
+            // The direction tree changes while the socket is down: read it again on every (re)connect (#4352).
+            if isHub, let hubAPI = api { Task { await refreshDirectionTree(hubAPI) } }
             Task { await refreshInAppTunnel(group) }
             Task { await refreshManagerRoster(group) }
             // Back on the hub: an install that moved on while the connection was down shows where it is now (#3307).
@@ -1871,6 +1913,10 @@ final class AppModel {
             // Settings › Managers reads the roster again (ManagersView watches this).
             if isHub { managersRevision += 1 }
             Task { await refreshManagerRoster(group) }
+        case .directions:
+            // The direction tree changed (#4352): read it again. Its answer is the default manager's alone, so another
+            // manager's page keeps what GET leaders gave it (docs/assistant/managers.md "Clients").
+            if isHub, let hubAPI = api, assistantShows(nil) { Task { await refreshDirectionTree(hubAPI) } }
         case .assistantFeed(let item):
             if isHub { TasksStore.shared.received(item, group: group) }
         case .assistantView(let view):
@@ -2000,6 +2046,7 @@ final class AppModel {
         case .personas: "personas"
         case .look: "look"
         case .managers: "managers"
+        case .directions: "directions"
         case .assistantFeed: "assistant_feed"
         case .assistantView: "assistant_view"
         case .assistantViewAction: "assistant_view_action"
