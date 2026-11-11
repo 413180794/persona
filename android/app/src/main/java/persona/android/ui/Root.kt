@@ -153,6 +153,7 @@ private fun PersonaRootContent(
                     // The pairing page scrolls by itself; the demo entry sits in its footer.
                     else PairingScreen(services.pairing, services.sessions, initialLink = link,
                         onReady = { MainActivity.pendingPairLink.value = null; entering = false; onPaired() },
+                        onBack = if (link != null && hub != null) ({ MainActivity.pendingPairLink.value = null }) else null,
                         onDiagnostics = { diagnostics = true }, diagnostics = services.diagnostics,
                         onCredentialsSaved = { MainActivity.pendingPairLink.value = null }, machines = services.machines,
                         attempts = services.pairingAttempts, mainReadiness = services.readiness,
