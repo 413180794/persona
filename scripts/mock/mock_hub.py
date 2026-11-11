@@ -20770,6 +20770,8 @@ def plugins_route(handler, p, body):
         return mock_showcase(handler, p.rsplit("/", 1)[-1], body)
     if p == "/mock/invalidate" and PLUGINS_MODE:
         return mock_invalidate(handler)
+    if p == "/mock/controls/reset" and PLUGINS_MODE:
+        return mock_controls_reset(handler)
     if p in ("/mock/motion/next", "/mock/motion/reset") and PLUGINS_MODE:
         return mock_motion(handler, reset=p.endswith("/reset"))
     if EXTENSIONS_API and (p == "/api/v1/extensions" or p.startswith("/api/v1/extensions/")):
@@ -20798,10 +20800,55 @@ def mock_showcase(handler, ui, body):
         handler.send_json({"error": "没有这个快照"}, 404)
         return True
     request = json.loads(body) if body else {}
+    if ui == "controls":
+        return _showcase_controls(handler, view, request)
     if request.get("action"):
         handler.send_json({"toast": "快照测试不执行写操作"})
     else:
         handler.send_json({"view": view})
+    return True
+
+
+# showcase › controls (UI version 6, #827): the controls keep what they were changed to while the mock runs, and each
+# change answers with just its row (`items`), as an extension best does. `fail` answers 502, so the app puts the switch
+# back. Two switches ask first (`confirm`), as the source subscription page's do. `GET /mock/controls/reset` forgets.
+_SHOWCASE_CONTROLS = {}
+_SHOWCASE_CONFIRMS = {"light.floor": (False, "打开落地灯？它在卧室门口，可能会吵醒家人。"),
+                      "purifier": (True, "关掉空气净化器？房间里的 PM2.5 会慢慢回升。")}
+
+
+def _showcase_controls(handler, view, request):
+    action = request.get("action")
+    if action == "fail":
+        handler.send_json({"error": "设备没有回应"}, 502)
+        return True
+    rows = [item for s in view["sections"] for item in s["items"] if item.get("control")]
+    changed = None
+    if action:
+        values = request.get("values") or {}
+        changed = next((row for row in rows if row["control"]["name"] in values), None)
+        if changed is None:
+            handler.send_json({"toast": "快照测试不执行写操作"})
+            return True
+        _SHOWCASE_CONTROLS[changed["control"]["name"]] = values[changed["control"]["name"]]
+    for row in rows:
+        c = row["control"]
+        saved = _SHOWCASE_CONTROLS.get(c["name"])
+        if saved is not None:
+            if c["kind"] == "switch": c["on"] = saved == "true"
+            else: c["value"] = float(saved) if "." in saved else int(saved)
+            c.pop("display", None)
+        # asked first only one way (turning the lamp on, the purifier off)
+        when, words = _SHOWCASE_CONFIRMS.get(c["name"], (None, ""))
+        if when is not None and bool(c.get("on")) == when:
+            c["action"]["confirm"] = words
+    handler.send_json({"items": [changed]} if changed else {"view": view})
+    return True
+
+
+def mock_controls_reset(handler):
+    _SHOWCASE_CONTROLS.clear()
+    handler.send_json({"ok": True})
     return True
 
 
