@@ -727,6 +727,26 @@ The workspace catalog, selection and management actions follow the current assis
 
 Removal uses the confirmation sheet pattern in section 4.4 because it needs branch and uncommitted-file choices. The dialog identifies the workspace and explains which files and running sessions will be lost. Keep the branch by default; require an explicit discard choice for uncommitted files. Confirmation stays unavailable until the computer supplies a valid preview. A changed target requires another preview, and an uncertain dispatched removal offers status reconciliation rather than another destructive submission. Renaming uses the existing text-entry dialog pattern and preserves workspace, branch and Agent identities.
 
+### 4.11 Questions of several
+
+A card that asks several questions at once shows where it is and lets the answers be checked before they go (a pending
+request, section 4.8). On iPhone and iPad (#2970) that is a terminal dialog of several, and a hook question of several:
+Claude Code's AskUserQuestion, the assistant's ask_user and Codex's questions.
+
+- **Step capsules** (`ScreenSteps`, `BUIScreenSteps` in `apple/Persona/Views/Interactions/InteractionViews.swift`): one per
+  question, ticked once answered, the current one in the accent. They show progress only and are not buttons. When the
+  row is wider than the card (the largest text sizes) it scrolls, opening with the current one in sight; the card's title
+  then wraps to up to three lines.
+- **Previous / Next** move one question at a time. A question gone back to shows the answer it had.
+- **The review** (`ScreenReview`, `apple/Persona/Views/Interactions/ScreenReview.swift`): a row per question, Previous and
+  **Submit N Answers**. A question left reads **Not answered** in the caution color; the main button then goes to it,
+  and **Submit Without Them** sends the rest. At the largest text sizes the buttons stack, the main one first, and so
+  does the card's last row (Reply in Chat Instead, Cancel, View Terminal); a label that still does not fit then shrinks
+  a little (section 6.2's last resort).
+- **BeautifulUI's hook card** keeps its own ↑ n / N ↓ counter instead of capsules; a question skipped with ↓ shows in the
+  review as not answered, and its main button opens the card at that question with every answer kept.
+- **The plan pill folds** while a card asks something, so it never sits over the card's buttons.
+
 ## 5. Content
 
 ### 5.1 Voice and tone

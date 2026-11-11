@@ -642,10 +642,14 @@ tap dialog option, hub gets `option` not keys and Dialog changed notice; existin
 `clear_draft` under a new `client_msg_id`, and Resend after Not Now reaches the computer again under a new one (#6425; `GET /mock/resolved`, `GET /mock/sent`). Screenshot `-openSendMessage <text>` sends after 3 seconds (`-openSendDelay <seconds>` overrides).
 
 Terminal questions of several (`ScreenStepsCardTests`, #2970): `MOCK_SCREEN_STEPS=1 PORT=<dedicated port> python3 scripts/mock/mock_hub.py &`,
-`TEST_RUNNER_PERSONA_STEPS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/ScreenStepsCardTests`. The mock's three-question dialog moves as the terminal does
+`TEST_RUNNER_PERSONA_STEPS_HUB=http://127.0.0.1:<port> xcodebuild test … -only-testing:PersonaUITests/ScreenStepsCardTests -only-testing:PersonaUITests/ScreenStepsCardBeautifulTests`
+(the second runs the same in BeautifulUI, whatever the run's style). The mock's three-question dialog moves as the terminal does
 (← / →, an answer moves on, the node submits the review tab after an answer that names its option): Previous back to the first question with its answer marked, Next on,
-the last answer as keys and the review card before Submit, in light and dark; and a review with a question left (`GET /mock/screen-steps?reset=review`) whose button goes back to it.
-`GET /mock/screen-steps` shows where the dialog is, the answers and every resolution; `TEST_RUNNER_PERSONA_SHOTS=<dir>` writes `steps-*.png`.
+the last answer as keys and the review card before Submit, in light and dark; a review with a question left (`GET /mock/screen-steps?reset=review`) whose button goes back to it;
+and that review at the largest accessibility text size, its stacked buttons and the card's last row reachable above the message box. Every button checked sits above the message box.
+`GET /mock/screen-steps` shows where the dialog is, the answers and every resolution; `TEST_RUNNER_PERSONA_SHOTS=<dir>` writes `steps-<style>-*.png`.
+Hook cards of several questions (#2970) are checked on Codex's two questions (`MOCK_CODEX=1`, `TEST_RUNNER_PERSONA_CODEX_HUB`): `CodexCardsTests/testApprovalThenQuestion` reads the
+capsules and answers through the review; `testBeautifulUIReviewsASkippedQuestion` skips one with ↓, finds it Not answered in the review, goes back to it and submits.
 
 New Persona chat from elsewhere (`NewConversationEntryTests`, #527): Inbox Hand to AI immediately shows sent message, not No messages yet;
 late transcript shows it once. `PORT=18927 MOCK_SOURCES=1 MOCK_TODO_OFFLINE=1 MOCK_ASSISTANT_TRANSCRIPT_SECONDS=8 python3 scripts/mock/mock_hub.py &`,

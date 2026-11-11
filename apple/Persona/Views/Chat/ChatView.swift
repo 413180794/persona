@@ -2430,7 +2430,8 @@ struct ChatView: View {
                     QueueStrip(key: key, queued: queued, steers: session?.steersQueue == true)
                 }
                 // The newest plan while its line is out of view (#5602): which step of how many; tap, the whole plan.
-                if viewing == nil, let plan = latestPlan, !planLineShown {
+                // Folded while a card asks something (#2970): it sat over the card's buttons.
+                if viewing == nil, let plan = latestPlan, !planLineShown, pendingCards.isEmpty || !ScreenStepsLogic.enabled {
                     PlanPill(plan: plan) { planOpen = true }
                 }
                 // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals); a Codex thread
