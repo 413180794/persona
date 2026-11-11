@@ -337,7 +337,10 @@ For every component: use the design-system one, not a lookalike. Counts are appr
 - Forwards (#3807) use the quote card with the forward arrow before the heading ("Forwarded from Claude · chat"), a line
   for the computer and time, and four lines of the original; a tap opens the original chat at that message. Over the
   composer the same row adds a line saying where it comes from and goes. Forward takes Share's place in the message bar
-  (the bar keeps its width); Share as Image is the first row of the Forward To sheet.
+  (the bar keeps its width); Share as Image is the first row of the Forward To sheet. Web (#3899): Forward takes Hand to
+  Persona's place in the message actions; the card over the composer (`ForwardBar`) and in the bubble (`ForwardBlock`)
+  are the quote bar's and quote card's shapes (`views/chat/Quote.tsx`) with the `forward` icon, and Forward to is a
+  `Dialog` (a bottom sheet on phones) with palette-style rows; no Share as Image row, as the web has no share card.
 - No shared bubble component exists. Messages, Tasks and Lark rebuild it with different paddings and gutters (DS-20).
 - Web: user bubble 14 px radius; replies unboxed. Android: 20 dp in Glass, max width 86%.
 
