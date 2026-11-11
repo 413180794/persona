@@ -49,19 +49,22 @@ func (n *Node) assistantProfileSelection(ctx context.Context, id, launcher, runt
 				p.mu.Unlock()
 			}
 		}
-		if selected == "" {
-			if path := n.transcriptPath(id); path != "" {
-				project := filepath.Dir(path)
-				projects := filepath.Dir(project)
-				if filepath.Base(projects) == "projects" {
-					selected = filepath.Dir(projects)
-					if sameScopePath(selected, filepath.Join(n.home, ".claude")) {
-						// Preserve the old unset-profile global config, unless
-						// the old parser explicitly selected this same directory.
-						legacy := n.legacyAssistantProfile(ctx, launcher, runtime)
-						if legacy == "default" || !sameScopePath(legacy, selected) {
-							selected = "default"
-						}
+		// A recorded profile holding no copy of the transcript (a launcher switch, a
+		// rollback that resumed elsewhere) would make Claude answer "No conversation
+		// found": resume where the transcript is. A profile that holds a copy, its
+		// projects/ shared through a symlink included, keeps the conversation.
+		if path := n.transcriptPath(id); path != "" {
+			project := filepath.Dir(path)
+			projects := filepath.Dir(project)
+			if filepath.Base(projects) == "projects" && (selected == "" ||
+				!fileExists(filepath.Join(n.assistantConfigPath(selected), "projects", filepath.Base(project), filepath.Base(path)))) {
+				selected = filepath.Dir(projects)
+				if sameScopePath(selected, filepath.Join(n.home, ".claude")) {
+					// Preserve the old unset-profile global config, unless
+					// the old parser explicitly selected this same directory.
+					legacy := n.legacyAssistantProfile(ctx, launcher, runtime)
+					if legacy == "default" || !sameScopePath(legacy, selected) {
+						selected = "default"
 					}
 				}
 			}
