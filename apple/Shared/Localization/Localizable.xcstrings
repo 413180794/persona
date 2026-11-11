@@ -48471,6 +48471,30 @@
       },
       "extractionState": "manual"
     },
+    "Downloads: %lld": {
+      "comment": "Cumulative package downloads reported by the extension catalog, not active installations.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载量：%lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード数：%lld"
+          }
+        }
+      }
+    },
     "Download package": {
       "localizations": {
         "en": {
