@@ -1,4 +1,13 @@
 # CLAUDE.md
+## Product positioning: an Agent product for everyone
+
+Persona is an Agent product for everyone, not a tool built only for software developers.
+
+- **Assistant** is for everyday people: plain language, simple defaults, no engineering jargon.
+- **Agents** is for people who collaborate directly with tools such as Claude Code; specialist workflows, engineering terminology, and advanced configuration belong here or in advanced settings.
+
+Every design names its intended audience and answers "who does this serve?". Public-facing experiences stay simple; complexity lives in Agents or advanced settings.
+
 
 ## Highest-priority rules
 
