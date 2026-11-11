@@ -1,5 +1,19 @@
 # Lessons: hub / node and networking
 
+## Receipt integration fixtures need independent identities (#4433)
+
+A registered manager bus connection is not the same as its normal device-state
+readiness report. Run that report through the fixture's actual RPC path before
+starting a session; do not relax the production readiness check. A state.load RPC
+on the same stream fences the preceding durable state.put without a fixed sleep.
+
+Creation IDs are immutable once stored. Reusing one machine/session across wrong
+and matching receipt cases can make the matching load retain the earlier identity,
+creating a false production-defect report. Give every case its own credential,
+machine and persistent record; keep exact creation/incarnation equality assertions.
+A local authenticated HTTP/manager/node-state round trip proves those boundaries,
+not a real runtime reply or production ownership: retain the separate live evidence.
+
 ## A list read before a locked write must not undo it (2026-11-11, #4372)
 
 The manager's agent archive restores a session when its node's list shows new activity (busy, or a newer update time). Readers decorated the node's list first and only then took the archive's lock, so a reader that read the list while an agent still waited on the user, and got the lock after a cancelled task's agent was closed and archived, took that old busy row for new activity and restored the archive for good. The log still said "closed and archived". It showed up as `TestCancelStopsAndArchivesAgents` failing about 1 run in 100, and only with `-cpu` above 1, once the fake answered `session.close` with the session already offline (#3184): the archive then followed the close at once while the test kept reading the list. Weigh a snapshot only against the state that was already there when it was read: `archivedSessions` takes the archive's write count from before its list was read (`archiveMark`), and a record written after that ignores what the list shows (`agentArchive.active`). A counter, not a time: two reads in one clock tick, or a clock stepped back, must not decide it. The web's card snapshots had the same shape (`refresh()` restoring just-resolved cards, `docs/lessons/web.md`).
