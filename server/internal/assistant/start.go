@@ -768,6 +768,9 @@ func (s *Service) messageParams(ctx context.Context, p SendParams, owner bool) (
 	}
 	delete(p.Params, "source") // app input cannot claim an automated author
 	delete(p.Params, "message_source")
+	if id, _ := p.Params["client_msg_id"].(string); id != "" {
+		s.availOwnerSent(p.MachineID, p.SessionID, id, time.Now()) // a replay opens no reply wait (availability.go)
+	}
 	text, said := p.Params["text"].(string)
 	if said {
 		p.Params["text"] = prompts.ProtectUserMessage(text)
