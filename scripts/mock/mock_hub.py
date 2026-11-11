@@ -10959,6 +10959,21 @@ if os.environ.get("MOCK_SELECT_TEXT") == "1":
         it("assistant", "text", 2, text=SELECT_RICH_REPLY),
     ]
 
+# MOCK_REPLY_BLOCKS=1: a reply's code blocks, inline code and quotes as Telegram draws them (#2984): a fence with its
+# language and one without, inline code, a short quote and a long one that folds.
+REPLY_BLOCKS = "a1f3c2d4-0000-4000-8000-0000005e1ec9"
+if os.environ.get("MOCK_REPLY_BLOCKS") == "1":
+    SESSIONS.append(sess("macbook", REPLY_BLOCKS, "代码和引用", "/Users/me/code/weather", "done", "read", "weather", 1, "blocks", 2, 1, "好"))
+    ITEMS[REPLY_BLOCKS] = [
+        it("user", "text", 3, text="首页的缓存怎么清？"),
+        it("assistant", "text", 2, text="先跑 `npm run build`，再清掉 `.cache` 目录（改在 `server/handlers.go`）：\n\n```ts\nexport async function clear(page: string) {\n"
+                                        "  await caches.delete(`page:${page}`)\n  return reload(page)\n}\n```\n\n不带语言的也一样：\n\n```\n"
+                                        "rm -rf .cache && npm run build\n```\n\n> 缓存键改了以后，旧缓存要等一天才过期。\n\n"
+                                        "> 上线前请确认三件事：一是首页的请求已经合并，跑过一遍回归测试；二是价格页换成了新的缓存键，"
+                                        "旧键在 CDN 上的副本会在一天内过期；三是文档页最后做，它的请求最多，改动的风险最低。"
+                                        "如果中途发现首屏时间反而变长，先回滚价格页，再看是不是缓存没命中。\n\n有问题再找我。"),
+    ]
+
 # MOCK_PORTS=1: an agent running a dev server (docs/operations/ports.md): its session lists the port, its reply links it (and a
 # server it has stopped), and …/ports/{port}/connect forwards a WebSocket's bytes to a real page served here on
 # another port (PortForwardTests). GET /mock/ports lists the connects.
