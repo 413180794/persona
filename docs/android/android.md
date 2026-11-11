@@ -169,6 +169,8 @@ without opening sockets. JVM Native-rendered component captures are separate evi
 - **QR scanner** centers the title between equal margins. Close and Android Back both return to the connection options.
 - Tests: `PairingFlowTest` in `feature:settings` (Robolectric).
 
+- **Connection diagnostics** opens over its caller. The toolbar arrow and Android Back dismiss it, keeping the pairing input or checklist scroll position.
+
 ## Aligning the Agents list and the Machines page (#3038)
 
 - **Sorting**: the list settings have "Sort: **Status first** / **Recently updated**" (iOS `AgentSort`, stored on the device). With recently updated, sessions in each group sort only by time, and active spaces, repositories and computers sort by their newest session, first. With status first the sections stay the same; only the order inside a section is by time. The logic is in `AgentList.kt` in `core:domain` (`AgentListSettings.sort`).
