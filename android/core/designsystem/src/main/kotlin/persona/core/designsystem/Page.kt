@@ -328,7 +328,7 @@ fun JTopBar(
     val style = PersonaTheme.style
     val leading: @Composable () -> Unit = {
         when {
-            onBack != null -> JIconButton(if (style == AppStyle.Glass) PhIcons.CaretLeft else PhIcons.ArrowLeft, stringResource(R.string.designsystem_back), onBack)
+            onBack != null -> JBackButton(onClick = onBack)
             else -> LocalRootLeading.current?.invoke()
         }
     }
@@ -378,6 +378,13 @@ fun JTopBar(
 
 /** Icon buttons in a glass bar that is not drawn yet float as glass circles of their own. */
 val LocalIconsRaised = compositionLocalOf { false }
+
+@Composable
+fun JBackButton(enabled: Boolean = true, onClick: () -> Unit) {
+    val icon = if (PersonaTheme.style == AppStyle.Glass) PhIcons.CaretLeft else PhIcons.ArrowLeft
+    JIconButton(icon, stringResource(R.string.designsystem_back), onClick,
+        enabled = enabled, raised = enabled && LocalIconsRaised.current)
+}
 
 /**
  * A root or list page whose content is a lazy list. Glass and brief show a large title that scrolls away and
