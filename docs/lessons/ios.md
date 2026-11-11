@@ -1797,3 +1797,19 @@ The watch only prunes by age. Segments the phone has not confirmed stay up to `u
 - An `accessibilityIdentifier` on a container covers the identifiers of the buttons laid out directly in it (the drawer's
   `assistant-sidebar` over its header, a popover's list over its actions); a scroll view or list in between keeps its rows'.
   Put a container's identifier on the part that holds rows, and let UI tests also accept the covering one.
+
+## The link card's pooled web views share one script handler table (2026-11-10, #150)
+
+`WebViewPool`'s web views are made from one `WKWebViewConfiguration`, so they share its `WKUserContentController`: a script
+message handler added for one page answers for every page in the pool, and adding a second one under the same name throws.
+The preview's element picking (`ElementPicker`, `docs/web/preview.md` "iPhone") removes any handler of its name, adds its own
+(held weakly) when picking starts, checks that a message came from its own view's main frame, and removes the handler when
+picking ends or the card goes away. The pick script runs in the page's own world, not an isolated one: what React, Vue and
+Svelte dev builds leave on an element (the component, its source) is only visible there.
+
+A preview page also changes documents under the picker: a reload or a link drops the injected listeners, so picking ends when
+the page starts loading rather than leaving a banner that no longer does anything.
+
+Handing the composer something while the card is up has its own trap: the composer focused its field when a picture arrived
+in `composerInbox`, and focusing a field under a sheet closes the sheet. A preview screenshot closed the card it was taken
+from. The chat now tells its composer the card covers it (`composerCovered`), and the picture lands without the keyboard.

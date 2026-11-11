@@ -19674,9 +19674,12 @@ class H(BaseHTTPRequestHandler):
         # The live screen (#1184): macOS's Screen Sharing on this Mac's own 5900, for a Mac the plugin cua is on for.
         machine = next((m for m in MACHINES if m["id"] == mid), {})
         listed = listed or (port == 5900 and (machine.get("computer", {}).get("enabled") or machine.get("browser", {}).get("enabled")))  # cua or ego (#1507)
+        # MOCK_PREVIEW: a preview's running port is the made-up app's page server (scripts/mock/mock_preview.py).
+        preview_to = mock_preview.forward(port) if preview_route else None
+        listed = listed or preview_to is not None
         if not listed: return self.send_json({"error": "port %d is not an agent's and was not opened" % port}, 403)
         try:
-            to = FAKE_SCREEN["port"] if port == 5900 and FAKE_SCREEN["port"] else port
+            to = preview_to or (FAKE_SCREEN["port"] if port == 5900 and FAKE_SCREEN["port"] else port)
             tcp = socket.create_connection(("127.0.0.1", to), timeout=3)
             tcp.settimeout(None)
         except OSError:
