@@ -513,6 +513,17 @@ test("a project's worktrees are one space; a new session at a worktree goes into
   assert.deepEqual([inApp.space_id, inApp.space_name, inApp.slot_name], [key, 'app', undefined], 'a new workspace of the project: no name yet')
 })
 
+test('an agent running Codex names its thread, an agent of Claude Code its transcript', async (t) => {
+  const THREAD = '0199aaaa-bbbb-7ccc-8ddd-eeeeffff0002'
+  const { fake, rows } = await setup(t)
+  fake.upsert(agentSnapshot({ provider: 'my-codex', cwd: '/tmp', title: 'CX',
+    persistence: { provider: 'my-codex', sessionId: THREAD, metadata: { provider: 'codex', threadId: THREAD } } }), PROJECT)
+  await until('the agent', () => rows().some((r) => r.title === 'CX'))
+  const by = Object.fromEntries(rows().map((r) => [r.title, r]))
+  assert.deepEqual([by.CX.codex_thread, by.CX.transcript, by.A.codex_thread, by.A.transcript], [THREAD, undefined, undefined, SID],
+    'the node lists a named thread once, as this session (#4495)')
+})
+
 test('a repository opened through a symbolic link is named by its physical directory', async (t) => {
   const dir = mkdtempSync('/tmp/ppaseo-ln-')
   t.after(() => rmSync(dir, { recursive: true, force: true }))

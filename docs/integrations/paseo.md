@@ -39,6 +39,10 @@ run with `ELECTRON_RUN_AS_NODE=1`. A plain `node` always runs the bridge without
     compaction, and "what it is doing" are all available. The same transcript does not produce an extra "Not running" row. If the transcript has not been written yet (the first turn has just started), or node does not recognize its configuration directory,
     content uses Paseo's timeline until the transcript becomes available, then switches automatically.
   - **Other Agents**: content comes from Paseo's timeline, converted to the App's rendering format. Commands, file reads / writes, diffs, search, web access, sub-Agents, and to-dos use Claude Code tool names.
+- **Agents running Codex** (#4495): the row names the Codex thread the Agent runs (`codex_thread`). Node finds that thread's rollout on its own as well; named, the chat is
+  listed once, as the Paseo Agent, not a second time as a read-only Codex history row, and the thread's own Codex sub-Agents hang off the Paseo Agent's row.
+  When another program takes the thread up while the Paseo Agent is not running (the Codex App runs it, a shared app-server has it loaded), that program's row is listed too,
+  with the thread's sub-Agents: a message from the phone goes where the thread is open.
 - **State**:
 
   | In Paseo | In Persona |
@@ -196,7 +200,6 @@ otherwise use Paseo's default provider (its built-in Claude Code provider if ena
 - The bridge knows only workspaces that still have Agents. After all Agents in a worktree are archived, creating another session in that directory from Persona leaves the bridge unable to find its workspace,
   and Paseo creates another project record (Paseo's creation request can create only a new worktree, not select an existing one). The App still groups it with the main repository.
 - Images in Paseo's timeline are not displayed. Claude Code sessions are unaffected; their images come from the transcript.
-- If Codex history is enabled for the machine, the same Codex chat in Paseo may also appear as an extra read-only Codex history row.
 - Paseo's own plugins, scheduled tasks, and hub execution are not integrated.
 
 ## Verification

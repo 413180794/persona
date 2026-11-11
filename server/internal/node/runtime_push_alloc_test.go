@@ -13,7 +13,9 @@ import (
 )
 
 // runtimePushBudget is what a push of 300 sessions may allocate (TestRuntimeSessionsPushAllocatesOneList).
-const runtimePushBudget = 686_000 // 666,020 measured; not checked with -race, whose instrumentation allocates
+// 627,526 measured (666,020 before the rows' extras were read into a slice of their size, #4495); not checked with -race,
+// whose instrumentation allocates.
+const runtimePushBudget = 646_000
 
 // runtimePush is a runtime.sessions push of rows sessions as the runtime SDK sends them (the fleet soak's machines: a
 // title, a directory, a status, the last 200 characters said, a model), and a host with that runtime connected and no
@@ -87,8 +89,8 @@ func TestRuntimeSessionsPushKeepsTheLastList(t *testing.T) {
 	}
 }
 
-// Reading resume_argv and transcript in one pass gives what reading them one at a time gave, also for a push where one
-// of the two fields has the wrong type and only the other reads.
+// Reading resume_argv, transcript and codex_thread in one pass gives what reading them one at a time gives, also for a
+// push where one of the fields has the wrong type and only the others read.
 func TestRuntimeRowExtrasReadsAsEachAlone(t *testing.T) {
 	const id, tr = `"0e000000-0000-4000-8000-000000000001"`, `"0e000000-0000-4000-8000-0000000000ff"`
 	for _, params := range []string{
@@ -96,11 +98,15 @@ func TestRuntimeRowExtrasReadsAsEachAlone(t *testing.T) {
 		`{"sessions":[{"session_id":` + id + `,"resume_argv":"pi","transcript":` + tr + `}]}`,
 		`{"sessions":[{"session_id":` + id + `,"resume_argv":["pi"],"transcript":7}]}`,
 		`{"sessions":[{"session_id":` + id + `,"resume_argv":["pi",""]},{"session_id":` + id + `,"resume_argv":["pi","x"]}]}`,
+		`{"sessions":[{"session_id":"paseo-c1","codex_thread":` + tr + `},{"session_id":"bad id","codex_thread":` + tr + `},{"session_id":"paseo-c2","codex_thread":"not a thread"}]}`,
+		`{"sessions":[{"session_id":"paseo-c1","codex_thread":7,"transcript":` + tr + `}]}`,
+		`{"sessions":[{"session_id":"paseo-c1","codex_thread":` + tr + `,"resume_argv":"pi"}]}`,
 		`{"sessions":null}`, `{"sessions":{}}`, `{}`, `[`,
 	} {
-		resume, transcripts := runtimeRowExtras(json.RawMessage(params))
-		if r, ts := resumeArgvs(json.RawMessage(params)), runtimeTranscripts(json.RawMessage(params)); !reflect.DeepEqual(resume, r) || !reflect.DeepEqual(transcripts, ts) {
-			t.Errorf("%s:\nread %v %v\nwas  %v %v", params, resume, transcripts, r, ts)
+		got := runtimeRowExtras(json.RawMessage(params), 4)
+		each := rowExtras{resumeArgvs(json.RawMessage(params)), runtimeTranscripts(json.RawMessage(params)), runtimeCodexThreads(json.RawMessage(params))}
+		if !reflect.DeepEqual(got, each) {
+			t.Errorf("%s:\nread %+v\nwas  %+v", params, got, each)
 		}
 	}
 }
