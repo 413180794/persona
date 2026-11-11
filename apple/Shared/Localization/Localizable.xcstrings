@@ -56257,6 +56257,30 @@
       },
       "extractionState": "manual"
     },
+    "From an extension": {
+      "comment": "Under the message an extension opened an assistant conversation with, and its row's VoiceOver label (#3758).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From an extension"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能から"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自扩展"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "From conversation “%@” [Message Source]": {
       "extractionState": "manual",
       "localizations": {

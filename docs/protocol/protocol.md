@@ -1065,6 +1065,7 @@ Once recorded, the origin never changes; Agent sessions (`assistant: false`) don
   While collapsed the row still shows status on the right: a working dot when something is running, and a **Needs You** dot with a count when something is waiting for you (`state: needs_you`), so nothing is missed because it's folded.
 - When expanded, each origin gets a row with a small label (Inbox · Scheduled Tasks · Lark /agent · Spawned from Chats · Extensions · Other), with a count and the same status dots; only origins that have chats are listed. Tapping a row opens **All Chats** filtered to that origin.
 - **All Chats** gets an origin filter at the top (All · Mine · Inbox · Scheduled Tasks · …), defaulting to **All**; search still covers all chats regardless of origin and folding.
+- **Conversations an extension opened** (`lark_agent`, `extension`; #3758) say so, the same on iOS / iPadOS and the web (Android: #4203): their rows carry the source's mark beside the title in the channel mark's place (Lark's for Lark /agent, the extensions symbol otherwise; one mark per row, the origin's over the channel's), and the message that opened the chat gets the "From Lark /agent" / "From an extension" line a channel's message has, on that first message only. `channel`, `user` and origins a client doesn't know get no such mark.
 
 ## Extension install, upgrade and uninstall progress (`extension_operations`, #3277)
 
