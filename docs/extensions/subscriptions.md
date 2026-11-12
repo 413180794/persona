@@ -219,12 +219,15 @@ opens the same page. The manager reports `inbox_sources` with these pages, and t
   and turns its Inbox on. They stay off until then.
 - **Set Up with the assistant** (in place of drafting with a model) is named as the app names the assistant in its composer
   ("Ask {name}…"): the apps send that name as `context.assistant` with these page requests only, never handed to an extension,
-  and without it the pages say "the assistant". The press answers `open_url` `persona://ask?text=<percent-encoded>`; the apps
-  take it only from these pages (`-subscriptions`), close them and send the text to the assistant's main conversation as the
-  user, as Ask Persona does. The text is a `<persona-context kind="context">` block, then one sentence of what the user wants. The
-  main conversation shows the block's title and body, so both are plain words: what it is about and a line of how it is set up
-  now. `connector`, `source` and `subscription` (left out before there is one) are its attributes, which the model reads and the
-  apps never draw (they keep attributes they have no field for, docs/protocol/protocol.md "Tags in messages"). The assistant
+  and with `""` the pages say "the assistant". The key itself says the app opens the press: without it (iOS builds before
+  #5278's iPhone part, Android until #5308) the pages leave Set Up with … out, since such an app would drop the link and the
+  row would do nothing (#5661); Choose a Tool and the rest stay. The press answers `open_url`
+  `persona://ask?text=<percent-encoded>`; the apps take it only from these pages (`-subscriptions`), close them and send the
+  text to the assistant's main conversation as the user, as Ask Persona does. The text is a `<persona-context kind="context">`
+  block, then one sentence of what the user wants. The main conversation shows the block's title and body, so both are plain
+  words: what it is about and a line of how it is set up now. `connector`, `source` and `subscription` (left out before there
+  is one) are its attributes, which the model reads and the apps never draw (they keep attributes they have no field for,
+  docs/protocol/protocol.md "Tags in messages"). The assistant
   reads the rest and changes it with its tools ("Assistant tools"), every save confirmed on the phone.
 - **Preview What Comes In** pulls once (a dry run) and draws the items as the Inbox would list them: an avatar, the title,
   "sender: summary", and the section the rule fallback gives (`fallback_tier`; with a due date Needs You). Under each, its time,
