@@ -333,10 +333,27 @@ For every component: use the design-system one, not a lookalike. Counts are appr
 - Accessibility: every control labelled; hold-to-talk has a hint and a tap action (`apple/Persona/DesignSystem/ComposerHoldMic.swift:105-110`). Reduce Motion read in the bar.
 - Source: `apple/Persona/DesignSystem/ShellComposerBar.swift:11`, `apple/Persona/DesignSystem/ComposerButtons.swift`.
 - Platforms: web composer (14 px radius, 28 px buttons, `web/src/views/chat/Composer.tsx:648`); Android `ComposerFrame` (radius 32 in Glass).
-- Web bottom row (#5032): `[+][@][/] [permission chip · source · folder] … [model pill][voice][stop/send]`. The model pill
-  sits in the composer's `trailing` slot, right before voice / Stop / Send, in an Agent chat and in a Persona chat
-  (#5033; the new-chat page too), where the permission chip is the only chip on the left. The card is the `composer`
-  container whose width sets the pill's modes ("Model pill and unified model panel" in 3.8).
+- Web bottom row (#5324, cindy's toolbar at the owner's request; cindy wins over this section's earlier rules for it):
+  `[+][permission picker] … [model pill][Stop][voice][send / queue / stop]`. The + and the picker are bare 30 px round
+  controls that show the model pill's frame (`line-strong` border, `hover` fill) on hover or while open; the action is one
+  dark 28 px circle (`ink` fill, `surface` icon, 40% when it can't be pressed): a filled plane for Send (**Queue message**
+  while the Agent works or needs you), a 10 px square for Stop (never red), round voice in an idle empty box, the main
+  conversation's not-ready button as a pill in the same fill. With something typed while the Agent works, a second Stop
+  sits left of voice. No @ or / button: typing them opens their menus. The model pill is the `trailing` slot and the
+  picker the `leading` one, in an Agent chat and in a Persona chat (#5033; the new-chat page has no picker). The card is the
+  `composer` container whose width sets the pill's and the picker's modes ("Model pill and unified model panel" in 3.8).
+- Web + / @ panel (#5324, `ComposerPanel.tsx`): one panel for both entries, 480 px and never wider than the composer
+  (full width on phones), 12 px corners, `line` border, raised shadow, at most 400 px tall. From the + it covers the box
+  from its bottom left with a pill search box on top; from a typed @ it sits above the box. Rows: a 24 px **Add** header
+  (12 px medium, `ink-3`), action rows (14 px icon and words, a check on a checked one), 44 px resource rows (16 px
+  icon, 14 px name that truncates, 12 px `ink-3` meta at the right, up to 240 px); the slash menu's glide fill marks the
+  active row. Empty: three 44 px pulsing rows while reading, "No matching items" for a query with nothing.
+- Web permission picker (#5324, `PermissionPicker.tsx`): the mode's symbol (14 px), its name (13 px, truncates) and a
+  chevron; Full access tints the words `red`, Auto-review `mode-acts`; under a 300 px composer (a 320 px phone) only
+  the symbol. Its menu is the shared `Menu` (300 px) with each mode's symbol, name and check; descriptions are tooltips
+  (`MenuItem.tip`), except a disabled row's reason and a row asking again, which stay under the name.
+- Web under the box (#5324): the source and folder line at the left (12 px `ink-3`, a folder mark, truncating, full
+  values on hover; an ⓘ menu at phone width), the context meter at the right.
 - Web `/` palette (#5325, `web/src/views/chat/SlashPalette.tsx`; cindy's slash command palette, followed at the owner's
   request, 2026-11-12): a 320 px panel anchored at the composer's left edge above it (`rounded-xl`, `bg-surface`,
   `shadow-overlay`, 6 px padding, at most 400 px or half the visible height, scrolling), 36 px rows (44 on touch) with
@@ -601,7 +618,9 @@ and the pointer tooltip. Going into Allow Everything asks first; so does leaving
 read nor changed shows none. The folded bar shows no marks on its right, so its capsule stays centered. Why a new
 pattern: Claude Code keeps the mode in its footer at all times; the composer's chips (`ModeChip`) are a level down on
 the phone. Android (#3957) and the web (#3956) do the same; their headers are one row, so the button sits left of `⋯`, at
-every width on the web, and neither has a folded bar.
+every width on the web, and neither has a folded bar. On the web the header draws the composer picker's symbol for each
+mode (#5324, cindy's: a raised hand, code, a list, sparkles, a warning triangle; `pickerIcon`), one symbol per mode
+across the web; iOS and Android keep theirs until they follow (#5378).
 
 Conversations an extension opened (#3758, `origin` `lark_agent` or `extension`) carry a source mark beside their title wherever they are a row, in the slot and size of the channel mark (iOS `ConversationSourceMark` / `ExternalSourceMark` in `ConversationChannelMark`'s place, web `OriginMark` in `ChannelMark`'s; Android has not caught up yet, #4203): Lark's `BrandMark` for Lark /agent, the extensions symbol in the secondary color for any other extension. A row has one source mark: the origin's replaces the channel's. No text tag: the row's accessible name carries "From Lark /agent" / "From an extension" instead. The message that opened the conversation gets the "From …" line channel messages already have (iOS `ExternalSourceLine` beside `ChannelSourceLine`, web the channel line in `SegmentView`), on that first message only and only once the page has loaded back to it; the chat's header stays as it is. Why not a new badge or a pinned line: the owner chose the existing channel patterns so the same place says the same thing for a channel's message and an extension's conversation.
 
