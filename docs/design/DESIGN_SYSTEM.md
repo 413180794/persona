@@ -1505,8 +1505,9 @@ page the user watches during the meeting is the page they keep writing in after 
   face the room. Its answers are never spoken, announced to VoiceOver, put in the Live Activity or pushed; a card the turn
   raises (one raised since its question, while its turn is the newest) is answered in the main chat, which the thread
   says in one line.
-- **Page menu**: the **Persona** role picker and the **Private Meeting** switch (`PUT …/private`; a refusal shows its
-  words, "Couldn't change Private Meeting. Try again." when the hub names no reason). The mark shows as the hub has it
+- **Page menu**: the **Persona** role picker, the **Private Meeting** switch (`PUT …/private`; a refusal shows its
+  words, "Couldn't change Private Meeting. Try again." when the hub names no reason) and Meeting / Note
+  ("One Record entry (#5243)" below). The mark shows as the hub has it
   once it said anything (absent: private); the start's choice stands in only until then. The start shows the same switch
   under the role, off by default, and no Who Attends. VoiceOver names the three menus apart: the page menu "Meeting
   options", [+] "Add to the conversation", the control row's "More".
@@ -1534,6 +1535,29 @@ page the user watches during the meeting is the page they keep writing in after 
   `recording-bookmark`, `recording-stop`, `recording-wrapup-title`, `recording-wrapup-open`, `recording-wrapup-done`)
   keep their names. UI tests: `MeetingConversationUITests`.
 - Platforms: the web shows the same thread on the recording detail (**Conversation**); Android has no meeting page yet.
+
+## One Record entry (#5243)
+
+Every place that starts a recording on the iPhone says **Record** and does one thing: it records a meeting (minutes, and
+Persona can attend with the hub's default role), named after the calendar event on now when there is one, or opens the
+recording running. That is the drawer's row, the Recordings page's button, the home screen's menu, the Control and Siri /
+Shortcuts. Reason: two large buttons, **Meeting Recording** and **Start Recording**, looked alike and owners couldn't tell
+which to press; impromptu talks are meetings too (principles 1 and 4).
+
+- **The Recordings page**: Record is the one prominent button (`.themedButton(prominent: true)`, one line, the icon going
+  at accessibility sizes), with the calendar line under it. The options follow as one row each: **Type**, a menu
+  `Picker` (Meeting / Note, Meeting for every start, never remembered), then for a meeting Persona, Private Meeting or Who
+  Attends, then language and microphone. Note hides the meeting's options and the calendar line and shows one caption
+  ("No minutes, and Persona stays out."); the same Record button then records a note (progressive disclosure, principle 2).
+  Note is never a second button (section 3.7).
+- **While it records**: the live sheet's page menu ends with the same choice, Meeting and Note with their marks (a menu
+  section, the current one checked), so it can change after the start (principle 3): the meeting page's menu, and in the live view a page menu beside **Hide** (the ellipsis, named
+  "Recording options" for VoiceOver, apart from the Persona strip's "Persona" and the bar's "More"). Turning a meeting into
+  a note turns Persona off, and the sheet shows the live view; turning it back makes it a meeting with Persona's part as a
+  start would get it, and a room meeting's page again.
+- Identifiers for tests: `recording-meeting-start` (Record), `recording-kind` and `recording-kind-detail` at the start,
+  `recording-page-menu` and `recording-kind-now` while recording; `sidebar-meeting-recording` for the drawer's row. UI
+  tests: `RecordEntryUITests`. The watch keeps its two entries for now.
 
 ## Checking typed credentials by themselves (#4881)
 
