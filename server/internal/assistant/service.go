@@ -102,6 +102,8 @@ type Service struct {
 
 	// rules: the answers to suggested rules, and the last count of what earns one (rule_suggest.go).
 	rules ruleSuggestState
+	// setupMu serializes the reads and the one write of the weekly setup block's book (setup_suggest.go).
+	setupMu sync.Mutex
 
 	// prepared is what this hub last gave a machine's node for a directory (key: machine id NUL directory), the
 	// CLAUDE.md and the plugin skills, by prepareSpaceIf; refreshInstructions gives again what differs.
@@ -357,6 +359,11 @@ func (s *Service) call(ctx context.Context, device, method string, params, out a
 				p["message_source"] = source
 				p["text"] = prompts.MessageSourceText(text, source)
 			}
+		}
+	}
+	if p, ok := params.(map[string]any); ok && method == DeviceSessionSend {
+		if id, _ := p["session_id"].(string); id != "" {
+			s.workTold(device, id) // the turn it starts is this manager's doing, not the owner's hand (setup_suggest.go)
 		}
 	}
 	if p, ok := params.(map[string]any); ok && method == DeviceAssistantSend {
