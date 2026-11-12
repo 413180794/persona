@@ -334,6 +334,7 @@ internal fun AgentsScreen(
             // focused one scrolls into view; the root leaves keyboard padding to each page (#867).
             modifier = Modifier.imePadding().then(Modifier.nestedScroll(searchPull)),
             state = listState,
+            scrollEdgeStyle = ScrollEdgeStyle.Gradient,
             summary = summary, subtitle = subtitle, greet = true, largeTitle = LocalHomeChrome.current == null,
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = if (connection != ConnectionState.Online) connectionDetails else ({ menu = true }), refreshing = refreshing, onRefresh = model::refresh,
