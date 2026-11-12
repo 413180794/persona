@@ -22,6 +22,7 @@
   "name_todo_title": "待办标题",
   "name_subscription_recipe": "订阅方式起草",
   "name_meeting_answer": "会议中的回答",
+  "name_suggest_next": "下一句建议",
   "name_schedule": "定时任务",
   "name_assistant_supervise": "后台督办",
   "desc_assistant": "和你对话，把事情拆成任务派出去。只有这个对话是你在等它回复的。",

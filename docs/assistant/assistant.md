@@ -481,6 +481,36 @@ merges such a message into the turn with `turn/steer` ("Codex" below); a Claude 
   work moved to the background is there only when it was. Without it an owner's "what happened?" got six minutes of tool calls and no
   word. Tests: `TestAssistantInterjectOffOrOldClaude`, `TestInterjectNote` (`node/assistant_interject_test.go`).
 
+## Next-message suggestions (#4644)
+
+The strip over an empty composer (#2978: click or Tab fills it in, the arrow sends it) reads one field, `Session.suggestion`, which has
+two sources (`server/internal/assistant/suggest_next.go`):
+
+- **Claude Code in a terminal** keeps the suggestion Claude Code draws in its own input box, read off the screen by the node
+  (`server/internal/node/suggestion.go`). The manager never calls a model for such a session.
+- **Every other chat** (Persona's own conversations, Codex and the other runtimes, a Claude session with no terminal) gets one from the
+  `suggest.next` model purpose (Model configuration, under information processing; it follows that category's model, like chat titles),
+  while the switch is on.
+
+Rules for the hub-made one:
+
+- **Switch**: `next_suggestions` in the assistant's settings (`GET/PUT /api/v1/assistant`, Settings › Persona on the web), **off by
+  default**. Default in one sentence: no chat gets a model-made suggestion until you turn it on. Claude Code's own suggestion
+  (`promptSuggestionEnabled`) is untouched by it.
+- **When**: once per turn, when a turn ends well (working to done or idle in the node's list) and an app has the chat open at that moment
+  (the hub watches the session for it: `Devices.Watched`). Every app with the chat open shows the same one. A new turn or a message going
+  in drops it and cancels a call still on its way. Failed turns (a turn error), interrupted turns and subagents get none.
+- **What the model reads**: at most the last 8 visible user and assistant text messages, 12,000 characters in all, oldest first
+  (`prompts/tools/next_message_input.md`). No tool calls or results, no thinking, no images, no messages Persona wrote for the model. The
+  call is a plain completion with no tools, MCP or memory.
+- **Nothing sensible, nothing shown**: `NONE`, an empty answer, more than one line or more than 200 characters shows nothing; there is no
+  stand-in and no retry.
+- **Risky suggestions** (either source): one that names a command, a path, a link, a secret-looking string or one of the risky actions
+  of the Agents' safety boundary (`riskyWords`: delete, push, deploy, send…) carries `suggestion_risky: true`. The apps fill it in but
+  show no one-tap send.
+- **Clients**: the web shows the strip in every chat, assistant conversations included, and drops the arrow for a risky one. iOS and
+  Android still show the strip only where they did, and do not read `suggestion_risky` yet (follow-up issue).
+
 ## Main chat, knowledge base, and context flow
 
 Prompts live in `server/internal/prompts/assistant/` (`docs/assistant/prompts.md`): CLAUDE.md is `claude_md.md`, snapshots `snapshot.md` (main-chat sentence in `context.md`), due-task messages `task_run.md`, default morning briefing / evening review `routine_*.md`.

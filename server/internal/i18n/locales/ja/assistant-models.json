@@ -22,6 +22,7 @@
   "name_todo_title": "ToDo のタイトル",
   "name_subscription_recipe": "購読レシピの下書き",
   "name_meeting_answer": "出席した会議での回答",
+  "name_suggest_next": "次のメッセージの候補",
   "name_schedule": "定期タスク",
   "name_assistant_supervise": "バックグラウンド監督",
   "desc_assistant": "あなたと話し、仕事をタスクに分けて任せます。あなたが返信を待つのはこの会話だけです。",
