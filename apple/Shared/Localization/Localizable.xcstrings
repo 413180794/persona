@@ -125927,24 +125927,47 @@
         }
       }
     },
-    "Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Session." : {
+    "Starts in the selected shell without opening a new tab." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Session."
+            "value" : "Starts in the selected shell without opening a new tab."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選択したshellで起動し、新しいタブは開きません。Codexには最初のメッセージが必要なため、「新規セッション」を使ってください。"
+            "value" : "選択したshellで起動し、新しいタブは開きません。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在选中的 shell 里启动，不新开标签页。Codex 需要第一条消息，请用「新建会话」。"
+            "value" : "在选中的 shell 里启动，不新开标签页。"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "Starts in the selected shell without opening a new tab. Codex starts in a tab of its own: use New Session." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts in the selected shell without opening a new tab. Codex starts in a tab of its own: use New Session."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択したshellで起動し、新しいタブは開きません。Codexは専用のタブで起動するため、「新規セッション」を使ってください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在选中的 shell 里启动，不新开标签页。Codex 在自己的标签页里启动，请用「新建会话」。"
           }
         }
       },
