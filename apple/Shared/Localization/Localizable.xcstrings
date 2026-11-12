@@ -64944,6 +64944,29 @@
       },
       "extractionState" : "manual"
     },
+    "Inbox Item…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inbox Item…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受信トレイの項目…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收件箱条目…"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
     "Include Old Chat Summary" : {
       "localizations" : {
         "en" : {
@@ -68851,6 +68874,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "知识库"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "Knowledge Note…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Knowledge Note…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ナレッジのノート…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知识库笔记…"
           }
         }
       },
@@ -145561,6 +145607,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "待办"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
+    "To-do…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To-do…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ToDo…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待办…"
           }
         }
       },
