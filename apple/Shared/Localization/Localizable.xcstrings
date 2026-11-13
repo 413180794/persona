@@ -86,6 +86,50 @@
         }
       }
     },
+    "%@: open %@, high %@, low %@, close %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: open %2$@, high %3$@, low %4$@, close %5$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@：开 %2$@，高 %3$@，低 %4$@，收 %5$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@：始値 %2$@、高値 %3$@、安値 %4$@、終値 %5$@"
+          }
+        }
+      }
+    },
+    ", volume %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", volume %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "，量 %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "、出来高 %@"
+          }
+        }
+      }
+    },
     "Agent tools and automation for this assistant's computers.": {
       "extractionState": "manual",
       "localizations": {
@@ -312,6 +356,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Claude Code 提醒这条命令可能有风险"
+          }
+        }
+      }
+    },
+    "Close [Candle]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "終値"
           }
         }
       }
@@ -615,6 +681,50 @@
         }
       }
     },
+    "Flat at %@, low %@, high %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flat at %1$@, low %2$@, high %3$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持平在 %1$@，最低 %2$@，最高 %3$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ で横ばい、最安 %2$@、最高 %3$@"
+          }
+        }
+      }
+    },
+    "High [Candle]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高値"
+          }
+        }
+      }
+    },
     "Hub": {
       "extractionState": "manual",
       "localizations": {
@@ -703,6 +813,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "言語と音声入力"
+          }
+        }
+      }
+    },
+    "Low [Candle]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安値"
           }
         }
       }
@@ -910,6 +1042,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "現在のアシスタントの設定だけを表示しています。別のアシスタントを変更するには切り替えてください。"
+          }
+        }
+      }
+    },
+    "Open [Candle]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始値"
           }
         }
       }
@@ -1535,6 +1689,50 @@
         }
       }
     },
+    "Trending down, from %@ to %@, low %@, high %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trending down, from %1$@ to %2$@, low %3$@, high %4$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "走势向下，从 %1$@ 到 %2$@，最低 %3$@，最高 %4$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下降傾向、%1$@ から %2$@、最安 %3$@、最高 %4$@"
+          }
+        }
+      }
+    },
+    "Trending up, from %@ to %@, low %@, high %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trending up, from %1$@ to %2$@, low %3$@, high %4$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "走势向上，从 %1$@ 到 %2$@，最低 %3$@，最高 %4$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上昇傾向、%1$@ から %2$@、最安 %3$@、最高 %4$@"
+          }
+        }
+      }
+    },
     "Type: %@": {
       "extractionState": "manual",
       "localizations": {
@@ -1554,6 +1752,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "種類：%1$@"
+          }
+        }
+      }
+    },
+    "Volume [Candle]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "量"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出来高"
           }
         }
       }

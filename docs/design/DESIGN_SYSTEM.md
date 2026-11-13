@@ -982,6 +982,14 @@ The widget extension doesn't build `Theme`: Persona's widgets take their colors,
 - **Every rendering mode**: in tinted, clear and Lock Screen modes every colored part goes in the accent group (`homeTone`, `homeAccent()`); a mark on a filled disc is knocked out of it; Mochi becomes a line drawing (`MochiGlyph`).
 - **Counts** are the app's own (Needs You per session, section 4.8; the Inbox's Needs You; the Machines page's windows); inbox and health content is `privacySensitive`. A to-do ticked on a widget shows done at once and says so in red when the hub refuses it.
 
+### 3.15 Charts (iOS)
+
+- `DataChart` (`apple/Persona/DesignSystem/DataChart.swift`): bars, lines and areas over categories, a few series in the data hues, holding a category reads it; a card's is compact (no axis text).
+- `RingChart`: a donut (its total in the hole) or a pie, one series of a few parts.
+- `CandleChart`: candlesticks with an optional volume chart under them; rising and falling colors come from the caller (the diff's green and red); holding a candle reads its prices, else the last one's.
+- `TrendLine`: a trend line the size of a word, no axes, in the quiet ink unless given a color; VoiceOver reads where it went and its lowest and highest.
+- Charts never take a hex: series use role colors, the data hues or `Theme.Hue`; text around them stays in the text's colors.
+
 ## 4. Interaction patterns
 
 ### 4.1 Navigation hierarchy (super rule 3)
