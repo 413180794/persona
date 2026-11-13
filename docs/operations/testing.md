@@ -141,6 +141,42 @@ A test binary never touches the developer's real `~/.persona`: the packages that
 
 Server packages with database tests call `dbtest.Main` in their `TestMain`: the binary gets a database of its own next to `PERSONA_TEST_DATABASE_URL` and drops it at the end (`docs/lessons/workflow.md`). The databases `dbtest` makes commit asynchronously (`synchronous_commit = off`): a commit is visible to other sessions at once, and only a crash of that Postgres could lose the last ones, so a migration does not wait for a WAL flush per transaction. In `internal/db`, a test that needs a new database with the current schema calls `migratedDatabase(t, sets)`, which copies a template the binary migrated once per set (`dbtest.Template`, `dbtest.Clone`); a test that starts from an older state uses `freshDatabase` and migrates. `open(t)` and `db.TruncateForTest` empty everything their `TRUNCATE ... CASCADE` reaches, but truncate only the tables that have a row (`docs/lessons/testing.md`, "Test database setup"). The CI Postgres and hub databases keep their own settings.
 
+## Bounded server package verification
+
+Since #6286, a plain `go -C server test` uses the node package's own partitions (see "Hosted CI" above).
+Diagnostic runs with `-json` or `-v` keep their normal event stream and do not use that automatic split.
+The existing runner also supports those diagnostic flags and can verify either reported package set under one
+600-second outer deadline:
+
+```sh
+cd server
+timeout --kill-after=5s 600s python3 ../scripts/test/go_test_partitioned.py go test -count=1 \
+  ./internal/assistant ./internal/assistantskills ./internal/assistantwire ./internal/hub ./internal/node
+timeout --kill-after=5s 600s python3 ../scripts/test/go_test_partitioned.py go test -count=1 \
+  ./internal/apierr ./internal/assistant ./internal/assistantskills ./internal/assistantwire \
+  ./internal/hub ./internal/i18n ./internal/node ./internal/prompts
+```
+
+Use an isolated test environment, with a disposable database when database coverage is required (the server CI lane
+prepares Postgres 18). The deadline includes discovery, compilation and execution. Exit 124 is a timeout; another
+nonzero exit is a failure, even when every partition finishes. Report existing opt-in/platform skips separately.
+The runner preserves caller flags, including `-skip` and `-race`; a caller's `-run` keeps the command unpartitioned.
+Compare like commands: an explicit runner result does not establish that direct `go test` passed. A verifier
+needs a maintainer change only to adopt this explicit entrypoint or diagnostic flags; the plain node split is
+part of the test binary. Earlier measurements from before #6286 describe the serial plain command.
+
+Shared node fixtures declare their scripted shell ready immediately; shell-readiness tests use `watchShell` to
+exercise observation instead. Scripted Claude and Codex hosts poll every 20 ms; timing-sensitive start tests use
+`withStartWaits` to keep the production 500 ms cadence. Virtual-time tests pin both cadences and the requirement
+for two consecutive ready frames, including reset after a working frame, and exact Codex rollout matching, launcher failure and cancellation. At fixture teardown,
+pending first-message checks are cancelled and joined before
+the fake socket closes or shared settings are restored. Tests of delivery/recovery still await `firstWait` before
+their assertions. The normal node keeps its detached delivery lifetime and all production wait limits.
+
+The Codex app-server fixture registers a reply waiter before sending each request and wakes it on the matching
+JSON-RPC response. Its five-second request budget, approval assertions and recorded responses remain intact;
+cancellation, transport errors and EOF remove pending waiters without leaving its reader blocked.
+
 ## Fast local checks (`scripts/check-fast.sh`, #2849)
 
 Runs only relevant second-scale checks based on git changes, with independent checks in parallel; useful before committing:
