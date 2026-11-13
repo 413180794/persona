@@ -705,6 +705,28 @@
         }
       }
     },
+    "Clear %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除%@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ をクリア"
+          }
+        }
+      }
+    },
     "Close [Candle]": {
       "localizations": {
         "en": {
@@ -1272,6 +1294,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "一致する設定がありません"
+          }
+        }
+      }
+    },
+    "Not Set": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Set"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未设置"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未設定"
           }
         }
       }
