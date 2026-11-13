@@ -38,7 +38,7 @@ struct ShellHome: View {
     var body: some View {
         ScrollView {
             if let pending {
-                FirstMessagePending(pending: pending, name: model.persona.name, shell: true, resend: resend, delete: delete)
+                FirstMessagePending(pending: pending, name: model.assistantShownName, shell: true, resend: resend, delete: delete)
                     // The page's height inside its margins, the message at its bottom (a long one runs up out of it, as the
                     // chat shows its newest end).
                     .containerRelativeFrame(.vertical, alignment: .bottom)
@@ -105,7 +105,7 @@ struct ShellHome: View {
             .background(Theme.pageBackground.ignoresSafeArea(edges: .bottom))
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { room.pageAtRest($0) }
-        .navigationTitle(model.persona.name)
+        .navigationTitle(model.assistantShownName)
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
         .modifier(ReadinessRefresh())
         .readinessSheets($route)
@@ -421,29 +421,102 @@ struct ShellNeedsYou: View {
 struct ShellDestinations: ViewModifier {
     @Binding var path: NavigationPath
     var enabled: Bool
+    /// The pages the Agents list registers too (a chat, a to-do, a machine, its terminals): off in the Sidebar layout
+    /// (#6332), whose one path has the Agents' (`AgentsDestinations`), the split's first pages without a back.
+    var agentRoutes = true
     @StateObject private var accounts = InboxAccountState()
 
     func body(content: Content) -> some View {
         if enabled {
             content
+                // ☰ beside Back on a place's pages: the sidebar opens at any depth, so a place is changed without
+                // popping it (docs/design/sidebar-navigation.md). In the Sidebar layout a place is the split's first
+                // page, with no back to the conversation under it (#6332).
                 .navigationDestination(for: ShellRoute.self) { route in
-                    switch route {
-                    case .inbox: InboxPage(path: $path, accountState: accounts, embedded: true)
-                    case .todos: TodosView()
-                    case .machines: MachinesView()
-                    case .extensionPage(let r): ExtensionNavPage(route: r)
-                    }
+                    place(route).modifier(ShellPlaceSidebarButton()).modifier(FirstPage(on: !agentRoutes))
                 }
-                .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id) }
                 .modifier(InboxDestinations(accounts: accounts.accounts))
-                .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref) }
-                .navigationDestination(for: TerminalsRoute.self) { r in TerminalsView(only: r.machine) }
-                .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
+                .modifier(AgentRoutes(on: agentRoutes))
                 .navigationDestination(for: InboxChatRoute.self) { r in ChatView(key: r.key, itemManager: r.manager).id(r.key) }
                 .environment(\.feishuOpen) { path.append($0) }
         } else {
             content
         }
+    }
+
+    /// What the Agents list registers as well: here only where it does not (the shell, the iPad's Persona tab).
+    private struct AgentRoutes: ViewModifier {
+        var on: Bool
+
+        func body(content: Content) -> some View {
+            if on {
+                content
+                    .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id).modifier(ShellPlaceSidebarButton()) }
+                    .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref).modifier(ShellPlaceSidebarButton()) }
+                    .navigationDestination(for: TerminalsRoute.self) { r in TerminalsView(only: r.machine).modifier(ShellPlaceSidebarButton()) }
+                    .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
+            } else {
+                content
+            }
+        }
+    }
+
+    /// The Sidebar layout's places are the split's first pages: no back to the conversation under them (#6332).
+    private struct FirstPage: ViewModifier {
+        var on: Bool
+
+        func body(content: Content) -> some View {
+            if on { content.splitDetailPage() } else { content }
+        }
+    }
+
+    @ViewBuilder private func place(_ route: ShellRoute) -> some View {
+        switch route {
+        case .inbox: InboxPage(path: $path, accountState: accounts, embedded: true)
+        case .todos: TodosView()
+        case .machines: MachinesView()
+        case .extensionPage(let r): ExtensionNavPage(route: r)
+        case .profile: AssistantProfileView()
+        case .routines: AssistantRoutinesView()
+        case .knowledge: KnowledgeView()
+        case .recordings:
+            #if os(iOS) || os(visionOS)
+            RecordingsPage()
+            #else
+            KnowledgeView() // the Mac records nothing: its Knowledge lists the hub's recordings
+            #endif
+        }
+    }
+}
+
+/// ☰ beside Back on the pages of a place the shell's sidebar opened (docs/design/sidebar-navigation.md): it opens the drawer
+/// over the page as it is, so the user can go to another place and come back to this one where they left it. Only in the
+/// iPhone shell; the iPad's sidebar is a column of its own.
+struct ShellPlaceSidebarButton: ViewModifier {
+    @Environment(\.shell) private var shell
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if let shell {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Haptics.tap()
+                        shell.drawer.open()
+                    } label: {
+                        Label(String(localized: "Chat History [Shell Components 60636b]"), systemImage: Theme.Icon.sidebarMenu)
+                            .labelStyle(.iconOnly)
+                    }
+                    .tint(Color.primary) // as Back beside it, not the accent
+                    .accessibilityIdentifier("shell-place-sidebar")
+                }
+            }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
     }
 }
 

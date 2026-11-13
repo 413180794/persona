@@ -64,6 +64,10 @@ type Task struct {
 	// pushes itself (notify_user). Set where the request has it; a client that leaves it out keeps it (PUT, the old
 	// app's routines PUT, the tools without push).
 	Push string `json:"push,omitempty"`
+	// Inbox is what of a run goes into the Inbox (inbox_post.go): "" nothing, "worthy" what the run puts there itself
+	// when it finds something worth a look (inbox_post), "every" a row after every run. Independent of Push. Set where
+	// the request has it; a client that leaves it out keeps it.
+	Inbox string `json:"inbox,omitempty"`
 	// Facts: the run's fixed part is worked out by Persona (briefing.go): what waits for the owner, what happened in the last
 	// 12 hours and what is to be verified, listed in one Lark card and pushed as counts, while the model writes only a
 	// sentence or two on top. On for the default morning and evening routines (a hub set up before gets it with their
@@ -705,7 +709,8 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 		Prompt          string          `json:"prompt"`
 		Title           string          `json:"title"`
 		NewConversation bool            `json:"new_conversation"`
-		Push            *string         `json:"push"` // left out: a new follow-up pushes every run, one rescheduled keeps its push
+		Push            *string         `json:"push"`  // left out: a new follow-up pushes every run, one rescheduled keeps its push
+		Inbox           *string         `json:"inbox"` // left out: a new follow-up puts nothing in the Inbox, one rescheduled keeps its setting
 		Until           json.RawMessage `json:"until"`
 		// The task's own model configuration (schedule_model.go): nil leaves it as it is, "" clears that part.
 		Launcher *string `json:"launcher"`
@@ -725,6 +730,14 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 			return "", err
 		}
 		push = &p
+	}
+	var inbox *string
+	if a.Inbox != nil {
+		m, err := inboxArg(*a.Inbox)
+		if err != nil {
+			return "", err
+		}
+		inbox = &m
 	}
 	prompt := stripScheduleHeader(a.Prompt)
 	if prompt == "" {
@@ -770,7 +783,7 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	needsOwn := hasTaskModel(a.Launcher, a.Model, a.Effort)
 	// A one-off ignores until, even a bad one. An interval task takes it; scheduleOwn applies it when this run is
 	// rescheduling its own task (including a one-off this call turns into an interval).
-	if out, id, ok, err := s.scheduleOwn(ctx, sessionID, a.Title, a.Prompt, prompt, a.At, at, every, rule, push, a.Until, a.Launcher, a.Model, a.Effort, a.UserRequested); ok || err != nil {
+	if out, id, ok, err := s.scheduleOwn(ctx, sessionID, a.Title, a.Prompt, prompt, a.At, at, every, rule, push, inbox, a.Until, a.Launcher, a.Model, a.Effort, a.UserRequested); ok || err != nil {
 		if err == nil && id != "" {
 			err = s.setTaskModel(ctx, id, a.Launcher, a.Model, a.Effort)
 		}
@@ -804,6 +817,9 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	}
 	if push != nil {
 		t.Push = *push
+	}
+	if inbox != nil {
+		t.Inbox = *inbox
 	}
 	ownConversationIfQuiet(&t, s.mayBeMainNow(ctx))
 	if t.SessionID != "" && s.quietConversation(ctx, t.SessionID) {
@@ -855,7 +871,7 @@ var errRepeatNeedsOwner = errors.New("a repeating task (every / cron) needs the 
 // (rawPrompt is what was asked, before stripScheduleHeader), or the title and prompt are another task's.
 // A one-off the assistant set up becomes repeating only when userRequested (errRepeatNeedsOwner); without it, it is
 // rescheduled once and stays a one-off. One the owner made in the app becomes repeating as before.
-func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, prompt, atArg string, at time.Time, every int, cron cronRule, push *string, untilRaw json.RawMessage, launcher, model, effort *string, userRequested bool) (string, string, bool, error) {
+func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, prompt, atArg string, at time.Time, every int, cron cronRule, push, inbox *string, untilRaw json.RawMessage, launcher, model, effort *string, userRequested bool) (string, string, bool, error) {
 	if sessionID == "" {
 		return "", "", false, nil
 	}
@@ -915,6 +931,9 @@ func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, 
 	t.Prompt = prompt
 	if push != nil { // left out: it keeps its push
 		t.Push = *push
+	}
+	if inbox != nil { // left out: it keeps its setting
+		t.Inbox = *inbox
 	}
 	ownConversationIfQuiet(t, mayBeMain)
 	var out string
@@ -1084,6 +1103,9 @@ func (s *Service) describeSchedule(ctx context.Context, space string) string {
 		if t.pushesOnlyAsked() {
 			b.WriteString(", " + pushText(t))
 		}
+		if t.Inbox != inboxOff {
+			b.WriteString(", " + inboxModeText(t))
+		}
 		if t.LastStatus != "" {
 			fmt.Fprintf(&b, ", last run %s %s", t.LastRun.In(loc).Format("01-02 15:04"), t.LastStatus)
 		}
@@ -1110,6 +1132,7 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 		Enabled  *bool           `json:"enabled"`
 		Report   *bool           `json:"report"` // left out: kept
 		Push     *string         `json:"push"`   // left out: a new routine pushes every run, an existing one keeps its push
+		Inbox    *string         `json:"inbox"`  // left out: a new routine puts nothing in the Inbox, an existing one keeps its setting
 		Until    json.RawMessage `json:"until"`
 		// The task's own model configuration (schedule_model.go): nil leaves it as it is, "" clears that part.
 		Launcher *string `json:"launcher"`
@@ -1131,6 +1154,14 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 			return "", err
 		}
 		push = &p
+	}
+	var inbox *string
+	if a.Inbox != nil {
+		m, err := inboxArg(*a.Inbox)
+		if err != nil {
+			return "", err
+		}
+		inbox = &m
 	}
 	loc := s.location(ctx)
 	now := time.Now()
@@ -1194,6 +1225,9 @@ func (s *Service) toolScheduleRoutine(ctx context.Context, self string, args jso
 	}
 	if push != nil {
 		t.Push = *push
+	}
+	if inbox != nil {
+		t.Inbox = *inbox
 	}
 	applyUntil(&t, end, hasUntil, clearUntil)
 	dropStaleUntil(&t, hasUntil, now)
@@ -1295,6 +1329,9 @@ func checkTask(t *Task, now time.Time) error {
 		return fmt.Errorf("unknown repeat %q (once / daily / interval / cron)", t.Repeat)
 	}
 	if err := checkPush(t.Push); err != nil {
+		return err
+	}
+	if err := checkInbox(t.Inbox); err != nil {
 		return err
 	}
 	if t.Launcher != "" && !launcherName.MatchString(t.Launcher) {
@@ -2409,7 +2446,7 @@ func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool
 // runs are above instead. The task's prompt is always there: it may have been edited, or compacted away.
 func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb, continued bool) string {
 	r := prompts.TaskRun{Label: t.label(), Once: t.Repeat == repeatOnce, Interval: t.Repeat == repeatInterval, Due: due.In(loc),
-		Prompt: t.Prompt, KBHint: kb && t.calendar(), KnowledgeDir: t.kbDir, Continued: continued, PushAsked: t.pushesOnlyAsked(), Facts: t.factsText}
+		Prompt: t.Prompt, KBHint: kb && t.calendar(), KnowledgeDir: t.kbDir, Continued: continued, PushAsked: t.pushesOnlyAsked(), InboxWorthy: t.inboxWorthy(), InboxEvery: t.inboxEvery(), Facts: t.factsText}
 	if r.Interval {
 		r.Every = everyText(t.EveryMinutes)
 		if t.cadenceEvery > 0 {
@@ -2573,6 +2610,11 @@ func (s *Service) scheduleRoutes() {
 			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
+		inbox, _, err := inboxIn(raw)
+		if err != nil {
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		}
 		now := time.Now()
 		end, hasUntil, clearUntil, err := untilIn(raw["until"], now, s.location(r.Context()))
 		if err != nil {
@@ -2587,7 +2629,7 @@ func (s *Service) scheduleRoutes() {
 			return
 		}
 		t := editTask(Task{ID: "task_" + randomHex(4), CreatedAt: now.UTC()}, in, now)
-		t.SessionID, t.Push = "", push
+		t.SessionID, t.Push, t.Inbox = "", push, inbox
 		applyUntil(&t, end, hasUntil, clearUntil)
 		dropStaleUntil(&t, hasUntil, now)
 		if err := checkTask(&t, now); err != nil {
@@ -2659,6 +2701,13 @@ func (s *Service) scheduleRoutes() {
 		}
 		if has { // an app that does not know the field leaves it out: the task keeps its push
 			t.Push = push
+		}
+		if mode, has, err := inboxIn(raw); err != nil {
+			sc.mu.Unlock()
+			apierr.Write(w, http.StatusBadRequest, err)
+			return
+		} else if has { // and its inbox setting
+			t.Inbox = mode
 		}
 		if v, ok := raw["facts"]; ok { // and its facts: set only when the body has them
 			if err := json.Unmarshal(v, &t.Facts); err != nil {

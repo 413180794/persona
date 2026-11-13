@@ -38,9 +38,14 @@ func TestAssistantProfileCompatibility(t *testing.T) {
 					params["config_dir"] = "legacy"
 				case "new-machine-default":
 					n.claudeStartDir.Store(&other)
+					want, profile = other, other
 				case "new-shell-default":
 					writeFile(t, filepath.Join(n.home, ".zshrc"), "export CLAUDE_CONFIG_DIR="+shellQuote(other)+"\n")
-				case "old-service", "old-missing":
+					want, profile = service, service
+					if runtime == "" {
+						want, profile = other, other
+					}
+				case "new-default", "old-service", "old-missing":
 					want, profile = service, service
 				case "old-home":
 					t.Setenv("CLAUDE_CONFIG_DIR", "")

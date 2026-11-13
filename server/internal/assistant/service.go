@@ -132,6 +132,7 @@ type Service struct {
 	interrupts interruptBook
 
 	titles     titleBook       // titles.go
+	phoneKept  keptPhoneTools  // fleet_tools.go: the phone's tools as the hub last listed them
 	agentNames agentNamingBook // agent_naming.go
 	prefs      settingsBook    // profile.go
 	main       mainBook        // start.go
@@ -159,6 +160,7 @@ type Service struct {
 	upReports      reportRate     // agent_control.go: report_to_supervisor
 	noteRate       reportRate     // todo_decisions.go: todo_decision_add
 	dispatch       dispatchBook   // dispatch.go: dispatch_start, dispatch_read
+	admission      admissionBook  // admission.go: execution-agent resource and direction gate
 	adoptMu        sync.Mutex     // agent_control.go: one agent_supervise at a time
 	placeBook      placeBook      // places.go
 	accept         acceptBook     // acceptance.go
@@ -271,6 +273,7 @@ func New(o Options) *Service {
 	s.directionNameRoutes()
 	s.originRoutes()
 	s.profileRoutes()
+	s.skillImportRoutes()
 	s.readinessRoutes()
 	s.availabilityRoutes()
 	s.startRoutes()
@@ -715,6 +718,7 @@ func (s *Service) turnEnded(ctx context.Context, r SessionRef, meeting bool) {
 	if !meeting {
 		// An assistant turn that failed is logged; a conversation conversation_new opened tells its parent (spawned.go).
 		s.afterSettle(context.WithoutCancel(ctx), s.assistantTurnSettled, r.MachineID, r.SessionID)
+		s.afterSettle(context.WithoutCancel(ctx), s.inboxAgentTurnSettled, r.MachineID, r.SessionID)
 	}
 	if !meeting {
 		s.titleAfterTurn(ctx, r.MachineID, r.SessionID)

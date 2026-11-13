@@ -380,6 +380,7 @@ func TestRepeatingFollowupNeedsTheOwner(t *testing.T) {
 		`{"every":"10m","prompt":"督办任务进展","title":"督办"}`,
 		`{"cron":"*/10 9-18 * * 1-5","prompt":"督办任务进展","title":"督办"}`,
 		`{"every":"10m","prompt":"督办任务进展","title":"督办","user_requested":false}`,
+		`{"every":"10m","prompt":"督办任务进展","title":"督办","inbox":"every"}`,
 	} {
 		if out, err := h.toolScheduleFollowup(context.Background(), "server", "s1", json.RawMessage(args)); !errors.Is(err, errRepeatNeedsOwner) {
 			t.Fatalf("%s is refused: %q, %v", args, out, err)
@@ -411,13 +412,13 @@ func TestAnAssistantOneOffReschedulingItselfStaysAOneOff(t *testing.T) {
 		LastRun: time.Now(), MachineID: "server", CreatedBy: "assistant"})
 	h.recordRun(ScheduleRun{Kind: "followup", RefID: "fu_1", Status: runOK, MachineID: "server", SessionID: "run-1"})
 
-	args, _ := json.Marshal(map[string]any{"at": "30m", "prompt": prompt, "title": "评测"})
+	args, _ := json.Marshal(map[string]any{"at": "30m", "prompt": prompt, "title": "评测", "inbox": "worthy"})
 	out, err := h.toolScheduleFollowup(context.Background(), "server", "run-1", args)
 	if err != nil || !strings.Contains(out, "Rescheduled fu_1") || !strings.Contains(out, "stays a one-off") {
 		t.Fatalf("rescheduled once: %q, %v", out, err)
 	}
 	p, _ := taskByID(h, "fu_1")
-	if p.Repeat != repeatOnce || p.EveryMinutes != 0 || !p.Enabled || time.Until(p.At) < 29*time.Minute {
+	if p.Repeat != repeatOnce || p.EveryMinutes != 0 || p.Inbox != inboxWorthy || !p.Enabled || time.Until(p.At) < 29*time.Minute {
 		t.Fatalf("the same one-off, 30 minutes out: %+v", p)
 	}
 	if n := len(h.tasksView(context.Background(), nil)); n != 1 {
@@ -425,11 +426,11 @@ func TestAnAssistantOneOffReschedulingItselfStaysAOneOff(t *testing.T) {
 	}
 
 	h.recordRun(ScheduleRun{Kind: "followup", RefID: "fu_1", Status: runOK, MachineID: "server", SessionID: "run-2"})
-	args, _ = json.Marshal(map[string]any{"at": "30m", "prompt": prompt, "title": "评测", "user_requested": true})
+	args, _ = json.Marshal(map[string]any{"at": "30m", "prompt": prompt, "title": "评测", "user_requested": true, "inbox": "every"})
 	if out, err = h.toolScheduleFollowup(context.Background(), "server", "run-2", args); err != nil || !strings.Contains(out, "now repeats every") {
 		t.Fatalf("the owner agreed: %q, %v", out, err)
 	}
-	if p, _ = taskByID(h, "fu_1"); p.Repeat != repeatInterval || p.EveryMinutes != 30 {
+	if p, _ = taskByID(h, "fu_1"); p.Repeat != repeatInterval || p.EveryMinutes != 30 || p.Inbox != inboxEvery {
 		t.Fatalf("repeats every 30 minutes: %+v", p)
 	}
 }
