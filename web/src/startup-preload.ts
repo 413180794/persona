@@ -250,8 +250,11 @@ export async function brotliCopies(dir: string, files: string[]): Promise<{ file
  * new helper or lazy boundary, and the Scheduled-task exclusion is a constant-time check inside the existing pure
  * `recentConversations`. The ceiling moves to the measured ja 477,968 B, 0 B of room; the idle tier is unaffected because
  * the fold stays on the first screen.
+ * And 162 B for restoring expanded Needs you title navigation and hydrating off-page question sessions (#6432:
+ * main at f0c995f923 measured ja 477,957 B; sharing the header's label and chevron takes this fix to 478,119 B,
+ * +162 B, keeping main's 11 B of room). Keep only this feature's measured allowance on top of main's changes.
  */
-export const FIRST_SCREEN_BUDGET = 477_968;
+export const FIRST_SCREEN_BUDGET = 478_130;
 // The hash in a built file's name: the 8 characters of Rollup's [hash] (url-safe base64) between "-" and the
 // extension, as vite.config.ts names every chunk and asset ("assets/[name]-[hash].js", "[name]-[hash][extname]").
 const NAME_HASH = /-([A-Za-z0-9_-]{8})\.[^./]+$/;
