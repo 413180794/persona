@@ -114,11 +114,9 @@ func (n *Node) assistantProfileSelection(ctx context.Context, id, launcher, runt
 	} else {
 		selected = n.assistantLauncherProfile(ctx, launcher, runtime)
 		if selected == "" {
-			root := n.dir
-			if root == "" {
-				root = identity.DataDir(n.home)
-			}
-			selected = filepath.Join(root, "profiles", launcher)
+			// A new conversation with no config_dir starts where this computer's Claude login already is (legacy),
+			// as the hub's own conversations do, instead of an empty private profile with no login (#4633).
+			selected = "legacy"
 		}
 	}
 	selected, err := normalize(selected)
