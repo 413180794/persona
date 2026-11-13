@@ -226,12 +226,19 @@ This shows the structure; actual parameter values are each URL-encoded, and orde
 
 | Parameter | Format |
 | --- | --- |
-| `url` | `public_url`; old Apps still use it, so keep a reachable LAN / VPN address here |
+| `url` | `public_url` or the local IPv6 address selected for an app QR (see below). Old apps still use this field |
 | `token` | Temporary Bearer token; the master token with `--legacy` |
 | `hub` | hub UUID |
 | `fp` | SHA-256(SubjectPublicKeyInfo DER), base64url without padding, 43 characters; not a hash of the whole certificate |
 | `tls` | TLS listen port, decimal |
 | `alt` | Full HTTPS URL, repeatable; at most two, excluding `lan`. When both literal address families are available, the first IPv6 and first IPv4 candidates, IPv6 first; otherwise the first two eligible candidates in candidate order |
+
+For an app pairing request made over loopback, a native HTTP-only Hub using its own bare hostname and listener port can use a
+bracketed unique-local IPv6 address as the QR's primary URL. This applies when LAN discovery finds no private IPv4
+address and all eligible IPv6 addresses share one /64. An explicit address or DNS domain in `public_url`, the
+`PERSONA_PUBLIC_URL` override, or `public.advertise` takes precedence. The Hub does not write the selected URL
+back to its configuration. Browser sign-in links, computer pairing, and requests relayed from a mesh member
+keep their existing addresses.
 
 Hostnames (`name` candidates) do not count as either address family because their DNS records may not support both. They remain eligible in the fallback order when one or both literal families are absent. Reserving an explicit IPv4 candidate alongside IPv6 lets IPv4-only clients attempt pairing even when earlier candidates are IPv6 addresses or an IPv6-only hostname. This selection applies to both app and computer pairing codes.
 
