@@ -48952,6 +48952,29 @@
       },
       "extractionState" : "manual"
     },
+    "This warning is for the default model connection. This conversation uses another model connection." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This warning is for the default model connection. This conversation uses another model connection."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この警告はデフォルトのモデル接続に関するものです。この会話では別のモデル接続を使用しています。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是默认模型连接的限流提醒；当前对话使用另一个模型连接。"
+          }
+        }
+      },
+      "extractionState" : "manual"
+    },
     "Default: %@" : {
       "localizations" : {
         "en" : {
