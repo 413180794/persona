@@ -540,6 +540,8 @@ extension Theme {
         static let pluginMinus = notChecked
         /// A commit (UI version 4's code hosting).
         static let pluginCommit = "circle.and.line.horizontal"
+        /// A picture that could not be loaded (an extension's `image`, its alt text beside it).
+        static let brokenImage = "photo.badge.exclamationmark"
         /// Asking for a GitHub star for Persona (#5761): the empty Agents pill, the milestone card, the onboarding toast.
         static let gitHubStar = pluginStar
         static let phone = "iphone"
