@@ -562,7 +562,7 @@ func TestCronInTheTools(t *testing.T) {
 	}
 
 	// A repeating follow-up on cron, into this conversation.
-	out, err = h.toolScheduleFollowup(ctx, "server", "s1", json.RawMessage(`{"prompt":"看看 CI","title":"CI","cron":"*/30 9-18 * * 1-5"}`))
+	out, err = h.toolScheduleFollowup(ctx, "server", "s1", json.RawMessage(`{"prompt":"看看 CI","title":"CI","cron":"*/30 9-18 * * 1-5","user_requested":true}`))
 	if err != nil || !strings.Contains(out, "on cron `*/30 9-18 * * 1-5`") || !strings.Contains(out, "It repeats by itself") {
 		t.Fatalf("follow-up: %q %v", out, err)
 	}

@@ -711,6 +711,9 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 		Launcher *string `json:"launcher"`
 		Model    *string `json:"model"`
 		Effort   *string `json:"effort"`
+		// UserRequested: the owner asked for this repeating task, in their latest message or by answering ask_user.
+		// Only a repeating task needs it; a one-off does not.
+		UserRequested bool `json:"user_requested"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", err
@@ -767,11 +770,14 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	needsOwn := hasTaskModel(a.Launcher, a.Model, a.Effort)
 	// A one-off ignores until, even a bad one. An interval task takes it; scheduleOwn applies it when this run is
 	// rescheduling its own task (including a one-off this call turns into an interval).
-	if out, id, ok, err := s.scheduleOwn(ctx, sessionID, a.Title, a.Prompt, prompt, a.At, at, every, rule, push, a.Until, a.Launcher, a.Model, a.Effort); ok || err != nil {
+	if out, id, ok, err := s.scheduleOwn(ctx, sessionID, a.Title, a.Prompt, prompt, a.At, at, every, rule, push, a.Until, a.Launcher, a.Model, a.Effort, a.UserRequested); ok || err != nil {
 		if err == nil && id != "" {
 			err = s.setTaskModel(ctx, id, a.Launcher, a.Model, a.Effort)
 		}
 		return out, err
+	}
+	if (every > 0 || rule.spec != nil) && !a.UserRequested {
+		return "", errRepeatNeedsOwner
 	}
 	space, _ := s.selfSpace(ctx, sessionID) // not listed: the assistant's own, as before the health space
 	t := Task{ID: "fu_" + randomHex(4), Title: strings.TrimSpace(a.Title), Prompt: prompt, Repeat: repeatOnce, At: at.UTC(), Enabled: true,
@@ -833,13 +839,23 @@ func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID s
 	return fmt.Sprintf("Scheduled %s for %s (%s); %s.", t.ID, at.In(loc).Format("01-02 15:04 Mon"), until(at), pushText(t)), nil
 }
 
+// errRepeatNeedsOwner: the assistant asked for a new repeating task the owner did not ask for. A patrol runs a whole
+// turn every interval for as long as it lives, and one watching a handed-out task only repeats what that task's
+// supervision messages already say, so it starts only once the owner has agreed.
+var errRepeatNeedsOwner = errors.New("a repeating task (every / cron) needs the owner's say-so: ask them with ask_user first " +
+	"(what to watch, how often, until when) and call again with user_requested: true only once they agree. Don't set one up " +
+	"to watch a task you handed out: its supervision messages already tell you when it finishes, stops or needs you. " +
+	"To look once more later, give only at")
+
 // scheduleOwn handles a run scheduling its own next run ("finally use schedule_followup (at=30m, same prompt as this one)
 // to schedule the next one"): the same task is kept, with the launcher and permission mode the user picked for it, instead of a new
 // follow-up per run. A one-off rescheduled by a relative time becomes a task every that long; one that already
 // repeats stays as it is (a changed prompt is taken). A task deleted while its run was going stays deleted: the run is
 // told so, nothing is scheduled (#4792). A one-off given a cron rule (`cron`, zero spec for none) runs on it from now on. ok is false when this conversation's latest run isn't one of the task's
 // (rawPrompt is what was asked, before stripScheduleHeader), or the title and prompt are another task's.
-func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, prompt, atArg string, at time.Time, every int, cron cronRule, push *string, untilRaw json.RawMessage, launcher, model, effort *string) (string, string, bool, error) {
+// A one-off the assistant set up becomes repeating only when userRequested (errRepeatNeedsOwner); without it, it is
+// rescheduled once and stays a one-off. One the owner made in the app becomes repeating as before.
+func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, prompt, atArg string, at time.Time, every int, cron cronRule, push *string, untilRaw json.RawMessage, launcher, model, effort *string, userRequested bool) (string, string, bool, error) {
 	if sessionID == "" {
 		return "", "", false, nil
 	}
@@ -914,6 +930,10 @@ func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, 
 		if d, ok := relative(atArg); every == 0 && cron.spec == nil && ok && d >= minEvery*time.Minute && d <= maxEvery*time.Minute {
 			every = int(d.Minutes())
 		}
+		held := (every > 0 || cron.spec != nil) && !userRequested && t.CreatedBy == "assistant"
+		if held {
+			every, cron = 0, cronRule{}
+		}
 		t.At, t.Enabled = at.UTC(), true
 		switch {
 		case cron.spec != nil:
@@ -928,6 +948,9 @@ func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, rawPrompt, 
 				"Don't schedule its next run from now on.", t.ID, t.label(), everyText(every), next.In(loc).Format("01-02 15:04 Mon"), until(next))
 		default:
 			out = fmt.Sprintf("Rescheduled %s「%s」 for %s (%s).", t.ID, t.label(), at.In(loc).Format("01-02 15:04 Mon"), until(at))
+			if held {
+				out += " It stays a one-off: making it repeat needs the owner's say-so (ask_user, then user_requested: true)."
+			}
 		}
 	}
 	// until applies only once the task is repeating. A one-off ignores it, including a bad value; checkUntil

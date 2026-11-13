@@ -352,7 +352,7 @@ func TestScheduleFollowupEvery(t *testing.T) {
 	h := newStorelessService(t, newFakeHub())
 	m := "server"
 	setTasks(h)
-	out, err := h.toolScheduleFollowup(context.Background(), m, "s1", json.RawMessage(`{"every":"2h","prompt":"看看部署","title":"部署巡检"}`))
+	out, err := h.toolScheduleFollowup(context.Background(), m, "s1", json.RawMessage(`{"every":"2h","prompt":"看看部署","title":"部署巡检","user_requested":true}`))
 	if err != nil || !strings.Contains(out, "every 2 小时") {
 		t.Fatalf("%q, %v", out, err)
 	}
@@ -366,6 +366,71 @@ func TestScheduleFollowupEvery(t *testing.T) {
 	}
 	if _, err := h.toolScheduleFollowup(context.Background(), m, "s1", json.RawMessage(`{"every":"1m","prompt":"x"}`)); err == nil {
 		t.Fatal("more often than every 5 minutes is refused")
+	}
+}
+
+// A repeating task the owner did not ask for is refused and saves nothing: the 10-minute patrols over handed-out tasks
+// cost more than the rest of the main chat together, and only repeated what those tasks' supervision messages said.
+func TestRepeatingFollowupNeedsTheOwner(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	setTasks(h)
+	for _, args := range []string{
+		`{"every":"10m","prompt":"督办任务进展","title":"督办"}`,
+		`{"cron":"*/10 9-18 * * 1-5","prompt":"督办任务进展","title":"督办"}`,
+		`{"every":"10m","prompt":"督办任务进展","title":"督办","user_requested":false}`,
+	} {
+		if out, err := h.toolScheduleFollowup(context.Background(), "server", "s1", json.RawMessage(args)); !errors.Is(err, errRepeatNeedsOwner) {
+			t.Fatalf("%s is refused: %q, %v", args, out, err)
+		}
+		if tasks := h.tasksView(context.Background(), nil); len(tasks) != 0 {
+			t.Fatalf("%s saves nothing: %+v", args, tasks)
+		}
+	}
+	if _, err := h.toolScheduleFollowup(context.Background(), "server", "s1", json.RawMessage(`{"at":"30m","prompt":"看一眼部署","title":"部署"}`)); err != nil {
+		t.Fatalf("a one-off needs no say-so: %v", err)
+	}
+	out, err := h.toolScheduleFollowup(context.Background(), "server", "s1", json.RawMessage(`{"every":"30m","prompt":"看看邮箱","title":"邮箱","user_requested":true}`))
+	if err != nil || !strings.Contains(out, "every 30 分钟") {
+		t.Fatalf("asked for: %q, %v", out, err)
+	}
+	if tasks := h.tasksView(context.Background(), nil); len(tasks) != 2 {
+		t.Fatalf("the one-off and the repeating task the owner asked for: %+v", tasks)
+	}
+}
+
+// A one-off the assistant set up whose run reschedules itself by a relative time stays a one-off without the owner's
+// say-so, instead of quietly becoming a task that repeats forever; with it, it repeats as one the owner made does.
+func TestAnAssistantOneOffReschedulingItselfStaysAOneOff(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	prompt := "看看评测跑完没有，最后用 schedule_followup（at=30m，prompt 和本条相同）安排下一次。"
+	setTasks(h, Task{ID: "fu_1", Title: "评测", Prompt: prompt, Repeat: repeatOnce, At: time.Now().Add(-time.Minute),
+		LastRun: time.Now(), MachineID: "server", CreatedBy: "assistant"})
+	h.recordRun(ScheduleRun{Kind: "followup", RefID: "fu_1", Status: runOK, MachineID: "server", SessionID: "run-1"})
+
+	args, _ := json.Marshal(map[string]any{"at": "30m", "prompt": prompt, "title": "评测"})
+	out, err := h.toolScheduleFollowup(context.Background(), "server", "run-1", args)
+	if err != nil || !strings.Contains(out, "Rescheduled fu_1") || !strings.Contains(out, "stays a one-off") {
+		t.Fatalf("rescheduled once: %q, %v", out, err)
+	}
+	p, _ := taskByID(h, "fu_1")
+	if p.Repeat != repeatOnce || p.EveryMinutes != 0 || !p.Enabled || time.Until(p.At) < 29*time.Minute {
+		t.Fatalf("the same one-off, 30 minutes out: %+v", p)
+	}
+	if n := len(h.tasksView(context.Background(), nil)); n != 1 {
+		t.Fatalf("still one task, have %d", n)
+	}
+
+	h.recordRun(ScheduleRun{Kind: "followup", RefID: "fu_1", Status: runOK, MachineID: "server", SessionID: "run-2"})
+	args, _ = json.Marshal(map[string]any{"at": "30m", "prompt": prompt, "title": "评测", "user_requested": true})
+	if out, err = h.toolScheduleFollowup(context.Background(), "server", "run-2", args); err != nil || !strings.Contains(out, "now repeats every") {
+		t.Fatalf("the owner agreed: %q, %v", out, err)
+	}
+	if p, _ = taskByID(h, "fu_1"); p.Repeat != repeatInterval || p.EveryMinutes != 30 {
+		t.Fatalf("repeats every 30 minutes: %+v", p)
 	}
 }
 
@@ -383,7 +448,7 @@ func TestScheduleFollowupRejectsIntervalOverAWeek(t *testing.T) {
 			t.Fatalf("every=%s saves nothing: %+v", every, tasks)
 		}
 	}
-	if _, err := h.toolScheduleFollowup(context.Background(), "server", "s1", json.RawMessage(`{"every":"7d","prompt":"x"}`)); err != nil {
+	if _, err := h.toolScheduleFollowup(context.Background(), "server", "s1", json.RawMessage(`{"every":"7d","prompt":"x","user_requested":true}`)); err != nil {
 		t.Fatalf("every 7 days is the longest allowed: %v", err)
 	}
 	tasks := h.tasksView(context.Background(), nil)
