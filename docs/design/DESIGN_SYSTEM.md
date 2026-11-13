@@ -1598,6 +1598,60 @@ Current gaps against this contract are listed in `docs/design/HIG_AUDIT.md`. No 
 | Text size setting | Small/Standard/Large | same ratios | none | missing on Android |
 | Tokens source | hand-written | hand-written | generated from `spec/tokens` | Apple and Android drift fails a test; the web is unchecked |
 
+## HarmonyOS native structure
+
+HarmonyOS 7 / API 26 uses native ArkUI Navigation, destination titles, floating Tabs, lists, menus, sheets and
+confirmation dialogs. The window breakpoint selects stack (XS/SM/MD) or native split (LG/XL); device names do not.
+The master pane starts at 320 vp, drags from 280 to 440 vp and collapses to 64 vp. Its bottom tabs are 56 vp with a
+12 vp system-component margin; the system safe area is not added a second time.
+
+An Agent's detail title is omitted only while its identifying selected row is fully visible in the expanded master.
+Compact, collapsed, filtered-out, offscreen or different-owner contexts restore the native title. Child pages keep
+their own title and back action. A title already provided by the destination is not repeated in the body. Avoid
+explanatory subtitles, explanatory child controls and duplicate actions; native control placement, names and state
+must explain their purpose. Explicit target and consequence text remains necessary for a consequential decision.
+
+Glass, Brief and Board preserve this structure and the same fields/actions, using semantic own-message colors with
+light/dark resources. Device-wide Avatar and Accent preferences are independent of the Hub and style. Native
+`WithTheme` supplies both light and dark system tokens; an own-message subtree supplies readable bubble tokens.
+Avatar choices use intrinsic native list groups and Radio controls, with no fixed-height nested list or descriptive
+captions. Preference restoration completes before selection is enabled, and a failed write retains the previous
+selection. Native system materials belong to supported controls; the client does not simulate them with
+another navigation shell. Horizontal half-fold uses `FoldSplitContainer`: reading above, the current decision or
+composer below, with native crease avoidance and a scrollable interaction area. The view samples native crease capability at creation; an image that omits fold geometry retains ordinary native Column/Scroll layout, without fabricated hover regions. Configuration updates do not replace that view’s input or transcript subtree. Ordinary posture uses measured
+interaction height rather than a fixed 50/50 split. A system photo editor returns a separate selected copy; system preview owns supported
+image zoom and document viewing. The [HarmonyOS guide](../harmony/harmony.md) records the full interaction and
+verification contract. This is a new platform implementation and does not alter another client's default style.
+
+The composer uses native GridRow/GridCol spans and order. At an effective application font scale of 2 or higher, or when the pane width
+leaves too little writing space, the same input occupies a full row and full-width actions stack below it, Send before Attach, with single-line labels. The input and draft
+keep their identity; controls grow with their labels instead of clipping a fixed-height row. Native Ability configuration
+callbacks supply the actual application font scale. A local font multiplier is not a substitute for that system value.
+
+A HarmonyOS destination has one native route title and the Navigation-owned return action. Content does not repeat
+that title or add another route-back button. Local actions such as returning to a file's parent directory or closing
+a message thread keep their separate meaning. A missing resource title falls back to its identifier in the native
+bar. Secondary list actions, such as grouping, use the framework's textual button style.
+
+Persona assistant question cards remain in the native transcript List alongside the stable composer. Each card keeps
+its own request identity; ordinary sends leave withdrawal to the Hub, and non-blocking questions remain answerable.
+Open editable questions begin with their prompt, without a generic answer subtitle. Pending, unknown and read-only
+states stay explicit. Chat has no permanent Hub/computer/path subtitle. Agent permissions and plans keep their
+existing approval gates.
+
+Extension applications open from a root Navigation menu into a native destination and complete List, without adding
+a primary tab. Session actions share one native Menu with MenuItem rows of at least 48vp from the title's More item or the hidden-title pane's
+More button. These are the same captured actions, not two parallel toolbars.
+
+The file workspace uses native composed list items, three labeled system-icon controls and scrollable, automatically
+sized local tabs. Computer transfer uses the system sheet, named computer switches, a native Radio list and Progress.
+File names, machine names and complete paths wrap in scrolling content; they are confirmation data, not explanatory
+captions. The target List hands boundary scrolling to its native parent Scroll. One footer uses native Flex wrapping
+and minimum touch heights, with no second bottom inset. The composer and transcript scroll independently at large
+text sizes; verification must reach each complete action within its own viewport. Theme primary fills include matching
+readable foreground tokens in both modes. Reopening an active transfer retains its captured receiving computer and
+folder; pending or unknown outcomes never silently resend.
+
 ## 8. Inconsistencies and duplicate definitions
 
 | ID | What | Where | Impact | Recommended unification |
