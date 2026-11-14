@@ -136,6 +136,47 @@ describe("Assistant Needs you / In progress trays", () => {
     expect(host.querySelector("[data-task-status]")!.textContent).toBe(t("assistant-tasks.status_starting"));
   });
 
+  it.each([undefined, conversation])("keeps an ordinary todo with origin %s out of In progress and the dock", async (origin) => {
+    mainChat = conversation;
+    moreTodos = [{ id: "personal-todo", title: "Choose an example date", origin, created_at: at, updated_at: at, agents: [] }];
+    await act(async () => { await refresh(); await refreshTodos(); });
+    act(() => root.render(<StrictMode><AssistantActionBar conversation={conversation} /><TaskDock conversation={conversation} /></StrictMode>));
+    expect(entry("running").textContent).toBe(`${label.running}1`);
+    act(() => entry("running").click());
+    expect(host.querySelectorAll("[data-task-slot]")).toHaveLength(1);
+    expect(host.textContent).not.toContain("Choose an example date");
+    expect(writes).toEqual([]);
+  });
+
+  it("keeps released work visible as stopped rather than starting another Agent", async () => {
+    todo.agents = todo.agents!.map((agent) => ({ ...agent, released_at: at }));
+    await act(async () => { await refreshTodos(); });
+    act(() => entry("running").click());
+    expect(host.querySelector("[data-task-status]")!.textContent).toBe(t("lib-state-labels.follow_up"));
+    expect(host.querySelector('[data-task-mark="follow_up"]')).not.toBeNull();
+    expect(host.textContent).not.toContain(t("assistant-tasks.status_starting"));
+  });
+
+  it.each(["needs_user", "pending_review", "ask_decide", "ask_done", "ask_verify"] as const)("keeps an ordinary %s todo in Needs you without a starting label or mark", async (kind) => {
+    mainChat = conversation;
+    const personal: Todo = { id: "personal-decision", title: "Review the example date", created_at: at, updated_at: at, agents: [] };
+    if (kind === "needs_user" || kind === "pending_review") personal.supervision = { supervisor: conversation, state: kind };
+    else personal.ask = { verdict: "Review the example option", asked_at: at, ...(kind === "ask_verify" ? {} : { outcome: kind === "ask_decide" ? "decide" : "done" }) };
+    moreTodos = [personal];
+    await act(async () => { await refresh(); await refreshTodos(); });
+    await act(async () => entry("needs").click());
+    const row = () => host.querySelector('[data-needs-row="task:personal-decision"]');
+    expect(row()).not.toBeNull();
+    expect(trays()).toContain(personal.title);
+    expect(trays()).not.toContain(t("assistant-tasks.status_starting"));
+    expect(host.querySelector('[data-task-mark="not_started"]')).toBeNull();
+    await openRows("task:personal-decision");
+    expect(row()).not.toBeNull();
+    expect(trays()).not.toContain(t("assistant-tasks.status_starting"));
+    expect(host.querySelector('[data-task-mark="not_started"]')).toBeNull();
+    expect(writes).toEqual([]);
+  });
+
   it("keeps two entries in order, collapses by default and replaces conversation cards with the dispatch's hand-off card", () => {
     expect(entries().map((button) => button.getAttribute("data-tray-entry"))).toEqual(["needs", "running"]);
     expect(entries().map((button) => button.textContent)).toEqual([label.needs, `${label.running}1`]);

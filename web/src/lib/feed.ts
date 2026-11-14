@@ -708,6 +708,13 @@ export function startFailure(todo: Todo, plans: Record<string, TaskPlan>): strin
   return plans[todo.plan_id]?.tasks.find((t) => t.todo_id === todo.id)?.error || undefined;
 }
 
+/** A start was requested and no Agent or failure has arrived yet. Origin alone is provenance, not a dispatch. */
+export function pendingDispatch(todo: Todo, plans: Record<string, TaskPlan>, feed: FeedItem[] = []): boolean {
+  if (todo.done_at || (todo.agents ?? []).length > 0 || startFailure(todo, plans)) return false;
+  if (todo.plan_id) return plans[todo.plan_id]?.state !== "dismissed";
+  return feed.some((item) => item.kind === "task" && item.ref === todo.id);
+}
+
 /**
  * Removes a task that does not run: its todo goes (its agents and their chats stay on the Agents page), and with it
  * its card, pill and panel. One whose agents ran asks first; one whose agent never started goes at once. Answers

@@ -1886,6 +1886,257 @@
           }
         }
       }
+    },
+    {
+      "name": "ordinary_todos_are_not_pending_dispatches",
+      "input": {
+        "conversation": "main-chat",
+        "main": "main-chat",
+        "now": "2026-11-10T09:00:00Z",
+        "todos": [
+          {
+            "id": "personal",
+            "title": "Example personal",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z"
+          },
+          {
+            "id": "legacy",
+            "title": "Example legacy",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat"
+          },
+          {
+            "id": "direction",
+            "title": "Example direction",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "other-chat",
+            "supervision": {
+              "supervisor": "other-chat",
+              "state": "working"
+            }
+          },
+          {
+            "id": "old-personal",
+            "title": "Example old-personal",
+            "created_at": "2026-11-01T08:00:00Z",
+            "updated_at": "2026-11-01T08:00:00Z",
+            "origin": "main-chat"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "plans": {},
+        "feed": []
+      },
+      "expected": {
+        "needs_you": [],
+        "running": [],
+        "shelved": []
+      },
+      "description": "Regression for #7552: dispatch evidence, not provenance, determines whether an Agent is starting.",
+      "source": [
+        "https://github.com/nwverse/persona/issues/7552",
+        "web/src/lib/assistant-entries.ts assistantEntries"
+      ],
+      "derived": true
+    },
+    {
+      "name": "planned_and_explicit_dispatches_keep_starting",
+      "input": {
+        "conversation": "main-chat",
+        "main": "main-chat",
+        "now": "2026-11-10T09:00:00Z",
+        "todos": [
+          {
+            "id": "planned",
+            "title": "Example planned",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat",
+            "plan_id": "pending-plan"
+          },
+          {
+            "id": "requested",
+            "title": "Example requested",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "plans": {
+          "pending-plan": {
+            "id": "pending-plan",
+            "conversation": "main-chat",
+            "state": "started",
+            "created_at": "2026-11-10T08:00:00Z",
+            "tasks": [
+              {
+                "title": "Example planned task",
+                "prompt": "Check the example",
+                "machine": "fixture-device",
+                "cwd": "/demo/project",
+                "todo_id": "planned"
+              }
+            ]
+          }
+        },
+        "feed": [
+          {
+            "id": "dispatch-request",
+            "conversation": "main-chat",
+            "at": "2026-11-10T08:00:00Z",
+            "kind": "task",
+            "ref": "requested"
+          }
+        ]
+      },
+      "expected": {
+        "needs_you": [],
+        "running": [
+          "task:planned",
+          "task:requested"
+        ],
+        "shelved": []
+      },
+      "description": "Regression for #7552: dispatch evidence, not provenance, determines whether an Agent is starting.",
+      "source": [
+        "https://github.com/nwverse/persona/issues/7552",
+        "web/src/lib/assistant-entries.ts assistantEntries"
+      ],
+      "derived": true
+    },
+    {
+      "name": "dismissed_and_released_tasks_are_not_starting",
+      "input": {
+        "conversation": "main-chat",
+        "main": "main-chat",
+        "now": "2026-11-10T09:00:00Z",
+        "todos": [
+          {
+            "id": "dismissed",
+            "title": "Example dismissed",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat",
+            "plan_id": "dismissed-plan"
+          },
+          {
+            "id": "released",
+            "title": "Example released",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat",
+            "agents": [
+              {
+                "machine_id": "fixture-device",
+                "session_id": "old-worker",
+                "linked_at": "2026-11-10T08:00:00Z",
+                "released_at": "2026-11-10T08:00:00Z"
+              }
+            ]
+          },
+          {
+            "id": "failed",
+            "title": "Example failed",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat",
+            "start_error": "Example start failure",
+            "done_at": "2026-11-10T08:00:00Z"
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "plans": {
+          "dismissed-plan": {
+            "id": "dismissed-plan",
+            "conversation": "main-chat",
+            "state": "dismissed",
+            "created_at": "2026-11-10T08:00:00Z",
+            "tasks": [
+              {
+                "title": "Example planned task",
+                "prompt": "Check the example",
+                "machine": "fixture-device",
+                "cwd": "/demo/project",
+                "todo_id": "dismissed"
+              }
+            ]
+          }
+        },
+        "feed": []
+      },
+      "expected": {
+        "needs_you": [
+          "task:failed"
+        ],
+        "running": [
+          "task:released"
+        ],
+        "shelved": []
+      },
+      "description": "Regression for #7552: dispatch evidence, not provenance, determines whether an Agent is starting.",
+      "source": [
+        "https://github.com/nwverse/persona/issues/7552",
+        "web/src/lib/assistant-entries.ts assistantEntries"
+      ],
+      "derived": true
+    },
+    {
+      "name": "ordinary_todo_decisions_still_need_the_owner",
+      "input": {
+        "conversation": "main-chat",
+        "main": "main-chat",
+        "now": "2026-11-10T09:00:00Z",
+        "todos": [
+          {
+            "id": "decision",
+            "title": "Example decision",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "main-chat",
+            "ask": {
+              "outcome": "decide",
+              "verdict": "Choose an example option",
+              "asked_at": "2026-11-10T08:00:00Z"
+            }
+          },
+          {
+            "id": "review",
+            "title": "Example review",
+            "created_at": "2026-11-10T08:00:00Z",
+            "updated_at": "2026-11-10T08:00:00Z",
+            "origin": "other-chat",
+            "supervision": {
+              "supervisor": "other-chat",
+              "state": "pending_review"
+            }
+          }
+        ],
+        "sessions": [],
+        "interactions": [],
+        "plans": {},
+        "feed": []
+      },
+      "expected": {
+        "needs_you": [
+          "task:decision",
+          "task:review"
+        ],
+        "running": [],
+        "shelved": []
+      },
+      "description": "Regression for #7552: dispatch evidence, not provenance, determines whether an Agent is starting.",
+      "source": [
+        "https://github.com/nwverse/persona/issues/7552",
+        "web/src/lib/assistant-entries.ts assistantEntries"
+      ],
+      "derived": true
     }
   ]
 }

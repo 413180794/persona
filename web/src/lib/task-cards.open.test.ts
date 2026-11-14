@@ -6,7 +6,7 @@ import { todoBucket, triageTodos } from "./todo-triage";
 import type { Todo } from "./todos";
 import { assistantEntries } from "./assistant-entries";
 
-// #3331: the conversation's In progress entry and the To-dos page's "Not done" read one rule (todoBucket).
+// #3331: displayed tasks use the To-dos page's open rule; personal to-dos stay on that page (#7552).
 const NOW = Date.parse("2026-11-10T08:00:00Z");
 const hoursAgo = (h: number) => new Date(NOW - h * 3600_000).toISOString();
 const at = hoursAgo(1);
@@ -48,30 +48,30 @@ describe("cardBucket", () => {
   });
 });
 
-// In progress (#3387) is the open tasks that do not wait on the user; none of these do, so it is the page's open number.
+// In progress (#3387) is dispatched open work that does not wait on the user; personal to-dos are not dispatches.
 const entryRows = (conversation: string, todos: Todo[], plans: Record<string, TaskPlan>, main?: string) => {
   const got = assistantEntries({ conversation, main, todos, sessions: [], interactions: [], plans, feed: [], lookup: noSessions, now: NOW });
   const ids = (items: typeof got.running) => items.map((item) => (item.kind === "task" ? item.todo.id : item.key));
   return { open: ids(got.running), shelved: ids(got.shelved), needsYou: got.needsYou.map((item) => item.key) };
 };
 
-describe("In progress counts what the To-dos page counts", () => {
+describe("In progress uses the To-dos open rule for dispatched work", () => {
   const todos: Todo[] = [
-    todo({ id: "open" }),
-    todo({ id: "shelved", created_at: hoursAgo(80), updated_at: hoursAgo(60) }),
+    todo({ id: "open", plan_id: "requested-plan" }),
+    todo({ id: "shelved", plan_id: "old-plan", created_at: hoursAgo(80), updated_at: hoursAgo(60) }),
     todo({ id: "accepted", supervision: accepted() }),
     todo({ id: "done", done_at: hoursAgo(3) }),
     todo({ id: "manual", origin: undefined }),
-    todo({ id: "elsewhere", origin: "other-chat" }),
+    todo({ id: "elsewhere", origin: "other-chat", plan_id: "other-plan" }),
   ];
   const plans = { p: plan("p", "open", "main", 2) };
 
-  it("the main conversation: every to-do, the same open number, shelved folded, plans not counted", () => {
+  it("the main conversation counts dispatched work, keeps personal to-dos on the page and folds shelved tasks", () => {
     const main = todos.map((td) => (td.origin === "c" ? { ...td, origin: "main" } : td));
     const rows = entryRows("main", main, plans, "main");
     const page = triageTodos(main, noSessions, NOW);
-    expect(rows.open.length).toBe(page.open);
-    expect([...rows.open].sort()).toEqual(["elsewhere", "manual", "open"]);
+    expect(rows.open.length + 1).toBe(page.open); // the personal to-do remains open on the page
+    expect([...rows.open].sort()).toEqual(["elsewhere", "open"]);
     expect(rows.shelved).toEqual(["shelved"]);
     expect(rows.shelved.length).toBe(page.shelved);
     // the finished ones are in neither entry; the plan waiting for Start is one Needs you row, not its two tasks

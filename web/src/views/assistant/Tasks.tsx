@@ -20,6 +20,7 @@ import {
   type InterruptBatch,
   type InterruptResolution,
   sentByPersona,
+  pendingDispatch,
   planEditsToSend,
   planUltracodeToSend,
   removeTask,
@@ -153,9 +154,10 @@ export function useTodo(id: string | undefined): Todo | undefined {
   return useStore((s) => (id ? s.todos.find((t) => t.id === id) : undefined));
 }
 
-/** A task's status, failed too when a hub from before #1077 left it open and only its plan says the start failed. */
+/** Task status, including legacy plan failures and stopped work whose Agents were all released. */
 export function statusOf(todo: Todo, lookup: SessionLookup, plans: Record<string, TaskPlan>): TodoStatus {
   const st = todoStatus(todo, lookup);
+  if (st === "not_started" && (todo.agents ?? []).length > 0) return "follow_up";
   return st === "not_started" && startFailure(todo, plans) ? "failed" : st;
 }
 
@@ -969,7 +971,7 @@ function dockTasksIn(s: State, conversation: string, plans: Record<string, TaskP
   return s.todos
     .filter((t) => t.origin === conversation)
     .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
-    .filter((x) => DOCK_RANK[x.st] !== undefined)
+    .filter((x) => DOCK_RANK[x.st] !== undefined && (x.st !== "not_started" || pendingDispatch(x.t, plans, getFeedState().feeds[conversation])))
     .sort((a, b) => DOCK_RANK[a.st]! - DOCK_RANK[b.st]! || byTime(b.t.created_at, a.t.created_at))
     .map(({ t: todo, st }) => {
       const lead = mostUrgentAgent(todo, lookup)?.session;
