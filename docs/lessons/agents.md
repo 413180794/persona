@@ -256,6 +256,10 @@ may legitimately repeat an earlier answer, so retirement follows the landed stre
 - Codex / an internal Codex variant's sub-Agents write their own rollouts alongside the main chat, with the same directory and cwd, and newer updates. The internal variant's pre-tool automatic approval evaluation (guardian)
   is written by the same process, with its own owner file. Identifying sessions by "newest rollout / newest owner file" makes the App show the review chat, unlike the terminal (2026-11-01).
   Always inspect `thread_source` / `source.subagent` in `session_meta`; replace sub-Agent `session_id` with its main chat (`docs/integrations/codex.md`).
+- A compatible CLI can stop writing rollouts after a storage migration while retaining its writer locks. CLI 0.215
+  uses paginated SQLite history; identify the live thread from its writer, and read the database rather than guessing
+  from the newest old rollout. Its legacy `--session-id` option does not name a fresh session in the measured exec path.
+  Its sandbox and permission presets also cannot be supplied together: map Persona's permission choice to one policy.
 - **A core chooses its own shell and layout destination** (#2532): use `terminal.run`'s returned argv for command syntax, sourcing and startup
   probes; the node's login shell can be different. A missing foreground is unknown, not permission to type. Resolve automatic placement by
   folder inside every layout CAS retry, updating terminal labels if the destination changes. Keep explicit space selection distinct so a

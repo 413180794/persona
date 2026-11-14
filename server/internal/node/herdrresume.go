@@ -111,7 +111,20 @@ func (n *Node) agentResumeArgv(spec agentLaunch, id string) (argv []string, ok b
 	if kind == "" || kind == "claude" {
 		return n.claudeResumeArgv(spec, id)
 	}
-	cmd := withHerdrAgent(resumeHerdrAgent(kind), n.launcherCommandQ(spec.Launcher, dquote)+" resume "+id)
+	cmd := n.launcherCommandQ(spec.Launcher, dquote)
+	if kind == traexAgent && n.state != nil {
+		// Both a new start and backfill after a node restart restore the persisted permission choice. Keep
+		// permissions independent of effort: an older saved effort must not remove a read-only constraint.
+		st, _ := n.state.get(id)
+		args, err := traexPermissionArgs(st.AppMode, "")
+		if err != nil {
+			return nil, false
+		}
+		for _, arg := range args {
+			cmd += " " + dquote(arg)
+		}
+	}
+	cmd = withHerdrAgent(resumeHerdrAgent(kind), cmd+" resume "+id)
 	cmd = n.agentCommand(cmd, dquote, herdrPaneShell())
 	if !resumeSayable(cmd) || !validID(id) {
 		return nil, false
