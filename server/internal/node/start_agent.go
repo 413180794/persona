@@ -31,6 +31,17 @@ func launcherAgentType(name string) string {
 	return "claude"
 }
 
+// An explicit type wins; managed TRAE launchers have no distinctive executable name to infer from.
+func (n *Node) startAgentType(launcher, declared string) string {
+	if declared != "" {
+		return declared
+	}
+	if l, ok := n.managedLauncher(launcher); ok && l.AgentType() == traexAgent {
+		return traexAgent
+	}
+	return launcherAgentType(launcher)
+}
+
 func typedLaunchers(list []proto.Launcher) []agentLauncher {
 	out := make([]agentLauncher, 0, len(list))
 	seen := map[string]bool{}
@@ -50,14 +61,30 @@ func typedLaunchers(list []proto.Launcher) []agentLauncher {
 // otherAgentCommand is the launcher's command line, with the first message as its argument (typedArg), for a pane whose
 // shell is shells.
 func otherAgentCommand(launcher, resume, prompt string, shells ...string) string {
+	return otherAgentCommandArgs(launcher, resume, prompt, nil, shells...)
+}
+
+// Root options precede resume; a prompt after injected options is separated so it cannot override them.
+func otherAgentCommandArgs(launcher, resume, prompt string, args []string, shells ...string) string {
 	cmd := launcher
+	for _, arg := range args {
+		cmd += " " + shellQuote(arg)
+	}
 	if resume != "" {
 		cmd += " resume " + shellQuote(resume)
 	}
 	if prompt != "" {
+		if len(args) > 0 {
+			cmd += " --"
+		}
 		cmd += " " + shellQuote(typedArg(prompt, shells...))
 	}
 	return cmd
+}
+
+type otherAgentStart struct {
+	Args         []string
+	Mode, Effort string
 }
 
 // typedArg is text to quote on a command line that may be typed into the shell (typedstart.go), whose line editor acts
@@ -75,7 +102,26 @@ func typedArg(text string, shells ...string) string {
 // startOtherAgent opens a new tab in ws (a new space when ""), runs the launcher there (resuming a session when
 // resume is set, with the first message as its argument) and waits until the host reports an agent of that kind in
 // the tab with a session id that was not running before (or the one resumed).
-func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, launcher, kind, prompt, resume, ws, tabName string) (*proto.Session, error) {
+func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, launcher, kind, prompt, resume, ws, tabName string, options ...otherAgentStart) (*proto.Session, error) {
+	var start otherAgentStart
+	if len(options) > 0 {
+		start = options[0]
+	} else if kind == traexAgent && resume != "" {
+		// Recovery can call this entry point directly instead of control.start.
+		if st, ok := n.state.get(resume); ok {
+			start.Mode, start.Effort = st.AppMode, st.AppEffort
+		}
+		var err error
+		start.Args, err = n.traexStartArgs(ctx, launcher, start.Mode, start.Effort)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if kind == traexAgent && resume != "" && start.Mode == "plan" {
+		if _, live := n.agent(resume); live {
+			return nil, readonlyStartUnsupported()
+		}
+	}
 	created, err := n.newTab(ctx, launch, cwd, ws, tabName, resume) // retire.go
 	if err != nil {
 		return nil, err
@@ -88,6 +134,15 @@ func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, l
 		existing[id] = true
 	}
 	n.mu.Unlock()
+	if kind == traexAgent && resume == "" {
+		// Hosts can guess an old conversation in this directory before the new process claims its own thread.
+		for id := range n.traexThreads() {
+			existing[id] = true
+		}
+		for _, r := range rollouts(n.traexHome()) {
+			existing[r.id] = true
+		}
+	}
 	if err := n.settleShell(ctx, pane); err != nil { // the fresh shell at rest first (shellsettle.go, #2570)
 		return nil, n.startTabFailed(ctx, launch, created, ws, resume, err)
 	}
@@ -100,7 +155,7 @@ func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, l
 	if !n.typesStartFile(launch, shells...) {
 		argShells = nil
 	}
-	cmd := withHerdrAgent(typedHerdrAgent(launch, kind, shells...), otherAgentCommand(launcher, resume, prompt, argShells...))
+	cmd := withHerdrAgent(typedHerdrAgent(launch, kind, shells...), otherAgentCommandArgs(n.launcherCommand(launcher), resume, prompt, start.Args, argShells...))
 	// Not in the agent sandbox (agentsandbox.go).
 	n.notePaneStart(launcher)
 	done, err := n.runAgentCommand(ctx, launch, created, ws, "", n.agentCommand(cmd, shellQuote, shells...), shells...) // typedstart.go
@@ -144,7 +199,7 @@ func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, l
 				continue
 			}
 		}
-		n.state.put(id, sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC()})
+		n.state.put(id, sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), AppMode: start.Mode, AppEffort: start.Effort})
 		n.bindPane(pane, id)
 		session := n.sessionFor(id, agent)
 		session.Agent = kind

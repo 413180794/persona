@@ -477,6 +477,15 @@ with its own tag and "Message the Agent" input label. Code: `server/internal/nod
 - **Infer state independently**: a braille spinner before the terminal title (`terminal_title`, not the stripped version) or "esc to interrupt" on screen = Working;
   numbered choices such as "› 1." = Needs you (a "Terminal is asking you" card). Otherwise report `done`, and the hub determines Unread / Seen from whether it has been read. Read the screen at most every 2 seconds.
 - **Same file layout as Codex**, rooted at `~/.trae/cli`: `sessions/YYYY/MM/DD/rollout-*.jsonl` and `session_index.jsonl` (thread names for titles).
+- **Paginated history (CLI 0.215)**: new conversations keep their title and directory in `state_<n>.sqlite`, and turns and
+  messages in `thread_history_<n>.sqlite`, without writing a rollout. Node reads these databases through `sqlite3`
+  (3.33 or newer, installed on the node), read-only, and materializes a private transcript in its own state directory.
+  Stored items from the running turn remain readable; a conversation remains in Agents after its process exits.
+  Writer locks still provide the exact session id, overriding a terminal host's stale rollout association. A new start
+  excludes historical ids too, so it cannot return an older conversation while waiting for the new writer.
+- **Start permissions**: a read-only task maps to `--sandbox read-only --ask-for-approval never`; a writable task's
+  `bypassPermissions` maps to `--sandbox danger-full-access --ask-for-approval never`. These are CLI arguments,
+  rather than Claude's permission flags. A running session cannot acquire a read-only sandbox by being resumed.
 - **Newer rollout format**: user messages and replies are in `history_mutation.display_completions[].item` (same item structure as `item_completed`),
   while tool calls remain in `event_msg/item_completed`. The same item may appear in both places within a turn (deduplicate by id within the turn). A `history_mutation` line may span hundreds of KB to 1 MB
   (full context after compaction); decode only `display_completions`. `task_started` / `task_complete` are recorded in `Meta.TurnOpen`.

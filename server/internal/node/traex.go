@@ -38,8 +38,23 @@ func (n *Node) traexHome() string {
 	return filepath.Join(n.home, ".trae", "cli")
 }
 
-func (n *Node) traexPath(id string) string  { return rolloutPath(n.traexHome(), id) }
-func (n *Node) traexTitle(id string) string { return threadTitle(n.traexHome(), id) }
+func (n *Node) traexPath(id string) string {
+	if _, ok := n.traexThread(id); ok {
+		_ = n.refreshCodexAppHistory(id)
+		p := n.codexAppHistoryFile(codexSource{home: n.traexHome(), thread: id})
+		if fileExists(p) {
+			return p
+		}
+	}
+	return rolloutPath(n.traexHome(), id)
+}
+
+func (n *Node) traexTitle(id string) string {
+	if t, ok := n.traexThread(id); ok && t.Title != "" {
+		return t.Title
+	}
+	return threadTitle(n.traexHome(), id)
+}
 
 var traexCache = struct {
 	sync.Mutex
@@ -52,12 +67,19 @@ type traexState struct {
 	at     time.Time
 }
 
-// traexOwners maps the live a compatible CLI processes to the conversation each runs. A process holds an owner file for every
-// thread it writes, its subagents included: the guardian that reviews tool calls before they run gets a thread (and
-// an owner file) newer than the conversation's, and taking the newest file showed the review instead of the
-// conversation (2026-11-01). So: the newest thread that is not a subagent, else the conversation of the newest
-// subagent, else the newest thread (a compatible CLI versions without thread_source / source in session_meta).
+// traexOwners maps each live compatible CLI process to its newest main conversation.
 func (n *Node) traexOwners() map[int]string {
+	out := map[int]string{}
+	for pid, threads := range n.traexOwnerThreads(n.traexThreads()) {
+		out[pid] = threads[0]
+	}
+	return out
+}
+
+// traexOwnerThreads keeps every main writer owned by a process, newest first: a host's existing session may still
+// have its own writer even when another thread is newer. Known subagents never fall back to their own id. Legacy
+// subagents may supply a root confirmed by rollout metadata; older CLIs without metadata keep the owner-file fallback.
+func (n *Node) traexOwnerThreads(threads map[string]codexAppThread) map[int][]string {
 	dir := filepath.Join(n.traexHome(), "thread-writer-locks")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.owner.json"))
 	type owner struct {
@@ -80,18 +102,45 @@ func (n *Node) traexOwners() map[int]string {
 		if json.Unmarshal(b, &o) != nil || o.PID <= 0 || !alive(o.PID) {
 			continue
 		}
-		byPID[o.PID] = append(byPID[o.PID], owner{strings.TrimSuffix(filepath.Base(f), ".owner.json"), st.ModTime()})
+		thread := strings.TrimSuffix(filepath.Base(f), ".owner.json")
+		if validID(thread) {
+			byPID[o.PID] = append(byPID[o.PID], owner{thread, st.ModTime()})
+		}
 	}
 	home := n.traexHome()
-	out := make(map[int]string, len(byPID))
+	out := make(map[int][]string, len(byPID))
 	for pid, owners := range byPID {
-		sort.Slice(owners, func(i, j int) bool { return owners[i].mtime.After(owners[j].mtime) })
-		out[pid] = mainThread(home, owners[0].thread)
-		for _, o := range owners {
-			if p := rolloutPath(home, o.thread); p != "" && !metaOf(home, p).sub {
-				out[pid] = o.thread
-				break
+		sort.Slice(owners, func(i, j int) bool {
+			if owners[i].mtime.Equal(owners[j].mtime) {
+				return owners[i].thread < owners[j].thread
 			}
+			return owners[i].mtime.After(owners[j].mtime)
+		})
+		var main, fallback []string
+		for _, o := range owners {
+			if t, known := threads[o.thread]; known {
+				if traexConversation(t) {
+					main = append(main, o.thread)
+				}
+				continue
+			}
+			if p := rolloutPath(home, o.thread); p != "" {
+				if !metaOf(home, p).sub {
+					main = append(main, o.thread)
+				} else if root := mainThread(home, o.thread); root != o.thread && validID(root) {
+					t, known := threads[root]
+					if (!known || traexConversation(t)) && !metaOf(home, rolloutPath(home, root)).sub {
+						fallback = append(fallback, root)
+					}
+				}
+			} else {
+				fallback = append(fallback, o.thread)
+			}
+		}
+		if len(main) > 0 {
+			out[pid] = main
+		} else if len(fallback) > 0 {
+			out[pid] = fallback
 		}
 	}
 	return out
@@ -155,35 +204,103 @@ func (n *Node) paneOfPID(pid int) string {
 
 // traexAgents turns the panes running a compatible CLI into agents, with their session id and a state of our own.
 func (n *Node) traexAgents(ctx context.Context, panes []host.Agent, agents []host.Agent) []host.Agent {
-	owners := n.traexOwners()
-	if len(owners) == 0 {
-		return nil
-	}
+	threads := n.traexThreads()
+	owners := n.traexOwnerThreads(threads)
 	isAgent := map[string]bool{}
-	for _, a := range agents {
+	compatible := map[string]int{}
+	for i, a := range agents {
 		// PaneReportResume claims a compatible-CLI pane in herdr so resume_argv persists, which makes herdr list a
 		// session-less traex entry in snap.Agents; keep filling its session id and screen status from the owner file.
-		if a.Agent != traexAgent || a.SessionID() != "" {
+		if a.Agent != traexAgent {
 			isAgent[a.PaneID] = true
+		} else {
+			compatible[a.PaneID] = i
+			if t, known := threads[a.SessionID()]; known && !traexConversation(t) {
+				agents[i].AgentSession = nil // a stale host claim cannot promote a known guardian to a terminal chat
+			}
 		}
 	}
-	byPane := map[string]host.Agent{}
-	for _, p := range panes {
-		byPane[p.PaneID] = p
+	byPane := map[string]map[int][]string{}
+	for pid, ids := range owners {
+		pane := n.paneOfPID(pid)
+		if byPane[pane] == nil {
+			byPane[pane] = map[int][]string{}
+		}
+		byPane[pane][pid] = ids
 	}
 	var out []host.Agent
-	for pid, thread := range owners {
-		pane := n.paneOfPID(pid)
-		p, ok := byPane[pane]
-		if !ok || isAgent[pane] {
+	for _, p := range panes {
+		pane := p.PaneID
+		if isAgent[pane] || len(byPane[pane]) == 0 {
+			continue
+		}
+		preferred := ""
+		if i, ok := compatible[pane]; ok {
+			preferred = agents[i].SessionID()
+		}
+		thread := traexPaneThread(byPane[pane], preferred, parentPID)
+		if thread == "" {
 			continue
 		}
 		p.Agent = traexAgent
 		p.AgentSession = &host.AgentSession{Kind: "id", Value: thread}
 		p.AgentStatus = n.traexStatus(ctx, p)
+		if i, ok := compatible[pane]; ok {
+			agents[i] = p
+			continue
+		}
 		out = append(out, p)
 	}
 	return out
+}
+
+// traexPaneThread picks one terminal conversation per pane. Nested exec writers inherit the pane environment,
+// but cannot replace an ancestor's conversation. Among independent roots a still-owned host id wins, else the
+// lowest pid makes the choice stable. Without ancestry and a host claim, ambiguous writers are left unclaimed.
+func traexPaneThread(owners map[int][]string, preferred string, parent func(int) (int, error)) string {
+	pids := make([]int, 0, len(owners))
+	for pid := range owners {
+		pids = append(pids, pid)
+	}
+	sort.Ints(pids)
+	roots := pids
+	complete := true
+	if len(pids) > 1 { // most panes have one writer process: no process-tree reads needed
+		roots = nil
+		for _, pid := range pids {
+			ancestors := lineage(pid, func(pid int) (int, error) {
+				next, err := parent(pid)
+				if err != nil {
+					complete = false
+				}
+				return next, err
+			})
+			if len(ancestors) == ancestorsMost {
+				complete = false
+			}
+			nested := false
+			for _, ancestor := range ancestors[1:] {
+				if len(owners[ancestor]) > 0 {
+					nested = true
+					break
+				}
+			}
+			if !nested {
+				roots = append(roots, pid)
+			}
+		}
+	}
+	for _, pid := range roots {
+		for _, id := range owners[pid] {
+			if id == preferred {
+				return id
+			}
+		}
+	}
+	if len(roots) == 0 || !complete && len(roots) > 1 {
+		return ""
+	}
+	return owners[roots[0]][0]
 }
 
 var traexChoiceRe = lazyre.New(`(?m)^\s*[›❯>]\s*1\.\s+\S`)

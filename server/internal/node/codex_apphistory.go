@@ -63,7 +63,8 @@ type codexHistoryFailure struct {
 // codexHistoryMark is what <file>.mark says: the last turn written (its rollout_ordinal, turn_id and status in the
 // database then; -1 and "" for none), what it is up to date with — the chat's updated_at_ms and the history database's
 // files (the App may write a turn's rows after updating the chat, and finish a turn without updating it) — and the size
-// the file had then (-1: no file, the chat has no finished turn).
+// the file had then (-1: no file, the chat has no finished turn). Terminal snapshots use the thread's projection
+// revision when available, keeping unchanged threads stable across unrelated database writes.
 type codexHistoryMark struct {
 	Turn    int64  `json:"turn"`
 	TurnID  string `json:"turn_id"`
@@ -156,6 +157,10 @@ func (n *Node) codexAppHistoryPath(src codexSource, pass *codexListPass) string 
 
 // codexAppHistoryChat: session id is an App chat with no rollout, whose transcript comes from the App's database.
 func (n *Node) codexAppHistoryChat(id string) (codexSource, codexAppThread, bool) {
+	// Compatible CLIs also moved their authoritative history to the paginated databases.
+	if t, ok := n.traexThread(id); ok {
+		return codexSource{home: n.traexHome(), thread: id}, t, true
+	}
 	src, ok := n.codexSource(id)
 	if !ok || n.codexBlocked(id) || n.ownedAssistantSource(id) { // as findTranscriptPath: no transcript of these here
 		return codexSource{}, codexAppThread{}, false
@@ -203,6 +208,9 @@ func (n *Node) refreshCodexAppHistory(id string) error {
 	history := ""
 	if db != "" {
 		history = fileStamp(db) + fileStamp(db+"-wal")
+		if t.includeRunning {
+			history = traexHistoryStamp(db, t.ID, history)
+		}
 	}
 	if mark.Updated == t.UpdatedAtMs && mark.History == history && mark.Size == size && (!t.Paginated || mark.Lineage == t.RolloutPath) {
 		return nil // up to date
@@ -222,7 +230,7 @@ func (n *Node) refreshCodexAppHistory(id string) error {
 	if t.Paginated {
 		lineage = t.RolloutPath
 	}
-	grow := mark.Size >= 0 && mark.Size == size && mark.TurnID != "" && mark.Lineage == lineage
+	grow := !t.includeRunning && mark.Size >= 0 && mark.Size == size && mark.TurnID != "" && mark.Lineage == lineage
 	res, err := writeCodexAppHistory(ctx, db, t, p, mark, grow)
 	if errors.Is(err, errCodexHistoryChanged) { // a written turn is not what it was (the App rolled back): anew
 		res, err = writeCodexAppHistory(ctx, db, t, p, codexHistoryMark{Turn: -1}, false)
@@ -503,6 +511,13 @@ func writeCodexAppHistory(ctx context.Context, db string, t codexAppThread, path
 	}
 	if cur != nil && !cur.done && cur.final {
 		closeTurn(cur, false) // the last turn while it still runs is left for later
+	} else if cur != nil && !cur.done && t.includeRunning {
+		// A terminal CLI has no separate live stream. Keep its current items without inventing a completion;
+		// the next history change rebuilds this snapshot, so finishing or replacing items cannot duplicate them.
+		startTurn(cur, cur.heldStart)
+		for _, it := range cur.held {
+			line(it[0].(time.Time), "event_msg", map[string]any{"type": "item_completed", "item": it[1]})
+		}
 	}
 	if err := w.Flush(); err != nil {
 		return res, err

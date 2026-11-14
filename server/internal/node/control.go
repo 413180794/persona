@@ -36,10 +36,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	execution := executionOption(options)
 	// The effort is checked against the agent this start actually dispatches: an explicit agentType wins over the
 	// launcher's name, so a Claude start refuses ultra even on a launcher named codex.
-	kind := agentType
-	if kind == "" {
-		kind = launcherAgentType(launcher)
-	}
+	kind := n.startAgentType(launcher, agentType)
 	if err := execution.check(kind); err != nil {
 		return nil, err
 	}
@@ -67,6 +64,34 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	}
 	if kind != "claude" && kind != "codex" && kind != traexAgent && kind != ompAgent {
 		return nil, fmt.Errorf("unsupported agent type %q", kind)
+	}
+	var otherStart otherAgentStart
+	if kind == traexAgent {
+		if resume != "" {
+			if _, live := n.agent(resume); live && mode == "plan" {
+				return nil, readonlyStartUnsupported() // A running process cannot acquire a sandbox from CLI flags.
+			} else if !live {
+				if st, ok := n.state.get(resume); ok {
+					if mode == "" {
+						mode = st.AppMode
+					}
+					if effort == "" {
+						effort = st.AppEffort
+					}
+				}
+			}
+		}
+		if effort == "" {
+			effort = execution.Effort
+		}
+		otherStart.Args, err = n.traexStartArgs(ctx, launcher, mode, effort)
+		if err != nil {
+			return nil, err
+		}
+		if execution.Model != "" {
+			otherStart.Args = append(otherStart.Args, "--model", execution.Model)
+		}
+		otherStart.Mode, otherStart.Effort = mode, effort
 	}
 	if execution.SecretTicket != "" {
 		if err := n.secretStartProblem(kind, launcher, resume, execution.SecretTicket); err != nil {
@@ -99,7 +124,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if codex && execution.SecretTicket != "" { // Codex would start without the values (secretenv.go)
 		return nil, refusal(secretEnvAgentCode, secretEnvAgentText, nil)
 	}
-	if mode == "plan" {
+	if mode == "plan" && kind != traexAgent {
 		if codex && kind != traexAgent {
 			if argv, err = n.codexReadonlyArgs(launcher, argv, mode); err != nil {
 				return nil, err
@@ -112,7 +137,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if err := n.checkUltracodeStart(ctx, execution.Ultracode, kind); err != nil {
 		return nil, err
 	}
-	if execution.Model != "" {
+	if execution.Model != "" && kind != traexAgent {
 		agent, err := n.launcherModelCheck(ctx, launcher, execution.Model)
 		if err != nil {
 			return nil, err
@@ -123,7 +148,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	}
 	if resume != "" {
 		if a, ok := n.agent(resume); ok {
-			if mode == "plan" && a.Agent == "codex" {
+			if mode == "plan" && (a.Agent == "codex" || a.Agent == traexAgent || kind == traexAgent) {
 				return nil, readonlyStartUnsupported() // A live thread without a local rollout cannot acquire CLI flags either.
 			}
 			n.starts.recovered(resume)
@@ -170,10 +195,10 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		return n.startCodex(ctx, launch, cwd, launcher, codexExecutionArgs(argv, execution), prompt, ws, tabName, mode)
 	}
 	if kind != "claude" { // start_agent.go
-		if mode != "" || effort != "" {
+		if kind != traexAgent && (mode != "" || effort != "") {
 			return nil, fmt.Errorf("permission mode and effort are only supported for Claude starts")
 		}
-		return n.startOtherAgent(ctx, launch, cwd, launcher, kind, prompt, resume, ws, tabName)
+		return n.startOtherAgent(ctx, launch, cwd, launcher, kind, prompt, resume, ws, tabName, otherStart)
 	}
 	if err := n.codexFunctionLauncher(ctx, launcher, true); err != nil {
 		return nil, err

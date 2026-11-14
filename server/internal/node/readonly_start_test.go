@@ -85,7 +85,7 @@ func TestReadOnlyTerminalStartRefusesUnsupportedLaunchers(t *testing.T) {
 	n, hh, oh := startNode(t)
 	n.setManaged([]proto.ManagedLauncher{{Name: "managed-codex", Agent: "codex", Args: []string{"--full-auto"}}})
 	for _, tc := range []struct{ launcher, agent string }{
-		{"code-alias", ""}, {"managed-codex", ""}, {"wrapper", "codex"}, {traexAgent, ""},
+		{"code-alias", ""}, {"managed-codex", ""}, {"wrapper", "codex"},
 	} {
 		t.Run(tc.launcher, func(t *testing.T) {
 			_, err := n.start(context.Background(), t.TempDir(), tc.launcher, "Inspect the project", "", "", "plan", "", "", "", tc.agent)
