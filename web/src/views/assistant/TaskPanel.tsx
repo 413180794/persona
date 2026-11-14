@@ -15,7 +15,7 @@ import { stateOf } from "../../lib/format";
 import { usageLimitLabel } from "../../lib/usage-limit";
 import { href, type Route } from "../../lib/router";
 import { t } from "../../i18n";
-import { useFeed } from "../../lib/feed";
+import { pendingDispatch, useFeed } from "../../lib/feed";
 import { TaskWorkspaceLine } from "./TaskWorkspace";
 
 /** ⋯'s "Open in new window": the page the panel shows, as its own tab (⌘-click on the link does the same). */
@@ -30,6 +30,7 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
   const [picked, setPicked] = useState<string | null>(null);
   const retrying = useRetrying(todoId);
   const planned = useFeed((s) => Object.values(s.plans).flatMap((p) => p.tasks).find((t) => t.todo_id === todoId));
+  const starting = useFeed((s) => !!todo && pendingDispatch(todo, s.plans, todo.origin ? s.feeds[todo.origin] : undefined));
   if (!todo || !st) {
     return (
       <>
@@ -99,7 +100,7 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
             </div>
           </div>
         ) : (
-          <div className="p-6 text-[13px] text-ink-2">{t("assistant-taskpanel.starting")}</div>
+          <div className="p-6 text-[13px] text-ink-2">{starting ? t("assistant-taskpanel.starting") : info.label}</div>
         )}
       </div>
     </>

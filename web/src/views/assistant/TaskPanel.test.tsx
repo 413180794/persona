@@ -89,6 +89,21 @@ async function expectSessionWindow(s = first) {
 }
 
 describe("Agent panel new-window destination", () => {
+  it.each(["personal", "needs_user", "pending_review", "ask_decide", "ask_done", "ask_verify"] as const)("opens an ordinary %s todo with neutral header and body", async (kind) => {
+    const personal = task([]);
+    if (kind === "needs_user" || kind === "pending_review") personal.supervision = { supervisor: "example-conversation", state: kind };
+    else if (kind !== "personal") personal.ask = { verdict: "Review the example option", asked_at: at, ...(kind === "ask_verify" ? {} : { outcome: kind === "ask_decide" ? "decide" : "done" }) };
+    await open({ kind: "task", todo: personal.id }, personal, []);
+    expect(host.querySelector("aside header")!.textContent).toContain(t("lib-state-labels.not_started"));
+    expect(host.textContent).not.toContain(t("assistant-taskpanel.starting"));
+    expect(host.textContent).not.toContain(t("assistant-tasks.status_starting"));
+  });
+
+  it("keeps the pending dispatch explanation while a planned Agent has not arrived", async () => {
+    await open({ kind: "task", todo: "example-task" }, { ...task([]), plan_id: "example-plan" }, []);
+    expect(host.textContent).toContain(t("assistant-taskpanel.starting"));
+  });
+
   it("opens the displayed Agent session from a task card or task-backed In progress tray entry", async () => {
     await open({ kind: "task", todo: "example-task" });
     expect(host.querySelector("aside header h1")?.textContent).toBe("Example task");

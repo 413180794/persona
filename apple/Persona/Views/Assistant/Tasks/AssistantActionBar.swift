@@ -85,9 +85,20 @@ nonisolated enum AssistantEntries {
     /// `entryStatus` over `todoStatus`.
     static func status(_ todo: TodoItem, lookup: TodosLogic.SessionLookup?, plans: [String: TaskPlan]) -> Status {
         let st = todoStatus(todo, lookup: lookup)
+        if st == .notStarted && !todo.agents.isEmpty { return .followUp }
         guard st == .notStarted, todo.agents.isEmpty, let plan = todo.planID.flatMap({ plans[$0] }),
               let error = plan.tasks.first(where: { $0.todoID == todo.id })?.error, !error.isEmpty else { return st }
         return .failed
+    }
+
+    /// Origin records where a to-do came from; only a plan or dispatch record means an Agent is starting.
+    static func pendingDispatch(_ todo: TodoItem, plans: [String: TaskPlan], feed: [FeedItem]) -> Bool {
+        guard todo.doneAt == nil, todo.agents.isEmpty, (todo.startError ?? "").isEmpty else { return false }
+        if let id = todo.planID, !id.isEmpty {
+            let plan = plans[id]
+            return plan?.state != .dismissed && (plan?.tasks.first(where: { $0.todoID == todo.id })?.error ?? "").isEmpty
+        }
+        return feed.contains { $0.kind == .task && $0.ref == todo.id }
     }
 
     static func todoStatus(_ todo: TodoItem, lookup: TodosLogic.SessionLookup?) -> Status {
@@ -200,6 +211,7 @@ nonisolated enum AssistantEntries {
                 if !(status != .needsYou && awaitsDecision(todo) && decisionHidden(todo)) { deciding.append((row, rank(todo, status), when)) }
                 listed()
             }
+            else if status == .notStarted && !pendingDispatch(todo, plans: plans, feed: feed) { continue }
             else if bucket == .open { open.append((row, rank(todo, status), when)); listed() }
             else if bucket == .shelved { shelved.append((row, rank(todo, status), when)); listed() }
         }
@@ -684,7 +696,8 @@ struct AssistantActionBar: View {
                                 ThemedIcon(Theme.Icon.infoFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
                                     .accessibilityIdentifier("action-tray.interrupted-mark")
                             } else if status == .notStarted {
-                                StartingMark().accessibilityIdentifier("action-tray.starting-mark")
+                                if open == .needsYou { TaskMark(state: .needsYou) }
+                                else { StartingMark().accessibilityIdentifier("action-tray.starting-mark") }
                             } else {
                                 TaskMark(state: state)
                             }
@@ -763,7 +776,7 @@ struct AssistantActionBar: View {
         var parts: [String]
         if status == .interrupted { parts = [String(localized: "Interrupted [Chat Layout]")] }
         else if status == .usageLimit { parts = [String(localized: "Usage Limit")] }
-        else if resting, review == .pendingReview || review == .needsUser { parts = [todo.reviewBadge?.label ?? status.taskState.label] }
+        else if resting, review == .pendingReview || review == .needsUser { parts = [todo.reviewBadge?.label ?? StateName.needsYou.text] }
         else { parts = [status.taskState.label] }
         if status == .waiting, let waits = store.waitLine(todo) { parts.append(waits) }
         if agents > 1 { parts.append(String(localized: "\(agents) agents")) }
@@ -796,7 +809,7 @@ struct AssistantActionBar: View {
         case .interrupted:
             return one(lead?.turnError.flatMap { TurnErrorReason.of($0) ?? $0 })
         case .notStarted:
-            return String(localized: "Starting the agent")
+            return open == .needsYou ? nil : String(localized: "Starting the agent")
         case .failed:
             return one(store.startFailure(todo))
         case .needsYou:

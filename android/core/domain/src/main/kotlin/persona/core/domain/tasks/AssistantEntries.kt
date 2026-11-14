@@ -70,6 +70,16 @@ fun Todo.awaitsDecision(): Boolean {
     return !isDone && (supervision?.state == "pending_review" || supervision?.state == "needs_user")
 }
 
+/** Origin is provenance; an Agent starts only after a plan or an explicit dispatch. */
+private fun Todo.pendingDispatch(plans: Collection<TaskPlan>, feed: List<FeedItem>): Boolean {
+    if (isDone || agents.isNotEmpty() || !startError.isNullOrEmpty()) return false
+    if (!planId.isNullOrEmpty()) {
+        val plan = plans.firstOrNull { it.id == planId }
+        return plan?.state != "dismissed" && plan?.tasks?.firstOrNull { it.todoId == id }?.error.isNullOrEmpty()
+    }
+    return feed.any { it.kind == "task" && it.ref == id }
+}
+
 /** The web's `todoRank` (what the user must act on first), on the triage status. */
 private fun Todo.entryRank(status: TriageStatus): Int {
     if ((supervision?.state == "pending_review" || openAsk != null) &&
@@ -106,7 +116,9 @@ fun assistantEntries(
     val superseded = supersededFailedStarts(todos)
     // the main conversation watches every task (docs/assistant/unified-entry.md); another one the tasks it dispatched
     for (todo in todos.filter { isMain || it.origin == conversation }) {
-        val status = todo.triageStatus(lookup)
+        val status = todo.triageStatus(lookup).let {
+            if (it == TriageStatus.NotStarted && todo.agents.isNotEmpty()) TriageStatus.FollowUp else it
+        }
         val active = if (todo.isDone) emptyList() else todo.activeAgents
         val asks = active.flatMap { asksOf[GroupKeys.rawKey(it.key)].orEmpty() }
         val bucket = todo.bucket(lookup, now, restored[todo.id] ?: 0L, superseded = todo.id in superseded)
@@ -116,6 +128,7 @@ fun assistantEntries(
         when {
             asks.isNotEmpty() -> asking += NeedsYouEntry.Task(todo, status, asks)
             waits || todo.awaitsDecision() -> deciding += NeedsYouEntry.Task(todo, status, asks) to todo.entryRank(status)
+            status == TriageStatus.NotStarted && !todo.pendingDispatch(plans, feed) -> continue
             bucket == TodoBucket.Open -> {
                 val activity = todo.backgroundWork(lookup)
                 val waiting = activity == null && todo.activeAgents.mapNotNull { lookup(it.key) }.any { it.waitsWithoutBackground() || it.waitsInBackground }

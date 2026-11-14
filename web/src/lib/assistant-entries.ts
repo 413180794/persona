@@ -1,5 +1,5 @@
 import { backgroundWork, taskBackgroundWork, type BackgroundWork } from "./background-work";
-import { cardDismissed, cardFiled, cardSent, startFailure, type FeedItem, type TaskPlan } from "./feed";
+import { cardDismissed, cardFiled, cardSent, pendingDispatch, startFailure, type FeedItem, type TaskPlan } from "./feed";
 import { cardBucket, taskCardSlots, type TaskCardMetadata } from "./task-cards";
 import { reviewState } from "./supervision";
 import { supersededFailedStarts } from "./todo-triage";
@@ -69,9 +69,10 @@ const WAITS_ON_YOU: ReadonlySet<TodoStatus> = new Set(["needs_you", "interrupted
 
 const sessionKey = (mid: string, sid: string) => `${mid}/${sid}`;
 
-/** A task's status, failed too when only its plan says the start failed (a hub from before #1077). */
+/** Task status, including legacy plan failures and stopped work whose Agents were all released. */
 export function entryStatus(todo: Todo, lookup: SessionLookup, plans: Record<string, TaskPlan>): TodoStatus {
   const st = todoStatus(todo, lookup);
+  if (st === "not_started" && (todo.agents ?? []).length > 0) return "follow_up";
   return st === "not_started" && startFailure(todo, plans) ? "failed" : st;
 }
 
@@ -137,6 +138,8 @@ export function assistantEntries(input: AssistantEntriesInput): AssistantEntries
         deciding.push({ item: { kind: "task", key, todo, status, asks, countsOpen }, rank: todoRank(todo, status), at: card.at });
       }
     }
+    // Personal and direction to-dos stay on the To-dos page until dispatched; their decisions above still need a home.
+    else if (status === "not_started" && !pendingDispatch(todo, plans, feed)) continue;
     // a parked task waits on purpose (#3804): with the tasks in progress however long it has been still, never folded away
     else if (bucket === "open" || reviewState(todo) === "parked") open.push({ item: { kind: "task", key, card, todo, status, activity: taskBackgroundWork(todo, lookup), countsOpen }, rank: todoRank(todo, status), at: card.at });
     else if (bucket === "shelved") shelved.push({ item: { kind: "task", key, card, todo, status, countsOpen: false }, at: card.at });

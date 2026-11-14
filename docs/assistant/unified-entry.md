@@ -119,13 +119,16 @@ each count is its rows:
   model error (`interrupted`) or whose start failed while it is still the user's to retry; in the main chat, an Agent
   opened by hand (no task) that asks something; a plan waiting for Start (one row per plan); a message card waiting for
   Send; the conversation's own cards.
-- **In progress**: every other task the To-dos page counts open (#3331), and in the main chat each working Agent opened by
+- **In progress**: every other dispatched task the To-dos page counts open (#3331), and in the main chat each working Agent opened by
   hand. A task its supervisor parked (#3804, "Supervision" below) is here on the web, saying "Parked until <time> ·
   <reason>", however long it has been still (never folded under shelved); it is never in Needs you for being parked.
   Android and iOS do not know the state yet and file it by its other facts; `spec/fixtures/entries` has no parked case. A task's agents are never rows of their own: the task's row carries their state and progress meter, and opens the
   task's details, which switch between its agents' chats. Shelved tasks fold under one uncounted line. A row can stay
   visible while the To-dos page no longer counts it open (a parked task past 48 h, a seen review): the chip badge reads
-  the row's `data-counts-open` flag, so the counted to-dos across both entries equal the To-dos header's "Not done".
+  the row's `data-counts-open` flag, using the same open rule as the To-dos page for each displayed task. Ordinary
+  to-dos with no Agent or pending dispatch stay on the To-dos page (#7552), so its header can count more than the
+  execution trays. Their decisions and reviews still appear in Needs you with decision/review wording and marks,
+  never Starting. An origin or direction supervisor alone is not evidence of a dispatch.
 - Finished tasks (done, cancelled, accepted) are in neither; the board (**All**) has them. An answered card moves its task
   back to In progress. An empty Needs you is grey and opens "All caught up".
 
