@@ -44,7 +44,10 @@ takes only `plan` from it (`assistant/tasks_permission.go`). None of this reache
 Auto Accept (their launcher says `auto_accept`; Grok and Paseo's other ACP providers, OpenCode): they start with it on,
 as the owner decided (#8141, `docs/integrations/paseo.md` "Agents Persona starts"). A read-only task's first message adds
 `本任务只读：不改项目文件、不提交、不对外写入` after its own prompt, without changing the saved prompt or duplicating the
-constraint on retries. Codex read-only tasks keep `permission: plan` and the hard read-only sandbox. Planning, card edits,
+constraint on retries. Codex read-only tasks keep `permission: plan` and the hard read-only sandbox. traex and omp take no
+permission mode or effort, so their tasks start with neither and a read-only one has only the first-message constraint (#7559);
+one the call names is refused. pi, cursor and agy start the same way, but one the call names is dropped rather than
+refused, as the node ignores it for them (#8151). Planning, card edits,
 legacy plans, retries, and the final dispatch all resolve the launcher before applying this rule; a permission change is
 saved with the resolved launcher and model.
 
