@@ -1527,6 +1527,42 @@ stopped or uninstalled extension leaves nothing in force. The full wire shape an
   by the rule's own note when it has one, and a matching sentence in the `task_plan`, `agent_start`,
   `conversation_new` and `conversation_send` tool descriptions.
 
+## Start defaults
+
+What a task Agent starts with beyond what its caller named can come from an optional start-defaults policy
+(`internal/assistant/start_defaults.go`): rules matched by the kind of work, each saying which Agent presets to try,
+which thinking effort, whether ultracode is on, whether a goal is set from the task's acceptance criteria, and whether
+the prompt asks the Agent to plan first. With no policy stored, one past its expiry, or no rule that fits a task, the
+task starts exactly as it would without the feature. A policy's values belong to the one start they were applied to:
+every try of a task starts again from what the task named itself, whichever rule fits it now, and for whatever a policy
+filled in (a preset's launcher, model, effort, tier and the permission mode its agent sets; the policy's effort or
+ultracode) the task's plan keeps the task's own value (its why names a preset the policy picked), so a remedy, a queued
+start, a retry from the card or a manager restart, which read the task back from its plan, never take an expired
+policy's values for the task's own, and the card does not show them as asked for. A rule that fits but fills nothing
+in leaves the start and what the plan keeps exactly as without the feature. The Agent's session shows what it actually runs with. The owner and an
+extension granted the
+`assistant.start_defaults` hub scope read and write it with `GET`/`PUT /api/v1/assistant/start-defaults` (the owner
+also as `start_defaults` in `PUT /api/v1/assistant`); an extension-written policy must expire within one hour, so a
+stopped or uninstalled extension leaves nothing in force. A rule must set something; a rule whose `then` names nothing
+is refused.
+`GET /api/v1/assistant/worker-presets?machine=<id>` (same scope) lists the presets a computer can start. The wire shape
+is in `docs/protocol/protocol.md` ("Start defaults").
+
+- **Matching**, first rule that fits wins: `supervisor` names the class of the conversation that follows the task up,
+  with the dispatch policy's classes (`main`, `leader`, `background_supervisor`, `scheduled`, `other`; a task leader's
+  worker takes the class of the conversation that follows its leader's task up, and a task no conversation follows up
+  matches only a rule naming no class), `role` is `worker` or `leader`, `readonly` matches read-only or writable tasks.
+- **Applied at the task's start** (`startTaskAgent`, after the launcher fit), so retries, remedies, queued starts and
+  `task_spawn` children get the same: the first preset whose launcher the computer has and that is not at its usage
+  limit (weights share starts among the usable ones; a preset passed over is named in the task's why); then the effort,
+  ultracode and goal on Claude Code only. A caller's own effort, ultracode choice, tier, model or launcher is never
+  replaced, and an effort the caller's tier gives wins over the policy's.
+- **The goal** is the task's `done_when` as one checkable sentence (`prompts/assistant/task_goal.md`), set by the node
+  after the first message is in the transcript ([agent-goal.md](../integrations/agent-goal.md), "A goal set at the start"). A computer
+  whose node cannot set it starts the Agent without it once, and the task's why says so, as for ultracode.
+- **Plan first** adds `prompts/agents/plan_first_task.md` to the prompt: for a launch whose model does not act on an
+  effort setting, the prompt is the only lever.
+
 ## Chat search (#6282)
 
 The apps find an assistant chat by what was said in it through `GET /api/v1/assistant/search` (`docs/protocol/protocol.md` ("Assistant chat search (#6282)"), the design in `docs/design/proposals/assistant-search.md`). The manager answers it from an index in its own database (`internal/assistant/search_index.go`, `search_routes.go`, and the text rules in `chatsearch/text.go`; tables `assistant_search_items` and `assistant_search_cursors`, migration `0511_assistant_search.sql`).
