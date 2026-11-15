@@ -242,6 +242,7 @@ Outside the scale: composer 32 (`Shell.composerRadius`, `apple/Shared/Design/The
 - The conversation kept in view over the pending cards: `voiceThreadRoom` 44 in a voice call, `cardThreadRoom` 72 over a lone question card (section 4.8, #6277).
 - The Mac's pointer over its picture in the app's VNC: at least `pointer` 22 tall, about macOS's own size (`VNCPointerArt`, #3075).
 - Widths: `readable` 560 (web chat column 880, pages 760), sidebar 340/400/480, drawer `min(0.82 x width, 380)` (Android the same).
+- Android rich-message table columns: `RichTextTokens.tableColumnMinimum` 160 dp and `tableColumnMaximum` 220 dp include the cell padding and scale with the message's font size; they do not alter a table that fits the upstream renderer unchanged.
 - `cardColumn` 330 is the minimum logical column width of an adaptive machine card: iOS pt and Android dp, with the shared token's `px` representing each platform's design unit rather than a physical pixel. `spec/tokens/dimension.json` is the cross-platform record; Android reads the generated `Tokens.Size.cardColumn`.
 - Sidebar rows: `Theme.Sidebar` (`apple/Shared/Design/SidebarMetrics.swift`), 44 on iOS; 24/28/32 on Mac; web 32 (touch 44 via a hit-area expander).
 - Retired native Mac sizes: the former target had a Mac-only token file; that target and its tokens were removed.
@@ -553,6 +554,7 @@ For every component: use the design-system one, not a lookalike. Counts are appr
   `shadow-hairline`) over what comes next; a transparent bridge over the 4 px gap keeps the hover, and hidden it takes
   no clicks. Where it goes is measured when the pointer or the focus comes into the bubble's row, and only its classes
   change, so the button Tab reached keeps the focus (`docs/web/web.md`, "The hover bar beside your bubbles").
+- Android Markdown tables in chat and file previews (`ReadableMarkdownTable`): a table that fits the upstream renderer stays unchanged. In a wide one, short columns keep their natural width, long columns wrap between the font-scaled `RichTextTokens` minimum and maximum, and only the table scrolls sideways. Share pictures keep the unchanged static table.
 - Web Markdown tables in replies: a column is as narrow as its words. Headers never wrap and have no minimum width; a
   cell whose words fit one line in about 5.5em stays on one line with no minimum; only longer cells keep 7em, so a
   squeezed table never stacks a sentence a word per line. The copy button (hover or keyboard focus; always on a screen
