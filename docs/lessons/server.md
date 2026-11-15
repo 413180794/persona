@@ -573,6 +573,44 @@ fleet, preferences, foreground state and tokens, and recheck after a slow claim.
 Empty/done, an open phone or a fresh update token suppresses a queued start. Restart
 reconstructs its deadline from the durable budget and the current manager snapshot.
 
+## A push-start the phone has not answered is an activity the hub cannot reach (#7641)
+
+A push-to-start reaches the phone through APNs even while the phone cannot reach the hub. The activity starts, its
+update token never comes back, and the hub can neither update nor end it: it goes stale and stays. "No token" is not
+"no activity": starting again each round, and after each restart, only added cards (15 starts in 22 hours, not one
+update or end). Hold the next start until the phone answers (a reported update token, its app connecting) or for as
+long as an activity can run, and keep the hold with the start budget so a restart or the other slot sees it. Put the
+hold on before sending, so an answer that follows at once is what lifts it; a claimed start that was not sent keeps
+only the cooldown. Hold only what may be on screen: a start APNs or the relay refused (any status but 200) put up
+nothing, so lift the hold when that answer comes, or the phone that cannot reach the hub goes 8 hours without an
+activity; only a start with no answer at all is in doubt and keeps it. Keep the send's outcome typed (refused, not
+sent, no answer) rather than a log line, since the transport's retries already blur "failed" into one error. A test
+that never reports a token models this case, not the usual one: have the phone answer where the test is about the
+cooldown. The hub's update and end paths were fine all along; check them with a token before
+looking for a lost push.
+
+The hold and its lift were first written against "the device's current start", on the reasoning that a refusal comes
+within the send's retries, well inside the cooldown. That is a guess about timing, not a guarantee: a slow send, a
+slow store or the slot that is leaving can deliver the write after the next start was claimed, where a late lift
+drops that start's hold and a late hold keeps a refused one back for 8 hours. A write that follows from an event
+says which event: the time the start was claimed at, or the time the phone answered, and the store applies it only
+to a start claimed up to then (`claimed_at <= asOf`, one statement under the row lock). That needs the claim time to
+name one claim, so a claim is refused unless it is later than the last one, whatever the deadline says.
+
+The hub then kept the deadline the store last told it, so as not to ask each round, and dropped it when its own lift
+moved the store's. Two slots share the store through a blue-green switch, and a lift is whichever slot's the phone
+reaches or the refusal comes back to: the other one held on for up to 8 hours on a deadline nobody had any more.
+State another process can move is read where it is kept, each time it decides something; a copy needs a way to hear
+of every writer, and "this process's own writes" is not that. Test it with two hubs over one store, not with a
+restart, which starts from nothing remembered. What the hub still keeps per device is only the last deferral it
+logged, so hours of rounds are one line.
+
+The app connecting lifted the hold by the `device_id` in `register_phone`, and an older app sends none. The id that
+registration falls back to (the connection's credential, then `legacy`) names the phone's tools, not its pushes:
+starts are claimed under the push id, so a lift by the fallback id changes no row and looks done. An id has a
+namespace; resolve the fallback into the ids of the table being written (the devices that credential registered, as
+`wakeDevices` does for the same registrations) and assert on the store's row for a registration without the id.
+
 ## A custom HTTPS dial must opt into HTTP/2 (#1620)
 
 A custom `http.Transport.DialContext` conservatively disables Go's automatic HTTP/2 negotiation. Keep the checked-address dial callback and explicitly enable `ForceAttemptHTTP2`; do not replace it with a default dialer or let an upstream proxy resolve the name again. Verify real local TLS HTTP/2 negotiation, HTTP/1.1 fallback and request cancellation. A successful transport test is not evidence that a particular upstream challenge disappeared: verify the installed source separately, without raising budgets or substituting host-downloaded content.
