@@ -137,6 +137,32 @@ and after draining on close, each shadow logs only `compared=<count> mismatches=
 `compared` excludes queued inputs, failed native work and rejections; `mismatches` counts individual rule reports.
 Release source sets contain neither the shadow nor its preferences.
 
+## Android Agents-list adapter and sort shadow (#8954)
+
+`:feature:agents` supplies its existing scoped list projection to `AgentListAdapter`. Kotlin remains authoritative; the
+default factory and the entire Release source set return only `KotlinAgentListAdapter`, with no observer or shadow class.
+The optional DEBUG observer uses `projectSort` on its own FIFO worker after the Kotlin result has returned. Enable it in
+JVM tests with `-Ppersona.sort=shadow`, or launch `DebugEntryActivity` with `--es debug.sortShadow on`, then force-stop
+and relaunch (`off` disables it). Reports use the `PersonaCoreShadow` tag and hold only `agents-list-sort`, a rule code
+and counts/flags/enum values: never titles, paths, queries, identifiers or exception messages.
+
+The core's `state`, `machine` and `space` projections compare complete published outputs. `Repo` and `MachineSpace`
+use the core's `space` projection for their inner list and separately report the unsupported outer repository/computer
+headers; to-do, direction and history extensions are not silently called parity. Input conversion preserves multi-hub
+identity and includes the core's `held` field from the shell's visible Agent chat when the row remains Unread. The
+production Kotlin path still owns range preprocessing, `retainOpenedRows`, history and children. A caller-supplied
+instant makes `since:` searches deterministic. The 30 checked-in `agents_list` fixtures pass through both production
+Kotlin and the real host JNI projection; additional real-JNI cases found #9027 (multi-hub pin identity in the core)
+and #9033 (Android does not yet implement iOS's `heldInList`). Those differences are recorded, not hidden or changed
+to match Rust.
+
+Release has no sort-shadow implementation and its native library does not export `Java_..._projectSort`. The app still
+packages the other core entry points for the existing packaging work: this is a strict boundary for this shadow, not a
+claim that the whole native library is absent. `buildAndroidReleaseCore` builds its own Cargo target and checks both
+ABIs with `scripts/check-android-sort-shadow.py`; Release JVM tests additionally prove that no shadow class is on the
+classpath and the factory remains Kotlin even when the debug property is set. Conversion, redaction, native failure,
+production entry and old-vs-new Kotlin behavior have focused JVM tests. This is host and packaged-artifact evidence,
+not a physical-device shadow run, UI change, Rust promotion or iOS behavior change.
 ## HarmonyOS Agents-list adapter (#8957)
 
 `AgentWorkspace` delegates its filtering, ordering and grouping to `NativeAgentListAdapter`, retaining the existing
@@ -157,7 +183,6 @@ both sides to unordered IDs. Current host evidence: 1/30 equal; 29 differ in `co
 membership/filter and rank parity remain open, so the adapter's existence is not migration or device acceptance.
 Physical-device and HAP/NAPI execution remain **blocked: no physical device**; this host environment has no
 `devecocli`, so a release HAP was not built.
-
 ## Reproducing phase-1 evidence
 
 These are experiment entry points, not claims that every cell has run. A host or simulator result never substitutes
