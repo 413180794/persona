@@ -164,8 +164,16 @@ enum RuntimeCLI {
         guard let w = window else { return nil }
         let f = UIGraphicsImageRendererFormat()
         f.scale = scale
+        #if os(iOS)
+        // The bars as on screen, not the screenshot banner (#9508): `drawHierarchy` leaves the capture layer out.
+        ScreenshotBanner.beginReveal()
+        defer { ScreenshotBanner.endReveal() }
+        let fresh = ScreenshotBanner.hasLayers // the frame already drawn leaves them out
+        #else
+        let fresh = false
+        #endif
         return UIGraphicsImageRenderer(bounds: w.bounds, format: f).image { _ in
-            for win in windows where !win.isHidden { win.drawHierarchy(in: win.frame, afterScreenUpdates: false) }
+            for win in windows where !win.isHidden { win.drawHierarchy(in: win.frame, afterScreenUpdates: fresh) }
         }
     }
 
