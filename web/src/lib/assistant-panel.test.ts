@@ -38,6 +38,16 @@ const info: AssistantLaunchers = {
 };
 const read: Record<string, ModelList> = { claude: { list: claudeList }, relay: { list: relayList }, "team-api": { list: { agent: "claude", models: [] } } };
 const listOf = (name: string) => read[name] ?? {};
+
+it("omits Agent-only profiles from Assistant without hiding fixable providers or changing the worker catalog", () => {
+  const worker = { name: "cloud-worker-profile", agent: "cloud-worker", kind: "launcher", code: "not_main_chat", reason: "Agent tasks only" };
+  const catalog = { ...info, unavailable: [...info.unavailable, worker] };
+  const panel = assistantPanel({ provider: "claude", model: "opus", source: "default" }, catalog, listOf, { handoff: true });
+  expect(panel.providers.some((p) => p.id === worker.name)).toBe(false);
+  expect(panel.providers.find((p) => p.id === "far-gw")?.unavailable).toBeTruthy();
+  expect(panel.providers.find((p) => p.id === "gpt-direct")?.unavailable).toBeTruthy();
+  expect(catalog.unavailable).toContain(worker);
+});
 const session = (x: Partial<Session> = {}): Session =>
   ({ machine_id: "server", session_id: "c1", title: "t", cwd: "/a", status: "idle", state: "idle", assistant: true, agent: "claude", launcher: "relay", model: "claude-sonnet-5-5", effort: "medium", ...x }) as Session;
 const chat = (x: Partial<AssistantChat> = {}): AssistantChat => ({ session: session(), isMain: false, kept: true, config: "claude", ...x });
