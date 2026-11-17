@@ -15,7 +15,7 @@ import (
 func TestPreparedAssistantClaudeAcknowledgesStartupWithoutAUserTurn(t *testing.T) {
 	f := cliTest(t)
 	// This CLI acknowledges initialization as the real stream-json control protocol does.
-	script := strings.Replace(fakeCLI, `*'"subtype":"set_permission_mode"'*|`, `*'"subtype":"initialize"'*|*'"subtype":"set_permission_mode"'*|`, 1)
+	script := strings.Replace(preparedFakeCLI, `*'"subtype":"set_permission_mode"'*|`, `*'"subtype":"initialize"'*|*'"subtype":"set_permission_mode"'*|`, 1)
 	if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), "bin", "claude"), []byte("#!/bin/sh\n"+script), 0o700); err != nil {
 		t.Fatal(err)
 	}

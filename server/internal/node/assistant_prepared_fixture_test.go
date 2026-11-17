@@ -1,23 +1,19 @@
 package node
 
 import (
-	"context"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// fakeCLI is the machine's claude -p in cliTest: it appends its args to $CLI_FAKE_DIR/cli-argv and keeps its
+// preparedFakeCLI is the machine's claude -p in cliTest: it appends its args to $CLI_FAKE_DIR/cli-argv and keeps its
 // CLAUDE_CONFIG_DIR in cli-profile, keeps every stdin line in stdin.jsonl, answers control requests (an error from
 // control-mode-error.json or control-effort-error.json, held while control-hold exists, after the lines in
 // control-extra.jsonl, exiting at control-exit), and plays a fixed turn for each user message (no result while
 // $CLI_FAKE_DIR/hold exists).
-const fakeCLI = `printf '%s\n' "$*" >> "$CLI_FAKE_DIR/cli-argv"
+const preparedFakeCLI = `printf '%s\n' "$*" >> "$CLI_FAKE_DIR/cli-argv"
 printf '%s\n' "$CLAUDE_CONFIG_DIR" > "$CLI_FAKE_DIR/cli-profile"
 echo '{"type":"system","subtype":"init"}'
 while IFS= read -r line; do
@@ -61,10 +57,10 @@ type cliFixture struct {
 	log *syncBuffer
 }
 
-// cliTest is a node whose assistant conversations run fakeCLI as the machine's claude, with a fake hub.
+// cliTest is a node whose assistant conversations run preparedFakeCLI as the machine's claude, with a fake hub.
 func cliTest(t *testing.T) *cliFixture {
 	t.Helper()
-	fakeClaudeHome(t, fakeCLI)
+	fakeClaudeHome(t, preparedFakeCLI)
 	dir := t.TempDir()
 	t.Setenv("CLI_FAKE_DIR", dir)
 	n := codexTestNode(t)
