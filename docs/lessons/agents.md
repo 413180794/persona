@@ -60,6 +60,13 @@ around missing task tools by extracting the hub token. Codex's shared daemon may
 its per-turn `CODEX_THREAD_ID` must resolve unambiguously in the node's registry before a CLI handoff. Unknown
 threads must not fall back to whichever task an inherited pane happens to run.
 
+The task handoff footer must describe the Agent that will actually run (#9846). Fit and health detours can change
+both machine and family. Source matters too: a Codex terminal has no injected Persona MCP server, while Paseo's
+Codex bridge does. A login shell need not have `personad` on PATH. Render after selection; give known terminal
+callers the node's reported absolute executable as data for the existing scoped CLI. Bound the metadata read;
+unavailable metadata or unknown capabilities omit unverified hints, not the assignment.
+Keep the existing project context, approval snapshot and attachment order intact.
+
 - An Agent SDK guest must register its session id and tools before the node starts: its bridge lists tools before
   `assistant.send` returns. A later `guestSet` makes the first list empty, and a connected MCP server with no tools
   does not fail by itself. On SDK 0.3.318 / Claude Code 2.1.322, use `tools: []` for no built-ins and register the
