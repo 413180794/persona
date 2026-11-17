@@ -85,6 +85,8 @@ export function assistantPanel(setup: AssistantSetup, info: AssistantLaunchers |
   }
   // what can't run it, a Paseo provider among them: that provider is its engine, never "paseo" (#8142)
   for (const u of info?.unavailable ?? []) {
+    // Agent-only launchers belong in the worker picker, not Assistant (#10032).
+    if (u.code === "not_main_chat") continue;
     if (providers.some((p) => p.id === u.name)) continue;
     providers.push({ id: u.name, name: providerTitle(u), engine: agentId(providerAgent(u.agent || "claude", u.name)), models: null, unavailable: u.reason });
   }

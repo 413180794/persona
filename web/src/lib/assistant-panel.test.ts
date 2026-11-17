@@ -109,8 +109,8 @@ describe("the panel's providers", () => {
     expect(providers.find((p) => p.id === "codex")).toMatchObject({ loading: true, models: null });
   });
 
-  it("a Paseo provider that can't run it is off as that provider, never 'paseo' (#8142)", () => {
-    const paseo: AssistantLaunchers = { ...info, unavailable: [{ name: "grok", kind: "launcher", agent: "paseo", code: "not_main_chat", reason: "跑不了主对话" }, { name: "cursor", kind: "launcher", agent: "paseo", code: "not_main_chat", reason: "跑不了主对话" }] };
+  it("a Paseo provider with a fixable scope problem keeps its provider identity (#8142)", () => {
+    const paseo: AssistantLaunchers = { ...info, unavailable: [{ name: "grok", kind: "launcher", agent: "paseo", code: "launcher_out_of_scope", reason: "Unavailable on this computer" }, { name: "cursor", kind: "launcher", agent: "paseo", code: "launcher_out_of_scope", reason: "Unavailable on this computer" }] };
     const { providers } = assistantPanel(assistantSetup(chat({ isMain: true }), paseo), paseo, listOf, {});
     expect(providers.filter((p) => p.unavailable).map((p) => [p.id, p.engine])).toEqual([["grok", "grok"], ["cursor", "cursor"]]);
   });
@@ -176,4 +176,13 @@ describe("what a pick keeps", () => {
     expect(assistantPickOf({ provider: "claude", model: "opus", effort: "medium" }, claudeList, now)).toBeNull();
     expect(assistantPickOf({ provider: "claude", model: "opus", effort: "max" }, claudeList, now)).toEqual({ launcher: "claude", model: "opus", effort: "max" });
   });
+});
+
+it("keeps Agent-only profiles out of Assistant while retaining the worker catalog", () => {
+  const worker = { name: "cloud-worker-profile", agent: "cloud-worker", kind: "launcher", code: "not_main_chat", reason: "Agent tasks only" };
+  const catalog = { ...info, unavailable: [...info.unavailable, worker] };
+  const panel = assistantPanel({ provider: "claude", model: "opus", source: "default" }, catalog, listOf);
+  expect(panel.providers.some((p) => p.id === worker.name)).toBe(false);
+  expect(panel.providers.find((p) => p.id === "far-gw")?.unavailable).toBeTruthy();
+  expect(catalog.unavailable).toContain(worker);
 });
